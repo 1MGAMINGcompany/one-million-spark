@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Home, Wallet, Plus, List, Menu, X } from "lucide-react";
+import { WalletButton } from "./WalletButton";
 
 const Navbar = () => {
   const location = useLocation();
@@ -41,6 +42,7 @@ const Navbar = () => {
                 </Link>
               );
             })}
+            <WalletButton />
           </div>
 
           {/* Mobile Menu Button */}
@@ -76,6 +78,10 @@ const Navbar = () => {
                   </Link>
                 );
               })}
+              {/* Wallet Button (Mobile) */}
+              <div className="pt-2">
+                <WalletButton />
+              </div>
             </div>
           </div>
         )}
