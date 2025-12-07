@@ -10,13 +10,20 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { useWallet } from "@/hooks/useWallet";
+import { WalletRequired } from "@/components/WalletRequired";
 
 const CreateRoom = () => {
+  const { isConnected } = useWallet();
   const [gameType, setGameType] = useState("chess");
   const [entryFee, setEntryFee] = useState("");
   const [players, setPlayers] = useState("");
   const [turnTime, setTurnTime] = useState("");
   const [roomType, setRoomType] = useState("public");
+
+  if (!isConnected) {
+    return <WalletRequired />;
+  }
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center px-4 py-12">

@@ -8,6 +8,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Users } from "lucide-react";
+import { useWallet } from "@/hooks/useWallet";
+import { WalletRequired } from "@/components/WalletRequired";
 
 const fakeRooms = [
   { id: 1, game: "Chess", entryFee: 1, players: 1, maxPlayers: 2 },
@@ -16,8 +18,13 @@ const fakeRooms = [
 ];
 
 const RoomList = () => {
+  const { isConnected } = useWallet();
   const [gameFilter, setGameFilter] = useState("all");
   const [feeFilter, setFeeFilter] = useState("all");
+
+  if (!isConnected) {
+    return <WalletRequired />;
+  }
 
   return (
     <div className="min-h-screen bg-background px-4 py-12">
