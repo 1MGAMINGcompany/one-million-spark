@@ -3,6 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import Navbar from "./components/Navbar";
 import Home from "./pages/Home";
 import AddFunds from "./pages/AddFunds";
 import CreateRoom from "./pages/CreateRoom";
@@ -18,14 +19,17 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/add-funds" element={<AddFunds />} />
-          <Route path="/create-room" element={<CreateRoom />} />
-          <Route path="/room-list" element={<RoomList />} />
-          <Route path="/game/chess/:roomId" element={<ChessGame />} />
-          <Route path="*" element={<NotFound />} />
-        </Routes>
+        <Navbar />
+        <div className="pt-16">
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/add-funds" element={<AddFunds />} />
+            <Route path="/create-room" element={<CreateRoom />} />
+            <Route path="/room-list" element={<RoomList />} />
+            <Route path="/game/chess/:roomId" element={<ChessGame />} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </div>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
