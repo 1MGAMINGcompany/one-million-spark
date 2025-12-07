@@ -28,7 +28,7 @@ export function WalletButton() {
 
   if (!isConnected) {
     return (
-      <Button variant="outline" size="sm" onClick={() => open()}>
+      <Button size="sm" onClick={() => open()} className="gap-2">
         <Wallet size={16} />
         Connect Wallet
       </Button>
