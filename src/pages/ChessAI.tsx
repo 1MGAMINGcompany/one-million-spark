@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
 import { Link } from "react-router-dom";
-import { Chess } from "chess.js";
+import { Chess, Square } from "chess.js";
 import { Chessboard } from "react-chessboard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -40,7 +40,6 @@ const ChessAI = () => {
     setIsThinking(true);
     setGameStatus("AI is thinking...");
 
-    // Simulate thinking delay
     setTimeout(() => {
       const randomMove = moves[Math.floor(Math.random() * moves.length)];
       currentGame.move(randomMove);
@@ -55,35 +54,32 @@ const ChessAI = () => {
     }, 500);
   }, [checkGameOver]);
 
-  const onPieceDrop = useCallback(
-    ({ sourceSquare, targetSquare }: { piece: unknown; sourceSquare: string; targetSquare: string | null }) => {
-      if (gameOver || isThinking || !targetSquare) return false;
+  const onDrop = (sourceSquare: Square, targetSquare: Square): boolean => {
+    if (gameOver || isThinking) return false;
 
-      const gameCopy = new Chess(game.fen());
-      
-      try {
-        const move = gameCopy.move({
-          from: sourceSquare,
-          to: targetSquare,
-          promotion: "q", // Always promote to queen
-        });
+    const gameCopy = new Chess(game.fen());
+    
+    try {
+      const move = gameCopy.move({
+        from: sourceSquare,
+        to: targetSquare,
+        promotion: "q",
+      });
 
-        if (move === null) return false;
+      if (move === null) return false;
 
-        setGame(new Chess(gameCopy.fen()));
-        setMoveHistory(gameCopy.history());
+      setGame(new Chess(gameCopy.fen()));
+      setMoveHistory(gameCopy.history());
 
-        if (!checkGameOver(gameCopy)) {
-          makeAIMove(gameCopy);
-        }
-
-        return true;
-      } catch {
-        return false;
+      if (!checkGameOver(gameCopy)) {
+        makeAIMove(gameCopy);
       }
-    },
-    [game, gameOver, isThinking, checkGameOver, makeAIMove]
-  );
+
+      return true;
+    } catch {
+      return false;
+    }
+  };
 
   const restartGame = () => {
     setGame(new Chess());
@@ -93,7 +89,6 @@ const ChessAI = () => {
     setIsThinking(false);
   };
 
-  // Format moves into pairs (1. e4 e5, 2. Nf3 Nc6, etc.)
   const formattedMoves = [];
   for (let i = 0; i < moveHistory.length; i += 2) {
     formattedMoves.push({
@@ -136,11 +131,9 @@ const ChessAI = () => {
             {/* Board */}
             <div className="w-full max-w-[600px] mx-auto">
               <Chessboard
-                options={{
-                  position: game.fen(),
-                  onPieceDrop: onPieceDrop,
-                  allowDragging: !gameOver && !isThinking,
-                }}
+                position={game.fen()}
+                onPieceDrop={onDrop}
+                arePiecesDraggable={!gameOver && !isThinking}
               />
             </div>
 
