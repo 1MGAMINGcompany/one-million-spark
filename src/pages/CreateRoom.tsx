@@ -17,7 +17,7 @@ const CreateRoom = () => {
   const { isConnected } = useWallet();
   const [gameType, setGameType] = useState("chess");
   const [entryFee, setEntryFee] = useState("");
-  const [players, setPlayers] = useState("");
+  const [players, setPlayers] = useState("2");
   const [turnTime, setTurnTime] = useState("");
   const [roomType, setRoomType] = useState("public");
 
@@ -55,11 +55,12 @@ const CreateRoom = () => {
               id="entryFee"
               type="number"
               placeholder="0.00"
-              min="0"
+              min="0.5"
               step="0.01"
               value={entryFee}
               onChange={(e) => setEntryFee(e.target.value)}
             />
+            <p className="text-sm text-muted-foreground">Minimum 0.5 USDT</p>
           </div>
 
           {/* Number of Players */}
