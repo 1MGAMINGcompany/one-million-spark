@@ -1,19 +1,23 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Bot, ArrowLeft } from "lucide-react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Bot, ArrowLeft, Play } from "lucide-react";
 
 const aiGames = [
-  { name: "Chess", emoji: "♟️", path: "/play-ai/chess", available: true },
-  { name: "Dominos", emoji: "🁢", path: "#", available: false },
-  { name: "Backgammon", emoji: "🎲", path: "#", available: false },
+  { 
+    name: "Chess vs AI", 
+    emoji: "♟️", 
+    path: "/play-ai/chess", 
+    description: "Play Chess against a basic computer opponent. No crypto, no signup.",
+    available: true 
+  },
 ];
 
 const PlayAILobby = () => {
   return (
-    <div className="min-h-screen bg-background flex flex-col items-center px-4 py-12">
-      {/* Header */}
-      <div className="w-full max-w-3xl mb-8">
+    <div className="min-h-screen bg-background px-4 py-8">
+      {/* Back Button */}
+      <div className="max-w-4xl mx-auto mb-6">
         <Button asChild variant="ghost" size="sm">
           <Link to="/">
             <ArrowLeft size={18} />
@@ -22,54 +26,42 @@ const PlayAILobby = () => {
         </Button>
       </div>
 
-      {/* Hero Section */}
-      <div className="text-center max-w-2xl mb-12">
+      {/* Header */}
+      <div className="text-center max-w-2xl mx-auto mb-12">
         <div className="flex items-center justify-center gap-3 mb-4">
-          <Bot size={48} className="text-primary" />
-          <h1 className="text-4xl md:text-5xl font-bold text-foreground">
-            Play vs AI
+          <Bot size={40} className="text-primary" />
+          <h1 className="text-3xl md:text-4xl font-bold text-foreground">
+            Play vs AI (Free Mode)
           </h1>
         </div>
         <p className="text-lg text-muted-foreground">
-          Practice your skills against our AI opponents. No wallet required, completely free!
+          Practice your skills with no wallet and no money required.
         </p>
       </div>
 
-      {/* Game Selection */}
-      <div className="w-full max-w-3xl">
-        <h2 className="text-2xl font-semibold text-foreground text-center mb-6">
-          Choose a Game
-        </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      {/* Game Cards Grid */}
+      <div className="max-w-4xl mx-auto">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {aiGames.map((game) => (
-            <Card 
-              key={game.name} 
-              className={`text-center ${!game.available ? 'opacity-60' : ''}`}
-            >
-              <CardContent className="pt-6 pb-4 flex flex-col items-center gap-3">
-                <span className="text-5xl">{game.emoji}</span>
-                <h3 className="text-xl font-medium text-foreground">{game.name}</h3>
-                {game.available ? (
-                  <Button asChild size="sm">
-                    <Link to={game.path}>Play vs AI</Link>
-                  </Button>
-                ) : (
-                  <Button size="sm" variant="secondary" disabled>
-                    Coming Soon
-                  </Button>
-                )}
+            <Card key={game.name} className="flex flex-col">
+              <CardHeader className="text-center pb-2">
+                <span className="text-5xl mb-2">{game.emoji}</span>
+                <CardTitle className="text-xl">{game.name}</CardTitle>
+              </CardHeader>
+              <CardContent className="flex flex-col flex-1 gap-4">
+                <CardDescription className="text-center flex-1">
+                  {game.description}
+                </CardDescription>
+                <Button asChild className="w-full">
+                  <Link to={game.path}>
+                    <Play size={18} />
+                    Play
+                  </Link>
+                </Button>
               </CardContent>
             </Card>
           ))}
         </div>
-      </div>
-
-      {/* Info Note */}
-      <div className="mt-12 text-center text-muted-foreground text-sm max-w-md">
-        <p>
-          AI mode is free and doesn't require a wallet connection. 
-          Ready to compete for real? Check out our <Link to="/room-list" className="text-primary underline">public rooms</Link>.
-        </p>
       </div>
     </div>
   );
