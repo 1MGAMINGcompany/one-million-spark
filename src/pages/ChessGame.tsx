@@ -1,30 +1,80 @@
 import { useParams, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { MessageSquare, Flag, Home } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { Home } from "lucide-react";
+
+const fakeMoves = [
+  { move: 1, white: "e2 → e4", black: "e7 → e5" },
+  { move: 2, white: "Ng1 → f3", black: "Nb8 → c6" },
+  { move: 3, white: "Bf1 → c4", black: "..." },
+];
 
 const ChessGame = () => {
   const { roomId } = useParams<{ roomId: string }>();
 
   return (
-    <div className="min-h-screen bg-background px-4 py-8">
-      <div className="max-w-5xl mx-auto">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-2xl md:text-3xl font-bold text-foreground">
-            Chess Game Room
+    <div className="min-h-screen bg-background px-4 py-6">
+      <div className="max-w-6xl mx-auto">
+        {/* Header Bar */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-6 bg-card border border-border rounded-lg p-4">
+          <h1 className="text-xl font-bold text-foreground">
+            Chess – Room #{roomId}
           </h1>
-          <p className="text-muted-foreground mt-1">Room ID: {roomId}</p>
+          <p className="text-muted-foreground text-sm">
+            Player A vs Player B
+          </p>
         </div>
 
         {/* Main Layout */}
         <div className="flex flex-col lg:flex-row gap-6">
-          {/* Chess Board Placeholder */}
+          {/* LEFT COLUMN - Chess Board */}
           <div className="flex-1">
             <div className="aspect-square bg-card border border-border rounded-lg flex items-center justify-center">
-              <span className="text-muted-foreground text-lg">Chess Board</span>
+              <span className="text-muted-foreground text-lg">Chess Board Placeholder</span>
             </div>
-            {/* Board Action Buttons */}
-            <div className="flex gap-3 mt-4">
+            <div className="mt-3 text-center">
+              <p className="text-foreground font-medium">Your Turn – 15s remaining</p>
+            </div>
+          </div>
+
+          {/* RIGHT COLUMN - Info Panels */}
+          <div className="w-full lg:w-80 space-y-4">
+            {/* Turn Info */}
+            <div className="bg-card border border-border rounded-lg p-4">
+              <h3 className="text-sm font-semibold text-muted-foreground mb-2">Turn Info</h3>
+              <p className="text-foreground font-medium">Turn: Player X (White)</p>
+            </div>
+
+            {/* Move List */}
+            <div className="bg-card border border-border rounded-lg p-4">
+              <h3 className="text-sm font-semibold text-muted-foreground mb-2">Move List</h3>
+              <div className="h-32 overflow-y-auto space-y-1 text-sm">
+                {fakeMoves.map((m) => (
+                  <div key={m.move} className="flex gap-2 text-foreground">
+                    <span className="text-muted-foreground w-6">{m.move}.</span>
+                    <span className="flex-1">{m.white}</span>
+                    <span className="flex-1">{m.black}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Chat */}
+            <div className="bg-card border border-border rounded-lg p-4">
+              <h3 className="text-sm font-semibold text-muted-foreground mb-2">Chat (coming soon)</h3>
+              <div className="h-20 bg-muted/30 rounded mb-2"></div>
+              <div className="flex gap-2">
+                <Textarea
+                  placeholder="Type a message..."
+                  className="resize-none h-10 min-h-0"
+                  disabled
+                />
+                <Button size="sm" disabled>Send</Button>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-3">
               <Button
                 variant="outline"
                 className="flex-1"
@@ -35,48 +85,16 @@ const ChessGame = () => {
               <Button
                 variant="outline"
                 className="flex-1"
-                onClick={() => alert("Resign feature coming soon")}
+                onClick={() => alert("Resign coming soon")}
               >
                 Resign
               </Button>
             </div>
           </div>
-
-          {/* Sidebar */}
-          <div className="w-full lg:w-72 space-y-4">
-            {/* Player 1 */}
-            <div className="bg-card border border-border rounded-lg p-4">
-              <p className="text-sm text-muted-foreground">Player 1</p>
-              <p className="font-semibold text-foreground">Waiting...</p>
-            </div>
-
-            {/* Player 2 */}
-            <div className="bg-card border border-border rounded-lg p-4">
-              <p className="text-sm text-muted-foreground">Player 2</p>
-              <p className="font-semibold text-foreground">Waiting...</p>
-            </div>
-
-            {/* Turn Indicator */}
-            <div className="bg-card border border-border rounded-lg p-4 text-center">
-              <p className="text-foreground font-medium">Turn: Player 1</p>
-            </div>
-
-            {/* Chat Placeholder */}
-            <div className="bg-card border border-border rounded-lg p-4">
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <MessageSquare size={18} />
-                <span className="text-sm">Chat (coming soon)</span>
-              </div>
-            </div>
-          </div>
         </div>
 
-        {/* Bottom Buttons */}
-        <div className="flex flex-col sm:flex-row justify-center gap-4 mt-8">
-          <Button variant="destructive" size="lg">
-            <Flag size={18} />
-            Resign
-          </Button>
+        {/* Back to Lobby */}
+        <div className="flex justify-center mt-8">
           <Button variant="outline" size="lg" asChild>
             <Link to="/">
               <Home size={18} />
@@ -86,7 +104,7 @@ const ChessGame = () => {
         </div>
 
         {/* Game Info Box */}
-        <div className="mt-10 bg-card border border-border rounded-lg p-6">
+        <div className="mt-8 bg-card border border-border rounded-lg p-6">
           <h3 className="text-lg font-semibold text-foreground mb-4">How It Works</h3>
           <ul className="space-y-2 text-muted-foreground text-sm">
             <li className="flex items-start gap-2">
