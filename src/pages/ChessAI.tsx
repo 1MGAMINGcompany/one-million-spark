@@ -1,143 +1,211 @@
+import { useState, useCallback } from "react";
 import { Link } from "react-router-dom";
+import { Chess } from "chess.js";
+import { Chessboard } from "react-chessboard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Bot, ArrowLeft, Send, RotateCcw, Flag } from "lucide-react";
-
-const fakeMoves = [
-  { number: 1, white: "e2 → e4", black: "e7 → e5" },
-  { number: 2, white: "Ng1 → f3", black: "Nb8 → c6" },
-  { number: 3, white: "Bf1 → b5", black: "..." },
-];
+import { ArrowLeft, RotateCcw, Bot } from "lucide-react";
 
 const ChessAI = () => {
-  const handleNewGame = () => {
-    alert("New game coming soon");
+  const [game, setGame] = useState(new Chess());
+  const [gameStatus, setGameStatus] = useState<string>("Your turn");
+  const [moveHistory, setMoveHistory] = useState<string[]>([]);
+  const [isThinking, setIsThinking] = useState(false);
+  const [gameOver, setGameOver] = useState(false);
+
+  const checkGameOver = useCallback((currentGame: Chess) => {
+    if (currentGame.isCheckmate()) {
+      const winner = currentGame.turn() === "w" ? "You lose!" : "You win!";
+      setGameStatus(winner);
+      setGameOver(true);
+      return true;
+    }
+    if (currentGame.isStalemate()) {
+      setGameStatus("Draw - Stalemate");
+      setGameOver(true);
+      return true;
+    }
+    if (currentGame.isDraw()) {
+      setGameStatus("Draw");
+      setGameOver(true);
+      return true;
+    }
+    return false;
+  }, []);
+
+  const makeAIMove = useCallback((currentGame: Chess) => {
+    const moves = currentGame.moves();
+    if (moves.length === 0) return;
+
+    setIsThinking(true);
+    setGameStatus("AI is thinking...");
+
+    // Simulate thinking delay
+    setTimeout(() => {
+      const randomMove = moves[Math.floor(Math.random() * moves.length)];
+      currentGame.move(randomMove);
+      
+      setGame(new Chess(currentGame.fen()));
+      setMoveHistory(currentGame.history());
+      setIsThinking(false);
+
+      if (!checkGameOver(currentGame)) {
+        setGameStatus("Your turn");
+      }
+    }, 500);
+  }, [checkGameOver]);
+
+  const onPieceDrop = useCallback(
+    ({ sourceSquare, targetSquare }: { piece: unknown; sourceSquare: string; targetSquare: string | null }) => {
+      if (gameOver || isThinking || !targetSquare) return false;
+
+      const gameCopy = new Chess(game.fen());
+      
+      try {
+        const move = gameCopy.move({
+          from: sourceSquare,
+          to: targetSquare,
+          promotion: "q", // Always promote to queen
+        });
+
+        if (move === null) return false;
+
+        setGame(new Chess(gameCopy.fen()));
+        setMoveHistory(gameCopy.history());
+
+        if (!checkGameOver(gameCopy)) {
+          makeAIMove(gameCopy);
+        }
+
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    [game, gameOver, isThinking, checkGameOver, makeAIMove]
+  );
+
+  const restartGame = () => {
+    setGame(new Chess());
+    setMoveHistory([]);
+    setGameStatus("Your turn");
+    setGameOver(false);
+    setIsThinking(false);
   };
 
-  const handleResign = () => {
-    alert("Resign coming soon");
-  };
+  // Format moves into pairs (1. e4 e5, 2. Nf3 Nc6, etc.)
+  const formattedMoves = [];
+  for (let i = 0; i < moveHistory.length; i += 2) {
+    formattedMoves.push({
+      number: Math.floor(i / 2) + 1,
+      white: moveHistory[i],
+      black: moveHistory[i + 1] || "",
+    });
+  }
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header Bar */}
-      <div className="bg-card border-b border-border px-4 py-3">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Button asChild variant="ghost" size="sm">
-              <Link to="/play-ai">
-                <ArrowLeft size={18} />
-                Back
-              </Link>
-            </Button>
-            <div className="flex items-center gap-2">
-              <Bot size={20} className="text-primary" />
-              <h1 className="text-lg font-semibold text-foreground">
-                Chess vs AI
+      {/* Header */}
+      <div className="bg-card border-b border-border px-4 py-4">
+        <div className="max-w-6xl mx-auto">
+          <Button asChild variant="ghost" size="sm" className="mb-3">
+            <Link to="/play-ai">
+              <ArrowLeft size={18} />
+              Back to AI Lobby
+            </Link>
+          </Button>
+          <div className="flex items-center gap-3">
+            <Bot size={32} className="text-primary" />
+            <div>
+              <h1 className="text-2xl font-bold text-foreground">
+                Chess vs AI (Free Practice)
               </h1>
+              <p className="text-sm text-muted-foreground">
+                No wallet needed · No money · Just practice
+              </p>
             </div>
-          </div>
-          <div className="text-muted-foreground text-sm">
-            You (White) vs AI (Black)
           </div>
         </div>
       </div>
 
       {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 py-6">
+      <div className="max-w-6xl mx-auto px-4 py-6">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left Column - Chess Board */}
+          {/* Chess Board Column */}
           <div className="lg:col-span-2 space-y-4">
-            {/* Board Placeholder */}
-            <div className="aspect-square bg-muted rounded-lg border border-border flex items-center justify-center">
-              <div className="text-center text-muted-foreground">
-                <span className="text-6xl mb-4 block">♟️</span>
-                <p className="text-lg font-medium">Chess Board Placeholder</p>
-                <p className="text-sm">AI opponent integration coming soon</p>
-              </div>
+            {/* Board */}
+            <div className="w-full max-w-[600px] mx-auto">
+              <Chessboard
+                options={{
+                  position: game.fen(),
+                  onPieceDrop: onPieceDrop,
+                  allowDragging: !gameOver && !isThinking,
+                }}
+              />
             </div>
 
-            {/* Turn Timer */}
-            <div className="bg-card rounded-lg border border-border p-4 text-center">
-              <p className="text-foreground font-medium">
-                Your Turn – <span className="text-primary">No time limit</span>
-              </p>
+            {/* Status */}
+            <div className={`text-center p-4 rounded-lg border ${
+              gameOver 
+                ? gameStatus.includes("win") 
+                  ? "bg-green-500/10 border-green-500/30 text-green-600" 
+                  : gameStatus.includes("lose")
+                  ? "bg-red-500/10 border-red-500/30 text-red-600"
+                  : "bg-yellow-500/10 border-yellow-500/30 text-yellow-600"
+                : isThinking
+                ? "bg-muted border-border text-muted-foreground"
+                : "bg-primary/10 border-primary/30 text-primary"
+            }`}>
+              <p className="font-medium text-lg">{gameStatus}</p>
+              {game.isCheck() && !gameOver && (
+                <p className="text-sm mt-1">Check!</p>
+              )}
             </div>
           </div>
 
-          {/* Right Column - Game Info */}
+          {/* Side Panel */}
           <div className="space-y-4">
-            {/* Turn Info */}
+            {/* Game Info */}
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-base">Turn Info</CardTitle>
+                <CardTitle className="text-base">Game Info</CardTitle>
               </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground">
-                  Turn: <span className="text-foreground font-medium">You (White)</span>
-                </p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  AI Difficulty: Medium
-                </p>
+              <CardContent className="text-sm text-muted-foreground space-y-1">
+                <p>You: <span className="text-foreground font-medium">White</span></p>
+                <p>AI: <span className="text-foreground font-medium">Black (Random)</span></p>
+                <p>Moves: <span className="text-foreground font-medium">{moveHistory.length}</span></p>
               </CardContent>
             </Card>
 
-            {/* Move List */}
+            {/* Move History */}
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-base">Move History</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="max-h-40 overflow-y-auto space-y-1 text-sm">
-                  {fakeMoves.map((move) => (
-                    <div key={move.number} className="flex gap-4 text-muted-foreground">
-                      <span className="w-6 text-foreground font-medium">{move.number}.</span>
-                      <span className="flex-1">{move.white}</span>
-                      <span className="flex-1">{move.black}</span>
+                <div className="max-h-48 overflow-y-auto">
+                  {formattedMoves.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No moves yet</p>
+                  ) : (
+                    <div className="space-y-1 text-sm font-mono">
+                      {formattedMoves.map((move) => (
+                        <div key={move.number} className="flex gap-2">
+                          <span className="w-6 text-muted-foreground">{move.number}.</span>
+                          <span className="w-12 text-foreground">{move.white}</span>
+                          <span className="w-12 text-foreground">{move.black}</span>
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  )}
                 </div>
               </CardContent>
             </Card>
 
-            {/* Chat Section */}
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Bot size={16} />
-                  AI Messages
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="bg-muted rounded-lg p-3 text-sm text-muted-foreground">
-                  <p className="font-medium text-foreground mb-1">AI:</p>
-                  <p>Good luck! I'll try my best to challenge you.</p>
-                </div>
-                <p className="text-xs text-muted-foreground text-center">
-                  AI chat coming soon
-                </p>
-              </CardContent>
-            </Card>
-
-            {/* Action Buttons */}
-            <div className="flex gap-3">
-              <Button 
-                variant="outline" 
-                className="flex-1"
-                onClick={handleNewGame}
-              >
-                <RotateCcw size={16} />
-                New Game
-              </Button>
-              <Button 
-                variant="destructive" 
-                className="flex-1"
-                onClick={handleResign}
-              >
-                <Flag size={16} />
-                Resign
-              </Button>
-            </div>
+            {/* Actions */}
+            <Button onClick={restartGame} className="w-full" variant="outline">
+              <RotateCcw size={18} />
+              Restart Game
+            </Button>
           </div>
         </div>
       </div>
