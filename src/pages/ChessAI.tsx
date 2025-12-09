@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { Chess, Square } from "chess.js";
-import { Chessboard } from "react-chessboard";
+import { ChessBoard } from "@/components/ChessBoard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowLeft, RotateCcw, Bot } from "lucide-react";
@@ -54,15 +54,15 @@ const ChessAI = () => {
     }, 500);
   }, [checkGameOver]);
 
-  const onDrop = (sourceSquare: Square, targetSquare: Square): boolean => {
+  const handleMove = (from: Square, to: Square): boolean => {
     if (gameOver || isThinking) return false;
 
     const gameCopy = new Chess(game.fen());
     
     try {
       const move = gameCopy.move({
-        from: sourceSquare,
-        to: targetSquare,
+        from,
+        to,
         promotion: "q",
       });
 
@@ -128,14 +128,11 @@ const ChessAI = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Chess Board Column */}
           <div className="lg:col-span-2 space-y-4">
-            {/* Board */}
-            <div className="w-full max-w-[600px] mx-auto">
-              <Chessboard
-                position={game.fen()}
-                onPieceDrop={onDrop}
-                arePiecesDraggable={!gameOver && !isThinking}
-              />
-            </div>
+            <ChessBoard
+              game={game}
+              onMove={handleMove}
+              disabled={gameOver || isThinking}
+            />
 
             {/* Status */}
             <div className={`text-center p-4 rounded-lg border ${
