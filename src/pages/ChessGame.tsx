@@ -67,6 +67,29 @@ const ChessGame = () => {
             </Link>
           </Button>
         </div>
+
+        {/* Game Info Box */}
+        <div className="mt-10 bg-card border border-border rounded-lg p-6">
+          <h3 className="text-lg font-semibold text-foreground mb-4">How It Works</h3>
+          <ul className="space-y-2 text-muted-foreground text-sm">
+            <li className="flex items-start gap-2">
+              <span className="text-primary mt-0.5">•</span>
+              Win by checkmate, opponent timeout, or resign.
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="text-primary mt-0.5">•</span>
+              Games can be drawn by stalemate or mutual draw agreement.
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="text-primary mt-0.5">•</span>
+              Entry fees are held in a smart contract until the result is confirmed.
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="text-primary mt-0.5">•</span>
+              Winner receives the prize pool minus a 5% platform fee.
+            </li>
+          </ul>
+        </div>
       </div>
     </div>
   );
