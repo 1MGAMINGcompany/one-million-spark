@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Plus, List } from "lucide-react";
+import { Plus, List, Bot } from "lucide-react";
 
 const featuredGames = [
   { name: "Chess", emoji: "♟️", path: "/create-room" },
@@ -23,17 +23,25 @@ const Home = () => {
       </div>
 
       {/* Action Buttons */}
-      <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16 w-full max-w-md">
-        <Button asChild size="lg" className="w-full sm:w-auto text-lg px-8 py-6">
-          <Link to="/create-room">
-            <Plus size={22} />
-            Create Game Room
-          </Link>
-        </Button>
-        <Button asChild variant="outline" size="lg" className="w-full sm:w-auto text-lg px-8 py-6">
-          <Link to="/room-list">
-            <List size={22} />
-            View Public Rooms
+      <div className="flex flex-col items-center justify-center gap-4 mb-16 w-full max-w-lg">
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 w-full">
+          <Button asChild size="lg" className="w-full sm:w-auto text-lg px-8 py-6">
+            <Link to="/create-room">
+              <Plus size={22} />
+              Create Game Room
+            </Link>
+          </Button>
+          <Button asChild variant="outline" size="lg" className="w-full sm:w-auto text-lg px-8 py-6">
+            <Link to="/room-list">
+              <List size={22} />
+              View Public Rooms
+            </Link>
+          </Button>
+        </div>
+        <Button asChild variant="secondary" size="lg" className="w-full sm:w-auto text-lg px-8 py-6">
+          <Link to="/play-ai">
+            <Bot size={22} />
+            Play vs AI (Free)
           </Link>
         </Button>
       </div>
