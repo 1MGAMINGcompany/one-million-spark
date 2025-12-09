@@ -23,6 +23,23 @@ const ChessGame = () => {
             <div className="aspect-square bg-card border border-border rounded-lg flex items-center justify-center">
               <span className="text-muted-foreground text-lg">Chess Board</span>
             </div>
+            {/* Board Action Buttons */}
+            <div className="flex gap-3 mt-4">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => alert("Draw offer coming soon")}
+              >
+                Offer Draw
+              </Button>
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => alert("Resign feature coming soon")}
+              >
+                Resign
+              </Button>
+            </div>
           </div>
 
           {/* Sidebar */}
