@@ -7,14 +7,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Users } from "lucide-react";
+import { Users, Clock, RefreshCw } from "lucide-react";
 import { useWallet } from "@/hooks/useWallet";
 import { WalletRequired } from "@/components/WalletRequired";
 
 const fakeRooms = [
-  { id: 1, game: "Chess", entryFee: 1, players: 1, maxPlayers: 2 },
-  { id: 2, game: "Dominos", entryFee: 2.5, players: 2, maxPlayers: 4 },
-  { id: 3, game: "Backgammon", entryFee: 5, players: 1, maxPlayers: 2 },
+  { id: 1, game: "Chess", entryFee: 1, players: 1, maxPlayers: 2, turnTime: 10 },
+  { id: 2, game: "Dominos", entryFee: 2.5, players: 2, maxPlayers: 4, turnTime: 15 },
+  { id: 3, game: "Backgammon", entryFee: 5, players: 1, maxPlayers: 2, turnTime: 5 },
 ];
 
 const RoomList = () => {
@@ -34,8 +34,8 @@ const RoomList = () => {
         </h1>
 
         {/* Filters */}
-        <div className="flex flex-col sm:flex-row gap-4 mb-8">
-          <div className="flex-1">
+        <div className="flex flex-col sm:flex-row gap-4 mb-8 items-center">
+          <div className="flex-1 w-full">
             <Select value={gameFilter} onValueChange={setGameFilter}>
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="Game Type" />
@@ -48,10 +48,10 @@ const RoomList = () => {
               </SelectContent>
             </Select>
           </div>
-          <div className="flex-1">
+          <div className="flex-1 w-full">
             <Select value={feeFilter} onValueChange={setFeeFilter}>
               <SelectTrigger className="w-full">
-                <SelectValue placeholder="Entry Fee" />
+                <SelectValue placeholder="Entry Fee Range" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Fees</SelectItem>
@@ -61,6 +61,9 @@ const RoomList = () => {
               </SelectContent>
             </Select>
           </div>
+          <Button variant="outline" size="icon" className="shrink-0">
+            <RefreshCw size={18} />
+          </Button>
         </div>
 
         {/* Room List */}
@@ -68,7 +71,7 @@ const RoomList = () => {
           {fakeRooms.map((room) => (
             <div
               key={room.id}
-              className="bg-card border border-border rounded-lg p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+              className="bg-card border border-border rounded-lg p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
             >
               <div className="flex-1">
                 <h3 className="text-lg font-semibold text-foreground">
@@ -78,13 +81,19 @@ const RoomList = () => {
                   Entry Fee: {room.entryFee} USDT
                 </p>
               </div>
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Users size={18} />
-                <span className="text-sm">
-                  {room.players} / {room.maxPlayers} players
-                </span>
+              <div className="flex items-center gap-4 text-muted-foreground">
+                <div className="flex items-center gap-1.5">
+                  <Users size={16} />
+                  <span className="text-sm">
+                    {room.players} / {room.maxPlayers} players
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Clock size={16} />
+                  <span className="text-sm">{room.turnTime}s per move</span>
+                </div>
               </div>
-              <Button size="sm">Join</Button>
+              <Button size="sm">Join Room</Button>
             </div>
           ))}
         </div>
