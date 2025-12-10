@@ -1,9 +1,17 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Plus, List, Bot, Trophy, Gem, Star, Shield, Zap } from "lucide-react";
+import { Swords, Users, Bot, Trophy, Gem, Star, Shield, Zap } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
-const featuredGames = [
+interface FeaturedGame {
+  name: string;
+  emoji: string;
+  path: string;
+  icon: LucideIcon;
+}
+
+const featuredGames: FeaturedGame[] = [
   { name: "Chess", emoji: "♟️", path: "/create-room", icon: Trophy },
   { name: "Dominos", emoji: "🁢", path: "/create-room", icon: Gem },
   { name: "Backgammon", emoji: "🎲", path: "/create-room", icon: Star },
@@ -53,22 +61,22 @@ const Home = () => {
 
               {/* CTA Buttons */}
               <div className="flex flex-col gap-4 mt-4">
-                <Button asChild size="lg" variant="gold" className="text-lg h-14 px-8">
-                  <Link to="/play-ai">
-                    <Bot className="w-5 h-5" />
+                <Button asChild size="lg" variant="gold" className="group text-lg h-14 px-8 border border-transparent hover:border-primary/50 transition-all">
+                  <Link to="/play-ai" className="flex items-center gap-2">
+                    <Bot className="w-5 h-5 group-hover:drop-shadow-[0_0_6px_hsl(45_93%_54%_/_0.6)] transition-all" />
                     Play vs AI (Free)
                   </Link>
                 </Button>
                 <div className="flex flex-col sm:flex-row gap-4">
-                  <Button asChild size="lg" variant="default" className="text-lg h-14 px-8 flex-1">
-                    <Link to="/create-room">
-                      <Plus className="w-5 h-5" />
+                  <Button asChild size="lg" variant="default" className="group text-lg h-14 px-8 flex-1 border border-transparent hover:border-primary/30 transition-all">
+                    <Link to="/create-room" className="flex items-center gap-2">
+                      <Swords className="w-5 h-5 group-hover:drop-shadow-[0_0_6px_hsl(45_93%_54%_/_0.6)] transition-all" />
                       Create Game Room
                     </Link>
                   </Button>
-                  <Button asChild size="lg" variant="outline" className="text-lg h-14 px-8 flex-1">
-                    <Link to="/room-list">
-                      <List className="w-5 h-5" />
+                  <Button asChild size="lg" variant="outline" className="group text-lg h-14 px-8 flex-1 border-primary/30 hover:border-primary/50 transition-all">
+                    <Link to="/room-list" className="flex items-center gap-2">
+                      <Users className="w-5 h-5 text-primary group-hover:drop-shadow-[0_0_6px_hsl(45_93%_54%_/_0.6)] transition-all" />
                       View Public Rooms
                     </Link>
                   </Button>

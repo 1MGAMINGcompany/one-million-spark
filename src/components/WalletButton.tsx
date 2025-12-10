@@ -19,8 +19,8 @@ export function WalletButton() {
 
   if (isConnecting) {
     return (
-      <Button variant="outline" size="sm" disabled>
-        <Wallet size={16} />
+      <Button variant="outline" size="sm" disabled className="gap-2">
+        <Wallet size={16} className="text-primary/50" />
         Connecting...
       </Button>
     );
@@ -28,8 +28,15 @@ export function WalletButton() {
 
   if (!isConnected) {
     return (
-      <Button size="sm" onClick={() => open()} className="gap-2">
-        <Wallet size={16} />
+      <Button 
+        size="sm" 
+        onClick={() => open()} 
+        className="group gap-2 border border-transparent hover:border-primary/30 transition-all"
+      >
+        <Wallet 
+          size={16} 
+          className="text-primary-foreground group-hover:drop-shadow-[0_0_4px_hsl(45_93%_54%_/_0.5)] transition-all" 
+        />
         Connect Wallet
       </Button>
     );
@@ -52,18 +59,25 @@ export function WalletButton() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-2">
-          <Wallet size={16} />
+        <Button 
+          variant="outline" 
+          size="sm" 
+          className="group gap-2 border-primary/30 hover:border-primary/50 transition-all"
+        >
+          <Wallet 
+            size={16} 
+            className="text-primary group-hover:drop-shadow-[0_0_4px_hsl(45_93%_54%_/_0.5)] transition-all" 
+          />
           {formatAddress(address!)}
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="bg-popover z-50">
-        <DropdownMenuItem onClick={() => open()}>
-          <Wallet size={16} />
+        <DropdownMenuItem onClick={() => open()} className="gap-2 cursor-pointer">
+          <Wallet size={16} className="text-primary" />
           Wallet Details
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => disconnect()}>
-          <LogOut size={16} />
+        <DropdownMenuItem onClick={() => disconnect()} className="gap-2 cursor-pointer">
+          <LogOut size={16} className="text-primary" />
           Disconnect
         </DropdownMenuItem>
       </DropdownMenuContent>
