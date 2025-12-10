@@ -144,19 +144,19 @@ const ChessPiece = ({
           <stop offset="100%" stopColor="hsl(35 80% 40%)" />
         </linearGradient>
         
-        {/* Obsidian gradient for black pieces */}
+        {/* Obsidian gradient for black pieces - more contrast */}
         <linearGradient id="obsidianGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="hsl(220 15% 25%)" />
-          <stop offset="30%" stopColor="hsl(220 15% 15%)" />
-          <stop offset="70%" stopColor="hsl(220 15% 10%)" />
-          <stop offset="100%" stopColor="hsl(220 15% 6%)" />
+          <stop offset="0%" stopColor="hsl(220 20% 28%)" />
+          <stop offset="30%" stopColor="hsl(220 18% 18%)" />
+          <stop offset="70%" stopColor="hsl(220 15% 12%)" />
+          <stop offset="100%" stopColor="hsl(220 12% 8%)" />
         </linearGradient>
         
-        {/* Gold trim for black pieces */}
+        {/* Gold trim for black pieces - more visible */}
         <linearGradient id="obsidianTrim" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="hsl(45 93% 55% / 0.7)" />
-          <stop offset="50%" stopColor="hsl(45 93% 45% / 0.8)" />
-          <stop offset="100%" stopColor="hsl(35 80% 35% / 0.6)" />
+          <stop offset="0%" stopColor="hsl(45 93% 65%)" />
+          <stop offset="50%" stopColor="hsl(45 93% 50%)" />
+          <stop offset="100%" stopColor="hsl(35 80% 40%)" />
         </linearGradient>
       </defs>
       
@@ -168,8 +168,19 @@ const ChessPiece = ({
         cy="35" 
         rx="8" 
         ry="4" 
-        fill={isWhite ? "rgba(255,255,255,0.4)" : "rgba(255,255,255,0.1)"} 
+        fill={isWhite ? "rgba(255,255,255,0.4)" : "rgba(255,255,255,0.15)"} 
       />
+      
+      {/* Additional rim light for black pieces */}
+      {!isWhite && (
+        <ellipse 
+          cx="55" 
+          cy="25" 
+          rx="6" 
+          ry="3" 
+          fill="hsl(45 93% 70% / 0.2)" 
+        />
+      )}
     </svg>
   );
 };
@@ -254,7 +265,7 @@ export function ChessBoardPremium({ game, onMove, disabled = false }: ChessBoard
                   style={{
                     background: isLight 
                       ? "linear-gradient(135deg, hsl(40 45% 75%) 0%, hsl(38 50% 70%) 50%, hsl(35 45% 65%) 100%)"
-                      : "linear-gradient(135deg, hsl(220 25% 18%) 0%, hsl(220 20% 12%) 50%, hsl(220 25% 8%) 100%)",
+                      : "linear-gradient(135deg, hsl(220 25% 22%) 0%, hsl(220 22% 16%) 40%, hsl(220 20% 12%) 100%)",
                   }}
                 >
                   {/* Sandstone/Obsidian texture overlay */}
@@ -267,25 +278,61 @@ export function ChessBoardPremium({ game, onMove, disabled = false }: ChessBoard
                     }}
                   />
                   
-                  {/* Gold dust particles for dark squares */}
+                  {/* Dark square enhancements for better piece visibility */}
                   {!isLight && (
-                    <div className="absolute inset-0 overflow-hidden pointer-events-none">
-                      {[...Array(5)].map((_, i) => (
-                        <div
-                          key={i}
-                          className="absolute w-0.5 h-0.5 bg-primary/40 rounded-full"
-                          style={{
-                            left: `${15 + i * 18}%`,
-                            top: `${20 + (i % 3) * 25}%`,
-                          }}
-                        />
-                      ))}
-                    </div>
+                    <>
+                      {/* Diagonal glossy shine gradient */}
+                      <div 
+                        className="absolute inset-0 pointer-events-none"
+                        style={{
+                          background: "linear-gradient(135deg, rgba(255,255,255,0.08) 0%, transparent 40%, transparent 60%, rgba(255,255,255,0.03) 100%)",
+                        }}
+                      />
+                      
+                      {/* Soft vignette effect to frame pieces */}
+                      <div 
+                        className="absolute inset-0 pointer-events-none"
+                        style={{
+                          background: "radial-gradient(ellipse at center, transparent 30%, rgba(0,0,0,0.25) 100%)",
+                        }}
+                      />
+                      
+                      {/* Gold dust particles */}
+                      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                        {[...Array(6)].map((_, i) => (
+                          <div
+                            key={i}
+                            className="absolute w-0.5 h-0.5 bg-primary/50 rounded-full"
+                            style={{
+                              left: `${12 + i * 15}%`,
+                              top: `${15 + (i % 3) * 28}%`,
+                              boxShadow: "0 0 2px hsl(45 93% 54% / 0.3)",
+                            }}
+                          />
+                        ))}
+                      </div>
+                      
+                      {/* Subtle inner glow border */}
+                      <div 
+                        className="absolute inset-0 pointer-events-none"
+                        style={{
+                          boxShadow: "inset 0 0 8px 1px hsl(45 93% 54% / 0.08)",
+                        }}
+                      />
+                    </>
                   )}
 
-                  {/* Selection glow */}
+                  {/* Selection glow - enhanced for dark squares */}
                   {isSelected && (
-                    <div className="absolute inset-0 bg-primary/30 animate-pulse" />
+                    <div 
+                      className={cn(
+                        "absolute inset-0 animate-pulse",
+                        isLight ? "bg-primary/30" : "bg-primary/40"
+                      )}
+                      style={!isLight ? {
+                        boxShadow: "inset 0 0 15px 3px hsl(45 93% 54% / 0.5)",
+                      } : undefined}
+                    />
                   )}
                   
                   {/* Check indicator */}
