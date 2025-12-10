@@ -240,7 +240,7 @@ const ChessAI = () => {
     }
   }, [difficulty]);
 
-  const makeAIMove = useCallback((currentGame: Chess) => {
+  const makeAIMove = useCallback((currentGame: Chess, currentAnimationsEnabled: boolean) => {
     const moveObj = getAIMove(currentGame);
     if (!moveObj) return;
 
@@ -251,14 +251,18 @@ const ChessAI = () => {
 
     // Store capture info BEFORE the move happens
     const targetPiece = currentGame.get(moveObj.to as Square);
+    const wasCapture = !!targetPiece;
+    const attackerPieceType = moveObj.piece as PieceSymbol;
+    const capturedPieceType = targetPiece?.type;
+    const targetSquare = moveObj.to as Square;
     
     setTimeout(() => {
       // Execute the move
       currentGame.move(moveObj.san);
       
       // Trigger capture animation if there was a capture
-      if (targetPiece && animationsEnabled) {
-        triggerAnimation(moveObj.piece as PieceSymbol, targetPiece.type, moveObj.to as Square);
+      if (wasCapture && currentAnimationsEnabled && capturedPieceType) {
+        triggerAnimation(attackerPieceType, capturedPieceType, targetSquare);
       }
       
       setGame(new Chess(currentGame.fen()));
@@ -269,7 +273,7 @@ const ChessAI = () => {
         setGameStatus("Your turn");
       }
     }, thinkingTime);
-  }, [getAIMove, checkGameOver, difficulty, animationsEnabled, triggerAnimation]);
+  }, [getAIMove, checkGameOver, difficulty, triggerAnimation]);
 
   const handleMove = useCallback((from: Square, to: Square): boolean => {
     if (gameOver || isThinking) return false;
@@ -298,7 +302,7 @@ const ChessAI = () => {
       setMoveHistory(gameCopy.history());
 
       if (!checkGameOver(gameCopy)) {
-        makeAIMove(gameCopy);
+        makeAIMove(gameCopy, animationsEnabled);
       }
 
       return true;
