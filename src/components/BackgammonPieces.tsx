@@ -6,6 +6,7 @@ interface Dice3DProps {
   variant: "ivory" | "obsidian";
   isRolling?: boolean;
   className?: string;
+  size?: "sm" | "md" | "lg";
 }
 
 // Pip positions for dice faces
@@ -18,7 +19,7 @@ const pipPositions: Record<number, { x: number; y: number }[]> = {
   6: [{ x: 25, y: 25 }, { x: 75, y: 25 }, { x: 25, y: 50 }, { x: 75, y: 50 }, { x: 25, y: 75 }, { x: 75, y: 75 }],
 };
 
-export const Dice3D = ({ value, variant, isRolling = false, className }: Dice3DProps) => {
+export const Dice3D = ({ value, variant, isRolling = false, className, size = "md" }: Dice3DProps) => {
   const [displayValue, setDisplayValue] = useState(value);
   const [rolling, setRolling] = useState(false);
 
@@ -42,6 +43,8 @@ export const Dice3D = ({ value, variant, isRolling = false, className }: Dice3DP
   }, [isRolling, value]);
 
   const isIvory = variant === "ivory";
+  const sizeMap = { sm: 36, md: 48, lg: 56 };
+  const svgSize = sizeMap[size];
 
   return (
     <div
@@ -66,8 +69,8 @@ export const Dice3D = ({ value, variant, isRolling = false, className }: Dice3DP
       <div className="absolute inset-0 translate-y-2 rounded-lg bg-black/40 blur-md" />
 
       <svg
-        width="48"
-        height="48"
+        width={svgSize}
+        height={svgSize}
         viewBox="0 0 100 100"
         className={cn(
           "relative drop-shadow-lg transition-transform duration-100",
@@ -193,6 +196,7 @@ interface Checker3DProps {
   isValidTarget?: boolean;
   onClick?: () => void;
   className?: string;
+  size?: "sm" | "md" | "lg";
 }
 
 export const Checker3D = ({ 
@@ -201,9 +205,12 @@ export const Checker3D = ({
   isSelected = false, 
   isValidTarget = false,
   onClick,
-  className 
+  className,
+  size = "md"
 }: Checker3DProps) => {
   const isGold = variant === "gold";
+  const sizeMap = { sm: { w: 28, h: 20 }, md: { w: 32, h: 24 }, lg: { w: 40, h: 30 } };
+  const { w, h } = sizeMap[size];
 
   return (
     <button
@@ -212,6 +219,8 @@ export const Checker3D = ({
         "relative transition-all duration-200 focus:outline-none",
         onClick && "cursor-pointer hover:scale-105",
         isSelected && "scale-110",
+        // Larger touch target on mobile
+        "min-w-[44px] min-h-[44px] flex items-center justify-center",
         className
       )}
     >
@@ -229,8 +238,8 @@ export const Checker3D = ({
       <div className="absolute inset-0 translate-y-1 rounded-full bg-black/40 blur-sm" />
 
       <svg
-        width="32"
-        height="24"
+        width={w}
+        height={h}
         viewBox="0 0 100 75"
         className="relative drop-shadow-md"
       >
@@ -342,6 +351,7 @@ export const CheckerStack = ({
   isValidTarget = false,
   onClick,
   isTop = true,
+  size = "md",
 }: {
   count: number;
   variant: "gold" | "obsidian";
@@ -349,6 +359,7 @@ export const CheckerStack = ({
   isValidTarget?: boolean;
   onClick?: () => void;
   isTop?: boolean;
+  size?: "sm" | "md" | "lg";
 }) => {
   const displayCount = Math.min(count, 5);
 
@@ -364,11 +375,12 @@ export const CheckerStack = ({
           key={i}
           className={cn(
             "transition-all duration-200",
-            i > 0 && (isTop ? "-mt-3" : "-mb-3")
+            i > 0 && (isTop ? (size === "lg" ? "-mt-4" : "-mt-3") : (size === "lg" ? "-mb-4" : "-mb-3"))
           )}
         >
           <Checker3D
             variant={variant}
+            size={size}
             count={i === displayCount - 1 && count > 5 ? count : undefined}
             isSelected={i === displayCount - 1 && isSelected}
             isValidTarget={i === displayCount - 1 && isValidTarget}
