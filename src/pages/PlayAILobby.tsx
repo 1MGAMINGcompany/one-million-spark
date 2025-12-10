@@ -2,12 +2,13 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Play, Gem, Star } from "lucide-react";
+import { ChessIcon, DominoIcon, BackgammonIcon } from "@/components/GameIcons";
 
 type Difficulty = "easy" | "medium" | "hard";
 
 interface GameConfig {
   name: string;
-  emoji: string;
+  icon: React.ReactNode;
   path: string;
   description: string;
 }
@@ -15,19 +16,19 @@ interface GameConfig {
 const aiGames: GameConfig[] = [
   { 
     name: "Chess", 
-    emoji: "♟️", 
+    icon: <ChessIcon className="w-24 h-24 md:w-28 md:h-28" />,
     path: "/play-ai/chess", 
     description: "Master the ancient art of strategy and tactical thinking.",
   },
   { 
     name: "Dominos", 
-    emoji: "🁡", 
+    icon: <DominoIcon className="w-24 h-24 md:w-28 md:h-28" />,
     path: "/play-ai/dominos", 
     description: "Perfect your tile-matching prowess and numerical mastery.",
   },
   { 
     name: "Backgammon", 
-    emoji: "🎲", 
+    icon: <BackgammonIcon className="w-24 h-24 md:w-28 md:h-28" />,
     path: "/play-ai/backgammon", 
     description: "Hone your skills in this timeless game of calculated moves.",
   },
@@ -154,9 +155,9 @@ const PlayAILobby = () => {
                     />
                   </div>
 
-                  {/* Game emoji */}
-                  <div className="text-center mb-4">
-                    <span className="text-6xl drop-shadow-lg">{game.emoji}</span>
+                  {/* Game icon */}
+                  <div className="flex justify-center mb-4">
+                    {game.icon}
                   </div>
 
                   {/* Game name */}
