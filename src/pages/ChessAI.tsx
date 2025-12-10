@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Chess, Square, Move } from "chess.js";
-import { ChessBoard } from "@/components/ChessBoard";
+import { ChessBoardPremium } from "@/components/ChessBoardPremium";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, RotateCcw, Gem, Star } from "lucide-react";
 
@@ -319,8 +319,8 @@ const ChessAI = () => {
                 
                 {/* Gold frame */}
                 <div className="relative p-1 rounded-xl bg-gradient-to-br from-primary/40 via-primary/20 to-primary/40 shadow-[0_0_40px_-10px_hsl(45_93%_54%_/_0.4)]">
-                  <div className="bg-background rounded-lg overflow-hidden">
-                    <ChessBoard
+                  <div className="bg-gradient-to-b from-midnight-light via-background to-midnight-light rounded-lg overflow-hidden p-4">
+                    <ChessBoardPremium
                       game={game}
                       onMove={handleMove}
                       disabled={gameOver || isThinking}
@@ -329,7 +329,7 @@ const ChessAI = () => {
                 </div>
               </div>
 
-              {/* Status Bar */}
+              {/* Premium Status Bar with Egyptian iconography */}
               <div 
                 className={`relative overflow-hidden rounded-lg border transition-all duration-300 ${
                   gameOver 
@@ -338,18 +338,40 @@ const ChessAI = () => {
                       : gameStatus.includes("lose")
                       ? "bg-red-500/10 border-red-500/30"
                       : "bg-primary/10 border-primary/30"
-                    : "bg-gradient-to-r from-primary/5 via-primary/10 to-primary/5 border-primary/30"
+                    : "bg-gradient-to-r from-primary/10 via-primary/20 to-primary/10 border-primary/40"
                 }`}
               >
+                {/* Gold decorative pattern */}
+                <div className="absolute inset-0 opacity-10">
+                  <div 
+                    className="absolute left-4 top-1/2 -translate-y-1/2 w-6 h-6"
+                    style={{
+                      background: "linear-gradient(to top, hsl(45 93% 54%) 0%, hsl(45 90% 65%) 100%)",
+                      clipPath: "polygon(50% 0%, 0% 100%, 100% 100%)"
+                    }}
+                  />
+                  <div 
+                    className="absolute right-4 top-1/2 -translate-y-1/2 w-6 h-6"
+                    style={{
+                      background: "linear-gradient(to top, hsl(45 93% 54%) 0%, hsl(45 90% 65%) 100%)",
+                      clipPath: "polygon(50% 0%, 0% 100%, 100% 100%)"
+                    }}
+                  />
+                </div>
+
+                {/* Ankh symbols */}
+                <div className="absolute left-8 top-1/2 -translate-y-1/2 text-primary/30 text-xl">☥</div>
+                <div className="absolute right-8 top-1/2 -translate-y-1/2 text-primary/30 text-xl">☥</div>
+
                 {/* Decorative corner accents */}
-                <div className="absolute top-1 left-1 w-3 h-3 border-l border-t border-primary/40 rounded-tl" />
-                <div className="absolute top-1 right-1 w-3 h-3 border-r border-t border-primary/40 rounded-tr" />
-                <div className="absolute bottom-1 left-1 w-3 h-3 border-l border-b border-primary/40 rounded-bl" />
-                <div className="absolute bottom-1 right-1 w-3 h-3 border-r border-b border-primary/40 rounded-br" />
+                <div className="absolute top-1 left-1 w-4 h-4 border-l-2 border-t-2 border-primary/50 rounded-tl" />
+                <div className="absolute top-1 right-1 w-4 h-4 border-r-2 border-t-2 border-primary/50 rounded-tr" />
+                <div className="absolute bottom-1 left-1 w-4 h-4 border-l-2 border-b-2 border-primary/50 rounded-bl" />
+                <div className="absolute bottom-1 right-1 w-4 h-4 border-r-2 border-b-2 border-primary/50 rounded-br" />
                 
-                <div className="px-6 py-4 text-center">
+                <div className="px-8 py-5 text-center relative z-10">
                   <p 
-                    className={`font-display font-bold text-lg ${
+                    className={`font-display font-bold text-xl ${
                       gameOver 
                         ? gameStatus.includes("win") 
                           ? "text-green-400" 
@@ -365,12 +387,13 @@ const ChessAI = () => {
                       WebkitBackgroundClip: "text",
                       WebkitTextFillColor: "transparent",
                       backgroundClip: "text",
+                      textShadow: "0 0 30px hsl(45 93% 54% / 0.3)"
                     } : undefined}
                   >
                     {gameStatus}
                   </p>
                   {game.isCheck() && !gameOver && (
-                    <p className="text-sm text-primary/70 mt-1">Check!</p>
+                    <p className="text-sm text-red-400/80 mt-1 font-medium animate-pulse">⚠ Check!</p>
                   )}
                 </div>
               </div>
