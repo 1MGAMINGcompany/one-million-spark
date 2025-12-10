@@ -1,20 +1,20 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Swords, Users, Bot, Trophy, Gem, Star, Shield, Zap } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+import FeaturedGameCard from "@/components/FeaturedGameCard";
+import { ChessIcon, DominoIcon, BackgammonIcon } from "@/components/GameIcons";
 
 interface FeaturedGame {
   name: string;
-  emoji: string;
+  tagline: string;
   path: string;
-  icon: LucideIcon;
+  icon: React.ReactNode;
 }
 
 const featuredGames: FeaturedGame[] = [
-  { name: "Chess", emoji: "♟️", path: "/create-room", icon: Trophy },
-  { name: "Dominos", emoji: "🁢", path: "/create-room", icon: Gem },
-  { name: "Backgammon", emoji: "🎲", path: "/create-room", icon: Star },
+  { name: "Chess", tagline: "Master the Temple of Strategy", path: "/create-room", icon: <ChessIcon /> },
+  { name: "Dominos", tagline: "Rule the Pyramid of Tiles", path: "/create-room", icon: <DominoIcon /> },
+  { name: "Backgammon", tagline: "Command the Board of Fate", path: "/create-room", icon: <BackgammonIcon /> },
 ];
 
 const Home = () => {
@@ -189,31 +189,16 @@ const Home = () => {
             <div className="h-px flex-1 max-w-24 bg-gradient-to-l from-transparent to-border" />
           </div>
           
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-            {featuredGames.map((game) => {
-              const Icon = game.icon;
-              return (
-                <Card key={game.name} className="text-center group relative overflow-hidden">
-                  {/* Card glow effect */}
-                  <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 bg-gradient-to-t from-primary/5 to-transparent" />
-                  
-                  <CardContent className="relative pt-8 pb-6 flex flex-col items-center gap-4">
-                    <div className="relative">
-                      <div className="absolute inset-0 -m-4 bg-primary/5 rounded-full group-hover:bg-primary/10 transition-colors" />
-                      <span className="relative text-6xl drop-shadow-lg">{game.emoji}</span>
-                      <Icon className="absolute -top-1 -right-1 w-5 h-5 text-primary opacity-0 group-hover:opacity-100 transition-all group-hover:scale-110" />
-                    </div>
-                    <h3 className="text-xl font-display font-medium text-foreground">{game.name}</h3>
-                    <Button asChild size="default" variant="default" className="mt-2">
-                      <Link to={game.path}>
-                        <Trophy className="w-4 h-4" />
-                        Play Now
-                      </Link>
-                    </Button>
-                  </CardContent>
-                </Card>
-              );
-            })}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-8">
+            {featuredGames.map((game) => (
+              <FeaturedGameCard
+                key={game.name}
+                name={game.name}
+                tagline={game.tagline}
+                path={game.path}
+                icon={game.icon}
+              />
+            ))}
           </div>
         </div>
       </section>
