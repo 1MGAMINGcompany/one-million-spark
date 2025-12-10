@@ -1,5 +1,7 @@
 import { cn } from "@/lib/utils";
 
+type TileSize = "default" | "mobile";
+
 interface DominoTile3DProps {
   left: number;
   right: number;
@@ -8,6 +10,7 @@ interface DominoTile3DProps {
   isPlayable?: boolean;
   isAITurn?: boolean;
   isChainTile?: boolean;
+  size?: TileSize;
   onClick?: () => void;
   className?: string;
 }
@@ -64,11 +67,16 @@ const DominoTile3D = ({
   isPlayable = false,
   isAITurn = false,
   isChainTile = false,
+  size = "default",
   onClick,
   className,
 }: DominoTile3DProps) => {
-  const tileWidth = isChainTile ? 60 : 80;
-  const tileHeight = isChainTile ? 36 : 120;
+  // Size multipliers for mobile (25-35% smaller)
+  const sizeMultiplier = size === "mobile" ? 0.68 : 1;
+  const baseTileWidth = isChainTile ? 60 : 80;
+  const baseTileHeight = isChainTile ? 36 : 120;
+  const tileWidth = Math.round(baseTileWidth * sizeMultiplier);
+  const tileHeight = Math.round(baseTileHeight * sizeMultiplier);
   const isHorizontal = isChainTile;
 
   return (
