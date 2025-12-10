@@ -3,8 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { Chess, Square, Move } from "chess.js";
 import { ChessBoard } from "@/components/ChessBoard";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, RotateCcw, Bot, Crown } from "lucide-react";
+import { ArrowLeft, RotateCcw, Gem, Star } from "lucide-react";
 
 type Difficulty = "easy" | "medium" | "hard";
 
@@ -129,16 +128,13 @@ const ChessAI = () => {
 
     switch (difficulty) {
       case "easy": {
-        // Random move
         const randomIndex = Math.floor(Math.random() * moves.length);
         return moves[randomIndex].san;
       }
 
       case "medium": {
-        // Prefer captures, otherwise random
         const captures = moves.filter(m => m.captured);
         if (captures.length > 0) {
-          // Pick the highest value capture
           const sorted = captures.sort((a, b) => {
             const aValue = PIECE_VALUES[a.captured || ""] || 0;
             const bValue = PIECE_VALUES[b.captured || ""] || 0;
@@ -151,9 +147,8 @@ const ChessAI = () => {
       }
 
       case "hard": {
-        // Minimax at depth 3
         let bestMove: string | null = null;
-        let bestValue = Infinity; // AI is black, minimizing
+        let bestValue = Infinity;
 
         for (const move of moves) {
           currentGame.move(move.san);
@@ -241,136 +236,253 @@ const ChessAI = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background pyramid-bg">
-      {/* Header */}
-      <div className="bg-card/80 backdrop-blur-sm border-b border-gold/20 px-4 py-4">
-        <div className="max-w-6xl mx-auto">
-          <Button asChild variant="ghost" size="sm" className="mb-3 text-muted-foreground hover:text-gold">
-            <Link to="/play-ai">
-              <ArrowLeft size={18} />
-              Back to AI Lobby
-            </Link>
-          </Button>
-          <div className="flex items-center justify-between flex-wrap gap-4">
-            <div className="flex items-center gap-3">
-              <Bot size={32} className="text-gold" />
-              <div>
-                <h1 className="text-2xl font-display font-bold text-foreground">
-                  Chess vs AI <span className="text-gold">(Free Practice)</span>
-                </h1>
-                <p className="text-sm text-muted-foreground">
-                  No wallet needed · No money · Just practice
-                </p>
-              </div>
-            </div>
-            {/* Difficulty Badge */}
-            <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gold/10 border border-gold/30">
-              <Crown size={18} className="text-gold" />
-              <div className="text-sm">
-                <span className="text-muted-foreground">Difficulty: </span>
-                <span className="font-bold text-gold">{difficultyLabel}</span>
-              </div>
-            </div>
-          </div>
-        </div>
+    <div className="min-h-screen bg-background relative overflow-hidden">
+      {/* Background with pyramid pattern */}
+      <div className="absolute inset-0 bg-gradient-to-b from-midnight-light via-background to-background" />
+      <div 
+        className="absolute inset-0 opacity-5"
+        style={{
+          backgroundImage: `repeating-linear-gradient(
+            60deg,
+            transparent,
+            transparent 100px,
+            hsl(45 93% 54% / 0.1) 100px,
+            hsl(45 93% 54% / 0.1) 102px
+          ),
+          repeating-linear-gradient(
+            -60deg,
+            transparent,
+            transparent 100px,
+            hsl(45 93% 54% / 0.1) 100px,
+            hsl(45 93% 54% / 0.1) 102px
+          )`
+        }}
+      />
+      {/* Subtle pyramid silhouette */}
+      <div className="absolute inset-0 flex items-end justify-center pointer-events-none overflow-hidden">
+        <div 
+          className="w-[600px] h-[400px] opacity-[0.03] translate-y-1/2"
+          style={{
+            background: "linear-gradient(to top, hsl(45 93% 54%) 0%, transparent 80%)",
+            clipPath: "polygon(50% 0%, 0% 100%, 100% 100%)"
+          }}
+        />
       </div>
 
-      {/* Main Content */}
-      <div className="max-w-6xl mx-auto px-4 py-6">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Chess Board Column */}
-          <div className="lg:col-span-2 space-y-4">
-            <ChessBoard
-              game={game}
-              onMove={handleMove}
-              disabled={gameOver || isThinking}
-            />
-
-            {/* Status */}
-            <div className={`text-center p-4 rounded-lg border ${
-              gameOver 
-                ? gameStatus.includes("win") 
-                  ? "bg-green-500/10 border-green-500/30 text-green-400" 
-                  : gameStatus.includes("lose")
-                  ? "bg-red-500/10 border-red-500/30 text-red-400"
-                  : "bg-gold/10 border-gold/30 text-gold"
-                : isThinking
-                ? "bg-muted/50 border-border text-muted-foreground"
-                : "bg-gold/10 border-gold/30 text-gold"
-            }`}>
-              <p className="font-medium text-lg">{gameStatus}</p>
-              {game.isCheck() && !gameOver && (
-                <p className="text-sm mt-1">Check!</p>
-              )}
+      <div className="relative z-10">
+        {/* Header */}
+        <div className="border-b border-primary/20 px-4 py-4">
+          <div className="max-w-6xl mx-auto">
+            <Button asChild variant="ghost" size="sm" className="mb-4 text-muted-foreground hover:text-primary group">
+              <Link to="/play-ai" className="flex items-center gap-2">
+                <ArrowLeft size={18} className="group-hover:text-primary transition-colors" />
+                Back to Temple
+              </Link>
+            </Button>
+            
+            {/* Title with decorative elements */}
+            <div className="flex items-center justify-center gap-3 mb-2">
+              <div className="h-px w-8 bg-gradient-to-r from-transparent to-primary/50 hidden sm:block" />
+              <Gem className="w-4 h-4 text-primary" />
+              <h1 
+                className="text-xl md:text-2xl font-display font-bold tracking-wide text-center"
+                style={{
+                  background: "linear-gradient(135deg, #FCE68A 0%, #FACC15 50%, #AB8215 100%)",
+                  WebkitBackgroundClip: "text",
+                  WebkitTextFillColor: "transparent",
+                  backgroundClip: "text",
+                }}
+              >
+                Chess Training – Temple of Strategy
+              </h1>
+              <Gem className="w-4 h-4 text-primary" />
+              <div className="h-px w-8 bg-gradient-to-l from-transparent to-primary/50 hidden sm:block" />
             </div>
+            
+            <p className="text-center text-sm text-muted-foreground/60">
+              <Star className="w-3 h-3 inline-block mr-1 text-primary/40" />
+              Free mode – no wallet required
+              <Star className="w-3 h-3 inline-block ml-1 text-primary/40" />
+            </p>
           </div>
+        </div>
 
-          {/* Side Panel */}
-          <div className="space-y-4">
-            {/* Game Info */}
-            <Card className="border-gold/20 bg-card/80">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base font-display">Game Info</CardTitle>
-              </CardHeader>
-              <CardContent className="text-sm text-muted-foreground space-y-2">
-                <div className="flex justify-between">
-                  <span>You:</span>
-                  <span className="text-foreground font-medium">White</span>
+        {/* Main Content */}
+        <div className="max-w-6xl mx-auto px-4 py-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Chess Board Column */}
+            <div className="lg:col-span-2 space-y-4">
+              {/* Board Container with gold frame */}
+              <div className="relative">
+                {/* Outer glow */}
+                <div className="absolute -inset-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 rounded-2xl blur-xl opacity-50" />
+                
+                {/* Gold frame */}
+                <div className="relative p-1 rounded-xl bg-gradient-to-br from-primary/40 via-primary/20 to-primary/40 shadow-[0_0_40px_-10px_hsl(45_93%_54%_/_0.4)]">
+                  <div className="bg-background rounded-lg overflow-hidden">
+                    <ChessBoard
+                      game={game}
+                      onMove={handleMove}
+                      disabled={gameOver || isThinking}
+                    />
+                  </div>
                 </div>
-                <div className="flex justify-between">
-                  <span>AI:</span>
-                  <span className="text-foreground font-medium">Black</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Difficulty:</span>
-                  <span className="text-gold font-medium">{difficultyLabel}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>AI Style:</span>
-                  <span className="text-muted-foreground">{difficultyDescription}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Moves:</span>
-                  <span className="text-foreground font-medium">{moveHistory.length}</span>
-                </div>
-              </CardContent>
-            </Card>
+              </div>
 
-            {/* Move History */}
-            <Card className="border-gold/20 bg-card/80">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base font-display">Move History</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="max-h-48 overflow-y-auto">
+              {/* Status Bar */}
+              <div 
+                className={`relative overflow-hidden rounded-lg border transition-all duration-300 ${
+                  gameOver 
+                    ? gameStatus.includes("win") 
+                      ? "bg-green-500/10 border-green-500/30" 
+                      : gameStatus.includes("lose")
+                      ? "bg-red-500/10 border-red-500/30"
+                      : "bg-primary/10 border-primary/30"
+                    : "bg-gradient-to-r from-primary/5 via-primary/10 to-primary/5 border-primary/30"
+                }`}
+              >
+                {/* Decorative corner accents */}
+                <div className="absolute top-1 left-1 w-3 h-3 border-l border-t border-primary/40 rounded-tl" />
+                <div className="absolute top-1 right-1 w-3 h-3 border-r border-t border-primary/40 rounded-tr" />
+                <div className="absolute bottom-1 left-1 w-3 h-3 border-l border-b border-primary/40 rounded-bl" />
+                <div className="absolute bottom-1 right-1 w-3 h-3 border-r border-b border-primary/40 rounded-br" />
+                
+                <div className="px-6 py-4 text-center">
+                  <p 
+                    className={`font-display font-bold text-lg ${
+                      gameOver 
+                        ? gameStatus.includes("win") 
+                          ? "text-green-400" 
+                          : gameStatus.includes("lose")
+                          ? "text-red-400"
+                          : "text-primary"
+                        : isThinking
+                        ? "text-muted-foreground"
+                        : "text-primary"
+                    }`}
+                    style={!gameOver && !isThinking ? {
+                      background: "linear-gradient(135deg, #FCE68A 0%, #FACC15 50%, #AB8215 100%)",
+                      WebkitBackgroundClip: "text",
+                      WebkitTextFillColor: "transparent",
+                      backgroundClip: "text",
+                    } : undefined}
+                  >
+                    {gameStatus}
+                  </p>
+                  {game.isCheck() && !gameOver && (
+                    <p className="text-sm text-primary/70 mt-1">Check!</p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Side Panel */}
+            <div className="space-y-4">
+              {/* Difficulty Display */}
+              <div className="relative p-4 rounded-xl bg-gradient-to-br from-midnight-light via-card to-background border border-primary/20">
+                <div className="absolute top-2 right-2">
+                  <div 
+                    className="w-3 h-3 opacity-40"
+                    style={{
+                      background: "linear-gradient(to top, hsl(45 93% 54%) 0%, hsl(45 90% 65%) 100%)",
+                      clipPath: "polygon(50% 0%, 0% 100%, 100% 100%)"
+                    }}
+                  />
+                </div>
+                
+                <p className="text-xs text-primary/60 uppercase tracking-wider mb-3 font-medium">Difficulty</p>
+                <div className="flex gap-1 p-1 bg-background/50 rounded-lg border border-primary/20">
+                  {(["easy", "medium", "hard"] as const).map((level) => (
+                    <div
+                      key={level}
+                      className={`flex-1 py-2 px-2 text-xs font-bold rounded-md text-center transition-all ${
+                        difficulty === level
+                          ? "bg-gradient-to-r from-primary to-gold text-primary-foreground shadow-[0_0_12px_-2px_hsl(45_93%_54%_/_0.5)]"
+                          : "text-muted-foreground/50"
+                      }`}
+                    >
+                      {level.toUpperCase()}
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground mt-3 text-center">{difficultyDescription}</p>
+              </div>
+
+              {/* Game Info */}
+              <div className="relative p-4 rounded-xl bg-gradient-to-br from-midnight-light via-card to-background border border-primary/20">
+                <div className="absolute top-2 right-2">
+                  <div 
+                    className="w-3 h-3 opacity-40"
+                    style={{
+                      background: "linear-gradient(to top, hsl(45 93% 54%) 0%, hsl(45 90% 65%) 100%)",
+                      clipPath: "polygon(50% 0%, 0% 100%, 100% 100%)"
+                    }}
+                  />
+                </div>
+                
+                <p className="text-xs text-primary/60 uppercase tracking-wider mb-3 font-medium">Game Info</p>
+                <div className="text-sm space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">You</span>
+                    <span className="text-foreground font-medium">White ♔</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">AI</span>
+                    <span className="text-foreground font-medium">Black ♚</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Total Moves</span>
+                    <span className="text-primary font-medium">{moveHistory.length}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Move History */}
+              <div className="relative p-4 rounded-xl bg-gradient-to-br from-midnight-light via-card to-background border border-primary/20">
+                <div className="absolute top-2 right-2">
+                  <div 
+                    className="w-3 h-3 opacity-40"
+                    style={{
+                      background: "linear-gradient(to top, hsl(45 93% 54%) 0%, hsl(45 90% 65%) 100%)",
+                      clipPath: "polygon(50% 0%, 0% 100%, 100% 100%)"
+                    }}
+                  />
+                </div>
+                
+                <p className="text-xs text-primary/60 uppercase tracking-wider mb-3 font-medium">Move History</p>
+                <div className="max-h-48 overflow-y-auto scrollbar-thin scrollbar-thumb-primary/20 scrollbar-track-transparent">
                   {formattedMoves.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No moves yet</p>
+                    <p className="text-sm text-muted-foreground/50 text-center py-4">No moves yet</p>
                   ) : (
                     <div className="space-y-1 text-sm font-mono">
                       {formattedMoves.map((move) => (
-                        <div key={move.number} className="flex gap-2">
-                          <span className="w-6 text-muted-foreground">{move.number}.</span>
-                          <span className="w-12 text-foreground">{move.white}</span>
-                          <span className="w-12 text-foreground">{move.black}</span>
+                        <div key={move.number} className="flex gap-2 py-1 px-2 rounded hover:bg-primary/5 transition-colors">
+                          <span className="w-6 text-primary/50">{move.number}.</span>
+                          <span className="w-14 text-foreground">{move.white}</span>
+                          <span className="w-14 text-foreground/70">{move.black}</span>
                         </div>
                       ))}
                     </div>
                   )}
                 </div>
-              </CardContent>
-            </Card>
+              </div>
 
-            {/* Actions */}
-            <Button onClick={restartGame} className="w-full" variant="outline">
-              <RotateCcw size={18} />
-              Restart Game
-            </Button>
+              {/* Actions */}
+              <Button 
+                onClick={restartGame} 
+                className="w-full group border border-primary/30 hover:border-primary/60 transition-all" 
+                variant="outline"
+              >
+                <RotateCcw size={18} className="text-primary group-hover:drop-shadow-[0_0_6px_hsl(45_93%_54%_/_0.6)] transition-all" />
+                Restart Game
+              </Button>
 
-            <Button asChild variant="ghost" className="w-full text-muted-foreground">
-              <Link to="/play-ai">
-                Change Difficulty
-              </Link>
-            </Button>
+              <Button asChild variant="ghost" className="w-full text-muted-foreground hover:text-primary">
+                <Link to="/play-ai">
+                  Change Difficulty
+                </Link>
+              </Button>
+            </div>
           </div>
         </div>
       </div>
