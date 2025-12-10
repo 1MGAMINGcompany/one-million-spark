@@ -1,8 +1,7 @@
 import { useState, useCallback, useMemo, useEffect } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, RotateCcw, Bot, Crown } from "lucide-react";
+import { ArrowLeft, RotateCcw, Gem, Star } from "lucide-react";
 
 type Difficulty = "easy" | "medium" | "hard";
 
@@ -61,6 +60,14 @@ const DominosAI = () => {
       case "easy": return "EASY";
       case "medium": return "MEDIUM";
       case "hard": return "HARD";
+    }
+  }, [difficulty]);
+
+  const difficultyDescription = useMemo(() => {
+    switch (difficulty) {
+      case "easy": return "Random moves";
+      case "medium": return "Greedy strategy";
+      case "hard": return "Advanced tactics";
     }
   }, [difficulty]);
 
@@ -356,17 +363,17 @@ const DominosAI = () => {
         onClick={() => isClickable && handlePlayerPlay(domino)}
         disabled={!isClickable}
         className={`
-          relative flex items-center gap-0.5 px-2 py-3 rounded-lg border-2 transition-all duration-200
-          ${isSelected ? "border-gold ring-2 ring-gold/50 scale-105" : "border-gold/30"}
-          ${isClickable && isLegal ? "hover:border-gold hover:scale-105 cursor-pointer" : ""}
+          relative flex items-center gap-0.5 px-3 py-4 rounded-lg border-2 transition-all duration-200
+          ${isSelected ? "border-primary ring-2 ring-primary/50 scale-105" : "border-primary/30"}
+          ${isClickable && isLegal ? "hover:border-primary hover:scale-105 hover:shadow-[0_0_20px_-5px_hsl(45_93%_54%_/_0.5)] cursor-pointer" : ""}
           ${isClickable && !isLegal ? "opacity-50 cursor-not-allowed" : ""}
           ${!isClickable ? "cursor-default" : ""}
-          bg-gradient-to-b from-sand/20 to-background
+          bg-gradient-to-b from-midnight-light via-card to-background
         `}
       >
-        <span className="text-lg font-bold text-gold w-5 text-center">{left}</span>
-        <span className="w-px h-6 bg-gold/40" />
-        <span className="text-lg font-bold text-gold w-5 text-center">{right}</span>
+        <span className="text-lg font-bold text-primary w-5 text-center">{left}</span>
+        <span className="w-px h-6 bg-primary/40" />
+        <span className="text-lg font-bold text-primary w-5 text-center">{right}</span>
       </button>
     );
   };
@@ -379,115 +386,193 @@ const DominosAI = () => {
     return (
       <div
         key={`chain-${placed.id}-${index}`}
-        className="flex items-center gap-0.5 px-1.5 py-2 rounded border border-gold/40 bg-gradient-to-b from-sand/30 to-card"
+        className="flex items-center gap-0.5 px-2 py-2.5 rounded border border-primary/40 bg-gradient-to-b from-primary/10 via-card to-background shadow-[0_0_10px_-3px_hsl(45_93%_54%_/_0.3)]"
       >
-        <span className="text-sm font-bold text-gold w-4 text-center">{left}</span>
-        <span className="w-px h-4 bg-gold/40" />
-        <span className="text-sm font-bold text-gold w-4 text-center">{right}</span>
+        <span className="text-sm font-bold text-primary w-4 text-center">{left}</span>
+        <span className="w-px h-4 bg-primary/40" />
+        <span className="text-sm font-bold text-primary w-4 text-center">{right}</span>
       </div>
     );
   };
 
   return (
-    <div className="min-h-screen bg-background pyramid-bg">
-      {/* Header */}
-      <div className="bg-card/80 backdrop-blur-sm border-b border-gold/20 px-4 py-4">
-        <div className="max-w-6xl mx-auto">
-          <Button asChild variant="ghost" size="sm" className="mb-3 text-muted-foreground hover:text-gold">
-            <Link to="/play-ai">
-              <ArrowLeft size={18} />
-              Back to AI Lobby
-            </Link>
-          </Button>
-          <div className="flex items-center justify-between flex-wrap gap-4">
-            <div className="flex items-center gap-3">
-              <Bot size={32} className="text-gold" />
-              <div>
-                <h1 className="text-2xl font-display font-bold text-foreground">
-                  Dominos vs AI <span className="text-gold">(Free Practice)</span>
-                </h1>
-                <p className="text-sm text-muted-foreground">
-                  No wallet needed · No money · Just practice
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gold/10 border border-gold/30">
-              <Crown size={18} className="text-gold" />
-              <div className="text-sm">
-                <span className="text-muted-foreground">Difficulty: </span>
-                <span className="font-bold text-gold">{difficultyLabel}</span>
-              </div>
-            </div>
-          </div>
-        </div>
+    <div className="min-h-screen bg-background relative overflow-hidden">
+      {/* Background with pyramid pattern */}
+      <div className="absolute inset-0 bg-gradient-to-b from-midnight-light via-background to-background" />
+      <div 
+        className="absolute inset-0 opacity-5"
+        style={{
+          backgroundImage: `repeating-linear-gradient(
+            60deg,
+            transparent,
+            transparent 100px,
+            hsl(45 93% 54% / 0.1) 100px,
+            hsl(45 93% 54% / 0.1) 102px
+          ),
+          repeating-linear-gradient(
+            -60deg,
+            transparent,
+            transparent 100px,
+            hsl(45 93% 54% / 0.1) 100px,
+            hsl(45 93% 54% / 0.1) 102px
+          )`
+        }}
+      />
+      {/* Subtle pyramid silhouette */}
+      <div className="absolute inset-0 flex items-end justify-center pointer-events-none overflow-hidden">
+        <div 
+          className="w-[600px] h-[400px] opacity-[0.03] translate-y-1/2"
+          style={{
+            background: "linear-gradient(to top, hsl(45 93% 54%) 0%, transparent 80%)",
+            clipPath: "polygon(50% 0%, 0% 100%, 100% 100%)"
+          }}
+        />
       </div>
 
-      {/* Main Content */}
-      <div className="max-w-6xl mx-auto px-4 py-6">
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          {/* Game Area */}
-          <div className="lg:col-span-3 space-y-4">
-            {/* AI Hand (face down) */}
-            <Card className="border-gold/20 bg-card/80">
-              <CardHeader className="py-3">
-                <CardTitle className="text-sm font-display flex items-center gap-2">
-                  <Bot size={16} className="text-gold" />
-                  AI's Hand ({aiHand.length} tiles)
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pb-3">
+      <div className="relative z-10">
+        {/* Header */}
+        <div className="border-b border-primary/20 px-4 py-4">
+          <div className="max-w-6xl mx-auto">
+            <Button asChild variant="ghost" size="sm" className="mb-4 text-muted-foreground hover:text-primary group">
+              <Link to="/play-ai" className="flex items-center gap-2">
+                <ArrowLeft size={18} className="group-hover:text-primary transition-colors" />
+                Back to Temple
+              </Link>
+            </Button>
+            
+            {/* Title with decorative elements */}
+            <div className="flex items-center justify-center gap-3 mb-2">
+              <div className="h-px w-8 bg-gradient-to-r from-transparent to-primary/50 hidden sm:block" />
+              <Gem className="w-4 h-4 text-primary" />
+              <h1 
+                className="text-xl md:text-2xl font-display font-bold tracking-wide text-center"
+                style={{
+                  background: "linear-gradient(135deg, #FCE68A 0%, #FACC15 50%, #AB8215 100%)",
+                  WebkitBackgroundClip: "text",
+                  WebkitTextFillColor: "transparent",
+                  backgroundClip: "text",
+                }}
+              >
+                Dominos Training – Temple of Tactics
+              </h1>
+              <Gem className="w-4 h-4 text-primary" />
+              <div className="h-px w-8 bg-gradient-to-l from-transparent to-primary/50 hidden sm:block" />
+            </div>
+            
+            <p className="text-center text-sm text-muted-foreground/60">
+              <Star className="w-3 h-3 inline-block mr-1 text-primary/40" />
+              Free mode – no wallet required
+              <Star className="w-3 h-3 inline-block ml-1 text-primary/40" />
+            </p>
+          </div>
+        </div>
+
+        {/* Main Content */}
+        <div className="max-w-6xl mx-auto px-4 py-6">
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            {/* Game Area */}
+            <div className="lg:col-span-3 space-y-4">
+              {/* AI Hand (face down) */}
+              <div className="relative p-4 rounded-xl bg-gradient-to-br from-midnight-light via-card to-background border border-primary/20">
+                <div className="absolute top-2 right-2">
+                  <div 
+                    className="w-3 h-3 opacity-40"
+                    style={{
+                      background: "linear-gradient(to top, hsl(45 93% 54%) 0%, hsl(45 90% 65%) 100%)",
+                      clipPath: "polygon(50% 0%, 0% 100%, 100% 100%)"
+                    }}
+                  />
+                </div>
+                <p className="text-xs text-primary/60 uppercase tracking-wider mb-3 font-medium">AI's Hand ({aiHand.length} tiles)</p>
                 <div className="flex flex-wrap gap-2">
                   {aiHand.map((_, i) => (
                     <div
                       key={i}
-                      className="w-12 h-8 rounded border border-gold/30 bg-gradient-to-b from-primary/20 to-card flex items-center justify-center"
+                      className="w-12 h-9 rounded border border-primary/30 bg-gradient-to-b from-primary/10 to-card flex items-center justify-center"
                     >
-                      <span className="text-gold/50 text-xs">?</span>
+                      <span className="text-primary/40 text-xs">?</span>
                     </div>
                   ))}
                 </div>
-              </CardContent>
-            </Card>
+              </div>
 
-            {/* Chain / Table */}
-            <Card className="border-gold/20 bg-card/80 min-h-[120px]">
-              <CardHeader className="py-3">
-                <CardTitle className="text-sm font-display">Table</CardTitle>
-              </CardHeader>
-              <CardContent className="pb-3">
-                {chain.length === 0 ? (
-                  <p className="text-muted-foreground text-center py-4">
-                    Play any tile to start the game
-                  </p>
-                ) : (
-                  <div className="flex flex-wrap gap-1 justify-center items-center">
-                    {chain.map((placed, i) => renderChainDomino(placed, i))}
+              {/* Table / Chain Container with gold frame */}
+              <div className="relative">
+                {/* Outer glow */}
+                <div className="absolute -inset-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 rounded-2xl blur-xl opacity-50" />
+                
+                {/* Gold frame */}
+                <div className="relative p-1 rounded-xl bg-gradient-to-br from-primary/40 via-primary/20 to-primary/40 shadow-[0_0_40px_-10px_hsl(45_93%_54%_/_0.4)]">
+                  <div className="bg-gradient-to-br from-midnight-light via-background to-background rounded-lg p-6 min-h-[140px]">
+                    <p className="text-xs text-primary/60 uppercase tracking-wider mb-4 font-medium text-center">Game Table</p>
+                    {chain.length === 0 ? (
+                      <p className="text-muted-foreground/60 text-center py-6">
+                        Play any tile to start the game
+                      </p>
+                    ) : (
+                      <div className="flex flex-wrap gap-1.5 justify-center items-center">
+                        {chain.map((placed, i) => renderChainDomino(placed, i))}
+                      </div>
+                    )}
                   </div>
-                )}
-              </CardContent>
-            </Card>
+                </div>
+              </div>
 
-            {/* Status */}
-            <div className={`text-center p-4 rounded-lg border ${
-              gameOver
-                ? gameStatus.includes("win")
-                  ? "bg-green-500/10 border-green-500/30 text-green-400"
-                  : gameStatus.includes("lose")
-                  ? "bg-red-500/10 border-red-500/30 text-red-400"
-                  : "bg-gold/10 border-gold/30 text-gold"
-                : isThinking
-                ? "bg-muted/50 border-border text-muted-foreground"
-                : "bg-gold/10 border-gold/30 text-gold"
-            }`}>
-              <p className="font-medium">{gameStatus}</p>
-            </div>
+              {/* Status Bar */}
+              <div 
+                className={`relative overflow-hidden rounded-lg border transition-all duration-300 ${
+                  gameOver 
+                    ? gameStatus.includes("win") 
+                      ? "bg-green-500/10 border-green-500/30" 
+                      : gameStatus.includes("lose")
+                      ? "bg-red-500/10 border-red-500/30"
+                      : "bg-primary/10 border-primary/30"
+                    : "bg-gradient-to-r from-primary/5 via-primary/10 to-primary/5 border-primary/30"
+                }`}
+              >
+                {/* Decorative corner accents */}
+                <div className="absolute top-1 left-1 w-3 h-3 border-l border-t border-primary/40 rounded-tl" />
+                <div className="absolute top-1 right-1 w-3 h-3 border-r border-t border-primary/40 rounded-tr" />
+                <div className="absolute bottom-1 left-1 w-3 h-3 border-l border-b border-primary/40 rounded-bl" />
+                <div className="absolute bottom-1 right-1 w-3 h-3 border-r border-b border-primary/40 rounded-br" />
+                
+                <div className="px-6 py-4 text-center">
+                  <p 
+                    className={`font-display font-bold text-lg ${
+                      gameOver 
+                        ? gameStatus.includes("win") 
+                          ? "text-green-400" 
+                          : gameStatus.includes("lose")
+                          ? "text-red-400"
+                          : "text-primary"
+                        : isThinking
+                        ? "text-muted-foreground"
+                        : "text-primary"
+                    }`}
+                    style={!gameOver && !isThinking ? {
+                      background: "linear-gradient(135deg, #FCE68A 0%, #FACC15 50%, #AB8215 100%)",
+                      WebkitBackgroundClip: "text",
+                      WebkitTextFillColor: "transparent",
+                      backgroundClip: "text",
+                    } : undefined}
+                  >
+                    {gameStatus}
+                  </p>
+                </div>
+              </div>
 
-            {/* Player Hand */}
-            <Card className="border-gold/20 bg-card/80">
-              <CardHeader className="py-3">
-                <CardTitle className="text-sm font-display">Your Hand ({playerHand.length} tiles)</CardTitle>
-              </CardHeader>
-              <CardContent className="pb-3">
+              {/* Player Hand */}
+              <div className="relative p-4 rounded-xl bg-gradient-to-br from-midnight-light via-card to-background border border-primary/20">
+                <div className="absolute top-2 right-2">
+                  <div 
+                    className="w-3 h-3 opacity-40"
+                    style={{
+                      background: "linear-gradient(to top, hsl(45 93% 54%) 0%, hsl(45 90% 65%) 100%)",
+                      clipPath: "polygon(50% 0%, 0% 100%, 100% 100%)"
+                    }}
+                  />
+                </div>
+                <p className="text-xs text-primary/60 uppercase tracking-wider mb-3 font-medium">Your Hand ({playerHand.length} tiles)</p>
                 <div className="flex flex-wrap gap-2 justify-center">
                   {playerHand.map(d => 
                     renderDomino(d, isPlayerTurn && !gameOver && !isThinking, selectedDomino === d.id)
@@ -502,52 +587,103 @@ const DominosAI = () => {
                         Draw from Boneyard ({boneyard.length})
                       </Button>
                     ) : (
-                      <Button variant="outline" size="sm" onClick={handlePass}>
+                      <Button variant="outline" size="sm" onClick={handlePass} className="border-primary/30 text-primary hover:bg-primary/10">
                         Pass (no moves)
                       </Button>
                     )}
                   </div>
                 )}
-              </CardContent>
-            </Card>
-          </div>
+              </div>
+            </div>
 
-          {/* Side Panel */}
-          <div className="space-y-4">
-            <Card className="border-gold/20 bg-card/80">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base font-display">Game Info</CardTitle>
-              </CardHeader>
-              <CardContent className="text-sm text-muted-foreground space-y-2">
-                <div className="flex justify-between">
-                  <span>Your tiles:</span>
-                  <span className="text-foreground font-medium">{playerHand.length}</span>
+            {/* Side Panel */}
+            <div className="space-y-4">
+              {/* Difficulty Display */}
+              <div className="relative p-4 rounded-xl bg-gradient-to-br from-midnight-light via-card to-background border border-primary/20">
+                <div className="absolute top-2 right-2">
+                  <div 
+                    className="w-3 h-3 opacity-40"
+                    style={{
+                      background: "linear-gradient(to top, hsl(45 93% 54%) 0%, hsl(45 90% 65%) 100%)",
+                      clipPath: "polygon(50% 0%, 0% 100%, 100% 100%)"
+                    }}
+                  />
                 </div>
-                <div className="flex justify-between">
-                  <span>AI tiles:</span>
-                  <span className="text-foreground font-medium">{aiHand.length}</span>
+                
+                <p className="text-xs text-primary/60 uppercase tracking-wider mb-3 font-medium">Difficulty</p>
+                <div className="flex gap-1 p-1 bg-background/50 rounded-lg border border-primary/20">
+                  {(["easy", "medium", "hard"] as const).map((level) => (
+                    <div
+                      key={level}
+                      className={`flex-1 py-2 px-2 text-xs font-bold rounded-md text-center transition-all ${
+                        difficulty === level
+                          ? "bg-gradient-to-r from-primary to-gold text-primary-foreground shadow-[0_0_12px_-2px_hsl(45_93%_54%_/_0.5)]"
+                          : "text-muted-foreground/50"
+                      }`}
+                    >
+                      {level.toUpperCase()}
+                    </div>
+                  ))}
                 </div>
-                <div className="flex justify-between">
-                  <span>Boneyard:</span>
-                  <span className="text-foreground font-medium">{boneyard.length}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Difficulty:</span>
-                  <span className="text-gold font-medium">{difficultyLabel}</span>
-                </div>
-              </CardContent>
-            </Card>
+                <p className="text-xs text-muted-foreground mt-3 text-center">{difficultyDescription}</p>
+              </div>
 
-            <Button onClick={initGame} className="w-full" variant="outline">
-              <RotateCcw size={18} />
-              Restart Game
-            </Button>
+              {/* Game Info */}
+              <div className="relative p-4 rounded-xl bg-gradient-to-br from-midnight-light via-card to-background border border-primary/20">
+                <div className="absolute top-2 right-2">
+                  <div 
+                    className="w-3 h-3 opacity-40"
+                    style={{
+                      background: "linear-gradient(to top, hsl(45 93% 54%) 0%, hsl(45 90% 65%) 100%)",
+                      clipPath: "polygon(50% 0%, 0% 100%, 100% 100%)"
+                    }}
+                  />
+                </div>
+                
+                <p className="text-xs text-primary/60 uppercase tracking-wider mb-3 font-medium">Game Info</p>
+                <div className="text-sm space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Your tiles</span>
+                    <span className="text-primary font-medium">{playerHand.length}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">AI tiles</span>
+                    <span className="text-foreground font-medium">{aiHand.length}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Boneyard</span>
+                    <span className="text-foreground font-medium">{boneyard.length}</span>
+                  </div>
+                </div>
+              </div>
 
-            <Button asChild variant="ghost" className="w-full text-muted-foreground">
-              <Link to="/play-ai">
-                Change Difficulty
-              </Link>
-            </Button>
+              {/* Actions */}
+              <div className="relative p-4 rounded-xl bg-gradient-to-br from-midnight-light via-card to-background border border-primary/20">
+                <div className="absolute top-2 right-2">
+                  <div 
+                    className="w-3 h-3 opacity-40"
+                    style={{
+                      background: "linear-gradient(to top, hsl(45 93% 54%) 0%, hsl(45 90% 65%) 100%)",
+                      clipPath: "polygon(50% 0%, 0% 100%, 100% 100%)"
+                    }}
+                  />
+                </div>
+                
+                <p className="text-xs text-primary/60 uppercase tracking-wider mb-3 font-medium">Actions</p>
+                <div className="space-y-2">
+                  <Button onClick={initGame} className="w-full" variant="gold" size="sm">
+                    <RotateCcw size={16} />
+                    Restart Game
+                  </Button>
+
+                  <Button asChild variant="ghost" size="sm" className="w-full text-muted-foreground hover:text-primary">
+                    <Link to="/play-ai">
+                      Change Difficulty
+                    </Link>
+                  </Button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
