@@ -241,7 +241,7 @@ export function ChessBoardPremium({
       <style>{`
         @media (min-width: 1024px) {
           .chess-board-desktop-container {
-            width: min(calc(100vh - 260px), calc(100vw * 0.55));
+            width: min(calc(100vh - 340px), calc(100vw * 0.42));
             max-width: 100%;
             aspect-ratio: 1 / 1;
             margin-left: auto;
