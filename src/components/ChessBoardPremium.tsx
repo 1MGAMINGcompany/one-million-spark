@@ -237,9 +237,21 @@ export function ChessBoardPremium({
   };
 
   return (
-    <div className="aspect-square w-full max-w-[600px] mx-auto lg:max-w-none lg:w-auto lg:h-[calc(100vh-260px)] lg:max-h-[calc(100vh-260px)]">
-      {/* Gold border frame */}
-      <div className="relative p-1 rounded-lg bg-gradient-to-br from-primary via-gold-light to-primary shadow-[0_0_30px_-5px_hsl(45_93%_54%_/_0.5)]">
+    <>
+      <style>{`
+        @media (min-width: 1024px) {
+          .chess-board-desktop-container {
+            width: min(calc(100vh - 260px), calc(100vw * 0.55));
+            max-width: 100%;
+            aspect-ratio: 1 / 1;
+            margin-left: auto;
+            margin-right: auto;
+          }
+        }
+      `}</style>
+      <div className="aspect-square w-full max-w-[600px] mx-auto lg:max-w-none lg:chess-board-desktop-container">
+        {/* Gold border frame */}
+        <div className="relative p-1 rounded-lg bg-gradient-to-br from-primary via-gold-light to-primary shadow-[0_0_30px_-5px_hsl(45_93%_54%_/_0.5)]">
         <div ref={boardRef} className="relative grid grid-cols-8 rounded overflow-hidden">
           {/* Capture Animation Layer */}
           {onAnimationComplete && (
@@ -396,6 +408,7 @@ export function ChessBoardPremium({
         </div>
       </div>
     </div>
+    </>
   );
 }
 
