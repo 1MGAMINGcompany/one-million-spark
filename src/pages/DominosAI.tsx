@@ -2,6 +2,7 @@ import { useState, useCallback, useMemo, useEffect } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, RotateCcw, Gem, Star } from "lucide-react";
+import DominoTile3D, { DominoTileBack } from "@/components/DominoTile3D";
 
 type Difficulty = "easy" | "medium" | "hard";
 
@@ -358,23 +359,16 @@ const DominosAI = () => {
     const isLegal = playerLegalMoves.some(d => d.id === domino.id);
     
     return (
-      <button
+      <DominoTile3D
         key={domino.id}
+        left={left}
+        right={right}
+        isClickable={isClickable}
+        isSelected={isSelected}
+        isPlayable={isLegal}
+        isAITurn={isThinking}
         onClick={() => isClickable && handlePlayerPlay(domino)}
-        disabled={!isClickable}
-        className={`
-          relative flex items-center gap-0.5 px-3 py-4 rounded-lg border-2 transition-all duration-200
-          ${isSelected ? "border-primary ring-2 ring-primary/50 scale-105" : "border-primary/30"}
-          ${isClickable && isLegal ? "hover:border-primary hover:scale-105 hover:shadow-[0_0_20px_-5px_hsl(45_93%_54%_/_0.5)] cursor-pointer" : ""}
-          ${isClickable && !isLegal ? "opacity-50 cursor-not-allowed" : ""}
-          ${!isClickable ? "cursor-default" : ""}
-          bg-gradient-to-b from-midnight-light via-card to-background
-        `}
-      >
-        <span className="text-lg font-bold text-primary w-5 text-center">{left}</span>
-        <span className="w-px h-6 bg-primary/40" />
-        <span className="text-lg font-bold text-primary w-5 text-center">{right}</span>
-      </button>
+      />
     );
   };
 
@@ -384,14 +378,12 @@ const DominosAI = () => {
     const right = placed.flipped ? placed.left : placed.right;
     
     return (
-      <div
+      <DominoTile3D
         key={`chain-${placed.id}-${index}`}
-        className="flex items-center gap-0.5 px-2 py-2.5 rounded border border-primary/40 bg-gradient-to-b from-primary/10 via-card to-background shadow-[0_0_10px_-3px_hsl(45_93%_54%_/_0.3)]"
-      >
-        <span className="text-sm font-bold text-primary w-4 text-center">{left}</span>
-        <span className="w-px h-4 bg-primary/40" />
-        <span className="text-sm font-bold text-primary w-4 text-center">{right}</span>
-      </div>
+        left={left}
+        right={right}
+        isChainTile
+      />
     );
   };
 
@@ -474,6 +466,14 @@ const DominosAI = () => {
             <div className="lg:col-span-3 space-y-4">
               {/* AI Hand (face down) */}
               <div className="relative p-4 rounded-xl bg-gradient-to-br from-midnight-light via-card to-background border border-primary/20">
+                {/* AI thinking indicator */}
+                {isThinking && (
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 flex items-center gap-2 px-3 py-1 rounded-full bg-background border border-primary/40 shadow-[0_0_15px_-3px_hsl(45_93%_54%_/_0.5)]">
+                    <div className="w-2 h-2 rounded-full bg-primary animate-pulse shadow-[0_0_8px_2px_hsl(45_93%_54%_/_0.6)]" />
+                    <span className="text-xs text-primary font-medium">AI Thinking...</span>
+                  </div>
+                )}
+                
                 <div className="absolute top-2 right-2">
                   <div 
                     className="w-3 h-3 opacity-40"
@@ -484,14 +484,9 @@ const DominosAI = () => {
                   />
                 </div>
                 <p className="text-xs text-primary/60 uppercase tracking-wider mb-3 font-medium">AI's Hand ({aiHand.length} tiles)</p>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-3 justify-center">
                   {aiHand.map((_, i) => (
-                    <div
-                      key={i}
-                      className="w-12 h-9 rounded border border-primary/30 bg-gradient-to-b from-primary/10 to-card flex items-center justify-center"
-                    >
-                      <span className="text-primary/40 text-xs">?</span>
-                    </div>
+                    <DominoTileBack key={i} isThinking={isThinking} />
                   ))}
                 </div>
               </div>
