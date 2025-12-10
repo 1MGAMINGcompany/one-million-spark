@@ -3,15 +3,16 @@ import { Chess, Square, PieceSymbol, Color } from "chess.js";
 import { cn } from "@/lib/utils";
 import { 
   CaptureAnimationLayer, 
-  CaptureAnimation, 
-  getCaptureAnimationType,
-  CAPTURE_ANIMATIONS_ENABLED 
+  CaptureAnimation
 } from "./CaptureAnimationLayer";
 
 interface ChessBoardPremiumProps {
   game: Chess;
   onMove: (from: Square, to: Square) => boolean;
   disabled?: boolean;
+  captureAnimations?: CaptureAnimation[];
+  onAnimationComplete?: (id: string) => void;
+  animationsEnabled?: boolean;
 }
 
 const files = ["a", "b", "c", "d", "e", "f", "g", "h"];
@@ -169,11 +170,17 @@ const ChessPiece = ({
   );
 };
 
-export function ChessBoardPremium({ game, onMove, disabled = false }: ChessBoardPremiumProps) {
+export function ChessBoardPremium({ 
+  game, 
+  onMove, 
+  disabled = false,
+  captureAnimations = [],
+  onAnimationComplete,
+  animationsEnabled = true
+}: ChessBoardPremiumProps) {
   const [selectedSquare, setSelectedSquare] = useState<Square | null>(null);
   const [legalMoves, setLegalMoves] = useState<Square[]>([]);
   const [movingPiece, setMovingPiece] = useState<{ from: Square; to: Square } | null>(null);
-  const [captureAnimations, setCaptureAnimations] = useState<CaptureAnimation[]>([]);
   const boardRef = useRef<HTMLDivElement>(null);
   const [squareSize, setSquareSize] = useState(0);
 
@@ -190,52 +197,16 @@ export function ChessBoardPremium({ game, onMove, disabled = false }: ChessBoard
     return () => window.removeEventListener("resize", updateSize);
   }, []);
 
-  const triggerCaptureAnimation = useCallback((
-    attackerPiece: PieceSymbol,
-    capturedPiece: PieceSymbol,
-    targetSquare: Square
-  ) => {
-    if (!CAPTURE_ANIMATIONS_ENABLED) return;
-    
-    const animationType = getCaptureAnimationType(attackerPiece, capturedPiece);
-    const newAnimation: CaptureAnimation = {
-      id: `${targetSquare}-${Date.now()}`,
-      square: targetSquare,
-      type: animationType,
-      timestamp: Date.now(),
-    };
-    
-    // Limit to max 2 concurrent animations
-    setCaptureAnimations(prev => {
-      const limited = prev.slice(-1);
-      return [...limited, newAnimation];
-    });
-  }, []);
-
-  const handleAnimationComplete = useCallback((id: string) => {
-    setCaptureAnimations(prev => prev.filter(a => a.id !== id));
-  }, []);
-
   const handleSquareClick = useCallback((square: Square) => {
     if (disabled) return;
 
     const piece = game.get(square);
 
     if (selectedSquare) {
-      // Get the attacking piece BEFORE the move
-      const attackingPiece = game.get(selectedSquare);
-      // Get the target piece (if any) BEFORE the move
-      const targetPiece = game.get(square);
       const moveSuccessful = onMove(selectedSquare, square);
       
       if (moveSuccessful) {
         setMovingPiece({ from: selectedSquare, to: square });
-        
-        // Trigger capture animation if a piece was captured
-        if (targetPiece && attackingPiece) {
-          triggerCaptureAnimation(attackingPiece.type, targetPiece.type, square);
-        }
-        
         setTimeout(() => setMovingPiece(null), 300);
         setSelectedSquare(null);
         setLegalMoves([]);
@@ -259,7 +230,7 @@ export function ChessBoardPremium({ game, onMove, disabled = false }: ChessBoard
       const moves = game.moves({ square, verbose: true });
       setLegalMoves(moves.map((m) => m.to as Square));
     }
-  }, [disabled, game, selectedSquare, onMove, triggerCaptureAnimation]);
+  }, [disabled, game, selectedSquare, onMove]);
 
   const isLightSquare = (file: number, rank: number) => {
     return (file + rank) % 2 === 0;
@@ -271,11 +242,14 @@ export function ChessBoardPremium({ game, onMove, disabled = false }: ChessBoard
       <div className="relative p-1 rounded-lg bg-gradient-to-br from-primary via-gold-light to-primary shadow-[0_0_30px_-5px_hsl(45_93%_54%_/_0.5)]">
         <div ref={boardRef} className="relative grid grid-cols-8 rounded overflow-hidden">
           {/* Capture Animation Layer */}
-          <CaptureAnimationLayer 
-            animations={captureAnimations}
-            onAnimationComplete={handleAnimationComplete}
-            squareSize={squareSize}
-          />
+          {onAnimationComplete && (
+            <CaptureAnimationLayer 
+              animations={captureAnimations}
+              onAnimationComplete={onAnimationComplete}
+              squareSize={squareSize}
+              enabled={animationsEnabled}
+            />
+          )}
           {ranks.map((rank, rankIndex) =>
             files.map((file, fileIndex) => {
               const square = `${file}${rank}` as Square;

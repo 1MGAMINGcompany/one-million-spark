@@ -1,7 +1,8 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useRef } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { Chess, Square, Move } from "chess.js";
+import { Chess, Square, Move, PieceSymbol } from "chess.js";
 import { ChessBoardPremium } from "@/components/ChessBoardPremium";
+import { useCaptureAnimations } from "@/components/CaptureAnimationLayer";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, RotateCcw, Gem, Star } from "lucide-react";
 
@@ -72,6 +73,65 @@ const minimax = (
   }
 };
 
+// Animation Toggle Component
+const AnimationToggle = ({ 
+  enabled, 
+  onToggle 
+}: { 
+  enabled: boolean; 
+  onToggle: () => void;
+}) => {
+  return (
+    <button
+      onClick={onToggle}
+      className="flex items-center gap-3 group"
+    >
+      <span className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
+        Board Animations
+      </span>
+      <div 
+        className={`relative w-14 h-7 rounded-full transition-all duration-300 ${
+          enabled 
+            ? "bg-gradient-to-r from-primary/80 to-primary shadow-[0_0_12px_-2px_hsl(45_93%_54%_/_0.6)]" 
+            : "bg-muted/30 border border-muted-foreground/20"
+        }`}
+      >
+        {/* Track labels */}
+        <span className={`absolute left-1.5 top-1/2 -translate-y-1/2 text-[9px] font-bold transition-opacity ${
+          enabled ? "opacity-0" : "opacity-50"
+        }`}>
+          OFF
+        </span>
+        <span className={`absolute right-1.5 top-1/2 -translate-y-1/2 text-[9px] font-bold transition-opacity ${
+          enabled ? "opacity-0" : "opacity-0"
+        }`}>
+          ON
+        </span>
+        
+        {/* Thumb with pyramid */}
+        <div 
+          className={`absolute top-0.5 w-6 h-6 rounded-full transition-all duration-300 flex items-center justify-center ${
+            enabled 
+              ? "left-[calc(100%-26px)] bg-gradient-to-br from-gold-light to-primary shadow-[0_0_8px_hsl(45_93%_54%_/_0.5)]" 
+              : "left-0.5 bg-muted-foreground/30"
+          }`}
+        >
+          {/* Pyramid icon */}
+          <div 
+            className={`w-3 h-3 transition-opacity ${enabled ? "opacity-100" : "opacity-30"}`}
+            style={{
+              background: enabled 
+                ? "linear-gradient(to top, hsl(35 80% 30%) 0%, hsl(45 93% 70%) 100%)" 
+                : "linear-gradient(to top, hsl(0 0% 30%) 0%, hsl(0 0% 50%) 100%)",
+              clipPath: "polygon(50% 0%, 0% 100%, 100% 100%)"
+            }}
+          />
+        </div>
+      </div>
+    </button>
+  );
+};
+
 const ChessAI = () => {
   const [searchParams] = useSearchParams();
   const rawDifficulty = searchParams.get("difficulty");
@@ -85,6 +145,17 @@ const ChessAI = () => {
   const [moveHistory, setMoveHistory] = useState<string[]>([]);
   const [isThinking, setIsThinking] = useState(false);
   const [gameOver, setGameOver] = useState(false);
+  const [animationsEnabled, setAnimationsEnabled] = useState(true);
+  
+  // Use ref to track game state for AI moves (to capture pieces before they're taken)
+  const pendingCaptureRef = useRef<{
+    attackerPiece: PieceSymbol;
+    capturedPiece: PieceSymbol;
+    targetSquare: Square;
+  } | null>(null);
+
+  // Capture animations hook
+  const { animations, triggerAnimation, handleAnimationComplete } = useCaptureAnimations(animationsEnabled);
 
   const difficultyLabel = useMemo(() => {
     switch (difficulty) {
@@ -122,14 +193,14 @@ const ChessAI = () => {
     return false;
   }, []);
 
-  const getAIMove = useCallback((currentGame: Chess): string | null => {
+  const getAIMove = useCallback((currentGame: Chess): Move | null => {
     const moves = currentGame.moves({ verbose: true }) as Move[];
     if (moves.length === 0) return null;
 
     switch (difficulty) {
       case "easy": {
         const randomIndex = Math.floor(Math.random() * moves.length);
-        return moves[randomIndex].san;
+        return moves[randomIndex];
       }
 
       case "medium": {
@@ -140,14 +211,14 @@ const ChessAI = () => {
             const bValue = PIECE_VALUES[b.captured || ""] || 0;
             return bValue - aValue;
           });
-          return sorted[0].san;
+          return sorted[0];
         }
         const randomIndex = Math.floor(Math.random() * moves.length);
-        return moves[randomIndex].san;
+        return moves[randomIndex];
       }
 
       case "hard": {
-        let bestMove: string | null = null;
+        let bestMove: Move | null = null;
         let bestValue = Infinity;
 
         for (const move of moves) {
@@ -157,29 +228,38 @@ const ChessAI = () => {
 
           if (value < bestValue) {
             bestValue = value;
-            bestMove = move.san;
+            bestMove = move;
           }
         }
 
-        return bestMove || moves[0].san;
+        return bestMove || moves[0];
       }
 
       default:
-        return moves[0].san;
+        return moves[0];
     }
   }, [difficulty]);
 
   const makeAIMove = useCallback((currentGame: Chess) => {
-    const move = getAIMove(currentGame);
-    if (!move) return;
+    const moveObj = getAIMove(currentGame);
+    if (!moveObj) return;
 
     setIsThinking(true);
     setGameStatus("AI is thinking...");
 
     const thinkingTime = difficulty === "hard" ? 800 : difficulty === "medium" ? 500 : 300;
 
+    // Store capture info BEFORE the move happens
+    const targetPiece = currentGame.get(moveObj.to as Square);
+    
     setTimeout(() => {
-      currentGame.move(move);
+      // Execute the move
+      currentGame.move(moveObj.san);
+      
+      // Trigger capture animation if there was a capture
+      if (targetPiece && animationsEnabled) {
+        triggerAnimation(moveObj.piece as PieceSymbol, targetPiece.type, moveObj.to as Square);
+      }
       
       setGame(new Chess(currentGame.fen()));
       setMoveHistory(currentGame.history());
@@ -189,12 +269,16 @@ const ChessAI = () => {
         setGameStatus("Your turn");
       }
     }, thinkingTime);
-  }, [getAIMove, checkGameOver, difficulty]);
+  }, [getAIMove, checkGameOver, difficulty, animationsEnabled, triggerAnimation]);
 
-  const handleMove = (from: Square, to: Square): boolean => {
+  const handleMove = useCallback((from: Square, to: Square): boolean => {
     if (gameOver || isThinking) return false;
 
     const gameCopy = new Chess(game.fen());
+    
+    // Get piece info BEFORE the move
+    const attackingPiece = gameCopy.get(from);
+    const targetPiece = gameCopy.get(to);
     
     try {
       const move = gameCopy.move({
@@ -204,6 +288,11 @@ const ChessAI = () => {
       });
 
       if (move === null) return false;
+
+      // Trigger capture animation for player's move
+      if (targetPiece && attackingPiece && animationsEnabled) {
+        triggerAnimation(attackingPiece.type, targetPiece.type, to);
+      }
 
       setGame(new Chess(gameCopy.fen()));
       setMoveHistory(gameCopy.history());
@@ -216,15 +305,15 @@ const ChessAI = () => {
     } catch {
       return false;
     }
-  };
+  }, [game, gameOver, isThinking, checkGameOver, makeAIMove, animationsEnabled, triggerAnimation]);
 
-  const restartGame = () => {
+  const restartGame = useCallback(() => {
     setGame(new Chess());
     setMoveHistory([]);
     setGameStatus("Your turn");
     setGameOver(false);
     setIsThinking(false);
-  };
+  }, []);
 
   const formattedMoves = [];
   for (let i = 0; i < moveHistory.length; i += 2) {
@@ -324,9 +413,20 @@ const ChessAI = () => {
                       game={game}
                       onMove={handleMove}
                       disabled={gameOver || isThinking}
+                      captureAnimations={animations}
+                      onAnimationComplete={handleAnimationComplete}
+                      animationsEnabled={animationsEnabled}
                     />
                   </div>
                 </div>
+              </div>
+
+              {/* Animation Toggle - below board */}
+              <div className="flex justify-center">
+                <AnimationToggle 
+                  enabled={animationsEnabled} 
+                  onToggle={() => setAnimationsEnabled(prev => !prev)} 
+                />
               </div>
 
               {/* Premium Status Bar with Egyptian iconography */}
