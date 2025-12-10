@@ -1,18 +1,25 @@
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Home, Wallet, Plus, List, Menu, X } from "lucide-react";
+import { Home, Wallet, PlusCircle, LayoutList, Menu, X, Coins } from "lucide-react";
 import { WalletButton } from "./WalletButton";
 import BrandLogo from "./BrandLogo";
+import type { LucideIcon } from "lucide-react";
+
+interface NavItem {
+  path: string;
+  label: string;
+  icon: LucideIcon;
+}
 
 const Navbar = () => {
   const location = useLocation();
   const [isOpen, setIsOpen] = useState(false);
 
-  const navItems = [
+  const navItems: NavItem[] = [
     { path: "/", label: "Home", icon: Home },
-    { path: "/add-funds", label: "Add Funds", icon: Wallet },
-    { path: "/create-room", label: "Create Room", icon: Plus },
-    { path: "/room-list", label: "Room List", icon: List },
+    { path: "/add-funds", label: "Add Funds", icon: Coins },
+    { path: "/create-room", label: "Create Room", icon: PlusCircle },
+    { path: "/room-list", label: "Room List", icon: LayoutList },
   ];
 
   return (
@@ -30,13 +37,20 @@ const Navbar = () => {
                 <Link
                   key={item.path}
                   to={item.path}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                  className={`group flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
                     isActive
                       ? "bg-primary text-primary-foreground shadow-gold"
-                      : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+                      : "text-muted-foreground hover:text-foreground hover:bg-secondary border border-transparent hover:border-primary/30"
                   }`}
                 >
-                  <Icon size={18} />
+                  <Icon 
+                    size={18} 
+                    className={`transition-all duration-200 ${
+                      isActive 
+                        ? "text-primary-foreground" 
+                        : "text-primary/70 group-hover:text-primary group-hover:drop-shadow-[0_0_4px_hsl(45_93%_54%_/_0.5)]"
+                    }`}
+                  />
                   <span>{item.label}</span>
                 </Link>
               );
@@ -47,7 +61,7 @@ const Navbar = () => {
           {/* Mobile Menu Button */}
           <button
             onClick={() => setIsOpen(!isOpen)}
-            className="md:hidden p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+            className="md:hidden p-2 rounded-lg text-primary/70 hover:text-primary hover:bg-secondary transition-colors"
             aria-label="Toggle menu"
           >
             {isOpen ? <X size={24} /> : <Menu size={24} />}
@@ -66,13 +80,20 @@ const Navbar = () => {
                     key={item.path}
                     to={item.path}
                     onClick={() => setIsOpen(false)}
-                    className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 ${
+                    className={`group flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 ${
                       isActive
                         ? "bg-primary text-primary-foreground shadow-gold"
-                        : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+                        : "text-muted-foreground hover:text-foreground hover:bg-secondary border border-transparent hover:border-primary/30"
                     }`}
                   >
-                    <Icon size={20} />
+                    <Icon 
+                      size={20} 
+                      className={`transition-all duration-200 ${
+                        isActive 
+                          ? "text-primary-foreground" 
+                          : "text-primary/70 group-hover:text-primary"
+                      }`}
+                    />
                     <span>{item.label}</span>
                   </Link>
                 );
