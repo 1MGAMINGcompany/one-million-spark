@@ -71,8 +71,8 @@ const DominoTile3D = ({
   onClick,
   className,
 }: DominoTile3DProps) => {
-  // Size multipliers for mobile (25-35% smaller)
-  const sizeMultiplier = size === "mobile" ? 0.68 : 1;
+  // Size multipliers for mobile (smaller to fit 6-7 tiles side by side)
+  const sizeMultiplier = size === "mobile" ? 0.52 : 1;
   const baseTileWidth = isChainTile ? 60 : 80;
   const baseTileHeight = isChainTile ? 36 : 120;
   const tileWidth = Math.round(baseTileWidth * sizeMultiplier);
