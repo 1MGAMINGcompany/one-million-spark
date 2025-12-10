@@ -6,7 +6,7 @@ interface Dice3DProps {
   variant: "ivory" | "obsidian";
   isRolling?: boolean;
   className?: string;
-  size?: "sm" | "md" | "lg";
+  size?: "xs" | "sm" | "md" | "lg";
 }
 
 // Pip positions for dice faces
@@ -43,7 +43,7 @@ export const Dice3D = ({ value, variant, isRolling = false, className, size = "m
   }, [isRolling, value]);
 
   const isIvory = variant === "ivory";
-  const sizeMap = { sm: 36, md: 48, lg: 56 };
+  const sizeMap = { xs: 28, sm: 36, md: 48, lg: 56 };
   const svgSize = sizeMap[size];
 
   return (
@@ -196,7 +196,7 @@ interface Checker3DProps {
   isValidTarget?: boolean;
   onClick?: () => void;
   className?: string;
-  size?: "sm" | "md" | "lg";
+  size?: "xs" | "sm" | "md" | "lg";
 }
 
 export const Checker3D = ({ 
@@ -209,7 +209,7 @@ export const Checker3D = ({
   size = "md"
 }: Checker3DProps) => {
   const isGold = variant === "gold";
-  const sizeMap = { sm: { w: 28, h: 20 }, md: { w: 32, h: 24 }, lg: { w: 40, h: 30 } };
+  const sizeMap = { xs: { w: 22, h: 16 }, sm: { w: 28, h: 20 }, md: { w: 32, h: 24 }, lg: { w: 40, h: 30 } };
   const { w, h } = sizeMap[size];
 
   return (
@@ -359,9 +359,11 @@ export const CheckerStack = ({
   isValidTarget?: boolean;
   onClick?: () => void;
   isTop?: boolean;
-  size?: "sm" | "md" | "lg";
+  size?: "xs" | "sm" | "md" | "lg";
 }) => {
   const displayCount = Math.min(count, 5);
+  const marginClass = size === "xs" ? "-mt-2" : size === "lg" ? "-mt-4" : "-mt-3";
+  const marginClassReverse = size === "xs" ? "-mb-2" : size === "lg" ? "-mb-4" : "-mb-3";
 
   return (
     <div
@@ -375,7 +377,7 @@ export const CheckerStack = ({
           key={i}
           className={cn(
             "transition-all duration-200",
-            i > 0 && (isTop ? (size === "lg" ? "-mt-4" : "-mt-3") : (size === "lg" ? "-mb-4" : "-mb-3"))
+            i > 0 && (isTop ? marginClass : marginClassReverse)
           )}
         >
           <Checker3D
