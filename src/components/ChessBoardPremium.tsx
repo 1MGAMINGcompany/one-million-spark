@@ -241,10 +241,9 @@ export function ChessBoardPremium({
       <style>{`
         @media (min-width: 1024px) {
           .chess-board-desktop-container {
-            width: 60vh;
-            height: 60vh;
-            max-height: 60vh;
-            max-width: min(60vh, 100%);
+            width: 70%;
+            max-width: 520px;
+            height: auto;
             aspect-ratio: 1 / 1;
             margin-left: auto;
             margin-right: auto;
