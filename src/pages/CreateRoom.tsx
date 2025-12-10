@@ -12,14 +12,31 @@ import {
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useWallet } from "@/hooks/useWallet";
 import { WalletRequired } from "@/components/WalletRequired";
+import { useGlobalLoading } from "@/contexts/LoadingContext";
+import { useToast } from "@/hooks/use-toast";
 
 const CreateRoom = () => {
   const { isConnected } = useWallet();
+  const { setGlobalLoading } = useGlobalLoading();
+  const { toast } = useToast();
   const [gameType, setGameType] = useState("chess");
   const [entryFee, setEntryFee] = useState("");
   const [players, setPlayers] = useState("2");
   const [turnTime, setTurnTime] = useState("");
   const [roomType, setRoomType] = useState("public");
+
+  const handleCreateRoom = async () => {
+    setGlobalLoading(true, "Creating your game room...");
+    
+    // Simulate transaction pending
+    await new Promise((resolve) => setTimeout(resolve, 2500));
+    
+    setGlobalLoading(false);
+    toast({
+      title: "Room Created!",
+      description: "Your game room has been created successfully.",
+    });
+  };
 
   if (!isConnected) {
     return <WalletRequired />;
@@ -113,7 +130,7 @@ const CreateRoom = () => {
           </div>
 
           {/* Submit Button */}
-          <Button type="button" className="w-full" size="lg">
+          <Button type="button" className="w-full" size="lg" onClick={handleCreateRoom}>
             Create Room
           </Button>
         </form>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -10,6 +10,7 @@ import {
 import { Users, Clock, RefreshCw } from "lucide-react";
 import { useWallet } from "@/hooks/useWallet";
 import { WalletRequired } from "@/components/WalletRequired";
+import { useGlobalLoading } from "@/contexts/LoadingContext";
 
 const fakeRooms = [
   { id: 1, game: "Chess", entryFee: 1, players: 1, maxPlayers: 2, turnTime: 10 },
@@ -19,8 +20,32 @@ const fakeRooms = [
 
 const RoomList = () => {
   const { isConnected } = useWallet();
+  const { setGlobalLoading } = useGlobalLoading();
   const [gameFilter, setGameFilter] = useState("all");
   const [feeFilter, setFeeFilter] = useState("all");
+  const [rooms, setRooms] = useState<typeof fakeRooms>([]);
+  const [hasLoaded, setHasLoaded] = useState(false);
+
+  const fetchRooms = async () => {
+    setGlobalLoading(true, "Fetching available rooms...");
+    
+    // Simulate fetching rooms from blockchain/backend
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    
+    setRooms(fakeRooms);
+    setGlobalLoading(false);
+    setHasLoaded(true);
+  };
+
+  useEffect(() => {
+    if (isConnected && !hasLoaded) {
+      fetchRooms();
+    }
+  }, [isConnected, hasLoaded]);
+
+  const handleRefresh = () => {
+    fetchRooms();
+  };
 
   if (!isConnected) {
     return <WalletRequired />;
@@ -61,14 +86,14 @@ const RoomList = () => {
               </SelectContent>
             </Select>
           </div>
-          <Button variant="outline" size="icon" className="shrink-0">
+          <Button variant="outline" size="icon" className="shrink-0" onClick={handleRefresh}>
             <RefreshCw size={18} />
           </Button>
         </div>
 
         {/* Room List */}
         <div className="space-y-4">
-          {fakeRooms.map((room) => (
+          {rooms.map((room) => (
             <div
               key={room.id}
               className="bg-card border border-border rounded-lg p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
