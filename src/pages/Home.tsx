@@ -71,11 +71,6 @@ const Home = () => {
                 <span className="text-primary font-medium">glory</span>.
               </p>
 
-              {/* Description */}
-              <p className="text-muted-foreground text-lg">
-                Play Chess, Dominos, and Backgammon — all powered by your skills.
-              </p>
-
               {/* CTA Buttons */}
               <div className="flex flex-col gap-4 mt-4">
                 <Button asChild size="lg" variant="gold" className="group text-lg h-14 px-8 border border-transparent hover:border-primary/50 transition-all">
