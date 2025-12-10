@@ -1,170 +1,290 @@
-// 3D-style gold game icons for featured games
+// Premium 3D-style gold game icons for featured games
+import { useState } from "react";
 
-export const ChessIcon = () => (
-  <svg viewBox="0 0 80 80" className="w-full h-full drop-shadow-[0_4px_8px_rgba(0,0,0,0.4)]">
-    {/* Base */}
-    <ellipse cx="40" cy="70" rx="20" ry="5" fill="url(#goldGradientBase)" />
-    <rect x="25" y="65" width="30" height="5" fill="url(#goldGradient)" />
+interface GameIconProps {
+  className?: string;
+}
+
+export const ChessIcon = ({ className = "" }: GameIconProps) => (
+  <div className={`relative group/icon ${className}`}>
+    {/* Soft glow background */}
+    <div className="absolute inset-0 bg-primary/20 rounded-full blur-xl opacity-60 group-hover/icon:opacity-100 transition-opacity duration-300" />
     
-    {/* Pedestal */}
-    <path d="M28 65 L32 55 L48 55 L52 65 Z" fill="url(#goldGradient)" />
-    <rect x="30" y="50" width="20" height="5" fill="url(#goldGradientLight)" />
-    
-    {/* Body - pyramid-like pawn */}
-    <path d="M32 50 L40 15 L48 50 Z" fill="url(#goldGradientBody)" stroke="url(#goldStroke)" strokeWidth="0.5" />
-    
-    {/* Top sphere */}
-    <circle cx="40" cy="12" r="6" fill="url(#goldSphere)" />
-    <ellipse cx="38" cy="10" rx="2" ry="1.5" fill="hsl(45 93% 80% / 0.6)" />
-    
-    {/* Highlights */}
-    <path d="M36 45 L40 20 L40 45 Z" fill="hsl(45 93% 70% / 0.3)" />
-    
-    <defs>
-      <linearGradient id="goldGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stopColor="hsl(45 93% 60%)" />
-        <stop offset="50%" stopColor="hsl(45 93% 50%)" />
-        <stop offset="100%" stopColor="hsl(35 80% 40%)" />
-      </linearGradient>
-      <linearGradient id="goldGradientBase" x1="0%" y1="0%" x2="0%" y2="100%">
-        <stop offset="0%" stopColor="hsl(35 80% 35%)" />
-        <stop offset="100%" stopColor="hsl(35 70% 25%)" />
-      </linearGradient>
-      <linearGradient id="goldGradientLight" x1="0%" y1="0%" x2="0%" y2="100%">
-        <stop offset="0%" stopColor="hsl(45 93% 65%)" />
-        <stop offset="100%" stopColor="hsl(45 93% 50%)" />
-      </linearGradient>
-      <linearGradient id="goldGradientBody" x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stopColor="hsl(45 93% 65%)" />
-        <stop offset="40%" stopColor="hsl(45 93% 54%)" />
-        <stop offset="100%" stopColor="hsl(35 80% 35%)" />
-      </linearGradient>
-      <radialGradient id="goldSphere" cx="35%" cy="35%" r="60%">
-        <stop offset="0%" stopColor="hsl(45 93% 75%)" />
-        <stop offset="50%" stopColor="hsl(45 93% 54%)" />
-        <stop offset="100%" stopColor="hsl(35 80% 35%)" />
-      </radialGradient>
-      <linearGradient id="goldStroke" x1="0%" y1="0%" x2="100%" y2="0%">
-        <stop offset="0%" stopColor="hsl(45 93% 70%)" />
-        <stop offset="100%" stopColor="hsl(35 80% 40%)" />
-      </linearGradient>
-    </defs>
-  </svg>
+    <svg 
+      viewBox="0 0 100 100" 
+      className="w-full h-full relative z-10 drop-shadow-[0_8px_16px_rgba(0,0,0,0.4)] transition-all duration-300 group-hover/icon:-translate-y-2 group-hover/icon:drop-shadow-[0_12px_24px_rgba(0,0,0,0.5)]"
+    >
+      {/* Pyramid-shaped pawn base */}
+      <defs>
+        <linearGradient id="chessGoldMain" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="hsl(45 93% 75%)" />
+          <stop offset="30%" stopColor="hsl(45 93% 60%)" />
+          <stop offset="70%" stopColor="hsl(45 93% 50%)" />
+          <stop offset="100%" stopColor="hsl(35 80% 35%)" />
+        </linearGradient>
+        <linearGradient id="chessGoldHighlight" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stopColor="hsl(45 93% 85%)" />
+          <stop offset="100%" stopColor="hsl(45 93% 60%)" />
+        </linearGradient>
+        <linearGradient id="chessGoldDark" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="hsl(35 80% 40%)" />
+          <stop offset="100%" stopColor="hsl(35 70% 25%)" />
+        </linearGradient>
+        <radialGradient id="chessSphereGold" cx="35%" cy="30%" r="60%">
+          <stop offset="0%" stopColor="hsl(45 93% 85%)" />
+          <stop offset="40%" stopColor="hsl(45 93% 60%)" />
+          <stop offset="100%" stopColor="hsl(35 80% 35%)" />
+        </radialGradient>
+        <linearGradient id="chessReflection" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stopColor="hsl(45 93% 95% / 0.8)" />
+          <stop offset="50%" stopColor="hsl(45 93% 80% / 0.3)" />
+          <stop offset="100%" stopColor="transparent" />
+        </linearGradient>
+        <filter id="chessGlow">
+          <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+          <feMerge>
+            <feMergeNode in="coloredBlur"/>
+            <feMergeNode in="SourceGraphic"/>
+          </feMerge>
+        </filter>
+      </defs>
+      
+      {/* Shadow */}
+      <ellipse cx="50" cy="90" rx="22" ry="6" fill="rgba(0,0,0,0.4)" />
+      
+      {/* Base platform */}
+      <ellipse cx="50" cy="82" rx="24" ry="7" fill="url(#chessGoldDark)" />
+      <ellipse cx="50" cy="80" rx="24" ry="7" fill="url(#chessGoldMain)" />
+      <ellipse cx="50" cy="80" rx="20" ry="5" fill="url(#chessGoldHighlight)" opacity="0.3" />
+      
+      {/* Pedestal */}
+      <path d="M30 80 L35 70 L65 70 L70 80 Z" fill="url(#chessGoldMain)" />
+      <rect x="33" y="65" width="34" height="5" rx="1" fill="url(#chessGoldHighlight)" />
+      
+      {/* Body - pyramid shape */}
+      <path d="M35 65 L50 18 L65 65 Z" fill="url(#chessGoldMain)" stroke="hsl(45 93% 70%)" strokeWidth="0.5" />
+      
+      {/* Metallic reflection on body */}
+      <path d="M42 60 L50 25 L50 60 Z" fill="url(#chessReflection)" />
+      
+      {/* Top sphere */}
+      <circle cx="50" cy="14" r="8" fill="url(#chessSphereGold)" filter="url(#chessGlow)" />
+      
+      {/* Sphere highlight */}
+      <ellipse cx="47" cy="11" rx="3" ry="2" fill="hsl(45 93% 90% / 0.7)" />
+      
+      {/* Collar ring */}
+      <ellipse cx="50" cy="24" rx="6" ry="2" fill="url(#chessGoldDark)" />
+      <ellipse cx="50" cy="23" rx="6" ry="2" fill="url(#chessGoldHighlight)" />
+
+      {/* Shine animation overlay */}
+      <path 
+        d="M38 65 L50 20 L52 20 L40 65 Z" 
+        fill="hsl(45 93% 95% / 0.15)"
+        className="group-hover/icon:animate-pulse"
+      />
+    </svg>
+  </div>
 );
 
-export const DominoIcon = () => (
-  <svg viewBox="0 0 80 80" className="w-full h-full drop-shadow-[0_4px_8px_rgba(0,0,0,0.4)]">
-    {/* Main domino tile - angled for 3D effect */}
-    <g transform="rotate(-10 40 40)">
-      {/* Shadow */}
-      <rect x="22" y="18" width="36" height="52" rx="4" fill="rgba(0,0,0,0.3)" transform="translate(3, 3)" />
-      
-      {/* Tile body */}
-      <rect x="22" y="16" width="36" height="52" rx="4" fill="url(#dominoGradient)" stroke="hsl(35 80% 40%)" strokeWidth="1.5" />
-      
-      {/* Beveled edge highlight */}
-      <rect x="23" y="17" width="34" height="50" rx="3" fill="none" stroke="hsl(220 30% 25%)" strokeWidth="0.5" />
-      
-      {/* Center divider with gold inlay */}
-      <line x1="24" y1="42" x2="56" y2="42" stroke="url(#goldLineGradient)" strokeWidth="2" />
-      
-      {/* Top pips - gold */}
-      <circle cx="32" cy="26" r="3" fill="url(#pipGold)" />
-      <circle cx="48" cy="26" r="3" fill="url(#pipGold)" />
-      <circle cx="32" cy="36" r="3" fill="url(#pipGold)" />
-      <circle cx="48" cy="36" r="3" fill="url(#pipGold)" />
-      
-      {/* Bottom pips - gold */}
-      <circle cx="40" cy="52" r="3" fill="url(#pipGold)" />
-      <circle cx="32" cy="60" r="3" fill="url(#pipGold)" />
-      <circle cx="48" cy="60" r="3" fill="url(#pipGold)" />
-    </g>
+export const DominoIcon = ({ className = "" }: GameIconProps) => (
+  <div className={`relative group/icon ${className}`}>
+    {/* Soft glow background */}
+    <div className="absolute inset-0 bg-primary/20 rounded-full blur-xl opacity-60 group-hover/icon:opacity-100 transition-opacity duration-300" />
     
-    <defs>
-      <linearGradient id="dominoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stopColor="hsl(220 30% 18%)" />
-        <stop offset="50%" stopColor="hsl(220 25% 12%)" />
-        <stop offset="100%" stopColor="hsl(220 20% 8%)" />
-      </linearGradient>
-      <linearGradient id="goldLineGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-        <stop offset="0%" stopColor="hsl(35 80% 35%)" />
-        <stop offset="50%" stopColor="hsl(45 93% 54%)" />
-        <stop offset="100%" stopColor="hsl(35 80% 35%)" />
-      </linearGradient>
-      <radialGradient id="pipGold" cx="30%" cy="30%" r="70%">
-        <stop offset="0%" stopColor="hsl(45 93% 70%)" />
-        <stop offset="50%" stopColor="hsl(45 93% 54%)" />
-        <stop offset="100%" stopColor="hsl(35 80% 35%)" />
-      </radialGradient>
-    </defs>
-  </svg>
+    <svg 
+      viewBox="0 0 100 100" 
+      className="w-full h-full relative z-10 drop-shadow-[0_8px_16px_rgba(0,0,0,0.4)] transition-all duration-300 group-hover/icon:-translate-y-2 group-hover/icon:drop-shadow-[0_12px_24px_rgba(0,0,0,0.5)]"
+    >
+      <defs>
+        <linearGradient id="dominoBlackGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="hsl(220 20% 20%)" />
+          <stop offset="30%" stopColor="hsl(220 25% 12%)" />
+          <stop offset="100%" stopColor="hsl(220 20% 6%)" />
+        </linearGradient>
+        <linearGradient id="dominoBevel" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stopColor="hsl(220 15% 30%)" />
+          <stop offset="10%" stopColor="hsl(220 20% 15%)" />
+          <stop offset="90%" stopColor="hsl(220 20% 8%)" />
+          <stop offset="100%" stopColor="hsl(220 15% 5%)" />
+        </linearGradient>
+        <linearGradient id="dominoGoldLine" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stopColor="hsl(35 80% 30%)" />
+          <stop offset="50%" stopColor="hsl(45 93% 60%)" />
+          <stop offset="100%" stopColor="hsl(35 80% 30%)" />
+        </linearGradient>
+        <radialGradient id="dominoPipGold" cx="30%" cy="30%" r="70%">
+          <stop offset="0%" stopColor="hsl(45 93% 80%)" />
+          <stop offset="50%" stopColor="hsl(45 93% 55%)" />
+          <stop offset="100%" stopColor="hsl(35 80% 35%)" />
+        </radialGradient>
+        <linearGradient id="dominoGloss" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stopColor="hsl(0 0% 100% / 0.2)" />
+          <stop offset="30%" stopColor="hsl(0 0% 100% / 0.05)" />
+          <stop offset="100%" stopColor="transparent" />
+        </linearGradient>
+        <filter id="dominoGlow">
+          <feGaussianBlur stdDeviation="1.5" result="coloredBlur"/>
+          <feMerge>
+            <feMergeNode in="coloredBlur"/>
+            <feMergeNode in="SourceGraphic"/>
+          </feMerge>
+        </filter>
+      </defs>
+      
+      <g transform="rotate(-8 50 50)">
+        {/* Shadow */}
+        <rect x="24" y="18" width="48" height="68" rx="6" fill="rgba(0,0,0,0.4)" transform="translate(4, 4)" />
+        
+        {/* Main tile body */}
+        <rect x="24" y="16" width="48" height="68" rx="6" fill="url(#dominoBevel)" />
+        <rect x="26" y="18" width="44" height="64" rx="5" fill="url(#dominoBlackGradient)" />
+        
+        {/* Glossy reflection */}
+        <rect x="26" y="18" width="44" height="30" rx="5" fill="url(#dominoGloss)" />
+        
+        {/* Gold divider line */}
+        <rect x="28" y="49" width="40" height="3" rx="1" fill="url(#dominoGoldLine)" filter="url(#dominoGlow)" />
+        
+        {/* Top section pips (4) */}
+        <circle cx="36" cy="28" r="4" fill="url(#dominoPipGold)" filter="url(#dominoGlow)" />
+        <circle cx="60" cy="28" r="4" fill="url(#dominoPipGold)" filter="url(#dominoGlow)" />
+        <circle cx="36" cy="42" r="4" fill="url(#dominoPipGold)" filter="url(#dominoGlow)" />
+        <circle cx="60" cy="42" r="4" fill="url(#dominoPipGold)" filter="url(#dominoGlow)" />
+        
+        {/* Bottom section pips (3) */}
+        <circle cx="36" cy="62" r="4" fill="url(#dominoPipGold)" filter="url(#dominoGlow)" />
+        <circle cx="48" cy="70" r="4" fill="url(#dominoPipGold)" filter="url(#dominoGlow)" />
+        <circle cx="60" cy="62" r="4" fill="url(#dominoPipGold)" filter="url(#dominoGlow)" />
+        
+        {/* Pip highlights */}
+        <circle cx="34" cy="26" r="1.5" fill="hsl(45 93% 90% / 0.6)" />
+        <circle cx="58" cy="26" r="1.5" fill="hsl(45 93% 90% / 0.6)" />
+        <circle cx="34" cy="40" r="1.5" fill="hsl(45 93% 90% / 0.6)" />
+        <circle cx="58" cy="40" r="1.5" fill="hsl(45 93% 90% / 0.6)" />
+        <circle cx="34" cy="60" r="1.5" fill="hsl(45 93% 90% / 0.6)" />
+        <circle cx="46" cy="68" r="1.5" fill="hsl(45 93% 90% / 0.6)" />
+        <circle cx="58" cy="60" r="1.5" fill="hsl(45 93% 90% / 0.6)" />
+      </g>
+    </svg>
+  </div>
 );
 
-export const BackgammonIcon = () => (
-  <svg viewBox="0 0 80 80" className="w-full h-full drop-shadow-[0_4px_8px_rgba(0,0,0,0.4)]">
-    {/* Dice 1 - larger, rotated */}
-    <g transform="rotate(-15 30 45)">
-      {/* Shadow */}
-      <rect x="10" y="30" width="32" height="32" rx="5" fill="rgba(0,0,0,0.3)" transform="translate(3, 3)" />
-      
-      {/* Dice body */}
-      <rect x="10" y="28" width="32" height="32" rx="5" fill="url(#diceGradient1)" stroke="hsl(45 93% 50%)" strokeWidth="1" />
-      
-      {/* Top face highlight */}
-      <rect x="12" y="30" width="28" height="28" rx="4" fill="url(#diceFace)" opacity="0.3" />
-      
-      {/* Gold pips - showing 5 */}
-      <circle cx="18" cy="36" r="2.5" fill="url(#dicePipGold)" />
-      <circle cx="34" cy="36" r="2.5" fill="url(#dicePipGold)" />
-      <circle cx="26" cy="44" r="2.5" fill="url(#dicePipGold)" />
-      <circle cx="18" cy="52" r="2.5" fill="url(#dicePipGold)" />
-      <circle cx="34" cy="52" r="2.5" fill="url(#dicePipGold)" />
-    </g>
+export const BackgammonIcon = ({ className = "" }: GameIconProps) => (
+  <div className={`relative group/icon ${className}`}>
+    {/* Soft glow background */}
+    <div className="absolute inset-0 bg-primary/20 rounded-full blur-xl opacity-60 group-hover/icon:opacity-100 transition-opacity duration-300" />
     
-    {/* Dice 2 - smaller, different rotation */}
-    <g transform="rotate(20 55 40)">
-      {/* Shadow */}
-      <rect x="42" y="22" width="26" height="26" rx="4" fill="rgba(0,0,0,0.3)" transform="translate(2, 2)" />
+    <svg 
+      viewBox="0 0 100 100" 
+      className="w-full h-full relative z-10 drop-shadow-[0_8px_16px_rgba(0,0,0,0.4)] transition-all duration-300 group-hover/icon:-translate-y-2 group-hover/icon:drop-shadow-[0_12px_24px_rgba(0,0,0,0.5)]"
+    >
+      <defs>
+        {/* Gold/Ivory dice gradient */}
+        <linearGradient id="bgIvoryDice" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="hsl(45 50% 95%)" />
+          <stop offset="30%" stopColor="hsl(45 40% 90%)" />
+          <stop offset="100%" stopColor="hsl(40 30% 80%)" />
+        </linearGradient>
+        <linearGradient id="bgGoldTrim" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="hsl(45 93% 70%)" />
+          <stop offset="50%" stopColor="hsl(45 93% 55%)" />
+          <stop offset="100%" stopColor="hsl(35 80% 40%)" />
+        </linearGradient>
+        <radialGradient id="bgGoldPip" cx="30%" cy="30%" r="70%">
+          <stop offset="0%" stopColor="hsl(45 93% 75%)" />
+          <stop offset="50%" stopColor="hsl(45 93% 55%)" />
+          <stop offset="100%" stopColor="hsl(35 80% 30%)" />
+        </radialGradient>
+        <linearGradient id="bgDiceGloss" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stopColor="hsl(0 0% 100% / 0.6)" />
+          <stop offset="40%" stopColor="hsl(0 0% 100% / 0.1)" />
+          <stop offset="100%" stopColor="transparent" />
+        </linearGradient>
+        {/* Black obsidian dice */}
+        <linearGradient id="bgObsidianDice" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="hsl(220 15% 25%)" />
+          <stop offset="50%" stopColor="hsl(220 20% 12%)" />
+          <stop offset="100%" stopColor="hsl(220 20% 6%)" />
+        </linearGradient>
+        <filter id="bgSpecular">
+          <feGaussianBlur stdDeviation="0.8" result="coloredBlur"/>
+          <feMerge>
+            <feMergeNode in="coloredBlur"/>
+            <feMergeNode in="SourceGraphic"/>
+          </feMerge>
+        </filter>
+        <filter id="bgGlowStrong">
+          <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+          <feMerge>
+            <feMergeNode in="coloredBlur"/>
+            <feMergeNode in="SourceGraphic"/>
+          </feMerge>
+        </filter>
+      </defs>
       
-      {/* Dice body */}
-      <rect x="42" y="20" width="26" height="26" rx="4" fill="url(#diceGradient2)" stroke="hsl(45 93% 50%)" strokeWidth="1" />
+      {/* Ivory/Gold Dice - front */}
+      <g transform="rotate(-12 35 50)">
+        {/* Shadow */}
+        <rect x="12" y="32" width="40" height="40" rx="6" fill="rgba(0,0,0,0.35)" transform="translate(4, 4)" />
+        
+        {/* Dice body */}
+        <rect x="12" y="30" width="40" height="40" rx="6" fill="url(#bgIvoryDice)" stroke="url(#bgGoldTrim)" strokeWidth="1.5" />
+        
+        {/* 3D edge effect */}
+        <rect x="14" y="32" width="36" height="36" rx="5" fill="none" stroke="hsl(40 30% 75%)" strokeWidth="0.5" />
+        
+        {/* Glossy highlight */}
+        <rect x="14" y="32" width="36" height="18" rx="5" fill="url(#bgDiceGloss)" />
+        
+        {/* Specular highlight */}
+        <ellipse cx="22" cy="40" rx="8" ry="4" fill="hsl(0 0% 100% / 0.4)" />
+        
+        {/* Gold pips - showing 5 */}
+        <circle cx="22" cy="40" r="3.5" fill="url(#bgGoldPip)" filter="url(#bgSpecular)" />
+        <circle cx="42" cy="40" r="3.5" fill="url(#bgGoldPip)" filter="url(#bgSpecular)" />
+        <circle cx="32" cy="50" r="3.5" fill="url(#bgGoldPip)" filter="url(#bgSpecular)" />
+        <circle cx="22" cy="60" r="3.5" fill="url(#bgGoldPip)" filter="url(#bgSpecular)" />
+        <circle cx="42" cy="60" r="3.5" fill="url(#bgGoldPip)" filter="url(#bgSpecular)" />
+        
+        {/* Pip highlights */}
+        <circle cx="20" cy="38" r="1.2" fill="hsl(45 93% 90% / 0.8)" />
+        <circle cx="40" cy="38" r="1.2" fill="hsl(45 93% 90% / 0.8)" />
+        <circle cx="30" cy="48" r="1.2" fill="hsl(45 93% 90% / 0.8)" />
+        <circle cx="20" cy="58" r="1.2" fill="hsl(45 93% 90% / 0.8)" />
+        <circle cx="40" cy="58" r="1.2" fill="hsl(45 93% 90% / 0.8)" />
+      </g>
       
-      {/* Top face highlight */}
-      <rect x="44" y="22" width="22" height="22" rx="3" fill="url(#diceFace)" opacity="0.3" />
-      
-      {/* Gold pips - showing 6 */}
-      <circle cx="50" cy="27" r="2" fill="url(#dicePipGold)" />
-      <circle cx="60" cy="27" r="2" fill="url(#dicePipGold)" />
-      <circle cx="50" cy="33" r="2" fill="url(#dicePipGold)" />
-      <circle cx="60" cy="33" r="2" fill="url(#dicePipGold)" />
-      <circle cx="50" cy="39" r="2" fill="url(#dicePipGold)" />
-      <circle cx="60" cy="39" r="2" fill="url(#dicePipGold)" />
-    </g>
-    
-    {/* Reflective shine */}
-    <ellipse cx="26" cy="34" rx="8" ry="3" fill="hsl(45 93% 80% / 0.2)" transform="rotate(-15 26 34)" />
-    <ellipse cx="55" cy="26" rx="6" ry="2" fill="hsl(45 93% 80% / 0.2)" transform="rotate(20 55 26)" />
-    
-    <defs>
-      <linearGradient id="diceGradient1" x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stopColor="hsl(0 0% 95%)" />
-        <stop offset="50%" stopColor="hsl(45 10% 90%)" />
-        <stop offset="100%" stopColor="hsl(40 15% 80%)" />
-      </linearGradient>
-      <linearGradient id="diceGradient2" x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stopColor="hsl(0 0% 92%)" />
-        <stop offset="50%" stopColor="hsl(45 10% 85%)" />
-        <stop offset="100%" stopColor="hsl(40 15% 75%)" />
-      </linearGradient>
-      <linearGradient id="diceFace" x1="0%" y1="0%" x2="0%" y2="100%">
-        <stop offset="0%" stopColor="white" />
-        <stop offset="100%" stopColor="transparent" />
-      </linearGradient>
-      <radialGradient id="dicePipGold" cx="30%" cy="30%" r="70%">
-        <stop offset="0%" stopColor="hsl(45 93% 70%)" />
-        <stop offset="50%" stopColor="hsl(45 93% 54%)" />
-        <stop offset="100%" stopColor="hsl(35 80% 35%)" />
-      </radialGradient>
-    </defs>
-  </svg>
+      {/* Obsidian Dice - back */}
+      <g transform="rotate(18 65 45)">
+        {/* Shadow */}
+        <rect x="48" y="22" width="34" height="34" rx="5" fill="rgba(0,0,0,0.4)" transform="translate(3, 3)" />
+        
+        {/* Dice body */}
+        <rect x="48" y="20" width="34" height="34" rx="5" fill="url(#bgObsidianDice)" stroke="url(#bgGoldTrim)" strokeWidth="1" />
+        
+        {/* Glossy highlight */}
+        <rect x="50" y="22" width="30" height="14" rx="4" fill="url(#bgDiceGloss)" opacity="0.5" />
+        
+        {/* Specular */}
+        <ellipse cx="56" cy="28" rx="6" ry="3" fill="hsl(0 0% 100% / 0.2)" />
+        
+        {/* Gold pips - showing 6 */}
+        <circle cx="56" cy="28" r="2.8" fill="url(#bgGoldPip)" filter="url(#bgGlowStrong)" />
+        <circle cx="74" cy="28" r="2.8" fill="url(#bgGoldPip)" filter="url(#bgGlowStrong)" />
+        <circle cx="56" cy="37" r="2.8" fill="url(#bgGoldPip)" filter="url(#bgGlowStrong)" />
+        <circle cx="74" cy="37" r="2.8" fill="url(#bgGoldPip)" filter="url(#bgGlowStrong)" />
+        <circle cx="56" cy="46" r="2.8" fill="url(#bgGoldPip)" filter="url(#bgGlowStrong)" />
+        <circle cx="74" cy="46" r="2.8" fill="url(#bgGoldPip)" filter="url(#bgGlowStrong)" />
+        
+        {/* Pip highlights */}
+        <circle cx="54" cy="26" r="1" fill="hsl(45 93% 85% / 0.7)" />
+        <circle cx="72" cy="26" r="1" fill="hsl(45 93% 85% / 0.7)" />
+        <circle cx="54" cy="35" r="1" fill="hsl(45 93% 85% / 0.7)" />
+        <circle cx="72" cy="35" r="1" fill="hsl(45 93% 85% / 0.7)" />
+        <circle cx="54" cy="44" r="1" fill="hsl(45 93% 85% / 0.7)" />
+        <circle cx="72" cy="44" r="1" fill="hsl(45 93% 85% / 0.7)" />
+      </g>
+    </svg>
+  </div>
 );
