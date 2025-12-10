@@ -1,8 +1,7 @@
 import { useState, useCallback, useMemo, useEffect } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, RotateCcw, Bot, Crown, Dice1, Dice2, Dice3, Dice4, Dice5, Dice6 } from "lucide-react";
+import { ArrowLeft, RotateCcw, Gem, Star, Dice1, Dice2, Dice3, Dice4, Dice5, Dice6 } from "lucide-react";
 
 type Difficulty = "easy" | "medium" | "hard";
 type Player = "player" | "ai";
@@ -22,7 +21,7 @@ interface Move {
 const DiceIcon = ({ value }: { value: number }) => {
   const icons = [Dice1, Dice2, Dice3, Dice4, Dice5, Dice6];
   const Icon = icons[value - 1] || Dice1;
-  return <Icon size={32} className="text-gold" />;
+  return <Icon size={32} className="text-primary drop-shadow-[0_0_8px_hsl(45_93%_54%_/_0.6)]" />;
 };
 
 // Initial backgammon setup
@@ -68,6 +67,14 @@ const BackgammonAI = () => {
       case "easy": return "EASY";
       case "medium": return "MEDIUM";
       case "hard": return "HARD";
+    }
+  }, [difficulty]);
+
+  const difficultyDescription = useMemo(() => {
+    switch (difficulty) {
+      case "easy": return "Random moves";
+      case "medium": return "Moves toward home";
+      case "hard": return "Hits and stacks";
     }
   }, [difficulty]);
 
@@ -411,7 +418,7 @@ const BackgammonAI = () => {
         className={`
           relative flex flex-col items-center cursor-pointer transition-all
           ${isTop ? "pt-1" : "pb-1 flex-col-reverse"}
-          ${isSelected ? "ring-2 ring-gold rounded" : ""}
+          ${isSelected ? "ring-2 ring-primary rounded" : ""}
           ${isValidTarget ? "ring-2 ring-green-400 rounded bg-green-400/10" : ""}
         `}
       >
@@ -419,7 +426,10 @@ const BackgammonAI = () => {
         <div
           className={`
             w-8 md:w-10 h-24 md:h-32 clip-triangle
-            ${index % 2 === 0 ? "bg-gold/60" : "bg-sand/40"}
+            ${index % 2 === 0 
+              ? "bg-gradient-to-t from-primary/70 to-primary/40" 
+              : "bg-gradient-to-t from-sand/60 to-sand/30"
+            }
             ${isTop ? "" : "rotate-180"}
           `}
         />
@@ -430,22 +440,24 @@ const BackgammonAI = () => {
             <div
               key={i}
               className={`
-                w-6 md:w-8 h-5 md:h-6 rounded-full border-2 shadow-md
+                w-6 md:w-8 h-5 md:h-6 rounded-full border-2 shadow-md transition-all
                 ${isPlayer 
-                  ? "bg-gradient-to-b from-amber-200 to-amber-400 border-amber-500" 
-                  : "bg-gradient-to-b from-gray-700 to-gray-900 border-gray-600"
+                  ? "bg-gradient-to-b from-primary/90 to-gold border-primary shadow-[0_0_8px_-2px_hsl(45_93%_54%_/_0.5)]" 
+                  : "bg-gradient-to-b from-stone-200 to-stone-100 border-stone-300"
                 }
               `}
             >
               {i === Math.min(checkerCount, 5) - 1 && checkerCount > 5 && (
-                <span className="text-xs font-bold text-center block">{checkerCount}</span>
+                <span className={`text-xs font-bold text-center block ${isPlayer ? 'text-primary-foreground' : 'text-stone-700'}`}>
+                  {checkerCount}
+                </span>
               )}
             </div>
           ))}
         </div>
         
         {/* Point number */}
-        <span className={`absolute ${isTop ? "bottom-0" : "top-0"} text-xs text-muted-foreground`}>
+        <span className={`absolute ${isTop ? "bottom-0" : "top-0"} text-xs text-primary/40`}>
           {index + 1}
         </span>
       </div>
@@ -453,198 +465,323 @@ const BackgammonAI = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background pyramid-bg">
-      {/* Header */}
-      <div className="bg-card/80 backdrop-blur-sm border-b border-gold/20 px-4 py-4">
-        <div className="max-w-6xl mx-auto">
-          <Button asChild variant="ghost" size="sm" className="mb-3 text-muted-foreground hover:text-gold">
-            <Link to="/play-ai">
-              <ArrowLeft size={18} />
-              Back to AI Lobby
-            </Link>
-          </Button>
-          <div className="flex items-center justify-between flex-wrap gap-4">
-            <div className="flex items-center gap-3">
-              <Bot size={32} className="text-gold" />
-              <div>
-                <h1 className="text-2xl font-display font-bold text-foreground">
-                  Backgammon vs AI <span className="text-gold">(Free Practice)</span>
-                </h1>
-                <p className="text-sm text-muted-foreground">
-                  Roll, move, and bear off · No wallet · No money
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gold/10 border border-gold/30">
-              <Crown size={18} className="text-gold" />
-              <div className="text-sm">
-                <span className="text-muted-foreground">Difficulty: </span>
-                <span className="font-bold text-gold">{difficultyLabel}</span>
-              </div>
-            </div>
-          </div>
-        </div>
+    <div className="min-h-screen bg-background relative overflow-hidden">
+      {/* Background with pyramid pattern */}
+      <div className="absolute inset-0 bg-gradient-to-b from-midnight-light via-background to-background" />
+      <div 
+        className="absolute inset-0 opacity-5"
+        style={{
+          backgroundImage: `repeating-linear-gradient(
+            60deg,
+            transparent,
+            transparent 100px,
+            hsl(45 93% 54% / 0.1) 100px,
+            hsl(45 93% 54% / 0.1) 102px
+          ),
+          repeating-linear-gradient(
+            -60deg,
+            transparent,
+            transparent 100px,
+            hsl(45 93% 54% / 0.1) 100px,
+            hsl(45 93% 54% / 0.1) 102px
+          )`
+        }}
+      />
+      {/* Subtle pyramid silhouette */}
+      <div className="absolute inset-0 flex items-end justify-center pointer-events-none overflow-hidden">
+        <div 
+          className="w-[600px] h-[400px] opacity-[0.03] translate-y-1/2"
+          style={{
+            background: "linear-gradient(to top, hsl(45 93% 54%) 0%, transparent 80%)",
+            clipPath: "polygon(50% 0%, 0% 100%, 100% 100%)"
+          }}
+        />
       </div>
 
-      {/* Main Content */}
-      <div className="max-w-6xl mx-auto px-4 py-6">
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          {/* Board Area */}
-          <div className="lg:col-span-3 space-y-4">
-            {/* Board */}
-            <Card className="border-gold/20 bg-card/80 overflow-hidden">
-              <CardContent className="p-4">
-                <div className="bg-gradient-to-b from-amber-900/40 to-amber-950/60 rounded-lg p-3 border border-gold/30">
-                  {/* AI Bear Off / Bar */}
-                  <div className="flex justify-between items-center mb-2 px-2">
-                    <div className="text-xs text-muted-foreground">
-                      AI Borne Off: <span className="text-gold font-bold">{gameState.bearOff.ai}</span>
-                    </div>
-                    {gameState.bar.ai > 0 && (
-                      <div className="flex items-center gap-1">
-                        <span className="text-xs text-muted-foreground">AI Bar:</span>
-                        <div className="w-6 h-5 rounded-full bg-gradient-to-b from-gray-700 to-gray-900 border-2 border-gray-600 flex items-center justify-center">
-                          <span className="text-xs font-bold text-white">{gameState.bar.ai}</span>
+      <div className="relative z-10">
+        {/* Header */}
+        <div className="border-b border-primary/20 px-4 py-4">
+          <div className="max-w-6xl mx-auto">
+            <Button asChild variant="ghost" size="sm" className="mb-4 text-muted-foreground hover:text-primary group">
+              <Link to="/play-ai" className="flex items-center gap-2">
+                <ArrowLeft size={18} className="group-hover:text-primary transition-colors" />
+                Back to Temple
+              </Link>
+            </Button>
+            
+            {/* Title with decorative elements */}
+            <div className="flex items-center justify-center gap-3 mb-2">
+              <div className="h-px w-8 bg-gradient-to-r from-transparent to-primary/50 hidden sm:block" />
+              <Gem className="w-4 h-4 text-primary" />
+              <h1 
+                className="text-xl md:text-2xl font-display font-bold tracking-wide text-center"
+                style={{
+                  background: "linear-gradient(135deg, #FCE68A 0%, #FACC15 50%, #AB8215 100%)",
+                  WebkitBackgroundClip: "text",
+                  WebkitTextFillColor: "transparent",
+                  backgroundClip: "text",
+                }}
+              >
+                Backgammon Training – Temple of Precision
+              </h1>
+              <Gem className="w-4 h-4 text-primary" />
+              <div className="h-px w-8 bg-gradient-to-l from-transparent to-primary/50 hidden sm:block" />
+            </div>
+            
+            <p className="text-center text-sm text-muted-foreground/60">
+              <Star className="w-3 h-3 inline-block mr-1 text-primary/40" />
+              Free mode – no wallet required
+              <Star className="w-3 h-3 inline-block ml-1 text-primary/40" />
+            </p>
+          </div>
+        </div>
+
+        {/* Main Content */}
+        <div className="max-w-6xl mx-auto px-4 py-6">
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            {/* Board Area */}
+            <div className="lg:col-span-3 space-y-4">
+              {/* Board Container with gold frame */}
+              <div className="relative">
+                {/* Outer glow */}
+                <div className="absolute -inset-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 rounded-2xl blur-xl opacity-50" />
+                
+                {/* Gold frame */}
+                <div className="relative p-1 rounded-xl bg-gradient-to-br from-primary/40 via-primary/20 to-primary/40 shadow-[0_0_40px_-10px_hsl(45_93%_54%_/_0.4)]">
+                  <div className="bg-gradient-to-b from-midnight-light via-background to-midnight-light rounded-lg p-4 overflow-hidden">
+                    {/* AI Bear Off / Bar */}
+                    <div className="flex justify-between items-center mb-3 px-2">
+                      <div className="text-xs text-muted-foreground">
+                        AI Borne Off: <span className="text-primary font-bold">{gameState.bearOff.ai}</span>
+                      </div>
+                      {gameState.bar.ai > 0 && (
+                        <div className="flex items-center gap-1">
+                          <span className="text-xs text-muted-foreground">AI Bar:</span>
+                          <div className="w-6 h-5 rounded-full bg-gradient-to-b from-stone-200 to-stone-100 border-2 border-stone-300 flex items-center justify-center">
+                            <span className="text-xs font-bold text-stone-700">{gameState.bar.ai}</span>
+                          </div>
                         </div>
+                      )}
+                    </div>
+
+                    {/* Top points (13-24, right to left) */}
+                    <div className="flex justify-center gap-0.5 mb-1">
+                      <div className="flex gap-0.5">
+                        {[12, 13, 14, 15, 16, 17].map(i => renderPoint(i, true))}
                       </div>
-                    )}
-                  </div>
-
-                  {/* Top points (13-24, right to left) */}
-                  <div className="flex justify-center gap-0.5 mb-1">
-                    <div className="flex gap-0.5">
-                      {[12, 13, 14, 15, 16, 17].map(i => renderPoint(i, true))}
-                    </div>
-                    <div className="w-6 md:w-8 bg-amber-900/60 rounded" />
-                    <div className="flex gap-0.5">
-                      {[18, 19, 20, 21, 22, 23].map(i => renderPoint(i, true))}
-                    </div>
-                  </div>
-
-                  {/* Middle bar */}
-                  <div className="h-4 bg-amber-800/40 my-1 rounded flex items-center justify-center">
-                    {dice.length > 0 && (
-                      <div className="flex gap-2">
-                        <DiceIcon value={dice[0]} />
-                        <DiceIcon value={dice[1]} />
+                      <div className="w-6 md:w-8 bg-gradient-to-b from-primary/20 to-primary/10 rounded border border-primary/20" />
+                      <div className="flex gap-0.5">
+                        {[18, 19, 20, 21, 22, 23].map(i => renderPoint(i, true))}
                       </div>
-                    )}
-                  </div>
-
-                  {/* Bottom points (1-12, left to right visually) */}
-                  <div className="flex justify-center gap-0.5 mt-1">
-                    <div className="flex gap-0.5">
-                      {[11, 10, 9, 8, 7, 6].map(i => renderPoint(i, false))}
                     </div>
-                    <div className="w-6 md:w-8 bg-amber-900/60 rounded" />
-                    <div className="flex gap-0.5">
-                      {[5, 4, 3, 2, 1, 0].map(i => renderPoint(i, false))}
-                    </div>
-                  </div>
 
-                  {/* Player Bar / Bear Off */}
-                  <div className="flex justify-between items-center mt-2 px-2">
-                    {gameState.bar.player > 0 && (
-                      <div 
-                        className={`flex items-center gap-1 cursor-pointer ${selectedPoint === -1 ? "ring-2 ring-gold rounded p-1" : ""}`}
-                        onClick={() => handlePointClick(-1)}
-                      >
-                        <span className="text-xs text-muted-foreground">Your Bar:</span>
-                        <div className="w-6 h-5 rounded-full bg-gradient-to-b from-amber-200 to-amber-400 border-2 border-amber-500 flex items-center justify-center">
-                          <span className="text-xs font-bold text-amber-900">{gameState.bar.player}</span>
+                    {/* Middle bar with dice */}
+                    <div className="h-10 bg-gradient-to-r from-primary/10 via-primary/20 to-primary/10 my-2 rounded-lg border border-primary/20 flex items-center justify-center">
+                      {dice.length > 0 && (
+                        <div className="flex gap-3">
+                          <DiceIcon value={dice[0]} />
+                          <DiceIcon value={dice[1]} />
                         </div>
+                      )}
+                    </div>
+
+                    {/* Bottom points (1-12, left to right visually) */}
+                    <div className="flex justify-center gap-0.5 mt-1">
+                      <div className="flex gap-0.5">
+                        {[11, 10, 9, 8, 7, 6].map(i => renderPoint(i, false))}
                       </div>
-                    )}
-                    <div className="text-xs text-muted-foreground ml-auto">
-                      You Borne Off: <span className="text-gold font-bold">{gameState.bearOff.player}</span>
+                      <div className="w-6 md:w-8 bg-gradient-to-t from-primary/20 to-primary/10 rounded border border-primary/20" />
+                      <div className="flex gap-0.5">
+                        {[5, 4, 3, 2, 1, 0].map(i => renderPoint(i, false))}
+                      </div>
+                    </div>
+
+                    {/* Player Bar / Bear Off */}
+                    <div className="flex justify-between items-center mt-3 px-2">
+                      {gameState.bar.player > 0 && (
+                        <div 
+                          className={`flex items-center gap-1 cursor-pointer transition-all ${selectedPoint === -1 ? "ring-2 ring-primary rounded-lg p-1" : ""}`}
+                          onClick={() => handlePointClick(-1)}
+                        >
+                          <span className="text-xs text-muted-foreground">Your Bar:</span>
+                          <div className="w-6 h-5 rounded-full bg-gradient-to-b from-primary/90 to-gold border-2 border-primary flex items-center justify-center shadow-[0_0_8px_-2px_hsl(45_93%_54%_/_0.5)]">
+                            <span className="text-xs font-bold text-primary-foreground">{gameState.bar.player}</span>
+                          </div>
+                        </div>
+                      )}
+                      <div className="text-xs text-muted-foreground ml-auto">
+                        You Borne Off: <span className="text-primary font-bold">{gameState.bearOff.player}</span>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
 
-            {/* Status & Controls */}
-            <div className={`text-center p-4 rounded-lg border ${
-              gameOver
-                ? gameStatus.includes("win")
-                  ? "bg-green-500/10 border-green-500/30 text-green-400"
-                  : "bg-red-500/10 border-red-500/30 text-red-400"
-                : isThinking
-                ? "bg-muted/50 border-border text-muted-foreground"
-                : "bg-gold/10 border-gold/30 text-gold"
-            }`}>
-              <p className="font-medium">{gameStatus}</p>
-              {remainingMoves.length > 0 && currentPlayer === "player" && (
-                <p className="text-sm mt-1 text-muted-foreground">
-                  Moves left: {remainingMoves.join(", ")}
-                </p>
+              {/* Status Bar */}
+              <div 
+                className={`relative overflow-hidden rounded-lg border transition-all duration-300 ${
+                  gameOver 
+                    ? gameStatus.includes("win") 
+                      ? "bg-green-500/10 border-green-500/30" 
+                      : "bg-red-500/10 border-red-500/30"
+                    : "bg-gradient-to-r from-primary/5 via-primary/10 to-primary/5 border-primary/30"
+                }`}
+              >
+                {/* Decorative corner accents */}
+                <div className="absolute top-1 left-1 w-3 h-3 border-l border-t border-primary/40 rounded-tl" />
+                <div className="absolute top-1 right-1 w-3 h-3 border-r border-t border-primary/40 rounded-tr" />
+                <div className="absolute bottom-1 left-1 w-3 h-3 border-l border-b border-primary/40 rounded-bl" />
+                <div className="absolute bottom-1 right-1 w-3 h-3 border-r border-b border-primary/40 rounded-br" />
+                
+                <div className="px-6 py-4 text-center">
+                  <p 
+                    className={`font-display font-bold text-lg ${
+                      gameOver 
+                        ? gameStatus.includes("win") 
+                          ? "text-green-400" 
+                          : "text-red-400"
+                        : isThinking
+                        ? "text-muted-foreground"
+                        : "text-primary"
+                    }`}
+                    style={!gameOver && !isThinking ? {
+                      background: "linear-gradient(135deg, #FCE68A 0%, #FACC15 50%, #AB8215 100%)",
+                      WebkitBackgroundClip: "text",
+                      WebkitTextFillColor: "transparent",
+                      backgroundClip: "text",
+                    } : undefined}
+                  >
+                    {gameStatus}
+                  </p>
+                  {remainingMoves.length > 0 && currentPlayer === "player" && (
+                    <p className="text-sm mt-1 text-muted-foreground">
+                      Moves left: {remainingMoves.join(", ")}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Roll Button */}
+              {currentPlayer === "player" && dice.length === 0 && !gameOver && (
+                <Button variant="gold" size="lg" className="w-full" onClick={rollDice}>
+                  🎲 Roll Dice
+                </Button>
+              )}
+
+              {/* Bear off button */}
+              {canBearOff(gameState, "player") && validMoves.includes(-2) && (
+                <Button variant="outline" className="w-full border-primary/30 text-primary hover:bg-primary/10" onClick={() => handlePointClick(-2)}>
+                  Bear Off Selected Checker
+                </Button>
               )}
             </div>
 
-            {/* Roll Button */}
-            {currentPlayer === "player" && dice.length === 0 && !gameOver && (
-              <Button variant="gold" size="lg" className="w-full" onClick={rollDice}>
-                🎲 Roll Dice
-              </Button>
-            )}
-
-            {/* Bear off button */}
-            {canBearOff(gameState, "player") && validMoves.includes(-2) && (
-              <Button variant="outline" className="w-full" onClick={() => handlePointClick(-2)}>
-                Bear Off Selected Checker
-              </Button>
-            )}
-          </div>
-
-          {/* Side Panel */}
-          <div className="space-y-4">
-            <Card className="border-gold/20 bg-card/80">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base font-display">Game Info</CardTitle>
-              </CardHeader>
-              <CardContent className="text-sm text-muted-foreground space-y-2">
-                <div className="flex justify-between">
-                  <span>Your checkers:</span>
-                  <span className="text-foreground font-medium">
-                    {15 - gameState.bearOff.player} remaining
-                  </span>
+            {/* Side Panel */}
+            <div className="space-y-4">
+              {/* Difficulty Display */}
+              <div className="relative p-4 rounded-xl bg-gradient-to-br from-midnight-light via-card to-background border border-primary/20">
+                <div className="absolute top-2 right-2">
+                  <div 
+                    className="w-3 h-3 opacity-40"
+                    style={{
+                      background: "linear-gradient(to top, hsl(45 93% 54%) 0%, hsl(45 90% 65%) 100%)",
+                      clipPath: "polygon(50% 0%, 0% 100%, 100% 100%)"
+                    }}
+                  />
                 </div>
-                <div className="flex justify-between">
-                  <span>AI checkers:</span>
-                  <span className="text-foreground font-medium">
-                    {15 - gameState.bearOff.ai} remaining
-                  </span>
+                
+                <p className="text-xs text-primary/60 uppercase tracking-wider mb-3 font-medium">Difficulty</p>
+                <div className="flex gap-1 p-1 bg-background/50 rounded-lg border border-primary/20">
+                  {(["easy", "medium", "hard"] as const).map((level) => (
+                    <div
+                      key={level}
+                      className={`flex-1 py-2 px-2 text-xs font-bold rounded-md text-center transition-all ${
+                        difficulty === level
+                          ? "bg-gradient-to-r from-primary to-gold text-primary-foreground shadow-[0_0_12px_-2px_hsl(45_93%_54%_/_0.5)]"
+                          : "text-muted-foreground/50"
+                      }`}
+                    >
+                      {level.toUpperCase()}
+                    </div>
+                  ))}
                 </div>
-                <div className="flex justify-between">
-                  <span>Difficulty:</span>
-                  <span className="text-gold font-medium">{difficultyLabel}</span>
+                <p className="text-xs text-muted-foreground mt-3 text-center">{difficultyDescription}</p>
+              </div>
+
+              {/* Game Info */}
+              <div className="relative p-4 rounded-xl bg-gradient-to-br from-midnight-light via-card to-background border border-primary/20">
+                <div className="absolute top-2 right-2">
+                  <div 
+                    className="w-3 h-3 opacity-40"
+                    style={{
+                      background: "linear-gradient(to top, hsl(45 93% 54%) 0%, hsl(45 90% 65%) 100%)",
+                      clipPath: "polygon(50% 0%, 0% 100%, 100% 100%)"
+                    }}
+                  />
                 </div>
-              </CardContent>
-            </Card>
+                
+                <p className="text-xs text-primary/60 uppercase tracking-wider mb-3 font-medium">Game Info</p>
+                <div className="text-sm space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Your checkers</span>
+                    <span className="text-primary font-medium">{15 - gameState.bearOff.player} remaining</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">AI checkers</span>
+                    <span className="text-foreground font-medium">{15 - gameState.bearOff.ai} remaining</span>
+                  </div>
+                </div>
+              </div>
 
-            <Card className="border-gold/20 bg-card/80">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base font-display">How to Play</CardTitle>
-              </CardHeader>
-              <CardContent className="text-xs text-muted-foreground space-y-1">
-                <p>• Roll dice and move your checkers</p>
-                <p>• Move from high points to low</p>
-                <p>• Land on opponent's single checker to hit</p>
-                <p>• Get all checkers to points 1-6 to bear off</p>
-                <p>• First to bear off all 15 wins!</p>
-              </CardContent>
-            </Card>
+              {/* How to Play */}
+              <div className="relative p-4 rounded-xl bg-gradient-to-br from-midnight-light via-card to-background border border-primary/20">
+                <div className="absolute top-2 right-2">
+                  <div 
+                    className="w-3 h-3 opacity-40"
+                    style={{
+                      background: "linear-gradient(to top, hsl(45 93% 54%) 0%, hsl(45 90% 65%) 100%)",
+                      clipPath: "polygon(50% 0%, 0% 100%, 100% 100%)"
+                    }}
+                  />
+                </div>
+                
+                <p className="text-xs text-primary/60 uppercase tracking-wider mb-3 font-medium">How to Play</p>
+                <div className="text-xs text-muted-foreground space-y-1">
+                  <p>• Roll dice and move your checkers</p>
+                  <p>• Move from high points to low</p>
+                  <p>• Land on opponent's single checker to hit</p>
+                  <p>• Get all checkers to points 1-6 to bear off</p>
+                  <p>• First to bear off all 15 wins!</p>
+                </div>
+              </div>
 
-            <Button onClick={restartGame} className="w-full" variant="outline">
-              <RotateCcw size={18} />
-              Restart Game
-            </Button>
+              {/* Actions */}
+              <div className="relative p-4 rounded-xl bg-gradient-to-br from-midnight-light via-card to-background border border-primary/20">
+                <div className="absolute top-2 right-2">
+                  <div 
+                    className="w-3 h-3 opacity-40"
+                    style={{
+                      background: "linear-gradient(to top, hsl(45 93% 54%) 0%, hsl(45 90% 65%) 100%)",
+                      clipPath: "polygon(50% 0%, 0% 100%, 100% 100%)"
+                    }}
+                  />
+                </div>
+                
+                <p className="text-xs text-primary/60 uppercase tracking-wider mb-3 font-medium">Actions</p>
+                <div className="space-y-2">
+                  <Button onClick={restartGame} className="w-full" variant="gold" size="sm">
+                    <RotateCcw size={16} />
+                    Restart Game
+                  </Button>
 
-            <Button asChild variant="ghost" className="w-full text-muted-foreground">
-              <Link to="/play-ai">
-                Change Difficulty
-              </Link>
-            </Button>
+                  <Button asChild variant="ghost" size="sm" className="w-full text-muted-foreground hover:text-primary">
+                    <Link to="/play-ai">
+                      Change Difficulty
+                    </Link>
+                  </Button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
