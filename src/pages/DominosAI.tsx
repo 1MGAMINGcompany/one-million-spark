@@ -597,29 +597,11 @@ const DominosAI = () => {
                   )}
                 </div>
                 
-                {/* Mobile: 2-row grid layout with smaller tiles */}
-                <div className="md:hidden">
-                  {(() => {
-                    const midpoint = Math.ceil(playerHand.length / 2);
-                    const row1 = playerHand.slice(0, midpoint);
-                    const row2 = playerHand.slice(midpoint);
-                    return (
-                      <div className="flex flex-col items-center gap-1.5">
-                        <div className="flex flex-wrap gap-1.5 justify-center">
-                          {row1.map(d => 
-                            renderDominoMobile(d, isPlayerTurn && !gameOver && !isThinking, selectedDomino === d.id)
-                          )}
-                        </div>
-                        {row2.length > 0 && (
-                          <div className="flex flex-wrap gap-1.5 justify-center">
-                            {row2.map(d => 
-                              renderDominoMobile(d, isPlayerTurn && !gameOver && !isThinking, selectedDomino === d.id)
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })()}
+                {/* Mobile: tiles side-by-side, wraps to second row only when needed */}
+                <div className="md:hidden flex flex-wrap gap-2 justify-center px-1">
+                  {playerHand.map(d => 
+                    renderDominoMobile(d, isPlayerTurn && !gameOver && !isThinking, selectedDomino === d.id)
+                  )}
                 </div>
                 
                 {/* Draw/Pass buttons */}
