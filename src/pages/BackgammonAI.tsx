@@ -409,11 +409,11 @@ const BackgammonAI = () => {
     const isSelected = selectedPoint === index;
     const isValidTarget = validMoves.includes(index);
 
-    // For vertical mobile layout, we need different sizing
-    const triangleWidth = isVertical ? 32 : 40;
-    const triangleHeight = isVertical ? 80 : 120;
-    const mdWidth = isVertical ? 36 : 48;
-    const mdHeight = isVertical ? 90 : 144;
+    // For vertical mobile layout, we need much smaller sizing to fit viewport
+    const triangleWidth = isVertical ? 24 : 40;
+    const triangleHeight = isVertical ? 56 : 120;
+    const mdWidth = isVertical ? 28 : 48;
+    const mdHeight = isVertical ? 64 : 144;
     
     return (
       <div
@@ -509,7 +509,7 @@ const BackgammonAI = () => {
           <div className={cn(
             "absolute",
             isVertical 
-              ? (isTop ? "left-[70px]" : "right-[70px]")
+              ? (isTop ? "left-[50px]" : "right-[50px]")
               : (isTop ? "top-4" : "bottom-4")
           )}>
             <CheckerStack
@@ -519,7 +519,7 @@ const BackgammonAI = () => {
               isValidTarget={isValidTarget}
               onClick={() => handlePointClick(index)}
               isTop={isVertical ? true : isTop}
-              size={isVertical ? "sm" : "md"}
+              size={isVertical ? "xs" : "md"}
             />
           </div>
         )}
@@ -535,7 +535,10 @@ const BackgammonAI = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background relative overflow-hidden">
+    <div className={cn(
+      "bg-background relative overflow-hidden",
+      isMobile ? "h-screen overflow-y-hidden" : "min-h-screen"
+    )}>
       {/* Background with pyramid pattern */}
       <div className="absolute inset-0 bg-gradient-to-b from-midnight-light via-background to-background" />
       <div 
@@ -557,34 +560,47 @@ const BackgammonAI = () => {
           )`
         }}
       />
-      {/* Subtle pyramid silhouette */}
-      <div className="absolute inset-0 flex items-end justify-center pointer-events-none overflow-hidden">
-        <div 
-          className="w-[600px] h-[400px] opacity-[0.03] translate-y-1/2"
-          style={{
-            background: "linear-gradient(to top, hsl(45 93% 54%) 0%, transparent 80%)",
-            clipPath: "polygon(50% 0%, 0% 100%, 100% 100%)"
-          }}
-        />
-      </div>
+      {/* Subtle pyramid silhouette - hidden on mobile */}
+      {!isMobile && (
+        <div className="absolute inset-0 flex items-end justify-center pointer-events-none overflow-hidden">
+          <div 
+            className="w-[600px] h-[400px] opacity-[0.03] translate-y-1/2"
+            style={{
+              background: "linear-gradient(to top, hsl(45 93% 54%) 0%, transparent 80%)",
+              clipPath: "polygon(50% 0%, 0% 100%, 100% 100%)"
+            }}
+          />
+        </div>
+      )}
 
-      <div className="relative z-10">
-        {/* Header */}
-        <div className="border-b border-primary/20 px-4 py-4">
+      <div className={cn(
+        "relative z-10",
+        isMobile && "h-full flex flex-col"
+      )}>
+        {/* Header - compact on mobile */}
+        <div className={cn(
+          "border-b border-primary/20 px-4",
+          isMobile ? "py-2" : "py-4"
+        )}>
           <div className="max-w-6xl mx-auto">
-            <Button asChild variant="ghost" size="sm" className="mb-4 text-muted-foreground hover:text-primary group">
-              <Link to="/play-ai" className="flex items-center gap-2">
-                <ArrowLeft size={18} className="group-hover:text-primary transition-colors" />
-                Back to Temple
-              </Link>
-            </Button>
+            {/* Back button - smaller on mobile */}
+            <div className={cn(isMobile ? "mb-1" : "mb-4")}>
+              <Button asChild variant="ghost" size="sm" className="text-muted-foreground hover:text-primary group p-1">
+                <Link to="/play-ai" className="flex items-center gap-1">
+                  <ArrowLeft size={16} className="group-hover:text-primary transition-colors" />
+                  <span className={isMobile ? "text-xs" : ""}>Back</span>
+                </Link>
+              </Button>
+            </div>
             
-            {/* Title with decorative elements */}
-            <div className="flex items-center justify-center gap-3 mb-2">
-              <div className="h-px w-8 bg-gradient-to-r from-transparent to-primary/50 hidden sm:block" />
-              <Gem className="w-4 h-4 text-primary" />
+            {/* Title with decorative elements - smaller on mobile */}
+            <div className="flex items-center justify-center gap-2 mb-1">
+              <Gem className={cn("text-primary", isMobile ? "w-3 h-3" : "w-4 h-4")} />
               <h1 
-                className="text-xl md:text-2xl font-display font-bold tracking-wide text-center"
+                className={cn(
+                  "font-display font-bold tracking-wide text-center",
+                  isMobile ? "text-sm" : "text-xl md:text-2xl"
+                )}
                 style={{
                   background: "linear-gradient(135deg, #FCE68A 0%, #FACC15 50%, #AB8215 100%)",
                   WebkitBackgroundClip: "text",
@@ -592,101 +608,115 @@ const BackgammonAI = () => {
                   backgroundClip: "text",
                 }}
               >
-                Backgammon Training – Temple of Precision
+                {isMobile ? "Backgammon vs AI" : "Backgammon Training – Temple of Precision"}
               </h1>
-              <Gem className="w-4 h-4 text-primary" />
-              <div className="h-px w-8 bg-gradient-to-l from-transparent to-primary/50 hidden sm:block" />
+              <Gem className={cn("text-primary", isMobile ? "w-3 h-3" : "w-4 h-4")} />
             </div>
             
-            <p className="text-center text-sm text-muted-foreground/60">
-              <Star className="w-3 h-3 inline-block mr-1 text-primary/40" />
-              Free mode – no wallet required
-              <Star className="w-3 h-3 inline-block ml-1 text-primary/40" />
-            </p>
+            {!isMobile && (
+              <p className="text-center text-sm text-muted-foreground/60">
+                <Star className="w-3 h-3 inline-block mr-1 text-primary/40" />
+                Free mode – no wallet required
+                <Star className="w-3 h-3 inline-block ml-1 text-primary/40" />
+              </p>
+            )}
           </div>
         </div>
 
         {/* Main Content */}
-        <div className="max-w-6xl mx-auto px-2 md:px-4 py-4 md:py-6">
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 md:gap-6">
+        <div className={cn(
+          "max-w-6xl mx-auto px-2 md:px-4",
+          isMobile ? "flex-1 flex flex-col py-1 overflow-hidden" : "py-4 md:py-6"
+        )}>
+          <div className={cn(
+            isMobile ? "flex flex-col flex-1 overflow-hidden" : "grid grid-cols-1 lg:grid-cols-4 gap-4 md:gap-6"
+          )}>
             {/* Board Area */}
-            <div className="lg:col-span-3 space-y-3 md:space-y-4">
+            <div className={cn(
+              isMobile ? "flex-1 flex flex-col min-h-0" : "lg:col-span-3 space-y-3 md:space-y-4"
+            )}>
               {/* Board Container with gold frame */}
-              <div className="relative">
-                {/* Outer glow */}
-                <div className="absolute -inset-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 rounded-2xl blur-xl opacity-50" />
+              <div className={cn(
+                "relative",
+                isMobile && "flex-1 flex flex-col min-h-0"
+              )}>
+                {/* Outer glow - smaller on mobile */}
+                <div className={cn(
+                  "absolute bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 rounded-2xl blur-xl opacity-50",
+                  isMobile ? "-inset-1" : "-inset-2"
+                )} />
                 
                 {/* Gold frame */}
-                <div className="relative p-1 rounded-xl bg-gradient-to-br from-primary/40 via-primary/20 to-primary/40 shadow-[0_0_40px_-10px_hsl(45_93%_54%_/_0.4)]">
-                  <div className="bg-gradient-to-b from-midnight-light via-background to-midnight-light rounded-lg p-2 md:p-4 overflow-hidden">
+                <div className={cn(
+                  "relative rounded-xl bg-gradient-to-br from-primary/40 via-primary/20 to-primary/40 shadow-[0_0_40px_-10px_hsl(45_93%_54%_/_0.4)]",
+                  isMobile ? "p-0.5 flex-1 flex flex-col min-h-0" : "p-1"
+                )}>
+                  <div className={cn(
+                    "bg-gradient-to-b from-midnight-light via-background to-midnight-light rounded-lg overflow-hidden",
+                    isMobile ? "p-1 flex-1 flex flex-col min-h-0" : "p-2 md:p-4"
+                  )}>
                     
                     {/* MOBILE VERTICAL LAYOUT */}
                     {isMobile ? (
-                      <div className="flex flex-col">
-                        {/* AI Info Bar */}
-                        <div className="flex justify-between items-center mb-2 px-2">
-                          <div className="text-xs text-muted-foreground flex items-center gap-2">
+                      <div className="flex flex-col flex-1 min-h-0">
+                        {/* AI Info Bar - compact */}
+                        <div className="flex justify-between items-center py-1 px-1">
+                          <div className="text-[10px] text-muted-foreground flex items-center gap-1">
                             AI: <span className="text-foreground font-bold">{gameState.bearOff.ai}</span> off
                           </div>
                           {gameState.bar.ai > 0 && (
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs text-muted-foreground">Bar:</span>
-                              <CheckerStack count={gameState.bar.ai} variant="obsidian" isTop={true} size="sm" />
+                            <div className="flex items-center gap-1">
+                              <span className="text-[10px] text-muted-foreground">Bar:</span>
+                              <CheckerStack count={gameState.bar.ai} variant="obsidian" isTop={true} size="xs" />
                             </div>
                           )}
                         </div>
 
-                        {/* Vertical Board */}
-                        <div className="flex">
-                          {/* Left side - AI's home (points 19-24) and outer (points 7-12) */}
-                          <div className="flex-1 flex flex-col gap-1">
-                            {/* AI Home Board - Top Left (points 24-19, going down) */}
-                            <div className="flex flex-col items-start gap-0">
-                              {[23, 22, 21, 20, 19, 18].map(i => renderPoint(i, true, true))}
-                            </div>
+                        {/* Vertical Board - fills remaining space */}
+                        <div className="flex flex-1 min-h-0 justify-center">
+                          {/* Left side - AI's home (points 19-24) */}
+                          <div className="flex flex-col justify-around py-1">
+                            {[23, 22, 21, 20, 19, 18].map(i => renderPoint(i, true, true))}
                           </div>
 
                           {/* Center bar with dice */}
-                          <div className="w-14 md:w-16 bg-gradient-to-b from-midnight-light via-background to-midnight-light rounded-lg border border-primary/20 flex flex-col items-center justify-center py-4 mx-1">
+                          <div className="w-12 bg-gradient-to-b from-midnight-light via-background to-midnight-light rounded-lg border border-primary/20 flex flex-col items-center justify-center mx-0.5">
                             {dice.length > 0 && (
-                              <div className="flex flex-col gap-2 items-center">
-                                <Dice3D value={dice[0]} variant={currentPlayer === "player" ? "ivory" : "obsidian"} isRolling={isThinking && currentPlayer === "ai"} size="sm" />
-                                <Dice3D value={dice[1]} variant={currentPlayer === "player" ? "ivory" : "obsidian"} isRolling={isThinking && currentPlayer === "ai"} size="sm" />
+                              <div className="flex flex-col gap-1 items-center">
+                                <Dice3D value={dice[0]} variant={currentPlayer === "player" ? "ivory" : "obsidian"} isRolling={isThinking && currentPlayer === "ai"} size="xs" />
+                                <Dice3D value={dice[1]} variant={currentPlayer === "player" ? "ivory" : "obsidian"} isRolling={isThinking && currentPlayer === "ai"} size="xs" />
                               </div>
                             )}
                           </div>
 
-                          {/* Right side - Player's outer (points 13-18) and home (points 1-6) */}
-                          <div className="flex-1 flex flex-col gap-1">
-                            {/* Player Home Board - Bottom Right (points 6-1, going down) */}
-                            <div className="flex flex-col items-end gap-0">
-                              {[5, 4, 3, 2, 1, 0].map(i => renderPoint(i, false, true))}
-                            </div>
+                          {/* Right side - Player's home (points 1-6) */}
+                          <div className="flex flex-col justify-around py-1">
+                            {[5, 4, 3, 2, 1, 0].map(i => renderPoint(i, false, true))}
                           </div>
                         </div>
 
-                        {/* Player Info Bar */}
-                        <div className="flex justify-between items-center mt-2 px-2">
-                          {gameState.bar.player > 0 && (
+                        {/* Player Info Bar - compact */}
+                        <div className="flex justify-between items-center py-1 px-1">
+                          {gameState.bar.player > 0 ? (
                             <div 
                               className={cn(
-                                "flex items-center gap-2 cursor-pointer transition-all rounded-lg p-1",
+                                "flex items-center gap-1 cursor-pointer transition-all rounded-lg p-0.5",
                                 selectedPoint === -1 && "ring-2 ring-primary bg-primary/10"
                               )}
                               onClick={() => handlePointClick(-1)}
                             >
-                              <span className="text-xs text-muted-foreground">Bar:</span>
+                              <span className="text-[10px] text-muted-foreground">Bar:</span>
                               <CheckerStack 
                                 count={gameState.bar.player} 
                                 variant="gold" 
                                 isSelected={selectedPoint === -1}
                                 onClick={() => handlePointClick(-1)}
                                 isTop={false} 
-                                size="sm"
+                                size="xs"
                               />
                             </div>
-                          )}
-                          <div className="text-xs text-muted-foreground ml-auto flex items-center gap-2">
+                          ) : <div />}
+                          <div className="text-[10px] text-muted-foreground flex items-center gap-1">
                             You: <span className="text-primary font-bold">{gameState.bearOff.player}</span> off
                           </div>
                         </div>
@@ -769,25 +799,26 @@ const BackgammonAI = () => {
                 </div>
               </div>
 
-              {/* Status Bar - repositioned for mobile thumb access */}
+              {/* Status Bar - compact on mobile */}
               <div 
-                className={`relative overflow-hidden rounded-lg border transition-all duration-300 ${
+                className={cn(
+                  "relative overflow-hidden rounded-lg border transition-all duration-300",
                   gameOver 
                     ? gameStatus.includes("win") 
                       ? "bg-green-500/10 border-green-500/30" 
                       : "bg-red-500/10 border-red-500/30"
-                    : "bg-gradient-to-r from-primary/5 via-primary/10 to-primary/5 border-primary/30"
-                }`}
+                    : "bg-gradient-to-r from-primary/5 via-primary/10 to-primary/5 border-primary/30",
+                  isMobile && "mt-1"
+                )}
               >
-                {/* Decorative corner accents */}
-                <div className="absolute top-1 left-1 w-3 h-3 border-l border-t border-primary/40 rounded-tl" />
-                <div className="absolute top-1 right-1 w-3 h-3 border-r border-t border-primary/40 rounded-tr" />
-                <div className="absolute bottom-1 left-1 w-3 h-3 border-l border-b border-primary/40 rounded-bl" />
-                <div className="absolute bottom-1 right-1 w-3 h-3 border-r border-b border-primary/40 rounded-br" />
-                
-                <div className="px-4 md:px-6 py-3 md:py-4 text-center">
+                <div className={cn(
+                  "text-center",
+                  isMobile ? "px-2 py-1.5" : "px-4 md:px-6 py-3 md:py-4"
+                )}>
                   <p 
-                    className={`font-display font-bold text-base md:text-lg ${
+                    className={cn(
+                      "font-display font-bold",
+                      isMobile ? "text-sm" : "text-base md:text-lg",
                       gameOver 
                         ? gameStatus.includes("win") 
                           ? "text-green-400" 
@@ -795,7 +826,7 @@ const BackgammonAI = () => {
                         : isThinking
                         ? "text-muted-foreground"
                         : "text-primary"
-                    }`}
+                    )}
                     style={!gameOver && !isThinking ? {
                       background: "linear-gradient(135deg, #FCE68A 0%, #FACC15 50%, #AB8215 100%)",
                       WebkitBackgroundClip: "text",
@@ -806,39 +837,39 @@ const BackgammonAI = () => {
                     {gameStatus}
                   </p>
                   {remainingMoves.length > 0 && currentPlayer === "player" && (
-                    <p className="text-xs md:text-sm mt-1 text-muted-foreground">
-                      Moves left: {remainingMoves.join(", ")}
+                    <p className={cn("mt-0.5 text-muted-foreground", isMobile ? "text-[10px]" : "text-xs md:text-sm")}>
+                      Moves: {remainingMoves.join(", ")}
                     </p>
                   )}
                 </div>
               </div>
 
-              {/* Controls - larger buttons for mobile thumb access */}
-              <div className="flex flex-col gap-2">
+              {/* Controls - compact on mobile */}
+              <div className={cn("flex flex-col", isMobile ? "gap-1 mt-1" : "gap-2")}>
                 {/* Roll Button */}
                 {currentPlayer === "player" && dice.length === 0 && !gameOver && (
-                  <Button variant="gold" size="lg" className="w-full py-4 text-base" onClick={rollDice}>
+                  <Button variant="gold" size={isMobile ? "sm" : "lg"} className={cn("w-full", isMobile ? "py-2 text-sm" : "py-4 text-base")} onClick={rollDice}>
                     🎲 Roll Dice
                   </Button>
                 )}
 
                 {/* Bear off button */}
                 {canBearOff(gameState, "player") && validMoves.includes(-2) && (
-                  <Button variant="outline" className="w-full py-4 border-primary/30 text-primary hover:bg-primary/10" onClick={() => handlePointClick(-2)}>
-                    Bear Off Selected Checker
+                  <Button variant="outline" className={cn("w-full border-primary/30 text-primary hover:bg-primary/10", isMobile ? "py-2 text-sm" : "py-4")} onClick={() => handlePointClick(-2)}>
+                    Bear Off
                   </Button>
                 )}
 
                 {/* Mobile: Quick actions row */}
                 {isMobile && (
-                  <div className="flex gap-2">
-                    <Button onClick={restartGame} className="flex-1" variant="gold" size="sm">
-                      <RotateCcw size={16} />
+                  <div className="flex gap-1">
+                    <Button onClick={restartGame} className="flex-1 py-1.5" variant="gold" size="sm">
+                      <RotateCcw size={14} />
                       Restart
                     </Button>
-                    <Button asChild variant="ghost" size="sm" className="flex-1 text-muted-foreground hover:text-primary border border-primary/20">
+                    <Button asChild variant="ghost" size="sm" className="flex-1 py-1.5 text-muted-foreground hover:text-primary border border-primary/20 text-xs">
                       <Link to="/play-ai">
-                        Change Difficulty
+                        Difficulty
                       </Link>
                     </Button>
                   </div>
