@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Home, Wallet, PlusCircle, LayoutList, Menu, X, Coins } from "lucide-react";
+import { Home, Wallet, PlusCircle, LayoutList, Menu, X, Coins, Volume2, VolumeX } from "lucide-react";
 import { WalletButton } from "./WalletButton";
 import BrandLogo from "./BrandLogo";
+import { useAudio } from "@/contexts/AudioContext";
 import type { LucideIcon } from "lucide-react";
 
 interface NavItem {
@@ -14,6 +15,15 @@ interface NavItem {
 const Navbar = () => {
   const location = useLocation();
   const [isOpen, setIsOpen] = useState(false);
+  const { isMuted, toggleMute, playClick } = useAudio();
+
+  const handleToggleMute = () => {
+    toggleMute();
+  };
+
+  const handleNavClick = () => {
+    playClick();
+  };
 
   const navItems: NavItem[] = [
     { path: "/", label: "Home", icon: Home },
@@ -37,6 +47,7 @@ const Navbar = () => {
                 <Link
                   key={item.path}
                   to={item.path}
+                  onClick={handleNavClick}
                   className={`group flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
                     isActive
                       ? "bg-primary text-primary-foreground shadow-gold"
@@ -55,6 +66,21 @@ const Navbar = () => {
                 </Link>
               );
             })}
+            
+            {/* Sound Toggle Button */}
+            <button
+              onClick={handleToggleMute}
+              className={`p-2 rounded-lg transition-all duration-200 ${
+                isMuted
+                  ? "text-muted-foreground/50 hover:text-muted-foreground hover:bg-secondary"
+                  : "text-primary hover:text-primary/80 hover:bg-secondary drop-shadow-[0_0_6px_hsl(45_93%_54%_/_0.4)]"
+              }`}
+              aria-label={isMuted ? "Unmute sounds" : "Mute sounds"}
+              title={isMuted ? "Sound OFF" : "Sound ON"}
+            >
+              {isMuted ? <VolumeX size={20} /> : <Volume2 size={20} />}
+            </button>
+            
             <WalletButton />
           </div>
 
@@ -79,7 +105,7 @@ const Navbar = () => {
                   <Link
                     key={item.path}
                     to={item.path}
-                    onClick={() => setIsOpen(false)}
+                    onClick={() => { setIsOpen(false); handleNavClick(); }}
                     className={`group flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 ${
                       isActive
                         ? "bg-primary text-primary-foreground shadow-gold"
@@ -98,6 +124,20 @@ const Navbar = () => {
                   </Link>
                 );
               })}
+              
+              {/* Sound Toggle (Mobile) */}
+              <button
+                onClick={handleToggleMute}
+                className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 ${
+                  isMuted
+                    ? "text-muted-foreground/50 hover:text-muted-foreground hover:bg-secondary"
+                    : "text-primary hover:bg-secondary"
+                }`}
+              >
+                {isMuted ? <VolumeX size={20} /> : <Volume2 size={20} />}
+                <span>{isMuted ? "Sound OFF" : "Sound ON"}</span>
+              </button>
+              
               {/* Wallet Button (Mobile) */}
               <div className="pt-2">
                 <WalletButton />
