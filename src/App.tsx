@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Web3Provider } from "./components/Web3Provider";
 import { LoadingProvider } from "./contexts/LoadingContext";
+import { AudioProvider } from "./contexts/AudioContext";
 import Navbar from "./components/Navbar";
 import PyramidLoader from "./components/PyramidLoader";
 import Home from "./pages/Home";
@@ -20,28 +21,30 @@ import NotFound from "./pages/NotFound";
 const App = () => (
   <Web3Provider>
     <LoadingProvider>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <PyramidLoader />
-        <BrowserRouter>
-          <Navbar />
-          <div className="pt-16">
-            <Routes>
-              <Route path="/" element={<Home />} />
-              <Route path="/add-funds" element={<AddFunds />} />
-              <Route path="/create-room" element={<CreateRoom />} />
-              <Route path="/room-list" element={<RoomList />} />
-              <Route path="/game/chess/:roomId" element={<ChessGame />} />
-              <Route path="/play-ai" element={<PlayAILobby />} />
-              <Route path="/play-ai/chess" element={<ChessAI />} />
-              <Route path="/play-ai/dominos" element={<DominosAI />} />
-              <Route path="/play-ai/backgammon" element={<BackgammonAI />} />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </div>
-        </BrowserRouter>
-      </TooltipProvider>
+      <AudioProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <PyramidLoader />
+          <BrowserRouter>
+            <Navbar />
+            <div className="pt-16">
+              <Routes>
+                <Route path="/" element={<Home />} />
+                <Route path="/add-funds" element={<AddFunds />} />
+                <Route path="/create-room" element={<CreateRoom />} />
+                <Route path="/room-list" element={<RoomList />} />
+                <Route path="/game/chess/:roomId" element={<ChessGame />} />
+                <Route path="/play-ai" element={<PlayAILobby />} />
+                <Route path="/play-ai/chess" element={<ChessAI />} />
+                <Route path="/play-ai/dominos" element={<DominosAI />} />
+                <Route path="/play-ai/backgammon" element={<BackgammonAI />} />
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </div>
+          </BrowserRouter>
+        </TooltipProvider>
+      </AudioProvider>
     </LoadingProvider>
   </Web3Provider>
 );
