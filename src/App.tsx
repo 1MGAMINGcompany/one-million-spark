@@ -7,6 +7,7 @@ import { LoadingProvider } from "./contexts/LoadingContext";
 import { AudioProvider } from "./contexts/AudioContext";
 import Navbar from "./components/Navbar";
 import PyramidLoader from "./components/PyramidLoader";
+import GoldenParticles from "./components/GoldenParticles";
 import Home from "./pages/Home";
 import AddFunds from "./pages/AddFunds";
 import CreateRoom from "./pages/CreateRoom";
@@ -26,9 +27,10 @@ const App = () => (
           <Toaster />
           <Sonner />
           <PyramidLoader />
+          <GoldenParticles />
           <BrowserRouter>
             <Navbar />
-            <div className="pt-16">
+            <div className="pt-16 relative z-10">
               <Routes>
                 <Route path="/" element={<Home />} />
                 <Route path="/add-funds" element={<AddFunds />} />
