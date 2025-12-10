@@ -66,7 +66,7 @@ export const Dice3D = ({ value, variant, isRolling = false, className, size = "m
       />
 
       {/* Drop shadow */}
-      <div className="absolute inset-0 translate-y-2 rounded-lg bg-black/40 blur-md" />
+      <div className="absolute inset-0 translate-y-1 rounded-lg bg-black/30 blur-sm" />
 
       <svg
         width={svgSize}
@@ -209,20 +209,25 @@ export const Checker3D = ({
   size = "md"
 }: Checker3DProps) => {
   const isGold = variant === "gold";
-  const sizeMap = { xs: { w: 22, h: 16 }, sm: { w: 28, h: 20 }, md: { w: 32, h: 24 }, lg: { w: 40, h: 30 } };
+  // Adjusted sizes for tighter stacking
+  const sizeMap = { 
+    xs: { w: 24, h: 14 }, 
+    sm: { w: 30, h: 18 }, 
+    md: { w: 36, h: 22 }, 
+    lg: { w: 44, h: 28 } 
+  };
   const { w, h } = sizeMap[size];
 
   return (
     <button
       onClick={onClick}
       className={cn(
-        "relative transition-all duration-200 focus:outline-none",
+        "relative transition-all duration-200 focus:outline-none flex items-center justify-center",
         onClick && "cursor-pointer hover:scale-105",
-        isSelected && "scale-110",
-        // Larger touch target on mobile
-        "min-w-[44px] min-h-[44px] flex items-center justify-center",
+        isSelected && "scale-110 z-10",
         className
       )}
+      style={{ width: w, height: h }}
     >
       {/* Valid target glow */}
       {isValidTarget && (
@@ -234,18 +239,18 @@ export const Checker3D = ({
         <div className="absolute -inset-1.5 bg-gradient-to-r from-primary via-gold-light to-primary rounded-full blur-md opacity-90" />
       )}
 
-      {/* Drop shadow */}
-      <div className="absolute inset-0 translate-y-1 rounded-full bg-black/40 blur-sm" />
-
       <svg
         width={w}
         height={h}
-        viewBox="0 0 100 75"
-        className="relative drop-shadow-md"
+        viewBox="0 0 100 60"
+        className="relative"
+        style={{
+          filter: `drop-shadow(0 1px 1px rgba(0,0,0,0.3))`
+        }}
       >
         <defs>
           {/* Gold gradient */}
-          <radialGradient id={`goldChecker-${variant}`} cx="35%" cy="35%" r="65%">
+          <radialGradient id={`goldChecker-${variant}-${size}`} cx="35%" cy="35%" r="65%">
             <stop offset="0%" stopColor="hsl(45 93% 70%)" />
             <stop offset="40%" stopColor="hsl(45 93% 54%)" />
             <stop offset="80%" stopColor="hsl(35 80% 40%)" />
@@ -253,85 +258,85 @@ export const Checker3D = ({
           </radialGradient>
 
           {/* Obsidian gradient */}
-          <radialGradient id={`obsidianChecker-${variant}`} cx="35%" cy="35%" r="65%">
-            <stop offset="0%" stopColor="hsl(220 15% 25%)" />
-            <stop offset="40%" stopColor="hsl(220 15% 15%)" />
-            <stop offset="80%" stopColor="hsl(220 15% 8%)" />
-            <stop offset="100%" stopColor="hsl(220 15% 4%)" />
+          <radialGradient id={`obsidianChecker-${variant}-${size}`} cx="35%" cy="35%" r="65%">
+            <stop offset="0%" stopColor="hsl(220 15% 28%)" />
+            <stop offset="40%" stopColor="hsl(220 15% 18%)" />
+            <stop offset="80%" stopColor="hsl(220 15% 10%)" />
+            <stop offset="100%" stopColor="hsl(220 15% 5%)" />
           </radialGradient>
 
           {/* Gold rim for obsidian */}
-          <linearGradient id="goldRim" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="hsl(45 93% 60% / 0.4)" />
-            <stop offset="50%" stopColor="hsl(45 93% 40% / 0.6)" />
-            <stop offset="100%" stopColor="hsl(45 93% 60% / 0.4)" />
+          <linearGradient id={`goldRim-${size}`} x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="hsl(45 93% 65% / 0.5)" />
+            <stop offset="50%" stopColor="hsl(45 93% 45% / 0.7)" />
+            <stop offset="100%" stopColor="hsl(45 93% 65% / 0.5)" />
           </linearGradient>
 
           {/* Emboss effect */}
-          <linearGradient id="embossTop" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stopColor="rgba(255,255,255,0.4)" />
+          <linearGradient id={`embossTop-${size}`} x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stopColor="rgba(255,255,255,0.5)" />
             <stop offset="50%" stopColor="transparent" />
           </linearGradient>
         </defs>
 
-        {/* Checker base (3D edge) */}
+        {/* Checker edge (3D depth) - subtle */}
         <ellipse
           cx="50"
-          cy="50"
-          rx="42"
-          ry="20"
-          fill={isGold ? "hsl(35 70% 25%)" : "hsl(220 15% 5%)"}
+          cy="38"
+          rx="44"
+          ry="18"
+          fill={isGold ? "hsl(35 70% 22%)" : "hsl(220 15% 4%)"}
         />
 
         {/* Main checker body */}
         <ellipse
           cx="50"
-          cy="40"
-          rx="42"
-          ry="20"
-          fill={isGold ? `url(#goldChecker-${variant})` : `url(#obsidianChecker-${variant})`}
-          stroke={isGold ? "hsl(35 80% 35%)" : "url(#goldRim)"}
+          cy="30"
+          rx="44"
+          ry="18"
+          fill={isGold ? `url(#goldChecker-${variant}-${size})` : `url(#obsidianChecker-${variant}-${size})`}
+          stroke={isGold ? "hsl(35 80% 30%)" : `url(#goldRim-${size})`}
           strokeWidth={isGold ? "2" : "1.5"}
         />
 
         {/* Top highlight */}
         <ellipse
           cx="50"
-          cy="40"
+          cy="30"
           rx="38"
-          ry="16"
-          fill="url(#embossTop)"
-          opacity="0.6"
+          ry="14"
+          fill={`url(#embossTop-${size})`}
+          opacity="0.5"
         />
 
         {/* Inner embossed ring */}
         <ellipse
           cx="50"
-          cy="40"
-          rx="30"
-          ry="12"
+          cy="30"
+          rx="28"
+          ry="10"
           fill="none"
-          stroke={isGold ? "hsl(35 70% 30% / 0.5)" : "hsl(45 93% 54% / 0.15)"}
+          stroke={isGold ? "hsl(35 70% 28% / 0.5)" : "hsl(45 93% 54% / 0.2)"}
           strokeWidth="1.5"
         />
 
         {/* Specular highlight */}
         <ellipse
           cx="38"
-          cy="32"
-          rx="12"
-          ry="5"
-          fill={isGold ? "hsl(45 93% 80% / 0.5)" : "hsl(220 10% 40% / 0.3)"}
+          cy="24"
+          rx="10"
+          ry="4"
+          fill={isGold ? "hsl(45 93% 80% / 0.6)" : "hsl(220 10% 45% / 0.4)"}
         />
 
         {/* Count number if > 1 */}
         {count > 1 && (
           <text
             x="50"
-            y="45"
+            y="36"
             textAnchor="middle"
-            fill={isGold ? "hsl(35 70% 20%)" : "hsl(45 93% 54%)"}
-            fontSize="18"
+            fill={isGold ? "hsl(35 70% 18%)" : "hsl(45 93% 54%)"}
+            fontSize="20"
             fontWeight="bold"
             fontFamily="sans-serif"
           >
@@ -343,7 +348,7 @@ export const Checker3D = ({
   );
 };
 
-// Stacked checkers for board display
+// Stacked checkers for board display - TIGHT stacking
 export const CheckerStack = ({
   count,
   variant,
@@ -362,23 +367,31 @@ export const CheckerStack = ({
   size?: "xs" | "sm" | "md" | "lg";
 }) => {
   const displayCount = Math.min(count, 5);
-  const marginClass = size === "xs" ? "-mt-2" : size === "lg" ? "-mt-4" : "-mt-3";
-  const marginClassReverse = size === "xs" ? "-mb-2" : size === "lg" ? "-mb-4" : "-mb-3";
+  
+  // Tight overlap values - checkers sit directly on each other
+  const overlapMap = { xs: 8, sm: 10, md: 12, lg: 14 };
+  const overlap = overlapMap[size];
 
   return (
     <div
       className={cn(
-        "flex items-center",
+        "relative flex items-center",
         isTop ? "flex-col" : "flex-col-reverse"
       )}
+      style={{ 
+        // Calculate height based on overlap
+        height: displayCount === 1 ? 'auto' : `${overlap + (displayCount - 1) * overlap}px`
+      }}
     >
       {Array.from({ length: displayCount }).map((_, i) => (
         <div
           key={i}
-          className={cn(
-            "transition-all duration-200",
-            i > 0 && (isTop ? marginClass : marginClassReverse)
-          )}
+          className="transition-all duration-200"
+          style={{
+            position: i === 0 ? 'relative' : 'absolute',
+            [isTop ? 'top' : 'bottom']: i === 0 ? 0 : `${i * overlap}px`,
+            zIndex: isTop ? displayCount - i : i,
+          }}
         >
           <Checker3D
             variant={variant}

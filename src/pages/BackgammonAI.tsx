@@ -80,14 +80,12 @@ const BackgammonAI = () => {
   const canBearOff = useCallback((state: GameState, player: Player): boolean => {
     if (player === "player") {
       if (state.bar.player > 0) return false;
-      // All checkers must be in home board (points 0-5)
       for (let i = 6; i < 24; i++) {
         if (state.points[i] > 0) return false;
       }
       return true;
     } else {
       if (state.bar.ai > 0) return false;
-      // All checkers must be in home board (points 18-23)
       for (let i = 0; i < 18; i++) {
         if (state.points[i] < 0) return false;
       }
@@ -103,11 +101,10 @@ const BackgammonAI = () => {
       let to: number;
       
       if (from === -1) {
-        // From bar
         if (player === "player") {
-          to = 24 - die; // Enter from point 24
+          to = 24 - die;
         } else {
-          to = die - 1; // Enter from point 1
+          to = die - 1;
         }
       } else {
         if (player === "player") {
@@ -117,10 +114,8 @@ const BackgammonAI = () => {
         }
       }
       
-      // Check bearing off
       if (player === "player" && to < 0) {
         if (canBearOff(state, "player")) {
-          // Can bear off if exact or highest checker
           if (to === -1 || from === Math.max(...state.points.map((p, i) => p > 0 ? i : -1))) {
             legalMoves.push({ from, to: -2, dieValue: die });
           }
@@ -138,10 +133,9 @@ const BackgammonAI = () => {
       
       if (to < 0 || to > 23) continue;
       
-      // Check if point is blocked
       const pointValue = state.points[to];
-      if (player === "player" && pointValue < -1) continue; // Blocked by AI
-      if (player === "ai" && pointValue > 1) continue; // Blocked by player
+      if (player === "player" && pointValue < -1) continue;
+      if (player === "ai" && pointValue > 1) continue;
       
       legalMoves.push({ from, to, dieValue: die });
     }
@@ -153,7 +147,6 @@ const BackgammonAI = () => {
   const getAllLegalMoves = useCallback((state: GameState, moves: number[], player: Player): Move[] => {
     const allMoves: Move[] = [];
     
-    // Must move from bar first
     if (player === "player" && state.bar.player > 0) {
       return getLegalMoves(state, -1, moves, player);
     }
@@ -161,7 +154,6 @@ const BackgammonAI = () => {
       return getLegalMoves(state, -1, moves, player);
     }
     
-    // Check all points
     for (let i = 0; i < 24; i++) {
       if (player === "player" && state.points[i] > 0) {
         allMoves.push(...getLegalMoves(state, i, moves, player));
@@ -182,7 +174,6 @@ const BackgammonAI = () => {
       bearOff: { ...state.bearOff },
     };
     
-    // Remove from source
     if (move.from === -1) {
       if (player === "player") newState.bar.player--;
       else newState.bar.ai--;
@@ -191,13 +182,10 @@ const BackgammonAI = () => {
       else newState.points[move.from]++;
     }
     
-    // Add to destination
     if (move.to === -2 || move.to === 25) {
-      // Bear off
       if (player === "player") newState.bearOff.player++;
       else newState.bearOff.ai++;
     } else {
-      // Check for hit
       if (player === "player" && newState.points[move.to] === -1) {
         newState.points[move.to] = 0;
         newState.bar.ai++;
@@ -224,7 +212,6 @@ const BackgammonAI = () => {
     setRemainingMoves(moves);
     setGameStatus(currentPlayer === "player" ? "Your turn - select a checker" : "AI's turn");
     
-    // Check if any moves are possible
     const allMoves = getAllLegalMoves(gameState, moves, currentPlayer);
     if (allMoves.length === 0) {
       setGameStatus(currentPlayer === "player" ? "No legal moves - AI's turn" : "AI has no moves - Your turn");
@@ -240,14 +227,12 @@ const BackgammonAI = () => {
   const handlePointClick = useCallback((pointIndex: number) => {
     if (currentPlayer !== "player" || remainingMoves.length === 0 || gameOver || isThinking) return;
     
-    // Must move from bar first
     if (gameState.bar.player > 0 && pointIndex !== -1) {
       setGameStatus("You must move from the bar first!");
       return;
     }
     
     if (selectedPoint === null) {
-      // Select a point
       if (pointIndex === -1 && gameState.bar.player > 0) {
         const moves = getLegalMoves(gameState, -1, remainingMoves, "player");
         if (moves.length > 0) {
@@ -266,7 +251,6 @@ const BackgammonAI = () => {
         }
       }
     } else {
-      // Try to move to clicked point
       if (validMoves.includes(pointIndex) || (pointIndex === -2 && validMoves.includes(-2))) {
         const moves = getLegalMoves(gameState, selectedPoint, remainingMoves, "player");
         const move = moves.find(m => m.to === pointIndex);
@@ -280,7 +264,6 @@ const BackgammonAI = () => {
           if (idx > -1) newRemaining.splice(idx, 1);
           setRemainingMoves(newRemaining);
           
-          // Check win
           if (newState.bearOff.player === 15) {
             setGameStatus("You win! 🎉");
             setGameOver(true);
@@ -337,18 +320,15 @@ const BackgammonAI = () => {
               break;
             }
             case "medium": {
-              // Prefer moves towards home
               const sorted = [...allMoves].sort((a, b) => b.to - a.to);
               chosenMove = sorted[0];
               break;
             }
             case "hard": {
-              // Prefer hitting blots, then stacking
               const hits = allMoves.filter(m => m.to >= 0 && m.to <= 23 && state.points[m.to] === 1);
               if (hits.length > 0) {
                 chosenMove = hits[0];
               } else {
-                // Prefer stacking
                 const stacks = allMoves.filter(m => m.to >= 0 && m.to <= 23 && state.points[m.to] < -1);
                 if (stacks.length > 0) {
                   chosenMove = stacks[Math.floor(Math.random() * stacks.length)];
@@ -401,7 +381,7 @@ const BackgammonAI = () => {
     setValidMoves([]);
   }, []);
 
-  // Render point (triangle) for DESKTOP - original premium styling
+  // ============== DESKTOP POINT RENDERING ==============
   const renderDesktopPoint = (index: number, isTop: boolean) => {
     const value = gameState.points[index];
     const checkerCount = Math.abs(value);
@@ -415,58 +395,58 @@ const BackgammonAI = () => {
         onClick={() => handlePointClick(index)}
         className={cn(
           "relative flex items-center cursor-pointer transition-all",
-          isTop ? "flex-col pt-1" : "flex-col-reverse pb-1"
+          isTop ? "flex-col" : "flex-col-reverse"
         )}
+        style={{ width: 48 }}
       >
-        {/* Triangle with textured gold/sand look */}
+        {/* Triangle */}
         <svg
-          width={40}
-          height={120}
-          viewBox="0 0 40 120"
+          width={48}
+          height={140}
+          viewBox="0 0 48 140"
           className={cn(
-            "md:w-12 md:h-36 transition-all duration-200",
+            "transition-all duration-200",
             isTop ? "" : "rotate-180",
             isValidTarget && "drop-shadow-[0_0_12px_hsl(45_93%_54%_/_0.6)]"
           )}
         >
           <defs>
-            <linearGradient id={`goldTriangle-${index}`} x1="0%" y1="100%" x2="0%" y2="0%">
+            <linearGradient id={`goldTri-${index}`} x1="0%" y1="100%" x2="0%" y2="0%">
               <stop offset="0%" stopColor="hsl(45 93% 50%)" />
               <stop offset="40%" stopColor="hsl(45 80% 45%)" />
               <stop offset="100%" stopColor="hsl(35 70% 35%)" />
             </linearGradient>
-            <linearGradient id={`sandTriangle-${index}`} x1="0%" y1="100%" x2="0%" y2="0%">
+            <linearGradient id={`sandTri-${index}`} x1="0%" y1="100%" x2="0%" y2="0%">
               <stop offset="0%" stopColor="hsl(35 50% 55%)" />
               <stop offset="40%" stopColor="hsl(35 45% 45%)" />
               <stop offset="100%" stopColor="hsl(30 40% 35%)" />
             </linearGradient>
-            <pattern id={`engravePattern-${index}`} width="4" height="4" patternUnits="userSpaceOnUse">
-              <rect width="4" height="4" fill="transparent"/>
-              <circle cx="2" cy="2" r="0.5" fill="rgba(0,0,0,0.1)"/>
-            </pattern>
           </defs>
 
-          <polygon points="20,5 3,115 37,115" fill="rgba(0,0,0,0.3)" transform="translate(1, 2)" />
+          <polygon points="24,5 3,135 45,135" fill="rgba(0,0,0,0.2)" transform="translate(1, 1)" />
           <polygon
-            points="20,5 3,115 37,115"
-            fill={index % 2 === 0 ? `url(#goldTriangle-${index})` : `url(#sandTriangle-${index})`}
+            points="24,5 3,135 45,135"
+            fill={index % 2 === 0 ? `url(#goldTri-${index})` : `url(#sandTri-${index})`}
             stroke={index % 2 === 0 ? "hsl(35 80% 35%)" : "hsl(30 40% 30%)"}
             strokeWidth="1"
           />
-          <polygon points="20,5 3,115 37,115" fill={`url(#engravePattern-${index})`} />
           <polygon
-            points="20,15 10,105 30,105"
+            points="24,18 10,125 38,125"
             fill="none"
-            stroke={index % 2 === 0 ? "hsl(45 93% 65% / 0.3)" : "hsl(35 50% 60% / 0.3)"}
+            stroke={index % 2 === 0 ? "hsl(45 93% 65% / 0.25)" : "hsl(35 50% 60% / 0.25)"}
             strokeWidth="1"
           />
           {isValidTarget && (
-            <polygon points="20,5 3,115 37,115" fill="hsl(45 93% 54% / 0.2)" className="animate-pulse" />
+            <polygon points="24,5 3,135 45,135" fill="hsl(45 93% 54% / 0.2)" className="animate-pulse" />
           )}
         </svg>
         
+        {/* Checkers - positioned on triangle */}
         {checkerCount > 0 && (
-          <div className={cn("absolute", isTop ? "top-4" : "bottom-4")}>
+          <div 
+            className={cn("absolute", isTop ? "top-2" : "bottom-2")}
+            style={{ left: '50%', transform: 'translateX(-50%)' }}
+          >
             <CheckerStack
               count={checkerCount}
               variant={isPlayer ? "gold" : "obsidian"}
@@ -479,63 +459,64 @@ const BackgammonAI = () => {
           </div>
         )}
         
-        <span className={`absolute ${isTop ? "-bottom-4" : "-top-4"} text-xs text-primary/40 font-medium`}>
+        <span className={`absolute ${isTop ? "-bottom-5" : "-top-5"} text-xs text-primary/40 font-medium`}>
           {index + 1}
         </span>
       </div>
     );
   };
 
-  // Render point (triangle) for MOBILE - compact vertical layout
-  const renderMobilePoint = (index: number, isTop: boolean) => {
+  // ============== MOBILE POINT RENDERING (Vertical Board) ==============
+  const renderMobilePoint = (index: number, isLeftSide: boolean) => {
     const value = gameState.points[index];
     const checkerCount = Math.abs(value);
     const isPlayer = value > 0;
     const isSelected = selectedPoint === index;
     const isValidTarget = validMoves.includes(index);
     
-    // Compact triangles for mobile - pointing left (AI) or right (player)
+    // For mobile vertical board: triangles point inward toward center bar
+    // Left side triangles point right, right side triangles point left
     return (
       <div
         key={index}
         onClick={() => handlePointClick(index)}
         className={cn(
-          "relative flex items-center cursor-pointer transition-all min-h-[42px]",
-          isTop ? "flex-row" : "flex-row-reverse"
+          "relative flex items-center cursor-pointer transition-all",
+          "h-[calc((100%-8px)/6)]", // Divide available height by 6 points
+          isLeftSide ? "flex-row" : "flex-row-reverse"
         )}
       >
-        {/* Compact horizontal triangle */}
+        {/* Triangle pointing toward center */}
         <svg
-          width={48}
-          height={32}
-          viewBox="0 0 48 32"
+          viewBox="0 0 60 28"
           className={cn(
-            "transition-all duration-200 shrink-0",
-            isValidTarget && "drop-shadow-[0_0_8px_hsl(45_93%_54%_/_0.5)]"
+            "h-full w-[50px] shrink-0 transition-all duration-200",
+            isValidTarget && "drop-shadow-[0_0_6px_hsl(45_93%_54%_/_0.5)]"
           )}
+          preserveAspectRatio="none"
         >
           <defs>
-            <linearGradient id={`mGold-${index}`} x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor="hsl(45 93% 50%)" />
-              <stop offset="100%" stopColor="hsl(35 70% 35%)" />
+            <linearGradient id={`mGold-${index}`} x1={isLeftSide ? "0%" : "100%"} y1="0%" x2={isLeftSide ? "100%" : "0%"} y2="0%">
+              <stop offset="0%" stopColor="hsl(45 93% 48%)" />
+              <stop offset="100%" stopColor="hsl(35 70% 32%)" />
             </linearGradient>
-            <linearGradient id={`mSand-${index}`} x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor="hsl(35 50% 55%)" />
-              <stop offset="100%" stopColor="hsl(30 40% 35%)" />
+            <linearGradient id={`mSand-${index}`} x1={isLeftSide ? "0%" : "100%"} y1="0%" x2={isLeftSide ? "100%" : "0%"} y2="0%">
+              <stop offset="0%" stopColor="hsl(35 50% 50%)" />
+              <stop offset="100%" stopColor="hsl(30 40% 32%)" />
             </linearGradient>
           </defs>
 
-          {/* Triangle pointing right for player (bottom), left for AI (top) */}
+          {/* Triangle: left side points right, right side points left */}
           <polygon
-            points={isTop ? "48,16 4,2 4,30" : "0,16 44,2 44,30"}
+            points={isLeftSide ? "0,2 0,26 58,14" : "60,2 60,26 2,14"}
             fill={index % 2 === 0 ? `url(#mGold-${index})` : `url(#mSand-${index})`}
-            stroke={index % 2 === 0 ? "hsl(35 80% 35%)" : "hsl(30 40% 30%)"}
-            strokeWidth="1"
+            stroke={index % 2 === 0 ? "hsl(35 80% 30%)" : "hsl(30 40% 28%)"}
+            strokeWidth="0.5"
           />
           {isValidTarget && (
             <polygon
-              points={isTop ? "48,16 4,2 4,30" : "0,16 44,2 44,30"}
-              fill="hsl(45 93% 54% / 0.25)"
+              points={isLeftSide ? "0,2 0,26 58,14" : "60,2 60,26 2,14"}
+              fill="hsl(45 93% 54% / 0.3)"
               className="animate-pulse"
             />
           )}
@@ -543,19 +524,43 @@ const BackgammonAI = () => {
         
         {/* Checker stack - positioned beside triangle */}
         {checkerCount > 0 && (
-          <div className={cn(
-            "absolute flex items-center",
-            isTop ? "left-[52px]" : "right-[52px]"
-          )}>
-            <CheckerStack
-              count={checkerCount}
-              variant={isPlayer ? "gold" : "obsidian"}
-              isSelected={isSelected}
-              isValidTarget={isValidTarget}
-              onClick={() => handlePointClick(index)}
-              isTop={true}
-              size="xs"
-            />
+          <div 
+            className={cn(
+              "absolute flex flex-row items-center gap-0",
+              isLeftSide ? "left-[52px]" : "right-[52px]"
+            )}
+          >
+            {/* Render checkers horizontally for mobile */}
+            {Array.from({ length: Math.min(checkerCount, 5) }).map((_, i) => (
+              <div
+                key={i}
+                className="transition-all"
+                style={{
+                  marginLeft: i > 0 ? '-10px' : 0,
+                  zIndex: i,
+                }}
+              >
+                <div
+                  className={cn(
+                    "w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold",
+                    isPlayer 
+                      ? "bg-gradient-to-br from-primary via-primary to-amber-700 text-amber-900 border border-amber-600/50" 
+                      : "bg-gradient-to-br from-slate-600 via-slate-800 to-slate-900 text-primary border border-primary/30",
+                    isSelected && i === Math.min(checkerCount, 5) - 1 && "ring-2 ring-primary ring-offset-1 ring-offset-background",
+                    isValidTarget && i === Math.min(checkerCount, 5) - 1 && "ring-2 ring-primary/50"
+                  )}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (i === Math.min(checkerCount, 5) - 1) handlePointClick(index);
+                  }}
+                  style={{
+                    boxShadow: '0 1px 2px rgba(0,0,0,0.3)'
+                  }}
+                >
+                  {i === Math.min(checkerCount, 5) - 1 && checkerCount > 5 ? checkerCount : ''}
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>
@@ -565,7 +570,7 @@ const BackgammonAI = () => {
   return (
     <div className={cn(
       "bg-background relative overflow-hidden",
-      isMobile ? "h-screen overflow-y-hidden" : "min-h-screen"
+      isMobile ? "h-screen overflow-y-hidden flex flex-col" : "min-h-screen"
     )}>
       {/* Background with pyramid pattern */}
       <div className="absolute inset-0 bg-gradient-to-b from-midnight-light via-background to-background" />
@@ -603,123 +608,150 @@ const BackgammonAI = () => {
 
       <div className={cn(
         "relative z-10",
-        isMobile && "h-full flex flex-col"
+        isMobile ? "flex-1 flex flex-col min-h-0" : ""
       )}>
         {/* Header */}
-        <div className={cn(
-          "border-b border-primary/20 px-4",
-          isMobile ? "py-2 shrink-0" : "py-4"
+        <header className={cn(
+          "border-b border-primary/20 px-3 shrink-0",
+          isMobile ? "py-1.5" : "py-4"
         )}>
           <div className="max-w-6xl mx-auto">
-            <div className={cn(isMobile ? "mb-1" : "mb-4")}>
-              <Button asChild variant="ghost" size="sm" className="text-muted-foreground hover:text-primary group p-1">
-                <Link to="/play-ai" className="flex items-center gap-1">
-                  <ArrowLeft size={16} className="group-hover:text-primary transition-colors" />
-                  <span className={isMobile ? "text-xs" : ""}>Back</span>
-                </Link>
-              </Button>
-            </div>
+            {!isMobile && (
+              <div className="mb-4">
+                <Button asChild variant="ghost" size="sm" className="text-muted-foreground hover:text-primary group p-1">
+                  <Link to="/play-ai" className="flex items-center gap-1">
+                    <ArrowLeft size={16} className="group-hover:text-primary transition-colors" />
+                    <span>Back</span>
+                  </Link>
+                </Button>
+              </div>
+            )}
             
-            <div className="flex items-center justify-center gap-2 mb-1">
-              <Gem className={cn("text-primary", isMobile ? "w-3 h-3" : "w-4 h-4")} />
-              <h1 
-                className={cn(
-                  "font-display font-bold tracking-wide text-center",
-                  isMobile ? "text-sm" : "text-xl md:text-2xl"
-                )}
-                style={{
-                  background: "linear-gradient(135deg, #FCE68A 0%, #FACC15 50%, #AB8215 100%)",
-                  WebkitBackgroundClip: "text",
-                  WebkitTextFillColor: "transparent",
-                  backgroundClip: "text",
-                }}
-              >
-                {isMobile ? "Backgammon vs AI" : "Backgammon Training – Temple of Precision"}
-              </h1>
-              <Gem className={cn("text-primary", isMobile ? "w-3 h-3" : "w-4 h-4")} />
+            <div className="flex items-center justify-between">
+              {isMobile && (
+                <Button asChild variant="ghost" size="sm" className="text-muted-foreground hover:text-primary p-1 -ml-1">
+                  <Link to="/play-ai">
+                    <ArrowLeft size={16} />
+                  </Link>
+                </Button>
+              )}
+              
+              <div className="flex items-center gap-1.5 flex-1 justify-center">
+                <Gem className={cn("text-primary", isMobile ? "w-3 h-3" : "w-4 h-4")} />
+                <h1 
+                  className={cn(
+                    "font-display font-bold tracking-wide text-center",
+                    isMobile ? "text-sm" : "text-xl md:text-2xl"
+                  )}
+                  style={{
+                    background: "linear-gradient(135deg, #FCE68A 0%, #FACC15 50%, #AB8215 100%)",
+                    WebkitBackgroundClip: "text",
+                    WebkitTextFillColor: "transparent",
+                    backgroundClip: "text",
+                  }}
+                >
+                  {isMobile ? "Backgammon" : "Backgammon Training – Temple of Precision"}
+                </h1>
+                <Gem className={cn("text-primary", isMobile ? "w-3 h-3" : "w-4 h-4")} />
+              </div>
+
+              {isMobile && <div className="w-8" />}
             </div>
             
             {!isMobile && (
-              <p className="text-center text-sm text-muted-foreground/60">
+              <p className="text-center text-sm text-muted-foreground/60 mt-1">
                 <Star className="w-3 h-3 inline-block mr-1 text-primary/40" />
                 Free mode – no wallet required
                 <Star className="w-3 h-3 inline-block ml-1 text-primary/40" />
               </p>
             )}
           </div>
-        </div>
+        </header>
 
         {/* ============== MOBILE LAYOUT ============== */}
         {isMobile ? (
-          <div className="flex-1 flex flex-col min-h-0 px-2 py-1">
+          <div className="flex-1 flex flex-col min-h-0 px-2 pt-1 pb-2">
+            {/* Score Row */}
+            <div className="flex justify-between items-center px-2 py-1 shrink-0">
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] text-muted-foreground">AI:</span>
+                <span className="text-primary font-bold text-sm">{gameState.bearOff.ai}</span>
+                <span className="text-[10px] text-muted-foreground/60">/15</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] text-muted-foreground">You:</span>
+                <span className="text-primary font-bold text-sm">{gameState.bearOff.player}</span>
+                <span className="text-[10px] text-muted-foreground/60">/15</span>
+              </div>
+            </div>
+
             {/* Board Container */}
-            <div className="flex-1 flex flex-col min-h-0 relative">
+            <div className="flex-1 min-h-0 relative">
               {/* Subtle glow */}
-              <div className="absolute -inset-1 bg-primary/10 rounded-xl blur-lg opacity-40" />
+              <div className="absolute -inset-1 bg-primary/10 rounded-xl blur-lg opacity-30" />
               
               {/* Gold frame */}
-              <div className="relative flex-1 flex flex-col min-h-0 p-0.5 rounded-lg bg-gradient-to-br from-primary/30 via-primary/15 to-primary/30">
-                <div className="flex-1 flex flex-col min-h-0 bg-gradient-to-b from-midnight-light via-background to-midnight-light rounded-md p-1 overflow-hidden">
+              <div className="relative h-full p-[3px] rounded-lg bg-gradient-to-br from-primary/40 via-primary/20 to-primary/40">
+                <div className="h-full flex bg-gradient-to-b from-midnight-light via-background to-midnight-light rounded-md overflow-hidden">
                   
-                  {/* AI Score Bar */}
-                  <div className="flex justify-between items-center px-2 py-0.5 shrink-0">
-                    <div className="text-[10px] text-muted-foreground">
-                      AI: <span className="text-foreground font-bold">{gameState.bearOff.ai}</span>/15
+                  {/* Left Column - Points 13-18 (top) and 12-7 (bottom) */}
+                  <div className="flex-1 flex flex-col p-1">
+                    {/* Top half: Points 13-18 */}
+                    <div className="flex-1 flex flex-col justify-evenly border-b border-primary/20">
+                      {[12, 13, 14, 15, 16, 17].map(i => renderMobilePoint(i, true))}
                     </div>
+                    {/* Bottom half: Points 12-7 */}
+                    <div className="flex-1 flex flex-col justify-evenly">
+                      {[11, 10, 9, 8, 7, 6].map(i => renderMobilePoint(i, true))}
+                    </div>
+                  </div>
+
+                  {/* Center Bar */}
+                  <div className="w-14 bg-gradient-to-b from-background via-midnight-light to-background border-x border-primary/20 flex flex-col items-center justify-center shrink-0">
+                    {/* AI Bar Checkers */}
                     {gameState.bar.ai > 0 && (
-                      <div className="flex items-center gap-1">
-                        <span className="text-[10px] text-muted-foreground">Bar:</span>
-                        <CheckerStack count={gameState.bar.ai} variant="obsidian" isTop={true} size="xs" />
+                      <div className="flex flex-col items-center mb-2">
+                        <span className="text-[8px] text-muted-foreground mb-0.5">AI</span>
+                        <div className="w-5 h-5 rounded-full bg-gradient-to-br from-slate-600 to-slate-900 border border-primary/30 flex items-center justify-center text-[9px] text-primary font-bold">
+                          {gameState.bar.ai}
+                        </div>
                       </div>
                     )}
-                  </div>
-
-                  {/* Main Board Area */}
-                  <div className="flex-1 flex min-h-0">
-                    {/* Left Column - AI's side (points 24-19) */}
-                    <div className="flex flex-col justify-evenly flex-1">
-                      {[23, 22, 21, 20, 19, 18].map(i => renderMobilePoint(i, true))}
-                    </div>
-
-                    {/* Center Bar */}
-                    <div className="w-10 bg-gradient-to-b from-background via-midnight-light to-background rounded border border-primary/20 flex flex-col items-center justify-center mx-1 shrink-0">
-                      {dice.length > 0 && (
-                        <div className="flex flex-col gap-1">
-                          <Dice3D value={dice[0]} variant={currentPlayer === "player" ? "ivory" : "obsidian"} isRolling={isThinking && currentPlayer === "ai"} size="xs" />
-                          <Dice3D value={dice[1]} variant={currentPlayer === "player" ? "ivory" : "obsidian"} isRolling={isThinking && currentPlayer === "ai"} size="xs" />
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Right Column - Player's side (points 6-1) */}
-                    <div className="flex flex-col justify-evenly flex-1">
-                      {[5, 4, 3, 2, 1, 0].map(i => renderMobilePoint(i, false))}
-                    </div>
-                  </div>
-
-                  {/* Player Score Bar */}
-                  <div className="flex justify-between items-center px-2 py-0.5 shrink-0">
-                    {gameState.bar.player > 0 ? (
+                    
+                    {/* Dice */}
+                    {dice.length > 0 && (
+                      <div className="flex flex-col gap-1 my-2">
+                        <Dice3D value={dice[0]} variant={currentPlayer === "player" ? "ivory" : "obsidian"} isRolling={isThinking && currentPlayer === "ai"} size="xs" />
+                        <Dice3D value={dice[1]} variant={currentPlayer === "player" ? "ivory" : "obsidian"} isRolling={isThinking && currentPlayer === "ai"} size="xs" />
+                      </div>
+                    )}
+                    
+                    {/* Player Bar Checkers */}
+                    {gameState.bar.player > 0 && (
                       <div 
                         className={cn(
-                          "flex items-center gap-1 cursor-pointer rounded p-0.5",
+                          "flex flex-col items-center mt-2 cursor-pointer rounded p-1",
                           selectedPoint === -1 && "ring-1 ring-primary bg-primary/10"
                         )}
                         onClick={() => handlePointClick(-1)}
                       >
-                        <span className="text-[10px] text-muted-foreground">Bar:</span>
-                        <CheckerStack 
-                          count={gameState.bar.player} 
-                          variant="gold" 
-                          isSelected={selectedPoint === -1}
-                          onClick={() => handlePointClick(-1)}
-                          isTop={false} 
-                          size="xs"
-                        />
+                        <div className="w-5 h-5 rounded-full bg-gradient-to-br from-primary to-amber-700 border border-amber-600/50 flex items-center justify-center text-[9px] text-amber-900 font-bold">
+                          {gameState.bar.player}
+                        </div>
+                        <span className="text-[8px] text-muted-foreground mt-0.5">You</span>
                       </div>
-                    ) : <div />}
-                    <div className="text-[10px] text-muted-foreground">
-                      You: <span className="text-primary font-bold">{gameState.bearOff.player}</span>/15
+                    )}
+                  </div>
+
+                  {/* Right Column - Points 19-24 (top) and 6-1 (bottom) */}
+                  <div className="flex-1 flex flex-col p-1">
+                    {/* Top half: Points 19-24 */}
+                    <div className="flex-1 flex flex-col justify-evenly border-b border-primary/20">
+                      {[18, 19, 20, 21, 22, 23].map(i => renderMobilePoint(i, false))}
+                    </div>
+                    {/* Bottom half: Points 6-1 */}
+                    <div className="flex-1 flex flex-col justify-evenly">
+                      {[5, 4, 3, 2, 1, 0].map(i => renderMobilePoint(i, false))}
                     </div>
                   </div>
                 </div>
@@ -727,13 +759,13 @@ const BackgammonAI = () => {
             </div>
 
             {/* Controls Area - Below Board */}
-            <div className="shrink-0 mt-2 space-y-1.5">
-              {/* Dice Display + Roll Button */}
+            <div className="shrink-0 mt-2 space-y-2">
+              {/* Roll Button */}
               {currentPlayer === "player" && dice.length === 0 && !gameOver && (
                 <Button 
                   variant="gold" 
                   size="lg" 
-                  className="w-full py-3 text-base font-bold shadow-[0_0_20px_-5px_hsl(45_93%_54%_/_0.5)]" 
+                  className="w-full py-4 text-lg font-bold shadow-[0_0_24px_-6px_hsl(45_93%_54%_/_0.6)]" 
                   onClick={rollDice}
                 >
                   🎲 ROLL
@@ -769,7 +801,7 @@ const BackgammonAI = () => {
                 </p>
                 {remainingMoves.length > 0 && currentPlayer === "player" && (
                   <p className="text-[10px] text-muted-foreground mt-0.5">
-                    Moves: {remainingMoves.join(", ")}
+                    Moves left: {remainingMoves.join(", ")}
                   </p>
                 )}
               </div>
@@ -793,14 +825,14 @@ const BackgammonAI = () => {
                 </Button>
                 <Button asChild variant="ghost" size="sm" className="flex-1 py-2 text-muted-foreground border border-primary/20 text-xs">
                   <Link to="/play-ai">
-                    Difficulty
+                    Change AI
                   </Link>
                 </Button>
               </div>
             </div>
           </div>
         ) : (
-          /* ============== DESKTOP LAYOUT (Original) ============== */
+          /* ============== DESKTOP LAYOUT (Original Premium) ============== */
           <div className="max-w-6xl mx-auto px-2 md:px-4 py-4 md:py-6">
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 md:gap-6">
               {/* Board Area */}
@@ -861,7 +893,7 @@ const BackgammonAI = () => {
 
                       {/* Player Bar / Bear Off */}
                       <div className="flex justify-between items-center mt-3 px-2">
-                        {gameState.bar.player > 0 && (
+                        {gameState.bar.player > 0 ? (
                           <div 
                             className={cn(
                               "flex items-center gap-2 cursor-pointer transition-all rounded-lg p-1",
@@ -878,8 +910,8 @@ const BackgammonAI = () => {
                               isTop={false} 
                             />
                           </div>
-                        )}
-                        <div className="text-xs text-muted-foreground ml-auto flex items-center gap-2">
+                        ) : <div />}
+                        <div className="text-xs text-muted-foreground flex items-center gap-2">
                           You Borne Off: <span className="text-primary font-bold">{gameState.bearOff.player}</span>
                         </div>
                       </div>
@@ -887,32 +919,48 @@ const BackgammonAI = () => {
                   </div>
                 </div>
 
-                {/* Status Bar */}
-                <div 
-                  className={`relative overflow-hidden rounded-lg border transition-all duration-300 ${
-                    gameOver 
-                      ? gameStatus.includes("win") 
-                        ? "bg-green-500/10 border-green-500/30" 
-                        : "bg-red-500/10 border-red-500/30"
-                      : "bg-gradient-to-r from-primary/5 via-primary/10 to-primary/5 border-primary/30"
-                  }`}
-                >
-                  <div className="absolute top-1 left-1 w-3 h-3 border-l border-t border-primary/40 rounded-tl" />
-                  <div className="absolute top-1 right-1 w-3 h-3 border-r border-t border-primary/40 rounded-tr" />
-                  <div className="absolute bottom-1 left-1 w-3 h-3 border-l border-b border-primary/40 rounded-bl" />
-                  <div className="absolute bottom-1 right-1 w-3 h-3 border-r border-b border-primary/40 rounded-br" />
-                  
-                  <div className="px-4 md:px-6 py-3 md:py-4 text-center">
+                {/* Controls */}
+                <div className="flex flex-wrap gap-3 items-center justify-center">
+                  {currentPlayer === "player" && dice.length === 0 && !gameOver && (
+                    <Button variant="gold" size="lg" className="min-w-[140px] shadow-[0_0_30px_-8px_hsl(45_93%_54%_/_0.5)]" onClick={rollDice}>
+                      🎲 Roll Dice
+                    </Button>
+                  )}
+                  {canBearOff(gameState, "player") && validMoves.includes(-2) && (
+                    <Button variant="outline" className="border-primary/30 text-primary hover:bg-primary/10" onClick={() => handlePointClick(-2)}>
+                      Bear Off
+                    </Button>
+                  )}
+                  <Button onClick={restartGame} variant="ghost" className="border border-primary/20">
+                    <RotateCcw size={16} className="mr-2" />
+                    Restart
+                  </Button>
+                </div>
+              </div>
+
+              {/* Sidebar */}
+              <div className="space-y-4">
+                {/* Status Card */}
+                <div className="relative">
+                  <div className="absolute -inset-1 bg-primary/10 rounded-xl blur-lg opacity-40" />
+                  <div 
+                    className={cn(
+                      "relative rounded-xl border p-4",
+                      gameOver 
+                        ? gameStatus.includes("win") 
+                          ? "bg-green-500/10 border-green-500/30" 
+                          : "bg-red-500/10 border-red-500/30"
+                        : "bg-card/50 border-primary/20"
+                    )}
+                  >
+                    <h3 className="text-sm font-medium text-muted-foreground mb-2">Game Status</h3>
                     <p 
-                      className={`font-display font-bold text-base md:text-lg ${
+                      className={cn(
+                        "font-display text-lg font-bold",
                         gameOver 
-                          ? gameStatus.includes("win") 
-                            ? "text-green-400" 
-                            : "text-red-400"
-                          : isThinking
-                          ? "text-muted-foreground"
-                          : "text-primary"
-                      }`}
+                          ? gameStatus.includes("win") ? "text-green-400" : "text-red-400"
+                          : isThinking ? "text-muted-foreground" : "text-primary"
+                      )}
                       style={!gameOver && !isThinking ? {
                         background: "linear-gradient(135deg, #FCE68A 0%, #FACC15 50%, #AB8215 100%)",
                         WebkitBackgroundClip: "text",
@@ -923,77 +971,49 @@ const BackgammonAI = () => {
                       {gameStatus}
                     </p>
                     {remainingMoves.length > 0 && currentPlayer === "player" && (
-                      <p className="text-xs md:text-sm mt-1 text-muted-foreground">
-                        Moves left: {remainingMoves.join(", ")}
+                      <p className="text-sm text-muted-foreground mt-2">
+                        Remaining moves: {remainingMoves.join(", ")}
                       </p>
                     )}
                   </div>
                 </div>
 
-                {/* Controls */}
-                <div className="flex flex-col gap-2">
-                  {currentPlayer === "player" && dice.length === 0 && !gameOver && (
-                    <Button variant="gold" size="lg" className="w-full py-4 text-base" onClick={rollDice}>
-                      🎲 Roll Dice
+                {/* Difficulty Card */}
+                <div className="relative">
+                  <div className="absolute -inset-1 bg-primary/5 rounded-xl blur-lg opacity-40" />
+                  <div className="relative rounded-xl border border-primary/20 bg-card/30 p-4">
+                    <h3 className="text-sm font-medium text-muted-foreground mb-2">AI Difficulty</h3>
+                    <p 
+                      className="font-display text-xl font-bold"
+                      style={{
+                        background: "linear-gradient(135deg, #FCE68A 0%, #FACC15 50%, #AB8215 100%)",
+                        WebkitBackgroundClip: "text",
+                        WebkitTextFillColor: "transparent",
+                        backgroundClip: "text",
+                      }}
+                    >
+                      {difficultyLabel}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">{difficultyDescription}</p>
+                    <Button asChild variant="ghost" size="sm" className="mt-3 w-full border border-primary/20 text-primary/80 hover:text-primary hover:bg-primary/5">
+                      <Link to="/play-ai">
+                        Change Difficulty
+                      </Link>
                     </Button>
-                  )}
-
-                  {canBearOff(gameState, "player") && validMoves.includes(-2) && (
-                    <Button variant="outline" className="w-full py-4 border-primary/30 text-primary hover:bg-primary/10" onClick={() => handlePointClick(-2)}>
-                      Bear Off Selected Checker
-                    </Button>
-                  )}
-                </div>
-              </div>
-
-              {/* Side Panel - Desktop only */}
-              <div className="space-y-4">
-                {/* Difficulty Display */}
-                <div className="relative p-4 rounded-xl bg-gradient-to-br from-midnight-light via-card to-background border border-primary/20">
-                  <p className="text-xs text-primary/60 uppercase tracking-wider mb-3 font-medium">Difficulty</p>
-                  <div className="flex gap-1 p-1 bg-background/50 rounded-lg border border-primary/20">
-                    {(["easy", "medium", "hard"] as const).map((level) => (
-                      <div
-                        key={level}
-                        className={`flex-1 py-2 px-2 text-xs font-bold rounded-md text-center transition-all ${
-                          difficulty === level
-                            ? "bg-gradient-to-r from-primary to-gold text-primary-foreground shadow-[0_0_12px_-2px_hsl(45_93%_54%_/_0.5)]"
-                            : "text-muted-foreground/50"
-                        }`}
-                      >
-                        {level.toUpperCase()}
-                      </div>
-                    ))}
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-3 text-center">{difficultyDescription}</p>
-                </div>
-
-                {/* Game Info */}
-                <div className="relative p-4 rounded-xl bg-gradient-to-br from-midnight-light via-card to-background border border-primary/20">
-                  <p className="text-xs text-primary/60 uppercase tracking-wider mb-3 font-medium">Game Info</p>
-                  <div className="text-sm space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Your checkers</span>
-                      <span className="text-primary font-medium">{15 - gameState.bearOff.player} remaining</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">AI checkers</span>
-                      <span className="text-foreground font-medium">{15 - gameState.bearOff.ai} remaining</span>
-                    </div>
                   </div>
                 </div>
 
-                {/* Actions */}
-                <div className="relative p-4 rounded-xl bg-gradient-to-br from-midnight-light via-card to-background border border-primary/20">
-                  <p className="text-xs text-primary/60 uppercase tracking-wider mb-3 font-medium">Actions</p>
-                  <div className="space-y-2">
-                    <Button onClick={restartGame} className="w-full" variant="gold" size="sm">
-                      <RotateCcw size={16} />
-                      Restart Game
-                    </Button>
-                    <Button asChild variant="ghost" size="sm" className="w-full text-muted-foreground hover:text-primary">
-                      <Link to="/play-ai">Change Difficulty</Link>
-                    </Button>
+                {/* Rules Card */}
+                <div className="relative">
+                  <div className="absolute -inset-1 bg-primary/5 rounded-xl blur-lg opacity-40" />
+                  <div className="relative rounded-xl border border-primary/20 bg-card/30 p-4">
+                    <h3 className="text-sm font-medium text-muted-foreground mb-2">Quick Rules</h3>
+                    <ul className="text-xs text-muted-foreground space-y-1.5">
+                      <li>• Move all 15 checkers to your home board</li>
+                      <li>• Then bear off all checkers to win</li>
+                      <li>• Hit opponent's single checkers to send them to the bar</li>
+                      <li>• Must re-enter from bar before other moves</li>
+                    </ul>
                   </div>
                 </div>
               </div>
@@ -1001,12 +1021,6 @@ const BackgammonAI = () => {
           </div>
         )}
       </div>
-
-      <style>{`
-        .clip-triangle {
-          clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
-        }
-      `}</style>
     </div>
   );
 };
