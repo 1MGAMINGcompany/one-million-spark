@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Home, Wallet, Plus, List, Menu, X } from "lucide-react";
 import { WalletButton } from "./WalletButton";
-import PyramidLogo from "./PyramidLogo";
+import BrandLogo from "./BrandLogo";
 
 const Navbar = () => {
   const location = useLocation();
@@ -19,24 +19,7 @@ const Navbar = () => {
     <nav className="sticky top-0 left-0 right-0 z-50 bg-background/90 backdrop-blur-md border-b border-border shadow-lg">
       <div className="max-w-7xl mx-auto px-4">
         <div className="flex items-center justify-between h-16">
-          <Link 
-            to="/" 
-            className="flex items-center gap-2 md:gap-3 hover:opacity-90 transition-opacity"
-          >
-            <PyramidLogo size={32} className="md:w-10 md:h-10" />
-            <span 
-              className="text-lg md:text-xl font-display font-bold tracking-wide"
-              style={{
-                background: "linear-gradient(135deg, #FCE68A 0%, #FACC15 50%, #AB8215 100%)",
-                WebkitBackgroundClip: "text",
-                WebkitTextFillColor: "transparent",
-                backgroundClip: "text",
-                filter: "drop-shadow(0 0 8px hsl(45 93% 54% / 0.3))"
-              }}
-            >
-              1M GAMING
-            </span>
-          </Link>
+          <BrandLogo size="md" />
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center gap-1">
