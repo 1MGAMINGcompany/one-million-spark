@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Swords, Users, Bot, Trophy, Gem, Star, Shield, Zap } from "lucide-react";
 import FeaturedGameCard from "@/components/FeaturedGameCard";
 import { ChessIcon, DominoIcon, BackgammonIcon } from "@/components/GameIcons";
+import PyramidLogo from "@/components/PyramidLogo";
 
 interface FeaturedGame {
   name: string;
@@ -33,11 +34,27 @@ const Home = () => {
           <div className="grid lg:grid-cols-2 gap-12 lg:gap-8 items-center">
             {/* Left Side - Content */}
             <div className="flex flex-col gap-6 text-center lg:text-left">
-              {/* Badge */}
-              <div className="flex justify-center lg:justify-start">
-                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/30">
-                  <Star className="w-4 h-4 text-primary fill-primary" />
-                  <span className="text-sm font-medium text-primary">Premium Skill Gaming</span>
+              {/* Premium Tagline Block */}
+              <div className="flex flex-col items-center lg:items-start gap-4">
+                {/* Badge with Pyramid Logo */}
+                <div className="relative">
+                  {/* Soft gold glow behind */}
+                  <div className="absolute inset-0 -m-4 bg-primary/15 blur-xl rounded-full" />
+                  <div className="relative inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/30">
+                    <PyramidLogo size={24} />
+                    <span className="text-sm font-medium bg-gradient-to-r from-primary via-gold-light to-primary bg-clip-text text-transparent">
+                      PREMIUM SKILL GAMING
+                    </span>
+                  </div>
+                </div>
+
+                {/* Tagline with Shimmer */}
+                <div className="relative text-center lg:text-left">
+                  <div className="absolute inset-0 -m-2 bg-primary/10 blur-lg rounded-lg" />
+                  <p className="relative text-lg md:text-xl font-display tracking-wide bg-gradient-to-r from-primary via-gold-light to-accent bg-clip-text text-transparent">
+                    "Where strategy becomes{" "}
+                    <span className="wealth-shimmer inline-block font-bold">WEALTH</span>."
+                  </p>
                 </div>
               </div>
 

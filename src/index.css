@@ -146,6 +146,36 @@
     background: linear-gradient(180deg, hsl(222 47% 6%) 0%, hsl(222 40% 12%) 100%);
   }
 
+  /* Wealth Shimmer Animation */
+  .wealth-shimmer {
+    background: linear-gradient(
+      90deg,
+      hsl(45 93% 54%) 0%,
+      hsl(45 93% 54%) 40%,
+      hsl(50 100% 80%) 50%,
+      hsl(45 93% 54%) 60%,
+      hsl(45 93% 54%) 100%
+    );
+    background-size: 200% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: wealthShimmer 4s ease-in-out infinite;
+  }
+
+  .wealth-shimmer:hover {
+    animation-duration: 2s;
+  }
+
+  @keyframes wealthShimmer {
+    0%, 100% {
+      background-position: 100% 50%;
+    }
+    50% {
+      background-position: 0% 50%;
+    }
+  }
+
   /* Pyramid silhouette effect for hero sections */
   .pyramid-bg {
     position: relative;
