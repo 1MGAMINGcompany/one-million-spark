@@ -1,7 +1,9 @@
 import { useState, useCallback, useMemo, useEffect } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, RotateCcw, Gem, Star, Dice1, Dice2, Dice3, Dice4, Dice5, Dice6 } from "lucide-react";
+import { ArrowLeft, RotateCcw, Gem, Star } from "lucide-react";
+import { Dice3D, CheckerStack } from "@/components/BackgammonPieces";
+import { cn } from "@/lib/utils";
 
 type Difficulty = "easy" | "medium" | "hard";
 type Player = "player" | "ai";
@@ -17,12 +19,6 @@ interface Move {
   to: number;
   dieValue: number;
 }
-
-const DiceIcon = ({ value }: { value: number }) => {
-  const icons = [Dice1, Dice2, Dice3, Dice4, Dice5, Dice6];
-  const Icon = icons[value - 1] || Dice1;
-  return <Icon size={32} className="text-primary drop-shadow-[0_0_8px_hsl(45_93%_54%_/_0.6)]" />;
-};
 
 // Initial backgammon setup
 const getInitialBoard = (): number[] => {
@@ -403,7 +399,7 @@ const BackgammonAI = () => {
     setValidMoves([]);
   }, []);
 
-  // Render point (triangle)
+  // Render point (triangle) with premium styling
   const renderPoint = (index: number, isTop: boolean) => {
     const value = gameState.points[index];
     const checkerCount = Math.abs(value);
@@ -418,46 +414,96 @@ const BackgammonAI = () => {
         className={`
           relative flex flex-col items-center cursor-pointer transition-all
           ${isTop ? "pt-1" : "pb-1 flex-col-reverse"}
-          ${isSelected ? "ring-2 ring-primary rounded" : ""}
-          ${isValidTarget ? "ring-2 ring-green-400 rounded bg-green-400/10" : ""}
         `}
       >
-        {/* Triangle */}
-        <div
-          className={`
-            w-8 md:w-10 h-24 md:h-32 clip-triangle
-            ${index % 2 === 0 
-              ? "bg-gradient-to-t from-primary/70 to-primary/40" 
-              : "bg-gradient-to-t from-sand/60 to-sand/30"
-            }
-            ${isTop ? "" : "rotate-180"}
-          `}
-        />
+        {/* Triangle with textured gold/sand look */}
+        <svg
+          width="40"
+          height="120"
+          viewBox="0 0 40 120"
+          className={cn(
+            "md:w-12 md:h-36 transition-all duration-200",
+            isTop ? "" : "rotate-180",
+            isValidTarget && "drop-shadow-[0_0_12px_hsl(45_93%_54%_/_0.6)]"
+          )}
+        >
+          <defs>
+            {/* Gold triangle gradient with texture */}
+            <linearGradient id={`goldTriangle-${index}`} x1="0%" y1="100%" x2="0%" y2="0%">
+              <stop offset="0%" stopColor="hsl(45 93% 50%)" />
+              <stop offset="40%" stopColor="hsl(45 80% 45%)" />
+              <stop offset="100%" stopColor="hsl(35 70% 35%)" />
+            </linearGradient>
+            
+            {/* Sand triangle gradient */}
+            <linearGradient id={`sandTriangle-${index}`} x1="0%" y1="100%" x2="0%" y2="0%">
+              <stop offset="0%" stopColor="hsl(35 50% 55%)" />
+              <stop offset="40%" stopColor="hsl(35 45% 45%)" />
+              <stop offset="100%" stopColor="hsl(30 40% 35%)" />
+            </linearGradient>
+
+            {/* Engraved texture pattern */}
+            <pattern id={`engravePattern-${index}`} width="4" height="4" patternUnits="userSpaceOnUse">
+              <rect width="4" height="4" fill="transparent"/>
+              <circle cx="2" cy="2" r="0.5" fill="rgba(0,0,0,0.1)"/>
+            </pattern>
+          </defs>
+
+          {/* Triangle shadow */}
+          <polygon
+            points="20,5 3,115 37,115"
+            fill="rgba(0,0,0,0.3)"
+            transform="translate(1, 2)"
+          />
+
+          {/* Main triangle */}
+          <polygon
+            points="20,5 3,115 37,115"
+            fill={index % 2 === 0 ? `url(#goldTriangle-${index})` : `url(#sandTriangle-${index})`}
+            stroke={index % 2 === 0 ? "hsl(35 80% 35%)" : "hsl(30 40% 30%)"}
+            strokeWidth="1"
+          />
+
+          {/* Engraved texture overlay */}
+          <polygon
+            points="20,5 3,115 37,115"
+            fill={`url(#engravePattern-${index})`}
+          />
+
+          {/* Inner highlight */}
+          <polygon
+            points="20,15 10,105 30,105"
+            fill="none"
+            stroke={index % 2 === 0 ? "hsl(45 93% 65% / 0.3)" : "hsl(35 50% 60% / 0.3)"}
+            strokeWidth="1"
+          />
+
+          {/* Valid target glow overlay */}
+          {isValidTarget && (
+            <polygon
+              points="20,5 3,115 37,115"
+              fill="hsl(45 93% 54% / 0.2)"
+              className="animate-pulse"
+            />
+          )}
+        </svg>
         
         {/* Checkers */}
-        <div className={`absolute ${isTop ? "top-2" : "bottom-2"} flex flex-col gap-0.5 items-center`}>
-          {Array.from({ length: Math.min(checkerCount, 5) }).map((_, i) => (
-            <div
-              key={i}
-              className={`
-                w-6 md:w-8 h-5 md:h-6 rounded-full border-2 shadow-md transition-all
-                ${isPlayer 
-                  ? "bg-gradient-to-b from-primary/90 to-gold border-primary shadow-[0_0_8px_-2px_hsl(45_93%_54%_/_0.5)]" 
-                  : "bg-gradient-to-b from-stone-200 to-stone-100 border-stone-300"
-                }
-              `}
-            >
-              {i === Math.min(checkerCount, 5) - 1 && checkerCount > 5 && (
-                <span className={`text-xs font-bold text-center block ${isPlayer ? 'text-primary-foreground' : 'text-stone-700'}`}>
-                  {checkerCount}
-                </span>
-              )}
-            </div>
-          ))}
-        </div>
+        {checkerCount > 0 && (
+          <div className={`absolute ${isTop ? "top-4" : "bottom-4"}`}>
+            <CheckerStack
+              count={checkerCount}
+              variant={isPlayer ? "gold" : "obsidian"}
+              isSelected={isSelected}
+              isValidTarget={isValidTarget}
+              onClick={() => handlePointClick(index)}
+              isTop={isTop}
+            />
+          </div>
+        )}
         
         {/* Point number */}
-        <span className={`absolute ${isTop ? "bottom-0" : "top-0"} text-xs text-primary/40`}>
+        <span className={`absolute ${isTop ? "-bottom-4" : "-top-4"} text-xs text-primary/40 font-medium`}>
           {index + 1}
         </span>
       </div>
@@ -551,15 +597,13 @@ const BackgammonAI = () => {
                   <div className="bg-gradient-to-b from-midnight-light via-background to-midnight-light rounded-lg p-4 overflow-hidden">
                     {/* AI Bear Off / Bar */}
                     <div className="flex justify-between items-center mb-3 px-2">
-                      <div className="text-xs text-muted-foreground">
+                      <div className="text-xs text-muted-foreground flex items-center gap-2">
                         AI Borne Off: <span className="text-primary font-bold">{gameState.bearOff.ai}</span>
                       </div>
                       {gameState.bar.ai > 0 && (
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-2">
                           <span className="text-xs text-muted-foreground">AI Bar:</span>
-                          <div className="w-6 h-5 rounded-full bg-gradient-to-b from-stone-200 to-stone-100 border-2 border-stone-300 flex items-center justify-center">
-                            <span className="text-xs font-bold text-stone-700">{gameState.bar.ai}</span>
-                          </div>
+                          <CheckerStack count={gameState.bar.ai} variant="obsidian" isTop={true} />
                         </div>
                       )}
                     </div>
@@ -575,12 +619,12 @@ const BackgammonAI = () => {
                       </div>
                     </div>
 
-                    {/* Middle bar with dice */}
-                    <div className="h-10 bg-gradient-to-r from-primary/10 via-primary/20 to-primary/10 my-2 rounded-lg border border-primary/20 flex items-center justify-center">
+                    {/* Middle bar with premium 3D dice */}
+                    <div className="h-16 bg-gradient-to-r from-midnight-light via-background to-midnight-light my-2 rounded-lg border border-primary/20 flex items-center justify-center gap-1">
                       {dice.length > 0 && (
-                        <div className="flex gap-3">
-                          <DiceIcon value={dice[0]} />
-                          <DiceIcon value={dice[1]} />
+                        <div className="flex gap-4 items-center">
+                          <Dice3D value={dice[0]} variant={currentPlayer === "player" ? "ivory" : "obsidian"} isRolling={isThinking && currentPlayer === "ai"} />
+                          <Dice3D value={dice[1]} variant={currentPlayer === "player" ? "ivory" : "obsidian"} isRolling={isThinking && currentPlayer === "ai"} />
                         </div>
                       )}
                     </div>
@@ -600,16 +644,23 @@ const BackgammonAI = () => {
                     <div className="flex justify-between items-center mt-3 px-2">
                       {gameState.bar.player > 0 && (
                         <div 
-                          className={`flex items-center gap-1 cursor-pointer transition-all ${selectedPoint === -1 ? "ring-2 ring-primary rounded-lg p-1" : ""}`}
+                          className={cn(
+                            "flex items-center gap-2 cursor-pointer transition-all rounded-lg p-1",
+                            selectedPoint === -1 && "ring-2 ring-primary bg-primary/10"
+                          )}
                           onClick={() => handlePointClick(-1)}
                         >
                           <span className="text-xs text-muted-foreground">Your Bar:</span>
-                          <div className="w-6 h-5 rounded-full bg-gradient-to-b from-primary/90 to-gold border-2 border-primary flex items-center justify-center shadow-[0_0_8px_-2px_hsl(45_93%_54%_/_0.5)]">
-                            <span className="text-xs font-bold text-primary-foreground">{gameState.bar.player}</span>
-                          </div>
+                          <CheckerStack 
+                            count={gameState.bar.player} 
+                            variant="gold" 
+                            isSelected={selectedPoint === -1}
+                            onClick={() => handlePointClick(-1)}
+                            isTop={false} 
+                          />
                         </div>
                       )}
-                      <div className="text-xs text-muted-foreground ml-auto">
+                      <div className="text-xs text-muted-foreground ml-auto flex items-center gap-2">
                         You Borne Off: <span className="text-primary font-bold">{gameState.bearOff.player}</span>
                       </div>
                     </div>
