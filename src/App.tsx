@@ -11,6 +11,7 @@ import RoomList from "./pages/RoomList";
 import ChessGame from "./pages/ChessGame";
 import PlayAILobby from "./pages/PlayAILobby";
 import ChessAI from "./pages/ChessAI";
+import DominosAI from "./pages/DominosAI";
 import NotFound from "./pages/NotFound";
 
 const App = () => (
@@ -29,6 +30,7 @@ const App = () => (
             <Route path="/game/chess/:roomId" element={<ChessGame />} />
             <Route path="/play-ai" element={<PlayAILobby />} />
             <Route path="/play-ai/chess" element={<ChessAI />} />
+            <Route path="/play-ai/dominos" element={<DominosAI />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </div>
