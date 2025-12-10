@@ -1,4 +1,95 @@
 @tailwind base;
+
+/* Capture Animation Keyframes */
+@keyframes slashIn {
+  0% {
+    stroke-dasharray: 200;
+    stroke-dashoffset: 200;
+    opacity: 0;
+  }
+  30% {
+    opacity: 1;
+  }
+  100% {
+    stroke-dasharray: 200;
+    stroke-dashoffset: 0;
+    opacity: 0;
+  }
+}
+
+@keyframes dustBurst {
+  0% {
+    transform: translate(-50%, -50%) rotate(var(--burst-angle)) translateX(0) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) rotate(var(--burst-angle)) translateX(30px) scale(0);
+    opacity: 0;
+  }
+}
+
+@keyframes kingDustBurst {
+  0% {
+    transform: translate(-50%, -50%) rotate(var(--burst-angle)) translateX(0) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) rotate(var(--burst-angle)) translateX(var(--burst-distance, 60px)) scale(0);
+    opacity: 0;
+  }
+}
+
+@keyframes biteTop {
+  0% {
+    transform: translateY(-100%);
+  }
+  50% {
+    transform: translateY(15%);
+  }
+  100% {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+}
+
+@keyframes biteBottom {
+  0% {
+    transform: translateY(100%);
+  }
+  50% {
+    transform: translateY(-15%);
+  }
+  100% {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+}
+
+@keyframes shockwave {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(8);
+    opacity: 0;
+  }
+}
+
+@keyframes flashPulse {
+  0% {
+    transform: scale(0);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.5);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(2);
+    opacity: 0;
+  }
+}
 @tailwind components;
 @tailwind utilities;
 

@@ -1,6 +1,12 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Chess, Square, PieceSymbol, Color } from "chess.js";
 import { cn } from "@/lib/utils";
+import { 
+  CaptureAnimationLayer, 
+  CaptureAnimation, 
+  getCaptureAnimationType,
+  CAPTURE_ANIMATIONS_ENABLED 
+} from "./CaptureAnimationLayer";
 
 interface ChessBoardPremiumProps {
   game: Chess;
@@ -10,28 +16,6 @@ interface ChessBoardPremiumProps {
 
 const files = ["a", "b", "c", "d", "e", "f", "g", "h"];
 const ranks = ["8", "7", "6", "5", "4", "3", "2", "1"];
-
-// Capture particle effect component
-const CaptureParticles = ({ active }: { active: boolean }) => {
-  if (!active) return null;
-  
-  return (
-    <div className="absolute inset-0 pointer-events-none overflow-hidden">
-      {Array.from({ length: 12 }).map((_, i) => (
-        <div
-          key={i}
-          className="absolute w-1 h-1 bg-primary rounded-full animate-ping"
-          style={{
-            left: `${30 + Math.random() * 40}%`,
-            top: `${30 + Math.random() * 40}%`,
-            animationDelay: `${i * 50}ms`,
-            animationDuration: "600ms",
-          }}
-        />
-      ))}
-    </div>
-  );
-};
 
 // Premium Chess Piece SVG Component
 const ChessPiece = ({ 
@@ -189,7 +173,48 @@ export function ChessBoardPremium({ game, onMove, disabled = false }: ChessBoard
   const [selectedSquare, setSelectedSquare] = useState<Square | null>(null);
   const [legalMoves, setLegalMoves] = useState<Square[]>([]);
   const [movingPiece, setMovingPiece] = useState<{ from: Square; to: Square } | null>(null);
-  const [captureSquare, setCaptureSquare] = useState<Square | null>(null);
+  const [captureAnimations, setCaptureAnimations] = useState<CaptureAnimation[]>([]);
+  const boardRef = useRef<HTMLDivElement>(null);
+  const [squareSize, setSquareSize] = useState(0);
+
+  // Measure square size
+  useEffect(() => {
+    const updateSize = () => {
+      if (boardRef.current) {
+        const boardWidth = boardRef.current.offsetWidth;
+        setSquareSize(boardWidth / 8);
+      }
+    };
+    updateSize();
+    window.addEventListener("resize", updateSize);
+    return () => window.removeEventListener("resize", updateSize);
+  }, []);
+
+  const triggerCaptureAnimation = useCallback((
+    attackerPiece: PieceSymbol,
+    capturedPiece: PieceSymbol,
+    targetSquare: Square
+  ) => {
+    if (!CAPTURE_ANIMATIONS_ENABLED) return;
+    
+    const animationType = getCaptureAnimationType(attackerPiece, capturedPiece);
+    const newAnimation: CaptureAnimation = {
+      id: `${targetSquare}-${Date.now()}`,
+      square: targetSquare,
+      type: animationType,
+      timestamp: Date.now(),
+    };
+    
+    // Limit to max 2 concurrent animations
+    setCaptureAnimations(prev => {
+      const limited = prev.slice(-1);
+      return [...limited, newAnimation];
+    });
+  }, []);
+
+  const handleAnimationComplete = useCallback((id: string) => {
+    setCaptureAnimations(prev => prev.filter(a => a.id !== id));
+  }, []);
 
   const handleSquareClick = useCallback((square: Square) => {
     if (disabled) return;
@@ -197,16 +222,20 @@ export function ChessBoardPremium({ game, onMove, disabled = false }: ChessBoard
     const piece = game.get(square);
 
     if (selectedSquare) {
-      // Try to make the move
+      // Get the attacking piece BEFORE the move
+      const attackingPiece = game.get(selectedSquare);
+      // Get the target piece (if any) BEFORE the move
       const targetPiece = game.get(square);
       const moveSuccessful = onMove(selectedSquare, square);
       
       if (moveSuccessful) {
         setMovingPiece({ from: selectedSquare, to: square });
-        if (targetPiece) {
-          setCaptureSquare(square);
-          setTimeout(() => setCaptureSquare(null), 600);
+        
+        // Trigger capture animation if a piece was captured
+        if (targetPiece && attackingPiece) {
+          triggerCaptureAnimation(attackingPiece.type, targetPiece.type, square);
         }
+        
         setTimeout(() => setMovingPiece(null), 300);
         setSelectedSquare(null);
         setLegalMoves([]);
@@ -230,7 +259,7 @@ export function ChessBoardPremium({ game, onMove, disabled = false }: ChessBoard
       const moves = game.moves({ square, verbose: true });
       setLegalMoves(moves.map((m) => m.to as Square));
     }
-  }, [disabled, game, selectedSquare, onMove]);
+  }, [disabled, game, selectedSquare, onMove, triggerCaptureAnimation]);
 
   const isLightSquare = (file: number, rank: number) => {
     return (file + rank) % 2 === 0;
@@ -240,7 +269,13 @@ export function ChessBoardPremium({ game, onMove, disabled = false }: ChessBoard
     <div className="aspect-square w-full max-w-[600px] mx-auto">
       {/* Gold border frame */}
       <div className="relative p-1 rounded-lg bg-gradient-to-br from-primary via-gold-light to-primary shadow-[0_0_30px_-5px_hsl(45_93%_54%_/_0.5)]">
-        <div className="grid grid-cols-8 rounded overflow-hidden">
+        <div ref={boardRef} className="relative grid grid-cols-8 rounded overflow-hidden">
+          {/* Capture Animation Layer */}
+          <CaptureAnimationLayer 
+            animations={captureAnimations}
+            onAnimationComplete={handleAnimationComplete}
+            squareSize={squareSize}
+          />
           {ranks.map((rank, rankIndex) =>
             files.map((file, fileIndex) => {
               const square = `${file}${rank}` as Square;
@@ -250,7 +285,6 @@ export function ChessBoardPremium({ game, onMove, disabled = false }: ChessBoard
               const isLegalMove = legalMoves.includes(square);
               const isCheck = game.isCheck() && piece?.type === "k" && piece?.color === game.turn();
               const isMoving = movingPiece?.to === square;
-              const showCapture = captureSquare === square;
 
               return (
                 <button
@@ -347,9 +381,6 @@ export function ChessBoardPremium({ game, onMove, disabled = false }: ChessBoard
                   {isLegalMove && piece && (
                     <div className="absolute inset-1 ring-4 ring-primary/60 rounded-sm shadow-[0_0_15px_2px_hsl(45_93%_54%_/_0.4)]" />
                   )}
-
-                  {/* Capture particles */}
-                  <CaptureParticles active={showCapture} />
                   
                   {/* Piece */}
                   {piece && (
