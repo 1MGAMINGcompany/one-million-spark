@@ -352,7 +352,7 @@ const DominosAI = () => {
   const playerLegalMoves = useMemo(() => getLegalMoves(playerHand), [getLegalMoves, playerHand]);
   const canPlayerPlay = playerLegalMoves.length > 0;
 
-  // Render a domino tile
+  // Render a domino tile (desktop)
   const renderDomino = (domino: Domino, isClickable: boolean, isSelected: boolean, flipped?: boolean) => {
     const left = flipped ? domino.right : domino.left;
     const right = flipped ? domino.left : domino.right;
@@ -367,6 +367,27 @@ const DominosAI = () => {
         isSelected={isSelected}
         isPlayable={isLegal}
         isAITurn={isThinking}
+        onClick={() => isClickable && handlePlayerPlay(domino)}
+      />
+    );
+  };
+
+  // Render a domino tile (mobile - smaller size)
+  const renderDominoMobile = (domino: Domino, isClickable: boolean, isSelected: boolean, flipped?: boolean) => {
+    const left = flipped ? domino.right : domino.left;
+    const right = flipped ? domino.left : domino.right;
+    const isLegal = playerLegalMoves.some(d => d.id === domino.id);
+    
+    return (
+      <DominoTile3D
+        key={domino.id}
+        left={left}
+        right={right}
+        isClickable={isClickable}
+        isSelected={isSelected}
+        isPlayable={isLegal}
+        isAITurn={isThinking}
+        size="mobile"
         onClick={() => isClickable && handlePlayerPlay(domino)}
       />
     );
@@ -557,7 +578,7 @@ const DominosAI = () => {
               </div>
 
               {/* Player Hand */}
-              <div className="relative p-4 rounded-xl bg-gradient-to-br from-midnight-light via-card to-background border border-primary/20">
+              <div className="relative p-4 md:p-4 rounded-xl bg-gradient-to-br from-midnight-light via-card to-background border border-primary/20">
                 <div className="absolute top-2 right-2">
                   <div 
                     className="w-3 h-3 opacity-40"
@@ -567,16 +588,43 @@ const DominosAI = () => {
                     }}
                   />
                 </div>
-                <p className="text-xs text-primary/60 uppercase tracking-wider mb-3 font-medium">Your Hand ({playerHand.length} tiles)</p>
-                <div className="flex flex-wrap gap-2 justify-center">
+                <p className="text-xs text-primary/60 uppercase tracking-wider mb-2 md:mb-3 font-medium">Your Hand ({playerHand.length} tiles)</p>
+                
+                {/* Desktop: single row flex */}
+                <div className="hidden md:flex flex-wrap gap-2 justify-center">
                   {playerHand.map(d => 
                     renderDomino(d, isPlayerTurn && !gameOver && !isThinking, selectedDomino === d.id)
                   )}
                 </div>
                 
+                {/* Mobile: 2-row grid layout with smaller tiles */}
+                <div className="md:hidden">
+                  {(() => {
+                    const midpoint = Math.ceil(playerHand.length / 2);
+                    const row1 = playerHand.slice(0, midpoint);
+                    const row2 = playerHand.slice(midpoint);
+                    return (
+                      <div className="flex flex-col items-center gap-1.5">
+                        <div className="flex flex-wrap gap-1.5 justify-center">
+                          {row1.map(d => 
+                            renderDominoMobile(d, isPlayerTurn && !gameOver && !isThinking, selectedDomino === d.id)
+                          )}
+                        </div>
+                        {row2.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5 justify-center">
+                            {row2.map(d => 
+                              renderDominoMobile(d, isPlayerTurn && !gameOver && !isThinking, selectedDomino === d.id)
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </div>
+                
                 {/* Draw/Pass buttons */}
                 {isPlayerTurn && !gameOver && !canPlayerPlay && (
-                  <div className="flex gap-3 justify-center mt-4">
+                  <div className="flex gap-3 justify-center mt-3 md:mt-4">
                     {boneyard.length > 0 ? (
                       <Button variant="gold" size="sm" onClick={handleDraw}>
                         Draw from Boneyard ({boneyard.length})
