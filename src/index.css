@@ -2,87 +2,95 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700&family=Raleway:wght@300;400;500;600;700&display=swap');
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 220 13% 13%;
+    --background: 222 47% 6%;
+    --foreground: 45 29% 97%;
 
-    --card: 0 0% 100%;
-    --card-foreground: 220 13% 13%;
+    --card: 222 40% 10%;
+    --card-foreground: 45 29% 97%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 220 13% 13%;
+    --popover: 222 40% 10%;
+    --popover-foreground: 45 29% 97%;
 
-    --primary: 220 13% 13%;
-    --primary-foreground: 0 0% 100%;
+    --primary: 45 93% 54%;
+    --primary-foreground: 222 47% 6%;
 
-    --secondary: 220 14% 96%;
-    --secondary-foreground: 220 13% 13%;
+    --secondary: 222 30% 16%;
+    --secondary-foreground: 45 29% 97%;
 
-    --muted: 220 14% 96%;
-    --muted-foreground: 220 9% 46%;
+    --muted: 222 30% 16%;
+    --muted-foreground: 45 15% 65%;
 
-    --accent: 220 14% 96%;
-    --accent-foreground: 220 13% 13%;
+    --accent: 35 80% 50%;
+    --accent-foreground: 222 47% 6%;
 
     --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 100%;
+    --destructive-foreground: 45 29% 97%;
 
-    --border: 220 13% 91%;
-    --input: 220 13% 91%;
-    --ring: 220 13% 13%;
+    --border: 45 50% 25%;
+    --input: 222 30% 18%;
+    --ring: 45 93% 54%;
 
-    --radius: 0.5rem;
+    --radius: 0.75rem;
 
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-primary: 240 5.9% 10%;
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 240 4.8% 95.9%;
-    --sidebar-accent-foreground: 240 5.9% 10%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 220 13% 13%;
+    /* Custom Egyptian theme colors */
+    --gold: 45 93% 54%;
+    --gold-light: 45 90% 65%;
+    --gold-dark: 45 85% 40%;
+    --sand: 35 40% 70%;
+    --midnight: 222 47% 6%;
+    --midnight-light: 222 40% 12%;
+
+    --sidebar-background: 222 40% 8%;
+    --sidebar-foreground: 45 29% 97%;
+    --sidebar-primary: 45 93% 54%;
+    --sidebar-primary-foreground: 222 47% 6%;
+    --sidebar-accent: 222 30% 16%;
+    --sidebar-accent-foreground: 45 29% 97%;
+    --sidebar-border: 45 50% 25%;
+    --sidebar-ring: 45 93% 54%;
   }
 
   .dark {
-    --background: 220 13% 8%;
-    --foreground: 0 0% 98%;
+    --background: 222 47% 6%;
+    --foreground: 45 29% 97%;
 
-    --card: 220 13% 10%;
-    --card-foreground: 0 0% 98%;
+    --card: 222 40% 10%;
+    --card-foreground: 45 29% 97%;
 
-    --popover: 220 13% 10%;
-    --popover-foreground: 0 0% 98%;
+    --popover: 222 40% 10%;
+    --popover-foreground: 45 29% 97%;
 
-    --primary: 0 0% 98%;
-    --primary-foreground: 220 13% 8%;
+    --primary: 45 93% 54%;
+    --primary-foreground: 222 47% 6%;
 
-    --secondary: 220 13% 15%;
-    --secondary-foreground: 0 0% 98%;
+    --secondary: 222 30% 16%;
+    --secondary-foreground: 45 29% 97%;
 
-    --muted: 220 13% 15%;
-    --muted-foreground: 220 9% 60%;
+    --muted: 222 30% 16%;
+    --muted-foreground: 45 15% 65%;
 
-    --accent: 220 13% 15%;
-    --accent-foreground: 0 0% 98%;
+    --accent: 35 80% 50%;
+    --accent-foreground: 222 47% 6%;
 
-    --destructive: 0 62% 30%;
-    --destructive-foreground: 0 0% 98%;
+    --destructive: 0 62% 50%;
+    --destructive-foreground: 45 29% 97%;
 
-    --border: 220 13% 18%;
-    --input: 220 13% 18%;
-    --ring: 0 0% 98%;
+    --border: 45 50% 25%;
+    --input: 222 30% 18%;
+    --ring: 45 93% 54%;
 
-    --sidebar-background: 220 13% 8%;
-    --sidebar-foreground: 0 0% 98%;
-    --sidebar-primary: 0 0% 98%;
-    --sidebar-primary-foreground: 220 13% 8%;
-    --sidebar-accent: 220 13% 15%;
-    --sidebar-accent-foreground: 0 0% 98%;
-    --sidebar-border: 220 13% 18%;
-    --sidebar-ring: 0 0% 98%;
+    --sidebar-background: 222 40% 8%;
+    --sidebar-foreground: 45 29% 97%;
+    --sidebar-primary: 45 93% 54%;
+    --sidebar-primary-foreground: 222 47% 6%;
+    --sidebar-accent: 222 30% 16%;
+    --sidebar-accent-foreground: 45 29% 97%;
+    --sidebar-border: 45 50% 25%;
+    --sidebar-ring: 45 93% 54%;
   }
 }
 
@@ -91,8 +99,73 @@
     @apply border-border;
   }
 
+  html {
+    @apply dark;
+  }
+
   body {
-    @apply bg-background text-foreground font-sans antialiased;
-    font-family: 'Inter', system-ui, sans-serif;
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Raleway', system-ui, sans-serif;
+    background: 
+      radial-gradient(ellipse at 50% 100%, hsl(222 40% 12% / 0.8) 0%, transparent 60%),
+      radial-gradient(ellipse at 80% 80%, hsl(35 40% 15% / 0.3) 0%, transparent 40%),
+      radial-gradient(ellipse at 20% 80%, hsl(45 30% 12% / 0.2) 0%, transparent 35%),
+      linear-gradient(180deg, hsl(222 47% 6%) 0%, hsl(222 47% 8%) 50%, hsl(222 40% 10%) 100%);
+    background-attachment: fixed;
+    min-height: 100vh;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Cinzel', serif;
+    font-weight: 600;
+  }
+}
+
+@layer utilities {
+  .gold-glow {
+    box-shadow: 0 0 20px hsl(45 93% 54% / 0.3), 0 0 40px hsl(45 93% 54% / 0.1);
+  }
+
+  .gold-border {
+    border: 1px solid hsl(45 50% 35% / 0.6);
+  }
+
+  .text-gold {
+    color: hsl(45 93% 54%);
+  }
+
+  .bg-gold {
+    background-color: hsl(45 93% 54%);
+  }
+
+  .gradient-gold {
+    background: linear-gradient(135deg, hsl(45 93% 54%) 0%, hsl(35 80% 50%) 100%);
+  }
+
+  .gradient-midnight {
+    background: linear-gradient(180deg, hsl(222 47% 6%) 0%, hsl(222 40% 12%) 100%);
+  }
+
+  /* Pyramid silhouette effect for hero sections */
+  .pyramid-bg {
+    position: relative;
+  }
+  
+  .pyramid-bg::before {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100%;
+    height: 60%;
+    background: 
+      linear-gradient(135deg, transparent 45%, hsl(35 30% 12% / 0.15) 45%, hsl(35 30% 12% / 0.15) 55%, transparent 55%),
+      linear-gradient(225deg, transparent 45%, hsl(35 30% 12% / 0.1) 45%, hsl(35 30% 12% / 0.1) 55%, transparent 55%);
+    background-size: 200px 150px;
+    background-position: center bottom;
+    background-repeat: repeat-x;
+    pointer-events: none;
+    opacity: 0.4;
   }
 }

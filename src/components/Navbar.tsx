@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Home, Wallet, Plus, List, Menu, X } from "lucide-react";
+import { Home, Wallet, Plus, List, Menu, X, Star } from "lucide-react";
 import { WalletButton } from "./WalletButton";
 
 const Navbar = () => {
@@ -15,11 +15,12 @@ const Navbar = () => {
   ];
 
   return (
-    <nav className="sticky top-0 left-0 right-0 z-50 bg-background/95 backdrop-blur-sm border-b border-border shadow-sm">
+    <nav className="sticky top-0 left-0 right-0 z-50 bg-background/90 backdrop-blur-md border-b border-border shadow-lg">
       <div className="max-w-7xl mx-auto px-4">
         <div className="flex items-center justify-between h-16">
-          <Link to="/" className="text-xl font-bold text-foreground">
-            1M GAMING
+          <Link to="/" className="flex items-center gap-2 text-xl font-display font-bold text-primary hover:text-primary/80 transition-colors">
+            <Star className="w-6 h-6 fill-primary" />
+            <span>1M GAMING</span>
           </Link>
 
           {/* Desktop Navigation */}
@@ -31,10 +32,10 @@ const Navbar = () => {
                 <Link
                   key={item.path}
                   to={item.path}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
                     isActive
-                      ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                      ? "bg-primary text-primary-foreground shadow-gold"
+                      : "text-muted-foreground hover:text-foreground hover:bg-secondary"
                   }`}
                 >
                   <Icon size={18} />
@@ -48,7 +49,7 @@ const Navbar = () => {
           {/* Mobile Menu Button */}
           <button
             onClick={() => setIsOpen(!isOpen)}
-            className="md:hidden p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+            className="md:hidden p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
             aria-label="Toggle menu"
           >
             {isOpen ? <X size={24} /> : <Menu size={24} />}
@@ -67,10 +68,10 @@ const Navbar = () => {
                     key={item.path}
                     to={item.path}
                     onClick={() => setIsOpen(false)}
-                    className={`flex items-center gap-3 px-4 py-3 rounded-md text-sm font-medium transition-colors ${
+                    className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 ${
                       isActive
-                        ? "bg-primary text-primary-foreground"
-                        : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                        ? "bg-primary text-primary-foreground shadow-gold"
+                        : "text-muted-foreground hover:text-foreground hover:bg-secondary"
                     }`}
                   >
                     <Icon size={20} />

@@ -13,6 +13,10 @@ export default {
       },
     },
     extend: {
+      fontFamily: {
+        sans: ['Raleway', 'system-ui', 'sans-serif'],
+        display: ['Cinzel', 'serif'],
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
@@ -57,11 +61,27 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+        gold: {
+          DEFAULT: "hsl(var(--gold))",
+          light: "hsl(var(--gold-light))",
+          dark: "hsl(var(--gold-dark))",
+        },
+        sand: "hsl(var(--sand))",
+        midnight: {
+          DEFAULT: "hsl(var(--midnight))",
+          light: "hsl(var(--midnight-light))",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
+      },
+      boxShadow: {
+        'gold': '0 4px 20px -2px hsl(45 93% 54% / 0.25)',
+        'gold-lg': '0 8px 30px -4px hsl(45 93% 54% / 0.35)',
+        'gold-glow': '0 0 20px hsl(45 93% 54% / 0.3), 0 0 40px hsl(45 93% 54% / 0.1)',
+        'card': '0 4px 20px -4px hsl(222 47% 0% / 0.5)',
       },
       keyframes: {
         "accordion-down": {
@@ -80,10 +100,20 @@ export default {
             height: "0",
           },
         },
+        "shimmer": {
+          "0%": { backgroundPosition: "-200% 0" },
+          "100%": { backgroundPosition: "200% 0" },
+        },
+        "pulse-gold": {
+          "0%, 100%": { boxShadow: "0 0 10px hsl(45 93% 54% / 0.3)" },
+          "50%": { boxShadow: "0 0 25px hsl(45 93% 54% / 0.5)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        "shimmer": "shimmer 2s linear infinite",
+        "pulse-gold": "pulse-gold 2s ease-in-out infinite",
       },
     },
   },
