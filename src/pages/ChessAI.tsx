@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useRef } from "react";
+import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Chess, Square, Move, PieceSymbol } from "chess.js";
 import { ChessBoardPremium } from "@/components/ChessBoardPremium";
@@ -6,72 +6,15 @@ import { useCaptureAnimations } from "@/components/CaptureAnimationLayer";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, RotateCcw, Gem, Star } from "lucide-react";
 import { useSound } from "@/contexts/SoundContext";
+import { createChessAI, type ChessAI as ChessAIType, type Difficulty } from "@/lib/chessEngine/stockfishEngine";
 
-type Difficulty = "easy" | "medium" | "hard";
-
-// Material values for evaluation
-const PIECE_VALUES: Record<string, number> = {
-  p: 100,
-  n: 320,
-  b: 330,
-  r: 500,
-  q: 900,
-  k: 20000,
-};
-
-// Evaluate board position (positive = good for white, negative = good for black)
-const evaluateBoard = (game: Chess): number => {
-  const fen = game.fen();
-  const board = fen.split(" ")[0];
-  let score = 0;
-
-  for (const char of board) {
-    if (char === "/" || !isNaN(Number(char))) continue;
-    const piece = char.toLowerCase();
-    const value = PIECE_VALUES[piece] || 0;
-    score += char === char.toUpperCase() ? value : -value;
-  }
-
-  return score;
-};
-
-// Minimax with alpha-beta pruning
-const minimax = (
-  game: Chess,
-  depth: number,
-  alpha: number,
-  beta: number,
-  isMaximizing: boolean
-): number => {
-  if (depth === 0 || game.isGameOver()) {
-    return evaluateBoard(game);
-  }
-
-  const moves = game.moves();
-
-  if (isMaximizing) {
-    let maxEval = -Infinity;
-    for (const move of moves) {
-      game.move(move);
-      const evalScore = minimax(game, depth - 1, alpha, beta, false);
-      game.undo();
-      maxEval = Math.max(maxEval, evalScore);
-      alpha = Math.max(alpha, evalScore);
-      if (beta <= alpha) break;
-    }
-    return maxEval;
-  } else {
-    let minEval = Infinity;
-    for (const move of moves) {
-      game.move(move);
-      const evalScore = minimax(game, depth - 1, alpha, beta, true);
-      game.undo();
-      minEval = Math.min(minEval, evalScore);
-      beta = Math.min(beta, evalScore);
-      if (beta <= alpha) break;
-    }
-    return minEval;
-  }
+// Helper to convert UCI move (e.g., "e2e4") to from/to squares
+const parseUCIMove = (uciMove: string): { from: Square; to: Square; promotion?: string } | null => {
+  if (uciMove.length < 4) return null;
+  const from = uciMove.slice(0, 2) as Square;
+  const to = uciMove.slice(2, 4) as Square;
+  const promotion = uciMove.length > 4 ? uciMove[4] : undefined;
+  return { from, to, promotion };
 };
 
 // Animation Toggle Component
@@ -149,6 +92,28 @@ const ChessAI = () => {
   const [gameOver, setGameOver] = useState(false);
   const [animationsEnabled, setAnimationsEnabled] = useState(true);
   
+  // Stockfish AI instance
+  const aiRef = useRef<ChessAIType | null>(null);
+  
+  // Initialize Stockfish AI on mount
+  useEffect(() => {
+    aiRef.current = createChessAI(difficulty);
+    
+    return () => {
+      if (aiRef.current) {
+        aiRef.current.terminate();
+        aiRef.current = null;
+      }
+    };
+  }, []); // Only create once on mount
+  
+  // Update difficulty when it changes
+  useEffect(() => {
+    if (aiRef.current) {
+      aiRef.current.setDifficulty(difficulty);
+    }
+  }, [difficulty]);
+  
   // Use ref to track game state for AI moves (to capture pieces before they're taken)
   const pendingCaptureRef = useRef<{
     attackerPiece: PieceSymbol;
@@ -169,9 +134,9 @@ const ChessAI = () => {
 
   const difficultyDescription = useMemo(() => {
     switch (difficulty) {
-      case "easy": return "Random moves";
-      case "medium": return "Prefers captures";
-      case "hard": return "Strategic play";
+      case "easy": return "Stockfish - Beginner";
+      case "medium": return "Stockfish - Intermediate";
+      case "hard": return "Stockfish - Advanced";
     }
   }, [difficulty]);
 
@@ -201,72 +166,82 @@ const ChessAI = () => {
     return false;
   }, [play]);
 
-  const getAIMove = useCallback((currentGame: Chess): Move | null => {
+  // Fallback to random move if Stockfish fails
+  const getRandomMove = useCallback((currentGame: Chess): Move | null => {
     const moves = currentGame.moves({ verbose: true }) as Move[];
     if (moves.length === 0) return null;
+    return moves[Math.floor(Math.random() * moves.length)];
+  }, []);
 
-    switch (difficulty) {
-      case "easy": {
-        const randomIndex = Math.floor(Math.random() * moves.length);
-        return moves[randomIndex];
-      }
-
-      case "medium": {
-        const captures = moves.filter(m => m.captured);
-        if (captures.length > 0) {
-          const sorted = captures.sort((a, b) => {
-            const aValue = PIECE_VALUES[a.captured || ""] || 0;
-            const bValue = PIECE_VALUES[b.captured || ""] || 0;
-            return bValue - aValue;
-          });
-          return sorted[0];
-        }
-        const randomIndex = Math.floor(Math.random() * moves.length);
-        return moves[randomIndex];
-      }
-
-      case "hard": {
-        let bestMove: Move | null = null;
-        let bestValue = Infinity;
-
-        for (const move of moves) {
-          currentGame.move(move.san);
-          const value = minimax(currentGame, 2, -Infinity, Infinity, true);
-          currentGame.undo();
-
-          if (value < bestValue) {
-            bestValue = value;
-            bestMove = move;
-          }
-        }
-
-        return bestMove || moves[0];
-      }
-
-      default:
-        return moves[0];
-    }
-  }, [difficulty]);
-
-  const makeAIMove = useCallback((currentGame: Chess, currentAnimationsEnabled: boolean) => {
-    const moveObj = getAIMove(currentGame);
-    if (!moveObj) return;
-
+  const makeAIMove = useCallback(async (currentGame: Chess, currentAnimationsEnabled: boolean) => {
+    if (currentGame.isGameOver()) return;
+    
     setIsThinking(true);
     setGameStatus("AI is thinking...");
 
-    const thinkingTime = difficulty === "hard" ? 800 : difficulty === "medium" ? 500 : 300;
-
-    // Store capture info BEFORE the move happens
-    const targetPiece = currentGame.get(moveObj.to as Square);
-    const wasCapture = !!targetPiece;
-    const attackerPieceType = moveObj.piece as PieceSymbol;
-    const capturedPieceType = targetPiece?.type;
-    const targetSquare = moveObj.to as Square;
-    
-    setTimeout(() => {
-      // Execute the move
-      currentGame.move(moveObj.san);
+    try {
+      let uciMove: string;
+      
+      if (aiRef.current) {
+        // Use Stockfish to get the best move
+        uciMove = await aiRef.current.getBestMove(currentGame.fen());
+      } else {
+        // Fallback: get a random move
+        console.warn('Stockfish not ready, using random move');
+        const randomMove = getRandomMove(currentGame);
+        if (!randomMove) {
+          setIsThinking(false);
+          return;
+        }
+        uciMove = randomMove.from + randomMove.to + (randomMove.promotion || '');
+      }
+      
+      const parsed = parseUCIMove(uciMove);
+      if (!parsed) {
+        console.warn('Failed to parse UCI move:', uciMove);
+        // Fallback to random
+        const randomMove = getRandomMove(currentGame);
+        if (randomMove) {
+          parsed && Object.assign(parsed, { from: randomMove.from, to: randomMove.to, promotion: randomMove.promotion });
+        }
+        setIsThinking(false);
+        if (!checkGameOver(currentGame)) {
+          setGameStatus("Your turn");
+        }
+        return;
+      }
+      
+      // Get piece info BEFORE the move
+      const attackingPiece = currentGame.get(parsed.from);
+      const targetPiece = currentGame.get(parsed.to);
+      const wasCapture = !!targetPiece;
+      const attackerPieceType = attackingPiece?.type;
+      const capturedPieceType = targetPiece?.type;
+      const targetSquare = parsed.to;
+      
+      // Try to make the move
+      const move = currentGame.move({
+        from: parsed.from,
+        to: parsed.to,
+        promotion: (parsed.promotion || 'q') as 'q' | 'r' | 'b' | 'n',
+      });
+      
+      if (!move) {
+        console.warn('Invalid move from Stockfish:', uciMove);
+        // Fallback to random move
+        const randomMove = getRandomMove(currentGame);
+        if (randomMove) {
+          currentGame.move(randomMove.san);
+          setGame(new Chess(currentGame.fen()));
+          setMoveHistory(currentGame.history());
+          play('chess_move');
+        }
+        setIsThinking(false);
+        if (!checkGameOver(currentGame)) {
+          setGameStatus("Your turn");
+        }
+        return;
+      }
       
       // Play sound based on move type
       if (wasCapture) {
@@ -276,12 +251,12 @@ const ChessAI = () => {
       }
       
       // Check for promotion
-      if (moveObj.promotion) {
+      if (move.promotion) {
         play('chess_promotion');
       }
       
       // Trigger capture animation if there was a capture
-      if (wasCapture && currentAnimationsEnabled && capturedPieceType) {
+      if (wasCapture && currentAnimationsEnabled && capturedPieceType && attackerPieceType) {
         triggerAnimation(attackerPieceType, capturedPieceType, targetSquare);
       }
       
@@ -292,8 +267,22 @@ const ChessAI = () => {
       if (!checkGameOver(currentGame)) {
         setGameStatus("Your turn");
       }
-    }, thinkingTime);
-  }, [getAIMove, checkGameOver, difficulty, triggerAnimation, play]);
+    } catch (error) {
+      console.error('Stockfish error:', error);
+      // Fallback to random move
+      const randomMove = getRandomMove(currentGame);
+      if (randomMove) {
+        currentGame.move(randomMove.san);
+        setGame(new Chess(currentGame.fen()));
+        setMoveHistory(currentGame.history());
+        play('chess_move');
+      }
+      setIsThinking(false);
+      if (!checkGameOver(currentGame)) {
+        setGameStatus("Your turn");
+      }
+    }
+  }, [checkGameOver, triggerAnimation, play, getRandomMove]);
 
   const handleMove = useCallback((from: Square, to: Square): boolean => {
     if (gameOver || isThinking) return false;
