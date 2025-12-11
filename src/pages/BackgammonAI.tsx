@@ -164,12 +164,9 @@ const BackgammonAI = () => {
     }
   }, [gameState, play]);
 
-  // Handle point click
+  // Handle point click - simplified bar logic to avoid closure issues
   const handlePointClick = useCallback((pointIndex: number) => {
-    console.log('[BACKGAMMON] Click:', { pointIndex, selectedPoint, hasBar: gameState.bar.player, remainingMoves, validMoves });
-    
     if (currentPlayer !== "player" || remainingMoves.length === 0 || gameOver || isThinking) {
-      console.log('[BACKGAMMON] Blocked: not player turn or no moves');
       return;
     }
     
@@ -177,44 +174,34 @@ const BackgammonAI = () => {
     
     // CASE 1: Player has bar checkers - they MUST move from bar first
     if (hasBarCheckers) {
-      // If bar is NOT selected yet (selectedPoint is null or a board point)
-      if (selectedPoint !== -1) {
-        if (pointIndex === -1) {
-          // Clicking bar to select it
-          const barMoves = getLegalMovesFromBar(gameState, remainingMoves, "player");
-          console.log('[BACKGAMMON] Selecting bar, moves:', barMoves);
+      // Get all legal bar entry moves upfront
+      const barMoves = getLegalMovesFromBar(gameState, remainingMoves, "player");
+      
+      // Clicking the bar itself - select it and show targets
+      if (pointIndex === -1) {
+        if (selectedPoint === -1) {
+          // Already selected, deselect
+          setSelectedPoint(null);
+          setValidMoves([]);
+          setGameStatus("Click the bar to re-enter");
+        } else {
+          // Select the bar
           if (barMoves.length > 0) {
-            const targets = barMoves.map(m => m.to);
             setSelectedPoint(-1);
-            setValidMoves(targets);
+            setValidMoves(barMoves.map(m => m.to));
             setGameStatus("Select where to re-enter");
           } else {
             setGameStatus("All entry points are blocked!");
           }
-        } else {
-          setGameStatus("You must click the bar first to re-enter your checker!");
         }
         return;
       }
       
-      // Bar IS selected (selectedPoint === -1), now handle destination click
-      console.log('[BACKGAMMON] Bar selected, clicking destination:', pointIndex);
-      
-      if (pointIndex === -1) {
-        // Clicked bar again - deselect
-        setSelectedPoint(null);
-        setValidMoves([]);
-        setGameStatus("Click the bar to select your checker");
-        return;
-      }
-      
-      // Clicked on a board point as destination - find move directly
-      const barMoves = getLegalMovesFromBar(gameState, remainingMoves, "player");
-      console.log('[BACKGAMMON] Looking for move to', pointIndex, 'in', barMoves);
+      // Clicking a board point - check if it's a valid bar entry destination
       const move = barMoves.find(m => m.to === pointIndex);
       
       if (move) {
-        console.log('[BACKGAMMON] Executing bar move:', move);
+        // Valid bar entry - apply the move
         const newState = applyMoveWithSound(gameState, move, "player");
         setGameState(newState);
         
@@ -247,12 +234,14 @@ const BackgammonAI = () => {
           }
         }
         return;
-      } else {
-        console.log('[BACKGAMMON] No valid move found for destination', pointIndex);
       }
       
-      // Clicked on invalid destination
-      setGameStatus("Invalid destination - select a highlighted point");
+      // Not a valid bar entry point - prompt user
+      if (selectedPoint !== -1) {
+        setGameStatus("You must click the bar first to re-enter!");
+      } else {
+        setGameStatus("Select a highlighted entry point");
+      }
       return;
     }
     
