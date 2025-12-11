@@ -168,8 +168,9 @@ const BackgammonAI = () => {
   const handlePointClick = useCallback((pointIndex: number) => {
     if (currentPlayer !== "player" || remainingMoves.length === 0 || gameOver || isThinking) return;
     
-    // If player has checkers on bar, they must move from bar
-    if (gameState.bar.player > 0 && pointIndex !== -1) {
+    // If player has checkers on bar and hasn't selected the bar yet, they must click the bar first
+    // BUT if the bar is already selected (selectedPoint === -1), allow clicking on destination points
+    if (gameState.bar.player > 0 && pointIndex !== -1 && selectedPoint !== -1) {
       setGameStatus("You must re-enter your checker from the bar first!");
       return;
     }
