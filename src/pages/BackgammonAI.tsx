@@ -6,37 +6,21 @@ import { Dice3D, CheckerStack } from "@/components/BackgammonPieces";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useSound } from "@/contexts/SoundContext";
+import {
+  type Player,
+  type GameState,
+  type Move,
+  getInitialBoard,
+  canBearOff,
+  getAllLegalMoves,
+  getLegalMovesFromBar,
+  getLegalMovesFromPoint,
+  applyMove as applyMoveEngine,
+  consumeDie,
+  checkWinner,
+} from "@/lib/backgammonEngine";
 
 type Difficulty = "easy" | "medium" | "hard";
-type Player = "player" | "ai";
-
-interface GameState {
-  points: number[]; // Positive = player checkers, negative = AI checkers
-  bar: { player: number; ai: number };
-  bearOff: { player: number; ai: number };
-}
-
-interface Move {
-  from: number; // -1 = bar, 0-23 = point, 24 = bear off
-  to: number;
-  dieValue: number;
-}
-
-// Initial backgammon setup
-const getInitialBoard = (): number[] => {
-  const points = Array(24).fill(0);
-  // Player pieces (positive) - moves from 24->1
-  points[23] = 2;  // Point 24
-  points[12] = 5;  // Point 13
-  points[7] = 3;   // Point 8
-  points[5] = 5;   // Point 6
-  // AI pieces (negative) - moves from 1->24
-  points[0] = -2;  // Point 1
-  points[11] = -5; // Point 12
-  points[16] = -3; // Point 17
-  points[18] = -5; // Point 19
-  return points;
-};
 
 const BackgammonAI = () => {
   const [searchParams] = useSearchParams();
@@ -78,130 +62,19 @@ const BackgammonAI = () => {
     }
   }, [difficulty]);
 
-  // Check if player can bear off
-  const canBearOff = useCallback((state: GameState, player: Player): boolean => {
-    if (player === "player") {
-      if (state.bar.player > 0) return false;
-      for (let i = 6; i < 24; i++) {
-        if (state.points[i] > 0) return false;
-      }
-      return true;
-    } else {
-      if (state.bar.ai > 0) return false;
-      for (let i = 0; i < 18; i++) {
-        if (state.points[i] < 0) return false;
-      }
-      return true;
-    }
-  }, []);
-
-  // Get legal moves for a point/bar
-  const getLegalMoves = useCallback((state: GameState, from: number, moves: number[], player: Player): Move[] => {
-    const legalMoves: Move[] = [];
+  // Apply a move with sound effects
+  const applyMoveWithSound = useCallback((state: GameState, move: Move, player: Player): GameState => {
+    const isBearOff = move.to === -2 || move.to === 25;
+    const isHit = !isBearOff && (
+      (player === "player" && state.points[move.to] === -1) ||
+      (player === "ai" && state.points[move.to] === 1)
+    );
     
-    for (const die of moves) {
-      let to: number;
-      
-      if (from === -1) {
-        if (player === "player") {
-          to = 24 - die;
-        } else {
-          to = die - 1;
-        }
-      } else {
-        if (player === "player") {
-          to = from - die;
-        } else {
-          to = from + die;
-        }
-      }
-      
-      if (player === "player" && to < 0) {
-        if (canBearOff(state, "player")) {
-          if (to === -1 || from === Math.max(...state.points.map((p, i) => p > 0 ? i : -1))) {
-            legalMoves.push({ from, to: -2, dieValue: die });
-          }
-        }
-        continue;
-      }
-      if (player === "ai" && to > 23) {
-        if (canBearOff(state, "ai")) {
-          if (to === 24 || from === Math.min(...state.points.map((p, i) => p < 0 ? i : 99))) {
-            legalMoves.push({ from, to: 25, dieValue: die });
-          }
-        }
-        continue;
-      }
-      
-      if (to < 0 || to > 23) continue;
-      
-      const pointValue = state.points[to];
-      if (player === "player" && pointValue < -1) continue;
-      if (player === "ai" && pointValue > 1) continue;
-      
-      legalMoves.push({ from, to, dieValue: die });
-    }
+    const newState = applyMoveEngine(state, move, player);
     
-    return legalMoves;
-  }, [canBearOff]);
-
-  // Get all legal moves for current player
-  const getAllLegalMoves = useCallback((state: GameState, moves: number[], player: Player): Move[] => {
-    const allMoves: Move[] = [];
-    
-    if (player === "player" && state.bar.player > 0) {
-      return getLegalMoves(state, -1, moves, player);
-    }
-    if (player === "ai" && state.bar.ai > 0) {
-      return getLegalMoves(state, -1, moves, player);
-    }
-    
-    for (let i = 0; i < 24; i++) {
-      if (player === "player" && state.points[i] > 0) {
-        allMoves.push(...getLegalMoves(state, i, moves, player));
-      }
-      if (player === "ai" && state.points[i] < 0) {
-        allMoves.push(...getLegalMoves(state, i, moves, player));
-      }
-    }
-    
-    return allMoves;
-  }, [getLegalMoves]);
-
-  // Apply a move
-  const applyMove = useCallback((state: GameState, move: Move, player: Player): GameState => {
-    const newState: GameState = {
-      points: [...state.points],
-      bar: { ...state.bar },
-      bearOff: { ...state.bearOff },
-    };
-    
-    if (move.from === -1) {
-      if (player === "player") newState.bar.player--;
-      else newState.bar.ai--;
-    } else {
-      if (player === "player") newState.points[move.from]--;
-      else newState.points[move.from]++;
-    }
-    
-    if (move.to === -2 || move.to === 25) {
-      if (player === "player") newState.bearOff.player++;
-      else newState.bearOff.ai++;
-      // Bear off sound
+    if (isBearOff) {
       play('backgammon_bearoff');
     } else {
-      if (player === "player" && newState.points[move.to] === -1) {
-        newState.points[move.to] = 0;
-        newState.bar.ai++;
-      } else if (player === "ai" && newState.points[move.to] === 1) {
-        newState.points[move.to] = 0;
-        newState.bar.player++;
-      }
-      
-      if (player === "player") newState.points[move.to]++;
-      else newState.points[move.to]--;
-      
-      // Move sound (for non-bear-off moves)
       play('backgammon_move');
     }
     
@@ -220,75 +93,105 @@ const BackgammonAI = () => {
     
     setDice(newDice);
     setRemainingMoves(moves);
-    setGameStatus(currentPlayer === "player" ? "Your turn - select a checker" : "AI's turn");
     
-    const allMoves = getAllLegalMoves(gameState, moves, currentPlayer);
+    // Check if player has checkers on bar and show appropriate message
+    if (gameState.bar.player > 0) {
+      const barMoves = getLegalMovesFromBar(gameState, moves, "player");
+      if (barMoves.length === 0) {
+        setGameStatus("All entry points blocked - AI's turn");
+        setTimeout(() => {
+          setCurrentPlayer("ai");
+          setDice([]);
+          setRemainingMoves([]);
+        }, 1500);
+        return;
+      }
+      setGameStatus("You have checkers on the bar - click the bar to re-enter");
+    } else {
+      setGameStatus("Your turn - select a checker");
+    }
+    
+    const allMoves = getAllLegalMoves(gameState, moves, "player");
     if (allMoves.length === 0) {
-      setGameStatus(currentPlayer === "player" ? "No legal moves - AI's turn" : "AI has no moves - Your turn");
+      setGameStatus("No legal moves - AI's turn");
       setTimeout(() => {
-        setCurrentPlayer(currentPlayer === "player" ? "ai" : "player");
+        setCurrentPlayer("ai");
         setDice([]);
         setRemainingMoves([]);
       }, 1000);
     }
-  }, [currentPlayer, gameState, getAllLegalMoves, play]);
+  }, [gameState, play]);
 
   // Handle point click
   const handlePointClick = useCallback((pointIndex: number) => {
     if (currentPlayer !== "player" || remainingMoves.length === 0 || gameOver || isThinking) return;
     
+    // If player has checkers on bar, they must move from bar
     if (gameState.bar.player > 0 && pointIndex !== -1) {
-      setGameStatus("You must move from the bar first!");
+      setGameStatus("You must re-enter your checker from the bar first!");
       return;
     }
     
     if (selectedPoint === null) {
+      // Selecting source
       if (pointIndex === -1 && gameState.bar.player > 0) {
-        const moves = getLegalMoves(gameState, -1, remainingMoves, "player");
-        if (moves.length > 0) {
+        // Clicking on bar
+        const barMoves = getLegalMovesFromBar(gameState, remainingMoves, "player");
+        if (barMoves.length > 0) {
           setSelectedPoint(-1);
-          setValidMoves(moves.map(m => m.to));
-          setGameStatus("Select where to move");
+          setValidMoves(barMoves.map(m => m.to));
+          setGameStatus("Select where to re-enter");
+        } else {
+          setGameStatus("All entry points are blocked!");
         }
-      } else if (gameState.points[pointIndex] > 0) {
-        const moves = getLegalMoves(gameState, pointIndex, remainingMoves, "player");
-        if (moves.length > 0) {
+      } else if (pointIndex >= 0 && gameState.points[pointIndex] > 0) {
+        // Clicking on a point with player's checkers
+        const pointMoves = getLegalMovesFromPoint(gameState, pointIndex, remainingMoves, "player");
+        if (pointMoves.length > 0) {
           setSelectedPoint(pointIndex);
-          setValidMoves(moves.map(m => m.to));
+          setValidMoves(pointMoves.map(m => m.to));
           setGameStatus("Select where to move");
         } else {
           setGameStatus("No legal moves from this point");
         }
       }
     } else {
+      // Selecting destination
       if (validMoves.includes(pointIndex) || (pointIndex === -2 && validMoves.includes(-2))) {
-        const moves = getLegalMoves(gameState, selectedPoint, remainingMoves, "player");
+        // Get the move that matches source -> destination
+        let moves: Move[];
+        if (selectedPoint === -1) {
+          moves = getLegalMovesFromBar(gameState, remainingMoves, "player");
+        } else {
+          moves = getLegalMovesFromPoint(gameState, selectedPoint, remainingMoves, "player");
+        }
         const move = moves.find(m => m.to === pointIndex);
         
         if (move) {
-          const newState = applyMove(gameState, move, "player");
+          const newState = applyMoveWithSound(gameState, move, "player");
           setGameState(newState);
           
-          const newRemaining = [...remainingMoves];
-          const idx = newRemaining.indexOf(move.dieValue);
-          if (idx > -1) newRemaining.splice(idx, 1);
+          const newRemaining = consumeDie(remainingMoves, move.dieValue);
           setRemainingMoves(newRemaining);
           
           if (newState.bearOff.player === 15) {
             setGameStatus("You win! 🎉");
             setGameOver(true);
-            play('chess_win'); // Use chess win sound as backgammon win
+            play('chess_win');
           } else if (newRemaining.length === 0) {
             setGameStatus("AI's turn");
             setCurrentPlayer("ai");
             setDice([]);
           } else {
+            // Check for more moves
             const allMoves = getAllLegalMoves(newState, newRemaining, "player");
             if (allMoves.length === 0) {
               setGameStatus("No more moves - AI's turn");
               setCurrentPlayer("ai");
               setDice([]);
               setRemainingMoves([]);
+            } else if (newState.bar.player > 0) {
+              setGameStatus("Click the bar to re-enter your next checker");
             } else {
               setGameStatus("Continue moving");
             }
@@ -299,7 +202,7 @@ const BackgammonAI = () => {
       setSelectedPoint(null);
       setValidMoves([]);
     }
-  }, [currentPlayer, remainingMoves, gameOver, isThinking, gameState, selectedPoint, validMoves, getLegalMoves, applyMove, getAllLegalMoves, play]);
+  }, [currentPlayer, remainingMoves, gameOver, isThinking, gameState, selectedPoint, validMoves, applyMoveWithSound, play]);
 
   // AI turn
   useEffect(() => {
@@ -317,7 +220,6 @@ const BackgammonAI = () => {
       
       // Play dice sound for AI
       play('backgammon_dice');
-      setRemainingMoves(moves);
       
       setTimeout(() => {
         let state = gameState;
@@ -358,9 +260,13 @@ const BackgammonAI = () => {
               chosenMove = allMoves[0];
           }
           
-          state = applyMove(state, chosenMove, "ai");
-          const idx = remaining.indexOf(chosenMove.dieValue);
-          if (idx > -1) remaining.splice(idx, 1);
+          state = applyMoveEngine(state, chosenMove, "ai");
+          remaining = consumeDie(remaining, chosenMove.dieValue);
+        }
+        
+        // Play move sound once for AI turn
+        if (state !== gameState) {
+          play('backgammon_move');
         }
         
         setGameState(state);
@@ -371,14 +277,14 @@ const BackgammonAI = () => {
         if (state.bearOff.ai === 15) {
           setGameStatus("You lose!");
           setGameOver(true);
-          play('chess_lose'); // Use chess lose sound as backgammon lose
+          play('chess_lose');
         } else {
           setCurrentPlayer("player");
           setGameStatus("Your turn - roll the dice");
         }
       }, 800);
     }, 500);
-  }, [currentPlayer, gameOver, dice, gameState, difficulty, getAllLegalMoves, applyMove, play]);
+  }, [currentPlayer, gameOver, dice, gameState, difficulty, play]);
 
   // Restart game
   const restartGame = useCallback(() => {
@@ -728,7 +634,7 @@ const BackgammonAI = () => {
                     {gameState.bar.ai > 0 && (
                       <div className="flex flex-col items-center mb-2">
                         <span className="text-[8px] text-muted-foreground mb-0.5">AI</span>
-                        <div className="w-5 h-5 rounded-full bg-gradient-to-br from-slate-600 to-slate-900 border border-primary/30 flex items-center justify-center text-[9px] text-primary font-bold">
+                        <div className="w-6 h-6 rounded-full bg-gradient-to-br from-slate-600 to-slate-900 border border-primary/30 flex items-center justify-center text-[10px] text-primary font-bold">
                           {gameState.bar.ai}
                         </div>
                       </div>
@@ -742,19 +648,26 @@ const BackgammonAI = () => {
                       </div>
                     )}
                     
-                    {/* Player Bar Checkers */}
+                    {/* Player Bar Checkers - Min 44px tap target */}
                     {gameState.bar.player > 0 && (
                       <div 
                         className={cn(
-                          "flex flex-col items-center mt-2 cursor-pointer rounded p-1",
-                          selectedPoint === -1 && "ring-1 ring-primary bg-primary/10"
+                          "flex flex-col items-center justify-center cursor-pointer rounded-lg p-2 min-w-[44px] min-h-[44px] transition-all active:scale-95",
+                          selectedPoint === -1 
+                            ? "ring-2 ring-primary bg-primary/20 shadow-[0_0_12px_hsl(45_93%_54%_/_0.4)]" 
+                            : currentPlayer === "player" && remainingMoves.length > 0 && !gameOver
+                              ? "bg-primary/10 animate-pulse"
+                              : ""
                         )}
                         onClick={() => handlePointClick(-1)}
                       >
-                        <div className="w-5 h-5 rounded-full bg-gradient-to-br from-primary to-amber-700 border border-amber-600/50 flex items-center justify-center text-[9px] text-amber-900 font-bold">
+                        <div className={cn(
+                          "w-7 h-7 rounded-full bg-gradient-to-br from-primary to-amber-700 border-2 border-amber-500 flex items-center justify-center text-[11px] text-amber-900 font-bold shadow-md",
+                          selectedPoint === -1 && "ring-2 ring-offset-1 ring-offset-background ring-primary"
+                        )}>
                           {gameState.bar.player}
                         </div>
-                        <span className="text-[8px] text-muted-foreground mt-0.5">You</span>
+                        <span className="text-[9px] text-primary font-medium mt-1">TAP</span>
                       </div>
                     )}
                   </div>
