@@ -168,47 +168,41 @@ const BackgammonAI = () => {
   const handlePointClick = useCallback((pointIndex: number) => {
     if (currentPlayer !== "player" || remainingMoves.length === 0 || gameOver || isThinking) return;
     
-    // If player has checkers on bar and hasn't selected the bar yet, they must click the bar first
-    // BUT if the bar is already selected (selectedPoint === -1), allow clicking on destination points
-    if (gameState.bar.player > 0 && pointIndex !== -1 && selectedPoint !== -1) {
-      setGameStatus("You must re-enter your checker from the bar first!");
-      return;
-    }
+    const hasBarCheckers = gameState.bar.player > 0;
     
-    if (selectedPoint === null) {
-      // Selecting source
-      if (pointIndex === -1 && gameState.bar.player > 0) {
-        // Clicking on bar
-        const barMoves = getLegalMovesFromBar(gameState, remainingMoves, "player");
-        if (barMoves.length > 0) {
-          setSelectedPoint(-1);
-          setValidMoves(barMoves.map(m => m.to));
-          setGameStatus("Select where to re-enter");
+    // CASE 1: Player has bar checkers - they MUST move from bar first
+    if (hasBarCheckers) {
+      if (selectedPoint === null || selectedPoint !== -1) {
+        // No selection yet, or wrong selection - clicking bar to select it
+        if (pointIndex === -1) {
+          const barMoves = getLegalMovesFromBar(gameState, remainingMoves, "player");
+          if (barMoves.length > 0) {
+            setSelectedPoint(-1);
+            setValidMoves(barMoves.map(m => m.to));
+            setGameStatus("Select where to re-enter");
+          } else {
+            setGameStatus("All entry points are blocked!");
+          }
         } else {
-          setGameStatus("All entry points are blocked!");
+          // Clicked on a board point but bar is not selected yet
+          setGameStatus("You must click the bar first to re-enter your checker!");
         }
-      } else if (pointIndex >= 0 && gameState.points[pointIndex] > 0) {
-        // Clicking on a point with player's checkers
-        const pointMoves = getLegalMovesFromPoint(gameState, pointIndex, remainingMoves, "player");
-        if (pointMoves.length > 0) {
-          setSelectedPoint(pointIndex);
-          setValidMoves(pointMoves.map(m => m.to));
-          setGameStatus("Select where to move");
-        } else {
-          setGameStatus("No legal moves from this point");
-        }
+        return;
       }
-    } else {
-      // Selecting destination
-      if (validMoves.includes(pointIndex) || (pointIndex === -2 && validMoves.includes(-2))) {
-        // Get the move that matches source -> destination
-        let moves: Move[];
-        if (selectedPoint === -1) {
-          moves = getLegalMovesFromBar(gameState, remainingMoves, "player");
-        } else {
-          moves = getLegalMovesFromPoint(gameState, selectedPoint, remainingMoves, "player");
-        }
-        const move = moves.find(m => m.to === pointIndex);
+      
+      // Bar is selected (selectedPoint === -1), now handle destination click
+      if (pointIndex === -1) {
+        // Clicked bar again - deselect
+        setSelectedPoint(null);
+        setValidMoves([]);
+        setGameStatus("Click the bar to select your checker");
+        return;
+      }
+      
+      // Clicked on a board point as destination
+      if (validMoves.includes(pointIndex)) {
+        const barMoves = getLegalMovesFromBar(gameState, remainingMoves, "player");
+        const move = barMoves.find(m => m.to === pointIndex);
         
         if (move) {
           const newState = applyMoveWithSound(gameState, move, "player");
@@ -216,6 +210,10 @@ const BackgammonAI = () => {
           
           const newRemaining = consumeDie(remainingMoves, move.dieValue);
           setRemainingMoves(newRemaining);
+          
+          // Reset selection
+          setSelectedPoint(null);
+          setValidMoves([]);
           
           if (newState.bearOff.player === 15) {
             setGameStatus("You win! 🎉");
@@ -235,6 +233,68 @@ const BackgammonAI = () => {
               setRemainingMoves([]);
             } else if (newState.bar.player > 0) {
               setGameStatus("Click the bar to re-enter your next checker");
+            } else {
+              setGameStatus("Continue moving - select a checker");
+            }
+          }
+          return;
+        }
+      }
+      
+      // Clicked on invalid destination
+      setGameStatus("Invalid destination - select a highlighted point");
+      return;
+    }
+    
+    // CASE 2: No bar checkers - normal move selection
+    if (selectedPoint === null) {
+      // Selecting source
+      if (pointIndex >= 0 && gameState.points[pointIndex] > 0) {
+        const pointMoves = getLegalMovesFromPoint(gameState, pointIndex, remainingMoves, "player");
+        if (pointMoves.length > 0) {
+          setSelectedPoint(pointIndex);
+          setValidMoves(pointMoves.map(m => m.to));
+          setGameStatus("Select where to move");
+        } else {
+          setGameStatus("No legal moves from this point");
+        }
+      }
+    } else {
+      // Deselect if clicking same point
+      if (pointIndex === selectedPoint) {
+        setSelectedPoint(null);
+        setValidMoves([]);
+        setGameStatus("Select a checker to move");
+        return;
+      }
+      
+      // Selecting destination
+      if (validMoves.includes(pointIndex) || (pointIndex === -2 && validMoves.includes(-2))) {
+        const moves = getLegalMovesFromPoint(gameState, selectedPoint, remainingMoves, "player");
+        const move = moves.find(m => m.to === pointIndex);
+        
+        if (move) {
+          const newState = applyMoveWithSound(gameState, move, "player");
+          setGameState(newState);
+          
+          const newRemaining = consumeDie(remainingMoves, move.dieValue);
+          setRemainingMoves(newRemaining);
+          
+          if (newState.bearOff.player === 15) {
+            setGameStatus("You win! 🎉");
+            setGameOver(true);
+            play('chess_win');
+          } else if (newRemaining.length === 0) {
+            setGameStatus("AI's turn");
+            setCurrentPlayer("ai");
+            setDice([]);
+          } else {
+            const allMoves = getAllLegalMoves(newState, newRemaining, "player");
+            if (allMoves.length === 0) {
+              setGameStatus("No more moves - AI's turn");
+              setCurrentPlayer("ai");
+              setDice([]);
+              setRemainingMoves([]);
             } else {
               setGameStatus("Continue moving");
             }
