@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, RotateCcw, Gem, Star } from "lucide-react";
 import DominoTile3D, { DominoTileBack } from "@/components/DominoTile3D";
+import { useSound } from "@/contexts/SoundContext";
 
 type Difficulty = "easy" | "medium" | "hard";
 
@@ -40,6 +41,7 @@ const shuffle = <T,>(array: T[]): T[] => {
 
 const DominosAI = () => {
   const [searchParams] = useSearchParams();
+  const { play } = useSound();
   const rawDifficulty = searchParams.get("difficulty");
   const difficulty: Difficulty =
     rawDifficulty === "easy" || rawDifficulty === "medium" || rawDifficulty === "hard"
@@ -125,11 +127,13 @@ const DominosAI = () => {
     if (pHand.length === 0) {
       setGameStatus("You win! 🎉");
       setGameOver(true);
+      play('domino_win');
       return true;
     }
     if (aHand.length === 0) {
       setGameStatus("You lose!");
       setGameOver(true);
+      play('domino_lose');
       return true;
     }
     
@@ -150,8 +154,10 @@ const DominosAI = () => {
       
       if (playerPips < aiPips) {
         setGameStatus("Game blocked - You win! (fewer pips)");
+        play('domino_win');
       } else if (aiPips < playerPips) {
         setGameStatus("Game blocked - You lose! (more pips)");
+        play('domino_lose');
       } else {
         setGameStatus("Game blocked - Draw!");
       }
@@ -160,7 +166,7 @@ const DominosAI = () => {
     }
     
     return false;
-  }, [canPlay]);
+  }, [canPlay, play]);
 
   // Play a domino
   const playDomino = useCallback((domino: Domino, side: "left" | "right", isPlayer: boolean) => {
@@ -182,12 +188,15 @@ const DominosAI = () => {
       side === "left" ? [placedDomino, ...prev] : [...prev, placedDomino]
     );
     
+    // Play place sound
+    play('domino_place');
+    
     if (isPlayer) {
       setPlayerHand(prev => prev.filter(d => d.id !== domino.id));
     } else {
       setAiHand(prev => prev.filter(d => d.id !== domino.id));
     }
-  }, [getChainEnds]);
+  }, [getChainEnds, play]);
 
   // Player plays a domino
   const handlePlayerPlay = useCallback((domino: Domino) => {
@@ -230,7 +239,8 @@ const DominosAI = () => {
     setPlayerHand(prev => [...prev, drawn]);
     setBoneyard(prev => prev.slice(1));
     setGameStatus("Drew a tile - your turn");
-  }, [isPlayerTurn, gameOver, boneyard]);
+    play('domino_draw');
+  }, [isPlayerTurn, gameOver, boneyard, play]);
 
   // Player passes
   const handlePass = useCallback(() => {
@@ -255,6 +265,7 @@ const DominosAI = () => {
           setAiHand(prev => [...prev, drawn]);
           setBoneyard(prev => prev.slice(1));
           setGameStatus("AI drew a tile");
+          play('domino_draw');
           // Check if AI can now play
           setTimeout(() => {
             setIsThinking(false);
@@ -346,7 +357,7 @@ const DominosAI = () => {
     }, 800);
     
     return () => clearTimeout(timeout);
-  }, [isPlayerTurn, gameOver, aiHand, boneyard, difficulty, getLegalMoves, canPlay, playDomino, checkGameOver, playerHand, getChainEnds]);
+  }, [isPlayerTurn, gameOver, aiHand, boneyard, difficulty, getLegalMoves, canPlay, playDomino, checkGameOver, playerHand, getChainEnds, play]);
 
   // Check player legal moves
   const playerLegalMoves = useMemo(() => getLegalMoves(playerHand), [getLegalMoves, playerHand]);

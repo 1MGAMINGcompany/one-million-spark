@@ -14,11 +14,13 @@ import { useWallet } from "@/hooks/useWallet";
 import { WalletRequired } from "@/components/WalletRequired";
 import { useGlobalLoading } from "@/contexts/LoadingContext";
 import { useToast } from "@/hooks/use-toast";
+import { useSound } from "@/contexts/SoundContext";
 
 const CreateRoom = () => {
   const { isConnected } = useWallet();
   const { setGlobalLoading } = useGlobalLoading();
   const { toast } = useToast();
+  const { play } = useSound();
   const [gameType, setGameType] = useState("chess");
   const [entryFee, setEntryFee] = useState("");
   const [players, setPlayers] = useState("2");
@@ -26,12 +28,14 @@ const CreateRoom = () => {
   const [roomType, setRoomType] = useState("public");
 
   const handleCreateRoom = async () => {
+    play('ui_click');
     setGlobalLoading(true, "Creating your game room...");
     
     // Simulate transaction pending
     await new Promise((resolve) => setTimeout(resolve, 2500));
     
     setGlobalLoading(false);
+    play('room_create');
     toast({
       title: "Room Created!",
       description: "Your game room has been created successfully.",
