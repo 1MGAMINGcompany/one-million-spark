@@ -270,19 +270,21 @@
   .premium-shimmer {
     background: linear-gradient(
       90deg,
-      hsl(45 29% 90%) 0%,
-      hsl(45 29% 90%) 35%,
-      hsl(45 93% 70%) 45%,
-      hsl(50 100% 85%) 50%,
-      hsl(45 93% 70%) 55%,
-      hsl(45 29% 90%) 65%,
-      hsl(45 29% 90%) 100%
+      #F4C842 0%,
+      #F4C842 35%,
+      #FFD76A 45%,
+      #FFFACD 50%,
+      #FFD76A 55%,
+      #F4C842 65%,
+      #F4C842 100%
     );
     background-size: 300% 100%;
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
-    animation: premiumShimmer 6s ease-in-out infinite;
+    animation: premiumShimmer 4s ease-in-out infinite;
+    text-shadow: 0 0 30px hsl(45 93% 54% / 0.15);
+    filter: drop-shadow(0 0 8px hsl(45 93% 54% / 0.1));
   }
 
   @keyframes premiumShimmer {
@@ -291,6 +293,22 @@
     }
     50% {
       background-position: 0% 50%;
+    }
+  }
+
+  /* Premium Fade In Animation */
+  .premium-fade-in {
+    animation: premiumFadeIn 0.7s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  }
+
+  @keyframes premiumFadeIn {
+    0% {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
     }
   }
 
