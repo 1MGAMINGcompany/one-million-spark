@@ -66,9 +66,7 @@ const Home = () => {
 
               {/* Subheading */}
               <p className="text-xl md:text-2xl text-foreground/90 font-light leading-relaxed">
-                Skill-based crypto competitions in a world of{" "}
-                <span className="text-primary font-medium">gold</span> and{" "}
-                <span className="text-primary font-medium">glory</span>.
+                FROM $1 TO $1 MILLION WITH STRATEGY AND INTELLIGENCE
               </p>
 
               {/* CTA Buttons */}
