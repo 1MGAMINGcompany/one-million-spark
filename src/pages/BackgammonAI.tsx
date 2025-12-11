@@ -166,31 +166,40 @@ const BackgammonAI = () => {
 
   // Handle point click
   const handlePointClick = useCallback((pointIndex: number) => {
-    if (currentPlayer !== "player" || remainingMoves.length === 0 || gameOver || isThinking) return;
+    console.log('[BACKGAMMON] Click:', { pointIndex, selectedPoint, hasBar: gameState.bar.player, remainingMoves, validMoves });
+    
+    if (currentPlayer !== "player" || remainingMoves.length === 0 || gameOver || isThinking) {
+      console.log('[BACKGAMMON] Blocked: not player turn or no moves');
+      return;
+    }
     
     const hasBarCheckers = gameState.bar.player > 0;
     
     // CASE 1: Player has bar checkers - they MUST move from bar first
     if (hasBarCheckers) {
-      if (selectedPoint === null || selectedPoint !== -1) {
-        // No selection yet, or wrong selection - clicking bar to select it
+      // If bar is NOT selected yet (selectedPoint is null or a board point)
+      if (selectedPoint !== -1) {
         if (pointIndex === -1) {
+          // Clicking bar to select it
           const barMoves = getLegalMovesFromBar(gameState, remainingMoves, "player");
+          console.log('[BACKGAMMON] Selecting bar, moves:', barMoves);
           if (barMoves.length > 0) {
+            const targets = barMoves.map(m => m.to);
             setSelectedPoint(-1);
-            setValidMoves(barMoves.map(m => m.to));
+            setValidMoves(targets);
             setGameStatus("Select where to re-enter");
           } else {
             setGameStatus("All entry points are blocked!");
           }
         } else {
-          // Clicked on a board point but bar is not selected yet
           setGameStatus("You must click the bar first to re-enter your checker!");
         }
         return;
       }
       
-      // Bar is selected (selectedPoint === -1), now handle destination click
+      // Bar IS selected (selectedPoint === -1), now handle destination click
+      console.log('[BACKGAMMON] Bar selected, clicking destination:', pointIndex);
+      
       if (pointIndex === -1) {
         // Clicked bar again - deselect
         setSelectedPoint(null);
@@ -199,46 +208,47 @@ const BackgammonAI = () => {
         return;
       }
       
-      // Clicked on a board point as destination
-      if (validMoves.includes(pointIndex)) {
-        const barMoves = getLegalMovesFromBar(gameState, remainingMoves, "player");
-        const move = barMoves.find(m => m.to === pointIndex);
+      // Clicked on a board point as destination - find move directly
+      const barMoves = getLegalMovesFromBar(gameState, remainingMoves, "player");
+      console.log('[BACKGAMMON] Looking for move to', pointIndex, 'in', barMoves);
+      const move = barMoves.find(m => m.to === pointIndex);
+      
+      if (move) {
+        console.log('[BACKGAMMON] Executing bar move:', move);
+        const newState = applyMoveWithSound(gameState, move, "player");
+        setGameState(newState);
         
-        if (move) {
-          const newState = applyMoveWithSound(gameState, move, "player");
-          setGameState(newState);
-          
-          const newRemaining = consumeDie(remainingMoves, move.dieValue);
-          setRemainingMoves(newRemaining);
-          
-          // Reset selection
-          setSelectedPoint(null);
-          setValidMoves([]);
-          
-          if (newState.bearOff.player === 15) {
-            setGameStatus("You win! 🎉");
-            setGameOver(true);
-            play('chess_win');
-          } else if (newRemaining.length === 0) {
-            setGameStatus("AI's turn");
+        const newRemaining = consumeDie(remainingMoves, move.dieValue);
+        setRemainingMoves(newRemaining);
+        
+        // Reset selection
+        setSelectedPoint(null);
+        setValidMoves([]);
+        
+        if (newState.bearOff.player === 15) {
+          setGameStatus("You win! 🎉");
+          setGameOver(true);
+          play('chess_win');
+        } else if (newRemaining.length === 0) {
+          setGameStatus("AI's turn");
+          setCurrentPlayer("ai");
+          setDice([]);
+        } else {
+          const allMoves = getAllLegalMoves(newState, newRemaining, "player");
+          if (allMoves.length === 0) {
+            setGameStatus("No more moves - AI's turn");
             setCurrentPlayer("ai");
             setDice([]);
+            setRemainingMoves([]);
+          } else if (newState.bar.player > 0) {
+            setGameStatus("Click the bar to re-enter your next checker");
           } else {
-            // Check for more moves
-            const allMoves = getAllLegalMoves(newState, newRemaining, "player");
-            if (allMoves.length === 0) {
-              setGameStatus("No more moves - AI's turn");
-              setCurrentPlayer("ai");
-              setDice([]);
-              setRemainingMoves([]);
-            } else if (newState.bar.player > 0) {
-              setGameStatus("Click the bar to re-enter your next checker");
-            } else {
-              setGameStatus("Continue moving - select a checker");
-            }
+            setGameStatus("Continue moving - select a checker");
           }
-          return;
         }
+        return;
+      } else {
+        console.log('[BACKGAMMON] No valid move found for destination', pointIndex);
       }
       
       // Clicked on invalid destination
@@ -248,7 +258,6 @@ const BackgammonAI = () => {
     
     // CASE 2: No bar checkers - normal move selection
     if (selectedPoint === null) {
-      // Selecting source
       if (pointIndex >= 0 && gameState.points[pointIndex] > 0) {
         const pointMoves = getLegalMovesFromPoint(gameState, pointIndex, remainingMoves, "player");
         if (pointMoves.length > 0) {
@@ -260,7 +269,6 @@ const BackgammonAI = () => {
         }
       }
     } else {
-      // Deselect if clicking same point
       if (pointIndex === selectedPoint) {
         setSelectedPoint(null);
         setValidMoves([]);
@@ -268,7 +276,6 @@ const BackgammonAI = () => {
         return;
       }
       
-      // Selecting destination
       if (validMoves.includes(pointIndex) || (pointIndex === -2 && validMoves.includes(-2))) {
         const moves = getLegalMovesFromPoint(gameState, selectedPoint, remainingMoves, "player");
         const move = moves.find(m => m.to === pointIndex);
