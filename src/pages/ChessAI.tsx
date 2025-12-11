@@ -5,6 +5,7 @@ import { ChessBoardPremium } from "@/components/ChessBoardPremium";
 import { useCaptureAnimations } from "@/components/CaptureAnimationLayer";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, RotateCcw, Gem, Star } from "lucide-react";
+import { useSound } from "@/contexts/SoundContext";
 
 type Difficulty = "easy" | "medium" | "hard";
 
@@ -134,6 +135,7 @@ const AnimationToggle = ({
 
 const ChessAI = () => {
   const [searchParams] = useSearchParams();
+  const { play } = useSound();
   const rawDifficulty = searchParams.get("difficulty");
   const difficulty: Difficulty = 
     rawDifficulty === "easy" || rawDifficulty === "medium" || rawDifficulty === "hard"
@@ -175,9 +177,11 @@ const ChessAI = () => {
 
   const checkGameOver = useCallback((currentGame: Chess) => {
     if (currentGame.isCheckmate()) {
-      const winner = currentGame.turn() === "w" ? "You lose!" : "You win!";
+      const isPlayerWin = currentGame.turn() !== "w";
+      const winner = isPlayerWin ? "You win!" : "You lose!";
       setGameStatus(winner);
       setGameOver(true);
+      play(isPlayerWin ? 'chess_win' : 'chess_lose');
       return true;
     }
     if (currentGame.isStalemate()) {
@@ -190,8 +194,12 @@ const ChessAI = () => {
       setGameOver(true);
       return true;
     }
+    // Check for check (not checkmate)
+    if (currentGame.isCheck()) {
+      play('chess_check');
+    }
     return false;
-  }, []);
+  }, [play]);
 
   const getAIMove = useCallback((currentGame: Chess): Move | null => {
     const moves = currentGame.moves({ verbose: true }) as Move[];
@@ -260,6 +268,18 @@ const ChessAI = () => {
       // Execute the move
       currentGame.move(moveObj.san);
       
+      // Play sound based on move type
+      if (wasCapture) {
+        play('chess_capture');
+      } else {
+        play('chess_move');
+      }
+      
+      // Check for promotion
+      if (moveObj.promotion) {
+        play('chess_promotion');
+      }
+      
       // Trigger capture animation if there was a capture
       if (wasCapture && currentAnimationsEnabled && capturedPieceType) {
         triggerAnimation(attackerPieceType, capturedPieceType, targetSquare);
@@ -273,7 +293,7 @@ const ChessAI = () => {
         setGameStatus("Your turn");
       }
     }, thinkingTime);
-  }, [getAIMove, checkGameOver, difficulty, triggerAnimation]);
+  }, [getAIMove, checkGameOver, difficulty, triggerAnimation, play]);
 
   const handleMove = useCallback((from: Square, to: Square): boolean => {
     if (gameOver || isThinking) return false;
@@ -293,6 +313,18 @@ const ChessAI = () => {
 
       if (move === null) return false;
 
+      // Play sound based on move type
+      if (targetPiece) {
+        play('chess_capture');
+      } else {
+        play('chess_move');
+      }
+      
+      // Check for promotion
+      if (move.promotion) {
+        play('chess_promotion');
+      }
+
       // Trigger capture animation for player's move
       if (targetPiece && attackingPiece && animationsEnabled) {
         triggerAnimation(attackingPiece.type, targetPiece.type, to);
@@ -309,7 +341,7 @@ const ChessAI = () => {
     } catch {
       return false;
     }
-  }, [game, gameOver, isThinking, checkGameOver, makeAIMove, animationsEnabled, triggerAnimation]);
+  }, [game, gameOver, isThinking, checkGameOver, makeAIMove, animationsEnabled, triggerAnimation, play]);
 
   const restartGame = useCallback(() => {
     setGame(new Chess());

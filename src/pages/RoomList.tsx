@@ -11,6 +11,7 @@ import { Users, Clock, RefreshCw } from "lucide-react";
 import { useWallet } from "@/hooks/useWallet";
 import { WalletRequired } from "@/components/WalletRequired";
 import { useGlobalLoading } from "@/contexts/LoadingContext";
+import { useSound } from "@/contexts/SoundContext";
 
 const fakeRooms = [
   { id: 1, game: "Chess", entryFee: 1, players: 1, maxPlayers: 2, turnTime: 10 },
@@ -21,6 +22,7 @@ const fakeRooms = [
 const RoomList = () => {
   const { isConnected } = useWallet();
   const { setGlobalLoading } = useGlobalLoading();
+  const { play } = useSound();
   const [gameFilter, setGameFilter] = useState("all");
   const [feeFilter, setFeeFilter] = useState("all");
   const [rooms, setRooms] = useState<typeof fakeRooms>([]);
@@ -44,7 +46,12 @@ const RoomList = () => {
   }, [isConnected, hasLoaded]);
 
   const handleRefresh = () => {
+    play('ui_click');
     fetchRooms();
+  };
+
+  const handleJoinRoom = () => {
+    play('room_enter');
   };
 
   if (!isConnected) {
@@ -118,7 +125,7 @@ const RoomList = () => {
                   <span className="text-sm">{room.turnTime}s per move</span>
                 </div>
               </div>
-              <Button size="sm">Join Room</Button>
+              <Button size="sm" onClick={handleJoinRoom}>Join Room</Button>
             </div>
           ))}
         </div>

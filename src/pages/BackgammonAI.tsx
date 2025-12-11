@@ -5,6 +5,7 @@ import { ArrowLeft, RotateCcw, Gem, Star } from "lucide-react";
 import { Dice3D, CheckerStack } from "@/components/BackgammonPieces";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useSound } from "@/contexts/SoundContext";
 
 type Difficulty = "easy" | "medium" | "hard";
 type Player = "player" | "ai";
@@ -40,6 +41,7 @@ const getInitialBoard = (): number[] => {
 const BackgammonAI = () => {
   const [searchParams] = useSearchParams();
   const isMobile = useIsMobile();
+  const { play } = useSound();
   const rawDifficulty = searchParams.get("difficulty");
   const difficulty: Difficulty =
     rawDifficulty === "easy" || rawDifficulty === "medium" || rawDifficulty === "hard"
@@ -185,6 +187,8 @@ const BackgammonAI = () => {
     if (move.to === -2 || move.to === 25) {
       if (player === "player") newState.bearOff.player++;
       else newState.bearOff.ai++;
+      // Bear off sound
+      play('backgammon_bearoff');
     } else {
       if (player === "player" && newState.points[move.to] === -1) {
         newState.points[move.to] = 0;
@@ -196,10 +200,13 @@ const BackgammonAI = () => {
       
       if (player === "player") newState.points[move.to]++;
       else newState.points[move.to]--;
+      
+      // Move sound (for non-bear-off moves)
+      play('backgammon_move');
     }
     
     return newState;
-  }, []);
+  }, [play]);
 
   // Roll dice
   const rollDice = useCallback(() => {
@@ -207,6 +214,9 @@ const BackgammonAI = () => {
     const d2 = Math.floor(Math.random() * 6) + 1;
     const newDice = [d1, d2];
     const moves = d1 === d2 ? [d1, d1, d1, d1] : [d1, d2];
+    
+    // Play dice roll sound
+    play('backgammon_dice');
     
     setDice(newDice);
     setRemainingMoves(moves);
@@ -221,7 +231,7 @@ const BackgammonAI = () => {
         setRemainingMoves([]);
       }, 1000);
     }
-  }, [currentPlayer, gameState, getAllLegalMoves]);
+  }, [currentPlayer, gameState, getAllLegalMoves, play]);
 
   // Handle point click
   const handlePointClick = useCallback((pointIndex: number) => {
@@ -267,6 +277,7 @@ const BackgammonAI = () => {
           if (newState.bearOff.player === 15) {
             setGameStatus("You win! 🎉");
             setGameOver(true);
+            play('chess_win'); // Use chess win sound as backgammon win
           } else if (newRemaining.length === 0) {
             setGameStatus("AI's turn");
             setCurrentPlayer("ai");
@@ -288,7 +299,7 @@ const BackgammonAI = () => {
       setSelectedPoint(null);
       setValidMoves([]);
     }
-  }, [currentPlayer, remainingMoves, gameOver, isThinking, gameState, selectedPoint, validMoves, getLegalMoves, applyMove, getAllLegalMoves]);
+  }, [currentPlayer, remainingMoves, gameOver, isThinking, gameState, selectedPoint, validMoves, getLegalMoves, applyMove, getAllLegalMoves, play]);
 
   // AI turn
   useEffect(() => {
@@ -302,6 +313,10 @@ const BackgammonAI = () => {
       const d2 = Math.floor(Math.random() * 6) + 1;
       setDice([d1, d2]);
       const moves = d1 === d2 ? [d1, d1, d1, d1] : [d1, d2];
+      setRemainingMoves(moves);
+      
+      // Play dice sound for AI
+      play('backgammon_dice');
       setRemainingMoves(moves);
       
       setTimeout(() => {
@@ -356,13 +371,14 @@ const BackgammonAI = () => {
         if (state.bearOff.ai === 15) {
           setGameStatus("You lose!");
           setGameOver(true);
+          play('chess_lose'); // Use chess lose sound as backgammon lose
         } else {
           setCurrentPlayer("player");
           setGameStatus("Your turn - roll the dice");
         }
       }, 800);
     }, 500);
-  }, [currentPlayer, gameOver, dice, gameState, difficulty, getAllLegalMoves, applyMove]);
+  }, [currentPlayer, gameOver, dice, gameState, difficulty, getAllLegalMoves, applyMove, play]);
 
   // Restart game
   const restartGame = useCallback(() => {
