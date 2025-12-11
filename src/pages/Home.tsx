@@ -65,7 +65,7 @@ const Home = () => {
               </h1>
 
               {/* Subheading */}
-              <p className="text-xl md:text-2xl font-medium leading-relaxed premium-shimmer">
+              <p className="text-xl md:text-2xl font-semibold tracking-wide leading-relaxed text-center lg:text-left premium-shimmer premium-fade-in">
                 FROM $1 TO $1 MILLION WITH STRATEGY AND INTELLIGENCE
               </p>
 
