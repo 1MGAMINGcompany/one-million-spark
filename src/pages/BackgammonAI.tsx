@@ -19,8 +19,50 @@ import {
   consumeDie,
   checkWinner,
 } from "@/lib/backgammonEngine";
+import {
+  type Difficulty as EngineDifficulty,
+  type BackgammonState,
+  type BackgammonMove,
+  chooseBackgammonMove,
+  backgammonEngine,
+} from "@/engine";
 
 type Difficulty = "easy" | "medium" | "hard";
+
+// Map UI difficulty to engine difficulty
+const toEngineDifficulty = (d: Difficulty): EngineDifficulty => {
+  switch (d) {
+    case "easy": return "EASY";
+    case "medium": return "MEDIUM";
+    case "hard": return "HARD";
+  }
+};
+
+// Convert legacy GameState to engine BackgammonState
+const toEngineState = (
+  state: GameState,
+  dice: number[],
+  currentPlayer: "player" | "ai"
+): BackgammonState => ({
+  board: [...state.points],
+  bar: {
+    'PLAYER_1': state.bar.player,
+    'PLAYER_2': state.bar.ai,
+  },
+  borneOff: {
+    'PLAYER_1': state.bearOff.player,
+    'PLAYER_2': state.bearOff.ai,
+  },
+  dice,
+  currentPlayer: currentPlayer === "player" ? 'PLAYER_1' : 'PLAYER_2',
+});
+
+// Convert engine move to legacy move
+const toLegacyMove = (move: BackgammonMove): Move => ({
+  from: move.from === 'BAR' ? -1 : move.from,
+  to: move.to === 'OFF' ? 25 : move.to, // AI bears off to 25 in legacy
+  dieValue: move.dieUsed,
+});
 
 const BackgammonAI = () => {
   const [searchParams] = useSearchParams();
@@ -204,85 +246,72 @@ const BackgammonAI = () => {
     }
   }, [currentPlayer, remainingMoves, gameOver, isThinking, gameState, selectedPoint, validMoves, applyMoveWithSound, play]);
 
-  // AI turn
+  // AI turn - uses unified engine
   useEffect(() => {
     if (currentPlayer !== "ai" || gameOver || dice.length > 0) return;
     
     setIsThinking(true);
     setGameStatus("AI is rolling...");
     
-    setTimeout(() => {
+    const runAiTurn = async () => {
+      // Roll dice
       const d1 = Math.floor(Math.random() * 6) + 1;
       const d2 = Math.floor(Math.random() * 6) + 1;
       setDice([d1, d2]);
-      const moves = d1 === d2 ? [d1, d1, d1, d1] : [d1, d2];
-      setRemainingMoves(moves);
+      const diceValues = d1 === d2 ? [d1, d1, d1, d1] : [d1, d2];
+      setRemainingMoves(diceValues);
       
       // Play dice sound for AI
       play('backgammon_dice');
       
-      setTimeout(() => {
-        let state = gameState;
-        let remaining = [...moves];
+      // Small delay for visual feedback
+      await new Promise(resolve => setTimeout(resolve, 800));
+      
+      // Use the unified engine for AI moves
+      let state = gameState;
+      let remaining = [...diceValues];
+      
+      while (remaining.length > 0) {
+        // Convert to engine state for AI decision
+        const engineState = toEngineState(state, remaining, "ai");
         
-        while (remaining.length > 0) {
-          const allMoves = getAllLegalMoves(state, remaining, "ai");
-          if (allMoves.length === 0) break;
-          
-          let chosenMove: Move;
-          
-          switch (difficulty) {
-            case "easy": {
-              chosenMove = allMoves[Math.floor(Math.random() * allMoves.length)];
-              break;
-            }
-            case "medium": {
-              const sorted = [...allMoves].sort((a, b) => b.to - a.to);
-              chosenMove = sorted[0];
-              break;
-            }
-            case "hard": {
-              const hits = allMoves.filter(m => m.to >= 0 && m.to <= 23 && state.points[m.to] === 1);
-              if (hits.length > 0) {
-                chosenMove = hits[0];
-              } else {
-                const stacks = allMoves.filter(m => m.to >= 0 && m.to <= 23 && state.points[m.to] < -1);
-                if (stacks.length > 0) {
-                  chosenMove = stacks[Math.floor(Math.random() * stacks.length)];
-                } else {
-                  const sorted = [...allMoves].sort((a, b) => b.to - a.to);
-                  chosenMove = sorted[0];
-                }
-              }
-              break;
-            }
-            default:
-              chosenMove = allMoves[0];
-          }
-          
-          state = applyMoveEngine(state, chosenMove, "ai");
-          remaining = consumeDie(remaining, chosenMove.dieValue);
-        }
+        // Use the unified AI engine to choose move
+        const engineMove = await chooseBackgammonMove(
+          engineState,
+          'PLAYER_2', // AI is always PLAYER_2
+          toEngineDifficulty(difficulty)
+        );
         
-        // Play move sound once for AI turn
-        if (state !== gameState) {
-          play('backgammon_move');
-        }
+        if (!engineMove) break; // No legal moves
         
-        setGameState(state);
-        setIsThinking(false);
-        setDice([]);
-        setRemainingMoves([]);
-        
-        if (state.bearOff.ai === 15) {
-          setGameStatus("You lose!");
-          setGameOver(true);
-          play('chess_lose');
-        } else {
-          setCurrentPlayer("player");
-          setGameStatus("Your turn - roll the dice");
-        }
-      }, 800);
+        // Convert engine move back to legacy move and apply
+        const legacyMove = toLegacyMove(engineMove);
+        state = applyMoveEngine(state, legacyMove, "ai");
+        remaining = consumeDie(remaining, legacyMove.dieValue);
+      }
+      
+      // Play move sound once for AI turn
+      if (state !== gameState) {
+        play('backgammon_move');
+      }
+      
+      setGameState(state);
+      setIsThinking(false);
+      setDice([]);
+      setRemainingMoves([]);
+      
+      if (state.bearOff.ai === 15) {
+        setGameStatus("You lose!");
+        setGameOver(true);
+        play('chess_lose');
+      } else {
+        setCurrentPlayer("player");
+        setGameStatus("Your turn - roll the dice");
+      }
+    };
+    
+    setTimeout(() => {
+      runAiTurn();
     }, 500);
   }, [currentPlayer, gameOver, dice, gameState, difficulty, play]);
 
