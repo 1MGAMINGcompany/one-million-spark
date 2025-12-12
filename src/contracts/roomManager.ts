@@ -78,6 +78,27 @@ export const ROOM_MANAGER_ABI = [
     stateMutability: "view",
     type: "function",
   },
+  {
+    inputs: [{ internalType: "uint256", name: "roomId", type: "uint256" }],
+    name: "startRoom",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [{ internalType: "uint256", name: "roomId", type: "uint256" }],
+    name: "getPlayers",
+    outputs: [{ internalType: "address[]", name: "", type: "address[]" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [{ internalType: "address", name: "creator", type: "address" }],
+    name: "creatorActiveRoomId",
+    outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
+    stateMutability: "view",
+    type: "function",
+  },
 ] as const;
 
 // IMPORTANT: your contract uses numeric statuses like you saw in UI (Status: 4)
@@ -88,7 +109,7 @@ export enum RoomStatus {
   Cancelled = 7,
 }
 
-export type RoomView = readonly [
+export type ContractRoomView = readonly [
   bigint, // id
   `0x${string}`, // creator
   bigint, // entryFee
@@ -99,3 +120,12 @@ export type RoomView = readonly [
   number, // turnTimeSeconds
   `0x${string}`, // winner
 ];
+
+// Alias for backward compatibility
+export type RoomView = ContractRoomView;
+
+export const GAME_CATALOG: Record<number, { label: string }> = {
+  0: { label: "Chess" },
+  1: { label: "Dominos" },
+  2: { label: "Backgammon" },
+};
