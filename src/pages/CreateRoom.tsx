@@ -68,7 +68,7 @@ const CreateRoom = () => {
       play('room_create');
       toast({
         title: "Room Created!",
-        description: "Your game room has been created on the blockchain.",
+        description: "Your game room has been created. Redirecting to room list...",
       });
       // Reset form
       setEntryFee("");
@@ -76,8 +76,13 @@ const CreateRoom = () => {
       setTurnTime("none");
       setRoomType("public");
       reset();
+      refetchActiveRoom();
+      // Navigate to room list to see the new room
+      setTimeout(() => {
+        navigate("/room-list");
+      }, 1500);
     }
-  }, [isSuccess, play, toast, reset]);
+  }, [isSuccess, play, toast, reset, refetchActiveRoom, navigate]);
 
   // Handle transaction error
   useEffect(() => {
