@@ -1,9 +1,11 @@
 // src/contracts/roomManager.ts
+
+// Deployed RoomManagerV2 on Polygon mainnet
 export const ROOM_MANAGER_ADDRESS = "0xd3ACD6e228280BDdb470653eBd658648FBB84789" as const;
 
-// IMPORTANT: Status numbers MUST match your deployed contract.
-// If your contract enum is: Created=1, Started=2, Finished=3, Cancelled=4 -> use below.
+// IMPORTANT: statuses MUST match the contract enum order
 export enum RoomStatus {
+  None = 0,
   Created = 1,
   Started = 2,
   Finished = 3,
@@ -81,15 +83,15 @@ export const ROOM_MANAGER_ABI = [
   },
 ] as const;
 
-// Helpers for UI
-export const GAME_CATALOG: Record<number, { label: string }> = {
-  1: { label: "Chess" },
-  2: { label: "Dominos" },
-  3: { label: "Backgammon" },
-  // reserved for later:
-  10: { label: "Poker" },
-  11: { label: "Yahtzee" },
-  12: { label: "Chinese Checkers" },
-  13: { label: "Checkers" },
-  14: { label: "UNO" },
-};
+// Frontend view type
+export type ContractRoomView = readonly [
+  bigint, // id
+  `0x${string}`, // creator
+  bigint, // entryFee
+  number, // maxPlayers
+  boolean, // isPrivate
+  number, // status
+  number, // gameId
+  number, // turnTimeSeconds
+  `0x${string}`, // winner
+];
