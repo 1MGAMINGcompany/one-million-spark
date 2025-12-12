@@ -12,21 +12,21 @@ import {
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useWallet } from "@/hooks/useWallet";
 import { WalletRequired } from "@/components/WalletRequired";
-import { useGlobalLoading } from "@/contexts/LoadingContext";
 import { useToast } from "@/hooks/use-toast";
 import { useSound } from "@/contexts/SoundContext";
 import { useCreateRoom } from "@/hooks/useRoomManager";
+import { usePolPrice } from "@/hooks/usePolPrice";
 import { Loader2 } from "lucide-react";
 
 const CreateRoom = () => {
   const { isConnected } = useWallet();
-  const { setGlobalLoading } = useGlobalLoading();
   const { toast } = useToast();
   const { play } = useSound();
+  const { formatUsd } = usePolPrice();
   const [gameType, setGameType] = useState("chess");
   const [entryFee, setEntryFee] = useState("");
   const [players, setPlayers] = useState("2");
-  const [turnTime, setTurnTime] = useState("");
+  const [turnTime, setTurnTime] = useState("none");
   const [roomType, setRoomType] = useState("public");
 
   const { createRoom, isPending, isConfirming, isSuccess, error, reset } = useCreateRoom();
@@ -34,7 +34,6 @@ const CreateRoom = () => {
   // Handle transaction success
   useEffect(() => {
     if (isSuccess) {
-      setGlobalLoading(false);
       play('room_create');
       toast({
         title: "Room Created!",
@@ -43,16 +42,15 @@ const CreateRoom = () => {
       // Reset form
       setEntryFee("");
       setPlayers("2");
-      setTurnTime("");
+      setTurnTime("none");
       setRoomType("public");
       reset();
     }
-  }, [isSuccess, play, toast, setGlobalLoading, reset]);
+  }, [isSuccess, play, toast, reset]);
 
   // Handle transaction error
   useEffect(() => {
     if (error) {
-      setGlobalLoading(false);
       toast({
         title: "Transaction Failed",
         description: error.message || "Failed to create room",
@@ -60,27 +58,19 @@ const CreateRoom = () => {
       });
       reset();
     }
-  }, [error, toast, setGlobalLoading, reset]);
-
-  // Show loading during confirmation
-  useEffect(() => {
-    if (isConfirming) {
-      setGlobalLoading(true, "Confirming transaction...");
-    }
-  }, [isConfirming, setGlobalLoading]);
+  }, [error, toast, reset]);
 
   const handleCreateRoom = () => {
     if (!entryFee || parseFloat(entryFee) < 0.5) {
       toast({
         title: "Invalid Entry Fee",
-        description: "Minimum entry fee is 0.5 MATIC",
+        description: "Minimum entry fee is 0.5 POL",
         variant: "destructive",
       });
       return;
     }
 
     play('ui_click');
-    setGlobalLoading(true, "Approve transaction in your wallet...");
     
     const maxPlayers = parseInt(players);
     const isPrivate = roomType === "private";
@@ -93,6 +83,13 @@ const CreateRoom = () => {
   }
 
   const isLoading = isPending || isConfirming;
+  const usdValue = formatUsd(entryFee);
+
+  const getButtonText = () => {
+    if (isPending) return "Waiting for wallet confirmation...";
+    if (isConfirming) return "Waiting for network confirmation...";
+    return "Create Room";
+  };
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center px-4 py-12">
@@ -119,7 +116,7 @@ const CreateRoom = () => {
 
           {/* Entry Fee */}
           <div className="space-y-2">
-            <Label htmlFor="entryFee">Entry Fee (MATIC)</Label>
+            <Label htmlFor="entryFee">Entry Fee (POL)</Label>
             <Input
               id="entryFee"
               type="number"
@@ -130,7 +127,12 @@ const CreateRoom = () => {
               onChange={(e) => setEntryFee(e.target.value)}
               disabled={isLoading}
             />
-            <p className="text-sm text-muted-foreground">Minimum 0.5 MATIC</p>
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">Minimum 0.5 POL</p>
+              {usdValue && (
+                <p className="text-sm text-muted-foreground">{usdValue} USD</p>
+              )}
+            </div>
           </div>
 
           {/* Number of Players */}
@@ -156,6 +158,7 @@ const CreateRoom = () => {
                 <SelectValue placeholder="Select time" />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="none">No timer</SelectItem>
                 <SelectItem value="5">5 seconds</SelectItem>
                 <SelectItem value="10">10 seconds</SelectItem>
                 <SelectItem value="15">15 seconds</SelectItem>
@@ -198,7 +201,7 @@ const CreateRoom = () => {
             {isLoading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                {isPending ? "Awaiting Approval..." : "Confirming..."}
+                {getButtonText()}
               </>
             ) : (
               "Create Room"

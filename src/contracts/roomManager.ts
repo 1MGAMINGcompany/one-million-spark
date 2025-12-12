@@ -406,8 +406,8 @@ export const ROOM_MANAGER_ABI = [
 export enum RoomStatus {
   Created = 0,
   Started = 1,
-  Finished = 2,
-  Cancelled = 3,
+  Cancelled = 2,
+  Finished = 3,
 }
 
 // TypeScript types for room data

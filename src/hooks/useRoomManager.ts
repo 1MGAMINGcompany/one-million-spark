@@ -38,15 +38,15 @@ export function useCreatorActiveRoom(creatorAddress: `0x${string}` | undefined) 
   });
 }
 
-// Hook to create a room
+// Hook to create a room (NO value sent - createRoom is not payable)
 export function useCreateRoom() {
   const { address } = useAccount();
   const { writeContract, data: hash, isPending, error, reset } = useWriteContract();
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
 
-  const createRoom = (entryFeeInMatic: string, maxPlayers: number, isPrivate: boolean) => {
+  const createRoom = (entryFeeInPol: string, maxPlayers: number, isPrivate: boolean) => {
     if (!address) return;
-    const entryFeeWei = parseEther(entryFeeInMatic);
+    const entryFeeWei = parseEther(entryFeeInPol);
     writeContract({
       address: ROOM_MANAGER_ADDRESS,
       abi: ROOM_MANAGER_ABI,
@@ -54,6 +54,7 @@ export function useCreateRoom() {
       args: [entryFeeWei, maxPlayers, isPrivate],
       chain: polygon,
       account: address,
+      // No value - createRoom is not payable
     });
   };
 
