@@ -5,12 +5,18 @@ export const ROOM_MANAGER_ADDRESS = "0xd3ACD6e228280BDdb470653eBd658648FBB84789"
 
 // IMPORTANT: statuses MUST match the contract enum order
 export enum RoomStatus {
-  None = 0,
-  Created = 1,
-  Started = 2,
-  Finished = 3,
-  Cancelled = 4,
+  Created = 4,
+  Started = 5,
+  Finished = 6,
+  Cancelled = 7,
 }
+
+// Game catalog for UI labels
+export const GAME_CATALOG: Record<number, { label: string }> = {
+  1: { label: "Chess" },
+  2: { label: "Dominos" },
+  3: { label: "Backgammon" },
+};
 
 export const ROOM_MANAGER_ABI = [
   {
@@ -31,6 +37,13 @@ export const ROOM_MANAGER_ABI = [
     name: "joinRoom",
     outputs: [],
     stateMutability: "payable",
+    type: "function",
+  },
+  {
+    inputs: [{ internalType: "uint256", name: "roomId", type: "uint256" }],
+    name: "startRoom",
+    outputs: [],
+    stateMutability: "nonpayable",
     type: "function",
   },
   {
@@ -69,7 +82,21 @@ export const ROOM_MANAGER_ABI = [
   },
   {
     inputs: [{ internalType: "uint256", name: "roomId", type: "uint256" }],
+    name: "getPlayers",
+    outputs: [{ internalType: "address[]", name: "", type: "address[]" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [{ internalType: "uint256", name: "roomId", type: "uint256" }],
     name: "getPlayerCount",
+    outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [{ internalType: "address", name: "creator", type: "address" }],
+    name: "creatorActiveRoomId",
     outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
     stateMutability: "view",
     type: "function",
