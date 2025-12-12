@@ -121,8 +121,18 @@ export type ContractRoomView = readonly [
   `0x${string}`, // winner
 ];
 
-// Alias for backward compatibility
-export type RoomView = ContractRoomView;
+// Parsed room view with named properties
+export interface RoomView {
+  id: bigint;
+  creator: `0x${string}`;
+  entryFee: bigint;
+  maxPlayers: number;
+  isPrivate: boolean;
+  status: RoomStatus;
+  gameId: number;
+  turnTimeSeconds: number;
+  winner: `0x${string}`;
+}
 
 export const GAME_CATALOG: Record<number, { label: string }> = {
   0: { label: "Chess" },

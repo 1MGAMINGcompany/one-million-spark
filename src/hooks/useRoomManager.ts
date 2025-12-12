@@ -3,7 +3,7 @@ import { useCallback } from "react";
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { parseEther, formatEther } from "viem";
 import { polygon } from "@/lib/wagmi-config";
-import { ROOM_MANAGER_ADDRESS, ROOM_MANAGER_ABI, RoomStatus, type RoomView } from "@/contracts/roomManager";
+import { ROOM_MANAGER_ADDRESS, ROOM_MANAGER_ABI, RoomStatus, type RoomView, type ContractRoomView } from "@/contracts/roomManager";
 
 export function useNextRoomId() {
   return useReadContract({
@@ -144,4 +144,73 @@ export function formatTurnTime(seconds: number) {
 // helper type guard
 export function asRoomView(x: unknown): RoomView {
   return x as RoomView;
+}
+
+// Alias for usePlayerActiveRoom (creator context)
+export function useCreatorActiveRoom(player: `0x${string}` | undefined) {
+  return usePlayerActiveRoom(player);
+}
+
+// Alias for useRoomView
+export function useRoom(roomId: bigint | undefined) {
+  return useRoomView(roomId);
+}
+
+// Get players for a room
+export function useRoomPlayers(roomId: bigint | undefined) {
+  return useReadContract({
+    address: ROOM_MANAGER_ADDRESS,
+    abi: ROOM_MANAGER_ABI,
+    functionName: "getPlayers",
+    args: roomId !== undefined ? [roomId] : undefined,
+    query: { enabled: roomId !== undefined },
+  });
+}
+
+// Start a room
+export function useStartRoom() {
+  const { address } = useAccount();
+  const { writeContract, data: hash, isPending, error, reset } = useWriteContract();
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+
+  const startRoom = (roomId: bigint) => {
+    if (!address) return;
+    writeContract({
+      address: ROOM_MANAGER_ADDRESS,
+      abi: ROOM_MANAGER_ABI,
+      functionName: "startRoom",
+      args: [roomId],
+      chain: polygon,
+      account: address,
+    });
+  };
+
+  return { startRoom, hash, isPending, isConfirming, isSuccess, error, reset };
+}
+
+// Parse contract tuple into RoomView object
+export function parseRoomView(data: ContractRoomView): RoomView {
+  return {
+    id: data[0],
+    creator: data[1],
+    entryFee: data[2],
+    maxPlayers: data[3],
+    isPrivate: data[4],
+    status: data[5] as RoomStatus,
+    gameId: data[6],
+    turnTimeSeconds: data[7],
+    winner: data[8],
+  };
+}
+
+// Format room view for display
+export function formatRoomView(data: ContractRoomView) {
+  const room = parseRoomView(data);
+  return {
+    ...room,
+    entryFeeFormatted: formatEther(room.entryFee),
+    statusLabel: getRoomStatusLabel(room.status),
+    gameLabel: gameName(room.gameId),
+    turnTimeLabel: formatTurnTime(room.turnTimeSeconds),
+  };
 }
