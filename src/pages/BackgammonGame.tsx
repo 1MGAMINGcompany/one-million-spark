@@ -3,7 +3,11 @@ import { Button } from "@/components/ui/button";
 import { Home, Flag, Handshake, Dices } from "lucide-react";
 import { useRoom, formatEntryFee, formatRoom } from "@/hooks/useRoomManager";
 import { usePolPrice } from "@/hooks/usePolPrice";
-import { useState } from "react";
+import { GameSyncStatus } from "@/components/GameSyncStatus";
+import { useGameSync, useTurnTimer, BackgammonMove } from "@/hooks/useGameSync";
+import { useWallet } from "@/hooks/useWallet";
+import { useState, useCallback } from "react";
+import { useToast } from "@/hooks/use-toast";
 
 // Die component for multiplayer
 const Die3D = ({ value, color = "ivory" }: { value: number; color?: "ivory" | "obsidian" }) => {
@@ -42,6 +46,8 @@ const Die3D = ({ value, color = "ivory" }: { value: number; color?: "ivory" | "o
 const BackgammonGame = () => {
   const { roomId } = useParams<{ roomId: string }>();
   const { formatUsd } = usePolPrice();
+  const { address } = useWallet();
+  const { toast } = useToast();
   
   const roomIdBigInt = roomId ? BigInt(roomId) : undefined;
   const { data: roomData } = useRoom(roomIdBigInt);
@@ -49,6 +55,7 @@ const BackgammonGame = () => {
   
   const [dice, setDice] = useState<[number, number]>([4, 2]);
   const [usedDice, setUsedDice] = useState<boolean[]>([false, false]);
+  const [gameEnded, setGameEnded] = useState(false);
 
   const entryFeeFormatted = room ? formatEntryFee(room.entryFee) : "...";
   const prizePool = room ? (parseFloat(entryFeeFormatted) * room.maxPlayers * 0.95).toFixed(3) : "...";
@@ -56,13 +63,48 @@ const BackgammonGame = () => {
   // Placeholder board state
   const [board] = useState(() => {
     const b: number[] = new Array(24).fill(0);
-    // Initial backgammon setup
     b[0] = 2; b[5] = -5; b[7] = -3; b[11] = 5;
     b[12] = -5; b[16] = 3; b[18] = 5; b[23] = -2;
     return b;
   });
 
+  const handleOpponentMove = useCallback((move: BackgammonMove) => {
+    // Apply opponent's move to board state
+    console.log("Opponent move:", move);
+  }, []);
+
+  const {
+    gameState,
+    isConnected,
+    opponentConnected,
+    isMyTurn,
+    sendMove,
+    sendResign,
+    sendDrawOffer,
+  } = useGameSync({
+    roomId: roomId || "",
+    gameType: "backgammon",
+    onOpponentMove: handleOpponentMove as any,
+    onGameEnd: () => setGameEnded(true),
+    onOpponentResign: () => setGameEnded(true),
+  });
+
+  const opponentAddress = gameState?.players.find(
+    (p) => p.toLowerCase() !== address?.toLowerCase()
+  );
+
+  const remainingTime = useTurnTimer(
+    isMyTurn,
+    gameState?.turnTimeSeconds || 300,
+    gameState?.turnStartedAt || Date.now(),
+    () => toast({ title: "Time's up!", variant: "destructive" })
+  );
+
   const handleRollDice = () => {
+    if (!isMyTurn && gameState?.status === "playing") {
+      toast({ title: "Not your turn", variant: "destructive" });
+      return;
+    }
     const d1 = Math.floor(Math.random() * 6) + 1;
     const d2 = Math.floor(Math.random() * 6) + 1;
     setDice([d1, d2]);
@@ -182,6 +224,16 @@ const BackgammonGame = () => {
 
           {/* RIGHT COLUMN - Info Panels */}
           <div className="w-full lg:w-72 space-y-4">
+            {/* Connection Status */}
+            <GameSyncStatus
+              isConnected={isConnected}
+              opponentConnected={opponentConnected}
+              isMyTurn={isMyTurn}
+              remainingTime={remainingTime}
+              playerAddress={address}
+              opponentAddress={opponentAddress}
+            />
+
             {/* Game Status */}
             <div className="bg-card border border-border rounded-lg p-4">
               <h3 className="text-sm font-semibold text-muted-foreground mb-2">Game Status</h3>
