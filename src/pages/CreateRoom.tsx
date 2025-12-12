@@ -14,10 +14,12 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useWallet } from "@/hooks/useWallet";
 import { useToast } from "@/hooks/use-toast";
 import { useSound } from "@/contexts/SoundContext";
-import { useCreateRoom, usePlayerActiveRoom, useCancelRoom } from "@/hooks/useRoomManager";
+import { useCreateRoom, usePlayerActiveRoom, useCancelRoom, getGameName } from "@/hooks/useRoomManager";
 import { usePolPrice } from "@/hooks/usePolPrice";
-import { Loader2, AlertCircle, AlertTriangle, Wallet } from "lucide-react";
+import { Loader2, AlertCircle, AlertTriangle, Wallet, Share2 } from "lucide-react";
 import { useWeb3Modal } from "@web3modal/wagmi/react";
+import { ShareInviteDialog } from "@/components/ShareInviteDialog";
+import { useNotificationPermission } from "@/hooks/useRoomEvents";
 
 // Game ID mapping: Chess=1, Dominos=2, Backgammon=3
 const GAME_IDS: Record<string, number> = {
@@ -44,9 +46,14 @@ const CreateRoom = () => {
   const [gameType, setGameType] = useState("chess");
   const [entryFee, setEntryFee] = useState("");
   const [players, setPlayers] = useState("2");
-  const [turnTime, setTurnTime] = useState("none");
+  const [turnTime, setTurnTime] = useState("5"); // Default to 5 seconds
   const [roomType, setRoomType] = useState("public");
   const [feeError, setFeeError] = useState<string | null>(null);
+  const [showShareDialog, setShowShareDialog] = useState(false);
+  const [createdRoomId, setCreatedRoomId] = useState<string | null>(null);
+  const [createdGameName, setCreatedGameName] = useState<string>("");
+  
+  const { requestPermission } = useNotificationPermission();
 
   const { createRoom, isPending, isConfirming, isSuccess, error, reset } = useCreateRoom();
   
@@ -81,23 +88,44 @@ const CreateRoom = () => {
   useEffect(() => {
     if (isSuccess) {
       play('room_create');
-      toast({
-        title: "Room Created!",
-        description: "Your game room has been created. Redirecting to room list...",
-      });
+      const isPrivate = roomType === "private";
+      const gameName = getGameName(GAME_IDS[gameType] || 1);
+      
+      // Request notification permission for room events
+      requestPermission();
+      
+      // If private room, show share dialog
+      if (isPrivate) {
+        refetchActiveRoom().then((result) => {
+          if (result.data && result.data > 0n) {
+            setCreatedRoomId(result.data.toString());
+            setCreatedGameName(gameName);
+            setShowShareDialog(true);
+          }
+        });
+        toast({
+          title: "Private Room Created!",
+          description: "Share the invite link with friends to play.",
+        });
+      } else {
+        toast({
+          title: "Room Created!",
+          description: "Your game room has been created. Redirecting to room list...",
+        });
+        // Navigate to room list with refresh param so the new room appears immediately
+        setTimeout(() => {
+          navigate("/room-list?refresh=1");
+        }, 1500);
+      }
+      
       // Reset form
       setEntryFee("");
       setPlayers("2");
-      setTurnTime("none");
-      setRoomType("public");
+      setTurnTime("5");
       reset();
       refetchActiveRoom();
-      // Navigate to room list with refresh param so the new room appears immediately
-      setTimeout(() => {
-        navigate("/room-list?refresh=1");
-      }, 1500);
     }
-  }, [isSuccess, play, toast, reset, refetchActiveRoom, navigate]);
+  }, [isSuccess, play, toast, reset, refetchActiveRoom, navigate, roomType, gameType, requestPermission]);
 
   // Handle transaction error
   useEffect(() => {
@@ -311,10 +339,10 @@ const CreateRoom = () => {
                 <SelectValue placeholder="Select time" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="none">No timer</SelectItem>
                 <SelectItem value="5">5 seconds</SelectItem>
                 <SelectItem value="10">10 seconds</SelectItem>
                 <SelectItem value="15">15 seconds</SelectItem>
+                <SelectItem value="none">No timer</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -367,6 +395,14 @@ const CreateRoom = () => {
           </Button>
         </form>
       </div>
+      
+      {/* Share Dialog for Private Rooms */}
+      <ShareInviteDialog
+        open={showShareDialog}
+        onOpenChange={setShowShareDialog}
+        roomId={createdRoomId || ""}
+        gameName={createdGameName}
+      />
     </div>
   );
 };

@@ -8,8 +8,10 @@ import { useSound } from "@/contexts/SoundContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Users, Coins, Crown, Copy, ArrowLeft, Gamepad2 } from "lucide-react";
-import { useEffect } from "react";
+import { Loader2, Users, Coins, Crown, Copy, ArrowLeft, Gamepad2, Share2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ShareInviteDialog } from "@/components/ShareInviteDialog";
+import { useRoomEvents, useNotificationPermission } from "@/hooks/useRoomEvents";
 
 export default function Room() {
   const { roomId } = useParams<{ roomId: string }>();
@@ -18,6 +20,8 @@ export default function Room() {
   const { toast } = useToast();
   const { play } = useSound();
   const { formatUsd } = usePolPrice();
+  const [showShareDialog, setShowShareDialog] = useState(false);
+  const { requestPermission } = useNotificationPermission();
 
   const roomIdBigInt = roomId ? BigInt(roomId) : undefined;
 
@@ -46,8 +50,26 @@ export default function Room() {
   const isPlayer = players.some(p => p.toLowerCase() === address?.toLowerCase());
   const canJoin = room && room.status === RoomStatus.Created && !isPlayer && players.length < room.maxPlayers;
   const canCancel = room && room.status === RoomStatus.Created && isCreator;
+  const canShare = room && room.isPrivate && isCreator && room.status === RoomStatus.Created;
 
-  // Handle successful actions
+  // Watch for room events (player joins, room ready)
+  useRoomEvents({
+    roomId: roomIdBigInt,
+    maxPlayers: room?.maxPlayers,
+    onPlayerJoined: () => {
+      refetchPlayers();
+    },
+    onRoomReady: () => {
+      refetch();
+    },
+  });
+
+  // Request notification permission when creator views room
+  useEffect(() => {
+    if (isCreator) {
+      requestPermission();
+    }
+  }, [isCreator, requestPermission]);
   useEffect(() => {
     if (isJoinSuccess) {
       play("rooms_enter");
@@ -215,6 +237,12 @@ export default function Room() {
                 </Button>
               )}
 
+              {canShare && (
+                <Button onClick={() => setShowShareDialog(true)} variant="outline" className="gap-2">
+                  <Share2 className="h-4 w-4" /> Invite Players
+                </Button>
+              )}
+
               {isPlayer && !isCreator && (
                 <p className="w-full text-center text-sm text-muted-foreground">Waiting for the game to start...</p>
               )}
@@ -235,6 +263,14 @@ export default function Room() {
           )}
         </CardContent>
       </Card>
+      
+      {/* Share Dialog for Private Rooms */}
+      <ShareInviteDialog
+        open={showShareDialog}
+        onOpenChange={setShowShareDialog}
+        roomId={roomId || ""}
+        gameName={room ? getGameName(room.gameId) : undefined}
+      />
     </div>
   );
 }
