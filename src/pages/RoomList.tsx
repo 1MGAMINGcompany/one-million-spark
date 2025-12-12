@@ -147,9 +147,9 @@ const RoomList = () => {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Games</SelectItem>
+                <SelectItem value="0">{GAME_CATALOG[0].label}</SelectItem>
                 <SelectItem value="1">{GAME_CATALOG[1].label}</SelectItem>
                 <SelectItem value="2">{GAME_CATALOG[2].label}</SelectItem>
-                <SelectItem value="3">{GAME_CATALOG[3].label}</SelectItem>
               </SelectContent>
             </Select>
           </div>
