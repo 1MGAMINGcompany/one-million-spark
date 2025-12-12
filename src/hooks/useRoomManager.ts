@@ -38,24 +38,34 @@ export function useCreateRoom() {
   const { writeContract, data: hash, isPending, error, reset } = useWriteContract();
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
 
-  const createRoom = useCallback(
-    (entryFeePol: string, maxPlayers: number, isPrivate: boolean, gameId: number, turnTimeSeconds: number) => {
-      if (!address) return;
+  const createRoom = (
+    entryFeeInPol: string,
+    maxPlayers: number,
+    isPrivate: boolean,
+    gameId: number,
+    turnTimeSeconds: number
+  ) => {
+    if (!address) return;
 
-      const entryFeeWei = parseEther(entryFeePol);
+    // ✅ ALWAYS convert POL → wei here
+    const entryFeeWei = parseEther(entryFeeInPol);
 
-      writeContract({
-        address: ROOM_MANAGER_ADDRESS,
-        abi: ROOM_MANAGER_ABI,
-        functionName: "createRoom",
-        args: [entryFeeWei, maxPlayers, isPrivate, gameId, turnTimeSeconds],
-        value: entryFeeWei, // ✅ creator pays same stake
-        chain: polygon,
-        account: address,
-      });
-    },
-    [address, writeContract],
-  );
+    writeContract({
+      address: ROOM_MANAGER_ADDRESS,
+      abi: ROOM_MANAGER_ABI,
+      functionName: "createRoom",
+      args: [
+        entryFeeWei,        // MUST be wei
+        maxPlayers,
+        isPrivate,
+        gameId,
+        turnTimeSeconds,
+      ],
+      value: entryFeeWei,  // MUST MATCH
+      chain: polygon,
+      account: address,
+    });
+  };
 
   return { createRoom, hash, isPending, isConfirming, isSuccess, error, reset };
 }
