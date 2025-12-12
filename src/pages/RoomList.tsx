@@ -229,7 +229,7 @@ const RoomList = () => {
                   <div className="flex items-center gap-1.5">
                     <Users size={16} />
                     <span className="text-sm">
-                      {room.players.length} / {room.maxPlayers}
+                      {room.playerCount} / {room.maxPlayers}
                     </span>
                   </div>
                   <span className="text-xs px-2 py-1 rounded bg-primary/10 text-primary">

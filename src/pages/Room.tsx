@@ -1,6 +1,6 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { useAccount } from "wagmi";
-import { useRoom, useJoinRoom, useStartRoom, useCancelRoom, formatRoom, formatEntryFee, getRoomStatusLabel } from "@/hooks/useRoomManager";
+import { useRoom, useRoomPlayers, useJoinRoom, useStartRoom, useCancelRoom, formatRoomView, formatEntryFee, getRoomStatusLabel } from "@/hooks/useRoomManager";
 import { RoomStatus } from "@/contracts/roomManager";
 import { usePolPrice } from "@/hooks/usePolPrice";
 import { useToast } from "@/hooks/use-toast";
@@ -22,17 +22,19 @@ export default function Room() {
   const roomIdBigInt = roomId ? BigInt(roomId) : undefined;
 
   const { data: roomData, isLoading: isRoomLoading, refetch } = useRoom(roomIdBigInt);
+  const { data: playersData, refetch: refetchPlayers } = useRoomPlayers(roomIdBigInt);
 
   const { joinRoom, isPending: isJoinPending, isConfirming: isJoinConfirming, isSuccess: isJoinSuccess, reset: resetJoin } = useJoinRoom();
   const { startRoom, isPending: isStartPending, isConfirming: isStartConfirming, isSuccess: isStartSuccess, reset: resetStart } = useStartRoom();
   const { cancelRoom, isPending: isCancelPending, isConfirming: isCancelConfirming, isSuccess: isCancelSuccess, reset: resetCancel } = useCancelRoom();
 
-  const room = roomData ? formatRoom(roomData as readonly [bigint, `0x${string}`, bigint, number, boolean, number, readonly `0x${string}`[], `0x${string}`]) : null;
+  const room = roomData ? formatRoomView(roomData) : null;
+  const players: readonly `0x${string}`[] = playersData ?? [];
 
   const isCreator = room && address && room.creator.toLowerCase() === address.toLowerCase();
-  const isPlayer = room && address && room.players.some(p => p.toLowerCase() === address.toLowerCase());
-  const canJoin = room && room.status === RoomStatus.Created && !isPlayer && room.players.length < room.maxPlayers;
-  const canStart = room && room.status === RoomStatus.Created && isCreator && room.players.length >= 2;
+  const isPlayer = players.some(p => p.toLowerCase() === address?.toLowerCase());
+  const canJoin = room && room.status === RoomStatus.Created && !isPlayer && players.length < room.maxPlayers;
+  const canStart = room && room.status === RoomStatus.Created && isCreator && players.length >= 2;
   const canCancel = room && room.status === RoomStatus.Created && isCreator;
 
   // Handle successful actions
@@ -42,8 +44,9 @@ export default function Room() {
       toast({ title: "Joined Room", description: "You have successfully joined the room." });
       resetJoin();
       refetch();
+      refetchPlayers();
     }
-  }, [isJoinSuccess, play, toast, resetJoin, refetch]);
+  }, [isJoinSuccess, play, toast, resetJoin, refetch, refetchPlayers]);
 
   useEffect(() => {
     if (isStartSuccess) {
@@ -51,8 +54,9 @@ export default function Room() {
       toast({ title: "Room Started", description: "The game has begun!" });
       resetStart();
       refetch();
+      refetchPlayers();
     }
-  }, [isStartSuccess, play, toast, resetStart, refetch]);
+  }, [isStartSuccess, play, toast, resetStart, refetch, refetchPlayers]);
 
   useEffect(() => {
     if (isCancelSuccess) {
@@ -168,9 +172,9 @@ export default function Room() {
           <div className="flex items-start gap-3">
             <Users className="h-5 w-5 text-primary mt-0.5" />
             <div className="flex-1">
-              <p className="text-sm text-muted-foreground">Players ({room.players.length}/{room.maxPlayers})</p>
+              <p className="text-sm text-muted-foreground">Players ({players.length}/{room.maxPlayers})</p>
               <div className="mt-2 space-y-1">
-                {room.players.map((player, idx) => (
+                {players.map((player, idx) => (
                   <div key={idx} className="flex items-center gap-2 text-sm">
                     <span className="font-mono">{shortenAddress(player)}</span>
                     <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => copyAddress(player)}>
@@ -180,7 +184,7 @@ export default function Room() {
                     {player.toLowerCase() === room.creator.toLowerCase() && <Badge variant="secondary" className="text-xs">Creator</Badge>}
                   </div>
                 ))}
-                {room.players.length === 0 && <p className="text-muted-foreground text-sm">No players yet.</p>}
+                {players.length === 0 && <p className="text-muted-foreground text-sm">No players yet.</p>}
               </div>
             </div>
           </div>
