@@ -7,7 +7,7 @@ import { useWallet } from "@/hooks/useWallet";
 import { WalletRequired } from "@/components/WalletRequired";
 import { useSound } from "@/contexts/SoundContext";
 import { useToast } from "@/hooks/use-toast";
-import { useJoinRoom, formatEntryFee, getRoomStatusLabel } from "@/hooks/useRoomManager";
+import { useJoinRoom, formatEntryFee, getRoomStatusLabel, gameName, formatTurnTime as formatTurnTimeFn } from "@/hooks/useRoomManager";
 import { usePublicRooms, type PublicRoom } from "@/hooks/usePublicRooms";
 import { formatEther } from "viem";
 import { GAME_CATALOG } from "@/contracts/roomManager";
