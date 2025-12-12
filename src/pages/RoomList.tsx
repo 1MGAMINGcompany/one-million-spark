@@ -99,7 +99,7 @@ const RoomList = () => {
     // Game filter
     if (gameFilter !== "all") {
       const gf = Number(gameFilter);
-      if (room.gameId !== gf) return false;
+      if (room.gameType !== gf) return false;
     }
 
     const feeInPol = parseFloat(formatEther(room.entryFee));
@@ -191,7 +191,7 @@ const RoomList = () => {
           ) : (
             filteredRooms.map((room) => {
               const isOwnRoom = room.creator.toLowerCase() === address?.toLowerCase();
-              const gameLabel = GAME_CATALOG[room.gameId]?.label || `Game #${room.gameId}`;
+              const gameLabel = GAME_CATALOG[room.gameType]?.label || `Game #${room.gameType}`;
 
               return (
                 <div
