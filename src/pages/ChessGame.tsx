@@ -1,39 +1,86 @@
 import { useParams, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { Home } from "lucide-react";
-
-const fakeMoves = [
-  { move: 1, white: "e2 → e4", black: "e7 → e5" },
-  { move: 2, white: "Ng1 → f3", black: "Nb8 → c6" },
-  { move: 3, white: "Bf1 → c4", black: "..." },
-];
+import { Home, Flag, Handshake } from "lucide-react";
+import { useRoom, formatEntryFee, formatRoom } from "@/hooks/useRoomManager";
+import { usePolPrice } from "@/hooks/usePolPrice";
+import { ChessBoardPremium } from "@/components/ChessBoardPremium";
+import { useState, useCallback } from "react";
+import { Chess, Square } from "chess.js";
 
 const ChessGame = () => {
   const { roomId } = useParams<{ roomId: string }>();
+  const { formatUsd } = usePolPrice();
+  
+  const roomIdBigInt = roomId ? BigInt(roomId) : undefined;
+  const { data: roomData } = useRoom(roomIdBigInt);
+  const room = roomData ? formatRoom(roomData) : null;
+  
+  const [game] = useState(() => new Chess());
+  const [, setFen] = useState(game.fen());
+  const [moveHistory, setMoveHistory] = useState<Array<{ move: number; white: string; black: string }>>([]);
+
+  const entryFeeFormatted = room ? formatEntryFee(room.entryFee) : "...";
+  const prizePool = room ? (parseFloat(entryFeeFormatted) * room.maxPlayers * 0.95).toFixed(3) : "...";
+
+  const handleMove = useCallback((from: Square, to: Square): boolean => {
+    try {
+      const move = game.move({
+        from,
+        to,
+        promotion: 'q',
+      });
+      
+      if (move) {
+        setFen(game.fen());
+        const history = game.history();
+        const moves: Array<{ move: number; white: string; black: string }> = [];
+        for (let i = 0; i < history.length; i += 2) {
+          moves.push({
+            move: Math.floor(i / 2) + 1,
+            white: history[i] || "",
+            black: history[i + 1] || "...",
+          });
+        }
+        setMoveHistory(moves);
+        return true;
+      }
+    } catch (e) {
+      // Invalid move
+    }
+    return false;
+  }, [game]);
 
   return (
     <div className="min-h-screen bg-background px-4 py-6">
       <div className="max-w-6xl mx-auto">
         {/* Header Bar */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-6 bg-card border border-border rounded-lg p-4">
-          <h1 className="text-xl font-bold text-foreground">
-            Chess – Room #{roomId}
-          </h1>
-          <p className="text-muted-foreground text-sm">
-            Player A vs Player B
-          </p>
+          <div>
+            <h1 className="text-xl font-bold text-foreground">
+              Chess – Room #{roomId}
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              Prize Pool: {prizePool} POL {room && `(~${formatUsd(parseFloat(prizePool))})`}
+            </p>
+          </div>
+          <div className="flex items-center gap-2 text-sm">
+            <span className="px-2 py-1 bg-primary/20 text-primary rounded">
+              {game.turn() === 'w' ? 'White' : 'Black'} to move
+            </span>
+            <span className="text-muted-foreground">15s remaining</span>
+          </div>
         </div>
 
         {/* Main Layout */}
         <div className="flex flex-col lg:flex-row gap-6">
           {/* LEFT COLUMN - Chess Board */}
-          <div className="flex-1">
-            <div className="aspect-square bg-card border border-border rounded-lg flex items-center justify-center">
-              <span className="text-muted-foreground text-lg">Chess Board Placeholder</span>
-            </div>
-            <div className="mt-3 text-center">
-              <p className="text-foreground font-medium">Your Turn – 15s remaining</p>
+          <div className="flex-1 flex justify-center">
+            <div className="w-full max-w-[min(100%,calc(100vh-280px))]">
+              <ChessBoardPremium
+                game={game}
+                onMove={handleMove}
+                disabled={false}
+              />
             </div>
           </div>
 
@@ -41,52 +88,42 @@ const ChessGame = () => {
           <div className="w-full lg:w-80 space-y-4">
             {/* Turn Info */}
             <div className="bg-card border border-border rounded-lg p-4">
-              <h3 className="text-sm font-semibold text-muted-foreground mb-2">Turn Info</h3>
-              <p className="text-foreground font-medium">Turn: Player X (White)</p>
+              <h3 className="text-sm font-semibold text-muted-foreground mb-2">Game Status</h3>
+              <p className="text-foreground font-medium">
+                {game.isCheckmate() ? "Checkmate!" : 
+                 game.isStalemate() ? "Stalemate!" :
+                 game.isDraw() ? "Draw!" :
+                 game.isCheck() ? "Check!" :
+                 `${game.turn() === 'w' ? 'White' : 'Black'} to move`}
+              </p>
             </div>
 
             {/* Move List */}
             <div className="bg-card border border-border rounded-lg p-4">
               <h3 className="text-sm font-semibold text-muted-foreground mb-2">Move List</h3>
-              <div className="h-32 overflow-y-auto space-y-1 text-sm">
-                {fakeMoves.map((m) => (
-                  <div key={m.move} className="flex gap-2 text-foreground">
-                    <span className="text-muted-foreground w-6">{m.move}.</span>
-                    <span className="flex-1">{m.white}</span>
-                    <span className="flex-1">{m.black}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Chat */}
-            <div className="bg-card border border-border rounded-lg p-4">
-              <h3 className="text-sm font-semibold text-muted-foreground mb-2">Chat (coming soon)</h3>
-              <div className="h-20 bg-muted/30 rounded mb-2"></div>
-              <div className="flex gap-2">
-                <Textarea
-                  placeholder="Type a message..."
-                  className="resize-none h-10 min-h-0"
-                  disabled
-                />
-                <Button size="sm" disabled>Send</Button>
+              <div className="h-40 overflow-y-auto space-y-1 text-sm">
+                {moveHistory.length === 0 ? (
+                  <p className="text-muted-foreground">No moves yet</p>
+                ) : (
+                  moveHistory.map((m) => (
+                    <div key={m.move} className="flex gap-2 text-foreground">
+                      <span className="text-muted-foreground w-6">{m.move}.</span>
+                      <span className="flex-1">{m.white}</span>
+                      <span className="flex-1">{m.black}</span>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
 
             {/* Action Buttons */}
             <div className="flex gap-3">
-              <Button
-                variant="outline"
-                className="flex-1"
-                onClick={() => alert("Draw offer coming soon")}
-              >
+              <Button variant="outline" className="flex-1 gap-2">
+                <Handshake size={16} />
                 Offer Draw
               </Button>
-              <Button
-                variant="outline"
-                className="flex-1"
-                onClick={() => alert("Resign coming soon")}
-              >
+              <Button variant="outline" className="flex-1 gap-2 text-destructive hover:text-destructive">
+                <Flag size={16} />
                 Resign
               </Button>
             </div>
@@ -97,7 +134,7 @@ const ChessGame = () => {
         <div className="flex justify-center mt-8">
           <Button variant="outline" size="lg" asChild>
             <Link to="/">
-              <Home size={18} />
+              <Home size={18} className="mr-2" />
               Return to Lobby
             </Link>
           </Button>
