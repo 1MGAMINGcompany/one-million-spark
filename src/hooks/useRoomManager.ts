@@ -1,9 +1,8 @@
 // src/hooks/useRoomManager.ts
-import { useCallback } from "react";
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { parseEther, formatEther } from "viem";
 import { polygon } from "@/lib/wagmi-config";
-import { ROOM_MANAGER_ADDRESS, ROOM_MANAGER_ABI, RoomStatus, type RoomView, type ContractRoomView } from "@/contracts/roomManager";
+import { ROOM_MANAGER_ADDRESS, ROOM_MANAGER_ABI, RoomStatus } from "@/contracts/roomManager";
 
 export function useNextRoomId() {
   return useReadContract({
@@ -17,19 +16,9 @@ export function useRoomView(roomId: bigint | undefined) {
   return useReadContract({
     address: ROOM_MANAGER_ADDRESS,
     abi: ROOM_MANAGER_ABI,
-    functionName: "getRoomView",
+    functionName: "getRoom",
     args: roomId !== undefined ? [roomId] : undefined,
     query: { enabled: roomId !== undefined },
-  });
-}
-
-export function usePlayerActiveRoom(player: `0x${string}` | undefined) {
-  return useReadContract({
-    address: ROOM_MANAGER_ADDRESS,
-    abi: ROOM_MANAGER_ABI,
-    functionName: "playerActiveRoom",
-    args: player ? [player] : undefined,
-    query: { enabled: !!player },
   });
 }
 
@@ -41,9 +30,7 @@ export function useCreateRoom() {
   const createRoom = (
     entryFeeInPol: string,
     maxPlayers: number,
-    isPrivate: boolean,
-    gameId: number,
-    turnTimeSeconds: number
+    isPrivate: boolean
   ) => {
     if (!address) return;
 
@@ -54,14 +41,7 @@ export function useCreateRoom() {
       address: ROOM_MANAGER_ADDRESS,
       abi: ROOM_MANAGER_ABI,
       functionName: "createRoom",
-      args: [
-        entryFeeWei,        // MUST be wei
-        maxPlayers,
-        isPrivate,
-        gameId,
-        turnTimeSeconds,
-      ],
-      value: entryFeeWei,  // MUST MATCH
+      args: [entryFeeWei, maxPlayers, isPrivate],
       chain: polygon,
       account: address,
     });
@@ -117,6 +97,8 @@ export function formatEntryFee(weiAmount: bigint): string {
 
 export function getRoomStatusLabel(status: RoomStatus): string {
   switch (status) {
+    case RoomStatus.None:
+      return "None";
     case RoomStatus.Created:
       return "Waiting";
     case RoomStatus.Started:
@@ -151,52 +133,31 @@ export function formatTurnTime(seconds: number) {
   return s ? `${m}m ${s}s/turn` : `${m}m/turn`;
 }
 
-// helper type guard
-export function asRoomView(x: unknown): RoomView {
-  return x as RoomView;
-}
+// RoomView type for parsed contract data
+export type RoomView = {
+  id: bigint;
+  creator: `0x${string}`;
+  entryFee: bigint;
+  maxPlayers: number;
+  isPrivate: boolean;
+  status: RoomStatus;
+  gameId: number;
+  turnTimeSeconds: number;
+  winner: `0x${string}`;
+};
 
-// Alias for usePlayerActiveRoom (creator context)
-export function useCreatorActiveRoom(player: `0x${string}` | undefined) {
-  return usePlayerActiveRoom(player);
-}
-
-// Alias for useRoomView
-export function useRoom(roomId: bigint | undefined) {
-  return useRoomView(roomId);
-}
-
-// Get players for a room
-export function useRoomPlayers(roomId: bigint | undefined) {
-  return useReadContract({
-    address: ROOM_MANAGER_ADDRESS,
-    abi: ROOM_MANAGER_ABI,
-    functionName: "getPlayers",
-    args: roomId !== undefined ? [roomId] : undefined,
-    query: { enabled: roomId !== undefined },
-  });
-}
-
-// Start a room
-export function useStartRoom() {
-  const { address } = useAccount();
-  const { writeContract, data: hash, isPending, error, reset } = useWriteContract();
-  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
-
-  const startRoom = (roomId: bigint) => {
-    if (!address) return;
-    writeContract({
-      address: ROOM_MANAGER_ADDRESS,
-      abi: ROOM_MANAGER_ABI,
-      functionName: "startRoom",
-      args: [roomId],
-      chain: polygon,
-      account: address,
-    });
-  };
-
-  return { startRoom, hash, isPending, isConfirming, isSuccess, error, reset };
-}
+// Contract tuple type
+export type ContractRoomView = readonly [
+  bigint,
+  `0x${string}`,
+  bigint,
+  number,
+  boolean,
+  number,
+  number,
+  number,
+  `0x${string}`,
+];
 
 // Parse contract tuple into RoomView object
 export function parseRoomView(data: ContractRoomView): RoomView {
@@ -223,4 +184,20 @@ export function formatRoomView(data: ContractRoomView) {
     gameLabel: gameName(room.gameId),
     turnTimeLabel: formatTurnTime(room.turnTimeSeconds),
   };
+}
+
+// Alias for useRoomView
+export function useRoom(roomId: bigint | undefined) {
+  return useRoomView(roomId);
+}
+
+// Get players for a room
+export function useRoomPlayers(roomId: bigint | undefined) {
+  return useReadContract({
+    address: ROOM_MANAGER_ADDRESS,
+    abi: ROOM_MANAGER_ABI,
+    functionName: "playersOf",
+    args: roomId !== undefined ? [roomId] : undefined,
+    query: { enabled: roomId !== undefined },
+  });
 }

@@ -1,7 +1,7 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { useAccount } from "wagmi";
-import { useRoom, useRoomPlayers, useJoinRoom, useStartRoom, useCancelRoom, formatRoomView, formatEntryFee, getRoomStatusLabel } from "@/hooks/useRoomManager";
-import { RoomStatus, type ContractRoomView } from "@/contracts/roomManager";
+import { useRoom, useRoomPlayers, useJoinRoom, useCancelRoom, formatRoomView, formatEntryFee, getRoomStatusLabel, type ContractRoomView } from "@/hooks/useRoomManager";
+import { RoomStatus } from "@/contracts/roomManager";
 import { usePolPrice } from "@/hooks/usePolPrice";
 import { useToast } from "@/hooks/use-toast";
 import { useSound } from "@/contexts/SoundContext";
@@ -25,7 +25,6 @@ export default function Room() {
   const { data: playersData, refetch: refetchPlayers } = useRoomPlayers(roomIdBigInt);
 
   const { joinRoom, isPending: isJoinPending, isConfirming: isJoinConfirming, isSuccess: isJoinSuccess, reset: resetJoin } = useJoinRoom();
-  const { startRoom, isPending: isStartPending, isConfirming: isStartConfirming, isSuccess: isStartSuccess, reset: resetStart } = useStartRoom();
   const { cancelRoom, isPending: isCancelPending, isConfirming: isCancelConfirming, isSuccess: isCancelSuccess, reset: resetCancel } = useCancelRoom();
 
   const room = roomData ? formatRoomView(roomData as ContractRoomView) : null;
@@ -34,7 +33,6 @@ export default function Room() {
   const isCreator = room && address && room.creator.toLowerCase() === address.toLowerCase();
   const isPlayer = players.some(p => p.toLowerCase() === address?.toLowerCase());
   const canJoin = room && room.status === RoomStatus.Created && !isPlayer && players.length < room.maxPlayers;
-  const canStart = room && room.status === RoomStatus.Created && isCreator && players.length >= 2;
   const canCancel = room && room.status === RoomStatus.Created && isCreator;
 
   // Handle successful actions
@@ -49,16 +47,6 @@ export default function Room() {
   }, [isJoinSuccess, play, toast, resetJoin, refetch, refetchPlayers]);
 
   useEffect(() => {
-    if (isStartSuccess) {
-      play("rooms_match-start");
-      toast({ title: "Room Started", description: "The game has begun!" });
-      resetStart();
-      refetch();
-      refetchPlayers();
-    }
-  }, [isStartSuccess, play, toast, resetStart, refetch, refetchPlayers]);
-
-  useEffect(() => {
     if (isCancelSuccess) {
       toast({ title: "Room Cancelled", description: "The room has been cancelled." });
       resetCancel();
@@ -70,12 +58,6 @@ export default function Room() {
     if (!room || !roomIdBigInt) return;
     play("ui_click");
     joinRoom(roomIdBigInt, room.entryFee);
-  };
-
-  const handleStart = () => {
-    if (!roomIdBigInt) return;
-    play("ui_click");
-    startRoom(roomIdBigInt);
   };
 
   const handleCancel = () => {
@@ -198,16 +180,6 @@ export default function Room() {
                     <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Joining...</>
                   ) : (
                     <>Join Room ({entryFeePol} POL)</>
-                  )}
-                </Button>
-              )}
-
-              {canStart && (
-                <Button onClick={handleStart} disabled={isStartPending || isStartConfirming} variant="secondary" className="flex-1">
-                  {isStartPending || isStartConfirming ? (
-                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Starting...</>
-                  ) : (
-                    "Start Game"
                   )}
                 </Button>
               )}
