@@ -88,8 +88,14 @@ export function usePublicRooms() {
         const statusNum = Number(statusRaw);
         const maxPlayers = Number(maxPlayersRaw);
 
-        // IMPORTANT: only filter private for now
+        // Filter: only public rooms
         if (isPrivate) continue;
+        
+        // Filter: only open rooms (Created or Started)
+        if (statusNum !== RoomStatus.Created && statusNum !== RoomStatus.Started) continue;
+        
+        // Filter: hide full rooms
+        if (players.length >= maxPlayers) continue;
 
         console.log(
           `[usePublicRooms] room #${id.toString()} status=`,
