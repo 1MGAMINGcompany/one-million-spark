@@ -1,11 +1,12 @@
 import { useParams, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Home, Flag, Handshake } from "lucide-react";
+import { Home, Flag, Handshake, Timer } from "lucide-react";
 import { useRoom, formatEntryFee, formatRoom, usePlayersOf } from "@/hooks/useRoomManager";
 import { usePolPrice } from "@/hooks/usePolPrice";
 import { GameSyncStatus } from "@/components/GameSyncStatus";
 import { useGameSync, useTurnTimer, DominoMove } from "@/hooks/useGameSync";
 import { useWebRTCSync, GameMessage } from "@/hooks/useWebRTCSync";
+import { useTimeoutForfeit } from "@/hooks/useTimeoutForfeit";
 import { useWallet } from "@/hooks/useWallet";
 import DominoTile3D from "@/components/DominoTile3D";
 import { useState, useCallback } from "react";
@@ -108,6 +109,25 @@ const DominosGame = () => {
     () => toast({ title: "Time's up!", variant: "destructive" })
   );
 
+  // Timeout forfeit logic
+  const {
+    canClaimTimeout,
+    isClaiming,
+    claimTimeoutVictory,
+  } = useTimeoutForfeit({
+    roomId: roomIdBigInt || BigInt(0),
+    opponentAddress,
+    isMyTurn,
+    turnTimeSeconds: gameState?.turnTimeSeconds || 300,
+    turnStartedAt: gameState?.turnStartedAt || Date.now(),
+    gameEnded,
+    onTimeoutClaimed: () => setGameEnded(true),
+  });
+
+  const handleClaimTimeout = useCallback(() => {
+    if (address) claimTimeoutVictory(address);
+  }, [address, claimTimeoutVictory]);
+
   return (
     <div className="min-h-screen bg-background px-4 py-6">
       <div className="max-w-6xl mx-auto">
@@ -187,6 +207,17 @@ const DominosGame = () => {
                 <div className="text-muted-foreground">3. You played [3|1]</div>
               </div>
             </div>
+
+            {canClaimTimeout && !gameEnded && (
+              <Button
+                onClick={handleClaimTimeout}
+                disabled={isClaiming}
+                className="w-full gap-2 bg-green-600 hover:bg-green-700 text-white"
+              >
+                <Timer size={16} />
+                {isClaiming ? "Claiming Victory..." : "Claim Timeout Victory"}
+              </Button>
+            )}
 
             <div className="space-y-2">
               <Button variant="outline" className="w-full" disabled>Draw from Pile</Button>
