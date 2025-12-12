@@ -1,10 +1,11 @@
 import { useParams, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Home, Flag, Handshake, Dices } from "lucide-react";
-import { useRoom, formatEntryFee, formatRoom } from "@/hooks/useRoomManager";
+import { useRoom, formatEntryFee, formatRoom, usePlayersOf } from "@/hooks/useRoomManager";
 import { usePolPrice } from "@/hooks/usePolPrice";
 import { GameSyncStatus } from "@/components/GameSyncStatus";
 import { useGameSync, useTurnTimer, BackgammonMove } from "@/hooks/useGameSync";
+import { useWebRTCSync, GameMessage } from "@/hooks/useWebRTCSync";
 import { useWallet } from "@/hooks/useWallet";
 import { useState, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -51,6 +52,7 @@ const BackgammonGame = () => {
   
   const roomIdBigInt = roomId ? BigInt(roomId) : undefined;
   const { data: roomData } = useRoom(roomIdBigInt);
+  const { data: players } = usePlayersOf(roomIdBigInt);
   const room = roomData ? formatRoom(roomData) : null;
   
   const [dice, setDice] = useState<[number, number]>([4, 2]);
@@ -69,29 +71,56 @@ const BackgammonGame = () => {
   });
 
   const handleOpponentMove = useCallback((move: BackgammonMove) => {
-    // Apply opponent's move to board state
     console.log("Opponent move:", move);
   }, []);
 
+  const handleOpponentResign = useCallback(() => {
+    setGameEnded(true);
+    toast({ title: "Opponent Resigned!", description: "You win!" });
+  }, [toast]);
+
+  const handleWebRTCMessage = useCallback((message: GameMessage) => {
+    switch (message.type) {
+      case "move":
+        if (message.payload) handleOpponentMove(message.payload as BackgammonMove);
+        break;
+      case "resign":
+        handleOpponentResign();
+        break;
+      case "draw_offer":
+        toast({ title: "Draw Offered", description: "Your opponent has offered a draw." });
+        break;
+    }
+  }, [handleOpponentMove, handleOpponentResign, toast]);
+
+  const {
+    isConnected: webrtcConnected,
+    isPushEnabled,
+    reconnect: webrtcReconnect,
+    peerAddress,
+  } = useWebRTCSync({
+    roomId: roomId || "",
+    players: (players as string[]) || [],
+    onMessage: handleWebRTCMessage,
+    enabled: !!players && players.length >= 2,
+  });
+
   const {
     gameState,
-    isConnected,
-    opponentConnected,
+    isConnected: bcConnected,
+    opponentConnected: bcOpponentConnected,
     isMyTurn,
-    sendMove,
-    sendResign,
-    sendDrawOffer,
   } = useGameSync({
     roomId: roomId || "",
     gameType: "backgammon",
     onOpponentMove: handleOpponentMove as any,
     onGameEnd: () => setGameEnded(true),
-    onOpponentResign: () => setGameEnded(true),
+    onOpponentResign: handleOpponentResign,
   });
 
-  const opponentAddress = gameState?.players.find(
-    (p) => p.toLowerCase() !== address?.toLowerCase()
-  );
+  const isConnected = webrtcConnected || bcConnected;
+  const opponentConnected = webrtcConnected || bcOpponentConnected;
+  const opponentAddress = peerAddress || gameState?.players.find(p => p.toLowerCase() !== address?.toLowerCase());
 
   const remainingTime = useTurnTimer(
     isMyTurn,
@@ -224,7 +253,6 @@ const BackgammonGame = () => {
 
           {/* RIGHT COLUMN - Info Panels */}
           <div className="w-full lg:w-72 space-y-4">
-            {/* Connection Status */}
             <GameSyncStatus
               isConnected={isConnected}
               opponentConnected={opponentConnected}
@@ -232,6 +260,9 @@ const BackgammonGame = () => {
               remainingTime={remainingTime}
               playerAddress={address}
               opponentAddress={opponentAddress}
+              connectionType={webrtcConnected ? "webrtc" : bcConnected ? "broadcast" : "none"}
+              isPushEnabled={isPushEnabled}
+              onReconnect={webrtcReconnect}
             />
 
             {/* Game Status */}

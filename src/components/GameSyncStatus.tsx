@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import { Wifi, WifiOff, User, Clock, RefreshCw, Radio } from "lucide-react";
+import { Wifi, WifiOff, User, Clock, RefreshCw, Radio, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface GameSyncStatusProps {
@@ -10,6 +10,7 @@ interface GameSyncStatusProps {
   playerAddress?: string;
   opponentAddress?: string;
   connectionType?: "webrtc" | "broadcast" | "none";
+  isPushEnabled?: boolean;
   onReconnect?: () => void;
 }
 
@@ -21,6 +22,7 @@ export function GameSyncStatus({
   playerAddress,
   opponentAddress,
   connectionType = "none",
+  isPushEnabled = false,
   onReconnect,
 }: GameSyncStatusProps) {
   const formatTime = (seconds: number) => {
@@ -32,6 +34,14 @@ export function GameSyncStatus({
   const isLowTime = remainingTime <= 10;
   const isCriticalTime = remainingTime <= 5;
 
+  const getConnectionLabel = () => {
+    if (!isConnected) return "Connecting...";
+    if (connectionType === "webrtc") {
+      return isPushEnabled ? "P2P (Cross-Device)" : "P2P (Local)";
+    }
+    return "Connected";
+  };
+
   return (
     <div className="bg-card border border-border rounded-lg p-3 space-y-3">
       {/* Connection Status */}
@@ -40,12 +50,17 @@ export function GameSyncStatus({
           {isConnected ? (
             <>
               {connectionType === "webrtc" ? (
-                <Radio className="w-4 h-4 text-green-500" />
+                <div className="relative">
+                  <Radio className="w-4 h-4 text-green-500" />
+                  {isPushEnabled && (
+                    <Zap className="w-2.5 h-2.5 text-yellow-400 absolute -top-1 -right-1" />
+                  )}
+                </div>
               ) : (
                 <Wifi className="w-4 h-4 text-green-500" />
               )}
               <span className="text-sm text-muted-foreground">
-                {connectionType === "webrtc" ? "P2P Connected" : "Connected"}
+                {getConnectionLabel()}
               </span>
             </>
           ) : (

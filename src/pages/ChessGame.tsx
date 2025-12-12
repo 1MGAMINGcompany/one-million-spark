@@ -89,6 +89,7 @@ const ChessGame = () => {
   // WebRTC P2P sync (primary)
   const {
     isConnected: webrtcConnected,
+    isPushEnabled,
     connectionState: webrtcState,
     sendMove: webrtcSendMove,
     sendResign: webrtcSendResign,
@@ -269,6 +270,7 @@ const ChessGame = () => {
               playerAddress={address}
               opponentAddress={opponentAddress}
               connectionType={webrtcConnected ? "webrtc" : bcConnected ? "broadcast" : "none"}
+              isPushEnabled={isPushEnabled}
               onReconnect={webrtcReconnect}
             />
 
