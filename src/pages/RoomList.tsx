@@ -13,7 +13,7 @@ import { useWallet } from "@/hooks/useWallet";
 import { WalletRequired } from "@/components/WalletRequired";
 import { useSound } from "@/contexts/SoundContext";
 import { useToast } from "@/hooks/use-toast";
-import { useJoinRoom, formatEntryFee, getRoomStatusLabel } from "@/hooks/useRoomManager";
+import { useJoinRoom, formatEntryFee, getRoomStatusLabel, getGameName } from "@/hooks/useRoomManager";
 import { usePublicRooms, type PublicRoom } from "@/hooks/usePublicRooms";
 import { formatEther } from "viem";
 
@@ -109,10 +109,20 @@ const RoomList = () => {
     return "Join Room";
   };
 
+  // Game ID mapping for filter
+  const GAME_ID_MAP: Record<string, number> = {
+    chess: 1,
+    dominos: 2,
+    backgammon: 3,
+  };
+
   // Filter rooms based on selected filters
   const filteredRooms = rooms.filter(room => {
-    // Game filter - currently contract doesn't store game type
-    // Skip game filter for now since it's not in contract
+    // Game filter - now using gameId from contract
+    if (gameFilter !== "all") {
+      const targetGameId = GAME_ID_MAP[gameFilter];
+      if (room.gameId !== targetGameId) return false;
+    }
     
     const feeInPol = parseFloat(formatEther(room.entryFee));
     
@@ -216,7 +226,7 @@ const RoomList = () => {
               >
                 <div className="flex-1">
                   <h3 className="text-lg font-semibold text-foreground">
-                    Game Room
+                    {getGameName(room.gameId)}
                   </h3>
                   <p className="text-sm text-muted-foreground">
                     Entry Fee: {formatEntryFee(room.entryFee)} POL
@@ -229,7 +239,7 @@ const RoomList = () => {
                   <div className="flex items-center gap-1.5">
                     <Users size={16} />
                     <span className="text-sm">
-                      {room.players.length} / {room.maxPlayers}
+                      ? / {room.maxPlayers}
                     </span>
                   </div>
                   <span className="text-xs px-2 py-1 rounded bg-primary/10 text-primary">

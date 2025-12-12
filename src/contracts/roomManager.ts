@@ -1,18 +1,38 @@
-// Deployed RoomManagerTest contract on Polygon mainnet
+// RoomManagerV2 contract on Polygon mainnet
 export const ROOM_MANAGER_ADDRESS =
-  "0xB24b7f603de5150dEB6fe51aCe1C139EB578854b" as const;
+  "0xd3ACD6e228280BDdb470653eBd658648FBB84789" as const;
 
 export const ROOM_MANAGER_ABI = [
   {
+    inputs: [],
+    stateMutability: "nonpayable",
+    type: "constructor",
+  },
+  {
+    anonymous: false,
     inputs: [
       {
+        indexed: true,
         internalType: "address",
-        name: "_platformTreasury",
+        name: "newRecipient",
         type: "address",
       },
     ],
-    stateMutability: "nonpayable",
-    type: "constructor",
+    name: "FeeRecipientUpdated",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: false,
+        internalType: "uint256",
+        name: "newFeeBps",
+        type: "uint256",
+      },
+    ],
+    name: "PlatformFeeUpdated",
+    type: "event",
   },
   {
     anonymous: false,
@@ -60,6 +80,18 @@ export const ROOM_MANAGER_ABI = [
         name: "isPrivate",
         type: "bool",
       },
+      {
+        indexed: false,
+        internalType: "uint16",
+        name: "gameId",
+        type: "uint16",
+      },
+      {
+        indexed: false,
+        internalType: "uint32",
+        name: "turnTimeSeconds",
+        type: "uint32",
+      },
     ],
     name: "RoomCreated",
     type: "event",
@@ -78,18 +110,6 @@ export const ROOM_MANAGER_ABI = [
         internalType: "address",
         name: "winner",
         type: "address",
-      },
-      {
-        indexed: false,
-        internalType: "uint256",
-        name: "prizeAmount",
-        type: "uint256",
-      },
-      {
-        indexed: false,
-        internalType: "uint256",
-        name: "platformFee",
-        type: "uint256",
       },
     ],
     name: "RoomFinished",
@@ -144,40 +164,75 @@ export const ROOM_MANAGER_ABI = [
     inputs: [
       {
         internalType: "uint256",
-        name: "_entryFee",
+        name: "entryFeeWei",
         type: "uint256",
       },
       {
         internalType: "uint8",
-        name: "_maxPlayers",
+        name: "maxPlayers",
         type: "uint8",
       },
       {
         internalType: "bool",
-        name: "_isPrivate",
+        name: "isPrivate",
         type: "bool",
+      },
+      {
+        internalType: "uint16",
+        name: "gameId",
+        type: "uint16",
+      },
+      {
+        internalType: "uint32",
+        name: "turnTimeSeconds",
+        type: "uint32",
       },
     ],
     name: "createRoom",
-    outputs: [
-      {
-        internalType: "uint256",
-        name: "",
-        type: "uint256",
-      },
-    ],
-    stateMutability: "nonpayable",
+    outputs: [],
+    stateMutability: "payable",
     type: "function",
   },
   {
-    inputs: [
+    inputs: [],
+    name: "feeRecipient",
+    outputs: [
       {
         internalType: "address",
         name: "",
         type: "address",
       },
     ],
-    name: "creatorActiveRoomId",
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "uint256",
+        name: "roomId",
+        type: "uint256",
+      },
+      {
+        internalType: "address",
+        name: "winner",
+        type: "address",
+      },
+    ],
+    name: "finishRoom",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "uint256",
+        name: "roomId",
+        type: "uint256",
+      },
+    ],
+    name: "getPlayerCount",
     outputs: [
       {
         internalType: "uint256",
@@ -196,7 +251,7 @@ export const ROOM_MANAGER_ABI = [
         type: "uint256",
       },
     ],
-    name: "getRoom",
+    name: "getRoomView",
     outputs: [
       {
         internalType: "uint256",
@@ -229,9 +284,14 @@ export const ROOM_MANAGER_ABI = [
         type: "uint8",
       },
       {
-        internalType: "address[]",
-        name: "players",
-        type: "address[]",
+        internalType: "uint16",
+        name: "gameId",
+        type: "uint16",
+      },
+      {
+        internalType: "uint32",
+        name: "turnTimeSeconds",
+        type: "uint32",
       },
       {
         internalType: "address",
@@ -270,6 +330,19 @@ export const ROOM_MANAGER_ABI = [
   },
   {
     inputs: [],
+    name: "owner",
+    outputs: [
+      {
+        internalType: "address",
+        name: "",
+        type: "address",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
     name: "platformFeeBps",
     outputs: [
       {
@@ -282,13 +355,19 @@ export const ROOM_MANAGER_ABI = [
     type: "function",
   },
   {
-    inputs: [],
-    name: "platformTreasury",
-    outputs: [
+    inputs: [
       {
         internalType: "address",
         name: "",
         type: "address",
+      },
+    ],
+    name: "playerActiveRoomId",
+    outputs: [
+      {
+        internalType: "uint256",
+        name: "",
+        type: "uint256",
       },
     ],
     stateMutability: "view",
@@ -301,15 +380,16 @@ export const ROOM_MANAGER_ABI = [
         name: "roomId",
         type: "uint256",
       },
+    ],
+    name: "playersOf",
+    outputs: [
       {
-        internalType: "address",
-        name: "winner",
-        type: "address",
+        internalType: "address[]",
+        name: "",
+        type: "address[]",
       },
     ],
-    name: "recordWinnerAndPayout",
-    outputs: [],
-    stateMutability: "nonpayable",
+    stateMutability: "view",
     type: "function",
   },
   {
@@ -348,9 +428,19 @@ export const ROOM_MANAGER_ABI = [
         type: "bool",
       },
       {
-        internalType: "uint8",
+        internalType: "enum RoomManagerV2.RoomStatus",
         name: "status",
         type: "uint8",
+      },
+      {
+        internalType: "uint16",
+        name: "gameId",
+        type: "uint16",
+      },
+      {
+        internalType: "uint32",
+        name: "turnTimeSeconds",
+        type: "uint32",
       },
       {
         internalType: "address",
@@ -364,38 +454,25 @@ export const ROOM_MANAGER_ABI = [
   {
     inputs: [
       {
+        internalType: "address",
+        name: "recipient",
+        type: "address",
+      },
+    ],
+    name: "setFeeRecipient",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
         internalType: "uint256",
-        name: "_bps",
+        name: "bps",
         type: "uint256",
       },
     ],
     name: "setPlatformFee",
-    outputs: [],
-    stateMutability: "nonpayable",
-    type: "function",
-  },
-  {
-    inputs: [
-      {
-        internalType: "address",
-        name: "_treasury",
-        type: "address",
-      },
-    ],
-    name: "setPlatformTreasury",
-    outputs: [],
-    stateMutability: "nonpayable",
-    type: "function",
-  },
-  {
-    inputs: [
-      {
-        internalType: "uint256",
-        name: "roomId",
-        type: "uint256",
-      },
-    ],
-    name: "startRoom",
     outputs: [],
     stateMutability: "nonpayable",
     type: "function",
@@ -412,7 +489,7 @@ export enum RoomStatus {
   Cancelled = 4,
 }
 
-// TypeScript types for room data
+// TypeScript types for room data (V2 with gameId and turnTimeSeconds)
 export interface ContractRoom {
   id: bigint;
   creator: `0x${string}`;
@@ -420,6 +497,7 @@ export interface ContractRoom {
   maxPlayers: number;
   isPrivate: boolean;
   status: RoomStatus;
-  players: `0x${string}`[];
+  gameId: number;
+  turnTimeSeconds: number;
   winner: `0x${string}`;
 }
