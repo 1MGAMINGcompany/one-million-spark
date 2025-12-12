@@ -106,29 +106,32 @@ const RoomList = () => {
     
     const feeInPol = parseFloat(formatEther(room.entryFee));
     
-    switch (feeFilter) {
-      case "lt10":
-        if (feeInPol >= 10) return false;
-        break;
-      case "lt50":
-        if (feeInPol >= 50) return false;
-        break;
-      case "lt100":
-        if (feeInPol >= 100) return false;
-        break;
-      case "lt1000":
-        if (feeInPol >= 1000) return false;
-        break;
-      case "gt1000":
-        if (feeInPol <= 1000) return false;
-        break;
-      case "gt10000":
-        if (feeInPol <= 10000) return false;
-        break;
-      case "gt100000":
-        if (feeInPol <= 100000) return false;
-        break;
-    }
+      switch (feeFilter) {
+        case "lt10":
+          if (feeInPol >= 10) return false;
+          break;
+        case "lt50":
+          if (feeInPol >= 50) return false;
+          break;
+        case "lt100":
+          if (feeInPol >= 100) return false;
+          break;
+        case "lt1000":
+          if (feeInPol >= 1000) return false;
+          break;
+        case "gt1000":
+          if (feeInPol <= 1000) return false;
+          break;
+        case "gt10000":
+          if (feeInPol <= 10000) return false;
+          break;
+        case "gt100000":
+          if (feeInPol <= 100000) return false;
+          break;
+        case "gt1000000":
+          if (feeInPol <= 1000000) return false;
+          break;
+      }
     
     return true;
   });
@@ -169,6 +172,7 @@ const RoomList = () => {
                 <SelectItem value="gt1000">Above 1,000 POL</SelectItem>
                 <SelectItem value="gt10000">Above 10,000 POL</SelectItem>
                 <SelectItem value="gt100000">Above 100,000 POL</SelectItem>
+                <SelectItem value="gt1000000">Above 1,000,000 POL</SelectItem>
               </SelectContent>
             </Select>
           </div>
