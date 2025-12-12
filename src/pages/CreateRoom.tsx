@@ -12,7 +12,7 @@ import { useCreateRoom, useCancelRoom } from "@/hooks/useRoomManager";
 import { usePolPrice } from "@/hooks/usePolPrice";
 import { Loader2, AlertCircle, AlertTriangle, Wallet } from "lucide-react";
 import { useWeb3Modal } from "@web3modal/wagmi/react";
-import { GAME_CATALOG } from "@/contracts/roomManager";
+import { GAME_CATALOG, TURN_TIMERS } from "@/contracts/roomManager";
 
 const CreateRoom = () => {
   const { open: openWalletModal } = useWeb3Modal();
@@ -26,7 +26,7 @@ const CreateRoom = () => {
   const [gameId, setGameId] = useState("0");
   const [entryFee, setEntryFee] = useState("");
   const [players, setPlayers] = useState("2");
-  const [turnTime, setTurnTime] = useState("0"); // seconds, "0" = no timer
+  const [turnTime, setTurnTime] = useState("0"); // seconds, "0" = unlimited
   const [roomType, setRoomType] = useState("public");
   const [feeError, setFeeError] = useState<string | null>(null);
 
@@ -44,9 +44,6 @@ const CreateRoom = () => {
     isSuccess: isCancelSuccess,
     reset: resetCancel,
   } = useCancelRoom();
-
-  // UX: if wallet modal fails to pop, guide user
-  const [connectNudge, setConnectNudge] = useState(false);
 
   useEffect(() => {
     if (!entryFee) {
@@ -119,10 +116,11 @@ const CreateRoom = () => {
 
     const maxPlayers = parseInt(players);
     const isPrivate = roomType === "private";
-    const turnTimeSeconds = turnTime === "none" ? 0 : parseInt(turnTime);
+    const gameType = parseInt(gameId);
+    const turnTimeSeconds = parseInt(turnTime);
 
     play("ui_click");
-    createRoom(entryFee, maxPlayers, isPrivate);
+    createRoom(entryFee, maxPlayers, isPrivate, gameType, turnTimeSeconds);
   };
 
   const isLoading = isPending || isConfirming;
@@ -133,27 +131,19 @@ const CreateRoom = () => {
     if (!isConnected) {
       play("ui_click");
       openWalletModal();
-
-      // If wallet doesn’t appear, user clicks again — we guide them.
-      setConnectNudge(true);
-      setTimeout(() => setConnectNudge(false), 2500);
-
-      toast({
-        title: "Connect your wallet",
-        description: "If the wallet popup didn’t open, click the button again.",
-      });
       return;
     }
+    if (isPending || isConfirming) return;
     handleCreateRoom();
   };
 
   const buttonLabel = !isConnected
-    ? connectNudge
-      ? "Click again to open wallet"
-      : "Double-click to connect"
-    : isLoading
-      ? "Processing..."
-      : "Create Room";
+    ? "Click to Connect Wallet"
+    : isPending
+      ? "Confirm in Wallet…"
+      : isConfirming
+        ? "Creating Room…"
+        : "Create Room";
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center px-4 py-12">
@@ -291,13 +281,11 @@ const CreateRoom = () => {
                 <SelectValue placeholder="Select time" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="0">No timer (play over days)</SelectItem>
-                <SelectItem value="30">30 seconds</SelectItem>
-                <SelectItem value="60">1 minute</SelectItem>
-                <SelectItem value="300">5 minutes</SelectItem>
-                <SelectItem value="900">15 minutes</SelectItem>
-                <SelectItem value="3600">1 hour</SelectItem>
-                <SelectItem value="86400">1 day per turn</SelectItem>
+                {TURN_TIMERS.map((timer) => (
+                  <SelectItem key={timer.value} value={String(timer.value)}>
+                    {timer.label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -337,7 +325,7 @@ const CreateRoom = () => {
             {isLoading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                {isPending ? "Waiting for wallet..." : "Waiting for network..."}
+                {isPending ? "Confirm in Wallet…" : "Creating Room…"}
               </>
             ) : !isConnected ? (
               <>

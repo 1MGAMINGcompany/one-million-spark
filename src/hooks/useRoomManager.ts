@@ -16,7 +16,7 @@ export function useRoomView(roomId: bigint | undefined) {
   return useReadContract({
     address: ROOM_MANAGER_ADDRESS,
     abi: ROOM_MANAGER_ABI,
-    functionName: "getRoom",
+    functionName: "getRoomView",
     args: roomId !== undefined ? [roomId] : undefined,
     query: { enabled: roomId !== undefined },
   });
@@ -30,18 +30,20 @@ export function useCreateRoom() {
   const createRoom = (
     entryFeeInPol: string,
     maxPlayers: number,
-    isPrivate: boolean
+    isPrivate: boolean,
+    gameType: number,
+    turnTimeSeconds: number
   ) => {
     if (!address) return;
 
-    // ✅ ALWAYS convert POL → wei here
     const entryFeeWei = parseEther(entryFeeInPol);
 
     writeContract({
       address: ROOM_MANAGER_ADDRESS,
       abi: ROOM_MANAGER_ABI,
       functionName: "createRoom",
-      args: [entryFeeWei, maxPlayers, isPrivate],
+      args: [entryFeeWei, maxPlayers, isPrivate, gameType, turnTimeSeconds],
+      value: entryFeeWei,
       chain: polygon,
       account: address,
     });
@@ -196,7 +198,7 @@ export function useRoomPlayers(roomId: bigint | undefined) {
   return useReadContract({
     address: ROOM_MANAGER_ADDRESS,
     abi: ROOM_MANAGER_ABI,
-    functionName: "playersOf",
+    functionName: "playersOf" as const,
     args: roomId !== undefined ? [roomId] : undefined,
     query: { enabled: roomId !== undefined },
   });
