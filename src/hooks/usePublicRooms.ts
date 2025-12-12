@@ -26,16 +26,6 @@ const publicClient = createPublicClient({
   ]),
 });
 
-async function readContractSafe<T>(params: {
-  address: `0x${string}`;
-  abi: typeof ROOM_MANAGER_ABI;
-  functionName: string;
-  args?: readonly unknown[];
-}): Promise<T> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return publicClient.readContract(params as any) as Promise<T>;
-}
-
 export function usePublicRooms() {
   const [rooms, setRooms] = useState<PublicRoom[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -45,11 +35,12 @@ export function usePublicRooms() {
     setIsLoading(true);
 
     try {
-      const nextRoomId = await readContractSafe<bigint>({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const nextRoomId = (await publicClient.readContract({
         address: ROOM_MANAGER_ADDRESS,
-        abi: ROOM_MANAGER_ABI,
+        abi: ROOM_MANAGER_ABI as any,
         functionName: "nextRoomId",
-      });
+      } as any)) as bigint;
 
       if (!nextRoomId || nextRoomId <= 1n) {
         setRooms([]);
@@ -59,23 +50,34 @@ export function usePublicRooms() {
       const ids: bigint[] = [];
       for (let i = 1n; i < nextRoomId; i++) ids.push(i);
 
-      // Fetch room views + playerCounts in parallel
       const results = await Promise.all(
         ids.map(async (roomId) => {
           try {
-            const rv = await readContractSafe<readonly [bigint, `0x${string}`, bigint, number, boolean, number, number, number, `0x${string}`]>({
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const rv = (await publicClient.readContract({
               address: ROOM_MANAGER_ADDRESS,
-              abi: ROOM_MANAGER_ABI,
+              abi: ROOM_MANAGER_ABI as any,
               functionName: "getRoomView",
               args: [roomId],
-            });
+            } as any)) as readonly [
+              bigint,
+              `0x${string}`,
+              bigint,
+              number,
+              boolean,
+              number,
+              number,
+              number,
+              `0x${string}`,
+            ];
 
-            const pc = await readContractSafe<bigint>({
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const pc = (await publicClient.readContract({
               address: ROOM_MANAGER_ADDRESS,
-              abi: ROOM_MANAGER_ABI,
+              abi: ROOM_MANAGER_ABI as any,
               functionName: "getPlayerCount",
               args: [roomId],
-            });
+            } as any)) as bigint;
 
             return { ok: true as const, rv, playerCount: Number(pc) };
           } catch {
@@ -98,6 +100,8 @@ export function usePublicRooms() {
         const turnTimeSeconds = Number(turnTimeSecondsRaw);
 
         if (isPrivate) continue;
+
+        // show only open rooms
         if (status !== RoomStatus.Created && status !== RoomStatus.Started) continue;
 
         // hide full rooms
@@ -131,9 +135,7 @@ export function usePublicRooms() {
     fetchRooms();
   }, [fetchRooms, refreshKey]);
 
-  const refetch = useCallback(() => {
-    setRefreshKey((p) => p + 1);
-  }, []);
+  const refetch = useCallback(() => setRefreshKey((p) => p + 1), []);
 
   return { rooms, isLoading, refetch };
 }
