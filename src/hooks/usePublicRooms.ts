@@ -1,5 +1,5 @@
 import { useCallback, useState, useEffect } from "react";
-import { createPublicClient, http } from "viem";
+import { createPublicClient, http, fallback } from "viem";
 import { polygon } from "viem/chains";
 import { ROOM_MANAGER_ADDRESS, ROOM_MANAGER_ABI, RoomStatus } from "@/contracts/roomManager";
 
@@ -9,14 +9,19 @@ export type PublicRoom = {
   entryFee: bigint;
   maxPlayers: number;
   isPrivate: boolean;
-  status: RoomStatus;
+  status: RoomStatus; // keep your type, but we'll display raw numbers too
   players: readonly `0x${string}`[];
   winner: `0x${string}`;
 };
 
 const publicClient = createPublicClient({
   chain: polygon,
-  transport: http("https://polygon-rpc.com"),
+  // more reliable than a single RPC:
+  transport: fallback([
+    http("https://polygon-rpc.com"),
+    http("https://rpc.ankr.com/polygon"),
+    http("https://polygon-bor-rpc.publicnode.com"),
+  ]),
 });
 
 export function usePublicRooms() {
@@ -29,11 +34,13 @@ export function usePublicRooms() {
 
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const nextRoomId = await (publicClient as any).readContract({
+      const nextRoomId = (await (publicClient as any).readContract({
         address: ROOM_MANAGER_ADDRESS,
         abi: ROOM_MANAGER_ABI,
         functionName: "nextRoomId",
-      }) as bigint;
+      })) as bigint;
+
+      console.log("[usePublicRooms] nextRoomId =", nextRoomId?.toString());
 
       if (!nextRoomId || nextRoomId <= 1n) {
         setRooms([]);
@@ -47,15 +54,26 @@ export function usePublicRooms() {
         ids.map(async (roomId) => {
           try {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const r = await (publicClient as any).readContract({
+            const r = (await (publicClient as any).readContract({
               address: ROOM_MANAGER_ADDRESS,
               abi: ROOM_MANAGER_ABI,
               functionName: "getRoom",
               args: [roomId],
-            }) as readonly [bigint, `0x${string}`, bigint, number, boolean, number, readonly `0x${string}`[], `0x${string}`];
-            return { ok: true as const, r };
-          } catch {
-            return { ok: false as const };
+            })) as readonly [
+              bigint,
+              `0x${string}`,
+              bigint,
+              any,
+              boolean,
+              any,
+              readonly `0x${string}`[],
+              `0x${string}`
+            ];
+
+            return { ok: true as const, roomId, r };
+          } catch (e) {
+            console.error("[usePublicRooms] getRoom failed:", roomId.toString(), e);
+            return { ok: false as const, roomId };
           }
         })
       );
@@ -67,11 +85,20 @@ export function usePublicRooms() {
 
         const [id, creator, entryFee, maxPlayersRaw, isPrivate, statusRaw, players, winner] = item.r;
 
-        const status = Number(statusRaw) as RoomStatus;
+        const statusNum = Number(statusRaw);
         const maxPlayers = Number(maxPlayersRaw);
 
+        // IMPORTANT: only filter private for now
         if (isPrivate) continue;
-        if (status !== RoomStatus.Created && status !== RoomStatus.Started) continue;
+
+        console.log(
+          `[usePublicRooms] room #${id.toString()} status=`,
+          statusNum,
+          "isPrivate=",
+          isPrivate,
+          "players=",
+          players?.length
+        );
 
         publicRooms.push({
           id,
@@ -79,7 +106,7 @@ export function usePublicRooms() {
           entryFee,
           maxPlayers,
           isPrivate,
-          status,
+          status: statusNum as RoomStatus,
           players,
           winner,
         });
@@ -103,9 +130,5 @@ export function usePublicRooms() {
     setRefreshKey((p) => p + 1);
   }, []);
 
-  return {
-    rooms,
-    isLoading,
-    refetch,
-  };
+  return { rooms, isLoading, refetch };
 }
