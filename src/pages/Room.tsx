@@ -1,6 +1,6 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { useAccount } from "wagmi";
-import { useRoom, useRoomPlayers, useJoinRoom, useCancelRoom, formatRoomView, formatEntryFee, getRoomStatusLabel, type ContractRoomView } from "@/hooks/useRoomManager";
+import { useRoom, useJoinRoom, useStartRoom, useCancelRoom, formatRoom, formatEntryFee, getRoomStatusLabel } from "@/hooks/useRoomManager";
 import { RoomStatus } from "@/contracts/roomManager";
 import { usePolPrice } from "@/hooks/usePolPrice";
 import { useToast } from "@/hooks/use-toast";
@@ -8,7 +8,7 @@ import { useSound } from "@/contexts/SoundContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Users, Coins, Crown, Copy, ArrowLeft, Share2, Mail, MessageCircle } from "lucide-react";
+import { Loader2, Users, Coins, Crown, Copy, ArrowLeft } from "lucide-react";
 import { useEffect } from "react";
 
 export default function Room() {
@@ -22,17 +22,17 @@ export default function Room() {
   const roomIdBigInt = roomId ? BigInt(roomId) : undefined;
 
   const { data: roomData, isLoading: isRoomLoading, refetch } = useRoom(roomIdBigInt);
-  const { data: playersData, refetch: refetchPlayers } = useRoomPlayers(roomIdBigInt);
 
   const { joinRoom, isPending: isJoinPending, isConfirming: isJoinConfirming, isSuccess: isJoinSuccess, reset: resetJoin } = useJoinRoom();
+  const { startRoom, isPending: isStartPending, isConfirming: isStartConfirming, isSuccess: isStartSuccess, reset: resetStart } = useStartRoom();
   const { cancelRoom, isPending: isCancelPending, isConfirming: isCancelConfirming, isSuccess: isCancelSuccess, reset: resetCancel } = useCancelRoom();
 
-  const room = roomData ? formatRoomView(roomData as ContractRoomView) : null;
-  const players: readonly `0x${string}`[] = (playersData as readonly `0x${string}`[] | undefined) ?? [];
+  const room = roomData ? formatRoom(roomData as readonly [bigint, `0x${string}`, bigint, number, boolean, number, readonly `0x${string}`[], `0x${string}`]) : null;
 
   const isCreator = room && address && room.creator.toLowerCase() === address.toLowerCase();
-  const isPlayer = players.some(p => p.toLowerCase() === address?.toLowerCase());
-  const canJoin = room && room.status === RoomStatus.Created && !isPlayer && players.length < room.maxPlayers;
+  const isPlayer = room && address && room.players.some(p => p.toLowerCase() === address.toLowerCase());
+  const canJoin = room && room.status === RoomStatus.Created && !isPlayer && room.players.length < room.maxPlayers;
+  const canStart = room && room.status === RoomStatus.Created && isCreator && room.players.length >= 2;
   const canCancel = room && room.status === RoomStatus.Created && isCreator;
 
   // Handle successful actions
@@ -42,9 +42,17 @@ export default function Room() {
       toast({ title: "Joined Room", description: "You have successfully joined the room." });
       resetJoin();
       refetch();
-      refetchPlayers();
     }
-  }, [isJoinSuccess, play, toast, resetJoin, refetch, refetchPlayers]);
+  }, [isJoinSuccess, play, toast, resetJoin, refetch]);
+
+  useEffect(() => {
+    if (isStartSuccess) {
+      play("rooms_match-start");
+      toast({ title: "Room Started", description: "The game has begun!" });
+      resetStart();
+      refetch();
+    }
+  }, [isStartSuccess, play, toast, resetStart, refetch]);
 
   useEffect(() => {
     if (isCancelSuccess) {
@@ -60,6 +68,12 @@ export default function Room() {
     joinRoom(roomIdBigInt, room.entryFee);
   };
 
+  const handleStart = () => {
+    if (!roomIdBigInt) return;
+    play("ui_click");
+    startRoom(roomIdBigInt);
+  };
+
   const handleCancel = () => {
     if (!roomIdBigInt) return;
     play("ui_click");
@@ -72,21 +86,6 @@ export default function Room() {
   };
 
   const shortenAddress = (addr: string) => `${addr.slice(0, 6)}...${addr.slice(-4)}`;
-
-  const inviteLink = `${window.location.origin}/room/${roomId}`;
-
-  const copyInviteLink = () => {
-    navigator.clipboard.writeText(inviteLink);
-    toast({ title: "Copied", description: "Invite link copied to clipboard." });
-  };
-
-  const shareWhatsApp = () => {
-    window.open(`https://wa.me/?text=Join%20my%20game:%20${encodeURIComponent(inviteLink)}`, "_blank");
-  };
-
-  const shareEmail = () => {
-    window.open(`mailto:?subject=Game%20Invite&body=Join%20me:%20${encodeURIComponent(inviteLink)}`, "_blank");
-  };
 
   const getStatusBadgeVariant = (status: RoomStatus) => {
     switch (status) {
@@ -169,9 +168,9 @@ export default function Room() {
           <div className="flex items-start gap-3">
             <Users className="h-5 w-5 text-primary mt-0.5" />
             <div className="flex-1">
-              <p className="text-sm text-muted-foreground">Players ({players.length}/{room.maxPlayers})</p>
+              <p className="text-sm text-muted-foreground">Players ({room.players.length}/{room.maxPlayers})</p>
               <div className="mt-2 space-y-1">
-                {players.map((player, idx) => (
+                {room.players.map((player, idx) => (
                   <div key={idx} className="flex items-center gap-2 text-sm">
                     <span className="font-mono">{shortenAddress(player)}</span>
                     <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => copyAddress(player)}>
@@ -181,7 +180,7 @@ export default function Room() {
                     {player.toLowerCase() === room.creator.toLowerCase() && <Badge variant="secondary" className="text-xs">Creator</Badge>}
                   </div>
                 ))}
-                {players.length === 0 && <p className="text-muted-foreground text-sm">No players yet.</p>}
+                {room.players.length === 0 && <p className="text-muted-foreground text-sm">No players yet.</p>}
               </div>
             </div>
           </div>
@@ -199,6 +198,16 @@ export default function Room() {
                 </Button>
               )}
 
+              {canStart && (
+                <Button onClick={handleStart} disabled={isStartPending || isStartConfirming} variant="secondary" className="flex-1">
+                  {isStartPending || isStartConfirming ? (
+                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Starting...</>
+                  ) : (
+                    "Start Game"
+                  )}
+                </Button>
+              )}
+
               {canCancel && (
                 <Button onClick={handleCancel} disabled={isCancelPending || isCancelConfirming} variant="destructive">
                   {isCancelPending || isCancelConfirming ? (
@@ -212,24 +221,6 @@ export default function Room() {
               {isPlayer && !isCreator && (
                 <p className="w-full text-center text-sm text-muted-foreground">Waiting for the creator to start the game...</p>
               )}
-
-              {/* Invite actions */}
-              <div className="w-full pt-3 border-t border-border/30">
-                <p className="text-sm text-muted-foreground mb-2 flex items-center gap-1">
-                  <Share2 className="h-4 w-4" /> Invite players
-                </p>
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={copyInviteLink}>
-                    <Copy className="mr-1 h-3 w-3" /> Copy Link
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={shareWhatsApp}>
-                    <MessageCircle className="mr-1 h-3 w-3" /> WhatsApp
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={shareEmail}>
-                    <Mail className="mr-1 h-3 w-3" /> Email
-                  </Button>
-                </div>
-              </div>
             </div>
           )}
 

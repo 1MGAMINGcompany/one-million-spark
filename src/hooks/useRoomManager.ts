@@ -1,312 +1,288 @@
-// src/hooks/useRoomManager.ts
-import { useCallback, useMemo } from "react";
+import { useReadContract, useWriteContract, useWaitForTransactionReceipt, useAccount, useSimulateContract } from "wagmi";
 import { parseEther, formatEther } from "viem";
-import {
-  useAccount,
-  useReadContract,
-  useWriteContract,
-  useWaitForTransactionReceipt,
-  useWatchContractEvent,
-} from "wagmi";
-import { ROOM_MANAGER_ABI, ROOM_MANAGER_ADDRESS, RoomStatus } from "../contracts/roomManager";
+import { polygon } from "@/lib/wagmi-config";
+import { ROOM_MANAGER_ADDRESS, ROOM_MANAGER_ABI, RoomStatus, type ContractRoom } from "@/contracts/roomManager";
+import { useToast } from "@/hooks/use-toast";
+import { useCallback, useState } from "react";
 
-export type Room = {
-  id: bigint;
-  creator: `0x${string}`;
-  entryFeeWei: bigint;
-  entryFee: bigint;
-  maxPlayers: number;
-  isPrivate: boolean;
-  platformFeeBps: number;
-  gameId: number;
-  playerCount: number;
-  isOpen: boolean;
-  status: RoomStatus;
-  winner: `0x${string}`;
-};
-
-export type ContractRoomView = readonly [
-  bigint,           // id
-  `0x${string}`,    // creator
-  bigint,           // entryFeeWei
-  number,           // maxPlayers
-  boolean,          // isPrivate
-  number,           // platformFeeBps
-  number,           // gameId
-  number,           // playerCount
-  boolean,          // isOpen
-];
-
-export function formatRoomView(data: ContractRoomView): Room {
-  return {
-    id: data[0],
-    creator: data[1],
-    entryFeeWei: data[2],
-    entryFee: data[2],
-    maxPlayers: Number(data[3]),
-    isPrivate: Boolean(data[4]),
-    platformFeeBps: Number(data[5]),
-    gameId: Number(data[6]),
-    playerCount: Number(data[7]),
-    isOpen: Boolean(data[8]),
-    status: Boolean(data[8]) ? RoomStatus.Created : RoomStatus.Finished,
-    winner: "0x0000000000000000000000000000000000000000" as `0x${string}`,
-  };
-}
-
-export function formatEntryFee(wei: bigint): string {
-  return formatEther(wei);
-}
-
-export function getRoomStatusLabel(status: RoomStatus): string {
-  switch (status) {
-    case RoomStatus.None: return "None";
-    case RoomStatus.Created: return "Waiting";
-    case RoomStatus.Started: return "In Progress";
-    case RoomStatus.Finished: return "Finished";
-    case RoomStatus.Cancelled: return "Cancelled";
-    default: return "Unknown";
-  }
-}
-
-export function useRoomManager() {
-  const { address } = useAccount();
-  const { writeContractAsync, data: txHash, isPending } = useWriteContract();
-
-  const {
-    isLoading: isConfirming,
-    isSuccess: isConfirmed,
-  } = useWaitForTransactionReceipt({
-    hash: txHash,
-  });
-
-  const latestRoomId = useReadContract({
+// Hook to get the next room ID
+export function useNextRoomId() {
+  return useReadContract({
     address: ROOM_MANAGER_ADDRESS,
     abi: ROOM_MANAGER_ABI,
-    functionName: "getLatestRoomId",
+    functionName: "nextRoomId",
   });
-
-  const openRoomIds = useReadContract({
-    address: ROOM_MANAGER_ADDRESS,
-    abi: ROOM_MANAGER_ABI,
-    functionName: "getOpenRoomIds",
-    args: [0n, 50n],
-    query: { refetchInterval: 4000 },
-  });
-
-  const createRoom = useCallback(
-    async (args: {
-      entryFeeEth: string;
-      maxPlayers: number;
-      isPrivate: boolean;
-      platformFeeBps: number;
-      gameId: number;
-    }) => {
-      const entryFeeWei = parseEther(args.entryFeeEth);
-
-      return writeContractAsync({
-        address: ROOM_MANAGER_ADDRESS,
-        abi: ROOM_MANAGER_ABI,
-        functionName: "createRoom",
-        args: [
-          entryFeeWei,
-          args.maxPlayers,
-          args.isPrivate,
-          args.platformFeeBps,
-          args.gameId,
-        ],
-        value: entryFeeWei,
-      } as any);
-    },
-    [writeContractAsync]
-  );
-
-  const joinRoom = useCallback(
-    async (roomId: bigint, entryFeeWei: bigint) => {
-      return writeContractAsync({
-        address: ROOM_MANAGER_ADDRESS,
-        abi: ROOM_MANAGER_ABI,
-        functionName: "joinRoom",
-        args: [roomId],
-        value: entryFeeWei,
-      } as any);
-    },
-    [writeContractAsync]
-  );
-
-  const cancelRoom = useCallback(
-    async (roomId: bigint) => {
-      return writeContractAsync({
-        address: ROOM_MANAGER_ADDRESS,
-        abi: ROOM_MANAGER_ABI,
-        functionName: "cancelRoom",
-        args: [roomId],
-      } as any);
-    },
-    [writeContractAsync]
-  );
-
-  const formatEntryFeeLocal = useCallback((wei: bigint) => formatEther(wei), []);
-
-  const watch = useMemo(
-    () => ({
-      address: ROOM_MANAGER_ADDRESS,
-      abi: ROOM_MANAGER_ABI,
-    }),
-    []
-  );
-
-  return {
-    address,
-    latestRoomId,
-    openRoomIds,
-    createRoom,
-    joinRoom,
-    cancelRoom,
-    txHash,
-    isPending,
-    isConfirming,
-    isConfirmed,
-    formatEntryFee: formatEntryFeeLocal,
-    watch,
-  };
 }
 
-// Separate hooks for individual operations
-export function useCreateRoom() {
-  const { writeContractAsync, data: txHash, isPending, error, reset } = useWriteContract();
-
-  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
-    hash: txHash,
-  });
-
-  const createRoom = useCallback(
-    async (
-      entryFeeEth: string,
-      maxPlayers: number,
-      isPrivate: boolean,
-      gameId: number,
-      turnTimeSeconds: number
-    ) => {
-      const entryFeeWei = parseEther(entryFeeEth);
-      const platformFeeBps = 500; // 5% platform fee
-
-      return writeContractAsync({
-        address: ROOM_MANAGER_ADDRESS,
-        abi: ROOM_MANAGER_ABI,
-        functionName: "createRoom",
-        args: [entryFeeWei, maxPlayers, isPrivate, platformFeeBps, gameId],
-        value: entryFeeWei,
-      } as any);
-    },
-    [writeContractAsync]
-  );
-
-  return { createRoom, isPending, isConfirming, isSuccess, error, reset };
-}
-
-export function useJoinRoom() {
-  const { writeContractAsync, data: txHash, isPending, error, reset } = useWriteContract();
-
-  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
-    hash: txHash,
-  });
-
-  const joinRoom = useCallback(
-    async (roomId: bigint, entryFeeWei: bigint) => {
-      return writeContractAsync({
-        address: ROOM_MANAGER_ADDRESS,
-        abi: ROOM_MANAGER_ABI,
-        functionName: "joinRoom",
-        args: [roomId],
-        value: entryFeeWei,
-      } as any);
-    },
-    [writeContractAsync]
-  );
-
-  return { joinRoom, isPending, isConfirming, isSuccess, error, reset };
-}
-
-export function useCancelRoom() {
-  const { writeContractAsync, data: txHash, isPending, error, reset } = useWriteContract();
-
-  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
-    hash: txHash,
-  });
-
-  const cancelRoom = useCallback(
-    async (roomId: bigint) => {
-      return writeContractAsync({
-        address: ROOM_MANAGER_ADDRESS,
-        abi: ROOM_MANAGER_ABI,
-        functionName: "cancelRoom",
-        args: [roomId],
-      } as any);
-    },
-    [writeContractAsync]
-  );
-
-  return { cancelRoom, isPending, isConfirming, isSuccess, error, reset };
-}
-
-export function useRoom(roomId?: bigint) {
+// Hook to get a specific room by ID
+export function useRoom(roomId: bigint | undefined) {
   return useReadContract({
     address: ROOM_MANAGER_ADDRESS,
     abi: ROOM_MANAGER_ABI,
     functionName: "getRoom",
-    args: roomId ? [roomId] : undefined,
-    query: { enabled: !!roomId, refetchInterval: 4000 },
+    args: roomId !== undefined ? [roomId] : undefined,
+    query: {
+      enabled: roomId !== undefined,
+    },
   });
 }
 
-export function useRoomPlayers(roomId?: bigint) {
-  // The contract doesn't have a separate players function - playerCount is in getRoom
-  // Return empty array since we don't have individual player addresses
-  return { data: [] as `0x${string}`[], refetch: () => {} };
-}
-
-export function useRoomEvents(onAnyEvent?: () => void) {
-  useWatchContractEvent({
+// Hook to get creator's active room
+export function useCreatorActiveRoom(creatorAddress: `0x${string}` | undefined) {
+  return useReadContract({
     address: ROOM_MANAGER_ADDRESS,
     abi: ROOM_MANAGER_ABI,
-    eventName: "RoomCreated",
-    onLogs: () => onAnyEvent?.(),
-  });
-
-  useWatchContractEvent({
-    address: ROOM_MANAGER_ADDRESS,
-    abi: ROOM_MANAGER_ABI,
-    eventName: "RoomJoined",
-    onLogs: () => onAnyEvent?.(),
-  });
-
-  useWatchContractEvent({
-    address: ROOM_MANAGER_ADDRESS,
-    abi: ROOM_MANAGER_ABI,
-    eventName: "RoomCancelled",
-    onLogs: () => onAnyEvent?.(),
+    functionName: "creatorActiveRoomId",
+    args: creatorAddress ? [creatorAddress] : undefined,
+    query: {
+      enabled: !!creatorAddress,
+    },
   });
 }
 
-// Helper functions for display
-export function formatTurnTime(seconds: number) {
-  if (!seconds || seconds <= 0) return "No timer";
-  if (seconds < 60) return `${seconds}s/turn`;
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return s ? `${m}m ${s}s/turn` : `${m}m/turn`;
+// Hook to create a room with simulation
+export function useCreateRoom() {
+  const { address } = useAccount();
+  const { toast } = useToast();
+  const { writeContract, data: hash, isPending, error: writeError, reset } = useWriteContract();
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+  const [simulationError, setSimulationError] = useState<Error | null>(null);
+  const [isSimulating, setIsSimulating] = useState(false);
+
+  // Simulation args state
+  const [simArgs, setSimArgs] = useState<{
+    entryFeeWei: bigint;
+    maxPlayers: number;
+    isPrivate: boolean;
+  } | null>(null);
+
+  // Simulate contract call
+  const { refetch: simulate } = useSimulateContract({
+    address: ROOM_MANAGER_ADDRESS,
+    abi: ROOM_MANAGER_ABI,
+    functionName: "createRoom",
+    args: simArgs ? [simArgs.entryFeeWei, simArgs.maxPlayers, simArgs.isPrivate] : undefined,
+    query: {
+      enabled: false, // Manual trigger only
+    },
+  });
+
+  const createRoom = useCallback(async (entryFeeInPol: string, maxPlayers: number, isPrivate: boolean) => {
+    if (!address) return;
+    
+    const entryFeeWei = parseEther(entryFeeInPol);
+    setSimArgs({ entryFeeWei, maxPlayers, isPrivate });
+    setSimulationError(null);
+    setIsSimulating(true);
+
+    try {
+      // Run simulation first
+      const simResult = await simulate();
+      
+      if (simResult.error) {
+        const revertReason = extractRevertReason(simResult.error);
+        setSimulationError(simResult.error);
+        toast({
+          title: "Transaction will fail",
+          description: revertReason,
+          variant: "destructive",
+        });
+        setIsSimulating(false);
+        return;
+      }
+
+      if (simResult.data?.request) {
+        // Simulation succeeded, send the transaction
+        writeContract(simResult.data.request);
+      }
+    } catch (err) {
+      const revertReason = extractRevertReason(err);
+      setSimulationError(err as Error);
+      toast({
+        title: "Simulation failed",
+        description: revertReason,
+        variant: "destructive",
+      });
+    } finally {
+      setIsSimulating(false);
+    }
+  }, [address, simulate, writeContract, toast]);
+
+  return {
+    createRoom,
+    hash,
+    isPending: isPending || isSimulating,
+    isConfirming,
+    isSuccess,
+    error: writeError || simulationError,
+    reset: () => {
+      reset();
+      setSimulationError(null);
+      setSimArgs(null);
+    },
+  };
 }
 
-export function gameName(gameId: number) {
-  switch (gameId) {
-    case 1:
-      return "Chess";
-    case 2:
-      return "Dominos";
-    case 3:
-      return "Backgammon";
+// Hook to join a room
+export function useJoinRoom() {
+  const { address } = useAccount();
+  const { writeContract, data: hash, isPending, error, reset } = useWriteContract();
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+
+  const joinRoom = (roomId: bigint, entryFeeWei: bigint) => {
+    if (!address) return;
+    writeContract({
+      address: ROOM_MANAGER_ADDRESS,
+      abi: ROOM_MANAGER_ABI,
+      functionName: "joinRoom",
+      args: [roomId],
+      value: entryFeeWei,
+      chain: polygon,
+      account: address,
+    });
+  };
+
+  return {
+    joinRoom,
+    hash,
+    isPending,
+    isConfirming,
+    isSuccess,
+    error,
+    reset,
+  };
+}
+
+// Hook to cancel a room
+export function useCancelRoom() {
+  const { address } = useAccount();
+  const { writeContract, data: hash, isPending, error, reset } = useWriteContract();
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+
+  const cancelRoom = (roomId: bigint) => {
+    if (!address) return;
+    writeContract({
+      address: ROOM_MANAGER_ADDRESS,
+      abi: ROOM_MANAGER_ABI,
+      functionName: "cancelRoom",
+      args: [roomId],
+      chain: polygon,
+      account: address,
+    });
+  };
+
+  return {
+    cancelRoom,
+    hash,
+    isPending,
+    isConfirming,
+    isSuccess,
+    error,
+    reset,
+  };
+}
+
+// Hook to start a room
+export function useStartRoom() {
+  const { address } = useAccount();
+  const { writeContract, data: hash, isPending, error, reset } = useWriteContract();
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+
+  const startRoom = (roomId: bigint) => {
+    if (!address) return;
+    writeContract({
+      address: ROOM_MANAGER_ADDRESS,
+      abi: ROOM_MANAGER_ABI,
+      functionName: "startRoom",
+      args: [roomId],
+      chain: polygon,
+      account: address,
+    });
+  };
+
+  return {
+    startRoom,
+    hash,
+    isPending,
+    isConfirming,
+    isSuccess,
+    error,
+    reset,
+  };
+}
+
+// Helper to extract revert reason from error
+function extractRevertReason(error: unknown): string {
+  if (!error) return "Unknown error";
+  
+  const errorStr = String(error);
+  
+  // Try to extract revert reason from common patterns
+  const patterns = [
+    /reason="([^"]+)"/,
+    /reverted with reason string '([^']+)'/,
+    /Error: ([^(]+)\(/,
+    /execution reverted: ([^"]+)/i,
+    /ContractFunctionExecutionError: ([^.]+)/,
+  ];
+
+  for (const pattern of patterns) {
+    const match = errorStr.match(pattern);
+    if (match?.[1]) {
+      return match[1].trim();
+    }
+  }
+
+  // Check for common error messages in the error object
+  if (typeof error === 'object' && error !== null) {
+    const err = error as Record<string, unknown>;
+    if (err.shortMessage && typeof err.shortMessage === 'string') {
+      return err.shortMessage;
+    }
+    if (err.message && typeof err.message === 'string') {
+      // Truncate long messages
+      const msg = err.message;
+      if (msg.length > 150) {
+        return msg.substring(0, 150) + "...";
+      }
+      return msg;
+    }
+  }
+
+  return "Transaction simulation failed";
+}
+
+// Helper to format room data from contract response
+export function formatRoom(data: readonly [bigint, `0x${string}`, bigint, number, boolean, number, readonly `0x${string}`[], `0x${string}`]): ContractRoom {
+  return {
+    id: data[0],
+    creator: data[1],
+    entryFee: data[2],
+    maxPlayers: data[3],
+    isPrivate: data[4],
+    status: data[5] as RoomStatus,
+    players: [...data[6]],
+    winner: data[7],
+  };
+}
+
+// Helper to format entry fee for display
+export function formatEntryFee(weiAmount: bigint): string {
+  return formatEther(weiAmount);
+}
+
+// Helper to get room status label
+export function getRoomStatusLabel(status: RoomStatus): string {
+  switch (status) {
+    case RoomStatus.Created:
+      return "Waiting";
+    case RoomStatus.Started:
+      return "In Progress";
+    case RoomStatus.Finished:
+      return "Finished";
+    case RoomStatus.Cancelled:
+      return "Cancelled";
     default:
-      return `Game ${gameId}`;
+      return "Unknown";
   }
 }

@@ -1,116 +1,409 @@
-// src/contracts/roomManager.ts
+// Deployed RoomManagerTest contract on Polygon mainnet
 export const ROOM_MANAGER_ADDRESS =
-  (import.meta.env.VITE_ROOM_MANAGER_ADDRESS ||
-    "0xd3ACD6e228280BDdb470653eBd658648FBB84789") as `0x${string}`;
+  "0xB24b7f603de5150dEB6fe51aCe1C139EB578854b" as const;
 
-// RoomManagerV2 ABI (minimal: write + read + events)
 export const ROOM_MANAGER_ABI = [
-  // createRoom(uint256,uint8,bool,uint16,uint32) payable
   {
-    type: "function",
-    name: "createRoom",
-    stateMutability: "payable",
     inputs: [
-      { name: "entryFeeWei", type: "uint256" },
-      { name: "maxPlayers", type: "uint8" },
-      { name: "isPrivate", type: "bool" },
-      { name: "platformFeeBps", type: "uint16" },
-      { name: "gameId", type: "uint32" },
+      {
+        internalType: "address",
+        name: "_platformTreasury",
+        type: "address",
+      },
     ],
-    outputs: [{ name: "roomId", type: "uint256" }],
-  },
-
-  // joinRoom(uint256) payable
-  {
-    type: "function",
-    name: "joinRoom",
-    stateMutability: "payable",
-    inputs: [{ name: "roomId", type: "uint256" }],
-    outputs: [],
-  },
-
-  // cancelRoom(uint256)
-  {
-    type: "function",
-    name: "cancelRoom",
     stateMutability: "nonpayable",
-    inputs: [{ name: "roomId", type: "uint256" }],
-    outputs: [],
+    type: "constructor",
   },
-
-  // getRoom(uint256) view returns (...)
   {
-    type: "function",
-    name: "getRoom",
-    stateMutability: "view",
-    inputs: [{ name: "roomId", type: "uint256" }],
-    outputs: [
-      { name: "id", type: "uint256" },
-      { name: "creator", type: "address" },
-      { name: "entryFeeWei", type: "uint256" },
-      { name: "maxPlayers", type: "uint8" },
-      { name: "isPrivate", type: "bool" },
-      { name: "platformFeeBps", type: "uint16" },
-      { name: "gameId", type: "uint32" },
-      { name: "playerCount", type: "uint8" },
-      { name: "isOpen", type: "bool" },
-    ],
-  },
-
-  // getLatestRoomId() view returns (uint256)
-  {
-    type: "function",
-    name: "getLatestRoomId",
-    stateMutability: "view",
-    inputs: [],
-    outputs: [{ name: "roomId", type: "uint256" }],
-  },
-
-  // getOpenRoomIds(uint256,uint256) view returns (uint256[])
-  {
-    type: "function",
-    name: "getOpenRoomIds",
-    stateMutability: "view",
-    inputs: [
-      { name: "cursor", type: "uint256" },
-      { name: "limit", type: "uint256" },
-    ],
-    outputs: [{ name: "roomIds", type: "uint256[]" }],
-  },
-
-  // events
-  {
-    type: "event",
-    name: "RoomCreated",
-    inputs: [
-      { indexed: true, name: "roomId", type: "uint256" },
-      { indexed: true, name: "creator", type: "address" },
-      { indexed: false, name: "entryFeeWei", type: "uint256" },
-      { indexed: false, name: "maxPlayers", type: "uint8" },
-      { indexed: false, name: "isPrivate", type: "bool" },
-      { indexed: false, name: "platformFeeBps", type: "uint16" },
-      { indexed: false, name: "gameId", type: "uint32" },
-    ],
     anonymous: false,
-  },
-  {
-    type: "event",
-    name: "RoomJoined",
     inputs: [
-      { indexed: true, name: "roomId", type: "uint256" },
-      { indexed: true, name: "player", type: "address" },
-      { indexed: false, name: "playerCount", type: "uint8" },
+      {
+        indexed: true,
+        internalType: "uint256",
+        name: "roomId",
+        type: "uint256",
+      },
     ],
-    anonymous: false,
-  },
-  {
-    type: "event",
     name: "RoomCancelled",
-    inputs: [{ indexed: true, name: "roomId", type: "uint256" }],
+    type: "event",
+  },
+  {
     anonymous: false,
+    inputs: [
+      {
+        indexed: true,
+        internalType: "uint256",
+        name: "roomId",
+        type: "uint256",
+      },
+      {
+        indexed: true,
+        internalType: "address",
+        name: "creator",
+        type: "address",
+      },
+      {
+        indexed: false,
+        internalType: "uint256",
+        name: "entryFee",
+        type: "uint256",
+      },
+      {
+        indexed: false,
+        internalType: "uint8",
+        name: "maxPlayers",
+        type: "uint8",
+      },
+      {
+        indexed: false,
+        internalType: "bool",
+        name: "isPrivate",
+        type: "bool",
+      },
+    ],
+    name: "RoomCreated",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: true,
+        internalType: "uint256",
+        name: "roomId",
+        type: "uint256",
+      },
+      {
+        indexed: true,
+        internalType: "address",
+        name: "winner",
+        type: "address",
+      },
+      {
+        indexed: false,
+        internalType: "uint256",
+        name: "prizeAmount",
+        type: "uint256",
+      },
+      {
+        indexed: false,
+        internalType: "uint256",
+        name: "platformFee",
+        type: "uint256",
+      },
+    ],
+    name: "RoomFinished",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: true,
+        internalType: "uint256",
+        name: "roomId",
+        type: "uint256",
+      },
+      {
+        indexed: true,
+        internalType: "address",
+        name: "player",
+        type: "address",
+      },
+    ],
+    name: "RoomJoined",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: true,
+        internalType: "uint256",
+        name: "roomId",
+        type: "uint256",
+      },
+    ],
+    name: "RoomStarted",
+    type: "event",
+  },
+  {
+    inputs: [
+      {
+        internalType: "uint256",
+        name: "roomId",
+        type: "uint256",
+      },
+    ],
+    name: "cancelRoom",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "uint256",
+        name: "_entryFee",
+        type: "uint256",
+      },
+      {
+        internalType: "uint8",
+        name: "_maxPlayers",
+        type: "uint8",
+      },
+      {
+        internalType: "bool",
+        name: "_isPrivate",
+        type: "bool",
+      },
+    ],
+    name: "createRoom",
+    outputs: [
+      {
+        internalType: "uint256",
+        name: "",
+        type: "uint256",
+      },
+    ],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "address",
+        name: "",
+        type: "address",
+      },
+    ],
+    name: "creatorActiveRoomId",
+    outputs: [
+      {
+        internalType: "uint256",
+        name: "",
+        type: "uint256",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "uint256",
+        name: "roomId",
+        type: "uint256",
+      },
+    ],
+    name: "getRoom",
+    outputs: [
+      {
+        internalType: "uint256",
+        name: "id",
+        type: "uint256",
+      },
+      {
+        internalType: "address",
+        name: "creator",
+        type: "address",
+      },
+      {
+        internalType: "uint256",
+        name: "entryFee",
+        type: "uint256",
+      },
+      {
+        internalType: "uint8",
+        name: "maxPlayers",
+        type: "uint8",
+      },
+      {
+        internalType: "bool",
+        name: "isPrivate",
+        type: "bool",
+      },
+      {
+        internalType: "uint8",
+        name: "status",
+        type: "uint8",
+      },
+      {
+        internalType: "address[]",
+        name: "players",
+        type: "address[]",
+      },
+      {
+        internalType: "address",
+        name: "winner",
+        type: "address",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "uint256",
+        name: "roomId",
+        type: "uint256",
+      },
+    ],
+    name: "joinRoom",
+    outputs: [],
+    stateMutability: "payable",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "nextRoomId",
+    outputs: [
+      {
+        internalType: "uint256",
+        name: "",
+        type: "uint256",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "platformFeeBps",
+    outputs: [
+      {
+        internalType: "uint256",
+        name: "",
+        type: "uint256",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "platformTreasury",
+    outputs: [
+      {
+        internalType: "address",
+        name: "",
+        type: "address",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "uint256",
+        name: "roomId",
+        type: "uint256",
+      },
+      {
+        internalType: "address",
+        name: "winner",
+        type: "address",
+      },
+    ],
+    name: "recordWinnerAndPayout",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "uint256",
+        name: "",
+        type: "uint256",
+      },
+    ],
+    name: "rooms",
+    outputs: [
+      {
+        internalType: "uint256",
+        name: "id",
+        type: "uint256",
+      },
+      {
+        internalType: "address",
+        name: "creator",
+        type: "address",
+      },
+      {
+        internalType: "uint256",
+        name: "entryFee",
+        type: "uint256",
+      },
+      {
+        internalType: "uint8",
+        name: "maxPlayers",
+        type: "uint8",
+      },
+      {
+        internalType: "bool",
+        name: "isPrivate",
+        type: "bool",
+      },
+      {
+        internalType: "uint8",
+        name: "status",
+        type: "uint8",
+      },
+      {
+        internalType: "address",
+        name: "winner",
+        type: "address",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "uint256",
+        name: "_bps",
+        type: "uint256",
+      },
+    ],
+    name: "setPlatformFee",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "address",
+        name: "_treasury",
+        type: "address",
+      },
+    ],
+    name: "setPlatformTreasury",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "uint256",
+        name: "roomId",
+        type: "uint256",
+      },
+    ],
+    name: "startRoom",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
   },
 ] as const;
 
+// Room status enum matching contract
+// None=0, Created=1, Started=2, Finished=3, Cancelled=4
 export enum RoomStatus {
   None = 0,
   Created = 1,
@@ -119,16 +412,14 @@ export enum RoomStatus {
   Cancelled = 4,
 }
 
-export const GAME_CATALOG = [
-  { id: 1, label: "Chess" },
-  { id: 2, label: "Dominos" },
-  { id: 3, label: "Backgammon" },
-] as const;
-
-export const TURN_TIMERS = [
-  { label: "5 seconds", value: 5 },
-  { label: "10 seconds", value: 10 },
-  { label: "15 seconds", value: 15 },
-  { label: "30 seconds", value: 30 },
-  { label: "Unlimited", value: 0 },
-] as const;
+// TypeScript types for room data
+export interface ContractRoom {
+  id: bigint;
+  creator: `0x${string}`;
+  entryFee: bigint;
+  maxPlayers: number;
+  isPrivate: boolean;
+  status: RoomStatus;
+  players: `0x${string}`[];
+  winner: `0x${string}`;
+}

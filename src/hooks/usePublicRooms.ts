@@ -1,11 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
-import { createPublicClient, http, fallback } from "viem";
+import { useCallback, useState, useEffect } from "react";
+import { useReadContract } from "wagmi";
+import { ROOM_MANAGER_ADDRESS, ROOM_MANAGER_ABI, RoomStatus } from "@/contracts/roomManager";
+import { createPublicClient, http } from "viem";
 import { polygon } from "viem/chains";
-import {
-  ROOM_MANAGER_ADDRESS,
-  ROOM_MANAGER_ABI,
-  RoomStatus,
-} from "@/contracts/roomManager";
 
 export type PublicRoom = {
   id: bigint;
@@ -14,119 +11,116 @@ export type PublicRoom = {
   maxPlayers: number;
   isPrivate: boolean;
   status: RoomStatus;
-  gameType: number;
-  turnTimeSeconds: number;
-  playerCount: number;
+  players: readonly `0x${string}`[];
   winner: `0x${string}`;
 };
 
+// Create a public client for direct viem calls - Polygon mainnet
 const publicClient = createPublicClient({
   chain: polygon,
-  transport: fallback([
-    http("https://polygon-rpc.com"),
-    http("https://rpc.ankr.com/polygon"),
-    http("https://polygon-bor-rpc.publicnode.com"),
-  ]),
+  transport: http("https://polygon-rpc.com"),
 });
 
 export function usePublicRooms() {
   const [rooms, setRooms] = useState<PublicRoom[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingRooms, setIsLoadingRooms] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
-  const fetchRooms = useCallback(async () => {
-    setIsLoading(true);
+  // Get the next room ID to know how many rooms exist
+  const { 
+    data: nextRoomId, 
+    isLoading: isLoadingNextId,
+    refetch: refetchNextId,
+  } = useReadContract({
+    address: ROOM_MANAGER_ADDRESS,
+    abi: ROOM_MANAGER_ABI,
+    functionName: "nextRoomId",
+    chainId: 137, // Polygon mainnet
+  });
 
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const nextRoomId = (await publicClient.readContract({
-        address: ROOM_MANAGER_ADDRESS,
-        abi: ROOM_MANAGER_ABI as any,
-        functionName: "nextRoomId",
-      } as any)) as bigint;
-
-      if (nextRoomId <= 1n) {
+  // Fetch all rooms when nextRoomId changes
+  useEffect(() => {
+    const fetchRooms = async () => {
+      if (!nextRoomId || nextRoomId <= 1n) {
         setRooms([]);
         return;
       }
 
-      const list: PublicRoom[] = [];
+      setIsLoadingRooms(true);
 
-      for (let roomId = 1n; roomId < nextRoomId; roomId++) {
-        try {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const room = (await publicClient.readContract({
-            address: ROOM_MANAGER_ADDRESS,
-            abi: ROOM_MANAGER_ABI as any,
-            functionName: "getRoomView",
-            args: [roomId],
-          } as any)) as readonly [
-            bigint,
-            `0x${string}`,
-            bigint,
-            number,
-            boolean,
-            number,
-            number,
-            number,
-            `0x${string}`
-          ];
-
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const playerCount = (await publicClient.readContract({
-            address: ROOM_MANAGER_ADDRESS,
-            abi: ROOM_MANAGER_ABI as any,
-            functionName: "getPlayerCount",
-            args: [roomId],
-          } as any)) as bigint;
-
-          const [
-            id,
-            creator,
-            entryFee,
-            maxPlayers,
-            isPrivate,
-            status,
-            gameType,
-            turnTimeSeconds,
-            winner,
-          ] = room;
-
-          if (isPrivate) continue;
-          if (
-            status !== RoomStatus.Created &&
-            status !== RoomStatus.Started
-          )
-            continue;
-          if (Number(playerCount) >= maxPlayers) continue;
-
-          list.push({
-            id,
-            creator,
-            entryFee,
-            maxPlayers,
-            isPrivate,
-            status,
-            gameType,
-            turnTimeSeconds,
-            playerCount: Number(playerCount),
-            winner,
-          });
-        } catch {
-          continue;
+      try {
+        // Build room IDs array
+        const roomIds: bigint[] = [];
+        for (let i = 1n; i < nextRoomId; i++) {
+          roomIds.push(i);
         }
+
+        // Fetch rooms in parallel using getRoom
+        const results = await Promise.all(
+          roomIds.map(async (roomId) => {
+            try {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const result = await (publicClient as any).readContract({
+                address: ROOM_MANAGER_ADDRESS,
+                abi: ROOM_MANAGER_ABI,
+                functionName: "getRoom",
+                args: [roomId],
+              });
+              return { status: "success" as const, roomId, result };
+            } catch (error) {
+              console.error(`Error fetching room ${roomId}:`, error);
+              return { status: "error" as const, roomId, error };
+            }
+          })
+        );
+
+        // Parse results and filter to only public rooms with Created or Started status
+        const publicRooms: PublicRoom[] = [];
+        
+        for (const r of results) {
+          if (r.status !== "success" || !r.result) continue;
+          
+          // getRoom returns: [id, creator, entryFee, maxPlayers, isPrivate, status, players, winner]
+          const [id, creator, entryFee, maxPlayers, isPrivate, status, players, winner] = r.result;
+          
+          // Only include public rooms that are Created or Started
+          if (isPrivate) continue;
+          if (status !== RoomStatus.Created && status !== RoomStatus.Started) continue;
+          
+          publicRooms.push({
+            id,
+            creator: creator as `0x${string}`,
+            entryFee,
+            maxPlayers,
+            isPrivate,
+            status: status as RoomStatus,
+            players: players as readonly `0x${string}`[],
+            winner: winner as `0x${string}`,
+          });
+        }
+
+        // Sort by newest first
+        publicRooms.sort((a, b) => Number(b.id - a.id));
+        setRooms(publicRooms);
+      } catch (error) {
+        console.error("Error fetching rooms:", error);
+      } finally {
+        setIsLoadingRooms(false);
       }
+    };
 
-      setRooms(list.reverse());
-    } catch {
-      setRooms([]);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
     fetchRooms();
-  }, [fetchRooms]);
+  }, [nextRoomId, refreshKey]);
 
-  return { rooms, isLoading, refetch: fetchRooms };
+  const refetch = useCallback(async () => {
+    await refetchNextId();
+    setRefreshKey((prev) => prev + 1);
+  }, [refetchNextId]);
+
+  return {
+    rooms,
+    isLoading: isLoadingNextId || isLoadingRooms,
+    refetch,
+    nextRoomId,
+  };
 }
