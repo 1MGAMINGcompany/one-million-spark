@@ -87,6 +87,8 @@ const BackgammonAI = () => {
   const [gameOver, setGameOver] = useState(false);
   const [isThinking, setIsThinking] = useState(false);
   const [validMoves, setValidMoves] = useState<number[]>([]);
+  // Animation state for AI moves
+  const [animatingMove, setAnimatingMove] = useState<{ from: number | 'BAR'; to: number } | null>(null);
 
   const difficultyLabel = useMemo(() => {
     switch (difficulty) {
@@ -303,7 +305,7 @@ const BackgammonAI = () => {
     }
   }, [currentPlayer, remainingMoves, gameOver, isThinking, gameState, selectedPoint, validMoves, applyMoveWithSound, play]);
 
-  // AI turn - uses unified engine
+  // AI turn - uses unified engine with animated moves
   useEffect(() => {
     if (currentPlayer !== "ai" || gameOver || dice.length > 0) return;
     
@@ -321,12 +323,17 @@ const BackgammonAI = () => {
       // Play dice sound for AI
       play('backgammon_dice');
       
-      // Small delay for visual feedback
-      await new Promise(resolve => setTimeout(resolve, 800));
+      // Wait for dice animation
+      await new Promise(resolve => setTimeout(resolve, 1200));
+      
+      setGameStatus("AI is thinking...");
       
       // Use the unified engine for AI moves
       let state = gameState;
       let remaining = [...diceValues];
+      
+      // Collect all moves first
+      const movesToAnimate: BackgammonMove[] = [];
       
       while (remaining.length > 0) {
         // Convert to engine state for AI decision
@@ -341,23 +348,50 @@ const BackgammonAI = () => {
         
         if (!engineMove) break; // No legal moves
         
-        // Convert engine move back to legacy move and apply
+        movesToAnimate.push(engineMove);
+        
+        // Apply move to state for next iteration
         const legacyMove = toLegacyMove(engineMove);
         state = applyMoveEngine(state, legacyMove, "ai");
         remaining = consumeDie(remaining, legacyMove.dieValue);
       }
       
-      // Play move sound once for AI turn
-      if (state !== gameState) {
-        play('backgammon_move');
+      // Now animate each move one by one
+      let currentState = gameState;
+      for (const move of movesToAnimate) {
+        // Show animation indicator
+        setAnimatingMove({ 
+          from: move.from === 'BAR' ? 'BAR' : move.from, 
+          to: move.to === 'OFF' ? 25 : move.to 
+        });
+        
+        // Wait for animation
+        await new Promise(resolve => setTimeout(resolve, 600));
+        
+        // Apply the move
+        const legacyMove = toLegacyMove(move);
+        currentState = applyMoveEngine(currentState, legacyMove, "ai");
+        setGameState(currentState);
+        
+        // Play move sound
+        if (move.to === 'OFF') {
+          play('backgammon_bearoff');
+        } else {
+          play('backgammon_move');
+        }
+        
+        // Clear animation
+        setAnimatingMove(null);
+        
+        // Small pause between moves
+        await new Promise(resolve => setTimeout(resolve, 300));
       }
       
-      setGameState(state);
       setIsThinking(false);
       setDice([]);
       setRemainingMoves([]);
       
-      if (state.bearOff.ai === 15) {
+      if (currentState.bearOff.ai === 15) {
         setGameStatus("You lose!");
         setGameOver(true);
         play('chess_lose');
@@ -396,6 +430,8 @@ const BackgammonAI = () => {
     const isPlayer = value > 0;
     const isSelected = selectedPoint === index;
     const isValidTarget = validMoves.includes(index);
+    const isAnimatingFrom = animatingMove?.from === index;
+    const isAnimatingTo = animatingMove?.to === index;
     
     return (
       <div
@@ -449,10 +485,37 @@ const BackgammonAI = () => {
           )}
         </svg>
         
+        {/* AI Move Animation Glow - Source */}
+        {isAnimatingFrom && (
+          <div 
+            className="absolute inset-0 pointer-events-none"
+            style={{
+              background: "radial-gradient(circle at 50% 50%, hsl(45 93% 54% / 0.6) 0%, transparent 70%)",
+              animation: "pulse 0.6s ease-in-out infinite"
+            }}
+          />
+        )}
+        
+        {/* AI Move Animation Glow - Target */}
+        {isAnimatingTo && (
+          <div 
+            className="absolute inset-0 pointer-events-none z-20"
+            style={{
+              background: "radial-gradient(circle at 50% 50%, hsl(120 70% 50% / 0.5) 0%, transparent 70%)",
+              animation: "pulse 0.6s ease-in-out infinite"
+            }}
+          />
+        )}
+        
         {/* Checkers - positioned on triangle */}
         {checkerCount > 0 && (
           <div 
-            className={cn("absolute", isTop ? "top-2" : "bottom-2")}
+            className={cn(
+              "absolute transition-all duration-500",
+              isTop ? "top-2" : "bottom-2",
+              isAnimatingFrom && "opacity-50 scale-90",
+              isAnimatingTo && "animate-[bounce_0.5s_ease-out]"
+            )}
             style={{ left: '50%', transform: 'translateX(-50%)' }}
           >
             <CheckerStack
@@ -481,6 +544,8 @@ const BackgammonAI = () => {
     const isPlayer = value > 0;
     const isSelected = selectedPoint === index;
     const isValidTarget = validMoves.includes(index);
+    const isAnimatingFrom = animatingMove?.from === index;
+    const isAnimatingTo = animatingMove?.to === index;
     
     // For mobile vertical board: triangles point inward toward center bar
     // Left side triangles point right, right side triangles point left
@@ -530,12 +595,36 @@ const BackgammonAI = () => {
           )}
         </svg>
         
+        {/* AI Move Animation Glow - Source (Mobile) */}
+        {isAnimatingFrom && (
+          <div 
+            className="absolute inset-0 pointer-events-none z-10"
+            style={{
+              background: "radial-gradient(circle at 50% 50%, hsl(45 93% 54% / 0.6) 0%, transparent 70%)",
+              animation: "pulse 0.6s ease-in-out infinite"
+            }}
+          />
+        )}
+        
+        {/* AI Move Animation Glow - Target (Mobile) */}
+        {isAnimatingTo && (
+          <div 
+            className="absolute inset-0 pointer-events-none z-10"
+            style={{
+              background: "radial-gradient(circle at 50% 50%, hsl(120 70% 50% / 0.5) 0%, transparent 70%)",
+              animation: "pulse 0.6s ease-in-out infinite"
+            }}
+          />
+        )}
+        
         {/* Checker stack - positioned beside triangle */}
         {checkerCount > 0 && (
           <div 
             className={cn(
-              "absolute flex flex-row items-center gap-0",
-              isLeftSide ? "left-[52px]" : "right-[52px]"
+              "absolute flex flex-row items-center gap-0 transition-all duration-500",
+              isLeftSide ? "left-[52px]" : "right-[52px]",
+              isAnimatingFrom && "opacity-50 scale-90",
+              isAnimatingTo && "animate-[bounce_0.5s_ease-out]"
             )}
           >
             {/* Render checkers horizontally for mobile */}

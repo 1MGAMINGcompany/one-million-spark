@@ -81,7 +81,7 @@ export function ChessBoard({ game, onMove, disabled = false }: ChessBoardProps) 
                 className={`
                   aspect-square flex items-center justify-center text-3xl sm:text-4xl md:text-5xl
                   transition-colors cursor-pointer relative
-                  ${isLight ? "bg-amber-100" : "bg-amber-700"}
+                  ${isLight ? "bg-amber-100" : "bg-gradient-to-br from-amber-500 via-amber-400 to-amber-600"}
                   ${isSelected ? "ring-4 ring-inset ring-blue-500" : ""}
                   ${isCheck ? "ring-4 ring-inset ring-red-500" : ""}
                   ${disabled ? "cursor-not-allowed" : "hover:brightness-110"}
