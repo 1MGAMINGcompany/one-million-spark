@@ -151,7 +151,7 @@ const CreateRoom = () => {
   const buttonLabel = !isConnected
     ? connectNudge
       ? "Click again to open wallet"
-      : "Connect Wallet"
+      : "Double-click to connect"
     : isLoading
       ? "Processing..."
       : "Create Room";
