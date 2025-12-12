@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -19,6 +19,7 @@ import { formatEther } from "viem";
 
 const RoomList = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { isConnected, address } = useWallet();
   const { play } = useSound();
   const { toast } = useToast();
@@ -27,6 +28,15 @@ const RoomList = () => {
   const [joiningRoomId, setJoiningRoomId] = useState<bigint | null>(null);
 
   const { rooms, isLoading: isLoadingRooms, refetch } = usePublicRooms();
+
+  // Handle refresh query param (set after room creation)
+  useEffect(() => {
+    if (searchParams.get("refresh") === "1") {
+      refetch();
+      // Remove the refresh param from URL
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams, refetch, setSearchParams]);
 
   const { 
     joinRoom, 

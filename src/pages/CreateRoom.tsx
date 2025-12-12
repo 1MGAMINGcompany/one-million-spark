@@ -77,9 +77,9 @@ const CreateRoom = () => {
       setRoomType("public");
       reset();
       refetchActiveRoom();
-      // Navigate to room list to see the new room
+      // Navigate to room list with refresh param so the new room appears immediately
       setTimeout(() => {
-        navigate("/room-list");
+        navigate("/room-list?refresh=1");
       }, 1500);
     }
   }, [isSuccess, play, toast, reset, refetchActiveRoom, navigate]);
