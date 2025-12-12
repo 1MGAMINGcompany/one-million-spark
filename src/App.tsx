@@ -33,7 +33,7 @@ const App = () => (
             <GoldenParticles />
             <BrowserRouter>
               <Navbar />
-              <div className="pt-16 relative z-10">
+              <main className="pt-16 relative z-10 min-h-screen">
                 <Routes>
                   <Route path="/" element={<Home />} />
                   <Route path="/add-funds" element={<AddFunds />} />
@@ -47,7 +47,7 @@ const App = () => (
                   <Route path="/play-ai/backgammon" element={<BackgammonAI />} />
                   <Route path="*" element={<NotFound />} />
                 </Routes>
-              </div>
+              </main>
             </BrowserRouter>
           </TooltipProvider>
         </SoundProvider>
