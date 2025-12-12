@@ -12,6 +12,7 @@ import { Loader2, Users, Coins, Crown, Copy, ArrowLeft, Gamepad2, Share2 } from 
 import { useEffect, useState } from "react";
 import { ShareInviteDialog } from "@/components/ShareInviteDialog";
 import { useRoomEvents, useNotificationPermission } from "@/hooks/useRoomEvents";
+import { DiceRollStart } from "@/components/DiceRollStart";
 
 export default function Room() {
   const { roomId } = useParams<{ roomId: string }>();
@@ -21,6 +22,9 @@ export default function Room() {
   const { play } = useSound();
   const { formatUsd } = usePolPrice();
   const [showShareDialog, setShowShareDialog] = useState(false);
+  const [showDiceRoll, setShowDiceRoll] = useState(false);
+  const [diceRollComplete, setDiceRollComplete] = useState(false);
+  const [playerGoesFirst, setPlayerGoesFirst] = useState<boolean | null>(null);
   const { requestPermission } = useNotificationPermission();
 
   const roomIdBigInt = roomId ? BigInt(roomId) : undefined;
@@ -51,6 +55,12 @@ export default function Room() {
   const canJoin = room && room.status === RoomStatus.Created && !isPlayer && players.length < room.maxPlayers;
   const canCancel = room && room.status === RoomStatus.Created && isCreator;
   const canShare = room && room.isPrivate && isCreator && room.status === RoomStatus.Created;
+  const roomIsFull = room && players.length >= room.maxPlayers;
+  const canStartGame = roomIsFull && room.status === RoomStatus.Created && isPlayer && !diceRollComplete;
+
+  // Get opponent info for dice roll
+  const opponent = players.find(p => p.toLowerCase() !== address?.toLowerCase());
+  const opponentShortName = opponent ? `${opponent.slice(0, 6)}...${opponent.slice(-4)}` : "Opponent";
 
   // Watch for room events (player joins, room ready)
   useRoomEvents({
@@ -243,8 +253,45 @@ export default function Room() {
                 </Button>
               )}
 
-              {isPlayer && !isCreator && (
-                <p className="w-full text-center text-sm text-muted-foreground">Waiting for the game to start...</p>
+              {isPlayer && !isCreator && !roomIsFull && (
+                <p className="w-full text-center text-sm text-muted-foreground">Waiting for more players to join...</p>
+              )}
+              
+              {/* Room is full - show start game button */}
+              {roomIsFull && !diceRollComplete && (
+                <div className="w-full text-center space-y-3">
+                  <p className="text-sm text-green-500 font-medium">All players have joined!</p>
+                  <Button 
+                    onClick={() => setShowDiceRoll(true)} 
+                    className="w-full bg-gradient-to-r from-primary to-amber-600 hover:from-primary/90 hover:to-amber-600/90"
+                  >
+                    Roll to Determine First Player
+                  </Button>
+                </div>
+              )}
+              
+              {/* Dice roll complete - show who goes first */}
+              {diceRollComplete && playerGoesFirst !== null && (
+                <div className="w-full text-center space-y-3">
+                  <p className={`text-sm font-medium ${playerGoesFirst ? "text-green-500" : "text-amber-500"}`}>
+                    {playerGoesFirst ? "You go first!" : `${opponentShortName} goes first`}
+                  </p>
+                  <Button 
+                    onClick={() => {
+                      // Navigate to game based on gameId
+                      const gamePaths: Record<number, string> = {
+                        1: `/game/chess/${roomId}`,
+                        2: `/game/dominos/${roomId}`,
+                        3: `/game/backgammon/${roomId}`,
+                      };
+                      const path = gamePaths[room?.gameId || 1] || `/game/chess/${roomId}`;
+                      navigate(path);
+                    }}
+                    className="w-full"
+                  >
+                    Start Game
+                  </Button>
+                </div>
               )}
             </div>
           )}
@@ -271,6 +318,24 @@ export default function Room() {
         roomId={roomId || ""}
         gameName={room ? getGameName(room.gameId) : undefined}
       />
+      
+      {/* Dice Roll to Determine First Player */}
+      {showDiceRoll && (
+        <DiceRollStart
+          playerName="You"
+          opponentName={opponentShortName}
+          onComplete={(playerStarts) => {
+            setShowDiceRoll(false);
+            setDiceRollComplete(true);
+            setPlayerGoesFirst(playerStarts);
+            play(playerStarts ? "chess_win" : "backgammon_move");
+            toast({
+              title: playerStarts ? "You go first!" : `${opponentShortName} goes first`,
+              description: "Get ready to play!",
+            });
+          }}
+        />
+      )}
     </div>
   );
 }
