@@ -32,6 +32,13 @@ export const ROOM_MANAGER_ABI = [
   },
   {
     type: "function",
+    name: "startRoom",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "roomId", type: "uint256" }],
+    outputs: [],
+  },
+  {
+    type: "function",
     name: "finishRoom",
     stateMutability: "nonpayable",
     inputs: [
@@ -70,6 +77,20 @@ export const ROOM_MANAGER_ABI = [
     stateMutability: "view",
     inputs: [],
     outputs: [{ name: "next", type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "creatorActiveRoomId",
+    stateMutability: "view",
+    inputs: [{ name: "creator", type: "address" }],
+    outputs: [{ name: "roomId", type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "getPlayers",
+    stateMutability: "view",
+    inputs: [{ name: "roomId", type: "uint256" }],
+    outputs: [{ name: "players", type: "address[]" }],
   },
 ] as const;
 

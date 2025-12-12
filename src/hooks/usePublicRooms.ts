@@ -26,6 +26,16 @@ const publicClient = createPublicClient({
   ]),
 });
 
+async function readContractSafe<T>(params: {
+  address: `0x${string}`;
+  abi: typeof ROOM_MANAGER_ABI;
+  functionName: string;
+  args?: readonly unknown[];
+}): Promise<T> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return publicClient.readContract(params as any) as Promise<T>;
+}
+
 export function usePublicRooms() {
   const [rooms, setRooms] = useState<PublicRoom[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -35,11 +45,11 @@ export function usePublicRooms() {
     setIsLoading(true);
 
     try {
-      const nextRoomId = (await publicClient.readContract({
+      const nextRoomId = await readContractSafe<bigint>({
         address: ROOM_MANAGER_ADDRESS,
         abi: ROOM_MANAGER_ABI,
         functionName: "nextRoomId",
-      })) as bigint;
+      });
 
       if (!nextRoomId || nextRoomId <= 1n) {
         setRooms([]);
@@ -53,19 +63,19 @@ export function usePublicRooms() {
       const results = await Promise.all(
         ids.map(async (roomId) => {
           try {
-            const rv = (await publicClient.readContract({
+            const rv = await readContractSafe<readonly [bigint, `0x${string}`, bigint, number, boolean, number, number, number, `0x${string}`]>({
               address: ROOM_MANAGER_ADDRESS,
               abi: ROOM_MANAGER_ABI,
               functionName: "getRoomView",
               args: [roomId],
-            })) as readonly [bigint, `0x${string}`, bigint, number, boolean, number, number, number, `0x${string}`];
+            });
 
-            const pc = (await publicClient.readContract({
+            const pc = await readContractSafe<bigint>({
               address: ROOM_MANAGER_ADDRESS,
               abi: ROOM_MANAGER_ABI,
               functionName: "getPlayerCount",
               args: [roomId],
-            })) as bigint;
+            });
 
             return { ok: true as const, rv, playerCount: Number(pc) };
           } catch {

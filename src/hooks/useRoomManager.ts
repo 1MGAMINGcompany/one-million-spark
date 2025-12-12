@@ -1,7 +1,7 @@
 import { useReadContract, useWriteContract, useWaitForTransactionReceipt, useAccount, useSimulateContract } from "wagmi";
 import { parseEther, formatEther } from "viem";
 import { polygon } from "@/lib/wagmi-config";
-import { ROOM_MANAGER_ADDRESS, ROOM_MANAGER_ABI, RoomStatus, type ContractRoom } from "@/contracts/roomManager";
+import { ROOM_MANAGER_ADDRESS, ROOM_MANAGER_ABI, RoomStatus, type ContractRoomView } from "@/contracts/roomManager";
 import { useToast } from "@/hooks/use-toast";
 import { useCallback, useState } from "react";
 
@@ -14,12 +14,25 @@ export function useNextRoomId() {
   });
 }
 
-// Hook to get a specific room by ID
+// Hook to get a specific room by ID (returns getRoomView data)
 export function useRoom(roomId: bigint | undefined) {
   return useReadContract({
     address: ROOM_MANAGER_ADDRESS,
     abi: ROOM_MANAGER_ABI,
-    functionName: "getRoom",
+    functionName: "getRoomView",
+    args: roomId !== undefined ? [roomId] : undefined,
+    query: {
+      enabled: roomId !== undefined,
+    },
+  });
+}
+
+// Hook to get players for a room
+export function useRoomPlayers(roomId: bigint | undefined) {
+  return useReadContract({
+    address: ROOM_MANAGER_ADDRESS,
+    abi: ROOM_MANAGER_ABI,
+    functionName: "getPlayers",
     args: roomId !== undefined ? [roomId] : undefined,
     query: {
       enabled: roomId !== undefined,
@@ -252,17 +265,18 @@ function extractRevertReason(error: unknown): string {
   return "Transaction simulation failed";
 }
 
-// Helper to format room data from contract response
-export function formatRoom(data: readonly [bigint, `0x${string}`, bigint, number, boolean, number, readonly `0x${string}`[], `0x${string}`]): ContractRoom {
+// Helper to format room data from contract response (getRoomView)
+export function formatRoomView(data: readonly [bigint, `0x${string}`, bigint, number, boolean, number, number, number, `0x${string}`]): ContractRoomView {
   return {
     id: data[0],
     creator: data[1],
     entryFee: data[2],
-    maxPlayers: data[3],
+    maxPlayers: Number(data[3]),
     isPrivate: data[4],
-    status: data[5] as RoomStatus,
-    players: [...data[6]],
-    winner: data[7],
+    status: Number(data[5]) as RoomStatus,
+    gameId: Number(data[6]),
+    turnTimeSeconds: Number(data[7]),
+    winner: data[8],
   };
 }
 
