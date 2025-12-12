@@ -1,7 +1,9 @@
-import { useReadContract, useWriteContract, useWaitForTransactionReceipt, useAccount } from "wagmi";
+import { useReadContract, useWriteContract, useWaitForTransactionReceipt, useAccount, useSimulateContract } from "wagmi";
 import { parseEther, formatEther } from "viem";
 import { polygon } from "@/lib/wagmi-config";
 import { ROOM_MANAGER_ADDRESS, ROOM_MANAGER_ABI, RoomStatus, type ContractRoom } from "@/contracts/roomManager";
+import { useToast } from "@/hooks/use-toast";
+import { useCallback, useState } from "react";
 
 // Hook to get the next room ID
 export function useNextRoomId() {
@@ -38,34 +40,86 @@ export function useCreatorActiveRoom(creatorAddress: `0x${string}` | undefined) 
   });
 }
 
-// Hook to create a room (NO value sent - createRoom is not payable)
+// Hook to create a room with simulation
 export function useCreateRoom() {
   const { address } = useAccount();
-  const { writeContract, data: hash, isPending, error, reset } = useWriteContract();
+  const { toast } = useToast();
+  const { writeContract, data: hash, isPending, error: writeError, reset } = useWriteContract();
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+  const [simulationError, setSimulationError] = useState<Error | null>(null);
+  const [isSimulating, setIsSimulating] = useState(false);
 
-  const createRoom = (entryFeeInPol: string, maxPlayers: number, isPrivate: boolean) => {
+  // Simulation args state
+  const [simArgs, setSimArgs] = useState<{
+    entryFeeWei: bigint;
+    maxPlayers: number;
+    isPrivate: boolean;
+  } | null>(null);
+
+  // Simulate contract call
+  const { refetch: simulate } = useSimulateContract({
+    address: ROOM_MANAGER_ADDRESS,
+    abi: ROOM_MANAGER_ABI,
+    functionName: "createRoom",
+    args: simArgs ? [simArgs.entryFeeWei, simArgs.maxPlayers, simArgs.isPrivate] : undefined,
+    query: {
+      enabled: false, // Manual trigger only
+    },
+  });
+
+  const createRoom = useCallback(async (entryFeeInPol: string, maxPlayers: number, isPrivate: boolean) => {
     if (!address) return;
+    
     const entryFeeWei = parseEther(entryFeeInPol);
-    writeContract({
-      address: ROOM_MANAGER_ADDRESS,
-      abi: ROOM_MANAGER_ABI,
-      functionName: "createRoom",
-      args: [entryFeeWei, maxPlayers, isPrivate],
-      chain: polygon,
-      account: address,
-      // No value - createRoom is not payable
-    });
-  };
+    setSimArgs({ entryFeeWei, maxPlayers, isPrivate });
+    setSimulationError(null);
+    setIsSimulating(true);
+
+    try {
+      // Run simulation first
+      const simResult = await simulate();
+      
+      if (simResult.error) {
+        const revertReason = extractRevertReason(simResult.error);
+        setSimulationError(simResult.error);
+        toast({
+          title: "Transaction will fail",
+          description: revertReason,
+          variant: "destructive",
+        });
+        setIsSimulating(false);
+        return;
+      }
+
+      if (simResult.data?.request) {
+        // Simulation succeeded, send the transaction
+        writeContract(simResult.data.request);
+      }
+    } catch (err) {
+      const revertReason = extractRevertReason(err);
+      setSimulationError(err as Error);
+      toast({
+        title: "Simulation failed",
+        description: revertReason,
+        variant: "destructive",
+      });
+    } finally {
+      setIsSimulating(false);
+    }
+  }, [address, simulate, writeContract, toast]);
 
   return {
     createRoom,
     hash,
-    isPending,
+    isPending: isPending || isSimulating,
     isConfirming,
     isSuccess,
-    error,
-    reset,
+    error: writeError || simulationError,
+    reset: () => {
+      reset();
+      setSimulationError(null);
+      setSimArgs(null);
+    },
   };
 }
 
@@ -155,6 +209,47 @@ export function useStartRoom() {
     error,
     reset,
   };
+}
+
+// Helper to extract revert reason from error
+function extractRevertReason(error: unknown): string {
+  if (!error) return "Unknown error";
+  
+  const errorStr = String(error);
+  
+  // Try to extract revert reason from common patterns
+  const patterns = [
+    /reason="([^"]+)"/,
+    /reverted with reason string '([^']+)'/,
+    /Error: ([^(]+)\(/,
+    /execution reverted: ([^"]+)/i,
+    /ContractFunctionExecutionError: ([^.]+)/,
+  ];
+
+  for (const pattern of patterns) {
+    const match = errorStr.match(pattern);
+    if (match?.[1]) {
+      return match[1].trim();
+    }
+  }
+
+  // Check for common error messages in the error object
+  if (typeof error === 'object' && error !== null) {
+    const err = error as Record<string, unknown>;
+    if (err.shortMessage && typeof err.shortMessage === 'string') {
+      return err.shortMessage;
+    }
+    if (err.message && typeof err.message === 'string') {
+      // Truncate long messages
+      const msg = err.message;
+      if (msg.length > 150) {
+        return msg.substring(0, 150) + "...";
+      }
+      return msg;
+    }
+  }
+
+  return "Transaction simulation failed";
 }
 
 // Helper to format room data from contract response
