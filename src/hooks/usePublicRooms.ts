@@ -11,7 +11,8 @@ export type PublicRoom = {
   maxPlayers: number;
   isPrivate: boolean;
   status: RoomStatus;
-  players: readonly `0x${string}`[];
+  gameId: number;
+  turnTimeSeconds: number;
   winner: `0x${string}`;
 };
 
@@ -55,7 +56,7 @@ export function usePublicRooms() {
           roomIds.push(i);
         }
 
-        // Fetch rooms in parallel using getRoom
+        // Fetch rooms in parallel using getRoomView
         const results = await Promise.all(
           roomIds.map(async (roomId) => {
             try {
@@ -63,7 +64,7 @@ export function usePublicRooms() {
               const result = await (publicClient as any).readContract({
                 address: ROOM_MANAGER_ADDRESS,
                 abi: ROOM_MANAGER_ABI,
-                functionName: "getRoom",
+                functionName: "getRoomView",
                 args: [roomId],
               });
               return { status: "success" as const, roomId, result };
@@ -80,8 +81,8 @@ export function usePublicRooms() {
         for (const r of results) {
           if (r.status !== "success" || !r.result) continue;
           
-          // getRoom returns: [id, creator, entryFee, maxPlayers, isPrivate, status, players, winner]
-          const [id, creator, entryFee, maxPlayers, isPrivate, status, players, winner] = r.result;
+          // getRoomView returns: [id, creator, entryFee, maxPlayers, isPrivate, status, gameId, turnTimeSeconds, winner]
+          const [id, creator, entryFee, maxPlayers, isPrivate, status, gameId, turnTimeSeconds, winner] = r.result;
           
           // Only include public rooms that are Created or Started
           if (isPrivate) continue;
@@ -94,7 +95,8 @@ export function usePublicRooms() {
             maxPlayers,
             isPrivate,
             status: status as RoomStatus,
-            players: players as readonly `0x${string}`[],
+            gameId,
+            turnTimeSeconds,
             winner: winner as `0x${string}`,
           });
         }

@@ -11,36 +11,53 @@ export function useNextRoomId() {
     address: ROOM_MANAGER_ADDRESS,
     abi: ROOM_MANAGER_ABI,
     functionName: "nextRoomId",
+    chainId: 137,
   });
 }
 
-// Hook to get a specific room by ID
+// Hook to get a specific room by ID using getRoomView
 export function useRoom(roomId: bigint | undefined) {
   return useReadContract({
     address: ROOM_MANAGER_ADDRESS,
     abi: ROOM_MANAGER_ABI,
-    functionName: "getRoom",
+    functionName: "getRoomView",
     args: roomId !== undefined ? [roomId] : undefined,
+    chainId: 137,
     query: {
       enabled: roomId !== undefined,
     },
   });
 }
 
-// Hook to get creator's active room
-export function useCreatorActiveRoom(creatorAddress: `0x${string}` | undefined) {
+// Hook to get player's active room
+export function usePlayerActiveRoom(playerAddress: `0x${string}` | undefined) {
   return useReadContract({
     address: ROOM_MANAGER_ADDRESS,
     abi: ROOM_MANAGER_ABI,
-    functionName: "creatorActiveRoomId",
-    args: creatorAddress ? [creatorAddress] : undefined,
+    functionName: "playerActiveRoomId",
+    args: playerAddress ? [playerAddress] : undefined,
+    chainId: 137,
     query: {
-      enabled: !!creatorAddress,
+      enabled: !!playerAddress,
     },
   });
 }
 
-// Hook to create a room with simulation
+// Hook to get players of a room
+export function usePlayersOf(roomId: bigint | undefined) {
+  return useReadContract({
+    address: ROOM_MANAGER_ADDRESS,
+    abi: ROOM_MANAGER_ABI,
+    functionName: "playersOf",
+    args: roomId !== undefined ? [roomId] : undefined,
+    chainId: 137,
+    query: {
+      enabled: roomId !== undefined,
+    },
+  });
+}
+
+// Hook to create a room with simulation (V2 with gameId and turnTimeSeconds)
 export function useCreateRoom() {
   const { address } = useAccount();
   const { toast } = useToast();
@@ -54,6 +71,8 @@ export function useCreateRoom() {
     entryFeeWei: bigint;
     maxPlayers: number;
     isPrivate: boolean;
+    gameId: number;
+    turnTimeSeconds: number;
   } | null>(null);
 
   // Simulate contract call
@@ -61,17 +80,25 @@ export function useCreateRoom() {
     address: ROOM_MANAGER_ADDRESS,
     abi: ROOM_MANAGER_ABI,
     functionName: "createRoom",
-    args: simArgs ? [simArgs.entryFeeWei, simArgs.maxPlayers, simArgs.isPrivate] : undefined,
+    args: simArgs ? [simArgs.entryFeeWei, simArgs.maxPlayers, simArgs.isPrivate, simArgs.gameId, simArgs.turnTimeSeconds] : undefined,
+    value: simArgs?.entryFeeWei, // V2: entryFeeWei is sent as transaction value
+    chainId: 137,
     query: {
       enabled: false, // Manual trigger only
     },
   });
 
-  const createRoom = useCallback(async (entryFeeInPol: string, maxPlayers: number, isPrivate: boolean) => {
+  const createRoom = useCallback(async (
+    entryFeeInPol: string, 
+    maxPlayers: number, 
+    isPrivate: boolean,
+    gameId: number = 1, // Default: Chess
+    turnTimeSeconds: number = 300 // Default: 5 minutes
+  ) => {
     if (!address) return;
     
     const entryFeeWei = parseEther(entryFeeInPol);
-    setSimArgs({ entryFeeWei, maxPlayers, isPrivate });
+    setSimArgs({ entryFeeWei, maxPlayers, isPrivate, gameId, turnTimeSeconds });
     setSimulationError(null);
     setIsSimulating(true);
 
@@ -182,35 +209,6 @@ export function useCancelRoom() {
   };
 }
 
-// Hook to start a room
-export function useStartRoom() {
-  const { address } = useAccount();
-  const { writeContract, data: hash, isPending, error, reset } = useWriteContract();
-  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
-
-  const startRoom = (roomId: bigint) => {
-    if (!address) return;
-    writeContract({
-      address: ROOM_MANAGER_ADDRESS,
-      abi: ROOM_MANAGER_ABI,
-      functionName: "startRoom",
-      args: [roomId],
-      chain: polygon,
-      account: address,
-    });
-  };
-
-  return {
-    startRoom,
-    hash,
-    isPending,
-    isConfirming,
-    isSuccess,
-    error,
-    reset,
-  };
-}
-
 // Helper to extract revert reason from error
 function extractRevertReason(error: unknown): string {
   if (!error) return "Unknown error";
@@ -252,8 +250,8 @@ function extractRevertReason(error: unknown): string {
   return "Transaction simulation failed";
 }
 
-// Helper to format room data from contract response
-export function formatRoom(data: readonly [bigint, `0x${string}`, bigint, number, boolean, number, readonly `0x${string}`[], `0x${string}`]): ContractRoom {
+// Helper to format room data from getRoomView response
+export function formatRoom(data: readonly [bigint, `0x${string}`, bigint, number, boolean, number, number, number, `0x${string}`]): ContractRoom {
   return {
     id: data[0],
     creator: data[1],
@@ -261,8 +259,9 @@ export function formatRoom(data: readonly [bigint, `0x${string}`, bigint, number
     maxPlayers: data[3],
     isPrivate: data[4],
     status: data[5] as RoomStatus,
-    players: [...data[6]],
-    winner: data[7],
+    gameId: data[6],
+    turnTimeSeconds: data[7],
+    winner: data[8],
   };
 }
 
@@ -282,6 +281,20 @@ export function getRoomStatusLabel(status: RoomStatus): string {
       return "Finished";
     case RoomStatus.Cancelled:
       return "Cancelled";
+    default:
+      return "Unknown";
+  }
+}
+
+// Helper to get game name from gameId
+export function getGameName(gameId: number): string {
+  switch (gameId) {
+    case 1:
+      return "Chess";
+    case 2:
+      return "Dominos";
+    case 3:
+      return "Backgammon";
     default:
       return "Unknown";
   }

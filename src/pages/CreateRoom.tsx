@@ -14,10 +14,25 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useWallet } from "@/hooks/useWallet";
 import { useToast } from "@/hooks/use-toast";
 import { useSound } from "@/contexts/SoundContext";
-import { useCreateRoom, useCreatorActiveRoom, useCancelRoom } from "@/hooks/useRoomManager";
+import { useCreateRoom, usePlayerActiveRoom, useCancelRoom } from "@/hooks/useRoomManager";
 import { usePolPrice } from "@/hooks/usePolPrice";
 import { Loader2, AlertCircle, AlertTriangle, Wallet } from "lucide-react";
 import { useWeb3Modal } from "@web3modal/wagmi/react";
+
+// Game ID mapping: Chess=1, Dominos=2, Backgammon=3
+const GAME_IDS: Record<string, number> = {
+  chess: 1,
+  dominos: 2,
+  backgammon: 3,
+};
+
+// Turn time mapping in seconds
+const TURN_TIME_MAP: Record<string, number> = {
+  none: 0,
+  "5": 5,
+  "10": 10,
+  "15": 15,
+};
 
 const CreateRoom = () => {
   const { open: openWalletModal } = useWeb3Modal();
@@ -35,8 +50,8 @@ const CreateRoom = () => {
 
   const { createRoom, isPending, isConfirming, isSuccess, error, reset } = useCreateRoom();
   
-  // Check for active room (only when connected)
-  const { data: activeRoomId, refetch: refetchActiveRoom } = useCreatorActiveRoom(address as `0x${string}` | undefined);
+  // Check for active room (only when connected) - V2 uses playerActiveRoomId
+  const { data: activeRoomId, refetch: refetchActiveRoom } = usePlayerActiveRoom(address as `0x${string}` | undefined);
   const hasActiveRoom = isConnected && activeRoomId !== undefined && activeRoomId > 0n;
   
   // Cancel room hook
@@ -129,8 +144,10 @@ const CreateRoom = () => {
     
     const maxPlayers = parseInt(players);
     const isPrivate = roomType === "private";
+    const gameId = GAME_IDS[gameType] || 1;
+    const turnTimeSeconds = TURN_TIME_MAP[turnTime] || 0;
     
-    createRoom(entryFee, maxPlayers, isPrivate);
+    createRoom(entryFee, maxPlayers, isPrivate, gameId, turnTimeSeconds);
   };
 
   const isLoading = isPending || isConfirming;
