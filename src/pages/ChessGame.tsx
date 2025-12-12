@@ -1,28 +1,130 @@
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Home, Flag, Handshake } from "lucide-react";
 import { useRoom, formatEntryFee, formatRoom } from "@/hooks/useRoomManager";
 import { usePolPrice } from "@/hooks/usePolPrice";
 import { ChessBoardPremium } from "@/components/ChessBoardPremium";
-import { useState, useCallback } from "react";
+import { GameSyncStatus } from "@/components/GameSyncStatus";
+import { useGameSync, useTurnTimer, ChessMove } from "@/hooks/useGameSync";
+import { useWallet } from "@/hooks/useWallet";
+import { useState, useCallback, useEffect } from "react";
 import { Chess, Square } from "chess.js";
+import { useToast } from "@/hooks/use-toast";
 
 const ChessGame = () => {
   const { roomId } = useParams<{ roomId: string }>();
+  const navigate = useNavigate();
   const { formatUsd } = usePolPrice();
+  const { address } = useWallet();
+  const { toast } = useToast();
   
   const roomIdBigInt = roomId ? BigInt(roomId) : undefined;
   const { data: roomData } = useRoom(roomIdBigInt);
   const room = roomData ? formatRoom(roomData) : null;
   
-  const [game] = useState(() => new Chess());
+  const [game, setGame] = useState(() => new Chess());
   const [, setFen] = useState(game.fen());
   const [moveHistory, setMoveHistory] = useState<Array<{ move: number; white: string; black: string }>>([]);
+  const [gameEnded, setGameEnded] = useState(false);
 
   const entryFeeFormatted = room ? formatEntryFee(room.entryFee) : "...";
   const prizePool = room ? (parseFloat(entryFeeFormatted) * room.maxPlayers * 0.95).toFixed(3) : "...";
 
+  // Apply opponent's move
+  const handleOpponentMove = useCallback((move: ChessMove) => {
+    try {
+      game.move({
+        from: move.from,
+        to: move.to,
+        promotion: move.promotion || undefined,
+      });
+      setFen(game.fen());
+      updateMoveHistory();
+    } catch (e) {
+      console.error("Failed to apply opponent move:", e);
+    }
+  }, [game]);
+
+  const handleGameEnd = useCallback((winner: string) => {
+    setGameEnded(true);
+    const isWinner = winner?.toLowerCase() === address?.toLowerCase();
+    toast({
+      title: isWinner ? "Victory!" : "Defeat",
+      description: isWinner 
+        ? "You won! Winnings sent to your wallet." 
+        : "Better luck next time!",
+    });
+  }, [address, toast]);
+
+  const handleOpponentResign = useCallback(() => {
+    setGameEnded(true);
+    toast({
+      title: "Opponent Resigned!",
+      description: "Your opponent has resigned. You win!",
+    });
+  }, [toast]);
+
+  // Real-time game sync
+  const {
+    gameState,
+    isConnected,
+    opponentConnected,
+    isMyTurn,
+    sendMove,
+    sendResign,
+    sendDrawOffer,
+  } = useGameSync({
+    roomId: roomId || "",
+    gameType: "chess",
+    onOpponentMove: handleOpponentMove as any,
+    onGameEnd: handleGameEnd,
+    onOpponentResign: handleOpponentResign,
+  });
+
+  // Get opponent address
+  const opponentAddress = gameState?.players.find(
+    (p) => p.toLowerCase() !== address?.toLowerCase()
+  );
+
+  // Turn timer
+  const remainingTime = useTurnTimer(
+    isMyTurn,
+    gameState?.turnTimeSeconds || 300,
+    gameState?.turnStartedAt || Date.now(),
+    () => {
+      toast({
+        title: "Time's up!",
+        description: "You ran out of time.",
+        variant: "destructive",
+      });
+    }
+  );
+
+  // Update move history helper
+  const updateMoveHistory = useCallback(() => {
+    const history = game.history();
+    const moves: Array<{ move: number; white: string; black: string }> = [];
+    for (let i = 0; i < history.length; i += 2) {
+      moves.push({
+        move: Math.floor(i / 2) + 1,
+        white: history[i] || "",
+        black: history[i + 1] || "...",
+      });
+    }
+    setMoveHistory(moves);
+  }, [game]);
+
   const handleMove = useCallback((from: Square, to: Square): boolean => {
+    // Only allow moves on your turn
+    if (!isMyTurn && gameState?.status === "playing") {
+      toast({
+        title: "Not your turn",
+        description: "Wait for your opponent to move.",
+        variant: "destructive",
+      });
+      return false;
+    }
+
     try {
       const move = game.move({
         from,
@@ -32,23 +134,40 @@ const ChessGame = () => {
       
       if (move) {
         setFen(game.fen());
-        const history = game.history();
-        const moves: Array<{ move: number; white: string; black: string }> = [];
-        for (let i = 0; i < history.length; i += 2) {
-          moves.push({
-            move: Math.floor(i / 2) + 1,
-            white: history[i] || "",
-            black: history[i + 1] || "...",
-          });
-        }
-        setMoveHistory(moves);
+        updateMoveHistory();
+
+        // Send move to opponent with correct type structure
+        const chessMove: Omit<ChessMove, "timestamp"> = {
+          type: "chess",
+          from,
+          to,
+          promotion: move.promotion || undefined,
+          fen: game.fen(),
+        };
+        sendMove(chessMove);
+
         return true;
       }
     } catch (e) {
       // Invalid move
     }
     return false;
-  }, [game]);
+  }, [game, isMyTurn, gameState?.status, sendMove, toast, updateMoveHistory]);
+
+  const handleResign = useCallback(() => {
+    if (confirm("Are you sure you want to resign?")) {
+      sendResign();
+      setGameEnded(true);
+      toast({
+        title: "You Resigned",
+        description: "The game is over.",
+      });
+    }
+  }, [sendResign, toast]);
+
+  const handleOfferDraw = useCallback(() => {
+    sendDrawOffer();
+  }, [sendDrawOffer]);
 
   return (
     <div className="min-h-screen bg-background px-4 py-6">
@@ -64,10 +183,9 @@ const ChessGame = () => {
             </p>
           </div>
           <div className="flex items-center gap-2 text-sm">
-            <span className="px-2 py-1 bg-primary/20 text-primary rounded">
-              {game.turn() === 'w' ? 'White' : 'Black'} to move
+            <span className={`px-2 py-1 rounded ${isMyTurn ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'}`}>
+              {isMyTurn ? 'Your turn' : "Opponent's turn"}
             </span>
-            <span className="text-muted-foreground">15s remaining</span>
           </div>
         </div>
 
@@ -79,18 +197,29 @@ const ChessGame = () => {
               <ChessBoardPremium
                 game={game}
                 onMove={handleMove}
-                disabled={false}
+                disabled={gameEnded || !isMyTurn}
               />
             </div>
           </div>
 
           {/* RIGHT COLUMN - Info Panels */}
           <div className="w-full lg:w-80 space-y-4">
-            {/* Turn Info */}
+            {/* Connection Status */}
+            <GameSyncStatus
+              isConnected={isConnected}
+              opponentConnected={opponentConnected}
+              isMyTurn={isMyTurn}
+              remainingTime={remainingTime}
+              playerAddress={address}
+              opponentAddress={opponentAddress}
+            />
+
+            {/* Game Status */}
             <div className="bg-card border border-border rounded-lg p-4">
               <h3 className="text-sm font-semibold text-muted-foreground mb-2">Game Status</h3>
               <p className="text-foreground font-medium">
-                {game.isCheckmate() ? "Checkmate!" : 
+                {gameEnded ? "Game Over" :
+                 game.isCheckmate() ? "Checkmate!" : 
                  game.isStalemate() ? "Stalemate!" :
                  game.isDraw() ? "Draw!" :
                  game.isCheck() ? "Check!" :
@@ -117,16 +246,27 @@ const ChessGame = () => {
             </div>
 
             {/* Action Buttons */}
-            <div className="flex gap-3">
-              <Button variant="outline" className="flex-1 gap-2">
-                <Handshake size={16} />
-                Offer Draw
-              </Button>
-              <Button variant="outline" className="flex-1 gap-2 text-destructive hover:text-destructive">
-                <Flag size={16} />
-                Resign
-              </Button>
-            </div>
+            {!gameEnded && (
+              <div className="flex gap-3">
+                <Button 
+                  variant="outline" 
+                  className="flex-1 gap-2"
+                  onClick={handleOfferDraw}
+                  disabled={!opponentConnected}
+                >
+                  <Handshake size={16} />
+                  Offer Draw
+                </Button>
+                <Button 
+                  variant="outline" 
+                  className="flex-1 gap-2 text-destructive hover:text-destructive"
+                  onClick={handleResign}
+                >
+                  <Flag size={16} />
+                  Resign
+                </Button>
+              </div>
+            )}
           </div>
         </div>
 

@@ -3,8 +3,12 @@ import { Button } from "@/components/ui/button";
 import { Home, Flag, Handshake } from "lucide-react";
 import { useRoom, formatEntryFee, formatRoom } from "@/hooks/useRoomManager";
 import { usePolPrice } from "@/hooks/usePolPrice";
+import { GameSyncStatus } from "@/components/GameSyncStatus";
+import { useGameSync, useTurnTimer, DominoMove } from "@/hooks/useGameSync";
+import { useWallet } from "@/hooks/useWallet";
 import DominoTile3D from "@/components/DominoTile3D";
-import { useState } from "react";
+import { useState, useCallback } from "react";
+import { useToast } from "@/hooks/use-toast";
 
 const initialPlayerHand = [
   [6, 6], [5, 4], [3, 2], [1, 0], [4, 4], [2, 1], [6, 3]
@@ -19,17 +23,51 @@ const initialBoardTiles = [
 const DominosGame = () => {
   const { roomId } = useParams<{ roomId: string }>();
   const { formatUsd } = usePolPrice();
+  const { address } = useWallet();
+  const { toast } = useToast();
   
   const roomIdBigInt = roomId ? BigInt(roomId) : undefined;
   const { data: roomData } = useRoom(roomIdBigInt);
   const room = roomData ? formatRoom(roomData) : null;
   
-  const [playerHand] = useState(initialPlayerHand);
-  const [boardTiles] = useState(initialBoardTiles);
+  const [playerHand, setPlayerHand] = useState(initialPlayerHand);
+  const [boardTiles, setBoardTiles] = useState(initialBoardTiles);
   const [selectedTile, setSelectedTile] = useState<number | null>(null);
+  const [gameEnded, setGameEnded] = useState(false);
 
   const entryFeeFormatted = room ? formatEntryFee(room.entryFee) : "...";
   const prizePool = room ? (parseFloat(entryFeeFormatted) * room.maxPlayers * 0.95).toFixed(3) : "...";
+
+  const handleOpponentMove = useCallback((move: DominoMove) => {
+    setBoardTiles(prev => [...prev, { tile: move.tile }]);
+  }, []);
+
+  const {
+    gameState,
+    isConnected,
+    opponentConnected,
+    isMyTurn,
+    sendMove,
+    sendResign,
+    sendDrawOffer,
+  } = useGameSync({
+    roomId: roomId || "",
+    gameType: "dominos",
+    onOpponentMove: handleOpponentMove as any,
+    onGameEnd: () => setGameEnded(true),
+    onOpponentResign: () => setGameEnded(true),
+  });
+
+  const opponentAddress = gameState?.players.find(
+    (p) => p.toLowerCase() !== address?.toLowerCase()
+  );
+
+  const remainingTime = useTurnTimer(
+    isMyTurn,
+    gameState?.turnTimeSeconds || 300,
+    gameState?.turnStartedAt || Date.now(),
+    () => toast({ title: "Time's up!", variant: "destructive" })
+  );
 
   return (
     <div className="min-h-screen bg-background px-4 py-6">
@@ -81,6 +119,16 @@ const DominosGame = () => {
           </div>
 
           <div className="w-full lg:w-72 space-y-4">
+            {/* Connection Status */}
+            <GameSyncStatus
+              isConnected={isConnected}
+              opponentConnected={opponentConnected}
+              isMyTurn={isMyTurn}
+              remainingTime={remainingTime}
+              playerAddress={address}
+              opponentAddress={opponentAddress}
+            />
+
             <div className="bg-card border border-border rounded-lg p-4">
               <h3 className="text-sm font-semibold text-muted-foreground mb-2">Game Status</h3>
               <div className="space-y-2 text-sm">
