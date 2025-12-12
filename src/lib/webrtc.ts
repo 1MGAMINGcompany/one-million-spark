@@ -1,5 +1,13 @@
 // WebRTC Peer Connection Manager for P2P Game Sync
-// Uses localStorage for signaling (cross-tab) and RTCDataChannel for game state
+// Uses Push Protocol for cross-device signaling and localStorage as fallback
+import * as PushAPI from "@pushprotocol/restapi";
+import {
+  initPushUser,
+  sendPushSignal,
+  startPushSignalListener,
+  fetchRecentSignals,
+  PushSignal,
+} from "./pushSignaling";
 
 export interface RTCSignal {
   type: "offer" | "answer" | "ice-candidate";
@@ -15,6 +23,10 @@ export interface WebRTCCallbacks {
   onDisconnected: () => void;
   onMessage: (data: any) => void;
   onError: (error: Error) => void;
+}
+
+export interface WebRTCPeerOptions {
+  usePushProtocol?: boolean;
 }
 
 // Free STUN servers for NAT traversal
@@ -39,15 +51,23 @@ export class WebRTCPeer {
   private processedSignals: Set<number> = new Set();
   private isInitiator: boolean = false;
   private connectionEstablished: boolean = false;
+  
+  // Push Protocol
+  private usePushProtocol: boolean;
+  private pushUser: PushAPI.PushAPI | null = null;
+  private pushStreamCleanup: (() => void) | null = null;
+  private pushInitialized: boolean = false;
 
   constructor(
     roomId: string,
     localAddress: string,
-    callbacks: WebRTCCallbacks
+    callbacks: WebRTCCallbacks,
+    options: WebRTCPeerOptions = {}
   ) {
     this.roomId = roomId;
     this.localAddress = localAddress.toLowerCase();
     this.callbacks = callbacks;
+    this.usePushProtocol = options.usePushProtocol ?? true;
   }
 
   async connect(remoteAddress: string, isInitiator: boolean): Promise<void> {
@@ -56,6 +76,12 @@ export class WebRTCPeer {
 
     console.log(`[WebRTC] Connecting as ${isInitiator ? "initiator" : "responder"}`);
     console.log(`[WebRTC] Local: ${this.localAddress}, Remote: ${this.remoteAddress}`);
+    console.log(`[WebRTC] Using Push Protocol: ${this.usePushProtocol}`);
+
+    // Initialize Push Protocol if enabled
+    if (this.usePushProtocol) {
+      await this.initPushProtocol();
+    }
 
     // Create peer connection
     this.pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
@@ -94,8 +120,13 @@ export class WebRTCPeer {
       this.setupDataChannel(event.channel);
     };
 
-    // Start polling for signals
+    // Start polling for localStorage signals (fallback)
     this.startSignalPolling();
+
+    // Fetch any recent Push signals we might have missed
+    if (this.usePushProtocol && this.pushUser) {
+      await this.fetchMissedPushSignals();
+    }
 
     if (isInitiator) {
       // Create data channel (initiator creates it)
@@ -116,6 +147,71 @@ export class WebRTCPeer {
         payload: offer,
         timestamp: Date.now(),
       });
+    }
+  }
+
+  private async initPushProtocol(): Promise<void> {
+    try {
+      console.log("[WebRTC] Initializing Push Protocol...");
+      this.pushUser = await initPushUser(this.localAddress);
+      
+      // Start listening for Push signals
+      this.pushStreamCleanup = await startPushSignalListener(
+        this.pushUser,
+        this.roomId,
+        this.localAddress,
+        (signal) => this.handlePushSignal(signal)
+      );
+      
+      this.pushInitialized = true;
+      console.log("[WebRTC] Push Protocol initialized successfully");
+    } catch (error) {
+      console.warn("[WebRTC] Push Protocol initialization failed, using localStorage only:", error);
+      this.usePushProtocol = false;
+    }
+  }
+
+  private async fetchMissedPushSignals(): Promise<void> {
+    if (!this.pushUser || !this.remoteAddress) return;
+
+    try {
+      const signals = await fetchRecentSignals(
+        this.pushUser,
+        this.remoteAddress,
+        this.roomId,
+        this.localAddress
+      );
+
+      for (const signal of signals) {
+        await this.handlePushSignal(signal);
+      }
+    } catch (error) {
+      console.warn("[WebRTC] Failed to fetch missed signals:", error);
+    }
+  }
+
+  private async handlePushSignal(signal: PushSignal): Promise<void> {
+    if (this.processedSignals.has(signal.timestamp)) return;
+    this.processedSignals.add(signal.timestamp);
+
+    if (signal.from.toLowerCase() !== this.remoteAddress) return;
+
+    console.log(`[WebRTC] Processing Push signal: ${signal.type}`);
+
+    try {
+      switch (signal.type) {
+        case "offer":
+          await this.handleOffer(signal.payload as RTCSessionDescriptionInit);
+          break;
+        case "answer":
+          await this.handleAnswer(signal.payload as RTCSessionDescriptionInit);
+          break;
+        case "ice-candidate":
+          await this.handleIceCandidate(signal.payload as RTCIceCandidateInit);
+          break;
+      }
+    } catch (e) {
+      console.error(`[WebRTC] Error processing Push signal:`, e);
     }
   }
 
@@ -147,7 +243,25 @@ export class WebRTCPeer {
     };
   }
 
-  private sendSignal(signal: RTCSignal): void {
+  private async sendSignal(signal: RTCSignal): Promise<void> {
+    // Send via Push Protocol if available
+    if (this.usePushProtocol && this.pushUser && signal.to) {
+      try {
+        await sendPushSignal(this.pushUser, {
+          type: signal.type,
+          roomId: signal.roomId,
+          from: signal.from,
+          to: signal.to,
+          payload: signal.payload,
+          timestamp: signal.timestamp,
+        });
+        console.log(`[WebRTC] Sent Push signal: ${signal.type}`);
+      } catch (error) {
+        console.warn("[WebRTC] Push signal failed, using localStorage:", error);
+      }
+    }
+
+    // Always send via localStorage as fallback (for same-browser tabs)
     const key = `${SIGNAL_KEY_PREFIX}${this.roomId}_${signal.to}`;
     const existing = localStorage.getItem(key);
     const signals: RTCSignal[] = existing ? JSON.parse(existing) : [];
@@ -157,7 +271,7 @@ export class WebRTCPeer {
     const trimmed = signals.slice(-50);
     localStorage.setItem(key, JSON.stringify(trimmed));
 
-    console.log(`[WebRTC] Sent signal: ${signal.type}`);
+    console.log(`[WebRTC] Sent localStorage signal: ${signal.type}`);
   }
 
   private startSignalPolling(): void {
@@ -183,7 +297,7 @@ export class WebRTCPeer {
       // Skip signals not from our peer
       if (signal.from !== this.remoteAddress) continue;
 
-      console.log(`[WebRTC] Processing signal: ${signal.type}`);
+      console.log(`[WebRTC] Processing localStorage signal: ${signal.type}`);
 
       try {
         switch (signal.type) {
@@ -253,12 +367,22 @@ export class WebRTCPeer {
     return this.dc?.readyState === "open" || this.connectionEstablished;
   }
 
+  isPushEnabled(): boolean {
+    return this.pushInitialized;
+  }
+
   disconnect(): void {
     console.log("[WebRTC] Disconnecting");
 
     if (this.signalPollInterval) {
       clearInterval(this.signalPollInterval);
       this.signalPollInterval = null;
+    }
+
+    // Cleanup Push Protocol stream
+    if (this.pushStreamCleanup) {
+      this.pushStreamCleanup();
+      this.pushStreamCleanup = null;
     }
 
     if (this.dc) {
@@ -271,11 +395,13 @@ export class WebRTCPeer {
       this.pc = null;
     }
 
-    // Clean up signals
+    // Clean up localStorage signals
     const key = `${SIGNAL_KEY_PREFIX}${this.roomId}_${this.localAddress}`;
     localStorage.removeItem(key);
 
     this.connectionEstablished = false;
+    this.pushInitialized = false;
+    this.pushUser = null;
   }
 }
 

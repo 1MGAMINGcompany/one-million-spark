@@ -28,6 +28,7 @@ export function useWebRTCSync({
   const { play } = useSound();
   
   const [isConnected, setIsConnected] = useState(false);
+  const [isPushEnabled, setIsPushEnabled] = useState(false);
   const [connectionState, setConnectionState] = useState<"connecting" | "connected" | "disconnected">("connecting");
   const peerRef = useRef<WebRTCPeer | null>(null);
   const reconnectAttempts = useRef(0);
@@ -65,11 +66,14 @@ export function useWebRTCSync({
         console.log("[WebRTCSync] Connected!");
         setIsConnected(true);
         setConnectionState("connected");
+        setIsPushEnabled(peer.isPushEnabled());
         reconnectAttempts.current = 0;
         play("rooms/player-join");
         toast({
           title: "Connected",
-          description: "Real-time sync established with opponent",
+          description: peer.isPushEnabled() 
+            ? "Cross-device P2P sync established via Push Protocol" 
+            : "Real-time sync established with opponent",
         });
       },
       onDisconnected: () => {
@@ -200,6 +204,7 @@ export function useWebRTCSync({
 
   return {
     isConnected,
+    isPushEnabled,
     connectionState,
     sendMove,
     sendResign,
