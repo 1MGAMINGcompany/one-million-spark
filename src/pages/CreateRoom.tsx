@@ -22,8 +22,8 @@ const CreateRoom = () => {
   const { play } = useSound();
   const { price, error: priceError, minPol, minUsd, getUsdValue } = usePolPrice();
 
-  // IMPORTANT: gameId numbers must match your contract mapping
-  const [gameId, setGameId] = useState("1"); // 1=Chess, 2=Dominos, 3=Backgammon
+  // IMPORTANT: gameId numbers must match your contract mapping (0=Chess, 1=Dominos, 2=Backgammon)
+  const [gameId, setGameId] = useState("0");
   const [entryFee, setEntryFee] = useState("");
   const [players, setPlayers] = useState("2");
   const [turnTime, setTurnTime] = useState("0"); // seconds, "0" = no timer
@@ -206,9 +206,9 @@ const CreateRoom = () => {
                 <SelectValue placeholder="Select game" />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="0">{GAME_CATALOG[0].label}</SelectItem>
                 <SelectItem value="1">{GAME_CATALOG[1].label}</SelectItem>
                 <SelectItem value="2">{GAME_CATALOG[2].label}</SelectItem>
-                <SelectItem value="3">{GAME_CATALOG[3].label}</SelectItem>
               </SelectContent>
             </Select>
           </div>
