@@ -7,10 +7,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Users, Clock, RefreshCw, Loader2 } from "lucide-react";
+import { Users, RefreshCw, Loader2 } from "lucide-react";
 import { useWallet } from "@/hooks/useWallet";
 import { WalletRequired } from "@/components/WalletRequired";
-import { useGlobalLoading } from "@/contexts/LoadingContext";
 import { useSound } from "@/contexts/SoundContext";
 import { useToast } from "@/hooks/use-toast";
 import { useReadContract } from "wagmi";
@@ -29,7 +28,6 @@ interface DisplayRoom {
 
 const RoomList = () => {
   const { isConnected, address } = useWallet();
-  const { setGlobalLoading } = useGlobalLoading();
   const { play } = useSound();
   const { toast } = useToast();
   const [gameFilter, setGameFilter] = useState("all");
@@ -55,7 +53,6 @@ const RoomList = () => {
     }
 
     setIsLoadingRooms(true);
-    setGlobalLoading(true, "Fetching rooms from blockchain...");
 
     try {
       const fetchedRooms: DisplayRoom[] = [];
@@ -117,9 +114,8 @@ const RoomList = () => {
       });
     } finally {
       setIsLoadingRooms(false);
-      setGlobalLoading(false);
     }
-  }, [nextRoomId, setGlobalLoading, toast]);
+  }, [nextRoomId, toast]);
 
   // Initial fetch when connected
   useEffect(() => {
@@ -131,7 +127,6 @@ const RoomList = () => {
   // Handle join success
   useEffect(() => {
     if (isJoinSuccess) {
-      setGlobalLoading(false);
       play('room_enter');
       toast({
         title: "Joined Room!",
@@ -141,12 +136,11 @@ const RoomList = () => {
       resetJoin();
       fetchRooms(); // Refresh the room list
     }
-  }, [isJoinSuccess, play, toast, setGlobalLoading, resetJoin, fetchRooms]);
+  }, [isJoinSuccess, play, toast, resetJoin, fetchRooms]);
 
   // Handle join error
   useEffect(() => {
     if (joinError) {
-      setGlobalLoading(false);
       toast({
         title: "Failed to Join",
         description: joinError.message || "Transaction failed",
@@ -155,14 +149,7 @@ const RoomList = () => {
       setJoiningRoomId(null);
       resetJoin();
     }
-  }, [joinError, toast, setGlobalLoading, resetJoin]);
-
-  // Show loading during join confirmation
-  useEffect(() => {
-    if (isJoinConfirming) {
-      setGlobalLoading(true, "Confirming transaction...");
-    }
-  }, [isJoinConfirming, setGlobalLoading]);
+  }, [joinError, toast, resetJoin]);
 
   const handleRefresh = () => {
     play('ui_click');
@@ -181,8 +168,8 @@ const RoomList = () => {
     }
 
     play('ui_click');
-    setGlobalLoading(true, "Approve transaction in your wallet...");
     setJoiningRoomId(room.id);
+    // joinRoom sends value: entryFee (payable)
     joinRoom(room.id, room.entryFee);
   };
 
@@ -192,14 +179,21 @@ const RoomList = () => {
 
   const isJoining = isJoinPending || isJoinConfirming;
 
+  const getJoinButtonText = (roomId: bigint) => {
+    if (joiningRoomId !== roomId) return "Join Room";
+    if (isJoinPending) return "Confirm in wallet...";
+    if (isJoinConfirming) return "Processing...";
+    return "Join Room";
+  };
+
   // Filter rooms based on selected filters
   const filteredRooms = rooms.filter(room => {
     if (gameFilter !== "all" && room.game.toLowerCase() !== gameFilter) return false;
     
-    const feeInMatic = parseFloat(formatEntryFee(room.entryFee));
-    if (feeFilter === "0.5-1" && (feeInMatic < 0.5 || feeInMatic > 1)) return false;
-    if (feeFilter === "1-5" && (feeInMatic < 1 || feeInMatic > 5)) return false;
-    if (feeFilter === "5+" && feeInMatic < 5) return false;
+    const feeInPol = parseFloat(formatEntryFee(room.entryFee));
+    if (feeFilter === "0.5-1" && (feeInPol < 0.5 || feeInPol > 1)) return false;
+    if (feeFilter === "1-5" && (feeInPol < 1 || feeInPol > 5)) return false;
+    if (feeFilter === "5+" && feeInPol < 5) return false;
     
     return true;
   });
@@ -233,9 +227,9 @@ const RoomList = () => {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Fees</SelectItem>
-                <SelectItem value="0.5-1">0.5 – 1 MATIC</SelectItem>
-                <SelectItem value="1-5">1 – 5 MATIC</SelectItem>
-                <SelectItem value="5+">5+ MATIC</SelectItem>
+                <SelectItem value="0.5-1">0.5 – 1 POL</SelectItem>
+                <SelectItem value="1-5">1 – 5 POL</SelectItem>
+                <SelectItem value="5+">5+ POL</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -272,7 +266,7 @@ const RoomList = () => {
                     {room.game}
                   </h3>
                   <p className="text-sm text-muted-foreground">
-                    Entry Fee: {formatEntryFee(room.entryFee)} MATIC
+                    Entry Fee: {formatEntryFee(room.entryFee)} POL
                   </p>
                   <p className="text-xs text-muted-foreground truncate">
                     Room #{room.id.toString()}
@@ -297,7 +291,7 @@ const RoomList = () => {
                   {isJoining && joiningRoomId === room.id ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Joining...
+                      {getJoinButtonText(room.id)}
                     </>
                   ) : (
                     "Join Room"
