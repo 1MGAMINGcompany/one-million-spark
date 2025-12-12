@@ -166,7 +166,7 @@ const CreateRoom = () => {
                     type="button"
                     variant="outline"
                     size="sm"
-                    onClick={() => navigate(`/room-list`)}
+                    onClick={() => navigate(`/room/${activeRoomId?.toString()}`)}
                   >
                     Go to Room
                   </Button>
