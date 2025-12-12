@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,12 +15,13 @@ import { useWallet } from "@/hooks/useWallet";
 import { WalletRequired } from "@/components/WalletRequired";
 import { useToast } from "@/hooks/use-toast";
 import { useSound } from "@/contexts/SoundContext";
-import { useCreateRoom } from "@/hooks/useRoomManager";
+import { useCreateRoom, useCreatorActiveRoom, useCancelRoom } from "@/hooks/useRoomManager";
 import { usePolPrice } from "@/hooks/usePolPrice";
-import { Loader2, AlertCircle } from "lucide-react";
+import { Loader2, AlertCircle, AlertTriangle } from "lucide-react";
 
 const CreateRoom = () => {
-  const { isConnected } = useWallet();
+  const navigate = useNavigate();
+  const { isConnected, address } = useWallet();
   const { toast } = useToast();
   const { play } = useSound();
   const { price, error: priceError, minPol, minUsd, getUsdValue } = usePolPrice();
@@ -31,6 +33,19 @@ const CreateRoom = () => {
   const [feeError, setFeeError] = useState<string | null>(null);
 
   const { createRoom, isPending, isConfirming, isSuccess, error, reset } = useCreateRoom();
+  
+  // Check for active room
+  const { data: activeRoomId, refetch: refetchActiveRoom } = useCreatorActiveRoom(address as `0x${string}` | undefined);
+  const hasActiveRoom = activeRoomId !== undefined && activeRoomId > 0n;
+  
+  // Cancel room hook
+  const { 
+    cancelRoom, 
+    isPending: isCancelPending, 
+    isConfirming: isCancelConfirming, 
+    isSuccess: isCancelSuccess,
+    reset: resetCancel 
+  } = useCancelRoom();
 
   // Validate entry fee on change
   useEffect(() => {
@@ -75,6 +90,24 @@ const CreateRoom = () => {
     }
   }, [error, toast, reset]);
 
+  // Handle cancel room success
+  useEffect(() => {
+    if (isCancelSuccess) {
+      toast({
+        title: "Room Cancelled",
+        description: "Your active room has been cancelled. You can now create a new one.",
+      });
+      resetCancel();
+      refetchActiveRoom();
+    }
+  }, [isCancelSuccess, toast, resetCancel, refetchActiveRoom]);
+
+  const handleCancelActiveRoom = () => {
+    if (!activeRoomId) return;
+    play('ui_click');
+    cancelRoom(activeRoomId);
+  };
+
   const handleCreateRoom = () => {
     const feeNum = parseFloat(entryFee);
     if (!entryFee || isNaN(feeNum) || feeNum < minPol) {
@@ -99,6 +132,7 @@ const CreateRoom = () => {
   }
 
   const isLoading = isPending || isConfirming;
+  const isCancelLoading = isCancelPending || isCancelConfirming;
   const entryUsdValue = getUsdValue(entryFee);
 
   const getButtonText = () => {
@@ -114,11 +148,55 @@ const CreateRoom = () => {
           Create Game Room
         </h1>
 
+        {/* Active Room Warning */}
+        {hasActiveRoom && (
+          <div className="mb-5 p-4 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
+              <div className="space-y-3 flex-1">
+                <div>
+                  <p className="font-medium text-amber-500">Active Room Exists</p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    You already have an active room (#{activeRoomId?.toString()}). 
+                    You must cancel it or finish it before creating a new one.
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => navigate(`/room-list`)}
+                  >
+                    Go to Room
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="sm"
+                    onClick={handleCancelActiveRoom}
+                    disabled={isCancelLoading}
+                  >
+                    {isCancelLoading ? (
+                      <>
+                        <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                        Cancelling...
+                      </>
+                    ) : (
+                      "Cancel Room"
+                    )}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         <form className="space-y-5">
           {/* Game Type */}
           <div className="space-y-2">
             <Label htmlFor="gameType">Game Type</Label>
-            <Select value={gameType} onValueChange={setGameType} disabled={isLoading}>
+            <Select value={gameType} onValueChange={setGameType} disabled={isLoading || hasActiveRoom}>
               <SelectTrigger id="gameType" className="w-full">
                 <SelectValue placeholder="Select game" />
               </SelectTrigger>
@@ -143,7 +221,7 @@ const CreateRoom = () => {
                   step="0.001"
                   value={entryFee}
                   onChange={(e) => setEntryFee(e.target.value)}
-                  disabled={isLoading}
+                  disabled={isLoading || hasActiveRoom}
                   className={feeError ? "border-destructive" : ""}
                 />
                 {feeError && (
@@ -185,7 +263,7 @@ const CreateRoom = () => {
           {/* Number of Players */}
           <div className="space-y-2">
             <Label htmlFor="players">Number of Players</Label>
-            <Select value={players} onValueChange={setPlayers} disabled={isLoading}>
+            <Select value={players} onValueChange={setPlayers} disabled={isLoading || hasActiveRoom}>
               <SelectTrigger id="players" className="w-full">
                 <SelectValue placeholder="Select players" />
               </SelectTrigger>
@@ -200,7 +278,7 @@ const CreateRoom = () => {
           {/* Time per Turn */}
           <div className="space-y-2">
             <Label htmlFor="turnTime">Time per Turn</Label>
-            <Select value={turnTime} onValueChange={setTurnTime} disabled={isLoading}>
+            <Select value={turnTime} onValueChange={setTurnTime} disabled={isLoading || hasActiveRoom}>
               <SelectTrigger id="turnTime" className="w-full">
                 <SelectValue placeholder="Select time" />
               </SelectTrigger>
@@ -220,7 +298,7 @@ const CreateRoom = () => {
               value={roomType} 
               onValueChange={setRoomType} 
               className="flex gap-6"
-              disabled={isLoading}
+              disabled={isLoading || hasActiveRoom}
             >
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="public" id="public" />
@@ -243,7 +321,7 @@ const CreateRoom = () => {
             className="w-full" 
             size="lg" 
             onClick={handleCreateRoom}
-            disabled={isLoading || !!feeError}
+            disabled={isLoading || !!feeError || hasActiveRoom}
           >
             {isLoading ? (
               <>
