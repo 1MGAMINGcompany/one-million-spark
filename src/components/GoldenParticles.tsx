@@ -26,7 +26,7 @@ const GoldenParticles = () => {
 
   return (
     <div 
-      className="fixed inset-0 overflow-hidden pointer-events-none z-0"
+      className="fixed inset-0 overflow-hidden pointer-events-none z-[5]"
       aria-hidden="true"
     >
       {particles.map((p) => (

@@ -33,7 +33,7 @@ const App = () => (
             <GoldenParticles />
             <BrowserRouter>
               <Navbar />
-              <main className="pt-16 relative z-10 min-h-screen">
+              <main className="pt-16 relative min-h-screen">
                 <Routes>
                   <Route path="/" element={<Home />} />
                   <Route path="/add-funds" element={<AddFunds />} />
