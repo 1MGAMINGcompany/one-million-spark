@@ -105,7 +105,95 @@ export function normalizeRoomView(data: readonly unknown[]): ContractRoomView {
   };
 }
 
+// ---------- additional reads ----------
+export function useRoom(roomId: bigint | undefined) {
+  return useReadContract({
+    address: ROOM_MANAGER_ADDRESS,
+    abi: ROOM_MANAGER_ABI,
+    functionName: "getRoomView",
+    args: roomId !== undefined ? [roomId] : undefined,
+    chainId: 137,
+    query: { enabled: roomId !== undefined },
+  });
+}
+
+export function useRoomPlayers(roomId: bigint | undefined) {
+  return useReadContract({
+    address: ROOM_MANAGER_ADDRESS,
+    abi: ROOM_MANAGER_ABI,
+    functionName: "getPlayers",
+    args: roomId !== undefined ? [roomId] : undefined,
+    chainId: 137,
+    query: { enabled: roomId !== undefined },
+  });
+}
+
+export function useCreatorActiveRoom(creator: `0x${string}` | undefined) {
+  return useReadContract({
+    address: ROOM_MANAGER_ADDRESS,
+    abi: ROOM_MANAGER_ABI,
+    functionName: "creatorActiveRoomId",
+    args: creator ? [creator] : undefined,
+    chainId: 137,
+    query: { enabled: !!creator },
+  });
+}
+
+// Format room view tuple to object
+export function formatRoomView(data: readonly unknown[]): ContractRoomView {
+  const [id, creator, entryFee, maxPlayers, isPrivate, status, gameId, turnTimeSeconds, winner] = data as readonly [
+    bigint,
+    `0x${string}`,
+    bigint,
+    number,
+    boolean,
+    number,
+    number,
+    number,
+    `0x${string}`,
+  ];
+  return {
+    id,
+    creator,
+    entryFee,
+    maxPlayers: Number(maxPlayers),
+    isPrivate,
+    status: Number(status) as RoomStatus,
+    gameId: Number(gameId),
+    turnTimeSeconds: Number(turnTimeSeconds),
+    winner,
+  };
+}
+
 // ---------- writes ----------
+export function useCreateRoom() {
+  const { address } = useAccount();
+  const { writeContract, data: hash, isPending, error, reset } = useWriteContract();
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+
+  const createRoom = (
+    entryFeeInPol: string,
+    maxPlayers: number,
+    isPrivate: boolean,
+    gameId: number = 0,
+    turnTimeSeconds: number = 0,
+  ) => {
+    if (!address) return;
+    const entryFeeWei = parseEther(entryFeeInPol);
+    writeContract({
+      address: ROOM_MANAGER_ADDRESS,
+      abi: ROOM_MANAGER_ABI,
+      functionName: "createRoom",
+      args: [entryFeeWei, maxPlayers, isPrivate, gameId, turnTimeSeconds],
+      value: entryFeeWei,
+      chain: polygon,
+      account: address,
+    });
+  };
+
+  return { createRoom, hash, isPending, isConfirming, isSuccess, error, reset };
+}
+
 export function useCreateRoomV2() {
   const { address } = useAccount();
   const { writeContract, data: hash, isPending, error, reset } = useWriteContract();
@@ -187,6 +275,26 @@ export function useCancelRoom() {
   };
 
   return { cancelRoom, hash, isPending, isConfirming, isSuccess, error, reset };
+}
+
+export function useStartRoom() {
+  const { address } = useAccount();
+  const { writeContract, data: hash, isPending, error, reset } = useWriteContract();
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+
+  const startRoom = (roomId: bigint) => {
+    if (!address) return;
+    writeContract({
+      address: ROOM_MANAGER_ADDRESS,
+      abi: ROOM_MANAGER_ABI,
+      functionName: "startRoom",
+      args: [roomId],
+      chain: polygon,
+      account: address,
+    });
+  };
+
+  return { startRoom, hash, isPending, isConfirming, isSuccess, error, reset };
 }
 
 export function useFinishRoom() {
