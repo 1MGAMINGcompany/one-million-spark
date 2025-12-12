@@ -233,23 +233,28 @@ const RoomList = () => {
                     </span>
                   </div>
                   <span className="text-xs px-2 py-1 rounded bg-primary/10 text-primary">
-                    Status: {Number(room.status)}
+                    {getRoomStatusLabel(room.status)}
                   </span>
                 </div>
-                <Button 
-                  size="sm" 
-                  onClick={() => handleJoinRoom(room)}
-                  disabled={isJoining && joiningRoomId === room.id}
-                >
-                  {isJoining && joiningRoomId === room.id ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      {getJoinButtonText(room.id)}
-                    </>
-                  ) : (
-                    "Join Room"
-                  )}
-                </Button>
+                {(() => {
+                  const isOwnRoom = room.creator.toLowerCase() === address?.toLowerCase();
+                  return (
+                    <Button 
+                      size="sm" 
+                      onClick={() => (isOwnRoom ? navigate(`/room/${room.id.toString()}`) : handleJoinRoom(room))}
+                      disabled={isJoining && joiningRoomId === room.id}
+                    >
+                      {isJoining && joiningRoomId === room.id ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          {getJoinButtonText(room.id)}
+                        </>
+                      ) : (
+                        isOwnRoom ? "View Room" : "Join Room"
+                      )}
+                    </Button>
+                  );
+                })()}
               </div>
             ))
           )}

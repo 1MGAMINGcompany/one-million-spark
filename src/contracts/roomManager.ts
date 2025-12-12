@@ -403,13 +403,11 @@ export const ROOM_MANAGER_ABI = [
 ] as const;
 
 // Room status enum matching contract
-// None=0, Created=1, Started=2, Finished=3, Cancelled=4
 export enum RoomStatus {
-  None = 0,
-  Created = 1,
-  Started = 2,
-  Finished = 3,
-  Cancelled = 4,
+  Created = 4,
+  Started = 5,
+  Finished = 6,
+  Cancelled = 7,
 }
 
 // TypeScript types for room data
