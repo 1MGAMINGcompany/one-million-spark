@@ -233,7 +233,7 @@ const RoomList = () => {
                     </span>
                   </div>
                   <span className="text-xs px-2 py-1 rounded bg-primary/10 text-primary">
-                    {getRoomStatusLabel(room.status)}
+                    {room.status === 1 ? "Waiting" : room.status === 2 ? "In Progress" : "Other"}
                   </span>
                 </div>
                 <Button 
