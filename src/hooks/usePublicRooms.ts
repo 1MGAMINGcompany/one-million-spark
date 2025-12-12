@@ -1,6 +1,6 @@
 import { useCallback, useState, useEffect } from "react";
 import { useReadContract } from "wagmi";
-import { ROOM_MANAGER_ADDRESS, RoomStatus } from "@/contracts/roomManager";
+import { ROOM_MANAGER_ADDRESS, ROOM_MANAGER_ABI, RoomStatus } from "@/contracts/roomManager";
 import { createPublicClient, http, type Address } from "viem";
 import { polygon } from "viem/chains";
 
@@ -15,11 +15,17 @@ export interface PublicRoom {
   winner: `0x${string}`;
 }
 
-// Minimal ABI for getRoom
-const GET_ROOM_ABI = [
+// Create a public client for direct viem calls - Polygon mainnet
+const publicClient = createPublicClient({
+  chain: polygon,
+  transport: http("https://polygon-rpc.com"),
+});
+
+// Minimal ABI for rooms mapping (returns fewer fields than getRoom)
+const ROOMS_ABI = [
   {
-    inputs: [{ internalType: "uint256", name: "roomId", type: "uint256" }],
-    name: "getRoom",
+    inputs: [{ internalType: "uint256", name: "", type: "uint256" }],
+    name: "rooms",
     outputs: [
       { internalType: "uint256", name: "id", type: "uint256" },
       { internalType: "address", name: "creator", type: "address" },
@@ -27,7 +33,6 @@ const GET_ROOM_ABI = [
       { internalType: "uint8", name: "maxPlayers", type: "uint8" },
       { internalType: "bool", name: "isPrivate", type: "bool" },
       { internalType: "uint8", name: "status", type: "uint8" },
-      { internalType: "address[]", name: "players", type: "address[]" },
       { internalType: "address", name: "winner", type: "address" },
     ],
     stateMutability: "view",
@@ -45,11 +50,16 @@ const NEXT_ROOM_ID_ABI = [
   },
 ] as const;
 
-// Create a public client for direct viem calls
-const publicClient = createPublicClient({
-  chain: polygon,
-  transport: http("https://polygon-rpc.com"),
-});
+// ABI for getRoomPlayers
+const GET_ROOM_PLAYERS_ABI = [
+  {
+    inputs: [{ internalType: "uint256", name: "roomId", type: "uint256" }],
+    name: "getRoomPlayers",
+    outputs: [{ internalType: "address[]", name: "", type: "address[]" }],
+    stateMutability: "view",
+    type: "function",
+  },
+] as const;
 
 export function usePublicRooms() {
   const [rooms, setRooms] = useState<PublicRoom[]>([]);
@@ -65,6 +75,7 @@ export function usePublicRooms() {
     address: ROOM_MANAGER_ADDRESS,
     abi: NEXT_ROOM_ID_ABI,
     functionName: "nextRoomId",
+    chainId: 137, // Polygon mainnet
   });
 
   // Fetch all rooms when nextRoomId changes
@@ -84,55 +95,74 @@ export function usePublicRooms() {
           roomIds.push(i);
         }
 
-        // Fetch rooms in parallel using individual calls
+        // Fetch rooms in parallel using the rooms mapping
         const results = await Promise.all(
           roomIds.map(async (roomId) => {
             try {
               const result = await (publicClient as any).readContract({
                 address: ROOM_MANAGER_ADDRESS,
-                abi: GET_ROOM_ABI,
-                functionName: "getRoom",
+                abi: ROOMS_ABI,
+                functionName: "rooms",
                 args: [roomId],
               });
-              return { status: "success" as const, result };
+              return { status: "success" as const, roomId, result };
             } catch (error) {
-              return { status: "error" as const, error };
+              console.error(`Error fetching room ${roomId}:`, error);
+              return { status: "error" as const, roomId, error };
             }
           })
         );
 
-        const publicRooms: PublicRoom[] = [];
+        // Filter to only public rooms with Created or Started status
+        const publicRoomData = results.filter((r) => {
+          if (r.status !== "success" || !r.result) return false;
+          const [id, creator, entryFee, maxPlayers, isPrivate, status, winner] = r.result;
+          // isPrivate must be false, status must be Created(1) or Started(2)
+          return !isPrivate && (status === RoomStatus.Created || status === RoomStatus.Started);
+        });
 
-        results.forEach((result) => {
-          if (result.status === "success" && result.result) {
-            const [id, creator, entryFee, maxPlayers, isPrivate, status, players, winner] = result.result as [
-              bigint,
-              Address,
-              bigint,
-              number,
-              boolean,
-              number,
-              readonly Address[],
-              Address
-            ];
-
-            // Only include public rooms (isPrivate === false)
-            // Show rooms with status Created (0) or Started (1)
-            if (!isPrivate && (status === RoomStatus.Created || status === RoomStatus.Started)) {
-              publicRooms.push({
+        // Fetch players for each public room
+        const roomsWithPlayers = await Promise.all(
+          publicRoomData.map(async (r) => {
+            if (r.status !== "success" || !r.result) return null;
+            const [id, creator, entryFee, maxPlayers, isPrivate, status, winner] = r.result;
+            
+            try {
+              const players = await (publicClient as any).readContract({
+                address: ROOM_MANAGER_ADDRESS,
+                abi: GET_ROOM_PLAYERS_ABI,
+                functionName: "getRoomPlayers",
+                args: [r.roomId],
+              });
+              
+              return {
                 id,
-                creator,
+                creator: creator as `0x${string}`,
                 entryFee,
                 maxPlayers,
                 isPrivate,
                 status: status as RoomStatus,
-                players,
-                winner,
-              });
+                players: players as readonly `0x${string}`[],
+                winner: winner as `0x${string}`,
+              };
+            } catch (error) {
+              console.error(`Error fetching players for room ${r.roomId}:`, error);
+              // Return room without players array
+              return {
+                id,
+                creator: creator as `0x${string}`,
+                entryFee,
+                maxPlayers,
+                isPrivate,
+                status: status as RoomStatus,
+                players: [] as readonly `0x${string}`[],
+                winner: winner as `0x${string}`,
+              };
             }
-          }
-        });
+          })
+        );
 
+        const publicRooms = roomsWithPlayers.filter((r): r is PublicRoom => r !== null);
         setRooms(publicRooms);
       } catch (error) {
         console.error("Error fetching rooms:", error);
