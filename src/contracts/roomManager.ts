@@ -1,8 +1,11 @@
 // src/contracts/roomManager.ts
+export const ROOM_MANAGER_ADDRESS =
+  (import.meta.env.VITE_ROOM_MANAGER_ADDRESS ||
+    "0xd3ACD6e228280BDdb470653eBd658648FBB84789") as `0x${string}`;
 
-export const ROOM_MANAGER_ADDRESS = "0xd3ACD6e228280BDdb470653eBd658648FBB84789" as const;
-
+// RoomManagerV2 ABI (minimal: write + read + events)
 export const ROOM_MANAGER_ABI = [
+  // createRoom(uint256,uint8,bool,uint16,uint32) payable
   {
     type: "function",
     name: "createRoom",
@@ -11,11 +14,13 @@ export const ROOM_MANAGER_ABI = [
       { name: "entryFeeWei", type: "uint256" },
       { name: "maxPlayers", type: "uint8" },
       { name: "isPrivate", type: "bool" },
-      { name: "gameType", type: "uint8" },
-      { name: "turnTimeSeconds", type: "uint32" },
+      { name: "platformFeeBps", type: "uint16" },
+      { name: "gameId", type: "uint32" },
     ],
-    outputs: [],
+    outputs: [{ name: "roomId", type: "uint256" }],
   },
+
+  // joinRoom(uint256) payable
   {
     type: "function",
     name: "joinRoom",
@@ -23,6 +28,8 @@ export const ROOM_MANAGER_ABI = [
     inputs: [{ name: "roomId", type: "uint256" }],
     outputs: [],
   },
+
+  // cancelRoom(uint256)
   {
     type: "function",
     name: "cancelRoom",
@@ -30,50 +37,77 @@ export const ROOM_MANAGER_ABI = [
     inputs: [{ name: "roomId", type: "uint256" }],
     outputs: [],
   },
+
+  // getRoom(uint256) view returns (...)
   {
     type: "function",
-    name: "getRoomView",
+    name: "getRoom",
     stateMutability: "view",
     inputs: [{ name: "roomId", type: "uint256" }],
     outputs: [
       { name: "id", type: "uint256" },
       { name: "creator", type: "address" },
-      { name: "entryFee", type: "uint256" },
+      { name: "entryFeeWei", type: "uint256" },
       { name: "maxPlayers", type: "uint8" },
       { name: "isPrivate", type: "bool" },
-      { name: "status", type: "uint8" },
-      { name: "gameType", type: "uint8" },
-      { name: "turnTimeSeconds", type: "uint32" },
-      { name: "winner", type: "address" },
+      { name: "platformFeeBps", type: "uint16" },
+      { name: "gameId", type: "uint32" },
+      { name: "playerCount", type: "uint8" },
+      { name: "isOpen", type: "bool" },
     ],
   },
+
+  // getLatestRoomId() view returns (uint256)
   {
     type: "function",
-    name: "getPlayerCount",
-    stateMutability: "view",
-    inputs: [{ name: "roomId", type: "uint256" }],
-    outputs: [{ type: "uint256" }],
-  },
-  {
-    type: "function",
-    name: "playersOf",
-    stateMutability: "view",
-    inputs: [{ name: "roomId", type: "uint256" }],
-    outputs: [{ type: "address[]" }],
-  },
-  {
-    type: "function",
-    name: "nextRoomId",
+    name: "getLatestRoomId",
     stateMutability: "view",
     inputs: [],
-    outputs: [{ type: "uint256" }],
+    outputs: [{ name: "roomId", type: "uint256" }],
   },
+
+  // getOpenRoomIds(uint256,uint256) view returns (uint256[])
   {
     type: "function",
-    name: "playerActiveRoomId",
+    name: "getOpenRoomIds",
     stateMutability: "view",
-    inputs: [{ type: "address" }],
-    outputs: [{ type: "uint256" }],
+    inputs: [
+      { name: "cursor", type: "uint256" },
+      { name: "limit", type: "uint256" },
+    ],
+    outputs: [{ name: "roomIds", type: "uint256[]" }],
+  },
+
+  // events
+  {
+    type: "event",
+    name: "RoomCreated",
+    inputs: [
+      { indexed: true, name: "roomId", type: "uint256" },
+      { indexed: true, name: "creator", type: "address" },
+      { indexed: false, name: "entryFeeWei", type: "uint256" },
+      { indexed: false, name: "maxPlayers", type: "uint8" },
+      { indexed: false, name: "isPrivate", type: "bool" },
+      { indexed: false, name: "platformFeeBps", type: "uint16" },
+      { indexed: false, name: "gameId", type: "uint32" },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "RoomJoined",
+    inputs: [
+      { indexed: true, name: "roomId", type: "uint256" },
+      { indexed: true, name: "player", type: "address" },
+      { indexed: false, name: "playerCount", type: "uint8" },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "RoomCancelled",
+    inputs: [{ indexed: true, name: "roomId", type: "uint256" }],
+    anonymous: false,
   },
 ] as const;
 
@@ -86,9 +120,9 @@ export enum RoomStatus {
 }
 
 export const GAME_CATALOG = [
-  { id: 0, label: "Chess" },
-  { id: 1, label: "Dominos" },
-  { id: 2, label: "Backgammon" },
+  { id: 1, label: "Chess" },
+  { id: 2, label: "Dominos" },
+  { id: 3, label: "Backgammon" },
 ] as const;
 
 export const TURN_TIMERS = [
