@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -12,131 +13,45 @@ import { useWallet } from "@/hooks/useWallet";
 import { WalletRequired } from "@/components/WalletRequired";
 import { useSound } from "@/contexts/SoundContext";
 import { useToast } from "@/hooks/use-toast";
-import { useReadContract } from "wagmi";
-import { ROOM_MANAGER_ADDRESS, ROOM_MANAGER_ABI, RoomStatus } from "@/contracts/roomManager";
 import { useJoinRoom, formatEntryFee, getRoomStatusLabel } from "@/hooks/useRoomManager";
-
-interface DisplayRoom {
-  id: bigint;
-  game: string;
-  entryFee: bigint;
-  players: number;
-  maxPlayers: number;
-  status: RoomStatus;
-  creator: string;
-}
+import { usePublicRooms, type PublicRoom } from "@/hooks/usePublicRooms";
+import { formatEther } from "viem";
 
 const RoomList = () => {
+  const navigate = useNavigate();
   const { isConnected, address } = useWallet();
   const { play } = useSound();
   const { toast } = useToast();
   const [gameFilter, setGameFilter] = useState("all");
   const [feeFilter, setFeeFilter] = useState("all");
-  const [rooms, setRooms] = useState<DisplayRoom[]>([]);
-  const [isLoadingRooms, setIsLoadingRooms] = useState(false);
   const [joiningRoomId, setJoiningRoomId] = useState<bigint | null>(null);
 
-  // Get next room ID to know how many rooms exist
-  const { data: nextRoomId, refetch: refetchNextId } = useReadContract({
-    address: ROOM_MANAGER_ADDRESS,
-    abi: ROOM_MANAGER_ABI,
-    functionName: "nextRoomId",
-  });
+  const { rooms, isLoading: isLoadingRooms, refetch } = usePublicRooms();
 
-  const { joinRoom, isPending: isJoinPending, isConfirming: isJoinConfirming, isSuccess: isJoinSuccess, error: joinError, reset: resetJoin } = useJoinRoom();
-
-  // Fetch all rooms from blockchain
-  const fetchRooms = useCallback(async () => {
-    if (!nextRoomId || nextRoomId === 0n) {
-      setRooms([]);
-      return;
-    }
-
-    setIsLoadingRooms(true);
-
-    try {
-      const fetchedRooms: DisplayRoom[] = [];
-      
-      // Fetch each room (starting from 1, as 0 is typically unused)
-      for (let i = 1n; i < nextRoomId; i++) {
-        try {
-          // We'll use a direct contract call here
-          const response = await fetch(`https://polygon-rpc.com`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              jsonrpc: '2.0',
-              id: Number(i),
-              method: 'eth_call',
-              params: [{
-                to: ROOM_MANAGER_ADDRESS,
-                data: `0xd5b8bc48${i.toString(16).padStart(64, '0')}` // getRoom selector
-              }, 'latest']
-            })
-          });
-          
-          const result = await response.json();
-          if (result.result && result.result !== '0x') {
-            // Parse the room data - simplified parsing
-            const data = result.result.slice(2);
-            const id = BigInt('0x' + data.slice(0, 64));
-            const creator = '0x' + data.slice(88, 128);
-            const entryFee = BigInt('0x' + data.slice(128, 192));
-            const maxPlayers = parseInt(data.slice(248, 256), 16);
-            const isPrivate = parseInt(data.slice(312, 320), 16) === 1;
-            const status = parseInt(data.slice(376, 384), 16) as RoomStatus;
-            
-            // Only show Created (waiting) rooms that are public
-            if (status === RoomStatus.Created && !isPrivate) {
-              fetchedRooms.push({
-                id,
-                game: "Chess", // Contract doesn't store game type - would need metadata
-                entryFee,
-                players: 1, // Would need to parse players array
-                maxPlayers,
-                status,
-                creator,
-              });
-            }
-          }
-        } catch (e) {
-          console.error(`Error fetching room ${i}:`, e);
-        }
-      }
-
-      setRooms(fetchedRooms);
-    } catch (error) {
-      console.error("Error fetching rooms:", error);
-      toast({
-        title: "Error",
-        description: "Failed to fetch rooms from blockchain",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoadingRooms(false);
-    }
-  }, [nextRoomId, toast]);
-
-  // Initial fetch when connected
-  useEffect(() => {
-    if (isConnected && nextRoomId !== undefined) {
-      fetchRooms();
-    }
-  }, [isConnected, nextRoomId, fetchRooms]);
+  const { 
+    joinRoom, 
+    isPending: isJoinPending, 
+    isConfirming: isJoinConfirming, 
+    isSuccess: isJoinSuccess, 
+    error: joinError, 
+    reset: resetJoin 
+  } = useJoinRoom();
 
   // Handle join success
   useEffect(() => {
-    if (isJoinSuccess) {
+    if (isJoinSuccess && joiningRoomId) {
       play('room_enter');
       toast({
         title: "Joined Room!",
         description: "You have successfully joined the game room.",
       });
+      // Navigate to the room page
+      navigate(`/room/${joiningRoomId.toString()}`);
       setJoiningRoomId(null);
       resetJoin();
-      fetchRooms(); // Refresh the room list
+      refetch();
     }
-  }, [isJoinSuccess, play, toast, resetJoin, fetchRooms]);
+  }, [isJoinSuccess, joiningRoomId, play, toast, resetJoin, refetch, navigate]);
 
   // Handle join error
   useEffect(() => {
@@ -153,11 +68,10 @@ const RoomList = () => {
 
   const handleRefresh = () => {
     play('ui_click');
-    refetchNextId();
-    fetchRooms();
+    refetch();
   };
 
-  const handleJoinRoom = (room: DisplayRoom) => {
+  const handleJoinRoom = (room: PublicRoom) => {
     if (room.creator.toLowerCase() === address?.toLowerCase()) {
       toast({
         title: "Cannot Join",
@@ -169,7 +83,6 @@ const RoomList = () => {
 
     play('ui_click');
     setJoiningRoomId(room.id);
-    // joinRoom sends value: entryFee (payable)
     joinRoom(room.id, room.entryFee);
   };
 
@@ -188,12 +101,34 @@ const RoomList = () => {
 
   // Filter rooms based on selected filters
   const filteredRooms = rooms.filter(room => {
-    if (gameFilter !== "all" && room.game.toLowerCase() !== gameFilter) return false;
+    // Game filter - currently contract doesn't store game type
+    // Skip game filter for now since it's not in contract
     
-    const feeInPol = parseFloat(formatEntryFee(room.entryFee));
-    if (feeFilter === "0.5-1" && (feeInPol < 0.5 || feeInPol > 1)) return false;
-    if (feeFilter === "1-5" && (feeInPol < 1 || feeInPol > 5)) return false;
-    if (feeFilter === "5+" && feeInPol < 5) return false;
+    const feeInPol = parseFloat(formatEther(room.entryFee));
+    
+    switch (feeFilter) {
+      case "lt10":
+        if (feeInPol >= 10) return false;
+        break;
+      case "lt50":
+        if (feeInPol >= 50) return false;
+        break;
+      case "lt100":
+        if (feeInPol >= 100) return false;
+        break;
+      case "lt1000":
+        if (feeInPol >= 1000) return false;
+        break;
+      case "gt1000":
+        if (feeInPol <= 1000) return false;
+        break;
+      case "gt10000":
+        if (feeInPol <= 10000) return false;
+        break;
+      case "gt100000":
+        if (feeInPol <= 100000) return false;
+        break;
+    }
     
     return true;
   });
@@ -227,9 +162,13 @@ const RoomList = () => {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Fees</SelectItem>
-                <SelectItem value="0.5-1">0.5 – 1 POL</SelectItem>
-                <SelectItem value="1-5">1 – 5 POL</SelectItem>
-                <SelectItem value="5+">5+ POL</SelectItem>
+                <SelectItem value="lt10">Less than 10 POL</SelectItem>
+                <SelectItem value="lt50">Less than 50 POL</SelectItem>
+                <SelectItem value="lt100">Less than 100 POL</SelectItem>
+                <SelectItem value="lt1000">Less than 1,000 POL</SelectItem>
+                <SelectItem value="gt1000">Above 1,000 POL</SelectItem>
+                <SelectItem value="gt10000">Above 10,000 POL</SelectItem>
+                <SelectItem value="gt100000">Above 100,000 POL</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -263,20 +202,20 @@ const RoomList = () => {
               >
                 <div className="flex-1">
                   <h3 className="text-lg font-semibold text-foreground">
-                    {room.game}
+                    Game Room
                   </h3>
                   <p className="text-sm text-muted-foreground">
                     Entry Fee: {formatEntryFee(room.entryFee)} POL
                   </p>
                   <p className="text-xs text-muted-foreground truncate">
-                    Room #{room.id.toString()}
+                    Room #{room.id.toString()} • Creator: {room.creator.slice(0, 6)}...{room.creator.slice(-4)}
                   </p>
                 </div>
                 <div className="flex items-center gap-4 text-muted-foreground">
                   <div className="flex items-center gap-1.5">
                     <Users size={16} />
                     <span className="text-sm">
-                      {room.players} / {room.maxPlayers}
+                      {room.players.length} / {room.maxPlayers}
                     </span>
                   </div>
                   <span className="text-xs px-2 py-1 rounded bg-primary/10 text-primary">
