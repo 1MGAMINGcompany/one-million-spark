@@ -7,10 +7,12 @@ import { ChessBoardPremium } from "@/components/ChessBoardPremium";
 import { GameSyncStatus } from "@/components/GameSyncStatus";
 import { useGameSync, useTurnTimer, ChessMove } from "@/hooks/useGameSync";
 import { useWebRTCSync, GameMessage } from "@/hooks/useWebRTCSync";
+import { useTimeoutForfeit } from "@/hooks/useTimeoutForfeit";
 import { useWallet } from "@/hooks/useWallet";
 import { useState, useCallback, useEffect } from "react";
 import { Chess, Square } from "chess.js";
 import { useToast } from "@/hooks/use-toast";
+import { Timer } from "lucide-react";
 
 const ChessGame = () => {
   const { roomId } = useParams<{ roomId: string }>();
@@ -142,6 +144,27 @@ const ChessGame = () => {
       });
     }
   );
+
+  // Timeout forfeit logic - claim victory when opponent times out
+  const {
+    canClaimTimeout,
+    isClaiming,
+    claimTimeoutVictory,
+  } = useTimeoutForfeit({
+    roomId: roomIdBigInt || BigInt(0),
+    opponentAddress,
+    isMyTurn,
+    turnTimeSeconds: gameState?.turnTimeSeconds || 300,
+    turnStartedAt: gameState?.turnStartedAt || Date.now(),
+    gameEnded,
+    onTimeoutClaimed: () => setGameEnded(true),
+  });
+
+  const handleClaimTimeout = useCallback(() => {
+    if (address) {
+      claimTimeoutVictory(address);
+    }
+  }, [address, claimTimeoutVictory]);
 
   // Update move history helper
   const updateMoveHistory = useCallback(() => {
@@ -304,6 +327,18 @@ const ChessGame = () => {
                 )}
               </div>
             </div>
+
+            {/* Claim Timeout Button */}
+            {canClaimTimeout && !gameEnded && (
+              <Button
+                onClick={handleClaimTimeout}
+                disabled={isClaiming}
+                className="w-full gap-2 bg-green-600 hover:bg-green-700 text-white"
+              >
+                <Timer size={16} />
+                {isClaiming ? "Claiming Victory..." : "Claim Timeout Victory"}
+              </Button>
+            )}
 
             {/* Action Buttons */}
             {!gameEnded && (
