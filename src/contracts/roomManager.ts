@@ -115,3 +115,9 @@ export type ContractRoomView = {
   turnTimeSeconds: number;
   winner: `0x${string}`;
 };
+
+export const GAME_CATALOG: Record<number, { label: string }> = {
+  0: { label: "Chess" },
+  1: { label: "Dominos" },
+  2: { label: "Backgammon" },
+};
