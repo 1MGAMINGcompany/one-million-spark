@@ -273,7 +273,7 @@ export function ChessBoardPremium({
                   style={{
                     background: isLight 
                       ? "linear-gradient(135deg, hsl(40 45% 75%) 0%, hsl(38 50% 70%) 50%, hsl(35 45% 65%) 100%)"
-                      : "linear-gradient(135deg, hsl(220 25% 22%) 0%, hsl(220 22% 16%) 40%, hsl(220 20% 12%) 100%)",
+                      : "linear-gradient(135deg, hsl(45 80% 50%) 0%, hsl(43 75% 45%) 30%, hsl(40 70% 38%) 60%, hsl(38 65% 32%) 100%)",
                   }}
                 >
                   {/* Sandstone/Obsidian texture overlay */}
@@ -286,45 +286,61 @@ export function ChessBoardPremium({
                     }}
                   />
                   
-                  {/* Dark square enhancements for better piece visibility */}
+                  {/* Gold square enhancements for shiny effect */}
                   {!isLight && (
                     <>
-                      {/* Diagonal glossy shine gradient */}
+                      {/* Metallic shine gradient overlay */}
                       <div 
                         className="absolute inset-0 pointer-events-none"
                         style={{
-                          background: "linear-gradient(135deg, rgba(255,255,255,0.08) 0%, transparent 40%, transparent 60%, rgba(255,255,255,0.03) 100%)",
+                          background: "linear-gradient(135deg, rgba(255,255,255,0.25) 0%, transparent 30%, transparent 70%, rgba(255,255,255,0.1) 100%)",
                         }}
                       />
                       
-                      {/* Soft vignette effect to frame pieces */}
+                      {/* Radial highlight for depth */}
                       <div 
                         className="absolute inset-0 pointer-events-none"
                         style={{
-                          background: "radial-gradient(ellipse at center, transparent 30%, rgba(0,0,0,0.25) 100%)",
+                          background: "radial-gradient(ellipse at 30% 30%, rgba(255,255,255,0.2) 0%, transparent 50%)",
                         }}
                       />
                       
-                      {/* Gold dust particles */}
+                      {/* Bottom shadow for 3D effect */}
+                      <div 
+                        className="absolute inset-0 pointer-events-none"
+                        style={{
+                          background: "linear-gradient(180deg, transparent 60%, rgba(0,0,0,0.2) 100%)",
+                        }}
+                      />
+                      
+                      {/* Subtle texture */}
+                      <div 
+                        className="absolute inset-0 pointer-events-none opacity-20"
+                        style={{
+                          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.2' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.2'/%3E%3C/svg%3E")`,
+                        }}
+                      />
+                      
+                      {/* Gold shimmer accents */}
                       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-                        {[...Array(6)].map((_, i) => (
+                        {[...Array(4)].map((_, i) => (
                           <div
                             key={i}
-                            className="absolute w-0.5 h-0.5 bg-primary/50 rounded-full"
+                            className="absolute w-1 h-1 bg-white/40 rounded-full"
                             style={{
-                              left: `${12 + i * 15}%`,
-                              top: `${15 + (i % 3) * 28}%`,
-                              boxShadow: "0 0 2px hsl(45 93% 54% / 0.3)",
+                              left: `${20 + i * 20}%`,
+                              top: `${15 + (i % 2) * 15}%`,
+                              boxShadow: "0 0 4px 1px rgba(255,255,255,0.3)",
                             }}
                           />
                         ))}
                       </div>
                       
-                      {/* Subtle inner glow border */}
+                      {/* Inner glow border for definition */}
                       <div 
                         className="absolute inset-0 pointer-events-none"
                         style={{
-                          boxShadow: "inset 0 0 8px 1px hsl(45 93% 54% / 0.08)",
+                          boxShadow: "inset 0 0 6px 1px hsl(35 70% 25% / 0.3)",
                         }}
                       />
                     </>
