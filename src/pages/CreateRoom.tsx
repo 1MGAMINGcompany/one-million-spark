@@ -8,7 +8,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useWallet } from "@/hooks/useWallet";
 import { useToast } from "@/hooks/use-toast";
 import { useSound } from "@/contexts/SoundContext";
-import { useCreateRoom, usePlayerActiveRoom, useCancelRoom } from "@/hooks/useRoomManager";
+import { useCreateRoom, useCancelRoom } from "@/hooks/useRoomManager";
 import { usePolPrice } from "@/hooks/usePolPrice";
 import { Loader2, AlertCircle, AlertTriangle, Wallet } from "lucide-react";
 import { useWeb3Modal } from "@web3modal/wagmi/react";
@@ -32,9 +32,10 @@ const CreateRoom = () => {
 
   const { createRoom, isPending, isConfirming, isSuccess, error, reset } = useCreateRoom();
 
-  // Active room guard
-  const { data: activeRoomId, refetch: refetchActiveRoom } = usePlayerActiveRoom(address as `0x${string}` | undefined);
-  const hasActiveRoom = isConnected && activeRoomId !== undefined && activeRoomId > 0n;
+  // Active room guard - disabled for now since contract doesn't have playerActiveRoom
+  const activeRoomId: bigint | undefined = undefined;
+  const refetchActiveRoom = () => {};
+  const hasActiveRoom = false;
 
   const {
     cancelRoom,
@@ -121,7 +122,7 @@ const CreateRoom = () => {
     const turnTimeSeconds = turnTime === "none" ? 0 : parseInt(turnTime);
 
     play("ui_click");
-    createRoom(entryFee, maxPlayers, isPrivate, parseInt(gameId), turnTimeSeconds);
+    createRoom(entryFee, maxPlayers, isPrivate);
   };
 
   const isLoading = isPending || isConfirming;

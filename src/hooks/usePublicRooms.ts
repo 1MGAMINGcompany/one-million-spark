@@ -54,10 +54,10 @@ export function usePublicRooms() {
         ids.map(async (roomId) => {
           try {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const rv = (await publicClient.readContract({
+            const room = (await publicClient.readContract({
               address: ROOM_MANAGER_ADDRESS,
               abi: ROOM_MANAGER_ABI as any,
-              functionName: "getRoomView",
+              functionName: "getRoom",
               args: [roomId],
             } as any)) as readonly [
               bigint,
@@ -72,14 +72,14 @@ export function usePublicRooms() {
             ];
 
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const pc = (await publicClient.readContract({
+            const players = (await publicClient.readContract({
               address: ROOM_MANAGER_ADDRESS,
               abi: ROOM_MANAGER_ABI as any,
-              functionName: "getPlayerCount",
+              functionName: "playersOf",
               args: [roomId],
-            } as any)) as bigint;
+            } as any)) as readonly `0x${string}`[];
 
-            return { ok: true as const, rv, playerCount: Number(pc) };
+            return { ok: true as const, room, playerCount: players.length };
           } catch {
             return { ok: false as const };
           }
@@ -92,7 +92,7 @@ export function usePublicRooms() {
         if (!item.ok) continue;
 
         const [id, creator, entryFee, maxPlayersRaw, isPrivate, statusRaw, gameIdRaw, turnTimeSecondsRaw, winner] =
-          item.rv;
+          item.room;
 
         const status = Number(statusRaw) as RoomStatus;
         const maxPlayers = Number(maxPlayersRaw);
