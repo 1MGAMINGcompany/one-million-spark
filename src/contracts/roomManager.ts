@@ -1,22 +1,6 @@
 // src/contracts/roomManager.ts
-
-// Deployed RoomManagerV2 on Polygon mainnet
+// Deployed RoomManagerV2/Test contract on Polygon mainnet
 export const ROOM_MANAGER_ADDRESS = "0xd3ACD6e228280BDdb470653eBd658648FBB84789" as const;
-
-// IMPORTANT: statuses MUST match the contract enum order
-export enum RoomStatus {
-  Created = 4,
-  Started = 5,
-  Finished = 6,
-  Cancelled = 7,
-}
-
-// Game catalog for UI labels
-export const GAME_CATALOG: Record<number, { label: string }> = {
-  1: { label: "Chess" },
-  2: { label: "Dominos" },
-  3: { label: "Backgammon" },
-};
 
 export const ROOM_MANAGER_ABI = [
   {
@@ -37,13 +21,6 @@ export const ROOM_MANAGER_ABI = [
     name: "joinRoom",
     outputs: [],
     stateMutability: "payable",
-    type: "function",
-  },
-  {
-    inputs: [{ internalType: "uint256", name: "roomId", type: "uint256" }],
-    name: "startRoom",
-    outputs: [],
-    stateMutability: "nonpayable",
     type: "function",
   },
   {
@@ -82,21 +59,7 @@ export const ROOM_MANAGER_ABI = [
   },
   {
     inputs: [{ internalType: "uint256", name: "roomId", type: "uint256" }],
-    name: "getPlayers",
-    outputs: [{ internalType: "address[]", name: "", type: "address[]" }],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [{ internalType: "uint256", name: "roomId", type: "uint256" }],
     name: "getPlayerCount",
-    outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [{ internalType: "address", name: "creator", type: "address" }],
-    name: "creatorActiveRoomId",
     outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
     stateMutability: "view",
     type: "function",
@@ -108,10 +71,24 @@ export const ROOM_MANAGER_ABI = [
     stateMutability: "view",
     type: "function",
   },
+  {
+    inputs: [{ internalType: "address", name: "", type: "address" }],
+    name: "playerActiveRoom",
+    outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
+    stateMutability: "view",
+    type: "function",
+  },
 ] as const;
 
-// Frontend view type
-export type ContractRoomView = readonly [
+// IMPORTANT: your contract uses numeric statuses like you saw in UI (Status: 4)
+export enum RoomStatus {
+  Created = 4,
+  Started = 5,
+  Finished = 6,
+  Cancelled = 7,
+}
+
+export type RoomView = readonly [
   bigint, // id
   `0x${string}`, // creator
   bigint, // entryFee
