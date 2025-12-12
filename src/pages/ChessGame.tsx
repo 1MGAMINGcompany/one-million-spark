@@ -1,11 +1,12 @@
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Home, Flag, Handshake } from "lucide-react";
-import { useRoom, formatEntryFee, formatRoom } from "@/hooks/useRoomManager";
+import { Home, Flag, Handshake, RefreshCw } from "lucide-react";
+import { useRoom, formatEntryFee, formatRoom, usePlayersOf } from "@/hooks/useRoomManager";
 import { usePolPrice } from "@/hooks/usePolPrice";
 import { ChessBoardPremium } from "@/components/ChessBoardPremium";
 import { GameSyncStatus } from "@/components/GameSyncStatus";
 import { useGameSync, useTurnTimer, ChessMove } from "@/hooks/useGameSync";
+import { useWebRTCSync, GameMessage } from "@/hooks/useWebRTCSync";
 import { useWallet } from "@/hooks/useWallet";
 import { useState, useCallback, useEffect } from "react";
 import { Chess, Square } from "chess.js";
@@ -20,6 +21,7 @@ const ChessGame = () => {
   
   const roomIdBigInt = roomId ? BigInt(roomId) : undefined;
   const { data: roomData } = useRoom(roomIdBigInt);
+  const { data: players } = usePlayersOf(roomIdBigInt);
   const room = roomData ? formatRoom(roomData) : null;
   
   const [game, setGame] = useState(() => new Chess());
@@ -64,15 +66,51 @@ const ChessGame = () => {
     });
   }, [toast]);
 
-  // Real-time game sync
+  // Handle WebRTC messages
+  const handleWebRTCMessage = useCallback((message: GameMessage) => {
+    switch (message.type) {
+      case "move":
+        if (message.payload) {
+          handleOpponentMove(message.payload as ChessMove);
+        }
+        break;
+      case "resign":
+        handleOpponentResign();
+        break;
+      case "draw_offer":
+        toast({
+          title: "Draw Offered",
+          description: "Your opponent has offered a draw.",
+        });
+        break;
+    }
+  }, [handleOpponentMove, handleOpponentResign, toast]);
+
+  // WebRTC P2P sync (primary)
+  const {
+    isConnected: webrtcConnected,
+    connectionState: webrtcState,
+    sendMove: webrtcSendMove,
+    sendResign: webrtcSendResign,
+    sendDrawOffer: webrtcSendDrawOffer,
+    reconnect: webrtcReconnect,
+    peerAddress,
+  } = useWebRTCSync({
+    roomId: roomId || "",
+    players: (players as string[]) || [],
+    onMessage: handleWebRTCMessage,
+    enabled: !!players && players.length >= 2,
+  });
+
+  // Fallback BroadcastChannel sync
   const {
     gameState,
-    isConnected,
-    opponentConnected,
+    isConnected: bcConnected,
+    opponentConnected: bcOpponentConnected,
     isMyTurn,
-    sendMove,
-    sendResign,
-    sendDrawOffer,
+    sendMove: bcSendMove,
+    sendResign: bcSendResign,
+    sendDrawOffer: bcSendDrawOffer,
   } = useGameSync({
     roomId: roomId || "",
     gameType: "chess",
@@ -81,8 +119,12 @@ const ChessGame = () => {
     onOpponentResign: handleOpponentResign,
   });
 
+  // Combined connection status - prefer WebRTC
+  const isConnected = webrtcConnected || bcConnected;
+  const opponentConnected = webrtcConnected || bcOpponentConnected;
+
   // Get opponent address
-  const opponentAddress = gameState?.players.find(
+  const opponentAddress = peerAddress || gameState?.players.find(
     (p) => p.toLowerCase() !== address?.toLowerCase()
   );
 
@@ -136,7 +178,7 @@ const ChessGame = () => {
         setFen(game.fen());
         updateMoveHistory();
 
-        // Send move to opponent with correct type structure
+        // Send move to opponent via WebRTC (primary) and BroadcastChannel (fallback)
         const chessMove: Omit<ChessMove, "timestamp"> = {
           type: "chess",
           from,
@@ -144,7 +186,13 @@ const ChessGame = () => {
           promotion: move.promotion || undefined,
           fen: game.fen(),
         };
-        sendMove(chessMove);
+        
+        // Try WebRTC first, fallback to BroadcastChannel
+        if (webrtcConnected) {
+          webrtcSendMove(chessMove);
+        } else {
+          bcSendMove(chessMove);
+        }
 
         return true;
       }
@@ -152,22 +200,30 @@ const ChessGame = () => {
       // Invalid move
     }
     return false;
-  }, [game, isMyTurn, gameState?.status, sendMove, toast, updateMoveHistory]);
+  }, [game, isMyTurn, gameState?.status, webrtcConnected, webrtcSendMove, bcSendMove, toast, updateMoveHistory]);
 
   const handleResign = useCallback(() => {
     if (confirm("Are you sure you want to resign?")) {
-      sendResign();
+      if (webrtcConnected) {
+        webrtcSendResign();
+      } else {
+        bcSendResign();
+      }
       setGameEnded(true);
       toast({
         title: "You Resigned",
         description: "The game is over.",
       });
     }
-  }, [sendResign, toast]);
+  }, [webrtcConnected, webrtcSendResign, bcSendResign, toast]);
 
   const handleOfferDraw = useCallback(() => {
-    sendDrawOffer();
-  }, [sendDrawOffer]);
+    if (webrtcConnected) {
+      webrtcSendDrawOffer();
+    } else {
+      bcSendDrawOffer();
+    }
+  }, [webrtcConnected, webrtcSendDrawOffer, bcSendDrawOffer]);
 
   return (
     <div className="min-h-screen bg-background px-4 py-6">
@@ -212,6 +268,8 @@ const ChessGame = () => {
               remainingTime={remainingTime}
               playerAddress={address}
               opponentAddress={opponentAddress}
+              connectionType={webrtcConnected ? "webrtc" : bcConnected ? "broadcast" : "none"}
+              onReconnect={webrtcReconnect}
             />
 
             {/* Game Status */}

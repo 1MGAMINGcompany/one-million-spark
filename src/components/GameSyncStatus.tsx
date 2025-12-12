@@ -1,5 +1,6 @@
 import { cn } from "@/lib/utils";
-import { Wifi, WifiOff, User, Clock } from "lucide-react";
+import { Wifi, WifiOff, User, Clock, RefreshCw, Radio } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface GameSyncStatusProps {
   isConnected: boolean;
@@ -8,6 +9,8 @@ interface GameSyncStatusProps {
   remainingTime: number;
   playerAddress?: string;
   opponentAddress?: string;
+  connectionType?: "webrtc" | "broadcast" | "none";
+  onReconnect?: () => void;
 }
 
 export function GameSyncStatus({
@@ -17,6 +20,8 @@ export function GameSyncStatus({
   remainingTime,
   playerAddress,
   opponentAddress,
+  connectionType = "none",
+  onReconnect,
 }: GameSyncStatusProps) {
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -33,13 +38,22 @@ export function GameSyncStatus({
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           {isConnected ? (
-            <Wifi className="w-4 h-4 text-green-500" />
+            <>
+              {connectionType === "webrtc" ? (
+                <Radio className="w-4 h-4 text-green-500" />
+              ) : (
+                <Wifi className="w-4 h-4 text-green-500" />
+              )}
+              <span className="text-sm text-muted-foreground">
+                {connectionType === "webrtc" ? "P2P Connected" : "Connected"}
+              </span>
+            </>
           ) : (
-            <WifiOff className="w-4 h-4 text-destructive" />
+            <>
+              <WifiOff className="w-4 h-4 text-yellow-500 animate-pulse" />
+              <span className="text-sm text-muted-foreground">Connecting...</span>
+            </>
           )}
-          <span className="text-sm text-muted-foreground">
-            {isConnected ? "Connected" : "Connecting..."}
-          </span>
         </div>
         <div className="flex items-center gap-2">
           <div
@@ -53,6 +67,19 @@ export function GameSyncStatus({
           </span>
         </div>
       </div>
+
+      {/* Reconnect button if disconnected */}
+      {!isConnected && onReconnect && (
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full gap-2"
+          onClick={onReconnect}
+        >
+          <RefreshCw className="w-4 h-4" />
+          Reconnect
+        </Button>
+      )}
 
       {/* Turn Indicator */}
       <div className="flex items-center justify-between">
