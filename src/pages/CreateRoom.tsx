@@ -12,14 +12,15 @@ import {
 } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useWallet } from "@/hooks/useWallet";
-import { WalletRequired } from "@/components/WalletRequired";
 import { useToast } from "@/hooks/use-toast";
 import { useSound } from "@/contexts/SoundContext";
 import { useCreateRoom, useCreatorActiveRoom, useCancelRoom } from "@/hooks/useRoomManager";
 import { usePolPrice } from "@/hooks/usePolPrice";
-import { Loader2, AlertCircle, AlertTriangle } from "lucide-react";
+import { Loader2, AlertCircle, AlertTriangle, Wallet } from "lucide-react";
+import { useWeb3Modal } from "@web3modal/wagmi/react";
 
 const CreateRoom = () => {
+  const { open: openWalletModal } = useWeb3Modal();
   const navigate = useNavigate();
   const { isConnected, address } = useWallet();
   const { toast } = useToast();
@@ -34,9 +35,9 @@ const CreateRoom = () => {
 
   const { createRoom, isPending, isConfirming, isSuccess, error, reset } = useCreateRoom();
   
-  // Check for active room
+  // Check for active room (only when connected)
   const { data: activeRoomId, refetch: refetchActiveRoom } = useCreatorActiveRoom(address as `0x${string}` | undefined);
-  const hasActiveRoom = activeRoomId !== undefined && activeRoomId > 0n;
+  const hasActiveRoom = isConnected && activeRoomId !== undefined && activeRoomId > 0n;
   
   // Cancel room hook
   const { 
@@ -127,18 +128,23 @@ const CreateRoom = () => {
     createRoom(entryFee, maxPlayers, isPrivate);
   };
 
-  if (!isConnected) {
-    return <WalletRequired />;
-  }
-
   const isLoading = isPending || isConfirming;
   const isCancelLoading = isCancelPending || isCancelConfirming;
   const entryUsdValue = getUsdValue(entryFee);
 
   const getButtonText = () => {
+    if (!isConnected) return "Connect Wallet";
     if (isPending) return "Waiting for wallet confirmation...";
     if (isConfirming) return "Waiting for network confirmation...";
     return "Create Room";
+  };
+
+  const handleButtonClick = () => {
+    if (!isConnected) {
+      openWalletModal();
+      return;
+    }
+    handleCreateRoom();
   };
 
   return (
@@ -320,13 +326,18 @@ const CreateRoom = () => {
             type="button" 
             className="w-full" 
             size="lg" 
-            onClick={handleCreateRoom}
-            disabled={isLoading || !!feeError || hasActiveRoom}
+            onClick={handleButtonClick}
+            disabled={isLoading || (isConnected && (!!feeError || hasActiveRoom))}
           >
             {isLoading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 {getButtonText()}
+              </>
+            ) : !isConnected ? (
+              <>
+                <Wallet className="mr-2 h-4 w-4" />
+                Connect Wallet
               </>
             ) : (
               "Create Room"
