@@ -1,7 +1,7 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { useAccount } from "wagmi";
 import { useRoom, useRoomPlayers, useJoinRoom, useStartRoom, useCancelRoom, formatRoomView, formatEntryFee, getRoomStatusLabel } from "@/hooks/useRoomManager";
-import { RoomStatus } from "@/contracts/roomManager";
+import { RoomStatus, type ContractRoomView } from "@/contracts/roomManager";
 import { usePolPrice } from "@/hooks/usePolPrice";
 import { useToast } from "@/hooks/use-toast";
 import { useSound } from "@/contexts/SoundContext";
@@ -28,8 +28,8 @@ export default function Room() {
   const { startRoom, isPending: isStartPending, isConfirming: isStartConfirming, isSuccess: isStartSuccess, reset: resetStart } = useStartRoom();
   const { cancelRoom, isPending: isCancelPending, isConfirming: isCancelConfirming, isSuccess: isCancelSuccess, reset: resetCancel } = useCancelRoom();
 
-  const room = roomData ? formatRoomView(roomData) : null;
-  const players: readonly `0x${string}`[] = playersData ?? [];
+  const room = roomData ? formatRoomView(roomData as ContractRoomView) : null;
+  const players: readonly `0x${string}`[] = (playersData as readonly `0x${string}`[] | undefined) ?? [];
 
   const isCreator = room && address && room.creator.toLowerCase() === address.toLowerCase();
   const isPlayer = players.some(p => p.toLowerCase() === address?.toLowerCase());
