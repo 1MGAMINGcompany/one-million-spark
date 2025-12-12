@@ -56,6 +56,13 @@ export const ROOM_MANAGER_ABI = [
   },
   {
     type: "function",
+    name: "playersOf",
+    stateMutability: "view",
+    inputs: [{ name: "roomId", type: "uint256" }],
+    outputs: [{ type: "address[]" }],
+  },
+  {
+    type: "function",
     name: "nextRoomId",
     stateMutability: "view",
     inputs: [],
@@ -78,13 +85,16 @@ export enum RoomStatus {
   Cancelled = 4,
 }
 
-export const GAME_LABELS = [
-  "Chess",
-  "Dominos",
-  "Backgammon",
-  "Checkers",
-  "Chinese Checkers",
-  "Uno",
-  "Yahtzee",
-  "Poker",
-];
+export const GAME_CATALOG = [
+  { id: 0, label: "Chess" },
+  { id: 1, label: "Dominos" },
+  { id: 2, label: "Backgammon" },
+] as const;
+
+export const TURN_TIMERS = [
+  { label: "5 seconds", value: 5 },
+  { label: "10 seconds", value: 10 },
+  { label: "15 seconds", value: 15 },
+  { label: "30 seconds", value: 30 },
+  { label: "Unlimited", value: 0 },
+] as const;

@@ -8,7 +8,7 @@ import { useSound } from "@/contexts/SoundContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Users, Coins, Crown, Copy, ArrowLeft } from "lucide-react";
+import { Loader2, Users, Coins, Crown, Copy, ArrowLeft, Share2, Mail, MessageCircle } from "lucide-react";
 import { useEffect } from "react";
 
 export default function Room() {
@@ -72,6 +72,21 @@ export default function Room() {
   };
 
   const shortenAddress = (addr: string) => `${addr.slice(0, 6)}...${addr.slice(-4)}`;
+
+  const inviteLink = `${window.location.origin}/room/${roomId}`;
+
+  const copyInviteLink = () => {
+    navigator.clipboard.writeText(inviteLink);
+    toast({ title: "Copied", description: "Invite link copied to clipboard." });
+  };
+
+  const shareWhatsApp = () => {
+    window.open(`https://wa.me/?text=Join%20my%20game:%20${encodeURIComponent(inviteLink)}`, "_blank");
+  };
+
+  const shareEmail = () => {
+    window.open(`mailto:?subject=Game%20Invite&body=Join%20me:%20${encodeURIComponent(inviteLink)}`, "_blank");
+  };
 
   const getStatusBadgeVariant = (status: RoomStatus) => {
     switch (status) {
@@ -197,6 +212,24 @@ export default function Room() {
               {isPlayer && !isCreator && (
                 <p className="w-full text-center text-sm text-muted-foreground">Waiting for the creator to start the game...</p>
               )}
+
+              {/* Invite actions */}
+              <div className="w-full pt-3 border-t border-border/30">
+                <p className="text-sm text-muted-foreground mb-2 flex items-center gap-1">
+                  <Share2 className="h-4 w-4" /> Invite players
+                </p>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={copyInviteLink}>
+                    <Copy className="mr-1 h-3 w-3" /> Copy Link
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={shareWhatsApp}>
+                    <MessageCircle className="mr-1 h-3 w-3" /> WhatsApp
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={shareEmail}>
+                    <Mail className="mr-1 h-3 w-3" /> Email
+                  </Button>
+                </div>
+              </div>
             </div>
           )}
 
