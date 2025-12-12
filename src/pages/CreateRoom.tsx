@@ -8,7 +8,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useWallet } from "@/hooks/useWallet";
 import { useToast } from "@/hooks/use-toast";
 import { useSound } from "@/contexts/SoundContext";
-import { useCreateRoom, useCreatorActiveRoom, useCancelRoom } from "@/hooks/useRoomManager";
+import { useCreateRoom, usePlayerActiveRoom, useCancelRoom } from "@/hooks/useRoomManager";
 import { usePolPrice } from "@/hooks/usePolPrice";
 import { Loader2, AlertCircle, AlertTriangle, Wallet } from "lucide-react";
 import { useWeb3Modal } from "@web3modal/wagmi/react";
@@ -33,7 +33,7 @@ const CreateRoom = () => {
   const { createRoom, isPending, isConfirming, isSuccess, error, reset } = useCreateRoom();
 
   // Active room guard
-  const { data: activeRoomId, refetch: refetchActiveRoom } = useCreatorActiveRoom(address as `0x${string}` | undefined);
+  const { data: activeRoomId, refetch: refetchActiveRoom } = usePlayerActiveRoom(address as `0x${string}` | undefined);
   const hasActiveRoom = isConnected && activeRoomId !== undefined && activeRoomId > 0n;
 
   const {
@@ -118,12 +118,10 @@ const CreateRoom = () => {
 
     const maxPlayers = parseInt(players);
     const isPrivate = roomType === "private";
-
-    const gid = parseInt(gameId, 10);
-    const tts = parseInt(turnTime, 10);
+    const turnTimeSeconds = turnTime === "none" ? 0 : parseInt(turnTime);
 
     play("ui_click");
-    createRoom(entryFee, maxPlayers, isPrivate, gid, tts);
+    createRoom(entryFee, maxPlayers, isPrivate, parseInt(gameId), turnTimeSeconds);
   };
 
   const isLoading = isPending || isConfirming;
