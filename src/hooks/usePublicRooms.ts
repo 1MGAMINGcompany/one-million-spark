@@ -1,8 +1,7 @@
 import { useCallback, useState, useEffect } from "react";
-import { useReadContract } from "wagmi";
-import { ROOM_MANAGER_ADDRESS, ROOM_MANAGER_ABI, RoomStatus } from "@/contracts/roomManager";
 import { createPublicClient, http } from "viem";
 import { polygon } from "viem/chains";
+import { ROOM_MANAGER_ADDRESS, ROOM_MANAGER_ABI } from "@/contracts/roomManager";
 
 export type PublicRoom = {
   id: bigint;
@@ -10,12 +9,11 @@ export type PublicRoom = {
   entryFee: bigint;
   maxPlayers: number;
   isPrivate: boolean;
-  status: RoomStatus;
+  status: number; // <-- keep as number for safety
   players: readonly `0x${string}`[];
   winner: `0x${string}`;
 };
 
-// Create a public client for direct viem calls - Polygon mainnet
 const publicClient = createPublicClient({
   chain: polygon,
   transport: http("https://polygon-rpc.com"),
@@ -26,101 +24,95 @@ export function usePublicRooms() {
   const [isLoadingRooms, setIsLoadingRooms] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
-  // Get the next room ID to know how many rooms exist
-  const { 
-    data: nextRoomId, 
-    isLoading: isLoadingNextId,
-    refetch: refetchNextId,
-  } = useReadContract({
-    address: ROOM_MANAGER_ADDRESS,
-    abi: ROOM_MANAGER_ABI,
-    functionName: "nextRoomId",
-    chainId: 137, // Polygon mainnet
-  });
+  const fetchRooms = useCallback(async () => {
+    setIsLoadingRooms(true);
 
-  // Fetch all rooms when nextRoomId changes
-  useEffect(() => {
-    const fetchRooms = async () => {
+    try {
+      // 1) Read nextRoomId directly (no wagmi here = fewer moving parts)
+      const nextRoomId = (await publicClient.readContract({
+        address: ROOM_MANAGER_ADDRESS,
+        abi: ROOM_MANAGER_ABI,
+        functionName: "nextRoomId",
+      })) as bigint;
+
+      // If nothing exists yet
       if (!nextRoomId || nextRoomId <= 1n) {
         setRooms([]);
         return;
       }
 
-      setIsLoadingRooms(true);
+      // 2) Build ids 1..nextRoomId-1
+      const ids: bigint[] = [];
+      for (let i = 1n; i < nextRoomId; i++) ids.push(i);
 
-      try {
-        // Build room IDs array
-        const roomIds: bigint[] = [];
-        for (let i = 1n; i < nextRoomId; i++) {
-          roomIds.push(i);
-        }
+      // 3) Fetch all rooms
+      const results = await Promise.all(
+        ids.map(async (roomId) => {
+          try {
+            const r = (await publicClient.readContract({
+              address: ROOM_MANAGER_ADDRESS,
+              abi: ROOM_MANAGER_ABI,
+              functionName: "getRoom",
+              args: [roomId],
+            })) as readonly [bigint, `0x${string}`, bigint, any, boolean, any, readonly `0x${string}`[], `0x${string}`];
 
-        // Fetch rooms in parallel using getRoom
-        const results = await Promise.all(
-          roomIds.map(async (roomId) => {
-            try {
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              const result = await (publicClient as any).readContract({
-                address: ROOM_MANAGER_ADDRESS,
-                abi: ROOM_MANAGER_ABI,
-                functionName: "getRoom",
-                args: [roomId],
-              });
-              return { status: "success" as const, roomId, result };
-            } catch (error) {
-              console.error(`Error fetching room ${roomId}:`, error);
-              return { status: "error" as const, roomId, error };
-            }
-          })
-        );
+            return { ok: true as const, r };
+          } catch (e) {
+            console.error("getRoom failed", roomId.toString(), e);
+            return { ok: false as const };
+          }
+        }),
+      );
 
-        // Parse results and filter to only public rooms with Created or Started status
-        const publicRooms: PublicRoom[] = [];
-        
-        for (const r of results) {
-          if (r.status !== "success" || !r.result) continue;
-          
-          // getRoom returns: [id, creator, entryFee, maxPlayers, isPrivate, status, players, winner]
-          const [id, creator, entryFee, maxPlayers, isPrivate, status, players, winner] = r.result;
-          
-          // Only include public rooms that are Created or Started
-          if (isPrivate) continue;
-          if (status !== RoomStatus.Created && status !== RoomStatus.Started) continue;
-          
-          publicRooms.push({
-            id,
-            creator: creator as `0x${string}`,
-            entryFee,
-            maxPlayers,
-            isPrivate,
-            status: status as RoomStatus,
-            players: players as readonly `0x${string}`[],
-            winner: winner as `0x${string}`,
-          });
-        }
+      const publicRooms: PublicRoom[] = [];
 
-        // Sort by newest first
-        publicRooms.sort((a, b) => Number(b.id - a.id));
-        setRooms(publicRooms);
-      } catch (error) {
-        console.error("Error fetching rooms:", error);
-      } finally {
-        setIsLoadingRooms(false);
+      for (const item of results) {
+        if (!item.ok) continue;
+
+        const [id, creator, entryFee, maxPlayersRaw, isPrivate, statusRaw, players, winner] = item.r;
+
+        const status = Number(statusRaw); // <-- key fix
+        const maxPlayers = Number(maxPlayersRaw); // <-- key fix
+
+        // Keep ONLY public & joinable rooms
+        if (isPrivate) continue;
+
+        // Created(1) or Started(2)
+        if (status !== 1 && status !== 2) continue;
+
+        publicRooms.push({
+          id,
+          creator,
+          entryFee,
+          maxPlayers,
+          isPrivate,
+          status,
+          players,
+          winner,
+        });
       }
-    };
 
+      publicRooms.sort((a, b) => Number(b.id - a.id));
+      setRooms(publicRooms);
+    } catch (e) {
+      console.error("fetchRooms error:", e);
+      setRooms([]);
+    } finally {
+      setIsLoadingRooms(false);
+    }
+  }, []);
+
+  useEffect(() => {
     fetchRooms();
-  }, [nextRoomId, refreshKey]);
+  }, [fetchRooms, refreshKey]);
 
-  const refetch = useCallback(async () => {
-    await refetchNextId();
-    setRefreshKey((prev) => prev + 1);
-  }, [refetchNextId]);
+  const refetch = useCallback(() => {
+    setRefreshKey((p) => p + 1);
+  }, []);
 
   return {
     rooms,
-    isLoading: isLoadingNextId || isLoadingRooms,
+    isLoading: isLoadingRooms,
     refetch,
-    nextRoomId,
   };
 }
