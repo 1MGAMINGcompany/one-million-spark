@@ -14,9 +14,9 @@ import { useWallet } from "@/hooks/useWallet";
 import { WalletRequired } from "@/components/WalletRequired";
 import { useSound } from "@/contexts/SoundContext";
 import { useToast } from "@/hooks/use-toast";
-import { useJoinRoomV4, getGameNameV4, unitsToUsdt } from "@/hooks/useRoomManagerV4";
+import { useJoinRoomV5, getGameNameV5, unitsToUsdt } from "@/hooks/useRoomManagerV5";
 import { usePublicRooms, type PublicRoom } from "@/hooks/usePublicRooms";
-import { formatTurnTime } from "@/contracts/roomManagerV4";
+import { formatTurnTime } from "@/contracts/roomManagerV5";
 
 const RoomList = () => {
   const { t } = useTranslation();
@@ -45,7 +45,7 @@ const RoomList = () => {
     isSuccess: isJoinSuccess, 
     error: joinError, 
     reset: resetJoin 
-  } = useJoinRoomV4();
+  } = useJoinRoomV5();
 
   useEffect(() => {
     if (isJoinSuccess && joiningRoomId) {
@@ -110,6 +110,8 @@ const RoomList = () => {
     chess: 1,
     dominos: 2,
     backgammon: 3,
+    checkers: 4,
+    ludo: 5,
   };
 
   const filteredRooms = rooms.filter(room => {
@@ -163,6 +165,8 @@ const RoomList = () => {
                 <SelectItem value="chess">{t("games.chess")}</SelectItem>
                 <SelectItem value="dominos">{t("games.dominos")}</SelectItem>
                 <SelectItem value="backgammon">{t("games.backgammon")}</SelectItem>
+                <SelectItem value="checkers">{t("games.checkers")}</SelectItem>
+                <SelectItem value="ludo">{t("games.ludo")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -212,7 +216,7 @@ const RoomList = () => {
               >
                 <div className="flex-1">
                   <h3 className="text-lg font-semibold text-foreground">
-                    {getGameNameV4(room.gameId)}
+                    {getGameNameV5(room.gameId)}
                   </h3>
                   <p className="text-sm text-muted-foreground">
                     {t("roomList.entryFee")}: ${unitsToUsdt(room.entryFee).toFixed(2)} USDT

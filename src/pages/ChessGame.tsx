@@ -8,6 +8,7 @@ import { ChessBoardPremium } from "@/components/ChessBoardPremium";
 import { GameSyncStatus } from "@/components/GameSyncStatus";
 import { GameVerificationPanel } from "@/components/GameVerificationPanel";
 import { GameChat, useChatMessages } from "@/components/GameChat";
+import { FinishGameButton } from "@/components/FinishGameButton";
 import { useGameSync, useTurnTimer, ChessMove } from "@/hooks/useGameSync";
 import { useWebRTCSync, GameMessage } from "@/hooks/useWebRTCSync";
 import { useTimeoutForfeit } from "@/hooks/useTimeoutForfeit";
@@ -30,6 +31,8 @@ const ChessGame = () => {
   const { data: players } = usePlayersOf(roomIdBigInt);
   const room = roomData ? formatRoom(roomData) : null;
   
+  const isCreator = room && address && room.creator.toLowerCase() === address.toLowerCase();
+  const isRoomFull = room && (players?.length || 0) >= room.maxPlayers;
   const [game, setGame] = useState(() => new Chess());
   const [, setFen] = useState(game.fen());
   const [moveHistory, setMoveHistory] = useState<Array<{ move: number; white: string; black: string }>>([]);
@@ -412,14 +415,23 @@ const ChessGame = () => {
 
             {/* Game Verification Panel - show when game ends */}
             {gameEnded && (
-              <GameVerificationPanel
-                roomId={roomIdBigInt || BigInt(0)}
-                gameType="chess"
-                finalState={game.fen()}
-                winner={getWinner()}
-                playerAddress={address}
-                onResultSubmitted={() => navigate("/")}
-              />
+              <>
+                <FinishGameButton
+                  roomId={roomIdBigInt || BigInt(0)}
+                  isCreator={!!isCreator}
+                  isRoomFull={!!isRoomFull}
+                  suggestedWinner={getWinner()}
+                  onGameFinished={() => navigate("/")}
+                />
+                <GameVerificationPanel
+                  roomId={roomIdBigInt || BigInt(0)}
+                  gameType="chess"
+                  finalState={game.fen()}
+                  winner={getWinner()}
+                  playerAddress={address}
+                  onResultSubmitted={() => navigate("/")}
+                />
+              </>
             )}
           </div>
         </div>
