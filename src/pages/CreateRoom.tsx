@@ -15,15 +15,15 @@ import { useWallet } from "@/hooks/useWallet";
 import { useToast } from "@/hooks/use-toast";
 import { useSound } from "@/contexts/SoundContext";
 import { 
-  useCreateRoomV3, 
-  useCancelRoomV3, 
-  useApproveUsdt, 
-  useUsdtAllowance,
-  useLatestRoomIdV3,
+  useCreateRoomV4, 
+  useCancelRoomV4, 
+  useApproveUsdtV4, 
+  useUsdtAllowanceV4,
+  useLatestRoomIdV4,
   usdtToUnits,
-  getGameNameV3 
-} from "@/hooks/useRoomManagerV3";
-import { Loader2, AlertCircle, AlertTriangle, Wallet, CheckCircle2 } from "lucide-react";
+  getGameNameV4 
+} from "@/hooks/useRoomManagerV4";
+import { Loader2, AlertCircle, Wallet, CheckCircle2 } from "lucide-react";
 import { useWeb3Modal } from "@web3modal/wagmi/react";
 import { ShareInviteDialog } from "@/components/ShareInviteDialog";
 import { useNotificationPermission } from "@/hooks/useRoomEvents";
@@ -51,6 +51,7 @@ const CreateRoom = () => {
   const [entryFee, setEntryFee] = useState("");
   const [players, setPlayers] = useState("2");
   const [roomType, setRoomType] = useState("public");
+  const [turnTimeSec, setTurnTimeSec] = useState("10"); // Default: 10 seconds
   const [feeError, setFeeError] = useState<string | null>(null);
   const [showShareDialog, setShowShareDialog] = useState(false);
   const [createdRoomId, setCreatedRoomId] = useState<string | null>(null);
@@ -59,7 +60,7 @@ const CreateRoom = () => {
   
   const { requestPermission } = useNotificationPermission();
 
-  // USDT Approval hook
+  // USDT Approval hook (V4)
   const { 
     approve: approveUsdt, 
     isPending: isApprovePending, 
@@ -67,12 +68,12 @@ const CreateRoom = () => {
     isSuccess: isApproveSuccess,
     error: approveError,
     reset: resetApprove 
-  } = useApproveUsdt();
+  } = useApproveUsdtV4();
 
-  // Check current allowance
-  const { data: currentAllowance, refetch: refetchAllowance } = useUsdtAllowance(address as `0x${string}` | undefined);
+  // Check current allowance (V4)
+  const { data: currentAllowance, refetch: refetchAllowance } = useUsdtAllowanceV4(address as `0x${string}` | undefined);
 
-  // Create room hook (V3 USDT-based)
+  // Create room hook (V4 USDT-based)
   const { 
     createRoom, 
     isPending: isCreatePending, 
@@ -80,10 +81,10 @@ const CreateRoom = () => {
     isSuccess: isCreateSuccess, 
     error: createError, 
     reset: resetCreate 
-  } = useCreateRoomV3();
+  } = useCreateRoomV4();
 
   // Get latest room ID for fetching created room
-  const { data: latestRoomId, refetch: refetchLatestRoomId } = useLatestRoomIdV3();
+  const { data: latestRoomId, refetch: refetchLatestRoomId } = useLatestRoomIdV4();
   
   // Cancel room hook
   const { 
@@ -92,7 +93,7 @@ const CreateRoom = () => {
     isConfirming: isCancelConfirming, 
     isSuccess: isCancelSuccess,
     reset: resetCancel 
-  } = useCancelRoomV3();
+  } = useCancelRoomV4();
 
   // Parse entry fee as number
   const entryFeeNum = parseFloat(entryFee) || 0;
@@ -145,7 +146,7 @@ const CreateRoom = () => {
     if (isCreateSuccess) {
       play('room_create');
       const isPrivate = roomType === "private";
-      const gameName = getGameNameV3(GAME_IDS[gameType] || 1);
+      const gameName = getGameNameV4(GAME_IDS[gameType] || 1);
       
       // Request notification permission for room events
       requestPermission();
@@ -178,6 +179,7 @@ const CreateRoom = () => {
       // Reset form
       setEntryFee("");
       setPlayers("2");
+      setTurnTimeSec("10");
       setApprovalStep('idle');
       resetCreate();
     }
@@ -234,8 +236,9 @@ const CreateRoom = () => {
     const maxPlayers = parseInt(players);
     const isPrivate = roomType === "private";
     const gameId = GAME_IDS[gameType] || 1;
+    const turnTime = parseInt(turnTimeSec);
     
-    createRoom(entryFeeNum, maxPlayers, isPrivate, PLATFORM_FEE_BPS, gameId);
+    createRoom(entryFeeNum, maxPlayers, isPrivate, PLATFORM_FEE_BPS, gameId, turnTime);
   };
 
   const isApproveLoading = isApprovePending || isApproveConfirming;
@@ -321,6 +324,22 @@ const CreateRoom = () => {
                 <SelectItem value="2">2 Players</SelectItem>
                 <SelectItem value="3">3 Players</SelectItem>
                 <SelectItem value="4">4 Players</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Time per Turn */}
+          <div className="space-y-2">
+            <Label htmlFor="turnTime">Time per Turn</Label>
+            <Select value={turnTimeSec} onValueChange={setTurnTimeSec} disabled={isApproveLoading || isCreateLoading}>
+              <SelectTrigger id="turnTime" className="w-full">
+                <SelectValue placeholder="Select turn time" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="5">5 sec</SelectItem>
+                <SelectItem value="10">10 sec</SelectItem>
+                <SelectItem value="15">15 sec</SelectItem>
+                <SelectItem value="0">Unlimited</SelectItem>
               </SelectContent>
             </Select>
           </div>

@@ -1,6 +1,6 @@
 import { useCallback, useState, useEffect } from "react";
 import { useReadContract } from "wagmi";
-import { ROOM_MANAGER_ADDRESS, ROOM_MANAGER_ABI, RoomStatus } from "@/contracts/roomManager";
+import { ROOM_MANAGER_V4_ADDRESS, ROOM_MANAGER_V4_ABI, type ContractRoomV4 } from "@/contracts/roomManagerV4";
 import { createPublicClient, http } from "viem";
 import { polygon } from "viem/chains";
 
@@ -10,11 +10,10 @@ export type PublicRoom = {
   entryFee: bigint;
   maxPlayers: number;
   isPrivate: boolean;
-  status: RoomStatus;
   gameId: number;
-  turnTimeSeconds: number;
-  winner: `0x${string}`;
+  turnTimeSec: number;
   playerCount: number;
+  isOpen: boolean;
 };
 
 // Create a public client for direct viem calls - Polygon mainnet
@@ -28,22 +27,22 @@ export function usePublicRooms() {
   const [isLoadingRooms, setIsLoadingRooms] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
-  // Get the next room ID to know how many rooms exist
+  // Get the latest room ID to know how many rooms exist
   const { 
-    data: nextRoomId, 
-    isLoading: isLoadingNextId,
-    refetch: refetchNextId,
+    data: latestRoomId, 
+    isLoading: isLoadingLatestId,
+    refetch: refetchLatestId,
   } = useReadContract({
-    address: ROOM_MANAGER_ADDRESS,
-    abi: ROOM_MANAGER_ABI,
-    functionName: "nextRoomId",
+    address: ROOM_MANAGER_V4_ADDRESS,
+    abi: ROOM_MANAGER_V4_ABI,
+    functionName: "latestRoomId",
     chainId: 137, // Polygon mainnet
   });
 
-  // Fetch all rooms when nextRoomId changes
+  // Fetch all rooms when latestRoomId changes
   useEffect(() => {
     const fetchRooms = async () => {
-      if (!nextRoomId || nextRoomId <= 1n) {
+      if (!latestRoomId || latestRoomId < 1n) {
         setRooms([]);
         return;
       }
@@ -51,32 +50,24 @@ export function usePublicRooms() {
       setIsLoadingRooms(true);
 
       try {
-        // Build room IDs array
+        // Build room IDs array (1-indexed, inclusive of latestRoomId)
         const roomIds: bigint[] = [];
-        for (let i = 1n; i < nextRoomId; i++) {
+        for (let i = 1n; i <= latestRoomId; i++) {
           roomIds.push(i);
         }
 
-        // Fetch rooms and player counts in parallel using getRoomView and getPlayerCount
+        // Fetch rooms in parallel using getRoom
         const results = await Promise.all(
           roomIds.map(async (roomId) => {
             try {
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              const [roomResult, playerCount] = await Promise.all([
-                (publicClient as any).readContract({
-                  address: ROOM_MANAGER_ADDRESS,
-                  abi: ROOM_MANAGER_ABI,
-                  functionName: "getRoomView",
-                  args: [roomId],
-                }),
-                (publicClient as any).readContract({
-                  address: ROOM_MANAGER_ADDRESS,
-                  abi: ROOM_MANAGER_ABI,
-                  functionName: "getPlayerCount",
-                  args: [roomId],
-                }),
-              ]);
-              return { status: "success" as const, roomId, result: roomResult, playerCount: Number(playerCount) };
+              const roomResult = await (publicClient as any).readContract({
+                address: ROOM_MANAGER_V4_ADDRESS,
+                abi: ROOM_MANAGER_V4_ABI,
+                functionName: "getRoom",
+                args: [roomId],
+              });
+              return { status: "success" as const, roomId, result: roomResult };
             } catch (error) {
               console.error(`Error fetching room ${roomId}:`, error);
               return { status: "error" as const, roomId, error };
@@ -84,30 +75,30 @@ export function usePublicRooms() {
           })
         );
 
-        // Parse results and filter to only public rooms with Created or Started status
+        // Parse results and filter to only public, open rooms with available slots
         const publicRooms: PublicRoom[] = [];
         
         for (const r of results) {
           if (r.status !== "success" || !r.result) continue;
           
-          // getRoomView returns: [id, creator, entryFee, maxPlayers, isPrivate, status, gameId, turnTimeSeconds, winner]
-          const [id, creator, entryFee, maxPlayers, isPrivate, status, gameId, turnTimeSeconds, winner] = r.result;
+          // getRoom returns: [id, creator, entryFee, maxPlayers, isPrivate, platformFeeBps, gameId, turnTimeSec, playerCount, isOpen]
+          const [id, creator, entryFee, maxPlayers, isPrivate, , gameId, turnTimeSec, playerCount, isOpen] = r.result;
           
-          // Only include public rooms that are Created or Started
+          // Only include public rooms that are open and have available slots
           if (isPrivate) continue;
-          if (status !== RoomStatus.Created && status !== RoomStatus.Started) continue;
+          if (!isOpen) continue;
+          if (Number(playerCount) >= Number(maxPlayers)) continue;
           
           publicRooms.push({
             id,
             creator: creator as `0x${string}`,
             entryFee,
-            maxPlayers,
+            maxPlayers: Number(maxPlayers),
             isPrivate,
-            status: status as RoomStatus,
-            gameId,
-            turnTimeSeconds,
-            winner: winner as `0x${string}`,
-            playerCount: r.playerCount ?? 0,
+            gameId: Number(gameId),
+            turnTimeSec: Number(turnTimeSec),
+            playerCount: Number(playerCount),
+            isOpen,
           });
         }
 
@@ -122,17 +113,17 @@ export function usePublicRooms() {
     };
 
     fetchRooms();
-  }, [nextRoomId, refreshKey]);
+  }, [latestRoomId, refreshKey]);
 
   const refetch = useCallback(async () => {
-    await refetchNextId();
+    await refetchLatestId();
     setRefreshKey((prev) => prev + 1);
-  }, [refetchNextId]);
+  }, [refetchLatestId]);
 
   return {
     rooms,
-    isLoading: isLoadingNextId || isLoadingRooms,
+    isLoading: isLoadingLatestId || isLoadingRooms,
     refetch,
-    nextRoomId,
+    latestRoomId,
   };
 }
