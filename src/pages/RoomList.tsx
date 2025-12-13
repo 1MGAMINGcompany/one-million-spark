@@ -13,9 +13,9 @@ import { useWallet } from "@/hooks/useWallet";
 import { WalletRequired } from "@/components/WalletRequired";
 import { useSound } from "@/contexts/SoundContext";
 import { useToast } from "@/hooks/use-toast";
-import { useJoinRoom, formatEntryFee, getGameName } from "@/hooks/useRoomManager";
+import { useJoinRoomV4, getGameNameV4, unitsToUsdt } from "@/hooks/useRoomManagerV4";
 import { usePublicRooms, type PublicRoom } from "@/hooks/usePublicRooms";
-import { formatEther } from "viem";
+import { formatTurnTime } from "@/contracts/roomManagerV4";
 
 const RoomList = () => {
   const navigate = useNavigate();
@@ -45,7 +45,7 @@ const RoomList = () => {
     isSuccess: isJoinSuccess, 
     error: joinError, 
     reset: resetJoin 
-  } = useJoinRoom();
+  } = useJoinRoomV4();
 
   // Handle join success
   useEffect(() => {
@@ -93,7 +93,7 @@ const RoomList = () => {
 
     play('ui_click');
     setJoiningRoomId(room.id);
-    joinRoom(room.id, room.entryFee);
+    joinRoom(room.id);
   };
 
   if (!isConnected) {
@@ -124,34 +124,29 @@ const RoomList = () => {
       if (room.gameId !== targetGameId) return false;
     }
     
-    const feeInPol = parseFloat(formatEther(room.entryFee));
+    // Fee filter - convert USDT units to dollars
+    const feeInUsdt = unitsToUsdt(room.entryFee);
     
-      switch (feeFilter) {
-        case "lt10":
-          if (feeInPol >= 10) return false;
-          break;
-        case "lt50":
-          if (feeInPol >= 50) return false;
-          break;
-        case "lt100":
-          if (feeInPol >= 100) return false;
-          break;
-        case "lt1000":
-          if (feeInPol >= 1000) return false;
-          break;
-        case "gt1000":
-          if (feeInPol <= 1000) return false;
-          break;
-        case "gt10000":
-          if (feeInPol <= 10000) return false;
-          break;
-        case "gt100000":
-          if (feeInPol <= 100000) return false;
-          break;
-        case "gt1000000":
-          if (feeInPol <= 1000000) return false;
-          break;
-      }
+    switch (feeFilter) {
+      case "lt1":
+        if (feeInUsdt >= 1) return false;
+        break;
+      case "lt5":
+        if (feeInUsdt >= 5) return false;
+        break;
+      case "lt10":
+        if (feeInUsdt >= 10) return false;
+        break;
+      case "lt50":
+        if (feeInUsdt >= 50) return false;
+        break;
+      case "gt50":
+        if (feeInUsdt <= 50) return false;
+        break;
+      case "gt100":
+        if (feeInUsdt <= 100) return false;
+        break;
+    }
     
     return true;
   });
@@ -185,14 +180,12 @@ const RoomList = () => {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Fees</SelectItem>
-                <SelectItem value="lt10">Less than 10 POL</SelectItem>
-                <SelectItem value="lt50">Less than 50 POL</SelectItem>
-                <SelectItem value="lt100">Less than 100 POL</SelectItem>
-                <SelectItem value="lt1000">Less than 1,000 POL</SelectItem>
-                <SelectItem value="gt1000">Above 1,000 POL</SelectItem>
-                <SelectItem value="gt10000">Above 10,000 POL</SelectItem>
-                <SelectItem value="gt100000">Above 100,000 POL</SelectItem>
-                <SelectItem value="gt1000000">Above 1,000,000 POL</SelectItem>
+                <SelectItem value="lt1">Less than $1</SelectItem>
+                <SelectItem value="lt5">Less than $5</SelectItem>
+                <SelectItem value="lt10">Less than $10</SelectItem>
+                <SelectItem value="lt50">Less than $50</SelectItem>
+                <SelectItem value="gt50">Above $50</SelectItem>
+                <SelectItem value="gt100">Above $100</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -226,10 +219,10 @@ const RoomList = () => {
               >
                 <div className="flex-1">
                   <h3 className="text-lg font-semibold text-foreground">
-                    {getGameName(room.gameId)}
+                    {getGameNameV4(room.gameId)}
                   </h3>
                   <p className="text-sm text-muted-foreground">
-                    Entry Fee: {formatEntryFee(room.entryFee)} POL
+                    Entry Fee: ${unitsToUsdt(room.entryFee).toFixed(2)} USDT
                   </p>
                 </div>
                 <div className="flex items-center gap-4 text-muted-foreground">
@@ -242,7 +235,7 @@ const RoomList = () => {
                   <div className="flex items-center gap-1.5" title="Time per turn">
                     <Clock size={16} />
                     <span className="text-sm">
-                      {room.turnTimeSeconds}s
+                      {formatTurnTime(room.turnTimeSec)}
                     </span>
                   </div>
                 </div>
