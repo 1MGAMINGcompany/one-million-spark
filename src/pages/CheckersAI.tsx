@@ -275,47 +275,43 @@ const CheckersAI = () => {
 
   // AI turn
   useEffect(() => {
-    if (currentPlayer === "obsidian" && !gameOver && !isAiThinking) {
-      setIsAiThinking(true);
+    if (currentPlayer !== "obsidian" || gameOver || isAiThinking) return;
+    
+    setIsAiThinking(true);
+    
+    const delay = difficulty === "easy" ? 300 : difficulty === "medium" ? 600 : 1000;
+    
+    const timeout = setTimeout(() => {
+      const move = getAiMove(board);
       
-      const delay = difficulty === "easy" ? 300 : difficulty === "medium" ? 600 : 1000;
+      if (move) {
+        // Play sound effect for AI move
+        if (move.captures && move.captures.length > 0) {
+          play('checkers_capture');
+        } else {
+          play('checkers_slide');
+        }
+        
+        const newBoard = applyMove(board, move);
+        setBoard(newBoard);
+        
+        const result = checkGameOver(newBoard);
+        if (result) {
+          setGameOver(result);
+          play(result === 'gold' ? 'checkers_win' : 'checkers_lose');
+        } else {
+          setCurrentPlayer("gold");
+        }
+      } else {
+        setGameOver("gold");
+        play('checkers_win');
+      }
       
-      const timeout = setTimeout(() => {
-        setBoard(currentBoard => {
-          const move = getAiMove(currentBoard);
-          
-          if (move) {
-            // Play sound effect for AI move
-            if (move.captures && move.captures.length > 0) {
-              play('checkers_capture');
-            } else {
-              play('checkers_slide');
-            }
-            
-            const newBoard = applyMove(currentBoard, move);
-            
-            const result = checkGameOver(newBoard);
-            if (result) {
-              setGameOver(result);
-              play(result === 'gold' ? 'checkers_win' : 'checkers_lose');
-            } else {
-              setCurrentPlayer("gold");
-            }
-            
-            setIsAiThinking(false);
-            return newBoard;
-          } else {
-            setGameOver("gold");
-            play('checkers_win');
-            setIsAiThinking(false);
-            return currentBoard;
-          }
-        });
-      }, delay);
-      
-      return () => clearTimeout(timeout);
-    }
-  }, [currentPlayer, gameOver, isAiThinking, difficulty, getAiMove, applyMove, checkGameOver, play]);
+      setIsAiThinking(false);
+    }, delay);
+    
+    return () => clearTimeout(timeout);
+  }, [currentPlayer, gameOver, isAiThinking, board, difficulty, getAiMove, applyMove, checkGameOver, play]);
 
   const resetGame = () => {
     setBoard(initializeBoard());
