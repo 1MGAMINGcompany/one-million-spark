@@ -144,7 +144,8 @@ export function useCreateRoomV3() {
     maxPlayers: number,
     isPrivate: boolean,
     platformFeeBps: number = 500, // 5% default
-    gameId: number = 1 // Default: Chess
+    gameId: number = 1, // Default: Chess
+    turnTimeSec: number = 300 // Default: 5 minutes
   ) => {
     if (!address) return;
     
@@ -154,7 +155,7 @@ export function useCreateRoomV3() {
       address: ROOM_MANAGER_V3_ADDRESS,
       abi: ROOM_MANAGER_V3_ABI,
       functionName: "createRoom",
-      args: [entryFeeUnits, maxPlayers, isPrivate, platformFeeBps, gameId],
+      args: [entryFeeUnits, maxPlayers, isPrivate, platformFeeBps, gameId, turnTimeSec],
       chain: polygon,
       account: address,
     });
@@ -233,7 +234,7 @@ export function useCancelRoomV3() {
 
 // Helper to format room data from getRoom response
 export function formatRoomV3(
-  data: readonly [bigint, `0x${string}`, bigint, number, boolean, number, number, number, boolean]
+  data: readonly [bigint, `0x${string}`, bigint, number, boolean, number, number, number, number, boolean]
 ): ContractRoomV3 {
   return {
     id: data[0],
@@ -243,8 +244,9 @@ export function formatRoomV3(
     isPrivate: data[4],
     platformFeeBps: data[5],
     gameId: data[6],
-    playerCount: data[7],
-    isOpen: data[8],
+    turnTimeSec: data[7],
+    playerCount: data[8],
+    isOpen: data[9],
   };
 }
 

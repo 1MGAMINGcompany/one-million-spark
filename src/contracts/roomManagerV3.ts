@@ -63,6 +63,7 @@ export const ROOM_MANAGER_V3_ABI = [
       { name: "isPrivate", type: "bool", internalType: "bool" },
       { name: "platformFeeBps", type: "uint16", internalType: "uint16" },
       { name: "gameId", type: "uint32", internalType: "uint32" },
+      { name: "turnTimeSec", type: "uint32", internalType: "uint32" },
     ],
     outputs: [],
   },
@@ -93,6 +94,7 @@ export const ROOM_MANAGER_V3_ABI = [
       { name: "", type: "bool", internalType: "bool" },
       { name: "", type: "uint16", internalType: "uint16" },
       { name: "", type: "uint32", internalType: "uint32" },
+      { name: "", type: "uint32", internalType: "uint32" },
       { name: "", type: "uint8", internalType: "uint8" },
       { name: "", type: "bool", internalType: "bool" },
     ],
@@ -110,6 +112,7 @@ export const ROOM_MANAGER_V3_ABI = [
       { name: "isPrivate", type: "bool", internalType: "bool" },
       { name: "platformFeeBps", type: "uint16", internalType: "uint16" },
       { name: "gameId", type: "uint32", internalType: "uint32" },
+      { name: "turnTimeSec", type: "uint32", internalType: "uint32" },
       { name: "playerCount", type: "uint8", internalType: "uint8" },
       { name: "isOpen", type: "bool", internalType: "bool" },
     ],
@@ -135,13 +138,14 @@ export interface ContractRoomV3 {
   isPrivate: boolean;
   platformFeeBps: number;
   gameId: number;
+  turnTimeSec: number;
   playerCount: number;
   isOpen: boolean;
 }
 
 // Format raw contract data into ContractRoomV3 object
 export function formatRoomV3(
-  data: readonly [bigint, `0x${string}`, bigint, number, boolean, number, number, number, boolean]
+  data: readonly [bigint, `0x${string}`, bigint, number, boolean, number, number, number, number, boolean]
 ): ContractRoomV3 {
   return {
     id: data[0],
@@ -151,8 +155,9 @@ export function formatRoomV3(
     isPrivate: data[4],
     platformFeeBps: data[5],
     gameId: data[6],
-    playerCount: data[7],
-    isOpen: data[8],
+    turnTimeSec: data[7],
+    playerCount: data[8],
+    isOpen: data[9],
   };
 }
 
