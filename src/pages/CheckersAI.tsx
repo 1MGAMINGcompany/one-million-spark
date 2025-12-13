@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, RotateCcw, Trophy, Gem, Star } from "lucide-react";
+import { useSound } from "@/contexts/SoundContext";
 
 type Difficulty = "easy" | "medium" | "hard";
 type Player = "gold" | "obsidian";
@@ -52,6 +53,7 @@ const initializeBoard = (): (Piece | null)[][] => {
 const CheckersAI = () => {
   const [searchParams] = useSearchParams();
   const difficulty = (searchParams.get("difficulty") as Difficulty) || "medium";
+  const { play } = useSound();
   
   const [board, setBoard] = useState<(Piece | null)[][]>(initializeBoard);
   const [selectedPiece, setSelectedPiece] = useState<Position | null>(null);
@@ -226,6 +228,13 @@ const CheckersAI = () => {
     if (selectedPiece) {
       const move = validMoves.find(m => m.to.row === row && m.to.col === col);
       if (move) {
+        // Play sound effect
+        if (move.captures && move.captures.length > 0) {
+          play('checkers_capture');
+        } else {
+          play('checkers_slide');
+        }
+        
         const newBoard = applyMove(board, move);
         setBoard(newBoard);
         setSelectedPiece(null);
@@ -234,6 +243,7 @@ const CheckersAI = () => {
         const result = checkGameOver(newBoard);
         if (result) {
           setGameOver(result);
+          play(result === 'gold' ? 'checkers_win' : 'checkers_lose');
         } else {
           setCurrentPlayer("obsidian");
         }
@@ -271,17 +281,26 @@ const CheckersAI = () => {
       const timeout = setTimeout(() => {
         const move = getAiMove(board);
         if (move) {
+          // Play sound effect for AI move
+          if (move.captures && move.captures.length > 0) {
+            play('checkers_capture');
+          } else {
+            play('checkers_slide');
+          }
+          
           const newBoard = applyMove(board, move);
           setBoard(newBoard);
           
           const result = checkGameOver(newBoard);
           if (result) {
             setGameOver(result);
+            play(result === 'gold' ? 'checkers_win' : 'checkers_lose');
           } else {
             setCurrentPlayer("gold");
           }
         } else {
           setGameOver("gold");
+          play('checkers_win');
         }
         setIsAiThinking(false);
       }, difficulty === "easy" ? 300 : difficulty === "medium" ? 600 : 1000);

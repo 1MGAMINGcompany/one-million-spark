@@ -39,6 +39,12 @@ const SOUND_FILES: Record<string, string> = {
   'ludo_win': '/sounds/chess/win.wav',
   'ludo_lose': '/sounds/chess/lose.mp3',
   
+  // Checkers sounds
+  'checkers_slide': '/sounds/checkers/slide.mp3',
+  'checkers_capture': '/sounds/checkers/capture.mp3',
+  'checkers_win': '/sounds/checkers/win.wav',
+  'checkers_lose': '/sounds/checkers/lose.mp3',
+  
   // Room sounds
   'room_create': '/sounds/rooms/created.mp3',
   'room_enter': '/sounds/rooms/enter.mp3',
