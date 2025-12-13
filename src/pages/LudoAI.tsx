@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, RotateCcw } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { useSound } from "@/contexts/SoundContext";
 import LudoBoard from "@/components/ludo/LudoBoard";
 import EgyptianDice from "@/components/ludo/EgyptianDice";
 import TurnIndicator from "@/components/ludo/TurnIndicator";
@@ -11,6 +12,7 @@ import { Difficulty, Player, PlayerColor, Token, initializePlayers, getTokenCoor
 const LudoAI = () => {
   const [searchParams] = useSearchParams();
   const difficulty = (searchParams.get("difficulty") as Difficulty) || "medium";
+  const { play } = useSound();
   
   const [players, setPlayers] = useState<Player[]>(() => initializePlayers());
   const [currentPlayerIndex, setCurrentPlayerIndex] = useState(0);
@@ -75,6 +77,9 @@ const LudoAI = () => {
       
       const nextPos = path[stepIndex];
       
+      // Play move sound on each step
+      play('ludo_move');
+      
       // Update token position for this step
       setPlayers(prevPlayers => {
         const newPlayers = prevPlayers.map((player, pIdx) => ({
@@ -91,11 +96,11 @@ const LudoAI = () => {
       });
       
       stepIndex++;
-      animationRef.current = setTimeout(animateStep, 150); // 150ms per step for faster animation
+      animationRef.current = setTimeout(animateStep, 150);
     };
     
     animateStep();
-  }, []);
+  }, [play]);
 
   // Move a token with animation
   const moveToken = useCallback((playerIndex: number, tokenIndex: number, dice: number) => {
@@ -137,6 +142,7 @@ const LudoAI = () => {
                   if (relativePos === myRelativePos) {
                     otherPlayer.tokens[oti] = { ...otherToken, position: -1 };
                     console.log(`[LUDO CAPTURE] ${currentPlayerData.color} captured ${otherPlayer.color} token #${oti}`);
+                    play('ludo_capture');
                     toast({
                       title: "Captured!",
                       description: `${currentPlayerData.color} captured ${otherPlayer.color}'s token!`,
@@ -152,7 +158,7 @@ const LudoAI = () => {
         return newPlayers;
       });
     });
-  }, [players, animateMove]);
+  }, [players, animateMove, play]);
 
   // Check for winner
   const checkWinner = useCallback((playersToCheck: Player[]): PlayerColor | null => {
@@ -169,6 +175,7 @@ const LudoAI = () => {
     if (isRolling || diceValue !== null || isAnimating) return;
     
     setIsRolling(true);
+    play('ludo_dice');
     
     let rolls = 0;
     const maxRolls = 10;
@@ -209,6 +216,7 @@ const LudoAI = () => {
                 const winner = checkWinner(current);
                 if (winner) {
                   setGameOver(winner);
+                  play(winner === 'gold' ? 'ludo_win' : 'ludo_lose');
                 } else {
                   setCurrentPlayerIndex(prev => currentDice === 6 ? prev : (prev + 1) % 4);
                 }
@@ -219,7 +227,7 @@ const LudoAI = () => {
         }
       }
     }, 100);
-  }, [isRolling, diceValue, isAnimating, currentPlayer, currentPlayerIndex, getMovableTokens, moveToken, checkWinner]);
+  }, [isRolling, diceValue, isAnimating, currentPlayer, currentPlayerIndex, getMovableTokens, moveToken, checkWinner, play]);
 
   // Handle token click (for human player)
   const handleTokenClick = useCallback((playerIndex: number, tokenIndex: number) => {
@@ -249,13 +257,14 @@ const LudoAI = () => {
         const winner = checkWinner(current);
         if (winner) {
           setGameOver(winner);
+          play(winner === 'gold' ? 'ludo_win' : 'ludo_lose');
         } else {
           setCurrentPlayerIndex(prev => currentDice === 6 ? prev : (prev + 1) % 4);
         }
         return current;
       });
     }, 800);
-  }, [isAnimating, currentPlayerIndex, currentPlayer, diceValue, isRolling, movableTokens, moveToken, checkWinner]);
+  }, [isAnimating, currentPlayerIndex, currentPlayer, diceValue, isRolling, movableTokens, moveToken, checkWinner, play]);
 
   // AI turn
   useEffect(() => {
@@ -296,6 +305,7 @@ const LudoAI = () => {
             const winner = checkWinner(current);
             if (winner) {
               setGameOver(winner);
+              play(winner === 'gold' ? 'ludo_win' : 'ludo_lose');
             } else {
               setCurrentPlayerIndex(prev => currentDice === 6 ? prev : (prev + 1) % 4);
             }
@@ -306,7 +316,7 @@ const LudoAI = () => {
       
       return () => clearTimeout(timeout);
     }
-  }, [currentPlayer, diceValue, isRolling, isAnimating, movableTokens, difficulty, moveToken, currentPlayerIndex, checkWinner]);
+  }, [currentPlayer, diceValue, isRolling, isAnimating, movableTokens, difficulty, moveToken, currentPlayerIndex, checkWinner, play]);
 
   // Cleanup animation on unmount
   useEffect(() => {
