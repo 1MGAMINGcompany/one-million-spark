@@ -14,6 +14,7 @@ export type PublicRoom = {
   gameId: number;
   turnTimeSeconds: number;
   winner: `0x${string}`;
+  playerCount: number;
 };
 
 // Create a public client for direct viem calls - Polygon mainnet
@@ -56,18 +57,26 @@ export function usePublicRooms() {
           roomIds.push(i);
         }
 
-        // Fetch rooms in parallel using getRoomView
+        // Fetch rooms and player counts in parallel using getRoomView and getPlayerCount
         const results = await Promise.all(
           roomIds.map(async (roomId) => {
             try {
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              const result = await (publicClient as any).readContract({
-                address: ROOM_MANAGER_ADDRESS,
-                abi: ROOM_MANAGER_ABI,
-                functionName: "getRoomView",
-                args: [roomId],
-              });
-              return { status: "success" as const, roomId, result };
+              const [roomResult, playerCount] = await Promise.all([
+                (publicClient as any).readContract({
+                  address: ROOM_MANAGER_ADDRESS,
+                  abi: ROOM_MANAGER_ABI,
+                  functionName: "getRoomView",
+                  args: [roomId],
+                }),
+                (publicClient as any).readContract({
+                  address: ROOM_MANAGER_ADDRESS,
+                  abi: ROOM_MANAGER_ABI,
+                  functionName: "getPlayerCount",
+                  args: [roomId],
+                }),
+              ]);
+              return { status: "success" as const, roomId, result: roomResult, playerCount: Number(playerCount) };
             } catch (error) {
               console.error(`Error fetching room ${roomId}:`, error);
               return { status: "error" as const, roomId, error };
@@ -98,6 +107,7 @@ export function usePublicRooms() {
             gameId,
             turnTimeSeconds,
             winner: winner as `0x${string}`,
+            playerCount: r.playerCount ?? 0,
           });
         }
 

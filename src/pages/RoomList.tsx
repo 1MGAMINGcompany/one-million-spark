@@ -8,12 +8,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Users, RefreshCw, Loader2 } from "lucide-react";
+import { Users, RefreshCw, Loader2, Clock } from "lucide-react";
 import { useWallet } from "@/hooks/useWallet";
 import { WalletRequired } from "@/components/WalletRequired";
 import { useSound } from "@/contexts/SoundContext";
 import { useToast } from "@/hooks/use-toast";
-import { useJoinRoom, formatEntryFee, getRoomStatusLabel, getGameName } from "@/hooks/useRoomManager";
+import { useJoinRoom, formatEntryFee, getGameName } from "@/hooks/useRoomManager";
 import { usePublicRooms, type PublicRoom } from "@/hooks/usePublicRooms";
 import { formatEther } from "viem";
 
@@ -231,20 +231,20 @@ const RoomList = () => {
                   <p className="text-sm text-muted-foreground">
                     Entry Fee: {formatEntryFee(room.entryFee)} POL
                   </p>
-                  <p className="text-xs text-muted-foreground truncate">
-                    Room #{room.id.toString()} • Creator: {room.creator.slice(0, 6)}...{room.creator.slice(-4)}
-                  </p>
                 </div>
                 <div className="flex items-center gap-4 text-muted-foreground">
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1.5" title="Players">
                     <Users size={16} />
                     <span className="text-sm">
-                      ? / {room.maxPlayers}
+                      {room.playerCount} / {room.maxPlayers}
                     </span>
                   </div>
-                  <span className="text-xs px-2 py-1 rounded bg-primary/10 text-primary">
-                    {getRoomStatusLabel(room.status)}
-                  </span>
+                  <div className="flex items-center gap-1.5" title="Time per turn">
+                    <Clock size={16} />
+                    <span className="text-sm">
+                      {room.turnTimeSeconds}s
+                    </span>
+                  </div>
                 </div>
                 <Button 
                   size="sm" 
