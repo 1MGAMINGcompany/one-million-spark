@@ -396,7 +396,7 @@ const CheckersAI = () => {
                     key={`${rowIndex}-${colIndex}`}
                     onClick={() => handleSquareClick(rowIndex, colIndex)}
                     className={`
-                      relative flex items-center justify-center cursor-pointer transition-all
+                      relative flex items-center justify-center cursor-pointer
                       ${isDark 
                         ? "bg-gradient-to-br from-amber-900/80 to-amber-950" 
                         : "bg-gradient-to-br from-amber-200 to-amber-300"
