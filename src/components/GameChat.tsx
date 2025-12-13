@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { MessageCircle, X, Send, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useSound } from "@/contexts/SoundContext";
 
 interface ChatMessage {
   id: string;
@@ -200,6 +201,7 @@ export const useChatMessages = (
   playerAddress?: string
 ) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const { play } = useSound();
 
   const addMessage = useCallback(
     (text: string, sender: string, isMe: boolean) => {
@@ -227,8 +229,10 @@ export const useChatMessages = (
   const receiveMessage = useCallback(
     (text: string, sender: string) => {
       addMessage(text, sender, false);
+      // Play notification sound for incoming messages
+      play("ui/notify");
     },
-    [addMessage]
+    [addMessage, play]
   );
 
   return {
