@@ -1,18 +1,19 @@
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Home, Flag, Handshake, RefreshCw } from "lucide-react";
+import { Home, Flag, Handshake, Timer } from "lucide-react";
 import { useRoom, formatEntryFee, formatRoom, usePlayersOf } from "@/hooks/useRoomManager";
 import { usePolPrice } from "@/hooks/usePolPrice";
 import { ChessBoardPremium } from "@/components/ChessBoardPremium";
 import { GameSyncStatus } from "@/components/GameSyncStatus";
+import { GameVerificationPanel } from "@/components/GameVerificationPanel";
 import { useGameSync, useTurnTimer, ChessMove } from "@/hooks/useGameSync";
 import { useWebRTCSync, GameMessage } from "@/hooks/useWebRTCSync";
 import { useTimeoutForfeit } from "@/hooks/useTimeoutForfeit";
+import { useGameNotifications } from "@/hooks/useGameNotifications";
 import { useWallet } from "@/hooks/useWallet";
 import { useState, useCallback, useEffect } from "react";
 import { Chess, Square } from "chess.js";
 import { useToast } from "@/hooks/use-toast";
-import { Timer } from "lucide-react";
 
 const ChessGame = () => {
   const { roomId } = useParams<{ roomId: string }>();
@@ -166,6 +167,22 @@ const ChessGame = () => {
     }
   }, [address, claimTimeoutVictory]);
 
+  // Push Protocol notifications
+  const { notifyYourTurn, notifyOpponentMoved, notifyGameEnded } = useGameNotifications({
+    address,
+    roomId: roomId || "",
+    gameType: "chess",
+    opponentAddress,
+    enabled: !!players && players.length >= 2,
+  });
+
+  // Determine game winner
+  const getWinner = useCallback((): `0x${string}` | null => {
+    if (!gameEnded || !gameState?.players) return null;
+    // Logic to determine winner based on game state
+    // For now, return null - actual winner is set when game ends
+    return null;
+  }, [gameEnded, gameState?.players]);
   // Update move history helper
   const updateMoveHistory = useCallback(() => {
     const history = game.history();
@@ -217,6 +234,9 @@ const ChessGame = () => {
         } else {
           bcSendMove(chessMove);
         }
+
+        // Notify opponent it's their turn
+        notifyYourTurn();
 
         return true;
       }
@@ -361,6 +381,18 @@ const ChessGame = () => {
                   Resign
                 </Button>
               </div>
+            )}
+
+            {/* Game Verification Panel - show when game ends */}
+            {gameEnded && (
+              <GameVerificationPanel
+                roomId={roomIdBigInt || BigInt(0)}
+                gameType="chess"
+                finalState={game.fen()}
+                winner={getWinner()}
+                playerAddress={address}
+                onResultSubmitted={() => navigate("/")}
+              />
             )}
           </div>
         </div>
