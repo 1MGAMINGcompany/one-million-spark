@@ -285,43 +285,43 @@ const CheckersAI = () => {
     const timeout = setTimeout(() => {
       if (cancelled) return;
       
-      setBoard(currentBoard => {
-        const move = getAiMove(currentBoard);
-        
-        if (!move) {
-          setGameOver("gold");
-          play('checkers_win');
-          setIsAiThinking(false);
-          return currentBoard;
-        }
-        
-        // Play sound
-        if (move.captures && move.captures.length > 0) {
-          play('checkers_capture');
-        } else {
-          play('checkers_slide');
-        }
-        
-        const newBoard = applyMove(currentBoard, move);
-        
-        const result = checkGameOver(newBoard);
-        if (result) {
-          setGameOver(result);
-          play(result === 'gold' ? 'checkers_win' : 'checkers_lose');
-        } else {
-          setCurrentPlayer("gold");
-        }
-        
+      // Get AI move using current board state
+      const move = getAiMove(board);
+      
+      if (!move) {
+        setGameOver("gold");
+        play('checkers_win');
         setIsAiThinking(false);
-        return newBoard;
-      });
+        return;
+      }
+      
+      // Play sound
+      if (move.captures && move.captures.length > 0) {
+        play('checkers_capture');
+      } else {
+        play('checkers_slide');
+      }
+      
+      const newBoard = applyMove(board, move);
+      setBoard(newBoard);
+      
+      const result = checkGameOver(newBoard);
+      if (result) {
+        setGameOver(result);
+        play(result === 'gold' ? 'checkers_win' : 'checkers_lose');
+      } else {
+        setCurrentPlayer("gold");
+      }
+      
+      setIsAiThinking(false);
     }, delay);
     
     return () => {
       cancelled = true;
       clearTimeout(timeout);
     };
-  }, [currentPlayer, gameOver, difficulty, getAiMove, applyMove, checkGameOver, play]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPlayer, gameOver]);
 
   const resetGame = () => {
     setBoard(initializeBoard());
