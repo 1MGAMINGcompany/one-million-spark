@@ -17,6 +17,8 @@ import RoomList from "./pages/RoomList";
 import ChessGame from "./pages/ChessGame";
 import DominosGame from "./pages/DominosGame";
 import BackgammonGame from "./pages/BackgammonGame";
+import CheckersGame from "./pages/CheckersGame";
+import LudoGame from "./pages/LudoGame";
 import PlayAILobby from "./pages/PlayAILobby";
 import ChessAI from "./pages/ChessAI";
 import DominosAI from "./pages/DominosAI";
@@ -51,6 +53,8 @@ const App = () => (
                     <Route path="/game/chess/:roomId" element={<ChessGame />} />
                     <Route path="/game/dominos/:roomId" element={<DominosGame />} />
                     <Route path="/game/backgammon/:roomId" element={<BackgammonGame />} />
+                    <Route path="/game/checkers/:roomId" element={<CheckersGame />} />
+                    <Route path="/game/ludo/:roomId" element={<LudoGame />} />
                     <Route path="/play-ai" element={<PlayAILobby />} />
                     <Route path="/play-ai/chess" element={<ChessAI />} />
                     <Route path="/play-ai/dominos" element={<DominosAI />} />

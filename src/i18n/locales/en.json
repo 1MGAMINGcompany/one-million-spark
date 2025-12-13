@@ -25,7 +25,8 @@
     "chess": "Chess",
     "backgammon": "Backgammon",
     "dominos": "Dominos",
-    "black": "Black",
+    "checkers": "Checkers",
+    "ludo": "Ludo",
     "stockfishBeginner": "Stockfish - Beginner",
     "stockfishIntermediate": "Stockfish - Intermediate",
     "stockfishAdvanced": "Stockfish - Advanced",
@@ -290,7 +291,14 @@
     "opponentPlayed": "Opponent played",
     "drawFromPile": "Draw from Pile",
     "dominosWinCondition": "Win by playing all your tiles first, or having the lowest pip count when blocked.",
-    "dominosMoveRules": "Match tile ends to play – if you can't play, draw from the pile."
+    "dominosMoveRules": "Match tile ends to play – if you can't play, draw from the pile.",
+    "yourPieces": "Your pieces",
+    "opponentPieces": "Opponent pieces",
+    "checkersWinCondition": "Capture all opponent pieces or block them from moving.",
+    "checkersMoveRules": "Pieces move diagonally. Kings can move backward. Captures are mandatory.",
+    "home": "home",
+    "ludoWinCondition": "Be the first to move all 4 tokens to the home area.",
+    "ludoMoveRules": "Roll a 6 to leave home. Move tokens based on dice rolls. Capture opponent tokens."
   },
   "wallet": {
     "connect": "Connect Wallet",

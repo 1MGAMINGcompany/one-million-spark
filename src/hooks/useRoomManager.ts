@@ -295,6 +295,10 @@ export function getGameName(gameId: number): string {
       return "Dominos";
     case 3:
       return "Backgammon";
+    case 4:
+      return "Checkers";
+    case 5:
+      return "Ludo";
     default:
       return "Unknown";
   }
