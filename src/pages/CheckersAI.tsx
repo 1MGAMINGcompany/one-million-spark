@@ -61,24 +61,24 @@ const CheckersAI = () => {
   const [validMoves, setValidMoves] = useState<Move[]>([]);
   const [gameOver, setGameOver] = useState<Player | "draw" | null>(null);
   const [isAiThinking, setIsAiThinking] = useState(false);
+  const [chainCapture, setChainCapture] = useState<Position | null>(null); // Track multi-jump
   
   // Use ref to always have access to latest board state
   const boardRef = useRef(board);
   boardRef.current = board;
 
-  // Get all valid moves for a piece
-  const getValidMoves = useCallback((board: (Piece | null)[][], pos: Position): Move[] => {
+  // Get capture moves for a piece (single jumps only)
+  const getCaptures = useCallback((board: (Piece | null)[][], pos: Position): Move[] => {
     const piece = board[pos.row][pos.col];
     if (!piece) return [];
     
-    const moves: Move[] = [];
+    const captures: Move[] = [];
     const directions = piece.type === "king" 
       ? [[-1, -1], [-1, 1], [1, -1], [1, 1]]
       : piece.player === "gold" 
-        ? [[-1, -1], [-1, 1]]  // Gold moves up
-        : [[1, -1], [1, 1]];   // Obsidian moves down
+        ? [[-1, -1], [-1, 1]]
+        : [[1, -1], [1, 1]];
     
-    // Check for captures first
     for (const [dr, dc] of directions) {
       const jumpRow = pos.row + dr * 2;
       const jumpCol = pos.col + dc * 2;
@@ -90,7 +90,7 @@ const CheckersAI = () => {
         const jumpSquare = board[jumpRow][jumpCol];
         
         if (midPiece && midPiece.player !== piece.player && !jumpSquare) {
-          moves.push({
+          captures.push({
             from: pos,
             to: { row: jumpRow, col: jumpCol },
             captures: [{ row: midRow, col: midCol }]
@@ -99,16 +99,28 @@ const CheckersAI = () => {
       }
     }
     
-    // If no captures, check regular moves
-    if (moves.length === 0) {
-      for (const [dr, dc] of directions) {
-        const newRow = pos.row + dr;
-        const newCol = pos.col + dc;
-        
-        if (newRow >= 0 && newRow < BOARD_SIZE && newCol >= 0 && newCol < BOARD_SIZE) {
-          if (!board[newRow][newCol]) {
-            moves.push({ from: pos, to: { row: newRow, col: newCol } });
-          }
+    return captures;
+  }, []);
+
+  // Get simple moves for a piece (non-capturing)
+  const getSimpleMoves = useCallback((board: (Piece | null)[][], pos: Position): Move[] => {
+    const piece = board[pos.row][pos.col];
+    if (!piece) return [];
+    
+    const moves: Move[] = [];
+    const directions = piece.type === "king" 
+      ? [[-1, -1], [-1, 1], [1, -1], [1, 1]]
+      : piece.player === "gold" 
+        ? [[-1, -1], [-1, 1]]
+        : [[1, -1], [1, 1]];
+    
+    for (const [dr, dc] of directions) {
+      const newRow = pos.row + dr;
+      const newCol = pos.col + dc;
+      
+      if (newRow >= 0 && newRow < BOARD_SIZE && newCol >= 0 && newCol < BOARD_SIZE) {
+        if (!board[newRow][newCol]) {
+          moves.push({ from: pos, to: { row: newRow, col: newCol } });
         }
       }
     }
@@ -116,35 +128,56 @@ const CheckersAI = () => {
     return moves;
   }, []);
 
-  // Get all moves for a player
+  // Get all valid moves for a piece (captures take priority)
+  const getValidMoves = useCallback((board: (Piece | null)[][], pos: Position): Move[] => {
+    const captures = getCaptures(board, pos);
+    if (captures.length > 0) return captures;
+    return getSimpleMoves(board, pos);
+  }, [getCaptures, getSimpleMoves]);
+
+  // Check if a player has any captures available
+  const playerHasCaptures = useCallback((board: (Piece | null)[][], player: Player): boolean => {
+    for (let row = 0; row < BOARD_SIZE; row++) {
+      for (let col = 0; col < BOARD_SIZE; col++) {
+        const piece = board[row][col];
+        if (piece && piece.player === player) {
+          if (getCaptures(board, { row, col }).length > 0) {
+            return true;
+          }
+        }
+      }
+    }
+    return false;
+  }, [getCaptures]);
+
+  // Get all moves for a player (captures are mandatory)
   const getAllMoves = useCallback((board: (Piece | null)[][], player: Player): Move[] => {
-    const allMoves: Move[] = [];
-    const captureMoves: Move[] = [];
+    const allCaptures: Move[] = [];
+    const allSimple: Move[] = [];
     
     for (let row = 0; row < BOARD_SIZE; row++) {
       for (let col = 0; col < BOARD_SIZE; col++) {
         const piece = board[row][col];
         if (piece && piece.player === player) {
-          const moves = getValidMoves(board, { row, col });
-          for (const move of moves) {
-            if (move.captures && move.captures.length > 0) {
-              captureMoves.push(move);
-            } else {
-              allMoves.push(move);
-            }
+          const captures = getCaptures(board, { row, col });
+          allCaptures.push(...captures);
+          
+          if (captures.length === 0) {
+            allSimple.push(...getSimpleMoves(board, { row, col }));
           }
         }
       }
     }
     
     // Must capture if possible
-    return captureMoves.length > 0 ? captureMoves : allMoves;
-  }, [getValidMoves]);
+    return allCaptures.length > 0 ? allCaptures : allSimple;
+  }, [getCaptures, getSimpleMoves]);
 
-  // Apply a move
+  // Apply a move and handle king promotion
   const applyMove = useCallback((board: (Piece | null)[][], move: Move): (Piece | null)[][] => {
     const newBoard = board.map(row => [...row]);
-    const piece = newBoard[move.from.row][move.from.col]!;
+    const piece = newBoard[move.from.row][move.from.col];
+    if (!piece) return newBoard;
     
     // Move piece
     newBoard[move.to.row][move.to.col] = { ...piece };
@@ -175,7 +208,9 @@ const CheckersAI = () => {
         const piece = board[row][col];
         if (piece) {
           const value = piece.type === "king" ? 3 : 1;
-          score += piece.player === "obsidian" ? value : -value;
+          // Add positional bonus for advancement
+          const posBonus = piece.player === "obsidian" ? row * 0.1 : (7 - row) * 0.1;
+          score += piece.player === "obsidian" ? (value + posBonus) : -(value + posBonus);
         }
       }
     }
@@ -187,18 +222,26 @@ const CheckersAI = () => {
     const moves = getAllMoves(board, "obsidian");
     if (moves.length === 0) return null;
     
-    const depthMap = { easy: 1, medium: 3, hard: 5 };
-    const depth = depthMap[difficulty];
-    
     let bestMove = moves[0];
     let bestScore = -Infinity;
     
     for (const move of moves) {
       const newBoard = applyMove(board, move);
-      const score = evaluateBoard(newBoard);
+      let score = evaluateBoard(newBoard);
       
-      // Add some randomness for easier difficulties
-      const randomness = difficulty === "easy" ? Math.random() * 2 : difficulty === "medium" ? Math.random() * 0.5 : 0;
+      // Bonus for captures
+      if (move.captures && move.captures.length > 0) {
+        score += move.captures.length * 0.5;
+      }
+      
+      // Check for chain captures
+      const postMoveCaptures = getCaptures(newBoard, move.to);
+      if (postMoveCaptures.length > 0) {
+        score += 0.3;
+      }
+      
+      // Add randomness based on difficulty
+      const randomness = difficulty === "easy" ? Math.random() * 3 : difficulty === "medium" ? Math.random() * 0.8 : 0;
       const adjustedScore = score + randomness;
       
       if (adjustedScore > bestScore) {
@@ -208,25 +251,69 @@ const CheckersAI = () => {
     }
     
     return bestMove;
-  }, [difficulty, getAllMoves, applyMove, evaluateBoard]);
+  }, [difficulty, getAllMoves, applyMove, evaluateBoard, getCaptures]);
 
   // Check for game over
   const checkGameOver = useCallback((board: (Piece | null)[][]): Player | "draw" | null => {
     const goldMoves = getAllMoves(board, "gold");
     const obsidianMoves = getAllMoves(board, "obsidian");
     
-    if (goldMoves.length === 0 && obsidianMoves.length === 0) return "draw";
+    let goldPieces = 0;
+    let obsidianPieces = 0;
+    for (let row = 0; row < BOARD_SIZE; row++) {
+      for (let col = 0; col < BOARD_SIZE; col++) {
+        const piece = board[row][col];
+        if (piece?.player === "gold") goldPieces++;
+        if (piece?.player === "obsidian") obsidianPieces++;
+      }
+    }
+    
+    if (goldPieces === 0) return "obsidian";
+    if (obsidianPieces === 0) return "gold";
     if (goldMoves.length === 0) return "obsidian";
     if (obsidianMoves.length === 0) return "gold";
     
     return null;
   }, [getAllMoves]);
 
-  // Handle piece selection
+  // Handle piece selection and moves
   const handleSquareClick = (row: number, col: number) => {
     if (gameOver || isAiThinking || currentPlayer !== "gold") return;
     
     const clickedPiece = board[row][col];
+    
+    // If we're in a chain capture, only allow continuing the chain
+    if (chainCapture) {
+      const move = validMoves.find(m => m.to.row === row && m.to.col === col);
+      if (move) {
+        play('checkers_capture');
+        const newBoard = applyMove(board, move);
+        setBoard(newBoard);
+        
+        // Check if there are more captures available from the new position
+        const moreCaptures = getCaptures(newBoard, move.to);
+        if (moreCaptures.length > 0) {
+          // Continue chain capture
+          setChainCapture(move.to);
+          setSelectedPiece(move.to);
+          setValidMoves(moreCaptures);
+        } else {
+          // End of chain, switch turns
+          setChainCapture(null);
+          setSelectedPiece(null);
+          setValidMoves([]);
+          
+          const result = checkGameOver(newBoard);
+          if (result) {
+            setGameOver(result);
+            play(result === 'gold' ? 'checkers_win' : 'checkers_lose');
+          } else {
+            setCurrentPlayer("obsidian");
+          }
+        }
+      }
+      return;
+    }
     
     // Check if clicking on a valid move destination
     if (selectedPiece) {
@@ -241,6 +328,19 @@ const CheckersAI = () => {
         
         const newBoard = applyMove(board, move);
         setBoard(newBoard);
+        
+        // If this was a capture, check for chain captures
+        if (move.captures && move.captures.length > 0) {
+          const moreCaptures = getCaptures(newBoard, move.to);
+          if (moreCaptures.length > 0) {
+            // Start chain capture
+            setChainCapture(move.to);
+            setSelectedPiece(move.to);
+            setValidMoves(moreCaptures);
+            return;
+          }
+        }
+        
         setSelectedPiece(null);
         setValidMoves([]);
         
@@ -257,20 +357,23 @@ const CheckersAI = () => {
     
     // Select a piece
     if (clickedPiece && clickedPiece.player === "gold") {
-      const moves = getValidMoves(board, { row, col });
-      const allMoves = getAllMoves(board, "gold");
+      const captures = getCaptures(board, { row, col });
+      const simpleMoves = getSimpleMoves(board, { row, col });
+      const hasAnyCaptures = playerHasCaptures(board, "gold");
       
-      // Check if we must capture
-      const mustCapture = allMoves.some(m => m.captures && m.captures.length > 0);
-      const pieceCanCapture = moves.some(m => m.captures && m.captures.length > 0);
-      
-      if (mustCapture && !pieceCanCapture) {
-        // Can't select this piece, must select one that can capture
-        return;
+      // If any piece can capture, must select a piece that can capture
+      if (hasAnyCaptures) {
+        if (captures.length === 0) {
+          // Can't select this piece, must select one that can capture
+          return;
+        }
+        setSelectedPiece({ row, col });
+        setValidMoves(captures);
+      } else {
+        // No captures required, show simple moves
+        setSelectedPiece({ row, col });
+        setValidMoves(simpleMoves);
       }
-      
-      setSelectedPiece({ row, col });
-      setValidMoves(mustCapture ? moves.filter(m => m.captures && m.captures.length > 0) : moves);
     } else {
       setSelectedPiece(null);
       setValidMoves([]);
@@ -283,43 +386,73 @@ const CheckersAI = () => {
     
     setIsAiThinking(true);
     
-    const delay = difficulty === "easy" ? 300 : difficulty === "medium" ? 600 : 1000;
-    
-    const timeout = setTimeout(() => {
-      // Use ref to get latest board state
-      const currentBoard = boardRef.current;
-      const move = getAiMove(currentBoard);
+    const executeAiMove = (currentBoard: (Piece | null)[][], lastPos?: Position) => {
+      const delay = difficulty === "easy" ? 300 : difficulty === "medium" ? 500 : 700;
       
-      if (!move) {
-        setGameOver("gold");
-        play('checkers_win');
+      setTimeout(() => {
+        // If we have a lastPos, check for chain captures first
+        if (lastPos) {
+          const chainMoves = getCaptures(currentBoard, lastPos);
+          if (chainMoves.length > 0) {
+            // Continue chain capture
+            const chainMove = chainMoves[Math.floor(Math.random() * chainMoves.length)];
+            play('checkers_capture');
+            const newBoard = applyMove(currentBoard, chainMove);
+            setBoard(newBoard);
+            boardRef.current = newBoard;
+            
+            // Check for more captures
+            executeAiMove(newBoard, chainMove.to);
+            return;
+          }
+        }
+        
+        // No chain capture, make a normal move if this is the start
+        if (!lastPos) {
+          const move = getAiMove(currentBoard);
+          
+          if (!move) {
+            setGameOver("gold");
+            play('checkers_win');
+            setIsAiThinking(false);
+            return;
+          }
+          
+          // Play sound
+          if (move.captures && move.captures.length > 0) {
+            play('checkers_capture');
+          } else {
+            play('checkers_slide');
+          }
+          
+          const newBoard = applyMove(currentBoard, move);
+          setBoard(newBoard);
+          boardRef.current = newBoard;
+          
+          // If this was a capture, check for chain
+          if (move.captures && move.captures.length > 0) {
+            executeAiMove(newBoard, move.to);
+            return;
+          }
+        }
+        
+        // End AI turn
+        const finalBoard = boardRef.current;
+        const result = checkGameOver(finalBoard);
+        if (result) {
+          setGameOver(result);
+          play(result === 'gold' ? 'checkers_win' : 'checkers_lose');
+        } else {
+          setCurrentPlayer("gold");
+        }
+        
         setIsAiThinking(false);
-        return;
-      }
-      
-      // Play sound
-      if (move.captures && move.captures.length > 0) {
-        play('checkers_capture');
-      } else {
-        play('checkers_slide');
-      }
-      
-      const newBoard = applyMove(currentBoard, move);
-      setBoard(newBoard);
-      
-      const result = checkGameOver(newBoard);
-      if (result) {
-        setGameOver(result);
-        play(result === 'gold' ? 'checkers_win' : 'checkers_lose');
-      } else {
-        setCurrentPlayer("gold");
-      }
-      
-      setIsAiThinking(false);
-    }, delay);
+      }, delay);
+    };
     
-    return () => clearTimeout(timeout);
-  }, [currentPlayer, gameOver, difficulty, getAiMove, applyMove, checkGameOver, play]);
+    executeAiMove(boardRef.current);
+    
+  }, [currentPlayer, gameOver, difficulty, getAiMove, applyMove, checkGameOver, play, getCaptures]);
 
   const resetGame = () => {
     setBoard(initializeBoard());
@@ -327,6 +460,8 @@ const CheckersAI = () => {
     setValidMoves([]);
     setCurrentPlayer("gold");
     setGameOver(null);
+    setIsAiThinking(false);
+    setChainCapture(null);
   };
 
   const isValidMoveTarget = (row: number, col: number) => {
