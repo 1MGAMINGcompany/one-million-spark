@@ -4,6 +4,7 @@ import { Home, Flag, Handshake, Dices, Timer } from "lucide-react";
 import { useRoom, formatEntryFee, formatRoom, usePlayersOf } from "@/hooks/useRoomManager";
 import { usePolPrice } from "@/hooks/usePolPrice";
 import { GameSyncStatus } from "@/components/GameSyncStatus";
+import { GameChat, useChatMessages } from "@/components/GameChat";
 import { useGameSync, useTurnTimer, BackgammonMove } from "@/hooks/useGameSync";
 import { useWebRTCSync, GameMessage } from "@/hooks/useWebRTCSync";
 import { useTimeoutForfeit } from "@/hooks/useTimeoutForfeit";
@@ -60,6 +61,9 @@ const BackgammonGame = () => {
   const [usedDice, setUsedDice] = useState<boolean[]>([false, false]);
   const [gameEnded, setGameEnded] = useState(false);
 
+  // Chat messages
+  const { messages: chatMessages, sendMessage: addChatMessage, receiveMessage } = useChatMessages(address);
+
   const entryFeeFormatted = room ? formatEntryFee(room.entryFee) : "...";
   const prizePool = room ? (parseFloat(entryFeeFormatted) * room.maxPlayers * 0.95).toFixed(3) : "...";
 
@@ -91,12 +95,18 @@ const BackgammonGame = () => {
       case "draw_offer":
         toast({ title: "Draw Offered", description: "Your opponent has offered a draw." });
         break;
+      case "chat":
+        if (message.payload && message.sender) {
+          receiveMessage(message.payload, message.sender);
+        }
+        break;
     }
-  }, [handleOpponentMove, handleOpponentResign, toast]);
+  }, [handleOpponentMove, handleOpponentResign, receiveMessage, toast]);
 
   const {
     isConnected: webrtcConnected,
     isPushEnabled,
+    sendChat: webrtcSendChat,
     reconnect: webrtcReconnect,
     peerAddress,
   } = useWebRTCSync({
@@ -159,6 +169,14 @@ const BackgammonGame = () => {
     setDice([d1, d2]);
     setUsedDice([false, false]);
   };
+
+  // Handle sending chat message
+  const handleSendChat = useCallback((text: string) => {
+    addChatMessage(text);
+    if (webrtcConnected) {
+      webrtcSendChat(text);
+    }
+  }, [addChatMessage, webrtcConnected, webrtcSendChat]);
 
   return (
     <div className="min-h-screen bg-background px-4 py-6">
@@ -269,6 +287,14 @@ const BackgammonGame = () => {
                 Roll Dice
               </Button>
             </div>
+
+            {/* Chat Button - below board */}
+            <GameChat
+              roomId={roomId || ""}
+              playerAddress={address}
+              onSendMessage={handleSendChat}
+              messages={chatMessages}
+            />
           </div>
 
           {/* RIGHT COLUMN - Info Panels */}

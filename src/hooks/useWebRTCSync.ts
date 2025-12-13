@@ -5,9 +5,10 @@ import { useToast } from "@/hooks/use-toast";
 import { useSound } from "@/contexts/SoundContext";
 
 export interface GameMessage {
-  type: "move" | "resign" | "draw_offer" | "draw_accept" | "draw_reject" | "sync_request" | "sync_response" | "heartbeat";
+  type: "move" | "resign" | "draw_offer" | "draw_accept" | "draw_reject" | "sync_request" | "sync_response" | "heartbeat" | "chat";
   payload?: any;
   timestamp: number;
+  sender?: string;
 }
 
 interface UseWebRTCSyncOptions {
@@ -196,6 +197,11 @@ export function useWebRTCSync({
     return sendMessage({ type: "sync_response", payload: gameState });
   }, [sendMessage]);
 
+  // Send chat message
+  const sendChat = useCallback((text: string): boolean => {
+    return sendMessage({ type: "chat", payload: text, sender: localAddress });
+  }, [sendMessage, localAddress]);
+
   // Manual reconnect
   const reconnect = useCallback(() => {
     reconnectAttempts.current = 0;
@@ -213,6 +219,7 @@ export function useWebRTCSync({
     sendDrawReject,
     requestSync,
     respondSync,
+    sendChat,
     reconnect,
     peerAddress: remoteAddress,
   };

@@ -6,6 +6,7 @@ import { usePolPrice } from "@/hooks/usePolPrice";
 import { ChessBoardPremium } from "@/components/ChessBoardPremium";
 import { GameSyncStatus } from "@/components/GameSyncStatus";
 import { GameVerificationPanel } from "@/components/GameVerificationPanel";
+import { GameChat, useChatMessages } from "@/components/GameChat";
 import { useGameSync, useTurnTimer, ChessMove } from "@/hooks/useGameSync";
 import { useWebRTCSync, GameMessage } from "@/hooks/useWebRTCSync";
 import { useTimeoutForfeit } from "@/hooks/useTimeoutForfeit";
@@ -31,6 +32,9 @@ const ChessGame = () => {
   const [, setFen] = useState(game.fen());
   const [moveHistory, setMoveHistory] = useState<Array<{ move: number; white: string; black: string }>>([]);
   const [gameEnded, setGameEnded] = useState(false);
+
+  // Chat messages
+  const { messages: chatMessages, sendMessage: addChatMessage, receiveMessage } = useChatMessages(address);
 
   const entryFeeFormatted = room ? formatEntryFee(room.entryFee) : "...";
   const prizePool = room ? (parseFloat(entryFeeFormatted) * room.maxPlayers * 0.95).toFixed(3) : "...";
@@ -86,8 +90,13 @@ const ChessGame = () => {
           description: "Your opponent has offered a draw.",
         });
         break;
+      case "chat":
+        if (message.payload && message.sender) {
+          receiveMessage(message.payload, message.sender);
+        }
+        break;
     }
-  }, [handleOpponentMove, handleOpponentResign, toast]);
+  }, [handleOpponentMove, handleOpponentResign, receiveMessage, toast]);
 
   // WebRTC P2P sync (primary)
   const {
@@ -97,6 +106,7 @@ const ChessGame = () => {
     sendMove: webrtcSendMove,
     sendResign: webrtcSendResign,
     sendDrawOffer: webrtcSendDrawOffer,
+    sendChat: webrtcSendChat,
     reconnect: webrtcReconnect,
     peerAddress,
   } = useWebRTCSync({
@@ -269,6 +279,14 @@ const ChessGame = () => {
     }
   }, [webrtcConnected, webrtcSendDrawOffer, bcSendDrawOffer]);
 
+  // Handle sending chat message
+  const handleSendChat = useCallback((text: string) => {
+    addChatMessage(text);
+    if (webrtcConnected) {
+      webrtcSendChat(text);
+    }
+  }, [addChatMessage, webrtcConnected, webrtcSendChat]);
+
   return (
     <div className="min-h-screen bg-background px-4 py-6">
       <div className="max-w-6xl mx-auto">
@@ -292,7 +310,7 @@ const ChessGame = () => {
         {/* Main Layout */}
         <div className="flex flex-col lg:flex-row gap-6">
           {/* LEFT COLUMN - Chess Board */}
-          <div className="flex-1 flex justify-center">
+          <div className="flex-1 flex flex-col items-center gap-4">
             <div className="w-full max-w-[min(100%,calc(100vh-280px))]">
               <ChessBoardPremium
                 game={game}
@@ -300,6 +318,13 @@ const ChessGame = () => {
                 disabled={gameEnded || !isMyTurn}
               />
             </div>
+            {/* Chat Button - below board */}
+            <GameChat
+              roomId={roomId || ""}
+              playerAddress={address}
+              onSendMessage={handleSendChat}
+              messages={chatMessages}
+            />
           </div>
 
           {/* RIGHT COLUMN - Info Panels */}

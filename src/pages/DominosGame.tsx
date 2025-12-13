@@ -4,6 +4,7 @@ import { Home, Flag, Handshake, Timer } from "lucide-react";
 import { useRoom, formatEntryFee, formatRoom, usePlayersOf } from "@/hooks/useRoomManager";
 import { usePolPrice } from "@/hooks/usePolPrice";
 import { GameSyncStatus } from "@/components/GameSyncStatus";
+import { GameChat, useChatMessages } from "@/components/GameChat";
 import { useGameSync, useTurnTimer, DominoMove } from "@/hooks/useGameSync";
 import { useWebRTCSync, GameMessage } from "@/hooks/useWebRTCSync";
 import { useTimeoutForfeit } from "@/hooks/useTimeoutForfeit";
@@ -38,6 +39,9 @@ const DominosGame = () => {
   const [selectedTile, setSelectedTile] = useState<number | null>(null);
   const [gameEnded, setGameEnded] = useState(false);
 
+  // Chat messages
+  const { messages: chatMessages, sendMessage: addChatMessage, receiveMessage } = useChatMessages(address);
+
   const entryFeeFormatted = room ? formatEntryFee(room.entryFee) : "...";
   const prizePool = room ? (parseFloat(entryFeeFormatted) * room.maxPlayers * 0.95).toFixed(3) : "...";
 
@@ -62,8 +66,13 @@ const DominosGame = () => {
       case "draw_offer":
         toast({ title: "Draw Offered", description: "Your opponent has offered a draw." });
         break;
+      case "chat":
+        if (message.payload && message.sender) {
+          receiveMessage(message.payload, message.sender);
+        }
+        break;
     }
-  }, [handleOpponentMove, handleOpponentResign, toast]);
+  }, [handleOpponentMove, handleOpponentResign, receiveMessage, toast]);
 
   // WebRTC P2P sync (primary)
   const {
@@ -72,6 +81,7 @@ const DominosGame = () => {
     sendMove: webrtcSendMove,
     sendResign: webrtcSendResign,
     sendDrawOffer: webrtcSendDrawOffer,
+    sendChat: webrtcSendChat,
     reconnect: webrtcReconnect,
     peerAddress,
   } = useWebRTCSync({
@@ -128,6 +138,14 @@ const DominosGame = () => {
     if (address) claimTimeoutVictory(address);
   }, [address, claimTimeoutVictory]);
 
+  // Handle sending chat message
+  const handleSendChat = useCallback((text: string) => {
+    addChatMessage(text);
+    if (webrtcConnected) {
+      webrtcSendChat(text);
+    }
+  }, [addChatMessage, webrtcConnected, webrtcSendChat]);
+
   return (
     <div className="min-h-screen bg-background px-4 py-6">
       <div className="max-w-6xl mx-auto">
@@ -143,7 +161,7 @@ const DominosGame = () => {
         </div>
 
         <div className="flex flex-col lg:flex-row gap-6">
-          <div className="flex-1">
+          <div className="flex-1 flex flex-col gap-4">
             <div className="mb-4">
               <p className="text-sm text-muted-foreground mb-2">Opponent's Hand</p>
               <div className="flex gap-1 justify-center">
@@ -175,6 +193,14 @@ const DominosGame = () => {
                 ))}
               </div>
             </div>
+            
+            {/* Chat Button - below board */}
+            <GameChat
+              roomId={roomId || ""}
+              playerAddress={address}
+              onSendMessage={handleSendChat}
+              messages={chatMessages}
+            />
           </div>
 
           <div className="w-full lg:w-72 space-y-4">
