@@ -171,3 +171,26 @@ export function formatTurnTime(turnTimeSec: number): string {
   if (turnTimeSec === 0) return "Unlimited";
   return `${turnTimeSec} sec`;
 }
+
+// Game ID to name mapping
+export const GAME_NAMES: Record<number, string> = {
+  1: "Chess",
+  2: "Dominos",
+  3: "Backgammon",
+  4: "Checkers",
+  5: "Ludo",
+};
+
+// Get game name from ID
+export function getGameName(gameId: number): string {
+  return GAME_NAMES[gameId] || `Game ${gameId}`;
+}
+
+// Game options for dropdown
+export const GAME_OPTIONS = [
+  { value: 1, label: "Chess" },
+  { value: 2, label: "Dominos" },
+  { value: 3, label: "Backgammon" },
+  { value: 4, label: "Checkers" },
+  { value: 5, label: "Ludo" },
+];
