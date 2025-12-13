@@ -8,39 +8,38 @@ interface LudoBoardProps {
   onTokenClick: (playerIndex: number, tokenIndex: number) => void;
 }
 
-const PLAYER_STYLES: Record<PlayerColor, { 
+const PLAYER_COLORS: Record<PlayerColor, { 
   bg: string;
-  fill: string;
-  border: string;
+  light: string;
+  dark: string;
   glow: string;
 }> = {
   gold: {
-    bg: "hsl(45 80% 50%)",
-    fill: "hsl(45 90% 60%)",
-    border: "hsl(45 70% 40%)",
+    bg: "#EAB308",
+    light: "#FDE047",
+    dark: "#A16207",
     glow: "rgba(251, 191, 36, 0.6)",
   },
   ruby: {
-    bg: "hsl(0 70% 50%)",
-    fill: "hsl(0 80% 55%)",
-    border: "hsl(0 60% 35%)",
+    bg: "#DC2626",
+    light: "#F87171",
+    dark: "#991B1B",
     glow: "rgba(239, 68, 68, 0.6)",
   },
   emerald: {
-    bg: "hsl(145 60% 40%)",
-    fill: "hsl(145 70% 50%)",
-    border: "hsl(145 50% 30%)",
+    bg: "#16A34A",
+    light: "#4ADE80",
+    dark: "#166534",
     glow: "rgba(16, 185, 129, 0.6)",
   },
   sapphire: {
-    bg: "hsl(220 70% 50%)",
-    fill: "hsl(220 80% 55%)",
-    border: "hsl(220 60% 35%)",
+    bg: "#2563EB",
+    light: "#60A5FA",
+    dark: "#1E40AF",
     glow: "rgba(59, 130, 246, 0.6)",
   },
 };
 
-// Corner symbols
 const CORNER_SYMBOLS: Record<PlayerColor, string> = {
   gold: "☥",
   ruby: "𓂀", 
@@ -48,283 +47,54 @@ const CORNER_SYMBOLS: Record<PlayerColor, string> = {
   sapphire: "△",
 };
 
-// Determine what each cell in 15x15 grid should be
-const getCellInfo = (row: number, col: number): { 
-  type: "path" | "home-area" | "center" | "empty" | "home-column"; 
-  color?: PlayerColor;
-  isStart?: boolean;
-  isSafe?: boolean;
-} => {
-  // Center 3x3 area (rows 6-8, cols 6-8) - the finish area
-  if (row >= 6 && row <= 8 && col >= 6 && col <= 8) {
-    return { type: "center" };
-  }
-  
-  // Home bases (4 corner 6x6 areas)
-  // Gold (top-left)
-  if (row >= 0 && row <= 5 && col >= 0 && col <= 5) {
-    return { type: "home-area", color: "gold" };
-  }
-  // Ruby (top-right)
-  if (row >= 0 && row <= 5 && col >= 9 && col <= 14) {
-    return { type: "home-area", color: "ruby" };
-  }
-  // Sapphire (bottom-right)
-  if (row >= 9 && row <= 14 && col >= 9 && col <= 14) {
-    return { type: "home-area", color: "sapphire" };
-  }
-  // Emerald (bottom-left)
-  if (row >= 9 && row <= 14 && col >= 0 && col <= 5) {
-    return { type: "home-area", color: "emerald" };
-  }
-  
-  // Home columns (colored paths leading to center)
-  // Gold: row 7, cols 1-5
-  if (row === 7 && col >= 1 && col <= 5) {
-    return { type: "home-column", color: "gold" };
-  }
-  // Ruby: rows 1-5, col 7
-  if (col === 7 && row >= 1 && row <= 5) {
-    return { type: "home-column", color: "ruby" };
-  }
-  // Sapphire: row 7, cols 9-13
-  if (row === 7 && col >= 9 && col <= 13) {
-    return { type: "home-column", color: "sapphire" };
-  }
-  // Emerald: rows 9-13, col 7
-  if (col === 7 && row >= 9 && row <= 13) {
-    return { type: "home-column", color: "emerald" };
-  }
-  
-  // Main track - the outer path
-  // Top horizontal (row 6, cols 0-5 and row 6, cols 9-14)
-  if (row === 6 && ((col >= 0 && col <= 5) || (col >= 9 && col <= 14))) {
-    // Start positions
-    if (row === 6 && col === 1) return { type: "path", color: "gold", isStart: true };
-    return { type: "path" };
-  }
-  // Bottom horizontal (row 8, cols 0-5 and row 8, cols 9-14)
-  if (row === 8 && ((col >= 0 && col <= 5) || (col >= 9 && col <= 14))) {
-    if (row === 8 && col === 13) return { type: "path", color: "sapphire", isStart: true };
-    return { type: "path" };
-  }
-  // Left vertical (col 6, rows 0-5 and col 6, rows 9-14)
-  if (col === 6 && ((row >= 0 && row <= 5) || (row >= 9 && row <= 14))) {
-    if (col === 6 && row === 13) return { type: "path", color: "emerald", isStart: true };
-    return { type: "path" };
-  }
-  // Right vertical (col 8, rows 0-5 and col 8, rows 9-14)
-  if (col === 8 && ((row >= 0 && row <= 5) || (row >= 9 && row <= 14))) {
-    if (col === 8 && row === 1) return { type: "path", color: "ruby", isStart: true };
-    return { type: "path" };
-  }
-  // Horizontal bridges (row 7, cols 0 and 14)
-  if (row === 7 && (col === 0 || col === 14)) {
-    return { type: "path" };
-  }
-  // Vertical bridges (col 7, rows 0 and 14)
-  if (col === 7 && (row === 0 || row === 14)) {
-    return { type: "path" };
-  }
-  
-  return { type: "empty" };
-};
-
-// Cell component
-const Cell = memo(({ 
-  row, 
-  col, 
-  type,
-  color,
-  isStart,
-}: { 
-  row: number; 
-  col: number; 
-  type: "path" | "home-area" | "center" | "empty" | "home-column";
-  color?: PlayerColor;
-  isStart?: boolean;
-}) => {
-  const style = color ? PLAYER_STYLES[color] : null;
-  
-  if (type === "empty") {
-    return <div className="w-full h-full bg-transparent" />;
-  }
-  
-  if (type === "center") {
-    // Center finish area - show logo only in middle cell
-    const isMiddle = row === 7 && col === 7;
-    
-    // Determine which triangle/arrow this cell is (for the 4 triangles pointing to center)
-    let triangleColor: PlayerColor | null = null;
-    if (row === 6 && col === 7) triangleColor = "ruby";
-    if (row === 8 && col === 7) triangleColor = "emerald";
-    if (row === 7 && col === 6) triangleColor = "gold";
-    if (row === 7 && col === 8) triangleColor = "sapphire";
-    
-    if (isMiddle) {
-      return (
-        <div 
-          className="w-full h-full flex items-center justify-center"
-          style={{ background: "linear-gradient(135deg, hsl(35 30% 18%) 0%, hsl(30 25% 14%) 100%)" }}
-        >
-          {/* Pyramid + circle logo */}
-          <div className="relative">
-            <div 
-              style={{
-                width: 0, height: 0,
-                borderLeft: '6px solid transparent',
-                borderRight: '6px solid transparent',
-                borderBottom: '10px solid hsl(45 70% 50%)',
-                filter: 'drop-shadow(0 0 4px rgba(251, 191, 36, 0.5))',
-              }}
-            />
-            <div 
-              className="absolute top-1/2 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full"
-              style={{
-                transform: 'translate(-50%, -10%)',
-                background: 'radial-gradient(circle at 30% 30%, hsl(45 90% 70%), hsl(45 80% 50%))',
-                boxShadow: '0 0 4px rgba(251, 191, 36, 0.8)',
-              }}
-            />
-          </div>
-        </div>
-      );
-    }
-    
-    if (triangleColor) {
-      const triangleStyle = PLAYER_STYLES[triangleColor];
-      return (
-        <div 
-          className="w-full h-full"
-          style={{ 
-            background: `linear-gradient(135deg, ${triangleStyle.bg}60 0%, ${triangleStyle.bg}30 100%)`,
-            borderColor: `${triangleStyle.border}40`,
-          }}
-        />
-      );
-    }
-    
-    // Corner cells of center
-    return (
-      <div 
-        className="w-full h-full"
-        style={{ background: "linear-gradient(135deg, hsl(35 25% 15%) 0%, hsl(30 20% 12%) 100%)" }}
-      />
-    );
-  }
-  
-  if (type === "home-area") {
-    return (
-      <div 
-        className="w-full h-full"
-        style={{
-          background: `linear-gradient(135deg, ${style?.bg}25 0%, ${style?.bg}15 100%)`,
-        }}
-      />
-    );
-  }
-  
-  if (type === "home-column") {
-    return (
-      <div 
-        className="w-full h-full border border-primary/10"
-        style={{
-          background: `linear-gradient(135deg, ${style?.bg}50 0%, ${style?.bg}30 100%)`,
-          boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.15)',
-        }}
-      />
-    );
-  }
-  
-  // Path cell
-  const hieroglyph = ["𓀀", "𓁀", "𓂀", "𓃀", "𓄀"][(row + col) % 5];
-  
-  return (
-    <div 
-      className="w-full h-full relative flex items-center justify-center border border-primary/15"
-      style={{
-        background: isStart && color
-          ? `linear-gradient(135deg, ${style?.bg}60 0%, ${style?.bg}40 100%)`
-          : "linear-gradient(135deg, hsl(40 30% 24%) 0%, hsl(35 25% 20%) 100%)",
-        boxShadow: isStart 
-          ? `inset 0 0 8px ${style?.glow || 'rgba(251, 191, 36, 0.3)'}`
-          : "inset 0 1px 2px rgba(0,0,0,0.15)",
-      }}
-    >
-      {/* Carved hieroglyph */}
-      <span 
-        className="absolute text-[5px] md:text-[7px] opacity-15 pointer-events-none"
-        style={{
-          textShadow: '0.5px 0.5px 1px rgba(0,0,0,0.5)',
-          color: 'rgba(251,191,36,0.4)',
-        }}
-      >
-        {hieroglyph}
-      </span>
-      {isStart && <span className="text-[8px] md:text-[10px] text-primary/70 z-10">★</span>}
-    </div>
-  );
-});
-
-// Token piece component
+// Token piece
 const TokenPiece = memo(({ 
   color, 
   isMovable, 
   onClick,
-  style: positionStyle,
+  left,
+  top,
+  cellSize,
 }: { 
   color: PlayerColor; 
   isMovable: boolean; 
   onClick: () => void;
-  style: React.CSSProperties;
+  left: number;
+  top: number;
+  cellSize: number;
 }) => {
-  const style = PLAYER_STYLES[color];
+  const colors = PLAYER_COLORS[color];
+  const size = cellSize * 0.75;
   
   return (
     <button
       onClick={onClick}
       disabled={!isMovable}
-      className={`
-        absolute
-        flex items-center justify-center
-        transition-all duration-500 ease-out
-        ${isMovable ? 'cursor-pointer z-20' : 'z-10'}
-      `}
+      className={`absolute transition-all duration-500 ease-out ${isMovable ? 'cursor-pointer z-20' : 'z-10'}`}
       style={{
-        ...positionStyle,
-        width: '75%',
-        height: '75%',
-        transform: 'translate(-50%, -50%)',
+        left: left - size / 2,
+        top: top - size / 2,
+        width: size,
+        height: size,
       }}
     >
-      {/* Gem pharaoh body */}
       <div 
-        className={`
-          w-full h-full rounded-sm
-          flex items-center justify-center
-          transition-transform duration-200
-          ${isMovable ? 'scale-110' : 'hover:scale-105'}
-        `}
+        className={`w-full h-full flex items-center justify-center transition-transform duration-200 ${isMovable ? 'scale-110' : 'hover:scale-105'}`}
         style={{
-          background: `linear-gradient(135deg, ${style.fill} 0%, ${style.bg} 50%, ${style.border} 100%)`,
+          background: `linear-gradient(135deg, ${colors.light} 0%, ${colors.bg} 50%, ${colors.dark} 100%)`,
           boxShadow: isMovable 
-            ? `0 0 10px ${style.glow}, 0 0 16px ${style.glow}`
-            : `0 2px 4px rgba(0,0,0,0.4), inset 0 1px 2px rgba(255,255,255,0.3)`,
+            ? `0 0 10px ${colors.glow}, 0 0 16px ${colors.glow}`
+            : `0 2px 4px rgba(0,0,0,0.5), inset 0 1px 2px rgba(255,255,255,0.3)`,
           clipPath: 'polygon(50% 5%, 88% 28%, 88% 88%, 50% 100%, 12% 88%, 12% 28%)',
-          border: `1px solid ${style.border}`,
+          border: `1px solid ${colors.dark}`,
         }}
       >
-        {/* Pharaoh silhouette */}
-        <svg viewBox="0 0 24 24" className="w-1/2 h-1/2 drop-shadow-sm" fill="rgba(0,0,0,0.3)">
-          <path d="M12 2L8 6v2l-2 2v3l2 2v5h8v-5l2-2v-3l-2-2V6l-4-4zm0 2l2 2v1h-4V6l2-2z"/>
+        <svg viewBox="0 0 24 24" className="w-1/2 h-1/2" fill="rgba(0,0,0,0.25)">
+          <path d="M12 2L8 6v2l-2 2v3l2 2v5h8v-5l2-2v-3l-2-2V6l-4-4z"/>
         </svg>
       </div>
-      
-      {/* Movable ring */}
       {isMovable && (
-        <div 
-          className="absolute inset-[-2px] rounded-full border-2 border-primary animate-pulse pointer-events-none"
-        />
+        <div className="absolute inset-[-3px] rounded-full border-2 border-yellow-400 animate-pulse pointer-events-none" />
       )}
     </button>
   );
@@ -337,13 +107,12 @@ const LudoBoard = memo(({
   onTokenClick,
 }: LudoBoardProps) => {
   const boardRef = useRef<HTMLDivElement>(null);
-  const [cellSize, setCellSize] = useState(0);
+  const [boardSize, setBoardSize] = useState(0);
   
   useEffect(() => {
     const updateSize = () => {
       if (boardRef.current) {
-        const size = boardRef.current.offsetWidth / 15;
-        setCellSize(size);
+        setBoardSize(boardRef.current.offsetWidth);
       }
     };
     updateSize();
@@ -351,26 +120,225 @@ const LudoBoard = memo(({
     return () => window.removeEventListener('resize', updateSize);
   }, []);
 
-  // Render 15x15 grid
-  const grid = [];
-  for (let row = 0; row < 15; row++) {
-    for (let col = 0; col < 15; col++) {
-      const { type, color, isStart, isSafe } = getCellInfo(row, col);
-      grid.push(
-        <Cell
-          key={`${row}-${col}`}
-          row={row}
-          col={col}
-          type={type}
-          color={color}
-          isStart={isStart}
-        />
-      );
+  const cellSize = boardSize / 15;
+  const pathCellStyle = "bg-[#3a3424] border border-[#5a4a34]";
+  const hieroglyphs = ["𓀀", "𓁀", "𓂀", "𓃀", "𓄀"];
+
+  // Render a single path cell
+  const PathCell = ({ row, col, colored, isStart }: { row: number; col: number; colored?: PlayerColor; isStart?: boolean }) => {
+    const colors = colored ? PLAYER_COLORS[colored] : null;
+    const h = hieroglyphs[(row + col) % 5];
+    return (
+      <div
+        className="absolute flex items-center justify-center border border-[#5a4a34]/50"
+        style={{
+          left: col * cellSize,
+          top: row * cellSize,
+          width: cellSize,
+          height: cellSize,
+          background: colored 
+            ? `linear-gradient(135deg, ${colors!.bg}88 0%, ${colors!.bg}55 100%)`
+            : 'linear-gradient(135deg, #3a3424 0%, #2e2a1e 100%)',
+          boxShadow: isStart ? `inset 0 0 8px ${colors?.glow || 'rgba(251,191,36,0.3)'}` : 'inset 0 1px 2px rgba(0,0,0,0.2)',
+        }}
+      >
+        <span className="text-[5px] md:text-[7px] opacity-20 text-amber-500/50 absolute">{h}</span>
+        {isStart && <span className="text-[8px] md:text-[10px] text-amber-400/80 z-10">★</span>}
+      </div>
+    );
+  };
+
+  // Render home base (corner colored area with 4 token slots)
+  const HomeBase = ({ color, startRow, startCol }: { color: PlayerColor; startRow: number; startCol: number }) => {
+    const colors = PLAYER_COLORS[color];
+    const size = cellSize * 6;
+    const innerSize = cellSize * 4;
+    const innerOffset = cellSize;
+    
+    return (
+      <div
+        className="absolute rounded-lg overflow-hidden"
+        style={{
+          left: startCol * cellSize,
+          top: startRow * cellSize,
+          width: size,
+          height: size,
+          background: `linear-gradient(135deg, ${colors.bg}40 0%, ${colors.bg}20 100%)`,
+          border: `2px solid ${colors.bg}60`,
+        }}
+      >
+        {/* Inner white/gold area for tokens */}
+        <div
+          className="absolute rounded-md"
+          style={{
+            left: innerOffset,
+            top: innerOffset,
+            width: innerSize,
+            height: innerSize,
+            background: 'linear-gradient(135deg, #4a4030 0%, #3a3424 100%)',
+            border: '2px solid #5a4a34',
+            boxShadow: 'inset 0 2px 6px rgba(0,0,0,0.3)',
+          }}
+        >
+          {/* 4 token slots in a 2x2 grid */}
+          {[0, 1, 2, 3].map((i) => {
+            const slotRow = Math.floor(i / 2);
+            const slotCol = i % 2;
+            const slotSize = cellSize * 1.2;
+            const spacing = (innerSize - slotSize * 2) / 3;
+            return (
+              <div
+                key={i}
+                className="absolute rounded-full"
+                style={{
+                  left: spacing + slotCol * (slotSize + spacing),
+                  top: spacing + slotRow * (slotSize + spacing),
+                  width: slotSize,
+                  height: slotSize,
+                  background: `radial-gradient(circle at 30% 30%, ${colors.light}40, ${colors.bg}30)`,
+                  border: `2px solid ${colors.bg}`,
+                  boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.3)',
+                }}
+              />
+            );
+          })}
+        </div>
+        
+        {/* Corner symbol */}
+        <div
+          className="absolute text-lg md:text-2xl"
+          style={{
+            top: '8%',
+            left: '8%',
+            color: `${colors.bg}90`,
+            textShadow: `0 0 8px ${colors.glow}`,
+          }}
+        >
+          {CORNER_SYMBOLS[color]}
+        </div>
+      </div>
+    );
+  };
+
+  // Build the path cells
+  const renderPath = () => {
+    if (cellSize === 0) return null;
+    
+    const cells: JSX.Element[] = [];
+    
+    // TOP ARM (rows 0-5, cols 6-8)
+    for (let row = 0; row <= 5; row++) {
+      for (let col = 6; col <= 8; col++) {
+        let colored: PlayerColor | undefined;
+        let isStart = false;
+        
+        if (col === 7) colored = "ruby"; // Home column
+        if (row === 1 && col === 8) { colored = "ruby"; isStart = true; }
+        
+        cells.push(<PathCell key={`${row}-${col}`} row={row} col={col} colored={colored} isStart={isStart} />);
+      }
     }
-  }
+    
+    // BOTTOM ARM (rows 9-14, cols 6-8)
+    for (let row = 9; row <= 14; row++) {
+      for (let col = 6; col <= 8; col++) {
+        let colored: PlayerColor | undefined;
+        let isStart = false;
+        
+        if (col === 7) colored = "emerald"; // Home column
+        if (row === 13 && col === 6) { colored = "emerald"; isStart = true; }
+        
+        cells.push(<PathCell key={`${row}-${col}`} row={row} col={col} colored={colored} isStart={isStart} />);
+      }
+    }
+    
+    // LEFT ARM (rows 6-8, cols 0-5)
+    for (let row = 6; row <= 8; row++) {
+      for (let col = 0; col <= 5; col++) {
+        let colored: PlayerColor | undefined;
+        let isStart = false;
+        
+        if (row === 7) colored = "gold"; // Home column
+        if (row === 6 && col === 1) { colored = "gold"; isStart = true; }
+        
+        cells.push(<PathCell key={`${row}-${col}`} row={row} col={col} colored={colored} isStart={isStart} />);
+      }
+    }
+    
+    // RIGHT ARM (rows 6-8, cols 9-14)
+    for (let row = 6; row <= 8; row++) {
+      for (let col = 9; col <= 14; col++) {
+        let colored: PlayerColor | undefined;
+        let isStart = false;
+        
+        if (row === 7) colored = "sapphire"; // Home column
+        if (row === 8 && col === 13) { colored = "sapphire"; isStart = true; }
+        
+        cells.push(<PathCell key={`${row}-${col}`} row={row} col={col} colored={colored} isStart={isStart} />);
+      }
+    }
+    
+    // CENTER 3x3 (rows 6-8, cols 6-8)
+    for (let row = 6; row <= 8; row++) {
+      for (let col = 6; col <= 8; col++) {
+        const isMiddle = row === 7 && col === 7;
+        let triangleColor: PlayerColor | undefined;
+        
+        if (row === 6 && col === 7) triangleColor = "ruby";
+        if (row === 8 && col === 7) triangleColor = "emerald";
+        if (row === 7 && col === 6) triangleColor = "gold";
+        if (row === 7 && col === 8) triangleColor = "sapphire";
+        
+        const colors = triangleColor ? PLAYER_COLORS[triangleColor] : null;
+        
+        cells.push(
+          <div
+            key={`center-${row}-${col}`}
+            className="absolute flex items-center justify-center"
+            style={{
+              left: col * cellSize,
+              top: row * cellSize,
+              width: cellSize,
+              height: cellSize,
+              background: triangleColor 
+                ? `linear-gradient(135deg, ${colors!.bg}60 0%, ${colors!.bg}30 100%)`
+                : 'linear-gradient(135deg, #2a261e 0%, #1e1a14 100%)',
+              border: '1px solid #4a4034',
+            }}
+          >
+            {isMiddle && (
+              <div className="relative">
+                <div 
+                  style={{
+                    width: 0, height: 0,
+                    borderLeft: '6px solid transparent',
+                    borderRight: '6px solid transparent',
+                    borderBottom: '10px solid #EAB308',
+                    filter: 'drop-shadow(0 0 4px rgba(251, 191, 36, 0.6))',
+                  }}
+                />
+                <div 
+                  className="absolute top-1/2 left-1/2 w-2 h-2 rounded-full"
+                  style={{
+                    transform: 'translate(-50%, -30%)',
+                    background: 'radial-gradient(circle at 30% 30%, #FDE047, #EAB308)',
+                    boxShadow: '0 0 6px rgba(251, 191, 36, 0.8)',
+                  }}
+                />
+              </div>
+            )}
+          </div>
+        );
+      }
+    }
+    
+    return cells;
+  };
 
   // Render tokens
   const renderTokens = () => {
+    if (cellSize === 0) return null;
+    
     const tokens: JSX.Element[] = [];
     
     players.forEach((player, playerIndex) => {
@@ -379,7 +347,6 @@ const LudoBoard = memo(({
         if (!coords) return;
         
         const isMovable = currentPlayerIndex === playerIndex && movableTokens.includes(tokenIndex);
-        
         const left = (coords[1] + 0.5) * cellSize;
         const top = (coords[0] + 0.5) * cellSize;
         
@@ -389,7 +356,9 @@ const LudoBoard = memo(({
             color={player.color}
             isMovable={isMovable}
             onClick={() => onTokenClick(playerIndex, tokenIndex)}
-            style={{ left, top }}
+            left={left}
+            top={top}
+            cellSize={cellSize}
           />
         );
       });
@@ -398,81 +367,41 @@ const LudoBoard = memo(({
     return tokens;
   };
 
-  // Render corner symbols in home areas
-  const renderCornerSymbols = () => {
-    const corners: { color: PlayerColor; row: number; col: number }[] = [
-      { color: "gold", row: 2.5, col: 2.5 },
-      { color: "ruby", row: 2.5, col: 11.5 },
-      { color: "sapphire", row: 11.5, col: 11.5 },
-      { color: "emerald", row: 11.5, col: 2.5 },
-    ];
-    
-    return corners.map(({ color, row, col }) => {
-      const style = PLAYER_STYLES[color];
-      const playerIdx = ["gold", "ruby", "sapphire", "emerald"].indexOf(color);
-      const isActive = playerIdx === currentPlayerIndex;
-      
-      return (
-        <div
-          key={`symbol-${color}`}
-          className="absolute flex items-center justify-center text-lg md:text-2xl pointer-events-none"
-          style={{
-            left: col * cellSize,
-            top: row * cellSize,
-            width: cellSize * 2,
-            height: cellSize * 2,
-            transform: 'translate(-50%, -50%)',
-            textShadow: isActive 
-              ? `0 0 8px ${style.glow}`
-              : '0 2px 4px rgba(0,0,0,0.5)',
-            color: isActive ? style.fill : 'rgba(251, 191, 36, 0.4)',
-            transition: 'all 0.3s ease',
-          }}
-        >
-          {CORNER_SYMBOLS[color]}
-        </div>
-      );
-    });
-  };
-
   return (
     <div className="relative w-full max-w-[min(85vw,380px)] md:max-w-[min(55vh,420px)] mx-auto aspect-square">
       <div 
         ref={boardRef}
         className="relative w-full h-full rounded-lg overflow-hidden"
         style={{
-          background: 'linear-gradient(135deg, hsl(40 35% 20%) 0%, hsl(30 30% 15%) 50%, hsl(35 25% 12%) 100%)',
-          boxShadow: `
-            0 0 30px rgba(251, 191, 36, 0.08),
-            0 8px 24px rgba(0, 0, 0, 0.4),
-            inset 0 1px 2px rgba(255, 255, 255, 0.04)
-          `,
-          border: '2px solid hsl(45 50% 35%)',
+          background: 'linear-gradient(135deg, #2e2a1e 0%, #252218 50%, #1e1a14 100%)',
+          boxShadow: '0 0 30px rgba(251, 191, 36, 0.08), 0 8px 24px rgba(0, 0, 0, 0.5)',
+          border: '3px solid #5a4a34',
         }}
       >
         {/* Subtle shimmer */}
         <div 
-          className="absolute inset-0 pointer-events-none opacity-[0.06]"
+          className="absolute inset-0 pointer-events-none opacity-[0.04]"
           style={{
-            background: 'linear-gradient(105deg, transparent 40%, rgba(251, 191, 36, 0.4) 50%, transparent 60%)',
-            animation: 'shimmer 10s ease-in-out infinite',
+            background: 'linear-gradient(105deg, transparent 40%, rgba(251, 191, 36, 0.5) 50%, transparent 60%)',
+            animation: 'shimmer 12s ease-in-out infinite',
           }}
         />
         
-        {/* Grid */}
-        <div className="absolute inset-0 grid grid-cols-[repeat(15,1fr)] grid-rows-[repeat(15,1fr)]">
-          {grid}
-        </div>
+        {/* Home bases */}
+        {boardSize > 0 && (
+          <>
+            <HomeBase color="gold" startRow={0} startCol={0} />
+            <HomeBase color="ruby" startRow={0} startCol={9} />
+            <HomeBase color="sapphire" startRow={9} startCol={9} />
+            <HomeBase color="emerald" startRow={9} startCol={0} />
+          </>
+        )}
+        
+        {/* Path cells */}
+        {renderPath()}
         
         {/* Tokens */}
-        <div className="absolute inset-0 pointer-events-none">
-          <div className="relative w-full h-full pointer-events-auto">
-            {cellSize > 0 && renderTokens()}
-          </div>
-        </div>
-        
-        {/* Corner symbols */}
-        {cellSize > 0 && renderCornerSymbols()}
+        {renderTokens()}
       </div>
       
       <style>{`
@@ -485,7 +414,6 @@ const LudoBoard = memo(({
   );
 });
 
-Cell.displayName = 'Cell';
 TokenPiece.displayName = 'TokenPiece';
 LudoBoard.displayName = 'LudoBoard';
 
