@@ -39,7 +39,7 @@ const GAME_IDS: Record<string, number> = {
 const PLATFORM_FEE_BPS = 500;
 
 // Minimum entry fee in USDT
-const MIN_ENTRY_FEE_USDT = 1;
+const MIN_ENTRY_FEE_USDT = 0.5;
 
 const CreateRoom = () => {
   const { open: openWalletModal } = useWeb3Modal();
@@ -284,9 +284,9 @@ const CreateRoom = () => {
               <Input
                 id="entryFee"
                 type="number"
-                placeholder="1.00"
+                placeholder="0.50"
                 min={MIN_ENTRY_FEE_USDT}
-                step="0.01"
+                step="0.1"
                 value={entryFee}
                 onChange={(e) => {
                   setEntryFee(e.target.value);
@@ -305,7 +305,7 @@ const CreateRoom = () => {
                 </p>
               )}
               <p className="text-sm text-muted-foreground">
-                Minimum ${MIN_ENTRY_FEE_USDT} USDT
+                Minimum $0.50 USDT
               </p>
             </div>
           </div>
