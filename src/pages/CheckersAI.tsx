@@ -384,74 +384,72 @@ const CheckersAI = () => {
   useEffect(() => {
     if (currentPlayer !== "obsidian" || gameOver) return;
     
+    let isCancelled = false;
     setIsAiThinking(true);
     
-    const executeAiMove = (currentBoard: (Piece | null)[][], lastPos?: Position) => {
-      const delay = difficulty === "easy" ? 300 : difficulty === "medium" ? 500 : 700;
+    const delay = difficulty === "easy" ? 400 : difficulty === "medium" ? 600 : 800;
+    
+    const runAiTurn = async () => {
+      await new Promise(r => setTimeout(r, delay));
+      if (isCancelled) return;
       
-      setTimeout(() => {
-        // If we have a lastPos, check for chain captures first
-        if (lastPos) {
-          const chainMoves = getCaptures(currentBoard, lastPos);
-          if (chainMoves.length > 0) {
-            // Continue chain capture
-            const chainMove = chainMoves[Math.floor(Math.random() * chainMoves.length)];
-            play('checkers_capture');
-            const newBoard = applyMove(currentBoard, chainMove);
-            setBoard(newBoard);
-            boardRef.current = newBoard;
-            
-            // Check for more captures
-            executeAiMove(newBoard, chainMove.to);
-            return;
-          }
-        }
+      let currentBoard = boardRef.current;
+      const move = getAiMove(currentBoard);
+      
+      if (!move) {
+        setGameOver("gold");
+        play('checkers_win');
+        setIsAiThinking(false);
+        return;
+      }
+      
+      // Play sound
+      if (move.captures && move.captures.length > 0) {
+        play('checkers_capture');
+      } else {
+        play('checkers_slide');
+      }
+      
+      let newBoard = applyMove(currentBoard, move);
+      setBoard(newBoard);
+      boardRef.current = newBoard;
+      
+      // Handle chain captures
+      if (move.captures && move.captures.length > 0) {
+        let currentPos = move.to;
+        let moreCaptures = getCaptures(newBoard, currentPos);
         
-        // No chain capture, make a normal move if this is the start
-        if (!lastPos) {
-          const move = getAiMove(currentBoard);
+        while (moreCaptures.length > 0 && !isCancelled) {
+          await new Promise(r => setTimeout(r, delay));
+          if (isCancelled) return;
           
-          if (!move) {
-            setGameOver("gold");
-            play('checkers_win');
-            setIsAiThinking(false);
-            return;
-          }
-          
-          // Play sound
-          if (move.captures && move.captures.length > 0) {
-            play('checkers_capture');
-          } else {
-            play('checkers_slide');
-          }
-          
-          const newBoard = applyMove(currentBoard, move);
+          const chainMove = moreCaptures[0];
+          play('checkers_capture');
+          newBoard = applyMove(newBoard, chainMove);
           setBoard(newBoard);
           boardRef.current = newBoard;
-          
-          // If this was a capture, check for chain
-          if (move.captures && move.captures.length > 0) {
-            executeAiMove(newBoard, move.to);
-            return;
-          }
+          currentPos = chainMove.to;
+          moreCaptures = getCaptures(newBoard, currentPos);
         }
-        
-        // End AI turn
-        const finalBoard = boardRef.current;
-        const result = checkGameOver(finalBoard);
-        if (result) {
-          setGameOver(result);
-          play(result === 'gold' ? 'checkers_win' : 'checkers_lose');
-        } else {
-          setCurrentPlayer("gold");
-        }
-        
-        setIsAiThinking(false);
-      }, delay);
+      }
+      
+      if (isCancelled) return;
+      
+      // End AI turn
+      const result = checkGameOver(newBoard);
+      if (result) {
+        setGameOver(result);
+        play(result === 'gold' ? 'checkers_win' : 'checkers_lose');
+      } else {
+        setCurrentPlayer("gold");
+      }
+      
+      setIsAiThinking(false);
     };
     
-    executeAiMove(boardRef.current);
+    runAiTurn();
     
+    return () => { isCancelled = true; };
   }, [currentPlayer, gameOver, difficulty, getAiMove, applyMove, checkGameOver, play, getCaptures]);
 
   const resetGame = () => {
