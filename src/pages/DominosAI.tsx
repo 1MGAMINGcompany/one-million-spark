@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, RotateCcw, Gem, Star } from "lucide-react";
 import DominoTile3D, { DominoTileBack } from "@/components/DominoTile3D";
 import { useSound } from "@/contexts/SoundContext";
+import { useTranslation } from "react-i18next";
 
 type Difficulty = "easy" | "medium" | "hard";
 
@@ -40,6 +41,7 @@ const shuffle = <T,>(array: T[]): T[] => {
 };
 
 const DominosAI = () => {
+  const { t } = useTranslation();
   const [searchParams] = useSearchParams();
   const { play } = useSound();
   const rawDifficulty = searchParams.get("difficulty");

@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, RotateCcw, Trophy, Gem, Star } from "lucide-react";
 import { useSound } from "@/contexts/SoundContext";
+import { useTranslation } from "react-i18next";
 
 type Difficulty = "easy" | "medium" | "hard";
 type Player = "gold" | "obsidian";
@@ -51,6 +52,7 @@ const initializeBoard = (): (Piece | null)[][] => {
 };
 
 const CheckersAI = () => {
+  const { t } = useTranslation();
   const [searchParams] = useSearchParams();
   const difficulty = (searchParams.get("difficulty") as Difficulty) || "medium";
   const { play } = useSound();

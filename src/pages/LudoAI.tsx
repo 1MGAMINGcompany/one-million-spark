@@ -4,12 +4,14 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, RotateCcw, Music, Music2, Volume2, VolumeX } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useSound } from "@/contexts/SoundContext";
+import { useTranslation } from "react-i18next";
 import LudoBoard from "@/components/ludo/LudoBoard";
 import EgyptianDice from "@/components/ludo/EgyptianDice";
 import TurnIndicator from "@/components/ludo/TurnIndicator";
 import { Difficulty, Player, PlayerColor, Token, initializePlayers, getTokenCoords } from "@/components/ludo/ludoTypes";
 
 const LudoAI = () => {
+  const { t } = useTranslation();
   const [searchParams] = useSearchParams();
   const difficulty = (searchParams.get("difficulty") as Difficulty) || "medium";
   const { play } = useSound();

@@ -6,6 +6,7 @@ import { useCaptureAnimations } from "@/components/CaptureAnimationLayer";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, RotateCcw, Gem, Star } from "lucide-react";
 import { useSound } from "@/contexts/SoundContext";
+import { useTranslation } from "react-i18next";
 import { createChessAI, type ChessAI as ChessAIType, type Difficulty } from "@/lib/chessEngine/stockfishEngine";
 
 // Helper to convert UCI move (e.g., "e2e4") to from/to squares
@@ -31,7 +32,7 @@ const AnimationToggle = ({
       className="flex items-center gap-3 group"
     >
       <span className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
-        Board Animations
+        {useTranslation().t('gameAI.boardAnimations')}
       </span>
       <div 
         className={`relative w-14 h-7 rounded-full transition-all duration-300 ${
@@ -77,6 +78,7 @@ const AnimationToggle = ({
 };
 
 const ChessAI = () => {
+  const { t } = useTranslation();
   const [searchParams] = useSearchParams();
   const { play } = useSound();
   const rawDifficulty = searchParams.get("difficulty");
