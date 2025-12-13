@@ -1,17 +1,18 @@
-import { useState, useCallback, useEffect, memo } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, RotateCcw, Star, Gem } from "lucide-react";
+import { toast } from "@/hooks/use-toast";
 import LudoBoard from "@/components/ludo/LudoBoard";
 import EgyptianDice from "@/components/ludo/EgyptianDice";
 import TurnIndicator from "@/components/ludo/TurnIndicator";
-import { Difficulty, Player, PlayerColor, initializePlayers } from "@/components/ludo/ludoTypes";
+import { Difficulty, Player, PlayerColor, Token, initializePlayers } from "@/components/ludo/ludoTypes";
 
 const LudoAI = () => {
   const [searchParams] = useSearchParams();
   const difficulty = (searchParams.get("difficulty") as Difficulty) || "medium";
   
-  const [players, setPlayers] = useState<Player[]>(initializePlayers);
+  const [players, setPlayers] = useState<Player[]>(() => initializePlayers());
   const [currentPlayerIndex, setCurrentPlayerIndex] = useState(0);
   const [diceValue, setDiceValue] = useState<number | null>(null);
   const [isRolling, setIsRolling] = useState(false);
@@ -40,37 +41,58 @@ const LudoAI = () => {
     return movable;
   }, []);
 
-  // Move a token
+  // Move a token - IMMUTABLE update to fix disappearing pieces bug
   const moveToken = useCallback((playerIndex: number, tokenIndex: number, dice: number) => {
-    setPlayers(prev => {
-      const newPlayers = prev.map((p, pi) => ({
-        ...p,
-        tokens: p.tokens.map((t, ti) => ({ ...t })),
+    setPlayers(prevPlayers => {
+      // Deep clone all players and their tokens immutably
+      const newPlayers: Player[] = prevPlayers.map((player, pIdx) => ({
+        ...player,
+        tokens: player.tokens.map((token) => ({ ...token })),
       }));
       
       const player = newPlayers[playerIndex];
       const token = player.tokens[tokenIndex];
       
+      // Calculate new position
+      const previousPosition = token.position;
+      let newPosition: number;
+      
       if (token.position === -1 && dice === 6) {
         // Move out of home
-        token.position = 0;
+        newPosition = 0;
       } else if (token.position >= 0) {
-        token.position += dice;
-        if (token.position > 57) token.position = 57;
+        newPosition = Math.min(token.position + dice, 57);
+      } else {
+        // Invalid move - should not happen
+        console.warn(`[LUDO] Invalid move attempt: token at ${token.position}, dice: ${dice}`);
+        return prevPlayers;
       }
       
+      // Update the token's position immutably
+      player.tokens[tokenIndex] = {
+        ...token,
+        position: newPosition,
+      };
+      
+      // Console log for debugging
+      console.log(`[LUDO MOVE] Player ${player.color} Token #${tokenIndex}: ${previousPosition} -> ${newPosition} (dice: ${dice})`);
+      
       // Check for captures (simplified - capture any opponent on same position)
-      const tokenBoardPos = token.position;
-      if (tokenBoardPos >= 0 && tokenBoardPos < 52) {
+      if (newPosition >= 0 && newPosition < 52) {
         newPlayers.forEach((otherPlayer, opi) => {
           if (opi !== playerIndex) {
-            otherPlayer.tokens.forEach(otherToken => {
+            otherPlayer.tokens.forEach((otherToken, oti) => {
               // Simplified capture logic
               if (otherToken.position >= 0 && otherToken.position < 52) {
-                const relativePos = (otherToken.position + newPlayers[opi].startPosition) % 52;
-                const myRelativePos = (tokenBoardPos + player.startPosition) % 52;
+                const relativePos = (otherToken.position + otherPlayer.startPosition) % 52;
+                const myRelativePos = (newPosition + player.startPosition) % 52;
                 if (relativePos === myRelativePos) {
-                  otherToken.position = -1; // Send back home
+                  // Capture - send back home immutably
+                  otherPlayer.tokens[oti] = {
+                    ...otherToken,
+                    position: -1,
+                  };
+                  console.log(`[LUDO CAPTURE] ${player.color} captured ${otherPlayer.color} token #${oti}`);
                 }
               }
             });
@@ -83,8 +105,8 @@ const LudoAI = () => {
   }, []);
 
   // Check for winner
-  const checkWinner = useCallback((players: Player[]): PlayerColor | null => {
-    for (const player of players) {
+  const checkWinner = useCallback((playersToCheck: Player[]): PlayerColor | null => {
+    for (const player of playersToCheck) {
       if (player.tokens.every(t => t.position === 57)) {
         return player.color;
       }
@@ -114,8 +136,15 @@ const LudoAI = () => {
         const movable = getMovableTokens(currentPlayer, finalValue);
         setMovableTokens(movable);
         
+        console.log(`[LUDO DICE] Player ${currentPlayer.color} rolled ${finalValue}, movable tokens: [${movable.join(', ')}]`);
+        
         if (movable.length === 0) {
           // No valid moves, next player
+          toast({
+            title: "No valid moves",
+            description: `${currentPlayer.isAI ? 'AI' : 'You'} cannot move any token.`,
+            duration: 1500,
+          });
           setTimeout(() => {
             setDiceValue(null);
             setCurrentPlayerIndex(prev => (prev + 1) % 4);
@@ -127,37 +156,74 @@ const LudoAI = () => {
             setDiceValue(null);
             setMovableTokens([]);
             
-            const winner = checkWinner(players);
-            if (winner) {
-              setGameOver(winner);
-            } else {
-              setCurrentPlayerIndex(prev => finalValue === 6 ? prev : (prev + 1) % 4);
-            }
+            setPlayers(current => {
+              const winner = checkWinner(current);
+              if (winner) {
+                setGameOver(winner);
+              } else {
+                setCurrentPlayerIndex(prev => finalValue === 6 ? prev : (prev + 1) % 4);
+              }
+              return current;
+            });
           }, 500);
         }
       }
     }, 100);
-  }, [isRolling, diceValue, currentPlayer, currentPlayerIndex, getMovableTokens, moveToken, checkWinner, players]);
+  }, [isRolling, diceValue, currentPlayer, currentPlayerIndex, getMovableTokens, moveToken, checkWinner]);
 
   // Handle token click (for human player)
-  const handleTokenClick = (playerIndex: number, tokenIndex: number) => {
-    if (playerIndex !== currentPlayerIndex) return;
-    if (currentPlayer.isAI || diceValue === null || isRolling) return;
-    if (!movableTokens.includes(tokenIndex)) return;
+  const handleTokenClick = useCallback((playerIndex: number, tokenIndex: number) => {
+    if (playerIndex !== currentPlayerIndex) {
+      console.log(`[LUDO] Click ignored: not current player's turn`);
+      return;
+    }
+    if (currentPlayer.isAI) {
+      console.log(`[LUDO] Click ignored: AI player`);
+      return;
+    }
+    if (diceValue === null) {
+      console.log(`[LUDO] Click ignored: no dice value`);
+      return;
+    }
+    if (isRolling) {
+      console.log(`[LUDO] Click ignored: dice still rolling`);
+      return;
+    }
+    if (!movableTokens.includes(tokenIndex)) {
+      console.log(`[LUDO] Illegal move: token ${tokenIndex} not in movable list [${movableTokens.join(', ')}]`);
+      toast({
+        title: "Illegal move",
+        description: "This token cannot move with the current dice roll.",
+        variant: "destructive",
+        duration: 2000,
+      });
+      return;
+    }
+    
+    const token = currentPlayer.tokens[tokenIndex];
+    console.log(`[LUDO] Human moving token #${tokenIndex} from position ${token.position}`);
     
     moveToken(currentPlayerIndex, tokenIndex, diceValue);
+    
+    const currentDice = diceValue;
     setDiceValue(null);
     setMovableTokens([]);
     
-    const winner = checkWinner(players);
-    if (winner) {
-      setGameOver(winner);
-    } else {
-      setCurrentPlayerIndex(prev => diceValue === 6 ? prev : (prev + 1) % 4);
-    }
-  };
+    // Use setTimeout to let state update complete before checking winner
+    setTimeout(() => {
+      setPlayers(current => {
+        const winner = checkWinner(current);
+        if (winner) {
+          setGameOver(winner);
+        } else {
+          setCurrentPlayerIndex(prev => currentDice === 6 ? prev : (prev + 1) % 4);
+        }
+        return current;
+      });
+    }, 50);
+  }, [currentPlayerIndex, currentPlayer, diceValue, isRolling, movableTokens, moveToken, checkWinner]);
 
-  // AI turn
+  // AI turn - trigger dice roll
   useEffect(() => {
     if (currentPlayer.isAI && !gameOver && diceValue === null && !isRolling) {
       const delay = difficulty === "easy" ? 800 : difficulty === "medium" ? 500 : 300;
@@ -166,7 +232,7 @@ const LudoAI = () => {
     }
   }, [currentPlayer.isAI, gameOver, diceValue, isRolling, rollDice, difficulty]);
 
-  // AI move selection
+  // AI move selection when multiple options available
   useEffect(() => {
     if (currentPlayer.isAI && diceValue !== null && !isRolling && movableTokens.length > 1) {
       const delay = difficulty === "easy" ? 600 : difficulty === "medium" ? 400 : 200;
@@ -191,30 +257,40 @@ const LudoAI = () => {
           chosenToken = tokens[0].index;
         }
         
-        moveToken(currentPlayerIndex, chosenToken, diceValue!);
+        console.log(`[LUDO AI] Choosing token ${chosenToken} from options [${movableTokens.join(', ')}]`);
+        
+        moveToken(currentPlayerIndex, chosenToken, diceValue);
+        
+        const currentDice = diceValue;
         setDiceValue(null);
         setMovableTokens([]);
         
-        const winner = checkWinner(players);
-        if (winner) {
-          setGameOver(winner);
-        } else {
-          setCurrentPlayerIndex(prev => diceValue === 6 ? prev : (prev + 1) % 4);
-        }
+        setTimeout(() => {
+          setPlayers(current => {
+            const winner = checkWinner(current);
+            if (winner) {
+              setGameOver(winner);
+            } else {
+              setCurrentPlayerIndex(prev => currentDice === 6 ? prev : (prev + 1) % 4);
+            }
+            return current;
+          });
+        }, 50);
       }, delay);
       
       return () => clearTimeout(timeout);
     }
-  }, [currentPlayer, diceValue, isRolling, movableTokens, difficulty, moveToken, currentPlayerIndex, checkWinner, players]);
+  }, [currentPlayer, diceValue, isRolling, movableTokens, difficulty, moveToken, currentPlayerIndex, checkWinner]);
 
-  const resetGame = () => {
+  const resetGame = useCallback(() => {
+    console.log('[LUDO] Game reset');
     setPlayers(initializePlayers());
     setCurrentPlayerIndex(0);
     setDiceValue(null);
     setIsRolling(false);
     setGameOver(null);
     setMovableTokens([]);
-  };
+  }, []);
 
   return (
     <div className="min-h-screen bg-background pb-8">
