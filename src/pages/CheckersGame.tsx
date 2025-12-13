@@ -1,4 +1,4 @@
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Home, Flag, Handshake, Timer } from "lucide-react";
@@ -6,6 +6,7 @@ import { useRoom, formatEntryFee, formatRoom, usePlayersOf } from "@/hooks/useRo
 import { usePolPrice } from "@/hooks/usePolPrice";
 import { GameSyncStatus } from "@/components/GameSyncStatus";
 import { GameChat, useChatMessages } from "@/components/GameChat";
+import { FinishGameButton } from "@/components/FinishGameButton";
 import { useGameSync, useTurnTimer } from "@/hooks/useGameSync";
 import { useWebRTCSync, GameMessage } from "@/hooks/useWebRTCSync";
 import { useTimeoutForfeit } from "@/hooks/useTimeoutForfeit";
@@ -59,6 +60,7 @@ const initializeBoard = (): (Piece | null)[][] => {
 
 const CheckersGame = () => {
   const { roomId } = useParams<{ roomId: string }>();
+  const navigate = useNavigate();
   const { t } = useTranslation();
   const { formatUsd } = usePolPrice();
   const { address } = useWallet();
@@ -69,6 +71,9 @@ const CheckersGame = () => {
   const { data: roomData } = useRoom(roomIdBigInt);
   const { data: players } = usePlayersOf(roomIdBigInt);
   const room = roomData ? formatRoom(roomData) : null;
+  
+  const isCreator = room && address && room.creator.toLowerCase() === address.toLowerCase();
+  const isRoomFull = room && (players?.length || 0) >= room.maxPlayers;
   
   const [board, setBoard] = useState<(Piece | null)[][]>(initializeBoard);
   const [selectedPiece, setSelectedPiece] = useState<Position | null>(null);
@@ -337,6 +342,16 @@ const CheckersGame = () => {
                 {t('game.resign')}
               </Button>
             </div>
+
+            {/* Finish Game & Pay Winner - Only visible to creator when game ends */}
+            {gameEnded && (
+              <FinishGameButton
+                roomId={roomIdBigInt || BigInt(0)}
+                isCreator={!!isCreator}
+                isRoomFull={!!isRoomFull}
+                onGameFinished={() => navigate("/")}
+              />
+            )}
           </div>
         </div>
 

@@ -1,4 +1,4 @@
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Home, Flag, Timer } from "lucide-react";
@@ -6,6 +6,7 @@ import { useRoom, formatEntryFee, formatRoom, usePlayersOf } from "@/hooks/useRo
 import { usePolPrice } from "@/hooks/usePolPrice";
 import { GameSyncStatus } from "@/components/GameSyncStatus";
 import { GameChat, useChatMessages } from "@/components/GameChat";
+import { FinishGameButton } from "@/components/FinishGameButton";
 import { useGameSync, useTurnTimer } from "@/hooks/useGameSync";
 import { useWebRTCSync, GameMessage } from "@/hooks/useWebRTCSync";
 import { useTimeoutForfeit } from "@/hooks/useTimeoutForfeit";
@@ -27,6 +28,7 @@ interface LudoMove {
 
 const LudoGame = () => {
   const { roomId } = useParams<{ roomId: string }>();
+  const navigate = useNavigate();
   const { t } = useTranslation();
   const { formatUsd } = usePolPrice();
   const { address } = useWallet();
@@ -37,6 +39,9 @@ const LudoGame = () => {
   const { data: roomData } = useRoom(roomIdBigInt);
   const { data: contractPlayers } = usePlayersOf(roomIdBigInt);
   const room = roomData ? formatRoom(roomData) : null;
+  
+  const isCreator = room && address && room.creator.toLowerCase() === address.toLowerCase();
+  const isRoomFull = room && (contractPlayers?.length || 0) >= room.maxPlayers;
   
   const [ludoPlayers, setLudoPlayers] = useState<Player[]>(() => initializePlayers());
   const [currentPlayerIndex, setCurrentPlayerIndex] = useState(0);
@@ -421,6 +426,16 @@ const LudoGame = () => {
               <Flag size={16} />
               {t('game.resign')}
             </Button>
+
+            {/* Finish Game & Pay Winner - Only visible to creator when game ends */}
+            {gameEnded && (
+              <FinishGameButton
+                roomId={roomIdBigInt || BigInt(0)}
+                isCreator={!!isCreator}
+                isRoomFull={!!isRoomFull}
+                onGameFinished={() => navigate("/")}
+              />
+            )}
           </div>
         </div>
 
