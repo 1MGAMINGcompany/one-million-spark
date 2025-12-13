@@ -398,29 +398,33 @@ const LudoAI = () => {
             onTokenClick={handleTokenClick}
           />
 
-          {/* Dice - Below board on mobile */}
-          <div className="flex md:hidden flex-col items-center gap-3 w-full">
-            <TurnIndicator
-              currentPlayer={currentPlayer.color}
-              isAI={currentPlayer.isAI}
-              isGameOver={!!gameOver}
-              winner={gameOver}
-            />
-            <EgyptianDice
-              value={diceValue}
-              isRolling={isRolling}
-              onRoll={rollDice}
-              disabled={isRolling || diceValue !== null || !!gameOver || isAnimating}
-              showRollButton={!currentPlayer.isAI && !gameOver && diceValue === null && !isAnimating}
-            />
-            {!currentPlayer.isAI && movableTokens.length > 0 && (
-              <p className="text-xs text-muted-foreground">Tap a glowing token to move</p>
-            )}
-            {currentPlayer.isAI && !gameOver && (
-              <p className="text-xs text-muted-foreground animate-pulse">
-                {isRolling ? "Rolling..." : isAnimating ? "Moving..." : diceValue ? "Thinking..." : "AI playing..."}
-              </p>
-            )}
+          {/* Dice - Below board on mobile, aligned left */}
+          <div className="flex md:hidden flex-row items-center gap-4 w-full px-2">
+            <div className="flex flex-col items-center gap-2">
+              <EgyptianDice
+                value={diceValue}
+                isRolling={isRolling}
+                onRoll={rollDice}
+                disabled={isRolling || diceValue !== null || !!gameOver || isAnimating}
+                showRollButton={!currentPlayer.isAI && !gameOver && diceValue === null && !isAnimating}
+              />
+            </div>
+            <div className="flex flex-col items-start gap-1">
+              <TurnIndicator
+                currentPlayer={currentPlayer.color}
+                isAI={currentPlayer.isAI}
+                isGameOver={!!gameOver}
+                winner={gameOver}
+              />
+              {!currentPlayer.isAI && movableTokens.length > 0 && (
+                <p className="text-xs text-muted-foreground">Tap a glowing token</p>
+              )}
+              {currentPlayer.isAI && !gameOver && (
+                <p className="text-xs text-muted-foreground animate-pulse">
+                  {isRolling ? "Rolling..." : isAnimating ? "Moving..." : diceValue ? "Thinking..." : "AI turn..."}
+                </p>
+              )}
+            </div>
           </div>
         </div>
       </div>
