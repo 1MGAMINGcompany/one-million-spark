@@ -85,7 +85,7 @@ const BackgammonAI = () => {
   const [remainingMoves, setRemainingMoves] = useState<number[]>([]);
   const [currentPlayer, setCurrentPlayer] = useState<Player>("player");
   const [selectedPoint, setSelectedPoint] = useState<number | null>(null);
-  const [gameStatus, setGameStatus] = useState("Roll the dice to start");
+  const [gameStatus, setGameStatus] = useState("");
   const [gameOver, setGameOver] = useState(false);
   const [isThinking, setIsThinking] = useState(false);
   const [validMoves, setValidMoves] = useState<number[]>([]);
@@ -102,11 +102,11 @@ const BackgammonAI = () => {
 
   const difficultyDescription = useMemo(() => {
     switch (difficulty) {
-      case "easy": return "Random moves";
-      case "medium": return "Moves toward home";
-      case "hard": return "Hits and stacks";
+      case "easy": return t('gameAI.randomMoves');
+      case "medium": return t('gameAI.movesTowardHome');
+      case "hard": return t('gameAI.hitsAndStacks');
     }
-  }, [difficulty]);
+  }, [difficulty, t]);
 
   // Apply a move with sound effects
   const applyMoveWithSound = useCallback((state: GameState, move: Move, player: Player): GameState => {
@@ -144,7 +144,7 @@ const BackgammonAI = () => {
     if (gameState.bar.player > 0) {
       const barMoves = getLegalMovesFromBar(gameState, moves, "player");
       if (barMoves.length === 0) {
-        setGameStatus("All entry points blocked - AI's turn");
+        setGameStatus(t('gameAI.allBlocked'));
         setTimeout(() => {
           setCurrentPlayer("ai");
           setDice([]);
@@ -152,21 +152,21 @@ const BackgammonAI = () => {
         }, 1500);
         return;
       }
-      setGameStatus("You have checkers on the bar - click the bar to re-enter");
+      setGameStatus(t('gameAI.barReenter'));
     } else {
-      setGameStatus("Your turn - select a checker");
+      setGameStatus(t('gameAI.selectChecker'));
     }
     
     const allMoves = getAllLegalMoves(gameState, moves, "player");
     if (allMoves.length === 0) {
-      setGameStatus("No legal moves - AI's turn");
+      setGameStatus(t('gameAI.noLegalMoves'));
       setTimeout(() => {
         setCurrentPlayer("ai");
         setDice([]);
         setRemainingMoves([]);
       }, 1000);
     }
-  }, [gameState, play]);
+  }, [gameState, play, t]);
 
   // Handle point click - simplified bar logic to avoid closure issues
   const handlePointClick = useCallback((pointIndex: number) => {
@@ -394,19 +394,19 @@ const BackgammonAI = () => {
       setRemainingMoves([]);
       
       if (currentState.bearOff.ai === 15) {
-        setGameStatus("You lose!");
+        setGameStatus(t('gameAI.youLose'));
         setGameOver(true);
         play('chess_lose');
       } else {
         setCurrentPlayer("player");
-        setGameStatus("Your turn - roll the dice");
+        setGameStatus(t('gameAI.yourTurnRoll'));
       }
     };
     
     setTimeout(() => {
       runAiTurn();
     }, 500);
-  }, [currentPlayer, gameOver, dice, gameState, difficulty, play]);
+  }, [currentPlayer, gameOver, dice, gameState, difficulty, play, t]);
 
   // Restart game
   const restartGame = useCallback(() => {
@@ -419,11 +419,11 @@ const BackgammonAI = () => {
     setRemainingMoves([]);
     setCurrentPlayer("player");
     setSelectedPoint(null);
-    setGameStatus("Roll the dice to start");
+    setGameStatus(t('gameAI.rollToStart'));
     setGameOver(false);
     setIsThinking(false);
     setValidMoves([]);
-  }, []);
+  }, [t]);
 
   // ============== DESKTOP POINT RENDERING ==============
   const renderDesktopPoint = (index: number, isTop: boolean) => {
@@ -720,7 +720,7 @@ const BackgammonAI = () => {
                 <Button asChild variant="ghost" size="sm" className="text-muted-foreground hover:text-primary group p-1">
                   <Link to="/play-ai" className="flex items-center gap-1">
                     <ArrowLeft size={16} className="group-hover:text-primary transition-colors" />
-                    <span>Back</span>
+                    <span>{t('gameAI.back')}</span>
                   </Link>
                 </Button>
               </div>
@@ -749,7 +749,7 @@ const BackgammonAI = () => {
                     backgroundClip: "text",
                   }}
                 >
-                  {isMobile ? "Backgammon" : "Backgammon Training – Temple of Precision"}
+                  {isMobile ? "Backgammon" : t('gameAI.backgammonTitle')}
                 </h1>
                 <Gem className={cn("text-primary", isMobile ? "w-3 h-3" : "w-4 h-4")} />
               </div>
@@ -760,7 +760,7 @@ const BackgammonAI = () => {
             {!isMobile && (
               <p className="text-center text-sm text-muted-foreground/60 mt-1">
                 <Star className="w-3 h-3 inline-block mr-1 text-primary/40" />
-                Free mode – no wallet required
+                {t('gameAI.freeMode')}
                 <Star className="w-3 h-3 inline-block ml-1 text-primary/40" />
               </p>
             )}
