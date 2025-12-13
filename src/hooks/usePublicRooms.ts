@@ -1,6 +1,6 @@
 import { useCallback, useState, useEffect } from "react";
 import { useReadContract } from "wagmi";
-import { ROOM_MANAGER_V4_ADDRESS, ROOM_MANAGER_V4_ABI, type ContractRoomV4 } from "@/contracts/roomManagerV4";
+import { ROOM_MANAGER_V5_ADDRESS, ROOM_MANAGER_V5_ABI, type ContractRoomV5 } from "@/contracts/roomManagerV5";
 import { createPublicClient, http } from "viem";
 import { polygon } from "viem/chains";
 
@@ -14,6 +14,7 @@ export type PublicRoom = {
   turnTimeSec: number;
   playerCount: number;
   isOpen: boolean;
+  isFinished: boolean;
 };
 
 // Create a public client for direct viem calls - Polygon mainnet
@@ -33,8 +34,8 @@ export function usePublicRooms() {
     isLoading: isLoadingLatestId,
     refetch: refetchLatestId,
   } = useReadContract({
-    address: ROOM_MANAGER_V4_ADDRESS,
-    abi: ROOM_MANAGER_V4_ABI,
+    address: ROOM_MANAGER_V5_ADDRESS,
+    abi: ROOM_MANAGER_V5_ABI,
     functionName: "latestRoomId",
     chainId: 137, // Polygon mainnet
   });
@@ -62,8 +63,8 @@ export function usePublicRooms() {
             try {
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               const roomResult = await (publicClient as any).readContract({
-                address: ROOM_MANAGER_V4_ADDRESS,
-                abi: ROOM_MANAGER_V4_ABI,
+                address: ROOM_MANAGER_V5_ADDRESS,
+                abi: ROOM_MANAGER_V5_ABI,
                 functionName: "getRoom",
                 args: [roomId],
               });
@@ -81,12 +82,13 @@ export function usePublicRooms() {
         for (const r of results) {
           if (r.status !== "success" || !r.result) continue;
           
-          // getRoom returns: [id, creator, entryFee, maxPlayers, isPrivate, platformFeeBps, gameId, turnTimeSec, playerCount, isOpen]
-          const [id, creator, entryFee, maxPlayers, isPrivate, , gameId, turnTimeSec, playerCount, isOpen] = r.result;
+          // getRoom returns: [id, creator, entryFee, maxPlayers, isPrivate, platformFeeBps, gameId, turnTimeSec, playerCount, isOpen, isFinished]
+          const [id, creator, entryFee, maxPlayers, isPrivate, , gameId, turnTimeSec, playerCount, isOpen, isFinished] = r.result;
           
-          // Only include public rooms that are open and have available slots
+          // Only include public rooms that are open, not finished, and have available slots
           if (isPrivate) continue;
           if (!isOpen) continue;
+          if (isFinished) continue;
           if (Number(playerCount) >= Number(maxPlayers)) continue;
           
           publicRooms.push({
@@ -99,6 +101,7 @@ export function usePublicRooms() {
             turnTimeSec: Number(turnTimeSec),
             playerCount: Number(playerCount),
             isOpen,
+            isFinished,
           });
         }
 

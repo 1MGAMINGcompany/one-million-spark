@@ -16,14 +16,13 @@ import { useWallet } from "@/hooks/useWallet";
 import { useToast } from "@/hooks/use-toast";
 import { useSound } from "@/contexts/SoundContext";
 import { 
-  useCreateRoomV4, 
-  useCancelRoomV4, 
-  useApproveUsdtV4, 
-  useUsdtAllowanceV4,
-  useLatestRoomIdV4,
+  useCreateRoomV5, 
+  useApproveUsdtV5, 
+  useUsdtAllowanceV5,
+  useLatestRoomIdV5,
   usdtToUnits,
-  getGameNameV4 
-} from "@/hooks/useRoomManagerV4";
+  getGameNameV5 
+} from "@/hooks/useRoomManagerV5";
 import { Loader2, AlertCircle, Wallet, CheckCircle2 } from "lucide-react";
 import { useWeb3Modal } from "@web3modal/wagmi/react";
 import { ShareInviteDialog } from "@/components/ShareInviteDialog";
@@ -71,9 +70,9 @@ const CreateRoom = () => {
     isSuccess: isApproveSuccess,
     error: approveError,
     reset: resetApprove 
-  } = useApproveUsdtV4();
+  } = useApproveUsdtV5();
 
-  const { data: currentAllowance, refetch: refetchAllowance } = useUsdtAllowanceV4(address as `0x${string}` | undefined);
+  const { data: currentAllowance, refetch: refetchAllowance } = useUsdtAllowanceV5(address as `0x${string}` | undefined);
 
   const { 
     createRoom, 
@@ -82,17 +81,9 @@ const CreateRoom = () => {
     isSuccess: isCreateSuccess, 
     error: createError, 
     reset: resetCreate 
-  } = useCreateRoomV4();
+  } = useCreateRoomV5();
 
-  const { data: latestRoomId, refetch: refetchLatestRoomId } = useLatestRoomIdV4();
-  
-  const { 
-    cancelRoom, 
-    isPending: isCancelPending, 
-    isConfirming: isCancelConfirming, 
-    isSuccess: isCancelSuccess,
-    reset: resetCancel 
-  } = useCancelRoomV4();
+  const { data: latestRoomId, refetch: refetchLatestRoomId } = useLatestRoomIdV5();
 
   const entryFeeNum = parseFloat(entryFee) || 0;
   const entryFeeUnits = usdtToUnits(entryFeeNum);
@@ -139,7 +130,7 @@ const CreateRoom = () => {
     if (isCreateSuccess) {
       play('room_create');
       const isPrivate = roomType === "private";
-      const gameName = getGameNameV4(GAME_IDS[gameType] || 1);
+      const gameName = getGameNameV5(GAME_IDS[gameType] || 1);
       
       requestPermission();
       
@@ -186,15 +177,6 @@ const CreateRoom = () => {
     }
   }, [createError, toast, resetCreate, t]);
 
-  useEffect(() => {
-    if (isCancelSuccess) {
-      toast({
-        title: t("createRoom.roomCancelled"),
-        description: t("createRoom.roomCancelledDesc"),
-      });
-      resetCancel();
-    }
-  }, [isCancelSuccess, toast, resetCancel, t]);
 
   const handleApproveUsdt = () => {
     if (!entryFee || entryFeeNum < MIN_ENTRY_FEE_USDT) {
