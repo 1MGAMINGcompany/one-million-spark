@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -42,6 +43,7 @@ const PLATFORM_FEE_BPS = 500;
 const MIN_ENTRY_FEE_USDT = 0.5;
 
 const CreateRoom = () => {
+  const { t } = useTranslation();
   const { open: openWalletModal } = useWeb3Modal();
   const navigate = useNavigate();
   const { isConnected, address } = useWallet();
@@ -51,7 +53,7 @@ const CreateRoom = () => {
   const [entryFee, setEntryFee] = useState("");
   const [players, setPlayers] = useState("2");
   const [roomType, setRoomType] = useState("public");
-  const [turnTimeSec, setTurnTimeSec] = useState("10"); // Default: 10 seconds
+  const [turnTimeSec, setTurnTimeSec] = useState("10");
   const [feeError, setFeeError] = useState<string | null>(null);
   const [showShareDialog, setShowShareDialog] = useState(false);
   const [createdRoomId, setCreatedRoomId] = useState<string | null>(null);
@@ -60,7 +62,6 @@ const CreateRoom = () => {
   
   const { requestPermission } = useNotificationPermission();
 
-  // USDT Approval hook (V4)
   const { 
     approve: approveUsdt, 
     isPending: isApprovePending, 
@@ -70,10 +71,8 @@ const CreateRoom = () => {
     reset: resetApprove 
   } = useApproveUsdtV4();
 
-  // Check current allowance (V4)
   const { data: currentAllowance, refetch: refetchAllowance } = useUsdtAllowanceV4(address as `0x${string}` | undefined);
 
-  // Create room hook (V4 USDT-based)
   const { 
     createRoom, 
     isPending: isCreatePending, 
@@ -83,10 +82,8 @@ const CreateRoom = () => {
     reset: resetCreate 
   } = useCreateRoomV4();
 
-  // Get latest room ID for fetching created room
   const { data: latestRoomId, refetch: refetchLatestRoomId } = useLatestRoomIdV4();
   
-  // Cancel room hook
   const { 
     cancelRoom, 
     isPending: isCancelPending, 
@@ -95,63 +92,55 @@ const CreateRoom = () => {
     reset: resetCancel 
   } = useCancelRoomV4();
 
-  // Parse entry fee as number
   const entryFeeNum = parseFloat(entryFee) || 0;
   const entryFeeUnits = usdtToUnits(entryFeeNum);
 
-  // Check if we have sufficient allowance
   const hasSufficientAllowance = currentAllowance !== undefined && currentAllowance >= entryFeeUnits && entryFeeNum > 0;
 
-  // Validate entry fee on change
   useEffect(() => {
     if (!entryFee) {
       setFeeError(null);
       return;
     }
     if (isNaN(entryFeeNum) || entryFeeNum < MIN_ENTRY_FEE_USDT) {
-      setFeeError(`Entry fee must be at least $${MIN_ENTRY_FEE_USDT} USDT`);
+      setFeeError(t("createRoom.feeError", { amount: MIN_ENTRY_FEE_USDT }));
     } else {
       setFeeError(null);
     }
-  }, [entryFee, entryFeeNum]);
+  }, [entryFee, entryFeeNum, t]);
 
-  // Handle approval success
   useEffect(() => {
     if (isApproveSuccess) {
       play('ui_click');
       toast({
-        title: "USDT Approved!",
-        description: "You can now create the room.",
+        title: t("createRoom.usdtApproved"),
+        description: t("createRoom.roomCreatedDesc"),
       });
       setApprovalStep('approved');
       resetApprove();
       refetchAllowance();
     }
-  }, [isApproveSuccess, play, toast, resetApprove, refetchAllowance]);
+  }, [isApproveSuccess, play, toast, resetApprove, refetchAllowance, t]);
 
-  // Handle approval error
   useEffect(() => {
     if (approveError) {
       toast({
-        title: "Approval Failed",
-        description: approveError.message || "Failed to approve USDT",
+        title: t("createRoom.approvalFailed"),
+        description: approveError.message || t("createRoom.approvalFailed"),
         variant: "destructive",
       });
       resetApprove();
     }
-  }, [approveError, toast, resetApprove]);
+  }, [approveError, toast, resetApprove, t]);
 
-  // Handle create room success
   useEffect(() => {
     if (isCreateSuccess) {
       play('room_create');
       const isPrivate = roomType === "private";
       const gameName = getGameNameV4(GAME_IDS[gameType] || 1);
       
-      // Request notification permission for room events
       requestPermission();
       
-      // Refetch latest room ID to get the created room
       refetchLatestRoomId().then((result) => {
         if (result.data && result.data > 0n) {
           const roomId = result.data.toString();
@@ -161,13 +150,13 @@ const CreateRoom = () => {
             setCreatedGameName(gameName);
             setShowShareDialog(true);
             toast({
-              title: "Private Room Created!",
-              description: "Share the invite link with friends to play.",
+              title: t("createRoom.privateRoomCreated"),
+              description: t("createRoom.privateRoomCreatedDesc"),
             });
           } else {
             toast({
-              title: "Room Created!",
-              description: "Your game room has been created. Redirecting to room list...",
+              title: t("createRoom.roomCreated"),
+              description: t("createRoom.roomCreatedDesc"),
             });
             setTimeout(() => {
               navigate("/room-list?refresh=1");
@@ -176,43 +165,40 @@ const CreateRoom = () => {
         }
       });
       
-      // Reset form
       setEntryFee("");
       setPlayers("2");
       setTurnTimeSec("10");
       setApprovalStep('idle');
       resetCreate();
     }
-  }, [isCreateSuccess, play, toast, resetCreate, refetchLatestRoomId, navigate, roomType, gameType, requestPermission]);
+  }, [isCreateSuccess, play, toast, resetCreate, refetchLatestRoomId, navigate, roomType, gameType, requestPermission, t]);
 
-  // Handle create room error
   useEffect(() => {
     if (createError) {
       toast({
-        title: "Transaction Failed",
-        description: createError.message || "Failed to create room",
+        title: t("createRoom.transactionFailed"),
+        description: createError.message || t("createRoom.transactionFailed"),
         variant: "destructive",
       });
       resetCreate();
     }
-  }, [createError, toast, resetCreate]);
+  }, [createError, toast, resetCreate, t]);
 
-  // Handle cancel room success
   useEffect(() => {
     if (isCancelSuccess) {
       toast({
-        title: "Room Cancelled",
-        description: "Your room has been cancelled.",
+        title: t("createRoom.roomCancelled"),
+        description: t("createRoom.roomCancelledDesc"),
       });
       resetCancel();
     }
-  }, [isCancelSuccess, toast, resetCancel]);
+  }, [isCancelSuccess, toast, resetCancel, t]);
 
   const handleApproveUsdt = () => {
     if (!entryFee || entryFeeNum < MIN_ENTRY_FEE_USDT) {
       toast({
-        title: "Invalid Entry Fee",
-        description: `Minimum entry fee is $${MIN_ENTRY_FEE_USDT} USDT`,
+        title: t("createRoom.invalidFee"),
+        description: t("createRoom.feeError", { amount: MIN_ENTRY_FEE_USDT }),
         variant: "destructive",
       });
       return;
@@ -224,8 +210,8 @@ const CreateRoom = () => {
   const handleCreateRoom = () => {
     if (!entryFee || entryFeeNum < MIN_ENTRY_FEE_USDT) {
       toast({
-        title: "Invalid Entry Fee",
-        description: `Minimum entry fee is $${MIN_ENTRY_FEE_USDT} USDT`,
+        title: t("createRoom.invalidFee"),
+        description: t("createRoom.feeError", { amount: MIN_ENTRY_FEE_USDT }),
         variant: "destructive",
       });
       return;
@@ -243,46 +229,45 @@ const CreateRoom = () => {
 
   const isApproveLoading = isApprovePending || isApproveConfirming;
   const isCreateLoading = isCreatePending || isCreateConfirming;
-  const isCancelLoading = isCancelPending || isCancelConfirming;
 
   const getApproveButtonText = () => {
-    if (isApprovePending) return "Confirm in Wallet...";
-    if (isApproveConfirming) return "Approving...";
-    return "Approve USDT";
+    if (isApprovePending) return t("createRoom.confirmInWallet");
+    if (isApproveConfirming) return t("createRoom.approving");
+    return t("createRoom.approveUsdt");
   };
 
   const getCreateButtonText = () => {
-    if (isCreatePending) return "Confirm in Wallet...";
-    if (isCreateConfirming) return "Creating Room...";
-    return "Create Room";
+    if (isCreatePending) return t("createRoom.confirmInWallet");
+    if (isCreateConfirming) return t("createRoom.creatingRoom");
+    return t("createRoom.step2Create");
   };
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center px-4 py-12">
       <div className="w-full max-w-md bg-card border border-border rounded-lg p-6 shadow-sm">
         <h1 className="text-2xl font-bold text-foreground mb-6 text-center">
-          Create Game Room
+          {t("createRoom.title")}
         </h1>
 
         <form className="space-y-5">
           {/* Game Type */}
           <div className="space-y-2">
-            <Label htmlFor="gameType">Game Type</Label>
+            <Label htmlFor="gameType">{t("createRoom.gameType")}</Label>
             <Select value={gameType} onValueChange={setGameType} disabled={isApproveLoading || isCreateLoading}>
               <SelectTrigger id="gameType" className="w-full">
-                <SelectValue placeholder="Select game" />
+                <SelectValue placeholder={t("createRoom.selectGame")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="chess">Chess</SelectItem>
-                <SelectItem value="dominos">Dominos</SelectItem>
-                <SelectItem value="backgammon">Backgammon</SelectItem>
+                <SelectItem value="chess">{t("games.chess")}</SelectItem>
+                <SelectItem value="dominos">{t("games.dominos")}</SelectItem>
+                <SelectItem value="backgammon">{t("games.backgammon")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           {/* Entry Fee (USDT) */}
           <div className="space-y-2">
-            <Label htmlFor="entryFee">Entry Fee (USDT)</Label>
+            <Label htmlFor="entryFee">{t("createRoom.entryFee")}</Label>
             <div className="flex-1 space-y-1">
               <Input
                 id="entryFee"
@@ -293,7 +278,6 @@ const CreateRoom = () => {
                 value={entryFee}
                 onChange={(e) => {
                   setEntryFee(e.target.value);
-                  // Reset approval step if fee changes
                   if (approvalStep === 'approved') {
                     setApprovalStep('idle');
                   }
@@ -308,45 +292,45 @@ const CreateRoom = () => {
                 </p>
               )}
               <p className="text-sm text-muted-foreground">
-                Minimum $0.50 USDT
+                {t("createRoom.minimumFee")}
               </p>
             </div>
           </div>
 
           {/* Number of Players */}
           <div className="space-y-2">
-            <Label htmlFor="players">Number of Players</Label>
+            <Label htmlFor="players">{t("createRoom.numPlayers")}</Label>
             <Select value={players} onValueChange={setPlayers} disabled={isApproveLoading || isCreateLoading}>
               <SelectTrigger id="players" className="w-full">
-                <SelectValue placeholder="Select players" />
+                <SelectValue placeholder={t("createRoom.selectPlayers")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="2">2 Players</SelectItem>
-                <SelectItem value="3">3 Players</SelectItem>
-                <SelectItem value="4">4 Players</SelectItem>
+                <SelectItem value="2">2 {t("createRoom.players")}</SelectItem>
+                <SelectItem value="3">3 {t("createRoom.players")}</SelectItem>
+                <SelectItem value="4">4 {t("createRoom.players")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           {/* Time per Turn */}
           <div className="space-y-2">
-            <Label htmlFor="turnTime">Time per Turn</Label>
+            <Label htmlFor="turnTime">{t("createRoom.timePerTurn")}</Label>
             <Select value={turnTimeSec} onValueChange={setTurnTimeSec} disabled={isApproveLoading || isCreateLoading}>
               <SelectTrigger id="turnTime" className="w-full">
-                <SelectValue placeholder="Select turn time" />
+                <SelectValue placeholder={t("createRoom.selectTime")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="5">5 sec</SelectItem>
-                <SelectItem value="10">10 sec</SelectItem>
-                <SelectItem value="15">15 sec</SelectItem>
-                <SelectItem value="0">Unlimited</SelectItem>
+                <SelectItem value="5">5 {t("common.sec")}</SelectItem>
+                <SelectItem value="10">10 {t("common.sec")}</SelectItem>
+                <SelectItem value="15">15 {t("common.sec")}</SelectItem>
+                <SelectItem value="0">{t("createRoom.unlimited")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           {/* Room Type */}
           <div className="space-y-3">
-            <Label>Room Type</Label>
+            <Label>{t("createRoom.roomType")}</Label>
             <RadioGroup 
               value={roomType} 
               onValueChange={setRoomType} 
@@ -356,13 +340,13 @@ const CreateRoom = () => {
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="public" id="public" />
                 <Label htmlFor="public" className="font-normal cursor-pointer">
-                  Public
+                  {t("createRoom.public")}
                 </Label>
               </div>
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="private" id="private" />
                 <Label htmlFor="private" className="font-normal cursor-pointer">
-                  Private
+                  {t("createRoom.private")}
                 </Label>
               </div>
             </RadioGroup>
@@ -377,7 +361,7 @@ const CreateRoom = () => {
               onClick={() => openWalletModal()}
             >
               <Wallet className="mr-2 h-4 w-4" />
-              Connect Wallet
+              {t("createRoom.connectWallet")}
             </Button>
           )}
 
@@ -401,10 +385,10 @@ const CreateRoom = () => {
                 ) : hasSufficientAllowance ? (
                   <>
                     <CheckCircle2 className="mr-2 h-4 w-4 text-green-500" />
-                    USDT Approved
+                    {t("createRoom.usdtApproved")}
                   </>
                 ) : (
-                  "Step 1: Approve USDT"
+                  t("createRoom.step1Approve")
                 )}
               </Button>
 
@@ -422,21 +406,20 @@ const CreateRoom = () => {
                     {getCreateButtonText()}
                   </>
                 ) : (
-                  "Step 2: Create Room"
+                  t("createRoom.step2Create")
                 )}
               </Button>
 
               {/* Instructions */}
               <div className="text-xs text-muted-foreground bg-muted/50 border border-border rounded-md p-3 space-y-1">
-                <p><strong>Step 1:</strong> Click "Approve USDT" once per entry fee amount.</p>
-                <p><strong>Step 2:</strong> After approval confirms, click "Create Room".</p>
+                <p><strong>{t("createRoom.step1Approve").split(':')[0]}:</strong> {t("createRoom.instructions1")}</p>
+                <p><strong>{t("createRoom.step2Create").split(':')[0]}:</strong> {t("createRoom.instructions2")}</p>
               </div>
             </div>
           )}
         </form>
       </div>
       
-      {/* Share Dialog for Private Rooms */}
       <ShareInviteDialog
         open={showShareDialog}
         onOpenChange={setShowShareDialog}
