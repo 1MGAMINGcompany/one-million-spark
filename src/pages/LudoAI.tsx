@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, RotateCcw } from "lucide-react";
+import { ArrowLeft, RotateCcw, Music, Music2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useSound } from "@/contexts/SoundContext";
 import LudoBoard from "@/components/ludo/LudoBoard";
@@ -21,9 +21,46 @@ const LudoAI = () => {
   const [gameOver, setGameOver] = useState<PlayerColor | null>(null);
   const [movableTokens, setMovableTokens] = useState<number[]>([]);
   const [isAnimating, setIsAnimating] = useState(false);
+  const [musicEnabled, setMusicEnabled] = useState(false);
   const animationRef = useRef<NodeJS.Timeout | null>(null);
+  const musicRef = useRef<HTMLAudioElement | null>(null);
 
   const currentPlayer = players[currentPlayerIndex];
+
+  // Background music control
+  useEffect(() => {
+    if (!musicRef.current) {
+      musicRef.current = new Audio('/sounds/ludo/background.mp3');
+      musicRef.current.loop = true;
+      musicRef.current.volume = 0.3;
+    }
+
+    if (musicEnabled) {
+      musicRef.current.play().catch(() => {});
+    } else {
+      musicRef.current.pause();
+    }
+
+    return () => {
+      if (musicRef.current) {
+        musicRef.current.pause();
+      }
+    };
+  }, [musicEnabled]);
+
+  // Cleanup music on unmount
+  useEffect(() => {
+    return () => {
+      if (musicRef.current) {
+        musicRef.current.pause();
+        musicRef.current = null;
+      }
+    };
+  }, []);
+
+  const toggleMusic = useCallback(() => {
+    setMusicEnabled(prev => !prev);
+  }, []);
 
   // Get movable tokens for current dice value
   const getMovableTokens = useCallback((player: Player, dice: number): number[] => {
@@ -398,6 +435,16 @@ const LudoAI = () => {
                 {isRolling ? "Rolling..." : isAnimating ? "Moving..." : diceValue ? "Thinking..." : "AI playing..."}
               </p>
             )}
+            {/* Music toggle - Desktop */}
+            <button
+              onClick={toggleMusic}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-primary/30 bg-card/50 hover:bg-card transition-colors text-xs"
+            >
+              {musicEnabled ? <Music2 size={14} className="text-primary" /> : <Music size={14} className="text-muted-foreground" />}
+              <span className={musicEnabled ? "text-primary" : "text-muted-foreground"}>
+                Music {musicEnabled ? "On" : "Off"}
+              </span>
+            </button>
           </div>
 
           {/* Board */}
@@ -409,7 +456,7 @@ const LudoAI = () => {
           />
 
           {/* Dice - Below board on mobile, aligned left */}
-          <div className="flex md:hidden flex-row items-center gap-4 w-full px-2">
+          <div className="flex md:hidden flex-row items-center gap-4 w-full px-2 relative">
             <div className="flex flex-col items-center gap-2">
               <EgyptianDice
                 value={diceValue}
@@ -419,7 +466,7 @@ const LudoAI = () => {
                 showRollButton={!currentPlayer.isAI && !gameOver && diceValue === null && !isAnimating}
               />
             </div>
-            <div className="flex flex-col items-start gap-1">
+            <div className="flex flex-col items-start gap-1 flex-1">
               <TurnIndicator
                 currentPlayer={currentPlayer.color}
                 isAI={currentPlayer.isAI}
@@ -435,6 +482,16 @@ const LudoAI = () => {
                 </p>
               )}
             </div>
+            {/* Music toggle - Mobile (bottom right) */}
+            <button
+              onClick={toggleMusic}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border border-primary/30 bg-card/50 hover:bg-card transition-colors text-xs"
+            >
+              {musicEnabled ? <Music2 size={14} className="text-primary" /> : <Music size={14} className="text-muted-foreground" />}
+              <span className={musicEnabled ? "text-primary" : "text-muted-foreground"}>
+                {musicEnabled ? "On" : "Off"}
+              </span>
+            </button>
           </div>
         </div>
       </div>
