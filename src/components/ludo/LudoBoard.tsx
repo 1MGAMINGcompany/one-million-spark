@@ -388,9 +388,9 @@ const LudoBoard = memo(({
         ref={boardRef}
         className="relative w-full h-full overflow-hidden"
         style={{
-          background: 'linear-gradient(145deg, #D4AF37 0%, #C9A227 25%, #B8922A 50%, #A6821E 75%, #8B7021 100%)',
-          boxShadow: '0 0 40px rgba(212, 175, 55, 0.25), 0 12px 32px rgba(0, 0, 0, 0.4), inset 0 2px 4px rgba(255,248,220,0.3)',
-          border: '4px solid #8B7021',
+          background: 'linear-gradient(145deg, #F4D03F 0%, #E6BE33 25%, #D4AF37 50%, #C9A227 75%, #B8922A 100%)',
+          boxShadow: '0 0 50px rgba(244, 208, 63, 0.3), 0 12px 32px rgba(0, 0, 0, 0.35), inset 0 2px 6px rgba(255,255,255,0.4)',
+          border: '4px solid #C9A227',
           borderRadius: '8px',
         }}
       >
