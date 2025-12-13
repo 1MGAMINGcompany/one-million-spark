@@ -1,5 +1,5 @@
-// USDT Contract on Polygon Mainnet
-export const USDT_ADDRESS = "0xC2132D05D31c914a87C6611C10748AEb04B58e8F" as const;
+// USDT Contract on Polygon Mainnet (correct checksum)
+export const USDT_ADDRESS = "0xc2132D05D31c914a87C6611C10748AEb04B58e8F" as const;
 
 export const USDT_ABI = [
   {
