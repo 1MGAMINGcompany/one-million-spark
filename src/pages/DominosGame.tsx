@@ -1,4 +1,5 @@
 import { useParams, Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Home, Flag, Handshake, Timer } from "lucide-react";
 import { useRoom, formatEntryFee, formatRoom, usePlayersOf } from "@/hooks/useRoomManager";
@@ -28,6 +29,7 @@ const DominosGame = () => {
   const { formatUsd } = usePolPrice();
   const { address } = useWallet();
   const { toast } = useToast();
+  const { t } = useTranslation();
   
   const roomIdBigInt = roomId ? BigInt(roomId) : undefined;
   const { data: roomData } = useRoom(roomIdBigInt);
@@ -51,8 +53,8 @@ const DominosGame = () => {
 
   const handleOpponentResign = useCallback(() => {
     setGameEnded(true);
-    toast({ title: "Opponent Resigned!", description: "You win!" });
-  }, [toast]);
+    toast({ title: t('game.opponentResigned'), description: t('game.youWin') });
+  }, [toast, t]);
 
   // Handle WebRTC messages
   const handleWebRTCMessage = useCallback((message: GameMessage) => {
@@ -64,7 +66,7 @@ const DominosGame = () => {
         handleOpponentResign();
         break;
       case "draw_offer":
-        toast({ title: "Draw Offered", description: "Your opponent has offered a draw." });
+        toast({ title: t('game.drawOffered'), description: t('game.drawOfferedDescription') });
         break;
       case "chat":
         if (message.payload && message.sender) {
@@ -116,7 +118,7 @@ const DominosGame = () => {
     isMyTurn,
     gameState?.turnTimeSeconds || 300,
     gameState?.turnStartedAt || Date.now(),
-    () => toast({ title: "Time's up!", variant: "destructive" })
+    () => toast({ title: t('game.timesUp'), variant: "destructive" })
   );
 
   // Timeout forfeit logic
@@ -151,19 +153,19 @@ const DominosGame = () => {
       <div className="max-w-6xl mx-auto">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-6 bg-card border border-border rounded-lg p-4">
           <div>
-            <h1 className="text-xl font-bold text-foreground">Dominos – Room #{roomId}</h1>
-            <p className="text-sm text-muted-foreground">Prize Pool: {prizePool} POL {room && `(~${formatUsd(parseFloat(prizePool))})`}</p>
+            <h1 className="text-xl font-bold text-foreground">{t('gameAI.dominos')} – {t('game.room')} #{roomId}</h1>
+            <p className="text-sm text-muted-foreground">{t('game.prizePool')}: {prizePool} POL {room && `(~${formatUsd(parseFloat(prizePool))})`}</p>
           </div>
           <div className="flex items-center gap-2 text-sm">
-            <span className="px-2 py-1 bg-primary/20 text-primary rounded">Your Turn</span>
-            <span className="text-muted-foreground">15s remaining</span>
+            <span className="px-2 py-1 bg-primary/20 text-primary rounded">{isMyTurn ? t('game.yourTurn') : t('game.opponentsTurn')}</span>
+            <span className="text-muted-foreground">{remainingTime}s {t('game.remaining')}</span>
           </div>
         </div>
 
         <div className="flex flex-col lg:flex-row gap-6">
           <div className="flex-1 flex flex-col gap-4">
             <div className="mb-4">
-              <p className="text-sm text-muted-foreground mb-2">Opponent's Hand</p>
+              <p className="text-sm text-muted-foreground mb-2">{t('game.opponentsHand')}</p>
               <div className="flex gap-1 justify-center">
                 {[1,2,3,4,5,6,7].map((i) => (
                   <div key={i} className="w-8 h-16 bg-gradient-to-br from-zinc-800 to-zinc-900 border border-primary/30 rounded" />
@@ -180,7 +182,7 @@ const DominosGame = () => {
             </div>
 
             <div className="mt-4">
-              <p className="text-sm text-muted-foreground mb-2">Your Hand</p>
+              <p className="text-sm text-muted-foreground mb-2">{t('game.yourHand')}</p>
               <div className="flex gap-2 justify-center flex-wrap">
                 {playerHand.map((tile, i) => (
                   <div
@@ -217,20 +219,20 @@ const DominosGame = () => {
             />
 
             <div className="bg-card border border-border rounded-lg p-4">
-              <h3 className="text-sm font-semibold text-muted-foreground mb-2">Game Status</h3>
+              <h3 className="text-sm font-semibold text-muted-foreground mb-2">{t('game.gameStatus')}</h3>
               <div className="space-y-2 text-sm">
-                <div className="flex justify-between"><span className="text-muted-foreground">Your tiles:</span><span className="text-foreground font-medium">{playerHand.length}</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Opponent tiles:</span><span className="text-foreground font-medium">7</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Draw pile:</span><span className="text-foreground font-medium">14</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">{t('game.yourTiles')}:</span><span className="text-foreground font-medium">{playerHand.length}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">{t('game.opponentTiles')}:</span><span className="text-foreground font-medium">7</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">{t('game.drawPile')}:</span><span className="text-foreground font-medium">14</span></div>
               </div>
             </div>
 
             <div className="bg-card border border-border rounded-lg p-4">
-              <h3 className="text-sm font-semibold text-muted-foreground mb-2">Move History</h3>
+              <h3 className="text-sm font-semibold text-muted-foreground mb-2">{t('game.moveHistory')}</h3>
               <div className="h-32 overflow-y-auto space-y-1 text-sm">
-                <div className="text-muted-foreground">1. You played [5|5]</div>
-                <div className="text-muted-foreground">2. Opponent played [5|3]</div>
-                <div className="text-muted-foreground">3. You played [3|1]</div>
+                <div className="text-muted-foreground">1. {t('game.youPlayed')} [5|5]</div>
+                <div className="text-muted-foreground">2. {t('game.opponentPlayed')} [5|3]</div>
+                <div className="text-muted-foreground">3. {t('game.youPlayed')} [3|1]</div>
               </div>
             </div>
 
@@ -241,15 +243,15 @@ const DominosGame = () => {
                 className="w-full gap-2 bg-green-600 hover:bg-green-700 text-white"
               >
                 <Timer size={16} />
-                {isClaiming ? "Claiming Victory..." : "Claim Timeout Victory"}
+                {isClaiming ? t('game.claimingVictory') : t('game.claimTimeoutVictory')}
               </Button>
             )}
 
             <div className="space-y-2">
-              <Button variant="outline" className="w-full" disabled>Draw from Pile</Button>
+              <Button variant="outline" className="w-full" disabled>{t('game.drawFromPile')}</Button>
               <div className="flex gap-2">
-                <Button variant="outline" className="flex-1 gap-2"><Handshake size={16} />Offer Draw</Button>
-                <Button variant="outline" className="flex-1 gap-2 text-destructive hover:text-destructive"><Flag size={16} />Resign</Button>
+                <Button variant="outline" className="flex-1 gap-2"><Handshake size={16} />{t('game.offerDraw')}</Button>
+                <Button variant="outline" className="flex-1 gap-2 text-destructive hover:text-destructive"><Flag size={16} />{t('game.resign')}</Button>
               </div>
             </div>
           </div>
@@ -257,17 +259,17 @@ const DominosGame = () => {
 
         <div className="flex justify-center mt-8">
           <Button variant="outline" size="lg" asChild>
-            <Link to="/"><Home size={18} className="mr-2" />Return to Lobby</Link>
+            <Link to="/"><Home size={18} className="mr-2" />{t('game.returnToLobby')}</Link>
           </Button>
         </div>
 
         <div className="mt-8 bg-card border border-border rounded-lg p-6">
-          <h3 className="text-lg font-semibold text-foreground mb-4">How It Works</h3>
+          <h3 className="text-lg font-semibold text-foreground mb-4">{t('game.howItWorks')}</h3>
           <ul className="space-y-2 text-muted-foreground text-sm">
-            <li className="flex items-start gap-2"><span className="text-primary mt-0.5">•</span>Win by playing all your tiles first, or having the lowest pip count when blocked.</li>
-            <li className="flex items-start gap-2"><span className="text-primary mt-0.5">•</span>Match tile ends to play – if you can't play, draw from the pile.</li>
-            <li className="flex items-start gap-2"><span className="text-primary mt-0.5">•</span>Entry fees are held in a smart contract until the result is confirmed.</li>
-            <li className="flex items-start gap-2"><span className="text-primary mt-0.5">•</span>Winner receives the prize pool minus a 5% platform fee.</li>
+            <li className="flex items-start gap-2"><span className="text-primary mt-0.5">•</span>{t('game.dominosWinCondition')}</li>
+            <li className="flex items-start gap-2"><span className="text-primary mt-0.5">•</span>{t('game.dominosMoveRules')}</li>
+            <li className="flex items-start gap-2"><span className="text-primary mt-0.5">•</span>{t('game.entryFeesHeld')}</li>
+            <li className="flex items-start gap-2"><span className="text-primary mt-0.5">•</span>{t('game.winnerReceives')}</li>
           </ul>
         </div>
       </div>

@@ -1,4 +1,5 @@
 import { useParams, Link, useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Home, Flag, Handshake, Timer } from "lucide-react";
 import { useRoom, formatEntryFee, formatRoom, usePlayersOf } from "@/hooks/useRoomManager";
@@ -22,6 +23,7 @@ const ChessGame = () => {
   const { formatUsd } = usePolPrice();
   const { address } = useWallet();
   const { toast } = useToast();
+  const { t } = useTranslation();
   
   const roomIdBigInt = roomId ? BigInt(roomId) : undefined;
   const { data: roomData } = useRoom(roomIdBigInt);
@@ -58,20 +60,20 @@ const ChessGame = () => {
     setGameEnded(true);
     const isWinner = winner?.toLowerCase() === address?.toLowerCase();
     toast({
-      title: isWinner ? "Victory!" : "Defeat",
+      title: isWinner ? t('game.victory') : t('game.defeat'),
       description: isWinner 
-        ? "You won! Winnings sent to your wallet." 
-        : "Better luck next time!",
+        ? t('game.victoryDescription') 
+        : t('game.defeatDescription'),
     });
-  }, [address, toast]);
+  }, [address, toast, t]);
 
   const handleOpponentResign = useCallback(() => {
     setGameEnded(true);
     toast({
-      title: "Opponent Resigned!",
-      description: "Your opponent has resigned. You win!",
+      title: t('game.opponentResigned'),
+      description: t('game.opponentResignedDescription'),
     });
-  }, [toast]);
+  }, [toast, t]);
 
   // Handle WebRTC messages
   const handleWebRTCMessage = useCallback((message: GameMessage) => {
@@ -86,8 +88,8 @@ const ChessGame = () => {
         break;
       case "draw_offer":
         toast({
-          title: "Draw Offered",
-          description: "Your opponent has offered a draw.",
+          title: t('game.drawOffered'),
+          description: t('game.drawOfferedDescription'),
         });
         break;
       case "chat":
@@ -149,8 +151,8 @@ const ChessGame = () => {
     gameState?.turnStartedAt || Date.now(),
     () => {
       toast({
-        title: "Time's up!",
-        description: "You ran out of time.",
+        title: t('game.timesUp'),
+        description: t('game.ranOutOfTime'),
         variant: "destructive",
       });
     }
@@ -211,8 +213,8 @@ const ChessGame = () => {
     // Only allow moves on your turn
     if (!isMyTurn && gameState?.status === "playing") {
       toast({
-        title: "Not your turn",
-        description: "Wait for your opponent to move.",
+        title: t('game.notYourTurn'),
+        description: t('game.waitForOpponent'),
         variant: "destructive",
       });
       return false;
@@ -257,7 +259,7 @@ const ChessGame = () => {
   }, [game, isMyTurn, gameState?.status, webrtcConnected, webrtcSendMove, bcSendMove, toast, updateMoveHistory]);
 
   const handleResign = useCallback(() => {
-    if (confirm("Are you sure you want to resign?")) {
+    if (confirm(t('game.confirmResign'))) {
       if (webrtcConnected) {
         webrtcSendResign();
       } else {
@@ -265,11 +267,11 @@ const ChessGame = () => {
       }
       setGameEnded(true);
       toast({
-        title: "You Resigned",
-        description: "The game is over.",
+        title: t('game.youResigned'),
+        description: t('game.gameOver'),
       });
     }
-  }, [webrtcConnected, webrtcSendResign, bcSendResign, toast]);
+  }, [webrtcConnected, webrtcSendResign, bcSendResign, toast, t]);
 
   const handleOfferDraw = useCallback(() => {
     if (webrtcConnected) {
@@ -294,15 +296,15 @@ const ChessGame = () => {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-6 bg-card border border-border rounded-lg p-4">
           <div>
             <h1 className="text-xl font-bold text-foreground">
-              Chess – Room #{roomId}
+              {t('gameAI.chess')} – {t('game.room')} #{roomId}
             </h1>
             <p className="text-sm text-muted-foreground">
-              Prize Pool: {prizePool} POL {room && `(~${formatUsd(parseFloat(prizePool))})`}
+              {t('game.prizePool')}: {prizePool} POL {room && `(~${formatUsd(parseFloat(prizePool))})`}
             </p>
           </div>
           <div className="flex items-center gap-2 text-sm">
             <span className={`px-2 py-1 rounded ${isMyTurn ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'}`}>
-              {isMyTurn ? 'Your turn' : "Opponent's turn"}
+              {isMyTurn ? t('game.yourTurn') : t('game.opponentsTurn')}
             </span>
           </div>
         </div>
@@ -344,23 +346,23 @@ const ChessGame = () => {
 
             {/* Game Status */}
             <div className="bg-card border border-border rounded-lg p-4">
-              <h3 className="text-sm font-semibold text-muted-foreground mb-2">Game Status</h3>
+              <h3 className="text-sm font-semibold text-muted-foreground mb-2">{t('game.gameStatus')}</h3>
               <p className="text-foreground font-medium">
-                {gameEnded ? "Game Over" :
-                 game.isCheckmate() ? "Checkmate!" : 
-                 game.isStalemate() ? "Stalemate!" :
-                 game.isDraw() ? "Draw!" :
-                 game.isCheck() ? "Check!" :
-                 `${game.turn() === 'w' ? 'White' : 'Black'} to move`}
+                {gameEnded ? t('game.gameOver') :
+                 game.isCheckmate() ? t('game.checkmate') : 
+                 game.isStalemate() ? t('game.stalemate') :
+                 game.isDraw() ? t('game.draw') :
+                 game.isCheck() ? t('game.check') :
+                 `${game.turn() === 'w' ? t('game.white') : t('game.black')} ${t('game.toMove')}`}
               </p>
             </div>
 
             {/* Move List */}
             <div className="bg-card border border-border rounded-lg p-4">
-              <h3 className="text-sm font-semibold text-muted-foreground mb-2">Move List</h3>
+              <h3 className="text-sm font-semibold text-muted-foreground mb-2">{t('game.moveList')}</h3>
               <div className="h-40 overflow-y-auto space-y-1 text-sm">
                 {moveHistory.length === 0 ? (
-                  <p className="text-muted-foreground">No moves yet</p>
+                  <p className="text-muted-foreground">{t('game.noMovesYet')}</p>
                 ) : (
                   moveHistory.map((m) => (
                     <div key={m.move} className="flex gap-2 text-foreground">
@@ -381,7 +383,7 @@ const ChessGame = () => {
                 className="w-full gap-2 bg-green-600 hover:bg-green-700 text-white"
               >
                 <Timer size={16} />
-                {isClaiming ? "Claiming Victory..." : "Claim Timeout Victory"}
+                {isClaiming ? t('game.claimingVictory') : t('game.claimTimeoutVictory')}
               </Button>
             )}
 
@@ -395,7 +397,7 @@ const ChessGame = () => {
                   disabled={!opponentConnected}
                 >
                   <Handshake size={16} />
-                  Offer Draw
+                  {t('game.offerDraw')}
                 </Button>
                 <Button 
                   variant="outline" 
@@ -403,7 +405,7 @@ const ChessGame = () => {
                   onClick={handleResign}
                 >
                   <Flag size={16} />
-                  Resign
+                  {t('game.resign')}
                 </Button>
               </div>
             )}
@@ -427,30 +429,30 @@ const ChessGame = () => {
           <Button variant="outline" size="lg" asChild>
             <Link to="/">
               <Home size={18} className="mr-2" />
-              Return to Lobby
+              {t('game.returnToLobby')}
             </Link>
           </Button>
         </div>
 
         {/* Game Info Box */}
         <div className="mt-8 bg-card border border-border rounded-lg p-6">
-          <h3 className="text-lg font-semibold text-foreground mb-4">How It Works</h3>
+          <h3 className="text-lg font-semibold text-foreground mb-4">{t('game.howItWorks')}</h3>
           <ul className="space-y-2 text-muted-foreground text-sm">
             <li className="flex items-start gap-2">
               <span className="text-primary mt-0.5">•</span>
-              Win by checkmate, opponent timeout, or resign.
+              {t('game.chessWinCondition')}
             </li>
             <li className="flex items-start gap-2">
               <span className="text-primary mt-0.5">•</span>
-              Games can be drawn by stalemate or mutual draw agreement.
+              {t('game.chessDrawCondition')}
             </li>
             <li className="flex items-start gap-2">
               <span className="text-primary mt-0.5">•</span>
-              Entry fees are held in a smart contract until the result is confirmed.
+              {t('game.entryFeesHeld')}
             </li>
             <li className="flex items-start gap-2">
               <span className="text-primary mt-0.5">•</span>
-              Winner receives the prize pool minus a 5% platform fee.
+              {t('game.winnerReceives')}
             </li>
           </ul>
         </div>
