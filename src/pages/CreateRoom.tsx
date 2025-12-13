@@ -29,11 +29,13 @@ import { useWeb3Modal } from "@web3modal/wagmi/react";
 import { ShareInviteDialog } from "@/components/ShareInviteDialog";
 import { useNotificationPermission } from "@/hooks/useRoomEvents";
 
-// Game ID mapping: Chess=1, Dominos=2, Backgammon=3
+// Game ID mapping: Chess=1, Dominos=2, Backgammon=3, Checkers=4, Ludo=5
 const GAME_IDS: Record<string, number> = {
   chess: 1,
   dominos: 2,
   backgammon: 3,
+  checkers: 4,
+  ludo: 5,
 };
 
 // Platform fee in basis points (500 = 5%)
@@ -261,6 +263,8 @@ const CreateRoom = () => {
                 <SelectItem value="chess">{t("games.chess")}</SelectItem>
                 <SelectItem value="dominos">{t("games.dominos")}</SelectItem>
                 <SelectItem value="backgammon">{t("games.backgammon")}</SelectItem>
+                <SelectItem value="checkers">{t("games.checkers")}</SelectItem>
+                <SelectItem value="ludo">{t("games.ludo")}</SelectItem>
               </SelectContent>
             </Select>
           </div>

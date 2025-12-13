@@ -283,6 +283,8 @@ export default function Room() {
                         1: `/game/chess/${roomId}`,
                         2: `/game/dominos/${roomId}`,
                         3: `/game/backgammon/${roomId}`,
+                        4: `/game/checkers/${roomId}`,
+                        5: `/game/ludo/${roomId}`,
                       };
                       const path = gamePaths[room?.gameId || 1] || `/game/chess/${roomId}`;
                       navigate(path);

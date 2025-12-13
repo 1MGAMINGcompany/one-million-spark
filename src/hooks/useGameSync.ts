@@ -47,7 +47,7 @@ export interface GameState {
 
 interface UseGameSyncOptions {
   roomId: string;
-  gameType: "chess" | "dominos" | "backgammon";
+  gameType: "chess" | "dominos" | "backgammon" | "checkers" | "ludo";
   onOpponentMove?: (move: GameMove) => void;
   onGameEnd?: (winner: string) => void;
   onOpponentResign?: () => void;
