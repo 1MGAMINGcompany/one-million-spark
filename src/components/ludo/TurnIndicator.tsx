@@ -56,41 +56,26 @@ const TurnIndicator = memo(({
   }
 
   return (
-    <div className="flex items-center justify-center gap-3 py-2">
-      {/* Animated scarab indicator */}
-      <div className="relative">
-        <div 
-          className={`
-            w-10 h-10 sm:w-12 sm:h-12 rounded-full
-            bg-gradient-to-br ${PLAYER_COLORS[currentPlayer]}
-            flex items-center justify-center
-            shadow-lg
-            ${!isAI ? 'ring-2 ring-primary ring-offset-2 ring-offset-background' : ''}
-          `}
-          style={{
-            boxShadow: `0 0 20px rgba(251, 191, 36, 0.3)`,
-          }}
-        >
-          <span className="text-lg sm:text-xl">{playerInfo.icon}</span>
-        </div>
-        
-        {/* Scarab orbiting animation */}
-        <div className="absolute -inset-1 pointer-events-none">
-          <div 
-            className="absolute w-full h-full animate-spin"
-            style={{ animationDuration: '3s' }}
-          >
-            <span className="absolute -top-1 left-1/2 -translate-x-1/2 text-xs opacity-60">𓆣</span>
-          </div>
-        </div>
+    <div className="flex flex-col md:flex-col items-center justify-center gap-2 py-2">
+      {/* Player icon */}
+      <div 
+        className={`
+          w-10 h-10 rounded-full
+          bg-gradient-to-br ${PLAYER_COLORS[currentPlayer]}
+          flex items-center justify-center
+          shadow-lg
+          ${!isAI ? 'ring-2 ring-primary ring-offset-1 ring-offset-background' : ''}
+        `}
+      >
+        <span className="text-lg">{playerInfo.icon}</span>
       </div>
       
-      <div className="flex flex-col">
+      <div className="flex flex-col items-center">
         <span className="text-[10px] text-muted-foreground uppercase tracking-wider">
           {isAI ? "AI's Turn" : "Your Turn"}
         </span>
         <span 
-          className={`text-lg sm:text-xl font-display font-semibold bg-gradient-to-r ${PLAYER_COLORS[currentPlayer]} bg-clip-text text-transparent`}
+          className={`text-sm font-display font-semibold bg-gradient-to-r ${PLAYER_COLORS[currentPlayer]} bg-clip-text text-transparent`}
         >
           {playerInfo.deity}
         </span>
