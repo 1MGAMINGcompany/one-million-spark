@@ -501,21 +501,21 @@ const CheckersAI = () => {
           <Button asChild variant="ghost" size="sm" className="mb-4 text-muted-foreground hover:text-primary">
             <Link to="/play-ai" className="flex items-center gap-2">
               <ArrowLeft size={18} />
-              Back to Lobby
+              {t('gameAI.backToTemple')}
             </Link>
           </Button>
           
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-3xl font-display font-bold bg-gradient-to-r from-primary via-gold-light to-accent bg-clip-text text-transparent">
-                Checkers vs AI
+                {t('gameAI.checkersTitle')}
               </h1>
-              <p className="text-muted-foreground capitalize">Difficulty: {difficulty}</p>
+              <p className="text-muted-foreground capitalize">{t('gameAI.difficulty')}: {difficulty}</p>
             </div>
             
             <Button onClick={resetGame} variant="outline" className="border-primary/30">
               <RotateCcw size={18} />
-              Reset
+              {t('gameAI.reset')}
             </Button>
           </div>
         </div>
@@ -529,12 +529,12 @@ const CheckersAI = () => {
             <div className="flex items-center justify-center gap-2 text-xl font-display">
               <Trophy className="w-6 h-6 text-primary" />
               <span className="text-primary">
-                {gameOver === "gold" ? "You Win!" : gameOver === "obsidian" ? "AI Wins!" : "Draw!"}
+                {gameOver === "gold" ? t('gameAI.youWin') : gameOver === "obsidian" ? t('gameAI.youLose') : t('gameAI.draw')}
               </span>
             </div>
           ) : (
             <p className="text-muted-foreground">
-              {isAiThinking ? "AI is thinking..." : "Your turn (Gold)"}
+              {isAiThinking ? t('gameAI.aiThinking') : t('gameAI.yourTurn')}
             </p>
           )}
         </div>

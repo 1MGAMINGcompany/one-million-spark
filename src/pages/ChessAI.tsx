@@ -88,7 +88,7 @@ const ChessAI = () => {
       : "easy";
 
   const [game, setGame] = useState(new Chess());
-  const [gameStatus, setGameStatus] = useState<string>("Your turn");
+  const [gameStatus, setGameStatus] = useState<string>("");
   const [moveHistory, setMoveHistory] = useState<string[]>([]);
   const [isThinking, setIsThinking] = useState(false);
   const [gameOver, setGameOver] = useState(false);
@@ -136,28 +136,28 @@ const ChessAI = () => {
 
   const difficultyDescription = useMemo(() => {
     switch (difficulty) {
-      case "easy": return "Stockfish - Beginner";
-      case "medium": return "Stockfish - Intermediate";
-      case "hard": return "Stockfish - Advanced";
+      case "easy": return t('gameAI.stockfishBeginner');
+      case "medium": return t('gameAI.stockfishIntermediate');
+      case "hard": return t('gameAI.stockfishAdvanced');
     }
-  }, [difficulty]);
+  }, [difficulty, t]);
 
   const checkGameOver = useCallback((currentGame: Chess) => {
     if (currentGame.isCheckmate()) {
       const isPlayerWin = currentGame.turn() !== "w";
-      const winner = isPlayerWin ? "You win!" : "You lose!";
+      const winner = isPlayerWin ? t('gameAI.youWin') : t('gameAI.youLose');
       setGameStatus(winner);
       setGameOver(true);
       play(isPlayerWin ? 'chess_win' : 'chess_lose');
       return true;
     }
     if (currentGame.isStalemate()) {
-      setGameStatus("Draw - Stalemate");
+      setGameStatus(t('gameAI.drawStalemate'));
       setGameOver(true);
       return true;
     }
     if (currentGame.isDraw()) {
-      setGameStatus("Draw");
+      setGameStatus(t('gameAI.draw'));
       setGameOver(true);
       return true;
     }
@@ -392,7 +392,7 @@ const ChessAI = () => {
             <Button asChild variant="ghost" size="sm" className="mb-4 text-muted-foreground hover:text-primary group">
               <Link to="/play-ai" className="flex items-center gap-2">
                 <ArrowLeft size={18} className="group-hover:text-primary transition-colors" />
-                Back to Temple
+                {t('gameAI.backToTemple')}
               </Link>
             </Button>
             
@@ -409,7 +409,7 @@ const ChessAI = () => {
                   backgroundClip: "text",
                 }}
               >
-                Chess Training – Temple of Strategy
+                {t('gameAI.chessTitle')}
               </h1>
               <Gem className="w-4 h-4 text-primary" />
               <div className="h-px w-8 bg-gradient-to-l from-transparent to-primary/50 hidden sm:block" />
@@ -417,7 +417,7 @@ const ChessAI = () => {
             
             <p className="text-center text-sm text-muted-foreground/60">
               <Star className="w-3 h-3 inline-block mr-1 text-primary/40" />
-              Free mode – no wallet required
+              {t('gameAI.freeMode')}
               <Star className="w-3 h-3 inline-block ml-1 text-primary/40" />
             </p>
           </div>
@@ -500,9 +500,9 @@ const ChessAI = () => {
                   <p 
                     className={`font-display font-bold text-xl ${
                       gameOver 
-                        ? gameStatus.includes("win") 
+                        ? gameStatus.includes(t('gameAI.youWin')) 
                           ? "text-green-400" 
-                          : gameStatus.includes("lose")
+                          : gameStatus.includes(t('gameAI.youLose'))
                           ? "text-red-400"
                           : "text-primary"
                         : isThinking
@@ -517,7 +517,7 @@ const ChessAI = () => {
                       textShadow: "0 0 30px hsl(45 93% 54% / 0.3)"
                     } : undefined}
                   >
-                    {gameStatus}
+                    {gameStatus || (isThinking ? t('gameAI.aiThinking') : t('gameAI.yourTurn'))}
                   </p>
                   {game.isCheck() && !gameOver && (
                     <p className="text-sm text-red-400/80 mt-1 font-medium animate-pulse">⚠ Check!</p>
@@ -540,7 +540,7 @@ const ChessAI = () => {
                   />
                 </div>
                 
-                <p className="text-xs text-primary/60 uppercase tracking-wider mb-3 font-medium">Difficulty</p>
+                <p className="text-xs text-primary/60 uppercase tracking-wider mb-3 font-medium">{t('gameAI.difficulty')}</p>
                 <div className="flex gap-1 p-1 bg-background/50 rounded-lg border border-primary/20">
                   {(["easy", "medium", "hard"] as const).map((level) => (
                     <div
@@ -570,18 +570,18 @@ const ChessAI = () => {
                   />
                 </div>
                 
-                <p className="text-xs text-primary/60 uppercase tracking-wider mb-3 font-medium">Game Info</p>
+                <p className="text-xs text-primary/60 uppercase tracking-wider mb-3 font-medium">{t('common.gameInfo') || 'Game Info'}</p>
                 <div className="text-sm space-y-2">
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">You</span>
-                    <span className="text-foreground font-medium">White ♔</span>
+                    <span className="text-muted-foreground">{t('common.you') || 'You'}</span>
+                    <span className="text-foreground font-medium">{t('gameAI.white')} ♔</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">AI</span>
-                    <span className="text-foreground font-medium">Black ♚</span>
+                    <span className="text-foreground font-medium">{t('gameAI.black')} ♚</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">Total Moves</span>
+                    <span className="text-muted-foreground">{t('common.totalMoves') || 'Total Moves'}</span>
                     <span className="text-primary font-medium">{moveHistory.length}</span>
                   </div>
                 </div>
@@ -599,10 +599,10 @@ const ChessAI = () => {
                   />
                 </div>
                 
-                <p className="text-xs text-primary/60 uppercase tracking-wider mb-3 font-medium">Move History</p>
+                <p className="text-xs text-primary/60 uppercase tracking-wider mb-3 font-medium">{t('gameAI.moveHistory')}</p>
                 <div className="max-h-48 overflow-y-auto scrollbar-thin scrollbar-thumb-primary/20 scrollbar-track-transparent">
                   {formattedMoves.length === 0 ? (
-                    <p className="text-sm text-muted-foreground/50 text-center py-4">No moves yet</p>
+                    <p className="text-sm text-muted-foreground/50 text-center py-4">{t('gameAI.noMoves')}</p>
                   ) : (
                     <div className="space-y-1 text-sm font-mono">
                       {formattedMoves.map((move) => (
@@ -624,7 +624,7 @@ const ChessAI = () => {
                 variant="outline"
               >
                 <RotateCcw size={18} className="text-primary group-hover:drop-shadow-[0_0_6px_hsl(45_93%_54%_/_0.6)] transition-all" />
-                Restart Game
+                {t('gameAI.restart')}
               </Button>
 
               <Button asChild variant="ghost" className="w-full text-muted-foreground hover:text-primary">

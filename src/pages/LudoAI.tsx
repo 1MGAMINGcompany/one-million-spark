@@ -400,22 +400,22 @@ const LudoAI = () => {
             <Button asChild variant="ghost" size="sm" className="text-muted-foreground hover:text-primary">
               <Link to="/play-ai" className="flex items-center gap-2">
                 <ArrowLeft size={18} />
-                <span className="hidden sm:inline">Back</span>
+                <span className="hidden sm:inline">{t('gameAI.back')}</span>
               </Link>
             </Button>
             <div>
               <h1 className="text-lg sm:text-xl font-display font-bold text-primary">
-                Ludo vs AI
+                {t('gameAI.ludoTitle')}
               </h1>
               <p className="text-xs text-muted-foreground capitalize">
-                {difficulty} difficulty
+                {difficulty} {t('gameAI.difficulty')}
               </p>
             </div>
           </div>
           
           <Button onClick={resetGame} variant="outline" size="sm" className="border-primary/30">
             <RotateCcw size={16} />
-            <span className="hidden sm:inline ml-1">Reset</span>
+            <span className="hidden sm:inline ml-1">{t('gameAI.reset')}</span>
           </Button>
         </div>
       </div>
@@ -441,12 +441,12 @@ const LudoAI = () => {
             />
             {!currentPlayer.isAI && movableTokens.length > 0 && (
               <p className="text-xs text-muted-foreground text-center">
-                Tap a glowing token
+                {t('gameAI.tapGlowingToken')}
               </p>
             )}
             {currentPlayer.isAI && !gameOver && (
               <p className="text-xs text-muted-foreground animate-pulse text-center">
-                {isRolling ? "Rolling..." : isAnimating ? "Moving..." : diceValue ? "Thinking..." : "AI playing..."}
+                {isRolling ? t('gameAI.rolling') : isAnimating ? t('gameAI.moving') : diceValue ? t('gameAI.thinking') : t('gameAI.aiPlaying')}
               </p>
             )}
             {/* Audio toggles - Desktop */}
@@ -457,7 +457,7 @@ const LudoAI = () => {
               >
                 {musicEnabled ? <Music2 size={14} className="text-primary" /> : <Music size={14} className="text-muted-foreground" />}
                 <span className={musicEnabled ? "text-primary" : "text-muted-foreground"}>
-                  Music {musicEnabled ? "On" : "Off"}
+                  {musicEnabled ? t('gameAI.musicOn') : t('gameAI.musicOff')}
                 </span>
               </button>
               <button
@@ -466,7 +466,7 @@ const LudoAI = () => {
               >
                 {sfxEnabled ? <Volume2 size={14} className="text-primary" /> : <VolumeX size={14} className="text-muted-foreground" />}
                 <span className={sfxEnabled ? "text-primary" : "text-muted-foreground"}>
-                  SFX {sfxEnabled ? "On" : "Off"}
+                  {sfxEnabled ? t('gameAI.sfxOn') : t('gameAI.sfxOff')}
                 </span>
               </button>
             </div>

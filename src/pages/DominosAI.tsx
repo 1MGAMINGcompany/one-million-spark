@@ -70,11 +70,11 @@ const DominosAI = () => {
 
   const difficultyDescription = useMemo(() => {
     switch (difficulty) {
-      case "easy": return "Random moves";
-      case "medium": return "Greedy strategy";
-      case "hard": return "Advanced tactics";
+      case "easy": return t('gameAI.randomMoves');
+      case "medium": return t('gameAI.greedyStrategy');
+      case "hard": return t('gameAI.advancedTactics');
     }
-  }, [difficulty]);
+  }, [difficulty, t]);
 
   // Initialize game
   const initGame = useCallback(() => {
@@ -84,11 +84,11 @@ const DominosAI = () => {
     setBoneyard(allDominos.slice(14));
     setChain([]);
     setIsPlayerTurn(true);
-    setGameStatus("Your turn - play any tile to start");
+    setGameStatus(t('gameAI.playAnyTile'));
     setGameOver(false);
     setSelectedDomino(null);
     setIsThinking(false);
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     initGame();
@@ -462,7 +462,7 @@ const DominosAI = () => {
             <Button asChild variant="ghost" size="sm" className="mb-4 text-muted-foreground hover:text-primary group">
               <Link to="/play-ai" className="flex items-center gap-2">
                 <ArrowLeft size={18} className="group-hover:text-primary transition-colors" />
-                Back to Temple
+                {t('gameAI.backToTemple')}
               </Link>
             </Button>
             
@@ -479,7 +479,7 @@ const DominosAI = () => {
                   backgroundClip: "text",
                 }}
               >
-                Dominos Training – Temple of Tactics
+                {t('gameAI.dominosTitle')}
               </h1>
               <Gem className="w-4 h-4 text-primary" />
               <div className="h-px w-8 bg-gradient-to-l from-transparent to-primary/50 hidden sm:block" />
@@ -487,7 +487,7 @@ const DominosAI = () => {
             
             <p className="text-center text-sm text-muted-foreground/60">
               <Star className="w-3 h-3 inline-block mr-1 text-primary/40" />
-              Free mode – no wallet required
+              {t('gameAI.freeMode')}
               <Star className="w-3 h-3 inline-block ml-1 text-primary/40" />
             </p>
           </div>
@@ -504,7 +504,7 @@ const DominosAI = () => {
                 {isThinking && (
                   <div className="absolute -top-3 left-1/2 -translate-x-1/2 flex items-center gap-2 px-3 py-1 rounded-full bg-background border border-primary/40 shadow-[0_0_15px_-3px_hsl(45_93%_54%_/_0.5)]">
                     <div className="w-2 h-2 rounded-full bg-primary animate-pulse shadow-[0_0_8px_2px_hsl(45_93%_54%_/_0.6)]" />
-                    <span className="text-xs text-primary font-medium">AI Thinking...</span>
+                    <span className="text-xs text-primary font-medium">{t('gameAI.aiThinking')}</span>
                   </div>
                 )}
                 
@@ -517,7 +517,7 @@ const DominosAI = () => {
                     }}
                   />
                 </div>
-                <p className="text-xs text-primary/60 uppercase tracking-wider mb-3 font-medium">AI's Hand ({aiHand.length} tiles)</p>
+                <p className="text-xs text-primary/60 uppercase tracking-wider mb-3 font-medium">{t('gameAI.aiTiles')} ({aiHand.length})</p>
                 <div className="flex flex-wrap gap-3 justify-center">
                   {aiHand.map((_, i) => (
                     <DominoTileBack key={i} isThinking={isThinking} />
@@ -601,7 +601,7 @@ const DominosAI = () => {
                     }}
                   />
                 </div>
-                <p className="text-xs text-primary/60 uppercase tracking-wider mb-2 md:mb-3 font-medium">Your Hand ({playerHand.length} tiles)</p>
+                <p className="text-xs text-primary/60 uppercase tracking-wider mb-2 md:mb-3 font-medium">{t('gameAI.yourHand')} ({playerHand.length})</p>
                 
                 {/* Desktop: single row flex */}
                 <div className="hidden md:flex flex-wrap gap-2 justify-center">
@@ -622,11 +622,11 @@ const DominosAI = () => {
                   <div className="flex gap-3 justify-center mt-3 md:mt-4">
                     {boneyard.length > 0 ? (
                       <Button variant="gold" size="sm" onClick={handleDraw}>
-                        Draw from Boneyard ({boneyard.length})
+                        {t('gameAI.drawTile')} ({t('gameAI.boneyard')}: {boneyard.length})
                       </Button>
                     ) : (
                       <Button variant="outline" size="sm" onClick={handlePass} className="border-primary/30 text-primary hover:bg-primary/10">
-                        Pass (no moves)
+                        {t('gameAI.pass')}
                       </Button>
                     )}
                   </div>
@@ -648,7 +648,7 @@ const DominosAI = () => {
                   />
                 </div>
                 
-                <p className="text-xs text-primary/60 uppercase tracking-wider mb-3 font-medium">Difficulty</p>
+                <p className="text-xs text-primary/60 uppercase tracking-wider mb-3 font-medium">{t('gameAI.difficulty')}</p>
                 <div className="flex gap-1 p-1 bg-background/50 rounded-lg border border-primary/20">
                   {(["easy", "medium", "hard"] as const).map((level) => (
                     <div
@@ -678,18 +678,18 @@ const DominosAI = () => {
                   />
                 </div>
                 
-                <p className="text-xs text-primary/60 uppercase tracking-wider mb-3 font-medium">Game Info</p>
+                <p className="text-xs text-primary/60 uppercase tracking-wider mb-3 font-medium">{t('common.gameInfo') || 'Game Info'}</p>
                 <div className="text-sm space-y-2">
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">Your tiles</span>
+                    <span className="text-muted-foreground">{t('gameAI.yourHand')}</span>
                     <span className="text-primary font-medium">{playerHand.length}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">AI tiles</span>
+                    <span className="text-muted-foreground">{t('gameAI.aiTiles')}</span>
                     <span className="text-foreground font-medium">{aiHand.length}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">Boneyard</span>
+                    <span className="text-muted-foreground">{t('gameAI.boneyard')}</span>
                     <span className="text-foreground font-medium">{boneyard.length}</span>
                   </div>
                 </div>
@@ -711,7 +711,7 @@ const DominosAI = () => {
                 <div className="space-y-2">
                   <Button onClick={initGame} className="w-full" variant="gold" size="sm">
                     <RotateCcw size={16} />
-                    Restart Game
+                    {t('gameAI.restart')}
                   </Button>
 
                   <Button asChild variant="ghost" size="sm" className="w-full text-muted-foreground hover:text-primary">
