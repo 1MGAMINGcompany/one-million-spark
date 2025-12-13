@@ -61,7 +61,8 @@ const CheckersAI = () => {
   const [validMoves, setValidMoves] = useState<Move[]>([]);
   const [gameOver, setGameOver] = useState<Player | "draw" | null>(null);
   const [isAiThinking, setIsAiThinking] = useState(false);
-  const [chainCapture, setChainCapture] = useState<Position | null>(null); // Track multi-jump
+  const [chainCapture, setChainCapture] = useState<Position | null>(null);
+  const [aiChainPos, setAiChainPos] = useState<Position | null>(null); // For AI chain captures
   
   // Use ref to always have access to latest board state
   const boardRef = useRef(board);
@@ -380,20 +381,15 @@ const CheckersAI = () => {
     }
   };
 
-  // AI turn - only trigger when it becomes AI's turn
+  // AI makes initial move
   useEffect(() => {
-    if (currentPlayer !== "obsidian" || gameOver) return;
+    if (currentPlayer !== "obsidian" || gameOver || aiChainPos !== null) return;
     
-    let isCancelled = false;
     setIsAiThinking(true);
-    
     const delay = difficulty === "easy" ? 400 : difficulty === "medium" ? 600 : 800;
     
-    const runAiTurn = async () => {
-      await new Promise(r => setTimeout(r, delay));
-      if (isCancelled) return;
-      
-      let currentBoard = boardRef.current;
+    const timeout = setTimeout(() => {
+      const currentBoard = boardRef.current;
       const move = getAiMove(currentBoard);
       
       if (!move) {
@@ -403,39 +399,26 @@ const CheckersAI = () => {
         return;
       }
       
-      // Play sound
       if (move.captures && move.captures.length > 0) {
         play('checkers_capture');
       } else {
         play('checkers_slide');
       }
       
-      let newBoard = applyMove(currentBoard, move);
+      const newBoard = applyMove(currentBoard, move);
       setBoard(newBoard);
       boardRef.current = newBoard;
       
-      // Handle chain captures
+      // Check for chain captures
       if (move.captures && move.captures.length > 0) {
-        let currentPos = move.to;
-        let moreCaptures = getCaptures(newBoard, currentPos);
-        
-        while (moreCaptures.length > 0 && !isCancelled) {
-          await new Promise(r => setTimeout(r, delay));
-          if (isCancelled) return;
-          
-          const chainMove = moreCaptures[0];
-          play('checkers_capture');
-          newBoard = applyMove(newBoard, chainMove);
-          setBoard(newBoard);
-          boardRef.current = newBoard;
-          currentPos = chainMove.to;
-          moreCaptures = getCaptures(newBoard, currentPos);
+        const moreCaptures = getCaptures(newBoard, move.to);
+        if (moreCaptures.length > 0) {
+          setAiChainPos(move.to);
+          return; // Will continue in next effect
         }
       }
       
-      if (isCancelled) return;
-      
-      // End AI turn
+      // No chain, end turn
       const result = checkGameOver(newBoard);
       if (result) {
         setGameOver(result);
@@ -443,14 +426,51 @@ const CheckersAI = () => {
       } else {
         setCurrentPlayer("gold");
       }
-      
       setIsAiThinking(false);
-    };
+    }, delay);
     
-    runAiTurn();
+    return () => clearTimeout(timeout);
+  }, [currentPlayer, gameOver, aiChainPos, difficulty, getAiMove, applyMove, checkGameOver, play, getCaptures]);
+
+  // AI continues chain captures
+  useEffect(() => {
+    if (aiChainPos === null || gameOver) return;
     
-    return () => { isCancelled = true; };
-  }, [currentPlayer, gameOver, difficulty, getAiMove, applyMove, checkGameOver, play, getCaptures]);
+    const delay = difficulty === "easy" ? 300 : difficulty === "medium" ? 500 : 600;
+    
+    const timeout = setTimeout(() => {
+      const currentBoard = boardRef.current;
+      const chainMoves = getCaptures(currentBoard, aiChainPos);
+      
+      if (chainMoves.length > 0) {
+        const chainMove = chainMoves[0];
+        play('checkers_capture');
+        const newBoard = applyMove(currentBoard, chainMove);
+        setBoard(newBoard);
+        boardRef.current = newBoard;
+        
+        // Check for more captures
+        const moreCaptures = getCaptures(newBoard, chainMove.to);
+        if (moreCaptures.length > 0) {
+          setAiChainPos(chainMove.to);
+          return;
+        }
+      }
+      
+      // Chain complete, end turn
+      setAiChainPos(null);
+      const result = checkGameOver(boardRef.current);
+      if (result) {
+        setGameOver(result);
+        play(result === 'gold' ? 'checkers_win' : 'checkers_lose');
+      } else {
+        setCurrentPlayer("gold");
+      }
+      setIsAiThinking(false);
+    }, delay);
+    
+    return () => clearTimeout(timeout);
+  }, [aiChainPos, gameOver, difficulty, applyMove, checkGameOver, play, getCaptures]);
 
   const resetGame = () => {
     setBoard(initializeBoard());
@@ -460,6 +480,7 @@ const CheckersAI = () => {
     setGameOver(null);
     setIsAiThinking(false);
     setChainCapture(null);
+    setAiChainPos(null);
   };
 
   const isValidMoveTarget = (row: number, col: number) => {
