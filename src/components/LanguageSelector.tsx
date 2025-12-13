@@ -1,0 +1,57 @@
+import { useState } from "react";
+import { useTranslation } from "react-i18next";
+import { Globe, Check } from "lucide-react";
+import { languages, type LanguageCode } from "@/i18n";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+
+const LanguageSelector = () => {
+  const { i18n } = useTranslation();
+  const [open, setOpen] = useState(false);
+
+  const currentLang = languages.find(l => l.code === i18n.language) || languages[0];
+
+  const handleLanguageChange = (code: LanguageCode) => {
+    i18n.changeLanguage(code);
+    // Update document direction for RTL languages
+    const lang = languages.find(l => l.code === code);
+    document.documentElement.dir = lang?.dir || 'ltr';
+    document.documentElement.lang = code;
+    setOpen(false);
+  };
+
+  return (
+    <DropdownMenu open={open} onOpenChange={setOpen}>
+      <DropdownMenuTrigger asChild>
+        <button
+          className="p-2 rounded-lg transition-all duration-200 text-primary hover:text-primary/80 hover:bg-secondary"
+          aria-label="Select language"
+        >
+          <Globe size={20} />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-48 bg-card border-border">
+        {languages.map((lang) => (
+          <DropdownMenuItem
+            key={lang.code}
+            onClick={() => handleLanguageChange(lang.code)}
+            className="flex items-center justify-between cursor-pointer"
+          >
+            <span className={lang.dir === 'rtl' ? 'font-arabic' : ''}>
+              {lang.nativeName}
+            </span>
+            {i18n.language === lang.code && (
+              <Check size={16} className="text-primary" />
+            )}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+};
+
+export default LanguageSelector;
