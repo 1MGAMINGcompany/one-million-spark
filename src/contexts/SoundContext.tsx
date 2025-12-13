@@ -31,8 +31,8 @@ const SOUND_FILES: Record<string, string> = {
   'backgammon_move': '/sounds/backgammon/move.m4a',
   'backgammon_bearoff': '/sounds/backgammon/bearoff.mp3',
   
-  // Ludo sounds (reusing existing assets)
-  'ludo_dice': '/sounds/backgammon/dice.mp3',
+  // Ludo sounds
+  'ludo_dice': '/sounds/ludo/dice.mp3',
   'ludo_move': '/sounds/chess/move.mp3',
   'ludo_capture': '/sounds/chess/capture.mp3',
   'ludo_win': '/sounds/chess/win.wav',
