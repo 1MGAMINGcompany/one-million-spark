@@ -1,4 +1,5 @@
 import { useParams, Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Home, Flag, Handshake, Dices, Timer } from "lucide-react";
 import { useRoom, formatEntryFee, formatRoom, usePlayersOf } from "@/hooks/useRoomManager";
@@ -51,6 +52,7 @@ const BackgammonGame = () => {
   const { formatUsd } = usePolPrice();
   const { address } = useWallet();
   const { toast } = useToast();
+  const { t } = useTranslation();
   
   const roomIdBigInt = roomId ? BigInt(roomId) : undefined;
   const { data: roomData } = useRoom(roomIdBigInt);
@@ -81,8 +83,8 @@ const BackgammonGame = () => {
 
   const handleOpponentResign = useCallback(() => {
     setGameEnded(true);
-    toast({ title: "Opponent Resigned!", description: "You win!" });
-  }, [toast]);
+    toast({ title: t('game.opponentResigned'), description: t('game.youWin') });
+  }, [toast, t]);
 
   const handleWebRTCMessage = useCallback((message: GameMessage) => {
     switch (message.type) {
@@ -93,7 +95,7 @@ const BackgammonGame = () => {
         handleOpponentResign();
         break;
       case "draw_offer":
-        toast({ title: "Draw Offered", description: "Your opponent has offered a draw." });
+        toast({ title: t('game.drawOffered'), description: t('game.drawOfferedDescription') });
         break;
       case "chat":
         if (message.payload && message.sender) {
@@ -137,7 +139,7 @@ const BackgammonGame = () => {
     isMyTurn,
     gameState?.turnTimeSeconds || 300,
     gameState?.turnStartedAt || Date.now(),
-    () => toast({ title: "Time's up!", variant: "destructive" })
+    () => toast({ title: t('game.timesUp'), variant: "destructive" })
   );
 
   // Timeout forfeit logic
@@ -161,7 +163,7 @@ const BackgammonGame = () => {
 
   const handleRollDice = () => {
     if (!isMyTurn && gameState?.status === "playing") {
-      toast({ title: "Not your turn", variant: "destructive" });
+      toast({ title: t('game.notYourTurn'), variant: "destructive" });
       return;
     }
     const d1 = Math.floor(Math.random() * 6) + 1;
@@ -185,15 +187,15 @@ const BackgammonGame = () => {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-6 bg-card border border-border rounded-lg p-4">
           <div>
             <h1 className="text-xl font-bold text-foreground">
-              Backgammon – Room #{roomId}
+              {t('gameAI.backgammon')} – {t('game.room')} #{roomId}
             </h1>
             <p className="text-sm text-muted-foreground">
-              Prize Pool: {prizePool} POL {room && `(~${formatUsd(parseFloat(prizePool))})`}
+              {t('game.prizePool')}: {prizePool} POL {room && `(~${formatUsd(parseFloat(prizePool))})`}
             </p>
           </div>
           <div className="flex items-center gap-2 text-sm">
-            <span className="px-2 py-1 bg-primary/20 text-primary rounded">Your Turn</span>
-            <span className="text-muted-foreground">15s remaining</span>
+            <span className="px-2 py-1 bg-primary/20 text-primary rounded">{isMyTurn ? t('game.yourTurn') : t('game.opponentsTurn')}</span>
+            <span className="text-muted-foreground">{remainingTime}s {t('game.remaining')}</span>
           </div>
         </div>
 
@@ -284,7 +286,7 @@ const BackgammonGame = () => {
               </div>
               <Button onClick={handleRollDice} className="gap-2">
                 <Dices size={18} />
-                Roll Dice
+                {t('gameAI.rollDice')}
               </Button>
             </div>
 
@@ -313,18 +315,18 @@ const BackgammonGame = () => {
 
             {/* Game Status */}
             <div className="bg-card border border-border rounded-lg p-4">
-              <h3 className="text-sm font-semibold text-muted-foreground mb-2">Game Status</h3>
+              <h3 className="text-sm font-semibold text-muted-foreground mb-2">{t('game.gameStatus')}</h3>
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Your checkers:</span>
-                  <span className="text-foreground font-medium">15 on board</span>
+                  <span className="text-muted-foreground">{t('game.yourCheckers')}:</span>
+                  <span className="text-foreground font-medium">15 {t('game.onBoard')}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Opponent:</span>
-                  <span className="text-foreground font-medium">15 on board</span>
+                  <span className="text-muted-foreground">{t('game.opponent')}:</span>
+                  <span className="text-foreground font-medium">15 {t('game.onBoard')}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Borne off:</span>
+                  <span className="text-muted-foreground">{t('game.borneOff')}:</span>
                   <span className="text-foreground font-medium">0 / 0</span>
                 </div>
               </div>
@@ -332,25 +334,25 @@ const BackgammonGame = () => {
 
             {/* Move History */}
             <div className="bg-card border border-border rounded-lg p-4">
-              <h3 className="text-sm font-semibold text-muted-foreground mb-2">Move History</h3>
+              <h3 className="text-sm font-semibold text-muted-foreground mb-2">{t('game.moveHistory')}</h3>
               <div className="h-32 overflow-y-auto space-y-1 text-sm">
-                <div className="text-muted-foreground">1. You rolled [4, 2]: 24→20, 13→11</div>
-                <div className="text-muted-foreground">2. Opponent rolled [6, 5]: 1→12</div>
-                <div className="text-muted-foreground">3. You rolled [3, 3]: ...</div>
+                <div className="text-muted-foreground">1. {t('game.youRolled')} [4, 2]: 24→20, 13→11</div>
+                <div className="text-muted-foreground">2. {t('game.opponentRolled')} [6, 5]: 1→12</div>
+                <div className="text-muted-foreground">3. {t('game.youRolled')} [3, 3]: ...</div>
               </div>
             </div>
 
             {/* Pip Count */}
             <div className="bg-card border border-border rounded-lg p-4">
-              <h3 className="text-sm font-semibold text-muted-foreground mb-2">Pip Count</h3>
+              <h3 className="text-sm font-semibold text-muted-foreground mb-2">{t('game.pipCount')}</h3>
               <div className="flex justify-between text-sm">
                 <div className="text-center">
                   <div className="text-lg font-bold text-primary">167</div>
-                  <div className="text-muted-foreground text-xs">You</div>
+                  <div className="text-muted-foreground text-xs">{t('game.you')}</div>
                 </div>
                 <div className="text-center">
                   <div className="text-lg font-bold text-foreground">167</div>
-                  <div className="text-muted-foreground text-xs">Opponent</div>
+                  <div className="text-muted-foreground text-xs">{t('game.opponent')}</div>
                 </div>
               </div>
             </div>
@@ -363,7 +365,7 @@ const BackgammonGame = () => {
                 className="w-full gap-2 bg-green-600 hover:bg-green-700 text-white"
               >
                 <Timer size={16} />
-                {isClaiming ? "Claiming Victory..." : "Claim Timeout Victory"}
+                {isClaiming ? t('game.claimingVictory') : t('game.claimTimeoutVictory')}
               </Button>
             )}
 
@@ -371,11 +373,11 @@ const BackgammonGame = () => {
             <div className="flex gap-2">
               <Button variant="outline" className="flex-1 gap-2">
                 <Handshake size={16} />
-                Offer Draw
+                {t('game.offerDraw')}
               </Button>
               <Button variant="outline" className="flex-1 gap-2 text-destructive hover:text-destructive">
                 <Flag size={16} />
-                Resign
+                {t('game.resign')}
               </Button>
             </div>
           </div>
@@ -386,30 +388,30 @@ const BackgammonGame = () => {
           <Button variant="outline" size="lg" asChild>
             <Link to="/">
               <Home size={18} className="mr-2" />
-              Return to Lobby
+              {t('game.returnToLobby')}
             </Link>
           </Button>
         </div>
 
         {/* Game Info Box */}
         <div className="mt-8 bg-card border border-border rounded-lg p-6">
-          <h3 className="text-lg font-semibold text-foreground mb-4">How It Works</h3>
+          <h3 className="text-lg font-semibold text-foreground mb-4">{t('game.howItWorks')}</h3>
           <ul className="space-y-2 text-muted-foreground text-sm">
             <li className="flex items-start gap-2">
               <span className="text-primary mt-0.5">•</span>
-              Win by bearing off all 15 checkers before your opponent.
+              {t('game.backgammonWinCondition')}
             </li>
             <li className="flex items-start gap-2">
               <span className="text-primary mt-0.5">•</span>
-              Move checkers according to dice rolls. Hit opponent's blots to send them to the bar.
+              {t('game.backgammonMoveRules')}
             </li>
             <li className="flex items-start gap-2">
               <span className="text-primary mt-0.5">•</span>
-              Entry fees are held in a smart contract until the result is confirmed.
+              {t('game.entryFeesHeld')}
             </li>
             <li className="flex items-start gap-2">
               <span className="text-primary mt-0.5">•</span>
-              Winner receives the prize pool minus a 5% platform fee.
+              {t('game.winnerReceives')}
             </li>
           </ul>
         </div>
