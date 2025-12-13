@@ -1,4 +1,4 @@
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Home, Flag, Handshake, Dices, Timer } from "lucide-react";
@@ -6,6 +6,7 @@ import { useRoom, formatEntryFee, formatRoom, usePlayersOf } from "@/hooks/useRo
 import { usePolPrice } from "@/hooks/usePolPrice";
 import { GameSyncStatus } from "@/components/GameSyncStatus";
 import { GameChat, useChatMessages } from "@/components/GameChat";
+import { FinishGameButton } from "@/components/FinishGameButton";
 import { useGameSync, useTurnTimer, BackgammonMove } from "@/hooks/useGameSync";
 import { useWebRTCSync, GameMessage } from "@/hooks/useWebRTCSync";
 import { useTimeoutForfeit } from "@/hooks/useTimeoutForfeit";
@@ -49,6 +50,7 @@ const Die3D = ({ value, color = "ivory" }: { value: number; color?: "ivory" | "o
 
 const BackgammonGame = () => {
   const { roomId } = useParams<{ roomId: string }>();
+  const navigate = useNavigate();
   const { formatUsd } = usePolPrice();
   const { address } = useWallet();
   const { toast } = useToast();
@@ -58,6 +60,9 @@ const BackgammonGame = () => {
   const { data: roomData } = useRoom(roomIdBigInt);
   const { data: players } = usePlayersOf(roomIdBigInt);
   const room = roomData ? formatRoom(roomData) : null;
+  
+  const isCreator = room && address && room.creator.toLowerCase() === address.toLowerCase();
+  const isRoomFull = room && (players?.length || 0) >= room.maxPlayers;
   
   const [dice, setDice] = useState<[number, number]>([4, 2]);
   const [usedDice, setUsedDice] = useState<boolean[]>([false, false]);
@@ -380,6 +385,16 @@ const BackgammonGame = () => {
                 {t('game.resign')}
               </Button>
             </div>
+
+            {/* Finish Game & Pay Winner - Only visible to creator when game ends */}
+            {gameEnded && (
+              <FinishGameButton
+                roomId={roomIdBigInt || BigInt(0)}
+                isCreator={!!isCreator}
+                isRoomFull={!!isRoomFull}
+                onGameFinished={() => navigate("/")}
+              />
+            )}
           </div>
         </div>
 
