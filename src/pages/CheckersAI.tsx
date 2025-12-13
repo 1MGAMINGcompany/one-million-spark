@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, RotateCcw, Trophy, Gem, Star } from "lucide-react";
@@ -61,6 +61,10 @@ const CheckersAI = () => {
   const [validMoves, setValidMoves] = useState<Move[]>([]);
   const [gameOver, setGameOver] = useState<Player | "draw" | null>(null);
   const [isAiThinking, setIsAiThinking] = useState(false);
+  
+  // Use ref to always have access to latest board state
+  const boardRef = useRef(board);
+  boardRef.current = board;
 
   // Get all valid moves for a piece
   const getValidMoves = useCallback((board: (Piece | null)[][], pos: Position): Move[] => {
@@ -277,16 +281,14 @@ const CheckersAI = () => {
   useEffect(() => {
     if (currentPlayer !== "obsidian" || gameOver) return;
     
-    let cancelled = false;
     setIsAiThinking(true);
     
     const delay = difficulty === "easy" ? 300 : difficulty === "medium" ? 600 : 1000;
     
     const timeout = setTimeout(() => {
-      if (cancelled) return;
-      
-      // Get AI move using current board state
-      const move = getAiMove(board);
+      // Use ref to get latest board state
+      const currentBoard = boardRef.current;
+      const move = getAiMove(currentBoard);
       
       if (!move) {
         setGameOver("gold");
@@ -302,7 +304,7 @@ const CheckersAI = () => {
         play('checkers_slide');
       }
       
-      const newBoard = applyMove(board, move);
+      const newBoard = applyMove(currentBoard, move);
       setBoard(newBoard);
       
       const result = checkGameOver(newBoard);
@@ -316,12 +318,8 @@ const CheckersAI = () => {
       setIsAiThinking(false);
     }, delay);
     
-    return () => {
-      cancelled = true;
-      clearTimeout(timeout);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPlayer, gameOver]);
+    return () => clearTimeout(timeout);
+  }, [currentPlayer, gameOver, difficulty, getAiMove, applyMove, checkGameOver, play]);
 
   const resetGame = () => {
     setBoard(initializeBoard());
