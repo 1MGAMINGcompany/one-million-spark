@@ -241,8 +241,11 @@ const CheckersAI = () => {
         score += 0.3;
       }
       
-      // Add randomness based on difficulty
-      const randomness = difficulty === "easy" ? Math.random() * 3 : difficulty === "medium" ? Math.random() * 0.8 : 0;
+      // Add randomness based on difficulty - less randomness = smarter AI
+      // Easy: high randomness makes AI pick suboptimal moves often
+      // Medium: low randomness for competitive play
+      // Hard: no randomness, always picks best move
+      const randomness = difficulty === "easy" ? Math.random() * 2 : difficulty === "medium" ? Math.random() * 0.15 : 0;
       const adjustedScore = score + randomness;
       
       if (adjustedScore > bestScore) {
