@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Swords, Users, Bot, Trophy, Gem, Star, Shield, Zap } from "lucide-react";
 import FeaturedGameCard from "@/components/FeaturedGameCard";
-import { ChessIcon, DominoIcon, BackgammonIcon } from "@/components/GameIcons";
+import { ChessIcon, DominoIcon, BackgammonIcon, CheckersIcon, LudoIcon } from "@/components/GameIcons";
 import PyramidLogo from "@/components/PyramidLogo";
 
 interface FeaturedGame {
@@ -16,6 +16,8 @@ const featuredGames: FeaturedGame[] = [
   { name: "Chess", tagline: "Master the Temple of Strategy", path: "/create-room", icon: <ChessIcon /> },
   { name: "Dominos", tagline: "Rule the Pyramid of Tiles", path: "/create-room", icon: <DominoIcon /> },
   { name: "Backgammon", tagline: "Command the Board of Fate", path: "/create-room", icon: <BackgammonIcon /> },
+  { name: "Checkers", tagline: "Conquer the Pharaoh's Grid", path: "/create-room", icon: <CheckersIcon /> },
+  { name: "Ludo", tagline: "Race Through the Nile's Path", path: "/create-room", icon: <LudoIcon /> },
 ];
 
 const Home = () => {
@@ -199,7 +201,7 @@ const Home = () => {
             <div className="h-px flex-1 max-w-24 bg-gradient-to-l from-transparent to-border" />
           </div>
           
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
             {featuredGames.map((game) => (
               <FeaturedGameCard
                 key={game.name}

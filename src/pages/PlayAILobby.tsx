@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Play, Gem, Star } from "lucide-react";
-import { ChessIcon, DominoIcon, BackgammonIcon } from "@/components/GameIcons";
+import { ChessIcon, DominoIcon, BackgammonIcon, CheckersIcon, LudoIcon } from "@/components/GameIcons";
 
 type Difficulty = "easy" | "medium" | "hard";
 
@@ -32,6 +32,18 @@ const aiGames: GameConfig[] = [
     path: "/play-ai/backgammon", 
     description: "Hone your skills in this timeless game of calculated moves.",
   },
+  { 
+    name: "Checkers", 
+    icon: <CheckersIcon className="w-24 h-24 md:w-28 md:h-28" />,
+    path: "/play-ai/checkers", 
+    description: "Capture and crown your way to victory on the sacred grid.",
+  },
+  { 
+    name: "Ludo", 
+    icon: <LudoIcon className="w-24 h-24 md:w-28 md:h-28" />,
+    path: "/play-ai/ludo", 
+    description: "Race your tokens through the ancient paths of the Nile.",
+  },
 ];
 
 const difficultyLabels: { value: Difficulty; label: string }[] = [
@@ -46,6 +58,8 @@ const PlayAILobby = () => {
     "Chess": "medium",
     "Dominos": "medium",
     "Backgammon": "medium",
+    "Checkers": "medium",
+    "Ludo": "medium",
   });
 
   const handleDifficultyChange = (gameName: string, difficulty: Difficulty) => {

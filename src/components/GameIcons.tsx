@@ -288,3 +288,194 @@ export const BackgammonIcon = ({ className = "" }: GameIconProps) => (
     </svg>
   </div>
 );
+
+// Egyptian-styled Checkers icon with golden crown piece
+export const CheckersIcon = ({ className = "" }: GameIconProps) => (
+  <div className={`relative group/icon ${className}`}>
+    <div className="absolute inset-0 bg-primary/20 rounded-full blur-xl opacity-60 group-hover/icon:opacity-100 transition-opacity duration-300" />
+    
+    <svg 
+      viewBox="0 0 100 100" 
+      className="w-full h-full relative z-10 drop-shadow-[0_8px_16px_rgba(0,0,0,0.4)] transition-all duration-300 group-hover/icon:-translate-y-2 group-hover/icon:drop-shadow-[0_12px_24px_rgba(0,0,0,0.5)]"
+    >
+      <defs>
+        <linearGradient id="checkersGold" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="hsl(45 93% 75%)" />
+          <stop offset="30%" stopColor="hsl(45 93% 60%)" />
+          <stop offset="70%" stopColor="hsl(45 93% 50%)" />
+          <stop offset="100%" stopColor="hsl(35 80% 35%)" />
+        </linearGradient>
+        <linearGradient id="checkersObsidian" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="hsl(220 15% 25%)" />
+          <stop offset="50%" stopColor="hsl(220 20% 12%)" />
+          <stop offset="100%" stopColor="hsl(220 20% 6%)" />
+        </linearGradient>
+        <radialGradient id="checkersPieceGold" cx="35%" cy="30%" r="60%">
+          <stop offset="0%" stopColor="hsl(45 93% 85%)" />
+          <stop offset="40%" stopColor="hsl(45 93% 60%)" />
+          <stop offset="100%" stopColor="hsl(35 80% 35%)" />
+        </radialGradient>
+        <radialGradient id="checkersPieceObsidian" cx="35%" cy="30%" r="60%">
+          <stop offset="0%" stopColor="hsl(220 15% 35%)" />
+          <stop offset="40%" stopColor="hsl(220 20% 15%)" />
+          <stop offset="100%" stopColor="hsl(220 20% 6%)" />
+        </radialGradient>
+        <linearGradient id="checkersGoldRim" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="hsl(45 93% 70%)" />
+          <stop offset="50%" stopColor="hsl(45 93% 55%)" />
+          <stop offset="100%" stopColor="hsl(35 80% 40%)" />
+        </linearGradient>
+        <filter id="checkersGlow">
+          <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+          <feMerge>
+            <feMergeNode in="coloredBlur"/>
+            <feMergeNode in="SourceGraphic"/>
+          </feMerge>
+        </filter>
+      </defs>
+      
+      {/* Board pattern hint */}
+      <g opacity="0.3">
+        <rect x="15" y="75" width="14" height="14" fill="url(#checkersGold)" />
+        <rect x="29" y="75" width="14" height="14" fill="url(#checkersObsidian)" />
+        <rect x="43" y="75" width="14" height="14" fill="url(#checkersGold)" />
+        <rect x="57" y="75" width="14" height="14" fill="url(#checkersObsidian)" />
+        <rect x="71" y="75" width="14" height="14" fill="url(#checkersGold)" />
+      </g>
+      
+      {/* Shadow */}
+      <ellipse cx="50" cy="72" rx="28" ry="8" fill="rgba(0,0,0,0.35)" />
+      
+      {/* Stacked pieces - bottom obsidian */}
+      <ellipse cx="50" cy="65" rx="24" ry="8" fill="url(#checkersPieceObsidian)" stroke="url(#checkersGoldRim)" strokeWidth="1.5" />
+      <ellipse cx="50" cy="62" rx="24" ry="8" fill="url(#checkersPieceObsidian)" stroke="url(#checkersGoldRim)" strokeWidth="1.5" />
+      
+      {/* Middle gold piece */}
+      <ellipse cx="50" cy="52" rx="24" ry="8" fill="url(#checkersPieceGold)" filter="url(#checkersGlow)" />
+      <ellipse cx="50" cy="49" rx="24" ry="8" fill="url(#checkersPieceGold)" filter="url(#checkersGlow)" />
+      
+      {/* Top crowned piece */}
+      <ellipse cx="50" cy="39" rx="24" ry="8" fill="url(#checkersPieceGold)" filter="url(#checkersGlow)" />
+      <ellipse cx="50" cy="36" rx="24" ry="8" fill="url(#checkersPieceGold)" filter="url(#checkersGlow)" />
+      
+      {/* Crown on top */}
+      <path 
+        d="M32 30 L38 18 L44 26 L50 12 L56 26 L62 18 L68 30 Z" 
+        fill="url(#checkersGold)" 
+        stroke="hsl(45 93% 75%)" 
+        strokeWidth="1"
+        filter="url(#checkersGlow)"
+      />
+      
+      {/* Crown gems */}
+      <circle cx="50" cy="22" r="3" fill="hsl(45 93% 85%)" />
+      <circle cx="38" cy="25" r="2" fill="hsl(45 93% 80%)" />
+      <circle cx="62" cy="25" r="2" fill="hsl(45 93% 80%)" />
+      
+      {/* Highlight */}
+      <ellipse cx="42" cy="34" rx="8" ry="3" fill="hsl(45 93% 95% / 0.4)" />
+    </svg>
+  </div>
+);
+
+// Egyptian-styled Ludo icon with pyramid paths and hieroglyphic feel
+export const LudoIcon = ({ className = "" }: GameIconProps) => (
+  <div className={`relative group/icon ${className}`}>
+    <div className="absolute inset-0 bg-primary/20 rounded-full blur-xl opacity-60 group-hover/icon:opacity-100 transition-opacity duration-300" />
+    
+    <svg 
+      viewBox="0 0 100 100" 
+      className="w-full h-full relative z-10 drop-shadow-[0_8px_16px_rgba(0,0,0,0.4)] transition-all duration-300 group-hover/icon:-translate-y-2 group-hover/icon:drop-shadow-[0_12px_24px_rgba(0,0,0,0.5)]"
+    >
+      <defs>
+        <linearGradient id="ludoGold" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="hsl(45 93% 75%)" />
+          <stop offset="50%" stopColor="hsl(45 93% 55%)" />
+          <stop offset="100%" stopColor="hsl(35 80% 35%)" />
+        </linearGradient>
+        <linearGradient id="ludoSandstone" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="hsl(35 50% 75%)" />
+          <stop offset="50%" stopColor="hsl(35 45% 60%)" />
+          <stop offset="100%" stopColor="hsl(30 40% 45%)" />
+        </linearGradient>
+        <linearGradient id="ludoRuby" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="hsl(350 70% 55%)" />
+          <stop offset="100%" stopColor="hsl(350 60% 35%)" />
+        </linearGradient>
+        <linearGradient id="ludoEmerald" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="hsl(145 60% 45%)" />
+          <stop offset="100%" stopColor="hsl(145 50% 25%)" />
+        </linearGradient>
+        <linearGradient id="ludoSapphire" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="hsl(210 70% 50%)" />
+          <stop offset="100%" stopColor="hsl(210 60% 30%)" />
+        </linearGradient>
+        <linearGradient id="ludoAmethyst" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="hsl(280 50% 55%)" />
+          <stop offset="100%" stopColor="hsl(280 40% 35%)" />
+        </linearGradient>
+        <filter id="ludoGlow">
+          <feGaussianBlur stdDeviation="1.5" result="coloredBlur"/>
+          <feMerge>
+            <feMergeNode in="coloredBlur"/>
+            <feMergeNode in="SourceGraphic"/>
+          </feMerge>
+        </filter>
+      </defs>
+      
+      {/* Shadow */}
+      <rect x="14" y="14" width="76" height="76" rx="8" fill="rgba(0,0,0,0.3)" transform="translate(2, 2)" />
+      
+      {/* Main board */}
+      <rect x="12" y="12" width="76" height="76" rx="8" fill="url(#ludoSandstone)" stroke="url(#ludoGold)" strokeWidth="2" />
+      
+      {/* Cross pattern - gold paths */}
+      <rect x="42" y="12" width="16" height="76" fill="url(#ludoGold)" opacity="0.3" />
+      <rect x="12" y="42" width="76" height="16" fill="url(#ludoGold)" opacity="0.3" />
+      
+      {/* Center pyramid */}
+      <path 
+        d="M50 30 L35 58 L65 58 Z" 
+        fill="url(#ludoGold)" 
+        stroke="hsl(45 93% 70%)" 
+        strokeWidth="1"
+        filter="url(#ludoGlow)"
+      />
+      
+      {/* Eye of Horus in center */}
+      <circle cx="50" cy="48" r="5" fill="hsl(220 20% 10%)" stroke="url(#ludoGold)" strokeWidth="1" />
+      <circle cx="50" cy="48" r="2" fill="url(#ludoGold)" />
+      
+      {/* Corner home bases - gems */}
+      <g filter="url(#ludoGlow)">
+        {/* Red corner */}
+        <rect x="16" y="16" width="22" height="22" rx="3" fill="url(#ludoRuby)" opacity="0.8" />
+        <circle cx="27" cy="27" r="5" fill="hsl(350 70% 65%)" />
+        
+        {/* Green corner */}
+        <rect x="62" y="16" width="22" height="22" rx="3" fill="url(#ludoEmerald)" opacity="0.8" />
+        <circle cx="73" cy="27" r="5" fill="hsl(145 60% 55%)" />
+        
+        {/* Blue corner */}
+        <rect x="16" y="62" width="22" height="22" rx="3" fill="url(#ludoSapphire)" opacity="0.8" />
+        <circle cx="27" cy="73" r="5" fill="hsl(210 70% 60%)" />
+        
+        {/* Purple corner */}
+        <rect x="62" y="62" width="22" height="22" rx="3" fill="url(#ludoAmethyst)" opacity="0.8" />
+        <circle cx="73" cy="73" r="5" fill="hsl(280 50% 65%)" />
+      </g>
+      
+      {/* Decorative hieroglyphic dots */}
+      <circle cx="20" cy="50" r="2" fill="url(#ludoGold)" />
+      <circle cx="80" cy="50" r="2" fill="url(#ludoGold)" />
+      <circle cx="50" cy="20" r="2" fill="url(#ludoGold)" />
+      <circle cx="50" cy="80" r="2" fill="url(#ludoGold)" />
+      
+      {/* Gold border accents */}
+      <rect x="12" y="12" width="10" height="3" fill="url(#ludoGold)" />
+      <rect x="78" y="12" width="10" height="3" fill="url(#ludoGold)" />
+      <rect x="12" y="85" width="10" height="3" fill="url(#ludoGold)" />
+      <rect x="78" y="85" width="10" height="3" fill="url(#ludoGold)" />
+    </svg>
+  </div>
+);
