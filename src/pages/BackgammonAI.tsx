@@ -6,6 +6,7 @@ import { Dice3D, CheckerStack } from "@/components/BackgammonPieces";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useSound } from "@/contexts/SoundContext";
+import { useTranslation } from "react-i18next";
 import {
   type Player,
   type GameState,
@@ -65,6 +66,7 @@ const toLegacyMove = (move: BackgammonMove): Move => ({
 });
 
 const BackgammonAI = () => {
+  const { t } = useTranslation();
   const [searchParams] = useSearchParams();
   const isMobile = useIsMobile();
   const { play } = useSound();
