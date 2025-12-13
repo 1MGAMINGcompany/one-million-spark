@@ -384,7 +384,7 @@ const CheckersAI = () => {
 
         {/* Board */}
         <div className="aspect-square border-4 border-primary/40 rounded-lg overflow-hidden shadow-[0_0_40px_-10px_hsl(45_93%_54%_/_0.3)]">
-          <div className="grid grid-cols-8 h-full">
+          <div className="grid grid-cols-8 grid-rows-8 h-full w-full">
             {board.map((row, rowIndex) =>
               row.map((piece, colIndex) => {
                 const isDark = (rowIndex + colIndex) % 2 === 1;
@@ -396,7 +396,7 @@ const CheckersAI = () => {
                     key={`${rowIndex}-${colIndex}`}
                     onClick={() => handleSquareClick(rowIndex, colIndex)}
                     className={`
-                      relative flex items-center justify-center cursor-pointer
+                      relative flex items-center justify-center cursor-pointer overflow-hidden
                       ${isDark 
                         ? "bg-gradient-to-br from-amber-900/80 to-amber-950" 
                         : "bg-gradient-to-br from-amber-200 to-amber-300"
@@ -408,12 +408,12 @@ const CheckersAI = () => {
                     {piece && (
                       <div
                         className={`
-                          w-[80%] h-[80%] rounded-full border-2 transition-transform
+                          w-[75%] h-[75%] rounded-full border-2 flex-shrink-0
                           ${piece.player === "gold"
                             ? "bg-gradient-to-br from-yellow-300 via-yellow-500 to-yellow-700 border-yellow-200 shadow-[0_0_15px_-3px_hsl(45_93%_54%_/_0.6)]"
                             : "bg-gradient-to-br from-gray-600 via-gray-800 to-gray-900 border-primary/50 shadow-[0_4px_12px_rgba(0,0,0,0.4)]"
                           }
-                          ${isSelected ? "scale-110" : "hover:scale-105"}
+                          ${isSelected ? "ring-2 ring-white/50" : ""}
                         `}
                       >
                         {piece.type === "king" && (
@@ -425,7 +425,7 @@ const CheckersAI = () => {
                     )}
                     
                     {isValidTarget && !piece && (
-                      <div className="w-4 h-4 rounded-full bg-green-400/50" />
+                      <div className="w-3 h-3 rounded-full bg-green-400/60 flex-shrink-0" />
                     )}
                   </div>
                 );
