@@ -1,14 +1,16 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { Home, Wallet, PlusCircle, LayoutList, Menu, X, Coins, Volume2, VolumeX } from "lucide-react";
 import { WalletButton } from "./WalletButton";
 import BrandLogo from "./BrandLogo";
+import LanguageSelector from "./LanguageSelector";
 import { useSound } from "@/contexts/SoundContext";
 import type { LucideIcon } from "lucide-react";
 
 interface NavItem {
   path: string;
-  label: string;
+  labelKey: string;
   icon: LucideIcon;
 }
 
@@ -16,9 +18,16 @@ const Navbar = () => {
   const location = useLocation();
   const [isOpen, setIsOpen] = useState(false);
   const { soundEnabled, toggleSound, play } = useSound();
+  const { t, i18n } = useTranslation();
+
+  // Set document direction based on language
+  useEffect(() => {
+    const lang = i18n.language;
+    document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
+    document.documentElement.lang = lang;
+  }, [i18n.language]);
 
   const handleToggleSound = () => {
-    // Play toggle sound before toggling (so it plays while still enabled)
     play(soundEnabled ? 'system_toggle_off' : 'system_toggle_on');
     toggleSound();
   };
@@ -28,10 +37,10 @@ const Navbar = () => {
   };
 
   const navItems: NavItem[] = [
-    { path: "/", label: "Home", icon: Home },
-    { path: "/add-funds", label: "Add Funds", icon: Coins },
-    { path: "/create-room", label: "Create Room", icon: PlusCircle },
-    { path: "/room-list", label: "Room List", icon: LayoutList },
+    { path: "/", labelKey: "nav.home", icon: Home },
+    { path: "/add-funds", labelKey: "nav.addFunds", icon: Coins },
+    { path: "/create-room", labelKey: "nav.createRoom", icon: PlusCircle },
+    { path: "/room-list", labelKey: "nav.roomList", icon: LayoutList },
   ];
 
   return (
@@ -64,10 +73,13 @@ const Navbar = () => {
                         : "text-primary/70 group-hover:text-primary group-hover:drop-shadow-[0_0_4px_hsl(45_93%_54%_/_0.5)]"
                     }`}
                   />
-                  <span>{item.label}</span>
+                  <span>{t(item.labelKey)}</span>
                 </Link>
               );
             })}
+            
+            {/* Language Selector */}
+            <LanguageSelector />
             
             {/* Sound Toggle Button */}
             <button
@@ -77,8 +89,8 @@ const Navbar = () => {
                   ? "text-muted-foreground/50 hover:text-muted-foreground hover:bg-secondary"
                   : "text-primary hover:text-primary/80 hover:bg-secondary drop-shadow-[0_0_6px_hsl(45_93%_54%_/_0.4)]"
               }`}
-              aria-label={soundEnabled ? "Mute sounds" : "Unmute sounds"}
-              title={soundEnabled ? "Sound ON" : "Sound OFF"}
+              aria-label={soundEnabled ? t("nav.soundOn") : t("nav.soundOff")}
+              title={soundEnabled ? t("nav.soundOn") : t("nav.soundOff")}
             >
               {soundEnabled ? <Volume2 size={20} /> : <VolumeX size={20} />}
             </button>
@@ -122,10 +134,16 @@ const Navbar = () => {
                           : "text-primary/70 group-hover:text-primary"
                       }`}
                     />
-                    <span>{item.label}</span>
+                    <span>{t(item.labelKey)}</span>
                   </Link>
                 );
               })}
+              
+              {/* Language Selector (Mobile) */}
+              <div className="flex items-center gap-3 px-4 py-3">
+                <LanguageSelector />
+                <span className="text-sm text-muted-foreground">{t("common.language")}</span>
+              </div>
               
               {/* Sound Toggle (Mobile) */}
               <button
@@ -137,7 +155,7 @@ const Navbar = () => {
                 }`}
               >
                 {soundEnabled ? <Volume2 size={20} /> : <VolumeX size={20} />}
-                <span>{soundEnabled ? "Sound ON" : "Sound OFF"}</span>
+                <span>{soundEnabled ? t("nav.soundOn") : t("nav.soundOff")}</span>
               </button>
               
               {/* Wallet Button (Mobile) */}

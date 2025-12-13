@@ -1,59 +1,60 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Play, Gem, Star } from "lucide-react";
 import { ChessIcon, DominoIcon, BackgammonIcon, CheckersIcon, LudoIcon } from "@/components/GameIcons";
 
 type Difficulty = "easy" | "medium" | "hard";
 
-interface GameConfig {
-  name: string;
-  icon: React.ReactNode;
-  path: string;
-  description: string;
-}
-
-const aiGames: GameConfig[] = [
-  { 
-    name: "Chess", 
-    icon: <ChessIcon className="w-24 h-24 md:w-28 md:h-28" />,
-    path: "/play-ai/chess", 
-    description: "Master the ancient art of strategy and tactical thinking.",
-  },
-  { 
-    name: "Dominos", 
-    icon: <DominoIcon className="w-24 h-24 md:w-28 md:h-28" />,
-    path: "/play-ai/dominos", 
-    description: "Perfect your tile-matching prowess and numerical mastery.",
-  },
-  { 
-    name: "Backgammon", 
-    icon: <BackgammonIcon className="w-24 h-24 md:w-28 md:h-28" />,
-    path: "/play-ai/backgammon", 
-    description: "Hone your skills in this timeless game of calculated moves.",
-  },
-  { 
-    name: "Checkers", 
-    icon: <CheckersIcon className="w-24 h-24 md:w-28 md:h-28" />,
-    path: "/play-ai/checkers", 
-    description: "Capture and crown your way to victory on the sacred grid.",
-  },
-  { 
-    name: "Ludo", 
-    icon: <LudoIcon className="w-24 h-24 md:w-28 md:h-28" />,
-    path: "/play-ai/ludo", 
-    description: "Race your tokens through the ancient paths of the Nile.",
-  },
-];
-
-const difficultyLabels: { value: Difficulty; label: string }[] = [
-  { value: "easy", label: "EASY" },
-  { value: "medium", label: "MEDIUM" },
-  { value: "hard", label: "HARD" },
-];
-
 const PlayAILobby = () => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
+  
+  const aiGames = [
+    { 
+      name: t("games.chess"), 
+      key: "Chess",
+      icon: <ChessIcon className="w-24 h-24 md:w-28 md:h-28" />,
+      path: "/play-ai/chess", 
+      description: t("games.chessDesc"),
+    },
+    { 
+      name: t("games.dominos"), 
+      key: "Dominos",
+      icon: <DominoIcon className="w-24 h-24 md:w-28 md:h-28" />,
+      path: "/play-ai/dominos", 
+      description: t("games.dominosDesc"),
+    },
+    { 
+      name: t("games.backgammon"), 
+      key: "Backgammon",
+      icon: <BackgammonIcon className="w-24 h-24 md:w-28 md:h-28" />,
+      path: "/play-ai/backgammon", 
+      description: t("games.backgammonDesc"),
+    },
+    { 
+      name: t("games.checkers"), 
+      key: "Checkers",
+      icon: <CheckersIcon className="w-24 h-24 md:w-28 md:h-28" />,
+      path: "/play-ai/checkers", 
+      description: t("games.checkersDesc"),
+    },
+    { 
+      name: t("games.ludo"), 
+      key: "Ludo",
+      icon: <LudoIcon className="w-24 h-24 md:w-28 md:h-28" />,
+      path: "/play-ai/ludo", 
+      description: t("games.ludoDesc"),
+    },
+  ];
+
+  const difficultyLabels = [
+    { value: "easy" as Difficulty, label: t("playAi.easy") },
+    { value: "medium" as Difficulty, label: t("playAi.medium") },
+    { value: "hard" as Difficulty, label: t("playAi.hard") },
+  ];
+
   const [selectedDifficulties, setSelectedDifficulties] = useState<Record<string, Difficulty>>({
     "Chess": "medium",
     "Dominos": "medium",
@@ -62,15 +63,15 @@ const PlayAILobby = () => {
     "Ludo": "medium",
   });
 
-  const handleDifficultyChange = (gameName: string, difficulty: Difficulty) => {
+  const handleDifficultyChange = (gameKey: string, difficulty: Difficulty) => {
     setSelectedDifficulties(prev => ({
       ...prev,
-      [gameName]: difficulty,
+      [gameKey]: difficulty,
     }));
   };
 
-  const handlePlay = (game: GameConfig) => {
-    const difficulty = selectedDifficulties[game.name];
+  const handlePlay = (game: typeof aiGames[0]) => {
+    const difficulty = selectedDifficulties[game.key];
     navigate(`${game.path}?difficulty=${difficulty}`);
   };
 
@@ -78,7 +79,6 @@ const PlayAILobby = () => {
     <div className="min-h-screen bg-background">
       {/* Hero Section with Pyramid Background */}
       <section className="relative py-16 overflow-hidden">
-        {/* Background gradient and pyramid silhouette */}
         <div className="absolute inset-0 bg-gradient-to-b from-midnight-light via-background to-background" />
         <div 
           className="absolute inset-0 opacity-10"
@@ -86,7 +86,6 @@ const PlayAILobby = () => {
             background: "linear-gradient(to top, hsl(45 93% 54% / 0.2) 0%, transparent 50%)",
           }}
         />
-        {/* Decorative pyramid shapes */}
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <div 
             className="absolute w-[400px] h-[300px] opacity-5"
@@ -103,7 +102,7 @@ const PlayAILobby = () => {
             <Button asChild variant="ghost" size="sm" className="text-muted-foreground hover:text-primary group">
               <Link to="/" className="flex items-center gap-2">
                 <ArrowLeft size={18} className="group-hover:text-primary transition-colors" />
-                Back to Home
+                {t("playAi.backToHome")}
               </Link>
             </Button>
           </div>
@@ -125,17 +124,17 @@ const PlayAILobby = () => {
                   backgroundClip: "text",
                 }}
               >
-                Temple of Practice
+                {t("playAi.title")}
               </span>
             </h1>
             
             <p className="text-lg md:text-xl text-muted-foreground max-w-xl mx-auto">
-              Train your mind in the arts of strategy. No pressure, no stakes — pure skill refinement.
+              {t("playAi.subtitle")}
             </p>
 
             <div className="flex items-center justify-center gap-3 mt-6">
               <Star className="w-3 h-3 text-primary/40 fill-primary/20" />
-              <span className="text-xs text-muted-foreground/60 uppercase tracking-[0.2em]">Free Practice Mode</span>
+              <span className="text-xs text-muted-foreground/60 uppercase tracking-[0.2em]">{t("playAi.freePractice")}</span>
               <Star className="w-3 h-3 text-primary/40 fill-primary/20" />
             </div>
           </div>
@@ -148,17 +147,14 @@ const PlayAILobby = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {aiGames.map((game) => (
               <div 
-                key={game.name} 
+                key={game.key} 
                 className="group relative"
               >
-                {/* Card glow effect on hover */}
                 <div className="absolute -inset-1 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 rounded-2xl blur-lg opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
                 
-                {/* Main Card */}
                 <div 
                   className="relative bg-gradient-to-br from-midnight-light via-card to-background border border-primary/20 rounded-xl p-6 transition-all duration-300 group-hover:border-primary/40 group-hover:-translate-y-1 group-hover:shadow-[0_0_30px_-5px_hsl(45_93%_54%_/_0.3)]"
                 >
-                  {/* Corner accent */}
                   <div className="absolute top-3 right-3">
                     <div 
                       className="w-4 h-4 opacity-40 group-hover:opacity-70 transition-opacity"
@@ -169,12 +165,10 @@ const PlayAILobby = () => {
                     />
                   </div>
 
-                  {/* Game icon */}
                   <div className="flex justify-center mb-4">
                     {game.icon}
                   </div>
 
-                  {/* Game name */}
                   <h2 
                     className="text-2xl font-display font-bold text-center mb-2"
                     style={{
@@ -187,7 +181,6 @@ const PlayAILobby = () => {
                     {game.name}
                   </h2>
 
-                  {/* Description */}
                   <p className="text-sm text-muted-foreground text-center mb-6">
                     {game.description}
                   </p>
@@ -195,16 +188,16 @@ const PlayAILobby = () => {
                   {/* Difficulty Selector */}
                   <div className="space-y-2 mb-5">
                     <p className="text-xs text-primary/60 text-center uppercase tracking-wider font-medium">
-                      Select Difficulty
+                      {t("playAi.selectDifficulty")}
                     </p>
                     <div className="flex gap-1 p-1 bg-background/50 rounded-lg border border-primary/20">
                       {difficultyLabels.map(({ value, label }) => (
                         <button
                           key={value}
-                          onClick={() => handleDifficultyChange(game.name, value)}
+                          onClick={() => handleDifficultyChange(game.key, value)}
                           className={`
                             flex-1 py-2.5 px-2 text-xs font-bold rounded-md transition-all duration-200
-                            ${selectedDifficulties[game.name] === value
+                            ${selectedDifficulties[game.key] === value
                               ? "bg-gradient-to-r from-primary to-gold text-primary-foreground shadow-[0_0_12px_-2px_hsl(45_93%_54%_/_0.5)]"
                               : "text-muted-foreground hover:text-primary hover:bg-primary/5"
                             }
@@ -223,10 +216,9 @@ const PlayAILobby = () => {
                     onClick={() => handlePlay(game)}
                   >
                     <Play size={18} className="group-hover/btn:drop-shadow-[0_0_6px_hsl(45_93%_54%_/_0.6)] transition-all" />
-                    Enter Training
+                    {t("playAi.enterTraining")}
                   </Button>
 
-                  {/* Bottom decorative line */}
                   <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-1/2 h-px bg-gradient-to-r from-transparent via-primary/30 to-transparent" />
                 </div>
               </div>
@@ -243,7 +235,7 @@ const PlayAILobby = () => {
           <div className="h-px w-16 bg-gradient-to-l from-transparent to-border" />
         </div>
         <p className="text-sm text-muted-foreground/60 text-center">
-          All training sessions are completely free. Master your craft at your own pace.
+          {t("playAi.footerNote")}
         </p>
       </div>
     </div>

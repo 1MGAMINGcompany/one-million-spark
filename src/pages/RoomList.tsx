@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -18,6 +19,7 @@ import { usePublicRooms, type PublicRoom } from "@/hooks/usePublicRooms";
 import { formatTurnTime } from "@/contracts/roomManagerV4";
 
 const RoomList = () => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { isConnected, address } = useWallet();
@@ -29,11 +31,9 @@ const RoomList = () => {
 
   const { rooms, isLoading: isLoadingRooms, refetch } = usePublicRooms();
 
-  // Handle refresh query param (set after room creation)
   useEffect(() => {
     if (searchParams.get("refresh") === "1") {
       refetch();
-      // Remove the refresh param from URL
       setSearchParams({}, { replace: true });
     }
   }, [searchParams, refetch, setSearchParams]);
@@ -47,34 +47,31 @@ const RoomList = () => {
     reset: resetJoin 
   } = useJoinRoomV4();
 
-  // Handle join success
   useEffect(() => {
     if (isJoinSuccess && joiningRoomId) {
       play('room_enter');
       toast({
-        title: "Joined Room!",
-        description: "You have successfully joined the game room.",
+        title: t("roomList.joinedRoom"),
+        description: t("roomList.joinedRoomDesc"),
       });
-      // Navigate to the room page
       navigate(`/room/${joiningRoomId.toString()}`);
       setJoiningRoomId(null);
       resetJoin();
       refetch();
     }
-  }, [isJoinSuccess, joiningRoomId, play, toast, resetJoin, refetch, navigate]);
+  }, [isJoinSuccess, joiningRoomId, play, toast, resetJoin, refetch, navigate, t]);
 
-  // Handle join error
   useEffect(() => {
     if (joinError) {
       toast({
-        title: "Failed to Join",
-        description: joinError.message || "Transaction failed",
+        title: t("roomList.failedToJoin"),
+        description: joinError.message || t("errors.transactionFailed"),
         variant: "destructive",
       });
       setJoiningRoomId(null);
       resetJoin();
     }
-  }, [joinError, toast, resetJoin]);
+  }, [joinError, toast, resetJoin, t]);
 
   const handleRefresh = () => {
     play('ui_click');
@@ -84,8 +81,8 @@ const RoomList = () => {
   const handleJoinRoom = (room: PublicRoom) => {
     if (room.creator.toLowerCase() === address?.toLowerCase()) {
       toast({
-        title: "Cannot Join",
-        description: "You cannot join your own room",
+        title: t("roomList.cannotJoin"),
+        description: t("roomList.cannotJoinOwn"),
         variant: "destructive",
       });
       return;
@@ -103,28 +100,24 @@ const RoomList = () => {
   const isJoining = isJoinPending || isJoinConfirming;
 
   const getJoinButtonText = (roomId: bigint) => {
-    if (joiningRoomId !== roomId) return "Join Room";
-    if (isJoinPending) return "Confirm in wallet...";
-    if (isJoinConfirming) return "Processing...";
-    return "Join Room";
+    if (joiningRoomId !== roomId) return t("roomList.joinRoom");
+    if (isJoinPending) return t("roomList.confirmInWallet");
+    if (isJoinConfirming) return t("roomList.processing");
+    return t("roomList.joinRoom");
   };
 
-  // Game ID mapping for filter
   const GAME_ID_MAP: Record<string, number> = {
     chess: 1,
     dominos: 2,
     backgammon: 3,
   };
 
-  // Filter rooms based on selected filters
   const filteredRooms = rooms.filter(room => {
-    // Game filter - now using gameId from contract
     if (gameFilter !== "all") {
       const targetGameId = GAME_ID_MAP[gameFilter];
       if (room.gameId !== targetGameId) return false;
     }
     
-    // Fee filter - convert USDT units to dollars
     const feeInUsdt = unitsToUsdt(room.entryFee);
     
     switch (feeFilter) {
@@ -155,7 +148,7 @@ const RoomList = () => {
     <div className="min-h-screen bg-background px-4 py-12">
       <div className="max-w-3xl mx-auto">
         <h1 className="text-3xl font-bold text-foreground mb-8 text-center">
-          Public Game Rooms
+          {t("roomList.title")}
         </h1>
 
         {/* Filters */}
@@ -163,29 +156,29 @@ const RoomList = () => {
           <div className="flex-1 w-full">
             <Select value={gameFilter} onValueChange={setGameFilter}>
               <SelectTrigger className="w-full">
-                <SelectValue placeholder="Game Type" />
+                <SelectValue placeholder={t("roomList.gameType")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Games</SelectItem>
-                <SelectItem value="chess">Chess</SelectItem>
-                <SelectItem value="dominos">Dominos</SelectItem>
-                <SelectItem value="backgammon">Backgammon</SelectItem>
+                <SelectItem value="all">{t("roomList.allGames")}</SelectItem>
+                <SelectItem value="chess">{t("games.chess")}</SelectItem>
+                <SelectItem value="dominos">{t("games.dominos")}</SelectItem>
+                <SelectItem value="backgammon">{t("games.backgammon")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
           <div className="flex-1 w-full">
             <Select value={feeFilter} onValueChange={setFeeFilter}>
               <SelectTrigger className="w-full">
-                <SelectValue placeholder="Entry Fee Range" />
+                <SelectValue placeholder={t("roomList.entryFeeRange")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Fees</SelectItem>
-                <SelectItem value="lt1">Less than $1</SelectItem>
-                <SelectItem value="lt5">Less than $5</SelectItem>
-                <SelectItem value="lt10">Less than $10</SelectItem>
-                <SelectItem value="lt50">Less than $50</SelectItem>
-                <SelectItem value="gt50">Above $50</SelectItem>
-                <SelectItem value="gt100">Above $100</SelectItem>
+                <SelectItem value="all">{t("roomList.allFees")}</SelectItem>
+                <SelectItem value="lt1">{t("roomList.lessThan")} $1</SelectItem>
+                <SelectItem value="lt5">{t("roomList.lessThan")} $5</SelectItem>
+                <SelectItem value="lt10">{t("roomList.lessThan")} $10</SelectItem>
+                <SelectItem value="lt50">{t("roomList.lessThan")} $50</SelectItem>
+                <SelectItem value="gt50">{t("roomList.above")} $50</SelectItem>
+                <SelectItem value="gt100">{t("roomList.above")} $100</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -205,11 +198,11 @@ const RoomList = () => {
           {isLoadingRooms && rooms.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
               <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
-              <p>Loading rooms from blockchain...</p>
+              <p>{t("roomList.loadingRooms")}</p>
             </div>
           ) : filteredRooms.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
-              <p>No rooms available. Create one!</p>
+              <p>{t("roomList.noRooms")}</p>
             </div>
           ) : (
             filteredRooms.map((room) => (
@@ -222,7 +215,7 @@ const RoomList = () => {
                     {getGameNameV4(room.gameId)}
                   </h3>
                   <p className="text-sm text-muted-foreground">
-                    Entry Fee: ${unitsToUsdt(room.entryFee).toFixed(2)} USDT
+                    {t("roomList.entryFee")}: ${unitsToUsdt(room.entryFee).toFixed(2)} USDT
                   </p>
                 </div>
                 <div className="flex items-center gap-4 text-muted-foreground">
@@ -250,7 +243,7 @@ const RoomList = () => {
                       {getJoinButtonText(room.id)}
                     </>
                   ) : (
-                    "Join Room"
+                    t("roomList.joinRoom")
                   )}
                 </Button>
               </div>
