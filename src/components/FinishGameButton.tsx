@@ -101,7 +101,7 @@ export function FinishGameButton({
       <div className="md:hidden h-40" />
       
       {/* Desktop: inline card, Mobile: fixed bottom */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 p-4 bg-background/95 backdrop-blur-sm border-t border-primary/30 md:static md:bg-card md:border md:border-primary/30 md:rounded-lg md:p-4 md:backdrop-blur-none">
+      <div className="fixed bottom-0 left-0 right-0 z-50 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] bg-background/95 backdrop-blur-sm border-t border-primary/30 md:static md:bg-card md:border md:border-primary/30 md:rounded-lg md:p-4 md:pb-4 md:backdrop-blur-none">
         <div className="space-y-3 max-w-md mx-auto md:max-w-none">
           <div className="flex items-center gap-2">
             <Trophy className="w-5 h-5 text-primary" />
