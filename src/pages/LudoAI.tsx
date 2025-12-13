@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, RotateCcw, Music, Music2 } from "lucide-react";
+import { ArrowLeft, RotateCcw, Music, Music2, Volume2, VolumeX } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useSound } from "@/contexts/SoundContext";
 import LudoBoard from "@/components/ludo/LudoBoard";
@@ -22,8 +22,16 @@ const LudoAI = () => {
   const [movableTokens, setMovableTokens] = useState<number[]>([]);
   const [isAnimating, setIsAnimating] = useState(false);
   const [musicEnabled, setMusicEnabled] = useState(false);
+  const [sfxEnabled, setSfxEnabled] = useState(true);
   const animationRef = useRef<NodeJS.Timeout | null>(null);
   const musicRef = useRef<HTMLAudioElement | null>(null);
+
+  // Wrapper for play function that respects sfxEnabled
+  const playSfx = useCallback((sound: string) => {
+    if (sfxEnabled) {
+      play(sound);
+    }
+  }, [sfxEnabled, play]);
 
   const currentPlayer = players[currentPlayerIndex];
 
@@ -60,6 +68,10 @@ const LudoAI = () => {
 
   const toggleMusic = useCallback(() => {
     setMusicEnabled(prev => !prev);
+  }, []);
+
+  const toggleSfx = useCallback(() => {
+    setSfxEnabled(prev => !prev);
   }, []);
 
   // Get movable tokens for current dice value
@@ -115,7 +127,7 @@ const LudoAI = () => {
       const nextPos = path[stepIndex];
       
       // Play move sound on each step
-      play('ludo_move');
+      playSfx('ludo_move');
       
       // Update token position for this step
       setPlayers(prevPlayers => {
@@ -137,7 +149,7 @@ const LudoAI = () => {
     };
     
     animateStep();
-  }, [play]);
+  }, [playSfx]);
 
   // Move a token with animation
   const moveToken = useCallback((playerIndex: number, tokenIndex: number, dice: number) => {
@@ -179,7 +191,7 @@ const LudoAI = () => {
                   if (relativePos === myRelativePos) {
                     otherPlayer.tokens[oti] = { ...otherToken, position: -1 };
                     console.log(`[LUDO CAPTURE] ${currentPlayerData.color} captured ${otherPlayer.color} token #${oti}`);
-                    play('ludo_capture');
+                    playSfx('ludo_capture');
                     toast({
                       title: "Captured!",
                       description: `${currentPlayerData.color} captured ${otherPlayer.color}'s token!`,
@@ -212,7 +224,7 @@ const LudoAI = () => {
     if (isRolling || diceValue !== null || isAnimating) return;
     
     setIsRolling(true);
-    play('ludo_dice');
+    playSfx('ludo_dice');
     
     let rolls = 0;
     const maxRolls = 10;
@@ -253,7 +265,7 @@ const LudoAI = () => {
                 const winner = checkWinner(current);
                 if (winner) {
                   setGameOver(winner);
-                  play(winner === 'gold' ? 'ludo_win' : 'ludo_lose');
+                  playSfx(winner === 'gold' ? 'ludo_win' : 'ludo_lose');
                 } else {
                   setCurrentPlayerIndex(prev => currentDice === 6 ? prev : (prev + 1) % 4);
                 }
@@ -264,7 +276,7 @@ const LudoAI = () => {
         }
       }
     }, 100);
-  }, [isRolling, diceValue, isAnimating, currentPlayer, currentPlayerIndex, getMovableTokens, moveToken, checkWinner, play]);
+  }, [isRolling, diceValue, isAnimating, currentPlayer, currentPlayerIndex, getMovableTokens, moveToken, checkWinner, playSfx]);
 
   // Handle token click (for human player)
   const handleTokenClick = useCallback((playerIndex: number, tokenIndex: number) => {
@@ -294,14 +306,14 @@ const LudoAI = () => {
         const winner = checkWinner(current);
         if (winner) {
           setGameOver(winner);
-          play(winner === 'gold' ? 'ludo_win' : 'ludo_lose');
+          playSfx(winner === 'gold' ? 'ludo_win' : 'ludo_lose');
         } else {
           setCurrentPlayerIndex(prev => currentDice === 6 ? prev : (prev + 1) % 4);
         }
         return current;
       });
     }, 800);
-  }, [isAnimating, currentPlayerIndex, currentPlayer, diceValue, isRolling, movableTokens, moveToken, checkWinner, play]);
+  }, [isAnimating, currentPlayerIndex, currentPlayer, diceValue, isRolling, movableTokens, moveToken, checkWinner, playSfx]);
 
   // AI turn
   useEffect(() => {
@@ -342,7 +354,7 @@ const LudoAI = () => {
             const winner = checkWinner(current);
             if (winner) {
               setGameOver(winner);
-              play(winner === 'gold' ? 'ludo_win' : 'ludo_lose');
+              playSfx(winner === 'gold' ? 'ludo_win' : 'ludo_lose');
             } else {
               setCurrentPlayerIndex(prev => currentDice === 6 ? prev : (prev + 1) % 4);
             }
@@ -353,7 +365,7 @@ const LudoAI = () => {
       
       return () => clearTimeout(timeout);
     }
-  }, [currentPlayer, diceValue, isRolling, isAnimating, movableTokens, difficulty, moveToken, currentPlayerIndex, checkWinner, play]);
+  }, [currentPlayer, diceValue, isRolling, isAnimating, movableTokens, difficulty, moveToken, currentPlayerIndex, checkWinner, playSfx]);
 
   // Cleanup animation on unmount
   useEffect(() => {
@@ -435,16 +447,27 @@ const LudoAI = () => {
                 {isRolling ? "Rolling..." : isAnimating ? "Moving..." : diceValue ? "Thinking..." : "AI playing..."}
               </p>
             )}
-            {/* Music toggle - Desktop */}
-            <button
-              onClick={toggleMusic}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-primary/30 bg-card/50 hover:bg-card transition-colors text-xs"
-            >
-              {musicEnabled ? <Music2 size={14} className="text-primary" /> : <Music size={14} className="text-muted-foreground" />}
-              <span className={musicEnabled ? "text-primary" : "text-muted-foreground"}>
-                Music {musicEnabled ? "On" : "Off"}
-              </span>
-            </button>
+            {/* Audio toggles - Desktop */}
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={toggleMusic}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-primary/30 bg-card/50 hover:bg-card transition-colors text-xs"
+              >
+                {musicEnabled ? <Music2 size={14} className="text-primary" /> : <Music size={14} className="text-muted-foreground" />}
+                <span className={musicEnabled ? "text-primary" : "text-muted-foreground"}>
+                  Music {musicEnabled ? "On" : "Off"}
+                </span>
+              </button>
+              <button
+                onClick={toggleSfx}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-primary/30 bg-card/50 hover:bg-card transition-colors text-xs"
+              >
+                {sfxEnabled ? <Volume2 size={14} className="text-primary" /> : <VolumeX size={14} className="text-muted-foreground" />}
+                <span className={sfxEnabled ? "text-primary" : "text-muted-foreground"}>
+                  SFX {sfxEnabled ? "On" : "Off"}
+                </span>
+              </button>
+            </div>
           </div>
 
           {/* Board */}
@@ -482,16 +505,27 @@ const LudoAI = () => {
                 </p>
               )}
             </div>
-            {/* Music toggle - Mobile (bottom right) */}
-            <button
-              onClick={toggleMusic}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border border-primary/30 bg-card/50 hover:bg-card transition-colors text-xs"
-            >
-              {musicEnabled ? <Music2 size={14} className="text-primary" /> : <Music size={14} className="text-muted-foreground" />}
-              <span className={musicEnabled ? "text-primary" : "text-muted-foreground"}>
-                {musicEnabled ? "On" : "Off"}
-              </span>
-            </button>
+            {/* Audio toggles - Mobile (bottom right) */}
+            <div className="flex flex-col gap-1.5">
+              <button
+                onClick={toggleMusic}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border border-primary/30 bg-card/50 hover:bg-card transition-colors text-xs"
+              >
+                {musicEnabled ? <Music2 size={14} className="text-primary" /> : <Music size={14} className="text-muted-foreground" />}
+                <span className={musicEnabled ? "text-primary" : "text-muted-foreground"}>
+                  {musicEnabled ? "On" : "Off"}
+                </span>
+              </button>
+              <button
+                onClick={toggleSfx}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border border-primary/30 bg-card/50 hover:bg-card transition-colors text-xs"
+              >
+                {sfxEnabled ? <Volume2 size={14} className="text-primary" /> : <VolumeX size={14} className="text-muted-foreground" />}
+                <span className={sfxEnabled ? "text-primary" : "text-muted-foreground"}>
+                  {sfxEnabled ? "On" : "Off"}
+                </span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
