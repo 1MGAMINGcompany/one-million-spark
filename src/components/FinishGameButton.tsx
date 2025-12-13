@@ -96,48 +96,56 @@ export function FinishGameButton({
   const shortenAddress = (addr: string) => `${addr.slice(0, 6)}...${addr.slice(-4)}`;
 
   return (
-    <div className="bg-card border border-primary/30 rounded-lg p-4 space-y-3">
-      <div className="flex items-center gap-2">
-        <Trophy className="w-5 h-5 text-primary" />
-        <h3 className="text-sm font-semibold text-foreground">
-          {t("game.finishGame")}
-        </h3>
+    <>
+      {/* Spacer for mobile to prevent content from being hidden behind fixed button */}
+      <div className="md:hidden h-40" />
+      
+      {/* Desktop: inline card, Mobile: fixed bottom */}
+      <div className="fixed bottom-0 left-0 right-0 z-50 p-4 bg-background/95 backdrop-blur-sm border-t border-primary/30 md:static md:bg-card md:border md:border-primary/30 md:rounded-lg md:p-4 md:backdrop-blur-none">
+        <div className="space-y-3 max-w-md mx-auto md:max-w-none">
+          <div className="flex items-center gap-2">
+            <Trophy className="w-5 h-5 text-primary" />
+            <h3 className="text-sm font-semibold text-foreground">
+              {t("game.finishGame")}
+            </h3>
+          </div>
+
+          <p className="text-xs text-muted-foreground hidden md:block">
+            {t("game.finishGameDesc")}
+          </p>
+
+          <Select value={selectedWinner} onValueChange={setSelectedWinner}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder={t("game.selectWinner")} />
+            </SelectTrigger>
+            <SelectContent>
+              {playerList.map((player) => (
+                <SelectItem key={player} value={player}>
+                  {shortenAddress(player)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Button
+            onClick={handleFinishGame}
+            disabled={isLoading || !selectedWinner}
+            className="w-full gap-2 bg-gradient-to-r from-primary to-amber-600 hover:from-primary/90 hover:to-amber-600/90"
+          >
+            {isLoading ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                {isPending ? t("game.confirmInWallet") : t("game.processing")}
+              </>
+            ) : (
+              <>
+                <Trophy className="h-4 w-4" />
+                {t("game.finishAndPay")}
+              </>
+            )}
+          </Button>
+        </div>
       </div>
-
-      <p className="text-xs text-muted-foreground">
-        {t("game.finishGameDesc")}
-      </p>
-
-      <Select value={selectedWinner} onValueChange={setSelectedWinner}>
-        <SelectTrigger className="w-full">
-          <SelectValue placeholder={t("game.selectWinner")} />
-        </SelectTrigger>
-        <SelectContent>
-          {playerList.map((player) => (
-            <SelectItem key={player} value={player}>
-              {shortenAddress(player)}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-
-      <Button
-        onClick={handleFinishGame}
-        disabled={isLoading || !selectedWinner}
-        className="w-full gap-2 bg-gradient-to-r from-primary to-amber-600 hover:from-primary/90 hover:to-amber-600/90"
-      >
-        {isLoading ? (
-          <>
-            <Loader2 className="h-4 w-4 animate-spin" />
-            {isPending ? t("game.confirmInWallet") : t("game.processing")}
-          </>
-        ) : (
-          <>
-            <Trophy className="h-4 w-4" />
-            {t("game.finishAndPay")}
-          </>
-        )}
-      </Button>
-    </div>
+    </>
   );
 }
