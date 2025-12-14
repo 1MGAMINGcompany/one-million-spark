@@ -2,6 +2,15 @@
  * ZK-Compatible Game Engine
  * Pure deterministic functions with no randomness, no Date.now, no floating point
  * All state is immutable and serializable
+ * 
+ * COMMIT-REVEAL SEED DESIGN:
+ * Games with randomness (Backgammon, Ludo, Dominos) use a seed stored in state.
+ * Dice rolls and shuffles consume the seed deterministically via LCG.
+ * For real-money ZK verification:
+ * 1. Both players commit to a secret value before game start: commit_A, commit_B
+ * 2. After both commits are on-chain, both reveal their secrets: reveal_A, reveal_B
+ * 3. Final seed = hash(reveal_A || reveal_B) - neither player can predict or manipulate
+ * 4. All randomness (dice, shuffles) derived from this seed via deterministic LCG
  */
 
 // ============================================================================
@@ -65,6 +74,7 @@ export interface BackgammonState {
   dice: [number, number] | null;
   remainingDice: number[];
   moveCount: number;
+  seed: number; // Deterministic seed for dice rolls
 }
 
 export interface BackgammonMove {
@@ -87,6 +97,7 @@ export interface LudoState {
   playerCount: number;
   eliminated: boolean[];
   moveCount: number;
+  seed: number; // Deterministic seed for dice rolls
 }
 
 export interface LudoMove {
@@ -107,10 +118,12 @@ export interface DominosState {
   passed: boolean[];
   playerCount: number;
   moveCount: number;
+  seed: number; // Deterministic seed for draws
 }
 
+// Dominos move types: PLAY (tileIndex >= 0), DRAW (tileIndex = -1), PASS (tileIndex = -2)
 export interface DominosMove {
-  tileIndex: number;
+  tileIndex: number; // -2 = PASS, -1 = DRAW, >= 0 = play tile
   end: 'left' | 'right';
   flip: boolean;
 }
@@ -124,12 +137,15 @@ export type GameMove = ChessMove | CheckersMove | BackgammonMove | LudoMove | Do
 // ============================================================================
 
 function lcgNext(seed: number): [number, number] {
-  // Linear Congruential Generator
+  // Linear Congruential Generator (integer-only, no floating point)
+  // a = 1664525, c = 1013904223, m = 2^31
   const a = 1664525;
   const c = 1013904223;
   const m = 2147483648; // 2^31
-  const next = ((a * seed + c) >>> 0) % m;
-  return [next, next];
+  // Use bitwise operations to stay in 32-bit integer range
+  const next = ((((a * (seed & 0xFFFF)) + (a * (seed >>> 16) << 16)) >>> 0) + c) >>> 0;
+  const result = next % m;
+  return [result, result];
 }
 
 function shuffleWithSeed<T>(arr: T[], seed: number): [T[], number] {
@@ -200,8 +216,8 @@ function isSquareAttacked(state: ChessState, x: number, y: number, byPlayer: 0 |
       
       const dx = x - px;
       const dy = y - py;
-      const adx = Math.abs(dx);
-      const ady = Math.abs(dy);
+      const adx = dx < 0 ? -dx : dx; // Math.abs without floating point
+      const ady = dy < 0 ? -dy : dy;
       
       switch (piece.type) {
         case 'p': {
@@ -228,7 +244,8 @@ function isSquareAttacked(state: ChessState, x: number, y: number, byPlayer: 0 |
             const stepX = dx === 0 ? 0 : dx > 0 ? 1 : -1;
             const stepY = dy === 0 ? 0 : dy > 0 ? 1 : -1;
             let blocked = false;
-            for (let i = 1; i < Math.max(adx, ady); i++) {
+            const steps = adx > ady ? adx : ady;
+            for (let i = 1; i < steps; i++) {
               if (state.board[px + i * stepX][py + i * stepY]) blocked = true;
             }
             if (!blocked) return true;
@@ -239,7 +256,8 @@ function isSquareAttacked(state: ChessState, x: number, y: number, byPlayer: 0 |
             const stepX = dx === 0 ? 0 : dx > 0 ? 1 : -1;
             const stepY = dy === 0 ? 0 : dy > 0 ? 1 : -1;
             let blocked = false;
-            for (let i = 1; i < Math.max(adx, ady); i++) {
+            const steps = adx > ady ? adx : ady;
+            for (let i = 1; i < steps; i++) {
               if (state.board[px + i * stepX][py + i * stepY]) blocked = true;
             }
             if (!blocked) return true;
@@ -295,8 +313,8 @@ function generateChessMoves(state: ChessState): ChessMove[] {
             }
           }
           // Captures
-          for (const dx of [-1, 1]) {
-            const tx = x + dx;
+          for (const ddx of [-1, 1]) {
+            const tx = x + ddx;
             const ty = y + dir;
             if (!isInBounds(tx, ty)) continue;
             const target = state.board[tx][ty];
@@ -312,15 +330,15 @@ function generateChessMoves(state: ChessState): ChessMove[] {
           break;
         }
         case 'n':
-          for (const [dx, dy] of [[2,1],[2,-1],[-2,1],[-2,-1],[1,2],[1,-2],[-1,2],[-1,-2]]) {
-            addMove(x + dx, y + dy);
+          for (const [ddx, ddy] of [[2,1],[2,-1],[-2,1],[-2,-1],[1,2],[1,-2],[-1,2],[-1,-2]]) {
+            addMove(x + ddx, y + ddy);
           }
           break;
         case 'b':
-          for (const [dx, dy] of [[1,1],[1,-1],[-1,1],[-1,-1]]) {
+          for (const [ddx, ddy] of [[1,1],[1,-1],[-1,1],[-1,-1]]) {
             for (let i = 1; i < 8; i++) {
-              const tx = x + i * dx;
-              const ty = y + i * dy;
+              const tx = x + i * ddx;
+              const ty = y + i * ddy;
               if (!isInBounds(tx, ty)) break;
               addMove(tx, ty);
               if (state.board[tx][ty]) break;
@@ -328,10 +346,10 @@ function generateChessMoves(state: ChessState): ChessMove[] {
           }
           break;
         case 'r':
-          for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+          for (const [ddx, ddy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
             for (let i = 1; i < 8; i++) {
-              const tx = x + i * dx;
-              const ty = y + i * dy;
+              const tx = x + i * ddx;
+              const ty = y + i * ddy;
               if (!isInBounds(tx, ty)) break;
               addMove(tx, ty);
               if (state.board[tx][ty]) break;
@@ -339,10 +357,10 @@ function generateChessMoves(state: ChessState): ChessMove[] {
           }
           break;
         case 'q':
-          for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]]) {
+          for (const [ddx, ddy] of [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]]) {
             for (let i = 1; i < 8; i++) {
-              const tx = x + i * dx;
-              const ty = y + i * dy;
+              const tx = x + i * ddx;
+              const ty = y + i * ddy;
               if (!isInBounds(tx, ty)) break;
               addMove(tx, ty);
               if (state.board[tx][ty]) break;
@@ -350,8 +368,8 @@ function generateChessMoves(state: ChessState): ChessMove[] {
           }
           break;
         case 'k':
-          for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]]) {
-            addMove(x + dx, y + dy);
+          for (const [ddx, ddy] of [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]]) {
+            addMove(x + ddx, y + ddy);
           }
           // Castling
           const row = player === 0 ? 0 : 7;
@@ -400,7 +418,7 @@ function applyChessMove(state: ChessState, move: ChessMove): ChessState {
   }
   
   // Handle castling
-  const isCastling = piece.type === 'k' && Math.abs(move.to[0] - move.from[0]) === 2;
+  const isCastling = piece.type === 'k' && (move.to[0] - move.from[0] === 2 || move.to[0] - move.from[0] === -2);
   if (isCastling) {
     const row = move.from[1];
     if (move.to[0] === 6) { // Kingside
@@ -419,7 +437,7 @@ function applyChessMove(state: ChessState, move: ChessMove): ChessState {
     : piece;
   
   // Update king position
-  const newKings = { ...state.kings };
+  const newKings = { 0: [...state.kings[0]] as [number, number], 1: [...state.kings[1]] as [number, number] };
   if (piece.type === 'k') {
     newKings[player] = move.to;
   }
@@ -445,8 +463,8 @@ function applyChessMove(state: ChessState, move: ChessMove): ChessState {
   
   // En passant square
   let newEnPassant: [number, number] | null = null;
-  if (piece.type === 'p' && Math.abs(move.to[1] - move.from[1]) === 2) {
-    newEnPassant = [move.to[0], (move.from[1] + move.to[1]) / 2];
+  if (piece.type === 'p' && (move.to[1] - move.from[1] === 2 || move.to[1] - move.from[1] === -2)) {
+    newEnPassant = [move.to[0], (move.from[1] + move.to[1]) >> 1]; // Integer division
   }
   
   // Half move clock
@@ -477,10 +495,14 @@ function isChessTerminal(state: ChessState): GameResult {
     return { ended: true, winnerIndex: -1 };
   }
   
-  // Fifty move rule
+  // Fifty move rule (100 half-moves = 50 full moves)
   if (state.halfMoveClock >= 100) {
     return { ended: true, winnerIndex: -1 };
   }
+  
+  // NOTE: Threefold repetition and insufficient material are NOT implemented
+  // as they require position history tracking (complex for ZK).
+  // Players can claim draw manually via agreement in these cases.
   
   return { ended: false, winnerIndex: null };
 }
@@ -521,58 +543,70 @@ function initCheckers(): CheckersState {
   return { board, turn: 0, mustContinueFrom: null, moveCount: 0 };
 }
 
+// Helper to deep-copy checkers board (immutable)
+function copyCheckersBoard(board: (CheckersPiece | null)[][]): (CheckersPiece | null)[][] {
+  return board.map(row => row.map(cell => cell ? { ...cell } : null));
+}
+
 function generateCheckersMoves(state: CheckersState): CheckersMove[] {
   const moves: CheckersMove[] = [];
   const player = state.turn;
   const dir = player === 0 ? 1 : -1;
   
-  const addCaptures = (x: number, y: number, piece: CheckersPiece, captures: [number, number][], visited: Set<string>): void => {
+  // FIXED: No mutation - use immutable board copies for recursive capture search
+  const findCaptures = (
+    board: (CheckersPiece | null)[][],
+    x: number,
+    y: number,
+    piece: CheckersPiece,
+    captures: [number, number][],
+    visited: Set<string>
+  ): void => {
     const directions = piece.isKing ? [[1,1],[1,-1],[-1,1],[-1,-1]] : [[1,dir],[-1,dir]];
-    let foundCapture = false;
     
-    for (const [dx, dy] of directions) {
-      const mx = x + dx;
-      const my = y + dy;
-      const tx = x + 2 * dx;
-      const ty = y + 2 * dy;
+    for (const [ddx, ddy] of directions) {
+      const mx = x + ddx;
+      const my = y + ddy;
+      const tx = x + 2 * ddx;
+      const ty = y + 2 * ddy;
       
       if (!isInBounds(tx, ty)) continue;
       const key = `${mx},${my}`;
       if (visited.has(key)) continue;
       
-      const middle = state.board[mx][my];
-      const target = state.board[tx][ty];
+      const middle = board[mx][my];
+      const target = board[tx][ty];
       
       if (middle && middle.player !== player && !target) {
-        foundCapture = true;
-        const newCaptures = [...captures, [mx, my] as [number, number]];
+        const newCaptures: [number, number][] = [...captures, [mx, my]];
         const newVisited = new Set(visited);
         newVisited.add(key);
         
-        // Temporarily update board for recursive check
-        const origPiece = state.board[x][y];
-        state.board[x][y] = null;
-        state.board[mx][my] = null;
-        state.board[tx][ty] = piece;
+        // Create immutable copy of board with move applied
+        const newBoard = copyCheckersBoard(board);
+        newBoard[x][y] = null;
+        newBoard[mx][my] = null;
+        newBoard[tx][ty] = piece;
         
-        addCaptures(tx, ty, piece, newCaptures, newVisited);
+        // Add this capture as a valid move
+        moves.push({ from: [captures.length === 0 ? x : (moves[moves.length-1]?.from[0] ?? x), captures.length === 0 ? y : (moves[moves.length-1]?.from[1] ?? y)], to: [tx, ty], captures: newCaptures });
         
-        // Restore
-        state.board[x][y] = origPiece;
-        state.board[mx][my] = middle;
-        state.board[tx][ty] = null;
-        
-        moves.push({ from: [x, y], to: [tx, ty], captures: newCaptures });
+        // Continue searching for more captures
+        findCaptures(newBoard, tx, ty, piece, newCaptures, newVisited);
       }
     }
+  };
+  
+  const addCaptures = (x: number, y: number, piece: CheckersPiece): void => {
+    findCaptures(state.board, x, y, piece, [], new Set());
   };
   
   const addSimpleMoves = (x: number, y: number, piece: CheckersPiece): void => {
     const directions = piece.isKing ? [[1,1],[1,-1],[-1,1],[-1,-1]] : [[1,dir],[-1,dir]];
     
-    for (const [dx, dy] of directions) {
-      const tx = x + dx;
-      const ty = y + dy;
+    for (const [ddx, ddy] of directions) {
+      const tx = x + ddx;
+      const ty = y + ddy;
       if (isInBounds(tx, ty) && !state.board[tx][ty]) {
         moves.push({ from: [x, y], to: [tx, ty], captures: [] });
       }
@@ -584,7 +618,7 @@ function generateCheckersMoves(state: CheckersState): CheckersMove[] {
     const [x, y] = state.mustContinueFrom;
     const piece = state.board[x][y];
     if (piece) {
-      addCaptures(x, y, piece, [], new Set());
+      addCaptures(x, y, piece);
     }
     return moves;
   }
@@ -594,7 +628,7 @@ function generateCheckersMoves(state: CheckersState): CheckersMove[] {
     for (let y = 0; y < 8; y++) {
       const piece = state.board[x][y];
       if (piece && piece.player === player) {
-        addCaptures(x, y, piece, [], new Set());
+        addCaptures(x, y, piece);
       }
     }
   }
@@ -616,7 +650,7 @@ function generateCheckersMoves(state: CheckersState): CheckersMove[] {
 }
 
 function applyCheckersMove(state: CheckersState, move: CheckersMove): CheckersState {
-  const newBoard = state.board.map(row => [...row]);
+  const newBoard = copyCheckersBoard(state.board);
   const piece = newBoard[move.from[0]][move.from[1]]!;
   
   // Remove captured pieces
@@ -656,25 +690,28 @@ function applyCheckersMove(state: CheckersState, move: CheckersMove): CheckersSt
 }
 
 function isCheckersTerminal(state: CheckersState): GameResult {
-  const moves = generateCheckersMoves(state);
-  
-  if (moves.length === 0) {
-    return { ended: true, winnerIndex: state.turn === 0 ? 1 : 0 };
-  }
-  
-  // Count pieces
-  let p0 = 0, p1 = 0;
+  // FIXED: Count pieces correctly first (before checking moves)
+  let p0 = 0;
+  let p1 = 0;
   for (let x = 0; x < 8; x++) {
     for (let y = 0; y < 8; y++) {
-      const p = state.board[x][y];
-      if (p) p[p.player === 0 ? 'p0' : 'p1']++;
-      if (p?.player === 0) p0++;
-      if (p?.player === 1) p1++;
+      const piece = state.board[x][y];
+      if (piece) {
+        if (piece.player === 0) p0++;
+        else p1++;
+      }
     }
   }
   
+  // If a player has no pieces, they lose
   if (p0 === 0) return { ended: true, winnerIndex: 1 };
   if (p1 === 0) return { ended: true, winnerIndex: 0 };
+  
+  // If current player has no moves, they lose
+  const moves = generateCheckersMoves(state);
+  if (moves.length === 0) {
+    return { ended: true, winnerIndex: state.turn === 0 ? 1 : 0 };
+  }
   
   return { ended: false, winnerIndex: null };
 }
@@ -709,7 +746,7 @@ function initBackgammon(seed: number): BackgammonState {
   points[18] = [1, 1, 1, 1, 1]; // Point 19
   
   // Roll to determine first player
-  const [dice, _] = rollDiceWithSeed(seed, 2);
+  const [dice, newSeed] = rollDiceWithSeed(seed, 2);
   const firstPlayer: 0 | 1 = dice[0] > dice[1] ? 0 : dice[1] > dice[0] ? 1 : 0;
   
   return {
@@ -719,7 +756,8 @@ function initBackgammon(seed: number): BackgammonState {
     turn: firstPlayer,
     dice: null,
     remainingDice: [],
-    moveCount: 0
+    moveCount: 0,
+    seed: newSeed
   };
 }
 
@@ -749,7 +787,8 @@ function generateBackgammonMoves(state: BackgammonState): BackgammonMove[] {
   
   // Must enter from bar first
   if (state.bar[player] > 0) {
-    for (const die of [...new Set(state.remainingDice)]) {
+    const uniqueDice = [...new Set(state.remainingDice)];
+    for (const die of uniqueDice) {
       const entry = player === 0 ? 24 - die : die - 1;
       if (canLandOn(entry)) {
         moves.push({ from: 'bar', to: entry, die });
@@ -762,7 +801,8 @@ function generateBackgammonMoves(state: BackgammonState): BackgammonMove[] {
   for (let from = 0; from < 24; from++) {
     if (!state.points[from].includes(player)) continue;
     
-    for (const die of [...new Set(state.remainingDice)]) {
+    const uniqueDice = [...new Set(state.remainingDice)];
+    for (const die of uniqueDice) {
       const to = from + die * dir;
       
       if (to >= 0 && to < 24 && canLandOn(to)) {
@@ -840,7 +880,8 @@ function applyBackgammonMove(state: BackgammonState, move: BackgammonMove): Back
     turn: hasLegalMoves ? player : opponent,
     dice: hasLegalMoves ? state.dice : null,
     remainingDice: hasLegalMoves ? newRemaining : [],
-    moveCount: state.moveCount + 1
+    moveCount: state.moveCount + 1,
+    seed: state.seed
   };
 }
 
@@ -862,7 +903,7 @@ function validateBackgammonMove(state: BackgammonState, move: BackgammonMove, pl
 // LUDO ENGINE
 // ============================================================================
 
-function initLudo(playerCount: number): LudoState {
+function initLudo(playerCount: number, seed: number): LudoState {
   const tokens: LudoToken[][] = [];
   for (let p = 0; p < playerCount; p++) {
     tokens.push([
@@ -880,7 +921,8 @@ function initLudo(playerCount: number): LudoState {
     consecutiveSixes: 0,
     playerCount,
     eliminated: Array(playerCount).fill(false),
-    moveCount: 0
+    moveCount: 0,
+    seed
   };
 }
 
@@ -1024,7 +1066,8 @@ function applyLudoMove(state: LudoState, move: LudoMove): LudoState {
     consecutiveSixes: extraTurn ? newConsecutiveSixes : 0,
     playerCount: state.playerCount,
     eliminated: newEliminated,
-    moveCount: state.moveCount + 1
+    moveCount: state.moveCount + 1,
+    seed: state.seed
   };
 }
 
@@ -1087,9 +1130,14 @@ function initDominos(playerCount: number, seed: number): DominosState {
     rightEnd: -1,
     passed: Array(playerCount).fill(false),
     playerCount,
-    moveCount: 0
+    moveCount: 0,
+    seed: newSeed
   };
 }
+
+// Move type constants
+const DOMINO_MOVE_PASS = -2;
+const DOMINO_MOVE_DRAW = -1;
 
 function generateDominosMoves(state: DominosState): DominosMove[] {
   const moves: DominosMove[] = [];
@@ -1103,6 +1151,7 @@ function generateDominosMoves(state: DominosState): DominosMove[] {
     return moves;
   }
   
+  // Check for playable tiles
   for (let i = 0; i < hand.length; i++) {
     const tile = hand[i];
     
@@ -1123,44 +1172,107 @@ function generateDominosMoves(state: DominosState): DominosMove[] {
     }
   }
   
+  // If no playable tiles...
+  if (moves.length === 0) {
+    if (state.boneyard.length > 0) {
+      // Must DRAW from boneyard
+      moves.push({ tileIndex: DOMINO_MOVE_DRAW, end: 'left', flip: false });
+    } else {
+      // Boneyard empty, must PASS
+      moves.push({ tileIndex: DOMINO_MOVE_PASS, end: 'left', flip: false });
+    }
+  }
+  
   return moves;
 }
 
 function applyDominosMove(state: DominosState, move: DominosMove): DominosState {
   const newHands = state.hands.map(h => [...h]);
-  const tile = newHands[state.turn][move.tileIndex];
-  newHands[state.turn].splice(move.tileIndex, 1);
-  
-  const orderedTile: DominoTile = move.flip ? [tile[1], tile[0]] : tile;
-  
+  const newPassed = [...state.passed];
+  let newBoneyard = [...state.boneyard];
+  let newBoard = [...state.board];
   let newLeftEnd = state.leftEnd;
   let newRightEnd = state.rightEnd;
-  const newBoard = [...state.board];
+  let newSeed = state.seed;
   
-  if (state.board.length === 0) {
-    newBoard.push({ tile: orderedTile, left: orderedTile[0], right: orderedTile[1] });
-    newLeftEnd = orderedTile[0];
-    newRightEnd = orderedTile[1];
-  } else if (move.end === 'left') {
-    newBoard.unshift({ tile: orderedTile, left: orderedTile[0], right: orderedTile[1] });
-    newLeftEnd = orderedTile[0];
-  } else {
-    newBoard.push({ tile: orderedTile, left: orderedTile[0], right: orderedTile[1] });
-    newRightEnd = orderedTile[1];
+  const currentPlayer = state.turn;
+  
+  // Handle PASS move
+  if (move.tileIndex === DOMINO_MOVE_PASS) {
+    newPassed[currentPlayer] = true;
+    const nextTurn = (currentPlayer + 1) % state.playerCount;
+    return {
+      hands: newHands,
+      board: newBoard,
+      boneyard: newBoneyard,
+      turn: nextTurn,
+      leftEnd: newLeftEnd,
+      rightEnd: newRightEnd,
+      passed: newPassed,
+      playerCount: state.playerCount,
+      moveCount: state.moveCount + 1,
+      seed: newSeed
+    };
   }
   
-  const nextTurn = (state.turn + 1) % state.playerCount;
+  // Handle DRAW move
+  if (move.tileIndex === DOMINO_MOVE_DRAW) {
+    if (newBoneyard.length > 0) {
+      // Draw deterministically (first tile from shuffled boneyard)
+      const drawnTile = newBoneyard[0];
+      newBoneyard = newBoneyard.slice(1);
+      newHands[currentPlayer].push(drawnTile);
+      
+      // After drawing, player stays on same turn to play or draw again
+      // (The rules say draw until playable or empty)
+      return {
+        hands: newHands,
+        board: newBoard,
+        boneyard: newBoneyard,
+        turn: currentPlayer, // Stay on same turn
+        leftEnd: newLeftEnd,
+        rightEnd: newRightEnd,
+        passed: Array(state.playerCount).fill(false), // Reset passes on draw
+        playerCount: state.playerCount,
+        moveCount: state.moveCount + 1,
+        seed: newSeed
+      };
+    }
+  }
+  
+  // Handle PLAY move (tileIndex >= 0)
+  if (move.tileIndex >= 0) {
+    const tile = newHands[currentPlayer][move.tileIndex];
+    newHands[currentPlayer].splice(move.tileIndex, 1);
+    
+    const orderedTile: DominoTile = move.flip ? [tile[1], tile[0]] : tile;
+    
+    if (state.board.length === 0) {
+      newBoard.push({ tile: orderedTile, left: orderedTile[0], right: orderedTile[1] });
+      newLeftEnd = orderedTile[0];
+      newRightEnd = orderedTile[1];
+    } else if (move.end === 'left') {
+      newBoard.unshift({ tile: orderedTile, left: orderedTile[0], right: orderedTile[1] });
+      newLeftEnd = orderedTile[0];
+    } else {
+      newBoard.push({ tile: orderedTile, left: orderedTile[0], right: orderedTile[1] });
+      newRightEnd = orderedTile[1];
+    }
+  }
+  
+  const nextTurn = (currentPlayer + 1) % state.playerCount;
   
   return {
     hands: newHands,
     board: newBoard,
-    boneyard: state.boneyard,
+    boneyard: newBoneyard,
     turn: nextTurn,
     leftEnd: newLeftEnd,
     rightEnd: newRightEnd,
-    passed: Array(state.playerCount).fill(false),
+    passed: Array(state.playerCount).fill(false), // Reset passes on play
     playerCount: state.playerCount,
-    moveCount: state.moveCount + 1
+    moveCount: state.moveCount + 1,
+    seed: newSeed
   };
 }
 
@@ -1172,17 +1284,19 @@ function isDominosTerminal(state: DominosState): GameResult {
     }
   }
   
-  // Check if blocked (no one can play)
+  // Check if blocked (no one can play and boneyard empty)
   let allBlocked = true;
   for (let p = 0; p < state.playerCount; p++) {
     const tempState = { ...state, turn: p };
-    if (generateDominosMoves(tempState).length > 0 || state.boneyard.length > 0) {
+    const moves = generateDominosMoves(tempState);
+    // If any player has a non-PASS move, not blocked
+    if (moves.some(m => m.tileIndex !== DOMINO_MOVE_PASS)) {
       allBlocked = false;
       break;
     }
   }
   
-  if (allBlocked) {
+  if (allBlocked && state.boneyard.length === 0) {
     // Lowest pip count wins
     let lowestPips = Infinity;
     let winner = 0;
@@ -1202,6 +1316,12 @@ function isDominosTerminal(state: DominosState): GameResult {
 function validateDominosMove(state: DominosState, move: DominosMove, playerIndex: number): boolean {
   if (state.turn !== playerIndex) return false;
   const legalMoves = generateDominosMoves(state);
+  
+  // For PASS and DRAW moves, just check tileIndex
+  if (move.tileIndex < 0) {
+    return legalMoves.some(m => m.tileIndex === move.tileIndex);
+  }
+  
   return legalMoves.some(m => 
     m.tileIndex === move.tileIndex && 
     m.end === move.end && 
@@ -1221,7 +1341,7 @@ export function initGame(gameId: GameId, playerCount: number, seed?: number): Ga
     case 2: return initDominos(playerCount, actualSeed);
     case 3: return initBackgammon(actualSeed);
     case 4: return initCheckers();
-    case 5: return initLudo(playerCount);
+    case 5: return initLudo(playerCount, actualSeed);
     default: throw new Error(`Unknown game ID: ${gameId}`);
   }
 }
@@ -1260,17 +1380,23 @@ export function validateMove(gameId: GameId, state: GameState, move: GameMove, p
 }
 
 // ============================================================================
-// DICE FUNCTIONS (Deterministic with seed)
+// DICE FUNCTIONS (Deterministic with seed consumption)
 // ============================================================================
 
-export function rollDice(gameId: GameId, seed: number): [number[], number] {
+export function rollDice(gameId: GameId, state: GameState): [number[], GameState] {
   switch (gameId) {
-    case 3: // Backgammon - 2d6
-      return rollDiceWithSeed(seed, 2);
-    case 5: // Ludo - 1d6
-      return rollDiceWithSeed(seed, 1);
+    case 3: { // Backgammon - 2d6
+      const bgState = state as BackgammonState;
+      const [dice, newSeed] = rollDiceWithSeed(bgState.seed, 2);
+      return [dice, { ...bgState, seed: newSeed }];
+    }
+    case 5: { // Ludo - 1d6
+      const ludoState = state as LudoState;
+      const [dice, newSeed] = rollDiceWithSeed(ludoState.seed, 1);
+      return [dice, { ...ludoState, seed: newSeed }];
+    }
     default:
-      return [[], seed];
+      return [[], state];
   }
 }
 
@@ -1289,3 +1415,12 @@ export function setDice(gameId: GameId, state: GameState, dice: number[]): GameS
       return state;
   }
 }
+
+// ============================================================================
+// MOVE TYPE CONSTANTS (exported for external use)
+// ============================================================================
+
+export const DOMINOS_MOVE_TYPES = {
+  PASS: DOMINO_MOVE_PASS,
+  DRAW: DOMINO_MOVE_DRAW
+} as const;
