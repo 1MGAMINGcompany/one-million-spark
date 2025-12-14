@@ -4,6 +4,27 @@ Welcome to 1M Gaming, the premier skill-based gaming platform. Below are the off
 
 ---
 
+## Commit-Reveal Seed (For Games with Randomness)
+
+Games that involve randomness (Backgammon dice, Ludo dice, Dominos shuffle) use a **commit-reveal** system to ensure fair, unbiased outcomes:
+
+### How It Works
+
+1. **Commit Phase**: Before the game begins, both players submit a commitment (hash of a secret value) to the smart contract
+2. **Reveal Phase**: After both commitments are on-chain, both players reveal their secret values
+3. **Verification**: The contract verifies each reveal matches its corresponding commitment
+4. **Seed Generation**: The final seed is computed as `seed = hash(secret_A || secret_B)`
+5. **Deterministic Derivation**: All dice rolls and shuffles are derived from this seed using a Linear Congruential Generator (LCG)
+
+### Why This Matters
+
+- **Neither player can predict the seed**: It depends on both secrets
+- **Neither player can manipulate the outcome**: Secrets are committed before either is revealed
+- **Fully verifiable**: Anyone can replay the game using the seed to verify fairness
+- **ZK-compatible**: The deterministic nature enables zero-knowledge proof verification
+
+---
+
 ## Chess
 
 ### Overview
@@ -34,10 +55,10 @@ Chess is a two-player strategy board game played on an 8×8 grid. Each player co
 
 ### Draw Conditions
 - **Stalemate**: Player has no legal moves but is not in check
-- **Threefold Repetition**: Same position occurs 3 times
-- **Fifty-Move Rule**: 50 moves without pawn move or capture
-- **Insufficient Material**: Neither player can checkmate (e.g., King vs King)
+- **Fifty-Move Rule**: 50 consecutive moves without pawn move or capture
 - **Agreement**: Both players agree to draw
+
+> **Note**: Threefold repetition and insufficient material draws are available via mutual agreement. These conditions are not auto-detected in the ZK engine due to the complexity of position history tracking.
 
 ---
 
@@ -85,6 +106,11 @@ Backgammon is a two-player game where each player has 15 checkers that move arou
 - Each player starts with checkers at: 2 on point 24, 5 on point 13, 3 on point 8, 5 on point 6 (mirrored for opponent)
 - Players roll dice to determine who goes first (highest roll)
 
+### Randomness (Dice)
+- Dice rolls are derived from the commit-reveal seed
+- Each roll consumes the seed deterministically via LCG
+- Results are fully reproducible given the initial seed
+
 ### Movement
 - Roll two dice; move checkers according to the numbers
 - Each die is a separate move (can be same or different checkers)
@@ -120,6 +146,11 @@ Ludo is a strategy board game for 2-4 players. Each player has 4 tokens that rac
 - Each player has 4 tokens in their base (colored corner)
 - Players take turns clockwise
 - Roll dice to determine first player (highest roll)
+
+### Randomness (Dice)
+- Dice rolls are derived from the commit-reveal seed
+- Each roll consumes the seed deterministically via LCG
+- Results are fully reproducible given the initial seed
 
 ### Movement
 - Roll one die per turn
@@ -157,11 +188,21 @@ Dominos is played with 28 tiles featuring pip values 0-6 on each end. Players ta
 - Remaining tiles form the boneyard
 - Player with highest double starts (e.g., 6-6)
 
+### Randomness (Shuffle)
+- Tile shuffle is derived from the commit-reveal seed
+- Uses Fisher-Yates shuffle with deterministic LCG
+- Order is fully reproducible given the initial seed
+
 ### Gameplay
 - Play tiles by matching one end to an open board end
 - **Doubles** are placed perpendicular (first double is the "spinner")
 - If you cannot play, draw from boneyard until you can (or it's empty)
 - If boneyard is empty and you cannot play, pass your turn
+
+### Move Types
+- **PLAY**: Place a tile from your hand (tileIndex ≥ 0)
+- **DRAW**: Draw from boneyard when you can't play (tileIndex = -1)
+- **PASS**: Skip turn when you can't play and boneyard is empty (tileIndex = -2)
 
 ### Turn Rules
 - Must play if possible
@@ -170,7 +211,7 @@ Dominos is played with 28 tiles featuring pip values 0-6 on each end. Players ta
 
 ### Win Conditions
 - **Empty Hand**: First player to play all tiles wins
-- **Blocked Game**: When no player can play, lowest pip total wins
+- **Blocked Game**: When no player can play (boneyard empty), lowest pip total wins
 
 ### Scoring
 - Winner scores sum of all opponents' remaining pips
@@ -194,8 +235,9 @@ Dominos is played with 28 tiles featuring pip values 0-6 on each end. Players ta
 - Exceeding turn time results in automatic loss by timeout
 
 ### Fair Play
-- All moves validated on-chain
-- Game states are deterministic and verifiable
+- All moves validated on-chain via deterministic engine
+- Game states are reproducible and verifiable
+- Randomness derived from commit-reveal seed (unbiased, unpredictable)
 - Disconnection does not stop the clock
 
 ### Disputes

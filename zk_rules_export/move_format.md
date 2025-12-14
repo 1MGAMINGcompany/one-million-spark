@@ -200,32 +200,45 @@ Enter home: { "tokenIndex": 1, "steps": 3 }
 }
 ```
 
+### Move Types
+
+| tileIndex | Meaning |
+|-----------|---------|
+| -2 | PASS (cannot play, boneyard empty) |
+| -1 | DRAW (cannot play, draw from boneyard) |
+| 0-27 | PLAY (play tile at index from hand) |
+
 ### Binary Format (2 bytes)
 
 | Byte | Bits | Field |
 |------|------|-------|
-| 0 | 0-4 | tileIndex (0-27) |
-| 0 | 5 | end (0=left, 1=right) |
-| 0 | 6 | flip (0=no, 1=yes) |
-| 0 | 7 | reserved |
+| 0 | 0-5 | tileIndex (-2 to 27, offset by +2 = 0-29) |
+| 0 | 6 | end (0=left, 1=right) |
+| 0 | 7 | flip (0=no, 1=yes) |
 
 ### Hex Encoding
 
 ```
 0xTTEF
 ```
-- TT: tile index (00-1B hex)
+- TT: tile index + 2 (00=PASS, 01=DRAW, 02-1D=tiles 0-27)
 - E: end (0=left, 1=right)
 - F: flip (0=no, 1=yes)
 
 ### Examples
 
 ```
-Play tile 0 to left: { "tileIndex": 0, "end": "left", "flip": false }
+PASS (can't play, boneyard empty): { "tileIndex": -2, "end": "left", "flip": false }
   → 0x0000
 
+DRAW (can't play, draw from boneyard): { "tileIndex": -1, "end": "left", "flip": false }
+  → 0x0100
+
+Play tile 0 to left: { "tileIndex": 0, "end": "left", "flip": false }
+  → 0x0200
+
 Play tile 5 to right flipped: { "tileIndex": 5, "end": "right", "flip": true }
-  → 0x0511
+  → 0x0711
 ```
 
 ---
@@ -252,17 +265,17 @@ board → moveCount → mustContinueFrom → turn
 
 **Backgammon:**
 ```
-bar → bearOff → dice → moveCount → points → remainingDice → turn
+bar → bearOff → dice → moveCount → points → remainingDice → seed → turn
 ```
 
 **Ludo:**
 ```
-consecutiveSixes → dice → eliminated → moveCount → playerCount → tokens → turn
+consecutiveSixes → dice → eliminated → moveCount → playerCount → seed → tokens → turn
 ```
 
 **Dominos:**
 ```
-board → boneyard → hands → leftEnd → moveCount → passed → playerCount → rightEnd → turn
+board → boneyard → hands → leftEnd → moveCount → passed → playerCount → rightEnd → seed → turn
 ```
 
 ---
@@ -277,3 +290,17 @@ All moves must be validated before application:
 4. Apply move and compute new state hash
 
 This ensures deterministic state transitions for ZK verification.
+
+---
+
+## Seed Consumption
+
+For games with randomness (Backgammon, Ludo, Dominos), the `seed` field in state is consumed deterministically:
+
+1. **Backgammon**: `rollDice(state)` returns `[dice, newState]` with updated seed
+2. **Ludo**: `rollDice(state)` returns `[dice, newState]` with updated seed
+3. **Dominos**: Seed consumed during init for shuffle; boneyard order fixed
+
+The LCG formula is: `next = (1664525 * seed + 1013904223) mod 2^31`
+
+This ensures identical replay given the same initial seed.

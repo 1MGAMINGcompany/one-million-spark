@@ -1,9 +1,30 @@
 {
   "version": "1.0.0",
+  "commitRevealSeed": {
+    "description": "For games with randomness, both players commit to a secret before game start, then reveal after both commits are on-chain. Final seed = hash(reveal_A || reveal_B).",
+    "flow": [
+      "1. Player A submits commit_A = hash(secret_A)",
+      "2. Player B submits commit_B = hash(secret_B)", 
+      "3. After both commits on-chain, Player A reveals secret_A",
+      "4. Player B reveals secret_B",
+      "5. Contract verifies reveals match commits",
+      "6. seed = hash(secret_A || secret_B) — neither player can predict or manipulate",
+      "7. All dice rolls and shuffles derived from seed via deterministic LCG"
+    ],
+    "appliesTo": ["backgammon", "ludo", "dominos"],
+    "lcg": {
+      "algorithm": "Linear Congruential Generator",
+      "a": 1664525,
+      "c": 1013904223,
+      "m": 2147483648,
+      "note": "Integer-only, no floating point. next = (a * seed + c) mod m"
+    }
+  },
   "games": {
     "chess": {
       "id": 1,
       "players": 2,
+      "usesRandomness": false,
       "board": {
         "width": 8,
         "height": 8,
@@ -35,7 +56,11 @@
         "turnOrder": "alternating",
         "firstPlayer": 0,
         "winConditions": ["checkmate", "resignation", "timeout"],
-        "drawConditions": ["stalemate", "threefoldRepetition", "fiftyMoveRule", "insufficientMaterial", "agreement"],
+        "drawConditions": ["stalemate", "fiftyMoveRule", "agreement"],
+        "drawConditionsNotImplemented": {
+          "note": "Threefold repetition and insufficient material require position history tracking, which adds complexity for ZK proofs. Players can claim draw via agreement in these cases.",
+          "items": ["threefoldRepetition", "insufficientMaterial"]
+        },
         "specialMoves": ["castling", "enPassant", "promotion"],
         "castling": {
           "kingside": { "kingMove": [2, 0], "rookMove": [-2, 0] },
@@ -59,6 +84,7 @@
     "checkers": {
       "id": 4,
       "players": 2,
+      "usesRandomness": false,
       "board": {
         "width": 8,
         "height": 8,
@@ -102,6 +128,9 @@
     "backgammon": {
       "id": 3,
       "players": 2,
+      "usesRandomness": true,
+      "randomnessType": "dice",
+      "seedInState": true,
       "board": {
         "points": 24,
         "bar": 2,
@@ -121,7 +150,8 @@
         "dice": {
           "count": 2,
           "sides": 6,
-          "doubles": "playFourMoves"
+          "doubles": "playFourMoves",
+          "derivation": "rollDiceWithSeed(state.seed, 2) -> consumes seed deterministically"
         },
         "movement": {
           "direction": { "0": "descending", "1": "ascending" },
@@ -151,6 +181,9 @@
     "ludo": {
       "id": 5,
       "players": [2, 3, 4],
+      "usesRandomness": true,
+      "randomnessType": "dice",
+      "seedInState": true,
       "board": {
         "mainTrackLength": 52,
         "homeColumnLength": 6,
@@ -167,7 +200,8 @@
         "firstPlayer": "highestDiceRoll",
         "dice": {
           "count": 1,
-          "sides": 6
+          "sides": 6,
+          "derivation": "rollDiceWithSeed(state.seed, 1) -> consumes seed deterministically"
         },
         "movement": {
           "exitBase": { "requiredRoll": 6 },
@@ -197,6 +231,9 @@
     "dominos": {
       "id": 2,
       "players": [2, 3, 4],
+      "usesRandomness": true,
+      "randomnessType": "shuffle",
+      "seedInState": true,
       "tiles": {
         "type": "double-six",
         "total": 28,
@@ -210,7 +247,8 @@
           [4,4], [4,5], [4,6],
           [5,5], [5,6],
           [6,6]
-        ]
+        ],
+        "shuffleDerivation": "shuffleWithSeed(tiles, seed) -> consumes seed deterministically"
       },
       "rules": {
         "tilesPerPlayer": { "2": 7, "3": 7, "4": 7 },
@@ -225,11 +263,16 @@
           "condition": "cannotPlay",
           "fromBoneyard": true,
           "untilPlayable": true,
-          "ifBoneyardEmpty": "passTurn"
+          "ifBoneyardEmpty": "passTurn",
+          "moveType": "DRAW (tileIndex = -1)"
+        },
+        "pass": {
+          "condition": "cannotPlayAndBoneyardEmpty",
+          "moveType": "PASS (tileIndex = -2)"
         },
         "winConditions": ["emptyHand", "lowestPipsWhenBlocked"],
         "blocked": {
-          "condition": "noPlayerCanPlay",
+          "condition": "noPlayerCanPlayAndBoneyardEmpty",
           "winner": "lowestPipCount"
         },
         "scoring": {
