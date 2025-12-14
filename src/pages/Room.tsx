@@ -13,6 +13,10 @@ import { useEffect, useState } from "react";
 import { ShareInviteDialog } from "@/components/ShareInviteDialog";
 import { useRoomEvents, useNotificationPermission } from "@/hooks/useRoomEvents";
 import { DiceRollStart } from "@/components/DiceRollStart";
+import { CommitRevealPanel } from "@/components/CommitRevealPanel";
+import { gameRequiresSeed } from "@/contracts/seedManager";
+import { SeedPhase } from "@/contracts/seedManager";
+import { useSeedState, parseSeedState } from "@/hooks/useCommitReveal";
 
 export default function Room() {
   const { roomId } = useParams<{ roomId: string }>();
@@ -25,6 +29,9 @@ export default function Room() {
   const [showDiceRoll, setShowDiceRoll] = useState(false);
   const [diceRollComplete, setDiceRollComplete] = useState(false);
   const [playerGoesFirst, setPlayerGoesFirst] = useState<boolean | null>(null);
+  const [seedFinalized, setSeedFinalized] = useState(false);
+  const [gameSeedInt, setGameSeedInt] = useState<number | null>(null);
+  const [finalSeedHash, setFinalSeedHash] = useState<`0x${string}` | null>(null);
   const { requestPermission } = useNotificationPermission();
 
   const roomIdBigInt = roomId ? BigInt(roomId) : undefined;
@@ -49,6 +56,7 @@ export default function Room() {
   } : null;
 
   const players = playersData || [];
+  const playersTyped = players as `0x${string}`[];
 
   const isCreator = room && address && room.creator.toLowerCase() === address.toLowerCase();
   const isPlayer = players.some(p => p.toLowerCase() === address?.toLowerCase());
@@ -56,11 +64,29 @@ export default function Room() {
   const canCancel = room && room.status === RoomStatus.Created && isCreator;
   const canShare = room && room.isPrivate && isCreator && room.status === RoomStatus.Created;
   const roomIsFull = room && players.length >= room.maxPlayers;
-  const canStartGame = roomIsFull && room.status === RoomStatus.Created && isPlayer && !diceRollComplete;
+  
+  // Check if game requires seed (commit-reveal)
+  const requiresSeed = room ? gameRequiresSeed(room.gameId) : false;
+  
+  // For games requiring seed, seed must be finalized before game can start
+  // For Chess (1) and Checkers (4), no seed needed
+  const canProceedToGame = requiresSeed ? seedFinalized : true;
+  const canStartGame = roomIsFull && room.status === RoomStatus.Created && isPlayer && !diceRollComplete && canProceedToGame;
 
   // Get opponent info for dice roll
   const opponent = players.find(p => p.toLowerCase() !== address?.toLowerCase());
   const opponentShortName = opponent ? `${opponent.slice(0, 6)}...${opponent.slice(-4)}` : "Opponent";
+
+  // Seed state for checking current phase
+  const { data: seedStateRaw } = useSeedState(requiresSeed && roomIsFull ? roomIdBigInt : undefined);
+  const seedState = parseSeedState(seedStateRaw);
+  
+  // Check if already finalized on load
+  useEffect(() => {
+    if (seedState?.phase === SeedPhase.Finalized && !seedFinalized) {
+      setSeedFinalized(true);
+    }
+  }, [seedState, seedFinalized]);
 
   // Watch for room events (player joins, room ready)
   useRoomEvents({
@@ -80,6 +106,7 @@ export default function Room() {
       requestPermission();
     }
   }, [isCreator, requestPermission]);
+
   useEffect(() => {
     if (isJoinSuccess) {
       play("rooms_enter");
@@ -125,6 +152,39 @@ export default function Room() {
       case RoomStatus.Cancelled: return "destructive";
       default: return "secondary";
     }
+  };
+  
+  const handleSeedFinalized = (seedInt: number, hash: `0x${string}`) => {
+    setGameSeedInt(seedInt);
+    setFinalSeedHash(hash);
+    setSeedFinalized(true);
+  };
+  
+  const handleSeedRefunded = () => {
+    // Navigate back to room list
+    navigate("/room-list");
+  };
+  
+  const navigateToGame = () => {
+    // Build game path with seed if needed
+    const gamePaths: Record<number, string> = {
+      1: `/game/chess/${roomId}`,
+      2: `/game/dominos/${roomId}`,
+      3: `/game/backgammon/${roomId}`,
+      4: `/game/checkers/${roomId}`,
+      5: `/game/ludo/${roomId}`,
+    };
+    let path = gamePaths[room?.gameId || 1] || `/game/chess/${roomId}`;
+    
+    // For seeded games, pass seed as query param
+    if (requiresSeed && gameSeedInt !== null) {
+      path += `?seed=${gameSeedInt}`;
+      if (finalSeedHash) {
+        path += `&seedHash=${finalSeedHash}`;
+      }
+    }
+    
+    navigate(path);
   };
 
   if (!isConnected) {
@@ -224,6 +284,16 @@ export default function Room() {
             </div>
           </div>
 
+          {/* Commit-Reveal Panel for games requiring seed */}
+          {requiresSeed && roomIsFull && room.status === RoomStatus.Created && (
+            <CommitRevealPanel
+              roomId={roomIdBigInt!}
+              players={playersTyped}
+              onSeedFinalized={handleSeedFinalized}
+              onRefunded={handleSeedRefunded}
+            />
+          )}
+
           {/* Actions */}
           {room.status === RoomStatus.Created && (
             <div className="flex flex-wrap gap-3 pt-4 border-t border-border/50">
@@ -257,10 +327,19 @@ export default function Room() {
                 <p className="w-full text-center text-sm text-muted-foreground">Waiting for more players to join...</p>
               )}
               
-              {/* Room is full - show start game button */}
-              {roomIsFull && !diceRollComplete && (
+              {/* Room is full - show seed requirement message or start game button */}
+              {roomIsFull && requiresSeed && !seedFinalized && (
+                <p className="w-full text-center text-sm text-amber-500 font-medium">
+                  Complete the commit-reveal process above to establish fair randomness before starting.
+                </p>
+              )}
+              
+              {/* Room is full and seed finalized (or not required) - show dice roll */}
+              {canStartGame && !diceRollComplete && (
                 <div className="w-full text-center space-y-3">
-                  <p className="text-sm text-green-500 font-medium">All players have joined!</p>
+                  <p className="text-sm text-green-500 font-medium">
+                    {requiresSeed ? "Seed finalized! " : ""}All players have joined!
+                  </p>
                   <Button 
                     onClick={() => setShowDiceRoll(true)} 
                     className="w-full bg-gradient-to-r from-primary to-amber-600 hover:from-primary/90 hover:to-amber-600/90"
@@ -277,18 +356,7 @@ export default function Room() {
                     {playerGoesFirst ? "You go first!" : `${opponentShortName} goes first`}
                   </p>
                   <Button 
-                    onClick={() => {
-                      // Navigate to game based on gameId
-                      const gamePaths: Record<number, string> = {
-                        1: `/game/chess/${roomId}`,
-                        2: `/game/dominos/${roomId}`,
-                        3: `/game/backgammon/${roomId}`,
-                        4: `/game/checkers/${roomId}`,
-                        5: `/game/ludo/${roomId}`,
-                      };
-                      const path = gamePaths[room?.gameId || 1] || `/game/chess/${roomId}`;
-                      navigate(path);
-                    }}
+                    onClick={navigateToGame}
                     className="w-full"
                   >
                     Start Game
