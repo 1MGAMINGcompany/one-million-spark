@@ -1,0 +1,256 @@
+{
+  "version": "1.0.0",
+  "games": {
+    "chess": {
+      "id": 1,
+      "players": 2,
+      "board": {
+        "width": 8,
+        "height": 8,
+        "squares": 64
+      },
+      "pieces": {
+        "types": ["pawn", "rook", "knight", "bishop", "queen", "king"],
+        "perPlayer": 16,
+        "initial": {
+          "0": {
+            "pawns": [[0,1], [1,1], [2,1], [3,1], [4,1], [5,1], [6,1], [7,1]],
+            "rooks": [[0,0], [7,0]],
+            "knights": [[1,0], [6,0]],
+            "bishops": [[2,0], [5,0]],
+            "queen": [[3,0]],
+            "king": [[4,0]]
+          },
+          "1": {
+            "pawns": [[0,6], [1,6], [2,6], [3,6], [4,6], [5,6], [6,6], [7,6]],
+            "rooks": [[0,7], [7,7]],
+            "knights": [[1,7], [6,7]],
+            "bishops": [[2,7], [5,7]],
+            "queen": [[3,7]],
+            "king": [[4,7]]
+          }
+        }
+      },
+      "rules": {
+        "turnOrder": "alternating",
+        "firstPlayer": 0,
+        "winConditions": ["checkmate", "resignation", "timeout"],
+        "drawConditions": ["stalemate", "threefoldRepetition", "fiftyMoveRule", "insufficientMaterial", "agreement"],
+        "specialMoves": ["castling", "enPassant", "promotion"],
+        "castling": {
+          "kingside": { "kingMove": [2, 0], "rookMove": [-2, 0] },
+          "queenside": { "kingMove": [-2, 0], "rookMove": [3, 0] },
+          "requirements": ["kingNotMoved", "rookNotMoved", "noCheckThrough", "pathClear"]
+        },
+        "enPassant": {
+          "condition": "pawnDoubleMoveLastTurn",
+          "captureSquare": "behindPawn"
+        },
+        "promotion": {
+          "condition": "pawnReachesLastRank",
+          "options": ["queen", "rook", "bishop", "knight"]
+        }
+      },
+      "parameters": {
+        "maxMoves": 500,
+        "fiftyMoveLimit": 50
+      }
+    },
+    "checkers": {
+      "id": 4,
+      "players": 2,
+      "board": {
+        "width": 8,
+        "height": 8,
+        "playableSquares": 32
+      },
+      "pieces": {
+        "types": ["man", "king"],
+        "perPlayer": 12,
+        "initial": {
+          "0": [[0,0], [2,0], [4,0], [6,0], [1,1], [3,1], [5,1], [7,1], [0,2], [2,2], [4,2], [6,2]],
+          "1": [[1,5], [3,5], [5,5], [7,5], [0,6], [2,6], [4,6], [6,6], [1,7], [3,7], [5,7], [7,7]]
+        }
+      },
+      "rules": {
+        "turnOrder": "alternating",
+        "firstPlayer": 0,
+        "movement": {
+          "man": "diagonalForwardOnly",
+          "king": "diagonalAnyDirection"
+        },
+        "capture": {
+          "mandatory": true,
+          "multiJump": true,
+          "direction": {
+            "man": "forwardOnly",
+            "king": "anyDirection"
+          }
+        },
+        "promotion": {
+          "condition": "reachOppositeEnd",
+          "promoteTo": "king"
+        },
+        "winConditions": ["captureAllPieces", "blockAllMoves", "resignation", "timeout"],
+        "drawConditions": ["agreement", "noProgressLimit"]
+      },
+      "parameters": {
+        "maxMoves": 200,
+        "noProgressLimit": 40
+      }
+    },
+    "backgammon": {
+      "id": 3,
+      "players": 2,
+      "board": {
+        "points": 24,
+        "bar": 2,
+        "bearOffZones": 2
+      },
+      "pieces": {
+        "type": "checker",
+        "perPlayer": 15,
+        "initial": {
+          "0": { "24": 2, "13": 5, "8": 3, "6": 5 },
+          "1": { "1": 2, "12": 5, "17": 3, "19": 5 }
+        }
+      },
+      "rules": {
+        "turnOrder": "alternating",
+        "firstPlayer": "highestDiceRoll",
+        "dice": {
+          "count": 2,
+          "sides": 6,
+          "doubles": "playFourMoves"
+        },
+        "movement": {
+          "direction": { "0": "descending", "1": "ascending" },
+          "barReentry": "mandatory",
+          "mustUseBothDice": true,
+          "useHigherIfOnlyOne": true
+        },
+        "hitting": {
+          "condition": "singleOpponentChecker",
+          "result": "sendToBar"
+        },
+        "bearingOff": {
+          "condition": "allCheckersInHomeBoard",
+          "homeBoard": { "0": [1, 6], "1": [19, 24] }
+        },
+        "winConditions": ["bearOffAll", "resignation", "timeout"],
+        "gammonConditions": {
+          "gammon": "opponentBoreOffNone",
+          "backgammon": "gammonAndOpponentInBarOrHomeBoard"
+        }
+      },
+      "parameters": {
+        "maxTurns": 500,
+        "doublingCube": false
+      }
+    },
+    "ludo": {
+      "id": 5,
+      "players": [2, 3, 4],
+      "board": {
+        "mainTrackLength": 52,
+        "homeColumnLength": 6,
+        "tokensPerPlayer": 4
+      },
+      "pieces": {
+        "type": "token",
+        "perPlayer": 4,
+        "colors": ["gold", "red", "green", "blue"],
+        "startPositions": { "0": 0, "1": 13, "2": 26, "3": 39 }
+      },
+      "rules": {
+        "turnOrder": "clockwise",
+        "firstPlayer": "highestDiceRoll",
+        "dice": {
+          "count": 1,
+          "sides": 6
+        },
+        "movement": {
+          "exitBase": { "requiredRoll": 6 },
+          "direction": "clockwise",
+          "exactHomeEntry": true
+        },
+        "capture": {
+          "condition": "landOnOpponent",
+          "result": "sendToBase",
+          "safeSquares": [0, 8, 13, 21, 26, 34, 39, 47]
+        },
+        "extraTurn": {
+          "onSix": true,
+          "maxConsecutiveSixes": 3,
+          "penaltyOnThirdSix": "returnLastMovedToBase"
+        },
+        "winConditions": ["allTokensHome", "lastPlayerStanding"],
+        "homeEntry": {
+          "condition": "completeTrackLoop",
+          "exactRoll": true
+        }
+      },
+      "parameters": {
+        "maxTurns": 1000
+      }
+    },
+    "dominos": {
+      "id": 2,
+      "players": [2, 3, 4],
+      "tiles": {
+        "type": "double-six",
+        "total": 28,
+        "maxPips": 6,
+        "format": "pairs",
+        "set": [
+          [0,0], [0,1], [0,2], [0,3], [0,4], [0,5], [0,6],
+          [1,1], [1,2], [1,3], [1,4], [1,5], [1,6],
+          [2,2], [2,3], [2,4], [2,5], [2,6],
+          [3,3], [3,4], [3,5], [3,6],
+          [4,4], [4,5], [4,6],
+          [5,5], [5,6],
+          [6,6]
+        ]
+      },
+      "rules": {
+        "tilesPerPlayer": { "2": 7, "3": 7, "4": 7 },
+        "turnOrder": "clockwise",
+        "firstPlayer": "highestDouble",
+        "placement": {
+          "matchingEnds": true,
+          "doublesPerpendicularly": true,
+          "spinnerFirst": true
+        },
+        "draw": {
+          "condition": "cannotPlay",
+          "fromBoneyard": true,
+          "untilPlayable": true,
+          "ifBoneyardEmpty": "passTurn"
+        },
+        "winConditions": ["emptyHand", "lowestPipsWhenBlocked"],
+        "blocked": {
+          "condition": "noPlayerCanPlay",
+          "winner": "lowestPipCount"
+        },
+        "scoring": {
+          "winner": "sumOfOpponentPips",
+          "roundTarget": 100
+        }
+      },
+      "parameters": {
+        "maxRounds": 10,
+        "targetScore": 100
+      }
+    }
+  },
+  "common": {
+    "timeControl": {
+      "turnTimeSec": [5, 10, 15, 0],
+      "zeroMeansUnlimited": true
+    },
+    "platformFee": {
+      "basisPoints": 500,
+      "means": "5%"
+    }
+  }
+}
