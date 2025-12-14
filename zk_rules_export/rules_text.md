@@ -234,20 +234,25 @@ Dominos is played with 28 tiles featuring pip values 0-6 on each end. Players ta
 - Players select turn time at room creation: 5, 10, 15 seconds, or Unlimited
 - Exceeding turn time results in automatic loss by timeout
 
-### Fair Randomness (Dice & Shuffles)
+### Commit–Reveal Fair Randomness (Mandatory for Ludo, Backgammon, Dominos)
 
-For games that use randomness (Ludo, Backgammon, Dominos), 1M Gaming uses a commit–reveal process to generate a fair random seed.
+For games that use randomness (Ludo, Backgammon, Dominos), 1M Gaming uses a mandatory commit–reveal process to generate a fair random seed:
 
-1. **Commit Phase**: Each player commits a hidden secret first (hash of secret submitted to contract)
-2. **Reveal Phase**: After all commits are submitted, each player reveals their secret
-3. **Seed Computation**: The final seed is computed from all player secrets and the room ID: `finalSeed = keccak256(roomId || secretsInJoinOrder)`
-4. **Deterministic Derivation**: Dice rolls and tile shuffles are derived deterministically from the final seed using a Linear Congruential Generator (LCG)
-5. **Timeout Protection**: If any player does not reveal their secret within the allowed time (120 seconds), the game is cancelled and all entry fees are refunded (no platform fee)
+1. **Commit Phase**: Each player in the room (2–4 players) commits a hash of a secret value on-chain. The secret is generated locally in the browser and stored securely.
 
-This ensures:
+2. **Reveal Phase**: After all commits are submitted, each player reveals their secret. The smart contract verifies each reveal matches its commitment.
+
+3. **Seed Computation**: The final seed is computed as: `finalSeedHash = keccak256(roomId || secretsInJoinOrder)`. This seed is stored on-chain for verifiability.
+
+4. **Deterministic Derivation**: Dice rolls and tile shuffles are derived deterministically from this seed using a Linear Congruential Generator (LCG).
+
+5. **Timeout & Refund**: If any player fails to reveal their secret within 120 seconds, the room is cancelled and all entry fees are refunded (no platform fee). This protects players from malicious opponents who refuse to reveal.
+
+**Guarantees:**
 - Neither player can predict or manipulate the random outcomes
 - All randomness is fully reproducible and verifiable
 - Perfect fairness through cryptographic commitment
+- No game moves (dice rolls, shuffles, draws) can occur until the seed is finalized
 
 ### Fair Play
 - Moves are validated by the game engine and verified via cryptographic proof on-chain at game completion
