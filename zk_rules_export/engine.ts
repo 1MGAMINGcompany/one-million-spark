@@ -1334,14 +1334,23 @@ function validateDominosMove(state: DominosState, move: DominosMove, playerIndex
 // ============================================================================
 
 export function initGame(gameId: GameId, playerCount: number, seed?: number): GameState {
-  const actualSeed = seed ?? 12345;
+  // Games that use randomness (Dominos=2, Backgammon=3, Ludo=5) REQUIRE seed
+  // for real-money ZK correctness. Seed must come from commit-reveal finalSeed.
+  const requiresSeed = gameId === 2 || gameId === 3 || gameId === 5;
+  
+  if (requiresSeed && seed === undefined) {
+    throw new Error(
+      `Game ID ${gameId} requires a seed for fair randomness. ` +
+      `Seed must be derived from commit-reveal finalSeed = keccak256(roomId || secretsInJoinOrder).`
+    );
+  }
   
   switch (gameId) {
-    case 1: return initChess();
-    case 2: return initDominos(playerCount, actualSeed);
-    case 3: return initBackgammon(actualSeed);
-    case 4: return initCheckers();
-    case 5: return initLudo(playerCount, actualSeed);
+    case 1: return initChess(); // No randomness, seed ignored
+    case 2: return initDominos(playerCount, seed!); // Seed required
+    case 3: return initBackgammon(seed!); // Seed required
+    case 4: return initCheckers(); // No randomness, seed ignored
+    case 5: return initLudo(playerCount, seed!); // Seed required
     default: throw new Error(`Unknown game ID: ${gameId}`);
   }
 }

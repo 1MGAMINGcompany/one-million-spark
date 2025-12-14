@@ -234,8 +234,23 @@ Dominos is played with 28 tiles featuring pip values 0-6 on each end. Players ta
 - Players select turn time at room creation: 5, 10, 15 seconds, or Unlimited
 - Exceeding turn time results in automatic loss by timeout
 
+### Fair Randomness (Dice & Shuffles)
+
+For games that use randomness (Ludo, Backgammon, Dominos), 1M Gaming uses a commit–reveal process to generate a fair random seed.
+
+1. **Commit Phase**: Each player commits a hidden secret first (hash of secret submitted to contract)
+2. **Reveal Phase**: After all commits are submitted, each player reveals their secret
+3. **Seed Computation**: The final seed is computed from all player secrets and the room ID: `finalSeed = keccak256(roomId || secretsInJoinOrder)`
+4. **Deterministic Derivation**: Dice rolls and tile shuffles are derived deterministically from the final seed using a Linear Congruential Generator (LCG)
+5. **Timeout Protection**: If any player does not reveal their secret within the allowed time (120 seconds), the game is cancelled and all entry fees are refunded (no platform fee)
+
+This ensures:
+- Neither player can predict or manipulate the random outcomes
+- All randomness is fully reproducible and verifiable
+- Perfect fairness through cryptographic commitment
+
 ### Fair Play
-- All moves validated on-chain via deterministic engine
+- Moves are validated by the game engine and verified via cryptographic proof on-chain at game completion
 - Game states are reproducible and verifiable
 - Randomness derived from commit-reveal seed (unbiased, unpredictable)
 - Disconnection does not stop the clock
