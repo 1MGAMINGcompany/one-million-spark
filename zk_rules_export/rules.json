@@ -131,6 +131,11 @@
       "usesRandomness": true,
       "randomnessType": "dice",
       "seedInState": true,
+      "randomness": {
+        "required": true,
+        "source": "commitRevealFinalSeed",
+        "deterministicRng": "lcg"
+      },
       "board": {
         "points": 24,
         "bar": 2,
@@ -184,6 +189,11 @@
       "usesRandomness": true,
       "randomnessType": "dice",
       "seedInState": true,
+      "randomness": {
+        "required": true,
+        "source": "commitRevealFinalSeed",
+        "deterministicRng": "lcg"
+      },
       "board": {
         "mainTrackLength": 52,
         "homeColumnLength": 6,
@@ -234,6 +244,11 @@
       "usesRandomness": true,
       "randomnessType": "shuffle",
       "seedInState": true,
+      "randomness": {
+        "required": true,
+        "source": "commitRevealFinalSeed",
+        "deterministicRng": "lcg"
+      },
       "tiles": {
         "type": "double-six",
         "total": 28,
@@ -294,6 +309,15 @@
     "platformFee": {
       "basisPoints": 500,
       "means": "5%"
+    },
+    "fairRandomness": {
+      "enabledGames": [2, 3, 5],
+      "method": "commitReveal",
+      "finalSeed": "keccak256(roomId || secretsInJoinOrder)",
+      "timeouts": {
+        "commitWindowSec": 120,
+        "revealWindowSec": 120
+      }
     }
   }
 }
