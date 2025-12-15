@@ -7,6 +7,7 @@ const SOUND_FILES: Record<string, string> = {
   'ui_menu': '/sounds/ui/menu-open.mp3',
   'ui_notify': '/sounds/ui/notify.mp3',
   'ui_woosh': '/sounds/ui/woosh.mp3',
+  'ui_litewoosh': '/sounds/ui/litewoosh.mp3',
   
   // System sounds
   'system_error': '/sounds/system/error.mp3',
