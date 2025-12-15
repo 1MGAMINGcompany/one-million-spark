@@ -23,8 +23,9 @@ export async function initPushUser(address: string): Promise<PushAPI.PushAPI> {
   }
 
   // Create ethers provider and signer
-  const web3Provider = new ethers.providers.Web3Provider(provider);
-  const signer = web3Provider.getSigner(address);
+  const { BrowserProvider } = await import("ethers");
+  const web3Provider = new BrowserProvider(provider);
+  const signer = await web3Provider.getSigner();
 
   // Initialize Push user with ethers signer
   const user = await PushAPI.PushAPI.initialize(signer, {

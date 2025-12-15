@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { ethers } from "ethers";
+import { BrowserProvider, Contract } from "ethers";
 import ABI from "@/abi/RoomManagerV7Production.abi.json";
 
 export const ROOMMANAGER_V7_ADDRESS =
@@ -12,9 +12,9 @@ export function useRoomManagerV7() {
     const eth = (window as any).ethereum;
     if (!eth) throw new Error("WALLET_NOT_FOUND");
 
-    const provider = new ethers.providers.Web3Provider(eth);
-    const signer = provider.getSigner();
-    return new ethers.Contract(ROOMMANAGER_V7_ADDRESS, ABI as any, signer);
+    const provider = new BrowserProvider(eth);
+    const signer = await provider.getSigner();
+    return new Contract(ROOMMANAGER_V7_ADDRESS, ABI as any, signer);
   }, []);
 
   const withLock = useCallback(async <T,>(fn: () => Promise<T>) => {

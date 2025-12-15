@@ -33,8 +33,9 @@ export async function initPushNotifications(
       return null;
     }
 
-    const web3Provider = new ethers.providers.Web3Provider(provider);
-    const signer = web3Provider.getSigner(address);
+    const { BrowserProvider } = await import("ethers");
+    const web3Provider = new BrowserProvider(provider);
+    const signer = await web3Provider.getSigner();
 
     const pushUser = await PushAPI.PushAPI.initialize(signer, {
       env: PUSH_ENV,
