@@ -1,7 +1,7 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { useAccount } from "wagmi";
-import { useRoom, useCancelRoom, usePlayersOf, formatEntryFee, getRoomStatusLabel, getGameName } from "@/hooks/useRoomManager";
-import { useGaslessJoinRoom } from "@/hooks/useGaslessCreateRoom";
+import { useRoom, usePlayersOf, formatEntryFee, getRoomStatusLabel, getGameName } from "@/hooks/useRoomManager";
+import { useGaslessJoinRoom, useGaslessCancelRoom } from "@/hooks/useGaslessCreateRoom";
 import { RoomStatus } from "@/contracts/roomManager";
 import { usePolPrice } from "@/hooks/usePolPrice";
 import { useToast } from "@/hooks/use-toast";
@@ -41,9 +41,10 @@ export default function Room() {
   const { data: playersData, refetch: refetchPlayers } = usePlayersOf(roomIdBigInt);
 
   const { joinRoomGasless, isBusy: isJoinBusy, isSuccess: isJoinSuccess, reset: resetJoin } = useGaslessJoinRoom();
-  const { cancelRoom, isPending: isCancelPending, isConfirming: isCancelConfirming, isSuccess: isCancelSuccess, reset: resetCancel } = useCancelRoom();
+  const { cancelRoomGasless, isBusy: isCancelBusy, isSuccess: isCancelSuccess, reset: resetCancel } = useGaslessCancelRoom();
 
   const isJoinPending = isJoinBusy;
+  const isCancelPending = isCancelBusy;
 
   // Parse room data from getRoomView: [id, creator, entryFee, maxPlayers, isPrivate, status, gameId, turnTimeSeconds, winner]
   const room = roomData ? {
@@ -138,10 +139,14 @@ export default function Room() {
     }
   };
 
-  const handleCancel = () => {
+  const handleCancel = async () => {
     if (!roomIdBigInt) return;
     play("ui_click");
-    cancelRoom(roomIdBigInt);
+    try {
+      await cancelRoomGasless(roomIdBigInt);
+    } catch (err) {
+      console.error("Cancel room failed:", err);
+    }
   };
 
   const copyAddress = (addr: string) => {
@@ -315,11 +320,11 @@ export default function Room() {
               )}
 
               {canCancel && (
-                <Button onClick={handleCancel} disabled={isCancelPending || isCancelConfirming} variant="destructive">
-                  {isCancelPending || isCancelConfirming ? (
+                <Button onClick={handleCancel} disabled={isCancelPending} variant="destructive">
+                  {isCancelPending ? (
                     <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Cancelling...</>
                   ) : (
-                    "Cancel Room"
+                    "Cancel Room (Gasless)"
                   )}
                 </Button>
               )}

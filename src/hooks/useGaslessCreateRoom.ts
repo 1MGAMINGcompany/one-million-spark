@@ -165,3 +165,63 @@ export function useGaslessJoinRoom() {
     reset,
   };
 }
+
+export function useGaslessCancelRoom() {
+  const [isBusy, setIsBusy] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+
+  const cancelRoomGasless = useCallback(async (roomId: bigint): Promise<{ transactionHash: string }> => {
+    if (isBusy) throw new Error("BUSY");
+    setIsBusy(true);
+    setIsSuccess(false);
+    setError(null);
+
+    try {
+      const account = await getThirdwebAccount();
+      const contract = getThirdwebContract();
+
+      // Prepare the cancelRoom transaction
+      const transaction = prepareContractCall({
+        contract,
+        method: "function cancelRoom(uint256 roomId)",
+        params: [roomId],
+      });
+
+      // Send gasless transaction via relayer (user signs, relayer pays gas)
+      const result = await sendTransaction({
+        account,
+        transaction,
+        gasless: GASLESS_CONFIG,
+      });
+
+      // Wait for receipt
+      const { waitForReceipt } = await import("thirdweb");
+      const receipt = await waitForReceipt(result);
+
+      setIsSuccess(true);
+      return {
+        transactionHash: receipt.transactionHash,
+      };
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      setError(error);
+      throw error;
+    } finally {
+      setIsBusy(false);
+    }
+  }, [isBusy]);
+
+  const reset = useCallback(() => {
+    setIsSuccess(false);
+    setError(null);
+  }, []);
+
+  return {
+    cancelRoomGasless,
+    isBusy,
+    isSuccess,
+    error,
+    reset,
+  };
+}
