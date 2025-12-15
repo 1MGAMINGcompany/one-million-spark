@@ -24,6 +24,7 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
   const [gameOver, setGameOver] = useState<PlayerColor | null>(null);
   const [movableTokens, setMovableTokens] = useState<number[]>([]);
   const [isAnimating, setIsAnimating] = useState(false);
+  const [turnSignal, setTurnSignal] = useState(0); // Increments on every turn to force re-renders
   
   // Use refs to avoid stale closures and prevent double execution
   const playersRef = useRef(players);
@@ -236,23 +237,32 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
     return null;
   }, []);
 
-  // Advance to next turn
-  const advanceTurn = useCallback((diceRolled: number) => {
+  // Advance to next turn - returns true if same player gets bonus turn (rolled 6)
+  const advanceTurn = useCallback((diceRolled: number): boolean => {
     const currentPlayers = playersRef.current;
     const winner = checkWinner(currentPlayers);
     
     if (winner) {
       setGameOver(winner);
       onSoundPlay?.(winner === 'gold' ? 'ludo_win' : 'ludo_lose');
+      return false;
+    }
+    
+    const isBonusTurn = diceRolled === 6;
+    
+    // Only advance turn if dice wasn't 6
+    if (!isBonusTurn) {
+      setCurrentPlayerIndex(prev => (prev + 1) % 4);
     } else {
-      // Only advance turn if dice wasn't 6
-      if (diceRolled !== 6) {
-        setCurrentPlayerIndex(prev => (prev + 1) % 4);
-      }
+      console.log(`[LUDO ENGINE] Bonus turn! Rolled 6, same player continues.`);
     }
     
     setDiceValue(null);
     setMovableTokens([]);
+    // CRITICAL: Always increment turnSignal to trigger re-renders for next turn
+    setTurnSignal(prev => prev + 1);
+    
+    return isBonusTurn;
   }, [checkWinner, onSoundPlay]);
 
   // Roll dice
@@ -325,6 +335,7 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
     setGameOver(null);
     setMovableTokens([]);
     setIsAnimating(false);
+    setTurnSignal(0);
   }, []);
 
   // Cleanup on unmount
@@ -346,6 +357,7 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
     gameOver,
     movableTokens,
     isAnimating,
+    turnSignal,
     
     // Actions
     rollDice,

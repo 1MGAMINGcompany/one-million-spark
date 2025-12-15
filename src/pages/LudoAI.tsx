@@ -41,6 +41,7 @@ const LudoAI = () => {
     gameOver,
     movableTokens,
     isAnimating,
+    turnSignal,
     rollDice,
     executeMove,
     advanceTurn,
@@ -92,7 +93,7 @@ const LudoAI = () => {
     setSfxEnabled(prev => !prev);
   }, []);
 
-  // Handle dice roll completion
+  // Handle dice roll completion - for human player only
   const handleRollComplete = useCallback((dice: number, movable: number[]) => {
     const player = players[currentPlayerIndex];
     console.log(`[LUDO AI] ${player.color} rolled ${dice}, movable: [${movable.join(', ')}]`);
@@ -104,12 +105,11 @@ const LudoAI = () => {
         duration: 1500,
       });
       setTimeout(() => {
-        setDiceValue(null);
-        setMovableTokens([]);
-        setCurrentPlayerIndex(prev => (prev + 1) % 4);
+        // Even with no moves, rolling 6 gives bonus turn
+        advanceTurn(dice);
       }, 1000);
     }
-  }, [players, currentPlayerIndex, setDiceValue, setMovableTokens, setCurrentPlayerIndex]);
+  }, [players, currentPlayerIndex, advanceTurn]);
 
   // Human player rolls dice
   const handleRollDice = useCallback(() => {
@@ -169,6 +169,7 @@ const LudoAI = () => {
   const aiMoveInProgressRef = useRef(false);
   
   useEffect(() => {
+    // Include turnSignal in dependency to ensure effect re-runs on bonus turns
     if (currentPlayer.isAI && !gameOver && diceValue === null && !isRolling && !isAnimating && !aiMoveInProgressRef.current) {
       const delay = difficulty === "easy" ? 800 : difficulty === "medium" ? 500 : 300;
       const timeout = setTimeout(() => {
@@ -185,9 +186,8 @@ const LudoAI = () => {
               duration: 1500,
             });
             setTimeout(() => {
-              setDiceValue(null);
-              setMovableTokens([]);
-              setCurrentPlayerIndex(prev => (prev + 1) % 4);
+              // Even with no moves, rolling 6 gives bonus turn
+              advanceTurn(dice);
               aiMoveInProgressRef.current = false;
             }, 1000);
           } else {
@@ -225,7 +225,7 @@ const LudoAI = () => {
       }, delay);
       return () => clearTimeout(timeout);
     }
-  }, [currentPlayer.isAI, currentPlayer.color, gameOver, diceValue, isRolling, isAnimating, difficulty, players, currentPlayerIndex, rollDice, executeMove, advanceTurn, setDiceValue, setMovableTokens, setCurrentPlayerIndex]);
+  }, [currentPlayer.isAI, currentPlayer.color, gameOver, diceValue, isRolling, isAnimating, difficulty, players, currentPlayerIndex, rollDice, executeMove, advanceTurn, setDiceValue, setMovableTokens, turnSignal]);
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
