@@ -1,6 +1,7 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { useAccount } from "wagmi";
-import { useRoom, useJoinRoom, useCancelRoom, usePlayersOf, formatEntryFee, getRoomStatusLabel, getGameName } from "@/hooks/useRoomManager";
+import { useRoom, useCancelRoom, usePlayersOf, formatEntryFee, getRoomStatusLabel, getGameName } from "@/hooks/useRoomManager";
+import { useGaslessJoinRoom } from "@/hooks/useGaslessCreateRoom";
 import { RoomStatus } from "@/contracts/roomManager";
 import { usePolPrice } from "@/hooks/usePolPrice";
 import { useToast } from "@/hooks/use-toast";
@@ -39,8 +40,10 @@ export default function Room() {
   const { data: roomData, isLoading: isRoomLoading, refetch } = useRoom(roomIdBigInt);
   const { data: playersData, refetch: refetchPlayers } = usePlayersOf(roomIdBigInt);
 
-  const { joinRoom, isPending: isJoinPending, isConfirming: isJoinConfirming, isSuccess: isJoinSuccess, reset: resetJoin } = useJoinRoom();
+  const { joinRoomGasless, isBusy: isJoinBusy, isSuccess: isJoinSuccess, reset: resetJoin } = useGaslessJoinRoom();
   const { cancelRoom, isPending: isCancelPending, isConfirming: isCancelConfirming, isSuccess: isCancelSuccess, reset: resetCancel } = useCancelRoom();
+
+  const isJoinPending = isJoinBusy;
 
   // Parse room data from getRoomView: [id, creator, entryFee, maxPlayers, isPrivate, status, gameId, turnTimeSeconds, winner]
   const room = roomData ? {
@@ -125,10 +128,14 @@ export default function Room() {
     }
   }, [isCancelSuccess, toast, resetCancel, refetch]);
 
-  const handleJoin = () => {
+  const handleJoin = async () => {
     if (!room || !roomIdBigInt) return;
     play("ui_click");
-    joinRoom(roomIdBigInt, room.entryFee);
+    try {
+      await joinRoomGasless(roomIdBigInt);
+    } catch (err) {
+      console.error("Join room failed:", err);
+    }
   };
 
   const handleCancel = () => {
@@ -298,11 +305,11 @@ export default function Room() {
           {room.status === RoomStatus.Created && (
             <div className="flex flex-wrap gap-3 pt-4 border-t border-border/50">
               {canJoin && (
-                <Button onClick={handleJoin} disabled={isJoinPending || isJoinConfirming} className="flex-1">
-                  {isJoinPending || isJoinConfirming ? (
+                <Button onClick={handleJoin} disabled={isJoinPending} className="flex-1">
+                  {isJoinPending ? (
                     <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Joining...</>
                   ) : (
-                    <>Join Room ({entryFeePol} POL)</>
+                    <>Join Room (Gasless)</>
                   )}
                 </Button>
               )}

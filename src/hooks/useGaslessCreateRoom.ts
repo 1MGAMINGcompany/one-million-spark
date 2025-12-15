@@ -20,6 +20,26 @@ const GASLESS_CONFIG = {
   relayerForwarderAddress: TRUSTED_FORWARDER_ADDRESS,
 };
 
+// Helper to get thirdweb account from browser wallet
+async function getThirdwebAccount() {
+  const eth = (window as any).ethereum;
+  if (!eth) throw new Error("WALLET_NOT_FOUND");
+
+  const provider = new BrowserProvider(eth);
+  const ethersSigner = await provider.getSigner();
+  return ethers6Adapter.signer.fromEthers({ signer: ethersSigner });
+}
+
+// Helper to get thirdweb contract instance
+function getThirdwebContract() {
+  return getContract({
+    client: thirdwebClient,
+    chain: polygon,
+    address: ROOMMANAGER_V7_ADDRESS,
+    abi: ABI as any,
+  });
+}
+
 export function useGaslessCreateRoom() {
   const [isBusy, setIsBusy] = useState(false);
 
@@ -35,23 +55,8 @@ export function useGaslessCreateRoom() {
     setIsBusy(true);
 
     try {
-      const eth = (window as any).ethereum;
-      if (!eth) throw new Error("WALLET_NOT_FOUND");
-
-      // Get ethers signer from browser wallet
-      const provider = new BrowserProvider(eth);
-      const ethersSigner = await provider.getSigner();
-
-      // Convert ethers signer to thirdweb account
-      const account = await ethers6Adapter.signer.fromEthers({ signer: ethersSigner });
-
-      // Get thirdweb contract instance
-      const contract = getContract({
-        client: thirdwebClient,
-        chain: polygon,
-        address: ROOMMANAGER_V7_ADDRESS,
-        abi: ABI as any,
-      });
+      const account = await getThirdwebAccount();
+      const contract = getThirdwebContract();
 
       // Prepare the createRoom transaction
       const transaction = prepareContractCall({
@@ -98,5 +103,65 @@ export function useGaslessCreateRoom() {
   return {
     createRoomGasless,
     isBusy,
+  };
+}
+
+export function useGaslessJoinRoom() {
+  const [isBusy, setIsBusy] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+
+  const joinRoomGasless = useCallback(async (roomId: bigint): Promise<{ transactionHash: string }> => {
+    if (isBusy) throw new Error("BUSY");
+    setIsBusy(true);
+    setIsSuccess(false);
+    setError(null);
+
+    try {
+      const account = await getThirdwebAccount();
+      const contract = getThirdwebContract();
+
+      // Prepare the joinRoom transaction
+      const transaction = prepareContractCall({
+        contract,
+        method: "function joinRoom(uint256 roomId)",
+        params: [roomId],
+      });
+
+      // Send gasless transaction via relayer (user signs, relayer pays gas)
+      const result = await sendTransaction({
+        account,
+        transaction,
+        gasless: GASLESS_CONFIG,
+      });
+
+      // Wait for receipt
+      const { waitForReceipt } = await import("thirdweb");
+      const receipt = await waitForReceipt(result);
+
+      setIsSuccess(true);
+      return {
+        transactionHash: receipt.transactionHash,
+      };
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      setError(error);
+      throw error;
+    } finally {
+      setIsBusy(false);
+    }
+  }, [isBusy]);
+
+  const reset = useCallback(() => {
+    setIsSuccess(false);
+    setError(null);
+  }, []);
+
+  return {
+    joinRoomGasless,
+    isBusy,
+    isSuccess,
+    error,
+    reset,
   };
 }
