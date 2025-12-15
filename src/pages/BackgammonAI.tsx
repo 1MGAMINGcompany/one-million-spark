@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useSound } from "@/contexts/SoundContext";
 import { useTranslation } from "react-i18next";
+import { MobileAppPrompt } from "@/components/MobileAppPrompt";
 import {
   type Player,
   type GameState,
@@ -1127,6 +1128,7 @@ const BackgammonAI = () => {
           </div>
         )}
       </div>
+      <MobileAppPrompt />
     </div>
   );
 };

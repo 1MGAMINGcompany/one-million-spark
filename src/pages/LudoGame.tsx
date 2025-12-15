@@ -18,6 +18,7 @@ import LudoBoard from "@/components/ludo/LudoBoard";
 import EgyptianDice from "@/components/ludo/EgyptianDice";
 import TurnIndicator from "@/components/ludo/TurnIndicator";
 import { useLudoEngine, LudoMove } from "@/hooks/useLudoEngine";
+import { MobileAppPrompt } from "@/components/MobileAppPrompt";
 
 const LudoGame = () => {
   const { roomId } = useParams<{ roomId: string }>();
@@ -428,6 +429,7 @@ const LudoGame = () => {
           </ul>
         </div>
       </div>
+      <MobileAppPrompt />
     </div>
   );
 };

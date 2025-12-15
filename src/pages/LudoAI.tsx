@@ -10,6 +10,7 @@ import EgyptianDice from "@/components/ludo/EgyptianDice";
 import TurnIndicator from "@/components/ludo/TurnIndicator";
 import { Difficulty } from "@/components/ludo/ludoTypes";
 import { useLudoEngine } from "@/hooks/useLudoEngine";
+import { MobileAppPrompt } from "@/components/MobileAppPrompt";
 
 const LudoAI = () => {
   const { t } = useTranslation();
@@ -395,6 +396,7 @@ const LudoAI = () => {
           ))}
         </div>
       </div>
+      <MobileAppPrompt />
     </div>
   );
 };

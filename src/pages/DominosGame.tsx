@@ -14,6 +14,7 @@ import { useWallet } from "@/hooks/useWallet";
 import DominoTile3D from "@/components/DominoTile3D";
 import { useState, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { MobileAppPrompt } from "@/components/MobileAppPrompt";
 
 const initialPlayerHand = [
   [6, 6], [5, 4], [3, 2], [1, 0], [4, 4], [2, 1], [6, 3]
@@ -288,6 +289,7 @@ const DominosGame = () => {
           </ul>
         </div>
       </div>
+      <MobileAppPrompt />
     </div>
   );
 };
