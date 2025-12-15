@@ -51,6 +51,7 @@ const LudoGame = () => {
     gameOver,
     movableTokens,
     isAnimating,
+    turnSignal,
     rollDice,
     executeMove,
     applyExternalMove,
@@ -176,13 +177,12 @@ const LudoGame = () => {
           duration: 1500,
         });
         setTimeout(() => {
-          setDiceValue(null);
-          setMovableTokens([]);
-          setCurrentPlayerIndex(prev => (prev + 1) % ludoPlayers.length);
+          // Use advanceTurn to properly handle bonus turn on 6
+          advanceTurn(dice);
         }, 1000);
       }
     });
-  }, [isMyTurn, rollDice, t, ludoPlayers.length, setDiceValue, setMovableTokens, setCurrentPlayerIndex]);
+  }, [isMyTurn, rollDice, t, advanceTurn]);
 
   // Prevent double-execution refs
   const moveStartedRef = useRef(false);
