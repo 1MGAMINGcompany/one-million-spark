@@ -15,7 +15,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useWallet } from "@/hooks/useWallet";
 import { useToast } from "@/hooks/use-toast";
 import { useSound } from "@/contexts/SoundContext";
-import { useRoomManagerV7 } from "@/hooks/useRoomManagerV7";
+import { useGaslessCreateRoom } from "@/hooks/useGaslessCreateRoom";
 import { useUsdtAllowanceV7 } from "@/hooks/useUsdtAllowanceV7";
 import { useApproveUsdtV7, usdtToUnitsV7 } from "@/hooks/useApproveUsdtV7";
 import { Loader2, AlertCircle, Wallet, CheckCircle2 } from "lucide-react";
@@ -70,7 +70,7 @@ const CreateRoom = () => {
   
   const { requestPermission } = useNotificationPermission();
 
-  const { getContract, withLock, isBusy } = useRoomManagerV7();
+  const { createRoomGasless, isBusy } = useGaslessCreateRoom();
 
   const { 
     approve: approveUsdt, 
@@ -234,25 +234,17 @@ const CreateRoom = () => {
     const turnTime = parseInt(turnTimeSec);
     
     try {
-      await withLock(async () => {
-        const c = await getContract();
-        // TODO: next step we insert the exact contract call + args
-        // await c.createRoom(...);
-        const tx = await c.createRoom(
-          entryFeeUnits,
-          maxPlayers,
-          isPrivate,
-          PLATFORM_FEE_BPS,
-          gameId,
-          turnTime
-        );
-        await tx.wait();
-        
-        // Fetch latest room ID
-        const roomId = await c.latestRoomId();
-        setLatestRoomId(roomId);
-        setIsCreateSuccess(true);
-      });
+      // Gasless transaction: user signs, relayer pays gas (ERC-2771)
+      const { roomId } = await createRoomGasless(
+        entryFeeUnits,
+        maxPlayers,
+        isPrivate,
+        PLATFORM_FEE_BPS,
+        gameId,
+        turnTime
+      );
+      setLatestRoomId(roomId);
+      setIsCreateSuccess(true);
     } catch (err) {
       setCreateError(err instanceof Error ? err : new Error(String(err)));
     }
