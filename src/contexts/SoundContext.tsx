@@ -23,7 +23,7 @@ const SOUND_FILES: Record<string, string> = {
   'chess_lose': '/sounds/chess/lose.mp3',
   
   // Domino sounds
-  'domino_place': '/sounds/domino/place.m4a',
+  'domino_place': '/sounds/checkers/slide.mp3',
   'domino_draw': '/sounds/domino/draw.mp3',
   'domino_shuffle': '/sounds/domino/shuffle.mp3',
   'domino_win': '/sounds/domino/win.mp3',
