@@ -67,12 +67,13 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
     return null; // Invalid move
   }, []);
 
-  // Animate movement step by step with guaranteed correct final position
+  // Animate movement step by step with STRICT position control
   const animateMovement = useCallback((
     playerIndex: number,
     tokenIndex: number,
     startPos: number,
     endPos: number,
+    diceUsed: number,
     onComplete: () => void
   ) => {
     // Clear any pending animation
@@ -82,24 +83,35 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
     
     setIsAnimating(true);
     
-    // For leaving home (-1 to 0), it's a single step
-    const totalSteps = startPos === -1 ? 1 : Math.abs(endPos - startPos);
-    let currentStep = 0;
+    // CRITICAL: Calculate steps based on dice used, not position difference
+    // For leaving home (-1 to 0), dice 6 is used but only 1 visual step needed
+    const totalSteps = startPos === -1 ? 1 : diceUsed;
     
-    console.log(`[LUDO ENGINE] Animating: ${startPos} -> ${endPos}, ${totalSteps} steps`);
+    // Precompute ALL positions to ensure exactness
+    const positions: number[] = [];
+    if (startPos === -1) {
+      positions.push(0); // Just enter the board
+    } else {
+      for (let i = 1; i <= totalSteps; i++) {
+        positions.push(startPos + i);
+      }
+    }
+    
+    // Verify final position matches expected
+    const expectedFinal = positions[positions.length - 1];
+    if (expectedFinal !== endPos) {
+      console.error(`[LUDO ENGINE] Position mismatch! Calculated ${expectedFinal}, expected ${endPos}`);
+    }
+    
+    console.log(`[LUDO ENGINE] Animating: ${startPos} -> ${endPos}, dice=${diceUsed}, steps=${totalSteps}, path=[${positions.join(',')}]`);
+    
+    let stepIndex = 0;
     
     const performStep = () => {
-      currentStep++;
+      const stepPosition = positions[stepIndex];
+      stepIndex++;
       
-      // Calculate intermediate position
-      let stepPosition: number;
-      if (startPos === -1) {
-        stepPosition = 0;
-      } else {
-        stepPosition = startPos + currentStep;
-      }
-      
-      console.log(`[LUDO ENGINE] Step ${currentStep}/${totalSteps}: pos=${stepPosition}`);
+      console.log(`[LUDO ENGINE] Step ${stepIndex}/${totalSteps}: pos=${stepPosition}`);
       onSoundPlay?.('ludo_move');
       
       // Update token position for this step
@@ -113,29 +125,31 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
         })
       })));
       
-      if (currentStep >= totalSteps) {
-        // Animation complete - force exact final position
-        setPlayers(prev => prev.map((p, pIdx) => ({
-          ...p,
-          tokens: p.tokens.map((t, tIdx) => {
-            if (pIdx === playerIndex && tIdx === tokenIndex) {
-              console.log(`[LUDO ENGINE] Final position: ${endPos}`);
-              return { ...t, position: endPos };
-            }
-            return t;
-          })
-        })));
-        
-        setIsAnimating(false);
-        onComplete();
+      if (stepIndex >= totalSteps) {
+        // Animation complete - FORCE exact final position
+        setTimeout(() => {
+          setPlayers(prev => prev.map((p, pIdx) => ({
+            ...p,
+            tokens: p.tokens.map((t, tIdx) => {
+              if (pIdx === playerIndex && tIdx === tokenIndex) {
+                console.log(`[LUDO ENGINE] Final position enforced: ${endPos}`);
+                return { ...t, position: endPos };
+              }
+              return t;
+            })
+          })));
+          
+          setIsAnimating(false);
+          onComplete();
+        }, 50);
       } else {
         // Schedule next step
         animationRef.current = setTimeout(performStep, 150);
       }
     };
     
-    // Start animation
-    animationRef.current = setTimeout(performStep, 150);
+    // Start animation after brief delay
+    animationRef.current = setTimeout(performStep, 100);
   }, [onSoundPlay]);
 
   // Execute a move with animation - LOCKS to prevent double execution
@@ -167,18 +181,21 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
       return false;
     }
     
-    // Validate the distance matches dice
-    const expectedDistance = startPos === -1 ? 1 : (endPos - startPos);
-    if (startPos >= 0 && expectedDistance !== dice) {
-      console.error(`[LUDO ENGINE] Distance mismatch! Expected ${dice}, got ${expectedDistance}`);
-      moveInProgressRef.current = false;
-      consumedDiceRef.current = null;
-      return false;
+    // Validate the distance matches dice (except for home exit which uses 6 to move to position 0)
+    if (startPos >= 0) {
+      const expectedDistance = endPos - startPos;
+      if (expectedDistance !== dice) {
+        console.error(`[LUDO ENGINE] Distance mismatch! Dice=${dice}, but ${startPos} -> ${endPos} = ${expectedDistance} steps`);
+        moveInProgressRef.current = false;
+        consumedDiceRef.current = null;
+        return false;
+      }
     }
     
     console.log(`[LUDO ENGINE] Move: ${player.color} token#${tokenIndex} from ${startPos} to ${endPos} (dice=${dice})`);
     
-    animateMovement(playerIndex, tokenIndex, startPos, endPos, () => {
+    // Pass dice value to animation for strict step counting
+    animateMovement(playerIndex, tokenIndex, startPos, endPos, dice, () => {
       // After animation: check captures
       setPlayers(prev => {
         const newPlayers = prev.map(p => ({
@@ -187,8 +204,9 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
         }));
         
         // Verify final position is correct
-        if (newPlayers[playerIndex].tokens[tokenIndex].position !== endPos) {
-          console.warn(`[LUDO ENGINE] Correcting position to ${endPos}`);
+        const actualPos = newPlayers[playerIndex].tokens[tokenIndex].position;
+        if (actualPos !== endPos) {
+          console.warn(`[LUDO ENGINE] Position correction: ${actualPos} -> ${endPos}`);
           newPlayers[playerIndex].tokens[tokenIndex].position = endPos;
         }
         
