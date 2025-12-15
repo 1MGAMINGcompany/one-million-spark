@@ -8,7 +8,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useFinishGameV5, usePlayersV5 } from "@/hooks/useRoomManagerV5";
+import { useGaslessFinishGame } from "@/hooks/useGaslessCreateRoom";
+import { usePlayersV5 } from "@/hooks/useRoomManagerV5";
 import { useToast } from "@/hooks/use-toast";
 import { Trophy, Loader2 } from "lucide-react";
 
@@ -33,13 +34,13 @@ export function FinishGameButton({
 
   const { data: players } = usePlayersV5(roomId);
   const {
-    finishGame,
+    finishGameGasless,
     isPending,
     isConfirming,
     isSuccess,
     error,
     reset,
-  } = useFinishGameV5();
+  } = useGaslessFinishGame();
 
   // Set suggested winner when available
   useEffect(() => {
@@ -77,7 +78,7 @@ export function FinishGameButton({
     return null;
   }
 
-  const handleFinishGame = () => {
+  const handleFinishGame = async () => {
     if (!selectedWinner) {
       toast({
         title: t("game.selectWinner"),
@@ -87,7 +88,11 @@ export function FinishGameButton({
       return;
     }
 
-    finishGame(roomId, selectedWinner as `0x${string}`);
+    try {
+      await finishGameGasless(roomId, selectedWinner as `0x${string}`);
+    } catch (err) {
+      console.error("Finish game failed:", err);
+    }
   };
 
   const isLoading = isPending || isConfirming;
