@@ -27,6 +27,9 @@ import CheckersAI from "./pages/CheckersAI";
 import LudoAI from "./pages/LudoAI";
 import Room from "./pages/Room";
 import JoinRoom from "./pages/JoinRoom";
+import GameRules from "./pages/GameRules";
+import Support from "./pages/Support";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
 import NotFound from "./pages/NotFound";
 
 const App = () => (
@@ -61,6 +64,9 @@ const App = () => (
                     <Route path="/play-ai/backgammon" element={<BackgammonAI />} />
                     <Route path="/play-ai/checkers" element={<CheckersAI />} />
                     <Route path="/play-ai/ludo" element={<LudoAI />} />
+                    <Route path="/game-rules" element={<GameRules />} />
+                    <Route path="/support" element={<Support />} />
+                    <Route path="/privacy-policy" element={<PrivacyPolicy />} />
                     <Route path="*" element={<NotFound />} />
                   </Routes>
                 </main>
