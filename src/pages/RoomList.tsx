@@ -56,7 +56,7 @@ const RoomList = () => {
     if (!isPrivate) {
       // Only refetch for public rooms
       console.log("[RoomList] New public room created, refreshing...");
-      play('ui_notify');
+      play('ui_woosh');
       refetch();
       toast({
         title: t("roomList.newRoomCreated"),
