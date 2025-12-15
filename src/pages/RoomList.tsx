@@ -9,13 +9,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Users, RefreshCw, Loader2, Clock } from "lucide-react";
+import { Users, RefreshCw, Loader2, Clock, AlertTriangle } from "lucide-react";
 import { useWallet } from "@/hooks/useWallet";
 import { WalletRequired } from "@/components/WalletRequired";
 import { useSound } from "@/contexts/SoundContext";
 import { useToast } from "@/hooks/use-toast";
 import { useJoinRoomV5 } from "@/hooks/useRoomManagerV5";
 import { usePublicRooms, type PublicRoom } from "@/hooks/usePublicRooms";
+import { usePlayerActiveRoom } from "@/hooks/usePlayerActiveRoom";
 
 // Local helpers for V7
 function getGameName(gameId: number): string {
@@ -42,6 +43,9 @@ const RoomList = () => {
   const [gameFilter, setGameFilter] = useState("all");
   const [feeFilter, setFeeFilter] = useState("all");
   const [joiningRoomId, setJoiningRoomId] = useState<bigint | null>(null);
+
+  // Check if player has an active room they created
+  const { activeRoom, hasActiveRoom, isLoading: isCheckingActiveRoom } = usePlayerActiveRoom(address as `0x${string}` | undefined);
 
   const { rooms, isLoading: isLoadingRooms, refetch } = usePublicRooms();
 
@@ -97,6 +101,16 @@ const RoomList = () => {
       toast({
         title: t("roomList.cannotJoin"),
         description: t("roomList.cannotJoinOwn"),
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Block joining if player has an active room
+    if (hasActiveRoom && activeRoom) {
+      toast({
+        title: t("roomList.cannotJoin"),
+        description: t("roomList.cannotJoinActiveRoom", { roomId: activeRoom.id.toString() }),
         variant: "destructive",
       });
       return;
@@ -210,6 +224,28 @@ const RoomList = () => {
             <RefreshCw size={18} className={isLoadingRooms ? "animate-spin" : ""} />
           </Button>
         </div>
+
+        {/* Active Room Warning Banner */}
+        {hasActiveRoom && activeRoom && (
+          <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-4 mb-6 flex flex-col sm:flex-row items-start sm:items-center gap-3">
+            <AlertTriangle className="h-5 w-5 text-destructive shrink-0" />
+            <div className="flex-1">
+              <p className="font-medium text-destructive">
+                {t("roomList.activeRoomWarning", { roomId: activeRoom.id.toString() })}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {t("roomList.activeRoomWarningDesc")}
+              </p>
+            </div>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => navigate(`/room/${activeRoom.id.toString()}`)}
+            >
+              {t("roomList.goToRoom")}
+            </Button>
+          </div>
+        )}
 
         {/* Room List */}
         <div className="space-y-4">
