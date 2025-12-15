@@ -15,13 +15,10 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useWallet } from "@/hooks/useWallet";
 import { useToast } from "@/hooks/use-toast";
 import { useSound } from "@/contexts/SoundContext";
-import { 
-  useApproveUsdtV5, 
-  useUsdtAllowanceV5,
-  usdtToUnits,
-  getGameNameV5 
-} from "@/hooks/useRoomManagerV5";
+import { getGameNameV5 } from "@/hooks/useRoomManagerV5";
 import { useRoomManagerV7 } from "@/hooks/useRoomManagerV7";
+import { useUsdtAllowanceV7 } from "@/hooks/useUsdtAllowanceV7";
+import { useApproveUsdtV7, usdtToUnitsV7 } from "@/hooks/useApproveUsdtV7";
 import { Loader2, AlertCircle, Wallet, CheckCircle2 } from "lucide-react";
 import { useWeb3Modal } from "@web3modal/wagmi/react";
 import { ShareInviteDialog } from "@/components/ShareInviteDialog";
@@ -71,16 +68,16 @@ const CreateRoom = () => {
     isSuccess: isApproveSuccess,
     error: approveError,
     reset: resetApprove 
-  } = useApproveUsdtV5();
+  } = useApproveUsdtV7();
 
-  const { data: currentAllowance, refetch: refetchAllowance } = useUsdtAllowanceV5(address as `0x${string}` | undefined);
+  const { data: currentAllowance, refetch: refetchAllowance } = useUsdtAllowanceV7(address as `0x${string}` | undefined);
 
   const [isCreateSuccess, setIsCreateSuccess] = useState(false);
   const [createError, setCreateError] = useState<Error | null>(null);
   const [latestRoomId, setLatestRoomId] = useState<bigint | null>(null);
 
   const entryFeeNum = parseFloat(entryFee) || 0;
-  const entryFeeUnits = usdtToUnits(entryFeeNum);
+  const entryFeeUnits = usdtToUnitsV7(entryFeeNum);
 
   const hasSufficientAllowance = currentAllowance !== undefined && currentAllowance >= entryFeeUnits && entryFeeNum > 0;
 
