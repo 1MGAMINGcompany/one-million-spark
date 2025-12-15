@@ -54,6 +54,11 @@ const PrivacyPolicy = () => {
               </a>
             </p>
           </section>
+
+          <section className="border-t border-primary/20 pt-6 mt-6">
+            <h2 className="text-xl font-semibold text-primary mb-2">{t("privacy.disclaimerTitle")}</h2>
+            <p className="font-medium">{t("privacy.disclaimerText")}</p>
+          </section>
         </CardContent>
       </Card>
     </div>
