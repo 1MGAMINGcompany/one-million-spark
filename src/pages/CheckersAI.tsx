@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, RotateCcw, Trophy, Gem, Star } from "lucide-react";
 import { useSound } from "@/contexts/SoundContext";
 import { useTranslation } from "react-i18next";
+import { MobileAppPrompt } from "@/components/MobileAppPrompt";
 
 type Difficulty = "easy" | "medium" | "hard";
 type Player = "gold" | "obsidian";
@@ -600,6 +601,7 @@ const CheckersAI = () => {
         <Gem className="w-4 h-4 text-primary/40" />
         <Star className="w-3 h-3 text-primary/40 fill-primary/20" />
       </div>
+      <MobileAppPrompt />
     </div>
   );
 };

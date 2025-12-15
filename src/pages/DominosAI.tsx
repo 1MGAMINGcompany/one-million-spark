@@ -5,6 +5,7 @@ import { ArrowLeft, RotateCcw, Gem, Star } from "lucide-react";
 import DominoTile3D, { DominoTileBack } from "@/components/DominoTile3D";
 import { useSound } from "@/contexts/SoundContext";
 import { useTranslation } from "react-i18next";
+import { MobileAppPrompt } from "@/components/MobileAppPrompt";
 
 type Difficulty = "easy" | "medium" | "hard";
 
@@ -725,6 +726,7 @@ const DominosAI = () => {
           </div>
         </div>
       </div>
+      <MobileAppPrompt />
     </div>
   );
 };
