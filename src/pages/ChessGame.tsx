@@ -17,7 +17,6 @@ import { useWallet } from "@/hooks/useWallet";
 import { useState, useCallback, useEffect } from "react";
 import { Chess, Square } from "chess.js";
 import { useToast } from "@/hooks/use-toast";
-import { MobileAppPrompt } from "@/components/MobileAppPrompt";
 
 const ChessGame = () => {
   const { roomId } = useParams<{ roomId: string }>();
@@ -470,7 +469,6 @@ const ChessGame = () => {
           </ul>
         </div>
       </div>
-      <MobileAppPrompt />
     </div>
   );
 };
