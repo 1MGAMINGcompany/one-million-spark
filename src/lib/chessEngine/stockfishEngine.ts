@@ -20,9 +20,9 @@ const DIFFICULTY_CONFIG: Record<Difficulty, DifficultyConfig> = {
     randomnessProbability: 0.15, // 15% chance to pick random from top moves
   },
   medium: {
-    skillLevel: 14,
-    depth: 8,
-    randomnessProbability: 0.01, // 1% chance - much stronger
+    skillLevel: 18,
+    depth: 12,
+    randomnessProbability: 0, // No randomness - plays optimally
   },
   hard: {
     skillLevel: 20,
