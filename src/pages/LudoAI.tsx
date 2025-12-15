@@ -106,22 +106,43 @@ const LudoAI = () => {
   ) => {
     setIsAnimating(true);
     
-    // Generate path from start to end
+    // Generate path from start to end (these are the VISUAL positions for animation)
     const path: number[] = [];
     if (startPos === -1) {
       // Moving out of home - just one step to position 0
       path.push(0);
     } else {
+      // CRITICAL: Generate exact path based on dice value
       for (let pos = startPos + 1; pos <= endPos; pos++) {
         path.push(pos);
       }
     }
+    
+    console.log(`[LUDO ANIM] Path from ${startPos} to ${endPos}: [${path.join(', ')}] (${path.length} steps)`);
     
     let stepIndex = 0;
     
     const animateStep = () => {
       if (stepIndex >= path.length) {
         setIsAnimating(false);
+        
+        // CRITICAL: Final state update to ensure position is EXACTLY endPos
+        setPlayers(prevPlayers => {
+          const newPlayers = prevPlayers.map((player, pIdx) => ({
+            ...player,
+            tokens: player.tokens.map((token, tIdx) => {
+              if (pIdx === playerIndex && tIdx === tokenIndex) {
+                if (token.position !== endPos) {
+                  console.log(`[LUDO ANIM FINAL] Correcting position: ${token.position} -> ${endPos}`);
+                }
+                return { ...token, position: endPos };
+              }
+              return { ...token };
+            }),
+          }));
+          return newPlayers;
+        });
+        
         onComplete();
         return;
       }
@@ -131,7 +152,7 @@ const LudoAI = () => {
       // Play move sound on each step
       playSfx('ludo_move');
       
-      // Update token position for this step
+      // Update token position for this step (visual animation only)
       setPlayers(prevPlayers => {
         const newPlayers = prevPlayers.map((player, pIdx) => ({
           ...player,
@@ -158,22 +179,39 @@ const LudoAI = () => {
     const player = players[playerIndex];
     const token = player.tokens[tokenIndex];
     
-    const previousPosition = token.position;
-    let newPosition: number;
+    // CRITICAL: Capture current position BEFORE any state updates
+    const startPosition = token.position;
+    let endPosition: number;
     
-    if (token.position === -1 && dice === 6) {
-      newPosition = 0;
-    } else if (token.position >= 0) {
-      newPosition = Math.min(token.position + dice, 57);
+    if (startPosition === -1 && dice === 6) {
+      // Moving out of home to position 0
+      endPosition = 0;
+    } else if (startPosition >= 0 && startPosition < 57) {
+      // Moving on board - calculate exact end position
+      endPosition = startPosition + dice;
+      // Cap at 57 (finished position)
+      if (endPosition > 57) {
+        console.warn(`[LUDO] Move would exceed 57 (${startPosition} + ${dice} = ${endPosition}), capping to stay`);
+        // Cannot move past 57 - this shouldn't happen if getMovableTokens is correct
+        return;
+      }
     } else {
-      console.warn(`[LUDO] Invalid move attempt: token at ${token.position}, dice: ${dice}`);
+      console.warn(`[LUDO] Invalid move attempt: token at ${startPosition}, dice: ${dice}`);
       return;
     }
     
-    console.log(`[LUDO MOVE] Player ${player.color} Token #${tokenIndex}: ${previousPosition} -> ${newPosition} (dice: ${dice})`);
+    console.log(`[LUDO MOVE] Player ${player.color} Token #${tokenIndex}: ${startPosition} -> ${endPosition} (dice: ${dice})`);
     
-    // Animate the movement
-    animateMove(playerIndex, tokenIndex, previousPosition, newPosition, () => {
+    // Validate dice matches expected move distance
+    if (startPosition >= 0) {
+      const expectedDistance = endPosition - startPosition;
+      if (expectedDistance !== dice) {
+        console.error(`[LUDO BUG] Distance mismatch! Expected ${dice} steps but calculating ${expectedDistance} (${startPosition} -> ${endPosition})`);
+      }
+    }
+    
+    // Animate the movement with FIXED start and end positions
+    animateMove(playerIndex, tokenIndex, startPosition, endPosition, () => {
       // After animation: check captures
       setPlayers(prevPlayers => {
         const newPlayers = prevPlayers.map((p, pi) => ({
@@ -181,15 +219,22 @@ const LudoAI = () => {
           tokens: p.tokens.map(t => ({ ...t })),
         }));
         
+        // Verify final position is correct
+        const finalToken = newPlayers[playerIndex].tokens[tokenIndex];
+        if (finalToken.position !== endPosition) {
+          console.error(`[LUDO BUG] Final position ${finalToken.position} doesn't match expected ${endPosition}! Fixing...`);
+          newPlayers[playerIndex].tokens[tokenIndex].position = endPosition;
+        }
+        
         // Check for captures (simplified)
-        if (newPosition >= 0 && newPosition < 52) {
+        if (endPosition >= 0 && endPosition < 52) {
           const currentPlayerData = newPlayers[playerIndex];
           newPlayers.forEach((otherPlayer, opi) => {
             if (opi !== playerIndex) {
               otherPlayer.tokens.forEach((otherToken, oti) => {
                 if (otherToken.position >= 0 && otherToken.position < 52) {
                   const relativePos = (otherToken.position + otherPlayer.startPosition) % 52;
-                  const myRelativePos = (newPosition + currentPlayerData.startPosition) % 52;
+                  const myRelativePos = (endPosition + currentPlayerData.startPosition) % 52;
                   if (relativePos === myRelativePos) {
                     otherPlayer.tokens[oti] = { ...otherToken, position: -1 };
                     console.log(`[LUDO CAPTURE] ${currentPlayerData.color} captured ${otherPlayer.color} token #${oti}`);
@@ -209,7 +254,7 @@ const LudoAI = () => {
         return newPlayers;
       });
     });
-  }, [players, animateMove, play]);
+  }, [players, animateMove, playSfx]);
 
   // Check for winner
   const checkWinner = useCallback((playersToCheck: Player[]): PlayerColor | null => {
