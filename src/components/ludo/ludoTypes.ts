@@ -20,21 +20,23 @@ export interface Player {
 // Each player has 6 home column positions (52-57 relative to their path)
 
 // Board cell coordinates for the 15x15 grid
-// Position index -> [row, col] mapping for main track (52 cells around the board)
+// Standard Ludo 52-position track on 15x15 grid
+// Note: Corners have diagonal transitions - this is normal for Ludo on a square grid
+// 1 position = 1 dice step, even when moving diagonally at corners
 export const MAIN_TRACK_COORDS: Record<number, [number, number]> = {
-  // Gold start area (left side, moving up then right)
+  // Gold section (0-12)
   0: [6, 1], 1: [6, 2], 2: [6, 3], 3: [6, 4], 4: [6, 5],
   5: [5, 6], 6: [4, 6], 7: [3, 6], 8: [2, 6], 9: [1, 6], 10: [0, 6],
   11: [0, 7], 12: [0, 8],
-  // Ruby start area (top side, moving right then down)
+  // Ruby section (13-25)
   13: [1, 8], 14: [2, 8], 15: [3, 8], 16: [4, 8], 17: [5, 8],
   18: [6, 9], 19: [6, 10], 20: [6, 11], 21: [6, 12], 22: [6, 13], 23: [6, 14],
   24: [7, 14], 25: [8, 14],
-  // Sapphire start area (right side, moving down then left)
+  // Sapphire section (26-38)
   26: [8, 13], 27: [8, 12], 28: [8, 11], 29: [8, 10], 30: [8, 9],
   31: [9, 8], 32: [10, 8], 33: [11, 8], 34: [12, 8], 35: [13, 8], 36: [14, 8],
   37: [14, 7], 38: [14, 6],
-  // Emerald start area (bottom side, moving left then up)
+  // Emerald section (39-51)
   39: [13, 6], 40: [12, 6], 41: [11, 6], 42: [10, 6], 43: [9, 6],
   44: [8, 5], 45: [8, 4], 46: [8, 3], 47: [8, 2], 48: [8, 1], 49: [8, 0],
   50: [7, 0], 51: [6, 0],
