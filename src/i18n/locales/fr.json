@@ -411,7 +411,81 @@
   },
   "footer": {
     "company": "1 MILLION GAMING co",
-    "tagline": "Compétence · Stratégie · Succès"
+    "tagline": "Compétence · Stratégie · Succès",
+    "gameRules": "Règles du Jeu",
+    "support": "Support",
+    "privacyPolicy": "Politique de Confidentialité"
+  },
+  "gameRules": {
+    "title": "Règles du Jeu",
+    "chess": "Échecs",
+    "chessRules": [
+      "Chaque joueur commence avec 16 pièces : 1 roi, 1 dame, 2 tours, 2 fous, 2 cavaliers et 8 pions.",
+      "Les blancs jouent en premier, puis les joueurs alternent les tours.",
+      "L'objectif est de mettre en échec et mat le roi adverse.",
+      "Les coups spéciaux incluent le roque, la prise en passant et la promotion du pion.",
+      "Une partie peut se terminer par échec et mat, pat, abandon ou nulle par accord."
+    ],
+    "checkers": "Dames",
+    "checkersRules": [
+      "Chaque joueur commence avec 12 pions sur les cases sombres.",
+      "Les pions se déplacent en diagonale vers l'avant d'une case.",
+      "Les prises sont obligatoires lorsqu'elles sont possibles.",
+      "Les prises multiples sont autorisées en un seul tour.",
+      "Les pions atteignant le côté opposé deviennent des dames et peuvent reculer.",
+      "Gagnez en capturant tous les pions adverses ou en bloquant tous leurs mouvements."
+    ],
+    "backgammon": "Backgammon",
+    "backgammonRules": [
+      "Chaque joueur a 15 pions à déplacer autour du plateau.",
+      "Lancez deux dés pour déterminer le mouvement.",
+      "Déplacez les pions vers votre jan intérieur.",
+      "Posez sur le pion isolé de l'adversaire pour l'envoyer sur la barre.",
+      "Les pions sur la barre doivent rentrer avant d'autres mouvements.",
+      "Sortez tous vos pions en premier pour gagner."
+    ],
+    "ludo": "Ludo",
+    "ludoRules": [
+      "Chaque joueur a 4 pions commençant dans sa base.",
+      "Obtenez un 6 pour déplacer un pion de la base au départ.",
+      "Déplacez les pions dans le sens horaire selon le dé.",
+      "Posez sur le pion adverse pour le renvoyer à sa base.",
+      "Obtenir un 6 donne un tour supplémentaire.",
+      "Le premier joueur à amener ses 4 pions à l'arrivée gagne."
+    ],
+    "dominos": "Dominos",
+    "dominosRules": [
+      "Chaque joueur tire 7 tuiles d'un ensemble mélangé.",
+      "Le joueur avec le double le plus élevé (ex. [6|6]) commence.",
+      "Si aucun joueur n'a de double, le plus haut total de points détermine qui commence.",
+      "Faites correspondre les extrémités des tuiles pour jouer (ex. 6 se connecte à 6).",
+      "Piochez dans la pioche si vous ne pouvez pas jouer.",
+      "Le premier à jouer toutes ses tuiles ou avec le moins de points quand bloqué gagne."
+    ]
+  },
+  "privacy": {
+    "title": "Politique de Confidentialité",
+    "lastUpdated": "Dernière mise à jour : Décembre 2024",
+    "section1Title": "1. Informations que Nous Collectons",
+    "section1Text": "1M Gaming est une application décentralisée. Nous ne collectons pas d'informations personnelles au-delà de ce qui est publiquement disponible sur la blockchain. Lorsque vous connectez votre portefeuille, nous n'accédons qu'à votre adresse publique.",
+    "section2Title": "2. Comment Nous Utilisons les Informations",
+    "section2Text": "Votre adresse de portefeuille est utilisée uniquement pour faciliter le jeu, gérer les salles de jeu et traiter les distributions de prix via des contrats intelligents sur le réseau Polygon.",
+    "section3Title": "3. Stockage des Données",
+    "section3Text": "Les états de jeu et les enregistrements de transactions sont stockés sur la blockchain Polygon et sont publiquement accessibles. Nous ne maintenons pas de bases de données privées d'informations utilisateur.",
+    "section4Title": "4. Cookies et Stockage Local",
+    "section4Text": "Nous utilisons le stockage local du navigateur pour sauvegarder vos préférences (langue, paramètres sonores). Aucun cookie de suivi n'est utilisé.",
+    "section5Title": "5. Services Tiers",
+    "section5Text": "Nous intégrons des fournisseurs de portefeuilles (MetaMask, WalletConnect) et l'infrastructure blockchain. Ces services ont leurs propres politiques de confidentialité.",
+    "section6Title": "6. Confidentialité des Mineurs",
+    "section6Text": "1M Gaming n'est pas destiné aux utilisateurs de moins de 18 ans. Nous ne collectons pas sciemment d'informations provenant de mineurs.",
+    "section7Title": "7. Nous Contacter",
+    "section7Text": "Pour les questions liées à la confidentialité, contactez-nous à"
+  },
+  "support": {
+    "title": "Support et Contact",
+    "description": "Vous avez des questions, des commentaires ou besoin d'aide ? Nous sommes là pour vous aider.",
+    "responseTime": "Temps de réponse : Sous 24-48 heures",
+    "urgentNote": "Pour les questions urgentes, veuillez inclure \"URGENT\" dans l'objet de votre message."
   },
   "errors": {
     "transactionFailed": "Transaction échouée",

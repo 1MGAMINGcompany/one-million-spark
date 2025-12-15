@@ -296,7 +296,81 @@
   },
   "footer": {
     "company": "1 MILLION GAMING co",
-    "tagline": "Skill · Strategy · Success"
+    "tagline": "Skill · Strategy · Success",
+    "gameRules": "Game Rules",
+    "support": "Support",
+    "privacyPolicy": "Privacy Policy"
+  },
+  "gameRules": {
+    "title": "Game Rules",
+    "chess": "Chess",
+    "chessRules": [
+      "Each player starts with 16 pieces: 1 king, 1 queen, 2 rooks, 2 bishops, 2 knights, and 8 pawns.",
+      "White moves first, then players alternate turns.",
+      "The objective is to checkmate the opponent's king.",
+      "Special moves include castling, en passant, and pawn promotion.",
+      "A game can end in checkmate, stalemate, resignation, or draw by agreement."
+    ],
+    "checkers": "Checkers",
+    "checkersRules": [
+      "Each player starts with 12 pieces on dark squares.",
+      "Pieces move diagonally forward one square.",
+      "Captures are mandatory when available.",
+      "Multi-jump captures are allowed in a single turn.",
+      "Pieces reaching the opposite end become kings and can move backward.",
+      "Win by capturing all opponent pieces or blocking all their moves."
+    ],
+    "backgammon": "Backgammon",
+    "backgammonRules": [
+      "Each player has 15 checkers to move around the board.",
+      "Roll two dice to determine movement.",
+      "Move checkers toward your home board.",
+      "Land on opponent's single checker (blot) to send it to the bar.",
+      "Checkers on the bar must re-enter before other moves.",
+      "Bear off all your checkers first to win."
+    ],
+    "ludo": "Ludo",
+    "ludoRules": [
+      "Each player has 4 tokens starting in their home base.",
+      "Roll a 6 to move a token from base to start.",
+      "Move tokens clockwise around the board based on dice roll.",
+      "Land on opponent's token to send it back to base.",
+      "Rolling a 6 grants an extra turn.",
+      "First player to move all 4 tokens to the finish wins."
+    ],
+    "dominos": "Dominos",
+    "dominosRules": [
+      "Each player draws 7 tiles from a shuffled set.",
+      "Player with the highest double (e.g., [6|6]) goes first.",
+      "If no player has a double, highest pip count tile determines first player.",
+      "Match tile ends to play (e.g., 6 connects to 6).",
+      "Draw from the boneyard if you can't play.",
+      "First to play all tiles or lowest pip count when blocked wins."
+    ]
+  },
+  "privacy": {
+    "title": "Privacy Policy",
+    "lastUpdated": "Last updated: December 2024",
+    "section1Title": "1. Information We Collect",
+    "section1Text": "1M Gaming is a decentralized application. We do not collect personal information beyond what is publicly available on the blockchain. When you connect your wallet, we only access your public wallet address.",
+    "section2Title": "2. How We Use Information",
+    "section2Text": "Your wallet address is used solely to facilitate gameplay, manage game rooms, and process prize distributions through smart contracts on the Polygon network.",
+    "section3Title": "3. Data Storage",
+    "section3Text": "Game states and transaction records are stored on the Polygon blockchain and are publicly accessible. We do not maintain private databases of user information.",
+    "section4Title": "4. Cookies & Local Storage",
+    "section4Text": "We use browser local storage to save your preferences (language, sound settings). No tracking cookies are used.",
+    "section5Title": "5. Third-Party Services",
+    "section5Text": "We integrate with wallet providers (MetaMask, WalletConnect) and blockchain infrastructure. These services have their own privacy policies.",
+    "section6Title": "6. Children's Privacy",
+    "section6Text": "1M Gaming is not intended for users under 18 years of age. We do not knowingly collect information from minors.",
+    "section7Title": "7. Contact Us",
+    "section7Text": "For privacy-related questions, contact us at"
+  },
+  "support": {
+    "title": "Support & Contact",
+    "description": "Have questions, feedback, or need assistance? We're here to help.",
+    "responseTime": "Response time: Within 24-48 hours",
+    "urgentNote": "For urgent matters, please include \"URGENT\" in your subject line."
   },
   "errors": {
     "transactionFailed": "Transaction failed",

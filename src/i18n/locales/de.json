@@ -411,7 +411,81 @@
   },
   "footer": {
     "company": "1 MILLION GAMING co",
-    "tagline": "Geschick · Strategie · Erfolg"
+    "tagline": "Geschick · Strategie · Erfolg",
+    "gameRules": "Spielregeln",
+    "support": "Support",
+    "privacyPolicy": "Datenschutzrichtlinie"
+  },
+  "gameRules": {
+    "title": "Spielregeln",
+    "chess": "Schach",
+    "chessRules": [
+      "Jeder Spieler beginnt mit 16 Figuren: 1 König, 1 Dame, 2 Türme, 2 Läufer, 2 Springer und 8 Bauern.",
+      "Weiß zieht zuerst, dann wechseln sich die Spieler ab.",
+      "Das Ziel ist es, den gegnerischen König schachmatt zu setzen.",
+      "Spezielle Züge sind Rochade, En Passant und Bauernumwandlung.",
+      "Ein Spiel kann durch Schachmatt, Patt, Aufgabe oder Remis enden."
+    ],
+    "checkers": "Dame",
+    "checkersRules": [
+      "Jeder Spieler beginnt mit 12 Steinen auf dunklen Feldern.",
+      "Steine ziehen diagonal vorwärts um ein Feld.",
+      "Schlagen ist Pflicht, wenn möglich.",
+      "Mehrfachsprünge sind in einem Zug erlaubt.",
+      "Steine, die die gegenüberliegende Seite erreichen, werden zu Damen und können rückwärts ziehen.",
+      "Gewinnen Sie, indem Sie alle gegnerischen Steine schlagen oder alle ihre Züge blockieren."
+    ],
+    "backgammon": "Backgammon",
+    "backgammonRules": [
+      "Jeder Spieler hat 15 Steine, die um das Brett bewegt werden.",
+      "Würfeln Sie zwei Würfel, um die Bewegung zu bestimmen.",
+      "Bewegen Sie Steine in Richtung Ihres Heimfeldes.",
+      "Landen Sie auf einem einzelnen gegnerischen Stein, um ihn auf die Bar zu schicken.",
+      "Steine auf der Bar müssen wieder eingesetzt werden, bevor andere Züge möglich sind.",
+      "Tragen Sie alle Ihre Steine zuerst ab, um zu gewinnen."
+    ],
+    "ludo": "Mensch ärgere dich nicht",
+    "ludoRules": [
+      "Jeder Spieler hat 4 Figuren in seiner Basis.",
+      "Würfeln Sie eine 6, um eine Figur aus der Basis zu bewegen.",
+      "Bewegen Sie Figuren im Uhrzeigersinn entsprechend dem Würfel.",
+      "Landen Sie auf einer gegnerischen Figur, um sie zurück zur Basis zu schicken.",
+      "Eine 6 zu würfeln gibt einen Extrazug.",
+      "Der erste Spieler, der alle 4 Figuren ins Ziel bringt, gewinnt."
+    ],
+    "dominos": "Domino",
+    "dominosRules": [
+      "Jeder Spieler zieht 7 Steine aus einem gemischten Satz.",
+      "Der Spieler mit dem höchsten Pasch (z.B. [6|6]) beginnt.",
+      "Wenn kein Spieler einen Pasch hat, bestimmt die höchste Punktzahl, wer beginnt.",
+      "Verbinden Sie Steinenden zum Spielen (z.B. 6 verbindet sich mit 6).",
+      "Ziehen Sie vom Talon, wenn Sie nicht spielen können.",
+      "Der Erste, der alle Steine spielt oder bei Blockade die niedrigste Punktzahl hat, gewinnt."
+    ]
+  },
+  "privacy": {
+    "title": "Datenschutzrichtlinie",
+    "lastUpdated": "Zuletzt aktualisiert: Dezember 2024",
+    "section1Title": "1. Informationen, die wir erheben",
+    "section1Text": "1M Gaming ist eine dezentralisierte Anwendung. Wir erheben keine persönlichen Informationen über das hinaus, was öffentlich auf der Blockchain verfügbar ist. Wenn Sie Ihr Wallet verbinden, greifen wir nur auf Ihre öffentliche Wallet-Adresse zu.",
+    "section2Title": "2. Wie wir Informationen verwenden",
+    "section2Text": "Ihre Wallet-Adresse wird ausschließlich verwendet, um das Gameplay zu ermöglichen, Spielräume zu verwalten und Preisverteilungen über Smart Contracts im Polygon-Netzwerk abzuwickeln.",
+    "section3Title": "3. Datenspeicherung",
+    "section3Text": "Spielzustände und Transaktionsaufzeichnungen werden auf der Polygon-Blockchain gespeichert und sind öffentlich zugänglich. Wir unterhalten keine privaten Datenbanken mit Benutzerinformationen.",
+    "section4Title": "4. Cookies und lokaler Speicher",
+    "section4Text": "Wir verwenden den lokalen Speicher des Browsers, um Ihre Einstellungen (Sprache, Soundeinstellungen) zu speichern. Es werden keine Tracking-Cookies verwendet.",
+    "section5Title": "5. Dienste Dritter",
+    "section5Text": "Wir integrieren Wallet-Anbieter (MetaMask, WalletConnect) und Blockchain-Infrastruktur. Diese Dienste haben ihre eigenen Datenschutzrichtlinien.",
+    "section6Title": "6. Datenschutz für Minderjährige",
+    "section6Text": "1M Gaming ist nicht für Benutzer unter 18 Jahren bestimmt. Wir erheben wissentlich keine Informationen von Minderjährigen.",
+    "section7Title": "7. Kontaktieren Sie uns",
+    "section7Text": "Bei datenschutzbezogenen Fragen kontaktieren Sie uns unter"
+  },
+  "support": {
+    "title": "Support und Kontakt",
+    "description": "Haben Sie Fragen, Feedback oder brauchen Hilfe? Wir sind hier, um zu helfen.",
+    "responseTime": "Antwortzeit: Innerhalb von 24-48 Stunden",
+    "urgentNote": "Für dringende Angelegenheiten fügen Sie bitte \"DRINGEND\" in Ihre Betreffzeile ein."
   },
   "errors": {
     "transactionFailed": "Transaktion fehlgeschlagen",

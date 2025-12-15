@@ -411,7 +411,81 @@
   },
   "footer": {
     "company": "1 MILLION GAMING co",
-    "tagline": "Abilità · Strategia · Successo"
+    "tagline": "Abilità · Strategia · Successo",
+    "gameRules": "Regole del Gioco",
+    "support": "Supporto",
+    "privacyPolicy": "Informativa sulla Privacy"
+  },
+  "gameRules": {
+    "title": "Regole del Gioco",
+    "chess": "Scacchi",
+    "chessRules": [
+      "Ogni giocatore inizia con 16 pezzi: 1 re, 1 regina, 2 torri, 2 alfieri, 2 cavalli e 8 pedoni.",
+      "Il bianco muove per primo, poi i giocatori si alternano.",
+      "L'obiettivo è dare scacco matto al re avversario.",
+      "Le mosse speciali includono arrocco, en passant e promozione del pedone.",
+      "Una partita può terminare con scacco matto, stallo, resa o patta per accordo."
+    ],
+    "checkers": "Dama",
+    "checkersRules": [
+      "Ogni giocatore inizia con 12 pedine sulle caselle scure.",
+      "Le pedine si muovono diagonalmente in avanti di una casella.",
+      "Le catture sono obbligatorie quando disponibili.",
+      "Sono permesse catture multiple in un singolo turno.",
+      "Le pedine che raggiungono il lato opposto diventano dame e possono muoversi all'indietro.",
+      "Vinci catturando tutte le pedine avversarie o bloccando tutte le loro mosse."
+    ],
+    "backgammon": "Backgammon",
+    "backgammonRules": [
+      "Ogni giocatore ha 15 pedine da muovere sul tavoliere.",
+      "Tira due dadi per determinare il movimento.",
+      "Muovi le pedine verso il tuo settore interno.",
+      "Atterra sulla pedina singola dell'avversario per mandarla sulla barra.",
+      "Le pedine sulla barra devono rientrare prima di altre mosse.",
+      "Togli tutte le tue pedine per primo per vincere."
+    ],
+    "ludo": "Ludo",
+    "ludoRules": [
+      "Ogni giocatore ha 4 pedine che partono dalla base.",
+      "Tira un 6 per muovere una pedina dalla base all'inizio.",
+      "Muovi le pedine in senso orario in base al dado.",
+      "Atterra sulla pedina avversaria per rimandarla alla base.",
+      "Tirare un 6 dà un turno extra.",
+      "Il primo giocatore a portare tutte e 4 le pedine al traguardo vince."
+    ],
+    "dominos": "Domino",
+    "dominosRules": [
+      "Ogni giocatore pesca 7 tessere da un set mischiato.",
+      "Il giocatore con il doppio più alto (es. [6|6]) inizia.",
+      "Se nessun giocatore ha un doppio, il più alto conteggio di punti determina chi inizia.",
+      "Abbina le estremità delle tessere per giocare (es. 6 si collega a 6).",
+      "Pesca dal pozzo se non puoi giocare.",
+      "Il primo a giocare tutte le tessere o con il punteggio più basso quando bloccato vince."
+    ]
+  },
+  "privacy": {
+    "title": "Informativa sulla Privacy",
+    "lastUpdated": "Ultimo aggiornamento: Dicembre 2024",
+    "section1Title": "1. Informazioni che Raccogliamo",
+    "section1Text": "1M Gaming è un'applicazione decentralizzata. Non raccogliamo informazioni personali oltre a quelle pubblicamente disponibili sulla blockchain. Quando connetti il tuo portafoglio, accediamo solo al tuo indirizzo pubblico.",
+    "section2Title": "2. Come Utilizziamo le Informazioni",
+    "section2Text": "Il tuo indirizzo del portafoglio è utilizzato esclusivamente per facilitare il gioco, gestire le stanze di gioco e elaborare le distribuzioni dei premi tramite smart contract sulla rete Polygon.",
+    "section3Title": "3. Archiviazione dei Dati",
+    "section3Text": "Gli stati di gioco e i record delle transazioni sono memorizzati sulla blockchain Polygon e sono pubblicamente accessibili. Non manteniamo database privati di informazioni utente.",
+    "section4Title": "4. Cookie e Archiviazione Locale",
+    "section4Text": "Utilizziamo l'archiviazione locale del browser per salvare le tue preferenze (lingua, impostazioni audio). Non vengono utilizzati cookie di tracciamento.",
+    "section5Title": "5. Servizi di Terze Parti",
+    "section5Text": "Ci integriamo con fornitori di portafogli (MetaMask, WalletConnect) e infrastruttura blockchain. Questi servizi hanno le proprie politiche sulla privacy.",
+    "section6Title": "6. Privacy dei Minori",
+    "section6Text": "1M Gaming non è destinato a utenti di età inferiore a 18 anni. Non raccogliamo consapevolmente informazioni da minori.",
+    "section7Title": "7. Contattaci",
+    "section7Text": "Per domande relative alla privacy, contattaci a"
+  },
+  "support": {
+    "title": "Supporto e Contatti",
+    "description": "Hai domande, feedback o hai bisogno di assistenza? Siamo qui per aiutarti.",
+    "responseTime": "Tempo di risposta: Entro 24-48 ore",
+    "urgentNote": "Per questioni urgenti, includi \"URGENTE\" nell'oggetto del messaggio."
   },
   "errors": {
     "transactionFailed": "Transazione fallita",
