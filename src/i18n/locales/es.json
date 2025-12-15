@@ -411,7 +411,81 @@
   },
   "footer": {
     "company": "1 MILLION GAMING co",
-    "tagline": "Habilidad · Estrategia · Éxito"
+    "tagline": "Habilidad · Estrategia · Éxito",
+    "gameRules": "Reglas del Juego",
+    "support": "Soporte",
+    "privacyPolicy": "Política de Privacidad"
+  },
+  "gameRules": {
+    "title": "Reglas del Juego",
+    "chess": "Ajedrez",
+    "chessRules": [
+      "Cada jugador comienza con 16 piezas: 1 rey, 1 reina, 2 torres, 2 alfiles, 2 caballos y 8 peones.",
+      "Las blancas mueven primero, luego los jugadores alternan turnos.",
+      "El objetivo es dar jaque mate al rey del oponente.",
+      "Los movimientos especiales incluyen enroque, captura al paso y promoción de peón.",
+      "Una partida puede terminar en jaque mate, tablas, renuncia o empate por acuerdo."
+    ],
+    "checkers": "Damas",
+    "checkersRules": [
+      "Cada jugador comienza con 12 piezas en casillas oscuras.",
+      "Las piezas se mueven diagonalmente hacia adelante una casilla.",
+      "Las capturas son obligatorias cuando están disponibles.",
+      "Se permiten capturas múltiples en un solo turno.",
+      "Las piezas que llegan al extremo opuesto se convierten en damas y pueden moverse hacia atrás.",
+      "Gana capturando todas las piezas del oponente o bloqueando todos sus movimientos."
+    ],
+    "backgammon": "Backgammon",
+    "backgammonRules": [
+      "Cada jugador tiene 15 fichas para mover alrededor del tablero.",
+      "Tira dos dados para determinar el movimiento.",
+      "Mueve las fichas hacia tu tablero de casa.",
+      "Aterriza en la ficha solitaria del oponente para enviarla a la barra.",
+      "Las fichas en la barra deben reingresar antes de otros movimientos.",
+      "Saca todas tus fichas primero para ganar."
+    ],
+    "ludo": "Ludo",
+    "ludoRules": [
+      "Cada jugador tiene 4 fichas comenzando en su base.",
+      "Tira un 6 para mover una ficha de la base al inicio.",
+      "Mueve las fichas en sentido horario según el dado.",
+      "Aterriza en la ficha del oponente para enviarla de vuelta a la base.",
+      "Tirar un 6 otorga un turno extra.",
+      "El primer jugador en llevar las 4 fichas a la meta gana."
+    ],
+    "dominos": "Dominó",
+    "dominosRules": [
+      "Cada jugador toma 7 fichas de un conjunto mezclado.",
+      "El jugador con el doble más alto (ej. [6|6]) comienza primero.",
+      "Si ningún jugador tiene doble, el que tenga más puntos determina quién comienza.",
+      "Une los extremos de las fichas para jugar (ej. 6 conecta con 6).",
+      "Roba del pozo si no puedes jugar.",
+      "El primero en jugar todas sus fichas o con menor puntuación cuando se bloquea, gana."
+    ]
+  },
+  "privacy": {
+    "title": "Política de Privacidad",
+    "lastUpdated": "Última actualización: Diciembre 2024",
+    "section1Title": "1. Información que Recopilamos",
+    "section1Text": "1M Gaming es una aplicación descentralizada. No recopilamos información personal más allá de lo que está públicamente disponible en la blockchain. Cuando conectas tu billetera, solo accedemos a tu dirección pública.",
+    "section2Title": "2. Cómo Usamos la Información",
+    "section2Text": "Tu dirección de billetera se usa únicamente para facilitar el juego, gestionar salas de juego y procesar distribuciones de premios a través de contratos inteligentes en la red Polygon.",
+    "section3Title": "3. Almacenamiento de Datos",
+    "section3Text": "Los estados de los juegos y registros de transacciones se almacenan en la blockchain de Polygon y son públicamente accesibles. No mantenemos bases de datos privadas de información de usuarios.",
+    "section4Title": "4. Cookies y Almacenamiento Local",
+    "section4Text": "Usamos almacenamiento local del navegador para guardar tus preferencias (idioma, configuración de sonido). No se usan cookies de rastreo.",
+    "section5Title": "5. Servicios de Terceros",
+    "section5Text": "Nos integramos con proveedores de billeteras (MetaMask, WalletConnect) e infraestructura blockchain. Estos servicios tienen sus propias políticas de privacidad.",
+    "section6Title": "6. Privacidad de Menores",
+    "section6Text": "1M Gaming no está destinado a usuarios menores de 18 años. No recopilamos información de menores conscientemente.",
+    "section7Title": "7. Contáctanos",
+    "section7Text": "Para preguntas relacionadas con privacidad, contáctanos en"
+  },
+  "support": {
+    "title": "Soporte y Contacto",
+    "description": "¿Tienes preguntas, comentarios o necesitas ayuda? Estamos aquí para ayudarte.",
+    "responseTime": "Tiempo de respuesta: Entre 24-48 horas",
+    "urgentNote": "Para asuntos urgentes, incluye \"URGENTE\" en el asunto de tu mensaje."
   },
   "errors": {
     "transactionFailed": "Transacción fallida",

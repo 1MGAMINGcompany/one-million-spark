@@ -13,9 +13,9 @@ const Footer = () => {
   const [isOpen, setIsOpen] = useState(false);
 
   const links = [
-    { to: "/game-rules", label: "Game Rules" },
-    { to: "/support", label: "Support" },
-    { to: "/privacy-policy", label: "Privacy Policy" },
+    { to: "/game-rules", labelKey: "footer.gameRules" },
+    { to: "/support", labelKey: "footer.support" },
+    { to: "/privacy-policy", labelKey: "footer.privacyPolicy" },
   ];
 
   return (
@@ -29,7 +29,7 @@ const Footer = () => {
               to={link.to}
               className="hover:text-primary/80 transition-colors"
             >
-              {link.label}
+              {t(link.labelKey)}
             </Link>
           ))}
         </div>
@@ -51,7 +51,7 @@ const Footer = () => {
                     to={link.to}
                     className="hover:text-primary/80 transition-colors"
                   >
-                    {link.label}
+                    {t(link.labelKey)}
                   </Link>
                 ))}
               </div>

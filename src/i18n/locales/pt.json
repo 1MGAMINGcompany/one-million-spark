@@ -411,7 +411,81 @@
   },
   "footer": {
     "company": "1 MILLION GAMING co",
-    "tagline": "Habilidade · Estratégia · Sucesso"
+    "tagline": "Habilidade · Estratégia · Sucesso",
+    "gameRules": "Regras do Jogo",
+    "support": "Suporte",
+    "privacyPolicy": "Política de Privacidade"
+  },
+  "gameRules": {
+    "title": "Regras do Jogo",
+    "chess": "Xadrez",
+    "chessRules": [
+      "Cada jogador começa com 16 peças: 1 rei, 1 rainha, 2 torres, 2 bispos, 2 cavalos e 8 peões.",
+      "Brancas jogam primeiro, depois os jogadores alternam turnos.",
+      "O objetivo é dar xeque-mate no rei do oponente.",
+      "Movimentos especiais incluem roque, en passant e promoção de peão.",
+      "Um jogo pode terminar em xeque-mate, empate, desistência ou acordo de empate."
+    ],
+    "checkers": "Damas",
+    "checkersRules": [
+      "Cada jogador começa com 12 peças nas casas escuras.",
+      "Peças movem-se diagonalmente para frente uma casa.",
+      "Capturas são obrigatórias quando disponíveis.",
+      "Capturas múltiplas são permitidas em um único turno.",
+      "Peças que chegam ao lado oposto tornam-se damas e podem mover para trás.",
+      "Vença capturando todas as peças do oponente ou bloqueando todos os seus movimentos."
+    ],
+    "backgammon": "Gamão",
+    "backgammonRules": [
+      "Cada jogador tem 15 pedras para mover pelo tabuleiro.",
+      "Lance dois dados para determinar o movimento.",
+      "Mova as pedras em direção ao seu território.",
+      "Pouse na pedra solitária do oponente para enviá-la à barra.",
+      "Pedras na barra devem reentrar antes de outros movimentos.",
+      "Retire todas as suas pedras primeiro para vencer."
+    ],
+    "ludo": "Ludo",
+    "ludoRules": [
+      "Cada jogador tem 4 peões começando na base.",
+      "Tire um 6 para mover um peão da base para o início.",
+      "Mova os peões em sentido horário baseado no dado.",
+      "Pouse no peão do oponente para enviá-lo de volta à base.",
+      "Tirar um 6 dá um turno extra.",
+      "O primeiro jogador a levar todos os 4 peões ao fim vence."
+    ],
+    "dominos": "Dominó",
+    "dominosRules": [
+      "Cada jogador pega 7 peças de um conjunto embaralhado.",
+      "O jogador com a maior carroça (ex. [6|6]) começa.",
+      "Se nenhum jogador tiver carroça, a maior peça determina quem começa.",
+      "Combine extremidades das peças para jogar (ex. 6 conecta com 6).",
+      "Compre do monte se não puder jogar.",
+      "O primeiro a jogar todas as peças ou com menor pontuação quando bloqueado vence."
+    ]
+  },
+  "privacy": {
+    "title": "Política de Privacidade",
+    "lastUpdated": "Última atualização: Dezembro 2024",
+    "section1Title": "1. Informações que Coletamos",
+    "section1Text": "1M Gaming é uma aplicação descentralizada. Não coletamos informações pessoais além do que está publicamente disponível na blockchain. Quando você conecta sua carteira, acessamos apenas seu endereço público.",
+    "section2Title": "2. Como Usamos as Informações",
+    "section2Text": "Seu endereço de carteira é usado apenas para facilitar o jogo, gerenciar salas de jogo e processar distribuições de prêmios através de contratos inteligentes na rede Polygon.",
+    "section3Title": "3. Armazenamento de Dados",
+    "section3Text": "Estados de jogos e registros de transações são armazenados na blockchain Polygon e são publicamente acessíveis. Não mantemos bancos de dados privados de informações de usuários.",
+    "section4Title": "4. Cookies e Armazenamento Local",
+    "section4Text": "Usamos armazenamento local do navegador para salvar suas preferências (idioma, configurações de som). Nenhum cookie de rastreamento é usado.",
+    "section5Title": "5. Serviços de Terceiros",
+    "section5Text": "Integramos com provedores de carteiras (MetaMask, WalletConnect) e infraestrutura blockchain. Esses serviços têm suas próprias políticas de privacidade.",
+    "section6Title": "6. Privacidade de Menores",
+    "section6Text": "1M Gaming não é destinado a usuários menores de 18 anos. Não coletamos conscientemente informações de menores.",
+    "section7Title": "7. Contate-nos",
+    "section7Text": "Para questões de privacidade, entre em contato em"
+  },
+  "support": {
+    "title": "Suporte e Contato",
+    "description": "Tem dúvidas, feedback ou precisa de ajuda? Estamos aqui para ajudar.",
+    "responseTime": "Tempo de resposta: Entre 24-48 horas",
+    "urgentNote": "Para assuntos urgentes, inclua \"URGENTE\" no assunto da sua mensagem."
   },
   "errors": {
     "transactionFailed": "Transação falhou",
