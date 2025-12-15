@@ -52,14 +52,18 @@ export function usePublicRooms() {
       for (let i = latestIdBigInt; i > latestIdBigInt - maxRoomsToFetch && i >= 1n; i--) {
         try {
           const r = await contract.rooms(i);
-          // Only include public, open rooms with available slots
+          // Only include public, open rooms with available slots AND status=Created (1)
+          // Rooms with status=Started (2) should NOT appear in Room List
           const isPrivate = r.isPrivate;
           const isOpen = r.isOpen;
           const isFinished = r.isFinished;
+          const status = Number(r.status);
           const playerCount = Number(r.playerCount);
           const maxPlayers = Number(r.maxPlayers);
 
-          if (!isPrivate && isOpen && !isFinished && playerCount < maxPlayers) {
+          // status === 1 means "Created" - game not started yet
+          // status === 2 means "Started" - game in play, should be hidden
+          if (!isPrivate && isOpen && !isFinished && status === 1 && playerCount < maxPlayers) {
             publicRooms.push({
               id: i,
               creator: r.creator as `0x${string}`,

@@ -218,7 +218,10 @@
     "approvalFailed": "Approval Failed",
     "transactionFailed": "Transaction Failed",
     "roomCancelled": "Room Cancelled",
-    "roomCancelledDesc": "Your room has been cancelled."
+    "roomCancelledDesc": "Your room has been cancelled.",
+    "activeRoomWarning": "You already have an active room (#{{roomId}})",
+    "activeRoomWarningDesc": "You must finish or cancel your existing room before creating a new one.",
+    "goToRoom": "Go to Room"
   },
   "roomList": {
     "title": "Public Game Rooms",
@@ -238,7 +241,11 @@
     "joinedRoomDesc": "You have successfully joined the game room.",
     "failedToJoin": "Failed to Join",
     "cannotJoin": "Cannot Join",
-    "cannotJoinOwn": "You cannot join your own room"
+    "cannotJoinOwn": "You cannot join your own room",
+    "cannotJoinActiveRoom": "You have an active room (#{{roomId}}). Finish or cancel it first.",
+    "activeRoomWarning": "You have an active room (#{{roomId}})",
+    "activeRoomWarningDesc": "Finish or cancel your room before joining another.",
+    "goToRoom": "Go to Room"
   },
   "playAi": {
     "title": "Temple of Practice",

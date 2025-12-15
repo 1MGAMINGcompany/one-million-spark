@@ -18,7 +18,8 @@ import { useSound } from "@/contexts/SoundContext";
 import { useGaslessCreateRoom } from "@/hooks/useGaslessCreateRoom";
 import { useUsdtAllowanceV7 } from "@/hooks/useUsdtAllowanceV7";
 import { useApproveUsdtV7, usdtToUnitsV7 } from "@/hooks/useApproveUsdtV7";
-import { Loader2, AlertCircle, Wallet, CheckCircle2 } from "lucide-react";
+import { usePlayerActiveRoom } from "@/hooks/usePlayerActiveRoom";
+import { Loader2, AlertCircle, Wallet, CheckCircle2, AlertTriangle } from "lucide-react";
 import { useWeb3Modal } from "@web3modal/wagmi/react";
 import { ShareInviteDialog } from "@/components/ShareInviteDialog";
 import { useNotificationPermission } from "@/hooks/useRoomEvents";
@@ -69,6 +70,9 @@ const CreateRoom = () => {
   const [approvalStep, setApprovalStep] = useState<'idle' | 'approved'>('idle');
   
   const { requestPermission } = useNotificationPermission();
+
+  // Check if player already has an active room
+  const { activeRoom, hasActiveRoom, isLoading: isCheckingActiveRoom } = usePlayerActiveRoom(address as `0x${string}` | undefined);
 
   const { createRoomGasless, isBusy } = useGaslessCreateRoom();
 
@@ -389,8 +393,33 @@ const CreateRoom = () => {
             </Button>
           )}
 
+          {/* Active Room Warning */}
+          {isConnected && hasActiveRoom && activeRoom && (
+            <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-4 space-y-3">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-medium text-destructive">
+                    {t("createRoom.activeRoomWarning", { roomId: activeRoom.id.toString() })}
+                  </p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {t("createRoom.activeRoomWarningDesc")}
+                  </p>
+                </div>
+              </div>
+              <Button 
+                type="button"
+                variant="outline" 
+                className="w-full"
+                onClick={() => navigate(`/room/${activeRoom.id.toString()}`)}
+              >
+                {t("createRoom.goToRoom")}
+              </Button>
+            </div>
+          )}
+
           {/* Two-Step Process: Approve USDT → Create Room */}
-          {isConnected && (
+          {isConnected && !hasActiveRoom && (
             <div className="space-y-3">
               {/* Step 1: Approve USDT */}
               <Button 
@@ -399,7 +428,7 @@ const CreateRoom = () => {
                 size="lg"
                 variant={hasSufficientAllowance ? "outline" : "default"}
                 onClick={handleApproveUsdt}
-                disabled={isApproveLoading || isCreateLoading || !entryFee || !!feeError || hasSufficientAllowance}
+                disabled={isApproveLoading || isCreateLoading || !entryFee || !!feeError || hasSufficientAllowance || isCheckingActiveRoom}
               >
                 {isApproveLoading ? (
                   <>
@@ -422,7 +451,7 @@ const CreateRoom = () => {
                 className="w-full" 
                 size="lg"
                 onClick={handleCreateRoom}
-                disabled={isCreateLoading || isApproveLoading || !entryFee || !!feeError || !hasSufficientAllowance}
+                disabled={isCreateLoading || isApproveLoading || !entryFee || !!feeError || !hasSufficientAllowance || isCheckingActiveRoom}
               >
                 {isCreateLoading ? (
                   <>
