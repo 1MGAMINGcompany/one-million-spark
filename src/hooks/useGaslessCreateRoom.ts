@@ -16,9 +16,8 @@ const thirdwebClient = createThirdwebClient({
 // Gasless config using OpenZeppelin ERC-2771 pattern
 const GASLESS_CONFIG = {
   provider: "openzeppelin" as const,
-  relayerUrl: import.meta.env.VITE_RELAYER_URL || "https://your-relayer-url",
   relayerForwarderAddress: TRUSTED_FORWARDER_ADDRESS,
-};
+} as any;
 
 // Helper to get thirdweb account from browser wallet
 async function getThirdwebAccount() {
