@@ -225,3 +225,71 @@ export function useGaslessCancelRoom() {
     reset,
   };
 }
+
+export function useGaslessFinishGame() {
+  const [isBusy, setIsBusy] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+
+  const finishGameGasless = useCallback(async (
+    roomId: bigint,
+    winnerAddress: `0x${string}`,
+    isDraw: boolean = false,
+    gameHash: `0x${string}` = "0x0000000000000000000000000000000000000000000000000000000000000000",
+    proofOrSig: `0x${string}` = "0x"
+  ): Promise<{ transactionHash: string }> => {
+    if (isBusy) throw new Error("BUSY");
+    setIsBusy(true);
+    setIsSuccess(false);
+    setError(null);
+
+    try {
+      const account = await getThirdwebAccount();
+      const contract = getThirdwebContract();
+
+      // Prepare the finishGameSig transaction (V7 signature: roomId, winner, isDraw, gameHash, proofOrSig)
+      const transaction = prepareContractCall({
+        contract,
+        method: "function finishGameSig(uint256 roomId, address winner, bool isDraw, bytes32 gameHash, bytes proofOrSig)",
+        params: [roomId, winnerAddress, isDraw, gameHash, proofOrSig],
+      });
+
+      // Send gasless transaction via relayer (user signs, relayer pays gas)
+      const result = await sendTransaction({
+        account,
+        transaction,
+        gasless: GASLESS_CONFIG,
+      });
+
+      // Wait for receipt
+      const { waitForReceipt } = await import("thirdweb");
+      const receipt = await waitForReceipt(result);
+
+      setIsSuccess(true);
+      return {
+        transactionHash: receipt.transactionHash,
+      };
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      setError(error);
+      throw error;
+    } finally {
+      setIsBusy(false);
+    }
+  }, [isBusy]);
+
+  const reset = useCallback(() => {
+    setIsSuccess(false);
+    setError(null);
+  }, []);
+
+  return {
+    finishGameGasless,
+    isBusy,
+    isPending: isBusy,
+    isConfirming: false,
+    isSuccess,
+    error,
+    reset,
+  };
+}
