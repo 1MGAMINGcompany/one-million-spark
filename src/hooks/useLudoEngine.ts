@@ -1,5 +1,9 @@
 import { useState, useCallback, useRef, useEffect } from "react";
-import { Player, PlayerColor, Token, initializePlayers } from "@/components/ludo/ludoTypes";
+import { Player, PlayerColor, Token, initializePlayers, TRACK_SIZE } from "@/components/ludo/ludoTypes";
+
+// Constants for 56-cell track
+const HOME_COLUMN_START = 56;  // Positions 56-61 are home column
+const FINISH_POSITION = 62;    // Position 62 means finished
 
 export interface LudoMove {
   playerIndex: number;
@@ -44,9 +48,9 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
     player.tokens.forEach((token, index) => {
       if (token.position === -1 && dice === 6) {
         movable.push(index);
-      } else if (token.position >= 0 && token.position < 57) {
+      } else if (token.position >= 0 && token.position < FINISH_POSITION) {
         const newPos = token.position + dice;
-        if (newPos <= 57) {
+        if (newPos <= FINISH_POSITION) {
           movable.push(index);
         }
       }
@@ -58,9 +62,9 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
   const calculateEndPosition = useCallback((token: Token, dice: number): number | null => {
     if (token.position === -1 && dice === 6) {
       return 0; // Leave home
-    } else if (token.position >= 0 && token.position < 57) {
+    } else if (token.position >= 0 && token.position < FINISH_POSITION) {
       const newPos = token.position + dice;
-      if (newPos <= 57) {
+      if (newPos <= FINISH_POSITION) {
         return newPos;
       }
     }
@@ -210,16 +214,16 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
           newPlayers[playerIndex].tokens[tokenIndex].position = endPos;
         }
         
-        // Check for captures (only on main track, positions 0-51)
-        if (endPos >= 0 && endPos < 52) {
+        // Check for captures (only on main track, positions 0-55)
+        if (endPos >= 0 && endPos < TRACK_SIZE) {
           const movingPlayer = newPlayers[playerIndex];
-          const myAbsPos = (endPos + movingPlayer.startPosition) % 52;
+          const myAbsPos = (endPos + movingPlayer.startPosition) % TRACK_SIZE;
           
           newPlayers.forEach((otherPlayer, opi) => {
             if (opi !== playerIndex) {
               otherPlayer.tokens.forEach((otherToken, oti) => {
-                if (otherToken.position >= 0 && otherToken.position < 52) {
-                  const otherAbsPos = (otherToken.position + otherPlayer.startPosition) % 52;
+                if (otherToken.position >= 0 && otherToken.position < TRACK_SIZE) {
+                  const otherAbsPos = (otherToken.position + otherPlayer.startPosition) % TRACK_SIZE;
                   if (otherAbsPos === myAbsPos) {
                     newPlayers[opi].tokens[oti].position = -1;
                     console.log(`[LUDO ENGINE] Capture: ${movingPlayer.color} captured ${otherPlayer.color} token#${oti}`);
@@ -248,7 +252,7 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
   // Check for winner
   const checkWinner = useCallback((playersToCheck: Player[]): PlayerColor | null => {
     for (const player of playersToCheck) {
-      if (player.tokens.every(t => t.position === 57)) {
+      if (player.tokens.every(t => t.position === FINISH_POSITION)) {
         return player.color;
       }
     }
