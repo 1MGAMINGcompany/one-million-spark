@@ -148,12 +148,12 @@ const LudoAI = () => {
     const currentDice = diceValue;
     moveStartedRef.current = true;
     
-    // Clear dice state immediately to prevent re-use
-    setDiceValue(null);
+    // Keep dice visible but clear movable tokens
     setMovableTokens([]);
     
     const success = executeMove(currentPlayerIndex, tokenIndex, currentDice, () => {
-      // After animation completes, advance turn and release lock
+      // After animation completes, clear dice and advance turn
+      setDiceValue(null);
       moveStartedRef.current = false;
       setTimeout(() => advanceTurn(currentDice), 200);
     });
@@ -161,7 +161,6 @@ const LudoAI = () => {
     if (!success) {
       // If move failed, restore state
       moveStartedRef.current = false;
-      setDiceValue(currentDice);
     }
   }, [isAnimating, currentPlayerIndex, currentPlayer, diceValue, isRolling, movableTokens, executeMove, advanceTurn, setDiceValue, setMovableTokens]);
 
@@ -191,9 +190,8 @@ const LudoAI = () => {
               aiMoveInProgressRef.current = false;
             }, 1000);
           } else {
-            // AI chooses a token to move - capture dice immediately
+            // AI chooses a token to move - keep dice visible during animation
             const capturedDice = dice;
-            setDiceValue(null);
             setMovableTokens([]);
             
             const aiDelay = difficulty === "easy" ? 600 : difficulty === "medium" ? 400 : 200;
@@ -214,6 +212,8 @@ const LudoAI = () => {
               }
               
               executeMove(currentPlayerIndex, chosenToken, capturedDice, () => {
+                // Clear dice AFTER animation completes
+                setDiceValue(null);
                 setTimeout(() => {
                   advanceTurn(capturedDice);
                   aiMoveInProgressRef.current = false;
