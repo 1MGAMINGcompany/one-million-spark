@@ -16,13 +16,12 @@ import { useWallet } from "@/hooks/useWallet";
 import { useToast } from "@/hooks/use-toast";
 import { useSound } from "@/contexts/SoundContext";
 import { 
-  useCreateRoomV5, 
   useApproveUsdtV5, 
   useUsdtAllowanceV5,
-  useLatestRoomIdV5,
   usdtToUnits,
   getGameNameV5 
 } from "@/hooks/useRoomManagerV5";
+import { useRoomManagerV7 } from "@/hooks/useRoomManagerV7";
 import { Loader2, AlertCircle, Wallet, CheckCircle2 } from "lucide-react";
 import { useWeb3Modal } from "@web3modal/wagmi/react";
 import { ShareInviteDialog } from "@/components/ShareInviteDialog";
@@ -63,6 +62,8 @@ const CreateRoom = () => {
   
   const { requestPermission } = useNotificationPermission();
 
+  const { getContract, withLock, isBusy } = useRoomManagerV7();
+
   const { 
     approve: approveUsdt, 
     isPending: isApprovePending, 
@@ -74,16 +75,9 @@ const CreateRoom = () => {
 
   const { data: currentAllowance, refetch: refetchAllowance } = useUsdtAllowanceV5(address as `0x${string}` | undefined);
 
-  const { 
-    createRoom, 
-    isPending: isCreatePending, 
-    isConfirming: isCreateConfirming, 
-    isSuccess: isCreateSuccess, 
-    error: createError, 
-    reset: resetCreate 
-  } = useCreateRoomV5();
-
-  const { data: latestRoomId, refetch: refetchLatestRoomId } = useLatestRoomIdV5();
+  const [isCreateSuccess, setIsCreateSuccess] = useState(false);
+  const [createError, setCreateError] = useState<Error | null>(null);
+  const [latestRoomId, setLatestRoomId] = useState<bigint | null>(null);
 
   const entryFeeNum = parseFloat(entryFee) || 0;
   const entryFeeUnits = usdtToUnits(entryFeeNum);
@@ -127,44 +121,41 @@ const CreateRoom = () => {
   }, [approveError, toast, resetApprove, t]);
 
   useEffect(() => {
-    if (isCreateSuccess) {
+    if (isCreateSuccess && latestRoomId && latestRoomId > 0n) {
       play('room_create');
       const isPrivate = roomType === "private";
       const gameName = getGameNameV5(GAME_IDS[gameType] || 1);
       
       requestPermission();
       
-      refetchLatestRoomId().then((result) => {
-        if (result.data && result.data > 0n) {
-          const roomId = result.data.toString();
-          
-          if (isPrivate) {
-            setCreatedRoomId(roomId);
-            setCreatedGameName(gameName);
-            setShowShareDialog(true);
-            toast({
-              title: t("createRoom.privateRoomCreated"),
-              description: t("createRoom.privateRoomCreatedDesc"),
-            });
-          } else {
-            toast({
-              title: t("createRoom.roomCreated"),
-              description: t("createRoom.roomCreatedDesc"),
-            });
-            setTimeout(() => {
-              navigate("/room-list?refresh=1");
-            }, 1500);
-          }
-        }
-      });
+      const roomId = latestRoomId.toString();
+      
+      if (isPrivate) {
+        setCreatedRoomId(roomId);
+        setCreatedGameName(gameName);
+        setShowShareDialog(true);
+        toast({
+          title: t("createRoom.privateRoomCreated"),
+          description: t("createRoom.privateRoomCreatedDesc"),
+        });
+      } else {
+        toast({
+          title: t("createRoom.roomCreated"),
+          description: t("createRoom.roomCreatedDesc"),
+        });
+        setTimeout(() => {
+          navigate("/room-list?refresh=1");
+        }, 1500);
+      }
       
       setEntryFee("");
       setPlayers("2");
       setTurnTimeSec("10");
       setApprovalStep('idle');
-      resetCreate();
+      setIsCreateSuccess(false);
+      setLatestRoomId(null);
     }
-  }, [isCreateSuccess, play, toast, resetCreate, refetchLatestRoomId, navigate, roomType, gameType, requestPermission, t]);
+  }, [isCreateSuccess, latestRoomId, play, toast, navigate, roomType, gameType, requestPermission, t]);
 
   useEffect(() => {
     if (createError) {
@@ -173,9 +164,9 @@ const CreateRoom = () => {
         description: createError.message || t("createRoom.transactionFailed"),
         variant: "destructive",
       });
-      resetCreate();
+      setCreateError(null);
     }
-  }, [createError, toast, resetCreate, t]);
+  }, [createError, toast, t]);
 
 
   const handleApproveUsdt = () => {
@@ -191,7 +182,7 @@ const CreateRoom = () => {
     approveUsdt(entryFeeNum);
   };
 
-  const handleCreateRoom = () => {
+  const handleCreateRoom = async () => {
     if (!entryFee || entryFeeNum < MIN_ENTRY_FEE_USDT) {
       toast({
         title: t("createRoom.invalidFee"),
@@ -208,11 +199,33 @@ const CreateRoom = () => {
     const gameId = GAME_IDS[gameType] || 1;
     const turnTime = parseInt(turnTimeSec);
     
-    createRoom(entryFeeNum, maxPlayers, isPrivate, PLATFORM_FEE_BPS, gameId, turnTime);
+    try {
+      await withLock(async () => {
+        const c = await getContract();
+        // TODO: next step we insert the exact contract call + args
+        // await c.createRoom(...);
+        const tx = await c.createRoom(
+          entryFeeUnits,
+          maxPlayers,
+          isPrivate,
+          PLATFORM_FEE_BPS,
+          gameId,
+          turnTime
+        );
+        await tx.wait();
+        
+        // Fetch latest room ID
+        const roomId = await c.latestRoomId();
+        setLatestRoomId(roomId);
+        setIsCreateSuccess(true);
+      });
+    } catch (err) {
+      setCreateError(err instanceof Error ? err : new Error(String(err)));
+    }
   };
 
   const isApproveLoading = isApprovePending || isApproveConfirming;
-  const isCreateLoading = isCreatePending || isCreateConfirming;
+  const isCreateLoading = isBusy;
 
   const getApproveButtonText = () => {
     if (isApprovePending) return t("createRoom.confirmInWallet");
@@ -221,8 +234,7 @@ const CreateRoom = () => {
   };
 
   const getCreateButtonText = () => {
-    if (isCreatePending) return t("createRoom.confirmInWallet");
-    if (isCreateConfirming) return t("createRoom.creatingRoom");
+    if (isBusy) return t("createRoom.creatingRoom");
     return t("createRoom.step2Create");
   };
 
