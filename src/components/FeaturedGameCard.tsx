@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
-import { Button } from "@/components/ui/button";
+import { useSound } from "@/contexts/SoundContext";
+import { useCallback, useRef } from "react";
 
 interface FeaturedGameCardProps {
   name: string;
@@ -9,8 +10,33 @@ interface FeaturedGameCardProps {
 }
 
 const FeaturedGameCard = ({ name, tagline, path, icon }: FeaturedGameCardProps) => {
+  const { play } = useSound();
+  const hasPlayedRef = useRef(false);
+
+  // Play sound on hover (desktop) - only once per hover session
+  const handleMouseEnter = useCallback(() => {
+    if (!hasPlayedRef.current) {
+      play('ui_litewoosh');
+      hasPlayedRef.current = true;
+    }
+  }, [play]);
+
+  const handleMouseLeave = useCallback(() => {
+    hasPlayedRef.current = false;
+  }, []);
+
+  // Play sound on touch/click (mobile)
+  const handleTouchStart = useCallback(() => {
+    play('ui_litewoosh');
+  }, [play]);
+
   return (
-    <div className="group relative">
+    <div 
+      className="group relative"
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+      onTouchStart={handleTouchStart}
+    >
       {/* Outer glow ring with pulse animation */}
       <div className="absolute -inset-0.5 bg-gradient-to-r from-primary via-gold-light to-primary rounded-2xl opacity-75 blur-sm animate-pulse-gold group-hover:opacity-100 group-hover:blur-md transition-all duration-500" />
       
