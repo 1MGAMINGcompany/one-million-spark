@@ -1,4 +1,10 @@
 {
+  "ageConfirmation": {
+    "title": "Age Verification",
+    "description": "This platform is for users 18 years and older. By continuing, you confirm you are at least 18.",
+    "confirm": "I am 18+",
+    "exit": "Exit"
+  },
   "game": {
     "finishGame": "Finish Game",
     "finishGameDesc": "As the room creator, you can finish the game and pay the winner.",

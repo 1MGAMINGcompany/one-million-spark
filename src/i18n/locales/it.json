@@ -1,4 +1,10 @@
 {
+  "ageConfirmation": {
+    "title": "Verifica dell'Età",
+    "description": "Questa piattaforma è riservata agli utenti di 18 anni e oltre. Continuando, confermi di avere almeno 18 anni.",
+    "confirm": "Ho 18+",
+    "exit": "Esci"
+  },
   "game": {
     "finishGame": "Termina Partita",
     "finishGameDesc": "Come creatore della stanza, puoi terminare la partita e pagare il vincitore.",

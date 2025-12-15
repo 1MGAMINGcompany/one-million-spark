@@ -1,4 +1,10 @@
 {
+  "ageConfirmation": {
+    "title": "年龄验证",
+    "description": "本平台仅限18岁及以上用户使用。继续即表示您确认已年满18岁。",
+    "confirm": "我已满18岁",
+    "exit": "退出"
+  },
   "game": {
     "finishGame": "结束游戏",
     "finishGameDesc": "作为房间创建者，您可以结束游戏并支付奖金给获胜者。",
