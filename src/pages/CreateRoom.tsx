@@ -15,7 +15,6 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useWallet } from "@/hooks/useWallet";
 import { useToast } from "@/hooks/use-toast";
 import { useSound } from "@/contexts/SoundContext";
-import { getGameNameV5 } from "@/hooks/useRoomManagerV5";
 import { useRoomManagerV7 } from "@/hooks/useRoomManagerV7";
 import { useUsdtAllowanceV7 } from "@/hooks/useUsdtAllowanceV7";
 import { useApproveUsdtV7, usdtToUnitsV7 } from "@/hooks/useApproveUsdtV7";
@@ -38,6 +37,18 @@ const PLATFORM_FEE_BPS = 500;
 
 // Minimum entry fee in USDT
 const MIN_ENTRY_FEE_USDT = 0.5;
+
+// Helper function to get game name from ID
+function getGameName(gameId: number): string {
+  const names: Record<number, string> = {
+    1: "Chess",
+    2: "Dominos",
+    3: "Backgammon",
+    4: "Checkers",
+    5: "Ludo",
+  };
+  return names[gameId] || "Unknown";
+}
 
 const CreateRoom = () => {
   const { t } = useTranslation();
@@ -121,7 +132,7 @@ const CreateRoom = () => {
     if (isCreateSuccess && latestRoomId && latestRoomId > 0n) {
       play('room_create');
       const isPrivate = roomType === "private";
-      const gameName = getGameNameV5(GAME_IDS[gameType] || 1);
+      const gameName = getGameName(GAME_IDS[gameType] || 1);
       
       requestPermission();
       
