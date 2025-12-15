@@ -14,10 +14,16 @@ import { useEffect, useState } from "react";
 import { ShareInviteDialog } from "@/components/ShareInviteDialog";
 import { useRoomEvents, useNotificationPermission } from "@/hooks/useRoomEvents";
 import { DiceRollStart } from "@/components/DiceRollStart";
+import { DominoFirstPlayer } from "@/components/DominoFirstPlayer";
 import { CommitRevealPanel } from "@/components/CommitRevealPanel";
 import { gameRequiresSeed } from "@/contracts/seedManager";
 import { SeedPhase } from "@/contracts/seedManager";
 import { useSeedState, parseSeedState } from "@/hooks/useCommitReveal";
+
+// Game IDs: Chess=1, Dominos=2, Backgammon=3, Checkers=4, Ludo=5
+const GAME_CHESS = 1;
+const GAME_DOMINOS = 2;
+const GAME_CHECKERS = 4;
 
 export default function Room() {
   const { roomId } = useParams<{ roomId: string }>();
@@ -346,22 +352,52 @@ export default function Room() {
                 </p>
               )}
               
-              {/* Room is full and seed finalized (or not required) - show dice roll */}
+              {/* Room is full and seed finalized (or not required) - show appropriate first player determination */}
               {canStartGame && !diceRollComplete && (
                 <div className="w-full text-center space-y-3">
                   <p className="text-sm text-green-500 font-medium">
                     {requiresSeed ? "Seed finalized! " : ""}All players have joined!
                   </p>
-                  <Button 
-                    onClick={() => setShowDiceRoll(true)} 
-                    className="w-full bg-gradient-to-r from-primary to-amber-600 hover:from-primary/90 hover:to-amber-600/90"
-                  >
-                    Roll to Determine First Player
-                  </Button>
+                  {/* Chess & Checkers: Deterministic first player (player 0 = creator starts as White) */}
+                  {(room?.gameId === GAME_CHESS || room?.gameId === GAME_CHECKERS) && (
+                    <>
+                      <p className="text-sm text-muted-foreground">
+                        {isCreator ? "As room creator, you play as White and go first." : "Room creator plays as White and goes first."}
+                      </p>
+                      <Button 
+                        onClick={() => {
+                          setDiceRollComplete(true);
+                          setPlayerGoesFirst(!!isCreator);
+                          play(isCreator ? "chess_win" : "backgammon_move");
+                        }}
+                        className="w-full bg-gradient-to-r from-primary to-amber-600 hover:from-primary/90 hover:to-amber-600/90"
+                      >
+                        Start Game
+                      </Button>
+                    </>
+                  )}
+                  {/* Dominos: Highest double determines first player */}
+                  {room?.gameId === GAME_DOMINOS && (
+                    <Button 
+                      onClick={() => setShowDiceRoll(true)} 
+                      className="w-full bg-gradient-to-r from-primary to-amber-600 hover:from-primary/90 hover:to-amber-600/90"
+                    >
+                      Check Highest Double
+                    </Button>
+                  )}
+                  {/* Backgammon & Ludo: Dice roll determines first player */}
+                  {room?.gameId !== GAME_CHESS && room?.gameId !== GAME_CHECKERS && room?.gameId !== GAME_DOMINOS && (
+                    <Button 
+                      onClick={() => setShowDiceRoll(true)} 
+                      className="w-full bg-gradient-to-r from-primary to-amber-600 hover:from-primary/90 hover:to-amber-600/90"
+                    >
+                      Roll to Determine First Player
+                    </Button>
+                  )}
                 </div>
               )}
               
-              {/* Dice roll complete - show who goes first */}
+              {/* First player determined - show result and start button */}
               {diceRollComplete && playerGoesFirst !== null && (
                 <div className="w-full text-center space-y-3">
                   <p className={`text-sm font-medium ${playerGoesFirst ? "text-green-500" : "text-amber-500"}`}>
@@ -401,8 +437,8 @@ export default function Room() {
         gameName={room ? getGameName(room.gameId) : undefined}
       />
       
-      {/* Dice Roll to Determine First Player */}
-      {showDiceRoll && (
+      {/* Dice Roll for Backgammon & Ludo */}
+      {showDiceRoll && room?.gameId !== GAME_DOMINOS && (
         <DiceRollStart
           playerName="You"
           opponentName={opponentShortName}
@@ -414,6 +450,24 @@ export default function Room() {
             toast({
               title: playerStarts ? "You go first!" : `${opponentShortName} goes first`,
               description: "Get ready to play!",
+            });
+          }}
+        />
+      )}
+      
+      {/* Domino First Player - Highest Double */}
+      {showDiceRoll && room?.gameId === GAME_DOMINOS && (
+        <DominoFirstPlayer
+          playerName="You"
+          opponentName={opponentShortName}
+          seed={gameSeedInt || Date.now()}
+          onComplete={(playerStarts) => {
+            setShowDiceRoll(false);
+            setDiceRollComplete(true);
+            setPlayerGoesFirst(playerStarts);
+            toast({
+              title: playerStarts ? "You go first!" : `${opponentShortName} goes first`,
+              description: "Play your highest double to start!",
             });
           }}
         />
