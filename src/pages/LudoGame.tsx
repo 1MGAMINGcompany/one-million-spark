@@ -11,7 +11,7 @@ import { useGameSync, useTurnTimer } from "@/hooks/useGameSync";
 import { useWebRTCSync, GameMessage } from "@/hooks/useWebRTCSync";
 import { useTimeoutForfeit } from "@/hooks/useTimeoutForfeit";
 import { useWallet } from "@/hooks/useWallet";
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useSound } from "@/contexts/SoundContext";
 import LudoBoard from "@/components/ludo/LudoBoard";
@@ -184,9 +184,19 @@ const LudoGame = () => {
     });
   }, [isMyTurn, rollDice, t, ludoPlayers.length, setDiceValue, setMovableTokens, setCurrentPlayerIndex]);
 
-  // Handle token click
+  // Prevent double-execution refs
+  const moveStartedRef = useRef(false);
+
+  // Handle token click with double-click prevention
   const handleTokenClick = useCallback((playerIndex: number, tokenIndex: number) => {
+    // Early guards
     if (isAnimating || !isMyTurn || diceValue === null || isRolling) return;
+    
+    // CRITICAL: Prevent consuming same dice twice
+    if (moveStartedRef.current) {
+      console.log('[LUDO MP] Move already started, ignoring click');
+      return;
+    }
     
     if (!movableTokens.includes(tokenIndex)) {
       toast({
@@ -197,12 +207,22 @@ const LudoGame = () => {
       return;
     }
     
+    // Capture values and lock immediately
     const token = ludoPlayers[playerIndex].tokens[tokenIndex];
     const currentDice = diceValue;
     const startPosition = token.position;
     const endPosition = startPosition === -1 ? 0 : Math.min(startPosition + currentDice, 57);
     
+    moveStartedRef.current = true;
+    
+    // Clear dice state immediately to prevent re-use
+    setDiceValue(null);
+    setMovableTokens([]);
+    
     const success = executeMove(playerIndex, tokenIndex, currentDice, () => {
+      // Release lock after animation
+      moveStartedRef.current = false;
+      
       // Check for winner
       const player = ludoPlayers[playerIndex];
       if (player.tokens.every(t => t.position === 57 || (t.id === token.id && endPosition === 57))) {
@@ -230,9 +250,10 @@ const LudoGame = () => {
       } else {
         bcSendMove(move as any);
       }
-      
-      setDiceValue(null);
-      setMovableTokens([]);
+    } else {
+      // If move failed, restore state and release lock
+      moveStartedRef.current = false;
+      setDiceValue(currentDice);
     }
   }, [isAnimating, isMyTurn, diceValue, isRolling, movableTokens, ludoPlayers, executeMove, advanceTurn, webrtcConnected, webrtcSendMove, bcSendMove, play, t, setDiceValue, setMovableTokens, setGameOver]);
 

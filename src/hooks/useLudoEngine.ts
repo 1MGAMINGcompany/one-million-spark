@@ -25,11 +25,12 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
   const [movableTokens, setMovableTokens] = useState<number[]>([]);
   const [isAnimating, setIsAnimating] = useState(false);
   
-  // Use refs to avoid stale closures
+  // Use refs to avoid stale closures and prevent double execution
   const playersRef = useRef(players);
   const currentPlayerIndexRef = useRef(currentPlayerIndex);
   const animationRef = useRef<NodeJS.Timeout | null>(null);
-  const moveQueueRef = useRef<(() => void)[]>([]);
+  const moveInProgressRef = useRef(false);
+  const consumedDiceRef = useRef<number | null>(null);
   
   useEffect(() => { playersRef.current = players; }, [players]);
   useEffect(() => { currentPlayerIndexRef.current = currentPlayerIndex; }, [currentPlayerIndex]);
@@ -136,13 +137,23 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
     animationRef.current = setTimeout(performStep, 150);
   }, [onSoundPlay]);
 
-  // Execute a move with animation
+  // Execute a move with animation - LOCKS to prevent double execution
   const executeMove = useCallback((
     playerIndex: number,
     tokenIndex: number,
     dice: number,
     onComplete?: () => void
   ): boolean => {
+    // CRITICAL: Prevent double execution
+    if (moveInProgressRef.current) {
+      console.warn(`[LUDO ENGINE] Move already in progress, ignoring`);
+      return false;
+    }
+    
+    // Lock immediately
+    moveInProgressRef.current = true;
+    consumedDiceRef.current = dice;
+    
     const player = playersRef.current[playerIndex];
     const token = player.tokens[tokenIndex];
     const startPos = token.position;
@@ -150,6 +161,8 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
     
     if (endPos === null) {
       console.warn(`[LUDO ENGINE] Invalid move: player=${playerIndex}, token=${tokenIndex}, dice=${dice}`);
+      moveInProgressRef.current = false;
+      consumedDiceRef.current = null;
       return false;
     }
     
@@ -157,6 +170,8 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
     const expectedDistance = startPos === -1 ? 1 : (endPos - startPos);
     if (startPos >= 0 && expectedDistance !== dice) {
       console.error(`[LUDO ENGINE] Distance mismatch! Expected ${dice}, got ${expectedDistance}`);
+      moveInProgressRef.current = false;
+      consumedDiceRef.current = null;
       return false;
     }
     
@@ -200,6 +215,10 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
         
         return newPlayers;
       });
+      
+      // Release lock after animation completes
+      moveInProgressRef.current = false;
+      consumedDiceRef.current = null;
       
       onComplete?.();
     });
