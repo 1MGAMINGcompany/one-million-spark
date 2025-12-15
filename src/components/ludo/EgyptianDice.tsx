@@ -66,7 +66,8 @@ const EgyptianDice = memo(({
   disabled,
   showRollButton,
 }: EgyptianDiceProps) => {
-  const displayValue = value || 1;
+  // Don't default to 1 - show nothing when null to avoid confusion
+  const displayValue = value;
 
   return (
     <div className="flex flex-col items-center gap-4">
@@ -102,7 +103,13 @@ const EgyptianDice = memo(({
         
         {/* Dice face with pips */}
         <div className="w-12 h-12 sm:w-14 sm:h-14 md:w-18 md:h-18 p-1">
-          <DiceFace value={displayValue} />
+          {displayValue ? (
+            <DiceFace value={displayValue} />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center">
+              <span className="text-primary/40 text-lg">?</span>
+            </div>
+          )}
         </div>
         
         {/* Glow overlay */}
