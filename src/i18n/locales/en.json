@@ -245,7 +245,11 @@
     "cannotJoinActiveRoom": "You have an active room (#{{roomId}}). Finish or cancel it first.",
     "activeRoomWarning": "You have an active room (#{{roomId}})",
     "activeRoomWarningDesc": "Finish or cancel your room before joining another.",
-    "goToRoom": "Go to Room"
+    "goToRoom": "Go to Room",
+    "live": "Live",
+    "paused": "Paused",
+    "newRoomCreated": "New Room Available",
+    "newRoomCreatedDesc": "A new game room was just created!"
   },
   "playAi": {
     "title": "Temple of Practice",

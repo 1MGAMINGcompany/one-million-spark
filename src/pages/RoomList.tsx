@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Users, RefreshCw, Loader2, Clock, AlertTriangle } from "lucide-react";
+import { Users, RefreshCw, Loader2, Clock, AlertTriangle, Radio } from "lucide-react";
 import { useWallet } from "@/hooks/useWallet";
 import { WalletRequired } from "@/components/WalletRequired";
 import { useSound } from "@/contexts/SoundContext";
@@ -17,6 +17,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useJoinRoomV5 } from "@/hooks/useRoomManagerV5";
 import { usePublicRooms, type PublicRoom } from "@/hooks/usePublicRooms";
 import { usePlayerActiveRoom } from "@/hooks/usePlayerActiveRoom";
+import { useRoomContractEvents } from "@/hooks/useRoomContractEvents";
 
 // Local helpers for V7
 function getGameName(gameId: number): string {
@@ -48,6 +49,43 @@ const RoomList = () => {
   const { activeRoom, hasActiveRoom, isLoading: isCheckingActiveRoom } = usePlayerActiveRoom(address as `0x${string}` | undefined);
 
   const { rooms, isLoading: isLoadingRooms, refetch } = usePublicRooms();
+  const [isLive, setIsLive] = useState(true);
+
+  // Real-time contract event listeners
+  const handleRoomCreated = useCallback((roomId: bigint, creator: string, isPrivate: boolean) => {
+    if (!isPrivate) {
+      // Only refetch for public rooms
+      console.log("[RoomList] New public room created, refreshing...");
+      refetch();
+      toast({
+        title: t("roomList.newRoomCreated"),
+        description: t("roomList.newRoomCreatedDesc"),
+      });
+    }
+  }, [refetch, toast, t]);
+
+  const handleRoomJoined = useCallback((roomId: bigint) => {
+    console.log("[RoomList] Room joined, refreshing...");
+    refetch();
+  }, [refetch]);
+
+  const handleRoomCancelled = useCallback((roomId: bigint) => {
+    console.log("[RoomList] Room cancelled, refreshing...");
+    refetch();
+  }, [refetch]);
+
+  const handleGameStarted = useCallback((roomId: bigint) => {
+    console.log("[RoomList] Game started, refreshing...");
+    refetch();
+  }, [refetch]);
+
+  // Subscribe to contract events when live mode is enabled
+  useRoomContractEvents(isLive ? {
+    onRoomCreated: handleRoomCreated,
+    onRoomJoined: handleRoomJoined,
+    onRoomCancelled: handleRoomCancelled,
+    onGameStarted: handleGameStarted,
+  } : {});
 
   useEffect(() => {
     if (searchParams.get("refresh") === "1") {
@@ -222,6 +260,16 @@ const RoomList = () => {
             disabled={isLoadingRooms}
           >
             <RefreshCw size={18} className={isLoadingRooms ? "animate-spin" : ""} />
+          </Button>
+          {/* Live indicator */}
+          <Button
+            variant={isLive ? "default" : "outline"}
+            size="sm"
+            className={`shrink-0 gap-2 ${isLive ? "bg-green-600 hover:bg-green-700" : ""}`}
+            onClick={() => setIsLive(!isLive)}
+          >
+            <Radio size={14} className={isLive ? "animate-pulse" : ""} />
+            {isLive ? t("roomList.live") : t("roomList.paused")}
           </Button>
         </div>
 
