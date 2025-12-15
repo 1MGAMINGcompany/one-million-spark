@@ -58,7 +58,8 @@ const GameRules = () => {
       name: "Dominos",
       rules: [
         "Each player draws 7 tiles from a shuffled set.",
-        "First player places any tile to start.",
+        "Player with the highest double (e.g., [6|6]) goes first.",
+        "If no player has a double, highest pip count tile determines first player.",
         "Match tile ends to play (e.g., 6 connects to 6).",
         "Draw from the boneyard if you can't play.",
         "First to play all tiles or lowest pip count when blocked wins."
