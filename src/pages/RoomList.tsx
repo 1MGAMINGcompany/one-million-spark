@@ -56,13 +56,14 @@ const RoomList = () => {
     if (!isPrivate) {
       // Only refetch for public rooms
       console.log("[RoomList] New public room created, refreshing...");
+      play('ui_notify');
       refetch();
       toast({
         title: t("roomList.newRoomCreated"),
         description: t("roomList.newRoomCreatedDesc"),
       });
     }
-  }, [refetch, toast, t]);
+  }, [refetch, toast, t, play]);
 
   const handleRoomJoined = useCallback((roomId: bigint) => {
     console.log("[RoomList] Room joined, refreshing...");
