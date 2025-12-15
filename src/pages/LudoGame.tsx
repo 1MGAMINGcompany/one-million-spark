@@ -11,20 +11,13 @@ import { useGameSync, useTurnTimer } from "@/hooks/useGameSync";
 import { useWebRTCSync, GameMessage } from "@/hooks/useWebRTCSync";
 import { useTimeoutForfeit } from "@/hooks/useTimeoutForfeit";
 import { useWallet } from "@/hooks/useWallet";
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useSound } from "@/contexts/SoundContext";
 import LudoBoard from "@/components/ludo/LudoBoard";
 import EgyptianDice from "@/components/ludo/EgyptianDice";
 import TurnIndicator from "@/components/ludo/TurnIndicator";
-import { Player, PlayerColor, initializePlayers } from "@/components/ludo/ludoTypes";
-
-interface LudoMove {
-  playerIndex: number;
-  tokenIndex: number;
-  diceValue: number;
-  newPosition: number;
-}
+import { useLudoEngine, LudoMove } from "@/hooks/useLudoEngine";
 
 const LudoGame = () => {
   const { roomId } = useParams<{ roomId: string }>();
@@ -43,49 +36,49 @@ const LudoGame = () => {
   const isCreator = room && address && room.creator.toLowerCase() === address.toLowerCase();
   const isRoomFull = room && (contractPlayers?.length || 0) >= room.maxPlayers;
   
-  const [ludoPlayers, setLudoPlayers] = useState<Player[]>(() => initializePlayers());
-  const [currentPlayerIndex, setCurrentPlayerIndex] = useState(0);
-  const [diceValue, setDiceValue] = useState<number | null>(null);
-  const [isRolling, setIsRolling] = useState(false);
   const [gameEnded, setGameEnded] = useState(false);
-  const [movableTokens, setMovableTokens] = useState<number[]>([]);
-  const [isAnimating, setIsAnimating] = useState(false);
-  const animationRef = useRef<NodeJS.Timeout | null>(null);
+
+  const showToast = useCallback((title: string, description: string, variant?: "default" | "destructive") => {
+    toast({ title, description, variant: variant as any, duration: 2000 });
+  }, [toast]);
+
+  const {
+    players: ludoPlayers,
+    currentPlayerIndex,
+    currentPlayer,
+    diceValue,
+    isRolling,
+    gameOver,
+    movableTokens,
+    isAnimating,
+    rollDice,
+    executeMove,
+    applyExternalMove,
+    advanceTurn,
+    setDiceValue,
+    setMovableTokens,
+    setCurrentPlayerIndex,
+    setGameOver,
+  } = useLudoEngine({
+    onSoundPlay: play,
+    onToast: showToast,
+  });
 
   const { messages: chatMessages, sendMessage: addChatMessage, receiveMessage } = useChatMessages(address);
 
   const entryFeeFormatted = room ? formatEntryFee(room.entryFee) : "...";
   const prizePool = room ? (parseFloat(entryFeeFormatted) * room.maxPlayers * 0.95).toFixed(3) : "...";
 
-  const currentPlayer = ludoPlayers[currentPlayerIndex];
-
   const handleOpponentMove = useCallback((move: LudoMove) => {
-    play('ludo_move');
-    setLudoPlayers(prevPlayers => {
-      const newPlayers = prevPlayers.map((player, pIdx) => ({
-        ...player,
-        tokens: player.tokens.map((token, tIdx) => {
-          if (pIdx === move.playerIndex && tIdx === move.tokenIndex) {
-            return { ...token, position: move.newPosition };
-          }
-          return { ...token };
-        }),
-      }));
-      return newPlayers;
-    });
-    
-    // Move to next player unless it was a 6
-    setTimeout(() => {
-      setCurrentPlayerIndex(prev => move.diceValue === 6 ? prev : (prev + 1) % ludoPlayers.length);
-      setDiceValue(null);
-    }, 500);
-  }, [play, ludoPlayers.length]);
+    applyExternalMove(move);
+  }, [applyExternalMove]);
 
   const handleOpponentResign = useCallback(() => {
     setGameEnded(true);
+    setGameOver('gold'); // Assume local player wins
     toast({ title: t('game.opponentResigned'), description: t('game.youWin') });
     play('ludo_win');
-  }, [toast, t, play]);
+  }, [toast, t, play, setGameOver]);
 
   const handleWebRTCMessage = useCallback((message: GameMessage) => {
     switch (message.type) {
@@ -154,7 +147,7 @@ const LudoGame = () => {
     isMyTurn,
     turnTimeSeconds: gameState?.turnTimeSeconds || 300,
     turnStartedAt: gameState?.turnStartedAt || Date.now(),
-    gameEnded,
+    gameEnded: gameEnded || !!gameOver,
     onTimeoutClaimed: () => setGameEnded(true),
   });
 
@@ -169,59 +162,31 @@ const LudoGame = () => {
     }
   }, [addChatMessage, webrtcConnected, webrtcSendChat]);
 
-  const getMovableTokens = useCallback((player: Player, dice: number): number[] => {
-    const movable: number[] = [];
-    player.tokens.forEach((token, index) => {
-      if (token.position === -1 && dice === 6) {
-        movable.push(index);
-      } else if (token.position >= 0 && token.position < 57) {
-        const newPos = token.position + dice;
-        if (newPos <= 57) {
-          movable.push(index);
-        }
+  // Handle dice roll
+  const handleRollDice = useCallback(() => {
+    if (!isMyTurn) return;
+    
+    rollDice((dice, movable) => {
+      console.log(`[LUDO MP] Rolled ${dice}, movable: [${movable.join(', ')}]`);
+      
+      if (movable.length === 0) {
+        toast({
+          title: t('gameAI.noValidMoves'),
+          description: t('gameAI.cannotMove'),
+          duration: 1500,
+        });
+        setTimeout(() => {
+          setDiceValue(null);
+          setMovableTokens([]);
+          setCurrentPlayerIndex(prev => (prev + 1) % ludoPlayers.length);
+        }, 1000);
       }
     });
-    return movable;
-  }, []);
+  }, [isMyTurn, rollDice, t, ludoPlayers.length, setDiceValue, setMovableTokens, setCurrentPlayerIndex]);
 
-  const rollDice = useCallback(() => {
-    if (isRolling || diceValue !== null || isAnimating || !isMyTurn) return;
-    
-    setIsRolling(true);
-    play('ludo_dice');
-    
-    let rolls = 0;
-    const maxRolls = 10;
-    const interval = setInterval(() => {
-      setDiceValue(Math.floor(Math.random() * 6) + 1);
-      rolls++;
-      
-      if (rolls >= maxRolls) {
-        clearInterval(interval);
-        const finalValue = Math.floor(Math.random() * 6) + 1;
-        setDiceValue(finalValue);
-        setIsRolling(false);
-        
-        const movable = getMovableTokens(currentPlayer, finalValue);
-        setMovableTokens(movable);
-        
-        if (movable.length === 0) {
-          toast({
-            title: t('gameAI.noValidMoves'),
-            description: t('gameAI.cannotMove'),
-            duration: 1500,
-          });
-          setTimeout(() => {
-            setDiceValue(null);
-            setCurrentPlayerIndex(prev => (prev + 1) % ludoPlayers.length);
-          }, 1000);
-        }
-      }
-    }, 100);
-  }, [isRolling, diceValue, isAnimating, isMyTurn, currentPlayer, getMovableTokens, play, t, ludoPlayers.length]);
-
+  // Handle token click
   const handleTokenClick = useCallback((playerIndex: number, tokenIndex: number) => {
-    if (isAnimating || !isMyTurn || playerIndex !== currentPlayerIndex || diceValue === null || isRolling) return;
+    if (isAnimating || !isMyTurn || diceValue === null || isRolling) return;
     
     if (!movableTokens.includes(tokenIndex)) {
       toast({
@@ -232,72 +197,44 @@ const LudoGame = () => {
       return;
     }
     
-    const token = currentPlayer.tokens[tokenIndex];
+    const token = ludoPlayers[playerIndex].tokens[tokenIndex];
     const currentDice = diceValue;
-    let newPosition: number;
+    const startPosition = token.position;
+    const endPosition = startPosition === -1 ? 0 : Math.min(startPosition + currentDice, 57);
     
-    if (token.position === -1 && currentDice === 6) {
-      newPosition = 0;
-    } else {
-      newPosition = Math.min(token.position + currentDice, 57);
-    }
-    
-    play('ludo_move');
-    
-    // Update local state
-    setLudoPlayers(prevPlayers => {
-      const newPlayers = prevPlayers.map((player, pIdx) => ({
-        ...player,
-        tokens: player.tokens.map((t, tIdx) => {
-          if (pIdx === playerIndex && tIdx === tokenIndex) {
-            return { ...t, position: newPosition };
-          }
-          return { ...t };
-        }),
-      }));
-      return newPlayers;
+    const success = executeMove(playerIndex, tokenIndex, currentDice, () => {
+      // Check for winner
+      const player = ludoPlayers[playerIndex];
+      if (player.tokens.every(t => t.position === 57 || (t.id === token.id && endPosition === 57))) {
+        setGameEnded(true);
+        setGameOver(player.color);
+        play('ludo_win');
+        toast({ title: t('game.victory'), description: t('game.victoryDescription') });
+      } else {
+        setTimeout(() => advanceTurn(currentDice), 200);
+      }
     });
     
-    // Send move to opponent
-    const move: LudoMove = {
-      playerIndex,
-      tokenIndex,
-      diceValue: currentDice,
-      newPosition,
-    };
-    
-    if (webrtcConnected) {
-      webrtcSendMove(move);
-    } else {
-      bcSendMove(move as any);
-    }
-    
-    setDiceValue(null);
-    setMovableTokens([]);
-    
-    // Check for winner
-    setTimeout(() => {
-      setLudoPlayers(current => {
-        const player = current[playerIndex];
-        if (player.tokens.every(t => t.position === 57)) {
-          setGameEnded(true);
-          play('ludo_win');
-          toast({ title: t('game.victory'), description: t('game.victoryDescription') });
-        } else {
-          setCurrentPlayerIndex(prev => currentDice === 6 ? prev : (prev + 1) % ludoPlayers.length);
-        }
-        return current;
-      });
-    }, 500);
-  }, [isAnimating, isMyTurn, currentPlayerIndex, diceValue, isRolling, movableTokens, currentPlayer, webrtcConnected, webrtcSendMove, bcSendMove, play, t, ludoPlayers.length]);
-
-  useEffect(() => {
-    return () => {
-      if (animationRef.current) {
-        clearTimeout(animationRef.current);
+    if (success) {
+      // Send move to opponent
+      const move: LudoMove = {
+        playerIndex,
+        tokenIndex,
+        diceValue: currentDice,
+        startPosition,
+        endPosition,
+      };
+      
+      if (webrtcConnected) {
+        webrtcSendMove(move);
+      } else {
+        bcSendMove(move as any);
       }
-    };
-  }, []);
+      
+      setDiceValue(null);
+      setMovableTokens([]);
+    }
+  }, [isAnimating, isMyTurn, diceValue, isRolling, movableTokens, ludoPlayers, executeMove, advanceTurn, webrtcConnected, webrtcSendMove, bcSendMove, play, t, setDiceValue, setMovableTokens, setGameOver]);
 
   return (
     <div className="min-h-screen bg-background px-4 py-6">
@@ -326,15 +263,15 @@ const LudoGame = () => {
               <TurnIndicator
                 currentPlayer={currentPlayer.color}
                 isAI={!isMyTurn}
-                isGameOver={gameEnded}
-                winner={null}
+                isGameOver={gameEnded || !!gameOver}
+                winner={gameOver}
               />
               <EgyptianDice
                 value={diceValue}
                 isRolling={isRolling}
-                onRoll={rollDice}
-                disabled={isRolling || diceValue !== null || gameEnded || isAnimating || !isMyTurn}
-                showRollButton={isMyTurn && !gameEnded && diceValue === null && !isAnimating}
+                onRoll={handleRollDice}
+                disabled={isRolling || diceValue !== null || gameEnded || !!gameOver || isAnimating || !isMyTurn}
+                showRollButton={isMyTurn && !gameEnded && !gameOver && diceValue === null && !isAnimating}
               />
               {isMyTurn && movableTokens.length > 0 && (
                 <p className="text-xs text-muted-foreground text-center">
@@ -355,15 +292,15 @@ const LudoGame = () => {
               <TurnIndicator
                 currentPlayer={currentPlayer.color}
                 isAI={!isMyTurn}
-                isGameOver={gameEnded}
-                winner={null}
+                isGameOver={gameEnded || !!gameOver}
+                winner={gameOver}
               />
               <EgyptianDice
                 value={diceValue}
                 isRolling={isRolling}
-                onRoll={rollDice}
-                disabled={isRolling || diceValue !== null || gameEnded || isAnimating || !isMyTurn}
-                showRollButton={isMyTurn && !gameEnded && diceValue === null && !isAnimating}
+                onRoll={handleRollDice}
+                disabled={isRolling || diceValue !== null || gameEnded || !!gameOver || isAnimating || !isMyTurn}
+                showRollButton={isMyTurn && !gameEnded && !gameOver && diceValue === null && !isAnimating}
               />
             </div>
 
@@ -391,7 +328,7 @@ const LudoGame = () => {
             <div className="bg-card border border-border rounded-lg p-4">
               <h3 className="text-sm font-semibold text-muted-foreground mb-2">{t('game.gameStatus')}</h3>
               <div className="space-y-2 text-sm">
-                {ludoPlayers.map((player, idx) => (
+                {ludoPlayers.map((player) => (
                   <div key={player.color} className="flex justify-between">
                     <span className="text-muted-foreground capitalize">{player.color}:</span>
                     <span className="text-foreground font-medium">
@@ -402,7 +339,7 @@ const LudoGame = () => {
               </div>
             </div>
 
-            {canClaimTimeout && !gameEnded && (
+            {canClaimTimeout && !gameEnded && !gameOver && (
               <Button
                 onClick={handleClaimTimeout}
                 disabled={isClaiming}
@@ -428,7 +365,7 @@ const LudoGame = () => {
             </Button>
 
             {/* Finish Game & Pay Winner - Only visible to creator when game ends */}
-            {gameEnded && (
+            {(gameEnded || gameOver) && (
               <FinishGameButton
                 roomId={roomIdBigInt || BigInt(0)}
                 isCreator={!!isCreator}
