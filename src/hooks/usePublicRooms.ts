@@ -1,8 +1,9 @@
 import { useCallback, useState, useEffect } from "react";
-import { useReadContract } from "wagmi";
-import { ROOM_MANAGER_V5_ADDRESS, ROOM_MANAGER_V5_ABI, type ContractRoomV5 } from "@/contracts/roomManagerV5";
-import { createPublicClient, http } from "viem";
-import { polygon } from "viem/chains";
+import { BrowserProvider, Contract } from "ethers";
+import ABI from "@/abi/RoomManagerV7Production.abi.json";
+
+export const ROOMMANAGER_V7_ADDRESS =
+  "0xA039B03De894ebFa92933a9A7326c1715f040b96" as const;
 
 export type PublicRoom = {
   id: bigint;
@@ -17,116 +18,83 @@ export type PublicRoom = {
   isFinished: boolean;
 };
 
-// Create a public client for direct viem calls - Polygon mainnet
-const publicClient = createPublicClient({
-  chain: polygon,
-  transport: http("https://polygon-rpc.com"),
-});
-
 export function usePublicRooms() {
   const [rooms, setRooms] = useState<PublicRoom[]>([]);
   const [isLoadingRooms, setIsLoadingRooms] = useState(false);
-  const [refreshKey, setRefreshKey] = useState(0);
+  const [latestRoomId, setLatestRoomId] = useState<bigint>(0n);
 
-  // Get the latest room ID to know how many rooms exist
-  const { 
-    data: latestRoomId, 
-    isLoading: isLoadingLatestId,
-    refetch: refetchLatestId,
-  } = useReadContract({
-    address: ROOM_MANAGER_V5_ADDRESS,
-    abi: ROOM_MANAGER_V5_ABI,
-    functionName: "latestRoomId",
-    chainId: 137, // Polygon mainnet
-  });
-
-  // Fetch all rooms when latestRoomId changes
-  useEffect(() => {
-    const fetchRooms = async () => {
-      if (!latestRoomId || latestRoomId < 1n) {
+  const fetchRooms = useCallback(async () => {
+    setIsLoadingRooms(true);
+    try {
+      const eth = (window as any).ethereum;
+      if (!eth) {
         setRooms([]);
         return;
       }
 
-      setIsLoadingRooms(true);
+      const provider = new BrowserProvider(eth);
+      const contract = new Contract(ROOMMANAGER_V7_ADDRESS, ABI as any, provider);
 
-      try {
-        // Build room IDs array (1-indexed, inclusive of latestRoomId)
-        const roomIds: bigint[] = [];
-        for (let i = 1n; i <= latestRoomId; i++) {
-          roomIds.push(i);
-        }
+      // Fetch latest room ID
+      const latestId = await contract.latestRoomId();
+      const latestIdBigInt = BigInt(latestId);
+      setLatestRoomId(latestIdBigInt);
 
-        // Fetch rooms in parallel using getRoom
-        const results = await Promise.all(
-          roomIds.map(async (roomId) => {
-            try {
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              const roomResult = await (publicClient as any).readContract({
-                address: ROOM_MANAGER_V5_ADDRESS,
-                abi: ROOM_MANAGER_V5_ABI,
-                functionName: "getRoom",
-                args: [roomId],
-              });
-              return { status: "success" as const, roomId, result: roomResult };
-            } catch (error) {
-              console.error(`Error fetching room ${roomId}:`, error);
-              return { status: "error" as const, roomId, error };
-            }
-          })
-        );
-
-        // Parse results and filter to only public, open rooms with available slots
-        const publicRooms: PublicRoom[] = [];
-        
-        for (const r of results) {
-          if (r.status !== "success" || !r.result) continue;
-          
-          // getRoom returns: [id, creator, entryFee, maxPlayers, isPrivate, platformFeeBps, gameId, turnTimeSec, playerCount, isOpen, isFinished]
-          const [id, creator, entryFee, maxPlayers, isPrivate, , gameId, turnTimeSec, playerCount, isOpen, isFinished] = r.result;
-          
-          // Only include public rooms that are open, not finished, and have available slots
-          if (isPrivate) continue;
-          if (!isOpen) continue;
-          if (isFinished) continue;
-          if (Number(playerCount) >= Number(maxPlayers)) continue;
-          
-          publicRooms.push({
-            id,
-            creator: creator as `0x${string}`,
-            entryFee,
-            maxPlayers: Number(maxPlayers),
-            isPrivate,
-            gameId: Number(gameId),
-            turnTimeSec: Number(turnTimeSec),
-            playerCount: Number(playerCount),
-            isOpen,
-            isFinished,
-          });
-        }
-
-        // Sort by newest first
-        publicRooms.sort((a, b) => Number(b.id - a.id));
-        setRooms(publicRooms);
-      } catch (error) {
-        console.error("Error fetching rooms:", error);
-      } finally {
-        setIsLoadingRooms(false);
+      if (latestIdBigInt === 0n) {
+        setRooms([]);
+        return;
       }
-    };
 
+      // Fetch rooms in descending order (most recent first)
+      const publicRooms: PublicRoom[] = [];
+      const maxRoomsToFetch = latestIdBigInt > 50n ? 50n : latestIdBigInt;
+
+      for (let i = latestIdBigInt; i > latestIdBigInt - maxRoomsToFetch && i >= 1n; i--) {
+        try {
+          const r = await contract.rooms(i);
+          // Only include public, open rooms with available slots
+          const isPrivate = r.isPrivate;
+          const isOpen = r.isOpen;
+          const isFinished = r.isFinished;
+          const playerCount = Number(r.playerCount);
+          const maxPlayers = Number(r.maxPlayers);
+
+          if (!isPrivate && isOpen && !isFinished && playerCount < maxPlayers) {
+            publicRooms.push({
+              id: i,
+              creator: r.creator as `0x${string}`,
+              entryFee: BigInt(r.entryFee),
+              maxPlayers,
+              isPrivate,
+              gameId: Number(r.gameId),
+              turnTimeSec: Number(r.turnTimeSec),
+              playerCount,
+              isOpen,
+              isFinished,
+            });
+          }
+        } catch (e) {
+          console.warn(`Failed to fetch room ${i}:`, e);
+        }
+      }
+
+      setRooms(publicRooms);
+    } catch (e) {
+      console.error("Failed to fetch rooms:", e);
+      setRooms([]);
+    } finally {
+      setIsLoadingRooms(false);
+    }
+  }, []);
+
+  useEffect(() => {
     fetchRooms();
-  }, [latestRoomId, refreshKey]);
-
-  const refetch = useCallback(async () => {
-    await refetchLatestId();
-    setRefreshKey((prev) => prev + 1);
-  }, [refetchLatestId]);
+  }, [fetchRooms]);
 
   return {
     rooms,
-    isLoading: isLoadingLatestId || isLoadingRooms,
-    refetch,
+    isLoading: isLoadingRooms,
+    refetch: fetchRooms,
     latestRoomId,
   };
 }

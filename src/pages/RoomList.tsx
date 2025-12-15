@@ -14,9 +14,23 @@ import { useWallet } from "@/hooks/useWallet";
 import { WalletRequired } from "@/components/WalletRequired";
 import { useSound } from "@/contexts/SoundContext";
 import { useToast } from "@/hooks/use-toast";
-import { useJoinRoomV5, getGameNameV5, unitsToUsdt } from "@/hooks/useRoomManagerV5";
+import { useJoinRoomV5 } from "@/hooks/useRoomManagerV5";
 import { usePublicRooms, type PublicRoom } from "@/hooks/usePublicRooms";
-import { formatTurnTime } from "@/contracts/roomManagerV5";
+
+// Local helpers for V7
+function getGameName(gameId: number): string {
+  const names: Record<number, string> = { 1: "Chess", 2: "Dominos", 3: "Backgammon", 4: "Checkers", 5: "Ludo" };
+  return names[gameId] || `Game ${gameId}`;
+}
+
+function unitsToUsdt(units: bigint): number {
+  return Number(units) / 1_000_000;
+}
+
+function formatTurnTime(turnTimeSec: number): string {
+  if (turnTimeSec === 0) return "Unlimited";
+  return `${turnTimeSec} sec`;
+}
 
 const RoomList = () => {
   const { t } = useTranslation();
@@ -216,7 +230,7 @@ const RoomList = () => {
               >
                 <div className="flex-1">
                   <h3 className="text-lg font-semibold text-foreground">
-                    {getGameNameV5(room.gameId)}
+                    {getGameName(room.gameId)}
                   </h3>
                   <p className="text-sm text-muted-foreground">
                     {t("roomList.entryFee")}: ${unitsToUsdt(room.entryFee).toFixed(2)} USDT
