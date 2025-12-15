@@ -15,19 +15,19 @@ interface DifficultyConfig {
 
 const DIFFICULTY_CONFIG: Record<Difficulty, DifficultyConfig> = {
   easy: {
-    skillLevel: 2,
-    depth: 1,
-    randomnessProbability: 0.2, // 20% chance to pick random from top moves
+    skillLevel: 3,
+    depth: 2,
+    randomnessProbability: 0.15, // 15% chance to pick random from top moves
   },
   medium: {
-    skillLevel: 12,
-    depth: 5,
-    randomnessProbability: 0.02, // 2% chance
+    skillLevel: 14,
+    depth: 8,
+    randomnessProbability: 0.01, // 1% chance - much stronger
   },
   hard: {
-    skillLevel: 15,
-    depth: 5,
-    randomnessProbability: 0, // No randomness
+    skillLevel: 20,
+    depth: 12,
+    randomnessProbability: 0, // No randomness - maximum strength
   },
 };
 
@@ -45,9 +45,8 @@ export function createChessAI(initialDifficulty: Difficulty): ChessAI {
     
     initPromise = new Promise((resolve, reject) => {
       try {
-        // Use the lite single-threaded version for browser compatibility
-        // This is loaded directly from the stockfish package's CDN-like approach
-        const workerUrl = 'https://unpkg.com/stockfish@17.1.1/src/stockfish-17.1-lite-single-03e3232.js';
+        // Use jsDelivr CDN which has proper CORS headers
+        const workerUrl = 'https://cdn.jsdelivr.net/npm/stockfish.js@10.0.2/stockfish.js';
         
         worker = new Worker(workerUrl);
 

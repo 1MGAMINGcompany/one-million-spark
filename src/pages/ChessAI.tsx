@@ -213,6 +213,9 @@ const ChessAI = () => {
         return;
       }
       
+      // Add 1 second delay before AI places its move
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
       // Get piece info BEFORE the move
       const attackingPiece = currentGame.get(parsed.from);
       const targetPiece = currentGame.get(parsed.to);
@@ -245,7 +248,7 @@ const ChessAI = () => {
         return;
       }
       
-      // Play sound based on move type
+      // Play sound based on move type (same sounds as player)
       if (wasCapture) {
         play('chess_capture');
       } else {
@@ -271,7 +274,8 @@ const ChessAI = () => {
       }
     } catch (error) {
       console.error('Stockfish error:', error);
-      // Fallback to random move
+      // Fallback to random move after 1 second delay
+      await new Promise(resolve => setTimeout(resolve, 1000));
       const randomMove = getRandomMove(currentGame);
       if (randomMove) {
         currentGame.move(randomMove.san);
