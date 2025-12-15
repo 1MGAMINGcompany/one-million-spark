@@ -321,20 +321,6 @@ export function ChessBoardPremium({
                         }}
                       />
                       
-                      {/* Gold shimmer accents */}
-                      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-                        {[...Array(4)].map((_, i) => (
-                          <div
-                            key={i}
-                            className="absolute w-1 h-1 bg-white/40 rounded-full"
-                            style={{
-                              left: `${20 + i * 20}%`,
-                              top: `${15 + (i % 2) * 15}%`,
-                              boxShadow: "0 0 4px 1px rgba(255,255,255,0.3)",
-                            }}
-                          />
-                        ))}
-                      </div>
                       
                       {/* Inner glow border for definition */}
                       <div 
