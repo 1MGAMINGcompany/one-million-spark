@@ -176,8 +176,27 @@ const CreateRoom = () => {
     }
   }, [createError, toast, t]);
 
+  // Network guard: check if on Polygon mainnet (0x89)
+  const checkPolygonNetwork = async (): Promise<boolean> => {
+    const eth = (window as any).ethereum;
+    if (!eth) return false;
+    try {
+      const chainId = await eth.request({ method: 'eth_chainId' });
+      if (chainId !== '0x89') {
+        toast({
+          title: "Wrong network",
+          description: "Switch to Polygon Mainnet",
+          variant: "destructive",
+        });
+        return false;
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  };
 
-  const handleApproveUsdt = () => {
+  const handleApproveUsdt = async () => {
     if (!entryFee || entryFeeNum < MIN_ENTRY_FEE_USDT) {
       toast({
         title: t("createRoom.invalidFee"),
@@ -186,6 +205,10 @@ const CreateRoom = () => {
       });
       return;
     }
+    
+    const isPolygon = await checkPolygonNetwork();
+    if (!isPolygon) return;
+    
     play('ui_click');
     approveUsdt(entryFeeNum);
   };
@@ -199,6 +222,9 @@ const CreateRoom = () => {
       });
       return;
     }
+
+    const isPolygon = await checkPolygonNetwork();
+    if (!isPolygon) return;
 
     play('ui_click');
     
