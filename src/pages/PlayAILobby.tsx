@@ -1,13 +1,15 @@
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Play, Gem, Star } from "lucide-react";
 import { ChessIcon, DominoIcon, BackgammonIcon, CheckersIcon, LudoIcon } from "@/components/GameIcons";
+import { useSound } from "@/contexts/SoundContext";
 
 type Difficulty = "easy" | "medium" | "hard";
 
 const PlayAILobby = () => {
+  const { play } = useSound();
   const { t } = useTranslation();
   const navigate = useNavigate();
   
@@ -145,10 +147,31 @@ const PlayAILobby = () => {
       <section className="py-12 px-4">
         <div className="max-w-5xl mx-auto">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {aiGames.map((game) => (
+            {aiGames.map((game) => {
+              const hoverSoundPlayed = useRef(false);
+              
+              const handleMouseEnter = useCallback(() => {
+                if (!hoverSoundPlayed.current) {
+                  play('ui_litewoosh');
+                  hoverSoundPlayed.current = true;
+                }
+              }, [play]);
+              
+              const handleMouseLeave = useCallback(() => {
+                hoverSoundPlayed.current = false;
+              }, []);
+              
+              const handleTouchStart = useCallback(() => {
+                play('ui_litewoosh');
+              }, [play]);
+              
+              return (
               <div 
                 key={game.key} 
                 className="group relative"
+                onMouseEnter={handleMouseEnter}
+                onMouseLeave={handleMouseLeave}
+                onTouchStart={handleTouchStart}
               >
                 <div className="absolute -inset-1 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 rounded-2xl blur-lg opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
                 
@@ -222,7 +245,7 @@ const PlayAILobby = () => {
                   <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-1/2 h-px bg-gradient-to-r from-transparent via-primary/30 to-transparent" />
                 </div>
               </div>
-            ))}
+            );})}
           </div>
         </div>
       </section>
