@@ -96,7 +96,18 @@ const LudoAI = () => {
     return movable;
   }, []);
 
-  // Animate token movement step by step
+  // Use refs to track current game state for reliable access in callbacks
+  const playersRef = useRef(players);
+  useEffect(() => {
+    playersRef.current = players;
+  }, [players]);
+  
+  const currentPlayerIndexRef = useRef(currentPlayerIndex);
+  useEffect(() => {
+    currentPlayerIndexRef.current = currentPlayerIndex;
+  }, [currentPlayerIndex]);
+
+  // Animate token movement step by step - completely rewritten for reliability
   const animateMove = useCallback((
     playerIndex: number, 
     tokenIndex: number, 
@@ -106,142 +117,130 @@ const LudoAI = () => {
   ) => {
     setIsAnimating(true);
     
-    // Calculate exact number of steps based on dice
-    const numSteps = startPos === -1 ? 1 : (endPos - startPos);
+    // Calculate exact number of steps
+    const numSteps = startPos === -1 ? 1 : Math.abs(endPos - startPos);
     
-    console.log(`[LUDO ANIM] Moving from ${startPos} to ${endPos}, ${numSteps} step(s)`);
+    console.log(`[LUDO ANIM] Animating ${numSteps} step(s) from ${startPos} to ${endPos}`);
     
-    let currentStep = 0;
+    // Track current step outside React state to avoid race conditions
+    let completedSteps = 0;
     
-    const animateStep = () => {
-      currentStep++;
+    const executeStep = () => {
+      completedSteps++;
       
-      // Calculate the position for this step
-      let stepPosition: number;
+      // Calculate position for this step
+      let newPosition: number;
       if (startPos === -1) {
-        stepPosition = 0; // Coming out of home
+        newPosition = 0;
       } else {
-        stepPosition = startPos + currentStep;
+        newPosition = startPos + completedSteps;
       }
       
-      // Play move sound
+      console.log(`[LUDO ANIM] Step ${completedSteps}/${numSteps}: pos=${newPosition}`);
       playSfx('ludo_move');
       
-      console.log(`[LUDO ANIM] Step ${currentStep}/${numSteps}: moving to position ${stepPosition}`);
+      // Update state synchronously for this step
+      setPlayers(prev => prev.map((player, pIdx) => ({
+        ...player,
+        tokens: player.tokens.map((token, tIdx) => {
+          if (pIdx === playerIndex && tIdx === tokenIndex) {
+            return { ...token, position: newPosition };
+          }
+          return token;
+        }),
+      })));
       
-      // Update token position for this step
-      setPlayers(prevPlayers => {
-        return prevPlayers.map((player, pIdx) => ({
+      if (completedSteps >= numSteps) {
+        // Animation complete - force final position and finish
+        setPlayers(prev => prev.map((player, pIdx) => ({
           ...player,
           tokens: player.tokens.map((token, tIdx) => {
             if (pIdx === playerIndex && tIdx === tokenIndex) {
-              return { ...token, position: stepPosition };
+              console.log(`[LUDO ANIM] Final: ${token.position} -> ${endPos}`);
+              return { ...token, position: endPos };
             }
-            return { ...token };
+            return token;
           }),
-        }));
-      });
-      
-      // Check if we've completed all steps
-      if (currentStep >= numSteps) {
-        // Animation complete - verify final position
+        })));
+        
         setIsAnimating(false);
-        
-        // Ensure final position is exactly endPos
-        setPlayers(prevPlayers => {
-          return prevPlayers.map((player, pIdx) => ({
-            ...player,
-            tokens: player.tokens.map((token, tIdx) => {
-              if (pIdx === playerIndex && tIdx === tokenIndex) {
-                if (token.position !== endPos) {
-                  console.log(`[LUDO ANIM] Final correction: ${token.position} -> ${endPos}`);
-                }
-                return { ...token, position: endPos };
-              }
-              return { ...token };
-            }),
-          }));
-        });
-        
         onComplete();
       } else {
         // Schedule next step
-        animationRef.current = setTimeout(animateStep, 150);
+        animationRef.current = setTimeout(executeStep, 150);
       }
     };
     
-    // Start the first step
-    animationRef.current = setTimeout(animateStep, 150);
+    // Start first step after initial delay
+    animationRef.current = setTimeout(executeStep, 150);
   }, [playSfx]);
 
-  // Move a token with animation
+  // Move a token - using refs for reliable state access
   const moveToken = useCallback((playerIndex: number, tokenIndex: number, dice: number) => {
-    const player = players[playerIndex];
+    // Get current state from ref to avoid stale closures
+    const currentPlayers = playersRef.current;
+    const player = currentPlayers[playerIndex];
     const token = player.tokens[tokenIndex];
     
-    // CRITICAL: Capture current position BEFORE any state updates
+    // Capture positions BEFORE any updates
     const startPosition = token.position;
     let endPosition: number;
     
     if (startPosition === -1 && dice === 6) {
-      // Moving out of home to position 0
       endPosition = 0;
     } else if (startPosition >= 0 && startPosition < 57) {
-      // Moving on board - calculate exact end position
       endPosition = startPosition + dice;
-      // Cap at 57 (finished position)
       if (endPosition > 57) {
-        console.warn(`[LUDO] Move would exceed 57 (${startPosition} + ${dice} = ${endPosition}), capping to stay`);
-        // Cannot move past 57 - this shouldn't happen if getMovableTokens is correct
+        console.warn(`[LUDO] Move would exceed 57, skipping`);
         return;
       }
     } else {
-      console.warn(`[LUDO] Invalid move attempt: token at ${startPosition}, dice: ${dice}`);
+      console.warn(`[LUDO] Invalid move: pos=${startPosition}, dice=${dice}`);
       return;
     }
     
-    console.log(`[LUDO MOVE] Player ${player.color} Token #${tokenIndex}: ${startPosition} -> ${endPosition} (dice: ${dice})`);
+    // Validate move distance
+    const expectedDistance = startPosition === -1 ? 1 : (endPosition - startPosition);
+    const actualDice = startPosition === -1 ? 6 : dice;
     
-    // Validate dice matches expected move distance
-    if (startPosition >= 0) {
-      const expectedDistance = endPosition - startPosition;
-      if (expectedDistance !== dice) {
-        console.error(`[LUDO BUG] Distance mismatch! Expected ${dice} steps but calculating ${expectedDistance} (${startPosition} -> ${endPosition})`);
-      }
+    console.log(`[LUDO MOVE] ${player.color} Token#${tokenIndex}: ${startPosition} -> ${endPosition} (dice=${dice}, distance=${expectedDistance})`);
+    
+    if (startPosition >= 0 && expectedDistance !== dice) {
+      console.error(`[LUDO BUG] Distance mismatch! dice=${dice} but distance=${expectedDistance}`);
     }
     
-    // Animate the movement with FIXED start and end positions
+    // Animate with locked positions
     animateMove(playerIndex, tokenIndex, startPosition, endPosition, () => {
-      // After animation: check captures
+      // After animation: handle captures
       setPlayers(prevPlayers => {
-        const newPlayers = prevPlayers.map((p, pi) => ({
+        const newPlayers = prevPlayers.map(p => ({
           ...p,
           tokens: p.tokens.map(t => ({ ...t })),
         }));
         
-        // Verify final position is correct
-        const finalToken = newPlayers[playerIndex].tokens[tokenIndex];
-        if (finalToken.position !== endPosition) {
-          console.error(`[LUDO BUG] Final position ${finalToken.position} doesn't match expected ${endPosition}! Fixing...`);
+        // Verify final position
+        const movedToken = newPlayers[playerIndex].tokens[tokenIndex];
+        if (movedToken.position !== endPosition) {
+          console.error(`[LUDO FIX] Correcting ${movedToken.position} -> ${endPosition}`);
           newPlayers[playerIndex].tokens[tokenIndex].position = endPosition;
         }
         
-        // Check for captures (simplified)
+        // Check captures (only on main track)
         if (endPosition >= 0 && endPosition < 52) {
-          const currentPlayerData = newPlayers[playerIndex];
+          const movingPlayer = newPlayers[playerIndex];
           newPlayers.forEach((otherPlayer, opi) => {
             if (opi !== playerIndex) {
               otherPlayer.tokens.forEach((otherToken, oti) => {
                 if (otherToken.position >= 0 && otherToken.position < 52) {
-                  const relativePos = (otherToken.position + otherPlayer.startPosition) % 52;
-                  const myRelativePos = (endPosition + currentPlayerData.startPosition) % 52;
-                  if (relativePos === myRelativePos) {
-                    otherPlayer.tokens[oti] = { ...otherToken, position: -1 };
-                    console.log(`[LUDO CAPTURE] ${currentPlayerData.color} captured ${otherPlayer.color} token #${oti}`);
+                  const otherAbsPos = (otherToken.position + otherPlayer.startPosition) % 52;
+                  const myAbsPos = (endPosition + movingPlayer.startPosition) % 52;
+                  if (otherAbsPos === myAbsPos) {
+                    newPlayers[opi].tokens[oti] = { ...otherToken, position: -1 };
+                    console.log(`[LUDO CAPTURE] ${movingPlayer.color} captured ${otherPlayer.color} token#${oti}`);
                     playSfx('ludo_capture');
                     toast({
                       title: "Captured!",
-                      description: `${currentPlayerData.color} captured ${otherPlayer.color}'s token!`,
+                      description: `${movingPlayer.color} captured ${otherPlayer.color}'s token!`,
                       duration: 2000,
                     });
                   }
@@ -254,7 +253,7 @@ const LudoAI = () => {
         return newPlayers;
       });
     });
-  }, [players, animateMove, playSfx]);
+  }, [animateMove, playSfx]);
 
   // Check for winner
   const checkWinner = useCallback((playersToCheck: Player[]): PlayerColor | null => {
@@ -267,6 +266,27 @@ const LudoAI = () => {
   }, []);
 
   // Roll dice
+  // Advance turn after a move
+  const advanceTurn = useCallback((diceRolled: number) => {
+    // Wait for animation to complete before checking winner and changing turn
+    const checkAndAdvance = () => {
+      setPlayers(current => {
+        const winner = checkWinner(current);
+        if (winner) {
+          setGameOver(winner);
+          playSfx(winner === 'gold' ? 'ludo_win' : 'ludo_lose');
+        } else {
+          // Only advance turn if dice wasn't 6
+          setCurrentPlayerIndex(prev => diceRolled === 6 ? prev : (prev + 1) % 4);
+        }
+        return current;
+      });
+    };
+    
+    // Add delay after animation completes
+    setTimeout(checkAndAdvance, 200);
+  }, [checkWinner, playSfx]);
+
   const rollDice = useCallback(() => {
     if (isRolling || diceValue !== null || isAnimating) return;
     
@@ -285,45 +305,40 @@ const LudoAI = () => {
         setDiceValue(finalValue);
         setIsRolling(false);
         
-        const movable = getMovableTokens(currentPlayer, finalValue);
+        // Use ref to get current player state
+        const currentPlayerData = playersRef.current[currentPlayerIndexRef.current];
+        const movable = getMovableTokens(currentPlayerData, finalValue);
         setMovableTokens(movable);
         
-        console.log(`[LUDO DICE] Player ${currentPlayer.color} rolled ${finalValue}, movable tokens: [${movable.join(', ')}]`);
+        console.log(`[LUDO DICE] Player ${currentPlayerData.color} rolled ${finalValue}, movable tokens: [${movable.join(', ')}]`);
         
         if (movable.length === 0) {
           toast({
             title: "No valid moves",
-            description: `${currentPlayer.isAI ? 'AI' : 'You'} cannot move any token.`,
+            description: `${currentPlayerData.isAI ? 'AI' : 'You'} cannot move any token.`,
             duration: 1500,
           });
           setTimeout(() => {
             setDiceValue(null);
+            setMovableTokens([]);
             setCurrentPlayerIndex(prev => (prev + 1) % 4);
           }, 1000);
-        } else if (movable.length === 1 && currentPlayer.isAI) {
+        } else if (movable.length === 1 && currentPlayerData.isAI) {
+          // AI auto-moves when only one option
           setTimeout(() => {
-            moveToken(currentPlayerIndex, movable[0], finalValue);
-            const currentDice = finalValue;
+            const playerIdx = currentPlayerIndexRef.current;
+            moveToken(playerIdx, movable[0], finalValue);
             setDiceValue(null);
             setMovableTokens([]);
             
-            setTimeout(() => {
-              setPlayers(current => {
-                const winner = checkWinner(current);
-                if (winner) {
-                  setGameOver(winner);
-                  playSfx(winner === 'gold' ? 'ludo_win' : 'ludo_lose');
-                } else {
-                  setCurrentPlayerIndex(prev => currentDice === 6 ? prev : (prev + 1) % 4);
-                }
-                return current;
-              });
-            }, 800);
+            // Wait for animation (numSteps * 150ms + buffer) then advance turn
+            const numSteps = playersRef.current[playerIdx].tokens[movable[0]].position === -1 ? 1 : finalValue;
+            setTimeout(() => advanceTurn(finalValue), numSteps * 150 + 300);
           }, 500);
         }
       }
     }, 100);
-  }, [isRolling, diceValue, isAnimating, currentPlayer, currentPlayerIndex, getMovableTokens, moveToken, checkWinner, playSfx]);
+  }, [isRolling, diceValue, isAnimating, getMovableTokens, moveToken, advanceTurn, playSfx]);
 
   // Handle token click (for human player)
   const handleTokenClick = useCallback((playerIndex: number, tokenIndex: number) => {
@@ -344,25 +359,18 @@ const LudoAI = () => {
     }
     
     const currentDice = diceValue;
+    const token = currentPlayer.tokens[tokenIndex];
+    const numSteps = token.position === -1 ? 1 : currentDice;
+    
     moveToken(currentPlayerIndex, tokenIndex, currentDice);
     setDiceValue(null);
     setMovableTokens([]);
     
-    setTimeout(() => {
-      setPlayers(current => {
-        const winner = checkWinner(current);
-        if (winner) {
-          setGameOver(winner);
-          playSfx(winner === 'gold' ? 'ludo_win' : 'ludo_lose');
-        } else {
-          setCurrentPlayerIndex(prev => currentDice === 6 ? prev : (prev + 1) % 4);
-        }
-        return current;
-      });
-    }, 800);
-  }, [isAnimating, currentPlayerIndex, currentPlayer, diceValue, isRolling, movableTokens, moveToken, checkWinner, playSfx]);
+    // Wait for animation to complete then advance turn
+    setTimeout(() => advanceTurn(currentDice), numSteps * 150 + 300);
+  }, [isAnimating, currentPlayerIndex, currentPlayer, diceValue, isRolling, movableTokens, moveToken, advanceTurn]);
 
-  // AI turn
+  // AI turn - trigger dice roll
   useEffect(() => {
     if (currentPlayer.isAI && !gameOver && diceValue === null && !isRolling && !isAnimating) {
       const delay = difficulty === "easy" ? 800 : difficulty === "medium" ? 500 : 300;
@@ -371,18 +379,20 @@ const LudoAI = () => {
     }
   }, [currentPlayer.isAI, gameOver, diceValue, isRolling, isAnimating, rollDice, difficulty]);
 
-  // AI move selection
+  // AI move selection - when multiple tokens can move
   useEffect(() => {
     if (currentPlayer.isAI && diceValue !== null && !isRolling && !isAnimating && movableTokens.length > 1) {
       const delay = difficulty === "easy" ? 600 : difficulty === "medium" ? 400 : 200;
       
       const timeout = setTimeout(() => {
         let chosenToken: number;
+        const currentPlayerData = playersRef.current[currentPlayerIndexRef.current];
         
         if (difficulty === "easy") {
           chosenToken = movableTokens[Math.floor(Math.random() * movableTokens.length)];
         } else {
-          const tokens = movableTokens.map(i => ({ index: i, token: currentPlayer.tokens[i] }));
+          // Prioritize tokens already on board over those in home
+          const tokens = movableTokens.map(i => ({ index: i, token: currentPlayerData.tokens[i] }));
           tokens.sort((a, b) => {
             if (a.token.position === -1 && b.token.position !== -1) return 1;
             if (b.token.position === -1 && a.token.position !== -1) return -1;
@@ -392,27 +402,21 @@ const LudoAI = () => {
         }
         
         const currentDice = diceValue;
-        moveToken(currentPlayerIndex, chosenToken, currentDice);
+        const token = currentPlayerData.tokens[chosenToken];
+        const numSteps = token.position === -1 ? 1 : currentDice;
+        const playerIdx = currentPlayerIndexRef.current;
+        
+        moveToken(playerIdx, chosenToken, currentDice);
         setDiceValue(null);
         setMovableTokens([]);
         
-        setTimeout(() => {
-          setPlayers(current => {
-            const winner = checkWinner(current);
-            if (winner) {
-              setGameOver(winner);
-              playSfx(winner === 'gold' ? 'ludo_win' : 'ludo_lose');
-            } else {
-              setCurrentPlayerIndex(prev => currentDice === 6 ? prev : (prev + 1) % 4);
-            }
-            return current;
-          });
-        }, 800);
+        // Wait for animation then advance turn
+        setTimeout(() => advanceTurn(currentDice), numSteps * 150 + 300);
       }, delay);
       
       return () => clearTimeout(timeout);
     }
-  }, [currentPlayer, diceValue, isRolling, isAnimating, movableTokens, difficulty, moveToken, currentPlayerIndex, checkWinner, playSfx]);
+  }, [currentPlayer.isAI, diceValue, isRolling, isAnimating, movableTokens, difficulty, moveToken, advanceTurn]);
 
   // Cleanup animation on unmount
   useEffect(() => {
