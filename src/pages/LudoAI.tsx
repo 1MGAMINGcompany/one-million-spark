@@ -116,13 +116,23 @@ const LudoAI = () => {
     rollDice(handleRollComplete);
   }, [rollDice, handleRollComplete]);
 
-  // Handle token click (for human player)
+  // Track if we've already consumed the current dice roll
+  const moveStartedRef = useRef(false);
+
+  // Handle token click (for human player) - with double-click prevention
   const handleTokenClick = useCallback((playerIndex: number, tokenIndex: number) => {
+    // Early guards
     if (isAnimating) return;
     if (playerIndex !== currentPlayerIndex) return;
     if (currentPlayer.isAI) return;
     if (diceValue === null) return;
     if (isRolling) return;
+    
+    // CRITICAL: Prevent consuming same dice twice
+    if (moveStartedRef.current) {
+      console.log('[LUDO AI] Move already started, ignoring click');
+      return;
+    }
     
     if (!movableTokens.includes(tokenIndex)) {
       toast({
@@ -134,26 +144,37 @@ const LudoAI = () => {
       return;
     }
     
+    // Capture dice value ONCE and immediately mark as consumed
     const currentDice = diceValue;
-    const token = currentPlayer.tokens[tokenIndex];
-    const numSteps = token.position === -1 ? 1 : currentDice;
+    moveStartedRef.current = true;
+    
+    // Clear dice state immediately to prevent re-use
+    setDiceValue(null);
+    setMovableTokens([]);
     
     const success = executeMove(currentPlayerIndex, tokenIndex, currentDice, () => {
-      // After animation completes, advance turn
+      // After animation completes, advance turn and release lock
+      moveStartedRef.current = false;
       setTimeout(() => advanceTurn(currentDice), 200);
     });
     
-    if (success) {
-      setDiceValue(null);
-      setMovableTokens([]);
+    if (!success) {
+      // If move failed, restore state
+      moveStartedRef.current = false;
+      setDiceValue(currentDice);
     }
   }, [isAnimating, currentPlayerIndex, currentPlayer, diceValue, isRolling, movableTokens, executeMove, advanceTurn, setDiceValue, setMovableTokens]);
 
   // AI turn - trigger dice roll
+  const aiMoveInProgressRef = useRef(false);
+  
   useEffect(() => {
-    if (currentPlayer.isAI && !gameOver && diceValue === null && !isRolling && !isAnimating) {
+    if (currentPlayer.isAI && !gameOver && diceValue === null && !isRolling && !isAnimating && !aiMoveInProgressRef.current) {
       const delay = difficulty === "easy" ? 800 : difficulty === "medium" ? 500 : 300;
       const timeout = setTimeout(() => {
+        // Lock AI turn
+        aiMoveInProgressRef.current = true;
+        
         rollDice((dice, movable) => {
           console.log(`[LUDO AI] AI ${currentPlayer.color} rolled ${dice}, movable: [${movable.join(', ')}]`);
           
@@ -167,9 +188,14 @@ const LudoAI = () => {
               setDiceValue(null);
               setMovableTokens([]);
               setCurrentPlayerIndex(prev => (prev + 1) % 4);
+              aiMoveInProgressRef.current = false;
             }, 1000);
           } else {
-            // AI chooses a token to move
+            // AI chooses a token to move - capture dice immediately
+            const capturedDice = dice;
+            setDiceValue(null);
+            setMovableTokens([]);
+            
             const aiDelay = difficulty === "easy" ? 600 : difficulty === "medium" ? 400 : 200;
             setTimeout(() => {
               let chosenToken: number;
@@ -187,12 +213,12 @@ const LudoAI = () => {
                 chosenToken = tokens[0].index;
               }
               
-              executeMove(currentPlayerIndex, chosenToken, dice, () => {
-                setTimeout(() => advanceTurn(dice), 200);
+              executeMove(currentPlayerIndex, chosenToken, capturedDice, () => {
+                setTimeout(() => {
+                  advanceTurn(capturedDice);
+                  aiMoveInProgressRef.current = false;
+                }, 200);
               });
-              
-              setDiceValue(null);
-              setMovableTokens([]);
             }, aiDelay);
           }
         });
