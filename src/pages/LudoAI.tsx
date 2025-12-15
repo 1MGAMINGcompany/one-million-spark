@@ -106,72 +106,72 @@ const LudoAI = () => {
   ) => {
     setIsAnimating(true);
     
-    // Generate path from start to end (these are the VISUAL positions for animation)
-    const path: number[] = [];
-    if (startPos === -1) {
-      // Moving out of home - just one step to position 0
-      path.push(0);
-    } else {
-      // CRITICAL: Generate exact path based on dice value
-      for (let pos = startPos + 1; pos <= endPos; pos++) {
-        path.push(pos);
-      }
-    }
+    // Calculate exact number of steps based on dice
+    const numSteps = startPos === -1 ? 1 : (endPos - startPos);
     
-    console.log(`[LUDO ANIM] Path from ${startPos} to ${endPos}: [${path.join(', ')}] (${path.length} steps)`);
+    console.log(`[LUDO ANIM] Moving from ${startPos} to ${endPos}, ${numSteps} step(s)`);
     
-    let stepIndex = 0;
+    let currentStep = 0;
     
     const animateStep = () => {
-      if (stepIndex >= path.length) {
+      currentStep++;
+      
+      // Calculate the position for this step
+      let stepPosition: number;
+      if (startPos === -1) {
+        stepPosition = 0; // Coming out of home
+      } else {
+        stepPosition = startPos + currentStep;
+      }
+      
+      // Play move sound
+      playSfx('ludo_move');
+      
+      console.log(`[LUDO ANIM] Step ${currentStep}/${numSteps}: moving to position ${stepPosition}`);
+      
+      // Update token position for this step
+      setPlayers(prevPlayers => {
+        return prevPlayers.map((player, pIdx) => ({
+          ...player,
+          tokens: player.tokens.map((token, tIdx) => {
+            if (pIdx === playerIndex && tIdx === tokenIndex) {
+              return { ...token, position: stepPosition };
+            }
+            return { ...token };
+          }),
+        }));
+      });
+      
+      // Check if we've completed all steps
+      if (currentStep >= numSteps) {
+        // Animation complete - verify final position
         setIsAnimating(false);
         
-        // CRITICAL: Final state update to ensure position is EXACTLY endPos
+        // Ensure final position is exactly endPos
         setPlayers(prevPlayers => {
-          const newPlayers = prevPlayers.map((player, pIdx) => ({
+          return prevPlayers.map((player, pIdx) => ({
             ...player,
             tokens: player.tokens.map((token, tIdx) => {
               if (pIdx === playerIndex && tIdx === tokenIndex) {
                 if (token.position !== endPos) {
-                  console.log(`[LUDO ANIM FINAL] Correcting position: ${token.position} -> ${endPos}`);
+                  console.log(`[LUDO ANIM] Final correction: ${token.position} -> ${endPos}`);
                 }
                 return { ...token, position: endPos };
               }
               return { ...token };
             }),
           }));
-          return newPlayers;
         });
         
         onComplete();
-        return;
+      } else {
+        // Schedule next step
+        animationRef.current = setTimeout(animateStep, 150);
       }
-      
-      const nextPos = path[stepIndex];
-      
-      // Play move sound on each step
-      playSfx('ludo_move');
-      
-      // Update token position for this step (visual animation only)
-      setPlayers(prevPlayers => {
-        const newPlayers = prevPlayers.map((player, pIdx) => ({
-          ...player,
-          tokens: player.tokens.map((token, tIdx) => {
-            if (pIdx === playerIndex && tIdx === tokenIndex) {
-              console.log(`[LUDO ANIM] Step ${stepIndex + 1}/${path.length}: ${token.position} -> ${nextPos}`);
-              return { ...token, position: nextPos };
-            }
-            return { ...token };
-          }),
-        }));
-        return newPlayers;
-      });
-      
-      stepIndex++;
-      animationRef.current = setTimeout(animateStep, 150);
     };
     
-    animateStep();
+    // Start the first step
+    animationRef.current = setTimeout(animateStep, 150);
   }, [playSfx]);
 
   // Move a token with animation
