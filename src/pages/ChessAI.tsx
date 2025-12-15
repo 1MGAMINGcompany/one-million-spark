@@ -8,7 +8,6 @@ import { ArrowLeft, RotateCcw, Gem, Star } from "lucide-react";
 import { useSound } from "@/contexts/SoundContext";
 import { useTranslation } from "react-i18next";
 import { createChessAI, type ChessAI as ChessAIType, type Difficulty } from "@/lib/chessEngine/stockfishEngine";
-import { MobileAppPrompt } from "@/components/MobileAppPrompt";
 
 // Helper to convert UCI move (e.g., "e2e4") to from/to squares
 const parseUCIMove = (uciMove: string): { from: Square; to: Square; promotion?: string } | null => {
@@ -637,7 +636,6 @@ const ChessAI = () => {
           </div>
         </div>
       </div>
-      <MobileAppPrompt />
     </div>
   );
 };

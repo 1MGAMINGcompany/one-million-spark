@@ -13,7 +13,6 @@ import { useTimeoutForfeit } from "@/hooks/useTimeoutForfeit";
 import { useWallet } from "@/hooks/useWallet";
 import { useState, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { MobileAppPrompt } from "@/components/MobileAppPrompt";
 
 // Die component for multiplayer
 const Die3D = ({ value, color = "ivory" }: { value: number; color?: "ivory" | "obsidian" }) => {
@@ -432,7 +431,6 @@ const BackgammonGame = () => {
           </ul>
         </div>
       </div>
-      <MobileAppPrompt />
     </div>
   );
 };

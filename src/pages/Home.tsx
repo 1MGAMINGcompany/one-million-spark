@@ -5,6 +5,7 @@ import { Swords, Users, Bot, Trophy, Gem, Star, Shield, Zap } from "lucide-react
 import FeaturedGameCard from "@/components/FeaturedGameCard";
 import { ChessIcon, DominoIcon, BackgammonIcon, CheckersIcon, LudoIcon } from "@/components/GameIcons";
 import PyramidLogo from "@/components/PyramidLogo";
+import { MobileAppPrompt } from "@/components/MobileAppPrompt";
 
 const Home = () => {
   const { t } = useTranslation();
@@ -196,6 +197,7 @@ const Home = () => {
           </div>
         </div>
       </section>
+      <MobileAppPrompt />
     </div>
   );
 };

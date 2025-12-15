@@ -14,7 +14,6 @@ import { useWallet } from "@/hooks/useWallet";
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useSound } from "@/contexts/SoundContext";
-import { MobileAppPrompt } from "@/components/MobileAppPrompt";
 
 type Player = "gold" | "obsidian";
 type PieceType = "normal" | "king";
@@ -387,7 +386,6 @@ const CheckersGame = () => {
           </ul>
         </div>
       </div>
-      <MobileAppPrompt />
     </div>
   );
 };
