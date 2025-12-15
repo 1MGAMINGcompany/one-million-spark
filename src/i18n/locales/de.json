@@ -1,4 +1,10 @@
 {
+  "ageConfirmation": {
+    "title": "Altersbestätigung",
+    "description": "Diese Plattform ist für Benutzer ab 18 Jahren. Durch Fortfahren bestätigen Sie, dass Sie mindestens 18 Jahre alt sind.",
+    "confirm": "Ich bin 18+",
+    "exit": "Verlassen"
+  },
   "game": {
     "finishGame": "Spiel Beenden",
     "finishGameDesc": "Als Raumersteller können Sie das Spiel beenden und den Gewinner auszahlen.",

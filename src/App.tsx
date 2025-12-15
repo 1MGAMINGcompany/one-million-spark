@@ -31,7 +31,7 @@ import GameRules from "./pages/GameRules";
 import Support from "./pages/Support";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import NotFound from "./pages/NotFound";
-
+import AgeConfirmation from "./components/AgeConfirmation";
 const App = () => (
   <Web3Provider>
     <LoadingProvider>
@@ -42,6 +42,7 @@ const App = () => (
             <Sonner />
             <PyramidLoader />
             <GoldenParticles />
+            <AgeConfirmation />
             <BrowserRouter>
               <div className="flex flex-col min-h-screen">
                 <Navbar />
