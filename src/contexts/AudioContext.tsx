@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
 import { AudioManager } from '@/lib/AudioManager';
 
 interface AudioContextType {
@@ -19,12 +19,14 @@ const AudioContext = createContext<AudioContextType | undefined>(undefined);
 export const AudioProvider = ({ children }: { children: ReactNode }) => {
   const [isMuted, setIsMuted] = useState(false);
   const [isAmbientPlaying, setIsAmbientPlaying] = useState(false);
+  const [wantsAmbient, setWantsAmbient] = useState(false);
 
   const toggleMute = useCallback(() => {
     const newMuted = AudioManager.toggleMute();
     setIsMuted(newMuted);
     if (newMuted) {
       setIsAmbientPlaying(false);
+      setWantsAmbient(false);
     }
   }, []);
 
@@ -49,14 +51,38 @@ export const AudioProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const playAmbient = useCallback(() => {
+    setWantsAmbient(true);
     AudioManager.playAmbient();
-    setIsAmbientPlaying(true);
+    setIsAmbientPlaying(AudioManager.isAmbientPlaying());
   }, []);
 
   const stopAmbient = useCallback(() => {
+    setWantsAmbient(false);
     AudioManager.stopAmbient();
     setIsAmbientPlaying(false);
   }, []);
+
+  // Retry playing ambient on user interaction if autoplay was blocked
+  useEffect(() => {
+    if (!wantsAmbient || isMuted) return;
+
+    const tryPlay = () => {
+      if (wantsAmbient && !AudioManager.isAmbientPlaying()) {
+        AudioManager.playAmbient();
+        setIsAmbientPlaying(AudioManager.isAmbientPlaying());
+      }
+    };
+
+    document.addEventListener('click', tryPlay, { once: true });
+    document.addEventListener('keydown', tryPlay, { once: true });
+    document.addEventListener('touchstart', tryPlay, { once: true });
+
+    return () => {
+      document.removeEventListener('click', tryPlay);
+      document.removeEventListener('keydown', tryPlay);
+      document.removeEventListener('touchstart', tryPlay);
+    };
+  }, [wantsAmbient, isMuted]);
 
   return (
     <AudioContext.Provider
