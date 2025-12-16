@@ -127,10 +127,20 @@ const CreateRoom = () => {
 
   useEffect(() => {
     if (approveError) {
+      // Check if user rejected the transaction
+      const isUserRejection = approveError.message?.toLowerCase().includes('rejected') ||
+                              approveError.message?.toLowerCase().includes('denied') ||
+                              approveError.message?.toLowerCase().includes('cancelled') ||
+                              approveError.message?.toLowerCase().includes('user refused');
+      
       toast({
-        title: t("createRoom.approvalFailed"),
-        description: approveError.message || t("createRoom.approvalFailed"),
-        variant: "destructive",
+        title: isUserRejection 
+          ? t("createRoom.approvalCancelled", "Approval cancelled")
+          : t("createRoom.approvalFailed"),
+        description: isUserRejection 
+          ? t("createRoom.approvalCancelledDesc", "No funds were moved. You can try again when ready.")
+          : (approveError.message || t("createRoom.approvalFailed")),
+        variant: isUserRejection ? "default" : "destructive",
       });
       resetApprove();
     }
