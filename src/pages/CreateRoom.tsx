@@ -524,8 +524,15 @@ const CreateRoom = () => {
           {/* Two-Step Process: Approve USDT → Create Room */}
           {isConnected && !hasActiveRoom && (
             <div className="space-y-3">
-              {/* Gasless Warning Banner */}
-              {!GASLESS_ENABLED && (
+              {/* Gasless Status Banner */}
+              {GASLESS_ENABLED ? (
+                <div className="bg-green-500/10 border border-green-500/30 rounded-md p-3 flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />
+                  <div className="text-xs text-green-600 dark:text-green-400">
+                    <strong>Gasless enabled ✅</strong> — No POL gas fees. Transactions are sponsored.
+                  </div>
+                </div>
+              ) : (
                 <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-md p-3 flex items-start gap-2">
                   <Info className="h-4 w-4 text-yellow-500 mt-0.5 shrink-0" />
                   <div className="text-xs text-yellow-600 dark:text-yellow-400">

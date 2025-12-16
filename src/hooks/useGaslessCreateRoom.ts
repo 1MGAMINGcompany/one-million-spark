@@ -1,9 +1,9 @@
 import { useState, useCallback } from "react";
-import { useAccount, usePublicClient, useWalletClient } from "wagmi";
+import { useAccount, usePublicClient } from "wagmi";
 import { toast } from "sonner";
 import { keccak256, toBytes, decodeEventLog, parseAbi, encodeFunctionData, decodeFunctionResult } from "viem";
-import { polygon } from "viem/chains";
-import { ROOMMANAGER_V7_ADDRESS } from "@/lib/contractAddresses";
+import { ROOMMANAGER_V7_ADDRESS, USDT_ADDRESS } from "@/lib/contractAddresses";
+import { sendGaslessTransaction } from "@/lib/smartAccountClient";
 
 // Rules hash for contract validation
 const RULES_TEXT = `
@@ -25,8 +25,32 @@ const LATEST_ROOM_ABI = parseAbi([
   "function latestRoomId() view returns (uint256)"
 ]);
 
-// RoomManagerV7Production ABI - minimal for our needs
-const ROOM_MANAGER_ABI = [
+// USDT ERC20 ABI (approve only)
+const USDT_ABI = [
+  {
+    inputs: [
+      { name: "spender", type: "address" },
+      { name: "amount", type: "uint256" }
+    ],
+    name: "approve",
+    outputs: [{ name: "", type: "bool" }],
+    stateMutability: "nonpayable",
+    type: "function"
+  },
+  {
+    inputs: [
+      { name: "owner", type: "address" },
+      { name: "spender", type: "address" }
+    ],
+    name: "allowance",
+    outputs: [{ name: "", type: "uint256" }],
+    stateMutability: "view",
+    type: "function"
+  }
+];
+
+// RoomManagerV7Production ABI
+const ROOM_MANAGER_ABI: any[] = [
   {
     inputs: [
       { internalType: "uint256", name: "entryFee", type: "uint256" },
@@ -76,17 +100,65 @@ const ROOM_MANAGER_ABI = [
     stateMutability: "view",
     type: "function"
   }
-] as const;
+];
 
-// Check if gasless/relayer is configured (currently false - no backend)
-export const GASLESS_ENABLED = false;
+// TRUE gasless via Smart Account (ERC-4337)
+export const GASLESS_ENABLED = true;
 
-// Main hook for creating rooms
+// Main hook for creating rooms with gasless transactions
 export function useGaslessCreateRoom() {
   const { address, isConnected } = useAccount();
   const [isBusy, setIsBusy] = useState(false);
   const publicClient = usePublicClient();
-  const { data: walletClient } = useWalletClient();
+
+  // Check current USDT allowance
+  const checkAllowance = useCallback(async (): Promise<bigint> => {
+    if (!publicClient || !address) return 0n;
+    try {
+      const data = encodeFunctionData({
+        abi: USDT_ABI,
+        functionName: "allowance",
+        args: [address, ROOMMANAGER_V7_ADDRESS]
+      });
+      const result = await publicClient.call({
+        to: USDT_ADDRESS as `0x${string}`,
+        data,
+      });
+      if (result.data) {
+        return BigInt(result.data);
+      }
+      return 0n;
+    } catch (err) {
+      console.error("Failed to check allowance:", err);
+      return 0n;
+    }
+  }, [publicClient, address]);
+
+  // Approve USDT via gasless transaction
+  const approveUsdtGasless = useCallback(async (amount: bigint): Promise<boolean> => {
+    if (!address) throw new Error("Wallet not connected");
+    
+    console.log("[Gasless] Approving USDT:", amount.toString());
+    toast.info("Approving USDT (gasless)...");
+
+    try {
+      const result = await sendGaslessTransaction({
+        contractAddress: USDT_ADDRESS,
+        abi: USDT_ABI,
+        method: "approve",
+        params: [ROOMMANAGER_V7_ADDRESS, amount],
+        userAddress: address,
+      });
+      
+      console.log("[Gasless] Approve result:", result);
+      toast.success("USDT approved!");
+      return true;
+    } catch (err: any) {
+      console.error("[Gasless] Approve failed:", err);
+      toast.error("USDT approval failed: " + (err?.message || "Unknown error"));
+      return false;
+    }
+  }, [address]);
 
   const createRoomGasless = useCallback(async (
     entryFeeUnits: bigint,
@@ -96,7 +168,7 @@ export function useGaslessCreateRoom() {
     gameId: number,
     turnTimeSec: number
   ): Promise<{ roomId: bigint }> => {
-    if (!address || !isConnected || !walletClient || !publicClient) {
+    if (!address || !isConnected || !publicClient) {
       throw new Error("Wallet not connected");
     }
 
@@ -105,7 +177,7 @@ export function useGaslessCreateRoom() {
     const gameIdU32 = Math.max(1, gameId || 1);
     const turnTimeU16 = turnTimeSec || 10;
 
-    console.log("CREATE_ROOM_ARGS:", {
+    console.log("CREATE_ROOM_ARGS (Gasless):", {
       entryFeeUnits: entryFeeUnits.toString(),
       maxPlayersU8,
       isPrivate,
@@ -114,6 +186,7 @@ export function useGaslessCreateRoom() {
       turnTimeU16,
       rulesHash: RULES_HASH,
       contract: ROOMMANAGER_V7_ADDRESS,
+      userAddress: address,
     });
 
     if (entryFeeUnits < 500000n) {
@@ -123,28 +196,44 @@ export function useGaslessCreateRoom() {
     setIsBusy(true);
 
     try {
-      // Send transaction using wallet client (user pays gas - no relayer)
-      const hash = await walletClient.writeContract({
-        address: ROOMMANAGER_V7_ADDRESS as `0x${string}`,
+      // Step 1: Check allowance and approve if needed
+      const currentAllowance = await checkAllowance();
+      console.log("[Gasless] Current allowance:", currentAllowance.toString());
+      
+      if (currentAllowance < entryFeeUnits) {
+        console.log("[Gasless] Insufficient allowance, approving exact amount...");
+        const approved = await approveUsdtGasless(entryFeeUnits);
+        if (!approved) {
+          throw new Error("USDT approval failed");
+        }
+        // Brief wait for approval to propagate
+        await new Promise(r => setTimeout(r, 2000));
+      }
+
+      // Step 2: Create room via gasless transaction
+      toast.info("Creating room (gasless)...");
+      
+      const result = await sendGaslessTransaction({
+        contractAddress: ROOMMANAGER_V7_ADDRESS,
         abi: ROOM_MANAGER_ABI,
-        functionName: "createRoom",
-        args: [entryFeeUnits, maxPlayersU8, isPrivate, 500, gameIdU32, turnTimeU16, RULES_HASH],
-        chain: polygon,
-        account: address,
+        method: "createRoom",
+        params: [entryFeeUnits, maxPlayersU8, isPrivate, 500, gameIdU32, turnTimeU16, RULES_HASH],
+        userAddress: address,
       });
 
-      console.log("Create room TX hash:", hash);
-      toast.success("Transaction submitted, waiting for confirmation...");
+      console.log("[Gasless] Create room result:", result);
 
-      // Wait for receipt
-      const receipt = await publicClient.waitForTransactionReceipt({ hash });
-      console.log("Transaction receipt:", receipt);
-
-      // STRATEGY 1: Parse RoomCreated event from logs
+      // Parse roomId from transaction receipt
       let roomId: bigint | null = null;
-      for (const log of receipt.logs) {
+      
+      // The result should contain transaction receipt with logs
+      const receipt = result as any;
+      const logs = receipt?.logs || receipt?.receipt?.logs || [];
+      
+      // STRATEGY 1: Parse RoomCreated event from logs
+      for (const log of logs) {
         try {
-          const topics = (log as { topics?: `0x${string}`[] }).topics;
+          const topics = log.topics || (log as any).topics;
           if (!topics || topics.length === 0) continue;
           
           const decoded = decodeEventLog({
@@ -172,16 +261,16 @@ export function useGaslessCreateRoom() {
             functionName: "latestRoomId",
           });
           
-          const result = await publicClient.call({
+          const latestResult = await publicClient.call({
             to: ROOMMANAGER_V7_ADDRESS as `0x${string}`,
             data: callData,
           });
           
-          if (result.data) {
+          if (latestResult.data) {
             const decoded = decodeFunctionResult({
               abi: LATEST_ROOM_ABI,
               functionName: "latestRoomId",
-              data: result.data,
+              data: latestResult.data,
             }) as bigint;
             
             if (decoded && decoded > 0n) {
@@ -197,8 +286,8 @@ export function useGaslessCreateRoom() {
       // STRATEGY 3: If still null, try parsing indexed topic directly
       if (roomId === null) {
         console.warn("latestRoomId fallback failed, trying direct topic parse...");
-        for (const log of receipt.logs) {
-          const topics = (log as { topics?: `0x${string}`[] }).topics;
+        for (const log of logs) {
+          const topics = log.topics || (log as any).topics;
           // RoomCreated has roomId as first indexed param (topics[1])
           if (topics && topics.length >= 2) {
             try {
@@ -228,7 +317,7 @@ export function useGaslessCreateRoom() {
     } finally {
       setIsBusy(false);
     }
-  }, [address, isConnected, walletClient, publicClient]);
+  }, [address, isConnected, publicClient, checkAllowance, approveUsdtGasless]);
 
   return {
     createRoomGasless,
@@ -238,16 +327,14 @@ export function useGaslessCreateRoom() {
   };
 }
 
-// Hook for joining rooms
+// Hook for joining rooms (still using wagmi for now)
 export function useGaslessJoinRoom() {
   const { address, isConnected } = useAccount();
   const [isBusy, setIsBusy] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
-  const publicClient = usePublicClient();
-  const { data: walletClient } = useWalletClient();
 
   const joinRoomGasless = useCallback(async (roomId: bigint): Promise<boolean> => {
-    if (!address || !isConnected || !walletClient || !publicClient) {
+    if (!address || !isConnected) {
       toast.error("Wallet not connected");
       return false;
     }
@@ -256,17 +343,17 @@ export function useGaslessJoinRoom() {
     setIsSuccess(false);
 
     try {
-      const hash = await walletClient.writeContract({
-        address: ROOMMANAGER_V7_ADDRESS as `0x${string}`,
+      toast.info("Joining room (gasless)...");
+      
+      const result = await sendGaslessTransaction({
+        contractAddress: ROOMMANAGER_V7_ADDRESS,
         abi: ROOM_MANAGER_ABI,
-        functionName: "joinRoom",
-        args: [roomId],
-        chain: polygon,
-        account: address,
+        method: "joinRoom",
+        params: [roomId],
+        userAddress: address,
       });
 
-      console.log("Join room TX hash:", hash);
-      await publicClient.waitForTransactionReceipt({ hash });
+      console.log("[Gasless] Join room result:", result);
       setIsSuccess(true);
       toast.success("Joined room successfully!");
       return true;
@@ -277,7 +364,7 @@ export function useGaslessJoinRoom() {
     } finally {
       setIsBusy(false);
     }
-  }, [address, isConnected, walletClient, publicClient]);
+  }, [address, isConnected]);
 
   const reset = useCallback(() => {
     setIsSuccess(false);
@@ -291,11 +378,9 @@ export function useGaslessCancelRoom() {
   const { address, isConnected } = useAccount();
   const [isBusy, setIsBusy] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
-  const publicClient = usePublicClient();
-  const { data: walletClient } = useWalletClient();
 
   const cancelRoomGasless = useCallback(async (roomId: bigint): Promise<boolean> => {
-    if (!address || !isConnected || !walletClient || !publicClient) {
+    if (!address || !isConnected) {
       toast.error("Wallet not connected");
       return false;
     }
@@ -304,17 +389,17 @@ export function useGaslessCancelRoom() {
     setIsSuccess(false);
 
     try {
-      const hash = await walletClient.writeContract({
-        address: ROOMMANAGER_V7_ADDRESS as `0x${string}`,
+      toast.info("Cancelling room (gasless)...");
+      
+      const result = await sendGaslessTransaction({
+        contractAddress: ROOMMANAGER_V7_ADDRESS,
         abi: ROOM_MANAGER_ABI,
-        functionName: "cancelRoom",
-        args: [roomId],
-        chain: polygon,
-        account: address,
+        method: "cancelRoom",
+        params: [roomId],
+        userAddress: address,
       });
 
-      console.log("Cancel room TX hash:", hash);
-      await publicClient.waitForTransactionReceipt({ hash });
+      console.log("[Gasless] Cancel room result:", result);
       setIsSuccess(true);
       toast.success("Room cancelled");
       return true;
@@ -325,7 +410,7 @@ export function useGaslessCancelRoom() {
     } finally {
       setIsBusy(false);
     }
-  }, [address, isConnected, walletClient, publicClient]);
+  }, [address, isConnected]);
 
   const reset = useCallback(() => {
     setIsSuccess(false);
@@ -341,8 +426,6 @@ export function useGaslessFinishGame() {
   const [isConfirming, setIsConfirming] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [error, setError] = useState<Error | null>(null);
-  const publicClient = usePublicClient();
-  const { data: walletClient } = useWalletClient();
 
   const finishGameGasless = useCallback(async (
     roomId: bigint, 
@@ -351,7 +434,7 @@ export function useGaslessFinishGame() {
     gameHash: `0x${string}` = "0x0000000000000000000000000000000000000000000000000000000000000000",
     proofOrSig: `0x${string}` = "0x"
   ): Promise<boolean> => {
-    if (!address || !isConnected || !walletClient || !publicClient) {
+    if (!address || !isConnected) {
       setError(new Error("Wallet not connected"));
       return false;
     }
@@ -365,17 +448,17 @@ export function useGaslessFinishGame() {
       setIsPending(false);
       setIsConfirming(true);
 
-      const hash = await walletClient.writeContract({
-        address: ROOMMANAGER_V7_ADDRESS as `0x${string}`,
+      toast.info("Finishing game (gasless)...");
+      
+      const result = await sendGaslessTransaction({
+        contractAddress: ROOMMANAGER_V7_ADDRESS,
         abi: ROOM_MANAGER_ABI,
-        functionName: "finishGameSig",
-        args: [roomId, winner, isDraw, gameHash, proofOrSig],
-        chain: polygon,
-        account: address,
+        method: "finishGameSig",
+        params: [roomId, winner, isDraw, gameHash, proofOrSig],
+        userAddress: address,
       });
 
-      console.log("Finish game TX hash:", hash);
-      await publicClient.waitForTransactionReceipt({ hash });
+      console.log("[Gasless] Finish game result:", result);
       setIsSuccess(true);
       return true;
     } catch (err: any) {
@@ -386,7 +469,7 @@ export function useGaslessFinishGame() {
       setIsPending(false);
       setIsConfirming(false);
     }
-  }, [address, isConnected, walletClient, publicClient]);
+  }, [address, isConnected]);
 
   const reset = useCallback(() => {
     setIsSuccess(false);
