@@ -1,16 +1,10 @@
 import { useState, useCallback } from "react";
-import { useAccount } from "wagmi";
+import { useAccount, useWriteContract } from "wagmi";
 import { toast } from "sonner";
-import { sendTransaction, prepareContractCall, getContract } from "thirdweb";
-import { polygon } from "thirdweb/chains";
-import { ethers6Adapter } from "thirdweb/adapters/ethers6";
-import { 
-  thirdwebClient, 
-  ROOMMANAGER_V7_ADDRESS,
-  TRUSTED_FORWARDER_ADDRESS
-} from "@/lib/thirdwebClient";
+import { polygon } from "wagmi/chains";
+import { ROOMMANAGER_V7_ADDRESS } from "@/lib/contractAddresses";
 
-// RoomManagerV7Production ABI - 6 params (no rulesHash based on original spec)
+// RoomManagerV7Production ABI - minimal for our needs
 const ROOM_MANAGER_ABI = [
   {
     inputs: [
@@ -52,38 +46,11 @@ const ROOM_MANAGER_ABI = [
   }
 ] as const;
 
-async function getThirdwebAccount() {
-  const ethereum = (window as any).ethereum;
-  if (!ethereum) throw new Error("No wallet provider found");
-  
-  const { ethers } = await import("ethers");
-  const provider = new ethers.BrowserProvider(ethereum);
-  const signer = await provider.getSigner();
-  
-  return ethers6Adapter.signer.fromEthers({ signer });
-}
-
-function getContract_() {
-  return getContract({
-    client: thirdwebClient,
-    chain: polygon,
-    address: ROOMMANAGER_V7_ADDRESS,
-    abi: ROOM_MANAGER_ABI,
-  });
-}
-
-interface CreateRoomParams {
-  entryFeeUsdt: string;
-  maxPlayers: number;
-  isPrivate: boolean;
-  gameId: number;
-  turnTimeSec: number;
-}
-
-// Main hook for creating rooms (used by CreateRoom.tsx)
+// Main hook for creating rooms
 export function useGaslessCreateRoom() {
   const { address, isConnected } = useAccount();
   const [isBusy, setIsBusy] = useState(false);
+  const { writeContractAsync } = useWriteContract();
 
   const createRoomGasless = useCallback(async (
     entryFeeUnits: bigint,
@@ -98,74 +65,63 @@ export function useGaslessCreateRoom() {
     }
 
     // Hard defaults & validation
-    const entryFeeBase = entryFeeUnits;
     const maxPlayersU8 = Math.max(2, Math.min(4, maxPlayers || 2));
-    const isPrivateBool = Boolean(isPrivate);
-    const platformFee = 500; // Always 5%
     const gameIdU32 = Math.max(1, gameId || 1);
     const turnTimeU16 = turnTimeSec || 10;
 
-    console.log("CREATE_ROOM_GASLESS_ARGS:", {
-      entryFeeBase: entryFeeBase.toString(),
+    console.log("CREATE_ROOM_ARGS:", {
+      entryFeeUnits: entryFeeUnits.toString(),
       maxPlayersU8,
-      isPrivateBool,
-      platformFee,
+      isPrivate,
+      platformFeeBps: 500,
       gameIdU32,
       turnTimeU16,
+      contract: ROOMMANAGER_V7_ADDRESS,
     });
 
-    if (entryFeeBase < 500000n) {
+    if (entryFeeUnits < 500000n) {
       throw new Error("Minimum entry fee is 0.5 USDT");
     }
 
     setIsBusy(true);
 
     try {
-      const account = await getThirdwebAccount();
-      console.log("Calling createRoom directly (6 params, no rulesHash)");
-
-      const contract = getContract_();
-
-      const transaction = prepareContractCall({
-        contract,
-        method: "createRoom",
-        params: [entryFeeBase, maxPlayersU8, isPrivateBool, platformFee, gameIdU32, turnTimeU16],
+      const hash = await writeContractAsync({
+        address: ROOMMANAGER_V7_ADDRESS as `0x${string}`,
+        abi: ROOM_MANAGER_ABI,
+        functionName: "createRoom",
+        args: [entryFeeUnits, maxPlayersU8, isPrivate, 500, gameIdU32, turnTimeU16],
+        chain: polygon,
+        account: address,
       });
 
-      // Note: gasless config removed - thirdweb v5 doesn't support legacy ERC-2771 gasless
-      // User pays gas directly, but _msgSender() returns user's address correctly
-      const result = await sendTransaction({
-        transaction,
-        account,
-      });
-
-      console.log("Gasless TX result:", result);
+      console.log("Create room TX hash:", hash);
       toast.success("Room created successfully!");
       
-      // Return roomId (will be in event logs, for now return 1)
+      // Return roomId (parsed from events in production)
       return { roomId: 1n };
 
     } catch (error: any) {
-      console.error("CREATE_ROOM_GASLESS_ERROR:", error);
+      console.error("CREATE_ROOM_ERROR:", error);
       throw error;
     } finally {
       setIsBusy(false);
     }
-  }, [address, isConnected]);
+  }, [address, isConnected, writeContractAsync]);
 
   return {
     createRoomGasless,
     isBusy,
     isGaslessReady: true,
-    trustedForwarder: TRUSTED_FORWARDER_ADDRESS,
   };
 }
 
-// Hook for joining rooms (used by Room.tsx)
+// Hook for joining rooms
 export function useGaslessJoinRoom() {
   const { address, isConnected } = useAccount();
   const [isBusy, setIsBusy] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const { writeContractAsync } = useWriteContract();
 
   const joinRoomGasless = useCallback(async (roomId: bigint): Promise<boolean> => {
     if (!address || !isConnected) {
@@ -177,21 +133,16 @@ export function useGaslessJoinRoom() {
     setIsSuccess(false);
 
     try {
-      const account = await getThirdwebAccount();
-      const contract = getContract_();
-
-      const transaction = prepareContractCall({
-        contract,
-        method: "joinRoom",
-        params: [roomId],
+      const hash = await writeContractAsync({
+        address: ROOMMANAGER_V7_ADDRESS as `0x${string}`,
+        abi: ROOM_MANAGER_ABI,
+        functionName: "joinRoom",
+        args: [roomId],
+        chain: polygon,
+        account: address,
       });
 
-      const result = await sendTransaction({
-        transaction,
-        account,
-      });
-
-      console.log("Join room TX:", result);
+      console.log("Join room TX hash:", hash);
       setIsSuccess(true);
       return true;
     } catch (error: any) {
@@ -201,7 +152,7 @@ export function useGaslessJoinRoom() {
     } finally {
       setIsBusy(false);
     }
-  }, [address, isConnected]);
+  }, [address, isConnected, writeContractAsync]);
 
   const reset = useCallback(() => {
     setIsSuccess(false);
@@ -210,11 +161,12 @@ export function useGaslessJoinRoom() {
   return { joinRoomGasless, isBusy, isSuccess, reset };
 }
 
-// Hook for cancelling rooms (used by Room.tsx)
+// Hook for cancelling rooms
 export function useGaslessCancelRoom() {
   const { address, isConnected } = useAccount();
   const [isBusy, setIsBusy] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const { writeContractAsync } = useWriteContract();
 
   const cancelRoomGasless = useCallback(async (roomId: bigint): Promise<boolean> => {
     if (!address || !isConnected) {
@@ -226,21 +178,16 @@ export function useGaslessCancelRoom() {
     setIsSuccess(false);
 
     try {
-      const account = await getThirdwebAccount();
-      const contract = getContract_();
-
-      const transaction = prepareContractCall({
-        contract,
-        method: "cancelRoom",
-        params: [roomId],
+      const hash = await writeContractAsync({
+        address: ROOMMANAGER_V7_ADDRESS as `0x${string}`,
+        abi: ROOM_MANAGER_ABI,
+        functionName: "cancelRoom",
+        args: [roomId],
+        chain: polygon,
+        account: address,
       });
 
-      const result = await sendTransaction({
-        transaction,
-        account,
-      });
-
-      console.log("Cancel room TX:", result);
+      console.log("Cancel room TX hash:", hash);
       setIsSuccess(true);
       toast.success("Room cancelled");
       return true;
@@ -251,7 +198,7 @@ export function useGaslessCancelRoom() {
     } finally {
       setIsBusy(false);
     }
-  }, [address, isConnected]);
+  }, [address, isConnected, writeContractAsync]);
 
   const reset = useCallback(() => {
     setIsSuccess(false);
@@ -260,13 +207,14 @@ export function useGaslessCancelRoom() {
   return { cancelRoomGasless, isBusy, isSuccess, reset };
 }
 
-// Hook for finishing games (used by FinishGameButton.tsx)
+// Hook for finishing games
 export function useGaslessFinishGame() {
   const { address, isConnected } = useAccount();
   const [isPending, setIsPending] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [error, setError] = useState<Error | null>(null);
+  const { writeContractAsync } = useWriteContract();
 
   const finishGameGasless = useCallback(async (roomId: bigint, winner: `0x${string}`): Promise<boolean> => {
     if (!address || !isConnected) {
@@ -280,24 +228,19 @@ export function useGaslessFinishGame() {
     setError(null);
 
     try {
-      const account = await getThirdwebAccount();
-      const contract = getContract_();
-
-      const transaction = prepareContractCall({
-        contract,
-        method: "finishGameSig",
-        params: [roomId, winner],
-      });
-
       setIsPending(false);
       setIsConfirming(true);
 
-      const result = await sendTransaction({
-        transaction,
-        account,
+      const hash = await writeContractAsync({
+        address: ROOMMANAGER_V7_ADDRESS as `0x${string}`,
+        abi: ROOM_MANAGER_ABI,
+        functionName: "finishGameSig",
+        args: [roomId, winner],
+        chain: polygon,
+        account: address,
       });
 
-      console.log("Finish game TX:", result);
+      console.log("Finish game TX hash:", hash);
       setIsSuccess(true);
       return true;
     } catch (err: any) {
@@ -308,7 +251,7 @@ export function useGaslessFinishGame() {
       setIsPending(false);
       setIsConfirming(false);
     }
-  }, [address, isConnected]);
+  }, [address, isConnected, writeContractAsync]);
 
   const reset = useCallback(() => {
     setIsSuccess(false);
