@@ -1,5 +1,12 @@
 import { useCallback, useState } from "react";
-import { createThirdwebClient, getContract, prepareContractCall, sendTransaction } from "thirdweb";
+import { 
+  createThirdwebClient, 
+  getContract, 
+  prepareContractCall, 
+  sendTransaction,
+  waitForReceipt,
+  readContract 
+} from "thirdweb";
 import { polygon } from "thirdweb/chains";
 import { ethers6Adapter } from "thirdweb/adapters/ethers6";
 import { BrowserProvider, formatUnits } from "ethers";
@@ -149,12 +156,10 @@ export function useGaslessCreateRoom() {
         gasless: GASLESS_CONFIG,
       });
 
-      // Wait for receipt
-      const { waitForReceipt } = await import("thirdweb");
-      const receipt = await waitForReceipt(result);
+      // Wait for receipt (static import - no dynamic loading)
+      const receipt = await waitForReceipt({ client: thirdwebClient, chain: polygon, transactionHash: result.transactionHash });
 
-      // Fetch latest room ID from contract
-      const { readContract } = await import("thirdweb");
+      // Fetch latest room ID from contract (static import - no dynamic loading)
       const roomId = await readContract({
         contract,
         method: "function latestRoomId() view returns (uint256)",
@@ -209,9 +214,8 @@ export function useGaslessJoinRoom() {
         gasless: GASLESS_CONFIG,
       });
 
-      // Wait for receipt
-      const { waitForReceipt } = await import("thirdweb");
-      const receipt = await waitForReceipt(result);
+      // Wait for receipt (static import - no dynamic loading)
+      const receipt = await waitForReceipt({ client: thirdwebClient, chain: polygon, transactionHash: result.transactionHash });
 
       setIsSuccess(true);
       return {
@@ -269,9 +273,8 @@ export function useGaslessCancelRoom() {
         gasless: GASLESS_CONFIG,
       });
 
-      // Wait for receipt
-      const { waitForReceipt } = await import("thirdweb");
-      const receipt = await waitForReceipt(result);
+      // Wait for receipt (static import - no dynamic loading)
+      const receipt = await waitForReceipt({ client: thirdwebClient, chain: polygon, transactionHash: result.transactionHash });
 
       setIsSuccess(true);
       return {
@@ -335,9 +338,8 @@ export function useGaslessFinishGame() {
         gasless: GASLESS_CONFIG,
       });
 
-      // Wait for receipt
-      const { waitForReceipt } = await import("thirdweb");
-      const receipt = await waitForReceipt(result);
+      // Wait for receipt (static import - no dynamic loading)
+      const receipt = await waitForReceipt({ client: thirdwebClient, chain: polygon, transactionHash: result.transactionHash });
 
       setIsSuccess(true);
       return {
