@@ -103,10 +103,10 @@ export function useGaslessCreateRoom() {
       const account = await getThirdwebAccount();
       const contract = getThirdwebContract();
 
-      // Prepare the createRoom transaction
+      // Prepare the createRoom transaction (gameId is uint32 per contract ABI)
       const transaction = prepareContractCall({
         contract,
-        method: "function createRoom(uint256 entryFee, uint8 maxPlayers, bool isPrivate, uint16 platformFeeBps, uint8 gameId, uint16 turnTimeSec)",
+        method: "function createRoom(uint256 entryFee, uint8 maxPlayers, bool isPrivate, uint16 platformFeeBps, uint32 gameId, uint16 turnTimeSec)",
         params: [
           entryFeeUnits,
           maxPlayers,
@@ -128,7 +128,7 @@ export function useGaslessCreateRoom() {
       console.log("  [1] maxPlayers (uint8):", maxPlayers);
       console.log("  [2] isPrivate (bool):", isPrivate);
       console.log("  [3] platformFeeBps (uint16):", platformFeeBps);
-      console.log("  [4] gameId (uint8):", gameId);
+      console.log("  [4] gameId (uint32):", gameId);
       console.log("  [5] turnTimeSec (uint16):", turnTimeSec);
       console.log("--- Stake Info ---");
       console.log("stake amount (raw units):", entryFeeUnits.toString());
