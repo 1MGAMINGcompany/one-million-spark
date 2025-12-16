@@ -98,10 +98,11 @@ export function useSmartCreateRoom() {
       const ROOM_CREATED_TOPIC = keccak256(toBytes("RoomCreated(uint256,address,uint256,uint8,bool,uint32,uint16)"));
       
       for (const log of receipt.logs) {
-        if (log.topics?.[0]?.toLowerCase() === ROOM_CREATED_TOPIC.toLowerCase()) {
+        const logAny = log as any;
+        if (logAny.topics?.[0]?.toLowerCase() === ROOM_CREATED_TOPIC.toLowerCase()) {
           // roomId is indexed (topics[1])
-          if (log.topics[1]) {
-            roomId = BigInt(log.topics[1]);
+          if (logAny.topics[1]) {
+            roomId = BigInt(logAny.topics[1]);
             console.log("Parsed roomId from event:", roomId.toString());
             break;
           }

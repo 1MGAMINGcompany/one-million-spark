@@ -26,6 +26,8 @@ import { useNotificationPermission } from "@/hooks/useRoomEvents";
 import { useBackgroundMusic } from "@/hooks/useBackgroundMusic";
 import { DepositConfirmModal } from "@/components/DepositConfirmModal";
 import { logTxError, isUserRejectionError } from "@/lib/txErrorLogger";
+import { useSmartAccount } from "@/components/ThirdwebSmartProvider";
+import { useSmartCreateRoom } from "@/hooks/useSmartAccountTransactions";
 
 // Game ID mapping: Chess=1, Dominos=2, Backgammon=3, Checkers=4, Ludo=5
 const GAME_IDS: Record<string, number> = {
