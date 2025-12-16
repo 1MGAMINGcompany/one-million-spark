@@ -54,7 +54,10 @@ const ROOM_MANAGER_ABI = [
   {
     inputs: [
       { internalType: "uint256", name: "roomId", type: "uint256" },
-      { internalType: "address", name: "winner", type: "address" }
+      { internalType: "address", name: "winner", type: "address" },
+      { internalType: "bool", name: "isDraw", type: "bool" },
+      { internalType: "bytes32", name: "gameHash", type: "bytes32" },
+      { internalType: "bytes", name: "proofOrSig", type: "bytes" }
     ],
     name: "finishGameSig",
     outputs: [],
@@ -274,7 +277,13 @@ export function useGaslessFinishGame() {
   const publicClient = usePublicClient();
   const { data: walletClient } = useWalletClient();
 
-  const finishGameGasless = useCallback(async (roomId: bigint, winner: `0x${string}`): Promise<boolean> => {
+  const finishGameGasless = useCallback(async (
+    roomId: bigint, 
+    winner: `0x${string}`,
+    isDraw: boolean = false,
+    gameHash: `0x${string}` = "0x0000000000000000000000000000000000000000000000000000000000000000",
+    proofOrSig: `0x${string}` = "0x"
+  ): Promise<boolean> => {
     if (!address || !isConnected || !walletClient || !publicClient) {
       setError(new Error("Wallet not connected"));
       return false;
@@ -293,7 +302,7 @@ export function useGaslessFinishGame() {
         address: ROOMMANAGER_V7_ADDRESS as `0x${string}`,
         abi: ROOM_MANAGER_ABI,
         functionName: "finishGameSig",
-        args: [roomId, winner],
+        args: [roomId, winner, isDraw, gameHash, proofOrSig],
         chain: polygon,
         account: address,
       });
