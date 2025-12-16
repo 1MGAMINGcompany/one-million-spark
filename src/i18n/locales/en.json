@@ -333,12 +333,15 @@
     ],
     "backgammon": "Backgammon",
     "backgammonRules": [
-      "Each player has 15 checkers to move around the board.",
-      "Roll two dice to determine movement.",
-      "Move checkers toward your home board.",
-      "Land on opponent's single checker (blot) to send it to the bar.",
-      "Checkers on the bar must re-enter before other moves.",
-      "Bear off all your checkers first to win."
+      "The board has 24 points numbered 1-24. Each player has 15 checkers.",
+      "Gold (Player) moves CLOCKWISE from point 24 → 1. Black (AI) moves COUNTER-CLOCKWISE from point 1 → 24.",
+      "Gold's home board is points 1-6. Black's home board is points 19-24.",
+      "Roll two dice to determine movement. Use each die value for separate moves.",
+      "Doubles grant four moves of that value instead of two.",
+      "Land on opponent's single checker (blot) to hit it to the bar.",
+      "Checkers on the bar MUST re-enter before any other moves.",
+      "Bear off begins when ALL 15 checkers reach your home board.",
+      "First to bear off all checkers wins. Gammon (2×) if loser has 0 off. Backgammon (3×) if loser also has checker on bar or winner's home."
     ],
     "ludo": "Ludo",
     "ludoRules": [
