@@ -1,21 +1,19 @@
 import { useEffect } from 'react';
-import { useAudio } from '@/contexts/AudioContext';
+import { useSound } from '@/contexts/SoundContext';
 
 export const useBackgroundMusic = (shouldPlay: boolean = true) => {
-  const { playAmbient, stopAmbient, isMuted } = useAudio();
+  const { playBackgroundMusic, stopBackgroundMusic, soundEnabled } = useSound();
 
   useEffect(() => {
-    if (!shouldPlay || isMuted) {
-      stopAmbient();
+    if (!shouldPlay || !soundEnabled) {
+      stopBackgroundMusic();
       return;
     }
 
-    // Play ambient sound
-    playAmbient();
+    playBackgroundMusic();
 
-    // Cleanup when component unmounts or shouldPlay changes
     return () => {
-      stopAmbient();
+      stopBackgroundMusic();
     };
-  }, [shouldPlay, isMuted, playAmbient, stopAmbient]);
+  }, [shouldPlay, soundEnabled, playBackgroundMusic, stopBackgroundMusic]);
 };
