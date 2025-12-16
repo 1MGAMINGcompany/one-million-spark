@@ -385,15 +385,20 @@ const CreateRoom = () => {
           {/* Wallet Connection */}
           {!isConnected && (
             <div className="space-y-4">
-              <Button 
-                type="button" 
-                className="w-full" 
-                size="lg" 
-                onClick={() => openWalletModal()}
-              >
-                <Wallet className="mr-2 h-4 w-4" />
-                {t("createRoom.connectWallet")}
-              </Button>
+              <div className="space-y-2">
+                <Button 
+                  type="button" 
+                  className="w-full" 
+                  size="lg" 
+                  onClick={() => openWalletModal()}
+                >
+                  <Wallet className="mr-2 h-4 w-4" />
+                  {t("createRoom.connectWallet")}
+                </Button>
+                <p className="text-xs text-muted-foreground text-center">
+                  {t("createRoom.connectHelperText", "Connect your wallet to see available games. No funds are moved.")}
+                </p>
+              </div>
               
               {/* USDT on Polygon info */}
               <div className="bg-primary/10 border border-primary/20 rounded-lg p-4">
