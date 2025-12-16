@@ -4,28 +4,13 @@ import { toast } from "sonner";
 import { sendTransaction, prepareContractCall, getContract } from "thirdweb";
 import { polygon } from "thirdweb/chains";
 import { ethers6Adapter } from "thirdweb/adapters/ethers6";
-import { keccak256, toBytes } from "viem";
 import { 
   thirdwebClient, 
-  GASLESS_CONFIG,
   ROOMMANAGER_V7_ADDRESS,
   TRUSTED_FORWARDER_ADDRESS
 } from "@/lib/thirdwebClient";
 
-// Game rules text - must be exact and stable for rulesHash verification
-const RULES_TEXT = `
-1M GAMING — RULES (V1)
-- Skill-based games only. No gambling.
-- Winner determined by game outcome, no disputes.
-- Entry fees held in smart contract until game ends.
-- Winner receives prize pool minus 5% platform fee.
-- Players must accept rules before playing.
-`;
-
-// Convert rules text -> bytes32 hash (matches Solidity keccak256)
-const RULES_HASH = keccak256(toBytes(RULES_TEXT));
-
-// RoomManagerV7Production ABI with rulesHash parameter
+// RoomManagerV7Production ABI - 6 params (no rulesHash based on original spec)
 const ROOM_MANAGER_ABI = [
   {
     inputs: [
@@ -34,8 +19,7 @@ const ROOM_MANAGER_ABI = [
       { internalType: "bool", name: "isPrivate", type: "bool" },
       { internalType: "uint16", name: "platformFeeBps", type: "uint16" },
       { internalType: "uint32", name: "gameId", type: "uint32" },
-      { internalType: "uint16", name: "turnTimeSec", type: "uint16" },
-      { internalType: "bytes32", name: "rulesHash", type: "bytes32" }
+      { internalType: "uint16", name: "turnTimeSec", type: "uint16" }
     ],
     name: "createRoom",
     outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
@@ -138,21 +122,21 @@ export function useGaslessCreateRoom() {
 
     try {
       const account = await getThirdwebAccount();
-      console.log("Sending via ERC-2771 forwarder:", TRUSTED_FORWARDER_ADDRESS);
-      console.log("RULES_HASH:", RULES_HASH);
+      console.log("Calling createRoom directly (6 params, no rulesHash)");
 
       const contract = getContract_();
 
       const transaction = prepareContractCall({
         contract,
         method: "createRoom",
-        params: [entryFeeBase, maxPlayersU8, isPrivateBool, platformFee, gameIdU32, turnTimeU16, RULES_HASH],
+        params: [entryFeeBase, maxPlayersU8, isPrivateBool, platformFee, gameIdU32, turnTimeU16],
       });
 
+      // Note: gasless config removed - thirdweb v5 doesn't support legacy ERC-2771 gasless
+      // User pays gas directly, but _msgSender() returns user's address correctly
       const result = await sendTransaction({
         transaction,
         account,
-        gasless: GASLESS_CONFIG,
       });
 
       console.log("Gasless TX result:", result);
@@ -174,7 +158,6 @@ export function useGaslessCreateRoom() {
     isBusy,
     isGaslessReady: true,
     trustedForwarder: TRUSTED_FORWARDER_ADDRESS,
-    rulesHash: RULES_HASH,
   };
 }
 
@@ -206,7 +189,6 @@ export function useGaslessJoinRoom() {
       const result = await sendTransaction({
         transaction,
         account,
-        gasless: GASLESS_CONFIG,
       });
 
       console.log("Join room TX:", result);
@@ -256,7 +238,6 @@ export function useGaslessCancelRoom() {
       const result = await sendTransaction({
         transaction,
         account,
-        gasless: GASLESS_CONFIG,
       });
 
       console.log("Cancel room TX:", result);
@@ -314,7 +295,6 @@ export function useGaslessFinishGame() {
       const result = await sendTransaction({
         transaction,
         account,
-        gasless: GASLESS_CONFIG,
       });
 
       console.log("Finish game TX:", result);
