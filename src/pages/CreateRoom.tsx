@@ -16,10 +16,10 @@ import { useWallet } from "@/hooks/useWallet";
 import { useToast } from "@/hooks/use-toast";
 import { useSound } from "@/contexts/SoundContext";
 import { useGaslessCreateRoom } from "@/hooks/useGaslessCreateRoom";
-import { useUsdtAllowanceV7 } from "@/hooks/useUsdtAllowanceV7";
+import { useUsdtPreflight } from "@/hooks/useUsdtPreflight";
 import { useApproveUsdtV7, usdtToUnitsV7 } from "@/hooks/useApproveUsdtV7";
 import { usePlayerActiveRoom } from "@/hooks/usePlayerActiveRoom";
-import { Loader2, AlertCircle, Wallet, CheckCircle2, AlertTriangle } from "lucide-react";
+import { Loader2, AlertCircle, Wallet, CheckCircle2, AlertTriangle, XCircle } from "lucide-react";
 import { useWeb3Modal } from "@web3modal/wagmi/react";
 import { ShareInviteDialog } from "@/components/ShareInviteDialog";
 import { useNotificationPermission } from "@/hooks/useRoomEvents";
@@ -81,6 +81,23 @@ const CreateRoom = () => {
 
   const { createRoomGasless, isBusy } = useGaslessCreateRoom();
 
+  const entryFeeNum = parseFloat(entryFee) || 0;
+  const entryFeeUnits = usdtToUnitsV7(entryFeeNum);
+
+  // USDT Preflight - reads allowance and balance
+  const {
+    allowanceRaw,
+    balanceRaw,
+    allowanceUsdt,
+    balanceUsdt,
+    hasSufficientAllowance,
+    hasSufficientBalance,
+    isLoading: isPreflightLoading,
+    runPreflight,
+    refetchAllowance,
+    spenderAddress,
+  } = useUsdtPreflight(address as `0x${string}` | undefined, entryFeeUnits);
+
   const { 
     approve: approveUsdt, 
     isPending: isApprovePending, 
@@ -90,16 +107,9 @@ const CreateRoom = () => {
     reset: resetApprove 
   } = useApproveUsdtV7();
 
-  const { data: currentAllowance, refetch: refetchAllowance } = useUsdtAllowanceV7(address as `0x${string}` | undefined);
-
   const [isCreateSuccess, setIsCreateSuccess] = useState(false);
   const [createError, setCreateError] = useState<Error | null>(null);
   const [latestRoomId, setLatestRoomId] = useState<bigint | null>(null);
-
-  const entryFeeNum = parseFloat(entryFee) || 0;
-  const entryFeeUnits = usdtToUnitsV7(entryFeeNum);
-
-  const hasSufficientAllowance = currentAllowance !== undefined && currentAllowance >= entryFeeUnits && entryFeeNum > 0;
 
   useEffect(() => {
     if (!entryFee) {
@@ -260,11 +270,10 @@ const CreateRoom = () => {
     const isPolygon = await checkPolygonNetwork();
     if (!isPolygon) return;
 
-    // Check current allowance - if sufficient, skip approve and create room directly
-    await refetchAllowance();
-    const currentAllowanceVal = currentAllowance ?? 0n;
+    // Run preflight check
+    const preflight = await runPreflight();
     
-    if (currentAllowanceVal >= entryFeeUnits) {
+    if (preflight.hasSufficientAllowance) {
       // Allowance sufficient - skip approve, create room immediately
       console.log("Allowance sufficient, skipping approve. Creating room directly.");
       toast({
@@ -302,6 +311,28 @@ const CreateRoom = () => {
       });
       return;
     }
+
+    // Run preflight check before creating room
+    const preflight = await runPreflight();
+    
+    if (!preflight.hasSufficientAllowance) {
+      toast({
+        title: "Approve USDT first",
+        description: "Approve USDT first (exact amount).",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!preflight.hasSufficientBalance) {
+      toast({
+        title: "Insufficient balance",
+        description: "Insufficient USDT balance.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     await handleCreateRoomInternal();
   };
 
@@ -490,21 +521,72 @@ const CreateRoom = () => {
           {/* Two-Step Process: Approve USDT → Create Room */}
           {isConnected && !hasActiveRoom && (
             <div className="space-y-3">
+              {/* USDT Preflight Status Display */}
+              {address && entryFeeNum > 0 && (
+                <div className="bg-muted/50 border border-border rounded-md p-3 space-y-2 text-sm">
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground">USDT Balance:</span>
+                    <span className={`font-mono ${hasSufficientBalance ? 'text-green-500' : 'text-destructive'}`}>
+                      {balanceUsdt} USDT
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground">Allowance:</span>
+                    <span className={`font-mono ${hasSufficientAllowance ? 'text-green-500' : 'text-yellow-500'}`}>
+                      {allowanceUsdt} USDT
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground">Required:</span>
+                    <span className="font-mono text-foreground">
+                      {(entryFeeNum).toFixed(6)} USDT
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center pt-1 border-t border-border">
+                    <span className="text-muted-foreground">Spender:</span>
+                    <span className="font-mono text-xs text-muted-foreground">
+                      {spenderAddress.slice(0, 6)}...{spenderAddress.slice(-4)}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Approval Status Indicator */}
+              {address && entryFeeNum > 0 && (
+                <div className={`flex items-center gap-2 p-2 rounded-md ${
+                  hasSufficientAllowance && entryFeeNum > 0
+                    ? 'bg-green-500/10 border border-green-500/30' 
+                    : 'bg-yellow-500/10 border border-yellow-500/30'
+                }`}>
+                  {hasSufficientAllowance && entryFeeNum > 0 ? (
+                    <>
+                      <CheckCircle2 className="h-4 w-4 text-green-500" />
+                      <span className="text-sm text-green-500">USDT Approved ✅</span>
+                    </>
+                  ) : (
+                    <>
+                      <XCircle className="h-4 w-4 text-yellow-500" />
+                      <span className="text-sm text-yellow-500">Not Approved</span>
+                    </>
+                  )}
+                </div>
+              )}
+
               {/* Step 1: Approve USDT */}
               <Button 
                 type="button" 
                 className="w-full" 
                 size="lg"
-                variant={hasSufficientAllowance ? "outline" : "default"}
+                variant={hasSufficientAllowance && entryFeeNum > 0 ? "outline" : "default"}
                 onClick={handleApproveClick}
-                disabled={isApproveLoading || isCreateLoading || !entryFee || !!feeError || hasSufficientAllowance || isCheckingActiveRoom}
+                disabled={isApproveLoading || isCreateLoading || !entryFee || !!feeError || (hasSufficientAllowance && entryFeeNum > 0) || isCheckingActiveRoom}
               >
                 {isApproveLoading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     {getApproveButtonText()}
                   </>
-                ) : hasSufficientAllowance ? (
+                ) : hasSufficientAllowance && entryFeeNum > 0 ? (
                   <>
                     <CheckCircle2 className="mr-2 h-4 w-4 text-green-500" />
                     {t("createRoom.usdtApproved")}
@@ -520,7 +602,7 @@ const CreateRoom = () => {
                 className="w-full" 
                 size="lg"
                 onClick={handleCreateRoom}
-                disabled={isCreateLoading || isApproveLoading || !entryFee || !!feeError || !hasSufficientAllowance || isCheckingActiveRoom}
+                disabled={isCreateLoading || isApproveLoading || !entryFee || !!feeError || !(hasSufficientAllowance && entryFeeNum > 0) || isCheckingActiveRoom}
               >
                 {isCreateLoading ? (
                   <>
