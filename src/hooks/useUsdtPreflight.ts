@@ -1,5 +1,6 @@
 import { useCallback, useState, useEffect } from "react";
 import { ethers } from "ethers";
+import { isAddress } from "viem";
 import { 
   USDT_ADDRESS, 
   ROOMMANAGER_V7_ADDRESS, 
@@ -68,6 +69,16 @@ export function useUsdtPreflight(ownerAddress: `0x${string}` | undefined, entryF
   const fetchPreflightData = useCallback(async (): Promise<PreflightResult | null> => {
     if (!ownerAddress) {
       setIsConnected(false);
+      return null;
+    }
+
+    // Validate addresses
+    if (!isAddress(USDT_ADDRESS)) {
+      console.error("BAD_USDT_ADDRESS in preflight:", USDT_ADDRESS);
+      return null;
+    }
+    if (!isAddress(ROOMMANAGER_V7_ADDRESS)) {
+      console.error("BAD_ROOM_MANAGER_ADDRESS in preflight:", ROOMMANAGER_V7_ADDRESS);
       return null;
     }
 
