@@ -9,7 +9,7 @@ import {
 } from "thirdweb";
 import { polygon } from "thirdweb/chains";
 import { ethers6Adapter } from "thirdweb/adapters/ethers6";
-import { BrowserProvider } from "ethers";
+import { BrowserProvider, Contract } from "ethers";
 import ABI from "@/abi/RoomManagerV7Production.abi.json";
 import { logCreateRoomDebug } from "@/lib/txErrorLogger";
 import {
@@ -83,6 +83,52 @@ function formatUsdtUnits(units: bigint): string {
   return (Number(units) / 10 ** USDT_DECIMALS).toFixed(USDT_DECIMALS);
 }
 
+// Simulation helper using ethers to get revert reason
+async function simulateCreateRoom(
+  entryFeeBase: bigint,
+  maxPlayersU8: number,
+  isPrivateBool: boolean,
+  platformFee: number,
+  gameIdU32: number,
+  turnTimeU16: number
+): Promise<{ success: boolean; error?: string }> {
+  const eth = (window as any).ethereum;
+  if (!eth) return { success: false, error: "WALLET_NOT_FOUND" };
+
+  const provider = new BrowserProvider(eth);
+  const signer = await provider.getSigner();
+  const contract = new Contract(ROOMMANAGER_V7_ADDRESS, ABI, signer);
+
+  try {
+    // Use callStatic to simulate without sending tx
+    await contract.createRoom.staticCall(
+      entryFeeBase,
+      maxPlayersU8,
+      isPrivateBool,
+      platformFee,
+      gameIdU32,
+      turnTimeU16
+    );
+    return { success: true };
+  } catch (err: any) {
+    // Extract revert reason
+    const errorMsg = err?.message || String(err);
+    const reason = err?.reason || err?.revert?.args?.[0] || 
+                   errorMsg.match(/reason="([^"]+)"/)?.[1] ||
+                   errorMsg.match(/reverted with reason string '([^']+)'/)?.[1] ||
+                   errorMsg.match(/execution reverted: ([^"]+)/)?.[1] ||
+                   "UNKNOWN_REVERT";
+    
+    console.error("SIMULATION_FAILED:", {
+      reason,
+      errorMsg,
+      fullError: err,
+    });
+    
+    return { success: false, error: reason };
+  }
+}
+
 export function useGaslessCreateRoom() {
   const [isBusy, setIsBusy] = useState(false);
 
@@ -96,6 +142,29 @@ export function useGaslessCreateRoom() {
   ): Promise<{ transactionHash: string; roomId: bigint }> => {
     if (isBusy) throw new Error("BUSY");
     setIsBusy(true);
+
+    // === HARD DEFAULTS to prevent undefined/0 values ===
+    const entryFeeBase = entryFeeUnits > 0n ? entryFeeUnits : 500000n; // min 0.5 USDT
+    const maxPlayersU8 = (maxPlayers >= 2 && maxPlayers <= 4) ? maxPlayers : 2;
+    const isPrivateBool = Boolean(isPrivate);
+    const platformFee = 500; // ALWAYS 500, ignore parameter
+    const gameIdU32 = (gameId >= 1) ? gameId : 1;
+    const turnTimeU16 = turnTimeSec >= 0 ? turnTimeSec : 10;
+
+    // === LOG EXACT VALUES AND TYPES ===
+    console.group("CREATE_ROOM_ARGS");
+    console.log("entryFeeBase:", entryFeeBase.toString(), "type:", typeof entryFeeBase);
+    console.log("maxPlayersU8:", maxPlayersU8, "type:", typeof maxPlayersU8);
+    console.log("isPrivateBool:", isPrivateBool, "type:", typeof isPrivateBool);
+    console.log("platformFee:", platformFee, "type:", typeof platformFee);
+    console.log("gameIdU32:", gameIdU32, "type:", typeof gameIdU32);
+    console.log("turnTimeU16:", turnTimeU16, "type:", typeof turnTimeU16);
+    console.log("--- Validation ---");
+    console.log("entryFee >= 500000:", entryFeeBase >= 500000n);
+    console.log("maxPlayers 2-4:", maxPlayersU8 >= 2 && maxPlayersU8 <= 4);
+    console.log("platformFee == 500:", platformFee === 500);
+    console.log("gameId >= 1:", gameIdU32 >= 1);
+    console.groupEnd();
 
     // Collect debug context upfront
     const chainId = await getWalletChainId();
@@ -113,59 +182,71 @@ export function useGaslessCreateRoom() {
       contractAddress: ROOMMANAGER_V7_ADDRESS,
       functionName: 'createRoom',
       params: {
-        entryFeeUnits: entryFeeUnits.toString(),
-        maxPlayers,
-        isPrivate,
-        platformFeeBps,
-        gameId,
-        turnTimeSec,
+        entryFeeUnits: entryFeeBase.toString(),
+        maxPlayers: maxPlayersU8,
+        isPrivate: isPrivateBool,
+        platformFeeBps: platformFee,
+        gameId: gameIdU32,
+        turnTimeSec: turnTimeU16,
       },
       usdtTokenAddress: USDT_ADDRESS,
-      stakeRaw: entryFeeUnits.toString(),
-      stakeFormatted: formatUsdtUnits(entryFeeUnits) + ' USDT',
+      stakeRaw: entryFeeBase.toString(),
+      stakeFormatted: formatUsdtUnits(entryFeeBase) + ' USDT',
     };
 
     try {
+      // === SIMULATION STEP: catch revert reason before sending ===
+      console.log("SIMULATING createRoom...");
+      const simulation = await simulateCreateRoom(
+        entryFeeBase,
+        maxPlayersU8,
+        isPrivateBool,
+        platformFee,
+        gameIdU32,
+        turnTimeU16
+      );
+
+      if (!simulation.success) {
+        setIsBusy(false);
+        const revertError = new Error(`SIMULATION_REVERT: ${simulation.error}`);
+        console.error("SIMULATION_REVERT_REASON:", simulation.error);
+        throw revertError;
+      }
+      console.log("SIMULATION_SUCCESS: proceeding with gasless tx");
+
       const account = await getThirdwebAccount();
       const contract = getThirdwebContract();
 
-      // Prepare the createRoom transaction with explicit types matching contract
-      // entryFee: uint256, maxPlayers: uint8, isPrivate: bool, 
-      // platformFeeBps: uint16, gameId: uint32, turnTimeSec: uint16
+      // Prepare the createRoom transaction with exact types matching contract
       const transaction = prepareContractCall({
         contract,
         method: "function createRoom(uint256 entryFee, uint8 maxPlayers, bool isPrivate, uint16 platformFeeBps, uint32 gameId, uint16 turnTimeSec) returns (uint256)",
         params: [
-          entryFeeUnits,           // uint256 - BigInt
-          maxPlayers,              // uint8 - number (will be cast)
-          isPrivate,               // bool
-          platformFeeBps,          // uint16 - number (will be cast)
-          gameId,                  // uint32 - number (will be cast)
-          turnTimeSec,             // uint16 - number (will be cast)
+          entryFeeBase,    // uint256 - BigInt
+          maxPlayersU8,    // uint8 - number
+          isPrivateBool,   // bool
+          platformFee,     // uint16 - number (always 500)
+          gameIdU32,       // uint32 - number
+          turnTimeU16,     // uint16 - number
         ],
       });
 
       // Log ALL inputs immediately before sending transaction
-      console.group("CREATE_ROOM_INPUTS");
+      console.group("CREATE_ROOM_TX_INPUTS");
       console.log("chainId:", chainId);
       console.log("wallet address (msg.sender):", walletAddress);
       console.log("RoomManager contract address:", ROOMMANAGER_V7_ADDRESS);
       console.log("function name:", "createRoom");
       console.log("--- Parameters (in order) ---");
-      console.log("  [0] entryFee (uint256):", entryFeeUnits.toString());
-      console.log("  [1] maxPlayers (uint8):", maxPlayers);
-      console.log("  [2] isPrivate (bool):", isPrivate);
-      console.log("  [3] platformFeeBps (uint16):", platformFeeBps);
-      console.log("  [4] gameId (uint32):", gameId);
-      console.log("  [5] turnTimeSec (uint16):", turnTimeSec);
-      console.log("--- Stake Info ---");
-      console.log("stake amount (raw units):", entryFeeUnits.toString());
-      console.log("stake amount (formatted):", formatUsdtUnits(entryFeeUnits), "USDT");
-      console.log("USDT token address:", USDT_ADDRESS);
+      console.log("  [0] entryFee (uint256):", entryFeeBase.toString());
+      console.log("  [1] maxPlayers (uint8):", maxPlayersU8);
+      console.log("  [2] isPrivate (bool):", isPrivateBool);
+      console.log("  [3] platformFeeBps (uint16):", platformFee);
+      console.log("  [4] gameId (uint32):", gameIdU32);
+      console.log("  [5] turnTimeSec (uint16):", turnTimeU16);
       console.log("--- Gasless Config ---");
       console.log("relayerUrl:", GASLESS_CONFIG.relayerUrl);
       console.log("trustedForwarder:", TRUSTED_FORWARDER_ADDRESS);
-      console.log("tx.value:", "0 (gasless via relayer)");
       console.groupEnd();
 
       // Send gasless transaction via relayer (user signs, relayer pays gas)
