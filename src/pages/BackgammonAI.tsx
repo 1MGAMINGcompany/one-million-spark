@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo, useEffect } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, RotateCcw, Gem, Star, Trophy } from "lucide-react";
+import { ArrowLeft, RotateCcw, RotateCw, Gem, Star, Trophy } from "lucide-react";
 import { Dice3D, CheckerStack } from "@/components/BackgammonPieces";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -925,10 +925,10 @@ const BackgammonAI = () => {
                 </Button>
               )}
 
-              {/* Status Bar */}
+              {/* Status Bar with Direction Arrow */}
               <div 
                 className={cn(
-                  "rounded-lg border px-3 py-2 text-center",
+                  "rounded-lg border px-3 py-2",
                   gameOver 
                     ? gameStatus.includes("win") 
                       ? "bg-green-500/10 border-green-500/30" 
@@ -936,9 +936,25 @@ const BackgammonAI = () => {
                     : "bg-primary/5 border-primary/20"
                 )}
               >
+                {/* Direction Indicator */}
+                {!gameOver && (
+                  <div className="flex items-center justify-center gap-2 mb-1">
+                    {currentPlayer === "player" ? (
+                      <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-primary/10 border border-primary/30">
+                        <RotateCw className="w-3.5 h-3.5 text-primary" strokeWidth={2.5} />
+                        <span className="text-[10px] font-medium text-primary">CLOCKWISE</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-700/50 border border-slate-500/30">
+                        <RotateCcw className="w-3.5 h-3.5 text-slate-400" strokeWidth={2.5} />
+                        <span className="text-[10px] font-medium text-slate-400">COUNTER-CW</span>
+                      </div>
+                    )}
+                  </div>
+                )}
                 <p 
                   className={cn(
-                    "font-display font-bold text-sm",
+                    "font-display font-bold text-sm text-center",
                     gameOver 
                       ? gameStatus.includes("win") ? "text-green-400" : "text-red-400"
                       : isThinking ? "text-muted-foreground" : "text-primary"
@@ -1116,6 +1132,22 @@ const BackgammonAI = () => {
                     )}
                   >
                     <h3 className="text-sm font-medium text-muted-foreground mb-2">Game Status</h3>
+                    {/* Direction Indicator - Desktop */}
+                    {!gameOver && (
+                      <div className="flex items-center justify-start gap-2 mb-2">
+                        {currentPlayer === "player" ? (
+                          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/10 border border-primary/30">
+                            <RotateCw className="w-4 h-4 text-primary" strokeWidth={2.5} />
+                            <span className="text-xs font-medium text-primary">CLOCKWISE</span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-700/50 border border-slate-500/30">
+                            <RotateCcw className="w-4 h-4 text-slate-400" strokeWidth={2.5} />
+                            <span className="text-xs font-medium text-slate-400">COUNTER-CW</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
                     <p 
                       className={cn(
                         "font-display text-lg font-bold",
