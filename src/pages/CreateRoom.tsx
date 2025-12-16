@@ -384,15 +384,28 @@ const CreateRoom = () => {
 
           {/* Wallet Connection */}
           {!isConnected && (
-            <Button 
-              type="button" 
-              className="w-full" 
-              size="lg" 
-              onClick={() => openWalletModal()}
-            >
-              <Wallet className="mr-2 h-4 w-4" />
-              {t("createRoom.connectWallet")}
-            </Button>
+            <div className="space-y-4">
+              <Button 
+                type="button" 
+                className="w-full" 
+                size="lg" 
+                onClick={() => openWalletModal()}
+              >
+                <Wallet className="mr-2 h-4 w-4" />
+                {t("createRoom.connectWallet")}
+              </Button>
+              
+              {/* USDT on Polygon info */}
+              <div className="bg-primary/10 border border-primary/20 rounded-lg p-4">
+                <div className="flex items-center justify-center gap-2 mb-2">
+                  <AlertCircle className="text-primary" size={18} />
+                  <span className="font-medium text-primary">{t('walletRequired.feesTitle')}</span>
+                </div>
+                <p className="text-sm text-muted-foreground text-center">
+                  {t('walletRequired.feesDescription')}
+                </p>
+              </div>
+            </div>
           )}
 
           {/* Active Room Warning */}
