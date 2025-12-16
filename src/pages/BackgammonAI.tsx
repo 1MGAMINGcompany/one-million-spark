@@ -453,7 +453,7 @@ const BackgammonAI = () => {
           className={cn(
             "transition-all duration-200",
             isTop ? "" : "rotate-180",
-            isValidTarget && "drop-shadow-[0_0_20px_hsl(45_93%_60%)] drop-shadow-[0_0_40px_hsl(45_93%_50%/_0.8)]"
+            isValidTarget && "drop-shadow-[0_0_25px_hsl(45_93%_70%)] drop-shadow-[0_0_50px_hsl(45_93%_60%)] md:drop-shadow-[0_0_20px_hsl(45_93%_60%)] md:drop-shadow-[0_0_40px_hsl(45_93%_50%/_0.8)]"
           )}
         >
           <defs>
@@ -484,8 +484,8 @@ const BackgammonAI = () => {
           />
           {isValidTarget && (
             <>
-              <polygon points="24,5 3,135 45,135" fill="hsl(45 93% 60% / 0.5)" className="animate-pulse" />
-              <polygon points="24,5 3,135 45,135" fill="none" stroke="hsl(45 93% 70%)" strokeWidth="3" className="animate-pulse" />
+              <polygon points="24,5 3,135 45,135" fill="hsl(45 93% 75% / 0.7)" className="animate-pulse" />
+              <polygon points="24,5 3,135 45,135" fill="none" stroke="hsl(45 100% 80%)" strokeWidth="4" className="animate-pulse" />
             </>
           )}
         </svg>
