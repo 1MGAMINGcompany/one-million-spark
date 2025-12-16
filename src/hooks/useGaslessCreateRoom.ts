@@ -13,7 +13,7 @@ import { BrowserProvider, formatUnits } from "ethers";
 import ABI from "@/abi/RoomManagerV7Production.abi.json";
 import { logCreateRoomDebug } from "@/lib/txErrorLogger";
 
-export const ROOMMANAGER_V7_ADDRESS = "0x4f3998195462100D867129747967BFCb56C07fe2" as const;
+export const ROOMMANAGER_V7_ADDRESS = "0xA039B03De894ebFa92933a9A7326c1715f040b96" as const;
 export const TRUSTED_FORWARDER_ADDRESS = "0x819e9EEf99446117476820aA2Ef754F068D7305e" as const;
 export const USDT_TOKEN_ADDRESS = "0xc2132D05D31c914a87C6611C10748AEb04B58e8F" as const;
 
