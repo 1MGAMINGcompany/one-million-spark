@@ -226,72 +226,34 @@ class AudioManagerClass {
     });
   }
 
-  // Desert wind ambient loop
+  // Background music using actual mp3 file
+  private backgroundAudio: HTMLAudioElement | null = null;
+
   playAmbient(): void {
-    if (this.isMuted || this.ambientNode) return;
-    const ctx = this.getContext();
-
-    // Create brown noise for wind effect
-    const bufferSize = 2 * ctx.sampleRate;
-    const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-    const output = noiseBuffer.getChannelData(0);
-
-    let lastOut = 0;
-    for (let i = 0; i < bufferSize; i++) {
-      const white = Math.random() * 2 - 1;
-      output[i] = (lastOut + 0.02 * white) / 1.02;
-      lastOut = output[i];
-      output[i] *= 3.5; // Amplify
+    if (this.isMuted) return;
+    
+    // Resume audio context first (required for browser autoplay policy)
+    this.getContext();
+    
+    if (!this.backgroundAudio) {
+      this.backgroundAudio = new Audio('/sounds/ambient/lightwind.mp3');
+      this.backgroundAudio.loop = true;
+      this.backgroundAudio.volume = 0.15;
     }
-
-    const noise = ctx.createBufferSource();
-    noise.buffer = noiseBuffer;
-    noise.loop = true;
-
-    // Low frequency oscillator for mystical hum
-    const lfo = ctx.createOscillator();
-    lfo.type = 'sine';
-    lfo.frequency.setValueAtTime(0.2, ctx.currentTime);
-
-    const lfoGain = ctx.createGain();
-    lfoGain.gain.setValueAtTime(50, ctx.currentTime);
-
-    // Filter for wind sound
-    const filter = ctx.createBiquadFilter();
-    filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(400, ctx.currentTime);
-
-    lfo.connect(lfoGain);
-    lfoGain.connect(filter.frequency);
-
-    // Mystical drone
-    const drone = ctx.createOscillator();
-    drone.type = 'sine';
-    drone.frequency.setValueAtTime(55, ctx.currentTime); // Low A
-
-    const droneGain = ctx.createGain();
-    droneGain.gain.setValueAtTime(0.03, ctx.currentTime);
-
-    this.ambientGain = ctx.createGain();
-    this.ambientGain.gain.setValueAtTime(0.04, ctx.currentTime);
-
-    noise.connect(filter);
-    filter.connect(this.ambientGain);
-    drone.connect(droneGain);
-    droneGain.connect(this.ambientGain);
-    this.ambientGain.connect(this.getMasterGain());
-
-    noise.start();
-    drone.start();
-    lfo.start();
-
-    // Store reference for stopping
-    this.ambientNode = drone;
-    (this.ambientNode as any)._noise = noise;
-    (this.ambientNode as any)._lfo = lfo;
+    
+    if (this.backgroundAudio.paused) {
+      this.backgroundAudio.play().catch(() => {
+        // Autoplay blocked - will play on next user interaction
+      });
+    }
   }
 
   stopAmbient(): void {
+    if (this.backgroundAudio) {
+      this.backgroundAudio.pause();
+      this.backgroundAudio.currentTime = 0;
+    }
+    // Also stop legacy oscillator nodes if any
     if (this.ambientNode) {
       try {
         this.ambientNode.stop();
@@ -306,7 +268,7 @@ class AudioManagerClass {
   }
 
   isAmbientPlaying(): boolean {
-    return this.ambientNode !== null;
+    return this.backgroundAudio !== null && !this.backgroundAudio.paused;
   }
 }
 
