@@ -113,18 +113,49 @@ const CreateRoom = () => {
     }
   }, [entryFee, entryFeeNum, t]);
 
+  // Auto-create room after approval succeeds
+  // Internal function to create room (no validation, called after approval or when allowance sufficient)
+  const handleCreateRoomInternal = async () => {
+    const isPolygon = await checkPolygonNetwork();
+    if (!isPolygon) return;
+
+    play('ui_click');
+    
+    const maxPlayers = parseInt(players);
+    const isPrivate = roomType === "private";
+    const gameId = GAME_IDS[gameType] || 1;
+    const turnTime = parseInt(turnTimeSec);
+    
+    try {
+      const { roomId } = await createRoomGasless(
+        entryFeeUnits,
+        maxPlayers,
+        isPrivate,
+        PLATFORM_FEE_BPS,
+        gameId,
+        turnTime
+      );
+      setLatestRoomId(roomId);
+      setIsCreateSuccess(true);
+    } catch (err) {
+      setCreateError(err instanceof Error ? err : new Error(String(err)));
+    }
+  };
+
+  // Auto-create room after approval succeeds
   useEffect(() => {
     if (isApproveSuccess) {
       play('ui_click');
       toast({
         title: t("createRoom.usdtApproved"),
-        description: t("createRoom.roomCreatedDesc"),
+        description: "Creating room...",
       });
-      setApprovalStep('approved');
       resetApprove();
       refetchAllowance();
+      // Immediately trigger room creation after approval
+      handleCreateRoomInternal();
     }
-  }, [isApproveSuccess, play, toast, resetApprove, refetchAllowance, t]);
+  }, [isApproveSuccess]);
 
   useEffect(() => {
     if (approveError) {
@@ -224,6 +255,30 @@ const CreateRoom = () => {
     }
   };
 
+  // Called when user clicks "Continue to Wallet" in modal
+  const handleDepositConfirm = async () => {
+    const isPolygon = await checkPolygonNetwork();
+    if (!isPolygon) return;
+
+    // Check current allowance - if sufficient, skip approve and create room directly
+    await refetchAllowance();
+    const currentAllowanceVal = currentAllowance ?? 0n;
+    
+    if (currentAllowanceVal >= entryFeeUnits) {
+      // Allowance sufficient - skip approve, create room immediately
+      console.log("Allowance sufficient, skipping approve. Creating room directly.");
+      toast({
+        title: "Allowance OK",
+        description: "Creating room...",
+      });
+      await handleCreateRoomInternal();
+    } else {
+      // Need approval first - this will auto-trigger createRoom on success
+      play('ui_click');
+      approveUsdt(entryFeeNum);
+    }
+  };
+
   const handleApproveClick = () => {
     if (!entryFee || entryFeeNum < MIN_ENTRY_FEE_USDT) {
       toast({
@@ -238,14 +293,6 @@ const CreateRoom = () => {
     setShowDepositModal(true);
   };
 
-  const handleApproveUsdt = async () => {
-    const isPolygon = await checkPolygonNetwork();
-    if (!isPolygon) return;
-    
-    play('ui_click');
-    approveUsdt(entryFeeNum);
-  };
-
   const handleCreateRoom = async () => {
     if (!entryFee || entryFeeNum < MIN_ENTRY_FEE_USDT) {
       toast({
@@ -255,32 +302,7 @@ const CreateRoom = () => {
       });
       return;
     }
-
-    const isPolygon = await checkPolygonNetwork();
-    if (!isPolygon) return;
-
-    play('ui_click');
-    
-    const maxPlayers = parseInt(players);
-    const isPrivate = roomType === "private";
-    const gameId = GAME_IDS[gameType] || 1;
-    const turnTime = parseInt(turnTimeSec);
-    
-    try {
-      // Gasless transaction: user signs, relayer pays gas (ERC-2771)
-      const { roomId } = await createRoomGasless(
-        entryFeeUnits,
-        maxPlayers,
-        isPrivate,
-        PLATFORM_FEE_BPS,
-        gameId,
-        turnTime
-      );
-      setLatestRoomId(roomId);
-      setIsCreateSuccess(true);
-    } catch (err) {
-      setCreateError(err instanceof Error ? err : new Error(String(err)));
-    }
+    await handleCreateRoomInternal();
   };
 
   const isApproveLoading = isApprovePending || isApproveConfirming;
@@ -531,7 +553,7 @@ const CreateRoom = () => {
         open={showDepositModal}
         onOpenChange={setShowDepositModal}
         stakeAmount={entryFeeNum}
-        onConfirm={handleApproveUsdt}
+        onConfirm={handleDepositConfirm}
       />
     </div>
   );
