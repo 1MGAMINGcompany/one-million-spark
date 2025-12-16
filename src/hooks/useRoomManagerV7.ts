@@ -3,7 +3,7 @@ import { BrowserProvider, Contract } from "ethers";
 import ABI from "@/abi/RoomManagerV7Production.abi.json";
 
 export const ROOMMANAGER_V7_ADDRESS =
-  "0xA039B03De894ebFa92933a9A7326c1715f040b96" as const;
+  "0x3a781aD953A3b731214463927089Af8AeC0eB0e3" as const;
 
 export function useRoomManagerV7() {
   const [isBusy, setIsBusy] = useState(false);
