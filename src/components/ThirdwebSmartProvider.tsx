@@ -100,11 +100,23 @@ export function ThirdwebSmartProvider({ children }: { children: ReactNode }) {
   );
 }
 
-// Hook to access smart account context
+// Hook to access smart account context (safe fallback)
 export function useSmartAccount() {
   const context = useContext(SmartAccountContext);
+  
+  // Return safe fallback if context is missing (provider not mounted)
   if (!context) {
-    throw new Error("useSmartAccount must be used within ThirdwebSmartProvider");
+    return {
+      smartAccount: null,
+      isConnecting: false,
+      isConnected: false,
+      address: undefined,
+      connectMetaMask: async () => { console.warn("ThirdwebSmartProvider not mounted"); },
+      connectWalletConnect: async () => { console.warn("ThirdwebSmartProvider not mounted"); },
+      disconnect: () => { console.warn("ThirdwebSmartProvider not mounted"); },
+      providerMissing: true,
+    };
   }
-  return context;
+  
+  return { ...context, providerMissing: false };
 }
