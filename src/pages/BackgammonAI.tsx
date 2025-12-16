@@ -811,13 +811,13 @@ const BackgammonAI = () => {
               <div className="relative h-full p-[3px] rounded-lg bg-gradient-to-br from-primary/40 via-primary/20 to-primary/40">
                 <div className="h-full flex bg-gradient-to-b from-midnight-light via-background to-midnight-light rounded-md overflow-hidden">
                   
-                  {/* Left Column - Points 13-18 (top) and 12-7 (bottom) */}
+                  {/* Left Column - Player moves: 18→13 (top), then 12→7 (bottom) */}
                   <div className="flex-1 flex flex-col p-1">
-                    {/* Top half: Points 13-18 */}
+                    {/* Top half: Points 18→13 (player moves DOWN through these) */}
                     <div className="flex-1 flex flex-col justify-evenly border-b border-primary/20">
-                      {[12, 13, 14, 15, 16, 17].map(i => renderMobilePoint(i, true))}
+                      {[17, 16, 15, 14, 13, 12].map(i => renderMobilePoint(i, true))}
                     </div>
-                    {/* Bottom half: Points 12-7 */}
+                    {/* Bottom half: Points 12→7 (player continues DOWN) */}
                     <div className="flex-1 flex flex-col justify-evenly">
                       {[11, 10, 9, 8, 7, 6].map(i => renderMobilePoint(i, true))}
                     </div>
@@ -867,13 +867,13 @@ const BackgammonAI = () => {
                     )}
                   </div>
 
-                  {/* Right Column - Points 19-24 (top) and 6-1 (bottom) */}
+                  {/* Right Column - Player moves: 24→19 (top), then 6→1 (bottom = HOME) */}
                   <div className="flex-1 flex flex-col p-1">
-                    {/* Top half: Points 19-24 */}
+                    {/* Top half: Points 24→19 (player starts here, moves DOWN) */}
                     <div className="flex-1 flex flex-col justify-evenly border-b border-primary/20">
-                      {[18, 19, 20, 21, 22, 23].map(i => renderMobilePoint(i, false))}
+                      {[23, 22, 21, 20, 19, 18].map(i => renderMobilePoint(i, false))}
                     </div>
-                    {/* Bottom half: Points 6-1 */}
+                    {/* Bottom half: Points 6→1 (player HOME, bears off from here) */}
                     <div className="flex-1 flex flex-col justify-evenly">
                       {[5, 4, 3, 2, 1, 0].map(i => renderMobilePoint(i, false))}
                     </div>
