@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react";
 import { useAccount, usePublicClient, useWalletClient } from "wagmi";
 import { toast } from "sonner";
-import { keccak256, toBytes, decodeEventLog, parseAbi } from "viem";
+import { keccak256, toBytes, decodeEventLog, parseAbi, encodeFunctionData, decodeFunctionResult } from "viem";
 import { polygon } from "viem/chains";
 import { ROOMMANAGER_V7_ADDRESS } from "@/lib/contractAddresses";
 
@@ -18,6 +18,11 @@ const RULES_HASH = keccak256(toBytes(RULES_TEXT));
 // RoomCreated event for parsing roomId
 const ROOM_CREATED_EVENT = parseAbi([
   "event RoomCreated(uint256 indexed roomId, address indexed creator, uint256 entryFee, uint8 maxPlayers, bool isPrivate, uint32 gameId, uint16 turnTimeSec)"
+]);
+
+// ABI for latestRoomId fallback
+const LATEST_ROOM_ABI = parseAbi([
+  "function latestRoomId() view returns (uint256)"
 ]);
 
 // RoomManagerV7Production ABI - minimal for our needs
@@ -63,8 +68,18 @@ const ROOM_MANAGER_ABI = [
     outputs: [],
     stateMutability: "nonpayable",
     type: "function"
+  },
+  {
+    inputs: [],
+    name: "latestRoomId",
+    outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
+    stateMutability: "view",
+    type: "function"
   }
 ] as const;
+
+// Check if gasless/relayer is configured (currently false - no backend)
+export const GASLESS_ENABLED = false;
 
 // Main hook for creating rooms
 export function useGaslessCreateRoom() {
@@ -108,7 +123,7 @@ export function useGaslessCreateRoom() {
     setIsBusy(true);
 
     try {
-      // Send transaction using wallet client
+      // Send transaction using wallet client (user pays gas - no relayer)
       const hash = await walletClient.writeContract({
         address: ROOMMANAGER_V7_ADDRESS as `0x${string}`,
         abi: ROOM_MANAGER_ABI,
@@ -125,11 +140,10 @@ export function useGaslessCreateRoom() {
       const receipt = await publicClient.waitForTransactionReceipt({ hash });
       console.log("Transaction receipt:", receipt);
 
-      // Parse RoomCreated event from logs
+      // STRATEGY 1: Parse RoomCreated event from logs
       let roomId: bigint | null = null;
       for (const log of receipt.logs) {
         try {
-          // Get topics from log
           const topics = (log as { topics?: `0x${string}`[] }).topics;
           if (!topics || topics.length === 0) continue;
           
@@ -149,8 +163,60 @@ export function useGaslessCreateRoom() {
         }
       }
 
+      // STRATEGY 2: Fallback - read latestRoomId via raw call
       if (roomId === null) {
-        throw new Error("Failed to parse roomId from transaction logs");
+        console.warn("Event parsing failed, falling back to latestRoomId()...");
+        try {
+          const callData = encodeFunctionData({
+            abi: LATEST_ROOM_ABI,
+            functionName: "latestRoomId",
+          });
+          
+          const result = await publicClient.call({
+            to: ROOMMANAGER_V7_ADDRESS as `0x${string}`,
+            data: callData,
+          });
+          
+          if (result.data) {
+            const decoded = decodeFunctionResult({
+              abi: LATEST_ROOM_ABI,
+              functionName: "latestRoomId",
+              data: result.data,
+            }) as bigint;
+            
+            if (decoded && decoded > 0n) {
+              roomId = decoded;
+              console.log("Got roomId from latestRoomId():", roomId.toString());
+            }
+          }
+        } catch (fallbackErr) {
+          console.error("latestRoomId() fallback failed:", fallbackErr);
+        }
+      }
+
+      // STRATEGY 3: If still null, try parsing indexed topic directly
+      if (roomId === null) {
+        console.warn("latestRoomId fallback failed, trying direct topic parse...");
+        for (const log of receipt.logs) {
+          const topics = (log as { topics?: `0x${string}`[] }).topics;
+          // RoomCreated has roomId as first indexed param (topics[1])
+          if (topics && topics.length >= 2) {
+            try {
+              const possibleRoomId = BigInt(topics[1]);
+              if (possibleRoomId > 0n) {
+                roomId = possibleRoomId;
+                console.log("Got roomId from topic[1]:", roomId.toString());
+                break;
+              }
+            } catch {
+              // Not a valid bigint, continue
+            }
+          }
+        }
+      }
+
+      if (roomId === null) {
+        throw new Error("Failed to get roomId after all fallback strategies");
       }
 
       toast.success(`Room #${roomId} created successfully!`);
@@ -168,6 +234,7 @@ export function useGaslessCreateRoom() {
     createRoomGasless,
     isBusy,
     isGaslessReady: true,
+    isGaslessEnabled: GASLESS_ENABLED,
   };
 }
 

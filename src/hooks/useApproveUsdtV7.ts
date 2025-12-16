@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { useWriteContract, useWaitForTransactionReceipt, useAccount } from "wagmi";
-import { parseUnits, isAddress, erc20Abi } from "viem";
+import { parseUnits, isAddress, erc20Abi, maxUint256 } from "viem";
 import { polygon } from "@/lib/wagmi-config";
 import { USDT_ADDRESS, ROOMMANAGER_V7_ADDRESS, USDT_DECIMALS } from "@/lib/contractAddresses";
 
@@ -19,6 +19,7 @@ export function useApproveUsdtV7() {
   const { writeContract, data: hash, isPending, error, reset } = useWriteContract();
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
 
+  // Approve exact amount
   const approve = useCallback((amountUsdt: number) => {
     if (!address) return;
     
@@ -38,11 +39,9 @@ export function useApproveUsdtV7() {
     const amountUnits = parseUnits(amountUsdt.toString(), USDT_DECIMALS);
     
     // Debug logging
-    console.log("APPROVE_USDT_CALL", {
+    console.log("APPROVE_USDT_CALL (exact)", {
       USDT: USDT_ADDRESS,
-      USDT_LENGTH: USDT_ADDRESS.length,
       SPENDER: ROOMMANAGER_V7_ADDRESS,
-      SPENDER_LENGTH: ROOMMANAGER_V7_ADDRESS.length,
       amountUsdt,
       amountUnits: amountUnits.toString(),
       userAddress: address,
@@ -58,8 +57,37 @@ export function useApproveUsdtV7() {
     });
   }, [address, writeContract]);
 
+  // Approve max (unlimited) amount for smoother UX
+  const approveMax = useCallback(() => {
+    if (!address) return;
+    
+    if (!isAddress(USDT_ADDRESS)) {
+      throw new Error("BAD_USDT_ADDRESS");
+    }
+    if (!isAddress(ROOMMANAGER_V7_ADDRESS)) {
+      throw new Error("BAD_ROOM_MANAGER_ADDRESS");
+    }
+    
+    console.log("APPROVE_USDT_CALL (max)", {
+      USDT: USDT_ADDRESS,
+      SPENDER: ROOMMANAGER_V7_ADDRESS,
+      amount: "MaxUint256",
+      userAddress: address,
+    });
+    
+    writeContract({
+      address: USDT_ADDRESS,
+      abi: erc20Abi,
+      functionName: "approve",
+      args: [ROOMMANAGER_V7_ADDRESS, maxUint256],
+      chain: polygon,
+      account: address,
+    });
+  }, [address, writeContract]);
+
   return {
     approve,
+    approveMax,
     hash,
     isPending,
     isConfirming,
