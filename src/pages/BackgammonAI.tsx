@@ -909,15 +909,16 @@ const BackgammonAI = () => {
                     )}
                   </div>
 
-                  {/* RIGHT Column - Player's HOME BOARD journey (12→1) */}
+                  {/* RIGHT Column - Player's HOME BOARD journey - REVERSED for clockwise flow */}
+                  {/* Player enters from BOTTOM (point 12) and moves UP to bear off at TOP (point 1) */}
                   <div className="flex-1 flex flex-col p-1">
-                    {/* Top half: Points 12→7 (player crosses bar here, continues DOWN) */}
+                    {/* Top half: Points 1→6 (player bears off from TOP) */}
                     <div className="flex-1 flex flex-col justify-evenly border-b border-primary/20">
-                      {[11, 10, 9, 8, 7, 6].map(i => renderMobilePoint(i, false))}
+                      {[0, 1, 2, 3, 4, 5].map(i => renderMobilePoint(i, false))}
                     </div>
-                    {/* Bottom half: Points 6→1 (player HOME, bears off from bottom) */}
+                    {/* Bottom half: Points 7→12 (player enters from bar at BOTTOM) */}
                     <div className="flex-1 flex flex-col justify-evenly">
-                      {[5, 4, 3, 2, 1, 0].map(i => renderMobilePoint(i, false))}
+                      {[6, 7, 8, 9, 10, 11].map(i => renderMobilePoint(i, false))}
                     </div>
                   </div>
                 </div>
