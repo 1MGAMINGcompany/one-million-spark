@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo, useEffect } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, RotateCcw, Gem, Star } from "lucide-react";
+import { ArrowLeft, RotateCcw, Gem, Star, Trophy } from "lucide-react";
 import { Dice3D, CheckerStack } from "@/components/BackgammonPieces";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -11,6 +11,7 @@ import {
   type Player,
   type GameState,
   type Move,
+  type GameResultType,
   getInitialBoard,
   canBearOff,
   getAllLegalMoves,
@@ -19,6 +20,7 @@ import {
   applyMove as applyMoveEngine,
   consumeDie,
   checkWinner,
+  getGameResult,
 } from "@/lib/backgammonEngine";
 import {
   type Difficulty as EngineDifficulty,
@@ -65,6 +67,19 @@ const toLegacyMove = (move: BackgammonMove): Move => ({
   dieValue: move.dieUsed,
 });
 
+// Format result type for display
+const formatResultType = (resultType: GameResultType | null): { label: string; multiplier: string; color: string } => {
+  switch (resultType) {
+    case "backgammon":
+      return { label: "BACKGAMMON!", multiplier: "3×", color: "text-red-500" };
+    case "gammon":
+      return { label: "GAMMON!", multiplier: "2×", color: "text-orange-500" };
+    case "single":
+    default:
+      return { label: "Single Game", multiplier: "1×", color: "text-primary" };
+  }
+};
+
 const BackgammonAI = () => {
   const { t } = useTranslation();
   const [searchParams] = useSearchParams();
@@ -91,6 +106,8 @@ const BackgammonAI = () => {
   const [validMoves, setValidMoves] = useState<number[]>([]);
   // Animation state for AI moves
   const [animatingMove, setAnimatingMove] = useState<{ from: number | 'BAR'; to: number } | null>(null);
+  // Game result state
+  const [gameResultInfo, setGameResultInfo] = useState<{ winner: Player | null; resultType: GameResultType | null; multiplier: number } | null>(null);
 
   const difficultyLabel = useMemo(() => {
     switch (difficulty) {
@@ -217,7 +234,10 @@ const BackgammonAI = () => {
         setValidMoves([]);
         
         if (newState.bearOff.player === 15) {
-          setGameStatus("You win! 🎉");
+          const result = getGameResult(newState);
+          setGameResultInfo(result);
+          const resultDisplay = formatResultType(result.resultType);
+          setGameStatus(`You win! ${resultDisplay.label}`);
           setGameOver(true);
           play('chess_win');
         } else if (newRemaining.length === 0) {
@@ -282,7 +302,10 @@ const BackgammonAI = () => {
           setRemainingMoves(newRemaining);
           
           if (newState.bearOff.player === 15) {
-            setGameStatus("You win! 🎉");
+            const result = getGameResult(newState);
+            setGameResultInfo(result);
+            const resultDisplay = formatResultType(result.resultType);
+            setGameStatus(`You win! ${resultDisplay.label}`);
             setGameOver(true);
             play('chess_win');
           } else if (newRemaining.length === 0) {
@@ -395,7 +418,10 @@ const BackgammonAI = () => {
       setRemainingMoves([]);
       
       if (currentState.bearOff.ai === 15) {
-        setGameStatus(t('gameAI.youLose'));
+        const result = getGameResult(currentState);
+        setGameResultInfo(result);
+        const resultDisplay = formatResultType(result.resultType);
+        setGameStatus(`${t('gameAI.youLose')} - ${resultDisplay.label}`);
         setGameOver(true);
         play('chess_lose');
       } else {
@@ -424,6 +450,7 @@ const BackgammonAI = () => {
     setGameOver(false);
     setIsThinking(false);
     setValidMoves([]);
+    setGameResultInfo(null);
   }, [t]);
 
   // ============== DESKTOP POINT RENDERING ==============
@@ -925,6 +952,15 @@ const BackgammonAI = () => {
                 >
                   {gameStatus}
                 </p>
+                {/* Game Result Display */}
+                {gameOver && gameResultInfo && (
+                  <div className="mt-2 flex items-center justify-center gap-2">
+                    <Trophy className={cn("w-4 h-4", formatResultType(gameResultInfo.resultType).color)} />
+                    <span className={cn("text-sm font-bold", formatResultType(gameResultInfo.resultType).color)}>
+                      {formatResultType(gameResultInfo.resultType).multiplier} Points
+                    </span>
+                  </div>
+                )}
                 {remainingMoves.length > 0 && currentPlayer === "player" && (
                   <p className="text-[10px] text-muted-foreground mt-0.5">
                     Moves left: {remainingMoves.join(", ")}
@@ -1096,6 +1132,22 @@ const BackgammonAI = () => {
                     >
                       {gameStatus}
                     </p>
+                    {/* Game Result Display */}
+                    {gameOver && gameResultInfo && (
+                      <div className="mt-3 p-3 rounded-lg bg-background/50 border border-primary/20">
+                        <div className="flex items-center justify-center gap-2">
+                          <Trophy className={cn("w-5 h-5", formatResultType(gameResultInfo.resultType).color)} />
+                          <span className={cn("text-lg font-bold", formatResultType(gameResultInfo.resultType).color)}>
+                            {formatResultType(gameResultInfo.resultType).multiplier} Points
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground text-center mt-1">
+                          {gameResultInfo.resultType === "backgammon" && "Opponent had checkers on bar or in your home!"}
+                          {gameResultInfo.resultType === "gammon" && "Opponent bore off no checkers!"}
+                          {gameResultInfo.resultType === "single" && "Standard win"}
+                        </p>
+                      </div>
+                    )}
                     {remainingMoves.length > 0 && currentPlayer === "player" && (
                       <p className="text-sm text-muted-foreground mt-2">
                         Remaining moves: {remainingMoves.join(", ")}
