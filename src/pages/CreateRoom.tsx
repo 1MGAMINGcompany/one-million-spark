@@ -23,6 +23,7 @@ import { Loader2, AlertCircle, Wallet, CheckCircle2, AlertTriangle } from "lucid
 import { useWeb3Modal } from "@web3modal/wagmi/react";
 import { ShareInviteDialog } from "@/components/ShareInviteDialog";
 import { useNotificationPermission } from "@/hooks/useRoomEvents";
+import { useBackgroundMusic } from "@/hooks/useBackgroundMusic";
 
 // Game ID mapping: Chess=1, Dominos=2, Backgammon=3, Checkers=4, Ludo=5
 const GAME_IDS: Record<string, number> = {
@@ -58,6 +59,7 @@ const CreateRoom = () => {
   const { isConnected, address } = useWallet();
   const { toast } = useToast();
   const { play } = useSound();
+  useBackgroundMusic(true);
   const [gameType, setGameType] = useState("chess");
   const [entryFee, setEntryFee] = useState("");
   const [players, setPlayers] = useState("2");

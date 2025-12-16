@@ -18,6 +18,7 @@ import { useJoinRoomV5 } from "@/hooks/useRoomManagerV5";
 import { usePublicRooms, type PublicRoom } from "@/hooks/usePublicRooms";
 import { usePlayerActiveRoom } from "@/hooks/usePlayerActiveRoom";
 import { useRoomContractEvents } from "@/hooks/useRoomContractEvents";
+import { useBackgroundMusic } from "@/hooks/useBackgroundMusic";
 
 // Local helpers for V7
 function getGameName(gameId: number): string {
@@ -41,6 +42,7 @@ const RoomList = () => {
   const { isConnected, address } = useWallet();
   const { play } = useSound();
   const { toast } = useToast();
+  useBackgroundMusic(true);
   const [gameFilter, setGameFilter] = useState("all");
   const [feeFilter, setFeeFilter] = useState("all");
   const [joiningRoomId, setJoiningRoomId] = useState<bigint | null>(null);
