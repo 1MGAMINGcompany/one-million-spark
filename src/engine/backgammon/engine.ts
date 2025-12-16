@@ -1,37 +1,44 @@
-// Backgammon game engine implementation
+// Backgammon game engine implementation - FULL PRODUCTION RULES
+// Deterministic, server-style validation
 
 import type { GameEngine, GameResult, PlayerId } from '../core/types';
 import type { BackgammonState, BackgammonMove } from './types';
 
+// ============= CONSTANTS =============
+
 // Direction of movement for each player
 const PLAYER_DIRECTION: Record<PlayerId, number> = {
-  'PLAYER_1': -1, // Moves from high index to low (toward 0)
-  'PLAYER_2': 1,  // Moves from low index to high (toward 23)
+  'PLAYER_1': -1, // Moves from high index to low (toward 0, bears off at -1)
+  'PLAYER_2': 1,  // Moves from low index to high (toward 23, bears off at 24)
 };
 
-// Home board ranges
+// Home board ranges (where player must have all checkers to bear off)
 const HOME_BOARD: Record<PlayerId, { start: number; end: number }> = {
   'PLAYER_1': { start: 0, end: 5 },   // Points 1-6 (indices 0-5)
   'PLAYER_2': { start: 18, end: 23 }, // Points 19-24 (indices 18-23)
 };
 
-// Entry point calculation for bar moves
+// ============= HELPER FUNCTIONS =============
+
+// Calculate bar entry point based on die value
 function getEntryPoint(die: number, player: PlayerId): number {
   if (player === 'PLAYER_1') {
-    // Player 1 enters from opponent's home (indices 18-23)
-    return 24 - die; // die 1 -> 23, die 6 -> 18
+    // Player 1 enters opponent's home (indices 18-23)
+    // die 1 → index 23, die 6 → index 18
+    return 24 - die;
   } else {
-    // Player 2 enters from opponent's home (indices 0-5)
-    return die - 1; // die 1 -> 0, die 6 -> 5
+    // Player 2 enters opponent's home (indices 0-5)
+    // die 1 → index 0, die 6 → index 5
+    return die - 1;
   }
 }
 
-// Check if a point can be landed on by the player
+// Check if a point can be landed on
 function canLandOn(board: number[], pointIndex: number, player: PlayerId): boolean {
   if (pointIndex < 0 || pointIndex > 23) return false;
   const value = board[pointIndex];
   if (player === 'PLAYER_1') {
-    // Player 1 uses positive values, can land if >=  -1 (empty, own, or single opponent)
+    // Player 1 uses positive values, can land if >= -1 (empty, own, or single opponent)
     return value >= -1;
   } else {
     // Player 2 uses negative values, can land if <= 1
@@ -47,10 +54,12 @@ function hasCheckerAt(board: number[], pointIndex: number, player: PlayerId): bo
 
 // Check if all checkers are in home board (can bear off)
 function canBearOff(state: BackgammonState, player: PlayerId): boolean {
+  // Must have no checkers on bar
   if (state.bar[player] > 0) return false;
   
   const home = HOME_BOARD[player];
   
+  // All checkers must be in home board
   for (let i = 0; i < 24; i++) {
     const isInHome = i >= home.start && i <= home.end;
     if (!isInHome && hasCheckerAt(state.board, i, player)) {
@@ -60,15 +69,15 @@ function canBearOff(state: BackgammonState, player: PlayerId): boolean {
   return true;
 }
 
-// Get the furthest checker from bearing off point
+// Get the furthest checker from bearing off point (for overshoot rule)
 function getFurthestChecker(board: number[], player: PlayerId): number {
   if (player === 'PLAYER_1') {
-    // Player 1 bears off toward index -1, so furthest is highest index with their checker
+    // Player 1 bears off toward index -1, furthest is highest index in home
     for (let i = 5; i >= 0; i--) {
       if (board[i] > 0) return i;
     }
   } else {
-    // Player 2 bears off toward index 24, so furthest is lowest index in home with their checker
+    // Player 2 bears off toward index 24, furthest is lowest index in home
     for (let i = 18; i <= 23; i++) {
       if (board[i] < 0) return i;
     }
@@ -76,20 +85,20 @@ function getFurthestChecker(board: number[], player: PlayerId): number {
   return -1;
 }
 
+// ============= MOVE GENERATION =============
+
 // Generate legal moves from the bar
 function generateBarMoves(state: BackgammonState, player: PlayerId): BackgammonMove[] {
   const moves: BackgammonMove[] = [];
   const usedDice = new Set<number>();
   
   for (const die of state.dice) {
-    // Avoid duplicate moves for same die value (doubles)
-    const key = die;
-    if (usedDice.has(key)) continue;
+    if (usedDice.has(die)) continue;
     
     const target = getEntryPoint(die, player);
     if (canLandOn(state.board, target, player)) {
       moves.push({ from: 'BAR', to: target, dieUsed: die });
-      usedDice.add(key);
+      usedDice.add(die);
     }
   }
   
@@ -116,7 +125,7 @@ function generatePointMoves(
     // Check for bearing off
     if (player === 'PLAYER_1' && targetIndex < 0) {
       if (canBearOff(state, player)) {
-        // Exact bear off or furthest checker with larger die
+        // Exact bear off (targetIndex === -1) or overshoot with furthest checker
         const furthest = getFurthestChecker(state.board, player);
         if (targetIndex === -1 || fromIndex === furthest) {
           moves.push({ from: fromIndex, to: 'OFF', dieUsed: die });
@@ -147,17 +156,16 @@ function generatePointMoves(
   return moves;
 }
 
-/**
- * Backgammon Game Engine implementation
- */
+// ============= GAME ENGINE =============
+
 export const backgammonEngine: GameEngine<BackgammonState, BackgammonMove> = {
   generateMoves(state: BackgammonState, player: PlayerId): BackgammonMove[] {
-    // If player has checkers on bar, they must move from bar first
+    // BAR RULE: If player has checkers on bar, must move from bar first
     if (state.bar[player] > 0) {
       return generateBarMoves(state, player);
     }
     
-    // Otherwise, generate all legal moves from board points
+    // Generate all legal moves from board points
     const allMoves: BackgammonMove[] = [];
     for (let i = 0; i < 24; i++) {
       allMoves.push(...generatePointMoves(state, i, player));
@@ -169,13 +177,8 @@ export const backgammonEngine: GameEngine<BackgammonState, BackgammonMove> = {
     const newBoard = [...state.board];
     const newBar = { ...state.bar };
     const newBorneOff = { ...state.borneOff };
-    const newDice = state.dice.filter((d, i) => {
-      // Remove first occurrence of used die
-      const idx = state.dice.indexOf(move.dieUsed);
-      return i !== idx;
-    });
     
-    // Actually remove the die properly
+    // Remove used die from dice array
     const diceArray = [...state.dice];
     const dieIndex = diceArray.indexOf(move.dieUsed);
     if (dieIndex > -1) diceArray.splice(dieIndex, 1);
@@ -196,7 +199,7 @@ export const backgammonEngine: GameEngine<BackgammonState, BackgammonMove> = {
     if (move.to === 'OFF') {
       newBorneOff[player]++;
     } else {
-      // Check for hit (single opponent checker)
+      // Check for HIT (single opponent checker = blot)
       if (newBoard[move.to] === opponentSign) {
         newBoard[move.to] = 0;
         newBar[opponent]++;
@@ -214,12 +217,45 @@ export const backgammonEngine: GameEngine<BackgammonState, BackgammonMove> = {
   },
 
   getResult(state: BackgammonState): GameResult {
+    // Check for winner
     if (state.borneOff['PLAYER_1'] === 15) {
-      return { finished: true, winner: 'PLAYER_1', reason: 'All checkers borne off' };
+      const loserBorneOff = state.borneOff['PLAYER_2'];
+      const loserBar = state.bar['PLAYER_2'];
+      let loserInWinnerHome = false;
+      for (let i = 0; i <= 5; i++) {
+        if (state.board[i] < 0) { loserInWinnerHome = true; break; }
+      }
+      
+      let reason = 'Single game';
+      if (loserBorneOff === 0) {
+        if (loserBar > 0 || loserInWinnerHome) {
+          reason = 'Backgammon (3x)';
+        } else {
+          reason = 'Gammon (2x)';
+        }
+      }
+      return { finished: true, winner: 'PLAYER_1', reason };
     }
+    
     if (state.borneOff['PLAYER_2'] === 15) {
-      return { finished: true, winner: 'PLAYER_2', reason: 'All checkers borne off' };
+      const loserBorneOff = state.borneOff['PLAYER_1'];
+      const loserBar = state.bar['PLAYER_1'];
+      let loserInWinnerHome = false;
+      for (let i = 18; i <= 23; i++) {
+        if (state.board[i] > 0) { loserInWinnerHome = true; break; }
+      }
+      
+      let reason = 'Single game';
+      if (loserBorneOff === 0) {
+        if (loserBar > 0 || loserInWinnerHome) {
+          reason = 'Backgammon (3x)';
+        } else {
+          reason = 'Gammon (2x)';
+        }
+      }
+      return { finished: true, winner: 'PLAYER_2', reason };
     }
+    
     return { finished: false };
   },
 
@@ -233,85 +269,95 @@ export const backgammonEngine: GameEngine<BackgammonState, BackgammonMove> = {
     score -= state.borneOff[opponent] * 100;
     
     // Checkers on bar are very bad
-    score -= state.bar[player] * 50;
-    score += state.bar[opponent] * 50;
+    score -= state.bar[player] * 60;
+    score += state.bar[opponent] * 60;
     
-    // Calculate pip count (lower is better for own, higher for opponent)
-    const playerDirection = PLAYER_DIRECTION[player];
+    // Calculate pip count (lower is better)
     let playerPips = 0;
     let opponentPips = 0;
     
     for (let i = 0; i < 24; i++) {
       const value = state.board[i];
       if (value > 0) {
-        // PLAYER_1 checkers
-        const pips = (i + 1) * value; // Distance from bearing off
-        if (player === 'PLAYER_1') {
-          playerPips += pips;
-        } else {
-          opponentPips += pips;
-        }
+        // PLAYER_1 checkers - distance from bearing off is (i + 1)
+        const pips = (i + 1) * value;
+        if (player === 'PLAYER_1') playerPips += pips;
+        else opponentPips += pips;
       } else if (value < 0) {
-        // PLAYER_2 checkers
+        // PLAYER_2 checkers - distance from bearing off is (24 - i)
         const pips = (24 - i) * Math.abs(value);
-        if (player === 'PLAYER_2') {
-          playerPips += pips;
-        } else {
-          opponentPips += pips;
-        }
+        if (player === 'PLAYER_2') playerPips += pips;
+        else opponentPips += pips;
       }
     }
+    
+    // Add bar checkers to pip count (25 pips from bearing off)
+    playerPips += state.bar[player] * 25;
+    opponentPips += state.bar[opponent] * 25;
     
     // Lower pip count is better
     score -= playerPips * 0.5;
     score += opponentPips * 0.5;
     
-    // Bonus for made points (2+ checkers = safe)
+    // Bonus for made points (2+ checkers = safe, can't be hit)
     for (let i = 0; i < 24; i++) {
       const value = state.board[i];
-      if (player === 'PLAYER_1' && value >= 2) {
-        score += 5;
-      } else if (player === 'PLAYER_2' && value <= -2) {
-        score += 5;
-      }
+      if (player === 'PLAYER_1' && value >= 2) score += 8;
+      else if (player === 'PLAYER_2' && value <= -2) score += 8;
+    }
+    
+    // Bonus for blocking points in opponent's home (primes)
+    const opponentHome = HOME_BOARD[opponent];
+    for (let i = opponentHome.start; i <= opponentHome.end; i++) {
+      if (player === 'PLAYER_1' && state.board[i] >= 2) score += 15;
+      else if (player === 'PLAYER_2' && state.board[i] <= -2) score += 15;
     }
     
     // Penalty for blots (single checkers that can be hit)
     for (let i = 0; i < 24; i++) {
       const value = state.board[i];
-      if (player === 'PLAYER_1' && value === 1) {
-        score -= 10;
-      } else if (player === 'PLAYER_2' && value === -1) {
-        score -= 10;
-      }
+      if (player === 'PLAYER_1' && value === 1) score -= 12;
+      else if (player === 'PLAYER_2' && value === -1) score -= 12;
     }
     
     return score;
   },
 };
 
-// Helper to convert legacy state to engine state
+// ============= HELPERS =============
+
+// Convert engine move to legacy format
 export function toLegacyMove(move: BackgammonMove): { from: number; to: number; dieValue: number } {
   return {
     from: move.from === 'BAR' ? -1 : move.from,
-    to: move.to === 'OFF' ? -2 : move.to, // Use -2 for player bear off (matches legacy)
+    to: move.to === 'OFF' ? -2 : move.to,
     dieValue: move.dieUsed,
   };
 }
 
-// Initial board setup
+// Initial board setup (standard backgammon)
 export function getInitialBackgammonState(startingPlayer: PlayerId = 'PLAYER_1'): BackgammonState {
   const board = Array(24).fill(0);
-  // PLAYER_1 (positive) - moves from 24->1 (high to low index)
-  board[23] = 2;  // Point 24
-  board[12] = 5;  // Point 13
-  board[7] = 3;   // Point 8
-  board[5] = 5;   // Point 6
-  // PLAYER_2 (negative) - moves from 1->24 (low to high index)
-  board[0] = -2;  // Point 1
-  board[11] = -5; // Point 12
-  board[16] = -3; // Point 17
-  board[18] = -5; // Point 19
+  
+  // PLAYER_1 (positive) - moves from 24→1 (high to low index)
+  // 2 on point 24 (index 23)
+  board[23] = 2;
+  // 5 on point 13 (index 12)
+  board[12] = 5;
+  // 3 on point 8 (index 7)
+  board[7] = 3;
+  // 5 on point 6 (index 5)
+  board[5] = 5;
+  
+  // PLAYER_2 (negative) - moves from 1→24 (low to high index)
+  // 2 on point 1 (index 0)
+  board[0] = -2;
+  // 5 on point 12 (index 11)
+  board[11] = -5;
+  // 3 on point 17 (index 16)
+  board[16] = -3;
+  // 5 on point 19 (index 18)
+  board[18] = -5;
   
   return {
     board,
