@@ -9,13 +9,19 @@ import {
 } from "thirdweb";
 import { polygon } from "thirdweb/chains";
 import { ethers6Adapter } from "thirdweb/adapters/ethers6";
-import { BrowserProvider, formatUnits } from "ethers";
+import { BrowserProvider } from "ethers";
 import ABI from "@/abi/RoomManagerV7Production.abi.json";
 import { logCreateRoomDebug } from "@/lib/txErrorLogger";
+import {
+  ROOMMANAGER_V7_ADDRESS,
+  TRUSTED_FORWARDER_ADDRESS,
+  USDT_ADDRESS,
+  USDT_DECIMALS,
+  POLYGON_CHAIN_ID_HEX,
+} from "@/lib/contractAddresses";
 
-export const ROOMMANAGER_V7_ADDRESS = "0xA039B03De894ebFa92933a9A7326c1715f040b96" as const;
-export const TRUSTED_FORWARDER_ADDRESS = "0x819e9EEf99446117476820aA2Ef754F068D7305e" as const;
-export const USDT_TOKEN_ADDRESS = "0xc2132D05D31c914a87C6611C10748AEb04B58e8F" as const;
+// Re-export addresses for backwards compatibility
+export { ROOMMANAGER_V7_ADDRESS, TRUSTED_FORWARDER_ADDRESS, USDT_ADDRESS as USDT_TOKEN_ADDRESS };
 
 // Thirdweb client - uses env variable for gasless transactions
 const thirdwebClient = createThirdwebClient({
@@ -25,7 +31,7 @@ const thirdwebClient = createThirdwebClient({
 // Gasless config using OpenZeppelin ERC-2771 pattern
 const GASLESS_CONFIG = {
   provider: "openzeppelin" as const,
-  relayerUrl: "https://prj_cmj4z7zde06ad7j0lbgauwexy.engine.thirdweb.com",
+  relayerUrl: import.meta.env.VITE_RELAYER_URL || "https://prj_cmj4z7zde06ad7j0lbgauwexy.engine.thirdweb.com",
   relayerForwarderAddress: TRUSTED_FORWARDER_ADDRESS,
 } as any;
 
@@ -72,6 +78,11 @@ function getThirdwebContract() {
   });
 }
 
+// Helper to format USDT units
+function formatUsdtUnits(units: bigint): string {
+  return (Number(units) / 10 ** USDT_DECIMALS).toFixed(USDT_DECIMALS);
+}
+
 export function useGaslessCreateRoom() {
   const [isBusy, setIsBusy] = useState(false);
 
@@ -89,6 +100,13 @@ export function useGaslessCreateRoom() {
     // Collect debug context upfront
     const chainId = await getWalletChainId();
     const walletAddress = await getWalletAddress();
+    
+    // Validate chain ID
+    if (chainId !== POLYGON_CHAIN_ID_HEX) {
+      setIsBusy(false);
+      throw new Error(`WRONG_NETWORK: Expected ${POLYGON_CHAIN_ID_HEX} (Polygon), got ${chainId}`);
+    }
+
     const debugContext = {
       chainId,
       walletAddress,
@@ -102,26 +120,28 @@ export function useGaslessCreateRoom() {
         gameId,
         turnTimeSec,
       },
-      usdtTokenAddress: USDT_TOKEN_ADDRESS,
+      usdtTokenAddress: USDT_ADDRESS,
       stakeRaw: entryFeeUnits.toString(),
-      stakeFormatted: formatUnits(entryFeeUnits, 6) + ' USDT',
+      stakeFormatted: formatUsdtUnits(entryFeeUnits) + ' USDT',
     };
 
     try {
       const account = await getThirdwebAccount();
       const contract = getThirdwebContract();
 
-      // Prepare the createRoom transaction (gameId is uint32 per contract ABI)
+      // Prepare the createRoom transaction with explicit types matching contract
+      // entryFee: uint256, maxPlayers: uint8, isPrivate: bool, 
+      // platformFeeBps: uint16, gameId: uint32, turnTimeSec: uint16
       const transaction = prepareContractCall({
         contract,
-        method: "function createRoom(uint256 entryFee, uint8 maxPlayers, bool isPrivate, uint16 platformFeeBps, uint32 gameId, uint16 turnTimeSec)",
+        method: "function createRoom(uint256 entryFee, uint8 maxPlayers, bool isPrivate, uint16 platformFeeBps, uint32 gameId, uint16 turnTimeSec) returns (uint256)",
         params: [
-          entryFeeUnits,
-          maxPlayers,
-          isPrivate,
-          platformFeeBps,
-          gameId,
-          turnTimeSec,
+          entryFeeUnits,           // uint256 - BigInt
+          maxPlayers,              // uint8 - number (will be cast)
+          isPrivate,               // bool
+          platformFeeBps,          // uint16 - number (will be cast)
+          gameId,                  // uint32 - number (will be cast)
+          turnTimeSec,             // uint16 - number (will be cast)
         ],
       });
 
@@ -140,13 +160,11 @@ export function useGaslessCreateRoom() {
       console.log("  [5] turnTimeSec (uint16):", turnTimeSec);
       console.log("--- Stake Info ---");
       console.log("stake amount (raw units):", entryFeeUnits.toString());
-      console.log("stake amount (formatted):", formatUnits(entryFeeUnits, 6), "USDT");
-      console.log("USDT token address:", USDT_TOKEN_ADDRESS);
-      console.log("feeRecipient address:", "contract-defined (owner)");
-      console.log("gameId / gameType:", gameId);
-      console.log("--- Transaction Object ---");
-      console.log("tx.to:", ROOMMANAGER_V7_ADDRESS);
-      console.log("tx.data:", transaction);
+      console.log("stake amount (formatted):", formatUsdtUnits(entryFeeUnits), "USDT");
+      console.log("USDT token address:", USDT_ADDRESS);
+      console.log("--- Gasless Config ---");
+      console.log("relayerUrl:", GASLESS_CONFIG.relayerUrl);
+      console.log("trustedForwarder:", TRUSTED_FORWARDER_ADDRESS);
       console.log("tx.value:", "0 (gasless via relayer)");
       console.groupEnd();
 
@@ -157,14 +175,23 @@ export function useGaslessCreateRoom() {
         gasless: GASLESS_CONFIG,
       });
 
-      // Wait for receipt (static import - no dynamic loading)
-      const receipt = await waitForReceipt({ client: thirdwebClient, chain: polygon, transactionHash: result.transactionHash });
+      // Wait for receipt
+      const receipt = await waitForReceipt({ 
+        client: thirdwebClient, 
+        chain: polygon, 
+        transactionHash: result.transactionHash 
+      });
 
-      // Fetch latest room ID from contract (static import - no dynamic loading)
+      // Fetch latest room ID from contract
       const roomId = await readContract({
         contract,
         method: "function latestRoomId() view returns (uint256)",
         params: [],
+      });
+
+      console.log("CREATE_ROOM_SUCCESS:", {
+        transactionHash: receipt.transactionHash,
+        roomId: roomId.toString(),
       });
 
       return {
@@ -174,6 +201,16 @@ export function useGaslessCreateRoom() {
     } catch (err) {
       // Log comprehensive debug info on failure
       logCreateRoomDebug(debugContext, err);
+      
+      // Extract revert reason if available
+      const errorMsg = (err as any)?.message || String(err);
+      const revertMatch = errorMsg.match(/reason="([^"]+)"/);
+      const dataMatch = errorMsg.match(/data="([^"]+)"/);
+      
+      if (revertMatch || dataMatch) {
+        console.error("REVERT_REASON:", revertMatch?.[1] || dataMatch?.[1]);
+      }
+      
       throw err;
     } finally {
       setIsBusy(false);
@@ -215,8 +252,12 @@ export function useGaslessJoinRoom() {
         gasless: GASLESS_CONFIG,
       });
 
-      // Wait for receipt (static import - no dynamic loading)
-      const receipt = await waitForReceipt({ client: thirdwebClient, chain: polygon, transactionHash: result.transactionHash });
+      // Wait for receipt
+      const receipt = await waitForReceipt({ 
+        client: thirdwebClient, 
+        chain: polygon, 
+        transactionHash: result.transactionHash 
+      });
 
       setIsSuccess(true);
       return {
@@ -274,8 +315,12 @@ export function useGaslessCancelRoom() {
         gasless: GASLESS_CONFIG,
       });
 
-      // Wait for receipt (static import - no dynamic loading)
-      const receipt = await waitForReceipt({ client: thirdwebClient, chain: polygon, transactionHash: result.transactionHash });
+      // Wait for receipt
+      const receipt = await waitForReceipt({ 
+        client: thirdwebClient, 
+        chain: polygon, 
+        transactionHash: result.transactionHash 
+      });
 
       setIsSuccess(true);
       return {
@@ -339,8 +384,12 @@ export function useGaslessFinishGame() {
         gasless: GASLESS_CONFIG,
       });
 
-      // Wait for receipt (static import - no dynamic loading)
-      const receipt = await waitForReceipt({ client: thirdwebClient, chain: polygon, transactionHash: result.transactionHash });
+      // Wait for receipt
+      const receipt = await waitForReceipt({ 
+        client: thirdwebClient, 
+        chain: polygon, 
+        transactionHash: result.transactionHash 
+      });
 
       setIsSuccess(true);
       return {

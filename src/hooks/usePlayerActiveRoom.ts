@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
 import { BrowserProvider, Contract } from "ethers";
 import ABI from "@/abi/RoomManagerV7Production.abi.json";
+import { ROOMMANAGER_V7_ADDRESS } from "@/lib/contractAddresses";
 
-export const ROOMMANAGER_V7_ADDRESS =
-  "0xA039B03De894ebFa92933a9A7326c1715f040b96" as const;
+// Re-export for backwards compatibility
+export { ROOMMANAGER_V7_ADDRESS };
 
 export interface ActiveRoom {
   id: bigint;
