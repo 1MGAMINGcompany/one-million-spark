@@ -117,6 +117,31 @@ export function useGaslessCreateRoom() {
         ],
       });
 
+      // Log ALL inputs immediately before sending transaction
+      console.group("CREATE_ROOM_INPUTS");
+      console.log("chainId:", chainId);
+      console.log("wallet address (msg.sender):", walletAddress);
+      console.log("RoomManager contract address:", ROOMMANAGER_V7_ADDRESS);
+      console.log("function name:", "createRoom");
+      console.log("--- Parameters (in order) ---");
+      console.log("  [0] entryFee (uint256):", entryFeeUnits.toString());
+      console.log("  [1] maxPlayers (uint8):", maxPlayers);
+      console.log("  [2] isPrivate (bool):", isPrivate);
+      console.log("  [3] platformFeeBps (uint16):", platformFeeBps);
+      console.log("  [4] gameId (uint8):", gameId);
+      console.log("  [5] turnTimeSec (uint16):", turnTimeSec);
+      console.log("--- Stake Info ---");
+      console.log("stake amount (raw units):", entryFeeUnits.toString());
+      console.log("stake amount (formatted):", formatUnits(entryFeeUnits, 6), "USDT");
+      console.log("USDT token address:", USDT_TOKEN_ADDRESS);
+      console.log("feeRecipient address:", "contract-defined (owner)");
+      console.log("gameId / gameType:", gameId);
+      console.log("--- Transaction Object ---");
+      console.log("tx.to:", ROOMMANAGER_V7_ADDRESS);
+      console.log("tx.data:", transaction);
+      console.log("tx.value:", "0 (gasless via relayer)");
+      console.groupEnd();
+
       // Send gasless transaction via relayer (user signs, relayer pays gas)
       const result = await sendTransaction({
         account,
