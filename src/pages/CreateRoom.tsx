@@ -24,6 +24,7 @@ import { useWeb3Modal } from "@web3modal/wagmi/react";
 import { ShareInviteDialog } from "@/components/ShareInviteDialog";
 import { useNotificationPermission } from "@/hooks/useRoomEvents";
 import { useBackgroundMusic } from "@/hooks/useBackgroundMusic";
+import { DepositConfirmModal } from "@/components/DepositConfirmModal";
 
 // Game ID mapping: Chess=1, Dominos=2, Backgammon=3, Checkers=4, Ludo=5
 const GAME_IDS: Record<string, number> = {
@@ -70,6 +71,7 @@ const CreateRoom = () => {
   const [createdRoomId, setCreatedRoomId] = useState<string | null>(null);
   const [createdGameName, setCreatedGameName] = useState<string>("");
   const [approvalStep, setApprovalStep] = useState<'idle' | 'approved'>('idle');
+  const [showDepositModal, setShowDepositModal] = useState(false);
   
   const { requestPermission } = useNotificationPermission();
 
@@ -202,7 +204,7 @@ const CreateRoom = () => {
     }
   };
 
-  const handleApproveUsdt = async () => {
+  const handleApproveClick = () => {
     if (!entryFee || entryFeeNum < MIN_ENTRY_FEE_USDT) {
       toast({
         title: t("createRoom.invalidFee"),
@@ -212,6 +214,11 @@ const CreateRoom = () => {
       return;
     }
     
+    // Show deposit confirmation modal BEFORE any wallet action
+    setShowDepositModal(true);
+  };
+
+  const handleApproveUsdt = async () => {
     const isPolygon = await checkPolygonNetwork();
     if (!isPolygon) return;
     
@@ -447,7 +454,7 @@ const CreateRoom = () => {
                 className="w-full" 
                 size="lg"
                 variant={hasSufficientAllowance ? "outline" : "default"}
-                onClick={handleApproveUsdt}
+                onClick={handleApproveClick}
                 disabled={isApproveLoading || isCreateLoading || !entryFee || !!feeError || hasSufficientAllowance || isCheckingActiveRoom}
               >
                 {isApproveLoading ? (
@@ -498,6 +505,13 @@ const CreateRoom = () => {
         onOpenChange={setShowShareDialog}
         roomId={createdRoomId || ""}
         gameName={createdGameName}
+      />
+
+      <DepositConfirmModal
+        open={showDepositModal}
+        onOpenChange={setShowDepositModal}
+        stakeAmount={entryFeeNum}
+        onConfirm={handleApproveUsdt}
       />
     </div>
   );
