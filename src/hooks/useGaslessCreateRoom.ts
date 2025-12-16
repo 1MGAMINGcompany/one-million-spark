@@ -25,6 +25,7 @@ const thirdwebClient = createThirdwebClient({
 // Gasless config using OpenZeppelin ERC-2771 pattern
 const GASLESS_CONFIG = {
   provider: "openzeppelin" as const,
+  relayerUrl: "https://prj_cmj4z7zde06ad7j0lbgauwexy.engine.thirdweb.com",
   relayerForwarderAddress: TRUSTED_FORWARDER_ADDRESS,
 } as any;
 
