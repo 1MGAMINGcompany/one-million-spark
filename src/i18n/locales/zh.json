@@ -212,7 +212,11 @@
     "step2Title": "第二步 – 在交易所购买USDT",
     "step2Desc": "在Coinbase、Binance或Kraken等交易所创建账户。完成验证流程后，使用银行转账或银行卡等方式购买USDT。",
     "step3Title": "第三步 – 提现到Polygon",
-    "step3Desc": "从交易所将USDT提现到您的钱包地址。提现时请选择Polygon网络以降低手续费。资金将在几分钟内到账。"
+    "step3Desc": "从交易所将USDT提现到您的钱包地址。提现时请选择Polygon网络以降低手续费。资金将在几分钟内到账。",
+    "disclaimerTitle": "重要信息",
+    "disclaimerPoint1": "我们不购买、出售或交易加密货币。1M Gaming仅是一个技能游戏平台。",
+    "disclaimerPoint2": "所有入场费和支付均使用Polygon网络上的USDT。",
+    "disclaimerPoint3": "我们支付所有Gas费用 – 您只需支付游戏入场费。"
   },
   "createRoom": {
     "title": "创建游戏房间",
@@ -419,6 +423,7 @@
     "company": "1 MILLION GAMING co",
     "tagline": "技能 · 策略 · 成功",
     "gameRules": "游戏规则",
+    "termsOfService": "服务条款",
     "support": "支持",
     "privacyPolicy": "隐私政策"
   },
@@ -514,5 +519,25 @@
     "drawAccepted": "和棋已接受",
     "drawDeclined": "和棋被拒绝",
     "resigned": "玩家认输"
+  },
+  "terms": {
+    "title": "服务条款",
+    "lastUpdated": "最后更新：2024年12月",
+    "skillBasedTitle": "100%技能游戏",
+    "skillBasedText": "1M Gaming是一个竞技技能游戏平台。所有游戏完全由玩家技能和策略决定——绝非靠运气或偶然。",
+    "skillPoint1": "无赌博 – 结果仅由技能决定",
+    "skillPoint2": "无随机支付 – 获胜者凭借卓越的游戏技术赢得奖励",
+    "skillPoint3": "随机数生成器不影响游戏结果",
+    "cryptoTitle": "加密货币政策",
+    "cryptoText": "1M Gaming不购买、出售或交易加密货币。我们是游戏平台，不是加密货币交易所。",
+    "cryptoPoint1": "我们不将法定货币兑换为加密货币",
+    "cryptoPoint2": "所有交易使用Polygon网络上的USDT",
+    "cryptoPoint3": "玩家必须通过持牌交易所独立获取USDT",
+    "gasFeesTitle": "Gas费用",
+    "gasFeesText": "1M Gaming承担所有游戏交易的区块链Gas费用。您只需支付游戏入场费——其余由我们负责。这确保了无隐藏成本的流畅游戏体验。",
+    "fairPlayTitle": "公平竞技承诺",
+    "fairPlayText": "所有游戏使用可验证的链上逻辑，并为Ludo、西洋双陆棋和多米诺等游戏采用承诺-揭示随机性。游戏状态存储在区块链上，确保透明度和争议解决。",
+    "noticeTitle": "重要通知",
+    "noticeText": "使用1M Gaming即表示您确认年满18岁，并同意仅参与技能游戏竞技。我们保留暂停参与串通或不公平游戏的账户的权利。"
   }
 }

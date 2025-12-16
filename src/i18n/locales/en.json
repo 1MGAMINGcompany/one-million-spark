@@ -188,7 +188,11 @@
     "step2Title": "Step 2 – Buy USDT on an Exchange",
     "step2Desc": "Create an account on a crypto exchange like Coinbase, Binance, or Kraken. Complete the verification process, then purchase USDT using your preferred payment method such as bank transfer or card.",
     "step3Title": "Step 3 – Withdraw to Polygon",
-    "step3Desc": "Withdraw your USDT from the exchange to your wallet address. Make sure to select the Polygon network when withdrawing to minimize fees. The funds should arrive within a few minutes."
+    "step3Desc": "Withdraw your USDT from the exchange to your wallet address. Make sure to select the Polygon network when withdrawing to minimize fees. The funds should arrive within a few minutes.",
+    "disclaimerTitle": "Important Information",
+    "disclaimerPoint1": "We do not buy, sell, or trade cryptocurrency. 1M Gaming is a skill-based gaming platform only.",
+    "disclaimerPoint2": "All entry fees and payouts are made in USDT on the Polygon network.",
+    "disclaimerPoint3": "We pay all gas fees – you only pay your game entry fee."
   },
   "createRoom": {
     "title": "Create Game Room",
@@ -304,6 +308,7 @@
     "company": "1 MILLION GAMING co",
     "tagline": "Skill · Strategy · Success",
     "gameRules": "Game Rules",
+    "termsOfService": "Terms of Service",
     "support": "Support",
     "privacyPolicy": "Privacy Policy"
   },
@@ -399,5 +404,25 @@
     "drawAccepted": "Draw accepted",
     "drawDeclined": "Draw declined",
     "resigned": "Player resigned"
+  },
+  "terms": {
+    "title": "Terms of Service",
+    "lastUpdated": "Last updated: December 2024",
+    "skillBasedTitle": "100% Skill-Based Games",
+    "skillBasedText": "1M Gaming is a competitive skill-based gaming platform. All games are determined purely by player skill and strategy – never by luck or chance.",
+    "skillPoint1": "No gambling – outcomes are determined by skill only",
+    "skillPoint2": "No chance-based payouts – winners earn through superior play",
+    "skillPoint3": "No random number generators affect game outcomes",
+    "cryptoTitle": "Cryptocurrency Policy",
+    "cryptoText": "1M Gaming does not buy, sell, or trade cryptocurrency. We are a gaming platform, not a crypto exchange.",
+    "cryptoPoint1": "We do not exchange fiat currency for cryptocurrency",
+    "cryptoPoint2": "All transactions use USDT on the Polygon network",
+    "cryptoPoint3": "Players must acquire USDT independently through licensed exchanges",
+    "gasFeesTitle": "Gas Fees",
+    "gasFeesText": "1M Gaming covers all blockchain gas fees for gameplay transactions. You only pay your game entry fee – we handle the rest. This ensures a seamless gaming experience without hidden costs.",
+    "fairPlayTitle": "Fair Play Commitment",
+    "fairPlayText": "All games use verifiable on-chain logic with commit-reveal randomness for games like Ludo, Backgammon, and Dominos. Game states are stored on the blockchain for transparency and dispute resolution.",
+    "noticeTitle": "Important Notice",
+    "noticeText": "By using 1M Gaming, you confirm you are 18+ and agree to compete in skill-based games only. We reserve the right to suspend accounts engaging in collusion or unfair play."
   }
 }

@@ -212,7 +212,11 @@
     "step2Title": "Étape 2 – Achetez des USDT sur une Plateforme d'Échange",
     "step2Desc": "Créez un compte sur une plateforme d'échange comme Coinbase, Binance ou Kraken. Complétez le processus de vérification, puis achetez des USDT avec votre méthode de paiement préférée comme le virement bancaire ou la carte.",
     "step3Title": "Étape 3 – Retirez vers Polygon",
-    "step3Desc": "Retirez vos USDT de la plateforme vers l'adresse de votre portefeuille. Assurez-vous de sélectionner le réseau Polygon lors du retrait pour minimiser les frais. Les fonds devraient arriver en quelques minutes."
+    "step3Desc": "Retirez vos USDT de la plateforme vers l'adresse de votre portefeuille. Assurez-vous de sélectionner le réseau Polygon lors du retrait pour minimiser les frais. Les fonds devraient arriver en quelques minutes.",
+    "disclaimerTitle": "Informations Importantes",
+    "disclaimerPoint1": "Nous n'achetons, ne vendons ni n'échangeons de cryptomonnaies. 1M Gaming est uniquement une plateforme de jeux d'adresse.",
+    "disclaimerPoint2": "Tous les frais d'entrée et paiements sont effectués en USDT sur le réseau Polygon.",
+    "disclaimerPoint3": "Nous payons tous les frais de gas – vous ne payez que vos frais d'entrée au jeu."
   },
   "createRoom": {
     "title": "Créer une Salle de Jeu",
@@ -419,6 +423,7 @@
     "company": "1 MILLION GAMING co",
     "tagline": "Compétence · Stratégie · Succès",
     "gameRules": "Règles du Jeu",
+    "termsOfService": "Conditions d'Utilisation",
     "support": "Support",
     "privacyPolicy": "Politique de Confidentialité"
   },
@@ -514,5 +519,25 @@
     "drawAccepted": "Égalité acceptée",
     "drawDeclined": "Égalité refusée",
     "resigned": "Le joueur a abandonné"
+  },
+  "terms": {
+    "title": "Conditions d'Utilisation",
+    "lastUpdated": "Dernière mise à jour : Décembre 2024",
+    "skillBasedTitle": "Jeux 100% d'Adresse",
+    "skillBasedText": "1M Gaming est une plateforme de jeux compétitifs basés sur l'adresse. Tous les jeux sont déterminés uniquement par l'habileté et la stratégie du joueur – jamais par la chance ou le hasard.",
+    "skillPoint1": "Pas de jeux de hasard – les résultats sont déterminés uniquement par l'adresse",
+    "skillPoint2": "Pas de gains basés sur le hasard – les gagnants gagnent par un jeu supérieur",
+    "skillPoint3": "Les générateurs de nombres aléatoires n'affectent pas les résultats des jeux",
+    "cryptoTitle": "Politique sur les Cryptomonnaies",
+    "cryptoText": "1M Gaming n'achète, ne vend ni n'échange de cryptomonnaies. Nous sommes une plateforme de jeux, pas une bourse de crypto.",
+    "cryptoPoint1": "Nous n'échangeons pas de monnaie fiduciaire contre des cryptomonnaies",
+    "cryptoPoint2": "Toutes les transactions utilisent l'USDT sur le réseau Polygon",
+    "cryptoPoint3": "Les joueurs doivent acquérir l'USDT indépendamment via des bourses agréées",
+    "gasFeesTitle": "Frais de Gas",
+    "gasFeesText": "1M Gaming couvre tous les frais de gas blockchain pour les transactions de jeu. Vous ne payez que vos frais d'entrée au jeu – nous nous occupons du reste. Cela garantit une expérience de jeu fluide sans coûts cachés.",
+    "fairPlayTitle": "Engagement pour le Fair-Play",
+    "fairPlayText": "Tous les jeux utilisent une logique vérifiable sur la blockchain avec un système d'engagement-révélation pour les jeux comme le Ludo, le Backgammon et les Dominos. Les états de jeu sont stockés sur la blockchain pour la transparence et la résolution des litiges.",
+    "noticeTitle": "Avis Important",
+    "noticeText": "En utilisant 1M Gaming, vous confirmez avoir 18 ans ou plus et acceptez de participer uniquement à des jeux d'adresse. Nous nous réservons le droit de suspendre les comptes impliqués dans la collusion ou le jeu déloyal."
   }
 }

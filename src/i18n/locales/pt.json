@@ -212,7 +212,11 @@
     "step2Title": "Passo 2 – Compre USDT em uma Exchange",
     "step2Desc": "Crie uma conta em uma exchange como Coinbase, Binance ou Kraken. Complete o processo de verificação e então compre USDT usando seu método de pagamento preferido, como transferência bancária ou cartão.",
     "step3Title": "Passo 3 – Saque para Polygon",
-    "step3Desc": "Saque seu USDT da exchange para o endereço da sua carteira. Certifique-se de selecionar a rede Polygon ao sacar para minimizar taxas. Os fundos devem chegar em poucos minutos."
+    "step3Desc": "Saque seu USDT da exchange para o endereço da sua carteira. Certifique-se de selecionar a rede Polygon ao sacar para minimizar taxas. Os fundos devem chegar em poucos minutos.",
+    "disclaimerTitle": "Informações Importantes",
+    "disclaimerPoint1": "Não compramos, vendemos ou negociamos criptomoedas. 1M Gaming é apenas uma plataforma de jogos de habilidade.",
+    "disclaimerPoint2": "Todas as taxas de entrada e pagamentos são feitos em USDT na rede Polygon.",
+    "disclaimerPoint3": "Nós pagamos todas as taxas de gas – você só paga sua taxa de entrada no jogo."
   },
   "createRoom": {
     "title": "Criar Sala de Jogo",
@@ -419,6 +423,7 @@
     "company": "1 MILLION GAMING co",
     "tagline": "Habilidade · Estratégia · Sucesso",
     "gameRules": "Regras do Jogo",
+    "termsOfService": "Termos de Serviço",
     "support": "Suporte",
     "privacyPolicy": "Política de Privacidade"
   },
@@ -514,5 +519,25 @@
     "drawAccepted": "Empate aceito",
     "drawDeclined": "Empate recusado",
     "resigned": "Jogador desistiu"
+  },
+  "terms": {
+    "title": "Termos de Serviço",
+    "lastUpdated": "Última atualização: Dezembro 2024",
+    "skillBasedTitle": "Jogos 100% de Habilidade",
+    "skillBasedText": "1M Gaming é uma plataforma de jogos competitivos baseados em habilidade. Todos os jogos são determinados puramente pela habilidade e estratégia do jogador – nunca por sorte ou acaso.",
+    "skillPoint1": "Sem apostas – resultados determinados apenas por habilidade",
+    "skillPoint2": "Sem pagamentos baseados em sorte – vencedores ganham por jogo superior",
+    "skillPoint3": "Geradores de números aleatórios não afetam resultados dos jogos",
+    "cryptoTitle": "Política de Criptomoedas",
+    "cryptoText": "1M Gaming não compra, vende ou negocia criptomoedas. Somos uma plataforma de jogos, não uma exchange de cripto.",
+    "cryptoPoint1": "Não trocamos moeda fiduciária por criptomoedas",
+    "cryptoPoint2": "Todas as transações usam USDT na rede Polygon",
+    "cryptoPoint3": "Jogadores devem adquirir USDT independentemente através de exchanges licenciadas",
+    "gasFeesTitle": "Taxas de Gas",
+    "gasFeesText": "1M Gaming cobre todas as taxas de gas blockchain para transações de jogo. Você paga apenas sua taxa de entrada no jogo – nós cuidamos do resto. Isso garante uma experiência de jogo sem custos ocultos.",
+    "fairPlayTitle": "Compromisso com Fair Play",
+    "fairPlayText": "Todos os jogos usam lógica verificável on-chain com aleatoriedade commit-reveal para jogos como Ludo, Gamão e Dominó. Estados dos jogos são armazenados na blockchain para transparência e resolução de disputas.",
+    "noticeTitle": "Aviso Importante",
+    "noticeText": "Ao usar 1M Gaming, você confirma ter 18+ anos e concorda em competir apenas em jogos de habilidade. Reservamos o direito de suspender contas envolvidas em conluio ou jogo desleal."
   }
 }

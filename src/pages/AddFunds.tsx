@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { Wallet, ArrowRightLeft, Send } from "lucide-react";
+import { Wallet, ArrowRightLeft, Send, Info } from "lucide-react";
 
 const AddFunds = () => {
   const { t } = useTranslation();
@@ -64,6 +64,34 @@ const AddFunds = () => {
                 <p className="text-muted-foreground leading-relaxed">
                   {t("addFunds.step3Desc")}
                 </p>
+              </div>
+            </div>
+          </section>
+
+          {/* Important Disclaimer */}
+          <section className="bg-primary/5 border border-primary/20 rounded-lg p-6">
+            <div className="flex items-start gap-4">
+              <div className="p-3 bg-primary/10 rounded-full shrink-0">
+                <Info className="text-primary" size={24} />
+              </div>
+              <div>
+                <h2 className="text-xl font-semibold text-foreground mb-3">
+                  {t("addFunds.disclaimerTitle")}
+                </h2>
+                <ul className="space-y-2 text-muted-foreground">
+                  <li className="flex items-start gap-2">
+                    <span className="w-1.5 h-1.5 bg-primary rounded-full mt-2 shrink-0" />
+                    {t("addFunds.disclaimerPoint1")}
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="w-1.5 h-1.5 bg-primary rounded-full mt-2 shrink-0" />
+                    {t("addFunds.disclaimerPoint2")}
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="w-1.5 h-1.5 bg-primary rounded-full mt-2 shrink-0" />
+                    {t("addFunds.disclaimerPoint3")}
+                  </li>
+                </ul>
               </div>
             </div>
           </section>
