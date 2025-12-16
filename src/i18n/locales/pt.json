@@ -368,7 +368,7 @@
     "youRolled": "Você tirou",
     "opponentRolled": "O oponente tirou",
     "backgammonWinCondition": "Vença retirando todas as 15 peças antes do oponente.",
-    "backgammonMoveRules": "Mova as peças de acordo com os dados. Acerte os blots do oponente para enviá-los à barra.",
+    "backgammonMoveRules": "Dourado move no SENTIDO HORÁRIO (24→1), Preto no SENTIDO ANTI-HORÁRIO (1→24). Acerte blots para enviá-los à barra.",
     "opponentsHand": "Mão do Oponente",
     "yourHand": "Sua Mão",
     "yourTiles": "Suas peças",
@@ -448,12 +448,15 @@
     ],
     "backgammon": "Gamão",
     "backgammonRules": [
-      "Cada jogador tem 15 pedras para mover pelo tabuleiro.",
-      "Lance dois dados para determinar o movimento.",
-      "Mova as pedras em direção ao seu território.",
-      "Pouse na pedra solitária do oponente para enviá-la à barra.",
-      "Pedras na barra devem reentrar antes de outros movimentos.",
-      "Retire todas as suas pedras primeiro para vencer."
+      "O tabuleiro tem 24 casas numeradas de 1-24. Cada jogador tem 15 pedras.",
+      "Dourado (Jogador) move-se no SENTIDO HORÁRIO da casa 24 → 1. Preto (IA) move-se no SENTIDO ANTI-HORÁRIO da casa 1 → 24.",
+      "O território interno do Dourado são as casas 1-6. O território interno do Preto são as casas 19-24.",
+      "Lance dois dados para determinar o movimento. Use cada valor do dado para movimentos separados.",
+      "Dobrados concedem quatro movimentos desse valor em vez de dois.",
+      "Pouse na pedra solitária do oponente (blot) para enviá-la à barra.",
+      "Pedras na barra DEVEM reentrar antes de qualquer outro movimento.",
+      "A retirada começa quando TODAS as 15 pedras chegam ao seu território interno.",
+      "O primeiro a retirar todas as pedras vence. Gammon (2×) se o perdedor tiver 0 retiradas. Backgammon (3×) se o perdedor também tiver pedra na barra ou no território interno do vencedor."
     ],
     "ludo": "Ludo",
     "ludoRules": [

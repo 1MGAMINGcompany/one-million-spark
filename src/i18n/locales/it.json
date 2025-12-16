@@ -368,7 +368,7 @@
     "youRolled": "Hai tirato",
     "opponentRolled": "L'avversario ha tirato",
     "backgammonWinCondition": "Vinci portando fuori tutte le 15 pedine prima del tuo avversario.",
-    "backgammonMoveRules": "Muovi le pedine secondo i dadi. Colpisci i blot dell'avversario per mandarli sulla barra.",
+    "backgammonMoveRules": "L'Oro si muove in SENSO ORARIO (24→1), il Nero in SENSO ANTIORARIO (1→24). Colpisci i blot per mandarli sulla barra.",
     "opponentsHand": "Mano dell'Avversario",
     "yourHand": "La Tua Mano",
     "yourTiles": "Le tue tessere",
@@ -448,12 +448,15 @@
     ],
     "backgammon": "Backgammon",
     "backgammonRules": [
-      "Ogni giocatore ha 15 pedine da muovere sul tavoliere.",
-      "Tira due dadi per determinare il movimento.",
-      "Muovi le pedine verso il tuo settore interno.",
-      "Atterra sulla pedina singola dell'avversario per mandarla sulla barra.",
-      "Le pedine sulla barra devono rientrare prima di altre mosse.",
-      "Togli tutte le tue pedine per primo per vincere."
+      "Il tavoliere ha 24 punte numerate da 1 a 24. Ogni giocatore ha 15 pedine.",
+      "Oro (Giocatore) si muove in SENSO ORARIO dalla punta 24 → 1. Nero (IA) si muove in SENSO ANTIORARIO dalla punta 1 → 24.",
+      "Il settore interno dell'Oro sono le punte 1-6. Il settore interno del Nero sono le punte 19-24.",
+      "Tira due dadi per determinare il movimento. Usa ogni valore del dado per mosse separate.",
+      "I doppi concedono quattro mosse di quel valore invece di due.",
+      "Atterra sulla pedina singola dell'avversario (blot) per mandarla sulla barra.",
+      "Le pedine sulla barra DEVONO rientrare prima di qualsiasi altra mossa.",
+      "La rimozione inizia quando TUTTE le 15 pedine raggiungono il tuo settore interno.",
+      "Il primo a rimuovere tutte le pedine vince. Gammon (2×) se il perdente ne ha 0 rimosse. Backgammon (3×) se il perdente ha anche una pedina sulla barra o nel settore interno del vincitore."
     ],
     "ludo": "Ludo",
     "ludoRules": [
