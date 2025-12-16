@@ -84,6 +84,15 @@ export const SoundProvider = ({ children }: { children: ReactNode }) => {
   const wantsBackgroundMusicRef = useRef(false);
   const initializedRef = useRef(false);
   
+  // Initialize background music immediately (but won't play until interaction)
+  useEffect(() => {
+    if (!backgroundMusicRef.current) {
+      backgroundMusicRef.current = new Audio('/sounds/ambient/lightwind.mp3');
+      backgroundMusicRef.current.loop = true;
+      backgroundMusicRef.current.volume = 0.15;
+    }
+  }, []);
+  
   // Preload all sounds after first user interaction
   const initializeSounds = useCallback(() => {
     if (initializedRef.current) return;
@@ -93,48 +102,39 @@ export const SoundProvider = ({ children }: { children: ReactNode }) => {
       try {
         const audio = new Audio(path);
         audio.preload = 'auto';
-        // Low latency settings
         audio.volume = 1;
         soundsRef.current[name] = audio;
       } catch (e) {
         console.warn(`Failed to load sound: ${name}`, e);
       }
     });
-    
-    // Initialize background music
-    backgroundMusicRef.current = new Audio('/sounds/ambient/lightwind.mp3');
-    backgroundMusicRef.current.loop = true;
-    backgroundMusicRef.current.volume = 0.15;
-    
-    // Try to play background music if it was requested
-    if (wantsBackgroundMusicRef.current && soundEnabled) {
-      backgroundMusicRef.current.play().then(() => {
-        setIsBackgroundMusicPlaying(true);
-      }).catch(() => {});
-    }
-  }, [soundEnabled]);
+  }, []);
   
-  // Initialize sounds on first interaction
+  // Try to play background music on ANY user interaction
   useEffect(() => {
-    const handleInteraction = () => {
-      initializeSounds();
-      
-      // Try to play background music if requested
+    const tryPlayBackgroundMusic = () => {
       if (wantsBackgroundMusicRef.current && soundEnabled && backgroundMusicRef.current) {
         backgroundMusicRef.current.play().then(() => {
           setIsBackgroundMusicPlaying(true);
-        }).catch(() => {});
+          console.log('Background music started');
+        }).catch((e) => {
+          console.log('Background music blocked, waiting for interaction:', e.message);
+        });
       }
-      
-      // Remove listeners after first interaction
-      document.removeEventListener('click', handleInteraction);
-      document.removeEventListener('touchstart', handleInteraction);
-      document.removeEventListener('keydown', handleInteraction);
     };
     
+    const handleInteraction = () => {
+      initializeSounds();
+      tryPlayBackgroundMusic();
+    };
+    
+    // Add multiple listeners and keep them active
     document.addEventListener('click', handleInteraction);
     document.addEventListener('touchstart', handleInteraction);
     document.addEventListener('keydown', handleInteraction);
+    
+    // Also try immediately in case we already have permission
+    tryPlayBackgroundMusic();
     
     return () => {
       document.removeEventListener('click', handleInteraction);
