@@ -1,10 +1,10 @@
 import { useState, useCallback } from "react";
 import { useAccount } from "wagmi";
-import { parseUnits } from "viem";
 import { toast } from "sonner";
 import { sendTransaction, prepareContractCall, getContract } from "thirdweb";
 import { polygon } from "thirdweb/chains";
 import { ethers6Adapter } from "thirdweb/adapters/ethers6";
+import { keccak256, toBytes } from "viem";
 import { 
   thirdwebClient, 
   GASLESS_CONFIG,
@@ -12,7 +12,20 @@ import {
   TRUSTED_FORWARDER_ADDRESS
 } from "@/lib/thirdwebClient";
 
-// RoomManagerV7Production ABI
+// Game rules text - must be exact and stable for rulesHash verification
+const RULES_TEXT = `
+1M GAMING — RULES (V1)
+- Skill-based games only. No gambling.
+- Winner determined by game outcome, no disputes.
+- Entry fees held in smart contract until game ends.
+- Winner receives prize pool minus 5% platform fee.
+- Players must accept rules before playing.
+`;
+
+// Convert rules text -> bytes32 hash (matches Solidity keccak256)
+const RULES_HASH = keccak256(toBytes(RULES_TEXT));
+
+// RoomManagerV7Production ABI with rulesHash parameter
 const ROOM_MANAGER_ABI = [
   {
     inputs: [
@@ -21,7 +34,8 @@ const ROOM_MANAGER_ABI = [
       { internalType: "bool", name: "isPrivate", type: "bool" },
       { internalType: "uint16", name: "platformFeeBps", type: "uint16" },
       { internalType: "uint32", name: "gameId", type: "uint32" },
-      { internalType: "uint16", name: "turnTimeSec", type: "uint16" }
+      { internalType: "uint16", name: "turnTimeSec", type: "uint16" },
+      { internalType: "bytes32", name: "rulesHash", type: "bytes32" }
     ],
     name: "createRoom",
     outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
@@ -47,7 +61,7 @@ const ROOM_MANAGER_ABI = [
       { internalType: "uint256", name: "roomId", type: "uint256" },
       { internalType: "address", name: "winner", type: "address" }
     ],
-    name: "finishGame",
+    name: "finishGameSig",
     outputs: [],
     stateMutability: "nonpayable",
     type: "function"
@@ -125,13 +139,14 @@ export function useGaslessCreateRoom() {
     try {
       const account = await getThirdwebAccount();
       console.log("Sending via ERC-2771 forwarder:", TRUSTED_FORWARDER_ADDRESS);
+      console.log("RULES_HASH:", RULES_HASH);
 
       const contract = getContract_();
 
       const transaction = prepareContractCall({
         contract,
         method: "createRoom",
-        params: [entryFeeBase, maxPlayersU8, isPrivateBool, platformFee, gameIdU32, turnTimeU16],
+        params: [entryFeeBase, maxPlayersU8, isPrivateBool, platformFee, gameIdU32, turnTimeU16, RULES_HASH],
       });
 
       const result = await sendTransaction({
@@ -159,6 +174,7 @@ export function useGaslessCreateRoom() {
     isBusy,
     isGaslessReady: true,
     trustedForwarder: TRUSTED_FORWARDER_ADDRESS,
+    rulesHash: RULES_HASH,
   };
 }
 
@@ -288,7 +304,7 @@ export function useGaslessFinishGame() {
 
       const transaction = prepareContractCall({
         contract,
-        method: "finishGame",
+        method: "finishGameSig",
         params: [roomId, winner],
       });
 
