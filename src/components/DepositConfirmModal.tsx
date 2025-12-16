@@ -7,7 +7,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Shield, Check } from "lucide-react";
+import { Check } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 interface DepositConfirmModalProps {
@@ -35,8 +35,7 @@ export function DepositConfirmModal({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-lg">
-            <Shield className="h-5 w-5 text-primary" />
-            {t("depositModal.title", "Match Deposit Required")}
+            🔒 {t("depositModal.title", "Match Deposit Required")}
           </DialogTitle>
           <DialogDescription className="pt-2">
             {t("depositModal.description", "To start this match, you'll approve exactly")} <span className="font-semibold text-foreground">{stakeAmount} USDT</span>.
