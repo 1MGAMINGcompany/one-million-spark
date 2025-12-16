@@ -3,7 +3,7 @@ import { BrowserProvider, Contract } from "ethers";
 import ABI from "@/abi/RoomManagerV7Production.abi.json";
 
 export const ROOMMANAGER_V7_ADDRESS =
-  "0x4f3998195462100D867129747967BFCb56C07fe2" as const;
+  "0xA039B03De894ebFa92933a9A7326c1715f040b96" as const;
 
 export interface ActiveRoom {
   id: bigint;
