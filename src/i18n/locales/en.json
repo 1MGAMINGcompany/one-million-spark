@@ -57,6 +57,7 @@
     "checkersWinCondition": "Win by capturing all opponent pieces or blocking all their moves.",
     "ludoWinCondition": "Win by moving all your pieces to the home column first.",
     "backgammonWinCondition": "Win by bearing off all your pieces first.",
+    "backgammonMoveRules": "Gold moves CLOCKWISE (24→1), Black moves COUNTER-CLOCKWISE (1→24). Hit blots to send them to the bar.",
     "dominosWinCondition": "Win by playing all your tiles first or having the lowest score."
   },
   "walletRequired": {

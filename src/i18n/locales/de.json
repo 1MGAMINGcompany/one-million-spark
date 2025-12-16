@@ -368,7 +368,7 @@
     "youRolled": "Sie haben gewürfelt",
     "opponentRolled": "Der Gegner hat gewürfelt",
     "backgammonWinCondition": "Gewinnen Sie, indem Sie alle 15 Steine vor Ihrem Gegner auswürfeln.",
-    "backgammonMoveRules": "Bewegen Sie Steine entsprechend der Würfel. Schlagen Sie Blots des Gegners, um sie auf die Bar zu senden.",
+    "backgammonMoveRules": "Gold bewegt sich IM UHRZEIGERSINN (24→1), Schwarz GEGEN DEN UHRZEIGERSINN (1→24). Schlagen Sie Blots, um sie auf die Bar zu schicken.",
     "opponentsHand": "Hand des Gegners",
     "yourHand": "Ihre Hand",
     "yourTiles": "Ihre Steine",
@@ -448,12 +448,15 @@
     ],
     "backgammon": "Backgammon",
     "backgammonRules": [
-      "Jeder Spieler hat 15 Steine, die um das Brett bewegt werden.",
-      "Würfeln Sie zwei Würfel, um die Bewegung zu bestimmen.",
-      "Bewegen Sie Steine in Richtung Ihres Heimfeldes.",
-      "Landen Sie auf einem einzelnen gegnerischen Stein, um ihn auf die Bar zu schicken.",
-      "Steine auf der Bar müssen wieder eingesetzt werden, bevor andere Züge möglich sind.",
-      "Tragen Sie alle Ihre Steine zuerst ab, um zu gewinnen."
+      "Das Brett hat 24 Zungen nummeriert von 1-24. Jeder Spieler hat 15 Steine.",
+      "Gold (Spieler) bewegt sich IM UHRZEIGERSINN von Zunge 24 → 1. Schwarz (KI) bewegt sich GEGEN DEN UHRZEIGERSINN von Zunge 1 → 24.",
+      "Golds Heimfeld sind die Zungen 1-6. Schwarzs Heimfeld sind die Zungen 19-24.",
+      "Würfeln Sie zwei Würfel für die Bewegung. Nutzen Sie jeden Würfelwert für separate Züge.",
+      "Pasche gewähren vier Züge mit diesem Wert statt zwei.",
+      "Landen Sie auf einem einzelnen gegnerischen Stein (Blot), um ihn auf die Bar zu schicken.",
+      "Steine auf der Bar MÜSSEN wieder eingesetzt werden, bevor andere Züge möglich sind.",
+      "Das Abtragen beginnt, wenn ALLE 15 Steine Ihr Heimfeld erreicht haben.",
+      "Wer zuerst alle Steine abträgt, gewinnt. Gammon (2×) wenn der Verlierer 0 abgetragen hat. Backgammon (3×) wenn der Verlierer zusätzlich einen Stein auf der Bar oder im Heimfeld des Gewinners hat."
     ],
     "ludo": "Mensch ärgere dich nicht",
     "ludoRules": [

@@ -368,7 +368,7 @@
     "youRolled": "Sacaste",
     "opponentRolled": "El oponente sacó",
     "backgammonWinCondition": "Gana sacando todas las 15 fichas antes que tu oponente.",
-    "backgammonMoveRules": "Mueve las fichas según los dados. Golpea los blots del oponente para enviarlos a la barra.",
+    "backgammonMoveRules": "Dorado mueve en SENTIDO HORARIO (24→1), Negro en SENTIDO ANTIHORARIO (1→24). Golpea los blots para enviarlos a la barra.",
     "opponentsHand": "Mano del Oponente",
     "yourHand": "Tu Mano",
     "yourTiles": "Tus fichas",
@@ -448,12 +448,15 @@
     ],
     "backgammon": "Backgammon",
     "backgammonRules": [
-      "Cada jugador tiene 15 fichas para mover alrededor del tablero.",
-      "Tira dos dados para determinar el movimiento.",
-      "Mueve las fichas hacia tu tablero de casa.",
-      "Aterriza en la ficha solitaria del oponente para enviarla a la barra.",
-      "Las fichas en la barra deben reingresar antes de otros movimientos.",
-      "Saca todas tus fichas primero para ganar."
+      "El tablero tiene 24 puntos numerados del 1 al 24. Cada jugador tiene 15 fichas.",
+      "Dorado (Jugador) se mueve en SENTIDO HORARIO del punto 24 → 1. Negro (IA) se mueve en SENTIDO ANTIHORARIO del punto 1 → 24.",
+      "El tablero interno de Dorado son los puntos 1-6. El tablero interno de Negro son los puntos 19-24.",
+      "Tira dos dados para determinar el movimiento. Usa cada valor del dado para movimientos separados.",
+      "Los dobles otorgan cuatro movimientos de ese valor en lugar de dos.",
+      "Aterriza en la ficha solitaria del oponente (blot) para enviarla a la barra.",
+      "Las fichas en la barra DEBEN reingresar antes de cualquier otro movimiento.",
+      "El proceso de sacar fichas comienza cuando TODAS las 15 fichas llegan a tu tablero interno.",
+      "El primero en sacar todas las fichas gana. Gammon (2×) si el perdedor tiene 0 sacadas. Backgammon (3×) si además tiene ficha en la barra o en el tablero interno del ganador."
     ],
     "ludo": "Ludo",
     "ludoRules": [

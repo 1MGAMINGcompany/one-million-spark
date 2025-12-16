@@ -368,7 +368,7 @@
     "youRolled": "Vous avez fait",
     "opponentRolled": "L'adversaire a fait",
     "backgammonWinCondition": "Gagnez en sortant les 15 pions avant votre adversaire.",
-    "backgammonMoveRules": "Déplacez les pions selon les dés. Frappez les blots de l'adversaire pour les envoyer sur la barre.",
+    "backgammonMoveRules": "L'Or se déplace dans le SENS HORAIRE (24→1), le Noir dans le SENS ANTIHORAIRE (1→24). Frappez les blots pour les envoyer à la barre.",
     "opponentsHand": "Main de l'Adversaire",
     "yourHand": "Votre Main",
     "yourTiles": "Vos tuiles",
@@ -448,12 +448,15 @@
     ],
     "backgammon": "Backgammon",
     "backgammonRules": [
-      "Chaque joueur a 15 pions à déplacer autour du plateau.",
-      "Lancez deux dés pour déterminer le mouvement.",
-      "Déplacez les pions vers votre jan intérieur.",
-      "Posez sur le pion isolé de l'adversaire pour l'envoyer sur la barre.",
-      "Les pions sur la barre doivent rentrer avant d'autres mouvements.",
-      "Sortez tous vos pions en premier pour gagner."
+      "Le plateau a 24 flèches numérotées de 1 à 24. Chaque joueur a 15 pions.",
+      "Or (Joueur) se déplace dans le SENS HORAIRE de la flèche 24 → 1. Noir (IA) se déplace dans le SENS ANTIHORAIRE de la flèche 1 → 24.",
+      "Le jan intérieur de l'Or est les flèches 1-6. Le jan intérieur du Noir est les flèches 19-24.",
+      "Lancez deux dés pour déterminer le mouvement. Utilisez chaque valeur de dé pour des mouvements séparés.",
+      "Les doubles accordent quatre mouvements de cette valeur au lieu de deux.",
+      "Posez sur le pion isolé de l'adversaire (blot) pour l'envoyer sur la barre.",
+      "Les pions sur la barre DOIVENT rentrer avant tout autre mouvement.",
+      "La sortie commence lorsque TOUS les 15 pions atteignent votre jan intérieur.",
+      "Le premier à sortir tous ses pions gagne. Gammon (2×) si le perdant en a 0 sortis. Backgammon (3×) si en plus le perdant a un pion sur la barre ou dans le jan intérieur du gagnant."
     ],
     "ludo": "Ludo",
     "ludoRules": [
