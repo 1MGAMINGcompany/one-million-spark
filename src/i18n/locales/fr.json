@@ -91,7 +91,9 @@
   "walletRequired": {
     "title": "Portefeuille Requis",
     "description": "Veuillez connecter votre portefeuille pour utiliser cette fonctionnalité.",
-    "hint": "Cliquez sur \"Connecter Portefeuille\" en haut à droite."
+    "hint": "Cliquez sur \"Connecter Portefeuille\" en haut à droite.",
+    "feesTitle": "Frais de Jeu",
+    "feesDescription": "Tous les frais d'entrée sont payés en USDT sur le réseau Polygon. Nous couvrons tous les frais de gas !"
   },
   "gameAI": {
     "backToTemple": "Retour au Temple",
