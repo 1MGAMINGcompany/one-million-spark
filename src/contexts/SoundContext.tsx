@@ -58,6 +58,9 @@ interface SoundContextType {
   play: (name: string) => void;
   toggleSound: () => void;
   soundEnabled: boolean;
+  playBackgroundMusic: () => void;
+  stopBackgroundMusic: () => void;
+  isBackgroundMusicPlaying: boolean;
 }
 
 const SoundContext = createContext<SoundContextType | undefined>(undefined);
@@ -76,6 +79,9 @@ export const SoundProvider = ({ children }: { children: ReactNode }) => {
   });
   
   const soundsRef = useRef<Record<string, HTMLAudioElement>>({});
+  const backgroundMusicRef = useRef<HTMLAudioElement | null>(null);
+  const [isBackgroundMusicPlaying, setIsBackgroundMusicPlaying] = useState(false);
+  const wantsBackgroundMusicRef = useRef(false);
   const initializedRef = useRef(false);
   
   // Preload all sounds after first user interaction
@@ -94,12 +100,32 @@ export const SoundProvider = ({ children }: { children: ReactNode }) => {
         console.warn(`Failed to load sound: ${name}`, e);
       }
     });
-  }, []);
+    
+    // Initialize background music
+    backgroundMusicRef.current = new Audio('/sounds/ambient/lightwind.mp3');
+    backgroundMusicRef.current.loop = true;
+    backgroundMusicRef.current.volume = 0.15;
+    
+    // Try to play background music if it was requested
+    if (wantsBackgroundMusicRef.current && soundEnabled) {
+      backgroundMusicRef.current.play().then(() => {
+        setIsBackgroundMusicPlaying(true);
+      }).catch(() => {});
+    }
+  }, [soundEnabled]);
   
   // Initialize sounds on first interaction
   useEffect(() => {
     const handleInteraction = () => {
       initializeSounds();
+      
+      // Try to play background music if requested
+      if (wantsBackgroundMusicRef.current && soundEnabled && backgroundMusicRef.current) {
+        backgroundMusicRef.current.play().then(() => {
+          setIsBackgroundMusicPlaying(true);
+        }).catch(() => {});
+      }
+      
       // Remove listeners after first interaction
       document.removeEventListener('click', handleInteraction);
       document.removeEventListener('touchstart', handleInteraction);
@@ -115,7 +141,19 @@ export const SoundProvider = ({ children }: { children: ReactNode }) => {
       document.removeEventListener('touchstart', handleInteraction);
       document.removeEventListener('keydown', handleInteraction);
     };
-  }, [initializeSounds]);
+  }, [initializeSounds, soundEnabled]);
+  
+  // Stop background music when sound is disabled
+  useEffect(() => {
+    if (!soundEnabled && backgroundMusicRef.current) {
+      backgroundMusicRef.current.pause();
+      setIsBackgroundMusicPlaying(false);
+    } else if (soundEnabled && wantsBackgroundMusicRef.current && backgroundMusicRef.current) {
+      backgroundMusicRef.current.play().then(() => {
+        setIsBackgroundMusicPlaying(true);
+      }).catch(() => {});
+    }
+  }, [soundEnabled]);
   
   // Cleanup on unmount
   useEffect(() => {
@@ -125,6 +163,10 @@ export const SoundProvider = ({ children }: { children: ReactNode }) => {
         audio.src = '';
       });
       soundsRef.current = {};
+      if (backgroundMusicRef.current) {
+        backgroundMusicRef.current.pause();
+        backgroundMusicRef.current = null;
+      }
     };
   }, []);
   
@@ -150,6 +192,34 @@ export const SoundProvider = ({ children }: { children: ReactNode }) => {
     });
   }, [soundEnabled, initializeSounds]);
   
+  const playBackgroundMusic = useCallback(() => {
+    wantsBackgroundMusicRef.current = true;
+    
+    if (!soundEnabled) return;
+    
+    // Initialize if not done yet
+    if (!initializedRef.current) {
+      initializeSounds();
+    }
+    
+    if (backgroundMusicRef.current && backgroundMusicRef.current.paused) {
+      backgroundMusicRef.current.play().then(() => {
+        setIsBackgroundMusicPlaying(true);
+      }).catch(() => {
+        // Will retry on user interaction
+      });
+    }
+  }, [soundEnabled, initializeSounds]);
+  
+  const stopBackgroundMusic = useCallback(() => {
+    wantsBackgroundMusicRef.current = false;
+    if (backgroundMusicRef.current) {
+      backgroundMusicRef.current.pause();
+      backgroundMusicRef.current.currentTime = 0;
+    }
+    setIsBackgroundMusicPlaying(false);
+  }, []);
+  
   const toggleSound = useCallback(() => {
     setSoundEnabled(prev => {
       const newValue = !prev;
@@ -167,7 +237,14 @@ export const SoundProvider = ({ children }: { children: ReactNode }) => {
   }, [play]);
   
   return (
-    <SoundContext.Provider value={{ play, toggleSound, soundEnabled }}>
+    <SoundContext.Provider value={{ 
+      play, 
+      toggleSound, 
+      soundEnabled, 
+      playBackgroundMusic, 
+      stopBackgroundMusic,
+      isBackgroundMusicPlaying 
+    }}>
       {children}
     </SoundContext.Provider>
   );
