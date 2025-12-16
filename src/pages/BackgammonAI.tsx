@@ -816,13 +816,26 @@ const BackgammonAI = () => {
 
         {/* ============== MOBILE LAYOUT ============== */}
         {isMobile ? (
-          <div className="flex-1 flex flex-col min-h-0 px-2 pt-1 pb-2">
+          <div className="flex-1 flex flex-col px-2 pt-1 pb-2 overflow-hidden">
             {/* Score Row */}
             <div className="flex justify-between items-center px-2 py-1 shrink-0">
               <div className="flex items-center gap-2">
                 <span className="text-[11px] text-muted-foreground">AI:</span>
                 <span className="text-primary font-bold text-sm">{gameState.bearOff.ai}</span>
                 <span className="text-[10px] text-muted-foreground/60">/15</span>
+              </div>
+              {/* Direction indicators */}
+              <div className="flex items-center gap-3">
+                {/* Gold clockwise */}
+                <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-full border border-primary/40 bg-primary/5">
+                  <div className="w-2.5 h-2.5 rounded-full bg-gradient-to-br from-primary to-amber-600" />
+                  <RotateCw className="w-3 h-3 text-primary" strokeWidth={2.5} />
+                </div>
+                {/* Black counter-clockwise */}
+                <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-full border border-slate-500/40 bg-slate-800/30">
+                  <div className="w-2.5 h-2.5 rounded-full bg-gradient-to-br from-slate-600 to-slate-900" />
+                  <RotateCcw className="w-3 h-3 text-slate-400" strokeWidth={2.5} />
+                </div>
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-[11px] text-muted-foreground">You:</span>
@@ -831,8 +844,8 @@ const BackgammonAI = () => {
               </div>
             </div>
 
-            {/* Board Container */}
-            <div className="flex-1 min-h-0 relative">
+            {/* Board Container - Fixed aspect ratio so it never shrinks */}
+            <div className="relative w-full shrink-0" style={{ height: 'calc(100vh - 220px)', maxHeight: '600px', minHeight: '350px' }}>
               {/* Subtle glow */}
               <div className="absolute -inset-1 bg-primary/10 rounded-xl blur-lg opacity-30" />
               
@@ -911,24 +924,26 @@ const BackgammonAI = () => {
               </div>
             </div>
 
-            {/* Controls Area - Below Board */}
-            <div className="shrink-0 mt-2 space-y-2">
-              {/* Roll Button */}
-              {currentPlayer === "player" && dice.length === 0 && !gameOver && (
-                <Button 
-                  variant="gold" 
-                  size="lg" 
-                  className="w-full py-4 text-lg font-bold shadow-[0_0_24px_-6px_hsl(45_93%_54%_/_0.6)]" 
-                  onClick={rollDice}
-                >
-                  🎲 ROLL
-                </Button>
-              )}
+            {/* Controls Area - Fixed height section below board */}
+            <div className="shrink-0 mt-2 space-y-2" style={{ minHeight: '80px' }}>
+              {/* Roll Button - Always takes space even when hidden */}
+              <div style={{ minHeight: '52px' }}>
+                {currentPlayer === "player" && dice.length === 0 && !gameOver ? (
+                  <Button 
+                    variant="gold" 
+                    size="lg" 
+                    className="w-full py-3 text-base font-bold shadow-[0_0_24px_-6px_hsl(45_93%_54%_/_0.6)]" 
+                    onClick={rollDice}
+                  >
+                    🎲 ROLL DICE
+                  </Button>
+                ) : null}
+              </div>
 
-              {/* Status Bar with Direction Arrow */}
+              {/* Status Bar */}
               <div 
                 className={cn(
-                  "rounded-lg border px-3 py-2",
+                  "rounded-lg border px-3 py-1.5",
                   gameOver 
                     ? gameStatus.includes("win") 
                       ? "bg-green-500/10 border-green-500/30" 
@@ -936,19 +951,13 @@ const BackgammonAI = () => {
                     : "bg-primary/5 border-primary/20"
                 )}
               >
-                {/* Direction Indicator */}
+                {/* Turn Indicator */}
                 {!gameOver && (
-                  <div className="flex items-center justify-center gap-2 mb-1">
+                  <div className="flex items-center justify-center gap-2 mb-0.5">
                     {currentPlayer === "player" ? (
-                      <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-primary/10 border border-primary/30">
-                        <RotateCw className="w-3.5 h-3.5 text-primary" strokeWidth={2.5} />
-                        <span className="text-[10px] font-medium text-primary">CLOCKWISE</span>
-                      </div>
+                      <span className="text-[10px] font-medium text-primary">YOUR TURN</span>
                     ) : (
-                      <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-700/50 border border-slate-500/30">
-                        <RotateCcw className="w-3.5 h-3.5 text-slate-400" strokeWidth={2.5} />
-                        <span className="text-[10px] font-medium text-slate-400">COUNTER-CW</span>
-                      </div>
+                      <span className="text-[10px] font-medium text-slate-400">AI THINKING...</span>
                     )}
                   </div>
                 )}
@@ -1024,10 +1033,25 @@ const BackgammonAI = () => {
                   <div className="relative p-1 rounded-xl bg-gradient-to-br from-primary/40 via-primary/20 to-primary/40 shadow-[0_0_40px_-10px_hsl(45_93%_54%_/_0.4)]">
                     <div className="bg-gradient-to-b from-midnight-light via-background to-midnight-light rounded-lg p-2 md:p-4 overflow-hidden">
                       
-                      {/* AI Bear Off / Bar */}
+                      {/* AI Bear Off / Bar + Direction Indicators */}
                       <div className="flex justify-between items-center mb-3 px-2">
                         <div className="text-xs text-muted-foreground flex items-center gap-2">
                           AI Borne Off: <span className="text-primary font-bold">{gameState.bearOff.ai}</span>
+                        </div>
+                        {/* Direction indicators - always visible */}
+                        <div className="flex items-center gap-3">
+                          {/* Gold clockwise */}
+                          <div className="flex items-center gap-1.5 px-2 py-1 rounded-full border border-primary/40 bg-primary/5">
+                            <div className="w-3 h-3 rounded-full bg-gradient-to-br from-primary to-amber-600 border border-amber-500/50" />
+                            <RotateCw className="w-3.5 h-3.5 text-primary" strokeWidth={2.5} />
+                            <span className="text-[10px] font-medium text-primary">CW</span>
+                          </div>
+                          {/* Black counter-clockwise */}
+                          <div className="flex items-center gap-1.5 px-2 py-1 rounded-full border border-slate-500/40 bg-slate-800/30">
+                            <div className="w-3 h-3 rounded-full bg-gradient-to-br from-slate-600 to-slate-900 border border-slate-500/50" />
+                            <RotateCcw className="w-3.5 h-3.5 text-slate-400" strokeWidth={2.5} />
+                            <span className="text-[10px] font-medium text-slate-400">CCW</span>
+                          </div>
                         </div>
                         {gameState.bar.ai > 0 && (
                           <div className="flex items-center gap-2">
