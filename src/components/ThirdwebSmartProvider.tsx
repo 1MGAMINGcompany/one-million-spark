@@ -71,7 +71,7 @@ function SmartAccountProviderInner({ children }: { children: ReactNode }) {
   }, [connect]);
 
   const disconnect = useCallback(() => {
-    twDisconnect();
+    (twDisconnect as any)();
   }, [twDisconnect]);
 
   const value: SmartAccountContextType = {
