@@ -253,6 +253,7 @@ const BackgammonAI = () => {
     if (selectedPoint === null) {
       if (pointIndex >= 0 && gameState.points[pointIndex] > 0) {
         const pointMoves = getLegalMovesFromPoint(gameState, pointIndex, remainingMoves, "player");
+        console.log(`[DEBUG] Selected point index: ${pointIndex}, dice: ${remainingMoves}, valid targets: ${pointMoves.map(m => m.to)}`);
         if (pointMoves.length > 0) {
           setSelectedPoint(pointIndex);
           setValidMoves(pointMoves.map(m => m.to));
@@ -812,15 +813,15 @@ const BackgammonAI = () => {
               <div className="relative h-full p-[3px] rounded-lg bg-gradient-to-br from-primary/40 via-primary/20 to-primary/40">
                 <div className="h-full flex bg-gradient-to-b from-midnight-light via-background to-midnight-light rounded-md overflow-hidden">
                   
-                  {/* Left Column - Player moves: 18→13 (top), then 12→7 (bottom) */}
+                  {/* LEFT Column - Player's OUTER BOARD journey (24→13) */}
                   <div className="flex-1 flex flex-col p-1">
-                    {/* Top half: Points 18→13 (player moves DOWN through these) */}
+                    {/* Top half: Points 24→19 (player STARTS here, moves DOWN) */}
                     <div className="flex-1 flex flex-col justify-evenly border-b border-primary/20">
-                      {[17, 16, 15, 14, 13, 12].map(i => renderMobilePoint(i, true))}
+                      {[23, 22, 21, 20, 19, 18].map(i => renderMobilePoint(i, true))}
                     </div>
-                    {/* Bottom half: Points 12→7 (player continues DOWN) */}
+                    {/* Bottom half: Points 18→13 (continues DOWN) */}
                     <div className="flex-1 flex flex-col justify-evenly">
-                      {[11, 10, 9, 8, 7, 6].map(i => renderMobilePoint(i, true))}
+                      {[17, 16, 15, 14, 13, 12].map(i => renderMobilePoint(i, true))}
                     </div>
                   </div>
 
@@ -868,13 +869,13 @@ const BackgammonAI = () => {
                     )}
                   </div>
 
-                  {/* Right Column - Player moves: 24→19 (top), then 6→1 (bottom = HOME) */}
+                  {/* RIGHT Column - Player's HOME BOARD journey (12→1) */}
                   <div className="flex-1 flex flex-col p-1">
-                    {/* Top half: Points 24→19 (player starts here, moves DOWN) */}
+                    {/* Top half: Points 12→7 (player crosses bar here, continues DOWN) */}
                     <div className="flex-1 flex flex-col justify-evenly border-b border-primary/20">
-                      {[23, 22, 21, 20, 19, 18].map(i => renderMobilePoint(i, false))}
+                      {[11, 10, 9, 8, 7, 6].map(i => renderMobilePoint(i, false))}
                     </div>
-                    {/* Bottom half: Points 6→1 (player HOME, bears off from here) */}
+                    {/* Bottom half: Points 6→1 (player HOME, bears off from bottom) */}
                     <div className="flex-1 flex flex-col justify-evenly">
                       {[5, 4, 3, 2, 1, 0].map(i => renderMobilePoint(i, false))}
                     </div>
