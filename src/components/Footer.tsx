@@ -14,6 +14,7 @@ const Footer = () => {
 
   const links = [
     { to: "/game-rules", labelKey: "footer.gameRules" },
+    { to: "/terms-of-service", labelKey: "footer.termsOfService" },
     { to: "/support", labelKey: "footer.support" },
     { to: "/privacy-policy", labelKey: "footer.privacyPolicy" },
   ];

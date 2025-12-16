@@ -30,6 +30,7 @@ import JoinRoom from "./pages/JoinRoom";
 import GameRules from "./pages/GameRules";
 import Support from "./pages/Support";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
+import TermsOfService from "./pages/TermsOfService";
 import NotFound from "./pages/NotFound";
 import AgeConfirmation from "./components/AgeConfirmation";
 const App = () => (
@@ -68,6 +69,7 @@ const App = () => (
                     <Route path="/game-rules" element={<GameRules />} />
                     <Route path="/support" element={<Support />} />
                     <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+                    <Route path="/terms-of-service" element={<TermsOfService />} />
                     <Route path="*" element={<NotFound />} />
                   </Routes>
                 </main>
