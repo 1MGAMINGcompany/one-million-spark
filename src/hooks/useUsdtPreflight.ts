@@ -1,6 +1,11 @@
 import { useCallback, useState, useEffect } from "react";
 import { ethers } from "ethers";
-import { ROOMMANAGER_V7_ADDRESS } from "./useRoomManagerV7";
+import { 
+  USDT_ADDRESS, 
+  ROOMMANAGER_V7_ADDRESS, 
+  USDT_DECIMALS,
+  formatUsdt 
+} from "@/lib/contractAddresses";
 
 // Extend Window type for ethereum
 declare global {
@@ -9,23 +14,13 @@ declare global {
   }
 }
 
-// USDT address on Polygon mainnet (checksummed)
-const USDT_ADDRESS = "0xC2132D05D31c914a87C6611C10748AEb04B58e8F";
-const USDT_DECIMALS = 6;
 const FALLBACK_RPC = "https://polygon-rpc.com";
 
 // Minimal ERC20 ABI for reads
 const ERC20_ABI = [
   "function allowance(address owner, address spender) view returns (uint256)",
   "function balanceOf(address account) view returns (uint256)",
-  "function decimals() view returns (uint8)",
 ];
-
-// Format raw units to USDT string (6 decimals)
-export function formatUsdtUnits(units: bigint): string {
-  const num = Number(units) / 10 ** USDT_DECIMALS;
-  return num.toFixed(6);
-}
 
 export interface PreflightResult {
   allowanceRaw: bigint;
@@ -130,15 +125,15 @@ export function useUsdtPreflight(ownerAddress: `0x${string}` | undefined, entryF
       const result: PreflightResult = {
         allowanceRaw: allowance,
         balanceRaw: balance,
-        allowanceUsdt: formatUsdtUnits(allowance),
-        balanceUsdt: formatUsdtUnits(balance),
+        allowanceUsdt: formatUsdt(allowance),
+        balanceUsdt: formatUsdt(balance),
         hasSufficientAllowance: allowance >= entryFeeUnits,
         hasSufficientBalance: balance >= entryFeeUnits,
       };
 
       // Console log in required format
       console.log(
-        `PRECHECK_OK chainId=${chainId} user=${ownerAddress} spender=${ROOMMANAGER_V7_ADDRESS} allowance=${allowance.toString()} balance=${balance.toString()}`
+        `PRECHECK_OK chainId=${chainId} user=${ownerAddress} spender=${ROOMMANAGER_V7_ADDRESS} allowance=${allowance.toString()} balance=${balance.toString()} entryFee=${entryFeeUnits.toString()}`
       );
 
       setLastPreflight(result);
@@ -187,8 +182,8 @@ export function useUsdtPreflight(ownerAddress: `0x${string}` | undefined, entryF
   return {
     allowanceRaw,
     balanceRaw,
-    allowanceUsdt: formatUsdtUnits(allowanceRaw),
-    balanceUsdt: formatUsdtUnits(balanceRaw),
+    allowanceUsdt: formatUsdt(allowanceRaw),
+    balanceUsdt: formatUsdt(balanceRaw),
     hasSufficientAllowance: allowanceRaw >= entryFeeUnits,
     hasSufficientBalance: balanceRaw >= entryFeeUnits,
     isLoading,

@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { JsonRpcProvider } from "ethers";
+import { ROOMMANAGER_V7_ADDRESS } from "@/lib/contractAddresses";
 
-// Single source of truth for RoomManager address
-export const ROOMMANAGER_V7_ADDRESS = "0xA039B03De894ebFa92933a9A7326c1715f040b96" as const;
+// Re-export for backwards compatibility
+export { ROOMMANAGER_V7_ADDRESS };
 
 const FALLBACK_RPC = "https://polygon-rpc.com";
 

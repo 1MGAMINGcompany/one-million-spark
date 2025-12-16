@@ -1,13 +1,17 @@
 import { useCallback } from "react";
 import { useWriteContract, useWaitForTransactionReceipt, useAccount } from "wagmi";
 import { polygon } from "@/lib/wagmi-config";
-import { ROOMMANAGER_V7_ADDRESS } from "./useRoomManagerV7";
+import { 
+  USDT_ADDRESS, 
+  ROOMMANAGER_V7_ADDRESS, 
+  USDT_DECIMALS,
+  usdtToUnits,
+  unitsToUsdt 
+} from "@/lib/contractAddresses";
 
-// USDT address on Polygon mainnet
-const USDT_ADDRESS = "0xc2132d05d31c914a87c6611c10748aeb04b58e8f" as const;
-
-// USDT has 6 decimals
-const USDT_DECIMALS = 6;
+// Re-export helper functions for backwards compatibility
+export const usdtToUnitsV7 = usdtToUnits;
+export const unitsToUsdtV7 = unitsToUsdt;
 
 // ERC20 ABI for approve function
 const ERC20_APPROVE_ABI = [
@@ -23,16 +27,6 @@ const ERC20_APPROVE_ABI = [
   },
 ] as const;
 
-// Convert USDT amount to token units (6 decimals)
-export function usdtToUnitsV7(amount: number): bigint {
-  return BigInt(Math.floor(amount * 10 ** USDT_DECIMALS));
-}
-
-// Convert token units to USDT amount
-export function unitsToUsdtV7(units: bigint): number {
-  return Number(units) / 10 ** USDT_DECIMALS;
-}
-
 // Hook to approve USDT spending for V7 contract
 export function useApproveUsdtV7() {
   const { address } = useAccount();
@@ -42,7 +36,15 @@ export function useApproveUsdtV7() {
   const approve = useCallback((amountUsdt: number) => {
     if (!address) return;
     
-    const amountUnits = usdtToUnitsV7(amountUsdt);
+    const amountUnits = usdtToUnits(amountUsdt);
+    
+    console.log("APPROVE_USDT:", {
+      usdtAddress: USDT_ADDRESS,
+      spender: ROOMMANAGER_V7_ADDRESS,
+      amountUsdt,
+      amountUnits: amountUnits.toString(),
+      userAddress: address,
+    });
     
     writeContract({
       address: USDT_ADDRESS,
