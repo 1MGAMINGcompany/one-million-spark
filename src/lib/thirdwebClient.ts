@@ -3,7 +3,7 @@ import { createThirdwebClient } from "thirdweb";
 // Thirdweb client for gasless transactions
 // Client ID from thirdweb dashboard (public, safe to expose)
 export const thirdwebClient = createThirdwebClient({
-  clientId: "your_thirdweb_client_id", // Replace with your actual thirdweb client ID
+  clientId: "e9e1086beb8bf58653a15ccaa171f889",
 });
 
 // Contract addresses
@@ -13,6 +13,6 @@ export const TRUSTED_FORWARDER_ADDRESS = "0x819e9EEf99446117476820aA2Ef754F068D7
 // Gasless config for OpenZeppelin ERC-2771
 export const GASLESS_CONFIG = {
   provider: "openzeppelin" as const,
-  relayerUrl: "https://api.defender.openzeppelin.com/autotasks/...", // Replace with your relayer URL
+  relayerUrl: "https://prj_cmj4z7zde06ad7j0lbgauwexy.engine.thirdweb.com",
   relayerForwarderAddress: TRUSTED_FORWARDER_ADDRESS,
 };
