@@ -568,8 +568,9 @@ const BackgammonAI = () => {
         <svg
           viewBox="0 0 60 28"
           className={cn(
-            "h-full w-[50px] shrink-0 transition-all duration-200",
-            isValidTarget && "drop-shadow-[0_0_15px_hsl(45_93%_70%)] drop-shadow-[0_0_30px_hsl(45_93%_60%)]"
+            "h-full w-[50px] shrink-0 transition-all duration-300",
+            isValidTarget && "drop-shadow-[0_0_12px_hsl(45_93%_70%)] drop-shadow-[0_0_24px_hsl(45_93%_55%/_0.7)]",
+            isSelected && "drop-shadow-[0_0_8px_hsl(45_93%_60%/_0.5)]"
           )}
           preserveAspectRatio="none"
         >
@@ -593,16 +594,18 @@ const BackgammonAI = () => {
           />
           {isValidTarget && (
             <>
+              {/* Elegant gold fill with soft glow */}
               <polygon
                 points={isLeftSide ? "0,2 0,26 58,14" : "60,2 60,26 2,14"}
-                fill="hsl(45 93% 70% / 0.6)"
-                className="animate-pulse"
+                fill="hsl(45 93% 65% / 0.5)"
+                style={{ filter: 'blur(0.5px)' }}
               />
+              {/* Crisp golden border */}
               <polygon
                 points={isLeftSide ? "0,2 0,26 58,14" : "60,2 60,26 2,14"}
                 fill="none"
-                stroke="hsl(45 100% 80%)"
-                strokeWidth="2"
+                stroke="hsl(45 100% 75%)"
+                strokeWidth="1.5"
                 className="animate-pulse"
               />
             </>
@@ -637,9 +640,7 @@ const BackgammonAI = () => {
             "absolute flex items-center justify-center cursor-pointer min-w-[48px] min-h-[48px] transition-all active:scale-95",
             isLeftSide ? "left-[50px]" : "right-[50px]",
             isAnimatingFrom && "opacity-50 scale-90",
-            isAnimatingTo && "animate-[bounce_0.5s_ease-out]",
-            isSelected && "bg-primary/20 rounded-lg",
-            isValidTarget && "bg-primary/30 rounded-lg"
+            isAnimatingTo && "animate-[bounce_0.5s_ease-out]"
           )}
           onClick={(e) => {
             e.stopPropagation();
