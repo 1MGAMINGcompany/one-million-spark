@@ -2,7 +2,12 @@ import { useState, useCallback } from "react";
 import { useAccount, useWriteContract } from "wagmi";
 import { toast } from "sonner";
 import { polygon } from "wagmi/chains";
+import { keccak256, toBytes } from "viem";
 import { ROOMMANAGER_V7_ADDRESS } from "@/lib/contractAddresses";
+
+// Rules hash for contract validation
+const RULES_TEXT = `1 MILLION GAMING RULES V1`;
+const RULES_HASH = keccak256(toBytes(RULES_TEXT));
 
 // RoomManagerV7Production ABI - minimal for our needs
 const ROOM_MANAGER_ABI = [
@@ -13,10 +18,11 @@ const ROOM_MANAGER_ABI = [
       { internalType: "bool", name: "isPrivate", type: "bool" },
       { internalType: "uint16", name: "platformFeeBps", type: "uint16" },
       { internalType: "uint32", name: "gameId", type: "uint32" },
-      { internalType: "uint16", name: "turnTimeSec", type: "uint16" }
+      { internalType: "uint16", name: "turnTimeSec", type: "uint16" },
+      { internalType: "bytes32", name: "rulesHash", type: "bytes32" }
     ],
     name: "createRoom",
-    outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
+    outputs: [{ internalType: "uint256", name: "roomId", type: "uint256" }],
     stateMutability: "nonpayable",
     type: "function"
   },
@@ -90,7 +96,7 @@ export function useGaslessCreateRoom() {
         address: ROOMMANAGER_V7_ADDRESS as `0x${string}`,
         abi: ROOM_MANAGER_ABI,
         functionName: "createRoom",
-        args: [entryFeeUnits, maxPlayersU8, isPrivate, 500, gameIdU32, turnTimeU16],
+        args: [entryFeeUnits, maxPlayersU8, isPrivate, 500, gameIdU32, turnTimeU16, RULES_HASH],
         chain: polygon,
         account: address,
       });
