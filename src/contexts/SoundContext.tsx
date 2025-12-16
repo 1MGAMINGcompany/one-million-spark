@@ -89,7 +89,7 @@ export const SoundProvider = ({ children }: { children: ReactNode }) => {
     if (!backgroundMusicRef.current) {
       backgroundMusicRef.current = new Audio('/sounds/ambient/lightwind.mp3');
       backgroundMusicRef.current.loop = true;
-      backgroundMusicRef.current.volume = 0.15;
+      backgroundMusicRef.current.volume = 0.35;
     }
   }, []);
   
