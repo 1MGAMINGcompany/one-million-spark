@@ -185,10 +185,19 @@ const CreateRoom = () => {
     if (createError) {
       const { title, description } = logTxError('CREATE_ROOM', createError);
       const isRejection = isUserRejectionError(createError);
+      const errorMsg = (createError as any)?.message || '';
+      const isRevert = errorMsg.toLowerCase().includes('revert') || 
+                       errorMsg.toLowerCase().includes('execution reverted');
       
       toast({
-        title: isRejection ? t("createRoom.approvalCancelled", title) : t("createRoom.transactionFailed"),
-        description,
+        title: isRejection 
+          ? t("createRoom.approvalCancelled", title) 
+          : isRevert 
+            ? "Create Room failed (revert)" 
+            : t("createRoom.transactionFailed"),
+        description: isRevert 
+          ? "Check network + room settings. See console for debug info."
+          : description,
         variant: isRejection ? "default" : "destructive",
       });
       setCreateError(null);

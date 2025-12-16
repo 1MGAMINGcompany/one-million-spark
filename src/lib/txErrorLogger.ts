@@ -8,6 +8,52 @@ interface TxError {
   cause?: { message?: string };
   status?: number;
   details?: string;
+  metaMessages?: string[];
+}
+
+interface CreateRoomDebugContext {
+  chainId?: string;
+  walletAddress?: string;
+  contractAddress?: string;
+  functionName?: string;
+  params?: {
+    entryFeeUnits: string;
+    maxPlayers: number;
+    isPrivate: boolean;
+    platformFeeBps: number;
+    gameId: number;
+    turnTimeSec: number;
+  };
+  usdtTokenAddress?: string;
+  stakeRaw?: string;
+  stakeFormatted?: string;
+}
+
+/**
+ * Logs Create Room failure with comprehensive debug info
+ */
+export function logCreateRoomDebug(context: CreateRoomDebugContext, error: unknown): void {
+  const err = error as TxError;
+  
+  console.group('CREATE_ROOM_FAILURE_DEBUG');
+  console.log('Chain ID:', context.chainId);
+  console.log('Wallet Address:', context.walletAddress);
+  console.log('Contract Address:', context.contractAddress);
+  console.log('Function:', context.functionName);
+  console.log('Parameters:', context.params);
+  console.log('USDT Token Address:', context.usdtTokenAddress);
+  console.log('Stake Amount (raw units):', context.stakeRaw);
+  console.log('Stake Amount (formatted):', context.stakeFormatted);
+  console.log('---');
+  console.log('Error Name:', err?.name);
+  console.log('Error Message:', err?.message);
+  console.log('Error Short Message:', err?.shortMessage);
+  console.log('Error Code:', err?.code);
+  console.log('Error Details:', err?.details);
+  console.log('Error Meta Messages:', err?.metaMessages);
+  console.log('Error Cause:', err?.cause);
+  console.error('TX_ERROR_FULL', error);
+  console.groupEnd();
 }
 
 /**
@@ -26,6 +72,13 @@ export function logTxError(context: string, error: unknown): { title: string; de
   const code = err?.code;
   const causeMessage = err?.cause?.message;
   const status = err?.status;
+  const details = err?.details;
+  const metaMessages = err?.metaMessages;
+  
+  // Log extra viem/thirdweb fields if present
+  if (details || metaMessages) {
+    console.log(`TX_ERROR_EXTRA [${context}]`, { details, metaMessages });
+  }
   
   // Check if user rejected
   const isUserRejection = message?.toLowerCase().includes('rejected') ||
