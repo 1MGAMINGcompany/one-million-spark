@@ -3,6 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Web3Provider } from "./components/Web3Provider";
+import { ThirdwebSmartProvider } from "./components/ThirdwebSmartProvider";
 import { LoadingProvider } from "./contexts/LoadingContext";
 import { AudioProvider } from "./contexts/AudioContext";
 import { SoundProvider } from "./contexts/SoundContext";
@@ -96,17 +97,19 @@ const AppContent = () => {
   );
 };
 const App = () => (
-  <Web3Provider>
-    <LoadingProvider>
-      <AudioProvider>
-        <SoundProvider>
-          <TooltipProvider>
-            <AppContent />
-          </TooltipProvider>
-        </SoundProvider>
-      </AudioProvider>
-    </LoadingProvider>
-  </Web3Provider>
+  <ThirdwebSmartProvider>
+    <Web3Provider>
+      <LoadingProvider>
+        <AudioProvider>
+          <SoundProvider>
+            <TooltipProvider>
+              <AppContent />
+            </TooltipProvider>
+          </SoundProvider>
+        </AudioProvider>
+      </LoadingProvider>
+    </Web3Provider>
+  </ThirdwebSmartProvider>
 );
 
 export default App;

@@ -59,7 +59,8 @@ function getGameName(gameId: number): string {
 const CreateRoom = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { isConnected, address, connectMetaMask, connectWalletConnect } = useSmartAccount();
+  const smartAccount = useSmartAccount();
+  const { isConnected, address, connectMetaMask, connectWalletConnect, providerMissing } = smartAccount;
   const { toast } = useToast();
   const { play } = useSound();
   useBackgroundMusic(true);
@@ -352,6 +353,23 @@ const CreateRoom = () => {
     if (isBusy) return t("createRoom.creatingRoom");
     return t("createRoom.step2Create");
   };
+
+  // Show error banner if gasless enabled but provider missing
+  if (GASLESS_ENABLED && providerMissing) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center px-4 py-12">
+        <div className="w-full max-w-md bg-destructive/10 border border-destructive rounded-lg p-6">
+          <div className="flex items-center gap-2 mb-2">
+            <AlertCircle className="text-destructive" />
+            <h2 className="font-bold text-destructive">Smart Account Provider Missing</h2>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Gasless transactions are enabled but the ThirdwebSmartProvider is not mounted. Please refresh the page.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center px-4 py-12">
