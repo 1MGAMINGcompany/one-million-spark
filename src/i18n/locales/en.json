@@ -63,7 +63,9 @@
   "walletRequired": {
     "title": "Wallet Required",
     "description": "Please connect your wallet to use this feature.",
-    "hint": "Click \"Connect Wallet\" in the top-right."
+    "hint": "Click \"Connect Wallet\" in the top-right.",
+    "feesTitle": "Game Fees",
+    "feesDescription": "All game entry fees are paid in USDT on the Polygon network. We cover all gas fees for you!"
   },
   "gameAI": {
     "backToTemple": "Back to Temple",

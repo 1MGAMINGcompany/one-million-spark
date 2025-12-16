@@ -91,7 +91,9 @@
   "walletRequired": {
     "title": "需要钱包",
     "description": "请连接您的钱包以使用此功能。",
-    "hint": "点击右上角的'连接钱包'。"
+    "hint": "点击右上角的'连接钱包'。",
+    "feesTitle": "游戏费用",
+    "feesDescription": "所有入场费用均使用Polygon网络上的USDT支付。我们为您支付所有Gas费用！"
   },
   "gameAI": {
     "backToTemple": "返回神殿",

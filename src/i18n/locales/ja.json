@@ -91,7 +91,9 @@
   "walletRequired": {
     "title": "ウォレットが必要です",
     "description": "この機能を使用するにはウォレットを接続してください。",
-    "hint": "右上の「ウォレットを接続」をクリックしてください。"
+    "hint": "右上の「ウォレットを接続」をクリックしてください。",
+    "feesTitle": "ゲーム料金",
+    "feesDescription": "すべてのエントリー料金はPolygonネットワーク上のUSDTで支払われます。ガス代はすべて私たちが負担します！"
   },
   "gameAI": {
     "backToTemple": "神殿に戻る",

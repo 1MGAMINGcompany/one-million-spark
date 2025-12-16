@@ -91,7 +91,9 @@
   "walletRequired": {
     "title": "Carteira Necessária",
     "description": "Por favor conecte sua carteira para usar este recurso.",
-    "hint": "Clique em \"Conectar Carteira\" no canto superior direito."
+    "hint": "Clique em \"Conectar Carteira\" no canto superior direito.",
+    "feesTitle": "Taxas do Jogo",
+    "feesDescription": "Todas as taxas de entrada são pagas em USDT na rede Polygon. Nós cobrimos todas as taxas de gas!"
   },
   "gameAI": {
     "backToTemple": "Voltar ao Templo",

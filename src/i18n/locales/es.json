@@ -91,7 +91,9 @@
   "walletRequired": {
     "title": "Billetera Requerida",
     "description": "Por favor conecta tu billetera para usar esta función.",
-    "hint": "Haz clic en \"Conectar Billetera\" en la esquina superior derecha."
+    "hint": "Haz clic en \"Conectar Billetera\" en la esquina superior derecha.",
+    "feesTitle": "Tarifas del Juego",
+    "feesDescription": "Todas las tarifas de entrada se pagan en USDT en la red Polygon. ¡Nosotros cubrimos todos los costos de gas!"
   },
   "gameAI": {
     "backToTemple": "Volver al Templo",

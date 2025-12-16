@@ -91,7 +91,9 @@
   "walletRequired": {
     "title": "Wallet Erforderlich",
     "description": "Bitte verbinden Sie Ihr Wallet, um diese Funktion zu nutzen.",
-    "hint": "Klicken Sie oben rechts auf \"Wallet verbinden\"."
+    "hint": "Klicken Sie oben rechts auf \"Wallet verbinden\".",
+    "feesTitle": "Spielgebühren",
+    "feesDescription": "Alle Eintrittsgebühren werden in USDT im Polygon-Netzwerk bezahlt. Wir übernehmen alle Gasgebühren für Sie!"
   },
   "gameAI": {
     "backToTemple": "Zurück zum Tempel",

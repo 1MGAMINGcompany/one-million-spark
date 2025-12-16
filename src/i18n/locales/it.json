@@ -91,7 +91,9 @@
   "walletRequired": {
     "title": "Portafoglio Richiesto",
     "description": "Connetti il tuo portafoglio per utilizzare questa funzione.",
-    "hint": "Clicca su \"Connetti Portafoglio\" in alto a destra."
+    "hint": "Clicca su \"Connetti Portafoglio\" in alto a destra.",
+    "feesTitle": "Commissioni di Gioco",
+    "feesDescription": "Tutte le quote di ingresso sono pagate in USDT sulla rete Polygon. Copriamo noi tutte le commissioni gas!"
   },
   "gameAI": {
     "backToTemple": "Torna al Tempio",
