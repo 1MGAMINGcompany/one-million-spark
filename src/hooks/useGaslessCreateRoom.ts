@@ -8,9 +8,9 @@ import ABI from "@/abi/RoomManagerV7Production.abi.json";
 export const ROOMMANAGER_V7_ADDRESS = "0xF99df196a90ae9Ea1A124316D2c85363D2A9cDA1" as const;
 export const TRUSTED_FORWARDER_ADDRESS = "0x819e9EEf99446117476820aA2Ef754F068D7305e" as const;
 
-// Thirdweb client - actual client ID for gasless transactions
+// Thirdweb client - uses env variable for gasless transactions
 const thirdwebClient = createThirdwebClient({
-  clientId: "e9e1086beb8bf58653a15ccaa171f889",
+  clientId: import.meta.env.VITE_THIRDWEB_CLIENT_ID || "e9e1086beb8bf58653a15ccaa171f889",
 });
 
 // Gasless config using OpenZeppelin ERC-2771 pattern
