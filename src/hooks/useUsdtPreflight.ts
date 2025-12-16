@@ -1,31 +1,25 @@
 import { useCallback, useState, useEffect } from "react";
-import { useReadContract } from "wagmi";
+import { ethers } from "ethers";
 import { ROOMMANAGER_V7_ADDRESS } from "./useRoomManagerV7";
 
-// USDT address on Polygon mainnet (checksummed)
-const USDT_ADDRESS = "0xC2132D05D31c914a87C6611C10748AEb04B58e8F" as const;
-const USDT_DECIMALS = 6;
+// Extend Window type for ethereum
+declare global {
+  interface Window {
+    ethereum?: ethers.Eip1193Provider;
+  }
+}
 
-// ERC20 ABI for allowance and balanceOf
+// USDT address on Polygon mainnet (checksummed)
+const USDT_ADDRESS = "0xC2132D05D31c914a87C6611C10748AEb04B58e8F";
+const USDT_DECIMALS = 6;
+const FALLBACK_RPC = "https://polygon-rpc.com";
+
+// Minimal ERC20 ABI for reads
 const ERC20_ABI = [
-  {
-    type: "function",
-    name: "allowance",
-    stateMutability: "view",
-    inputs: [
-      { name: "owner", type: "address" },
-      { name: "spender", type: "address" },
-    ],
-    outputs: [{ name: "", type: "uint256" }],
-  },
-  {
-    type: "function",
-    name: "balanceOf",
-    stateMutability: "view",
-    inputs: [{ name: "account", type: "address" }],
-    outputs: [{ name: "", type: "uint256" }],
-  },
-] as const;
+  "function allowance(address owner, address spender) view returns (uint256)",
+  "function balanceOf(address account) view returns (uint256)",
+  "function decimals() view returns (uint8)",
+];
 
 // Format raw units to USDT string (6 decimals)
 export function formatUsdtUnits(units: bigint): string {
@@ -42,90 +36,153 @@ export interface PreflightResult {
   hasSufficientBalance: boolean;
 }
 
+// Safe read helper with fallback
+async function safeRead<T>(
+  primaryFn: () => Promise<T>,
+  fallbackFn: () => Promise<T>
+): Promise<T> {
+  try {
+    return await primaryFn();
+  } catch (e1) {
+    console.warn("BrowserProvider read failed, falling back to RPC", e1);
+    return await fallbackFn();
+  }
+}
+
 export function useUsdtPreflight(ownerAddress: `0x${string}` | undefined, entryFeeUnits: bigint) {
   const [lastPreflight, setLastPreflight] = useState<PreflightResult | null>(null);
+  const [allowanceRaw, setAllowanceRaw] = useState<bigint>(0n);
+  const [balanceRaw, setBalanceRaw] = useState<bigint>(0n);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isConnected, setIsConnected] = useState(false);
 
-  // Read allowance
-  const { 
-    data: allowanceData, 
-    refetch: refetchAllowance,
-    isLoading: isLoadingAllowance 
-  } = useReadContract({
-    address: USDT_ADDRESS,
-    abi: ERC20_ABI,
-    functionName: "allowance",
-    args: ownerAddress ? [ownerAddress, ROOMMANAGER_V7_ADDRESS] : undefined,
-    chainId: 137,
-    query: {
-      enabled: !!ownerAddress,
-      refetchInterval: 10000,
-    },
-  });
+  // Create fallback read-only provider
+  const getFallbackProvider = useCallback(() => {
+    return new ethers.JsonRpcProvider(FALLBACK_RPC);
+  }, []);
 
-  // Read balance
-  const { 
-    data: balanceData, 
-    refetch: refetchBalance,
-    isLoading: isLoadingBalance 
-  } = useReadContract({
-    address: USDT_ADDRESS,
-    abi: ERC20_ABI,
-    functionName: "balanceOf",
-    args: ownerAddress ? [ownerAddress] : undefined,
-    chainId: 137,
-    query: {
-      enabled: !!ownerAddress,
-      refetchInterval: 10000,
-    },
-  });
-
-  const allowanceRaw = allowanceData ?? 0n;
-  const balanceRaw = balanceData ?? 0n;
-
-  // Run preflight check and log to console
-  const runPreflight = useCallback(async (): Promise<PreflightResult> => {
-    await Promise.all([refetchAllowance(), refetchBalance()]);
-    
-    const currentAllowance = allowanceData ?? 0n;
-    const currentBalance = balanceData ?? 0n;
-    
-    const result: PreflightResult = {
-      allowanceRaw: currentAllowance,
-      balanceRaw: currentBalance,
-      allowanceUsdt: formatUsdtUnits(currentAllowance),
-      balanceUsdt: formatUsdtUnits(currentBalance),
-      hasSufficientAllowance: currentAllowance >= entryFeeUnits,
-      hasSufficientBalance: currentBalance >= entryFeeUnits,
-    };
-
-    // Console log in single line as requested
-    console.log(
-      `PRECHECK allowance=${currentAllowance.toString()} balance=${currentBalance.toString()} entryFee=${entryFeeUnits.toString()} spender=${ROOMMANAGER_V7_ADDRESS}`
-    );
-
-    setLastPreflight(result);
-    return result;
-  }, [refetchAllowance, refetchBalance, allowanceData, balanceData, entryFeeUnits]);
-
-  // Update preflight result when data changes
-  useEffect(() => {
-    if (ownerAddress && !isLoadingAllowance && !isLoadingBalance) {
-      const result: PreflightResult = {
-        allowanceRaw,
-        balanceRaw,
-        allowanceUsdt: formatUsdtUnits(allowanceRaw),
-        balanceUsdt: formatUsdtUnits(balanceRaw),
-        hasSufficientAllowance: allowanceRaw >= entryFeeUnits,
-        hasSufficientBalance: balanceRaw >= entryFeeUnits,
-      };
-      setLastPreflight(result);
-      
-      // Log on initial load
-      console.log(
-        `PRECHECK allowance=${allowanceRaw.toString()} balance=${balanceRaw.toString()} entryFee=${entryFeeUnits.toString()} spender=${ROOMMANAGER_V7_ADDRESS}`
-      );
+  // Create browser provider if available
+  const getBrowserProvider = useCallback(() => {
+    if (typeof window !== "undefined" && window.ethereum) {
+      return new ethers.BrowserProvider(window.ethereum);
     }
-  }, [ownerAddress, allowanceRaw, balanceRaw, entryFeeUnits, isLoadingAllowance, isLoadingBalance]);
+    return null;
+  }, []);
+
+  // Fetch allowance and balance
+  const fetchPreflightData = useCallback(async (): Promise<PreflightResult | null> => {
+    if (!ownerAddress) {
+      setIsConnected(false);
+      return null;
+    }
+
+    setIsLoading(true);
+    setIsConnected(true);
+
+    try {
+      const browserProvider = getBrowserProvider();
+      const fallbackProvider = getFallbackProvider();
+
+      // Create contract instances
+      const createContract = (provider: ethers.Provider) => 
+        new ethers.Contract(USDT_ADDRESS, ERC20_ABI, provider);
+
+      // Safe read allowance
+      const allowance = await safeRead(
+        async () => {
+          if (!browserProvider) throw new Error("No browser provider");
+          const contract = createContract(browserProvider);
+          return BigInt(await contract.allowance(ownerAddress, ROOMMANAGER_V7_ADDRESS));
+        },
+        async () => {
+          const contract = createContract(fallbackProvider);
+          return BigInt(await contract.allowance(ownerAddress, ROOMMANAGER_V7_ADDRESS));
+        }
+      );
+
+      // Safe read balance
+      const balance = await safeRead(
+        async () => {
+          if (!browserProvider) throw new Error("No browser provider");
+          const contract = createContract(browserProvider);
+          return BigInt(await contract.balanceOf(ownerAddress));
+        },
+        async () => {
+          const contract = createContract(fallbackProvider);
+          return BigInt(await contract.balanceOf(ownerAddress));
+        }
+      );
+
+      // Get chainId for logging
+      let chainId = "unknown";
+      try {
+        if (browserProvider) {
+          const network = await browserProvider.getNetwork();
+          chainId = network.chainId.toString();
+        }
+      } catch {
+        chainId = "137"; // Assume Polygon
+      }
+
+      setAllowanceRaw(allowance);
+      setBalanceRaw(balance);
+
+      const result: PreflightResult = {
+        allowanceRaw: allowance,
+        balanceRaw: balance,
+        allowanceUsdt: formatUsdtUnits(allowance),
+        balanceUsdt: formatUsdtUnits(balance),
+        hasSufficientAllowance: allowance >= entryFeeUnits,
+        hasSufficientBalance: balance >= entryFeeUnits,
+      };
+
+      // Console log in required format
+      console.log(
+        `PRECHECK_OK chainId=${chainId} user=${ownerAddress} spender=${ROOMMANAGER_V7_ADDRESS} allowance=${allowance.toString()} balance=${balance.toString()}`
+      );
+
+      setLastPreflight(result);
+      return result;
+    } catch (error) {
+      console.error("Preflight check failed:", error);
+      return null;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [ownerAddress, entryFeeUnits, getBrowserProvider, getFallbackProvider]);
+
+  // Run preflight on mount and when address changes
+  useEffect(() => {
+    if (ownerAddress) {
+      fetchPreflightData();
+    } else {
+      setAllowanceRaw(0n);
+      setBalanceRaw(0n);
+      setLastPreflight(null);
+      setIsConnected(false);
+    }
+  }, [ownerAddress, fetchPreflightData]);
+
+  // Refetch functions
+  const refetchAllowance = useCallback(async () => {
+    await fetchPreflightData();
+  }, [fetchPreflightData]);
+
+  const refetchBalance = useCallback(async () => {
+    await fetchPreflightData();
+  }, [fetchPreflightData]);
+
+  const runPreflight = useCallback(async (): Promise<PreflightResult> => {
+    const result = await fetchPreflightData();
+    return result || {
+      allowanceRaw: 0n,
+      balanceRaw: 0n,
+      allowanceUsdt: "0.000000",
+      balanceUsdt: "0.000000",
+      hasSufficientAllowance: false,
+      hasSufficientBalance: false,
+    };
+  }, [fetchPreflightData]);
 
   return {
     allowanceRaw,
@@ -134,7 +191,8 @@ export function useUsdtPreflight(ownerAddress: `0x${string}` | undefined, entryF
     balanceUsdt: formatUsdtUnits(balanceRaw),
     hasSufficientAllowance: allowanceRaw >= entryFeeUnits,
     hasSufficientBalance: balanceRaw >= entryFeeUnits,
-    isLoading: isLoadingAllowance || isLoadingBalance,
+    isLoading,
+    isConnected,
     runPreflight,
     refetchAllowance,
     refetchBalance,
