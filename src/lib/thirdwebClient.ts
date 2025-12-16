@@ -1,9 +1,9 @@
 import { createThirdwebClient } from "thirdweb";
 
 // Thirdweb client for gasless transactions
-// Client ID from thirdweb dashboard (public, safe to expose)
+// Client ID from thirdweb dashboard (loaded from env variable)
 export const thirdwebClient = createThirdwebClient({
-  clientId: "e9e1086beb8bf58653a15ccaa171f889",
+  clientId: import.meta.env.VITE_THIRDWEB_CLIENT_ID || "e9e1086beb8bf58653a15ccaa171f889",
 });
 
 // Contract addresses
