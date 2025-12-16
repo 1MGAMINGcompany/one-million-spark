@@ -569,7 +569,7 @@ const BackgammonAI = () => {
           viewBox="0 0 60 28"
           className={cn(
             "h-full w-[50px] shrink-0 transition-all duration-200",
-            isValidTarget && "drop-shadow-[0_0_6px_hsl(45_93%_54%_/_0.5)]"
+            isValidTarget && "drop-shadow-[0_0_15px_hsl(45_93%_70%)] drop-shadow-[0_0_30px_hsl(45_93%_60%)]"
           )}
           preserveAspectRatio="none"
         >
@@ -592,11 +592,20 @@ const BackgammonAI = () => {
             strokeWidth="0.5"
           />
           {isValidTarget && (
-            <polygon
-              points={isLeftSide ? "0,2 0,26 58,14" : "60,2 60,26 2,14"}
-              fill="hsl(45 93% 54% / 0.3)"
-              className="animate-pulse"
-            />
+            <>
+              <polygon
+                points={isLeftSide ? "0,2 0,26 58,14" : "60,2 60,26 2,14"}
+                fill="hsl(45 93% 70% / 0.6)"
+                className="animate-pulse"
+              />
+              <polygon
+                points={isLeftSide ? "0,2 0,26 58,14" : "60,2 60,26 2,14"}
+                fill="none"
+                stroke="hsl(45 100% 80%)"
+                strokeWidth="2"
+                className="animate-pulse"
+              />
+            </>
           )}
         </svg>
         
@@ -622,49 +631,55 @@ const BackgammonAI = () => {
           />
         )}
         
-        {/* Checker stack - positioned beside triangle */}
-        {checkerCount > 0 && (
-          <div 
-            className={cn(
-              "absolute flex flex-row items-center gap-0 transition-all duration-500",
-              isLeftSide ? "left-[52px]" : "right-[52px]",
-              isAnimatingFrom && "opacity-50 scale-90",
-              isAnimatingTo && "animate-[bounce_0.5s_ease-out]"
-            )}
-          >
-            {/* Render checkers horizontally for mobile */}
-            {Array.from({ length: Math.min(checkerCount, 5) }).map((_, i) => (
-              <div
-                key={i}
-                className="transition-all"
-                style={{
-                  marginLeft: i > 0 ? '-10px' : 0,
-                  zIndex: i,
-                }}
-              >
+        {/* Checker stack - positioned beside triangle - TAPPABLE ZONE */}
+        <div 
+          className={cn(
+            "absolute flex items-center justify-center cursor-pointer min-w-[48px] min-h-[48px] transition-all active:scale-95",
+            isLeftSide ? "left-[50px]" : "right-[50px]",
+            isAnimatingFrom && "opacity-50 scale-90",
+            isAnimatingTo && "animate-[bounce_0.5s_ease-out]",
+            isSelected && "bg-primary/20 rounded-lg",
+            isValidTarget && "bg-primary/30 rounded-lg"
+          )}
+          onClick={(e) => {
+            e.stopPropagation();
+            handlePointClick(index);
+          }}
+        >
+          {checkerCount > 0 && (
+            <div className="flex flex-row items-center gap-0">
+              {/* Render checkers horizontally for mobile */}
+              {Array.from({ length: Math.min(checkerCount, 4) }).map((_, i) => (
                 <div
-                  className={cn(
-                    "w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold",
-                    isPlayer 
-                      ? "bg-gradient-to-br from-primary via-primary to-amber-700 text-amber-900 border border-amber-600/50" 
-                      : "bg-gradient-to-br from-slate-600 via-slate-800 to-slate-900 text-primary border border-primary/30",
-                    isSelected && i === Math.min(checkerCount, 5) - 1 && "ring-2 ring-primary ring-offset-1 ring-offset-background",
-                    isValidTarget && i === Math.min(checkerCount, 5) - 1 && "ring-2 ring-primary/50"
-                  )}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (i === Math.min(checkerCount, 5) - 1) handlePointClick(index);
-                  }}
+                  key={i}
+                  className="transition-all"
                   style={{
-                    boxShadow: '0 1px 2px rgba(0,0,0,0.3)'
+                    marginLeft: i > 0 ? '-8px' : 0,
+                    zIndex: i,
                   }}
                 >
-                  {i === Math.min(checkerCount, 5) - 1 && checkerCount > 5 ? checkerCount : ''}
+                  <div
+                    className={cn(
+                      "w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold shadow-md",
+                      isPlayer 
+                        ? "bg-gradient-to-br from-primary via-primary to-amber-700 text-amber-900 border-2 border-amber-500" 
+                        : "bg-gradient-to-br from-slate-600 via-slate-800 to-slate-900 text-primary border-2 border-primary/40",
+                      isSelected && i === Math.min(checkerCount, 4) - 1 && "ring-2 ring-primary ring-offset-1 ring-offset-background",
+                      isValidTarget && i === Math.min(checkerCount, 4) - 1 && "ring-2 ring-primary"
+                    )}
+                    style={{
+                      boxShadow: isSelected 
+                        ? '0 0 12px hsl(45 93% 60% / 0.6), 0 2px 4px rgba(0,0,0,0.3)' 
+                        : '0 2px 4px rgba(0,0,0,0.3)'
+                    }}
+                  >
+                    {i === Math.min(checkerCount, 4) - 1 && checkerCount > 4 ? checkerCount : ''}
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     );
   };
