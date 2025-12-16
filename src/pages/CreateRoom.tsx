@@ -15,11 +15,11 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useWallet } from "@/hooks/useWallet";
 import { useToast } from "@/hooks/use-toast";
 import { useSound } from "@/contexts/SoundContext";
-import { useGaslessCreateRoom } from "@/hooks/useGaslessCreateRoom";
+import { useGaslessCreateRoom, GASLESS_ENABLED } from "@/hooks/useGaslessCreateRoom";
 import { useUsdtPreflight } from "@/hooks/useUsdtPreflight";
 import { useApproveUsdtV7, usdtToUnitsV7 } from "@/hooks/useApproveUsdtV7";
 import { usePlayerActiveRoom } from "@/hooks/usePlayerActiveRoom";
-import { Loader2, AlertCircle, Wallet, CheckCircle2, AlertTriangle, XCircle } from "lucide-react";
+import { Loader2, AlertCircle, Wallet, CheckCircle2, AlertTriangle, XCircle, Info } from "lucide-react";
 import { useWeb3Modal } from "@web3modal/wagmi/react";
 import { ShareInviteDialog } from "@/components/ShareInviteDialog";
 import { useNotificationPermission } from "@/hooks/useRoomEvents";
@@ -73,6 +73,7 @@ const CreateRoom = () => {
   const [createdGameName, setCreatedGameName] = useState<string>("");
   const [approvalStep, setApprovalStep] = useState<'idle' | 'approved'>('idle');
   const [showDepositModal, setShowDepositModal] = useState(false);
+  const [approveMode, setApproveMode] = useState<'exact' | 'max'>('exact');
   
   const { requestPermission } = useNotificationPermission();
 
@@ -100,6 +101,7 @@ const CreateRoom = () => {
 
   const { 
     approve: approveUsdt, 
+    approveMax: approveUsdtMax,
     isPending: isApprovePending, 
     isConfirming: isApproveConfirming, 
     isSuccess: isApproveSuccess,
@@ -284,7 +286,11 @@ const CreateRoom = () => {
     } else {
       // Need approval first - this will auto-trigger createRoom on success
       play('ui_click');
-      approveUsdt(entryFeeNum);
+      if (approveMode === 'max') {
+        approveUsdtMax();
+      } else {
+        approveUsdt(entryFeeNum);
+      }
     }
   };
 
@@ -521,6 +527,16 @@ const CreateRoom = () => {
           {/* Two-Step Process: Approve USDT → Create Room */}
           {isConnected && !hasActiveRoom && (
             <div className="space-y-3">
+              {/* Gasless Warning Banner */}
+              {!GASLESS_ENABLED && (
+                <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-md p-3 flex items-start gap-2">
+                  <Info className="h-4 w-4 text-yellow-500 mt-0.5 shrink-0" />
+                  <div className="text-xs text-yellow-600 dark:text-yellow-400">
+                    <strong>Note:</strong> Gasless transactions not enabled yet. MetaMask will show a small POL network fee (~$0.01).
+                  </div>
+                </div>
+              )}
+
               {/* USDT Preflight Status Display */}
               {address && entryFeeNum > 0 && (
                 <div className="bg-muted/50 border border-border rounded-md p-3 space-y-2 text-sm">
@@ -548,6 +564,42 @@ const CreateRoom = () => {
                       {spenderAddress.slice(0, 6)}...{spenderAddress.slice(-4)}
                     </span>
                   </div>
+                </div>
+              )}
+
+              {/* Approval Options - only show when not approved */}
+              {address && entryFeeNum > 0 && !hasSufficientAllowance && (
+                <div className="bg-muted/30 border border-border rounded-md p-3 space-y-2">
+                  <p className="text-xs text-muted-foreground">Choose approval type:</p>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setApproveMode('exact')}
+                      className={`flex-1 text-xs py-2 px-3 rounded-md border transition-colors ${
+                        approveMode === 'exact' 
+                          ? 'bg-primary text-primary-foreground border-primary' 
+                          : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted'
+                      }`}
+                    >
+                      Exact ({entryFeeNum.toFixed(2)} USDT)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setApproveMode('max')}
+                      className={`flex-1 text-xs py-2 px-3 rounded-md border transition-colors ${
+                        approveMode === 'max' 
+                          ? 'bg-primary text-primary-foreground border-primary' 
+                          : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted'
+                      }`}
+                    >
+                      Unlimited ⚡
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">
+                    {approveMode === 'max' 
+                      ? "Unlimited approval = no future approvals needed (recommended)" 
+                      : "Exact approval = more secure, approve again for higher fees"}
+                  </p>
                 </div>
               )}
 
