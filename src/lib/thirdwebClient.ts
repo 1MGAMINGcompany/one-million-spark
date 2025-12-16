@@ -12,11 +12,10 @@ export const thirdwebClient = createThirdwebClient({
   clientId: import.meta.env.VITE_THIRDWEB_CLIENT_ID || "e9e1086beb8bf58653a15ccaa171f889",
 });
 
-// Gasless config for OpenZeppelin ERC-2771 forwarding
-// This ensures createRoom is sent via the trusted forwarder
+// Gasless config for ERC-2771 forwarding via Thirdweb Engine
 export const GASLESS_CONFIG = {
-  provider: "openzeppelin" as const,
-  relayerUrl: import.meta.env.VITE_RELAYER_URL || "https://api.defender.openzeppelin.com/autotasks/...",
+  provider: "engine" as const,
+  relayerUrl: "https://prj_cmj4z7zde06ad7j0lbgauwexy.engine.thirdweb.com",
   relayerForwarderAddress: TRUSTED_FORWARDER_ADDRESS,
 };
 
