@@ -2,11 +2,13 @@ import { useCallback, useState } from "react";
 import { createThirdwebClient, getContract, prepareContractCall, sendTransaction } from "thirdweb";
 import { polygon } from "thirdweb/chains";
 import { ethers6Adapter } from "thirdweb/adapters/ethers6";
-import { BrowserProvider } from "ethers";
+import { BrowserProvider, formatUnits } from "ethers";
 import ABI from "@/abi/RoomManagerV7Production.abi.json";
+import { logCreateRoomDebug } from "@/lib/txErrorLogger";
 
 export const ROOMMANAGER_V7_ADDRESS = "0xF99df196a90ae9Ea1A124316D2c85363D2A9cDA1" as const;
 export const TRUSTED_FORWARDER_ADDRESS = "0x819e9EEf99446117476820aA2Ef754F068D7305e" as const;
+export const USDT_TOKEN_ADDRESS = "0xc2132D05D31c914a87C6611C10748AEb04B58e8F" as const;
 
 // Thirdweb client - uses env variable for gasless transactions
 const thirdwebClient = createThirdwebClient({
@@ -18,6 +20,29 @@ const GASLESS_CONFIG = {
   provider: "openzeppelin" as const,
   relayerForwarderAddress: TRUSTED_FORWARDER_ADDRESS,
 } as any;
+
+// Helper to get chain ID from wallet
+async function getWalletChainId(): Promise<string> {
+  const eth = (window as any).ethereum;
+  if (!eth) return 'unknown';
+  try {
+    return await eth.request({ method: 'eth_chainId' });
+  } catch {
+    return 'error';
+  }
+}
+
+// Helper to get wallet address
+async function getWalletAddress(): Promise<string> {
+  const eth = (window as any).ethereum;
+  if (!eth) return 'unknown';
+  try {
+    const accounts = await eth.request({ method: 'eth_accounts' });
+    return accounts?.[0] || 'no-account';
+  } catch {
+    return 'error';
+  }
+}
 
 // Helper to get thirdweb account from browser wallet
 async function getThirdwebAccount() {
@@ -52,6 +77,27 @@ export function useGaslessCreateRoom() {
   ): Promise<{ transactionHash: string; roomId: bigint }> => {
     if (isBusy) throw new Error("BUSY");
     setIsBusy(true);
+
+    // Collect debug context upfront
+    const chainId = await getWalletChainId();
+    const walletAddress = await getWalletAddress();
+    const debugContext = {
+      chainId,
+      walletAddress,
+      contractAddress: ROOMMANAGER_V7_ADDRESS,
+      functionName: 'createRoom',
+      params: {
+        entryFeeUnits: entryFeeUnits.toString(),
+        maxPlayers,
+        isPrivate,
+        platformFeeBps,
+        gameId,
+        turnTimeSec,
+      },
+      usdtTokenAddress: USDT_TOKEN_ADDRESS,
+      stakeRaw: entryFeeUnits.toString(),
+      stakeFormatted: formatUnits(entryFeeUnits, 6) + ' USDT',
+    };
 
     try {
       const account = await getThirdwebAccount();
@@ -94,6 +140,10 @@ export function useGaslessCreateRoom() {
         transactionHash: receipt.transactionHash,
         roomId: roomId as bigint,
       };
+    } catch (err) {
+      // Log comprehensive debug info on failure
+      logCreateRoomDebug(debugContext, err);
+      throw err;
     } finally {
       setIsBusy(false);
     }
