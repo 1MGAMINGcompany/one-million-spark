@@ -25,6 +25,7 @@ import { ShareInviteDialog } from "@/components/ShareInviteDialog";
 import { useNotificationPermission } from "@/hooks/useRoomEvents";
 import { useBackgroundMusic } from "@/hooks/useBackgroundMusic";
 import { DepositConfirmModal } from "@/components/DepositConfirmModal";
+import { logTxError, isUserRejectionError } from "@/lib/txErrorLogger";
 
 // Game ID mapping: Chess=1, Dominos=2, Backgammon=3, Checkers=4, Ludo=5
 const GAME_IDS: Record<string, number> = {
@@ -127,20 +128,17 @@ const CreateRoom = () => {
 
   useEffect(() => {
     if (approveError) {
-      // Check if user rejected the transaction
-      const isUserRejection = approveError.message?.toLowerCase().includes('rejected') ||
-                              approveError.message?.toLowerCase().includes('denied') ||
-                              approveError.message?.toLowerCase().includes('cancelled') ||
-                              approveError.message?.toLowerCase().includes('user refused');
+      const { title, description } = logTxError('APPROVE_USDT', approveError);
+      const isRejection = isUserRejectionError(approveError);
       
       toast({
-        title: isUserRejection 
-          ? t("createRoom.approvalCancelled", "Approval cancelled")
+        title: isRejection 
+          ? t("createRoom.approvalCancelled", title)
           : t("createRoom.approvalFailed"),
-        description: isUserRejection 
-          ? t("createRoom.approvalCancelledDesc", "No funds were moved. You can try again when ready.")
-          : (approveError.message || t("createRoom.approvalFailed")),
-        variant: isUserRejection ? "default" : "destructive",
+        description: isRejection 
+          ? t("createRoom.approvalCancelledDesc", description)
+          : description,
+        variant: isRejection ? "default" : "destructive",
       });
       resetApprove();
     }
@@ -185,10 +183,13 @@ const CreateRoom = () => {
 
   useEffect(() => {
     if (createError) {
+      const { title, description } = logTxError('CREATE_ROOM', createError);
+      const isRejection = isUserRejectionError(createError);
+      
       toast({
-        title: t("createRoom.transactionFailed"),
-        description: createError.message || t("createRoom.transactionFailed"),
-        variant: "destructive",
+        title: isRejection ? t("createRoom.approvalCancelled", title) : t("createRoom.transactionFailed"),
+        description,
+        variant: isRejection ? "default" : "destructive",
       });
       setCreateError(null);
     }
