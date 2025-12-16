@@ -56,9 +56,8 @@ function getGameName(gameId: number): string {
 
 const CreateRoom = () => {
   const { t } = useTranslation();
-  const { open: openWalletModal } = useWeb3Modal();
   const navigate = useNavigate();
-  const { isConnected, address } = useWallet();
+  const { isConnected, address, connectMetaMask, connectWalletConnect } = useSmartAccount();
   const { toast } = useToast();
   const { play } = useSound();
   useBackgroundMusic(true);
@@ -80,7 +79,7 @@ const CreateRoom = () => {
   // Check if player already has an active room
   const { activeRoom, hasActiveRoom, isLoading: isCheckingActiveRoom } = usePlayerActiveRoom(address as `0x${string}` | undefined);
 
-  const { createRoomGasless, isBusy } = useGaslessCreateRoom();
+  const { createRoomGasless, isBusy } = useSmartCreateRoom();
 
   const entryFeeNum = parseFloat(entryFee) || 0;
   const entryFeeUnits = usdtToUnitsV7(entryFeeNum);
@@ -125,12 +124,8 @@ const CreateRoom = () => {
     }
   }, [entryFee, entryFeeNum, t]);
 
-  // Auto-create room after approval succeeds
   // Internal function to create room (no validation, called after approval or when allowance sufficient)
   const handleCreateRoomInternal = async () => {
-    const isPolygon = await checkPolygonNetwork();
-    if (!isPolygon) return;
-
     play('ui_click');
     
     const maxPlayers = parseInt(players);
@@ -476,7 +471,7 @@ const CreateRoom = () => {
                   type="button" 
                   className="w-full" 
                   size="lg" 
-                  onClick={() => openWalletModal()}
+                  onClick={() => connectMetaMask()}
                 >
                   <Wallet className="mr-2 h-4 w-4" />
                   {t("createRoom.connectWallet")}
