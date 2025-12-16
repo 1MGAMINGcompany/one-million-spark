@@ -6,8 +6,10 @@ import FeaturedGameCard from "@/components/FeaturedGameCard";
 import { ChessIcon, DominoIcon, BackgammonIcon, CheckersIcon, LudoIcon } from "@/components/GameIcons";
 import PyramidLogo from "@/components/PyramidLogo";
 import { MobileAppPrompt } from "@/components/MobileAppPrompt";
+import { useBackgroundMusic } from "@/hooks/useBackgroundMusic";
 
 const Home = () => {
+  useBackgroundMusic(true);
   const { t } = useTranslation();
 
   const featuredGames = [
