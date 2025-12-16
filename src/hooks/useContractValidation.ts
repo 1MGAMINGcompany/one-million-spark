@@ -3,7 +3,7 @@ import { BrowserProvider, Contract, JsonRpcProvider } from "ethers";
 import ABI from "@/abi/RoomManagerV7Production.abi.json";
 
 // Single source of truth for RoomManager address
-export const ROOMMANAGER_V7_ADDRESS = "0xA039B03De894ebFa92933a9A7326c1715f040b96" as const;
+export const ROOMMANAGER_V7_ADDRESS = "0x4f3998195462100D867129747967BFCb56C07fe2" as const;
 
 const FALLBACK_RPC = "https://polygon-rpc.com";
 
