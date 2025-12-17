@@ -2,12 +2,10 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { Web3Provider } from "./components/Web3Provider";
-import { ThirdwebSmartProvider } from "./components/ThirdwebSmartProvider";
+import { SolanaWalletProvider } from "./components/SolanaWalletProvider";
 import { LoadingProvider } from "./contexts/LoadingContext";
 import { AudioProvider } from "./contexts/AudioContext";
 import { SoundProvider } from "./contexts/SoundContext";
-import { useContractValidation, ROOMMANAGER_V7_ADDRESS } from "./hooks/useContractValidation";
 import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
 import PyramidLoader from "./components/PyramidLoader";
@@ -36,24 +34,8 @@ import TermsOfService from "./pages/TermsOfService";
 import NotFound from "./pages/NotFound";
 import AgeConfirmation from "./components/AgeConfirmation";
 
-// Log contract address on app start
-console.log("RoomManager address:", ROOMMANAGER_V7_ADDRESS);
-
-// Inner component that runs validation
+// App Content Component
 const AppContent = () => {
-  const { isValidContract, error } = useContractValidation();
-  
-  if (error) {
-    return (
-      <div className="min-h-screen bg-destructive/10 flex items-center justify-center p-4">
-        <div className="bg-card border border-destructive rounded-lg p-8 max-w-lg text-center">
-          <h1 className="text-2xl font-bold text-destructive mb-4">Fatal Error</h1>
-          <p className="text-foreground">{error}</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <>
       <Toaster />
@@ -96,20 +78,19 @@ const AppContent = () => {
     </>
   );
 };
+
 const App = () => (
-  <ThirdwebSmartProvider>
-    <Web3Provider>
-      <LoadingProvider>
-        <AudioProvider>
-          <SoundProvider>
-            <TooltipProvider>
-              <AppContent />
-            </TooltipProvider>
-          </SoundProvider>
-        </AudioProvider>
-      </LoadingProvider>
-    </Web3Provider>
-  </ThirdwebSmartProvider>
+  <SolanaWalletProvider>
+    <LoadingProvider>
+      <AudioProvider>
+        <SoundProvider>
+          <TooltipProvider>
+            <AppContent />
+          </TooltipProvider>
+        </SoundProvider>
+      </AudioProvider>
+    </LoadingProvider>
+  </SolanaWalletProvider>
 );
 
 export default App;
