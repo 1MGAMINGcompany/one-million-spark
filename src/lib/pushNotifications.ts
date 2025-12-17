@@ -1,9 +1,8 @@
-// Push Protocol Notifications for game events
-import * as PushAPI from "@pushprotocol/restapi";
-import { CONSTANTS } from "@pushprotocol/restapi";
-import { ethers } from "ethers";
+// Push Protocol Notifications - Placeholder for Solana
+// Push Protocol currently requires EVM signatures, so this is stubbed for Solana migration
+// TODO: Implement Solana-compatible notifications when Push Protocol adds Solana support
 
-export const PUSH_ENV = CONSTANTS.ENV.PROD;
+export const PUSH_ENV = "prod";
 
 // Notification types
 export type GameNotificationType = 
@@ -22,126 +21,34 @@ interface GameNotification {
   data?: Record<string, any>;
 }
 
-// Initialize Push user for notifications
+// Stub: Initialize Push user for notifications
 export async function initPushNotifications(
   address: string
-): Promise<PushAPI.PushAPI | null> {
-  try {
-    const provider = (window as any).ethereum;
-    if (!provider) {
-      console.warn("[PushNotifications] No wallet provider found");
-      return null;
-    }
-
-    const { BrowserProvider } = await import("ethers");
-    const web3Provider = new BrowserProvider(provider);
-    const signer = await web3Provider.getSigner();
-
-    const pushUser = await PushAPI.PushAPI.initialize(signer, {
-      env: PUSH_ENV,
-    });
-
-    console.log("[PushNotifications] Initialized for:", address);
-    return pushUser;
-  } catch (error) {
-    console.error("[PushNotifications] Init failed:", error);
-    return null;
-  }
+): Promise<any> {
+  console.warn("[PushNotifications] Push Protocol not yet available for Solana");
+  return null;
 }
 
-// Send a game notification to a player
+// Stub: Send a game notification
 export async function sendGameNotification(
-  pushUser: PushAPI.PushAPI,
+  pushUser: any,
   recipientAddress: string,
   notification: GameNotification
 ): Promise<boolean> {
-  try {
-    const title = getNotificationTitle(notification.type, notification.gameType);
-    
-    await pushUser.chat.send(recipientAddress, {
-      type: "Text",
-      content: JSON.stringify({
-        notificationType: "1M_GAME_NOTIFICATION",
-        ...notification,
-        title,
-        timestamp: Date.now(),
-      }),
-    });
-
-    console.log(`[PushNotifications] Sent ${notification.type} to ${recipientAddress}`);
-    return true;
-  } catch (error) {
-    console.error("[PushNotifications] Send failed:", error);
-    return false;
-  }
+  console.warn("[PushNotifications] Push Protocol not yet available for Solana");
+  return false;
 }
 
-// Get notification title based on type
-function getNotificationTitle(
-  type: GameNotificationType,
-  gameType: string
-): string {
-  const gameName = gameType.charAt(0).toUpperCase() + gameType.slice(1);
-  
-  switch (type) {
-    case "opponent_joined":
-      return `${gameName}: Opponent Joined!`;
-    case "your_turn":
-      return `${gameName}: Your Turn!`;
-    case "opponent_moved":
-      return `${gameName}: Opponent Moved`;
-    case "game_started":
-      return `${gameName}: Game Started!`;
-    case "timeout_warning":
-      return `${gameName}: Time Running Low!`;
-    case "game_ended":
-      return `${gameName}: Game Over`;
-    default:
-      return `${gameName} Notification`;
-  }
-}
-
-// Start listening for incoming game notifications
+// Stub: Start listening for notifications
 export async function startNotificationListener(
-  pushUser: PushAPI.PushAPI,
+  pushUser: any,
   onNotification: (notification: GameNotification & { title: string }) => void
 ): Promise<() => void> {
-  const stream = await pushUser.initStream([PushAPI.STREAM.CHAT]);
-
-  stream.on(PushAPI.STREAM.CHAT, (message: any) => {
-    try {
-      const content = message.message?.content || message.payload?.body;
-      if (!content) return;
-
-      const parsed = JSON.parse(content);
-
-      if (parsed.notificationType !== "1M_GAME_NOTIFICATION") return;
-
-      console.log("[PushNotifications] Received:", parsed.type);
-      
-      onNotification({
-        type: parsed.type,
-        roomId: parsed.roomId,
-        gameType: parsed.gameType,
-        message: parsed.message,
-        title: parsed.title,
-        data: parsed.data,
-      });
-    } catch (e) {
-      // Not a notification message, ignore
-    }
-  });
-
-  await stream.connect();
-  console.log("[PushNotifications] Stream connected, listening for notifications");
-
-  return () => {
-    stream.disconnect();
-    console.log("[PushNotifications] Stream disconnected");
-  };
+  console.warn("[PushNotifications] Push Protocol not yet available for Solana");
+  return () => {};
 }
 
-// Request browser notification permission
+// Request browser notification permission (still works without Push Protocol)
 export async function requestNotificationPermission(): Promise<boolean> {
   if (!("Notification" in window)) {
     console.warn("[PushNotifications] Browser doesn't support notifications");
@@ -160,7 +67,7 @@ export async function requestNotificationPermission(): Promise<boolean> {
   return false;
 }
 
-// Show browser notification
+// Show browser notification (still works without Push Protocol)
 export function showBrowserNotification(
   title: string,
   body: string,
