@@ -1,22 +1,12 @@
 import { ConnectButton } from "thirdweb/react";
-import { inAppWallet, createWallet } from "thirdweb/wallets";
+import { createWallet } from "thirdweb/wallets";
 import { polygon } from "thirdweb/chains";
 import { thirdwebClient } from "@/lib/thirdwebClient";
 
-// Configure wallets with Smart Account + Gas Sponsorship
+// ONLY MetaMask + WalletConnect - converted to Smart Account with sponsored gas
 const wallets = [
-  // Primary: In-App Wallet with Smart Account (gasless)
-  inAppWallet({
-    auth: {
-      options: ["email", "passkey", "google", "apple", "facebook"],
-    },
-    smartAccount: {
-      chain: polygon,
-      sponsorGas: true, // Enable gas sponsorship
-    },
-  }),
-  // Secondary: MetaMask (will show warning about POL gas)
   createWallet("io.metamask"),
+  createWallet("walletConnect"),
 ];
 
 export function SmartWalletButton() {
@@ -25,9 +15,12 @@ export function SmartWalletButton() {
       client={thirdwebClient}
       wallets={wallets}
       chain={polygon}
+      accountAbstraction={{
+        chain: polygon,
+        sponsorGas: true,
+      }}
       connectModal={{
         title: "Connect to 1M Gaming",
-        titleIcon: "",
         size: "compact",
         showThirdwebBranding: false,
       }}
