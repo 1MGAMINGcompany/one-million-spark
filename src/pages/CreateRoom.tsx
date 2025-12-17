@@ -12,15 +12,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { useWallet } from "@/hooks/useWallet";
 import { useToast } from "@/hooks/use-toast";
 import { useSound } from "@/contexts/SoundContext";
-import { useGaslessCreateRoom, GASLESS_ENABLED } from "@/hooks/useGaslessCreateRoom";
+import { GASLESS_ENABLED } from "@/hooks/useGaslessCreateRoom";
 import { useUsdtPreflight } from "@/hooks/useUsdtPreflight";
 import { useApproveUsdtV7, usdtToUnitsV7 } from "@/hooks/useApproveUsdtV7";
 import { usePlayerActiveRoom } from "@/hooks/usePlayerActiveRoom";
 import { Loader2, AlertCircle, Wallet, CheckCircle2, AlertTriangle, XCircle, Info } from "lucide-react";
-import { useWeb3Modal } from "@web3modal/wagmi/react";
 import { ShareInviteDialog } from "@/components/ShareInviteDialog";
 import { useNotificationPermission } from "@/hooks/useRoomEvents";
 import { useBackgroundMusic } from "@/hooks/useBackgroundMusic";
@@ -570,21 +568,21 @@ const CreateRoom = () => {
           {isConnected && !hasActiveRoom && (
             <div className="space-y-3">
               {/* Gasless Status Banner */}
-              {GASLESS_ENABLED ? (
+              {GASLESS_ENABLED && isConnected ? (
                 <div className="bg-green-500/10 border border-green-500/30 rounded-md p-3 flex items-center gap-2">
                   <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />
                   <div className="text-xs text-green-600 dark:text-green-400">
-                    <strong>Gasless enabled ✅</strong> — No POL gas fees. Transactions are sponsored.
+                    <strong>Gasless enabled ✅</strong> — No POL gas fees. Transactions are sponsored via Smart Account.
                   </div>
                 </div>
-              ) : (
+              ) : !GASLESS_ENABLED ? (
                 <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-md p-3 flex items-start gap-2">
                   <Info className="h-4 w-4 text-yellow-500 mt-0.5 shrink-0" />
                   <div className="text-xs text-yellow-600 dark:text-yellow-400">
                     <strong>Note:</strong> Gasless transactions not enabled yet. MetaMask will show a small POL network fee (~$0.01).
                   </div>
                 </div>
-              )}
+              ) : null}
 
               {/* USDT Preflight Status Display */}
               {address && entryFeeNum > 0 && (
@@ -637,8 +635,9 @@ const CreateRoom = () => {
                   </Button>
                   
                   {/* Instructions for gasless */}
-                  <div className="text-xs text-muted-foreground bg-muted/50 border border-border rounded-md p-3">
-                    <p>USDT approval and room creation are handled automatically — no gas fees required.</p>
+                  <div className="text-xs text-muted-foreground bg-muted/50 border border-border rounded-md p-3 space-y-1">
+                    <p><strong>How it works:</strong> USDT approval and room creation are handled automatically — no POL gas fees required.</p>
+                    <p className="text-[10px] opacity-70">Transactions are sent via Smart Account with gas sponsorship.</p>
                   </div>
                 </>
               ) : (

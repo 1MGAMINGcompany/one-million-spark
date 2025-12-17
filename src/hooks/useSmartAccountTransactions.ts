@@ -37,12 +37,17 @@ export const GASLESS_ENABLED = true;
 export function useSmartCreateRoom() {
   const account = useActiveAccount();
   const [isBusy, setIsBusy] = useState(false);
+  
+  // Use sendTransaction - gas sponsorship comes from Account Abstraction in ThirdwebSmartProvider
   const { mutateAsync: sendTransaction, isPending } = useSendTransaction();
 
   // Debug: Log account info on mount/change
   if (account) {
-    console.log("[SmartAccount] Active account address:", account.address);
-    console.log("[SmartAccount] Account type:", (account as any).type || "unknown");
+    console.log("[useSmartCreateRoom] Active account:", account.address);
+    console.log("[useSmartCreateRoom] Account type:", (account as any).type || typeof account);
+    console.log("[useSmartCreateRoom] Full account object:", JSON.stringify(account, null, 2));
+  } else {
+    console.log("[useSmartCreateRoom] No active account");
   }
 
   // Check USDT allowance for the Smart Account
