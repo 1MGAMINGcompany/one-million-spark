@@ -1,4 +1,4 @@
-import { ReactNode, useMemo, useCallback, useState, createContext, useContext } from "react";
+import React, { ReactNode, useMemo, useCallback, useState, createContext, useContext } from "react";
 import { ConnectionProvider, WalletProvider, useWallet } from "@solana/wallet-adapter-react";
 import { PhantomWalletAdapter } from "@solana/wallet-adapter-phantom";
 import { SolflareWalletAdapter } from "@solana/wallet-adapter-solflare";
