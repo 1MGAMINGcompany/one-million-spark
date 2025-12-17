@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Home, Construction } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useWallet } from "@/hooks/useWallet";
+import { BackgammonRulesDialog } from "@/components/BackgammonRulesDialog";
 
 const BackgammonGame = () => {
   const { roomId } = useParams<{ roomId: string }>();
@@ -13,9 +14,12 @@ const BackgammonGame = () => {
 
   return (
     <div className="container max-w-4xl py-8 px-4">
-      <Button variant="ghost" size="sm" className="mb-4" onClick={() => navigate("/room-list")}>
-        <Home className="mr-2 h-4 w-4" /> Back to Rooms
-      </Button>
+      <div className="flex justify-between items-center mb-4">
+        <Button variant="ghost" size="sm" onClick={() => navigate("/room-list")}>
+          <Home className="mr-2 h-4 w-4" /> Back to Rooms
+        </Button>
+        <BackgammonRulesDialog variant="button" />
+      </div>
 
       <Card className="border-border/50 bg-card/80 backdrop-blur">
         <CardHeader>
