@@ -1,13 +1,7 @@
 // WebRTC Peer Connection Manager for P2P Game Sync
-// Uses Push Protocol for cross-device signaling and localStorage as fallback
-import * as PushAPI from "@pushprotocol/restapi";
-import {
-  initPushUser,
-  sendPushSignal,
-  startPushSignalListener,
-  fetchRecentSignals,
-  PushSignal,
-} from "./pushSignaling";
+// Uses localStorage/BroadcastChannel only (Push Protocol removed for Solana)
+
+import { PushSignal } from "./pushSignaling";
 
 export interface RTCSignal {
   type: "offer" | "answer" | "ice-candidate";
@@ -33,12 +27,10 @@ export interface WebRTCPeerOptions {
 const ICE_SERVERS: RTCIceServer[] = [
   { urls: "stun:stun.l.google.com:19302" },
   { urls: "stun:stun1.l.google.com:19302" },
-  { urls: "stun:stun2.l.google.com:19302" },
-  { urls: "stun:stun.stunprotocol.org:3478" },
 ];
 
 const SIGNAL_KEY_PREFIX = "webrtc_signal_";
-const SIGNAL_POLL_INTERVAL = 500; // ms
+const SIGNAL_POLL_INTERVAL = 500;
 
 export class WebRTCPeer {
   private pc: RTCPeerConnection | null = null;
@@ -51,12 +43,6 @@ export class WebRTCPeer {
   private processedSignals: Set<number> = new Set();
   private isInitiator: boolean = false;
   private connectionEstablished: boolean = false;
-  
-  // Push Protocol
-  private usePushProtocol: boolean;
-  private pushUser: PushAPI.PushAPI | null = null;
-  private pushStreamCleanup: (() => void) | null = null;
-  private pushInitialized: boolean = false;
 
   constructor(
     roomId: string,
@@ -67,7 +53,6 @@ export class WebRTCPeer {
     this.roomId = roomId;
     this.localAddress = localAddress.toLowerCase();
     this.callbacks = callbacks;
-    this.usePushProtocol = options.usePushProtocol ?? true;
   }
 
   async connect(remoteAddress: string, isInitiator: boolean): Promise<void> {
@@ -75,18 +60,9 @@ export class WebRTCPeer {
     this.isInitiator = isInitiator;
 
     console.log(`[WebRTC] Connecting as ${isInitiator ? "initiator" : "responder"}`);
-    console.log(`[WebRTC] Local: ${this.localAddress}, Remote: ${this.remoteAddress}`);
-    console.log(`[WebRTC] Using Push Protocol: ${this.usePushProtocol}`);
 
-    // Initialize Push Protocol if enabled
-    if (this.usePushProtocol) {
-      await this.initPushProtocol();
-    }
-
-    // Create peer connection
     this.pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
 
-    // Handle ICE candidates
     this.pc.onicecandidate = (event) => {
       if (event.candidate) {
         this.sendSignal({
@@ -100,7 +76,6 @@ export class WebRTCPeer {
       }
     };
 
-    // Handle connection state
     this.pc.onconnectionstatechange = () => {
       console.log(`[WebRTC] Connection state: ${this.pc?.connectionState}`);
       if (this.pc?.connectionState === "connected") {
@@ -114,28 +89,17 @@ export class WebRTCPeer {
       }
     };
 
-    // Handle incoming data channel (for responder)
     this.pc.ondatachannel = (event) => {
       console.log("[WebRTC] Received data channel");
       this.setupDataChannel(event.channel);
     };
 
-    // Start polling for localStorage signals (fallback)
     this.startSignalPolling();
 
-    // Fetch any recent Push signals we might have missed
-    if (this.usePushProtocol && this.pushUser) {
-      await this.fetchMissedPushSignals();
-    }
-
     if (isInitiator) {
-      // Create data channel (initiator creates it)
-      this.dc = this.pc.createDataChannel("game-sync", {
-        ordered: true,
-      });
+      this.dc = this.pc.createDataChannel("game-sync", { ordered: true });
       this.setupDataChannel(this.dc);
 
-      // Create and send offer
       const offer = await this.pc.createOffer();
       await this.pc.setLocalDescription(offer);
 
@@ -147,71 +111,6 @@ export class WebRTCPeer {
         payload: offer,
         timestamp: Date.now(),
       });
-    }
-  }
-
-  private async initPushProtocol(): Promise<void> {
-    try {
-      console.log("[WebRTC] Initializing Push Protocol...");
-      this.pushUser = await initPushUser(this.localAddress);
-      
-      // Start listening for Push signals
-      this.pushStreamCleanup = await startPushSignalListener(
-        this.pushUser,
-        this.roomId,
-        this.localAddress,
-        (signal) => this.handlePushSignal(signal)
-      );
-      
-      this.pushInitialized = true;
-      console.log("[WebRTC] Push Protocol initialized successfully");
-    } catch (error) {
-      console.warn("[WebRTC] Push Protocol initialization failed, using localStorage only:", error);
-      this.usePushProtocol = false;
-    }
-  }
-
-  private async fetchMissedPushSignals(): Promise<void> {
-    if (!this.pushUser || !this.remoteAddress) return;
-
-    try {
-      const signals = await fetchRecentSignals(
-        this.pushUser,
-        this.remoteAddress,
-        this.roomId,
-        this.localAddress
-      );
-
-      for (const signal of signals) {
-        await this.handlePushSignal(signal);
-      }
-    } catch (error) {
-      console.warn("[WebRTC] Failed to fetch missed signals:", error);
-    }
-  }
-
-  private async handlePushSignal(signal: PushSignal): Promise<void> {
-    if (this.processedSignals.has(signal.timestamp)) return;
-    this.processedSignals.add(signal.timestamp);
-
-    if (signal.from.toLowerCase() !== this.remoteAddress) return;
-
-    console.log(`[WebRTC] Processing Push signal: ${signal.type}`);
-
-    try {
-      switch (signal.type) {
-        case "offer":
-          await this.handleOffer(signal.payload as RTCSessionDescriptionInit);
-          break;
-        case "answer":
-          await this.handleAnswer(signal.payload as RTCSessionDescriptionInit);
-          break;
-        case "ice-candidate":
-          await this.handleIceCandidate(signal.payload as RTCIceCandidateInit);
-          break;
-      }
-    } catch (e) {
-      console.error(`[WebRTC] Error processing Push signal:`, e);
     }
   }
 
@@ -244,34 +143,14 @@ export class WebRTCPeer {
   }
 
   private async sendSignal(signal: RTCSignal): Promise<void> {
-    // Send via Push Protocol if available
-    if (this.usePushProtocol && this.pushUser && signal.to) {
-      try {
-        await sendPushSignal(this.pushUser, {
-          type: signal.type,
-          roomId: signal.roomId,
-          from: signal.from,
-          to: signal.to,
-          payload: signal.payload,
-          timestamp: signal.timestamp,
-        });
-        console.log(`[WebRTC] Sent Push signal: ${signal.type}`);
-      } catch (error) {
-        console.warn("[WebRTC] Push signal failed, using localStorage:", error);
-      }
-    }
-
-    // Always send via localStorage as fallback (for same-browser tabs)
+    // Send via localStorage (for same-browser tabs)
     const key = `${SIGNAL_KEY_PREFIX}${this.roomId}_${signal.to}`;
     const existing = localStorage.getItem(key);
     const signals: RTCSignal[] = existing ? JSON.parse(existing) : [];
     signals.push(signal);
     
-    // Keep only recent signals (last 50)
     const trimmed = signals.slice(-50);
     localStorage.setItem(key, JSON.stringify(trimmed));
-
-    console.log(`[WebRTC] Sent localStorage signal: ${signal.type}`);
   }
 
   private startSignalPolling(): void {
@@ -290,14 +169,9 @@ export class WebRTCPeer {
     const signals: RTCSignal[] = JSON.parse(existing);
 
     for (const signal of signals) {
-      // Skip already processed signals
       if (this.processedSignals.has(signal.timestamp)) continue;
       this.processedSignals.add(signal.timestamp);
-
-      // Skip signals not from our peer
       if (signal.from !== this.remoteAddress) continue;
-
-      console.log(`[WebRTC] Processing localStorage signal: ${signal.type}`);
 
       try {
         switch (signal.type) {
@@ -319,7 +193,6 @@ export class WebRTCPeer {
 
   private async handleOffer(offer: RTCSessionDescriptionInit): Promise<void> {
     if (!this.pc) return;
-
     await this.pc.setRemoteDescription(new RTCSessionDescription(offer));
     const answer = await this.pc.createAnswer();
     await this.pc.setLocalDescription(answer);
@@ -350,10 +223,8 @@ export class WebRTCPeer {
 
   send(data: any): boolean {
     if (!this.dc || this.dc.readyState !== "open") {
-      console.warn("[WebRTC] Cannot send: data channel not open");
       return false;
     }
-
     try {
       this.dc.send(JSON.stringify(data));
       return true;
@@ -368,50 +239,34 @@ export class WebRTCPeer {
   }
 
   isPushEnabled(): boolean {
-    return this.pushInitialized;
+    return false;
   }
 
   disconnect(): void {
-    console.log("[WebRTC] Disconnecting");
-
     if (this.signalPollInterval) {
       clearInterval(this.signalPollInterval);
       this.signalPollInterval = null;
     }
-
-    // Cleanup Push Protocol stream
-    if (this.pushStreamCleanup) {
-      this.pushStreamCleanup();
-      this.pushStreamCleanup = null;
-    }
-
     if (this.dc) {
       this.dc.close();
       this.dc = null;
     }
-
     if (this.pc) {
       this.pc.close();
       this.pc = null;
     }
-
-    // Clean up localStorage signals
     const key = `${SIGNAL_KEY_PREFIX}${this.roomId}_${this.localAddress}`;
     localStorage.removeItem(key);
-
     this.connectionEstablished = false;
-    this.pushInitialized = false;
-    this.pushUser = null;
   }
 }
 
-// Clear old signals on page load
 export function clearOldSignals(): void {
   const keys = Object.keys(localStorage).filter((k) =>
     k.startsWith(SIGNAL_KEY_PREFIX)
   );
   const now = Date.now();
-  const maxAge = 5 * 60 * 1000; // 5 minutes
+  const maxAge = 5 * 60 * 1000;
 
   for (const key of keys) {
     try {

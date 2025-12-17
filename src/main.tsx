@@ -3,4 +3,7 @@ import App from "./App.tsx";
 import "./index.css";
 import "./i18n";
 
+// Solana wallet adapter styles
+import "@solana/wallet-adapter-react-ui/styles.css";
+
 createRoot(document.getElementById("root")!).render(<App />);
