@@ -1,27 +1,24 @@
-import { useAccount, useChainId, useDisconnect, useSwitchChain } from "wagmi";
-import { polygon } from "@/lib/wagmi-config";
+// Solana wallet hook - replaces wagmi/Polygon useWallet
+import { useWallet as useSolanaWalletAdapter } from "@solana/wallet-adapter-react";
 
 export function useWallet() {
-  const { address, isConnected, isConnecting, isReconnecting } = useAccount();
-  const chainId = useChainId();
-  const { disconnect } = useDisconnect();
-  const { switchChain } = useSwitchChain();
-
-  const isWrongNetwork = isConnected && chainId !== polygon.id;
-
-  const switchToPolygon = () => {
-    if (switchChain) {
-      switchChain({ chainId: polygon.id });
-    }
-  };
+  const { 
+    publicKey, 
+    connected, 
+    connecting, 
+    disconnect,
+    wallet 
+  } = useSolanaWalletAdapter();
 
   return {
-    address,
-    isConnected,
-    isConnecting: isConnecting || isReconnecting,
-    chainId,
-    isWrongNetwork,
+    address: publicKey?.toBase58() || undefined,
+    isConnected: connected,
+    isConnecting: connecting,
+    chainId: undefined, // Solana doesn't use chainId like EVM
+    isWrongNetwork: false, // Solana mainnet only
     disconnect,
-    switchToPolygon,
+    switchToPolygon: () => {}, // No-op on Solana
+    publicKey,
+    wallet,
   };
 }

@@ -5,9 +5,6 @@ import { PhantomWalletAdapter } from "@solana/wallet-adapter-phantom";
 import { SolflareWalletAdapter } from "@solana/wallet-adapter-solflare";
 import { SOLANA_RPC_ENDPOINT } from "@/lib/solanaConfig";
 
-// Import wallet adapter CSS
-import "@solana/wallet-adapter-react-ui/styles.css";
-
 interface SolanaWalletProviderProps {
   children: ReactNode;
 }

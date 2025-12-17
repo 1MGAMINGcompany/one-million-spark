@@ -10,6 +10,12 @@
     <meta property="og:type" content="website" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <script>
+      // Polyfill for Node.js globals required by some libraries
+      window.global = window;
+      window.process = { env: {} };
+      window.Buffer = window.Buffer || { isBuffer: () => false };
+    </script>
   </head>
   <body>
     <div id="root"></div>
