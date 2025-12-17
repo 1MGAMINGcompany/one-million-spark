@@ -1,8 +1,5 @@
-import { ReactNode, createContext, useContext, useState, useCallback } from "react";
-import { ThirdwebProvider, useConnect, useActiveAccount, useDisconnect } from "thirdweb/react";
-import { createWallet, walletConnect } from "thirdweb/wallets";
-import { polygon } from "thirdweb/chains";
-import { thirdwebClient } from "@/lib/thirdwebClient";
+import { ReactNode, createContext, useContext } from "react";
+import { ThirdwebProvider, useActiveAccount, useActiveWallet, useDisconnect } from "thirdweb/react";
 
 // Context for smart account state
 interface SmartAccountContextType {
@@ -10,8 +7,7 @@ interface SmartAccountContextType {
   isConnecting: boolean;
   isConnected: boolean;
   address: string | undefined;
-  connectMetaMask: () => Promise<void>;
-  connectWalletConnect: () => Promise<void>;
+  isSmartAccount: boolean;
   disconnect: () => void;
 }
 
@@ -20,73 +16,28 @@ const SmartAccountContext = createContext<SmartAccountContextType | null>(null);
 // Inner provider that uses thirdweb hooks
 function SmartAccountProviderInner({ children }: { children: ReactNode }) {
   const activeAccount = useActiveAccount();
+  const activeWallet = useActiveWallet();
   const { disconnect: twDisconnect } = useDisconnect();
-  const [isConnecting, setIsConnecting] = useState(false);
-
-  // Use useConnect with accountAbstraction for smart account + gas sponsorship
-  const { connect } = useConnect({
-    client: thirdwebClient,
-    accountAbstraction: {
-      chain: polygon,
-      sponsorGas: true, // Enable gas sponsorship via thirdweb paymaster
-    },
-  });
 
   // Debug: log account info when it changes
   if (activeAccount) {
     console.log("[ThirdwebSmartProvider] Active account:", activeAccount.address);
-    console.log("[ThirdwebSmartProvider] Account object:", activeAccount);
+    console.log("[ThirdwebSmartProvider] Wallet type:", activeWallet?.id);
   }
 
-  const connectMetaMask = useCallback(async () => {
-    setIsConnecting(true);
-    try {
-      await connect(async () => {
-        const wallet = createWallet("io.metamask");
-        await wallet.connect({
-          client: thirdwebClient,
-          chain: polygon,
-        });
-        return wallet;
-      });
-    } catch (error) {
-      console.error("MetaMask connection error:", error);
-      throw error;
-    } finally {
-      setIsConnecting(false);
-    }
-  }, [connect]);
+  // Check if connected via smart account (in-app wallet with smart account)
+  const isSmartAccount = activeWallet?.id === "inApp" || activeWallet?.id?.includes("smart");
 
-  const connectWalletConnect = useCallback(async () => {
-    setIsConnecting(true);
-    try {
-      await connect(async () => {
-        const wallet = walletConnect();
-        await wallet.connect({
-          client: thirdwebClient,
-          chain: polygon,
-        });
-        return wallet;
-      });
-    } catch (error) {
-      console.error("WalletConnect connection error:", error);
-      throw error;
-    } finally {
-      setIsConnecting(false);
-    }
-  }, [connect]);
-
-  const disconnect = useCallback(() => {
+  const disconnect = () => {
     (twDisconnect as any)();
-  }, [twDisconnect]);
+  };
 
   const value: SmartAccountContextType = {
     smartAccount: activeAccount || null,
-    isConnecting,
+    isConnecting: false, // ConnectButton handles this internally
     isConnected: !!activeAccount,
     address: activeAccount?.address,
-    connectMetaMask,
-    connectWalletConnect,
+    isSmartAccount,
     disconnect,
   };
 
@@ -117,8 +68,7 @@ export function useSmartAccount() {
       isConnecting: false,
       isConnected: false,
       address: undefined,
-      connectMetaMask: async () => { console.warn("ThirdwebSmartProvider not mounted"); },
-      connectWalletConnect: async () => { console.warn("ThirdwebSmartProvider not mounted"); },
+      isSmartAccount: false,
       disconnect: () => { console.warn("ThirdwebSmartProvider not mounted"); },
       providerMissing: true,
     };
