@@ -265,7 +265,7 @@ const CreateRoom = () => {
     }
   };
 
-  // Called when user clicks "Continue to Wallet" in modal
+  // Called when user clicks "Continue to Wallet" in modal (only for non-gasless mode)
   const handleDepositConfirm = async () => {
     const isPolygon = await checkPolygonNetwork();
     if (!isPolygon) return;
@@ -302,8 +302,35 @@ const CreateRoom = () => {
       return;
     }
     
-    // Show deposit confirmation modal BEFORE any wallet action
+    // Show deposit confirmation modal BEFORE any wallet action (non-gasless only)
     setShowDepositModal(true);
+  };
+
+  // Gasless Create Room handler - single click, no approval step needed
+  const handleGaslessCreateRoom = async () => {
+    if (!entryFee || entryFeeNum < MIN_ENTRY_FEE_USDT) {
+      toast({
+        title: t("createRoom.invalidFee"),
+        description: t("createRoom.feeError", { amount: MIN_ENTRY_FEE_USDT }),
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Check balance before proceeding
+    const preflight = await runPreflight();
+    if (!preflight.hasSufficientBalance) {
+      toast({
+        title: "Insufficient balance",
+        description: "Insufficient USDT balance.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // createRoomGasless handles allowance check + approval + room creation
+    play('ui_click');
+    await handleCreateRoomInternal();
   };
 
   const handleCreateRoom = async () => {
@@ -589,110 +616,141 @@ const CreateRoom = () => {
                 </div>
               )}
 
-              {/* Approval Options - only show when not approved */}
-              {address && entryFeeNum > 0 && !hasSufficientAllowance && (
-                <div className="bg-muted/30 border border-border rounded-md p-3 space-y-2">
-                  <p className="text-xs text-muted-foreground">Choose approval type:</p>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setApproveMode('exact')}
-                      className={`flex-1 text-xs py-2 px-3 rounded-md border transition-colors ${
-                        approveMode === 'exact' 
-                          ? 'bg-primary text-primary-foreground border-primary' 
-                          : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted'
-                      }`}
-                    >
-                      Exact ({entryFeeNum.toFixed(2)} USDT)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setApproveMode('max')}
-                      className={`flex-1 text-xs py-2 px-3 rounded-md border transition-colors ${
-                        approveMode === 'max' 
-                          ? 'bg-primary text-primary-foreground border-primary' 
-                          : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted'
-                      }`}
-                    >
-                      Unlimited ⚡
-                    </button>
+              {/* GASLESS MODE: Single Create Room button */}
+              {GASLESS_ENABLED ? (
+                <>
+                  <Button 
+                    type="button" 
+                    className="w-full" 
+                    size="lg"
+                    onClick={handleGaslessCreateRoom}
+                    disabled={isCreateLoading || !entryFee || !!feeError || isCheckingActiveRoom}
+                  >
+                    {isCreateLoading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        {getCreateButtonText()}
+                      </>
+                    ) : (
+                      t("createRoom.step2Create")
+                    )}
+                  </Button>
+                  
+                  {/* Instructions for gasless */}
+                  <div className="text-xs text-muted-foreground bg-muted/50 border border-border rounded-md p-3">
+                    <p>USDT approval and room creation are handled automatically — no gas fees required.</p>
                   </div>
-                  <p className="text-[10px] text-muted-foreground">
-                    {approveMode === 'max' 
-                      ? "Unlimited approval = no future approvals needed (recommended)" 
-                      : "Exact approval = more secure, approve again for higher fees"}
-                  </p>
-                </div>
-              )}
-
-              {/* Approval Status Indicator */}
-              {address && entryFeeNum > 0 && (
-                <div className={`flex items-center gap-2 p-2 rounded-md ${
-                  hasSufficientAllowance && entryFeeNum > 0
-                    ? 'bg-green-500/10 border border-green-500/30' 
-                    : 'bg-yellow-500/10 border border-yellow-500/30'
-                }`}>
-                  {hasSufficientAllowance && entryFeeNum > 0 ? (
-                    <>
-                      <CheckCircle2 className="h-4 w-4 text-green-500" />
-                      <span className="text-sm text-green-500">USDT Approved ✅</span>
-                    </>
-                  ) : (
-                    <>
-                      <XCircle className="h-4 w-4 text-yellow-500" />
-                      <span className="text-sm text-yellow-500">Not Approved</span>
-                    </>
+                </>
+              ) : (
+                <>
+                  {/* NON-GASLESS MODE: Two-step Approve → Create */}
+                  
+                  {/* Approval Options - only show when not approved */}
+                  {address && entryFeeNum > 0 && !hasSufficientAllowance && (
+                    <div className="bg-muted/30 border border-border rounded-md p-3 space-y-2">
+                      <p className="text-xs text-muted-foreground">Choose approval type:</p>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setApproveMode('exact')}
+                          className={`flex-1 text-xs py-2 px-3 rounded-md border transition-colors ${
+                            approveMode === 'exact' 
+                              ? 'bg-primary text-primary-foreground border-primary' 
+                              : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted'
+                          }`}
+                        >
+                          Exact ({entryFeeNum.toFixed(2)} USDT)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setApproveMode('max')}
+                          className={`flex-1 text-xs py-2 px-3 rounded-md border transition-colors ${
+                            approveMode === 'max' 
+                              ? 'bg-primary text-primary-foreground border-primary' 
+                              : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted'
+                          }`}
+                        >
+                          Unlimited ⚡
+                        </button>
+                      </div>
+                      <p className="text-[10px] text-muted-foreground">
+                        {approveMode === 'max' 
+                          ? "Unlimited approval = no future approvals needed (recommended)" 
+                          : "Exact approval = more secure, approve again for higher fees"}
+                      </p>
+                    </div>
                   )}
-                </div>
+
+                  {/* Approval Status Indicator */}
+                  {address && entryFeeNum > 0 && (
+                    <div className={`flex items-center gap-2 p-2 rounded-md ${
+                      hasSufficientAllowance && entryFeeNum > 0
+                        ? 'bg-green-500/10 border border-green-500/30' 
+                        : 'bg-yellow-500/10 border border-yellow-500/30'
+                    }`}>
+                      {hasSufficientAllowance && entryFeeNum > 0 ? (
+                        <>
+                          <CheckCircle2 className="h-4 w-4 text-green-500" />
+                          <span className="text-sm text-green-500">USDT Approved ✅</span>
+                        </>
+                      ) : (
+                        <>
+                          <XCircle className="h-4 w-4 text-yellow-500" />
+                          <span className="text-sm text-yellow-500">Not Approved</span>
+                        </>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Step 1: Approve USDT */}
+                  <Button 
+                    type="button" 
+                    className="w-full" 
+                    size="lg"
+                    variant={hasSufficientAllowance && entryFeeNum > 0 ? "outline" : "default"}
+                    onClick={handleApproveClick}
+                    disabled={isApproveLoading || isCreateLoading || !entryFee || !!feeError || (hasSufficientAllowance && entryFeeNum > 0) || isCheckingActiveRoom}
+                  >
+                    {isApproveLoading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        {getApproveButtonText()}
+                      </>
+                    ) : hasSufficientAllowance && entryFeeNum > 0 ? (
+                      <>
+                        <CheckCircle2 className="mr-2 h-4 w-4 text-green-500" />
+                        {t("createRoom.usdtApproved")}
+                      </>
+                    ) : (
+                      t("createRoom.step1Approve")
+                    )}
+                  </Button>
+
+                  {/* Step 2: Create Room */}
+                  <Button 
+                    type="button" 
+                    className="w-full" 
+                    size="lg"
+                    onClick={handleCreateRoom}
+                    disabled={isCreateLoading || isApproveLoading || !entryFee || !!feeError || !(hasSufficientAllowance && entryFeeNum > 0) || isCheckingActiveRoom}
+                  >
+                    {isCreateLoading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        {getCreateButtonText()}
+                      </>
+                    ) : (
+                      t("createRoom.step2Create")
+                    )}
+                  </Button>
+
+                  {/* Instructions */}
+                  <div className="text-xs text-muted-foreground bg-muted/50 border border-border rounded-md p-3 space-y-1">
+                    <p><strong>{t("createRoom.step1Approve").split(':')[0]}:</strong> {t("createRoom.instructions1")}</p>
+                    <p><strong>{t("createRoom.step2Create").split(':')[0]}:</strong> {t("createRoom.instructions2")}</p>
+                  </div>
+                </>
               )}
-
-              {/* Step 1: Approve USDT */}
-              <Button 
-                type="button" 
-                className="w-full" 
-                size="lg"
-                variant={hasSufficientAllowance && entryFeeNum > 0 ? "outline" : "default"}
-                onClick={handleApproveClick}
-                disabled={isApproveLoading || isCreateLoading || !entryFee || !!feeError || (hasSufficientAllowance && entryFeeNum > 0) || isCheckingActiveRoom}
-              >
-                {isApproveLoading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    {getApproveButtonText()}
-                  </>
-                ) : hasSufficientAllowance && entryFeeNum > 0 ? (
-                  <>
-                    <CheckCircle2 className="mr-2 h-4 w-4 text-green-500" />
-                    {t("createRoom.usdtApproved")}
-                  </>
-                ) : (
-                  t("createRoom.step1Approve")
-                )}
-              </Button>
-
-              {/* Step 2: Create Room */}
-              <Button 
-                type="button" 
-                className="w-full" 
-                size="lg"
-                onClick={handleCreateRoom}
-                disabled={isCreateLoading || isApproveLoading || !entryFee || !!feeError || !(hasSufficientAllowance && entryFeeNum > 0) || isCheckingActiveRoom}
-              >
-                {isCreateLoading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    {getCreateButtonText()}
-                  </>
-                ) : (
-                  t("createRoom.step2Create")
-                )}
-              </Button>
-
-              {/* Instructions */}
-              <div className="text-xs text-muted-foreground bg-muted/50 border border-border rounded-md p-3 space-y-1">
-                <p><strong>{t("createRoom.step1Approve").split(':')[0]}:</strong> {t("createRoom.instructions1")}</p>
-                <p><strong>{t("createRoom.step2Create").split(':')[0]}:</strong> {t("createRoom.instructions2")}</p>
-              </div>
             </div>
           )}
         </form>
