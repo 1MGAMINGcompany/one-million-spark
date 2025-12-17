@@ -22,7 +22,7 @@ export const useWalletModal = () => useContext(WalletModalContext);
 // Custom wallet modal - ONLY shows Phantom, Solflare, Backpack
 function CustomWalletModal() {
   const { visible, setVisible } = useWalletModal();
-  const { wallets, select, connecting } = useWallet();
+  const { wallets, select, connect, connecting } = useWallet();
 
   // Filter to ONLY our explicitly defined Solana wallets
   const allowedWalletNames = ["Phantom", "Solflare", "Backpack"];
@@ -35,10 +35,22 @@ function CustomWalletModal() {
     );
   }, [wallets]);
 
-  const handleSelect = useCallback((walletName: string) => {
-    select(walletName as any);
-    setVisible(false);
-  }, [select, setVisible]);
+  const handleSelect = useCallback(async (walletName: string) => {
+    try {
+      select(walletName as any);
+      // Give the adapter time to initialize, then connect
+      setTimeout(async () => {
+        try {
+          await connect();
+        } catch (err) {
+          console.log("Connect after select:", err);
+        }
+      }, 100);
+      setVisible(false);
+    } catch (err) {
+      console.error("Wallet selection error:", err);
+    }
+  }, [select, connect, setVisible]);
 
   if (!visible) return null;
 
