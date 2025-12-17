@@ -28,9 +28,15 @@ function SmartAccountProviderInner({ children }: { children: ReactNode }) {
     client: thirdwebClient,
     accountAbstraction: {
       chain: polygon,
-      sponsorGas: true, // Enable gas sponsorship via thirdweb
+      sponsorGas: true, // Enable gas sponsorship via thirdweb paymaster
     },
   });
+
+  // Debug: log account info when it changes
+  if (activeAccount) {
+    console.log("[ThirdwebSmartProvider] Active account:", activeAccount.address);
+    console.log("[ThirdwebSmartProvider] Account object:", activeAccount);
+  }
 
   const connectMetaMask = useCallback(async () => {
     setIsConnecting(true);
