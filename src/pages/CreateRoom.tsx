@@ -12,15 +12,18 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { useWallet } from "@/hooks/useWallet";
 import { useToast } from "@/hooks/use-toast";
 import { useSound } from "@/contexts/SoundContext";
-import { useSolanaWallet } from "@/components/SolanaWalletButton";
-import { useSolPrice } from "@/hooks/useSolPrice";
-import { MIN_ENTRY_FEE_SOL, PLATFORM_FEE_BPS, solToLamports, lamportsToSol } from "@/lib/solanaConfig";
-import { Loader2, AlertCircle, AlertTriangle, Info, Wallet } from "lucide-react";
+import { useGaslessCreateRoom } from "@/hooks/useGaslessCreateRoom";
+import { useUsdtAllowanceV7 } from "@/hooks/useUsdtAllowanceV7";
+import { useApproveUsdtV7, usdtToUnitsV7 } from "@/hooks/useApproveUsdtV7";
+import { usePlayerActiveRoom } from "@/hooks/usePlayerActiveRoom";
+import { Loader2, AlertCircle, Wallet, CheckCircle2, AlertTriangle } from "lucide-react";
+import { useWeb3Modal } from "@web3modal/wagmi/react";
 import { ShareInviteDialog } from "@/components/ShareInviteDialog";
+import { useNotificationPermission } from "@/hooks/useRoomEvents";
 import { useBackgroundMusic } from "@/hooks/useBackgroundMusic";
-import { SolanaWalletButton } from "@/components/SolanaWalletButton";
 
 // Game ID mapping: Chess=1, Dominos=2, Backgammon=3, Checkers=4, Ludo=5
 const GAME_IDS: Record<string, number> = {
@@ -30,6 +33,12 @@ const GAME_IDS: Record<string, number> = {
   checkers: 4,
   ludo: 5,
 };
+
+// Platform fee in basis points (500 = 5%)
+const PLATFORM_FEE_BPS = 500;
+
+// Minimum entry fee in USDT
+const MIN_ENTRY_FEE_USDT = 0.5;
 
 // Helper function to get game name from ID
 function getGameName(gameId: number): string {
@@ -45,13 +54,12 @@ function getGameName(gameId: number): string {
 
 const CreateRoom = () => {
   const { t } = useTranslation();
+  const { open: openWalletModal } = useWeb3Modal();
   const navigate = useNavigate();
-  const { isConnected, address, publicKey } = useSolanaWallet();
+  const { isConnected, address } = useWallet();
   const { toast } = useToast();
   const { play } = useSound();
-  const { price: solPrice, solToUsd } = useSolPrice();
   useBackgroundMusic(true);
-  
   const [gameType, setGameType] = useState("chess");
   const [entryFee, setEntryFee] = useState("");
   const [players, setPlayers] = useState("2");
@@ -61,90 +69,205 @@ const CreateRoom = () => {
   const [showShareDialog, setShowShareDialog] = useState(false);
   const [createdRoomId, setCreatedRoomId] = useState<string | null>(null);
   const [createdGameName, setCreatedGameName] = useState<string>("");
-  const [isCreating, setIsCreating] = useState(false);
+  const [approvalStep, setApprovalStep] = useState<'idle' | 'approved'>('idle');
+  
+  const { requestPermission } = useNotificationPermission();
+
+  // Check if player already has an active room
+  const { activeRoom, hasActiveRoom, isLoading: isCheckingActiveRoom } = usePlayerActiveRoom(address as `0x${string}` | undefined);
+
+  const { createRoomGasless, isBusy } = useGaslessCreateRoom();
+
+  const { 
+    approve: approveUsdt, 
+    isPending: isApprovePending, 
+    isConfirming: isApproveConfirming, 
+    isSuccess: isApproveSuccess,
+    error: approveError,
+    reset: resetApprove 
+  } = useApproveUsdtV7();
+
+  const { data: currentAllowance, refetch: refetchAllowance } = useUsdtAllowanceV7(address as `0x${string}` | undefined);
+
+  const [isCreateSuccess, setIsCreateSuccess] = useState(false);
+  const [createError, setCreateError] = useState<Error | null>(null);
+  const [latestRoomId, setLatestRoomId] = useState<bigint | null>(null);
 
   const entryFeeNum = parseFloat(entryFee) || 0;
-  const entryFeeLamports = solToLamports(entryFeeNum);
-  const usdValue = solToUsd(entryFeeNum);
+  const entryFeeUnits = usdtToUnitsV7(entryFeeNum);
 
-  // Validate entry fee
+  const hasSufficientAllowance = currentAllowance !== undefined && currentAllowance >= entryFeeUnits && entryFeeNum > 0;
+
   useEffect(() => {
     if (!entryFee) {
       setFeeError(null);
       return;
     }
-    if (isNaN(entryFeeNum) || entryFeeNum < MIN_ENTRY_FEE_SOL) {
-      setFeeError(t("createRoom.feeErrorSol", { amount: MIN_ENTRY_FEE_SOL }));
+    if (isNaN(entryFeeNum) || entryFeeNum < MIN_ENTRY_FEE_USDT) {
+      setFeeError(t("createRoom.feeError", { amount: MIN_ENTRY_FEE_USDT }));
     } else {
       setFeeError(null);
     }
   }, [entryFee, entryFeeNum, t]);
 
-  // Create room handler - will call Solana program instruction
-  const handleCreateRoom = async () => {
-    if (!isConnected || !publicKey) {
+  useEffect(() => {
+    if (isApproveSuccess) {
+      play('ui_click');
       toast({
-        title: "Wallet not connected",
-        description: "Please connect your Solana wallet first.",
+        title: t("createRoom.usdtApproved"),
+        description: t("createRoom.roomCreatedDesc"),
+      });
+      setApprovalStep('approved');
+      resetApprove();
+      refetchAllowance();
+    }
+  }, [isApproveSuccess, play, toast, resetApprove, refetchAllowance, t]);
+
+  useEffect(() => {
+    if (approveError) {
+      toast({
+        title: t("createRoom.approvalFailed"),
+        description: approveError.message || t("createRoom.approvalFailed"),
         variant: "destructive",
       });
-      return;
+      resetApprove();
     }
+  }, [approveError, toast, resetApprove, t]);
 
-    if (!entryFee || entryFeeNum < MIN_ENTRY_FEE_SOL) {
-      toast({
-        title: t("createRoom.invalidFee"),
-        description: t("createRoom.feeErrorSol", { amount: MIN_ENTRY_FEE_SOL }),
-        variant: "destructive",
-      });
-      return;
-    }
-
-    play('ui_click');
-    setIsCreating(true);
-
-    try {
-      // TODO: Call Solana program instruction to create room
-      // This will be implemented when the Solana program is deployed
-      // For now, show a placeholder message
-      
-      const maxPlayers = parseInt(players);
+  useEffect(() => {
+    if (isCreateSuccess && latestRoomId && latestRoomId > 0n) {
+      play('room_create');
       const isPrivate = roomType === "private";
-      const gameId = GAME_IDS[gameType] || 1;
-      const turnTime = parseInt(turnTimeSec);
+      const gameName = getGameName(GAME_IDS[gameType] || 1);
       
-      console.log("Creating room with params:", {
-        entryFeeLamports: entryFeeLamports.toString(),
-        maxPlayers,
-        isPrivate,
-        platformFeeBps: PLATFORM_FEE_BPS,
-        gameId,
-        turnTimeSec: turnTime,
-        creator: publicKey.toBase58(),
-      });
-
-      // Placeholder: Show success after simulated delay
-      // In production, this will wait for Solana tx confirmation
-      toast({
-        title: "Room Creation Pending",
-        description: "Solana program integration coming soon. Your room parameters have been logged.",
-      });
+      requestPermission();
       
-      // Reset form
+      const roomId = latestRoomId.toString();
+      
+      if (isPrivate) {
+        setCreatedRoomId(roomId);
+        setCreatedGameName(gameName);
+        setShowShareDialog(true);
+        toast({
+          title: t("createRoom.privateRoomCreated"),
+          description: t("createRoom.privateRoomCreatedDesc"),
+        });
+      } else {
+        toast({
+          title: t("createRoom.roomCreated"),
+          description: t("createRoom.roomCreatedDesc"),
+        });
+        setTimeout(() => {
+          navigate("/room-list?refresh=1");
+        }, 1500);
+      }
+      
       setEntryFee("");
       setPlayers("2");
       setTurnTimeSec("10");
-      
-    } catch (err) {
-      console.error("Create room error:", err);
+      setApprovalStep('idle');
+      setIsCreateSuccess(false);
+      setLatestRoomId(null);
+    }
+  }, [isCreateSuccess, latestRoomId, play, toast, navigate, roomType, gameType, requestPermission, t]);
+
+  useEffect(() => {
+    if (createError) {
       toast({
         title: t("createRoom.transactionFailed"),
-        description: err instanceof Error ? err.message : "Unknown error",
+        description: createError.message || t("createRoom.transactionFailed"),
         variant: "destructive",
       });
-    } finally {
-      setIsCreating(false);
+      setCreateError(null);
     }
+  }, [createError, toast, t]);
+
+  // Network guard: check if on Polygon mainnet (0x89)
+  const checkPolygonNetwork = async (): Promise<boolean> => {
+    const eth = (window as any).ethereum;
+    if (!eth) return false;
+    try {
+      const chainId = await eth.request({ method: 'eth_chainId' });
+      if (chainId !== '0x89') {
+        toast({
+          title: "Wrong network",
+          description: "Switch to Polygon Mainnet",
+          variant: "destructive",
+        });
+        return false;
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  const handleApproveUsdt = async () => {
+    if (!entryFee || entryFeeNum < MIN_ENTRY_FEE_USDT) {
+      toast({
+        title: t("createRoom.invalidFee"),
+        description: t("createRoom.feeError", { amount: MIN_ENTRY_FEE_USDT }),
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    const isPolygon = await checkPolygonNetwork();
+    if (!isPolygon) return;
+    
+    play('ui_click');
+    approveUsdt(entryFeeNum);
+  };
+
+  const handleCreateRoom = async () => {
+    if (!entryFee || entryFeeNum < MIN_ENTRY_FEE_USDT) {
+      toast({
+        title: t("createRoom.invalidFee"),
+        description: t("createRoom.feeError", { amount: MIN_ENTRY_FEE_USDT }),
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const isPolygon = await checkPolygonNetwork();
+    if (!isPolygon) return;
+
+    play('ui_click');
+    
+    const maxPlayers = parseInt(players);
+    const isPrivate = roomType === "private";
+    const gameId = GAME_IDS[gameType] || 1;
+    const turnTime = parseInt(turnTimeSec);
+    
+    try {
+      // Gasless transaction: user signs, relayer pays gas (ERC-2771)
+      const { roomId } = await createRoomGasless(
+        entryFeeUnits,
+        maxPlayers,
+        isPrivate,
+        PLATFORM_FEE_BPS,
+        gameId,
+        turnTime
+      );
+      setLatestRoomId(roomId);
+      setIsCreateSuccess(true);
+    } catch (err) {
+      setCreateError(err instanceof Error ? err : new Error(String(err)));
+    }
+  };
+
+  const isApproveLoading = isApprovePending || isApproveConfirming;
+  const isCreateLoading = isBusy;
+
+  const getApproveButtonText = () => {
+    if (isApprovePending) return t("createRoom.confirmInWallet");
+    if (isApproveConfirming) return t("createRoom.approving");
+    return t("createRoom.approveUsdt");
+  };
+
+  const getCreateButtonText = () => {
+    if (isBusy) return t("createRoom.creatingRoom");
+    return t("createRoom.step2Create");
   };
 
   return (
@@ -158,7 +281,7 @@ const CreateRoom = () => {
           {/* Game Type */}
           <div className="space-y-2">
             <Label htmlFor="gameType">{t("createRoom.gameType")}</Label>
-            <Select value={gameType} onValueChange={setGameType} disabled={isCreating}>
+            <Select value={gameType} onValueChange={setGameType} disabled={isApproveLoading || isCreateLoading}>
               <SelectTrigger id="gameType" className="w-full">
                 <SelectValue placeholder={t("createRoom.selectGame")} />
               </SelectTrigger>
@@ -172,19 +295,24 @@ const CreateRoom = () => {
             </Select>
           </div>
 
-          {/* Entry Fee (SOL) */}
+          {/* Entry Fee (USDT) */}
           <div className="space-y-2">
-            <Label htmlFor="entryFee">{t("createRoom.entryFeeSol")}</Label>
+            <Label htmlFor="entryFee">{t("createRoom.entryFee")}</Label>
             <div className="flex-1 space-y-1">
               <Input
                 id="entryFee"
                 type="number"
-                placeholder="0.01"
-                min={MIN_ENTRY_FEE_SOL}
-                step="0.01"
+                placeholder="0.50"
+                min={MIN_ENTRY_FEE_USDT}
+                step="0.1"
                 value={entryFee}
-                onChange={(e) => setEntryFee(e.target.value)}
-                disabled={isCreating}
+                onChange={(e) => {
+                  setEntryFee(e.target.value);
+                  if (approvalStep === 'approved') {
+                    setApprovalStep('idle');
+                  }
+                }}
+                disabled={isApproveLoading || isCreateLoading}
                 className={feeError ? "border-destructive" : ""}
               />
               {feeError && (
@@ -194,20 +322,15 @@ const CreateRoom = () => {
                 </p>
               )}
               <p className="text-sm text-muted-foreground">
-                {t("createRoom.minimumFeeSol", { amount: MIN_ENTRY_FEE_SOL })}
+                {t("createRoom.minimumFee")}
               </p>
-              {entryFeeNum > 0 && usdValue !== null && (
-                <p className="text-sm text-muted-foreground">
-                  ≈ ${usdValue.toFixed(2)} USD
-                </p>
-              )}
             </div>
           </div>
 
           {/* Number of Players */}
           <div className="space-y-2">
             <Label htmlFor="players">{t("createRoom.numPlayers")}</Label>
-            <Select value={players} onValueChange={setPlayers} disabled={isCreating}>
+            <Select value={players} onValueChange={setPlayers} disabled={isApproveLoading || isCreateLoading}>
               <SelectTrigger id="players" className="w-full">
                 <SelectValue placeholder={t("createRoom.selectPlayers")} />
               </SelectTrigger>
@@ -222,7 +345,7 @@ const CreateRoom = () => {
           {/* Time per Turn */}
           <div className="space-y-2">
             <Label htmlFor="turnTime">{t("createRoom.timePerTurn")}</Label>
-            <Select value={turnTimeSec} onValueChange={setTurnTimeSec} disabled={isCreating}>
+            <Select value={turnTimeSec} onValueChange={setTurnTimeSec} disabled={isApproveLoading || isCreateLoading}>
               <SelectTrigger id="turnTime" className="w-full">
                 <SelectValue placeholder={t("createRoom.selectTime")} />
               </SelectTrigger>
@@ -242,7 +365,7 @@ const CreateRoom = () => {
               value={roomType} 
               onValueChange={setRoomType} 
               className="flex gap-6"
-              disabled={isCreating}
+              disabled={isApproveLoading || isCreateLoading}
             >
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="public" id="public" />
@@ -262,87 +385,103 @@ const CreateRoom = () => {
           {/* Wallet Connection */}
           {!isConnected && (
             <div className="space-y-4">
-              <div className="flex flex-col items-center gap-2">
-                <SolanaWalletButton />
-                <p className="text-xs text-muted-foreground text-center">
-                  {t("createRoom.connectHelperTextSol")}
-                </p>
-              </div>
+              <Button 
+                type="button" 
+                className="w-full" 
+                size="lg" 
+                onClick={() => openWalletModal()}
+              >
+                <Wallet className="mr-2 h-4 w-4" />
+                {t("createRoom.connectWallet")}
+              </Button>
               
-              {/* Solana info */}
+              {/* USDT on Polygon info */}
               <div className="bg-primary/10 border border-primary/20 rounded-lg p-4">
                 <div className="flex items-center justify-center gap-2 mb-2">
                   <AlertCircle className="text-primary" size={18} />
-                  <span className="font-medium text-primary">{t('walletRequired.solanaInfo')}</span>
+                  <span className="font-medium text-primary">{t('walletRequired.feesTitle')}</span>
                 </div>
                 <p className="text-sm text-muted-foreground text-center">
-                  {t('walletRequired.solanaDescription')}
+                  {t('walletRequired.feesDescription')}
                 </p>
               </div>
             </div>
           )}
 
-          {/* Connected State - Create Room */}
-          {isConnected && (
+          {/* Active Room Warning */}
+          {isConnected && hasActiveRoom && activeRoom && (
+            <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-4 space-y-3">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-medium text-destructive">
+                    {t("createRoom.activeRoomWarning", { roomId: activeRoom.id.toString() })}
+                  </p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {t("createRoom.activeRoomWarningDesc")}
+                  </p>
+                </div>
+              </div>
+              <Button 
+                type="button"
+                variant="outline" 
+                className="w-full"
+                onClick={() => navigate(`/room/${activeRoom.id.toString()}`)}
+              >
+                {t("createRoom.goToRoom")}
+              </Button>
+            </div>
+          )}
+
+          {/* Two-Step Process: Approve USDT → Create Room */}
+          {isConnected && !hasActiveRoom && (
             <div className="space-y-3">
-              {/* Wallet Info Banner */}
-              <div className="bg-muted/50 border border-border rounded-md p-3 space-y-2 text-sm">
-                <div className="flex justify-between items-center">
-                  <span className="text-muted-foreground">Wallet:</span>
-                  <span className="font-mono text-xs text-foreground">
-                    {address?.slice(0, 4)}...{address?.slice(-4)}
-                  </span>
-                </div>
-                {entryFeeNum > 0 && (
+              {/* Step 1: Approve USDT */}
+              <Button 
+                type="button" 
+                className="w-full" 
+                size="lg"
+                variant={hasSufficientAllowance ? "outline" : "default"}
+                onClick={handleApproveUsdt}
+                disabled={isApproveLoading || isCreateLoading || !entryFee || !!feeError || hasSufficientAllowance || isCheckingActiveRoom}
+              >
+                {isApproveLoading ? (
                   <>
-                    <div className="flex justify-between items-center">
-                      <span className="text-muted-foreground">Entry Fee:</span>
-                      <span className="font-mono text-foreground">
-                        {entryFeeNum.toFixed(4)} SOL
-                      </span>
-                    </div>
-                    {usdValue !== null && (
-                      <div className="flex justify-between items-center">
-                        <span className="text-muted-foreground">USD Value:</span>
-                        <span className="font-mono text-foreground">
-                          ≈ ${usdValue.toFixed(2)}
-                        </span>
-                      </div>
-                    )}
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    {getApproveButtonText()}
                   </>
+                ) : hasSufficientAllowance ? (
+                  <>
+                    <CheckCircle2 className="mr-2 h-4 w-4 text-green-500" />
+                    {t("createRoom.usdtApproved")}
+                  </>
+                ) : (
+                  t("createRoom.step1Approve")
                 )}
-              </div>
+              </Button>
 
-              {/* Network Info */}
-              <div className="bg-green-500/10 border border-green-500/30 rounded-md p-3 flex items-center gap-2">
-                <Info className="h-4 w-4 text-green-500 shrink-0" />
-                <div className="text-xs text-green-600 dark:text-green-400">
-                  <strong>Solana Mainnet</strong> — User pays small SOL network fee (~$0.001)
-                </div>
-              </div>
-
-              {/* Create Room Button */}
+              {/* Step 2: Create Room */}
               <Button 
                 type="button" 
                 className="w-full" 
                 size="lg"
                 onClick={handleCreateRoom}
-                disabled={isCreating || !entryFee || !!feeError}
+                disabled={isCreateLoading || isApproveLoading || !entryFee || !!feeError || !hasSufficientAllowance || isCheckingActiveRoom}
               >
-                {isCreating ? (
+                {isCreateLoading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    {t("createRoom.creatingRoom")}
+                    {getCreateButtonText()}
                   </>
                 ) : (
-                  t("createRoom.createRoomSol")
+                  t("createRoom.step2Create")
                 )}
               </Button>
-              
+
               {/* Instructions */}
               <div className="text-xs text-muted-foreground bg-muted/50 border border-border rounded-md p-3 space-y-1">
-                <p><strong>How it works:</strong> SOL is deposited directly to the game escrow. Winner receives the prize pool minus 5% platform fee.</p>
-                <p className="text-[10px] opacity-70">No token approvals needed — just connect and play!</p>
+                <p><strong>{t("createRoom.step1Approve").split(':')[0]}:</strong> {t("createRoom.instructions1")}</p>
+                <p><strong>{t("createRoom.step2Create").split(':')[0]}:</strong> {t("createRoom.instructions2")}</p>
               </div>
             </div>
           )}

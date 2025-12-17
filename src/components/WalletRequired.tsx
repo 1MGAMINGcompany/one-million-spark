@@ -1,6 +1,5 @@
 import { Wallet, Coins } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { SolanaWalletButton } from "./SolanaWalletButton";
 
 export function WalletRequired() {
   const { t } = useTranslation();
@@ -15,24 +14,20 @@ export function WalletRequired() {
           {t('walletRequired.title')}
         </h2>
         <p className="text-muted-foreground mb-4">
-          {t('walletRequired.descriptionSol')}
+          {t('walletRequired.description')}
         </p>
         <p className="text-sm text-muted-foreground mb-6">
-          {t('walletRequired.hintSol')}
+          {t('walletRequired.hint')}
         </p>
         
-        <div className="flex justify-center mb-6">
-          <SolanaWalletButton />
-        </div>
-        
-        {/* SOL on Solana info */}
+        {/* USDT on Polygon info */}
         <div className="bg-primary/10 border border-primary/20 rounded-lg p-4 mt-4">
           <div className="flex items-center justify-center gap-2 mb-2">
             <Coins className="text-primary" size={18} />
-            <span className="font-medium text-primary">{t('walletRequired.solanaInfo')}</span>
+            <span className="font-medium text-primary">{t('walletRequired.feesTitle')}</span>
           </div>
           <p className="text-sm text-muted-foreground">
-            {t('walletRequired.solanaDescription')}
+            {t('walletRequired.feesDescription')}
           </p>
         </div>
       </div>

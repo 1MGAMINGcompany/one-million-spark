@@ -83,12 +83,6 @@ export const SoundProvider = ({ children }: { children: ReactNode }) => {
   const [isBackgroundMusicPlaying, setIsBackgroundMusicPlaying] = useState(false);
   const wantsBackgroundMusicRef = useRef(false);
   const initializedRef = useRef(false);
-  const soundEnabledRef = useRef(soundEnabled);
-  
-  // Keep ref in sync with state
-  useEffect(() => {
-    soundEnabledRef.current = soundEnabled;
-  }, [soundEnabled]);
   
   // Initialize background music immediately (but won't play until interaction)
   useEffect(() => {
@@ -119,8 +113,7 @@ export const SoundProvider = ({ children }: { children: ReactNode }) => {
   // Try to play background music on ANY user interaction
   useEffect(() => {
     const tryPlayBackgroundMusic = () => {
-      // Use ref to get the CURRENT soundEnabled value (not stale closure)
-      if (wantsBackgroundMusicRef.current && soundEnabledRef.current && backgroundMusicRef.current) {
+      if (wantsBackgroundMusicRef.current && soundEnabled && backgroundMusicRef.current) {
         backgroundMusicRef.current.play().then(() => {
           setIsBackgroundMusicPlaying(true);
           console.log('Background music started');
@@ -148,7 +141,7 @@ export const SoundProvider = ({ children }: { children: ReactNode }) => {
       document.removeEventListener('touchstart', handleInteraction);
       document.removeEventListener('keydown', handleInteraction);
     };
-  }, [initializeSounds]);
+  }, [initializeSounds, soundEnabled]);
   
   // Stop background music when sound is disabled
   useEffect(() => {

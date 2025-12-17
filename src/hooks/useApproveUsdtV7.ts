@@ -1,14 +1,34 @@
 import { useCallback } from "react";
 import { useWriteContract, useWaitForTransactionReceipt, useAccount } from "wagmi";
-import { parseUnits, isAddress, erc20Abi, maxUint256 } from "viem";
 import { polygon } from "@/lib/wagmi-config";
-import { USDT_ADDRESS, ROOMMANAGER_V7_ADDRESS, USDT_DECIMALS } from "@/lib/contractAddresses";
+import { ROOMMANAGER_V7_ADDRESS } from "./useRoomManagerV7";
 
-// Re-export helper functions for backwards compatibility
+// USDT address on Polygon mainnet
+const USDT_ADDRESS = "0xc2132d05d31c914a87c6611c10748aeb04b58e8f" as const;
+
+// USDT has 6 decimals
+const USDT_DECIMALS = 6;
+
+// ERC20 ABI for approve function
+const ERC20_APPROVE_ABI = [
+  {
+    type: "function",
+    name: "approve",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "spender", type: "address" },
+      { name: "amount", type: "uint256" },
+    ],
+    outputs: [{ name: "", type: "bool" }],
+  },
+] as const;
+
+// Convert USDT amount to token units (6 decimals)
 export function usdtToUnitsV7(amount: number): bigint {
-  return parseUnits(amount.toString(), USDT_DECIMALS);
+  return BigInt(Math.floor(amount * 10 ** USDT_DECIMALS));
 }
 
+// Convert token units to USDT amount
 export function unitsToUsdtV7(units: bigint): number {
   return Number(units) / 10 ** USDT_DECIMALS;
 }
@@ -19,37 +39,14 @@ export function useApproveUsdtV7() {
   const { writeContract, data: hash, isPending, error, reset } = useWriteContract();
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
 
-  // Approve exact amount
   const approve = useCallback((amountUsdt: number) => {
     if (!address) return;
     
-    // Debug log address lengths before validation
-    console.log("USDT_ADDRESS_CHECK:", USDT_ADDRESS, "length:", (USDT_ADDRESS as string).length);
-    console.log("ROOM_MANAGER_CHECK:", ROOMMANAGER_V7_ADDRESS, "length:", (ROOMMANAGER_V7_ADDRESS as string).length);
-    
-    // Validate addresses before calling
-    if (!isAddress(USDT_ADDRESS)) {
-      throw new Error("BAD_USDT_ADDRESS");
-    }
-    if (!isAddress(ROOMMANAGER_V7_ADDRESS)) {
-      throw new Error("BAD_ROOM_MANAGER_ADDRESS");
-    }
-    
-    // Convert to bigint using viem parseUnits
-    const amountUnits = parseUnits(amountUsdt.toString(), USDT_DECIMALS);
-    
-    // Debug logging
-    console.log("APPROVE_USDT_CALL (exact)", {
-      USDT: USDT_ADDRESS,
-      SPENDER: ROOMMANAGER_V7_ADDRESS,
-      amountUsdt,
-      amountUnits: amountUnits.toString(),
-      userAddress: address,
-    });
+    const amountUnits = usdtToUnitsV7(amountUsdt);
     
     writeContract({
       address: USDT_ADDRESS,
-      abi: erc20Abi,
+      abi: ERC20_APPROVE_ABI,
       functionName: "approve",
       args: [ROOMMANAGER_V7_ADDRESS, amountUnits],
       chain: polygon,
@@ -57,37 +54,8 @@ export function useApproveUsdtV7() {
     });
   }, [address, writeContract]);
 
-  // Approve max (unlimited) amount for smoother UX
-  const approveMax = useCallback(() => {
-    if (!address) return;
-    
-    if (!isAddress(USDT_ADDRESS)) {
-      throw new Error("BAD_USDT_ADDRESS");
-    }
-    if (!isAddress(ROOMMANAGER_V7_ADDRESS)) {
-      throw new Error("BAD_ROOM_MANAGER_ADDRESS");
-    }
-    
-    console.log("APPROVE_USDT_CALL (max)", {
-      USDT: USDT_ADDRESS,
-      SPENDER: ROOMMANAGER_V7_ADDRESS,
-      amount: "MaxUint256",
-      userAddress: address,
-    });
-    
-    writeContract({
-      address: USDT_ADDRESS,
-      abi: erc20Abi,
-      functionName: "approve",
-      args: [ROOMMANAGER_V7_ADDRESS, maxUint256],
-      chain: polygon,
-      account: address,
-    });
-  }, [address, writeContract]);
-
   return {
     approve,
-    approveMax,
     hash,
     isPending,
     isConfirming,

@@ -1,5 +1,9 @@
-import { useCallback, useState } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
+import * as PushAPI from "@pushprotocol/restapi";
 import {
+  initPushNotifications,
+  sendGameNotification,
+  startNotificationListener,
   requestNotificationPermission,
   showBrowserNotification,
   GameNotificationType,
@@ -25,21 +29,57 @@ export function useGameNotifications({
   const { toast } = useToast();
   const { play } = useSound();
   
-  const [isInitialized] = useState(false);
+  const [pushUser, setPushUser] = useState<PushAPI.PushAPI | null>(null);
+  const [isInitialized, setIsInitialized] = useState(false);
   const [notificationPermission, setNotificationPermission] = useState(false);
+  const cleanupRef = useRef<(() => void) | null>(null);
 
-  // Request browser notification permission only
-  const requestPermission = useCallback(async () => {
-    const hasPermission = await requestNotificationPermission();
-    setNotificationPermission(hasPermission);
-    return hasPermission;
-  }, []);
+  // Initialize Push Protocol
+  useEffect(() => {
+    if (!enabled || !address) return;
 
-  // Show local notification (no Push Protocol on Solana)
-  const showNotification = useCallback(
-    (type: GameNotificationType, title: string, message: string) => {
+    const init = async () => {
+      try {
+        // Request browser notification permission
+        const hasPermission = await requestNotificationPermission();
+        setNotificationPermission(hasPermission);
+
+        // Initialize Push user
+        const user = await initPushNotifications(address);
+        if (user) {
+          setPushUser(user);
+          setIsInitialized(true);
+
+          // Start listening for notifications
+          cleanupRef.current = await startNotificationListener(user, (notification) => {
+            handleIncomingNotification(notification);
+          });
+        }
+      } catch (error) {
+        console.error("[GameNotifications] Initialization failed:", error);
+      }
+    };
+
+    init();
+
+    return () => {
+      if (cleanupRef.current) {
+        cleanupRef.current();
+        cleanupRef.current = null;
+      }
+    };
+  }, [enabled, address]);
+
+  // Handle incoming notifications
+  const handleIncomingNotification = useCallback(
+    (notification: { type: GameNotificationType; title: string; message: string; roomId: string }) => {
+      // Only process notifications for this room
+      if (notification.roomId !== roomId) return;
+
+      console.log("[GameNotifications] Processing:", notification.type);
+
       // Play sound based on notification type
-      switch (type) {
+      switch (notification.type) {
         case "opponent_joined":
           play("rooms/player-join");
           break;
@@ -58,30 +98,77 @@ export function useGameNotifications({
       }
 
       // Show in-app toast
-      toast({ title, description: message });
+      toast({
+        title: notification.title,
+        description: notification.message,
+      });
 
       // Show browser notification if permitted
       if (notificationPermission) {
-        showBrowserNotification(title, message);
+        showBrowserNotification(notification.title, notification.message);
       }
     },
-    [play, toast, notificationPermission]
+    [roomId, play, toast, notificationPermission]
   );
 
-  // Stub methods for backwards compatibility
-  const notifyOpponent = useCallback(async () => false, []);
-  const notifyOpponentJoined = useCallback(async () => false, []);
-  const notifyYourTurn = useCallback(async () => false, []);
-  const notifyOpponentMoved = useCallback(async () => false, []);
-  const notifyGameStarted = useCallback(async () => false, []);
-  const notifyTimeoutWarning = useCallback(async () => false, []);
-  const notifyGameEnded = useCallback(async () => false, []);
+  // Send notification to opponent
+  const notifyOpponent = useCallback(
+    async (type: GameNotificationType, message: string, data?: Record<string, any>) => {
+      if (!pushUser || !opponentAddress) {
+        console.log("[GameNotifications] Cannot send: not initialized or no opponent");
+        return false;
+      }
+
+      return await sendGameNotification(pushUser, opponentAddress, {
+        type,
+        roomId,
+        gameType,
+        message,
+        data,
+      });
+    },
+    [pushUser, opponentAddress, roomId, gameType]
+  );
+
+  // Convenience methods for common notifications
+  const notifyOpponentJoined = useCallback(() => {
+    return notifyOpponent("opponent_joined", "Your opponent has joined the game!");
+  }, [notifyOpponent]);
+
+  const notifyYourTurn = useCallback(() => {
+    return notifyOpponent("your_turn", "It's your turn to move!");
+  }, [notifyOpponent]);
+
+  const notifyOpponentMoved = useCallback((moveDescription?: string) => {
+    return notifyOpponent(
+      "opponent_moved",
+      moveDescription || "Your opponent has made a move."
+    );
+  }, [notifyOpponent]);
+
+  const notifyGameStarted = useCallback(() => {
+    return notifyOpponent("game_started", "The game has started. Good luck!");
+  }, [notifyOpponent]);
+
+  const notifyTimeoutWarning = useCallback((secondsRemaining: number) => {
+    return notifyOpponent(
+      "timeout_warning",
+      `You have ${secondsRemaining} seconds remaining!`,
+      { secondsRemaining }
+    );
+  }, [notifyOpponent]);
+
+  const notifyGameEnded = useCallback((winner: string, reason: string) => {
+    return notifyOpponent(
+      "game_ended",
+      `Game over! ${reason}`,
+      { winner, reason }
+    );
+  }, [notifyOpponent]);
 
   return {
     isInitialized,
     notificationPermission,
-    requestPermission,
-    showNotification,
     notifyOpponent,
     notifyOpponentJoined,
     notifyYourTurn,
