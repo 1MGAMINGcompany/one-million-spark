@@ -3,8 +3,8 @@ import { ConnectionProvider, WalletProvider, useWallet } from "@solana/wallet-ad
 import { PhantomWalletAdapter } from "@solana/wallet-adapter-phantom";
 import { SolflareWalletAdapter } from "@solana/wallet-adapter-solflare";
 import { BackpackWalletAdapter } from "@solana/wallet-adapter-backpack";
-import { clusterApiUrl } from "@solana/web3.js";
 import { WalletReadyState } from "@solana/wallet-adapter-base";
+import { getSolanaEndpoint, getSolanaCluster } from "@/lib/solana-config";
 
 // Custom modal context
 interface WalletModalContextType {
@@ -41,6 +41,8 @@ function CustomWalletModal() {
   }, [select, setVisible]);
 
   if (!visible) return null;
+
+  const cluster = getSolanaCluster();
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center">
@@ -115,9 +117,16 @@ function CustomWalletModal() {
           </p>
         )}
 
-        <p className="text-xs text-muted-foreground text-center mt-4">
-          Solana wallets only. No EVM wallets.
-        </p>
+        <div className="flex items-center justify-between mt-4 pt-4 border-t border-border/50">
+          <p className="text-xs text-muted-foreground">
+            Solana {cluster === "devnet" ? "Devnet" : "Mainnet"}
+          </p>
+          {cluster === "devnet" && (
+            <span className="text-xs bg-amber-500/20 text-amber-500 px-2 py-0.5 rounded">
+              Test Mode
+            </span>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -140,8 +149,8 @@ interface SolanaProviderProps {
 }
 
 export function SolanaProvider({ children }: SolanaProviderProps) {
-  // Solana Mainnet-Beta endpoint
-  const endpoint = useMemo(() => clusterApiUrl("mainnet-beta"), []);
+  // Get endpoint from config (mainnet-beta or devnet)
+  const endpoint = useMemo(() => getSolanaEndpoint(), []);
 
   // ONLY these Solana wallets - NO auto-detection, NO EVM wallets
   const wallets = useMemo(
