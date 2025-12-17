@@ -1,13 +1,10 @@
 import { Wallet, Coins } from "lucide-react";
-import { useTranslation } from "react-i18next";
 
 interface WalletRequiredProps {
   message?: string;
 }
 
 export function WalletRequired({ message }: WalletRequiredProps) {
-  const { t } = useTranslation();
-  
   return (
     <div className="min-h-screen bg-background flex items-center justify-center px-4">
       <div className="text-center max-w-md">
@@ -15,13 +12,13 @@ export function WalletRequired({ message }: WalletRequiredProps) {
           <Wallet className="text-muted-foreground" size={32} />
         </div>
         <h2 className="text-2xl font-bold text-foreground mb-2">
-          {t('walletRequired.title')}
+          Wallet Required
         </h2>
         <p className="text-muted-foreground mb-4">
-          {message || t('walletRequired.description')}
+          {message || "Please connect your Solana wallet to continue."}
         </p>
         <p className="text-sm text-muted-foreground mb-6">
-          {t('walletRequired.hint')}
+          Click "Select Wallet" in the navigation bar to connect.
         </p>
         
         {/* SOL on Solana info */}

@@ -11,14 +11,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useWallet } from "@/hooks/useWallet";
 import { useToast } from "@/hooks/use-toast";
 import { useSound } from "@/contexts/SoundContext";
-import { Loader2, AlertCircle, Wallet, Construction } from "lucide-react";
+import { useSolPrice } from "@/hooks/useSolPrice";
+import { Wallet, Construction, RefreshCw } from "lucide-react";
 import { useWalletModal } from "@/components/SolanaProvider";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useBackgroundMusic } from "@/hooks/useBackgroundMusic";
+import { MIN_ENTRY_FEE_SOL, getSolanaCluster } from "@/lib/solana-config";
 
 // Game ID mapping: Chess=1, Dominos=2, Backgammon=3, Checkers=4, Ludo=5
 const GAME_IDS: Record<string, number> = {
@@ -36,6 +37,7 @@ export default function CreateRoom() {
   const { toast } = useToast();
   const { play } = useSound();
   const { setVisible } = useWalletModal();
+  const { price, formatUsd, loading: priceLoading, refetch: refetchPrice } = useSolPrice();
   
   // Enable background music
   useBackgroundMusic();
@@ -45,6 +47,10 @@ export default function CreateRoom() {
   const [maxPlayers, setMaxPlayers] = useState<string>("2");
   const [isPrivate, setIsPrivate] = useState<boolean>(false);
   const [turnTime, setTurnTime] = useState<string>("10");
+
+  const cluster = getSolanaCluster();
+  const isDevnet = cluster === "devnet";
+  const entryFeeUsd = formatUsd(entryFee);
 
   if (!isConnected) {
     return (
@@ -80,17 +86,40 @@ export default function CreateRoom() {
     <div className="container max-w-2xl py-8 px-4">
       <Card className="border-border/50 bg-card/80 backdrop-blur">
         <CardHeader>
-          <CardTitle className="text-2xl font-cinzel flex items-center gap-3">
-            <Construction className="h-6 w-6 text-primary" />
-            {t("createRoom.title")}
-          </CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-2xl font-cinzel flex items-center gap-3">
+              <Construction className="h-6 w-6 text-primary" />
+              {t("createRoom.title")}
+            </CardTitle>
+            {isDevnet && (
+              <span className="text-xs bg-amber-500/20 text-amber-500 px-2 py-1 rounded">
+                Devnet
+              </span>
+            )}
+          </div>
         </CardHeader>
         <CardContent className="space-y-6">
+          {/* SOL Price Display */}
+          <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+            <span className="text-sm text-muted-foreground">SOL Price:</span>
+            <div className="flex items-center gap-2">
+              <span className="font-semibold text-primary">
+                {priceLoading ? "..." : price ? `$${price.toFixed(2)}` : "N/A"}
+              </span>
+              <button 
+                onClick={refetchPrice} 
+                className="text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <RefreshCw size={14} className={priceLoading ? "animate-spin" : ""} />
+              </button>
+            </div>
+          </div>
+
           <div className="text-center py-8">
             <Construction className="h-16 w-16 text-primary mx-auto mb-4" />
             <h3 className="text-xl font-semibold mb-2">Solana Integration Coming Soon</h3>
             <p className="text-muted-foreground mb-4">
-              We're migrating to Solana! Room creation with SOL entry fees will be available soon.
+              Room creation with SOL entry fees will be available soon.
             </p>
             <p className="text-sm text-muted-foreground">
               Connected: {address?.slice(0, 8)}...{address?.slice(-4)}
@@ -116,13 +145,26 @@ export default function CreateRoom() {
             </div>
 
             <div>
-              <Label>{t("createRoom.entryFee")} (SOL)</Label>
-              <Input
-                type="number"
-                value={entryFee}
-                disabled
-                placeholder="0.1"
-              />
+              <Label>Entry Fee (SOL)</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  value={entryFee}
+                  onChange={(e) => setEntryFee(e.target.value)}
+                  disabled
+                  placeholder="0.1"
+                  min={MIN_ENTRY_FEE_SOL}
+                  step="0.01"
+                />
+                {entryFeeUsd && (
+                  <span className="text-sm text-muted-foreground whitespace-nowrap">
+                    {entryFeeUsd}
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Minimum: {MIN_ENTRY_FEE_SOL} SOL
+              </p>
             </div>
 
             <Button disabled className="w-full">
