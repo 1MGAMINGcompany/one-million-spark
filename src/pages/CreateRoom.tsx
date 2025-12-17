@@ -18,7 +18,7 @@ import { GASLESS_ENABLED } from "@/hooks/useGaslessCreateRoom";
 import { useUsdtPreflight } from "@/hooks/useUsdtPreflight";
 import { useApproveUsdtV7, usdtToUnitsV7 } from "@/hooks/useApproveUsdtV7";
 import { usePlayerActiveRoom } from "@/hooks/usePlayerActiveRoom";
-import { Loader2, AlertCircle, Wallet, CheckCircle2, AlertTriangle, XCircle, Info } from "lucide-react";
+import { Loader2, AlertCircle, CheckCircle2, AlertTriangle, XCircle, Info } from "lucide-react";
 import { ShareInviteDialog } from "@/components/ShareInviteDialog";
 import { useNotificationPermission } from "@/hooks/useRoomEvents";
 import { useBackgroundMusic } from "@/hooks/useBackgroundMusic";
@@ -26,6 +26,7 @@ import { DepositConfirmModal } from "@/components/DepositConfirmModal";
 import { logTxError, isUserRejectionError } from "@/lib/txErrorLogger";
 import { useSmartAccount } from "@/components/ThirdwebSmartProvider";
 import { useSmartCreateRoom } from "@/hooks/useSmartAccountTransactions";
+import { SmartWalletButton } from "@/components/SmartWalletButton";
 
 // Game ID mapping: Chess=1, Dominos=2, Backgammon=3, Checkers=4, Ludo=5
 const GAME_IDS: Record<string, number> = {
@@ -58,7 +59,7 @@ const CreateRoom = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const smartAccount = useSmartAccount();
-  const { isConnected, address, connectMetaMask, connectWalletConnect, providerMissing } = smartAccount;
+  const { isConnected, address, isSmartAccount, providerMissing } = smartAccount;
   const { toast } = useToast();
   const { play } = useSound();
   useBackgroundMusic(true);
@@ -511,16 +512,8 @@ const CreateRoom = () => {
           {/* Wallet Connection */}
           {!isConnected && (
             <div className="space-y-4">
-              <div className="space-y-2">
-                <Button 
-                  type="button" 
-                  className="w-full" 
-                  size="lg" 
-                  onClick={() => connectMetaMask()}
-                >
-                  <Wallet className="mr-2 h-4 w-4" />
-                  {t("createRoom.connectWallet")}
-                </Button>
+              <div className="flex flex-col items-center gap-2">
+                <SmartWalletButton />
                 <p className="text-xs text-muted-foreground text-center">
                   {t("createRoom.connectHelperText", "Connect your wallet to see available games. No funds are moved.")}
                 </p>
@@ -568,18 +561,25 @@ const CreateRoom = () => {
           {isConnected && !hasActiveRoom && (
             <div className="space-y-3">
               {/* Gasless Status Banner */}
-              {GASLESS_ENABLED && isConnected ? (
+              {GASLESS_ENABLED && isSmartAccount ? (
                 <div className="bg-green-500/10 border border-green-500/30 rounded-md p-3 flex items-center gap-2">
                   <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />
                   <div className="text-xs text-green-600 dark:text-green-400">
-                    <strong>Gasless enabled ✅</strong> — No POL gas fees. Transactions are sponsored via Smart Account.
+                    <strong>Smart Wallet Connected ✅</strong> — Gasless transactions enabled. No POL fees required.
+                  </div>
+                </div>
+              ) : GASLESS_ENABLED && isConnected && !isSmartAccount ? (
+                <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-md p-3 flex items-start gap-2">
+                  <AlertTriangle className="h-4 w-4 text-yellow-500 mt-0.5 shrink-0" />
+                  <div className="text-xs text-yellow-600 dark:text-yellow-400">
+                    <strong>MetaMask requires POL gas.</strong> Disconnect and use Smart Wallet (Email/Google) for gasless transactions.
                   </div>
                 </div>
               ) : !GASLESS_ENABLED ? (
                 <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-md p-3 flex items-start gap-2">
                   <Info className="h-4 w-4 text-yellow-500 mt-0.5 shrink-0" />
                   <div className="text-xs text-yellow-600 dark:text-yellow-400">
-                    <strong>Note:</strong> Gasless transactions not enabled yet. MetaMask will show a small POL network fee (~$0.01).
+                    <strong>Note:</strong> Gasless not enabled. MetaMask will show a small POL network fee (~$0.01).
                   </div>
                 </div>
               ) : null}
