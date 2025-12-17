@@ -3,7 +3,7 @@ import { Construction, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useWallet } from "@/hooks/useWallet";
-import { useWalletModal } from "@solana/wallet-adapter-react-ui";
+import { useWalletModal } from "@/components/SolanaProvider";
 
 export default function JoinRoom() {
   const [searchParams] = useSearchParams();
