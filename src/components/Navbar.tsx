@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Home, Wallet, PlusCircle, LayoutList, Menu, X, Coins, Volume2, VolumeX } from "lucide-react";
-import { SmartWalletButton } from "./SmartWalletButton";
+import { SolanaWalletButton } from "./SolanaWalletButton";
 import BrandLogo from "./BrandLogo";
 import LanguageSelector from "./LanguageSelector";
 import { useSound } from "@/contexts/SoundContext";
@@ -95,7 +95,7 @@ const Navbar = () => {
               {soundEnabled ? <Volume2 size={20} /> : <VolumeX size={20} />}
             </button>
             
-            <SmartWalletButton />
+            <SolanaWalletButton />
           </div>
 
           {/* Mobile Menu Button */}
@@ -160,7 +160,7 @@ const Navbar = () => {
               
               {/* Wallet Button (Mobile) */}
               <div className="pt-2">
-                <SmartWalletButton />
+                <SolanaWalletButton />
               </div>
             </div>
           </div>

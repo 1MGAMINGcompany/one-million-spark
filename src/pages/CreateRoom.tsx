@@ -14,19 +14,13 @@ import {
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useToast } from "@/hooks/use-toast";
 import { useSound } from "@/contexts/SoundContext";
-import { GASLESS_ENABLED } from "@/hooks/useGaslessCreateRoom";
-import { useUsdtPreflight } from "@/hooks/useUsdtPreflight";
-import { useApproveUsdtV7, usdtToUnitsV7 } from "@/hooks/useApproveUsdtV7";
-import { usePlayerActiveRoom } from "@/hooks/usePlayerActiveRoom";
-import { Loader2, AlertCircle, CheckCircle2, AlertTriangle, XCircle, Info } from "lucide-react";
+import { useSolanaWallet } from "@/components/SolanaWalletButton";
+import { useSolPrice } from "@/hooks/useSolPrice";
+import { MIN_ENTRY_FEE_SOL, PLATFORM_FEE_BPS, solToLamports, lamportsToSol } from "@/lib/solanaConfig";
+import { Loader2, AlertCircle, AlertTriangle, Info, Wallet } from "lucide-react";
 import { ShareInviteDialog } from "@/components/ShareInviteDialog";
-import { useNotificationPermission } from "@/hooks/useRoomEvents";
 import { useBackgroundMusic } from "@/hooks/useBackgroundMusic";
-import { DepositConfirmModal } from "@/components/DepositConfirmModal";
-import { logTxError, isUserRejectionError } from "@/lib/txErrorLogger";
-import { useSmartAccount } from "@/components/ThirdwebSmartProvider";
-import { useSmartCreateRoom } from "@/hooks/useSmartAccountTransactions";
-import { SmartWalletButton } from "@/components/SmartWalletButton";
+import { SolanaWalletButton } from "@/components/SolanaWalletButton";
 
 // Game ID mapping: Chess=1, Dominos=2, Backgammon=3, Checkers=4, Ludo=5
 const GAME_IDS: Record<string, number> = {
@@ -36,12 +30,6 @@ const GAME_IDS: Record<string, number> = {
   checkers: 4,
   ludo: 5,
 };
-
-// Platform fee in basis points (500 = 5%)
-const PLATFORM_FEE_BPS = 500;
-
-// Minimum entry fee in USDT
-const MIN_ENTRY_FEE_USDT = 0.5;
 
 // Helper function to get game name from ID
 function getGameName(gameId: number): string {
@@ -58,11 +46,12 @@ function getGameName(gameId: number): string {
 const CreateRoom = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const smartAccount = useSmartAccount();
-  const { isConnected, address, isSmartAccount, providerMissing } = smartAccount;
+  const { isConnected, address, publicKey } = useSolanaWallet();
   const { toast } = useToast();
   const { play } = useSound();
+  const { price: solPrice, solToUsd } = useSolPrice();
   useBackgroundMusic(true);
+  
   const [gameType, setGameType] = useState("chess");
   const [entryFee, setEntryFee] = useState("");
   const [players, setPlayers] = useState("2");
@@ -72,330 +61,91 @@ const CreateRoom = () => {
   const [showShareDialog, setShowShareDialog] = useState(false);
   const [createdRoomId, setCreatedRoomId] = useState<string | null>(null);
   const [createdGameName, setCreatedGameName] = useState<string>("");
-  const [approvalStep, setApprovalStep] = useState<'idle' | 'approved'>('idle');
-  const [showDepositModal, setShowDepositModal] = useState(false);
-  const [approveMode, setApproveMode] = useState<'exact' | 'max'>('exact');
-  
-  const { requestPermission } = useNotificationPermission();
-
-  // Check if player already has an active room
-  const { activeRoom, hasActiveRoom, isLoading: isCheckingActiveRoom } = usePlayerActiveRoom(address as `0x${string}` | undefined);
-
-  const { createRoomGasless, isBusy } = useSmartCreateRoom();
+  const [isCreating, setIsCreating] = useState(false);
 
   const entryFeeNum = parseFloat(entryFee) || 0;
-  const entryFeeUnits = usdtToUnitsV7(entryFeeNum);
+  const entryFeeLamports = solToLamports(entryFeeNum);
+  const usdValue = solToUsd(entryFeeNum);
 
-  // USDT Preflight - reads allowance and balance
-  const {
-    allowanceRaw,
-    balanceRaw,
-    allowanceUsdt,
-    balanceUsdt,
-    hasSufficientAllowance,
-    hasSufficientBalance,
-    isLoading: isPreflightLoading,
-    runPreflight,
-    refetchAllowance,
-    spenderAddress,
-  } = useUsdtPreflight(address as `0x${string}` | undefined, entryFeeUnits);
-
-  const { 
-    approve: approveUsdt, 
-    approveMax: approveUsdtMax,
-    isPending: isApprovePending, 
-    isConfirming: isApproveConfirming, 
-    isSuccess: isApproveSuccess,
-    error: approveError,
-    reset: resetApprove 
-  } = useApproveUsdtV7();
-
-  const [isCreateSuccess, setIsCreateSuccess] = useState(false);
-  const [createError, setCreateError] = useState<Error | null>(null);
-  const [latestRoomId, setLatestRoomId] = useState<bigint | null>(null);
-
+  // Validate entry fee
   useEffect(() => {
     if (!entryFee) {
       setFeeError(null);
       return;
     }
-    if (isNaN(entryFeeNum) || entryFeeNum < MIN_ENTRY_FEE_USDT) {
-      setFeeError(t("createRoom.feeError", { amount: MIN_ENTRY_FEE_USDT }));
+    if (isNaN(entryFeeNum) || entryFeeNum < MIN_ENTRY_FEE_SOL) {
+      setFeeError(t("createRoom.feeErrorSol", { amount: MIN_ENTRY_FEE_SOL }));
     } else {
       setFeeError(null);
     }
   }, [entryFee, entryFeeNum, t]);
 
-  // Internal function to create room (no validation, called after approval or when allowance sufficient)
-  const handleCreateRoomInternal = async () => {
+  // Create room handler - will call Solana program instruction
+  const handleCreateRoom = async () => {
+    if (!isConnected || !publicKey) {
+      toast({
+        title: "Wallet not connected",
+        description: "Please connect your Solana wallet first.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!entryFee || entryFeeNum < MIN_ENTRY_FEE_SOL) {
+      toast({
+        title: t("createRoom.invalidFee"),
+        description: t("createRoom.feeErrorSol", { amount: MIN_ENTRY_FEE_SOL }),
+        variant: "destructive",
+      });
+      return;
+    }
+
     play('ui_click');
-    
-    const maxPlayers = parseInt(players);
-    const isPrivate = roomType === "private";
-    const gameId = GAME_IDS[gameType] || 1;
-    const turnTime = parseInt(turnTimeSec);
-    
+    setIsCreating(true);
+
     try {
-      const { roomId } = await createRoomGasless(
-        entryFeeUnits,
+      // TODO: Call Solana program instruction to create room
+      // This will be implemented when the Solana program is deployed
+      // For now, show a placeholder message
+      
+      const maxPlayers = parseInt(players);
+      const isPrivate = roomType === "private";
+      const gameId = GAME_IDS[gameType] || 1;
+      const turnTime = parseInt(turnTimeSec);
+      
+      console.log("Creating room with params:", {
+        entryFeeLamports: entryFeeLamports.toString(),
         maxPlayers,
         isPrivate,
-        PLATFORM_FEE_BPS,
+        platformFeeBps: PLATFORM_FEE_BPS,
         gameId,
-        turnTime
-      );
-      setLatestRoomId(roomId);
-      setIsCreateSuccess(true);
-    } catch (err) {
-      setCreateError(err instanceof Error ? err : new Error(String(err)));
-    }
-  };
-
-  // Auto-create room after approval succeeds
-  useEffect(() => {
-    if (isApproveSuccess) {
-      play('ui_click');
-      toast({
-        title: t("createRoom.usdtApproved"),
-        description: "Creating room...",
+        turnTimeSec: turnTime,
+        creator: publicKey.toBase58(),
       });
-      resetApprove();
-      refetchAllowance();
-      // Immediately trigger room creation after approval
-      handleCreateRoomInternal();
-    }
-  }, [isApproveSuccess]);
 
-  useEffect(() => {
-    if (approveError) {
-      const { title, description } = logTxError('APPROVE_USDT', approveError);
-      const isRejection = isUserRejectionError(approveError);
-      
+      // Placeholder: Show success after simulated delay
+      // In production, this will wait for Solana tx confirmation
       toast({
-        title: isRejection 
-          ? t("createRoom.approvalCancelled", title)
-          : t("createRoom.approvalFailed"),
-        description: isRejection 
-          ? t("createRoom.approvalCancelledDesc", description)
-          : description,
-        variant: isRejection ? "default" : "destructive",
+        title: "Room Creation Pending",
+        description: "Solana program integration coming soon. Your room parameters have been logged.",
       });
-      resetApprove();
-    }
-  }, [approveError, toast, resetApprove, t]);
-
-  useEffect(() => {
-    if (isCreateSuccess && latestRoomId && latestRoomId > 0n) {
-      play('room_create');
-      const isPrivate = roomType === "private";
-      const gameName = getGameName(GAME_IDS[gameType] || 1);
       
-      requestPermission();
-      
-      const roomId = latestRoomId.toString();
-      
-      if (isPrivate) {
-        setCreatedRoomId(roomId);
-        setCreatedGameName(gameName);
-        setShowShareDialog(true);
-        toast({
-          title: t("createRoom.privateRoomCreated"),
-          description: t("createRoom.privateRoomCreatedDesc"),
-        });
-      } else {
-        toast({
-          title: t("createRoom.roomCreated"),
-          description: t("createRoom.roomCreatedDesc"),
-        });
-        setTimeout(() => {
-          navigate("/room-list?refresh=1");
-        }, 1500);
-      }
-      
+      // Reset form
       setEntryFee("");
       setPlayers("2");
       setTurnTimeSec("10");
-      setApprovalStep('idle');
-      setIsCreateSuccess(false);
-      setLatestRoomId(null);
-    }
-  }, [isCreateSuccess, latestRoomId, play, toast, navigate, roomType, gameType, requestPermission, t]);
-
-  useEffect(() => {
-    if (createError) {
-      const { title, description } = logTxError('CREATE_ROOM', createError);
-      const isRejection = isUserRejectionError(createError);
-      const errorMsg = (createError as any)?.message || '';
-      const isRevert = errorMsg.toLowerCase().includes('revert') || 
-                       errorMsg.toLowerCase().includes('execution reverted');
       
+    } catch (err) {
+      console.error("Create room error:", err);
       toast({
-        title: isRejection 
-          ? t("createRoom.approvalCancelled", title) 
-          : isRevert 
-            ? "Create Room failed (revert)" 
-            : t("createRoom.transactionFailed"),
-        description: isRevert 
-          ? "Check network + room settings. See console for debug info."
-          : description,
-        variant: isRejection ? "default" : "destructive",
-      });
-      setCreateError(null);
-    }
-  }, [createError, toast, t]);
-
-  // Network guard: check if on Polygon mainnet (0x89)
-  const checkPolygonNetwork = async (): Promise<boolean> => {
-    const eth = (window as any).ethereum;
-    if (!eth) return false;
-    try {
-      const chainId = await eth.request({ method: 'eth_chainId' });
-      if (chainId !== '0x89') {
-        toast({
-          title: "Wrong network",
-          description: "Switch to Polygon Mainnet",
-          variant: "destructive",
-        });
-        return false;
-      }
-      return true;
-    } catch {
-      return false;
-    }
-  };
-
-  // Called when user clicks "Continue to Wallet" in modal (only for non-gasless mode)
-  const handleDepositConfirm = async () => {
-    const isPolygon = await checkPolygonNetwork();
-    if (!isPolygon) return;
-
-    // Run preflight check
-    const preflight = await runPreflight();
-    
-    if (preflight.hasSufficientAllowance) {
-      // Allowance sufficient - skip approve, create room immediately
-      console.log("Allowance sufficient, skipping approve. Creating room directly.");
-      toast({
-        title: "Allowance OK",
-        description: "Creating room...",
-      });
-      await handleCreateRoomInternal();
-    } else {
-      // Need approval first - this will auto-trigger createRoom on success
-      play('ui_click');
-      if (approveMode === 'max') {
-        approveUsdtMax();
-      } else {
-        approveUsdt(entryFeeNum);
-      }
-    }
-  };
-
-  const handleApproveClick = () => {
-    if (!entryFee || entryFeeNum < MIN_ENTRY_FEE_USDT) {
-      toast({
-        title: t("createRoom.invalidFee"),
-        description: t("createRoom.feeError", { amount: MIN_ENTRY_FEE_USDT }),
+        title: t("createRoom.transactionFailed"),
+        description: err instanceof Error ? err.message : "Unknown error",
         variant: "destructive",
       });
-      return;
+    } finally {
+      setIsCreating(false);
     }
-    
-    // Show deposit confirmation modal BEFORE any wallet action (non-gasless only)
-    setShowDepositModal(true);
   };
-
-  // Gasless Create Room handler - single click, no approval step needed
-  const handleGaslessCreateRoom = async () => {
-    if (!entryFee || entryFeeNum < MIN_ENTRY_FEE_USDT) {
-      toast({
-        title: t("createRoom.invalidFee"),
-        description: t("createRoom.feeError", { amount: MIN_ENTRY_FEE_USDT }),
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Check balance before proceeding
-    const preflight = await runPreflight();
-    if (!preflight.hasSufficientBalance) {
-      toast({
-        title: "Insufficient balance",
-        description: "Insufficient USDT balance.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // createRoomGasless handles allowance check + approval + room creation
-    play('ui_click');
-    await handleCreateRoomInternal();
-  };
-
-  const handleCreateRoom = async () => {
-    if (!entryFee || entryFeeNum < MIN_ENTRY_FEE_USDT) {
-      toast({
-        title: t("createRoom.invalidFee"),
-        description: t("createRoom.feeError", { amount: MIN_ENTRY_FEE_USDT }),
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Run preflight check before creating room
-    const preflight = await runPreflight();
-    
-    if (!preflight.hasSufficientAllowance) {
-      toast({
-        title: "Approve USDT first",
-        description: "Approve USDT first (exact amount).",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (!preflight.hasSufficientBalance) {
-      toast({
-        title: "Insufficient balance",
-        description: "Insufficient USDT balance.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    await handleCreateRoomInternal();
-  };
-
-  const isApproveLoading = isApprovePending || isApproveConfirming;
-  const isCreateLoading = isBusy;
-
-  const getApproveButtonText = () => {
-    if (isApprovePending) return t("createRoom.confirmInWallet");
-    if (isApproveConfirming) return t("createRoom.approving");
-    return t("createRoom.approveUsdt");
-  };
-
-  const getCreateButtonText = () => {
-    if (isBusy) return t("createRoom.creatingRoom");
-    return t("createRoom.step2Create");
-  };
-
-  // Show error banner if gasless enabled but provider missing
-  if (GASLESS_ENABLED && providerMissing) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center px-4 py-12">
-        <div className="w-full max-w-md bg-destructive/10 border border-destructive rounded-lg p-6">
-          <div className="flex items-center gap-2 mb-2">
-            <AlertCircle className="text-destructive" />
-            <h2 className="font-bold text-destructive">Smart Account Provider Missing</h2>
-          </div>
-          <p className="text-sm text-muted-foreground">
-            Gasless transactions are enabled but the ThirdwebSmartProvider is not mounted. Please refresh the page.
-          </p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center px-4 py-12">
@@ -408,7 +158,7 @@ const CreateRoom = () => {
           {/* Game Type */}
           <div className="space-y-2">
             <Label htmlFor="gameType">{t("createRoom.gameType")}</Label>
-            <Select value={gameType} onValueChange={setGameType} disabled={isApproveLoading || isCreateLoading}>
+            <Select value={gameType} onValueChange={setGameType} disabled={isCreating}>
               <SelectTrigger id="gameType" className="w-full">
                 <SelectValue placeholder={t("createRoom.selectGame")} />
               </SelectTrigger>
@@ -422,24 +172,19 @@ const CreateRoom = () => {
             </Select>
           </div>
 
-          {/* Entry Fee (USDT) */}
+          {/* Entry Fee (SOL) */}
           <div className="space-y-2">
-            <Label htmlFor="entryFee">{t("createRoom.entryFee")}</Label>
+            <Label htmlFor="entryFee">{t("createRoom.entryFeeSol")}</Label>
             <div className="flex-1 space-y-1">
               <Input
                 id="entryFee"
                 type="number"
-                placeholder="0.50"
-                min={MIN_ENTRY_FEE_USDT}
-                step="0.1"
+                placeholder="0.01"
+                min={MIN_ENTRY_FEE_SOL}
+                step="0.01"
                 value={entryFee}
-                onChange={(e) => {
-                  setEntryFee(e.target.value);
-                  if (approvalStep === 'approved') {
-                    setApprovalStep('idle');
-                  }
-                }}
-                disabled={isApproveLoading || isCreateLoading}
+                onChange={(e) => setEntryFee(e.target.value)}
+                disabled={isCreating}
                 className={feeError ? "border-destructive" : ""}
               />
               {feeError && (
@@ -449,15 +194,20 @@ const CreateRoom = () => {
                 </p>
               )}
               <p className="text-sm text-muted-foreground">
-                {t("createRoom.minimumFee")}
+                {t("createRoom.minimumFeeSol", { amount: MIN_ENTRY_FEE_SOL })}
               </p>
+              {entryFeeNum > 0 && usdValue !== null && (
+                <p className="text-sm text-muted-foreground">
+                  ≈ ${usdValue.toFixed(2)} USD
+                </p>
+              )}
             </div>
           </div>
 
           {/* Number of Players */}
           <div className="space-y-2">
             <Label htmlFor="players">{t("createRoom.numPlayers")}</Label>
-            <Select value={players} onValueChange={setPlayers} disabled={isApproveLoading || isCreateLoading}>
+            <Select value={players} onValueChange={setPlayers} disabled={isCreating}>
               <SelectTrigger id="players" className="w-full">
                 <SelectValue placeholder={t("createRoom.selectPlayers")} />
               </SelectTrigger>
@@ -472,7 +222,7 @@ const CreateRoom = () => {
           {/* Time per Turn */}
           <div className="space-y-2">
             <Label htmlFor="turnTime">{t("createRoom.timePerTurn")}</Label>
-            <Select value={turnTimeSec} onValueChange={setTurnTimeSec} disabled={isApproveLoading || isCreateLoading}>
+            <Select value={turnTimeSec} onValueChange={setTurnTimeSec} disabled={isCreating}>
               <SelectTrigger id="turnTime" className="w-full">
                 <SelectValue placeholder={t("createRoom.selectTime")} />
               </SelectTrigger>
@@ -492,7 +242,7 @@ const CreateRoom = () => {
               value={roomType} 
               onValueChange={setRoomType} 
               className="flex gap-6"
-              disabled={isApproveLoading || isCreateLoading}
+              disabled={isCreating}
             >
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="public" id="public" />
@@ -513,243 +263,87 @@ const CreateRoom = () => {
           {!isConnected && (
             <div className="space-y-4">
               <div className="flex flex-col items-center gap-2">
-                <SmartWalletButton />
+                <SolanaWalletButton />
                 <p className="text-xs text-muted-foreground text-center">
-                  {t("createRoom.connectHelperText", "Connect your wallet to see available games. No funds are moved.")}
+                  {t("createRoom.connectHelperTextSol")}
                 </p>
               </div>
               
-              {/* USDT on Polygon info */}
+              {/* Solana info */}
               <div className="bg-primary/10 border border-primary/20 rounded-lg p-4">
                 <div className="flex items-center justify-center gap-2 mb-2">
                   <AlertCircle className="text-primary" size={18} />
-                  <span className="font-medium text-primary">{t('walletRequired.feesTitle')}</span>
+                  <span className="font-medium text-primary">{t('walletRequired.solanaInfo')}</span>
                 </div>
                 <p className="text-sm text-muted-foreground text-center">
-                  {t('walletRequired.feesDescription')}
+                  {t('walletRequired.solanaDescription')}
                 </p>
               </div>
             </div>
           )}
 
-          {/* Active Room Warning */}
-          {isConnected && hasActiveRoom && activeRoom && (
-            <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-4 space-y-3">
-              <div className="flex items-start gap-3">
-                <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-medium text-destructive">
-                    {t("createRoom.activeRoomWarning", { roomId: activeRoom.id.toString() })}
-                  </p>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    {t("createRoom.activeRoomWarningDesc")}
-                  </p>
+          {/* Connected State - Create Room */}
+          {isConnected && (
+            <div className="space-y-3">
+              {/* Wallet Info Banner */}
+              <div className="bg-muted/50 border border-border rounded-md p-3 space-y-2 text-sm">
+                <div className="flex justify-between items-center">
+                  <span className="text-muted-foreground">Wallet:</span>
+                  <span className="font-mono text-xs text-foreground">
+                    {address?.slice(0, 4)}...{address?.slice(-4)}
+                  </span>
+                </div>
+                {entryFeeNum > 0 && (
+                  <>
+                    <div className="flex justify-between items-center">
+                      <span className="text-muted-foreground">Entry Fee:</span>
+                      <span className="font-mono text-foreground">
+                        {entryFeeNum.toFixed(4)} SOL
+                      </span>
+                    </div>
+                    {usdValue !== null && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-muted-foreground">USD Value:</span>
+                        <span className="font-mono text-foreground">
+                          ≈ ${usdValue.toFixed(2)}
+                        </span>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+
+              {/* Network Info */}
+              <div className="bg-green-500/10 border border-green-500/30 rounded-md p-3 flex items-center gap-2">
+                <Info className="h-4 w-4 text-green-500 shrink-0" />
+                <div className="text-xs text-green-600 dark:text-green-400">
+                  <strong>Solana Mainnet</strong> — User pays small SOL network fee (~$0.001)
                 </div>
               </div>
+
+              {/* Create Room Button */}
               <Button 
-                type="button"
-                variant="outline" 
-                className="w-full"
-                onClick={() => navigate(`/room/${activeRoom.id.toString()}`)}
+                type="button" 
+                className="w-full" 
+                size="lg"
+                onClick={handleCreateRoom}
+                disabled={isCreating || !entryFee || !!feeError}
               >
-                {t("createRoom.goToRoom")}
+                {isCreating ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    {t("createRoom.creatingRoom")}
+                  </>
+                ) : (
+                  t("createRoom.createRoomSol")
+                )}
               </Button>
-            </div>
-          )}
-
-          {/* Two-Step Process: Approve USDT → Create Room */}
-          {isConnected && !hasActiveRoom && (
-            <div className="space-y-3">
-              {/* Gasless Status Banner */}
-              {GASLESS_ENABLED && isSmartAccount ? (
-                <div className="bg-green-500/10 border border-green-500/30 rounded-md p-3 flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />
-                  <div className="text-xs text-green-600 dark:text-green-400">
-                    <strong>Smart Wallet Connected ✅</strong> — Gasless transactions enabled. No POL fees required.
-                  </div>
-                </div>
-              ) : GASLESS_ENABLED && isConnected && !isSmartAccount ? (
-                <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-md p-3 flex items-start gap-2">
-                  <AlertTriangle className="h-4 w-4 text-yellow-500 mt-0.5 shrink-0" />
-                  <div className="text-xs text-yellow-600 dark:text-yellow-400">
-                    <strong>MetaMask requires POL gas.</strong> Disconnect and use Smart Wallet (Email/Google) for gasless transactions.
-                  </div>
-                </div>
-              ) : !GASLESS_ENABLED ? (
-                <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-md p-3 flex items-start gap-2">
-                  <Info className="h-4 w-4 text-yellow-500 mt-0.5 shrink-0" />
-                  <div className="text-xs text-yellow-600 dark:text-yellow-400">
-                    <strong>Note:</strong> Gasless not enabled. MetaMask will show a small POL network fee (~$0.01).
-                  </div>
-                </div>
-              ) : null}
-
-              {/* USDT Preflight Status Display */}
-              {address && entryFeeNum > 0 && (
-                <div className="bg-muted/50 border border-border rounded-md p-3 space-y-2 text-sm">
-                  <div className="flex justify-between items-center">
-                    <span className="text-muted-foreground">USDT Balance:</span>
-                    <span className={`font-mono ${hasSufficientBalance ? 'text-green-500' : 'text-destructive'}`}>
-                      {balanceUsdt} USDT
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-muted-foreground">Allowance:</span>
-                    <span className={`font-mono ${hasSufficientAllowance ? 'text-green-500' : 'text-yellow-500'}`}>
-                      {allowanceUsdt} USDT
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-muted-foreground">Required:</span>
-                    <span className="font-mono text-foreground">
-                      {(entryFeeNum).toFixed(6)} USDT
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center pt-1 border-t border-border">
-                    <span className="text-muted-foreground">Spender:</span>
-                    <span className="font-mono text-xs text-muted-foreground">
-                      {spenderAddress.slice(0, 6)}...{spenderAddress.slice(-4)}
-                    </span>
-                  </div>
-                </div>
-              )}
-
-              {/* GASLESS MODE: Single Create Room button */}
-              {GASLESS_ENABLED ? (
-                <>
-                  <Button 
-                    type="button" 
-                    className="w-full" 
-                    size="lg"
-                    onClick={handleGaslessCreateRoom}
-                    disabled={isCreateLoading || !entryFee || !!feeError || isCheckingActiveRoom}
-                  >
-                    {isCreateLoading ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        {getCreateButtonText()}
-                      </>
-                    ) : (
-                      t("createRoom.step2Create")
-                    )}
-                  </Button>
-                  
-                  {/* Instructions for gasless */}
-                  <div className="text-xs text-muted-foreground bg-muted/50 border border-border rounded-md p-3 space-y-1">
-                    <p><strong>How it works:</strong> USDT approval and room creation are handled automatically — no POL gas fees required.</p>
-                    <p className="text-[10px] opacity-70">Transactions are sent via Smart Account with gas sponsorship.</p>
-                  </div>
-                </>
-              ) : (
-                <>
-                  {/* NON-GASLESS MODE: Two-step Approve → Create */}
-                  
-                  {/* Approval Options - only show when not approved */}
-                  {address && entryFeeNum > 0 && !hasSufficientAllowance && (
-                    <div className="bg-muted/30 border border-border rounded-md p-3 space-y-2">
-                      <p className="text-xs text-muted-foreground">Choose approval type:</p>
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setApproveMode('exact')}
-                          className={`flex-1 text-xs py-2 px-3 rounded-md border transition-colors ${
-                            approveMode === 'exact' 
-                              ? 'bg-primary text-primary-foreground border-primary' 
-                              : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted'
-                          }`}
-                        >
-                          Exact ({entryFeeNum.toFixed(2)} USDT)
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setApproveMode('max')}
-                          className={`flex-1 text-xs py-2 px-3 rounded-md border transition-colors ${
-                            approveMode === 'max' 
-                              ? 'bg-primary text-primary-foreground border-primary' 
-                              : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted'
-                          }`}
-                        >
-                          Unlimited ⚡
-                        </button>
-                      </div>
-                      <p className="text-[10px] text-muted-foreground">
-                        {approveMode === 'max' 
-                          ? "Unlimited approval = no future approvals needed (recommended)" 
-                          : "Exact approval = more secure, approve again for higher fees"}
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Approval Status Indicator */}
-                  {address && entryFeeNum > 0 && (
-                    <div className={`flex items-center gap-2 p-2 rounded-md ${
-                      hasSufficientAllowance && entryFeeNum > 0
-                        ? 'bg-green-500/10 border border-green-500/30' 
-                        : 'bg-yellow-500/10 border border-yellow-500/30'
-                    }`}>
-                      {hasSufficientAllowance && entryFeeNum > 0 ? (
-                        <>
-                          <CheckCircle2 className="h-4 w-4 text-green-500" />
-                          <span className="text-sm text-green-500">USDT Approved ✅</span>
-                        </>
-                      ) : (
-                        <>
-                          <XCircle className="h-4 w-4 text-yellow-500" />
-                          <span className="text-sm text-yellow-500">Not Approved</span>
-                        </>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Step 1: Approve USDT */}
-                  <Button 
-                    type="button" 
-                    className="w-full" 
-                    size="lg"
-                    variant={hasSufficientAllowance && entryFeeNum > 0 ? "outline" : "default"}
-                    onClick={handleApproveClick}
-                    disabled={isApproveLoading || isCreateLoading || !entryFee || !!feeError || (hasSufficientAllowance && entryFeeNum > 0) || isCheckingActiveRoom}
-                  >
-                    {isApproveLoading ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        {getApproveButtonText()}
-                      </>
-                    ) : hasSufficientAllowance && entryFeeNum > 0 ? (
-                      <>
-                        <CheckCircle2 className="mr-2 h-4 w-4 text-green-500" />
-                        {t("createRoom.usdtApproved")}
-                      </>
-                    ) : (
-                      t("createRoom.step1Approve")
-                    )}
-                  </Button>
-
-                  {/* Step 2: Create Room */}
-                  <Button 
-                    type="button" 
-                    className="w-full" 
-                    size="lg"
-                    onClick={handleCreateRoom}
-                    disabled={isCreateLoading || isApproveLoading || !entryFee || !!feeError || !(hasSufficientAllowance && entryFeeNum > 0) || isCheckingActiveRoom}
-                  >
-                    {isCreateLoading ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        {getCreateButtonText()}
-                      </>
-                    ) : (
-                      t("createRoom.step2Create")
-                    )}
-                  </Button>
-
-                  {/* Instructions */}
-                  <div className="text-xs text-muted-foreground bg-muted/50 border border-border rounded-md p-3 space-y-1">
-                    <p><strong>{t("createRoom.step1Approve").split(':')[0]}:</strong> {t("createRoom.instructions1")}</p>
-                    <p><strong>{t("createRoom.step2Create").split(':')[0]}:</strong> {t("createRoom.instructions2")}</p>
-                  </div>
-                </>
-              )}
+              
+              {/* Instructions */}
+              <div className="text-xs text-muted-foreground bg-muted/50 border border-border rounded-md p-3 space-y-1">
+                <p><strong>How it works:</strong> SOL is deposited directly to the game escrow. Winner receives the prize pool minus 5% platform fee.</p>
+                <p className="text-[10px] opacity-70">No token approvals needed — just connect and play!</p>
+              </div>
             </div>
           )}
         </form>
@@ -760,13 +354,6 @@ const CreateRoom = () => {
         onOpenChange={setShowShareDialog}
         roomId={createdRoomId || ""}
         gameName={createdGameName}
-      />
-
-      <DepositConfirmModal
-        open={showDepositModal}
-        onOpenChange={setShowDepositModal}
-        stakeAmount={entryFeeNum}
-        onConfirm={handleDepositConfirm}
       />
     </div>
   );

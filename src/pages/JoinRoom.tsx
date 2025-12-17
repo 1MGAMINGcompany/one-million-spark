@@ -1,73 +1,92 @@
 import { useEffect, useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { formatEther } from "viem";
 import { Loader2, Users, Coins, Gamepad2, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useWallet } from "@/hooks/useWallet";
-import { useRoom, useJoinRoom, getGameName, formatEntryFee } from "@/hooks/useRoomManager";
+import { useSolanaWallet, SolanaWalletButton } from "@/components/SolanaWalletButton";
+import { useSolPrice } from "@/hooks/useSolPrice";
 import { useToast } from "@/hooks/use-toast";
 import { useSound } from "@/contexts/SoundContext";
-import { usePolPrice } from "@/hooks/usePolPrice";
+import { lamportsToSol } from "@/lib/solanaConfig";
+
+// Helper function to get game name from ID
+function getGameName(gameId: number): string {
+  const names: Record<number, string> = {
+    1: "Chess",
+    2: "Dominos",
+    3: "Backgammon",
+    4: "Checkers",
+    5: "Ludo",
+  };
+  return names[gameId] || "Unknown";
+}
 
 export default function JoinRoom() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { toast } = useToast();
   const { play } = useSound();
-  const { address, isConnected } = useWallet();
-  const { price: polPrice } = usePolPrice();
+  const { isConnected, address, publicKey } = useSolanaWallet();
+  const { price: solPrice, solToUsd } = useSolPrice();
 
   const roomIdParam = searchParams.get("roomId");
-  const roomId = roomIdParam ? BigInt(roomIdParam) : undefined;
+  const [isJoining, setIsJoining] = useState(false);
+  const [roomData, setRoomData] = useState<any>(null);
+  const [roomLoading, setRoomLoading] = useState(true);
 
-  const { data: roomData, isLoading: roomLoading } = useRoom(roomId);
-  const { joinRoom, isPending, isConfirming, isSuccess, error } = useJoinRoom();
-
-  const [hasJoined, setHasJoined] = useState(false);
-
-  // Parse room data
-  const room = roomData ? {
-    id: roomData[0],
-    creator: roomData[1],
-    entryFee: roomData[2],
-    maxPlayers: roomData[3],
-    isPrivate: roomData[4],
-    status: roomData[5],
-    gameId: roomData[6],
-    turnTimeSeconds: roomData[7],
-    winner: roomData[8],
-  } : null;
-
-  const isCreator = room && address?.toLowerCase() === room.creator.toLowerCase();
-  const canJoin = room && room.status === 1 && !isCreator;
-
+  // TODO: Fetch room data from Solana program
+  // For now, show placeholder UI
   useEffect(() => {
-    if (isSuccess && !hasJoined) {
-      setHasJoined(true);
-      play("rooms/player-join");
-      toast({
-        title: "Joined room!",
-        description: `You've successfully joined Room #${roomIdParam}`,
-      });
-      navigate(`/room/${roomIdParam}`);
+    if (roomIdParam) {
+      // Simulate loading
+      setTimeout(() => {
+        setRoomLoading(false);
+        // Placeholder room data
+        setRoomData({
+          id: roomIdParam,
+          creator: "SoLana...",
+          entryFee: 10000000, // 0.01 SOL in lamports
+          maxPlayers: 2,
+          isPrivate: false,
+          status: 1,
+          gameId: 1,
+          turnTimeSeconds: 10,
+        });
+      }, 1000);
     }
-  }, [isSuccess, hasJoined, roomIdParam, navigate, toast, play]);
+  }, [roomIdParam]);
 
-  useEffect(() => {
-    if (error) {
+  const room = roomData;
+  const entryFeeSol = room ? lamportsToSol(room.entryFee) : 0;
+  const usdValue = solToUsd(entryFeeSol);
+
+  const handleJoin = async () => {
+    if (!room || !publicKey) return;
+    
+    play("ui/click");
+    setIsJoining(true);
+
+    try {
+      // TODO: Call Solana program instruction to join room
+      console.log("Joining room:", {
+        roomId: roomIdParam,
+        entryFee: room.entryFee,
+        player: publicKey.toBase58(),
+      });
+
+      toast({
+        title: "Join Room Pending",
+        description: "Solana program integration coming soon.",
+      });
+    } catch (err) {
       toast({
         title: "Failed to join",
-        description: error.message || "Transaction failed",
+        description: err instanceof Error ? err.message : "Transaction failed",
         variant: "destructive",
       });
+    } finally {
+      setIsJoining(false);
     }
-  }, [error, toast]);
-
-  const handleJoin = () => {
-    if (!room || !roomId) return;
-    play("ui/click");
-    joinRoom(roomId, room.entryFee);
   };
 
   if (!roomIdParam) {
@@ -106,8 +125,8 @@ export default function JoinRoom() {
                 <div className="mx-auto w-12 h-12 bg-muted rounded-full flex items-center justify-center mb-4">
                   <Wallet className="text-muted-foreground" size={24} />
                 </div>
-                <p className="text-muted-foreground mb-2">Connect your wallet to join this room</p>
-                <p className="text-sm text-muted-foreground">Click "Connect Wallet" in the top-right</p>
+                <p className="text-muted-foreground mb-4">Connect your Solana wallet to join this room</p>
+                <SolanaWalletButton />
               </div>
             ) : roomLoading ? (
               <div className="flex items-center justify-center py-8">
@@ -122,32 +141,6 @@ export default function JoinRoom() {
                   className="mt-4"
                 >
                   Go Home
-                </Button>
-              </div>
-            ) : room.status !== 1 ? (
-              <div className="text-center py-4">
-                <p className="text-muted-foreground">
-                  This room is no longer accepting players
-                </p>
-                <Button 
-                  variant="outline" 
-                  onClick={() => navigate("/room-list")}
-                  className="mt-4"
-                >
-                  Browse Rooms
-                </Button>
-              </div>
-            ) : isCreator ? (
-              <div className="text-center py-4">
-                <p className="text-muted-foreground">
-                  You created this room. Waiting for players to join.
-                </p>
-                <Button 
-                  variant="outline" 
-                  onClick={() => navigate(`/room/${roomIdParam}`)}
-                  className="mt-4"
-                >
-                  View Room
                 </Button>
               </div>
             ) : (
@@ -169,11 +162,11 @@ export default function JoinRoom() {
                     </span>
                     <div className="text-right">
                       <span className="font-medium text-primary">
-                        {formatEntryFee(room.entryFee)} POL
+                        {entryFeeSol.toFixed(4)} SOL
                       </span>
-                      {polPrice && (
+                      {usdValue !== null && (
                         <p className="text-xs text-muted-foreground">
-                          ≈ ${(Number(formatEther(room.entryFee)) * polPrice).toFixed(2)} USD
+                          ≈ ${usdValue.toFixed(2)} USD
                         </p>
                       )}
                     </div>
@@ -199,26 +192,21 @@ export default function JoinRoom() {
                 {/* Join Button */}
                 <Button
                   onClick={handleJoin}
-                  disabled={!canJoin || isPending || isConfirming}
+                  disabled={isJoining}
                   className="w-full bg-primary hover:bg-primary/90"
                 >
-                  {isPending ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Confirm in Wallet...
-                    </>
-                  ) : isConfirming ? (
+                  {isJoining ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       Joining Room...
                     </>
                   ) : (
-                    `Join Room (${formatEntryFee(room.entryFee)} POL)`
+                    `Join Room (${entryFeeSol.toFixed(4)} SOL)`
                   )}
                 </Button>
 
                 <p className="text-xs text-muted-foreground text-center">
-                  Entry fee will be held in escrow until the game ends
+                  SOL will be held in escrow until the game ends
                 </p>
               </>
             )}
