@@ -2,6 +2,7 @@ import { useState, useCallback, useMemo, useEffect } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, RotateCcw, RotateCw, Gem, Star, Trophy } from "lucide-react";
+import { BackgammonRulesDialog } from "@/components/BackgammonRulesDialog";
 import { Dice3D, CheckerStack } from "@/components/BackgammonPieces";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -801,7 +802,12 @@ const BackgammonAI = () => {
                 <Gem className={cn("text-primary", isMobile ? "w-3 h-3" : "w-4 h-4")} />
               </div>
 
-              {isMobile && <div className="w-8" />}
+              {/* Rules Button */}
+              {isMobile ? (
+                <BackgammonRulesDialog className="h-8 w-8" />
+              ) : (
+                <BackgammonRulesDialog variant="button" />
+              )}
             </div>
             
             {!isMobile && (
@@ -994,15 +1000,28 @@ const BackgammonAI = () => {
                 )}
               </div>
 
-              {/* Bear Off Button */}
-              {canBearOff(gameState, "player") && validMoves.includes(-2) && (
-                <Button 
-                  variant="outline" 
-                  className="w-full py-2 border-primary/30 text-primary hover:bg-primary/10" 
-                  onClick={() => handlePointClick(-2)}
+              {/* Bear Off Zone - Mobile */}
+              {canBearOff(gameState, "player") && (
+                <div 
+                  className={cn(
+                    "w-full py-2 rounded-lg flex items-center justify-center gap-2 transition-all",
+                    validMoves.includes(-2) 
+                      ? "bg-primary/20 border-2 border-primary animate-pulse cursor-pointer shadow-[0_0_20px_hsl(45_93%_54%_/_0.4)]" 
+                      : "border border-primary/30 bg-primary/5"
+                  )}
+                  onClick={() => validMoves.includes(-2) && handlePointClick(-2)}
                 >
-                  Bear Off
-                </Button>
+                  <Trophy className={cn("w-4 h-4", validMoves.includes(-2) ? "text-primary" : "text-primary/50")} />
+                  <span className={cn(
+                    "font-bold",
+                    validMoves.includes(-2) ? "text-primary" : "text-muted-foreground"
+                  )}>
+                    {validMoves.includes(-2) ? "TAP TO BEAR OFF" : `Bear Off: ${gameState.bearOff.player}/15`}
+                  </span>
+                  {validMoves.includes(-2) && (
+                    <span className="text-xs text-primary/70">({gameState.bearOff.player}/15)</span>
+                  )}
+                </div>
               )}
 
               {/* Quick Actions */}
@@ -1094,7 +1113,7 @@ const BackgammonAI = () => {
                         </div>
                       </div>
 
-                      {/* Player Bar / Bear Off */}
+                      {/* Player Bar / Bear Off Zone */}
                       <div className="flex justify-between items-center mt-3 px-2">
                         {gameState.bar.player > 0 ? (
                           <div 
@@ -1114,8 +1133,35 @@ const BackgammonAI = () => {
                             />
                           </div>
                         ) : <div />}
-                        <div className="text-xs text-muted-foreground flex items-center gap-2">
-                          You Borne Off: <span className="text-primary font-bold">{gameState.bearOff.player}</span>
+                        
+                        {/* Bear Off Zone - clickable when valid */}
+                        <div 
+                          className={cn(
+                            "flex items-center gap-2 rounded-lg px-3 py-2 transition-all",
+                            validMoves.includes(-2) 
+                              ? "cursor-pointer bg-primary/20 border-2 border-primary animate-pulse hover:bg-primary/30 shadow-[0_0_20px_hsl(45_93%_54%_/_0.4)]" 
+                              : canBearOff(gameState, "player") 
+                                ? "border border-primary/30 bg-primary/5" 
+                                : "border border-primary/10"
+                          )}
+                          onClick={() => validMoves.includes(-2) && handlePointClick(-2)}
+                        >
+                          <span className={cn(
+                            "text-xs font-medium",
+                            validMoves.includes(-2) ? "text-primary" : "text-muted-foreground"
+                          )}>
+                            Bear Off:
+                          </span>
+                          <span className={cn(
+                            "font-bold",
+                            validMoves.includes(-2) ? "text-primary text-lg" : "text-primary"
+                          )}>
+                            {gameState.bearOff.player}
+                          </span>
+                          <span className="text-xs text-muted-foreground">/15</span>
+                          {validMoves.includes(-2) && (
+                            <Trophy className="w-4 h-4 text-primary ml-1" />
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1127,11 +1173,6 @@ const BackgammonAI = () => {
                   {currentPlayer === "player" && dice.length === 0 && !gameOver && (
                     <Button variant="gold" size="lg" className="min-w-[140px] shadow-[0_0_30px_-8px_hsl(45_93%_54%_/_0.5)]" onClick={rollDice}>
                       🎲 Roll Dice
-                    </Button>
-                  )}
-                  {canBearOff(gameState, "player") && validMoves.includes(-2) && (
-                    <Button variant="outline" className="border-primary/30 text-primary hover:bg-primary/10" onClick={() => handlePointClick(-2)}>
-                      Bear Off
                     </Button>
                   )}
                   <Button onClick={restartGame} variant="ghost" className="border border-primary/20">
@@ -1249,6 +1290,9 @@ const BackgammonAI = () => {
                       <li>• Hit opponent's single checkers to send them to the bar</li>
                       <li>• Must re-enter from bar before other moves</li>
                     </ul>
+                    <div className="mt-3">
+                      <BackgammonRulesDialog variant="button" className="w-full" />
+                    </div>
                   </div>
                 </div>
               </div>
