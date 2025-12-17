@@ -1,27 +1,16 @@
-import { useAccount, useChainId, useDisconnect, useSwitchChain } from "wagmi";
-import { polygon } from "@/lib/wagmi-config";
+import { useWallet as useSolanaWallet, useConnection } from "@solana/wallet-adapter-react";
 
 export function useWallet() {
-  const { address, isConnected, isConnecting, isReconnecting } = useAccount();
-  const chainId = useChainId();
-  const { disconnect } = useDisconnect();
-  const { switchChain } = useSwitchChain();
-
-  const isWrongNetwork = isConnected && chainId !== polygon.id;
-
-  const switchToPolygon = () => {
-    if (switchChain) {
-      switchChain({ chainId: polygon.id });
-    }
-  };
+  const { publicKey, connected, connecting, disconnect, wallet } = useSolanaWallet();
+  const { connection } = useConnection();
 
   return {
-    address,
-    isConnected,
-    isConnecting: isConnecting || isReconnecting,
-    chainId,
-    isWrongNetwork,
+    address: publicKey?.toBase58() ?? null,
+    publicKey,
+    isConnected: connected,
+    isConnecting: connecting,
     disconnect,
-    switchToPolygon,
+    wallet,
+    connection,
   };
 }

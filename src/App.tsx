@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { Web3Provider } from "./components/Web3Provider";
+import { SolanaProvider } from "./components/SolanaProvider";
 import { LoadingProvider } from "./contexts/LoadingContext";
 import { AudioProvider } from "./contexts/AudioContext";
 import { SoundProvider } from "./contexts/SoundContext";
@@ -33,8 +33,9 @@ import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfService from "./pages/TermsOfService";
 import NotFound from "./pages/NotFound";
 import AgeConfirmation from "./components/AgeConfirmation";
+
 const App = () => (
-  <Web3Provider>
+  <SolanaProvider>
     <LoadingProvider>
       <AudioProvider>
         <SoundProvider>
@@ -80,7 +81,7 @@ const App = () => (
         </SoundProvider>
       </AudioProvider>
     </LoadingProvider>
-  </Web3Provider>
+  </SolanaProvider>
 );
 
 export default App;

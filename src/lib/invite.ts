@@ -1,15 +1,13 @@
-import { ROOM_MANAGER_ADDRESS } from "@/contracts/roomManager";
+// Solana-based invite links (placeholder for future Solana program integration)
 
 export function buildInviteLink(params: {
   roomId: string;
-  chainId?: number;
-  contract?: string;
+  cluster?: string;
 }) {
   const url = new URL(window.location.origin);
   url.pathname = "/join";
   url.searchParams.set("roomId", params.roomId);
-  url.searchParams.set("chainId", String(params.chainId || 137));
-  url.searchParams.set("contract", params.contract || ROOM_MANAGER_ADDRESS);
+  url.searchParams.set("cluster", params.cluster || "mainnet-beta");
   return url.toString();
 }
 
