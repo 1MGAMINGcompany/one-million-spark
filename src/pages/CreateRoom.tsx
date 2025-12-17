@@ -54,28 +54,21 @@ export default function CreateRoom() {
 
   if (!isConnected) {
     return (
-      <div className="min-h-[calc(100vh-4rem)] flex flex-col items-center justify-center px-4">
-        <Card className="max-w-md w-full border-border/50 bg-card/80 backdrop-blur">
-          <CardContent className="pt-6 text-center space-y-4">
-            <Wallet className="h-12 w-12 text-primary mx-auto" />
-            <h2 className="text-xl font-cinzel">{t("createRoom.connectWallet")}</h2>
+      <div className="min-h-[calc(100vh-5rem)] flex items-center justify-center px-3 py-4">
+        <Card className="max-w-sm w-full border-border/50 bg-card/80 backdrop-blur">
+          <CardContent className="pt-5 text-center space-y-3">
+            <Wallet className="h-10 w-10 text-primary mx-auto" />
+            <h2 className="text-lg font-cinzel">{t("createRoom.connectWallet")}</h2>
             <p className="text-muted-foreground text-sm">
               Connect your Solana wallet to create a game room.
             </p>
-            <Button onClick={() => setVisible(true)} className="w-full">
+            <Button onClick={() => setVisible(true)} className="w-full" size="sm">
               <Wallet className="mr-2 h-4 w-4" />
               Connect Wallet
             </Button>
             <p className="text-xs text-muted-foreground">
-              Connect your wallet to see available games. No funds are moved.
+              No funds are moved when connecting.
             </p>
-            {/* SOL Info */}
-            <div className="mt-4 p-3 rounded-lg bg-primary/10 border border-primary/20 text-left">
-              <p className="text-sm font-medium text-primary mb-1">Game Fees</p>
-              <p className="text-xs text-muted-foreground">
-                Entry fees are paid in SOL on the Solana network.
-              </p>
-            </div>
           </CardContent>
         </Card>
       </div>
@@ -83,25 +76,25 @@ export default function CreateRoom() {
   }
 
   return (
-    <div className="container max-w-2xl py-8 px-4">
-      <Card className="border-border/50 bg-card/80 backdrop-blur">
-        <CardHeader>
+    <div className="min-h-[calc(100vh-5rem)] flex items-center justify-center px-3 py-4">
+      <Card className="max-w-md w-full border-border/50 bg-card/80 backdrop-blur">
+        <CardHeader className="pb-3 pt-4 px-4">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-2xl font-cinzel flex items-center gap-3">
-              <Construction className="h-6 w-6 text-primary" />
+            <CardTitle className="text-lg font-cinzel flex items-center gap-2">
+              <Construction className="h-5 w-5 text-primary" />
               {t("createRoom.title")}
             </CardTitle>
             {isDevnet && (
-              <span className="text-xs bg-amber-500/20 text-amber-500 px-2 py-1 rounded">
+              <span className="text-xs bg-amber-500/20 text-amber-500 px-2 py-0.5 rounded">
                 Devnet
               </span>
             )}
           </div>
         </CardHeader>
-        <CardContent className="space-y-6">
+        <CardContent className="space-y-4 px-4 pb-5">
           {/* SOL Price Display */}
-          <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-            <span className="text-sm text-muted-foreground">SOL Price:</span>
+          <div className="flex items-center justify-between p-2.5 bg-muted/50 rounded-lg text-sm">
+            <span className="text-muted-foreground">SOL Price:</span>
             <div className="flex items-center gap-2">
               <span className="font-semibold text-primary">
                 {priceLoading ? "..." : price ? `$${price.toFixed(2)}` : "N/A"}
@@ -110,28 +103,28 @@ export default function CreateRoom() {
                 onClick={refetchPrice} 
                 className="text-muted-foreground hover:text-foreground transition-colors"
               >
-                <RefreshCw size={14} className={priceLoading ? "animate-spin" : ""} />
+                <RefreshCw size={12} className={priceLoading ? "animate-spin" : ""} />
               </button>
             </div>
           </div>
 
-          <div className="text-center py-8">
-            <Construction className="h-16 w-16 text-primary mx-auto mb-4" />
-            <h3 className="text-xl font-semibold mb-2">Solana Integration Coming Soon</h3>
-            <p className="text-muted-foreground mb-4">
+          <div className="text-center py-4">
+            <Construction className="h-12 w-12 text-primary mx-auto mb-3" />
+            <h3 className="text-base font-semibold mb-1">Solana Integration Coming Soon</h3>
+            <p className="text-sm text-muted-foreground mb-2">
               Room creation with SOL entry fees will be available soon.
             </p>
-            <p className="text-sm text-muted-foreground">
-              Connected: {address?.slice(0, 8)}...{address?.slice(-4)}
+            <p className="text-xs text-muted-foreground">
+              Connected: {address?.slice(0, 6)}...{address?.slice(-4)}
             </p>
           </div>
 
           {/* Preview of form (disabled) */}
-          <div className="space-y-4 opacity-50 pointer-events-none">
+          <div className="space-y-3 opacity-50 pointer-events-none">
             <div>
-              <Label>{t("createRoom.gameType")}</Label>
+              <Label className="text-sm">{t("createRoom.gameType")}</Label>
               <Select value={gameType} disabled>
-                <SelectTrigger>
+                <SelectTrigger className="h-9">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -145,7 +138,7 @@ export default function CreateRoom() {
             </div>
 
             <div>
-              <Label>Entry Fee (SOL)</Label>
+              <Label className="text-sm">Entry Fee (SOL)</Label>
               <div className="flex items-center gap-2">
                 <Input
                   type="number"
@@ -155,6 +148,7 @@ export default function CreateRoom() {
                   placeholder="0.1"
                   min={MIN_ENTRY_FEE_SOL}
                   step="0.01"
+                  className="h-9"
                 />
                 {entryFeeUsd && (
                   <span className="text-sm text-muted-foreground whitespace-nowrap">
@@ -163,11 +157,11 @@ export default function CreateRoom() {
                 )}
               </div>
               <p className="text-xs text-muted-foreground mt-1">
-                Minimum: {MIN_ENTRY_FEE_SOL} SOL
+                Min: {MIN_ENTRY_FEE_SOL} SOL
               </p>
             </div>
 
-            <Button disabled className="w-full">
+            <Button disabled className="w-full" size="sm">
               Create Room (Coming Soon)
             </Button>
           </div>
