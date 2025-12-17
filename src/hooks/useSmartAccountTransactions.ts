@@ -4,7 +4,7 @@ import { prepareContractCall, getContract, waitForReceipt, readContract } from "
 import { polygon } from "thirdweb/chains";
 import { keccak256, toBytes } from "viem";
 import { toast } from "sonner";
-import { thirdwebClient, ROOMMANAGER_V7_ADDRESS } from "@/lib/thirdwebClient";
+import { thirdwebClient, ROOMMANAGER_V7_ADDRESS, USDT_ADDRESS } from "@/lib/thirdwebClient";
 
 // Rules hash for contract validation
 const RULES_TEXT = `
@@ -23,6 +23,13 @@ const roomManagerContract = getContract({
   address: ROOMMANAGER_V7_ADDRESS,
 });
 
+// Get the USDT contract instance
+const usdtContract = getContract({
+  client: thirdwebClient,
+  chain: polygon,
+  address: USDT_ADDRESS,
+});
+
 // True gasless is now enabled with Smart Accounts
 export const GASLESS_ENABLED = true;
 
@@ -31,6 +38,62 @@ export function useSmartCreateRoom() {
   const account = useActiveAccount();
   const [isBusy, setIsBusy] = useState(false);
   const { mutateAsync: sendTransaction, isPending } = useSendTransaction();
+
+  // Debug: Log account info on mount/change
+  if (account) {
+    console.log("[SmartAccount] Active account address:", account.address);
+    console.log("[SmartAccount] Account type:", (account as any).type || "unknown");
+  }
+
+  // Check USDT allowance for the Smart Account
+  const checkAllowance = useCallback(async (): Promise<bigint> => {
+    if (!account) return 0n;
+    console.log("[SmartAccount] Checking allowance for:", account.address);
+    try {
+      const allowance = await readContract({
+        contract: usdtContract,
+        method: "function allowance(address owner, address spender) view returns (uint256)",
+        params: [account.address, ROOMMANAGER_V7_ADDRESS],
+      });
+      console.log("[SmartAccount] Current USDT allowance:", allowance.toString());
+      return allowance;
+    } catch (err) {
+      console.error("[SmartAccount] Failed to check allowance:", err);
+      return 0n;
+    }
+  }, [account]);
+
+  // Approve USDT via Smart Account (gasless)
+  const approveUsdtGasless = useCallback(async (amount: bigint): Promise<boolean> => {
+    if (!account) throw new Error("Smart Account not connected");
+
+    console.log("[SmartAccount] Approving USDT:", amount.toString());
+    toast.info("Approving USDT (gasless)...");
+
+    try {
+      const transaction = prepareContractCall({
+        contract: usdtContract,
+        method: "function approve(address spender, uint256 amount) returns (bool)",
+        params: [ROOMMANAGER_V7_ADDRESS, amount],
+      });
+
+      const result = await sendTransaction(transaction);
+      console.log("[SmartAccount] Approve TX:", result.transactionHash);
+
+      await waitForReceipt({
+        client: thirdwebClient,
+        chain: polygon,
+        transactionHash: result.transactionHash,
+      });
+
+      toast.success("USDT approved (gasless)!");
+      return true;
+    } catch (err: any) {
+      console.error("[SmartAccount] Approve failed:", err);
+      toast.error("USDT approval failed: " + (err?.message?.slice(0, 100) || "Unknown error"));
+      return false;
+    }
+  }, [account, sendTransaction]);
 
   const createRoomGasless = useCallback(async (
     entryFeeUnits: bigint,
@@ -68,6 +131,21 @@ export function useSmartCreateRoom() {
     setIsBusy(true);
 
     try {
+      // Step 1: Check allowance and approve if needed
+      const currentAllowance = await checkAllowance();
+      if (currentAllowance < entryFeeUnits) {
+        console.log("[SmartAccount] Allowance insufficient, approving...");
+        const approved = await approveUsdtGasless(entryFeeUnits);
+        if (!approved) {
+          throw new Error("USDT approval failed");
+        }
+      } else {
+        console.log("[SmartAccount] Allowance sufficient, skipping approve");
+      }
+
+      // Step 2: Create room
+      toast.info("Creating room (gasless)...");
+
       // Prepare the contract call
       const transaction = prepareContractCall({
         contract: roomManagerContract,
@@ -140,7 +218,7 @@ export function useSmartCreateRoom() {
     } finally {
       setIsBusy(false);
     }
-  }, [account, sendTransaction]);
+  }, [account, sendTransaction, checkAllowance, approveUsdtGasless]);
 
   return {
     createRoomGasless,
@@ -157,7 +235,53 @@ export function useSmartJoinRoom() {
   const [isSuccess, setIsSuccess] = useState(false);
   const { mutateAsync: sendTransaction, isPending } = useSendTransaction();
 
-  const joinRoomGasless = useCallback(async (roomId: bigint): Promise<boolean> => {
+  // Check USDT allowance for the Smart Account
+  const checkAllowance = useCallback(async (): Promise<bigint> => {
+    if (!account) return 0n;
+    try {
+      const allowance = await readContract({
+        contract: usdtContract,
+        method: "function allowance(address owner, address spender) view returns (uint256)",
+        params: [account.address, ROOMMANAGER_V7_ADDRESS],
+      });
+      return allowance;
+    } catch (err) {
+      console.error("[SmartAccount] Failed to check allowance:", err);
+      return 0n;
+    }
+  }, [account]);
+
+  // Approve USDT via Smart Account (gasless)
+  const approveUsdtGasless = useCallback(async (amount: bigint): Promise<boolean> => {
+    if (!account) throw new Error("Smart Account not connected");
+
+    console.log("[SmartAccount] Approving USDT for join:", amount.toString());
+    toast.info("Approving USDT (gasless)...");
+
+    try {
+      const transaction = prepareContractCall({
+        contract: usdtContract,
+        method: "function approve(address spender, uint256 amount) returns (bool)",
+        params: [ROOMMANAGER_V7_ADDRESS, amount],
+      });
+
+      const result = await sendTransaction(transaction);
+      await waitForReceipt({
+        client: thirdwebClient,
+        chain: polygon,
+        transactionHash: result.transactionHash,
+      });
+
+      toast.success("USDT approved (gasless)!");
+      return true;
+    } catch (err: any) {
+      console.error("[SmartAccount] Approve failed:", err);
+      toast.error("USDT approval failed: " + (err?.message?.slice(0, 100) || "Unknown error"));
+      return false;
+    }
+  }, [account, sendTransaction]);
+
+  const joinRoomGasless = useCallback(async (roomId: bigint, entryFeeUnits?: bigint): Promise<boolean> => {
     if (!account) {
       toast.error("Smart Account not connected");
       return false;
@@ -167,6 +291,20 @@ export function useSmartJoinRoom() {
     setIsSuccess(false);
 
     try {
+      // Check and approve USDT if entryFeeUnits provided
+      if (entryFeeUnits && entryFeeUnits > 0n) {
+        const currentAllowance = await checkAllowance();
+        if (currentAllowance < entryFeeUnits) {
+          console.log("[SmartAccount] Allowance insufficient for join, approving...");
+          const approved = await approveUsdtGasless(entryFeeUnits);
+          if (!approved) {
+            throw new Error("USDT approval failed");
+          }
+        }
+      }
+
+      toast.info("Joining room (gasless)...");
+
       const transaction = prepareContractCall({
         contract: roomManagerContract,
         method: "function joinRoom(uint256 roomId)",
@@ -192,7 +330,7 @@ export function useSmartJoinRoom() {
     } finally {
       setIsBusy(false);
     }
-  }, [account, sendTransaction]);
+  }, [account, sendTransaction, checkAllowance, approveUsdtGasless]);
 
   const reset = useCallback(() => {
     setIsSuccess(false);
