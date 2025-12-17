@@ -16,7 +16,7 @@ import { useWallet } from "@/hooks/useWallet";
 import { useToast } from "@/hooks/use-toast";
 import { useSound } from "@/contexts/SoundContext";
 import { Loader2, AlertCircle, Wallet, Construction } from "lucide-react";
-import { useWalletModal } from "@solana/wallet-adapter-react-ui";
+import { useWalletModal } from "@/components/SolanaProvider";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useBackgroundMusic } from "@/hooks/useBackgroundMusic";
 
