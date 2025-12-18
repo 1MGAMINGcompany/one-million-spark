@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useWalletModal } from "@/components/SolanaProvider";
 import {
   Dialog,
@@ -12,20 +11,15 @@ import {
   DrawerHeader,
   DrawerTitle,
 } from "@/components/ui/drawer";
-import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { 
   Wallet, 
-  Download, 
   Link, 
   Coins, 
   Shield, 
   ExternalLink,
-  Copy,
-  Check,
   Info
 } from "lucide-react";
-import { toast } from "sonner";
 
 interface HowToConnectSolModalProps {
   isOpen: boolean;
@@ -60,22 +54,32 @@ const CONNECT_STEPS = [
   "Approve the connection in your wallet",
 ];
 
-const GET_SOL_STEPS = [
-  "Buy SOL on a trusted exchange (Coinbase, Binance, Kraken)",
-  "Withdraw SOL to your wallet address",
-  "Keep a small amount (~0.01 SOL) for network fees",
-];
+const GET_SOL_OPTIONS = {
+  walletOption: {
+    title: "Option 1 — Buy SOL directly in your wallet (easiest)",
+    steps: [
+      "Phantom and Solflare wallets let you buy SOL with a credit or debit card in many regions",
+      "Requires identity verification with the wallet's payment provider",
+      "SOL is delivered directly to your wallet",
+    ],
+  },
+  exchangeOption: {
+    title: "Option 2 — Buy SOL on an exchange",
+    steps: [
+      "Buy SOL on a trusted exchange (Coinbase, Binance, Kraken)",
+      "Withdraw SOL to your wallet address",
+      "Keep a small amount (~0.01 SOL) for network fees",
+    ],
+  },
+  notes: [
+    "Credit/debit card purchases depend on country, card, and provider availability",
+    "Fees may apply",
+    "1M GAMING never handles payments or stores card details",
+  ],
+};
 
 export function HowToConnectSolModal({ isOpen, onClose }: HowToConnectSolModalProps) {
   const isMobile = useIsMobile();
-  const [copiedAddress, setCopiedAddress] = useState(false);
-
-  const handleCopyExample = () => {
-    navigator.clipboard.writeText("Your wallet address appears in your wallet app");
-    setCopiedAddress(true);
-    toast.success("Copied!");
-    setTimeout(() => setCopiedAddress(false), 2000);
-  };
 
   const content = (
     <div className="space-y-6 pb-4">
@@ -128,29 +132,48 @@ export function HowToConnectSolModal({ isOpen, onClose }: HowToConnectSolModalPr
       </div>
 
       {/* How to Get SOL */}
-      <div className="space-y-3">
+      <div className="space-y-4">
         <h3 className="text-sm font-semibold text-primary flex items-center gap-2">
           <Coins size={16} />
           How to Get SOL
         </h3>
-        <ol className="space-y-2">
-          {GET_SOL_STEPS.map((step, index) => (
-            <li key={index} className="flex items-start gap-3 text-sm text-muted-foreground">
-              <span className="flex-shrink-0 w-5 h-5 rounded-full bg-primary/20 text-primary text-xs flex items-center justify-center font-medium">
-                {index + 1}
-              </span>
-              <span>{step}</span>
-            </li>
-          ))}
-        </ol>
         
-        <button
-          onClick={handleCopyExample}
-          className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors mt-2"
-        >
-          {copiedAddress ? <Check size={12} /> : <Copy size={12} />}
-          Your wallet address is in your wallet app
-        </button>
+        {/* Option 1 - Wallet Purchase */}
+        <div className="space-y-2">
+          <p className="text-xs font-medium text-foreground">{GET_SOL_OPTIONS.walletOption.title}</p>
+          <ul className="space-y-1.5">
+            {GET_SOL_OPTIONS.walletOption.steps.map((step, index) => (
+              <li key={index} className="flex items-start gap-2 text-xs text-muted-foreground">
+                <span className="text-primary">•</span>
+                <span>{step}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        {/* Option 2 - Exchange */}
+        <div className="space-y-2">
+          <p className="text-xs font-medium text-foreground">{GET_SOL_OPTIONS.exchangeOption.title}</p>
+          <ol className="space-y-1.5">
+            {GET_SOL_OPTIONS.exchangeOption.steps.map((step, index) => (
+              <li key={index} className="flex items-start gap-2 text-xs text-muted-foreground">
+                <span className="flex-shrink-0 w-4 h-4 rounded-full bg-primary/20 text-primary text-[10px] flex items-center justify-center font-medium">
+                  {index + 1}
+                </span>
+                <span>{step}</span>
+              </li>
+            ))}
+          </ol>
+        </div>
+
+        {/* Important Notes */}
+        <div className="mt-3 pt-3 border-t border-border/30">
+          <p className="text-[10px] text-muted-foreground/70 space-y-0.5">
+            {GET_SOL_OPTIONS.notes.map((note, index) => (
+              <span key={index} className="block">• {note}</span>
+            ))}
+          </p>
+        </div>
       </div>
 
       {/* Safety Note */}
