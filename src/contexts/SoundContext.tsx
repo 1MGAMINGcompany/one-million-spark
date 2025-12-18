@@ -153,12 +153,17 @@ export const SoundProvider = ({ children }: { children: ReactNode }) => {
     return removeListeners;
   }, [initializeSounds, soundEnabled]);
   
-  // Stop background music when sound is disabled
+  // Stop/start background music when sound toggle changes - this is the primary control
   useEffect(() => {
-    if (!soundEnabled && backgroundMusicRef.current) {
+    if (!backgroundMusicRef.current) return;
+    
+    if (!soundEnabled) {
+      // Immediately stop when disabled
       backgroundMusicRef.current.pause();
+      backgroundMusicRef.current.currentTime = 0;
       setIsBackgroundMusicPlaying(false);
-    } else if (soundEnabled && wantsBackgroundMusicRef.current && backgroundMusicRef.current) {
+    } else if (wantsBackgroundMusicRef.current) {
+      // Resume if we want music and sound is enabled
       backgroundMusicRef.current.play().then(() => {
         setIsBackgroundMusicPlaying(true);
       }).catch(() => {});
