@@ -169,18 +169,37 @@ const LudoGame = () => {
     }
   }, [roomId]);
 
+  // Refs for WebRTC rematch functions
+  const sendRematchInviteRef = useRef<((data: any) => boolean) | null>(null);
+  const sendRematchAcceptRef = useRef<((roomId: string) => boolean) | null>(null);
+  const sendRematchDeclineRef = useRef<((roomId: string) => boolean) | null>(null);
+  const sendRematchReadyRef = useRef<((roomId: string) => boolean) | null>(null);
+
   const handleAcceptRematch = async (rematchRoomId: string) => {
     const result = await rematch.acceptRematch(rematchRoomId);
+    sendRematchAcceptRef.current?.(rematchRoomId);
     if (result.allAccepted) {
       toast({ title: "All players accepted!", description: "Game is starting..." });
-      window.location.href = window.location.pathname;
+      sendRematchReadyRef.current?.(rematchRoomId);
+      window.location.href = `/game/ludo/${rematchRoomId}`;
     }
   };
 
   const handleDeclineRematch = (rematchRoomId: string) => {
     rematch.declineRematch(rematchRoomId);
+    sendRematchDeclineRef.current?.(rematchRoomId);
     navigate('/room-list');
   };
+
+  // Sync rematch invite via WebRTC when created
+  useEffect(() => {
+    if (rematch.state.newRoomId && rematch.state.inviteLink && sendRematchInviteRef.current) {
+      const rematchData = rematch.getRematchData(rematch.state.newRoomId);
+      if (rematchData) {
+        sendRematchInviteRef.current(rematchData);
+      }
+    }
+  }, [rematch.state.newRoomId, rematch.state.inviteLink]);
 
   // Game chat hook ref (sendChat defined after WebRTC hook)
   const chatRef = useRef<ReturnType<typeof useGameChat> | null>(null);
@@ -204,8 +223,20 @@ const LudoGame = () => {
       const move = message.payload as LudoMove;
       applyExternalMove(move);
       recordPlayerMove(roomPlayers[move.playerIndex] || "", `Moved to position ${move.endPosition}`);
+    } else if (message.type === "rematch_invite" && message.payload) {
+      setRematchInviteData(message.payload);
+      setShowAcceptModal(true);
+      toast({ title: "Rematch Invite", description: "Your opponent wants a rematch!" });
+    } else if (message.type === "rematch_accept") {
+      toast({ title: "Rematch Accepted!", description: "Opponent accepted. Starting new game..." });
+    } else if (message.type === "rematch_decline") {
+      toast({ title: "Rematch Declined", description: "Opponent declined the rematch.", variant: "destructive" });
+      rematch.closeRematchModal();
+    } else if (message.type === "rematch_ready" && message.payload) {
+      toast({ title: "Rematch Ready!", description: "Starting new game..." });
+      navigate(`/game/ludo/${message.payload.roomId}`);
     }
-  }, [applyExternalMove, recordPlayerMove, roomPlayers]);
+  }, [applyExternalMove, recordPlayerMove, roomPlayers, rematch, navigate]);
 
   // WebRTC sync
   const {
@@ -213,12 +244,24 @@ const LudoGame = () => {
     connectionState,
     sendMove,
     sendChat,
+    sendRematchInvite,
+    sendRematchAccept,
+    sendRematchDecline,
+    sendRematchReady,
   } = useWebRTCSync({
     roomId: roomId || "",
     players: roomPlayers,
     onMessage: handleWebRTCMessage,
     enabled: roomPlayers.length >= 2,
   });
+
+  // Update refs with WebRTC functions
+  useEffect(() => {
+    sendRematchInviteRef.current = sendRematchInvite;
+    sendRematchAcceptRef.current = sendRematchAccept;
+    sendRematchDeclineRef.current = sendRematchDecline;
+    sendRematchReadyRef.current = sendRematchReady;
+  }, [sendRematchInvite, sendRematchAccept, sendRematchDecline, sendRematchReady]);
 
   // Handle chat message sending via WebRTC
   const handleChatSend = useCallback((msg: ChatMessage) => {

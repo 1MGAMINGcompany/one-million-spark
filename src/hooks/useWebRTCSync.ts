@@ -5,7 +5,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useSound } from "@/contexts/SoundContext";
 
 export interface GameMessage {
-  type: "move" | "resign" | "draw_offer" | "draw_accept" | "draw_reject" | "sync_request" | "sync_response" | "heartbeat" | "chat";
+  type: "move" | "resign" | "draw_offer" | "draw_accept" | "draw_reject" | "sync_request" | "sync_response" | "heartbeat" | "chat" | "rematch_invite" | "rematch_accept" | "rematch_decline" | "rematch_ready";
   payload?: any;
   timestamp: number;
   sender?: string;
@@ -202,6 +202,26 @@ export function useWebRTCSync({
     return sendMessage({ type: "chat", payload: text, sender: localAddress });
   }, [sendMessage, localAddress]);
 
+  // Send rematch invite
+  const sendRematchInvite = useCallback((rematchData: any): boolean => {
+    return sendMessage({ type: "rematch_invite", payload: rematchData, sender: localAddress });
+  }, [sendMessage, localAddress]);
+
+  // Accept rematch invite
+  const sendRematchAccept = useCallback((roomId: string): boolean => {
+    return sendMessage({ type: "rematch_accept", payload: { roomId }, sender: localAddress });
+  }, [sendMessage, localAddress]);
+
+  // Decline rematch invite
+  const sendRematchDecline = useCallback((roomId: string): boolean => {
+    return sendMessage({ type: "rematch_decline", payload: { roomId }, sender: localAddress });
+  }, [sendMessage, localAddress]);
+
+  // Signal rematch is ready (all accepted)
+  const sendRematchReady = useCallback((roomId: string): boolean => {
+    return sendMessage({ type: "rematch_ready", payload: { roomId }, sender: localAddress });
+  }, [sendMessage, localAddress]);
+
   // Manual reconnect
   const reconnect = useCallback(() => {
     reconnectAttempts.current = 0;
@@ -220,6 +240,10 @@ export function useWebRTCSync({
     requestSync,
     respondSync,
     sendChat,
+    sendRematchInvite,
+    sendRematchAccept,
+    sendRematchDecline,
+    sendRematchReady,
     reconnect,
     peerAddress: remoteAddress,
   };
