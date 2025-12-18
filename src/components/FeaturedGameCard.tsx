@@ -32,7 +32,7 @@ const FeaturedGameCard = ({ name, tagline, path, icon }: FeaturedGameCardProps) 
 
   return (
     <div 
-      className="group relative"
+      className="group relative z-10"
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
       onTouchStart={handleTouchStart}

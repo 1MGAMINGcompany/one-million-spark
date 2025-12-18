@@ -170,8 +170,8 @@ const Home = () => {
       </section>
 
       {/* Featured Games Section */}
-      <section className="relative py-20 px-4">
-        <div className="max-w-5xl mx-auto">
+      <section className="relative z-10 py-20 px-4">
+        <div className="max-w-5xl mx-auto relative z-10">
           <div className="flex items-center justify-center gap-4 mb-12">
             <div className="h-px flex-1 max-w-24 bg-gradient-to-r from-transparent to-border" />
             <div className="flex items-center gap-3">
