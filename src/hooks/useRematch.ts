@@ -201,6 +201,19 @@ export function useRematch(gameType: string, previousPlayers: string[]) {
     return rematchDataStr ? JSON.parse(rematchDataStr) : null;
   }, []);
 
+  // Check for rematch invite from URL
+  const checkRematchInvite = useCallback((roomId: string): { isRematch: boolean; data: any } => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const isRematch = urlParams.get('rematch') === 'true';
+    
+    if (isRematch) {
+      const data = getRematchData(roomId);
+      return { isRematch: true, data };
+    }
+    
+    return { isRematch: false, data: null };
+  }, [getRematchData]);
+
   return {
     state,
     isModalOpen,
@@ -215,6 +228,7 @@ export function useRematch(gameType: string, previousPlayers: string[]) {
     acceptRematch,
     declineRematch,
     getRematchData,
+    checkRematchInvite,
   };
 }
 
