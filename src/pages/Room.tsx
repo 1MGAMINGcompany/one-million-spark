@@ -114,6 +114,43 @@ export default function Room() {
     fetchRoom();
   }, [roomAddress, connection, wallet]);
 
+  // Real-time subscription to room changes
+  useEffect(() => {
+    if (!roomAddress) return;
+
+    let subId: number | null = null;
+
+    (async () => {
+      try {
+        const roomPda = new PublicKey(roomAddress);
+
+        subId = connection.onAccountChange(
+          roomPda,
+          async () => {
+            // Refetch latest room when it changes
+            try {
+              const provider = getAnchorProvider(connection, wallet);
+              const program = getProgram(provider);
+              const latest = await (program.account as any).room.fetch(roomPda);
+              setRoom(latest);
+            } catch (e) {
+              console.error("Failed to refetch room on change", e);
+            }
+          },
+          "confirmed"
+        );
+      } catch (e) {
+        console.error("onAccountChange subscribe failed", e);
+      }
+    })();
+
+    return () => {
+      if (subId !== null) {
+        connection.removeAccountChangeListener(subId);
+      }
+    };
+  }, [roomAddress, connection, wallet]);
+
   // Fetch user's active room on mount
   useEffect(() => {
     if (isConnected) {
