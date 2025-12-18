@@ -7,10 +7,12 @@ import { useTranslation } from "react-i18next";
 import { useWallet } from "@/hooks/useWallet";
 import { useWebRTCSync, GameMessage } from "@/hooks/useWebRTCSync";
 import { useTurnNotifications, TurnPlayer } from "@/hooks/useTurnNotifications";
+import { useGameChat, ChatPlayer, ChatMessage } from "@/hooks/useGameChat";
 import TurnStatusHeader from "@/components/TurnStatusHeader";
 import TurnHistoryDrawer from "@/components/TurnHistoryDrawer";
 import NotificationToggle from "@/components/NotificationToggle";
 import TurnBanner from "@/components/TurnBanner";
+import GameChatPanel from "@/components/GameChatPanel";
 import { toast } from "@/hooks/use-toast";
 
 type Player = "gold" | "obsidian";
@@ -656,6 +658,8 @@ const CheckersGame = () => {
           </div>
         </div>
       </div>
+      
+      {/* Chat Panel - placeholder until full integration */}
     </div>
   );
 };
