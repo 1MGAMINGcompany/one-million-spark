@@ -9,7 +9,7 @@ import { Construction, ArrowLeft } from "lucide-react";
 import { WalletGateModal } from "@/components/WalletGateModal";
 
 export default function Room() {
-  const { roomId } = useParams<{ roomId: string }>();
+  const { roomAddress } = useParams<{ roomAddress: string }>();
   const navigate = useNavigate();
   const { isConnected } = useWallet();
   const { connection } = useConnection();
@@ -39,7 +39,7 @@ export default function Room() {
     });
 
     console.log("Play again created room:", res);
-    navigate(`/room/${res.roomId.toString()}`);
+    navigate(`/room/${res.roomPda}`);
   };
 
   return (
@@ -52,7 +52,7 @@ export default function Room() {
         <CardHeader>
           <CardTitle className="text-2xl font-cinzel flex items-center gap-3">
             <Construction className="h-6 w-6 text-primary" />
-            Room #{roomId}
+            Room {roomAddress ? `${roomAddress.slice(0, 8)}...` : ""}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
