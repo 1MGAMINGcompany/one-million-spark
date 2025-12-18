@@ -5,7 +5,9 @@ import { useToast } from "@/hooks/use-toast";
 import {
   RoomDisplay,
   GameType,
+  RoomStatus,
   fetchOpenPublicRooms,
+  fetchAllRooms,
   fetchRoomById,
   fetchNextRoomId,
   buildCreateRoomTx,
@@ -28,8 +30,30 @@ export function useSolanaRooms() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [txPending, setTxPending] = useState(false);
+  const [activeRoom, setActiveRoom] = useState<RoomDisplay | null>(null);
 
   const programReady = isProgramConfigured();
+
+  // Fetch user's active open room (created by them, status Open)
+  const fetchCreatorActiveRoom = useCallback(async (): Promise<RoomDisplay | null> => {
+    if (!programReady || !publicKey) {
+      setActiveRoom(null);
+      return null;
+    }
+    
+    try {
+      const allRooms = await fetchAllRooms(connection);
+      const userActiveRoom = allRooms.find(
+        room => room.creator === publicKey.toBase58() && room.status === RoomStatus.Created
+      );
+      setActiveRoom(userActiveRoom || null);
+      return userActiveRoom || null;
+    } catch (err) {
+      console.error("Error fetching active room:", err);
+      setActiveRoom(null);
+      return null;
+    }
+  }, [connection, publicKey, programReady]);
 
   // Fetch all open public rooms
   const fetchRooms = useCallback(async () => {
@@ -79,6 +103,17 @@ export function useSolanaRooms() {
       toast({
         title: "Program not ready",
         description: "Solana program is not yet deployed",
+        variant: "destructive",
+      });
+      return null;
+    }
+
+    // Check for existing active room
+    const existingRoom = await fetchCreatorActiveRoom();
+    if (existingRoom) {
+      toast({
+        title: "Active room exists",
+        description: "Cancel your existing room before creating a new one",
         variant: "destructive",
       });
       return null;
@@ -140,7 +175,7 @@ export function useSolanaRooms() {
     } finally {
       setTxPending(false);
     }
-  }, [publicKey, connected, connection, sendTransaction, toast, fetchRooms, programReady]);
+  }, [publicKey, connected, connection, sendTransaction, toast, fetchRooms, programReady, fetchCreatorActiveRoom]);
 
   // Join room
   const joinRoom = useCallback(async (roomId: number): Promise<boolean> => {
@@ -157,6 +192,17 @@ export function useSolanaRooms() {
       toast({
         title: "Program not ready",
         description: "Solana program is not yet deployed",
+        variant: "destructive",
+      });
+      return false;
+    }
+
+    // Check for existing active room
+    const existingRoom = await fetchCreatorActiveRoom();
+    if (existingRoom) {
+      toast({
+        title: "Active room exists",
+        description: "Cancel your existing room before joining another",
         variant: "destructive",
       });
       return false;
@@ -202,7 +248,7 @@ export function useSolanaRooms() {
     } finally {
       setTxPending(false);
     }
-  }, [publicKey, connected, connection, sendTransaction, toast, fetchRooms, programReady]);
+  }, [publicKey, connected, connection, sendTransaction, toast, fetchRooms, programReady, fetchCreatorActiveRoom]);
 
   // Cancel room
   const cancelRoom = useCallback(async (roomId: number): Promise<boolean> => {
@@ -251,6 +297,7 @@ export function useSolanaRooms() {
         description: `Room #${roomId} has been cancelled`,
       });
       
+      setActiveRoom(null);
       await fetchRooms();
       return true;
     } catch (err: any) {
@@ -283,11 +330,13 @@ export function useSolanaRooms() {
     error,
     txPending,
     programReady,
+    activeRoom,
     fetchRooms,
     getRoom,
     createRoom,
     joinRoom,
     cancelRoom,
     getBalance,
+    fetchCreatorActiveRoom,
   };
 }

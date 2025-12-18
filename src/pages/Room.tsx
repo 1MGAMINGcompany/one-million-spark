@@ -7,9 +7,10 @@ import { getAnchorProvider, getProgram } from "@/lib/anchor-program";
 import { playAgain } from "@/lib/play-again";
 import { joinRoomByPda } from "@/lib/join-room";
 import { useWallet } from "@/hooks/useWallet";
+import { useSolanaRooms } from "@/hooks/useSolanaRooms";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Construction, ArrowLeft, Loader2, Users, Clock, Coins } from "lucide-react";
+import { Construction, ArrowLeft, Loader2, Users, Clock, Coins, XCircle, AlertTriangle } from "lucide-react";
 import { WalletGateModal } from "@/components/WalletGateModal";
 import { toast } from "sonner";
 
@@ -51,6 +52,7 @@ export default function Room() {
   const { isConnected, address } = useWallet();
   const { connection } = useConnection();
   const wallet = useSolanaWallet();
+  const { activeRoom, fetchCreatorActiveRoom, cancelRoom, txPending: cancelPending } = useSolanaRooms();
   const [showWalletGate, setShowWalletGate] = useState(false);
 
   const [room, setRoom] = useState<any>(null);
@@ -71,9 +73,13 @@ export default function Room() {
   const isPlayer = activePlayers.some((p: any) => 
     p.toBase58() === address
   );
+
+  // Check if current wallet is the room creator
+  const isCreator = room?.creator?.toBase58?.() === address;
   
   // Role-based button visibility
   const canJoin = status === STATUS_OPEN && !isPlayer && isConnected;
+  const canCancel = status === STATUS_OPEN && isCreator;
   const canPlayAgain = status === STATUS_FINISHED && isPlayer;
   
   // Stake calculations
@@ -108,11 +114,27 @@ export default function Room() {
     fetchRoom();
   }, [roomAddress, connection, wallet]);
 
+  // Fetch user's active room on mount
+  useEffect(() => {
+    if (isConnected) {
+      fetchCreatorActiveRoom();
+    }
+  }, [isConnected, fetchCreatorActiveRoom]);
+
+  // Check if user has an active room that blocks joining
+  const hasBlockingActiveRoom = activeRoom && activeRoom.roomId !== room?.roomId?.toNumber?.();
+
   const onJoinRoom = async () => {
     if (!roomAddress) return;
 
     if (!isConnected) {
       setShowWalletGate(true);
+      return;
+    }
+
+    // Check if user has an active room
+    if (hasBlockingActiveRoom) {
+      toast.error("You have an active room. Cancel it before joining another.");
       return;
     }
 
@@ -139,7 +161,24 @@ export default function Room() {
     }
   };
 
+  const onCancelRoom = async () => {
+    if (!room?.roomId) return;
+    
+    const roomId = typeof room.roomId === 'object' ? room.roomId.toNumber() : room.roomId;
+    const success = await cancelRoom(roomId);
+    
+    if (success) {
+      navigate("/room-list");
+    }
+  };
+
   const onPlayAgain = async () => {
+    // Check if user has an active room
+    if (hasBlockingActiveRoom) {
+      toast.error("You have an active room. Cancel it before creating a new one.");
+      return;
+    }
+
     try {
       setTxPending(true);
       const gameType = room?.gameType ?? 2;
@@ -188,6 +227,25 @@ export default function Room() {
 
           {room && !loading && (
             <div className="space-y-4">
+              {/* Active Room Warning */}
+              {hasBlockingActiveRoom && !isCreator && (
+                <div className="flex items-start gap-2 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+                  <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
+                  <div className="text-sm">
+                    <p className="text-amber-200 font-medium">You have an active room</p>
+                    <p className="text-amber-200/70">Cancel your room before joining or creating another.</p>
+                    <Button 
+                      variant="link" 
+                      size="sm" 
+                      className="text-amber-400 p-0 h-auto mt-1"
+                      onClick={() => navigate(`/room/${activeRoom?.roomId}`)}
+                    >
+                      Go to your room →
+                    </Button>
+                  </div>
+                </div>
+              )}
+
               {/* Status Badge */}
               <div className="flex items-center gap-2">
                 <span className={`px-3 py-1 rounded-full text-sm font-medium ${
@@ -200,6 +258,11 @@ export default function Room() {
                 {isPlayer && (
                   <span className="px-3 py-1 rounded-full text-sm font-medium bg-primary/20 text-primary">
                     You're in this game
+                  </span>
+                )}
+                {isCreator && (
+                  <span className="px-3 py-1 rounded-full text-sm font-medium bg-blue-500/20 text-blue-400">
+                    Your Room
                   </span>
                 )}
               </div>
@@ -252,6 +315,7 @@ export default function Room() {
                       <span className={p.toBase58() === address ? 'text-primary font-medium' : ''}>
                         {p.toBase58().slice(0, 8)}...{p.toBase58().slice(-4)}
                         {p.toBase58() === address && ' (You)'}
+                        {p.toBase58() === room?.creator?.toBase58?.() && ' (Creator)'}
                       </span>
                     </li>
                   ))}
@@ -271,48 +335,75 @@ export default function Room() {
           )}
           
           {/* Action Buttons */}
-          <div className="flex justify-center gap-3">
-            {status === STATUS_OPEN && !isPlayer && (
-              <Button 
-                onClick={onJoinRoom} 
-                size="lg" 
-                disabled={txPending}
-                className="min-w-32"
-              >
-                {txPending ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Joining...
-                  </>
-                ) : (
-                  `Join Room (${stakeSOL} SOL)`
-                )}
-              </Button>
-            )}
-            
-            {canPlayAgain && (
-              <Button 
-                onClick={onPlayAgain} 
-                size="lg" 
-                variant="outline"
-                disabled={txPending}
-                className="min-w-32"
-              >
-                {txPending ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Creating...
-                  </>
-                ) : (
-                  'Play Again'
-                )}
-              </Button>
-            )}
+          <div className="flex flex-col gap-3">
+            <div className="flex justify-center gap-3">
+              {status === STATUS_OPEN && !isPlayer && !hasBlockingActiveRoom && (
+                <Button 
+                  onClick={onJoinRoom} 
+                  size="lg" 
+                  disabled={txPending}
+                  className="min-w-32"
+                >
+                  {txPending ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Joining...
+                    </>
+                  ) : (
+                    `Join Room (${stakeSOL} SOL)`
+                  )}
+                </Button>
+              )}
+              
+              {canPlayAgain && !hasBlockingActiveRoom && (
+                <Button 
+                  onClick={onPlayAgain} 
+                  size="lg" 
+                  variant="outline"
+                  disabled={txPending}
+                  className="min-w-32"
+                >
+                  {txPending ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Creating...
+                    </>
+                  ) : (
+                    'Play Again'
+                  )}
+                </Button>
+              )}
 
-            {status === STATUS_OPEN && isPlayer && (
-              <p className="text-muted-foreground text-sm">
-                Waiting for other players to join...
-              </p>
+              {status === STATUS_OPEN && isPlayer && !isCreator && (
+                <p className="text-muted-foreground text-sm">
+                  Waiting for other players to join...
+                </p>
+              )}
+            </div>
+
+            {/* Cancel Room Button - Only for creator when room is open */}
+            {canCancel && (
+              <div className="flex justify-center pt-2 border-t border-border/30">
+                <Button 
+                  onClick={onCancelRoom}
+                  variant="destructive"
+                  size="sm"
+                  disabled={cancelPending || txPending}
+                  className="gap-2"
+                >
+                  {cancelPending ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Cancelling...
+                    </>
+                  ) : (
+                    <>
+                      <XCircle className="h-4 w-4" />
+                      Cancel Room
+                    </>
+                  )}
+                </Button>
+              </div>
             )}
           </div>
         </CardContent>
