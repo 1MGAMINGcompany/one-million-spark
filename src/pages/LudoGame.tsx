@@ -13,10 +13,12 @@ import TurnIndicator from "@/components/ludo/TurnIndicator";
 import { Player, PlayerColor, initializePlayers } from "@/components/ludo/ludoTypes";
 import { useLudoEngine, LudoMove } from "@/hooks/useLudoEngine";
 import { useTurnNotifications, TurnPlayer } from "@/hooks/useTurnNotifications";
+import { useGameChat, ChatPlayer, ChatMessage } from "@/hooks/useGameChat";
 import TurnStatusHeader from "@/components/TurnStatusHeader";
 import TurnHistoryDrawer from "@/components/TurnHistoryDrawer";
 import NotificationToggle from "@/components/NotificationToggle";
 import TurnBanner from "@/components/TurnBanner";
+import GameChatPanel from "@/components/GameChatPanel";
 
 
 // Player color to wallet mapping (would come from room data in production)

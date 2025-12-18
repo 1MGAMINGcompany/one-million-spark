@@ -10,10 +10,12 @@ import { useTranslation } from "react-i18next";
 import { useWallet } from "@/hooks/useWallet";
 import { useWebRTCSync, GameMessage } from "@/hooks/useWebRTCSync";
 import { useTurnNotifications, TurnPlayer } from "@/hooks/useTurnNotifications";
+import { useGameChat, ChatPlayer, ChatMessage } from "@/hooks/useGameChat";
 import TurnStatusHeader from "@/components/TurnStatusHeader";
 import TurnHistoryDrawer from "@/components/TurnHistoryDrawer";
 import NotificationToggle from "@/components/NotificationToggle";
 import TurnBanner from "@/components/TurnBanner";
+import GameChatPanel from "@/components/GameChatPanel";
 import { toast } from "@/hooks/use-toast";
 
 // Animation Toggle Component
@@ -155,8 +157,52 @@ const ChessGame = () => {
   });
 
   // Handle incoming WebRTC messages
+  // Chat players derived from turn players
+  const chatPlayers: ChatPlayer[] = useMemo(() => {
+    return turnPlayers.map((tp) => ({
+      wallet: tp.address,
+      displayName: tp.name,
+      color: tp.color,
+      seatIndex: tp.seatIndex,
+    }));
+  }, [turnPlayers]);
+
+  // Handle chat message sending via WebRTC
+  const handleChatSend = useCallback((msg: ChatMessage) => {
+    sendChat(JSON.stringify(msg));
+  }, []);
+
+  // Game chat hook
+  const chat = useGameChat({
+    roomId: roomId || "",
+    myWallet: address,
+    players: chatPlayers,
+    onSendMessage: handleChatSend,
+    enabled: roomPlayers.length === 2,
+  });
+
+  // Add system message when game starts
+  useEffect(() => {
+    if (roomPlayers.length === 2 && chat.messages.length === 0) {
+      chat.addSystemMessage("Game started! Good luck!");
+    }
+  }, [roomPlayers.length]);
+
   const handleWebRTCMessage = useCallback((message: GameMessage) => {
     console.log("[ChessGame] Received message:", message.type);
+    
+    // Handle chat messages
+    if (message.type === "chat" && message.payload) {
+      try {
+        const chatMsg = typeof message.payload === "string" 
+          ? JSON.parse(message.payload) 
+          : message.payload;
+        chat.receiveMessage(chatMsg);
+      } catch (e) {
+        console.error("[ChessGame] Failed to parse chat message:", e);
+      }
+      return;
+    }
     
     if (message.type === "move" && message.payload) {
       const move = message.payload as ChessMove;
@@ -202,6 +248,7 @@ const ChessGame = () => {
       setGameStatus("Opponent resigned - You win!");
       setGameOver(true);
       play('chess_win');
+      chat.addSystemMessage("Opponent resigned");
       toast({
         title: "Victory!",
         description: "Your opponent has resigned.",
@@ -216,6 +263,7 @@ const ChessGame = () => {
     } else if (message.type === "draw_accept") {
       setGameStatus("Draw by agreement");
       setGameOver(true);
+      chat.addSystemMessage("Game ended in a draw");
       toast({
         title: "Draw",
         description: "Game ended in a draw by agreement.",
@@ -228,7 +276,7 @@ const ChessGame = () => {
         description: "Your draw offer was declined.",
       });
     }
-  }, [game, play, animationsEnabled, triggerAnimation, recordPlayerMove, roomPlayers]);
+  }, [game, play, animationsEnabled, triggerAnimation, recordPlayerMove, roomPlayers, chat]);
 
   // WebRTC sync
   const {
@@ -239,6 +287,7 @@ const ChessGame = () => {
     sendDrawOffer,
     sendDrawAccept,
     sendDrawReject,
+    sendChat,
   } = useWebRTCSync({
     roomId: roomId || "",
     players: roomPlayers,
@@ -592,6 +641,9 @@ const ChessGame = () => {
           </div>
         </div>
       </div>
+      
+      {/* Chat Panel */}
+      <GameChatPanel chat={chat} />
     </div>
   );
 };
