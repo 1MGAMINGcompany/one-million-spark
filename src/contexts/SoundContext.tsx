@@ -208,9 +208,10 @@ export const SoundProvider = ({ children }: { children: ReactNode }) => {
   }, [soundEnabled, initializeSounds]);
   
   const playBackgroundMusic = useCallback(() => {
-    wantsBackgroundMusicRef.current = true;
-    
+    // Only set wants flag if sound is enabled
     if (!soundEnabled) return;
+    
+    wantsBackgroundMusicRef.current = true;
     
     // Initialize if not done yet
     if (!initializedRef.current) {
@@ -239,6 +240,15 @@ export const SoundProvider = ({ children }: { children: ReactNode }) => {
     setSoundEnabled(prev => {
       const newValue = !prev;
       localStorage.setItem('soundEnabled', String(newValue));
+      
+      // Immediately stop background music when disabling
+      if (!newValue && backgroundMusicRef.current) {
+        backgroundMusicRef.current.pause();
+        backgroundMusicRef.current.currentTime = 0;
+        wantsBackgroundMusicRef.current = false;
+        setIsBackgroundMusicPlaying(false);
+      }
+      
       return newValue;
     });
   }, []);
