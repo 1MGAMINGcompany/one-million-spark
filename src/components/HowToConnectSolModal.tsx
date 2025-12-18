@@ -1,4 +1,3 @@
-import { useWalletModal } from "@/components/SolanaProvider";
 import {
   Dialog,
   DialogContent,
@@ -14,11 +13,11 @@ import {
 import { useIsMobile } from "@/hooks/use-mobile";
 import { 
   Wallet, 
-  Link, 
-  Coins, 
+  CreditCard,
   Shield, 
   ExternalLink,
-  Info
+  Sparkles,
+  ArrowRight
 } from "lucide-react";
 
 interface HowToConnectSolModalProps {
@@ -47,146 +46,110 @@ const WALLETS = [
   },
 ];
 
-const CONNECT_STEPS = [
-  "Install the wallet app or browser extension",
-  "Create a new wallet or import existing one",
-  'Tap "Connect Wallet" in 1M GAMING',
-  "Approve the connection in your wallet",
-];
-
-const GET_SOL_OPTIONS = {
-  walletOption: {
-    title: "Option 1 — Buy SOL directly in your wallet (easiest)",
-    steps: [
-      "Phantom and Solflare wallets let you buy SOL with a credit or debit card in many regions",
-      "Requires identity verification with the wallet's payment provider",
-      "SOL is delivered directly to your wallet",
-    ],
-  },
-  exchangeOption: {
-    title: "Option 2 — Buy SOL on an exchange",
-    steps: [
-      "Buy SOL on a trusted exchange (Coinbase, Binance, Kraken)",
-      "Withdraw SOL to your wallet address",
-      "Keep a small amount (~0.01 SOL) for network fees",
-    ],
-  },
-  notes: [
-    "Credit/debit card purchases depend on country, card, and provider availability",
-    "Fees may apply",
-    "1M GAMING never handles payments or stores card details",
-  ],
-};
-
 export function HowToConnectSolModal({ isOpen, onClose }: HowToConnectSolModalProps) {
   const isMobile = useIsMobile();
 
   const content = (
-    <div className="space-y-6 pb-4">
-      {/* Recommended Wallets */}
+    <div className="space-y-5 pb-4">
+      {/* How Easy It Is - Visual Flow */}
+      <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-primary/10 rounded-xl p-4 border border-primary/20">
+        <p className="text-center text-sm text-muted-foreground mb-3">It's this easy:</p>
+        <div className="flex items-center justify-center gap-2 text-lg">
+          <div className="flex flex-col items-center">
+            <span className="text-2xl">🔗</span>
+            <span className="text-xs text-muted-foreground mt-1">Connect</span>
+          </div>
+          <ArrowRight className="text-primary" size={16} />
+          <div className="flex flex-col items-center">
+            <span className="text-2xl">💳</span>
+            <span className="text-xs text-muted-foreground mt-1">Buy</span>
+          </div>
+          <ArrowRight className="text-primary" size={16} />
+          <div className="flex flex-col items-center">
+            <span className="text-2xl">🎮</span>
+            <span className="text-xs text-muted-foreground mt-1">Play!</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Step 1: Get a Wallet */}
       <div className="space-y-3">
-        <h3 className="text-sm font-semibold text-primary flex items-center gap-2">
-          <Wallet size={16} />
-          Recommended Solana Wallets
-        </h3>
-        <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          <div className="w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-bold">1</div>
+          <h3 className="text-sm font-semibold flex items-center gap-2">
+            <Wallet size={16} className="text-primary" />
+            Get a Wallet
+          </h3>
+        </div>
+        <p className="text-xs text-muted-foreground pl-8">Free to install, takes 30 seconds! 🚀</p>
+        <div className="space-y-2 pl-8">
           {WALLETS.map((wallet) => (
             <a
               key={wallet.name}
               href={wallet.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center justify-between p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors border border-border/30"
+              className="flex items-center justify-between p-2.5 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors border border-border/30"
             >
-              <div className="flex items-center gap-3">
-                <span className="text-xl">{wallet.icon}</span>
-                <span className="font-medium">{wallet.name}</span>
+              <div className="flex items-center gap-2.5">
+                <span className="text-lg">{wallet.icon}</span>
+                <span className="font-medium text-sm">{wallet.name}</span>
                 {wallet.recommended && (
-                  <span className="text-xs bg-primary/20 text-primary px-2 py-0.5 rounded-full">
-                    Recommended
+                  <span className="text-[10px] bg-primary/20 text-primary px-1.5 py-0.5 rounded-full">
+                    Popular
                   </span>
                 )}
               </div>
-              <ExternalLink size={14} className="text-muted-foreground" />
+              <ExternalLink size={12} className="text-muted-foreground" />
             </a>
           ))}
         </div>
       </div>
 
-      {/* How to Connect */}
+      {/* Step 2: Buy SOL */}
       <div className="space-y-3">
-        <h3 className="text-sm font-semibold text-primary flex items-center gap-2">
-          <Link size={16} />
-          How to Connect
-        </h3>
-        <ol className="space-y-2">
-          {CONNECT_STEPS.map((step, index) => (
-            <li key={index} className="flex items-start gap-3 text-sm text-muted-foreground">
-              <span className="flex-shrink-0 w-5 h-5 rounded-full bg-primary/20 text-primary text-xs flex items-center justify-center font-medium">
-                {index + 1}
-              </span>
-              <span>{step}</span>
-            </li>
-          ))}
-        </ol>
-      </div>
-
-      {/* How to Get SOL */}
-      <div className="space-y-4">
-        <h3 className="text-sm font-semibold text-primary flex items-center gap-2">
-          <Coins size={16} />
-          How to Get SOL
-        </h3>
+        <div className="flex items-center gap-2">
+          <div className="w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-bold">2</div>
+          <h3 className="text-sm font-semibold flex items-center gap-2">
+            <CreditCard size={16} className="text-primary" />
+            Buy SOL in Your Wallet
+          </h3>
+        </div>
         
-        {/* Option 1 - Wallet Purchase */}
-        <div className="space-y-2">
-          <p className="text-xs font-medium text-foreground">{GET_SOL_OPTIONS.walletOption.title}</p>
-          <ul className="space-y-1.5">
-            {GET_SOL_OPTIONS.walletOption.steps.map((step, index) => (
-              <li key={index} className="flex items-start gap-2 text-xs text-muted-foreground">
-                <span className="text-primary">•</span>
-                <span>{step}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
+        <div className="pl-8 space-y-3">
+          {/* No Exchanges Badge */}
+          <div className="inline-flex items-center gap-1.5 bg-green-500/20 text-green-400 px-2.5 py-1 rounded-full text-xs font-medium">
+            <Sparkles size={12} />
+            No exchanges needed!
+          </div>
 
-        {/* Option 2 - Exchange */}
-        <div className="space-y-2">
-          <p className="text-xs font-medium text-foreground">{GET_SOL_OPTIONS.exchangeOption.title}</p>
-          <ol className="space-y-1.5">
-            {GET_SOL_OPTIONS.exchangeOption.steps.map((step, index) => (
-              <li key={index} className="flex items-start gap-2 text-xs text-muted-foreground">
-                <span className="flex-shrink-0 w-4 h-4 rounded-full bg-primary/20 text-primary text-[10px] flex items-center justify-center font-medium">
-                  {index + 1}
-                </span>
-                <span>{step}</span>
-              </li>
-            ))}
-          </ol>
-        </div>
+          <p className="text-xs text-muted-foreground">
+            Buy SOL with card or Apple Pay directly in Phantom, Solflare, or Backpack.
+          </p>
 
-        {/* Important Notes */}
-        <div className="mt-3 pt-3 border-t border-border/30">
-          <p className="text-[10px] text-muted-foreground/70 space-y-0.5">
-            {GET_SOL_OPTIONS.notes.map((note, index) => (
-              <span key={index} className="block">• {note}</span>
-            ))}
+          {/* Payment Methods */}
+          <div className="flex items-center gap-3 text-muted-foreground">
+            <span className="text-lg">💳</span>
+            <span className="text-lg">🍎</span>
+            <span className="text-lg">🅿️</span>
+            <span className="text-xs">Credit Card • Apple Pay • Google Pay</span>
+          </div>
+
+          <p className="text-[11px] text-muted-foreground/70">
+            Or transfer from another wallet if you already have SOL
           </p>
         </div>
       </div>
 
-      {/* Safety Note */}
-      <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-3 space-y-2">
-        <h3 className="text-sm font-semibold text-destructive flex items-center gap-2">
-          <Shield size={16} />
-          Safety First
+      {/* Safety Note - Simplified */}
+      <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-3">
+        <h3 className="text-xs font-semibold text-destructive flex items-center gap-2 mb-1.5">
+          <Shield size={14} />
+          Stay Safe
         </h3>
-        <ul className="text-xs text-muted-foreground space-y-1">
-          <li>• Never share your seed phrase with anyone</li>
-          <li>• 1M GAMING will never ask for your seed phrase</li>
-          <li>• Only connect to trusted websites</li>
-        </ul>
+        <p className="text-[11px] text-muted-foreground">
+          Never share your seed phrase. 1M GAMING will never ask for it.
+        </p>
       </div>
     </div>
   );
@@ -197,8 +160,8 @@ export function HowToConnectSolModal({ isOpen, onClose }: HowToConnectSolModalPr
         <DrawerContent className="bg-background border-border">
           <DrawerHeader className="pb-2">
             <DrawerTitle className="flex items-center gap-2 text-lg font-cinzel">
-              <Info className="text-primary" size={20} />
-              How to Connect & Get SOL
+              <Sparkles className="text-primary" size={20} />
+              Getting Started
             </DrawerTitle>
           </DrawerHeader>
           <div className="px-4 max-h-[70vh] overflow-y-auto">
@@ -214,8 +177,8 @@ export function HowToConnectSolModal({ isOpen, onClose }: HowToConnectSolModalPr
       <DialogContent className="sm:max-w-md bg-background border-border">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-lg font-cinzel">
-            <Info className="text-primary" size={20} />
-            How to Connect & Get SOL
+            <Sparkles className="text-primary" size={20} />
+            Getting Started
           </DialogTitle>
         </DialogHeader>
         <div className="max-h-[60vh] overflow-y-auto pr-2">
