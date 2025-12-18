@@ -42,8 +42,42 @@ function CustomWalletModal() {
     }
   }, [connected, visible, setVisible]);
 
+  // Detect mobile device
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+  // Deep link URLs for mobile wallets
+  const getDeepLink = (walletName: string): string | null => {
+    const currentUrl = encodeURIComponent(window.location.href);
+    
+    if (walletName.toLowerCase().includes('phantom')) {
+      // Phantom universal link - opens current page in Phantom browser
+      return `https://phantom.app/ul/browse/${currentUrl}`;
+    }
+    if (walletName.toLowerCase().includes('solflare')) {
+      // Solflare deep link
+      return `https://solflare.com/ul/v1/browse/${currentUrl}`;
+    }
+    return null;
+  };
+
   const handleSelect = useCallback(async (walletName: string) => {
     console.log("handleSelect called with:", walletName);
+    
+    // Check if wallet is installed
+    const selectedWallet = filteredWallets.find(w => w.adapter.name === walletName);
+    const isInstalled = selectedWallet?.readyState === WalletReadyState.Installed || 
+                       selectedWallet?.readyState === WalletReadyState.Loadable;
+    
+    // On mobile, if wallet not detected, try deep link
+    if (isMobile && !isInstalled) {
+      const deepLink = getDeepLink(walletName);
+      if (deepLink) {
+        console.log("Opening deep link:", deepLink);
+        window.location.href = deepLink;
+        return;
+      }
+    }
+    
     try {
       select(walletName as any);
       // Give the adapter time to initialize, then connect
@@ -53,12 +87,20 @@ function CustomWalletModal() {
           console.log("connect() succeeded");
         } catch (err) {
           console.error("Connect error:", err);
+          // Fallback to deep link on mobile if connect fails
+          if (isMobile) {
+            const deepLink = getDeepLink(walletName);
+            if (deepLink) {
+              console.log("Connect failed, trying deep link:", deepLink);
+              window.location.href = deepLink;
+            }
+          }
         }
       }, 100);
     } catch (err) {
       console.error("Select error:", err);
     }
-  }, [select, connect]);
+  }, [select, connect, filteredWallets, isMobile]);
 
   if (!visible) return null;
 
