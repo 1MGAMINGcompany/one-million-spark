@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, RotateCcw, Music, Music2, Volume2, VolumeX } from "lucide-react";
@@ -10,6 +10,11 @@ import EgyptianDice from "@/components/ludo/EgyptianDice";
 import TurnIndicator from "@/components/ludo/TurnIndicator";
 import { Difficulty } from "@/components/ludo/ludoTypes";
 import { useLudoEngine } from "@/hooks/useLudoEngine";
+import { useTurnNotifications, TurnPlayer } from "@/hooks/useTurnNotifications";
+import TurnStatusHeader from "@/components/TurnStatusHeader";
+import TurnHistoryDrawer from "@/components/TurnHistoryDrawer";
+import NotificationToggle from "@/components/NotificationToggle";
+import TurnBanner from "@/components/TurnBanner";
 
 const LudoAI = () => {
   const { t } = useTranslation();
@@ -52,6 +57,41 @@ const LudoAI = () => {
   } = useLudoEngine({
     onSoundPlay: playSfx,
     onToast: showToast,
+  });
+
+  // Simulated wallet address for AI testing (gold player is human)
+  const humanPlayerAddress = "gold-player-test-address";
+
+  // Convert Ludo players to TurnPlayer format
+  const turnPlayers: TurnPlayer[] = useMemo(() => {
+    return players.map((player, index) => ({
+      address: player.isAI ? `ai-${player.color}` : humanPlayerAddress,
+      name: player.isAI ? `AI ${player.color.charAt(0).toUpperCase() + player.color.slice(1)}` : "You",
+      color: player.color,
+      status: player.tokens.every(t => t.position === 57) ? "finished" : "active" as const,
+      seatIndex: index,
+    }));
+  }, [players, humanPlayerAddress]);
+
+  // Current active player address
+  const activeTurnAddress = turnPlayers[currentPlayerIndex]?.address || null;
+
+  // Turn notification system
+  const {
+    isMyTurn,
+    notificationsEnabled,
+    hasPermission,
+    turnHistory,
+    waitingMessage,
+    toggleNotifications,
+    recordPlayerMove,
+  } = useTurnNotifications({
+    gameName: "Ludo",
+    roomId: "ludo-ai-test",
+    players: turnPlayers,
+    activeTurnAddress,
+    myAddress: humanPlayerAddress,
+    enabled: true,
   });
 
   // Background music control
@@ -229,6 +269,13 @@ const LudoAI = () => {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
+      {/* Turn Banner (fallback for no permission) */}
+      <TurnBanner
+        gameName="Ludo"
+        roomId="ludo-ai-test"
+        isVisible={!hasPermission && isMyTurn && !gameOver}
+      />
+
       {/* Header */}
       <div className="relative py-3 px-4 flex-shrink-0">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
@@ -249,10 +296,34 @@ const LudoAI = () => {
             </div>
           </div>
           
-          <Button onClick={resetGame} variant="outline" size="sm" className="border-primary/30">
-            <RotateCcw size={16} />
-            <span className="hidden sm:inline ml-1">{t('gameAI.reset')}</span>
-          </Button>
+          <div className="flex items-center gap-2">
+            {/* Turn History Drawer */}
+            <TurnHistoryDrawer events={turnHistory} />
+            
+            {/* Notification Toggle */}
+            <NotificationToggle
+              enabled={notificationsEnabled}
+              hasPermission={hasPermission}
+              onToggle={toggleNotifications}
+            />
+            
+            <Button onClick={resetGame} variant="outline" size="sm" className="border-primary/30">
+              <RotateCcw size={16} />
+              <span className="hidden sm:inline ml-1">{t('gameAI.reset')}</span>
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* Turn Status Header */}
+      <div className="px-4 pb-2">
+        <div className="max-w-4xl mx-auto">
+          <TurnStatusHeader
+            isMyTurn={isMyTurn}
+            activePlayer={turnPlayers[currentPlayerIndex]}
+            players={turnPlayers}
+            myAddress={humanPlayerAddress}
+          />
         </div>
       </div>
 
