@@ -31,7 +31,7 @@ export default function CreateRoom() {
   const { toast } = useToast();
   const { play } = useSound();
   const { price, formatUsd, loading: priceLoading, refetch: refetchPrice } = useSolPrice();
-  const { createRoom, txPending, programReady, getBalance } = useSolanaRooms();
+  const { createRoom, txPending, programReady, getBalance, activeRoom, fetchCreatorActiveRoom } = useSolanaRooms();
   
   useBackgroundMusic();
 
@@ -41,20 +41,33 @@ export default function CreateRoom() {
   const [isPrivate, setIsPrivate] = useState<boolean>(false);
   const [turnTime, setTurnTime] = useState<string>("10");
   const [balance, setBalance] = useState<number>(0);
+  const [checkingActiveRoom, setCheckingActiveRoom] = useState(true);
 
   const cluster = getSolanaCluster();
   const isDevnet = cluster === "devnet";
   const entryFeeNum = parseFloat(entryFee) || 0;
   const entryFeeUsd = formatUsd(entryFee);
 
-  // Fetch balance on mount
+  // Fetch balance and check for active room on mount
   useEffect(() => {
     if (isConnected) {
       getBalance().then(setBalance);
+      fetchCreatorActiveRoom().finally(() => setCheckingActiveRoom(false));
+    } else {
+      setCheckingActiveRoom(false);
     }
-  }, [isConnected, getBalance]);
+  }, [isConnected, getBalance, fetchCreatorActiveRoom]);
 
   const handleCreateRoom = async () => {
+    if (activeRoom) {
+      toast({
+        title: "Active room exists",
+        description: "Cancel your existing room before creating a new one",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (entryFeeNum < MIN_ENTRY_FEE_SOL) {
       toast({
         title: "Invalid entry fee",
@@ -131,6 +144,25 @@ export default function CreateRoom() {
           </div>
         </CardHeader>
         <CardContent className="space-y-4 px-4 pb-5">
+          {/* Active Room Warning */}
+          {activeRoom && (
+            <div className="flex items-start gap-2 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+              <AlertCircle className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
+              <div className="text-sm">
+                <p className="text-amber-200 font-medium">You have an active room</p>
+                <p className="text-amber-200/70">Cancel your existing room before creating a new one.</p>
+                <Button 
+                  variant="link" 
+                  size="sm" 
+                  className="text-amber-400 p-0 h-auto mt-1"
+                  onClick={() => navigate(`/room/${activeRoom.roomId}`)}
+                >
+                  Go to your room →
+                </Button>
+              </div>
+            </div>
+          )}
+
           {/* Balance & Price */}
           <div className="flex items-center justify-between p-2.5 bg-muted/50 rounded-lg text-sm">
             <div>
@@ -232,7 +264,7 @@ export default function CreateRoom() {
           {/* Create Button */}
           <Button 
             onClick={handleCreateRoom}
-            disabled={txPending || !programReady}
+            disabled={txPending || !programReady || !!activeRoom || checkingActiveRoom}
             className="w-full"
             size="sm"
           >
@@ -241,8 +273,15 @@ export default function CreateRoom() {
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 Creating...
               </>
+            ) : checkingActiveRoom ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Checking...
+              </>
             ) : !programReady ? (
               "Program Not Deployed"
+            ) : activeRoom ? (
+              "Cancel Active Room First"
             ) : (
               "Create Room"
             )}
