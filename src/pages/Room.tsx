@@ -5,6 +5,7 @@ import { PublicKey } from "@solana/web3.js";
 import { useConnection, useWallet as useSolanaWallet } from "@solana/wallet-adapter-react";
 import { getAnchorProvider, getProgram } from "@/lib/anchor-program";
 import { playAgain } from "@/lib/play-again";
+import { joinRoomByPda } from "@/lib/join-room";
 import { useWallet } from "@/hooks/useWallet";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -64,12 +65,34 @@ export default function Room() {
     })();
   }, [roomAddress, connection, wallet]);
 
-  const handleJoinAttempt = () => {
+  const onJoinRoom = async () => {
+    if (!roomAddress) return;
+
     if (!isConnected) {
       setShowWalletGate(true);
       return;
     }
-    // Normal join flow would go here
+
+    try {
+      const roomPda = new PublicKey(roomAddress);
+
+      const res = await joinRoomByPda({
+        connection,
+        wallet,
+        roomPda,
+      });
+
+      console.log("Joined room:", res);
+
+      // refresh room state
+      const provider = getAnchorProvider(connection, wallet);
+      const program = getProgram(provider);
+      const roomAccount = await (program.account as any).room.fetch(roomPda);
+      setRoom(roomAccount);
+    } catch (e: any) {
+      console.error(e);
+      alert(e?.message ?? "Failed to join room");
+    }
   };
 
   const onPlayAgain = async () => {
@@ -134,7 +157,7 @@ export default function Room() {
           
           <div className="flex justify-center gap-2">
             {canJoin && (
-              <Button onClick={handleJoinAttempt} size="lg">
+              <Button onClick={onJoinRoom} size="lg">
                 Join Room
               </Button>
             )}
