@@ -13,6 +13,8 @@ interface ChessBoardPremiumProps {
   captureAnimations?: CaptureAnimation[];
   onAnimationComplete?: (id: string) => void;
   animationsEnabled?: boolean;
+  flipped?: boolean;
+  playerColor?: Color;
 }
 
 const files = ["a", "b", "c", "d", "e", "f", "g", "h"];
@@ -176,13 +178,19 @@ export function ChessBoardPremium({
   disabled = false,
   captureAnimations = [],
   onAnimationComplete,
-  animationsEnabled = true
+  animationsEnabled = true,
+  flipped = false,
+  playerColor = "w"
 }: ChessBoardPremiumProps) {
   const [selectedSquare, setSelectedSquare] = useState<Square | null>(null);
   const [legalMoves, setLegalMoves] = useState<Square[]>([]);
   const [movingPiece, setMovingPiece] = useState<{ from: Square; to: Square } | null>(null);
   const boardRef = useRef<HTMLDivElement>(null);
   const [squareSize, setSquareSize] = useState(0);
+
+  // Flip the board based on player color or explicit flip prop
+  const displayFiles = flipped ? [...files].reverse() : files;
+  const displayRanks = flipped ? [...ranks].reverse() : ranks;
 
   // Measure square size
   useEffect(() => {
@@ -213,7 +221,8 @@ export function ChessBoardPremium({
         return;
       }
 
-      if (piece && piece.color === "w") {
+      // Allow selecting own pieces based on playerColor
+      if (piece && piece.color === playerColor) {
         setSelectedSquare(square);
         const moves = game.moves({ square, verbose: true });
         setLegalMoves(moves.map((m) => m.to as Square));
@@ -225,12 +234,13 @@ export function ChessBoardPremium({
       return;
     }
 
-    if (piece && piece.color === "w") {
+    // Select piece if it belongs to the player
+    if (piece && piece.color === playerColor) {
       setSelectedSquare(square);
       const moves = game.moves({ square, verbose: true });
       setLegalMoves(moves.map((m) => m.to as Square));
     }
-  }, [disabled, game, selectedSquare, onMove]);
+  }, [disabled, game, selectedSquare, onMove, playerColor]);
 
   const isLightSquare = (file: number, rank: number) => {
     return (file + rank) % 2 === 0;
@@ -250,11 +260,14 @@ export function ChessBoardPremium({
               enabled={animationsEnabled}
             />
           )}
-          {ranks.map((rank, rankIndex) =>
-            files.map((file, fileIndex) => {
+          {displayRanks.map((rank, rankIndex) =>
+            displayFiles.map((file, fileIndex) => {
               const square = `${file}${rank}` as Square;
               const piece = game.get(square);
-              const isLight = isLightSquare(fileIndex, rankIndex);
+              // Calculate light/dark based on actual board position, not display position
+              const actualFileIndex = files.indexOf(file);
+              const actualRankIndex = ranks.indexOf(rank);
+              const isLight = isLightSquare(actualFileIndex, actualRankIndex);
               const isSelected = selectedSquare === square;
               const isLegalMove = legalMoves.includes(square);
               const isCheck = game.isCheck() && piece?.type === "k" && piece?.color === game.turn();

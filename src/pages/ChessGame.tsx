@@ -485,6 +485,8 @@ const ChessGame = () => {
                       captureAnimations={animations}
                       onAnimationComplete={handleAnimationComplete}
                       animationsEnabled={animationsEnabled}
+                      flipped={myColor === "b"}
+                      playerColor={myColor}
                     />
                   </div>
                 </div>
