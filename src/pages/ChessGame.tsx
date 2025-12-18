@@ -219,19 +219,38 @@ const ChessGame = () => {
     }
   }, [roomId]);
 
+  // Refs for WebRTC functions (to avoid circular dependency)
+  const sendRematchInviteRef = useRef<((data: any) => boolean) | null>(null);
+  const sendRematchAcceptRef = useRef<((roomId: string) => boolean) | null>(null);
+  const sendRematchDeclineRef = useRef<((roomId: string) => boolean) | null>(null);
+  const sendRematchReadyRef = useRef<((roomId: string) => boolean) | null>(null);
+
   const handleAcceptRematch = async (rematchRoomId: string) => {
     const result = await rematch.acceptRematch(rematchRoomId);
+    // Notify opponent via WebRTC
+    sendRematchAcceptRef.current?.(rematchRoomId);
     if (result.allAccepted) {
       toast({ title: "All players accepted!", description: "Game is starting..." });
-      // Reload to start fresh game
-      window.location.href = window.location.pathname;
+      sendRematchReadyRef.current?.(rematchRoomId);
+      window.location.href = `/game/chess/${rematchRoomId}`;
     }
   };
 
   const handleDeclineRematch = (rematchRoomId: string) => {
     rematch.declineRematch(rematchRoomId);
+    sendRematchDeclineRef.current?.(rematchRoomId);
     navigate('/room-list');
   };
+
+  // Sync rematch invite via WebRTC when created
+  useEffect(() => {
+    if (rematch.state.newRoomId && rematch.state.inviteLink && sendRematchInviteRef.current) {
+      const rematchData = rematch.getRematchData(rematch.state.newRoomId);
+      if (rematchData) {
+        sendRematchInviteRef.current(rematchData);
+      }
+    }
+  }, [rematch.state.newRoomId, rematch.state.inviteLink]);
 
   // Add system message when game starts
   useEffect(() => {
@@ -327,8 +346,40 @@ const ChessGame = () => {
         title: "Draw Declined",
         description: "Your draw offer was declined.",
       });
+    } else if (message.type === "rematch_invite" && message.payload) {
+      // Opponent sent a rematch invite
+      setRematchInviteData(message.payload);
+      setShowAcceptModal(true);
+      toast({
+        title: "Rematch Invite",
+        description: "Your opponent wants a rematch!",
+      });
+    } else if (message.type === "rematch_accept" && message.payload) {
+      // Opponent accepted our rematch
+      toast({
+        title: "Rematch Accepted!",
+        description: "Opponent accepted. Starting new game...",
+      });
+      // Update local rematch data
+      if (rematch.state.newRoomId) {
+        rematch.acceptRematch(rematch.state.newRoomId);
+      }
+    } else if (message.type === "rematch_decline") {
+      toast({
+        title: "Rematch Declined",
+        description: "Opponent declined the rematch.",
+        variant: "destructive",
+      });
+      rematch.closeRematchModal();
+    } else if (message.type === "rematch_ready" && message.payload) {
+      // Both players accepted, navigate to new game
+      toast({
+        title: "Rematch Ready!",
+        description: "Starting new game...",
+      });
+      navigate(`/game/chess/${message.payload.roomId}`);
     }
-  }, [game, play, animationsEnabled, triggerAnimation, recordPlayerMove, roomPlayers, chat]);
+  }, [game, play, animationsEnabled, triggerAnimation, recordPlayerMove, roomPlayers, chat, rematch, navigate]);
 
   // WebRTC sync
   const {
@@ -340,6 +391,10 @@ const ChessGame = () => {
     sendDrawAccept,
     sendDrawReject,
     sendChat,
+    sendRematchInvite,
+    sendRematchAccept,
+    sendRematchDecline,
+    sendRematchReady,
   } = useWebRTCSync({
     roomId: roomId || "",
     players: roomPlayers,
@@ -347,7 +402,14 @@ const ChessGame = () => {
     enabled: roomPlayers.length === 2,
   });
 
-  // Update game status based on connection
+  // Update refs with WebRTC functions
+  useEffect(() => {
+    sendRematchInviteRef.current = sendRematchInvite;
+    sendRematchAcceptRef.current = sendRematchAccept;
+    sendRematchDeclineRef.current = sendRematchDecline;
+    sendRematchReadyRef.current = sendRematchReady;
+  }, [sendRematchInvite, sendRematchAccept, sendRematchDecline, sendRematchReady]);
+
   useEffect(() => {
     if (roomPlayers.length < 2) {
       setGameStatus("Waiting for opponent...");
