@@ -22,37 +22,40 @@ export const useWalletModal = () => useContext(WalletModalContext);
 // Custom wallet modal - ONLY shows Phantom, Solflare, Backpack
 function CustomWalletModal() {
   const { visible, setVisible } = useWalletModal();
-  const { wallets, select, connected, connecting } = useWallet();
-  const [selectedWallet, setSelectedWallet] = useState<string | null>(null);
+  const { wallets, select, connect, connected, connecting, wallet } = useWallet();
+  const [pendingWallet, setPendingWallet] = useState<string | null>(null);
 
   // Filter to ONLY our explicitly defined Solana wallets
   const allowedWalletNames = ["Phantom", "Solflare", "Backpack"];
   
   const filteredWallets = useMemo(() => {
-    return wallets.filter(wallet => 
+    return wallets.filter(w => 
       allowedWalletNames.some(name => 
-        wallet.adapter.name.toLowerCase().includes(name.toLowerCase())
+        w.adapter.name.toLowerCase().includes(name.toLowerCase())
       )
     );
   }, [wallets]);
 
+  // When wallet is selected and adapter is ready, call connect
+  useEffect(() => {
+    if (pendingWallet && wallet?.adapter.name === pendingWallet) {
+      connect().catch(err => {
+        console.error("Connect error:", err);
+      });
+      setPendingWallet(null);
+    }
+  }, [pendingWallet, wallet, connect]);
+
   // Close modal when connected
   useEffect(() => {
-    if (connected && selectedWallet) {
+    if (connected && visible) {
       setVisible(false);
-      setSelectedWallet(null);
     }
-  }, [connected, selectedWallet, setVisible]);
+  }, [connected, visible, setVisible]);
 
   const handleSelect = useCallback((walletName: string) => {
-    try {
-      setSelectedWallet(walletName);
-      select(walletName as any);
-      // The wallet adapter will handle the connection popup automatically
-    } catch (err) {
-      console.error("Wallet selection error:", err);
-      setSelectedWallet(null);
-    }
+    setPendingWallet(walletName);
+    select(walletName as any);
   }, [select]);
 
   if (!visible) return null;
