@@ -38,10 +38,8 @@ export default function Room() {
       stakeLamports,
     });
 
-    // For now: log + show the new roomId.
-    // Next step we'll navigate to the new room route.
     console.log("Play again created room:", res);
-    alert(`New room created: ${res.roomId.toString()}`);
+    navigate(`/room/${res.roomId.toString()}`);
   };
 
   return (
