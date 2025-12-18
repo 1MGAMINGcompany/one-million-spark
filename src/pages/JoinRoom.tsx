@@ -3,13 +3,12 @@ import { Construction, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useWallet } from "@/hooks/useWallet";
-import { useWalletModal } from "@/components/SolanaProvider";
+import { ConnectWalletGate } from "@/components/ConnectWalletGate";
 
 export default function JoinRoom() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { isConnected, address } = useWallet();
-  const { setVisible } = useWalletModal();
 
   const roomIdParam = searchParams.get("roomId");
 
@@ -21,12 +20,12 @@ export default function JoinRoom() {
             <Wallet className="h-12 w-12 text-primary mx-auto" />
             <h2 className="text-xl font-cinzel">Connect to Join</h2>
             <p className="text-muted-foreground text-sm">
-              Connect your Solana wallet to join room {roomIdParam && `#${roomIdParam}`}.
+              Connect your Solana wallet to join room {roomIdParam && `#${roomIdParam}`} and compete for SOL prizes.
             </p>
-            <Button onClick={() => setVisible(true)} className="w-full">
-              <Wallet className="mr-2 h-4 w-4" />
-              Connect Wallet
-            </Button>
+            <ConnectWalletGate />
+            <p className="text-xs text-muted-foreground pt-2">
+              You can browse rooms without a wallet. You only need a wallet to play.
+            </p>
           </CardContent>
         </Card>
       </div>
