@@ -496,6 +496,24 @@ const DominosGame = () => {
 
             {/* Chain */}
             <div className="min-h-24 p-4 rounded-xl bg-gradient-to-br from-emerald-900/30 to-emerald-950/50 border border-emerald-500/20">
+              {/* Chain End Indicators */}
+              {chain.length > 0 && getChainEnds() && (
+                <div className="flex justify-between items-center mb-3 px-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-10 h-10 rounded-lg bg-primary/20 border-2 border-primary/50 flex items-center justify-center shadow-lg shadow-primary/20">
+                      <span className="text-xl font-bold text-primary">{getChainEnds()!.left}</span>
+                    </div>
+                    <span className="text-xs text-muted-foreground uppercase tracking-wider">Left End</span>
+                  </div>
+                  <div className="flex-1 h-px bg-gradient-to-r from-primary/30 via-primary/10 to-primary/30 mx-4" />
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground uppercase tracking-wider">Right End</span>
+                    <div className="w-10 h-10 rounded-lg bg-primary/20 border-2 border-primary/50 flex items-center justify-center shadow-lg shadow-primary/20">
+                      <span className="text-xl font-bold text-primary">{getChainEnds()!.right}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
               <div className="flex flex-wrap justify-center gap-1 items-center">
                 {chain.length === 0 ? (
                   <p className="text-muted-foreground text-sm">Play a tile to start</p>
