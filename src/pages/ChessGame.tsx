@@ -11,11 +11,14 @@ import { useWallet } from "@/hooks/useWallet";
 import { useWebRTCSync, GameMessage } from "@/hooks/useWebRTCSync";
 import { useTurnNotifications, TurnPlayer } from "@/hooks/useTurnNotifications";
 import { useGameChat, ChatPlayer, ChatMessage } from "@/hooks/useGameChat";
+import { useRematch } from "@/hooks/useRematch";
 import TurnStatusHeader from "@/components/TurnStatusHeader";
 import TurnHistoryDrawer from "@/components/TurnHistoryDrawer";
 import NotificationToggle from "@/components/NotificationToggle";
 import TurnBanner from "@/components/TurnBanner";
 import GameChatPanel from "@/components/GameChatPanel";
+import { GameEndScreen } from "@/components/GameEndScreen";
+import { RematchModal } from "@/components/RematchModal";
 import { toast } from "@/hooks/use-toast";
 
 // Animation Toggle Component
@@ -180,6 +183,25 @@ const ChessGame = () => {
     onSendMessage: handleChatSend,
     enabled: roomPlayers.length === 2,
   });
+
+  // Rematch hook
+  const rematch = useRematch("Chess", roomPlayers);
+
+  // Rematch players for display
+  const rematchPlayers = useMemo(() => {
+    return turnPlayers.map(tp => ({
+      address: tp.address,
+      name: tp.name,
+    }));
+  }, [turnPlayers]);
+
+  // Winner address for end screen
+  const winnerAddress = useMemo(() => {
+    if (!gameOver) return null;
+    if (gameStatus.includes("draw") || gameStatus.includes("Stalemate")) return "draw";
+    if (gameStatus.includes("win")) return address;
+    return roomPlayers.find(p => p !== address) || null;
+  }, [gameOver, gameStatus, address, roomPlayers]);
 
   // Add system message when game starts
   useEffect(() => {
@@ -628,11 +650,12 @@ const ChessGame = () => {
                 <div className="bg-card/50 border border-border/50 rounded-lg p-4 space-y-3">
                   <h3 className="text-sm font-semibold">Game Over</h3>
                   <div className="flex flex-col gap-2">
-                    <Button asChild variant="default" className="w-full">
-                      <Link to="/room-list">Find New Game</Link>
+                    <Button onClick={() => rematch.openRematchModal()} className="w-full gap-2">
+                      <RotateCcw className="w-4 h-4" />
+                      Rematch
                     </Button>
                     <Button asChild variant="outline" className="w-full">
-                      <Link to="/play-ai/chess">Practice vs AI</Link>
+                      <Link to="/room-list">Find New Game</Link>
                     </Button>
                   </div>
                 </div>
@@ -644,6 +667,15 @@ const ChessGame = () => {
       
       {/* Chat Panel */}
       <GameChatPanel chat={chat} />
+
+      {/* Rematch Modal */}
+      <RematchModal
+        isOpen={rematch.isModalOpen}
+        onClose={rematch.closeRematchModal}
+        gameType="Chess"
+        players={rematchPlayers}
+        rematchHook={rematch}
+      />
     </div>
   );
 };

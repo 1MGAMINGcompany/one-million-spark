@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, RotateCcw, RotateCw, Gem, Flag, Users, Wifi, WifiOff } from "lucide-react";
+import { ArrowLeft, RotateCcw, RotateCw, Gem, Flag, Users, Wifi, WifiOff, RefreshCw } from "lucide-react";
 import { BackgammonRulesDialog } from "@/components/BackgammonRulesDialog";
 import { Dice3D, CheckerStack } from "@/components/BackgammonPieces";
 import { cn } from "@/lib/utils";
@@ -12,11 +12,13 @@ import { useWallet } from "@/hooks/useWallet";
 import { useWebRTCSync, GameMessage } from "@/hooks/useWebRTCSync";
 import { useTurnNotifications, TurnPlayer } from "@/hooks/useTurnNotifications";
 import { useGameChat, ChatPlayer, ChatMessage } from "@/hooks/useGameChat";
+import { useRematch } from "@/hooks/useRematch";
 import TurnStatusHeader from "@/components/TurnStatusHeader";
 import TurnHistoryDrawer from "@/components/TurnHistoryDrawer";
 import NotificationToggle from "@/components/NotificationToggle";
 import TurnBanner from "@/components/TurnBanner";
 import GameChatPanel from "@/components/GameChatPanel";
+import { RematchModal } from "@/components/RematchModal";
 import { toast } from "@/hooks/use-toast";
 import {
   type Player,
@@ -143,6 +145,17 @@ const BackgammonGame = () => {
       displayName: tp.name,
       color: tp.color,
       seatIndex: tp.seatIndex,
+    }));
+  }, [turnPlayers]);
+
+  // Rematch hook
+  const rematch = useRematch("Backgammon", roomPlayers);
+
+  // Rematch players for display
+  const rematchPlayers = useMemo(() => {
+    return turnPlayers.map(tp => ({
+      address: tp.address,
+      name: tp.name,
     }));
   }, [turnPlayers]);
 
@@ -757,12 +770,13 @@ const BackgammonGame = () => {
                 {formatResultType(gameResultInfo.resultType).label} ({formatResultType(gameResultInfo.resultType).multiplier})
               </p>
             )}
-            <div className="flex gap-4 justify-center">
-              <Button asChild variant="default">
-                <Link to="/room-list">Find New Game</Link>
+            <div className="flex flex-col gap-3">
+              <Button onClick={() => rematch.openRematchModal()} className="w-full gap-2">
+                <RefreshCw className="w-4 h-4" />
+                Rematch
               </Button>
-              <Button asChild variant="outline">
-                <Link to="/play-ai/backgammon">Practice vs AI</Link>
+              <Button asChild variant="outline" className="w-full">
+                <Link to="/room-list">Exit</Link>
               </Button>
             </div>
           </div>
@@ -771,6 +785,15 @@ const BackgammonGame = () => {
       
       {/* Chat Panel */}
       <GameChatPanel chat={chat} />
+
+      {/* Rematch Modal */}
+      <RematchModal
+        isOpen={rematch.isModalOpen}
+        onClose={rematch.closeRematchModal}
+        gameType="Backgammon"
+        players={rematchPlayers}
+        rematchHook={rematch}
+      />
     </div>
   );
 };

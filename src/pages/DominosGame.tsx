@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Gem, Flag, Users, Wifi, WifiOff, Download } from "lucide-react";
+import { ArrowLeft, Gem, Flag, Users, Wifi, WifiOff, Download, RefreshCw } from "lucide-react";
 import DominoTile3D, { DominoTileBack } from "@/components/DominoTile3D";
 import { useSound } from "@/contexts/SoundContext";
 import { useTranslation } from "react-i18next";
@@ -9,11 +9,13 @@ import { useWallet } from "@/hooks/useWallet";
 import { useWebRTCSync, GameMessage } from "@/hooks/useWebRTCSync";
 import { useTurnNotifications, TurnPlayer } from "@/hooks/useTurnNotifications";
 import { useGameChat, ChatPlayer, ChatMessage } from "@/hooks/useGameChat";
+import { useRematch } from "@/hooks/useRematch";
 import TurnStatusHeader from "@/components/TurnStatusHeader";
 import TurnHistoryDrawer from "@/components/TurnHistoryDrawer";
 import NotificationToggle from "@/components/NotificationToggle";
 import TurnBanner from "@/components/TurnBanner";
 import GameChatPanel from "@/components/GameChatPanel";
+import { RematchModal } from "@/components/RematchModal";
 import { toast } from "@/hooks/use-toast";
 
 interface Domino {
@@ -148,6 +150,17 @@ const DominosGame = () => {
       displayName: tp.name,
       color: tp.color,
       seatIndex: tp.seatIndex,
+    }));
+  }, [turnPlayers]);
+
+  // Rematch hook
+  const rematch = useRematch("Dominos", roomPlayers);
+
+  // Rematch players for display
+  const rematchPlayers = useMemo(() => {
+    return turnPlayers.map(tp => ({
+      address: tp.address,
+      name: tp.name,
     }));
   }, [turnPlayers]);
 
@@ -613,7 +626,17 @@ const DominosGame = () => {
                 {gameStatus}
               </div>
 
-              {!gameOver && (
+              {gameOver ? (
+                <div className="flex gap-3">
+                  <Button onClick={() => rematch.openRematchModal()} className="gap-2">
+                    <RefreshCw className="w-4 h-4" />
+                    Rematch
+                  </Button>
+                  <Button asChild variant="outline">
+                    <Link to="/room-list">Exit</Link>
+                  </Button>
+                </div>
+              ) : (
                 <div className="flex gap-3">
                   {boneyard.length > 0 && playerLegalMoves.length === 0 && isMyTurn && (
                     <Button
@@ -655,6 +678,15 @@ const DominosGame = () => {
       
       {/* Chat Panel */}
       <GameChatPanel chat={chat} />
+
+      {/* Rematch Modal */}
+      <RematchModal
+        isOpen={rematch.isModalOpen}
+        onClose={rematch.closeRematchModal}
+        gameType="Dominos"
+        players={rematchPlayers}
+        rematchHook={rematch}
+      />
     </div>
   );
 };

@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, RotateCcw, Music, Music2, Volume2, VolumeX, Users, Wifi, WifiOff } from "lucide-react";
+import { ArrowLeft, RotateCcw, Music, Music2, Volume2, VolumeX, Users, Wifi, WifiOff, RefreshCw } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useSound } from "@/contexts/SoundContext";
 import { useWallet } from "@/hooks/useWallet";
@@ -14,11 +14,13 @@ import { Player, PlayerColor, initializePlayers } from "@/components/ludo/ludoTy
 import { useLudoEngine, LudoMove } from "@/hooks/useLudoEngine";
 import { useTurnNotifications, TurnPlayer } from "@/hooks/useTurnNotifications";
 import { useGameChat, ChatPlayer, ChatMessage } from "@/hooks/useGameChat";
+import { useRematch } from "@/hooks/useRematch";
 import TurnStatusHeader from "@/components/TurnStatusHeader";
 import TurnHistoryDrawer from "@/components/TurnHistoryDrawer";
 import NotificationToggle from "@/components/NotificationToggle";
 import TurnBanner from "@/components/TurnBanner";
 import GameChatPanel from "@/components/GameChatPanel";
+import { RematchModal } from "@/components/RematchModal";
 
 
 // Player color to wallet mapping (would come from room data in production)
@@ -137,6 +139,17 @@ const LudoGame = () => {
       displayName: tp.name,
       color: tp.color,
       seatIndex: tp.seatIndex,
+    }));
+  }, [turnPlayers]);
+
+  // Rematch hook
+  const rematch = useRematch("Ludo", roomPlayers);
+
+  // Rematch players for display
+  const rematchPlayers = useMemo(() => {
+    return turnPlayers.map(tp => ({
+      address: tp.address,
+      name: tp.name,
     }));
   }, [turnPlayers]);
 
@@ -542,12 +555,13 @@ const LudoGame = () => {
             <p className="text-muted-foreground capitalize">
               {gameOver} player wins!
             </p>
-            <div className="flex gap-4 justify-center">
-              <Button onClick={resetGame} variant="default">
-                Play Again
+            <div className="flex flex-col gap-3">
+              <Button onClick={() => rematch.openRematchModal()} className="w-full gap-2">
+                <RefreshCw className="w-4 h-4" />
+                Rematch
               </Button>
-              <Button asChild variant="outline">
-                <Link to="/room-list">Back to Rooms</Link>
+              <Button asChild variant="outline" className="w-full">
+                <Link to="/room-list">Exit</Link>
               </Button>
             </div>
           </div>
@@ -574,6 +588,15 @@ const LudoGame = () => {
       
       {/* Chat Panel */}
       <GameChatPanel chat={chat} />
+
+      {/* Rematch Modal */}
+      <RematchModal
+        isOpen={rematch.isModalOpen}
+        onClose={rematch.closeRematchModal}
+        gameType="Ludo"
+        players={rematchPlayers}
+        rematchHook={rematch}
+      />
     </div>
   );
 };
