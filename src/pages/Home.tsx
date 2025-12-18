@@ -71,7 +71,7 @@ const Home = () => {
 
               {/* CTA Buttons */}
               <div className="flex flex-col gap-4 mt-4">
-                <Button asChild size="lg" variant="gold" className="group text-lg h-14 px-8 border border-transparent hover:border-primary/50 transition-all">
+                <Button asChild size="lg" variant="default" className="group text-lg h-14 px-8 border border-transparent hover:border-primary/30 transition-all">
                   <Link to="/play-ai" className="flex items-center gap-2">
                     <Bot className="w-5 h-5 group-hover:drop-shadow-[0_0_6px_hsl(45_93%_54%_/_0.6)] transition-all" />
                     {t("home.playAiFree")}
