@@ -30,18 +30,27 @@ const AddFunds = () => {
           </p>
           
           {/* SOL Price Display */}
-          <div className="inline-flex items-center gap-2 mt-4 px-4 py-2 bg-card border border-border rounded-lg">
-            <span className="text-sm text-muted-foreground">SOL Price:</span>
-            <span className="font-semibold text-primary">
-              {loading ? "..." : price ? `$${price.toFixed(2)}` : "N/A"}
-            </span>
-            <button 
-              onClick={refetch} 
-              className="text-muted-foreground hover:text-foreground transition-colors"
-              title="Refresh price"
-            >
-              <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
-            </button>
+          <div className="flex flex-col items-center gap-2 mt-4">
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-card border border-border rounded-lg">
+              <span className="text-sm text-muted-foreground">SOL Price:</span>
+              <span className="font-semibold text-primary">
+                {loading ? "..." : price ? `$${price.toFixed(2)}` : "N/A"}
+              </span>
+              <button 
+                onClick={refetch} 
+                className="text-muted-foreground hover:text-foreground transition-colors"
+                title="Refresh price"
+              >
+                <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
+              </button>
+            </div>
+            <div className="text-xs text-muted-foreground flex items-center gap-1.5">
+              <span className="text-primary">💰</span>
+              <span>Minimum Entry Fee: <span className="text-foreground font-medium">$0.50 USD</span></span>
+              <span className="text-muted-foreground/60">
+                (~{price ? (0.5 / price).toFixed(4) : "0.004"} SOL)
+              </span>
+            </div>
           </div>
         </div>
 
