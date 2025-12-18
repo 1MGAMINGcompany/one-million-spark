@@ -1,5 +1,4 @@
 import { useEffect, useState, useCallback, useRef } from "react";
-import * as PushAPI from "@pushprotocol/restapi";
 import {
   initPushNotifications,
   sendGameNotification,
@@ -29,7 +28,7 @@ export function useGameNotifications({
   const { toast } = useToast();
   const { play } = useSound();
   
-  const [pushUser, setPushUser] = useState<PushAPI.PushAPI | null>(null);
+  const [pushUser, setPushUser] = useState<any | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
   const [notificationPermission, setNotificationPermission] = useState(false);
   const cleanupRef = useRef<(() => void) | null>(null);
