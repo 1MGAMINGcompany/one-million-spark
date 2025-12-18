@@ -18,11 +18,11 @@ import { useSound } from "@/contexts/SoundContext";
 import { useSolPrice } from "@/hooks/useSolPrice";
 import { useSolanaRooms } from "@/hooks/useSolanaRooms";
 import { Wallet, Loader2, AlertCircle } from "lucide-react";
-import { useWalletModal } from "@/components/SolanaProvider";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useBackgroundMusic } from "@/hooks/useBackgroundMusic";
 import { MIN_ENTRY_FEE_SOL, getSolanaCluster } from "@/lib/solana-config";
 import { GameType } from "@/lib/solana-program";
+import { ConnectWalletGate } from "@/components/ConnectWalletGate";
 
 export default function CreateRoom() {
   const navigate = useNavigate();
@@ -30,7 +30,6 @@ export default function CreateRoom() {
   const { isConnected, address } = useWallet();
   const { toast } = useToast();
   const { play } = useSound();
-  const { setVisible } = useWalletModal();
   const { price, formatUsd, loading: priceLoading, refetch: refetchPrice } = useSolPrice();
   const { createRoom, txPending, programReady, getBalance } = useSolanaRooms();
   
@@ -93,17 +92,14 @@ export default function CreateRoom() {
     return (
       <div className="min-h-[calc(100vh-5rem)] flex items-center justify-center px-3 py-4">
         <Card className="max-w-sm w-full border-border/50 bg-card/80 backdrop-blur">
-          <CardContent className="pt-5 text-center space-y-3">
-            <Wallet className="h-10 w-10 text-primary mx-auto" />
-            <h2 className="text-lg font-cinzel">{t("createRoom.connectWallet")}</h2>
+          <CardContent className="pt-6 text-center space-y-4">
+            <Wallet className="h-12 w-12 text-primary mx-auto" />
+            <h2 className="text-xl font-cinzel">{t("createRoom.connectWallet")}</h2>
             <p className="text-muted-foreground text-sm">
-              Connect your Solana wallet to create a game room.
+              Connect your Solana wallet to create a game room and compete for SOL prizes.
             </p>
-            <Button onClick={() => setVisible(true)} className="w-full" size="sm">
-              <Wallet className="mr-2 h-4 w-4" />
-              Connect Wallet
-            </Button>
-            <p className="text-xs text-muted-foreground">
+            <ConnectWalletGate />
+            <p className="text-xs text-muted-foreground pt-2">
               No funds are moved when connecting.
             </p>
           </CardContent>
