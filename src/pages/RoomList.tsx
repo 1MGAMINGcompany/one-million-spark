@@ -5,15 +5,11 @@ import { Construction, Wallet } from "lucide-react";
 import { useWallet } from "@/hooks/useWallet";
 import { WalletRequired } from "@/components/WalletRequired";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useBackgroundMusic } from "@/hooks/useBackgroundMusic";
 
 export default function RoomList() {
   const navigate = useNavigate();
   const { t } = useTranslation();
   const { isConnected, address } = useWallet();
-
-  // Enable background music
-  useBackgroundMusic();
 
   if (!isConnected) {
     return <WalletRequired message="Connect your Solana wallet to browse game rooms." />;

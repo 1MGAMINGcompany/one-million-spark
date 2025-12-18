@@ -19,7 +19,6 @@ import { useSolPrice } from "@/hooks/useSolPrice";
 import { useSolanaRooms } from "@/hooks/useSolanaRooms";
 import { Wallet, Loader2, AlertCircle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useBackgroundMusic } from "@/hooks/useBackgroundMusic";
 import { MIN_ENTRY_FEE_SOL, getSolanaCluster } from "@/lib/solana-config";
 import { GameType } from "@/lib/solana-program";
 import { ConnectWalletGate } from "@/components/ConnectWalletGate";
@@ -32,8 +31,6 @@ export default function CreateRoom() {
   const { play } = useSound();
   const { price, formatUsd, loading: priceLoading, refetch: refetchPrice } = useSolPrice();
   const { createRoom, txPending, programReady, getBalance, activeRoom, fetchCreatorActiveRoom } = useSolanaRooms();
-  
-  useBackgroundMusic();
 
   const [gameType, setGameType] = useState<string>("1"); // Chess
   const [entryFee, setEntryFee] = useState<string>("0.1");
