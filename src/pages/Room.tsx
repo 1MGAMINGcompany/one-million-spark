@@ -11,6 +11,18 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Construction, ArrowLeft } from "lucide-react";
 import { WalletGateModal } from "@/components/WalletGateModal";
 
+const STATUS_OPEN = 1;
+const STATUS_STARTED = 2;
+const STATUS_FINISHED = 3;
+
+function isDefaultPubkey(p: any) {
+  try {
+    return p?.toBase58?.() === PublicKey.default.toBase58();
+  } catch {
+    return false;
+  }
+}
+
 export default function Room() {
   const { roomAddress } = useParams<{ roomAddress: string }>();
   const navigate = useNavigate();
@@ -22,6 +34,10 @@ export default function Room() {
   const [room, setRoom] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const status = room?.status ?? 0;
+  const canJoin = status === STATUS_OPEN;
+  const canPlayAgain = status === STATUS_FINISHED;
 
   useEffect(() => {
     if (!roomAddress) return;
@@ -117,13 +133,17 @@ export default function Room() {
           )}
           
           <div className="flex justify-center gap-2">
-            <Button onClick={handleJoinAttempt} size="lg">
-              Join Room
-            </Button>
+            {canJoin && (
+              <Button onClick={handleJoinAttempt} size="lg">
+                Join Room
+              </Button>
+            )}
             
-            <Button onClick={onPlayAgain} size="lg" variant="outline">
-              Play Again
-            </Button>
+            {canPlayAgain && (
+              <Button onClick={onPlayAgain} size="lg" variant="outline">
+                Play Again
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
