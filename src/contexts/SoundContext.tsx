@@ -110,13 +110,18 @@ export const SoundProvider = ({ children }: { children: ReactNode }) => {
     });
   }, []);
   
-  // Try to play background music on ANY user interaction
+  // Try to play background music on ANY user interaction (only until first successful play)
   useEffect(() => {
+    let hasInitialized = false;
+    
     const tryPlayBackgroundMusic = () => {
       if (wantsBackgroundMusicRef.current && soundEnabled && backgroundMusicRef.current) {
         backgroundMusicRef.current.play().then(() => {
           setIsBackgroundMusicPlaying(true);
+          hasInitialized = true;
           console.log('Background music started');
+          // Remove listeners once we've successfully started - no need to keep retrying
+          removeListeners();
         }).catch((e) => {
           console.log('Background music blocked, waiting for interaction:', e.message);
         });
@@ -125,10 +130,19 @@ export const SoundProvider = ({ children }: { children: ReactNode }) => {
     
     const handleInteraction = () => {
       initializeSounds();
-      tryPlayBackgroundMusic();
+      // Only try to play if we haven't successfully initialized yet
+      if (!hasInitialized) {
+        tryPlayBackgroundMusic();
+      }
     };
     
-    // Add multiple listeners and keep them active
+    const removeListeners = () => {
+      document.removeEventListener('click', handleInteraction);
+      document.removeEventListener('touchstart', handleInteraction);
+      document.removeEventListener('keydown', handleInteraction);
+    };
+    
+    // Add multiple listeners and keep them active until first success
     document.addEventListener('click', handleInteraction);
     document.addEventListener('touchstart', handleInteraction);
     document.addEventListener('keydown', handleInteraction);
@@ -136,11 +150,7 @@ export const SoundProvider = ({ children }: { children: ReactNode }) => {
     // Also try immediately in case we already have permission
     tryPlayBackgroundMusic();
     
-    return () => {
-      document.removeEventListener('click', handleInteraction);
-      document.removeEventListener('touchstart', handleInteraction);
-      document.removeEventListener('keydown', handleInteraction);
-    };
+    return removeListeners;
   }, [initializeSounds, soundEnabled]);
   
   // Stop background music when sound is disabled
