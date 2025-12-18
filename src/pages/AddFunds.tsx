@@ -1,9 +1,10 @@
 import { useWallet } from "@/hooks/useWallet";
 import { useSolPrice } from "@/hooks/useSolPrice";
-import { Wallet, ArrowRightLeft, Send, Info, ExternalLink, RefreshCw } from "lucide-react";
+import { Wallet, CreditCard, Gamepad2, Link2, CheckCircle2, ExternalLink, RefreshCw, Sparkles, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useWalletModal } from "@/components/SolanaProvider";
 import { getSolanaCluster } from "@/lib/solana-config";
+import { useNavigate } from "react-router-dom";
 
 const AddFunds = () => {
   const { isConnected, address } = useWallet();
@@ -11,16 +12,21 @@ const AddFunds = () => {
   const { price, loading, refetch } = useSolPrice();
   const cluster = getSolanaCluster();
   const isDevnet = cluster === "devnet";
+  const navigate = useNavigate();
 
   return (
     <div className="min-h-screen bg-background py-12 px-4">
       <div className="max-w-2xl mx-auto">
-        <div className="text-center mb-12">
-          <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-2 font-cinzel">
+        {/* Hero Section */}
+        <div className="text-center mb-10">
+          <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-3 font-cinzel">
             Add SOL Funds
           </h1>
+          <p className="text-xl text-primary font-medium mb-2">
+            Getting SOL is easier than you think! ✨
+          </p>
           <p className="text-muted-foreground">
-            Fund your wallet with SOL to play competitive games
+            Buy directly in your wallet — no complicated exchanges needed
           </p>
           
           {/* SOL Price Display */}
@@ -39,98 +45,159 @@ const AddFunds = () => {
           </div>
         </div>
 
-        {/* Wallet Connection Status */}
-        {!isConnected ? (
-          <div className="bg-card border border-border rounded-lg p-6 text-center mb-8">
-            <Wallet className="mx-auto text-primary mb-4" size={48} />
-            <h2 className="text-xl font-semibold mb-2">Connect Your Wallet</h2>
-            <p className="text-muted-foreground mb-4">
-              Connect your Solana wallet to view your balance and add funds.
-            </p>
-            <Button onClick={() => setVisible(true)}>
-              <Wallet className="mr-2" size={18} />
-              Connect Wallet
-            </Button>
-          </div>
-        ) : (
-          <div className="bg-card border border-primary/30 rounded-lg p-6 mb-8">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Connected Wallet</p>
-                <p className="font-mono text-sm">{address?.slice(0, 8)}...{address?.slice(-8)}</p>
+        {/* How Easy It Is - Visual Flow */}
+        <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-primary/10 border border-primary/20 rounded-xl p-6 mb-8">
+          <div className="flex items-center justify-center gap-4 md:gap-8">
+            <div className="text-center">
+              <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center mx-auto mb-2">
+                <Link2 className="h-5 w-5 text-primary" />
               </div>
-              <div className="text-right">
-                <p className="text-sm text-muted-foreground">Network</p>
-                <p className={`font-medium ${isDevnet ? "text-amber-500" : "text-green-500"}`}>
-                  Solana {isDevnet ? "Devnet" : "Mainnet"}
-                </p>
+              <p className="text-sm font-medium">Connect</p>
+            </div>
+            <div className="text-primary text-2xl">→</div>
+            <div className="text-center">
+              <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center mx-auto mb-2">
+                <CreditCard className="h-5 w-5 text-primary" />
+              </div>
+              <p className="text-sm font-medium">Buy</p>
+            </div>
+            <div className="text-primary text-2xl">→</div>
+            <div className="text-center">
+              <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center mx-auto mb-2">
+                <Gamepad2 className="h-5 w-5 text-primary" />
+              </div>
+              <p className="text-sm font-medium">Play!</p>
+            </div>
+          </div>
+          <p className="text-center text-muted-foreground text-sm mt-4">
+            Takes less than 2 minutes to get started
+          </p>
+        </div>
+
+        {/* Wallet Connection Status */}
+        {isConnected && (
+          <div className="bg-card border border-primary/30 rounded-lg p-4 mb-6 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <CheckCircle2 className="h-5 w-5 text-green-500" />
+              <div>
+                <p className="text-sm text-green-400 font-medium">Wallet Connected</p>
+                <p className="font-mono text-xs text-muted-foreground">{address?.slice(0, 8)}...{address?.slice(-8)}</p>
               </div>
             </div>
+            <span className={`text-xs px-2 py-1 rounded ${isDevnet ? "bg-amber-500/20 text-amber-400" : "bg-green-500/20 text-green-400"}`}>
+              {isDevnet ? "Devnet" : "Mainnet"}
+            </span>
           </div>
         )}
 
-        <div className="space-y-6">
-          {/* Step 1 */}
-          <section className="bg-card border border-border rounded-lg p-6">
+        <div className="space-y-5">
+          {/* Step 1: Get a Wallet */}
+          <section className="bg-card border border-border rounded-xl p-6">
             <div className="flex items-start gap-4">
-              <div className="p-3 bg-primary/10 rounded-full shrink-0">
-                <Wallet className="text-primary" size={24} />
+              <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-bold shrink-0">
+                1
               </div>
-              <div>
-                <h2 className="text-xl font-semibold text-foreground mb-2">
-                  1. Get a Solana Wallet
+              <div className="flex-1">
+                <h2 className="text-lg font-semibold text-foreground mb-1">
+                  Get a Wallet
                 </h2>
-                <p className="text-muted-foreground leading-relaxed mb-3">
-                  Install a Solana wallet like Phantom, Solflare, or Backpack. These are browser extensions that securely store your SOL.
+                <p className="text-muted-foreground text-sm mb-4">
+                  Install any of these free wallets — takes 30 seconds!
                 </p>
-                <div className="flex flex-wrap gap-2">
+                
+                <div className="grid grid-cols-3 gap-3">
                   <a 
                     href="https://phantom.app" 
                     target="_blank" 
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+                    className="flex flex-col items-center gap-2 p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors border border-border/50"
                   >
-                    Phantom <ExternalLink size={12} />
+                    <div className="w-10 h-10 rounded-full bg-purple-500/20 flex items-center justify-center">
+                      <span className="text-lg">👻</span>
+                    </div>
+                    <span className="text-sm font-medium">Phantom</span>
                   </a>
                   <a 
                     href="https://solflare.com" 
                     target="_blank" 
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+                    className="flex flex-col items-center gap-2 p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors border border-border/50"
                   >
-                    Solflare <ExternalLink size={12} />
+                    <div className="w-10 h-10 rounded-full bg-orange-500/20 flex items-center justify-center">
+                      <span className="text-lg">🔆</span>
+                    </div>
+                    <span className="text-sm font-medium">Solflare</span>
                   </a>
                   <a 
                     href="https://backpack.app" 
                     target="_blank" 
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+                    className="flex flex-col items-center gap-2 p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors border border-border/50"
                   >
-                    Backpack <ExternalLink size={12} />
+                    <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center">
+                      <span className="text-lg">🎒</span>
+                    </div>
+                    <span className="text-sm font-medium">Backpack</span>
                   </a>
                 </div>
+
+                {!isConnected && (
+                  <Button onClick={() => setVisible(true)} className="w-full mt-4">
+                    <Wallet className="mr-2 h-4 w-4" />
+                    Connect Wallet
+                  </Button>
+                )}
               </div>
             </div>
           </section>
 
-          {/* Step 2 */}
-          <section className="bg-card border border-border rounded-lg p-6">
+          {/* Step 2: Buy SOL */}
+          <section className="bg-card border border-border rounded-xl p-6 relative overflow-hidden">
+            {/* No Exchanges Badge */}
+            <div className="absolute top-4 right-4">
+              <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-green-500/20 text-green-400 text-xs font-medium">
+                <Sparkles className="h-3 w-3" />
+                No exchanges needed!
+              </span>
+            </div>
+
             <div className="flex items-start gap-4">
-              <div className="p-3 bg-primary/10 rounded-full shrink-0">
-                <ArrowRightLeft className="text-primary" size={24} />
+              <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-bold shrink-0">
+                2
               </div>
-              <div>
-                <h2 className="text-xl font-semibold text-foreground mb-2">
-                  2. Buy or Transfer SOL
+              <div className="flex-1">
+                <h2 className="text-lg font-semibold text-foreground mb-1">
+                  Buy SOL Directly in Your Wallet
                 </h2>
-                <p className="text-muted-foreground leading-relaxed mb-3">
-                  Purchase SOL from an exchange (Coinbase, Binance, Kraken) or transfer from another wallet. Most wallets also have built-in purchase options.
+                <p className="text-muted-foreground text-sm mb-4">
+                  Phantom, Solflare, and Backpack all have built-in purchasing — just tap "Buy" inside the app!
                 </p>
+                
+                {/* Payment Methods */}
+                <div className="flex flex-wrap gap-2 mb-4">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted/50 text-sm">
+                    <CreditCard className="h-4 w-4 text-primary" />
+                    Credit Card
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted/50 text-sm">
+                    <span className="text-base"></span>
+                    Apple Pay
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted/50 text-sm">
+                    <span className="text-base">G</span>
+                    Google Pay
+                  </span>
+                </div>
+
+                <p className="text-xs text-muted-foreground">
+                  Already have SOL elsewhere? You can also transfer from another wallet.
+                </p>
+
                 {isDevnet && (
-                  <div className="mt-3 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
-                    <p className="text-sm text-amber-500 font-medium mb-2">🧪 Devnet Mode</p>
-                    <p className="text-sm text-muted-foreground mb-2">
-                      Get free test SOL from the Solana faucet:
+                  <div className="mt-4 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+                    <p className="text-sm text-amber-400 font-medium mb-1">🧪 Devnet Mode</p>
+                    <p className="text-xs text-muted-foreground mb-2">
+                      Get free test SOL from the faucet:
                     </p>
                     <a 
                       href="https://faucet.solana.com" 
@@ -146,53 +213,44 @@ const AddFunds = () => {
             </div>
           </section>
 
-          {/* Step 3 */}
-          <section className="bg-card border border-border rounded-lg p-6">
-            <div className="flex items-start gap-4">
-              <div className="p-3 bg-primary/10 rounded-full shrink-0">
-                <Send className="text-primary" size={24} />
-              </div>
-              <div>
-                <h2 className="text-xl font-semibold text-foreground mb-2">
-                  3. Start Playing
-                </h2>
-                <p className="text-muted-foreground leading-relaxed">
-                  Once you have SOL in your wallet, you can create or join game rooms. Entry fees are paid in SOL, and winners receive their prize directly to their wallet.
-                </p>
-              </div>
-            </div>
+          {/* Quick Info */}
+          <section className="bg-muted/20 border border-border/50 rounded-xl p-5">
+            <h3 className="font-medium text-foreground mb-3">Quick Info</h3>
+            <ul className="space-y-2 text-sm text-muted-foreground">
+              <li className="flex items-start gap-2">
+                <CheckCircle2 className="h-4 w-4 text-green-500 mt-0.5 shrink-0" />
+                Entry fees and prizes are in SOL
+              </li>
+              <li className="flex items-start gap-2">
+                <CheckCircle2 className="h-4 w-4 text-green-500 mt-0.5 shrink-0" />
+                Network fees are tiny (less than $0.01)
+              </li>
+              <li className="flex items-start gap-2">
+                <CheckCircle2 className="h-4 w-4 text-green-500 mt-0.5 shrink-0" />
+                Winners receive prizes minus 5% platform fee
+              </li>
+            </ul>
           </section>
 
-          {/* Important Info */}
-          <section className="bg-primary/5 border border-primary/20 rounded-lg p-6">
-            <div className="flex items-start gap-4">
-              <div className="p-3 bg-primary/10 rounded-full shrink-0">
-                <Info className="text-primary" size={24} />
-              </div>
-              <div>
-                <h2 className="text-xl font-semibold text-foreground mb-3">
-                  Important Information
-                </h2>
-                <ul className="space-y-2 text-muted-foreground">
-                  <li className="flex items-start gap-2">
-                    <span className="w-1.5 h-1.5 bg-primary rounded-full mt-2 shrink-0" />
-                    All entry fees and prizes are in <strong className="text-foreground">SOL</strong> on the Solana network.
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="w-1.5 h-1.5 bg-primary rounded-full mt-2 shrink-0" />
-                    You'll need a small amount of SOL for network fees (typically less than $0.01).
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="w-1.5 h-1.5 bg-primary rounded-full mt-2 shrink-0" />
-                    1M Gaming does NOT buy, sell, or trade cryptocurrency.
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="w-1.5 h-1.5 bg-primary rounded-full mt-2 shrink-0" />
-                    Winners receive prizes minus a 5% platform fee.
-                  </li>
-                </ul>
+          {/* Fun CTA - Play with Friends */}
+          <section className="bg-gradient-to-r from-primary/20 to-primary/10 border border-primary/30 rounded-xl p-6 text-center">
+            <div className="flex justify-center mb-3">
+              <div className="w-14 h-14 rounded-full bg-primary/20 flex items-center justify-center">
+                <Users className="h-7 w-7 text-primary" />
               </div>
             </div>
+            <h3 className="text-lg font-semibold text-foreground mb-2">
+              🎮 Ready to play with friends?
+            </h3>
+            <p className="text-muted-foreground text-sm mb-4">
+              Create a private room and share the link — your friends can join anytime!
+            </p>
+            <p className="text-xs text-primary mb-4">
+              ✨ Private rooms never expire
+            </p>
+            <Button onClick={() => navigate("/create-room")} variant="default" size="lg">
+              Create a Private Room
+            </Button>
           </section>
         </div>
       </div>
