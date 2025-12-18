@@ -1,6 +1,9 @@
 // Solana network configuration
 export const SOLANA_NETWORK = "mainnet-beta" as const;
 
+// Feature flag - set to false to show "Coming Soon" placeholder
+export const SOLANA_ENABLED = true;
+
 // Toggle this for testing on devnet
 export const USE_DEVNET = false;
 
