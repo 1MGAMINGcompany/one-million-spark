@@ -6,6 +6,7 @@ import { SolanaProvider } from "./components/SolanaProvider";
 import { LoadingProvider } from "./contexts/LoadingContext";
 import { AudioProvider } from "./contexts/AudioContext";
 import { SoundProvider } from "./contexts/SoundContext";
+import { GlobalBackgroundMusic } from "./components/GlobalBackgroundMusic";
 import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
 import PyramidLoader from "./components/PyramidLoader";
@@ -46,6 +47,7 @@ const App = () => (
             <GoldenParticles />
             <AgeConfirmation />
             <BrowserRouter>
+              <GlobalBackgroundMusic />
               <div className="flex flex-col min-h-screen">
                 <Navbar />
                 <main className="pt-16 relative flex-1">
