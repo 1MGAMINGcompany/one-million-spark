@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
 
@@ -10,13 +10,17 @@ import { useWallet } from "@/hooks/useWallet";
 import { useSolanaRooms } from "@/hooks/useSolanaRooms";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Construction, ArrowLeft, Loader2, Users, Clock, Coins, XCircle, AlertTriangle } from "lucide-react";
+import { Construction, ArrowLeft, Loader2, Users, Clock, Coins, XCircle, AlertTriangle, Radio } from "lucide-react";
 import { WalletGateModal } from "@/components/WalletGateModal";
 import { toast } from "sonner";
 
 const STATUS_OPEN = 1;
 const STATUS_STARTED = 2;
 const STATUS_FINISHED = 3;
+
+// Presence timeout in seconds
+const CREATOR_TIMEOUT_SECS = 60;
+const PING_INTERVAL_MS = 30000; // 30 seconds
 
 // Human-readable mappings
 const STATUS_NAMES: Record<number, string> = {
@@ -52,13 +56,15 @@ export default function Room() {
   const { isConnected, address } = useWallet();
   const { connection } = useConnection();
   const wallet = useSolanaWallet();
-  const { activeRoom, fetchCreatorActiveRoom, cancelRoom, txPending: cancelPending } = useSolanaRooms();
+  const { activeRoom, fetchCreatorActiveRoom, cancelRoom, pingRoom, cancelAbandonedRoom, txPending: cancelPending } = useSolanaRooms();
   const [showWalletGate, setShowWalletGate] = useState(false);
 
   const [room, setRoom] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [txPending, setTxPending] = useState(false);
+  const [currentTime, setCurrentTime] = useState(Date.now());
+  const pingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const status = room?.status ?? 0;
   const statusName = STATUS_NAMES[status] || "Unknown";
@@ -77,9 +83,15 @@ export default function Room() {
   // Check if current wallet is the room creator
   const isCreator = room?.creator?.toBase58?.() === address;
   
+  // Check if room is abandoned (creator hasn't pinged in > 60 seconds)
+  const lastCreatorPing = room?.lastCreatorPing ? Number(room.lastCreatorPing) * 1000 : 0; // Convert to ms
+  const secondsSinceLastPing = lastCreatorPing ? Math.floor((currentTime - lastCreatorPing) / 1000) : 0;
+  const isAbandoned = status === STATUS_OPEN && lastCreatorPing > 0 && secondsSinceLastPing > CREATOR_TIMEOUT_SECS;
+  
   // Role-based button visibility
-  const canJoin = status === STATUS_OPEN && !isPlayer && isConnected;
+  const canJoin = status === STATUS_OPEN && !isPlayer && isConnected && !isAbandoned;
   const canCancel = status === STATUS_OPEN && isCreator;
+  const canCancelAbandoned = status === STATUS_OPEN && isAbandoned && !isCreator && isConnected;
   const canPlayAgain = status === STATUS_FINISHED && isPlayer;
   
   // Stake calculations
@@ -158,6 +170,49 @@ export default function Room() {
     }
   }, [isConnected, fetchCreatorActiveRoom]);
 
+  // Update current time every second for abandoned check
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Creator presence ping - ping immediately and every 30 seconds
+  useEffect(() => {
+    if (!isCreator || !room || status !== STATUS_OPEN) {
+      // Clear any existing interval
+      if (pingIntervalRef.current) {
+        clearInterval(pingIntervalRef.current);
+        pingIntervalRef.current = null;
+      }
+      return;
+    }
+
+    const roomId = typeof room.roomId === 'object' ? room.roomId.toNumber() : room.roomId;
+
+    // Ping immediately on mount
+    const doPing = async () => {
+      try {
+        await pingRoom(roomId);
+      } catch (e) {
+        console.error("Failed to ping room:", e);
+      }
+    };
+    
+    doPing();
+
+    // Then ping every 30 seconds
+    pingIntervalRef.current = setInterval(doPing, PING_INTERVAL_MS);
+
+    return () => {
+      if (pingIntervalRef.current) {
+        clearInterval(pingIntervalRef.current);
+        pingIntervalRef.current = null;
+      }
+    };
+  }, [isCreator, room?.roomId, status, pingRoom]);
+
   // Check if user has an active room that blocks joining
   const hasBlockingActiveRoom = activeRoom && activeRoom.roomId !== room?.roomId?.toNumber?.();
 
@@ -203,6 +258,21 @@ export default function Room() {
     
     const roomId = typeof room.roomId === 'object' ? room.roomId.toNumber() : room.roomId;
     const success = await cancelRoom(roomId);
+    
+    if (success) {
+      navigate("/room-list");
+    }
+  };
+
+  const onCancelAbandonedRoom = async () => {
+    if (!room?.roomId) return;
+    
+    const roomId = typeof room.roomId === 'object' ? room.roomId.toNumber() : room.roomId;
+    
+    // Get player pubkeys for refunds
+    const playerPubkeys = activePlayers.map((p: any) => new PublicKey(p.toBase58()));
+    
+    const success = await cancelAbandonedRoom(roomId, playerPubkeys);
     
     if (success) {
       navigate("/room-list");
@@ -283,14 +353,29 @@ export default function Room() {
                 </div>
               )}
 
+              {/* Abandoned Room Warning */}
+              {isAbandoned && (
+                <div className="flex items-start gap-2 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
+                  <AlertTriangle className="h-4 w-4 text-red-500 mt-0.5 shrink-0" />
+                  <div className="text-sm">
+                    <p className="text-red-200 font-medium">Room Abandoned</p>
+                    <p className="text-red-200/70">
+                      Creator has been inactive for {secondsSinceLastPing} seconds. 
+                      Anyone can cancel this room and get refunded.
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {/* Status Badge */}
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                  isAbandoned ? 'bg-red-500/20 text-red-400' :
                   status === STATUS_OPEN ? 'bg-green-500/20 text-green-400' :
                   status === STATUS_STARTED ? 'bg-yellow-500/20 text-yellow-400' :
                   'bg-muted text-muted-foreground'
                 }`}>
-                  {statusName}
+                  {isAbandoned ? 'Abandoned' : statusName}
                 </span>
                 {isPlayer && (
                   <span className="px-3 py-1 rounded-full text-sm font-medium bg-primary/20 text-primary">
@@ -300,6 +385,13 @@ export default function Room() {
                 {isCreator && (
                   <span className="px-3 py-1 rounded-full text-sm font-medium bg-blue-500/20 text-blue-400">
                     Your Room
+                  </span>
+                )}
+                {/* Creator presence indicator */}
+                {status === STATUS_OPEN && !isAbandoned && (
+                  <span className="px-3 py-1 rounded-full text-sm font-medium bg-green-500/10 text-green-400 flex items-center gap-1">
+                    <Radio className="h-3 w-3 animate-pulse" />
+                    Creator Online
                   </span>
                 )}
               </div>
@@ -374,7 +466,7 @@ export default function Room() {
           {/* Action Buttons */}
           <div className="flex flex-col gap-3">
             <div className="flex justify-center gap-3">
-              {status === STATUS_OPEN && !isPlayer && !hasBlockingActiveRoom && (
+              {canJoin && !hasBlockingActiveRoom && (
                 <Button 
                   onClick={onJoinRoom} 
                   size="lg" 
@@ -442,7 +534,43 @@ export default function Room() {
                 </Button>
               </div>
             )}
+
+            {/* Cancel Abandoned Room Button - Anyone can cancel if creator timed out */}
+            {canCancelAbandoned && (
+              <div className="flex justify-center pt-2 border-t border-border/30">
+                <Button 
+                  onClick={onCancelAbandonedRoom}
+                  variant="destructive"
+                  size="lg"
+                  disabled={cancelPending || txPending}
+                  className="gap-2"
+                >
+                  {cancelPending ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Cancelling & Refunding...
+                    </>
+                  ) : (
+                    <>
+                      <XCircle className="h-4 w-4" />
+                      Cancel Abandoned Room & Refund All
+                    </>
+                  )}
+                </Button>
+              </div>
+            )}
           </div>
+
+          {/* Presence Info Message */}
+          {status === STATUS_OPEN && (
+            <div className="bg-muted/20 rounded-lg p-3 text-xs text-muted-foreground space-y-1">
+              <p className="flex items-center gap-1">
+                <Radio className="h-3 w-3" />
+                <span className="font-medium">Presence-Based Rooms</span>
+              </p>
+              <p>Rooms stay open only while the creator is present. If the creator leaves for 60 seconds, the room becomes abandoned and all players are refunded automatically.</p>
+            </div>
+          )}
         </CardContent>
       </Card>
 

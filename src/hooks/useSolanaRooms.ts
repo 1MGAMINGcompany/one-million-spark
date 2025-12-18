@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { useToast } from "@/hooks/use-toast";
@@ -13,6 +13,8 @@ import {
   buildCreateRoomTx,
   buildJoinRoomTx,
   buildCancelRoomTx,
+  buildPingRoomTx,
+  buildCancelAbandonedRoomTx,
   PROGRAM_ID,
 } from "@/lib/solana-program";
 
@@ -313,6 +315,97 @@ export function useSolanaRooms() {
     }
   }, [publicKey, connected, connection, sendTransaction, toast, fetchRooms, programReady]);
 
+  // Ping room (creator presence heartbeat)
+  const pingRoom = useCallback(async (roomId: number): Promise<boolean> => {
+    if (!publicKey || !connected || !programReady) {
+      return false;
+    }
+
+    try {
+      const tx = await buildPingRoomTx(publicKey, roomId);
+      
+      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+      tx.recentBlockhash = blockhash;
+      tx.feePayer = publicKey;
+      
+      const signature = await sendTransaction(tx, connection);
+      
+      await connection.confirmTransaction({
+        signature,
+        blockhash,
+        lastValidBlockHeight,
+      });
+      
+      console.log("Room pinged successfully");
+      return true;
+    } catch (err: any) {
+      console.error("Ping room error:", err);
+      return false;
+    }
+  }, [publicKey, connected, connection, sendTransaction, programReady]);
+
+  // Cancel abandoned room (anyone can call if creator timed out)
+  const cancelAbandonedRoom = useCallback(async (roomId: number, players: PublicKey[]): Promise<boolean> => {
+    if (!publicKey || !connected) {
+      toast({
+        title: "Wallet not connected",
+        description: "Please connect your wallet first",
+        variant: "destructive",
+      });
+      return false;
+    }
+
+    if (!programReady) {
+      toast({
+        title: "Program not ready",
+        description: "Solana program is not yet deployed",
+        variant: "destructive",
+      });
+      return false;
+    }
+
+    setTxPending(true);
+    
+    try {
+      const tx = await buildCancelAbandonedRoomTx(publicKey, roomId, players);
+      
+      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+      tx.recentBlockhash = blockhash;
+      tx.feePayer = publicKey;
+      
+      const signature = await sendTransaction(tx, connection);
+      
+      toast({
+        title: "Transaction sent",
+        description: "Cancelling abandoned room...",
+      });
+      
+      await connection.confirmTransaction({
+        signature,
+        blockhash,
+        lastValidBlockHeight,
+      });
+      
+      toast({
+        title: "Room cancelled",
+        description: "All players have been refunded",
+      });
+      
+      await fetchRooms();
+      return true;
+    } catch (err: any) {
+      console.error("Cancel abandoned room error:", err);
+      toast({
+        title: "Failed to cancel room",
+        description: err.message || "Transaction failed",
+        variant: "destructive",
+      });
+      return false;
+    } finally {
+      setTxPending(false);
+    }
+  }, [publicKey, connected, connection, sendTransaction, toast, fetchRooms, programReady]);
+
   // Get user's SOL balance
   const getBalance = useCallback(async (): Promise<number> => {
     if (!publicKey) return 0;
@@ -336,6 +429,8 @@ export function useSolanaRooms() {
     createRoom,
     joinRoom,
     cancelRoom,
+    pingRoom,
+    cancelAbandonedRoom,
     getBalance,
     fetchCreatorActiveRoom,
   };

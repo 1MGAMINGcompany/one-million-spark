@@ -387,7 +387,7 @@ export async function buildSettleTx(
 }
 
 /**
- * Build cancelRoom transaction
+ * Build cancelRoom transaction (creator only)
  * @param creator - Room creator's public key
  * @param roomId - Room ID to cancel
  */
@@ -412,6 +412,81 @@ export async function buildCancelRoomTx(
       { pubkey: vaultPda, isSigner: false, isWritable: true },
       { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
     ],
+    programId: PROGRAM_ID,
+    data,
+  });
+  
+  const tx = new Transaction().add(instruction);
+  return tx;
+}
+
+/**
+ * Build pingRoom transaction (creator presence heartbeat)
+ * @param creator - Room creator's public key
+ * @param roomId - Room ID to ping
+ */
+export async function buildPingRoomTx(
+  creator: PublicKey,
+  roomId: number
+): Promise<Transaction> {
+  const [roomPda] = getRoomPDA(roomId);
+  
+  // Anchor discriminator for "ping_room" instruction
+  const discriminator = Buffer.from([0x8d, 0xac, 0x8c, 0xac, 0x8c, 0xac, 0x8c, 0xac]); // Placeholder
+  
+  const data = Buffer.alloc(8 + 8);
+  discriminator.copy(data, 0);
+  data.writeBigUInt64LE(BigInt(roomId), 8);
+  
+  const instruction = new TransactionInstruction({
+    keys: [
+      { pubkey: creator, isSigner: true, isWritable: false },
+      { pubkey: roomPda, isSigner: false, isWritable: true },
+    ],
+    programId: PROGRAM_ID,
+    data,
+  });
+  
+  const tx = new Transaction().add(instruction);
+  return tx;
+}
+
+/**
+ * Build cancelRoomIfAbandoned transaction (anyone can call if creator timed out)
+ * @param caller - Anyone's public key
+ * @param roomId - Room ID to cancel
+ * @param players - Array of player pubkeys to refund
+ */
+export async function buildCancelAbandonedRoomTx(
+  caller: PublicKey,
+  roomId: number,
+  players: PublicKey[]
+): Promise<Transaction> {
+  const [roomPda] = getRoomPDA(roomId);
+  const [vaultPda] = getVaultPDA(roomId);
+  
+  // Anchor discriminator for "cancel_room_if_abandoned" instruction
+  const discriminator = Buffer.from([0x9d, 0xbc, 0x9c, 0xbc, 0x9c, 0xbc, 0x9c, 0xbc]); // Placeholder
+  
+  const data = Buffer.alloc(8 + 8);
+  discriminator.copy(data, 0);
+  data.writeBigUInt64LE(BigInt(roomId), 8);
+  
+  // Build account keys: caller, room, vault, system_program, then all players for refunds
+  const keys = [
+    { pubkey: caller, isSigner: true, isWritable: true },
+    { pubkey: roomPda, isSigner: false, isWritable: true },
+    { pubkey: vaultPda, isSigner: false, isWritable: true },
+    { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+  ];
+  
+  // Add player accounts for refunds
+  for (const player of players) {
+    keys.push({ pubkey: player, isSigner: false, isWritable: true });
+  }
+  
+  const instruction = new TransactionInstruction({
+    keys,
     programId: PROGRAM_ID,
     data,
   });
