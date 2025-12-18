@@ -22,8 +22,7 @@ export const useWalletModal = () => useContext(WalletModalContext);
 // Custom wallet modal - ONLY shows Phantom, Solflare, Backpack
 function CustomWalletModal() {
   const { visible, setVisible } = useWalletModal();
-  const { wallets, select, connect, connected, connecting, wallet } = useWallet();
-  const [pendingWallet, setPendingWallet] = useState<string | null>(null);
+  const { wallets, select, connect, connected, connecting } = useWallet();
 
   // Filter to ONLY our explicitly defined Solana wallets
   const allowedWalletNames = ["Phantom", "Solflare", "Backpack"];
@@ -36,20 +35,6 @@ function CustomWalletModal() {
     );
   }, [wallets]);
 
-  // When wallet is selected and adapter is ready, call connect
-  useEffect(() => {
-    console.log("useEffect check - pendingWallet:", pendingWallet, "wallet?.adapter.name:", wallet?.adapter.name);
-    if (pendingWallet && wallet?.adapter.name === pendingWallet) {
-      console.log("Calling connect()...");
-      connect().then(() => {
-        console.log("connect() resolved");
-      }).catch(err => {
-        console.error("Connect error:", err);
-      });
-      setPendingWallet(null);
-    }
-  }, [pendingWallet, wallet, connect]);
-
   // Close modal when connected
   useEffect(() => {
     if (connected && visible) {
@@ -57,13 +42,23 @@ function CustomWalletModal() {
     }
   }, [connected, visible, setVisible]);
 
-  const handleSelect = useCallback((walletName: string) => {
+  const handleSelect = useCallback(async (walletName: string) => {
     console.log("handleSelect called with:", walletName);
-    console.log("Current wallets:", wallets.map(w => w.adapter.name));
-    setPendingWallet(walletName);
-    select(walletName as any);
-    console.log("select() called");
-  }, [select, wallets]);
+    try {
+      select(walletName as any);
+      // Give the adapter time to initialize, then connect
+      setTimeout(async () => {
+        try {
+          await connect();
+          console.log("connect() succeeded");
+        } catch (err) {
+          console.error("Connect error:", err);
+        }
+      }, 100);
+    } catch (err) {
+      console.error("Select error:", err);
+    }
+  }, [select, connect]);
 
   if (!visible) return null;
 
