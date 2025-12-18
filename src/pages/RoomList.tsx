@@ -27,9 +27,16 @@ export default function RoomList() {
 
   const targetCluster = getSolanaCluster();
 
+  // Initial fetch and auto-refresh every 30 seconds
   useEffect(() => {
     if (isConnected && SOLANA_ENABLED && programReady) {
       fetchRooms();
+      
+      const interval = setInterval(() => {
+        fetchRooms();
+      }, 30000);
+      
+      return () => clearInterval(interval);
     }
   }, [isConnected, programReady]);
 
