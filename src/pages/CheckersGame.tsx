@@ -144,6 +144,19 @@ const CheckersGame = () => {
     enabled: true,
   });
 
+  // Chat players derived from turn players
+  const chatPlayers: ChatPlayer[] = useMemo(() => {
+    return turnPlayers.map((tp) => ({
+      wallet: tp.address,
+      displayName: tp.name,
+      color: tp.color,
+      seatIndex: tp.seatIndex,
+    }));
+  }, [turnPlayers]);
+
+  // Game chat hook (sendChat defined after WebRTC hook)
+  const chatRef = useRef<ReturnType<typeof useGameChat> | null>(null);
+
   // Game logic functions
   const getCaptures = useCallback((board: (Piece | null)[][], pos: Position): Move[] => {
     const piece = board[pos.row][pos.col];
@@ -289,6 +302,19 @@ const CheckersGame = () => {
   const handleWebRTCMessage = useCallback((message: GameMessage) => {
     console.log("[CheckersGame] Received message:", message.type);
     
+    // Handle chat messages
+    if (message.type === "chat" && message.payload) {
+      try {
+        const chatMsg = typeof message.payload === "string" 
+          ? JSON.parse(message.payload) 
+          : message.payload;
+        chatRef.current?.receiveMessage(chatMsg);
+      } catch (e) {
+        console.error("[CheckersGame] Failed to parse chat message:", e);
+      }
+      return;
+    }
+    
     if (message.type === "move" && message.payload) {
       const moveData = message.payload as CheckersMove;
       
@@ -306,12 +332,14 @@ const CheckersGame = () => {
       const result = checkGameOver(moveData.board);
       if (result) {
         setGameOver(result);
+        chatRef.current?.addSystemMessage(result === myColor ? "You win!" : "Opponent wins!");
         play(result === myColor ? 'checkers_win' : 'checkers_lose');
       } else {
         setCurrentPlayer(moveData.player === "gold" ? "obsidian" : "gold");
       }
     } else if (message.type === "resign") {
       setGameOver(myColor);
+      chatRef.current?.addSystemMessage("Opponent resigned");
       play('checkers_win');
       toast({
         title: "Victory!",
@@ -326,12 +354,35 @@ const CheckersGame = () => {
     connectionState,
     sendMove,
     sendResign,
+    sendChat,
   } = useWebRTCSync({
     roomId: roomId || "",
     players: roomPlayers,
     onMessage: handleWebRTCMessage,
     enabled: roomPlayers.length === 2,
   });
+
+  // Handle chat message sending via WebRTC
+  const handleChatSend = useCallback((msg: ChatMessage) => {
+    sendChat(JSON.stringify(msg));
+  }, [sendChat]);
+
+  // Game chat hook
+  const chat = useGameChat({
+    roomId: roomId || "",
+    myWallet: address,
+    players: chatPlayers,
+    onSendMessage: handleChatSend,
+    enabled: roomPlayers.length === 2,
+  });
+  chatRef.current = chat;
+
+  // Add system message when game starts
+  useEffect(() => {
+    if (roomPlayers.length === 2 && chat.messages.length === 0) {
+      chat.addSystemMessage("Game started! Good luck!");
+    }
+  }, [roomPlayers.length]);
 
   // Handle square click
   const handleSquareClick = useCallback((row: number, col: number) => {
@@ -659,7 +710,8 @@ const CheckersGame = () => {
         </div>
       </div>
       
-      {/* Chat Panel - placeholder until full integration */}
+      {/* Chat Panel */}
+      <GameChatPanel chat={chat} />
     </div>
   );
 };

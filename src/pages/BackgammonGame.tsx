@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect } from "react";
+import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, RotateCcw, RotateCw, Gem, Flag, Users, Wifi, WifiOff } from "lucide-react";
@@ -136,8 +136,34 @@ const BackgammonGame = () => {
     enabled: true,
   });
 
+  // Chat players derived from turn players
+  const chatPlayers: ChatPlayer[] = useMemo(() => {
+    return turnPlayers.map((tp) => ({
+      wallet: tp.address,
+      displayName: tp.name,
+      color: tp.color,
+      seatIndex: tp.seatIndex,
+    }));
+  }, [turnPlayers]);
+
+  // Game chat hook ref (sendChat defined after WebRTC hook)
+  const chatRef = useRef<ReturnType<typeof useGameChat> | null>(null);
+
   // Handle WebRTC messages
   const handleWebRTCMessage = useCallback((message: GameMessage) => {
+    // Handle chat messages
+    if (message.type === "chat" && message.payload) {
+      try {
+        const chatMsg = typeof message.payload === "string" 
+          ? JSON.parse(message.payload) 
+          : message.payload;
+        chatRef.current?.receiveMessage(chatMsg);
+      } catch (e) {
+        console.error("[BackgammonGame] Failed to parse chat message:", e);
+      }
+      return;
+    }
+    
     if (message.type === "move" && message.payload) {
       const moveMsg = message.payload as BackgammonMoveMessage;
       
@@ -168,6 +194,7 @@ const BackgammonGame = () => {
           const resultDisplay = formatResultType(result.resultType);
           setGameStatus(winner === myRole ? `You win! ${resultDisplay.label}` : `You lose! ${resultDisplay.label}`);
           setGameOver(true);
+          chatRef.current?.addSystemMessage(winner === myRole ? "You win!" : "Opponent wins!");
           play(winner === myRole ? 'chess_win' : 'chess_lose');
         }
       } else if (moveMsg.type === "turn_end") {
@@ -179,6 +206,7 @@ const BackgammonGame = () => {
     } else if (message.type === "resign") {
       setGameStatus("Opponent resigned - You win!");
       setGameOver(true);
+      chatRef.current?.addSystemMessage("Opponent resigned");
       play('chess_win');
       toast({ title: "Victory!", description: "Your opponent has resigned." });
     }
@@ -190,12 +218,35 @@ const BackgammonGame = () => {
     connectionState,
     sendMove,
     sendResign,
+    sendChat,
   } = useWebRTCSync({
     roomId: roomId || "",
     players: roomPlayers,
     onMessage: handleWebRTCMessage,
     enabled: roomPlayers.length === 2,
   });
+
+  // Handle chat message sending via WebRTC
+  const handleChatSend = useCallback((msg: ChatMessage) => {
+    sendChat(JSON.stringify(msg));
+  }, [sendChat]);
+
+  // Game chat hook
+  const chat = useGameChat({
+    roomId: roomId || "",
+    myWallet: address,
+    players: chatPlayers,
+    onSendMessage: handleChatSend,
+    enabled: roomPlayers.length === 2,
+  });
+  chatRef.current = chat;
+
+  // Add system message when game starts
+  useEffect(() => {
+    if (roomPlayers.length === 2 && chat.messages.length === 0) {
+      chat.addSystemMessage("Game started! Good luck!");
+    }
+  }, [roomPlayers.length]);
 
   // Update status based on connection
   useEffect(() => {
@@ -717,6 +768,9 @@ const BackgammonGame = () => {
           </div>
         </div>
       )}
+      
+      {/* Chat Panel */}
+      <GameChatPanel chat={chat} />
     </div>
   );
 };
