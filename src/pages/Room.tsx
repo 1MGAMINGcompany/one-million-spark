@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useWallet } from "@/hooks/useWallet";
+import { useConnection, useWallet as useSolanaWallet } from "@solana/wallet-adapter-react";
+import { playAgain } from "@/lib/play-again";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Construction, ArrowLeft } from "lucide-react";
@@ -10,6 +12,8 @@ export default function Room() {
   const { roomId } = useParams<{ roomId: string }>();
   const navigate = useNavigate();
   const { isConnected } = useWallet();
+  const { connection } = useConnection();
+  const wallet = useSolanaWallet();
   const [showWalletGate, setShowWalletGate] = useState(false);
 
   const handleJoinAttempt = () => {
@@ -18,6 +22,26 @@ export default function Room() {
       return;
     }
     // Normal join flow would go here
+  };
+
+  const onPlayAgain = async () => {
+    // TODO: replace these 3 values with the room's actual settings once you're reading on-chain room state
+    const gameType = 2; // Ludo (example)
+    const maxPlayers = 4;
+    const stakeLamports = 200_000_000n; // 0.2 SOL
+
+    const res = await playAgain({
+      connection,
+      wallet,
+      gameType,
+      maxPlayers,
+      stakeLamports,
+    });
+
+    // For now: log + show the new roomId.
+    // Next step we'll navigate to the new room route.
+    console.log("Play again created room:", res);
+    alert(`New room created: ${res.roomId.toString()}`);
   };
 
   return (
@@ -44,6 +68,10 @@ export default function Room() {
             {/* Join button that triggers wallet gate if not connected */}
             <Button onClick={handleJoinAttempt} size="lg">
               Join Room
+            </Button>
+            
+            <Button onClick={onPlayAgain} size="lg" variant="outline" className="ml-2">
+              Play Again
             </Button>
           </div>
         </CardContent>
