@@ -37,20 +37,22 @@ function CustomWalletModal() {
 
   const handleSelect = useCallback(async (walletName: string) => {
     try {
+      // First select the wallet
       select(walletName as any);
-      // Give the adapter time to initialize, then connect
-      setTimeout(async () => {
-        try {
-          await connect();
-        } catch (err) {
-          console.log("Connect after select:", err);
-        }
-      }, 100);
+      
+      // Find the wallet adapter and connect directly
+      const selectedWallet = wallets.find(w => w.adapter.name === walletName);
+      if (selectedWallet?.adapter) {
+        await selectedWallet.adapter.connect();
+      }
+      
       setVisible(false);
     } catch (err) {
-      console.error("Wallet selection error:", err);
+      console.error("Wallet connection error:", err);
+      // Still close modal on error
+      setVisible(false);
     }
-  }, [select, connect, setVisible]);
+  }, [select, wallets, setVisible]);
 
   if (!visible) return null;
 
