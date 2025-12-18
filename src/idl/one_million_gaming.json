@@ -1,9 +1,516 @@
 {
-  "version": "0.1.0",
-  "name": "one_million_gaming",
   "address": "4nkWS2ZYPqQrRSYbXD6XW6U6VenmBiZV2TkutY3vSPHu",
-  "instructions": [],
-  "accounts": [],
-  "types": [],
-  "errors": []
-}
+  "metadata": {
+    "name": "one_million_gaming",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Created with Anchor"
+  },
+  "instructions": [
+    {
+      "name": "create_room",
+      "discriminator": [
+        130,
+        166,
+        32,
+        2,
+        247,
+        120,
+        178,
+        53
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "room",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "creator"
+              },
+              {
+                "kind": "arg",
+                "path": "room_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "room_id",
+          "type": "u64"
+        },
+        {
+          "name": "game_type",
+          "type": "u8"
+        },
+        {
+          "name": "max_players",
+          "type": "u8"
+        },
+        {
+          "name": "stake_lamports",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "init_config",
+      "discriminator": [
+        23,
+        235,
+        115,
+        232,
+        168,
+        96,
+        1,
+        231
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "fee_recipient",
+          "type": "pubkey"
+        },
+        {
+          "name": "verifier",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "join_room",
+      "discriminator": [
+        95,
+        232,
+        188,
+        81,
+        124,
+        130,
+        78,
+        139
+      ],
+      "accounts": [
+        {
+          "name": "player",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "room",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room.creator",
+                "account": "Room"
+              },
+              {
+                "kind": "account",
+                "path": "room.room_id",
+                "account": "Room"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "submit_result",
+      "discriminator": [
+        240,
+        42,
+        89,
+        180,
+        10,
+        239,
+        9,
+        214
+      ],
+      "accounts": [
+        {
+          "name": "verifier",
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "room",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room.creator",
+                "account": "Room"
+              },
+              {
+                "kind": "account",
+                "path": "room.room_id",
+                "account": "Room"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room"
+              }
+            ]
+          }
+        },
+        {
+          "name": "winner",
+          "writable": true
+        },
+        {
+          "name": "fee_recipient",
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "winner",
+          "type": "pubkey"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Config",
+      "discriminator": [
+        155,
+        12,
+        170,
+        224,
+        30,
+        250,
+        204,
+        130
+      ]
+    },
+    {
+      "name": "Room",
+      "discriminator": [
+        156,
+        199,
+        67,
+        27,
+        222,
+        23,
+        185,
+        94
+      ]
+    },
+    {
+      "name": "Vault",
+      "discriminator": [
+        211,
+        8,
+        232,
+        43,
+        2,
+        152,
+        117,
+        119
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "BadMaxPlayers",
+      "msg": "max_players must be 2, 3, or 4"
+    },
+    {
+      "code": 6001,
+      "name": "BadStake",
+      "msg": "stake must be > 0"
+    },
+    {
+      "code": 6002,
+      "name": "RoomNotOpen",
+      "msg": "Room is not open"
+    },
+    {
+      "code": 6003,
+      "name": "RoomFull",
+      "msg": "Room is already full"
+    },
+    {
+      "code": 6004,
+      "name": "AlreadyJoined",
+      "msg": "Player already joined"
+    },
+    {
+      "code": 6005,
+      "name": "GameNotStarted",
+      "msg": "Game is not started"
+    },
+    {
+      "code": 6006,
+      "name": "RoomNotFull",
+      "msg": "Room is not full yet"
+    },
+    {
+      "code": 6007,
+      "name": "UnauthorizedVerifier",
+      "msg": "Verifier is not authorized"
+    },
+    {
+      "code": 6008,
+      "name": "BadWinner",
+      "msg": "Winner must be one of the players"
+    },
+    {
+      "code": 6009,
+      "name": "BadFeeRecipient",
+      "msg": "Fee recipient does not match config"
+    },
+    {
+      "code": 6010,
+      "name": "WinnerAccountMismatch",
+      "msg": "Winner account does not match winner pubkey"
+    },
+    {
+      "code": 6011,
+      "name": "MathOverflow",
+      "msg": "Math overflow"
+    },
+    {
+      "code": 6012,
+      "name": "InsufficientVault",
+      "msg": "Vault does not have enough SOL"
+    }
+  ],
+  "types": [
+    {
+      "name": "Config",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "fee_recipient",
+            "type": "pubkey"
+          },
+          {
+            "name": "fee_bps",
+            "type": "u16"
+          },
+          {
+            "name": "verifier",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Room",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "room_id",
+            "type": "u64"
+          },
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "game_type",
+            "type": "u8"
+          },
+          {
+            "name": "max_players",
+            "type": "u8"
+          },
+          {
+            "name": "player_count",
+            "type": "u8"
+          },
+          {
+            "name": "status",
+            "type": "u8"
+          },
+          {
+            "name": "stake_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "winner",
+            "type": "pubkey"
+          },
+          {
+            "name": "players",
+            "type": {
+              "array": [
+                "pubkey",
+                4
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "Vault",
+      "type": {
+        "kind": "struct",
+        "fields": []
+      }
+    }
+  ]
