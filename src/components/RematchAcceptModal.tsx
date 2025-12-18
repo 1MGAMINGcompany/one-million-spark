@@ -44,14 +44,27 @@ export function RematchAcceptModal({
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [isSigning, setIsSigning] = useState(false);
   const [isExpired, setIsExpired] = useState(false);
+  const [timeRemaining, setTimeRemaining] = useState<number>(0);
 
-  // Check if rematch has expired (30 minutes)
+  const EXPIRY_DURATION = 10 * 1000; // 10 seconds
+
+  // Countdown timer
   useEffect(() => {
-    if (rematchData) {
-      const expiryTime = rematchData.createdAt + 30 * 60 * 1000; // 30 minutes
-      setIsExpired(Date.now() > expiryTime);
-    }
-  }, [rematchData]);
+    if (!rematchData || !isOpen) return;
+
+    const expiryTime = rematchData.createdAt + EXPIRY_DURATION;
+    
+    const updateTimer = () => {
+      const remaining = Math.max(0, expiryTime - Date.now());
+      setTimeRemaining(remaining);
+      setIsExpired(remaining === 0);
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 100);
+
+    return () => clearInterval(interval);
+  }, [rematchData, isOpen]);
 
   if (!rematchData) return null;
 
@@ -70,6 +83,13 @@ export function RematchAcceptModal({
     if (!addr) return 'Unknown';
     return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
   };
+
+  const formatCountdown = (ms: number) => {
+    const seconds = Math.ceil(ms / 1000);
+    return `${seconds}s`;
+  };
+
+  const countdownProgress = (timeRemaining / EXPIRY_DURATION) * 100;
 
   const creatorName = rematchData.creator === address 
     ? 'You' 
@@ -133,6 +153,29 @@ export function RematchAcceptModal({
         </DialogHeader>
 
         <div className="space-y-4 py-2">
+          {/* Countdown Timer */}
+          {!isExpired && !isCreator && !alreadyAccepted && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground flex items-center gap-1">
+                  <Clock size={14} className="text-primary animate-pulse" />
+                  Time to accept:
+                </span>
+                <span className={`font-bold tabular-nums ${timeRemaining < 3000 ? 'text-destructive' : 'text-primary'}`}>
+                  {formatCountdown(timeRemaining)}
+                </span>
+              </div>
+              <div className="h-2 bg-muted/30 rounded-full overflow-hidden">
+                <div 
+                  className={`h-full transition-all duration-100 rounded-full ${
+                    timeRemaining < 3000 ? 'bg-destructive' : 'bg-primary'
+                  }`}
+                  style={{ width: `${countdownProgress}%` }}
+                />
+              </div>
+            </div>
+          )}
+
           {/* Expired Warning */}
           {isExpired && (
             <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-3 flex items-center gap-2">
