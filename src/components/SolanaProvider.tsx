@@ -1,4 +1,4 @@
-import React, { ReactNode, useMemo, useCallback, useState, createContext, useContext } from "react";
+import React, { ReactNode, useMemo, useCallback, useState, useEffect, createContext, useContext } from "react";
 import { ConnectionProvider, WalletProvider, useWallet } from "@solana/wallet-adapter-react";
 import { PhantomWalletAdapter } from "@solana/wallet-adapter-phantom";
 import { SolflareWalletAdapter } from "@solana/wallet-adapter-solflare";
@@ -22,7 +22,8 @@ export const useWalletModal = () => useContext(WalletModalContext);
 // Custom wallet modal - ONLY shows Phantom, Solflare, Backpack
 function CustomWalletModal() {
   const { visible, setVisible } = useWalletModal();
-  const { wallets, select, connect, connecting } = useWallet();
+  const { wallets, select, connected, connecting } = useWallet();
+  const [selectedWallet, setSelectedWallet] = useState<string | null>(null);
 
   // Filter to ONLY our explicitly defined Solana wallets
   const allowedWalletNames = ["Phantom", "Solflare", "Backpack"];
@@ -35,24 +36,24 @@ function CustomWalletModal() {
     );
   }, [wallets]);
 
-  const handleSelect = useCallback(async (walletName: string) => {
-    try {
-      // First select the wallet
-      select(walletName as any);
-      
-      // Find the wallet adapter and connect directly
-      const selectedWallet = wallets.find(w => w.adapter.name === walletName);
-      if (selectedWallet?.adapter) {
-        await selectedWallet.adapter.connect();
-      }
-      
+  // Close modal when connected
+  useEffect(() => {
+    if (connected && selectedWallet) {
       setVisible(false);
-    } catch (err) {
-      console.error("Wallet connection error:", err);
-      // Still close modal on error
-      setVisible(false);
+      setSelectedWallet(null);
     }
-  }, [select, wallets, setVisible]);
+  }, [connected, selectedWallet, setVisible]);
+
+  const handleSelect = useCallback((walletName: string) => {
+    try {
+      setSelectedWallet(walletName);
+      select(walletName as any);
+      // The wallet adapter will handle the connection popup automatically
+    } catch (err) {
+      console.error("Wallet selection error:", err);
+      setSelectedWallet(null);
+    }
+  }, [select]);
 
   if (!visible) return null;
 
