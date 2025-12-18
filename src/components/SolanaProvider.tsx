@@ -174,9 +174,19 @@ export function SolanaProvider({ children }: SolanaProviderProps) {
     []
   );
 
+  // Handle wallet errors gracefully
+  const onError = useCallback((error: Error) => {
+    console.warn("Wallet error:", error.message);
+  }, []);
+
   return (
     <ConnectionProvider endpoint={endpoint}>
-      <WalletProvider wallets={wallets} autoConnect>
+      <WalletProvider 
+        wallets={wallets} 
+        autoConnect={true}
+        onError={onError}
+        localStorageKey="1m-gaming-wallet"
+      >
         <CustomWalletModalProvider>
           {children}
         </CustomWalletModalProvider>
