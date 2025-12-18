@@ -38,8 +38,12 @@ function CustomWalletModal() {
 
   // When wallet is selected and adapter is ready, call connect
   useEffect(() => {
+    console.log("useEffect check - pendingWallet:", pendingWallet, "wallet?.adapter.name:", wallet?.adapter.name);
     if (pendingWallet && wallet?.adapter.name === pendingWallet) {
-      connect().catch(err => {
+      console.log("Calling connect()...");
+      connect().then(() => {
+        console.log("connect() resolved");
+      }).catch(err => {
         console.error("Connect error:", err);
       });
       setPendingWallet(null);
@@ -54,9 +58,12 @@ function CustomWalletModal() {
   }, [connected, visible, setVisible]);
 
   const handleSelect = useCallback((walletName: string) => {
+    console.log("handleSelect called with:", walletName);
+    console.log("Current wallets:", wallets.map(w => w.adapter.name));
     setPendingWallet(walletName);
     select(walletName as any);
-  }, [select]);
+    console.log("select() called");
+  }, [select, wallets]);
 
   if (!visible) return null;
 
