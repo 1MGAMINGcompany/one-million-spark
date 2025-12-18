@@ -1,8 +1,5 @@
 import React, { ReactNode, useMemo, useCallback, useState, useEffect, createContext, useContext } from "react";
 import { ConnectionProvider, WalletProvider, useWallet } from "@solana/wallet-adapter-react";
-import { PhantomWalletAdapter } from "@solana/wallet-adapter-phantom";
-import { SolflareWalletAdapter } from "@solana/wallet-adapter-solflare";
-import { BackpackWalletAdapter } from "@solana/wallet-adapter-backpack";
 import { WalletReadyState } from "@solana/wallet-adapter-base";
 import { getSolanaEndpoint, getSolanaCluster } from "@/lib/solana-config";
 
@@ -177,15 +174,8 @@ export function SolanaProvider({ children }: SolanaProviderProps) {
   // Get endpoint from config (mainnet-beta or devnet)
   const endpoint = useMemo(() => getSolanaEndpoint(), []);
 
-  // ONLY these Solana wallets - NO auto-detection, NO EVM wallets
-  const wallets = useMemo(
-    () => [
-      new PhantomWalletAdapter(),
-      new SolflareWalletAdapter(),
-      new BackpackWalletAdapter(),
-    ],
-    []
-  );
+  // Empty array - let Wallet Standard auto-detect Phantom, Solflare, etc.
+  const wallets = useMemo(() => [], []);
 
   // Handle wallet errors gracefully
   const onError = useCallback((error: Error) => {
