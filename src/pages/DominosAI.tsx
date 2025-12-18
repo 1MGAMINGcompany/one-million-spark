@@ -534,6 +534,24 @@ const DominosAI = () => {
                 <div className="relative p-1 rounded-xl bg-gradient-to-br from-primary/40 via-primary/20 to-primary/40 shadow-[0_0_40px_-10px_hsl(45_93%_54%_/_0.4)]">
                   <div className="bg-gradient-to-br from-midnight-light via-background to-background rounded-lg p-6 min-h-[140px]">
                     <p className="text-xs text-primary/60 uppercase tracking-wider mb-4 font-medium text-center">Game Table</p>
+                    {/* Chain End Indicators */}
+                    {chain.length > 0 && getChainEnds() && (
+                      <div className="flex justify-between items-center mb-4 px-2">
+                        <div className="flex items-center gap-2">
+                          <div className="w-10 h-10 rounded-lg bg-primary/20 border-2 border-primary/50 flex items-center justify-center shadow-lg shadow-primary/20">
+                            <span className="text-xl font-bold text-primary">{getChainEnds()!.left}</span>
+                          </div>
+                          <span className="text-xs text-muted-foreground uppercase tracking-wider">Left End</span>
+                        </div>
+                        <div className="flex-1 h-px bg-gradient-to-r from-primary/30 via-primary/10 to-primary/30 mx-4" />
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground uppercase tracking-wider">Right End</span>
+                          <div className="w-10 h-10 rounded-lg bg-primary/20 border-2 border-primary/50 flex items-center justify-center shadow-lg shadow-primary/20">
+                            <span className="text-xl font-bold text-primary">{getChainEnds()!.right}</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                     {chain.length === 0 ? (
                       <p className="text-muted-foreground/60 text-center py-6">
                         Play any tile to start the game
