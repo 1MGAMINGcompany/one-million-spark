@@ -144,8 +144,8 @@ const PlayAILobby = () => {
       </section>
 
       {/* Game Cards Section */}
-      <section className="py-12 px-4">
-        <div className="max-w-5xl mx-auto">
+      <section className="relative z-10 py-12 px-4">
+        <div className="max-w-5xl mx-auto relative z-10">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {aiGames.map((game) => {
               const hoverSoundPlayed = useRef(false);
