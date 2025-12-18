@@ -84,9 +84,10 @@ export default function Room() {
   const isCreator = room?.creator?.toBase58?.() === address;
   
   // Check if room is abandoned (creator hasn't pinged in > 60 seconds)
+  // Private rooms never expire - only public rooms can be abandoned
   const lastCreatorPing = room?.lastCreatorPing ? Number(room.lastCreatorPing) * 1000 : 0; // Convert to ms
   const secondsSinceLastPing = lastCreatorPing ? Math.floor((currentTime - lastCreatorPing) / 1000) : 0;
-  const isAbandoned = status === STATUS_OPEN && lastCreatorPing > 0 && secondsSinceLastPing > CREATOR_TIMEOUT_SECS;
+  const isAbandoned = status === STATUS_OPEN && !room?.isPrivate && lastCreatorPing > 0 && secondsSinceLastPing > CREATOR_TIMEOUT_SECS;
   
   // Role-based button visibility
   const canJoin = status === STATUS_OPEN && !isPlayer && isConnected && !isAbandoned;
