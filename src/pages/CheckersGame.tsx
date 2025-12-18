@@ -15,6 +15,7 @@ import NotificationToggle from "@/components/NotificationToggle";
 import TurnBanner from "@/components/TurnBanner";
 import GameChatPanel from "@/components/GameChatPanel";
 import { RematchModal } from "@/components/RematchModal";
+import { RematchAcceptModal } from "@/components/RematchAcceptModal";
 import { toast } from "@/hooks/use-toast";
 
 type Player = "gold" | "obsidian";
@@ -166,6 +167,34 @@ const CheckersGame = () => {
       name: tp.name,
     }));
   }, [turnPlayers]);
+
+  // Rematch acceptance modal state
+  const [showAcceptModal, setShowAcceptModal] = useState(false);
+  const [rematchInviteData, setRematchInviteData] = useState<any>(null);
+
+  // Check for rematch invite on mount
+  useEffect(() => {
+    if (roomId) {
+      const { isRematch, data } = rematch.checkRematchInvite(roomId);
+      if (isRematch && data) {
+        setRematchInviteData(data);
+        setShowAcceptModal(true);
+      }
+    }
+  }, [roomId]);
+
+  const handleAcceptRematch = async (rematchRoomId: string) => {
+    const result = await rematch.acceptRematch(rematchRoomId);
+    if (result.allAccepted) {
+      toast({ title: "All players accepted!", description: "Game is starting..." });
+      window.location.href = window.location.pathname;
+    }
+  };
+
+  const handleDeclineRematch = (rematchRoomId: string) => {
+    rematch.declineRematch(rematchRoomId);
+    navigate('/room-list');
+  };
 
   // Game chat hook ref (sendChat defined after WebRTC hook)
   const chatRef = useRef<ReturnType<typeof useGameChat> | null>(null);
@@ -744,6 +773,15 @@ const CheckersGame = () => {
         gameType="Checkers"
         players={rematchPlayers}
         rematchHook={rematch}
+      />
+
+      {/* Rematch Accept Modal */}
+      <RematchAcceptModal
+        isOpen={showAcceptModal}
+        onClose={() => setShowAcceptModal(false)}
+        rematchData={rematchInviteData}
+        onAccept={handleAcceptRematch}
+        onDecline={handleDeclineRematch}
       />
     </div>
   );
