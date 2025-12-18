@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect } from "react";
+import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Gem, Flag, Users, Wifi, WifiOff, Download } from "lucide-react";
@@ -141,6 +141,19 @@ const DominosGame = () => {
     enabled: true,
   });
 
+  // Chat players derived from turn players
+  const chatPlayers: ChatPlayer[] = useMemo(() => {
+    return turnPlayers.map((tp) => ({
+      wallet: tp.address,
+      displayName: tp.name,
+      color: tp.color,
+      seatIndex: tp.seatIndex,
+    }));
+  }, [turnPlayers]);
+
+  // Game chat hook ref (sendChat defined after WebRTC hook)
+  const chatRef = useRef<ReturnType<typeof useGameChat> | null>(null);
+
   // Game logic functions
   const getChainEnds = useCallback((): { left: number; right: number } | null => {
     if (chain.length === 0) return null;
@@ -173,6 +186,19 @@ const DominosGame = () => {
   const handleWebRTCMessage = useCallback((message: GameMessage) => {
     console.log("[DominosGame] Received message:", message.type);
     
+    // Handle chat messages
+    if (message.type === "chat" && message.payload) {
+      try {
+        const chatMsg = typeof message.payload === "string" 
+          ? JSON.parse(message.payload) 
+          : message.payload;
+        chatRef.current?.receiveMessage(chatMsg);
+      } catch (e) {
+        console.error("[DominosGame] Failed to parse chat message:", e);
+      }
+      return;
+    }
+    
     if (message.type === "move" && message.payload) {
       const moveData = message.payload as DominoMove;
       
@@ -189,6 +215,7 @@ const DominosGame = () => {
           setGameOver(true);
           setWinner("opponent");
           setGameStatus("Opponent wins!");
+          chatRef.current?.addSystemMessage("Opponent wins!");
           play('domino_lose');
         } else {
           setIsMyTurn(true);
@@ -213,6 +240,7 @@ const DominosGame = () => {
       setGameOver(true);
       setWinner("me");
       setGameStatus("Opponent resigned - You win!");
+      chatRef.current?.addSystemMessage("Opponent resigned");
       play('domino_win');
       toast({
         title: "Victory!",
@@ -227,12 +255,35 @@ const DominosGame = () => {
     connectionState,
     sendMove,
     sendResign,
+    sendChat,
   } = useWebRTCSync({
     roomId: roomId || "",
     players: roomPlayers,
     onMessage: handleWebRTCMessage,
     enabled: roomPlayers.length === 2,
   });
+
+  // Handle chat message sending via WebRTC
+  const handleChatSend = useCallback((msg: ChatMessage) => {
+    sendChat(JSON.stringify(msg));
+  }, [sendChat]);
+
+  // Game chat hook
+  const chat = useGameChat({
+    roomId: roomId || "",
+    myWallet: address,
+    players: chatPlayers,
+    onSendMessage: handleChatSend,
+    enabled: roomPlayers.length === 2,
+  });
+  chatRef.current = chat;
+
+  // Add system message when game starts
+  useEffect(() => {
+    if (roomPlayers.length === 2 && chat.messages.length === 0) {
+      chat.addSystemMessage("Game started! Good luck!");
+    }
+  }, [roomPlayers.length]);
 
   const checkBlockedGame = useCallback(() => {
     const myPips = myHand.reduce((sum, d) => sum + d.left + d.right, 0);
@@ -241,6 +292,7 @@ const DominosGame = () => {
     setGameOver(true);
     setWinner("draw");
     setGameStatus("Game blocked - Draw!");
+    chatRef.current?.addSystemMessage("Game blocked - Draw!");
   }, [myHand]);
 
   // Play a domino
@@ -601,7 +653,8 @@ const DominosGame = () => {
         </div>
       </div>
       
-      {/* Chat Panel - uses existing WebRTC sendChat */}
+      {/* Chat Panel */}
+      <GameChatPanel chat={chat} />
     </div>
   );
 };

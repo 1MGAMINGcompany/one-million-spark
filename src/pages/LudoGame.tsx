@@ -130,15 +130,75 @@ const LudoGame = () => {
     enabled: true,
   });
 
-  // WebRTC sync for multiplayer (only for 2-player mode, Ludo typically doesn't use WebRTC with AI)
-  // In production, all 4 players would be real wallets syncing via WebRTC
+  // Chat players derived from turn players
+  const chatPlayers: ChatPlayer[] = useMemo(() => {
+    return turnPlayers.map((tp) => ({
+      wallet: tp.address,
+      displayName: tp.name,
+      color: tp.color,
+      seatIndex: tp.seatIndex,
+    }));
+  }, [turnPlayers]);
+
+  // Game chat hook ref (sendChat defined after WebRTC hook)
+  const chatRef = useRef<ReturnType<typeof useGameChat> | null>(null);
+
+  // WebRTC sync for multiplayer
   const handleWebRTCMessage = useCallback((message: GameMessage) => {
+    // Handle chat messages
+    if (message.type === "chat" && message.payload) {
+      try {
+        const chatMsg = typeof message.payload === "string" 
+          ? JSON.parse(message.payload) 
+          : message.payload;
+        chatRef.current?.receiveMessage(chatMsg);
+      } catch (e) {
+        console.error("[LudoGame] Failed to parse chat message:", e);
+      }
+      return;
+    }
+    
     if (message.type === "move" && message.payload) {
       const move = message.payload as LudoMove;
       applyExternalMove(move);
       recordPlayerMove(roomPlayers[move.playerIndex] || "", `Moved to position ${move.endPosition}`);
     }
   }, [applyExternalMove, recordPlayerMove, roomPlayers]);
+
+  // WebRTC sync
+  const {
+    isConnected: peerConnected,
+    connectionState,
+    sendMove,
+    sendChat,
+  } = useWebRTCSync({
+    roomId: roomId || "",
+    players: roomPlayers,
+    onMessage: handleWebRTCMessage,
+    enabled: roomPlayers.length >= 2,
+  });
+
+  // Handle chat message sending via WebRTC
+  const handleChatSend = useCallback((msg: ChatMessage) => {
+    sendChat(JSON.stringify(msg));
+  }, [sendChat]);
+
+  // Game chat hook
+  const chat = useGameChat({
+    roomId: roomId || "",
+    myWallet: address,
+    players: chatPlayers,
+    onSendMessage: handleChatSend,
+    enabled: roomPlayers.length >= 2,
+  });
+  chatRef.current = chat;
+
+  // Add system message when game starts
+  useEffect(() => {
+    if (roomPlayers.length >= 2 && chat.messages.length === 0) {
+      chat.addSystemMessage("Game started! Good luck!");
+    }
+  }, [roomPlayers.length]);
 
   // Background music control
   useEffect(() => {
@@ -511,6 +571,9 @@ const LudoGame = () => {
           ))}
         </div>
       </div>
+      
+      {/* Chat Panel */}
+      <GameChatPanel chat={chat} />
     </div>
   );
 };
