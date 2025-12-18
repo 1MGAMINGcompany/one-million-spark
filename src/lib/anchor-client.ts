@@ -17,5 +17,5 @@ export function getAnchorProvider(connection: anchor.web3.Connection, wallet: an
 }
 
 export function getProgram(provider: anchor.AnchorProvider) {
-  return new anchor.Program(idl as anchor.Idl, provider);
+  return new anchor.Program(idl as unknown as anchor.Idl, provider);
 }
