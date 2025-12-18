@@ -1,18 +1,20 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Gem, Star, Flag, Users, Wifi, WifiOff, Crown } from "lucide-react";
+import { ArrowLeft, Gem, Star, Flag, Users, Wifi, WifiOff, Crown, RotateCcw } from "lucide-react";
 import { useSound } from "@/contexts/SoundContext";
 import { useTranslation } from "react-i18next";
 import { useWallet } from "@/hooks/useWallet";
 import { useWebRTCSync, GameMessage } from "@/hooks/useWebRTCSync";
 import { useTurnNotifications, TurnPlayer } from "@/hooks/useTurnNotifications";
 import { useGameChat, ChatPlayer, ChatMessage } from "@/hooks/useGameChat";
+import { useRematch } from "@/hooks/useRematch";
 import TurnStatusHeader from "@/components/TurnStatusHeader";
 import TurnHistoryDrawer from "@/components/TurnHistoryDrawer";
 import NotificationToggle from "@/components/NotificationToggle";
 import TurnBanner from "@/components/TurnBanner";
 import GameChatPanel from "@/components/GameChatPanel";
+import { RematchModal } from "@/components/RematchModal";
 import { toast } from "@/hooks/use-toast";
 
 type Player = "gold" | "obsidian";
@@ -154,7 +156,18 @@ const CheckersGame = () => {
     }));
   }, [turnPlayers]);
 
-  // Game chat hook (sendChat defined after WebRTC hook)
+  // Rematch hook
+  const rematch = useRematch("Checkers", roomPlayers);
+
+  // Rematch players for display
+  const rematchPlayers = useMemo(() => {
+    return turnPlayers.map(tp => ({
+      address: tp.address,
+      name: tp.name,
+    }));
+  }, [turnPlayers]);
+
+  // Game chat hook ref (sendChat defined after WebRTC hook)
   const chatRef = useRef<ReturnType<typeof useGameChat> | null>(null);
 
   // Game logic functions
@@ -686,10 +699,21 @@ const CheckersGame = () => {
             {/* Game Status */}
             <div className="text-center">
               {gameOver && (
-                <div className={`text-xl font-display font-bold ${
-                  gameOver === myColor ? "text-green-400" : "text-red-400"
-                }`}>
-                  {gameOver === myColor ? "🎉 You Win!" : gameOver === "draw" ? "Draw!" : "You Lose!"}
+                <div className="space-y-4">
+                  <div className={`text-xl font-display font-bold ${
+                    gameOver === myColor ? "text-green-400" : "text-red-400"
+                  }`}>
+                    {gameOver === myColor ? "🎉 You Win!" : gameOver === "draw" ? "Draw!" : "You Lose!"}
+                  </div>
+                  <div className="flex gap-3 justify-center">
+                    <Button onClick={() => rematch.openRematchModal()} className="gap-2">
+                      <RotateCcw className="w-4 h-4" />
+                      Rematch
+                    </Button>
+                    <Button asChild variant="outline">
+                      <Link to="/room-list">Exit</Link>
+                    </Button>
+                  </div>
                 </div>
               )}
             </div>
@@ -712,6 +736,15 @@ const CheckersGame = () => {
       
       {/* Chat Panel */}
       <GameChatPanel chat={chat} />
+
+      {/* Rematch Modal */}
+      <RematchModal
+        isOpen={rematch.isModalOpen}
+        onClose={rematch.closeRematchModal}
+        gameType="Checkers"
+        players={rematchPlayers}
+        rematchHook={rematch}
+      />
     </div>
   );
 };
