@@ -1,7 +1,7 @@
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useWalletModal } from "./SolanaProvider";
 import { Button } from "@/components/ui/button";
-import { Wallet, ChevronDown, LogOut } from "lucide-react";
+import { Wallet, ChevronDown, LogOut, Loader2 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,11 +16,12 @@ export function WalletButton() {
   const formatAddress = (address: string) =>
     `${address.slice(0, 4)}...${address.slice(-4)}`;
 
+  // Show spinner when connecting or auto-reconnecting
   if (connecting) {
     return (
-      <Button variant="outline" size="sm" disabled className="gap-2">
-        <Wallet size={16} className="text-primary/50" />
-        Connecting...
+      <Button variant="outline" size="sm" disabled className="gap-2 min-w-[140px]">
+        <Loader2 size={16} className="text-primary animate-spin" />
+        <span className="text-muted-foreground">Reconnecting...</span>
       </Button>
     );
   }
