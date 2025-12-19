@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { showBrowserNotification, requestNotificationPermission } from "@/lib/pushNotifications";
 import { useSound } from "@/contexts/SoundContext";
+import { toast } from "@/hooks/use-toast";
 
 export type PlayerStatus = "active" | "finished" | "disconnected";
 
@@ -122,11 +123,26 @@ export function useTurnNotifications({
       const granted = await requestPermission();
       if (granted) {
         setNotificationsEnabled(true);
+        toast({
+          title: "Notifications enabled",
+          description: "You'll be notified when it's your turn.",
+        });
         return true;
       }
+      // Permission was denied
+      toast({
+        title: "Notifications blocked",
+        description: "Please enable notifications in your browser settings to receive turn alerts.",
+        variant: "destructive",
+      });
       return false;
     } catch (error) {
       console.error("[TurnNotifications] Enable notifications failed:", error);
+      toast({
+        title: "Notification error",
+        description: "Failed to enable notifications. Please try again.",
+        variant: "destructive",
+      });
       return false;
     }
   }, [requestPermission]);
