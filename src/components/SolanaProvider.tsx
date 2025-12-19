@@ -1,25 +1,10 @@
 import React, { ReactNode, useMemo, useCallback, useState, useEffect, createContext, useContext, useRef } from "react";
 import { ConnectionProvider, WalletProvider, useWallet } from "@solana/wallet-adapter-react";
-import { WalletReadyState, WalletName, WalletAdapter } from "@solana/wallet-adapter-base";
+import { WalletReadyState, WalletName } from "@solana/wallet-adapter-base";
 import { PhantomWalletAdapter } from "@solana/wallet-adapter-phantom";
 import { SolflareWalletAdapter } from "@solana/wallet-adapter-solflare";
 import { BackpackWalletAdapter } from "@solana/wallet-adapter-backpack";
 import { getSolanaEndpoint } from "@/lib/solana-config";
-
-// Disable wallet-standard auto-registration BEFORE any imports
-// This prevents duplicate wallet entries
-if (typeof window !== 'undefined') {
-  (window as any).__WALLET_STANDARD_DISABLED__ = true;
-  // Also disable the navigator.wallets API that causes auto-registration
-  Object.defineProperty(window, 'navigator', {
-    value: {
-      ...window.navigator,
-      wallets: undefined,
-    },
-    writable: true,
-    configurable: true,
-  });
-}
 
 // Allowed Solana wallet names - only these will be shown
 const ALLOWED_WALLETS = new Set(["Phantom", "Solflare", "Backpack"]);
