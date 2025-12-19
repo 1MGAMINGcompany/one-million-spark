@@ -333,7 +333,7 @@ const LudoAI = () => {
       </div>
 
       {/* Game Area - Responsive layout */}
-      <div className="flex-1 flex flex-col items-center justify-center p-2 md:p-4">
+      <div className="flex-1 flex flex-col items-center justify-center p-2 md:p-4 pb-36 md:pb-4">
         {/* Game Board */}
         <div className="w-full max-w-md">
           <LudoBoard
@@ -343,9 +343,11 @@ const LudoAI = () => {
             onTokenClick={handleTokenClick}
           />
         </div>
+      </div>
 
-        {/* Dice Controls - Below Board */}
-        <div className="w-full max-w-md mt-4 flex items-start gap-4 bg-card/90 backdrop-blur-sm rounded-lg p-3 border border-primary/30 shadow-lg">
+      {/* Dice Controls - Fixed Bottom on Mobile, Normal Flow on Desktop */}
+      <div className="fixed bottom-0 left-0 right-0 md:relative md:bottom-auto bg-card/95 backdrop-blur-md border-t md:border border-primary/30 shadow-lg md:rounded-lg md:max-w-md md:mx-auto md:mb-4 z-40">
+        <div className="p-3 flex items-center gap-4">
           {/* Left side: Roll Button + Dice */}
           <div className="flex items-center gap-3">
             {!currentPlayer.isAI && !gameOver && diceValue === null && !isAnimating && (
@@ -380,28 +382,28 @@ const LudoAI = () => {
               </p>
             )}
           </div>
-        </div>
 
-        {/* Audio Controls - Below Dice Controls */}
-        <div className="flex gap-2 mt-2">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={toggleMusic}
-            className="w-9 h-9 border-primary/30"
-            title={musicEnabled ? "Disable Music" : "Enable Music"}
-          >
-            {musicEnabled ? <Music size={16} /> : <Music2 size={16} />}
-          </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={toggleSfx}
-            className="w-9 h-9 border-primary/30"
-            title={sfxEnabled ? "Disable SFX" : "Enable SFX"}
-          >
-            {sfxEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
-          </Button>
+          {/* Right side: Audio Controls */}
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={toggleMusic}
+              className="w-9 h-9 border-primary/30"
+              title={musicEnabled ? "Disable Music" : "Enable Music"}
+            >
+              {musicEnabled ? <Music size={16} /> : <Music2 size={16} />}
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={toggleSfx}
+              className="w-9 h-9 border-primary/30"
+              title={sfxEnabled ? "Disable SFX" : "Enable SFX"}
+            >
+              {sfxEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
+            </Button>
+          </div>
         </div>
       </div>
 
