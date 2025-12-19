@@ -5,6 +5,7 @@ import { ArrowLeft, RotateCcw, Gem, Star } from "lucide-react";
 import DominoTile3D, { DominoTileBack } from "@/components/DominoTile3D";
 import { useSound } from "@/contexts/SoundContext";
 import { useTranslation } from "react-i18next";
+import GoldConfettiExplosion from "@/components/GoldConfettiExplosion";
 
 type Difficulty = "easy" | "medium" | "hard";
 
@@ -423,6 +424,10 @@ const DominosAI = () => {
 
   return (
     <div className="min-h-screen bg-background relative overflow-hidden">
+      {/* Gold Confetti Explosion on Win */}
+      <GoldConfettiExplosion 
+        active={gameOver && gameStatus.includes("win")} 
+      />
       {/* Background with pyramid pattern */}
       <div className="absolute inset-0 bg-gradient-to-b from-midnight-light via-background to-background" />
       <div 

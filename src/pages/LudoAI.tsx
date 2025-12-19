@@ -15,6 +15,7 @@ import TurnStatusHeader from "@/components/TurnStatusHeader";
 import TurnHistoryDrawer from "@/components/TurnHistoryDrawer";
 import NotificationToggle from "@/components/NotificationToggle";
 import TurnBanner from "@/components/TurnBanner";
+import GoldConfettiExplosion from "@/components/GoldConfettiExplosion";
 
 const LudoAI = () => {
   const { t } = useTranslation();
@@ -268,7 +269,11 @@ const LudoAI = () => {
   }, [currentPlayer.isAI, currentPlayer.color, gameOver, diceValue, isRolling, isAnimating, difficulty, players, currentPlayerIndex, rollDice, executeMove, advanceTurn, setDiceValue, setMovableTokens, turnSignal]);
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="min-h-screen bg-background flex flex-col relative">
+      {/* Gold Confetti Explosion on Win */}
+      <GoldConfettiExplosion 
+        active={gameOver === 'gold'} 
+      />
       {/* Turn Banner (fallback for no permission) */}
       <TurnBanner
         gameName="Ludo"
