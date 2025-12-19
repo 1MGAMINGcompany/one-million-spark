@@ -5,6 +5,7 @@ import { ArrowLeft, RotateCcw, RotateCw, Gem, Star, Trophy } from "lucide-react"
 import { BackgammonRulesDialog } from "@/components/BackgammonRulesDialog";
 import { Dice3D, CheckerStack } from "@/components/BackgammonPieces";
 import { BackgammonCheckerAnimation, useCheckerAnimation } from "@/components/BackgammonCheckerAnimation";
+import GoldConfettiExplosion from "@/components/GoldConfettiExplosion";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useSound } from "@/contexts/SoundContext";
@@ -751,6 +752,11 @@ const BackgammonAI = () => {
       <BackgammonCheckerAnimation 
         animatingChecker={animatingChecker} 
         onAnimationComplete={onAnimationComplete} 
+      />
+      
+      {/* Gold Confetti Explosion on Win */}
+      <GoldConfettiExplosion 
+        active={gameOver && gameResultInfo?.winner === 'player'} 
       />
       
       {/* Background with pyramid pattern */}
