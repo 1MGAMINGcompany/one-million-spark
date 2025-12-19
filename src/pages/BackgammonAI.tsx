@@ -1,9 +1,10 @@
-import { useState, useCallback, useMemo, useEffect } from "react";
+import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, RotateCcw, RotateCw, Gem, Star, Trophy } from "lucide-react";
 import { BackgammonRulesDialog } from "@/components/BackgammonRulesDialog";
 import { Dice3D, CheckerStack } from "@/components/BackgammonPieces";
+import { BackgammonCheckerAnimation, useCheckerAnimation } from "@/components/BackgammonCheckerAnimation";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useSound } from "@/contexts/SoundContext";
@@ -105,8 +106,12 @@ const BackgammonAI = () => {
   const [gameOver, setGameOver] = useState(false);
   const [isThinking, setIsThinking] = useState(false);
   const [validMoves, setValidMoves] = useState<number[]>([]);
-  // Animation state for AI moves
+  // Animation state for moves
   const [animatingMove, setAnimatingMove] = useState<{ from: number | 'BAR'; to: number } | null>(null);
+  // Smooth checker animation
+  const { animatingChecker, animateMove, onAnimationComplete } = useCheckerAnimation(450);
+  // Refs for point elements (for animation positioning)
+  const pointRefs = useRef<Map<number | 'BAR' | 'BEAR_OFF_PLAYER' | 'BEAR_OFF_AI', HTMLDivElement | null>>(new Map());
   // Game result state
   const [gameResultInfo, setGameResultInfo] = useState<{ winner: Player | null; resultType: GameResultType | null; multiplier: number } | null>(null);
 
@@ -386,32 +391,44 @@ const BackgammonAI = () => {
       // Now animate each move one by one
       let currentState = gameState;
       for (const move of movesToAnimate) {
-        // Show animation indicator
+        const fromKey = move.from === 'BAR' ? 'BAR' : move.from;
+        const toKey = move.to === 'OFF' ? 'BEAR_OFF_AI' : move.to;
+        
+        // Get element refs for animation
+        const fromEl = pointRefs.current.get(fromKey) ?? null;
+        const toEl = pointRefs.current.get(toKey) ?? null;
+        
+        // Show glow indicator
         setAnimatingMove({ 
           from: move.from === 'BAR' ? 'BAR' : move.from, 
           to: move.to === 'OFF' ? 25 : move.to 
         });
         
-        // Wait for animation
-        await new Promise(resolve => setTimeout(resolve, 600));
-        
-        // Apply the move
-        const legacyMove = toLegacyMove(move);
-        currentState = applyMoveEngine(currentState, legacyMove, "ai");
-        setGameState(currentState);
-        
-        // Play move sound
+        // Play move sound at start
         if (move.to === 'OFF') {
           play('backgammon_bearoff');
         } else {
           play('backgammon_move');
         }
         
-        // Clear animation
+        // Animate the checker movement
+        if (fromEl && toEl) {
+          await animateMove('obsidian', fromEl, toEl);
+        } else {
+          // Fallback: just wait
+          await new Promise(resolve => setTimeout(resolve, 450));
+        }
+        
+        // Apply the move after animation
+        const legacyMove = toLegacyMove(move);
+        currentState = applyMoveEngine(currentState, legacyMove, "ai");
+        setGameState(currentState);
+        
+        // Clear animation indicator
         setAnimatingMove(null);
         
         // Small pause between moves
-        await new Promise(resolve => setTimeout(resolve, 300));
+        await new Promise(resolve => setTimeout(resolve, 200));
       }
       
       setIsThinking(false);
@@ -467,6 +484,7 @@ const BackgammonAI = () => {
     return (
       <div
         key={index}
+        ref={(el) => pointRefs.current.set(index, el)}
         onClick={() => handlePointClick(index)}
         className={cn(
           "relative flex items-center cursor-pointer transition-all",
@@ -586,6 +604,7 @@ const BackgammonAI = () => {
     return (
       <div
         key={index}
+        ref={(el) => pointRefs.current.set(index, el)}
         onClick={() => handlePointClick(index)}
         className={cn(
           "relative flex items-center cursor-pointer transition-all",
@@ -719,6 +738,12 @@ const BackgammonAI = () => {
       "bg-background relative overflow-hidden",
       isMobile ? "h-screen overflow-y-hidden flex flex-col" : "min-h-screen"
     )}>
+      {/* Checker Animation Layer */}
+      <BackgammonCheckerAnimation 
+        animatingChecker={animatingChecker} 
+        onAnimationComplete={onAnimationComplete} 
+      />
+      
       {/* Background with pyramid pattern */}
       <div className="absolute inset-0 bg-gradient-to-b from-midnight-light via-background to-background" />
       <div 
