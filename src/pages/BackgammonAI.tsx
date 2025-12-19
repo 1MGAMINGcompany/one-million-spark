@@ -191,9 +191,76 @@ const BackgammonAI = () => {
     }
   }, [gameState, play, t]);
 
+  // State for player animation in progress
+  const [isAnimatingPlayerMove, setIsAnimatingPlayerMove] = useState(false);
+
+  // Execute a player move with animation
+  const executePlayerMove = useCallback(async (
+    move: Move,
+    fromKey: number | 'BAR',
+    toKey: number | 'BEAR_OFF_PLAYER'
+  ) => {
+    setIsAnimatingPlayerMove(true);
+    
+    // Get element refs for animation
+    const fromEl = pointRefs.current.get(fromKey) ?? null;
+    const toEl = pointRefs.current.get(toKey) ?? null;
+    
+    // Play sound at start
+    const isBearOff = move.to === -2 || move.to === 25;
+    if (isBearOff) {
+      play('backgammon_bearoff');
+    } else {
+      play('backgammon_move');
+    }
+    
+    // Animate the checker movement
+    if (fromEl && toEl) {
+      await animateMove('gold', fromEl, toEl);
+    }
+    
+    // Apply the move after animation
+    const newState = applyMoveEngine(gameState, move, "player");
+    setGameState(newState);
+    
+    const newRemaining = consumeDie(remainingMoves, move.dieValue);
+    setRemainingMoves(newRemaining);
+    
+    // Reset selection
+    setSelectedPoint(null);
+    setValidMoves([]);
+    setIsAnimatingPlayerMove(false);
+    
+    // Check game state after move
+    if (newState.bearOff.player === 15) {
+      const result = getGameResult(newState);
+      setGameResultInfo(result);
+      const resultDisplay = formatResultType(result.resultType);
+      setGameStatus(`You win! ${resultDisplay.label}`);
+      setGameOver(true);
+      play('chess_win');
+    } else if (newRemaining.length === 0) {
+      setGameStatus("AI's turn");
+      setCurrentPlayer("ai");
+      setDice([]);
+    } else {
+      const allMoves = getAllLegalMoves(newState, newRemaining, "player");
+      if (allMoves.length === 0) {
+        setGameStatus("No more moves - AI's turn");
+        setCurrentPlayer("ai");
+        setDice([]);
+        setRemainingMoves([]);
+      } else if (newState.bar.player > 0) {
+        setGameStatus("Click the bar to re-enter");
+      } else {
+        setGameStatus("Continue moving");
+      }
+    }
+  }, [gameState, remainingMoves, animateMove, play]);
+
   // Handle point click - simplified bar logic to avoid closure issues
   const handlePointClick = useCallback((pointIndex: number) => {
-    if (currentPlayer !== "player" || remainingMoves.length === 0 || gameOver || isThinking) {
+    if (currentPlayer !== "player" || remainingMoves.length === 0 || gameOver || isThinking || isAnimatingPlayerMove) {
       return;
     }
     
@@ -228,41 +295,8 @@ const BackgammonAI = () => {
       const move = barMoves.find(m => m.to === pointIndex);
       
       if (move) {
-        // Valid bar entry - apply the move
-        const newState = applyMoveWithSound(gameState, move, "player");
-        setGameState(newState);
-        
-        const newRemaining = consumeDie(remainingMoves, move.dieValue);
-        setRemainingMoves(newRemaining);
-        
-        // Reset selection
-        setSelectedPoint(null);
-        setValidMoves([]);
-        
-        if (newState.bearOff.player === 15) {
-          const result = getGameResult(newState);
-          setGameResultInfo(result);
-          const resultDisplay = formatResultType(result.resultType);
-          setGameStatus(`You win! ${resultDisplay.label}`);
-          setGameOver(true);
-          play('chess_win');
-        } else if (newRemaining.length === 0) {
-          setGameStatus("AI's turn");
-          setCurrentPlayer("ai");
-          setDice([]);
-        } else {
-          const allMoves = getAllLegalMoves(newState, newRemaining, "player");
-          if (allMoves.length === 0) {
-            setGameStatus("No more moves - AI's turn");
-            setCurrentPlayer("ai");
-            setDice([]);
-            setRemainingMoves([]);
-          } else if (newState.bar.player > 0) {
-            setGameStatus("Click the bar to re-enter your next checker");
-          } else {
-            setGameStatus("Continue moving - select a checker");
-          }
-        }
+        // Valid bar entry - animate and apply the move
+        executePlayerMove(move, 'BAR', pointIndex);
         return;
       }
       
@@ -279,7 +313,6 @@ const BackgammonAI = () => {
     if (selectedPoint === null) {
       if (pointIndex >= 0 && gameState.points[pointIndex] > 0) {
         const pointMoves = getLegalMovesFromPoint(gameState, pointIndex, remainingMoves, "player");
-        console.log(`[DEBUG] Selected point index: ${pointIndex}, dice: ${remainingMoves}, valid targets: ${pointMoves.map(m => m.to)}`);
         if (pointMoves.length > 0) {
           setSelectedPoint(pointIndex);
           setValidMoves(pointMoves.map(m => m.to));
@@ -301,41 +334,17 @@ const BackgammonAI = () => {
         const move = moves.find(m => m.to === pointIndex);
         
         if (move) {
-          const newState = applyMoveWithSound(gameState, move, "player");
-          setGameState(newState);
-          
-          const newRemaining = consumeDie(remainingMoves, move.dieValue);
-          setRemainingMoves(newRemaining);
-          
-          if (newState.bearOff.player === 15) {
-            const result = getGameResult(newState);
-            setGameResultInfo(result);
-            const resultDisplay = formatResultType(result.resultType);
-            setGameStatus(`You win! ${resultDisplay.label}`);
-            setGameOver(true);
-            play('chess_win');
-          } else if (newRemaining.length === 0) {
-            setGameStatus("AI's turn");
-            setCurrentPlayer("ai");
-            setDice([]);
-          } else {
-            const allMoves = getAllLegalMoves(newState, newRemaining, "player");
-            if (allMoves.length === 0) {
-              setGameStatus("No more moves - AI's turn");
-              setCurrentPlayer("ai");
-              setDice([]);
-              setRemainingMoves([]);
-            } else {
-              setGameStatus("Continue moving");
-            }
-          }
+          // Determine destination key for animation
+          const toKey = move.to === -2 ? 'BEAR_OFF_PLAYER' : move.to;
+          executePlayerMove(move, selectedPoint, toKey as number | 'BEAR_OFF_PLAYER');
+          return;
         }
       }
       
       setSelectedPoint(null);
       setValidMoves([]);
     }
-  }, [currentPlayer, remainingMoves, gameOver, isThinking, gameState, selectedPoint, validMoves, applyMoveWithSound, play]);
+  }, [currentPlayer, remainingMoves, gameOver, isThinking, isAnimatingPlayerMove, gameState, selectedPoint, validMoves, executePlayerMove]);
 
   // AI turn - uses unified engine with animated moves
   useEffect(() => {
@@ -919,6 +928,7 @@ const BackgammonAI = () => {
                     {/* Player Bar Checkers - Min 44px tap target */}
                     {gameState.bar.player > 0 && (
                       <div 
+                        ref={(el) => pointRefs.current.set('BAR', el)}
                         className={cn(
                           "flex flex-col items-center justify-center cursor-pointer rounded-lg p-2 min-w-[44px] min-h-[44px] transition-all active:scale-95",
                           selectedPoint === -1 
@@ -1142,6 +1152,7 @@ const BackgammonAI = () => {
                       <div className="flex justify-between items-center mt-3 px-2">
                         {gameState.bar.player > 0 ? (
                           <div 
+                            ref={(el) => pointRefs.current.set('BAR', el)}
                             className={cn(
                               "flex items-center gap-2 cursor-pointer transition-all rounded-lg p-1",
                               selectedPoint === -1 && "ring-2 ring-primary bg-primary/10"
@@ -1157,10 +1168,11 @@ const BackgammonAI = () => {
                               isTop={false} 
                             />
                           </div>
-                        ) : <div />}
+                        ) : <div ref={(el) => pointRefs.current.set('BAR', el)} />}
                         
                         {/* Bear Off Zone - clickable when valid */}
                         <div 
+                          ref={(el) => pointRefs.current.set('BEAR_OFF_PLAYER', el)}
                           className={cn(
                             "flex items-center gap-2 rounded-lg px-3 py-2 transition-all",
                             validMoves.includes(-2) 
