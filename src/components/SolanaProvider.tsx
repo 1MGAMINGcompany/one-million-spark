@@ -1,11 +1,10 @@
 import React, { ReactNode, useMemo, useCallback, useState, useEffect, createContext, useContext, useRef } from "react";
-import { ConnectionProvider, WalletProvider, useWallet } from "@solana/wallet-adapter-react";
+import { ConnectionProvider, WalletProvider, useWallet, useConnection } from "@solana/wallet-adapter-react";
 import { WalletReadyState, WalletName } from "@solana/wallet-adapter-base";
 import { PhantomWalletAdapter } from "@solana/wallet-adapter-phantom";
 import { SolflareWalletAdapter } from "@solana/wallet-adapter-solflare";
 import { BackpackWalletAdapter } from "@solana/wallet-adapter-backpack";
-import { getSolanaEndpoint } from "@/lib/solana-config";
-
+import { getSolanaEndpoint, getSolanaCluster } from "@/lib/solana-config";
 // Polyfill for navigator.userAgent if undefined (happens in some iframe contexts)
 // This must run before wallet adapters are instantiated
 if (typeof window !== 'undefined' && typeof navigator !== 'undefined') {
@@ -411,6 +410,113 @@ function CustomWalletModalProvider({ children }: { children: ReactNode }) {
   );
 }
 
+// Network Debug Component - only shows when ?debug=1 or in dev mode
+function NetworkDebug() {
+  const { connection } = useConnection();
+  const { publicKey, connected } = useWallet();
+  const [balance, setBalance] = useState<{ lamports: number; sol: number } | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Check if debug mode is enabled
+  const isDebugMode = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    const urlParams = new URLSearchParams(window.location.search);
+    return urlParams.get('debug') === '1' || import.meta.env.DEV;
+  }, []);
+
+  // Fetch balance when connected
+  useEffect(() => {
+    if (!connected || !publicKey || !isDebugMode) {
+      setBalance(null);
+      return;
+    }
+
+    const fetchBalance = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const lamports = await connection.getBalance(publicKey);
+        setBalance({
+          lamports,
+          sol: lamports / 1_000_000_000,
+        });
+        console.log("[NetworkDebug] Balance fetched:", { 
+          lamports, 
+          sol: lamports / 1_000_000_000,
+          publicKey: publicKey.toBase58(),
+          endpoint: connection.rpcEndpoint
+        });
+      } catch (e: any) {
+        console.error("[NetworkDebug] Failed to fetch balance:", e);
+        setError(e?.message || "Failed to fetch balance");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchBalance();
+  }, [connected, publicKey, connection, isDebugMode]);
+
+  if (!isDebugMode) return null;
+
+  const endpoint = connection.rpcEndpoint;
+  const cluster = getSolanaCluster();
+
+  return (
+    <div className="fixed bottom-4 right-4 z-[999] bg-black/95 text-green-400 font-mono text-xs p-4 rounded-lg border border-green-500/50 max-w-md shadow-xl backdrop-blur">
+      <div className="font-bold text-green-300 mb-2 border-b border-green-500/30 pb-1 flex items-center gap-2">
+        <span>🔧</span> Network Debug
+      </div>
+      <div className="space-y-1">
+        <div>
+          <span className="text-green-500">cluster:</span>{" "}
+          <span className={cluster === "mainnet-beta" ? "text-green-300" : "text-red-400 font-bold"}>
+            {cluster}
+          </span>
+        </div>
+        <div>
+          <span className="text-green-500">rpcEndpoint:</span>{" "}
+          <span className="text-yellow-300 break-all text-[10px]">{endpoint}</span>
+        </div>
+        <div>
+          <span className="text-green-500">connectedPublicKey:</span>{" "}
+          <span className="text-blue-300 break-all text-[10px]">
+            {connected && publicKey ? publicKey.toBase58() : "(not connected)"}
+          </span>
+        </div>
+        {connected && publicKey && (
+          <>
+            <div>
+              <span className="text-green-500">balanceLamports:</span>{" "}
+              {loading ? (
+                <span className="text-gray-400 animate-pulse">loading...</span>
+              ) : error ? (
+                <span className="text-red-400">{error}</span>
+              ) : (
+                <span className="text-cyan-300">{balance?.lamports?.toLocaleString() ?? "—"}</span>
+              )}
+            </div>
+            <div>
+              <span className="text-green-500">balanceSOL:</span>{" "}
+              {loading ? (
+                <span className="text-gray-400 animate-pulse">loading...</span>
+              ) : error ? (
+                <span className="text-red-400">{error}</span>
+              ) : (
+                <span className="text-cyan-300 font-bold">{balance?.sol?.toFixed(9) ?? "—"}</span>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+      <div className="mt-2 pt-2 border-t border-green-500/30 text-green-600 text-[10px]">
+        ?debug=1 in URL shows this panel
+      </div>
+    </div>
+  );
+}
+
 interface SolanaProviderProps {
   children: ReactNode;
 }
@@ -448,6 +554,7 @@ export function SolanaProvider({ children }: SolanaProviderProps) {
       >
         <CustomWalletModalProvider>
           {children}
+          <NetworkDebug />
         </CustomWalletModalProvider>
       </WalletProvider>
     </ConnectionProvider>
