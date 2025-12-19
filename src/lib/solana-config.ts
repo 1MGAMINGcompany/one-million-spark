@@ -1,22 +1,37 @@
-// Solana network configuration - MAINNET PRODUCTION
+// Solana network configuration - MAINNET PRODUCTION ONLY
+// NO devnet/testnet/localnet - always mainnet-beta
 export const SOLANA_NETWORK = "mainnet-beta" as const;
 
 // Feature flag - Solana is LIVE
 export const SOLANA_ENABLED = true;
 
-// Mainnet RPC - Uses environment variable, with Helius public fallback
+// Mainnet RPC - Uses environment variable, with public mainnet fallback
+// IMPORTANT: No devnet/testnet fallbacks - mainnet only!
 const envRpcUrl = import.meta.env.VITE_SOLANA_RPC_URL as string | undefined;
+
+// Log warning if env var not set
 if (!envRpcUrl) {
-  console.warn("⚠️ VITE_SOLANA_RPC_URL not set - using public RPC (rate limited)");
+  console.warn("⚠️ [solana-config] VITE_SOLANA_RPC_URL not set - using public mainnet RPC (rate limited)");
 }
-export const SOLANA_RPC_URL = envRpcUrl || "https://mainnet.helius-rpc.com/?api-key=1d8740dc-e5f4-421c-b823-e1bad1889eff";
+
+// Primary: VITE_SOLANA_RPC_URL (Helius mainnet)
+// Fallback: Public mainnet RPC (rate limited but always mainnet)
+// NEVER use devnet/testnet URLs here
+export const SOLANA_RPC_URL = envRpcUrl || "https://api.mainnet-beta.solana.com";
+
+// Log the RPC being used for debugging
+console.log("[solana-config] ═══════════════════════════════════════");
+console.log("[solana-config] Network:", SOLANA_NETWORK);
+console.log("[solana-config] RPC URL:", SOLANA_RPC_URL);
+console.log("[solana-config] Env var set:", !!envRpcUrl);
+console.log("[solana-config] ═══════════════════════════════════════");
 
 // Get current RPC endpoint (mainnet only)
 export function getSolanaEndpoint(): string {
   return SOLANA_RPC_URL;
 }
 
-// Get current cluster name (mainnet only)
+// Get current cluster name (mainnet only - never devnet/testnet)
 export function getSolanaCluster(): "mainnet-beta" {
   return "mainnet-beta";
 }
