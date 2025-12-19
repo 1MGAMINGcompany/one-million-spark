@@ -7,17 +7,19 @@ export const SOLANA_ENABLED = true;
 // Toggle this for testing on devnet
 export const USE_DEVNET = false;
 
-// RPC endpoints
+// RPC endpoints - fallback to public endpoints if custom not set
 export const SOLANA_RPC_ENDPOINTS = {
-  "mainnet-beta": "https://api.mainnet-beta.solana.com",
+  "mainnet-beta": import.meta.env.VITE_SOLANA_RPC_URL || "https://api.mainnet-beta.solana.com",
   "devnet": "https://api.devnet.solana.com",
 } as const;
 
 // Get current RPC endpoint
 export function getSolanaEndpoint(): string {
-  return USE_DEVNET 
-    ? SOLANA_RPC_ENDPOINTS.devnet 
-    : SOLANA_RPC_ENDPOINTS["mainnet-beta"];
+  if (USE_DEVNET) {
+    return SOLANA_RPC_ENDPOINTS.devnet;
+  }
+  // Use custom RPC URL if available, otherwise fallback to public
+  return import.meta.env.VITE_SOLANA_RPC_URL || SOLANA_RPC_ENDPOINTS["mainnet-beta"];
 }
 
 // Get current cluster name
