@@ -769,16 +769,26 @@ const BackgammonGame = () => {
             <div className="flex justify-between mt-4">
               <div className="text-center">
                 <p className="text-xs text-muted-foreground mb-1">Your Bear Off</p>
-                <div className="w-12 h-8 bg-primary/20 rounded flex items-center justify-center">
-                  <span className="font-bold text-primary">
+                <div 
+                  onClick={() => handlePointClick(-2)}
+                  className={cn(
+                    "w-16 h-12 bg-primary/20 rounded flex items-center justify-center transition-all",
+                    validMoves.includes(-2) && "cursor-pointer ring-2 ring-primary animate-pulse drop-shadow-[0_0_25px_hsl(45_93%_70%)] bg-primary/40",
+                    validMoves.includes(-2) && "hover:bg-primary/50"
+                  )}
+                >
+                  <span className="font-bold text-primary text-lg">
                     {myRole === "player" ? gameState.bearOff.player : gameState.bearOff.ai}
                   </span>
                 </div>
+                {validMoves.includes(-2) && (
+                  <p className="text-xs text-primary mt-1 animate-pulse">Tap to bear off</p>
+                )}
               </div>
               <div className="text-center">
                 <p className="text-xs text-muted-foreground mb-1">Opponent Bear Off</p>
-                <div className="w-12 h-8 bg-muted/20 rounded flex items-center justify-center">
-                  <span className="font-bold text-muted-foreground">
+                <div className="w-16 h-12 bg-muted/20 rounded flex items-center justify-center">
+                  <span className="font-bold text-muted-foreground text-lg">
                     {myRole === "player" ? gameState.bearOff.ai : gameState.bearOff.player}
                   </span>
                 </div>
