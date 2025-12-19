@@ -1,10 +1,28 @@
 import React, { ReactNode, useMemo, useCallback, useState, useEffect, createContext, useContext, useRef } from "react";
 import { ConnectionProvider, WalletProvider, useWallet } from "@solana/wallet-adapter-react";
-import { WalletReadyState, WalletName } from "@solana/wallet-adapter-base";
+import { WalletReadyState, WalletName, WalletAdapter } from "@solana/wallet-adapter-base";
 import { PhantomWalletAdapter } from "@solana/wallet-adapter-phantom";
 import { SolflareWalletAdapter } from "@solana/wallet-adapter-solflare";
 import { BackpackWalletAdapter } from "@solana/wallet-adapter-backpack";
 import { getSolanaEndpoint } from "@/lib/solana-config";
+
+// Disable wallet-standard auto-registration BEFORE any imports
+// This prevents duplicate wallet entries
+if (typeof window !== 'undefined') {
+  (window as any).__WALLET_STANDARD_DISABLED__ = true;
+  // Also disable the navigator.wallets API that causes auto-registration
+  Object.defineProperty(window, 'navigator', {
+    value: {
+      ...window.navigator,
+      wallets: undefined,
+    },
+    writable: true,
+    configurable: true,
+  });
+}
+
+// Allowed Solana wallet names - only these will be shown
+const ALLOWED_WALLETS = new Set(["Phantom", "Solflare", "Backpack"]);
 
 // Custom modal context
 interface WalletModalContextType {
@@ -58,24 +76,20 @@ function WalletAutoConnect() {
   const [hasAttemptedConnect, setHasAttemptedConnect] = useState(false);
 
   useEffect(() => {
-    // Skip if already connected or connecting
     if (connected || connecting || hasAttemptedConnect) return;
 
     const walletBrowser = detectWalletBrowser();
     console.log("🔍 Wallet browser detected:", walletBrowser);
     
     if (walletBrowser) {
-      // We're inside a wallet's browser - attempt eager connection
       const walletAdapter = wallets.find(w => w.adapter.name === walletBrowser);
       
       if (walletAdapter && (walletAdapter.readyState === WalletReadyState.Installed || walletAdapter.readyState === WalletReadyState.Loadable)) {
         console.log("🚀 Auto-connecting to", walletBrowser, "- detected in wallet browser");
         setHasAttemptedConnect(true);
         
-        // Select and connect
         select(walletAdapter.adapter.name);
         
-        // Give it a moment then try to connect
         setTimeout(async () => {
           try {
             if (!walletAdapter.adapter.connected) {
@@ -83,14 +97,17 @@ function WalletAutoConnect() {
               console.log("✅ Auto-connected successfully");
             }
           } catch (err) {
-            console.log("Auto-connect attempt:", err);
+            console.error("wallet connect failed (auto-connect)", err);
+            if (err instanceof Error) {
+              console.error("message:", err.message);
+              console.error("stack:", err.stack);
+            }
           }
         }, 500);
       }
     }
   }, [wallets, select, connected, connecting, hasAttemptedConnect]);
 
-  // Log connection state changes
   useEffect(() => {
     console.log("👛 Wallet state:", { connected, connecting, publicKey: publicKey?.toString() });
   }, [connected, connecting, publicKey]);
@@ -101,7 +118,7 @@ function WalletAutoConnect() {
 // Custom wallet modal using the standard wallet adapter
 function CustomWalletModal() {
   const { visible, setVisible } = useWalletModal();
-  const { wallets, select, connect, connecting, connected, publicKey } = useWallet();
+  const { wallets, select, wallet, connecting, connected, publicKey } = useWallet();
   const [error, setError] = useState<string | null>(null);
   const [connectingWallet, setConnectingWallet] = useState<string | null>(null);
 
@@ -114,14 +131,33 @@ function CustomWalletModal() {
   // Track pending wallet selection for connect-on-next-tick
   const pendingWalletRef = useRef<string | null>(null);
 
+  // Filter to only show allowed Solana wallets (no MetaMask or EVM wallets)
+  const filteredWallets = useMemo(() => {
+    const seen = new Set<string>();
+    return wallets.filter(w => {
+      const name = w.adapter.name;
+      // Only allow Phantom, Solflare, Backpack - no duplicates
+      if (!ALLOWED_WALLETS.has(name)) {
+        console.log("🚫 Filtering out wallet:", name);
+        return false;
+      }
+      if (seen.has(name)) {
+        console.log("🚫 Filtering duplicate wallet:", name);
+        return false;
+      }
+      seen.add(name);
+      return true;
+    });
+  }, [wallets]);
+
   const handleConnect = useCallback(async (walletName: string) => {
     console.log("👆 handleConnect called with:", walletName);
     setError(null);
     
     // Find the wallet adapter
-    const walletAdapter = wallets.find(w => w.adapter.name === walletName);
+    const walletAdapter = filteredWallets.find(w => w.adapter.name === walletName);
     if (!walletAdapter) {
-      console.error("Wallet adapter not found:", walletName);
+      console.error("wallet connect failed: Wallet adapter not found:", walletName);
       setError(`${walletName} wallet not found`);
       return;
     }
@@ -154,39 +190,54 @@ function CustomWalletModal() {
     try {
       setConnectingWallet(walletName);
       
-      // Set pending wallet and select it - connect will happen on next tick via useEffect
-      console.log("🎯 Selecting wallet:", walletName);
+      // Step 1: Select the wallet first
+      console.log("🎯 Step 1: Selecting wallet:", walletName);
       pendingWalletRef.current = walletName;
       select(walletName as WalletName);
       
+      // Step 2: Connect on next tick via setTimeout(0) to avoid stale state
+      // This is handled in the useEffect below
+      
     } catch (err: unknown) {
-      console.error("❌ Select error:", err);
-      console.error("Full error object:", JSON.stringify(err, Object.getOwnPropertyNames(err as object), 2));
+      console.error("wallet connect failed (select):", err);
+      if (err instanceof Error) {
+        console.error("message:", err.message);
+        console.error("stack:", err.stack);
+      }
       setError("Failed to select wallet");
       setConnectingWallet(null);
+      pendingWalletRef.current = null;
     }
-  }, [wallets, select, isMobile, walletBrowser]);
+  }, [filteredWallets, select, isMobile, walletBrowser]);
 
-  // Connect on next tick after wallet selection (avoids stale state)
+  // Connect on next tick after wallet selection (avoids stale state / WalletNotSelected errors)
   useEffect(() => {
     const pendingWallet = pendingWalletRef.current;
     if (!pendingWallet) return;
     
-    const walletAdapter = wallets.find(w => w.adapter.name === pendingWallet);
-    if (!walletAdapter) return;
+    // Check if the wallet is now selected
+    if (!wallet || wallet.adapter.name !== pendingWallet) {
+      // Wallet not yet selected, wait for next render
+      return;
+    }
     
-    // Wait for next tick to ensure wallet selection is processed
+    // Clear pending immediately to prevent double-connect
+    pendingWalletRef.current = null;
+    
+    // Use setTimeout(0) to connect on next tick
     const timer = setTimeout(async () => {
       try {
-        console.log("🔗 Connecting to wallet (next tick)...");
-        await connect();
-        console.log("✅ Connected! Public key:", walletAdapter.adapter.publicKey?.toString());
+        console.log("🔗 Step 2: Connecting to wallet (next tick):", pendingWallet);
+        await wallet.adapter.connect();
+        console.log("✅ Connected! Public key:", wallet.adapter.publicKey?.toString());
         setVisible(false);
         setConnectingWallet(null);
-        pendingWalletRef.current = null;
       } catch (err: unknown) {
-        console.error("❌ Connect error:", err);
-        console.error("Full error object:", JSON.stringify(err, Object.getOwnPropertyNames(err as object), 2));
+        console.error("wallet connect failed:", err);
+        if (err instanceof Error) {
+          console.error("message:", err.message);
+          console.error("stack:", err.stack);
+        }
         
         const error = err as { code?: number; message?: string; name?: string };
         
@@ -199,12 +250,11 @@ function CustomWalletModal() {
           setError(error.message || "Failed to connect wallet");
         }
         setConnectingWallet(null);
-        pendingWalletRef.current = null;
       }
-    }, 100);
+    }, 0); // setTimeout(0) for next tick
 
     return () => clearTimeout(timer);
-  }, [wallets, connect, setVisible]);
+  }, [wallet, setVisible]);
 
   // Close modal when connected
   useEffect(() => {
@@ -264,23 +314,23 @@ function CustomWalletModal() {
         )}
 
         <div className="space-y-2">
-          {wallets.map((wallet) => {
-            const isInstalled = wallet.readyState === WalletReadyState.Installed || 
-                               wallet.readyState === WalletReadyState.Loadable;
-            const isCurrentlyConnecting = connecting || connectingWallet === wallet.adapter.name;
+          {filteredWallets.map((walletItem) => {
+            const isInstalled = walletItem.readyState === WalletReadyState.Installed || 
+                               walletItem.readyState === WalletReadyState.Loadable;
+            const isCurrentlyConnecting = connecting || connectingWallet === walletItem.adapter.name;
             const showAsAvailable = isInstalled || isMobile;
-            const deepLinkInfo = WALLET_DEEP_LINKS[wallet.adapter.name];
-            const isCurrentWalletBrowser = walletBrowser === wallet.adapter.name;
+            const deepLinkInfo = WALLET_DEEP_LINKS[walletItem.adapter.name];
+            const isCurrentWalletBrowser = walletBrowser === walletItem.adapter.name;
             
             return (
               <button
-                key={wallet.adapter.name}
-                onClick={() => handleConnect(wallet.adapter.name)}
+                key={walletItem.adapter.name}
+                onClick={() => handleConnect(walletItem.adapter.name)}
                 disabled={isCurrentlyConnecting}
                 className={`w-full flex items-center gap-3 p-3 rounded-lg border transition-all ${
                   isCurrentWalletBrowser
                     ? "border-primary bg-primary/10 ring-2 ring-primary/30"
-                    : connectingWallet === wallet.adapter.name
+                    : connectingWallet === walletItem.adapter.name
                       ? "border-primary bg-primary/20"
                       : showAsAvailable 
                         ? "border-primary/30 hover:border-primary hover:bg-primary/10 cursor-pointer" 
@@ -288,17 +338,17 @@ function CustomWalletModal() {
                 }`}
               >
                 <img 
-                  src={wallet.adapter.icon} 
-                  alt={wallet.adapter.name}
+                  src={walletItem.adapter.icon} 
+                  alt={walletItem.adapter.name}
                   className="w-8 h-8 rounded-lg"
                 />
                 <div className="flex-1 text-left">
                   <p className="font-medium text-foreground">
-                    {wallet.adapter.name}
+                    {walletItem.adapter.name}
                     {isCurrentWalletBrowser && <span className="text-primary ml-2">★</span>}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {connectingWallet === wallet.adapter.name 
+                    {connectingWallet === walletItem.adapter.name 
                       ? "Connecting..." 
                       : isCurrentWalletBrowser
                         ? "Tap to connect"
@@ -326,7 +376,7 @@ function CustomWalletModal() {
           })}
         </div>
 
-        {wallets.every(w => w.readyState !== WalletReadyState.Installed) && !isMobile && (
+        {filteredWallets.every(w => w.readyState !== WalletReadyState.Installed) && !isMobile && (
           <div className="mt-4 p-3 bg-muted/50 rounded-lg">
             <p className="text-sm text-muted-foreground text-center">
               No wallets detected. Install one of the wallets above to continue.
@@ -372,13 +422,9 @@ interface SolanaProviderProps {
 export function SolanaProvider({ children }: SolanaProviderProps) {
   const endpoint = useMemo(() => getSolanaEndpoint(), []);
 
-  // Initialize legacy wallet adapters explicitly to avoid wallet-standard duplicates
+  // Initialize legacy wallet adapters explicitly - only Solana wallets
   const wallets = useMemo(() => {
-    // Disable wallet-standard auto-registration to prevent duplicate providers
-    if (typeof window !== 'undefined') {
-      (window as any).__WALLET_STANDARD_DISABLED__ = true;
-    }
-    
+    console.log("🔧 Initializing wallet adapters: Phantom, Solflare, Backpack only");
     return [
       new PhantomWalletAdapter(),
       new SolflareWalletAdapter(),
@@ -391,8 +437,9 @@ export function SolanaProvider({ children }: SolanaProviderProps) {
     if (error.name === 'WalletNotSelectedError') {
       return;
     }
-    console.error("Wallet provider error:", error);
-    console.error("Full error:", JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
+    console.error("wallet connect failed (provider):", error);
+    console.error("message:", error.message);
+    console.error("stack:", error.stack);
   }, []);
 
   return (
