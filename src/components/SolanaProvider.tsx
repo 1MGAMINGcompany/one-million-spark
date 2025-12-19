@@ -1,4 +1,4 @@
-import React, { ReactNode, useMemo, useCallback, useState, createContext, useContext } from "react";
+import React, { ReactNode, useMemo, useCallback, useState, useEffect, createContext, useContext } from "react";
 import { ConnectionProvider, WalletProvider, useWallet } from "@solana/wallet-adapter-react";
 import { WalletReadyState } from "@solana/wallet-adapter-base";
 import { PhantomWalletAdapter } from "@solana/wallet-adapter-phantom";
@@ -40,6 +40,64 @@ const WALLET_DEEP_LINKS: Record<string, WalletDeepLink> = {
   },
 };
 
+// Detect if we're in a wallet's in-app browser
+function detectWalletBrowser(): string | null {
+  const isPhantom = !!(window as any).phantom?.solana?.isPhantom || !!(window as any).solana?.isPhantom;
+  const isSolflare = !!(window as any).solflare?.isSolflare;
+  const isBackpack = !!(window as any).backpack?.isBackpack;
+  
+  if (isPhantom) return "Phantom";
+  if (isSolflare) return "Solflare";
+  if (isBackpack) return "Backpack";
+  return null;
+}
+
+// Component that handles eager connection when inside wallet browser
+function WalletAutoConnect() {
+  const { wallets, select, connected, connecting, publicKey } = useWallet();
+  const [hasAttemptedConnect, setHasAttemptedConnect] = useState(false);
+
+  useEffect(() => {
+    // Skip if already connected or connecting
+    if (connected || connecting || hasAttemptedConnect) return;
+
+    const walletBrowser = detectWalletBrowser();
+    console.log("🔍 Wallet browser detected:", walletBrowser);
+    
+    if (walletBrowser) {
+      // We're inside a wallet's browser - attempt eager connection
+      const walletAdapter = wallets.find(w => w.adapter.name === walletBrowser);
+      
+      if (walletAdapter && (walletAdapter.readyState === WalletReadyState.Installed || walletAdapter.readyState === WalletReadyState.Loadable)) {
+        console.log("🚀 Auto-connecting to", walletBrowser, "- detected in wallet browser");
+        setHasAttemptedConnect(true);
+        
+        // Select and connect
+        select(walletAdapter.adapter.name);
+        
+        // Give it a moment then try to connect
+        setTimeout(async () => {
+          try {
+            if (!walletAdapter.adapter.connected) {
+              await walletAdapter.adapter.connect();
+              console.log("✅ Auto-connected successfully");
+            }
+          } catch (err) {
+            console.log("Auto-connect attempt:", err);
+          }
+        }, 500);
+      }
+    }
+  }, [wallets, select, connected, connecting, hasAttemptedConnect]);
+
+  // Log connection state changes
+  useEffect(() => {
+    console.log("👛 Wallet state:", { connected, connecting, publicKey: publicKey?.toString() });
+  }, [connected, connecting, publicKey]);
+
+  return null;
+}
+
 // Custom wallet modal using the standard wallet adapter
 function CustomWalletModal() {
   const { visible, setVisible } = useWalletModal();
@@ -49,6 +107,9 @@ function CustomWalletModal() {
 
   // Detect mobile device
   const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  
+  // Detect if we're inside a wallet browser
+  const walletBrowser = detectWalletBrowser();
 
   const handleConnect = useCallback(async (walletName: string) => {
     console.log("👆 handleConnect called with:", walletName);
@@ -65,10 +126,10 @@ function CustomWalletModal() {
     const isInstalled = walletAdapter.readyState === WalletReadyState.Installed || 
                         walletAdapter.readyState === WalletReadyState.Loadable;
     
-    console.log("📋 Wallet ready state:", walletAdapter.readyState, "isMobile:", isMobile);
+    console.log("📋 Wallet ready state:", walletAdapter.readyState, "isMobile:", isMobile, "walletBrowser:", walletBrowser);
     
-    // On mobile or if wallet not installed, use deep link
-    if (isMobile && !isInstalled) {
+    // On mobile and wallet not installed (and we're not in the wallet's browser), use deep link
+    if (isMobile && !isInstalled && !walletBrowser) {
       const deepLinkInfo = WALLET_DEEP_LINKS[walletName];
       if (deepLinkInfo) {
         const deepLink = deepLinkInfo.deepLink(window.location.href);
@@ -95,7 +156,7 @@ function CustomWalletModal() {
       select(walletAdapter.adapter.name);
       
       // Wait a moment for the selection to be processed
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise(resolve => setTimeout(resolve, 200));
       
       // Now connect
       console.log("🔗 Connecting to wallet...");
@@ -123,10 +184,10 @@ function CustomWalletModal() {
       }
       setConnectingWallet(null);
     }
-  }, [wallets, select, isMobile, setVisible]);
+  }, [wallets, select, isMobile, walletBrowser, setVisible]);
 
   // Close modal when connected
-  React.useEffect(() => {
+  useEffect(() => {
     if (connected && publicKey && visible) {
       console.log("✅ Wallet connected, closing modal");
       setVisible(false);
@@ -165,9 +226,11 @@ function CustomWalletModal() {
         </div>
 
         <p className="text-sm text-muted-foreground mb-4">
-          {isMobile 
-            ? "Tap a wallet to connect or open in wallet app"
-            : "Select a Solana wallet to connect"
+          {walletBrowser 
+            ? `Tap ${walletBrowser} to connect`
+            : isMobile 
+              ? "Tap a wallet to connect or open in wallet app"
+              : "Select a Solana wallet to connect"
           }
         </p>
 
@@ -189,6 +252,7 @@ function CustomWalletModal() {
             const isCurrentlyConnecting = connecting || connectingWallet === wallet.adapter.name;
             const showAsAvailable = isInstalled || isMobile;
             const deepLinkInfo = WALLET_DEEP_LINKS[wallet.adapter.name];
+            const isCurrentWalletBrowser = walletBrowser === wallet.adapter.name;
             
             return (
               <button
@@ -196,11 +260,13 @@ function CustomWalletModal() {
                 onClick={() => handleConnect(wallet.adapter.name)}
                 disabled={isCurrentlyConnecting}
                 className={`w-full flex items-center gap-3 p-3 rounded-lg border transition-all ${
-                  connectingWallet === wallet.adapter.name
-                    ? "border-primary bg-primary/20"
-                    : showAsAvailable 
-                      ? "border-primary/30 hover:border-primary hover:bg-primary/10 cursor-pointer" 
-                      : "border-border/50 opacity-60"
+                  isCurrentWalletBrowser
+                    ? "border-primary bg-primary/10 ring-2 ring-primary/30"
+                    : connectingWallet === wallet.adapter.name
+                      ? "border-primary bg-primary/20"
+                      : showAsAvailable 
+                        ? "border-primary/30 hover:border-primary hover:bg-primary/10 cursor-pointer" 
+                        : "border-border/50 opacity-60"
                 }`}
               >
                 <img 
@@ -209,15 +275,20 @@ function CustomWalletModal() {
                   className="w-8 h-8 rounded-lg"
                 />
                 <div className="flex-1 text-left">
-                  <p className="font-medium text-foreground">{wallet.adapter.name}</p>
+                  <p className="font-medium text-foreground">
+                    {wallet.adapter.name}
+                    {isCurrentWalletBrowser && <span className="text-primary ml-2">★</span>}
+                  </p>
                   <p className="text-xs text-muted-foreground">
                     {connectingWallet === wallet.adapter.name 
                       ? "Connecting..." 
-                      : isMobile 
-                        ? isInstalled ? "Tap to connect" : "Tap to open"
-                        : isInstalled 
-                          ? "Detected" 
-                          : "Not installed"
+                      : isCurrentWalletBrowser
+                        ? "Tap to connect"
+                        : isMobile 
+                          ? isInstalled ? "Tap to connect" : "Tap to open"
+                          : isInstalled 
+                            ? "Detected" 
+                            : "Not installed"
                     }
                   </p>
                 </div>
@@ -245,7 +316,7 @@ function CustomWalletModal() {
           </div>
         )}
 
-        {isMobile && (
+        {isMobile && !walletBrowser && (
           <div className="mt-4 p-3 bg-muted/50 rounded-lg">
             <p className="text-sm text-muted-foreground text-center">
               For best experience, open this page in your wallet's built-in browser
@@ -275,6 +346,7 @@ function CustomWalletModalProvider({ children }: { children: ReactNode }) {
   return (
     <WalletModalContext.Provider value={{ visible, setVisible }}>
       {children}
+      <WalletAutoConnect />
       <CustomWalletModal />
     </WalletModalContext.Provider>
   );
@@ -286,7 +358,6 @@ interface SolanaProviderProps {
 
 export function SolanaProvider({ children }: SolanaProviderProps) {
   const endpoint = useMemo(() => getSolanaEndpoint(), []);
-  const cluster = getSolanaCluster();
 
   // Initialize wallet adapters - these handle connection properly
   const wallets = useMemo(() => [
