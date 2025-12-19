@@ -7,19 +7,19 @@ export const SOLANA_ENABLED = true;
 // Toggle this for testing on devnet
 export const USE_DEVNET = false;
 
-// ⚠️ REPLACE "YOUR_HELIUS_API_KEY" WITH YOUR ACTUAL HELIUS API KEY
-const HELIUS_API_KEY = https://mainnet.helius-rpc.com/?api-key=feb250de-24a3-4b8c-a3ac-6c5609c221b9;
-
-// Mainnet RPC - Helius ONLY (no public fallback)
-export const SOLANA_RPC_URL = `https://mainnet.helius-rpc.com/?api-key=${HELIUS_API_KEY}`;
+// Mainnet RPC - Read from environment variable (set in Lovable Secrets)
+export const SOLANA_RPC_URL = import.meta.env.VITE_SOLANA_RPC_URL as string;
 
 // Devnet endpoint for testing only
 export const DEVNET_RPC_URL = "https://api.devnet.solana.com";
 
-// Get current RPC endpoint - uses Helius for mainnet
+// Get current RPC endpoint
 export function getSolanaEndpoint(): string {
   if (USE_DEVNET) {
     return DEVNET_RPC_URL;
+  }
+  if (!SOLANA_RPC_URL) {
+    throw new Error("VITE_SOLANA_RPC_URL is not configured in secrets");
   }
   return SOLANA_RPC_URL;
 }
