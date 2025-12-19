@@ -2,6 +2,7 @@ import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, RotateCcw, RotateCw, Gem, Star, Trophy } from "lucide-react";
+import { SoundToggle } from "@/components/SoundToggle";
 import { BackgammonRulesDialog } from "@/components/BackgammonRulesDialog";
 import { Dice3D, CheckerStack } from "@/components/BackgammonPieces";
 import { BackgammonCheckerAnimation, useCheckerAnimation } from "@/components/BackgammonCheckerAnimation";
@@ -842,12 +843,15 @@ const BackgammonAI = () => {
                 <Gem className={cn("text-primary", isMobile ? "w-3 h-3" : "w-4 h-4")} />
               </div>
 
-              {/* Rules Button */}
-              {isMobile ? (
-                <BackgammonRulesDialog className="h-8 w-8" />
-              ) : (
-                <BackgammonRulesDialog variant="button" />
-              )}
+              {/* Sound & Rules Buttons */}
+              <div className="flex items-center gap-2">
+                <SoundToggle size={isMobile ? "sm" : "md"} />
+                {isMobile ? (
+                  <BackgammonRulesDialog className="h-8 w-8" />
+                ) : (
+                  <BackgammonRulesDialog variant="button" />
+                )}
+              </div>
             </div>
             
             {!isMobile && (
