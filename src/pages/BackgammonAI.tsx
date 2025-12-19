@@ -862,7 +862,7 @@ const BackgammonAI = () => {
 
         {/* ============== MOBILE LAYOUT ============== */}
         {isMobile ? (
-          <div className="flex-1 flex flex-col px-2 pt-1 pb-2 overflow-hidden">
+          <div className="flex-1 flex flex-col px-2 pt-1 pb-2 overflow-hidden min-h-0">
             {/* Score Row */}
             <div className="flex justify-between items-center px-2 py-1 shrink-0">
               <div className="flex items-center gap-2">
@@ -890,8 +890,8 @@ const BackgammonAI = () => {
               </div>
             </div>
 
-            {/* Board Container - Fixed aspect ratio so it never shrinks */}
-            <div className="relative w-full shrink-0" style={{ height: 'calc(100vh - 220px)', maxHeight: '600px', minHeight: '350px' }}>
+            {/* Board Container - Flexible height that fits remaining space */}
+            <div className="relative w-full flex-1 min-h-0" style={{ maxHeight: '55vh' }}>
               {/* Subtle glow */}
               <div className="absolute -inset-1 bg-primary/10 rounded-xl blur-lg opacity-30" />
               
