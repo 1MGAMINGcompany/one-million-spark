@@ -18,10 +18,8 @@ import {
   PROGRAM_ID,
 } from "@/lib/solana-program";
 
-// Check if program is configured (not placeholder)
-const isProgramConfigured = () => {
-  return PROGRAM_ID.toBase58() !== "11111111111111111111111111111111";
-};
+// Program is now deployed on mainnet
+const isProgramConfigured = () => true;
 
 export function useSolanaRooms() {
   const { connection } = useConnection();

@@ -9,14 +9,11 @@ import {
 import { getSolanaEndpoint } from "./solana-config";
 
 // ============================================
-// CONFIGURATION - FILL IN AFTER DEPLOYMENT
+// CONFIGURATION - MAINNET PRODUCTION
 // ============================================
 
-// TODO: Replace with deployed program ID
-export const PROGRAM_ID = new PublicKey("11111111111111111111111111111111"); // Placeholder
-
-// Result Authority - signs winner settlement transactions
-export const RESULT_AUTHORITY = new PublicKey("11111111111111111111111111111111"); // TODO: Set after deployment
+// Mainnet deployed program ID
+export const PROGRAM_ID = new PublicKey("4nkWS2ZYPqQrRSYbXD6XW6U6VenmBiZV2TkutY3vSPHu");
 
 // Platform fee recipient (5% of prize pool)
 export const FEE_RECIPIENT = new PublicKey("3bcV9vtxeiHsXgNx4qvQbS4ZL4cMUnAg2tF3DZjtmGUj");
@@ -105,6 +102,84 @@ export function getGlobalStatePDA(): [PublicKey, number] {
     [Buffer.from("global_state")],
     PROGRAM_ID
   );
+}
+
+export function getConfigPDA(): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from("config")],
+    PROGRAM_ID
+  );
+}
+
+// Config account structure
+export interface ConfigAccount {
+  authority: PublicKey;
+  verifier: PublicKey; // Result settlement authority
+  feeRecipient: PublicKey;
+  feeBps: number;
+  bump: number;
+}
+
+// Parse config account from on-chain data
+export function parseConfigAccount(data: Buffer): ConfigAccount | null {
+  try {
+    // Skip 8-byte discriminator
+    let offset = 8;
+    
+    // authority: Pubkey (32 bytes)
+    const authority = new PublicKey(data.subarray(offset, offset + 32));
+    offset += 32;
+    
+    // verifier: Pubkey (32 bytes)
+    const verifier = new PublicKey(data.subarray(offset, offset + 32));
+    offset += 32;
+    
+    // fee_recipient: Pubkey (32 bytes)
+    const feeRecipient = new PublicKey(data.subarray(offset, offset + 32));
+    offset += 32;
+    
+    // fee_bps: u16
+    const feeBps = data.readUInt16LE(offset);
+    offset += 2;
+    
+    // bump: u8
+    const bump = data.readUInt8(offset);
+    
+    return {
+      authority,
+      verifier,
+      feeRecipient,
+      feeBps,
+      bump,
+    };
+  } catch (err) {
+    console.error("Failed to parse config account:", err);
+    return null;
+  }
+}
+
+// Fetch config from on-chain (contains verifier/result authority)
+export async function fetchConfig(connection: Connection): Promise<ConfigAccount | null> {
+  try {
+    const [configPda] = getConfigPDA();
+    const accountInfo = await connection.getAccountInfo(configPda);
+    
+    if (!accountInfo) {
+      console.log("Config PDA not initialized");
+      return null;
+    }
+    
+    return parseConfigAccount(accountInfo.data as Buffer);
+  } catch (err) {
+    console.error("Failed to fetch config:", err);
+    return null;
+  }
+}
+
+// Get result authority (verifier) from on-chain config
+export async function getResultAuthority(connection: Connection): Promise<PublicKey | null> {
+  const config = await fetchConfig(connection);
+  return config?.verifier || null;
 }
 
 // ============================================
