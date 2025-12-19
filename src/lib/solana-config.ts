@@ -7,23 +7,20 @@ export const SOLANA_ENABLED = true;
 // Toggle this for testing on devnet
 export const USE_DEVNET = false;
 
-// RPC endpoint - uses ONLY the custom URL from environment (no public fallback)
-export const SOLANA_RPC_URL = import.meta.env.VITE_SOLANA_RPC_URL as string;
+// ⚠️ REPLACE "YOUR_HELIUS_API_KEY" WITH YOUR ACTUAL HELIUS API KEY
+const HELIUS_API_KEY = "YOUR_HELIUS_API_KEY";
+
+// Mainnet RPC - Helius ONLY (no public fallback)
+export const SOLANA_RPC_URL = `https://mainnet.helius-rpc.com/?api-key=${HELIUS_API_KEY}`;
 
 // Devnet endpoint for testing only
 export const DEVNET_RPC_URL = "https://api.devnet.solana.com";
 
-// Get current RPC endpoint - NO fallback to public endpoints
+// Get current RPC endpoint - uses Helius for mainnet
 export function getSolanaEndpoint(): string {
   if (USE_DEVNET) {
     return DEVNET_RPC_URL;
   }
-  
-  if (!SOLANA_RPC_URL) {
-    console.error("VITE_SOLANA_RPC_URL is not configured. Please set it in your environment.");
-    throw new Error("Solana RPC URL not configured");
-  }
-  
   return SOLANA_RPC_URL;
 }
 
