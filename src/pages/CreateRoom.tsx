@@ -19,9 +19,13 @@ import { useSolPrice } from "@/hooks/useSolPrice";
 import { useSolanaRooms } from "@/hooks/useSolanaRooms";
 import { Wallet, Loader2, AlertCircle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { MIN_ENTRY_FEE_SOL } from "@/lib/solana-config";
 import { GameType } from "@/lib/solana-program";
 import { ConnectWalletGate } from "@/components/ConnectWalletGate";
+
+// Target minimum fee in USD
+const MIN_FEE_USD = 0.50;
+// Fallback minimum if price unavailable
+const FALLBACK_MIN_SOL = 0.004;
 
 export default function CreateRoom() {
   const navigate = useNavigate();
@@ -39,7 +43,9 @@ export default function CreateRoom() {
   const [turnTime, setTurnTime] = useState<string>("10");
   const [balance, setBalance] = useState<number>(0);
   const [checkingActiveRoom, setCheckingActiveRoom] = useState(true);
-
+  // Dynamic minimum fee based on current SOL price (~$0.50 USD)
+  const dynamicMinFee = price ? Math.ceil((MIN_FEE_USD / price) * 10000) / 10000 : FALLBACK_MIN_SOL;
+  
   const entryFeeNum = parseFloat(entryFee) || 0;
   const entryFeeUsd = formatUsd(entryFee);
 
@@ -63,10 +69,10 @@ export default function CreateRoom() {
       return;
     }
 
-    if (entryFeeNum < MIN_ENTRY_FEE_SOL) {
+    if (entryFeeNum < dynamicMinFee) {
       toast({
         title: "Invalid entry fee",
-        description: `Minimum entry fee is ${MIN_ENTRY_FEE_SOL} SOL`,
+        description: `Minimum entry fee is ${dynamicMinFee.toFixed(4)} SOL (~$${MIN_FEE_USD.toFixed(2)})`,
         variant: "destructive",
       });
       return;
@@ -183,9 +189,9 @@ export default function CreateRoom() {
                 type="number"
                 value={entryFee}
                 onChange={(e) => setEntryFee(e.target.value)}
-                placeholder="0.1"
-                min={MIN_ENTRY_FEE_SOL}
-                step="0.01"
+                placeholder={dynamicMinFee.toFixed(4)}
+                min={dynamicMinFee}
+                step="0.001"
                 className="h-9"
               />
               {entryFeeUsd && (
@@ -195,7 +201,7 @@ export default function CreateRoom() {
               )}
             </div>
             <p className="text-xs text-muted-foreground">
-              Min: {MIN_ENTRY_FEE_SOL} SOL
+              Min: {dynamicMinFee.toFixed(4)} SOL (~${MIN_FEE_USD.toFixed(2)})
             </p>
           </div>
 
