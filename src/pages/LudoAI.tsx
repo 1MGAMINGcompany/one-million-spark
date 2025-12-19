@@ -23,7 +23,7 @@ const LudoAI = () => {
   const difficulty = (searchParams.get("difficulty") as Difficulty) || "medium";
   const { play } = useSound();
   
-  const [musicEnabled, setMusicEnabled] = useState(false);
+  const [musicEnabled, setMusicEnabled] = useState(true); // Auto-start music
   const [sfxEnabled, setSfxEnabled] = useState(true);
   const musicRef = useRef<HTMLAudioElement | null>(null);
 
@@ -333,53 +333,8 @@ const LudoAI = () => {
       </div>
 
       {/* Game Area - Responsive layout */}
-      <div className="flex-1 flex items-center justify-center p-2 md:p-4">
-        <div className="w-full max-w-4xl flex flex-col md:flex-row items-center justify-center gap-4 md:gap-8">
-          
-          {/* Dice - Left side on desktop */}
-          <div className="hidden md:flex flex-col items-center gap-4 w-32">
-            <TurnIndicator
-              currentPlayer={currentPlayer.color}
-              isAI={currentPlayer.isAI}
-              isGameOver={!!gameOver}
-              winner={gameOver}
-            />
-            <EgyptianDice
-              value={diceValue}
-              isRolling={isRolling}
-              onRoll={handleRollDice}
-              disabled={isRolling || diceValue !== null || !!gameOver || isAnimating || currentPlayer.isAI}
-              showRollButton={!currentPlayer.isAI && !gameOver && diceValue === null && !isAnimating}
-            />
-            {!currentPlayer.isAI && movableTokens.length > 0 && (
-              <p className="text-xs text-muted-foreground text-center">
-                {t('gameAI.tapGlowingToken')}
-              </p>
-            )}
-            
-            {/* Audio Controls */}
-            <div className="flex gap-2 mt-4">
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={toggleMusic}
-                className="w-8 h-8 border-primary/30"
-                title={musicEnabled ? "Disable Music" : "Enable Music"}
-              >
-                {musicEnabled ? <Music size={14} /> : <Music2 size={14} />}
-              </Button>
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={toggleSfx}
-                className="w-8 h-8 border-primary/30"
-                title={sfxEnabled ? "Disable SFX" : "Enable SFX"}
-              >
-                {sfxEnabled ? <Volume2 size={14} /> : <VolumeX size={14} />}
-              </Button>
-            </div>
-          </div>
-
+      <div className="flex-1 flex items-center justify-center p-2 md:p-4 relative">
+        <div className="w-full max-w-4xl flex flex-col items-center justify-center gap-4">
           {/* Game Board */}
           <LudoBoard
             players={players}
@@ -387,47 +342,49 @@ const LudoAI = () => {
             movableTokens={isAnimating ? [] : (currentPlayer.isAI ? [] : movableTokens)}
             onTokenClick={handleTokenClick}
           />
+        </div>
 
-          {/* Dice - Below board on mobile */}
-          <div className="md:hidden flex flex-col items-center gap-3">
-            <TurnIndicator
-              currentPlayer={currentPlayer.color}
-              isAI={currentPlayer.isAI}
-              isGameOver={!!gameOver}
-              winner={gameOver}
-            />
-            <EgyptianDice
-              value={diceValue}
-              isRolling={isRolling}
-              onRoll={handleRollDice}
-              disabled={isRolling || diceValue !== null || !!gameOver || isAnimating || currentPlayer.isAI}
-              showRollButton={!currentPlayer.isAI && !gameOver && diceValue === null && !isAnimating}
-            />
-            {!currentPlayer.isAI && movableTokens.length > 0 && (
-              <p className="text-xs text-muted-foreground text-center">
-                {t('gameAI.tapGlowingToken')}
-              </p>
-            )}
-            
-            {/* Audio Controls - Mobile */}
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={toggleMusic}
-                className="w-8 h-8 border-primary/30"
-              >
-                {musicEnabled ? <Music size={14} /> : <Music2 size={14} />}
-              </Button>
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={toggleSfx}
-                className="w-8 h-8 border-primary/30"
-              >
-                {sfxEnabled ? <Volume2 size={14} /> : <VolumeX size={14} />}
-              </Button>
-            </div>
+        {/* Dice Controls - Bottom Left */}
+        <div className="absolute bottom-4 left-4 flex flex-col items-center gap-2 bg-card/90 backdrop-blur-sm rounded-lg p-3 border border-primary/30 shadow-lg">
+          <TurnIndicator
+            currentPlayer={currentPlayer.color}
+            isAI={currentPlayer.isAI}
+            isGameOver={!!gameOver}
+            winner={gameOver}
+          />
+          <EgyptianDice
+            value={diceValue}
+            isRolling={isRolling}
+            onRoll={handleRollDice}
+            disabled={isRolling || diceValue !== null || !!gameOver || isAnimating || currentPlayer.isAI}
+            showRollButton={!currentPlayer.isAI && !gameOver && diceValue === null && !isAnimating}
+          />
+          {!currentPlayer.isAI && movableTokens.length > 0 && (
+            <p className="text-xs text-muted-foreground text-center max-w-[100px]">
+              {t('gameAI.tapGlowingToken')}
+            </p>
+          )}
+          
+          {/* Audio Controls */}
+          <div className="flex gap-2 mt-1">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={toggleMusic}
+              className="w-7 h-7 border-primary/30"
+              title={musicEnabled ? "Disable Music" : "Enable Music"}
+            >
+              {musicEnabled ? <Music size={12} /> : <Music2 size={12} />}
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={toggleSfx}
+              className="w-7 h-7 border-primary/30"
+              title={sfxEnabled ? "Disable SFX" : "Enable SFX"}
+            >
+              {sfxEnabled ? <Volume2 size={12} /> : <VolumeX size={12} />}
+            </Button>
           </div>
         </div>
       </div>
