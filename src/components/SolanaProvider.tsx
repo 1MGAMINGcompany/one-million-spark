@@ -1,10 +1,10 @@
-import React, { ReactNode, useMemo, useCallback, useState, useEffect, createContext, useContext } from "react";
+import React, { ReactNode, useMemo, useCallback, useState, useEffect, createContext, useContext, useRef } from "react";
 import { ConnectionProvider, WalletProvider, useWallet } from "@solana/wallet-adapter-react";
-import { WalletReadyState } from "@solana/wallet-adapter-base";
+import { WalletReadyState, WalletName } from "@solana/wallet-adapter-base";
 import { PhantomWalletAdapter } from "@solana/wallet-adapter-phantom";
 import { SolflareWalletAdapter } from "@solana/wallet-adapter-solflare";
 import { BackpackWalletAdapter } from "@solana/wallet-adapter-backpack";
-import { getSolanaEndpoint, getSolanaCluster } from "@/lib/solana-config";
+import { getSolanaEndpoint } from "@/lib/solana-config";
 
 // Custom modal context
 interface WalletModalContextType {
@@ -111,6 +111,9 @@ function CustomWalletModal() {
   // Detect if we're inside a wallet browser
   const walletBrowser = detectWalletBrowser();
 
+  // Track pending wallet selection for connect-on-next-tick
+  const pendingWalletRef = useRef<string | null>(null);
+
   const handleConnect = useCallback(async (walletName: string) => {
     console.log("👆 handleConnect called with:", walletName);
     setError(null);
@@ -151,40 +154,57 @@ function CustomWalletModal() {
     try {
       setConnectingWallet(walletName);
       
-      // Use the standard wallet adapter select + connect pattern
+      // Set pending wallet and select it - connect will happen on next tick via useEffect
       console.log("🎯 Selecting wallet:", walletName);
-      select(walletAdapter.adapter.name);
+      pendingWalletRef.current = walletName;
+      select(walletName as WalletName);
       
-      // Wait a moment for the selection to be processed
-      await new Promise(resolve => setTimeout(resolve, 200));
-      
-      // Now connect
-      console.log("🔗 Connecting to wallet...");
-      await walletAdapter.adapter.connect();
-      
-      console.log("✅ Connected! Public key:", walletAdapter.adapter.publicKey?.toString());
-      
-      setVisible(false);
-      setConnectingWallet(null);
-      
-    } catch (err: any) {
-      console.error("❌ Connect error:", err);
-      console.error("Error name:", err?.name);
-      console.error("Error message:", err?.message);
-      console.error("Error code:", err?.code);
-      
-      // Handle user rejection
-      if (err?.code === 4001 || err?.message?.includes('rejected') || err?.message?.includes('User rejected')) {
-        setError("Connection cancelled by user");
-      } else if (err?.code === -32603) {
-        // This error often happens in iframes - suggest opening in wallet browser
-        setError("Connection failed. Try opening in the wallet's browser.");
-      } else {
-        setError(err?.message || "Failed to connect wallet");
-      }
+    } catch (err: unknown) {
+      console.error("❌ Select error:", err);
+      console.error("Full error object:", JSON.stringify(err, Object.getOwnPropertyNames(err as object), 2));
+      setError("Failed to select wallet");
       setConnectingWallet(null);
     }
-  }, [wallets, select, isMobile, walletBrowser, setVisible]);
+  }, [wallets, select, isMobile, walletBrowser]);
+
+  // Connect on next tick after wallet selection (avoids stale state)
+  useEffect(() => {
+    const pendingWallet = pendingWalletRef.current;
+    if (!pendingWallet) return;
+    
+    const walletAdapter = wallets.find(w => w.adapter.name === pendingWallet);
+    if (!walletAdapter) return;
+    
+    // Wait for next tick to ensure wallet selection is processed
+    const timer = setTimeout(async () => {
+      try {
+        console.log("🔗 Connecting to wallet (next tick)...");
+        await connect();
+        console.log("✅ Connected! Public key:", walletAdapter.adapter.publicKey?.toString());
+        setVisible(false);
+        setConnectingWallet(null);
+        pendingWalletRef.current = null;
+      } catch (err: unknown) {
+        console.error("❌ Connect error:", err);
+        console.error("Full error object:", JSON.stringify(err, Object.getOwnPropertyNames(err as object), 2));
+        
+        const error = err as { code?: number; message?: string; name?: string };
+        
+        // Handle user rejection
+        if (error.code === 4001 || error.message?.includes('rejected') || error.message?.includes('User rejected')) {
+          setError("Connection cancelled by user");
+        } else if (error.code === -32603) {
+          setError("Connection failed. Try opening in the wallet's browser.");
+        } else {
+          setError(error.message || "Failed to connect wallet");
+        }
+        setConnectingWallet(null);
+        pendingWalletRef.current = null;
+      }
+    }, 100);
+
+    return () => clearTimeout(timer);
+  }, [wallets, connect, setVisible]);
 
   // Close modal when connected
   useEffect(() => {
@@ -196,8 +216,6 @@ function CustomWalletModal() {
   }, [connected, publicKey, visible, setVisible]);
 
   if (!visible) return null;
-
-  const cluster = getSolanaCluster();
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center">
@@ -354,26 +372,34 @@ interface SolanaProviderProps {
 export function SolanaProvider({ children }: SolanaProviderProps) {
   const endpoint = useMemo(() => getSolanaEndpoint(), []);
 
-  // Initialize wallet adapters - these handle connection properly
-  const wallets = useMemo(() => [
-    new PhantomWalletAdapter(),
-    new SolflareWalletAdapter(),
-    new BackpackWalletAdapter(),
-  ], []);
+  // Initialize legacy wallet adapters explicitly to avoid wallet-standard duplicates
+  const wallets = useMemo(() => {
+    // Disable wallet-standard auto-registration to prevent duplicate providers
+    if (typeof window !== 'undefined') {
+      (window as any).__WALLET_STANDARD_DISABLED__ = true;
+    }
+    
+    return [
+      new PhantomWalletAdapter(),
+      new SolflareWalletAdapter(),
+      new BackpackWalletAdapter(),
+    ];
+  }, []);
 
-  // Handle wallet errors
+  // Handle wallet errors with detailed logging
   const onError = useCallback((error: Error) => {
     if (error.name === 'WalletNotSelectedError') {
       return;
     }
     console.error("Wallet provider error:", error);
+    console.error("Full error:", JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
   }, []);
 
   return (
     <ConnectionProvider endpoint={endpoint}>
       <WalletProvider 
         wallets={wallets} 
-        autoConnect={true}
+        autoConnect={false}
         onError={onError}
         localStorageKey="1m-gaming-wallet"
       >
