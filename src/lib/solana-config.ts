@@ -8,7 +8,7 @@ export const SOLANA_ENABLED = true;
 export const USE_DEVNET = false;
 
 // ⚠️ REPLACE "YOUR_HELIUS_API_KEY" WITH YOUR ACTUAL HELIUS API KEY
-const HELIUS_API_KEY = "YOUR_HELIUS_API_KEY";
+const HELIUS_API_KEY = https://mainnet.helius-rpc.com/?api-key=feb250de-24a3-4b8c-a3ac-6c5609c221b9;
 
 // Mainnet RPC - Helius ONLY (no public fallback)
 export const SOLANA_RPC_URL = `https://mainnet.helius-rpc.com/?api-key=${HELIUS_API_KEY}`;
