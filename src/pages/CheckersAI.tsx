@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, RotateCcw, Trophy, Gem, Star } from "lucide-react";
+import { SoundToggle } from "@/components/SoundToggle";
 import { useSound } from "@/contexts/SoundContext";
 import { useTranslation } from "react-i18next";
 
@@ -513,10 +514,13 @@ const CheckersAI = () => {
               <p className="text-muted-foreground capitalize">{t('gameAI.difficulty')}: {difficulty}</p>
             </div>
             
-            <Button onClick={resetGame} variant="outline" className="border-primary/30">
-              <RotateCcw size={18} />
-              {t('gameAI.reset')}
-            </Button>
+            <div className="flex items-center gap-2">
+              <SoundToggle />
+              <Button onClick={resetGame} variant="outline" className="border-primary/30">
+                <RotateCcw size={18} />
+                {t('gameAI.reset')}
+              </Button>
+            </div>
           </div>
         </div>
       </div>

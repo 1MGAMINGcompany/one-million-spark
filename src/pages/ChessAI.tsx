@@ -5,6 +5,7 @@ import { ChessBoardPremium } from "@/components/ChessBoardPremium";
 import { useCaptureAnimations } from "@/components/CaptureAnimationLayer";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, RotateCcw, Gem, Star } from "lucide-react";
+import { SoundToggle } from "@/components/SoundToggle";
 import { useSound } from "@/contexts/SoundContext";
 import { useTranslation } from "react-i18next";
 import { createChessAI, type ChessAI as ChessAIType, type Difficulty } from "@/lib/chessEngine/localChessAI";
@@ -401,22 +402,26 @@ const ChessAI = () => {
             </Button>
             
             {/* Title with decorative elements */}
-            <div className="flex items-center justify-center gap-3 mb-2">
-              <div className="h-px w-8 bg-gradient-to-r from-transparent to-primary/50 hidden sm:block" />
-              <Gem className="w-4 h-4 text-primary" />
-              <h1 
-                className="text-xl md:text-2xl font-display font-bold tracking-wide text-center"
-                style={{
-                  background: "linear-gradient(135deg, #FCE68A 0%, #FACC15 50%, #AB8215 100%)",
-                  WebkitBackgroundClip: "text",
-                  WebkitTextFillColor: "transparent",
-                  backgroundClip: "text",
-                }}
-              >
-                {t('gameAI.chessTitle')}
-              </h1>
-              <Gem className="w-4 h-4 text-primary" />
-              <div className="h-px w-8 bg-gradient-to-l from-transparent to-primary/50 hidden sm:block" />
+            <div className="flex items-center justify-between mb-2">
+              <div className="w-10" /> {/* Spacer for centering */}
+              <div className="flex items-center gap-3">
+                <div className="h-px w-8 bg-gradient-to-r from-transparent to-primary/50 hidden sm:block" />
+                <Gem className="w-4 h-4 text-primary" />
+                <h1 
+                  className="text-xl md:text-2xl font-display font-bold tracking-wide text-center"
+                  style={{
+                    background: "linear-gradient(135deg, #FCE68A 0%, #FACC15 50%, #AB8215 100%)",
+                    WebkitBackgroundClip: "text",
+                    WebkitTextFillColor: "transparent",
+                    backgroundClip: "text",
+                  }}
+                >
+                  {t('gameAI.chessTitle')}
+                </h1>
+                <Gem className="w-4 h-4 text-primary" />
+                <div className="h-px w-8 bg-gradient-to-l from-transparent to-primary/50 hidden sm:block" />
+              </div>
+              <SoundToggle />
             </div>
             
             <p className="text-center text-sm text-muted-foreground/60">
