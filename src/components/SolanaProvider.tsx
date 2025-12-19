@@ -6,6 +6,17 @@ import { SolflareWalletAdapter } from "@solana/wallet-adapter-solflare";
 import { BackpackWalletAdapter } from "@solana/wallet-adapter-backpack";
 import { getSolanaEndpoint } from "@/lib/solana-config";
 
+// Polyfill for navigator.userAgent if undefined (happens in some iframe contexts)
+// This must run before wallet adapters are instantiated
+if (typeof window !== 'undefined' && typeof navigator !== 'undefined') {
+  if (!navigator.userAgent) {
+    Object.defineProperty(navigator, 'userAgent', {
+      get: () => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      configurable: true,
+    });
+  }
+}
+
 // Allowed Solana wallet names - only these will be shown
 const ALLOWED_WALLETS = new Set(["Phantom", "Solflare", "Backpack"]);
 
