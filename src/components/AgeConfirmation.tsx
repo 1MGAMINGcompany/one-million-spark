@@ -13,13 +13,15 @@ const AGE_CONFIRMED_KEY = "1m-gaming-age-confirmed";
 
 const AgeConfirmation = () => {
   const { t } = useTranslation();
+  // DISABLED FOR TESTING - set to false to skip age verification
   const [showModal, setShowModal] = useState(false);
 
   useEffect(() => {
-    const confirmed = localStorage.getItem(AGE_CONFIRMED_KEY);
-    if (!confirmed) {
-      setShowModal(true);
-    }
+    // Temporarily disabled for testing - uncomment before deploy
+    // const confirmed = localStorage.getItem(AGE_CONFIRMED_KEY);
+    // if (!confirmed) {
+    //   setShowModal(true);
+    // }
   }, []);
 
   const handleConfirm = () => {

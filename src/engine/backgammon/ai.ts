@@ -6,11 +6,11 @@ import { createAiEngine } from '../core/ai';
 import { backgammonEngine } from './engine';
 import type { BackgammonState, BackgammonMove } from './types';
 
-// Difficulty configurations
+// Difficulty configurations - improved for better AI play
 const DIFFICULTY_CONFIG: Record<Difficulty, { maxDepth: number; randomness: number }> = {
-  'EASY': { maxDepth: 1, randomness: 100 },    // Very random, shallow search
-  'MEDIUM': { maxDepth: 2, randomness: 30 },   // Some randomness, moderate depth
-  'HARD': { maxDepth: 3, randomness: 0 },      // No randomness, deeper search
+  'EASY': { maxDepth: 2, randomness: 60 },     // Some randomness, basic lookahead
+  'MEDIUM': { maxDepth: 3, randomness: 15 },   // Less randomness, good depth
+  'HARD': { maxDepth: 4, randomness: 0 },      // No randomness, deeper search
 };
 
 const aiEngine = createAiEngine<BackgammonState, BackgammonMove>();

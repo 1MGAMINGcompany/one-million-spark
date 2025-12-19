@@ -830,17 +830,17 @@ const BackgammonAI = () => {
                 <span className="text-primary font-bold text-sm">{gameState.bearOff.ai}</span>
                 <span className="text-[10px] text-muted-foreground/60">/15</span>
               </div>
-              {/* Direction indicators */}
+              {/* Direction indicators - Player (Gold) moves counterclockwise, AI (Black) moves clockwise */}
               <div className="flex items-center gap-3">
-                {/* Gold clockwise */}
+                {/* Gold counter-clockwise (moves 24→1) */}
                 <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-full border border-primary/40 bg-primary/5">
                   <div className="w-2.5 h-2.5 rounded-full bg-gradient-to-br from-primary to-amber-600" />
-                  <RotateCw className="w-3 h-3 text-primary" strokeWidth={2.5} />
+                  <RotateCcw className="w-3 h-3 text-primary" strokeWidth={2.5} />
                 </div>
-                {/* Black counter-clockwise */}
+                {/* Black clockwise (moves 1→24) */}
                 <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-full border border-slate-500/40 bg-slate-800/30">
                   <div className="w-2.5 h-2.5 rounded-full bg-gradient-to-br from-slate-600 to-slate-900" />
-                  <RotateCcw className="w-3 h-3 text-slate-400" strokeWidth={2.5} />
+                  <RotateCw className="w-3 h-3 text-slate-400" strokeWidth={2.5} />
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -1058,19 +1058,19 @@ const BackgammonAI = () => {
                         <div className="text-xs text-muted-foreground flex items-center gap-2">
                           AI Borne Off: <span className="text-primary font-bold">{gameState.bearOff.ai}</span>
                         </div>
-                        {/* Direction indicators - always visible */}
+                        {/* Direction indicators - Gold moves counter-clockwise (24→1), Black moves clockwise (1→24) */}
                         <div className="flex items-center gap-3">
-                          {/* Gold clockwise */}
+                          {/* Gold counter-clockwise */}
                           <div className="flex items-center gap-1.5 px-2 py-1 rounded-full border border-primary/40 bg-primary/5">
                             <div className="w-3 h-3 rounded-full bg-gradient-to-br from-primary to-amber-600 border border-amber-500/50" />
-                            <RotateCw className="w-3.5 h-3.5 text-primary" strokeWidth={2.5} />
-                            <span className="text-[10px] font-medium text-primary">CW</span>
+                            <RotateCcw className="w-3.5 h-3.5 text-primary" strokeWidth={2.5} />
+                            <span className="text-[10px] font-medium text-primary">CCW</span>
                           </div>
-                          {/* Black counter-clockwise */}
+                          {/* Black clockwise */}
                           <div className="flex items-center gap-1.5 px-2 py-1 rounded-full border border-slate-500/40 bg-slate-800/30">
                             <div className="w-3 h-3 rounded-full bg-gradient-to-br from-slate-600 to-slate-900 border border-slate-500/50" />
-                            <RotateCcw className="w-3.5 h-3.5 text-slate-400" strokeWidth={2.5} />
-                            <span className="text-[10px] font-medium text-slate-400">CCW</span>
+                            <RotateCw className="w-3.5 h-3.5 text-slate-400" strokeWidth={2.5} />
+                            <span className="text-[10px] font-medium text-slate-400">CW</span>
                           </div>
                         </div>
                         {gameState.bar.ai > 0 && (
@@ -1198,18 +1198,18 @@ const BackgammonAI = () => {
                     )}
                   >
                     <h3 className="text-sm font-medium text-muted-foreground mb-2">Game Status</h3>
-                    {/* Direction Indicator - Desktop */}
+                    {/* Direction Indicator - Desktop: Player (Gold) = counterclockwise, AI (Black) = clockwise */}
                     {!gameOver && (
                       <div className="flex items-center justify-start gap-2 mb-2">
                         {currentPlayer === "player" ? (
                           <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/10 border border-primary/30">
-                            <RotateCw className="w-4 h-4 text-primary" strokeWidth={2.5} />
-                            <span className="text-xs font-medium text-primary">CLOCKWISE</span>
+                            <RotateCcw className="w-4 h-4 text-primary" strokeWidth={2.5} />
+                            <span className="text-xs font-medium text-primary">COUNTER-CW</span>
                           </div>
                         ) : (
                           <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-700/50 border border-slate-500/30">
-                            <RotateCcw className="w-4 h-4 text-slate-400" strokeWidth={2.5} />
-                            <span className="text-xs font-medium text-slate-400">COUNTER-CW</span>
+                            <RotateCw className="w-4 h-4 text-slate-400" strokeWidth={2.5} />
+                            <span className="text-xs font-medium text-slate-400">CLOCKWISE</span>
                           </div>
                         )}
                       </div>

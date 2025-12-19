@@ -676,8 +676,9 @@ const BackgammonGame = () => {
                 <span className="mx-1">•</span>
                 Playing as {myRole === "player" ? "Gold" : "Black"}
                 <span className="mx-1">•</span>
-                {myRole === "player" ? <RotateCw className="w-3 h-3" /> : <RotateCcw className="w-3 h-3" />}
-                {myRole === "player" ? "Clockwise" : "Counter-CW"}
+                {/* Player (Gold) moves counterclockwise 24→1, AI (Black) moves clockwise 1→24 */}
+                {myRole === "player" ? <RotateCcw className="w-3 h-3" /> : <RotateCw className="w-3 h-3" />}
+                {myRole === "player" ? "Counter-CW" : "Clockwise"}
               </p>
             </div>
           </div>
