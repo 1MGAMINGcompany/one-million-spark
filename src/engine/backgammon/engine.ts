@@ -264,15 +264,16 @@ export const backgammonEngine: GameEngine<BackgammonState, BackgammonMove> = {
     
     let score = 0;
     
-    // Borne off checkers are very valuable
-    score += state.borneOff[player] * 100;
-    score -= state.borneOff[opponent] * 100;
+    // ===== PHASE 1: WINNING/LOSING BONUSES =====
+    // Borne off checkers are extremely valuable
+    score += state.borneOff[player] * 150;
+    score -= state.borneOff[opponent] * 150;
     
-    // Checkers on bar are very bad
-    score -= state.bar[player] * 60;
-    score += state.bar[opponent] * 60;
+    // Checkers on bar are very punishing
+    score -= state.bar[player] * 80;
+    score += state.bar[opponent] * 80;
     
-    // Calculate pip count (lower is better)
+    // ===== PHASE 2: PIP COUNT (race position) =====
     let playerPips = 0;
     let opponentPips = 0;
     
@@ -295,29 +296,96 @@ export const backgammonEngine: GameEngine<BackgammonState, BackgammonMove> = {
     playerPips += state.bar[player] * 25;
     opponentPips += state.bar[opponent] * 25;
     
-    // Lower pip count is better
-    score -= playerPips * 0.5;
-    score += opponentPips * 0.5;
+    // Lower pip count is better - this is a PRIMARY factor
+    score -= playerPips * 0.8;
+    score += opponentPips * 0.8;
+    
+    // ===== PHASE 3: POSITION QUALITY =====
+    const playerHome = HOME_BOARD[player];
+    const opponentHome = HOME_BOARD[opponent];
     
     // Bonus for made points (2+ checkers = safe, can't be hit)
+    // More valuable in home board and blocking positions
     for (let i = 0; i < 24; i++) {
       const value = state.board[i];
-      if (player === 'PLAYER_1' && value >= 2) score += 8;
-      else if (player === 'PLAYER_2' && value <= -2) score += 8;
+      const absValue = Math.abs(value);
+      const isPlayerChecker = (player === 'PLAYER_1' && value > 0) || (player === 'PLAYER_2' && value < 0);
+      const isOpponentChecker = !isPlayerChecker && absValue > 0;
+      
+      if (isPlayerChecker && absValue >= 2) {
+        // Made point bonus
+        let pointValue = 12;
+        
+        // Extra bonus for home board points
+        if (i >= playerHome.start && i <= playerHome.end) {
+          pointValue += 8;
+        }
+        
+        // Extra bonus for blocking opponent's entry points (indices 0-5 for P1, 18-23 for P2)
+        if (i >= opponentHome.start && i <= opponentHome.end) {
+          pointValue += 15; // Blocking their home is very strong
+        }
+        
+        // Prime bonus: consecutive made points are very valuable
+        // Check if adjacent points are also made
+        if (i > 0) {
+          const prevValue = state.board[i - 1];
+          const prevIsMade = (player === 'PLAYER_1' && prevValue >= 2) || (player === 'PLAYER_2' && prevValue <= -2);
+          if (prevIsMade) pointValue += 10;
+        }
+        if (i < 23) {
+          const nextValue = state.board[i + 1];
+          const nextIsMade = (player === 'PLAYER_1' && nextValue >= 2) || (player === 'PLAYER_2' && nextValue <= -2);
+          if (nextIsMade) pointValue += 10;
+        }
+        
+        score += pointValue;
+      }
+      
+      // Penalty for blots (single checkers that can be hit)
+      if (isPlayerChecker && absValue === 1) {
+        let blotPenalty = 15;
+        
+        // Higher penalty if in opponent's home board (more likely to be hit)
+        if (i >= opponentHome.start && i <= opponentHome.end) {
+          blotPenalty += 20;
+        }
+        
+        // Higher penalty early in the game when opponent has more checkers behind
+        const checkersAhead = player === 'PLAYER_1' 
+          ? state.board.slice(i + 1).reduce((sum, v) => sum + (v < 0 ? Math.abs(v) : 0), 0)
+          : state.board.slice(0, i).reduce((sum, v) => sum + (v > 0 ? v : 0), 0);
+        
+        if (checkersAhead > 3) {
+          blotPenalty += checkersAhead * 2;
+        }
+        
+        score -= blotPenalty;
+      }
+      
+      // Bonus for having opponent on the bar (they must re-enter)
+      if (state.bar[opponent] > 0) {
+        // Extra bonus for blocking entry points
+        if (i >= opponentHome.start && i <= opponentHome.end) {
+          if (isPlayerChecker && absValue >= 2) {
+            score += 20; // Blocking entry while opponent is on bar is huge
+          }
+        }
+      }
     }
     
-    // Bonus for blocking points in opponent's home (primes)
-    const opponentHome = HOME_BOARD[opponent];
-    for (let i = opponentHome.start; i <= opponentHome.end; i++) {
-      if (player === 'PLAYER_1' && state.board[i] >= 2) score += 15;
-      else if (player === 'PLAYER_2' && state.board[i] <= -2) score += 15;
+    // ===== PHASE 4: RACE ADVANTAGE =====
+    // If we're ahead in the race and can avoid contact, that's good
+    const pipDifference = opponentPips - playerPips;
+    if (pipDifference > 20) {
+      // We're significantly ahead, value safety more
+      score += 25;
     }
     
-    // Penalty for blots (single checkers that can be hit)
-    for (let i = 0; i < 24; i++) {
-      const value = state.board[i];
-      if (player === 'PLAYER_1' && value === 1) score -= 12;
-      else if (player === 'PLAYER_2' && value === -1) score -= 12;
+    // ===== PHASE 5: BEARING OFF READINESS =====
+    // Bonus for having all checkers in home board (ready to bear off)
+    if (canBearOff(state, player)) {
+      score += 50;
     }
     
     return score;
