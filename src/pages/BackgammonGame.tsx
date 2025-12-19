@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, RotateCcw, RotateCw, Gem, Flag, Users, Wifi, WifiOff, RefreshCw } from "lucide-react";
 import { BackgammonRulesDialog } from "@/components/BackgammonRulesDialog";
 import { Dice3D, CheckerStack } from "@/components/BackgammonPieces";
+import GoldConfettiExplosion from "@/components/GoldConfettiExplosion";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useSound } from "@/contexts/SoundContext";
@@ -643,7 +644,11 @@ const BackgammonGame = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="min-h-screen bg-background flex flex-col relative">
+      {/* Gold Confetti Explosion on Win */}
+      <GoldConfettiExplosion 
+        active={gameOver && gameStatus.includes("win")} 
+      />
       <TurnBanner
         gameName="Backgammon"
         roomId={roomId || "unknown"}
