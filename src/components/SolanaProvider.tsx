@@ -2,6 +2,7 @@ import React, { ReactNode, useMemo, useCallback, useState, useEffect, createCont
 import { ConnectionProvider, WalletProvider, useWallet, useConnection } from "@solana/wallet-adapter-react";
 import { WalletReadyState, WalletName } from "@solana/wallet-adapter-base";
 import { getSolanaEndpoint, getSolanaCluster } from "@/lib/solana-config";
+import { QRCodeSVG } from "qrcode.react";
 
 // ============================================================
 // WALLET ADAPTER CLEANUP - Using Solana Wallet Standard ONLY
@@ -224,6 +225,91 @@ function MobileWalletDeepLinks({ onClose }: { onClose: () => void }) {
           </p>
         </div>
       </div>
+    </div>
+  );
+}
+
+// Desktop QR Code section component
+function DesktopQRCodeSection() {
+  const [showQR, setShowQR] = useState(false);
+  const [selectedWallet, setSelectedWallet] = useState<string>("Phantom");
+  const currentUrl = typeof window !== 'undefined' ? window.location.href : '';
+
+  const walletOptions = [
+    { name: "Phantom", color: "bg-[#AB9FF2]" },
+    { name: "Solflare", color: "bg-[#FC7227]" },
+    { name: "Backpack", color: "bg-[#E33E3F]" },
+  ];
+
+  // Get the deep link URL for the selected wallet
+  const qrUrl = useMemo(() => {
+    const deepLinkInfo = WALLET_DEEP_LINKS[selectedWallet];
+    if (deepLinkInfo) {
+      return deepLinkInfo.deepLink(currentUrl);
+    }
+    return currentUrl;
+  }, [selectedWallet, currentUrl]);
+
+  if (!showQR) {
+    return (
+      <button
+        onClick={() => setShowQR(true)}
+        className="w-full mt-4 p-3 bg-muted/30 hover:bg-muted/50 border border-border/50 rounded-lg transition-all flex items-center justify-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+      >
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+        </svg>
+        Scan QR with mobile wallet
+      </button>
+    );
+  }
+
+  return (
+    <div className="mt-4 p-4 bg-muted/30 border border-border/50 rounded-lg">
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-sm font-medium text-foreground">Scan with wallet app</p>
+        <button
+          onClick={() => setShowQR(false)}
+          className="text-muted-foreground hover:text-foreground text-lg leading-none"
+        >
+          ×
+        </button>
+      </div>
+
+      {/* Wallet selector tabs */}
+      <div className="flex gap-1 mb-4 p-1 bg-muted/50 rounded-lg">
+        {walletOptions.map((wallet) => (
+          <button
+            key={wallet.name}
+            onClick={() => setSelectedWallet(wallet.name)}
+            className={`flex-1 py-1.5 px-2 text-xs font-medium rounded-md transition-all ${
+              selectedWallet === wallet.name
+                ? "bg-card text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {wallet.name}
+          </button>
+        ))}
+      </div>
+
+      {/* QR Code */}
+      <div className="flex justify-center">
+        <div className="bg-white p-3 rounded-xl shadow-inner">
+          <QRCodeSVG
+            value={qrUrl}
+            size={160}
+            level="M"
+            includeMargin={false}
+            bgColor="#ffffff"
+            fgColor="#000000"
+          />
+        </div>
+      </div>
+
+      <p className="text-xs text-muted-foreground text-center mt-3">
+        Open {selectedWallet} app → Scan → Connect
+      </p>
     </div>
   );
 }
@@ -523,6 +609,11 @@ function CustomWalletModal() {
               For best experience, open this page in your wallet's built-in browser
             </p>
           </div>
+        )}
+
+        {/* QR Code section for desktop users */}
+        {!isMobile && (
+          <DesktopQRCodeSection />
         )}
 
         <div className="flex items-center justify-center mt-4 pt-4 border-t border-border/50">
