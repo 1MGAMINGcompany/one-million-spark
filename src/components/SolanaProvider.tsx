@@ -105,6 +105,129 @@ function WalletAutoConnect() {
   return null;
 }
 
+// Check if any wallet providers are injected (for mobile detection)
+function hasInjectedWalletProviders(): boolean {
+  const win = window as any;
+  return !!(
+    win.solana ||
+    win.phantom?.solana ||
+    win.solflare ||
+    win.backpack ||
+    (win.navigator?.wallets?.length > 0)
+  );
+}
+
+// Mobile deep-link wallet info
+const MOBILE_WALLETS = [
+  {
+    name: "Phantom",
+    icon: "https://raw.githubusercontent.com/solana-labs/wallet-adapter/master/packages/wallets/icons/phantom.svg",
+    color: "from-[#AB9FF2] to-[#7C3AED]",
+    deepLink: (url: string) => `https://phantom.app/ul/browse/${encodeURIComponent(url)}?ref=${encodeURIComponent(window.location.origin)}`,
+  },
+  {
+    name: "Solflare",
+    icon: "https://raw.githubusercontent.com/solana-labs/wallet-adapter/master/packages/wallets/icons/solflare.svg",
+    color: "from-[#FC7227] to-[#E04A00]",
+    deepLink: (url: string) => `https://solflare.com/ul/v1/browse/${encodeURIComponent(url)}`,
+  },
+  {
+    name: "Backpack",
+    icon: "https://raw.githubusercontent.com/solana-labs/wallet-adapter/master/packages/wallets/icons/backpack.svg",
+    color: "from-[#E33E3F] to-[#B91C1C]",
+    deepLink: (url: string) => `https://backpack.app/ul/browse/${encodeURIComponent(url)}`,
+    installUrl: "https://backpack.app/download",
+  },
+];
+
+// Mobile deep-link screen component
+function MobileWalletDeepLinks({ onClose }: { onClose: () => void }) {
+  const currentUrl = window.location.href;
+
+  const handleOpenWallet = (wallet: typeof MOBILE_WALLETS[0]) => {
+    const deepLink = wallet.deepLink(currentUrl);
+    console.log(`📱 Opening ${wallet.name} deep link:`, deepLink);
+    window.location.href = deepLink;
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center">
+      {/* Backdrop */}
+      <div 
+        className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+        onClick={onClose}
+      />
+      
+      {/* Modal */}
+      <div className="relative bg-card border border-border rounded-xl p-6 w-full max-w-sm mx-4 shadow-2xl">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-cinzel text-foreground">Connect Wallet</h2>
+          <button 
+            onClick={onClose}
+            className="text-muted-foreground hover:text-foreground transition-colors text-2xl leading-none"
+          >
+            ×
+          </button>
+        </div>
+
+        <p className="text-sm text-muted-foreground mb-6 text-center">
+          Open this page in your wallet's browser to connect
+        </p>
+
+        <div className="space-y-3">
+          {MOBILE_WALLETS.map((wallet) => (
+            <button
+              key={wallet.name}
+              onClick={() => handleOpenWallet(wallet)}
+              className={`w-full flex items-center gap-4 p-4 rounded-xl border border-border/50 bg-gradient-to-r ${wallet.color} hover:scale-[1.02] transition-all shadow-lg`}
+            >
+              <div className="w-12 h-12 bg-white/20 backdrop-blur rounded-xl flex items-center justify-center">
+                <img 
+                  src={wallet.icon} 
+                  alt={wallet.name}
+                  className="w-8 h-8"
+                  onError={(e) => {
+                    // Fallback if icon fails to load
+                    (e.target as HTMLImageElement).style.display = 'none';
+                  }}
+                />
+              </div>
+              <div className="flex-1 text-left">
+                <p className="font-semibold text-white text-lg">
+                  Open in {wallet.name}
+                </p>
+                <p className="text-xs text-white/80">
+                  Tap to open in wallet browser
+                </p>
+              </div>
+              <svg 
+                className="w-5 h-5 text-white/80" 
+                fill="none" 
+                viewBox="0 0 24 24" 
+                stroke="currentColor"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+              </svg>
+            </button>
+          ))}
+        </div>
+
+        <div className="mt-6 p-3 bg-muted/50 rounded-lg">
+          <p className="text-xs text-muted-foreground text-center">
+            💡 Wallet apps have built-in browsers that allow you to connect securely
+          </p>
+        </div>
+
+        <div className="flex items-center justify-center mt-4 pt-4 border-t border-border/50">
+          <p className="text-xs text-muted-foreground">
+            Solana Mainnet
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Custom wallet modal using the standard wallet adapter
 function CustomWalletModal() {
   const { visible, setVisible } = useWalletModal();
@@ -117,6 +240,13 @@ function CustomWalletModal() {
   
   // Detect if we're inside a wallet browser
   const walletBrowser = detectWalletBrowser();
+  
+  // Check if we have any injected wallet providers
+  const hasInjectedWallets = useMemo(() => {
+    const has = hasInjectedWalletProviders();
+    console.log("🔍 [CustomWalletModal] hasInjectedWallets:", has, "isMobile:", isMobile, "walletBrowser:", walletBrowser);
+    return has;
+  }, []);
 
   // Track pending wallet selection for connect-on-next-tick
   const pendingWalletRef = useRef<string | null>(null);
@@ -144,6 +274,9 @@ function CustomWalletModal() {
     console.log("📋 [CustomWalletModal] Final wallet list:", filtered.map(w => w.adapter.name));
     return filtered;
   }, [wallets]);
+  
+  // Determine if we should show mobile deep-link UI
+  const showMobileDeepLinks = isMobile && !hasInjectedWallets && !walletBrowser;
 
   const handleConnect = useCallback(async (walletName: string) => {
     console.log("👆 handleConnect called with:", walletName);
@@ -262,6 +395,11 @@ function CustomWalletModal() {
 
   if (!visible) return null;
 
+  // Show mobile deep-link UI when on mobile with no injected wallets
+  if (showMobileDeepLinks) {
+    return <MobileWalletDeepLinks onClose={() => setVisible(false)} />;
+  }
+
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center">
       {/* Backdrop */}
@@ -371,15 +509,15 @@ function CustomWalletModal() {
           })}
         </div>
 
-        {filteredWallets.every(w => w.readyState !== WalletReadyState.Installed) && !isMobile && (
+        {filteredWallets.length === 0 && !isMobile && (
           <div className="mt-4 p-3 bg-muted/50 rounded-lg">
             <p className="text-sm text-muted-foreground text-center">
-              No wallets detected. Install one of the wallets above to continue.
+              No wallets detected. Install Phantom, Solflare, or Backpack to continue.
             </p>
           </div>
         )}
 
-        {isMobile && !walletBrowser && (
+        {isMobile && !walletBrowser && filteredWallets.length > 0 && (
           <div className="mt-4 p-3 bg-muted/50 rounded-lg">
             <p className="text-sm text-muted-foreground text-center">
               For best experience, open this page in your wallet's built-in browser
