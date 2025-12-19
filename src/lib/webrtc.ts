@@ -1,6 +1,5 @@
 // WebRTC Peer Connection Manager for P2P Game Sync
-// Uses Push Protocol for cross-device signaling and localStorage as fallback
-import * as PushAPI from "@pushprotocol/restapi";
+// Uses localStorage for signaling (Push Protocol stubbed for Solana migration)
 import {
   initPushUser,
   sendPushSignal,
@@ -52,9 +51,9 @@ export class WebRTCPeer {
   private isInitiator: boolean = false;
   private connectionEstablished: boolean = false;
   
-  // Push Protocol
+  // Push Protocol (stubbed for Solana)
   private usePushProtocol: boolean;
-  private pushUser: PushAPI.PushAPI | null = null;
+  private pushUser: any = null;
   private pushStreamCleanup: (() => void) | null = null;
   private pushInitialized: boolean = false;
 
