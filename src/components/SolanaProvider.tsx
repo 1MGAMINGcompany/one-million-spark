@@ -1,22 +1,17 @@
 import React, { ReactNode, useMemo, useCallback, useState, useEffect, createContext, useContext, useRef } from "react";
 import { ConnectionProvider, WalletProvider, useWallet, useConnection } from "@solana/wallet-adapter-react";
 import { WalletReadyState, WalletName } from "@solana/wallet-adapter-base";
-import { PhantomWalletAdapter } from "@solana/wallet-adapter-phantom";
-import { SolflareWalletAdapter } from "@solana/wallet-adapter-solflare";
-import { BackpackWalletAdapter } from "@solana/wallet-adapter-backpack";
 import { getSolanaEndpoint, getSolanaCluster } from "@/lib/solana-config";
-// Polyfill for navigator.userAgent if undefined (happens in some iframe contexts)
-// This must run before wallet adapters are instantiated
-if (typeof window !== 'undefined' && typeof navigator !== 'undefined') {
-  if (!navigator.userAgent) {
-    Object.defineProperty(navigator, 'userAgent', {
-      get: () => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      configurable: true,
-    });
-  }
-}
 
-// Allowed Solana wallet names - only these will be shown
+// ============================================================
+// WALLET ADAPTER CLEANUP - Using Solana Wallet Standard ONLY
+// ============================================================
+// - NO legacy adapters (PhantomWalletAdapter, SolflareWalletAdapter, etc.)
+// - Wallets are auto-discovered via Solana Wallet Standard
+// - This resolves Phantom "connecting forever" and duplicate wallets
+// ============================================================
+
+// Allowed Solana wallet names - only these will be shown (filters out MetaMask, etc.)
 const ALLOWED_WALLETS = new Set(["Phantom", "Solflare", "Backpack"]);
 
 // Custom modal context
@@ -127,22 +122,27 @@ function CustomWalletModal() {
   const pendingWalletRef = useRef<string | null>(null);
 
   // Filter to only show allowed Solana wallets (no MetaMask or EVM wallets)
+  // With wallet-standard, wallets are auto-discovered - we just filter the list
   const filteredWallets = useMemo(() => {
+    console.log("🔍 [CustomWalletModal] Available wallets from standard:", wallets.map(w => w.adapter.name));
     const seen = new Set<string>();
-    return wallets.filter(w => {
+    const filtered = wallets.filter(w => {
       const name = w.adapter.name;
-      // Only allow Phantom, Solflare, Backpack - no duplicates
+      // Only allow Phantom, Solflare, Backpack - no duplicates, no MetaMask
       if (!ALLOWED_WALLETS.has(name)) {
-        console.log("🚫 Filtering out wallet:", name);
+        console.log("🚫 [CustomWalletModal] Filtering out wallet:", name);
         return false;
       }
       if (seen.has(name)) {
-        console.log("🚫 Filtering duplicate wallet:", name);
+        console.log("🚫 [CustomWalletModal] Filtering duplicate wallet:", name);
         return false;
       }
       seen.add(name);
+      console.log("✅ [CustomWalletModal] Keeping wallet:", name, "readyState:", w.readyState);
       return true;
     });
+    console.log("📋 [CustomWalletModal] Final wallet list:", filtered.map(w => w.adapter.name));
+    return filtered;
   }, [wallets]);
 
   const handleConnect = useCallback(async (walletName: string) => {
@@ -524,14 +524,21 @@ interface SolanaProviderProps {
 export function SolanaProvider({ children }: SolanaProviderProps) {
   const endpoint = useMemo(() => getSolanaEndpoint(), []);
 
-  // Initialize legacy wallet adapters explicitly - only Solana wallets
+  // ============================================================
+  // SOLANA WALLET STANDARD - NO LEGACY ADAPTERS
+  // ============================================================
+  // Wallets that implement the Solana Wallet Standard are auto-discovered.
+  // We pass an EMPTY array - no legacy adapters needed.
+  // This prevents:
+  //   - Phantom "connecting forever" bug
+  //   - Duplicate wallet entries
+  //   - MetaMask appearing in the list
+  // ============================================================
   const wallets = useMemo(() => {
-    console.log("🔧 Initializing wallet adapters: Phantom, Solflare, Backpack only");
-    return [
-      new PhantomWalletAdapter(),
-      new SolflareWalletAdapter(),
-      new BackpackWalletAdapter(),
-    ];
+    console.log("🔧 [SolanaProvider] Using Solana Wallet Standard (no legacy adapters)");
+    console.log("🔧 [SolanaProvider] Wallets will be auto-discovered via wallet-standard");
+    // Empty array = rely entirely on auto-discovered standard wallets
+    return [];
   }, []);
 
   // Handle wallet errors with detailed logging
