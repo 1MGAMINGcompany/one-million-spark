@@ -19,7 +19,7 @@ import { useSolPrice } from "@/hooks/useSolPrice";
 import { useSolanaRooms } from "@/hooks/useSolanaRooms";
 import { Wallet, Loader2, AlertCircle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { MIN_ENTRY_FEE_SOL, getSolanaCluster } from "@/lib/solana-config";
+import { MIN_ENTRY_FEE_SOL } from "@/lib/solana-config";
 import { GameType } from "@/lib/solana-program";
 import { ConnectWalletGate } from "@/components/ConnectWalletGate";
 
@@ -40,8 +40,6 @@ export default function CreateRoom() {
   const [balance, setBalance] = useState<number>(0);
   const [checkingActiveRoom, setCheckingActiveRoom] = useState(true);
 
-  const cluster = getSolanaCluster();
-  const isDevnet = cluster === "devnet";
   const entryFeeNum = parseFloat(entryFee) || 0;
   const entryFeeUsd = formatUsd(entryFee);
 
@@ -127,11 +125,6 @@ export default function CreateRoom() {
               {t("createRoom.title")}
             </CardTitle>
             <div className="flex items-center gap-2">
-              {isDevnet && (
-                <span className="text-xs bg-amber-500/20 text-amber-500 px-2 py-0.5 rounded">
-                  Devnet
-                </span>
-              )}
               {!programReady && (
                 <span className="text-xs bg-orange-500/20 text-orange-500 px-2 py-0.5 rounded">
                   Preview

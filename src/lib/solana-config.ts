@@ -1,30 +1,27 @@
-// Solana network configuration
+// Solana network configuration - MAINNET PRODUCTION
 export const SOLANA_NETWORK = "mainnet-beta" as const;
 
-// Feature flag - set to false to show "Coming Soon" placeholder
+// Feature flag - Solana is LIVE
 export const SOLANA_ENABLED = true;
 
-// Toggle this for testing on devnet
-export const USE_DEVNET = false;
-
-// Mainnet RPC - Uses environment variable if available, falls back to public RPC
+// Mainnet RPC - MUST use environment variable (no public fallback)
 const envRpcUrl = import.meta.env.VITE_SOLANA_RPC_URL as string | undefined;
-export const SOLANA_RPC_URL = envRpcUrl || "https://api.mainnet-beta.solana.com";
+if (!envRpcUrl) {
+  console.warn("⚠️ VITE_SOLANA_RPC_URL not set - Solana features may not work properly");
+}
+export const SOLANA_RPC_URL = envRpcUrl || "";
 
-// Devnet endpoint for testing only
-export const DEVNET_RPC_URL = "https://api.devnet.solana.com";
-
-// Get current RPC endpoint
+// Get current RPC endpoint (mainnet only)
 export function getSolanaEndpoint(): string {
-  if (USE_DEVNET) {
-    return DEVNET_RPC_URL;
+  if (!SOLANA_RPC_URL) {
+    throw new Error("VITE_SOLANA_RPC_URL environment variable is required");
   }
   return SOLANA_RPC_URL;
 }
 
-// Get current cluster name
-export function getSolanaCluster(): "mainnet-beta" | "devnet" {
-  return USE_DEVNET ? "devnet" : "mainnet-beta";
+// Get current cluster name (mainnet only)
+export function getSolanaCluster(): "mainnet-beta" {
+  return "mainnet-beta";
 }
 
 // Platform fee recipient on Solana

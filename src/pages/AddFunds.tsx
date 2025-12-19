@@ -3,15 +3,12 @@ import { useSolPrice } from "@/hooks/useSolPrice";
 import { Wallet, CreditCard, Gamepad2, Link2, CheckCircle2, ExternalLink, RefreshCw, Sparkles, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useWalletModal } from "@/components/SolanaProvider";
-import { getSolanaCluster } from "@/lib/solana-config";
 import { useNavigate } from "react-router-dom";
 
 const AddFunds = () => {
   const { isConnected, address } = useWallet();
   const { setVisible } = useWalletModal();
   const { price, loading, refetch } = useSolPrice();
-  const cluster = getSolanaCluster();
-  const isDevnet = cluster === "devnet";
   const navigate = useNavigate();
 
   return (
@@ -93,8 +90,8 @@ const AddFunds = () => {
                 <p className="font-mono text-xs text-muted-foreground">{address?.slice(0, 8)}...{address?.slice(-8)}</p>
               </div>
             </div>
-            <span className={`text-xs px-2 py-1 rounded ${isDevnet ? "bg-amber-500/20 text-amber-400" : "bg-green-500/20 text-green-400"}`}>
-              {isDevnet ? "Devnet" : "Mainnet"}
+            <span className="text-xs px-2 py-1 rounded bg-green-500/20 text-green-400">
+              Mainnet
             </span>
           </div>
         )}
@@ -202,22 +199,6 @@ const AddFunds = () => {
                   Already have SOL elsewhere? You can also transfer from another wallet.
                 </p>
 
-                {isDevnet && (
-                  <div className="mt-4 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
-                    <p className="text-sm text-amber-400 font-medium mb-1">🧪 Devnet Mode</p>
-                    <p className="text-xs text-muted-foreground mb-2">
-                      Get free test SOL from the faucet:
-                    </p>
-                    <a 
-                      href="https://faucet.solana.com" 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
-                    >
-                      Solana Faucet <ExternalLink size={12} />
-                    </a>
-                  </div>
-                )}
               </div>
             </div>
           </section>

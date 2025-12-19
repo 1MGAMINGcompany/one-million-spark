@@ -324,15 +324,10 @@ function CustomWalletModal() {
           </div>
         )}
 
-        <div className="flex items-center justify-between mt-4 pt-4 border-t border-border/50">
+        <div className="flex items-center justify-center mt-4 pt-4 border-t border-border/50">
           <p className="text-xs text-muted-foreground">
-            Solana {cluster === "devnet" ? "Devnet" : "Mainnet"}
+            Solana Mainnet
           </p>
-          {cluster === "devnet" && (
-            <span className="text-xs bg-amber-500/20 text-amber-500 px-2 py-0.5 rounded">
-              Test Mode
-            </span>
-          )}
         </div>
       </div>
     </div>
