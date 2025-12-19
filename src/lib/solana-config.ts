@@ -27,8 +27,8 @@ export const PLATFORM_FEE_RECIPIENT = "3bcV9vtxeiHsXgNx4qvQbS4ZL4cMUnAg2tF3DZjtm
 // Platform fee in basis points (5% = 500 bps)
 export const PLATFORM_FEE_BPS = 500;
 
-// Minimum entry fee in SOL
-export const MIN_ENTRY_FEE_SOL = 0.01;
+// Minimum entry fee in SOL (~$0.50 USD)
+export const MIN_ENTRY_FEE_SOL = 0.004;
 
 // SOL decimals (lamports)
 export const SOL_DECIMALS = 9;
