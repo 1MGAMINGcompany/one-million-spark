@@ -345,45 +345,60 @@ const LudoAI = () => {
         </div>
 
         {/* Dice Controls - Bottom Left */}
-        <div className="absolute bottom-4 left-4 flex flex-col items-center gap-2 bg-card/90 backdrop-blur-sm rounded-lg p-3 border border-primary/30 shadow-lg">
+        <div className="absolute bottom-4 left-4 flex flex-col gap-2 bg-card/90 backdrop-blur-sm rounded-lg p-3 border border-primary/30 shadow-lg">
+          {/* Turn Indicator */}
           <TurnIndicator
             currentPlayer={currentPlayer.color}
             isAI={currentPlayer.isAI}
             isGameOver={!!gameOver}
             winner={gameOver}
           />
-          <EgyptianDice
-            value={diceValue}
-            isRolling={isRolling}
-            onRoll={handleRollDice}
-            disabled={isRolling || diceValue !== null || !!gameOver || isAnimating || currentPlayer.isAI}
-            showRollButton={!currentPlayer.isAI && !gameOver && diceValue === null && !isAnimating}
-          />
+          
+          {/* Roll Button + Dice - Left to Right */}
+          <div className="flex items-center gap-3">
+            {!currentPlayer.isAI && !gameOver && diceValue === null && !isAnimating && (
+              <Button
+                onClick={handleRollDice}
+                disabled={isRolling}
+                className="h-12 px-4 font-bold text-sm bg-primary hover:bg-primary/90"
+              >
+                Roll Dice
+              </Button>
+            )}
+            <EgyptianDice
+              value={diceValue}
+              isRolling={isRolling}
+              onRoll={handleRollDice}
+              disabled={true}
+              showRollButton={false}
+            />
+          </div>
+          
           {!currentPlayer.isAI && movableTokens.length > 0 && (
-            <p className="text-xs text-muted-foreground text-center max-w-[100px]">
+            <p className="text-xs text-muted-foreground text-center max-w-[140px]">
               {t('gameAI.tapGlowingToken')}
             </p>
           )}
           
-          {/* Audio Controls */}
-          <div className="flex gap-2 mt-1">
+          {/* Audio Controls - Below dice */}
+          <div className="flex gap-2">
             <Button
               variant="outline"
               size="icon"
               onClick={toggleMusic}
-              className="w-7 h-7 border-primary/30"
+              className="w-8 h-8 border-primary/30"
               title={musicEnabled ? "Disable Music" : "Enable Music"}
             >
-              {musicEnabled ? <Music size={12} /> : <Music2 size={12} />}
+              {musicEnabled ? <Music size={14} /> : <Music2 size={14} />}
             </Button>
             <Button
               variant="outline"
               size="icon"
               onClick={toggleSfx}
-              className="w-7 h-7 border-primary/30"
+              className="w-8 h-8 border-primary/30"
               title={sfxEnabled ? "Disable SFX" : "Enable SFX"}
             >
-              {sfxEnabled ? <Volume2 size={12} /> : <VolumeX size={12} />}
+              {sfxEnabled ? <Volume2 size={14} /> : <VolumeX size={14} />}
             </Button>
           </div>
         </div>
