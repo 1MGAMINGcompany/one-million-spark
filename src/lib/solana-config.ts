@@ -7,19 +7,24 @@ export const SOLANA_ENABLED = true;
 // Toggle this for testing on devnet
 export const USE_DEVNET = false;
 
-// RPC endpoints - fallback to public endpoints if custom not set
-export const SOLANA_RPC_ENDPOINTS = {
-  "mainnet-beta": import.meta.env.VITE_SOLANA_RPC_URL || "https://api.mainnet-beta.solana.com",
-  "devnet": "https://api.devnet.solana.com",
-} as const;
+// RPC endpoint - uses ONLY the custom URL from environment (no public fallback)
+export const SOLANA_RPC_URL = import.meta.env.VITE_SOLANA_RPC_URL as string;
 
-// Get current RPC endpoint
+// Devnet endpoint for testing only
+export const DEVNET_RPC_URL = "https://api.devnet.solana.com";
+
+// Get current RPC endpoint - NO fallback to public endpoints
 export function getSolanaEndpoint(): string {
   if (USE_DEVNET) {
-    return SOLANA_RPC_ENDPOINTS.devnet;
+    return DEVNET_RPC_URL;
   }
-  // Use custom RPC URL if available, otherwise fallback to public
-  return import.meta.env.VITE_SOLANA_RPC_URL || SOLANA_RPC_ENDPOINTS["mainnet-beta"];
+  
+  if (!SOLANA_RPC_URL) {
+    console.error("VITE_SOLANA_RPC_URL is not configured. Please set it in your environment.");
+    throw new Error("Solana RPC URL not configured");
+  }
+  
+  return SOLANA_RPC_URL;
 }
 
 // Get current cluster name
