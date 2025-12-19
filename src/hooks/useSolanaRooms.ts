@@ -18,8 +18,7 @@ import {
   PROGRAM_ID,
 } from "@/lib/solana-program";
 
-// Program is now deployed on mainnet
-const isProgramConfigured = () => true;
+// Program is deployed on mainnet - no preview guards needed
 
 export function useSolanaRooms() {
   const { connection } = useConnection();
@@ -32,11 +31,9 @@ export function useSolanaRooms() {
   const [txPending, setTxPending] = useState(false);
   const [activeRoom, setActiveRoom] = useState<RoomDisplay | null>(null);
 
-  const programReady = isProgramConfigured();
-
   // Fetch user's active open room (created by them, status Open)
   const fetchCreatorActiveRoom = useCallback(async (): Promise<RoomDisplay | null> => {
-    if (!programReady || !publicKey) {
+    if (!publicKey) {
       setActiveRoom(null);
       return null;
     }
@@ -53,16 +50,12 @@ export function useSolanaRooms() {
       setActiveRoom(null);
       return null;
     }
-  }, [connection, publicKey, programReady]);
+  }, [connection, publicKey]);
 
   // Fetch all open public rooms
   const fetchRooms = useCallback(async () => {
-    if (!programReady) {
-      setError("Program not configured");
-      return;
-    }
-    
     setLoading(true);
+    setError(null);
     setError(null);
     
     try {
@@ -74,13 +67,12 @@ export function useSolanaRooms() {
     } finally {
       setLoading(false);
     }
-  }, [connection, programReady]);
+  }, [connection]);
 
   // Fetch single room
   const getRoom = useCallback(async (roomId: number): Promise<RoomDisplay | null> => {
-    if (!programReady) return null;
     return fetchRoomById(connection, roomId);
-  }, [connection, programReady]);
+  }, [connection]);
 
   // Create room
   const createRoom = useCallback(async (
@@ -94,15 +86,6 @@ export function useSolanaRooms() {
       toast({
         title: "Wallet not connected",
         description: "Please connect your wallet first",
-        variant: "destructive",
-      });
-      return null;
-    }
-
-    if (!programReady) {
-      toast({
-        title: "Program not ready",
-        description: "Solana program is not yet deployed",
         variant: "destructive",
       });
       return null;
@@ -175,7 +158,7 @@ export function useSolanaRooms() {
     } finally {
       setTxPending(false);
     }
-  }, [publicKey, connected, connection, sendTransaction, toast, fetchRooms, programReady, fetchCreatorActiveRoom]);
+  }, [publicKey, connected, connection, sendTransaction, toast, fetchRooms, fetchCreatorActiveRoom]);
 
   // Join room
   const joinRoom = useCallback(async (roomId: number): Promise<boolean> => {
@@ -188,14 +171,6 @@ export function useSolanaRooms() {
       return false;
     }
 
-    if (!programReady) {
-      toast({
-        title: "Program not ready",
-        description: "Solana program is not yet deployed",
-        variant: "destructive",
-      });
-      return false;
-    }
 
     // Check for existing active room
     const existingRoom = await fetchCreatorActiveRoom();
@@ -248,7 +223,7 @@ export function useSolanaRooms() {
     } finally {
       setTxPending(false);
     }
-  }, [publicKey, connected, connection, sendTransaction, toast, fetchRooms, programReady, fetchCreatorActiveRoom]);
+  }, [publicKey, connected, connection, sendTransaction, toast, fetchRooms, fetchCreatorActiveRoom]);
 
   // Cancel room
   const cancelRoom = useCallback(async (roomId: number): Promise<boolean> => {
@@ -261,14 +236,6 @@ export function useSolanaRooms() {
       return false;
     }
 
-    if (!programReady) {
-      toast({
-        title: "Program not ready",
-        description: "Solana program is not yet deployed",
-        variant: "destructive",
-      });
-      return false;
-    }
 
     setTxPending(true);
     
@@ -311,11 +278,11 @@ export function useSolanaRooms() {
     } finally {
       setTxPending(false);
     }
-  }, [publicKey, connected, connection, sendTransaction, toast, fetchRooms, programReady]);
+  }, [publicKey, connected, connection, sendTransaction, toast, fetchRooms]);
 
   // Ping room (creator presence heartbeat)
   const pingRoom = useCallback(async (roomId: number): Promise<boolean> => {
-    if (!publicKey || !connected || !programReady) {
+    if (!publicKey || !connected) {
       return false;
     }
 
@@ -340,7 +307,7 @@ export function useSolanaRooms() {
       console.error("Ping room error:", err);
       return false;
     }
-  }, [publicKey, connected, connection, sendTransaction, programReady]);
+  }, [publicKey, connected, connection, sendTransaction]);
 
   // Cancel abandoned room (anyone can call if creator timed out)
   const cancelAbandonedRoom = useCallback(async (roomId: number, players: PublicKey[]): Promise<boolean> => {
@@ -353,14 +320,6 @@ export function useSolanaRooms() {
       return false;
     }
 
-    if (!programReady) {
-      toast({
-        title: "Program not ready",
-        description: "Solana program is not yet deployed",
-        variant: "destructive",
-      });
-      return false;
-    }
 
     setTxPending(true);
     
@@ -402,7 +361,7 @@ export function useSolanaRooms() {
     } finally {
       setTxPending(false);
     }
-  }, [publicKey, connected, connection, sendTransaction, toast, fetchRooms, programReady]);
+  }, [publicKey, connected, connection, sendTransaction, toast, fetchRooms]);
 
   // Get user's SOL balance
   const getBalance = useCallback(async (): Promise<number> => {
@@ -420,7 +379,6 @@ export function useSolanaRooms() {
     loading,
     error,
     txPending,
-    programReady,
     activeRoom,
     fetchRooms,
     getRoom,

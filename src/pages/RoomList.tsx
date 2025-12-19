@@ -23,13 +23,13 @@ export default function RoomList() {
   const navigate = useNavigate();
   const { t } = useTranslation();
   const { isConnected, address } = useWallet();
-  const { rooms, loading, error, programReady, fetchRooms } = useSolanaRooms();
+  const { rooms, loading, error, fetchRooms } = useSolanaRooms();
 
   const targetCluster = getSolanaCluster();
 
   // Initial fetch and auto-refresh every 30 seconds
   useEffect(() => {
-    if (isConnected && SOLANA_ENABLED && programReady) {
+    if (isConnected && SOLANA_ENABLED) {
       fetchRooms();
       
       const interval = setInterval(() => {
@@ -38,7 +38,7 @@ export default function RoomList() {
       
       return () => clearInterval(interval);
     }
-  }, [isConnected, programReady]);
+  }, [isConnected]);
 
   if (!isConnected) {
     return <WalletRequired message="Connect your Solana wallet to browse game rooms." />;
@@ -58,31 +58,6 @@ export default function RoomList() {
               <h3 className="text-xl font-semibold mb-2">Solana Integration Coming Soon</h3>
               <p className="text-muted-foreground">
                 We're migrating to Solana! Browse and join rooms with SOL entry fees soon.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  // Program not ready (placeholder program ID)
-  if (!programReady) {
-    return (
-      <div className="container max-w-4xl py-8 px-4">
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-cinzel">{t("roomList.title")}</h1>
-        </div>
-        <Card className="border-border/50 bg-card/80 backdrop-blur">
-          <CardContent className="py-12">
-            <div className="text-center">
-              <AlertTriangle className="h-16 w-16 text-yellow-500 mx-auto mb-4" />
-              <h3 className="text-xl font-semibold mb-2">Solana Program Not Deployed</h3>
-              <p className="text-muted-foreground mb-4">
-                The on-chain program is being configured. Check back soon!
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Network: {targetCluster === "mainnet-beta" ? "Mainnet" : "Devnet"}
               </p>
             </div>
           </CardContent>
