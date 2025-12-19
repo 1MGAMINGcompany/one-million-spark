@@ -4,18 +4,15 @@ export const SOLANA_NETWORK = "mainnet-beta" as const;
 // Feature flag - Solana is LIVE
 export const SOLANA_ENABLED = true;
 
-// Mainnet RPC - MUST use environment variable (no public fallback)
+// Mainnet RPC - Uses environment variable, with Helius public fallback
 const envRpcUrl = import.meta.env.VITE_SOLANA_RPC_URL as string | undefined;
 if (!envRpcUrl) {
-  console.warn("⚠️ VITE_SOLANA_RPC_URL not set - Solana features may not work properly");
+  console.warn("⚠️ VITE_SOLANA_RPC_URL not set - using public RPC (rate limited)");
 }
-export const SOLANA_RPC_URL = envRpcUrl || "";
+export const SOLANA_RPC_URL = envRpcUrl || "https://mainnet.helius-rpc.com/?api-key=1d8740dc-e5f4-421c-b823-e1bad1889eff";
 
 // Get current RPC endpoint (mainnet only)
 export function getSolanaEndpoint(): string {
-  if (!SOLANA_RPC_URL) {
-    throw new Error("VITE_SOLANA_RPC_URL environment variable is required");
-  }
   return SOLANA_RPC_URL;
 }
 
