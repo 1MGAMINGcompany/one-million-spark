@@ -30,7 +30,7 @@ export default function CreateRoom() {
   const { toast } = useToast();
   const { play } = useSound();
   const { price, formatUsd, loading: priceLoading, refetch: refetchPrice } = useSolPrice();
-  const { createRoom, txPending, programReady, getBalance, activeRoom, fetchCreatorActiveRoom } = useSolanaRooms();
+  const { createRoom, txPending, getBalance, activeRoom, fetchCreatorActiveRoom } = useSolanaRooms();
 
   const [gameType, setGameType] = useState<string>("1"); // Chess
   const [entryFee, setEntryFee] = useState<string>("0.1");
@@ -124,13 +124,6 @@ export default function CreateRoom() {
             <CardTitle className="text-lg font-cinzel">
               {t("createRoom.title")}
             </CardTitle>
-            <div className="flex items-center gap-2">
-              {!programReady && (
-                <span className="text-xs bg-orange-500/20 text-orange-500 px-2 py-0.5 rounded">
-                  Preview
-                </span>
-              )}
-            </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-4 px-4 pb-5">
@@ -164,15 +157,6 @@ export default function CreateRoom() {
             </div>
           </div>
 
-          {/* Program not ready notice */}
-          {!programReady && (
-            <div className="flex items-start gap-2 p-2.5 bg-orange-500/10 border border-orange-500/20 rounded-lg">
-              <AlertCircle className="h-4 w-4 text-orange-500 mt-0.5 shrink-0" />
-              <p className="text-xs text-orange-200">
-                Solana program not yet deployed. Form is in preview mode.
-              </p>
-            </div>
-          )}
 
           {/* Game Type */}
           <div className="space-y-1.5">
@@ -254,7 +238,7 @@ export default function CreateRoom() {
           {/* Create Button */}
           <Button 
             onClick={handleCreateRoom}
-            disabled={txPending || !programReady || !!activeRoom || checkingActiveRoom}
+            disabled={txPending || !!activeRoom || checkingActiveRoom}
             className="w-full"
             size="sm"
           >
@@ -268,8 +252,6 @@ export default function CreateRoom() {
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 Checking...
               </>
-            ) : !programReady ? (
-              "Program Not Deployed"
             ) : activeRoom ? (
               "Cancel Active Room First"
             ) : (
