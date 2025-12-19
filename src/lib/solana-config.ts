@@ -7,8 +7,9 @@ export const SOLANA_ENABLED = true;
 // Toggle this for testing on devnet
 export const USE_DEVNET = false;
 
-// Mainnet RPC - Read from environment variable (set in Lovable Secrets)
-export const SOLANA_RPC_URL = import.meta.env.VITE_SOLANA_RPC_URL as string;
+// Mainnet RPC - Uses environment variable if available, falls back to public RPC
+const envRpcUrl = import.meta.env.VITE_SOLANA_RPC_URL as string | undefined;
+export const SOLANA_RPC_URL = envRpcUrl || "https://api.mainnet-beta.solana.com";
 
 // Devnet endpoint for testing only
 export const DEVNET_RPC_URL = "https://api.devnet.solana.com";
@@ -17,9 +18,6 @@ export const DEVNET_RPC_URL = "https://api.devnet.solana.com";
 export function getSolanaEndpoint(): string {
   if (USE_DEVNET) {
     return DEVNET_RPC_URL;
-  }
-  if (!SOLANA_RPC_URL) {
-    throw new Error("VITE_SOLANA_RPC_URL is not configured in secrets");
   }
   return SOLANA_RPC_URL;
 }
