@@ -105,19 +105,30 @@ export function useTurnNotifications({
 
   // Request notification permission
   const requestPermission = useCallback(async (): Promise<boolean> => {
-    const granted = await requestNotificationPermission();
-    setHasPermission(granted);
-    return granted;
+    try {
+      const granted = await requestNotificationPermission();
+      setHasPermission(granted);
+      return granted;
+    } catch (error) {
+      console.error("[TurnNotifications] Permission request failed:", error);
+      setHasPermission(false);
+      return false;
+    }
   }, []);
 
   // Enable notifications with permission request
   const enableNotifications = useCallback(async () => {
-    const granted = await requestPermission();
-    if (granted) {
-      setNotificationsEnabled(true);
-      return true;
+    try {
+      const granted = await requestPermission();
+      if (granted) {
+        setNotificationsEnabled(true);
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error("[TurnNotifications] Enable notifications failed:", error);
+      return false;
     }
-    return false;
   }, [requestPermission]);
 
   // Disable notifications

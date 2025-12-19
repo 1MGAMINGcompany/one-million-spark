@@ -50,21 +50,33 @@ export async function startNotificationListener(
 
 // Request browser notification permission (still works without Push Protocol)
 export async function requestNotificationPermission(): Promise<boolean> {
-  if (!("Notification" in window)) {
-    console.warn("[PushNotifications] Browser doesn't support notifications");
+  try {
+    if (!("Notification" in window)) {
+      console.warn("[PushNotifications] Browser doesn't support notifications");
+      return false;
+    }
+
+    if (Notification.permission === "granted") {
+      return true;
+    }
+
+    if (Notification.permission === "denied") {
+      console.warn("[PushNotifications] Notifications were previously denied");
+      return false;
+    }
+
+    // Request permission with timeout to prevent hanging on mobile
+    const permissionPromise = Notification.requestPermission();
+    const timeoutPromise = new Promise<NotificationPermission>((_, reject) => 
+      setTimeout(() => reject(new Error("Permission request timeout")), 10000)
+    );
+
+    const permission = await Promise.race([permissionPromise, timeoutPromise]);
+    return permission === "granted";
+  } catch (error) {
+    console.error("[PushNotifications] Error requesting permission:", error);
     return false;
   }
-
-  if (Notification.permission === "granted") {
-    return true;
-  }
-
-  if (Notification.permission !== "denied") {
-    const permission = await Notification.requestPermission();
-    return permission === "granted";
-  }
-
-  return false;
 }
 
 // Show browser notification (still works without Push Protocol)
