@@ -765,35 +765,95 @@ const BackgammonGame = () => {
               </div>
             </div>
 
-            {/* Bear off areas */}
-            <div className="flex justify-between mt-4">
-              <div className="text-center">
-                <p className="text-xs text-muted-foreground mb-1">Your Bear Off</p>
-                <div 
-                  onClick={() => handlePointClick(-2)}
-                  className={cn(
-                    "w-16 h-12 bg-primary/20 rounded flex items-center justify-center transition-all",
-                    validMoves.includes(-2) && "cursor-pointer ring-2 ring-primary animate-pulse drop-shadow-[0_0_25px_hsl(45_93%_70%)] bg-primary/40",
-                    validMoves.includes(-2) && "hover:bg-primary/50"
-                  )}
-                >
-                  <span className="font-bold text-primary text-lg">
-                    {myRole === "player" ? gameState.bearOff.player : gameState.bearOff.ai}
-                  </span>
+            {/* Home Board Status & Bear off areas */}
+            {(() => {
+              // Calculate checkers in home board
+              // points array: positive = player checkers, negative = AI checkers
+              const myHomeRange = myRole === "player" ? [0, 1, 2, 3, 4, 5] : [18, 19, 20, 21, 22, 23];
+              const isPlayer = myRole === "player";
+              const checkersInHome = myHomeRange.reduce((sum, pt) => {
+                const val = gameState.points[pt];
+                // Player: count positive values, AI: count absolute of negative values
+                return sum + (isPlayer ? (val > 0 ? val : 0) : (val < 0 ? Math.abs(val) : 0));
+              }, 0);
+              const myBarCount = isPlayer ? gameState.bar.player : gameState.bar.ai;
+              const myBearOff = isPlayer ? gameState.bearOff.player : gameState.bearOff.ai;
+              const totalCheckers = 15;
+              const checkersOutside = totalCheckers - checkersInHome - myBearOff - myBarCount;
+              const canBearOffNow = canBearOff(gameState, isPlayer ? "player" : "ai");
+              
+              return (
+                <div className="flex flex-col gap-3 mt-4">
+                  {/* Home Board Status Indicator */}
+                  <div className={cn(
+                    "flex items-center justify-between px-3 py-2 rounded-lg border transition-all",
+                    canBearOffNow 
+                      ? "bg-green-500/20 border-green-500/50 text-green-400" 
+                      : "bg-muted/10 border-border/50 text-muted-foreground"
+                  )}>
+                    <div className="flex items-center gap-2">
+                      <div className={cn(
+                        "w-3 h-3 rounded-full",
+                        canBearOffNow ? "bg-green-500 animate-pulse" : "bg-muted-foreground/50"
+                      )} />
+                      <span className="text-xs font-medium">
+                        {canBearOffNow ? "Bear-Off Ready!" : "Move to Home Board"}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3 text-xs">
+                      <div className="flex items-center gap-1">
+                        <span className="text-muted-foreground">Home:</span>
+                        <span className={cn("font-bold", canBearOffNow && "text-green-400")}>
+                          {checkersInHome}/15
+                        </span>
+                      </div>
+                      {checkersOutside > 0 && (
+                        <div className="flex items-center gap-1">
+                          <span className="text-muted-foreground">Outside:</span>
+                          <span className="font-bold text-orange-400">{checkersOutside}</span>
+                        </div>
+                      )}
+                      {myBarCount > 0 && (
+                        <div className="flex items-center gap-1">
+                          <span className="text-muted-foreground">Bar:</span>
+                          <span className="font-bold text-red-400">{myBarCount}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* Bear off areas */}
+                  <div className="flex justify-between">
+                    <div className="text-center">
+                      <p className="text-xs text-muted-foreground mb-1">Your Bear Off</p>
+                      <div 
+                        onClick={() => handlePointClick(-2)}
+                        className={cn(
+                          "w-16 h-12 bg-primary/20 rounded flex items-center justify-center transition-all",
+                          validMoves.includes(-2) && "cursor-pointer ring-2 ring-primary animate-pulse drop-shadow-[0_0_25px_hsl(45_93%_70%)] bg-primary/40",
+                          validMoves.includes(-2) && "hover:bg-primary/50"
+                        )}
+                      >
+                        <span className="font-bold text-primary text-lg">
+                          {myBearOff}
+                        </span>
+                      </div>
+                      {validMoves.includes(-2) && (
+                        <p className="text-xs text-primary mt-1 animate-pulse">Tap to bear off</p>
+                      )}
+                    </div>
+                    <div className="text-center">
+                      <p className="text-xs text-muted-foreground mb-1">Opponent Bear Off</p>
+                      <div className="w-16 h-12 bg-muted/20 rounded flex items-center justify-center">
+                        <span className="font-bold text-muted-foreground text-lg">
+                          {myRole === "player" ? gameState.bearOff.ai : gameState.bearOff.player}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                {validMoves.includes(-2) && (
-                  <p className="text-xs text-primary mt-1 animate-pulse">Tap to bear off</p>
-                )}
-              </div>
-              <div className="text-center">
-                <p className="text-xs text-muted-foreground mb-1">Opponent Bear Off</p>
-                <div className="w-16 h-12 bg-muted/20 rounded flex items-center justify-center">
-                  <span className="font-bold text-muted-foreground text-lg">
-                    {myRole === "player" ? gameState.bearOff.ai : gameState.bearOff.player}
-                  </span>
-                </div>
-              </div>
-            </div>
+              );
+            })()}
           </div>
 
           {/* Controls */}
