@@ -831,21 +831,37 @@ const BackgammonGame = () => {
                   {/* Bear off areas */}
                   <div className="flex justify-between">
                     <div className="text-center">
-                      <p className="text-xs text-muted-foreground mb-1">Your Bear Off</p>
+                      <p className={cn(
+                        "text-xs mb-1 transition-colors",
+                        canBearOffNow ? "text-green-400 font-medium" : "text-muted-foreground"
+                      )}>Your Bear Off</p>
                       <div 
                         onClick={() => handlePointClick(-2)}
                         className={cn(
-                          "w-16 h-12 bg-primary/20 rounded flex items-center justify-center transition-all",
-                          validMoves.includes(-2) && "cursor-pointer ring-2 ring-primary animate-pulse drop-shadow-[0_0_25px_hsl(45_93%_70%)] bg-primary/40",
-                          validMoves.includes(-2) && "hover:bg-primary/50"
+                          "w-16 h-12 rounded flex items-center justify-center transition-all relative",
+                          // Base state
+                          !canBearOffNow && "bg-primary/20",
+                          // Ready to bear off (glowing highlight)
+                          canBearOffNow && !validMoves.includes(-2) && "bg-green-500/30 ring-2 ring-green-500/50 shadow-[0_0_20px_hsl(142_76%_36%/0.4)]",
+                          // Active target (can tap now)
+                          validMoves.includes(-2) && "cursor-pointer ring-2 ring-primary animate-pulse shadow-[0_0_30px_hsl(45_93%_70%/0.6)] bg-primary/50"
                         )}
                       >
-                        <span className="font-bold text-primary text-lg">
+                        {/* Glow overlay when bearing off is available */}
+                        {canBearOffNow && (
+                          <div className="absolute inset-0 rounded bg-gradient-to-t from-green-500/20 to-transparent animate-pulse" />
+                        )}
+                        <span className={cn(
+                          "font-bold text-lg relative z-10",
+                          canBearOffNow ? "text-green-400" : "text-primary"
+                        )}>
                           {myBearOff}
                         </span>
                       </div>
-                      {validMoves.includes(-2) && (
-                        <p className="text-xs text-primary mt-1 animate-pulse">Tap to bear off</p>
+                      {validMoves.includes(-2) ? (
+                        <p className="text-xs text-primary mt-1 animate-pulse font-medium">Tap to bear off!</p>
+                      ) : canBearOffNow && (
+                        <p className="text-xs text-green-400/80 mt-1">Ready</p>
                       )}
                     </div>
                     <div className="text-center">
