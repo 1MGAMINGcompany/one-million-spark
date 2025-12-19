@@ -333,9 +333,9 @@ const LudoAI = () => {
       </div>
 
       {/* Game Area - Responsive layout */}
-      <div className="flex-1 flex items-center justify-center p-2 md:p-4 relative">
-        <div className="w-full max-w-4xl flex flex-col items-center justify-center gap-4">
-          {/* Game Board */}
+      <div className="flex-1 flex flex-col items-center justify-center p-2 md:p-4">
+        {/* Game Board */}
+        <div className="w-full max-w-md">
           <LudoBoard
             players={players}
             currentPlayerIndex={currentPlayerIndex}
@@ -344,23 +344,15 @@ const LudoAI = () => {
           />
         </div>
 
-        {/* Dice Controls - Bottom Left */}
-        <div className="absolute bottom-4 left-4 flex flex-col gap-2 bg-card/90 backdrop-blur-sm rounded-lg p-3 border border-primary/30 shadow-lg">
-          {/* Turn Indicator */}
-          <TurnIndicator
-            currentPlayer={currentPlayer.color}
-            isAI={currentPlayer.isAI}
-            isGameOver={!!gameOver}
-            winner={gameOver}
-          />
-          
-          {/* Roll Button + Dice - Left to Right */}
+        {/* Dice Controls - Below Board */}
+        <div className="w-full max-w-md mt-4 flex items-start gap-4 bg-card/90 backdrop-blur-sm rounded-lg p-3 border border-primary/30 shadow-lg">
+          {/* Left side: Roll Button + Dice */}
           <div className="flex items-center gap-3">
             {!currentPlayer.isAI && !gameOver && diceValue === null && !isAnimating && (
               <Button
                 onClick={handleRollDice}
                 disabled={isRolling}
-                className="h-12 px-4 font-bold text-sm bg-primary hover:bg-primary/90"
+                className="h-12 px-5 font-bold text-sm bg-primary hover:bg-primary/90"
               >
                 Roll Dice
               </Button>
@@ -374,33 +366,42 @@ const LudoAI = () => {
             />
           </div>
           
-          {!currentPlayer.isAI && movableTokens.length > 0 && (
-            <p className="text-xs text-muted-foreground text-center max-w-[140px]">
-              {t('gameAI.tapGlowingToken')}
-            </p>
-          )}
-          
-          {/* Audio Controls - Below dice */}
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={toggleMusic}
-              className="w-8 h-8 border-primary/30"
-              title={musicEnabled ? "Disable Music" : "Enable Music"}
-            >
-              {musicEnabled ? <Music size={14} /> : <Music2 size={14} />}
-            </Button>
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={toggleSfx}
-              className="w-8 h-8 border-primary/30"
-              title={sfxEnabled ? "Disable SFX" : "Enable SFX"}
-            >
-              {sfxEnabled ? <Volume2 size={14} /> : <VolumeX size={14} />}
-            </Button>
+          {/* Center: Turn indicator + hint */}
+          <div className="flex-1 flex flex-col items-center justify-center">
+            <TurnIndicator
+              currentPlayer={currentPlayer.color}
+              isAI={currentPlayer.isAI}
+              isGameOver={!!gameOver}
+              winner={gameOver}
+            />
+            {!currentPlayer.isAI && movableTokens.length > 0 && (
+              <p className="text-xs text-muted-foreground text-center mt-1">
+                {t('gameAI.tapGlowingToken')}
+              </p>
+            )}
           </div>
+        </div>
+
+        {/* Audio Controls - Below Dice Controls */}
+        <div className="flex gap-2 mt-2">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={toggleMusic}
+            className="w-9 h-9 border-primary/30"
+            title={musicEnabled ? "Disable Music" : "Enable Music"}
+          >
+            {musicEnabled ? <Music size={16} /> : <Music2 size={16} />}
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={toggleSfx}
+            className="w-9 h-9 border-primary/30"
+            title={sfxEnabled ? "Disable SFX" : "Enable SFX"}
+          >
+            {sfxEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
+          </Button>
         </div>
       </div>
 
