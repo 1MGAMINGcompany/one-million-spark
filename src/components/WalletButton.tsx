@@ -3,15 +3,28 @@ import { useWallet, useConnection } from "@solana/wallet-adapter-react";
 import { LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Wallet, LogOut, RefreshCw, Copy, Check, AlertCircle, Smartphone, Loader2 } from "lucide-react";
+import { Wallet, LogOut, RefreshCw, Copy, Check, AlertCircle, Smartphone, Loader2, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { fetchBalance as fetchBalanceRpc, is403Error } from "@/lib/solana-rpc";
 import { NetworkProofBadge } from "./NetworkProofBadge";
+import { MobileWalletFallback } from "./MobileWalletFallback";
 
 const CONNECT_TIMEOUT_MS = 8000;
 
-// Device detection using navigator.userAgent
+// ===== ENVIRONMENT DETECTION =====
 const getIsMobile = () => /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+const getIsAndroid = () => /Android/i.test(navigator.userAgent);
+const getIsIOS = () => /iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+// Check if we're inside a wallet's in-app browser
+const getIsInWalletBrowser = () => {
+  const win = window as any;
+  const isInPhantom = !!win?.phantom?.solana?.isPhantom;
+  const isInSolflare = !!win?.solflare?.isSolflare;
+  // Check for any injected Solana provider (covers other wallet browsers)
+  const hasSolanaProvider = !!win?.solana;
+  return isInPhantom || isInSolflare || hasSolanaProvider;
+};
 
 // SOLANA-ONLY: Allowed wallet names (case-insensitive substring match)
 const ALLOWED_SOLANA_WALLETS = ['phantom', 'solflare', 'backpack', 'glow', 'trust'];
@@ -19,7 +32,6 @@ const ALLOWED_SOLANA_WALLETS = ['phantom', 'solflare', 'backpack', 'glow', 'trus
 // Wallets to explicitly BLOCK (EVM/non-Solana)
 const BLOCKED_WALLET_NAMES = [
   'metamask',
-  'mobile wallet adapter', // MWA doesn't work well on desktop
   'walletconnect',
   'coinbase',
   'rainbow',
@@ -38,9 +50,14 @@ export function WalletButton() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [connectTimeout, setConnectTimeout] = useState(false);
   const [connectingWallet, setConnectingWallet] = useState<string | null>(null);
+  const [showFallbackPanel, setShowFallbackPanel] = useState(false);
   const connectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Platform detection
   const isMobile = getIsMobile();
+  const isAndroid = getIsAndroid();
+  const isIOS = getIsIOS();
+  const isInWalletBrowser = getIsInWalletBrowser();
 
   // Clear timeout on unmount or when connected
   useEffect(() => {
@@ -49,6 +66,7 @@ export function WalletButton() {
       connectTimeoutRef.current = null;
       setConnectTimeout(false);
       setConnectingWallet(null);
+      setShowFallbackPanel(false);
     }
     return () => {
       if (connectTimeoutRef.current) {
@@ -76,7 +94,6 @@ export function WalletButton() {
       console.error('[Wallet] Balance error:', msg);
       setBalanceError(msg);
       
-      // Show specific error for 403
       if (is403Error(err)) {
         toast.error('RPC access denied - using public fallback failed');
       } else {
@@ -94,37 +111,63 @@ export function WalletButton() {
     }
   }, [connected, publicKey, fetchBalance]);
 
+  // Handle MWA timeout - show fallback panel
+  const handleMWATimeout = useCallback(() => {
+    setConnectTimeout(true);
+    setShowFallbackPanel(true);
+  }, []);
+
   const handleSelectWallet = async (walletName: string) => {
     const selectedWallet = wallets.find(w => w.adapter.name === walletName);
     if (selectedWallet) {
+      const isMWA = walletName.toLowerCase().includes('mobile wallet adapter');
+      
       try {
         setConnectingWallet(walletName);
         setConnectTimeout(false);
         
-        // Start timeout for connection
+        // Start timeout for connection - especially important for MWA
         connectTimeoutRef.current = setTimeout(() => {
           if (!connected) {
-            setConnectTimeout(true);
+            handleMWATimeout();
           }
         }, CONNECT_TIMEOUT_MS);
 
         select(selectedWallet.adapter.name);
         setDialogOpen(false);
+        
+        // For MWA on Android, show immediate feedback
+        if (isMWA && isAndroid) {
+          toast.info("Opening wallet app...");
+        }
       } catch (err) {
         console.error('[Wallet] Select error:', err);
         toast.error('Failed to select wallet');
         setConnectingWallet(null);
+        
+        // On error, show fallback panel for mobile
+        if (isMobile) {
+          setShowFallbackPanel(true);
+        }
       }
     }
   };
 
   const handleRetryConnect = () => {
     setConnectTimeout(false);
+    setShowFallbackPanel(false);
     if (wallet) {
       try {
         wallet.adapter.connect();
+        // Restart timeout
+        connectTimeoutRef.current = setTimeout(() => {
+          if (!connected) {
+            handleMWATimeout();
+          }
+        }, CONNECT_TIMEOUT_MS);
       } catch (err) {
         console.error('[Wallet] Retry connect error:', err);
+        setShowFallbackPanel(true);
       }
     }
   };
@@ -135,6 +178,7 @@ export function WalletButton() {
       setBalance(null);
       setBalanceError(null);
       setConnectTimeout(false);
+      setShowFallbackPanel(false);
     } catch (err) {
       console.error('[Wallet] Disconnect error:', err);
     }
@@ -152,6 +196,11 @@ export function WalletButton() {
     }
   };
 
+  const handleOpenFallbackPanel = () => {
+    setDialogOpen(false);
+    setShowFallbackPanel(true);
+  };
+
   // SOLANA-ONLY: Filter to allowed wallets, block EVM/MetaMask
   const filteredWallets = wallets.filter(w => {
     const name = w.adapter.name.toLowerCase();
@@ -161,21 +210,27 @@ export function WalletButton() {
       return false;
     }
     
+    const isMWA = name.includes('mobile wallet adapter');
+    
     // On desktop: never show MWA
-    if (!isMobile && name.includes('mobile wallet adapter')) {
+    if (!isMobile && isMWA) {
       return false;
     }
     
-    // Only allow known Solana wallets
-    const isAllowed = ALLOWED_SOLANA_WALLETS.some(allowed => name.includes(allowed));
-    
-    // Also allow MWA on mobile
-    const isMWA = name.includes('mobile wallet adapter');
-    if (isMobile && isMWA) {
-      return true;
+    // On mobile in wallet browser: hide MWA (use injected provider instead)
+    if (isMobile && isInWalletBrowser && isMWA) {
+      return false;
     }
     
-    return isAllowed;
+    // On mobile outside wallet browser:
+    // - Android: show MWA
+    // - iOS: hide MWA (doesn't work reliably)
+    if (isMobile && !isInWalletBrowser && isMWA) {
+      return isAndroid; // Only show MWA on Android
+    }
+    
+    // Only allow known Solana wallets
+    return ALLOWED_SOLANA_WALLETS.some(allowed => name.includes(allowed));
   });
 
   // Sort: Installed wallets first, then by priority
@@ -195,32 +250,57 @@ export function WalletButton() {
     return 0;
   });
 
-  // Connection timeout state - show retry UI
+  // Show fallback panel
+  if (showFallbackPanel) {
+    return (
+      <MobileWalletFallback 
+        onClose={() => {
+          setShowFallbackPanel(false);
+          setConnectTimeout(false);
+          setConnectingWallet(null);
+        }}
+        isAndroid={isAndroid}
+        isIOS={isIOS}
+      />
+    );
+  }
+
+  // Connection timeout state - show retry UI with platform-specific guidance
   if ((connecting || connectingWallet) && connectTimeout) {
     return (
       <div className="flex flex-col items-center gap-2 p-4 bg-card rounded-lg border">
         <AlertCircle className="text-amber-500" size={24} />
         <p className="text-sm text-muted-foreground text-center max-w-xs">
-          Connection didn't start. Please open this site inside your wallet's browser (Phantom/Solflare/Backpack) and try again.
+          {isAndroid 
+            ? "If your wallet didn't open, use 'Open in wallet browser' below."
+            : isIOS
+            ? "iPhone browsers may not connect directly. Open inside Phantom/Solflare browser."
+            : "Connection didn't start. Please try again."
+          }
         </p>
         <div className="flex gap-2 mt-2">
           <Button size="sm" variant="outline" onClick={handleRetryConnect}>
             Retry
           </Button>
-          <Button size="sm" variant="ghost" onClick={() => {
+          {isMobile && (
+            <Button size="sm" variant="default" onClick={() => setShowFallbackPanel(true)} className="gap-1">
+              <ExternalLink size={14} />
+              Open in wallet browser
+            </Button>
+          )}
+        </div>
+        <Button 
+          size="sm" 
+          variant="ghost" 
+          onClick={() => {
             setConnectTimeout(false);
             setConnectingWallet(null);
             handleDisconnect();
-          }}>
-            Cancel
-          </Button>
-        </div>
-        {isMobile && (
-          <p className="text-xs text-amber-500 flex items-center gap-1 mt-2">
-            <Smartphone size={12} />
-            Open in wallet browser for best experience
-          </p>
-        )}
+          }}
+          className="mt-1"
+        >
+          Cancel
+        </Button>
       </div>
     );
   }
@@ -254,7 +334,25 @@ export function WalletButton() {
             <DialogTitle>Connect Wallet</DialogTitle>
           </DialogHeader>
           <div className="grid gap-2 py-4">
-            {sortedWallets.length === 0 ? (
+            {/* Mobile: Show "Open in wallet browser" as primary option for iOS */}
+            {isMobile && !isInWalletBrowser && (
+              <Button
+                variant={isIOS ? "default" : "outline"}
+                className="w-full justify-start gap-3 h-12"
+                onClick={handleOpenFallbackPanel}
+              >
+                <Smartphone size={20} />
+                <div className="flex flex-col items-start">
+                  <span>Open in wallet browser</span>
+                  <span className="text-xs text-muted-foreground">
+                    {isIOS ? "Recommended for iPhone" : "Alternative method"}
+                  </span>
+                </div>
+              </Button>
+            )}
+
+            {/* Wallet list */}
+            {sortedWallets.length === 0 && !isMobile ? (
               <div className="text-center py-4">
                 <p className="text-muted-foreground mb-2">
                   No wallets detected.
@@ -262,12 +360,6 @@ export function WalletButton() {
                 <p className="text-sm text-muted-foreground">
                   Please install Phantom, Solflare, or Backpack.
                 </p>
-                {isMobile && (
-                  <p className="text-xs text-amber-500 mt-3 flex items-center justify-center gap-1">
-                    <Smartphone size={12} />
-                    Open this page in your wallet's browser
-                  </p>
-                )}
               </div>
             ) : (
               <>
@@ -276,7 +368,7 @@ export function WalletButton() {
                   return (
                     <Button
                       key={w.adapter.name}
-                      variant="outline"
+                      variant={isIOS && isMobile && !isInWalletBrowser ? "outline" : "outline"}
                       className="w-full justify-start gap-3 h-12"
                       onClick={() => handleSelectWallet(w.adapter.name)}
                     >
@@ -292,18 +384,31 @@ export function WalletButton() {
                         <span className="ml-auto text-xs text-green-500">Detected</span>
                       )}
                       {isMWA && (
-                        <span className="ml-auto text-xs text-muted-foreground">Mobile</span>
+                        <span className="ml-auto text-xs text-blue-500">Android</span>
                       )}
                     </Button>
                   );
                 })}
-                {isMobile && (
-                  <p className="text-xs text-amber-500 text-center mt-3 flex items-center justify-center gap-1 bg-amber-500/10 p-2 rounded">
-                    <Smartphone size={12} />
-                    On mobile, open 1mgaming.com inside your wallet's built-in browser for the smoothest connect.
-                  </p>
-                )}
               </>
+            )}
+
+            {/* Mobile guidance */}
+            {isMobile && !isInWalletBrowser && (
+              <div className="text-xs text-amber-500 text-center mt-3 flex flex-col gap-1 bg-amber-500/10 p-3 rounded">
+                <p className="flex items-center justify-center gap-1">
+                  <Smartphone size={12} />
+                  {isIOS 
+                    ? "iPhone: Use 'Open in wallet browser' for best results"
+                    : "Android: Try MWA first, or open in wallet browser"
+                  }
+                </p>
+              </div>
+            )}
+
+            {isMobile && isInWalletBrowser && (
+              <p className="text-xs text-green-500 text-center mt-3 bg-green-500/10 p-2 rounded">
+                ✓ You're in a wallet browser - select your wallet above to connect
+              </p>
             )}
           </div>
         </DialogContent>
