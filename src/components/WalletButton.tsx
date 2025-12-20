@@ -3,12 +3,14 @@ import { useWallet, useConnection } from "@solana/wallet-adapter-react";
 import { LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Wallet, LogOut, RefreshCw, Copy, Check, AlertCircle, Smartphone } from "lucide-react";
+import { Wallet, LogOut, RefreshCw, Copy, Check, AlertCircle, Smartphone, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { fetchBalanceWithFailover, is403Error } from "@/lib/solana-rpc";
-import { isMobileDevice, hasInjectedWallet } from "@/lib/solana-config";
 
 const CONNECT_TIMEOUT_MS = 8000;
+
+// Device detection using navigator.userAgent
+const getIsMobile = () => /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
 export function WalletButton() {
   const { connected, publicKey, disconnect, connecting, wallets, select, wallet } = useWallet();
@@ -20,10 +22,10 @@ export function WalletButton() {
   const [copied, setCopied] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [connectTimeout, setConnectTimeout] = useState(false);
+  const [connectingWallet, setConnectingWallet] = useState<string | null>(null);
   const connectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const isMobile = isMobileDevice();
-  const hasInjected = hasInjectedWallet();
+  const isMobile = getIsMobile();
 
   // Clear timeout on unmount or when connected
   useEffect(() => {
@@ -31,6 +33,7 @@ export function WalletButton() {
       clearTimeout(connectTimeoutRef.current);
       connectTimeoutRef.current = null;
       setConnectTimeout(false);
+      setConnectingWallet(null);
     }
     return () => {
       if (connectTimeoutRef.current) {
@@ -80,8 +83,10 @@ export function WalletButton() {
     const selectedWallet = wallets.find(w => w.adapter.name === walletName);
     if (selectedWallet) {
       try {
-        // Start timeout for connection
+        setConnectingWallet(walletName);
         setConnectTimeout(false);
+        
+        // Start timeout for connection
         connectTimeoutRef.current = setTimeout(() => {
           if (!connected) {
             setConnectTimeout(true);
@@ -93,6 +98,7 @@ export function WalletButton() {
       } catch (err) {
         console.error('[Wallet] Select error:', err);
         toast.error('Failed to select wallet');
+        setConnectingWallet(null);
       }
     }
   };
@@ -131,52 +137,72 @@ export function WalletButton() {
     }
   };
 
-  // Filter wallets: On desktop, prioritize installed injected wallets
-  // On mobile without injected wallet, show MWA
+  // Filter wallets based on device type
   const filteredWallets = wallets.filter(w => {
     const name = w.adapter.name.toLowerCase();
     const isMWA = name.includes('mobile wallet adapter');
     
-    // On desktop with injected wallets, hide MWA
-    if (!isMobile && hasInjected && isMWA) {
+    // On desktop: NEVER show Mobile Wallet Adapter
+    if (!isMobile && isMWA) {
       return false;
     }
     
     return true;
   });
 
-  // Sort: Installed wallets first
+  // Sort: Installed wallets first, then by name
   const sortedWallets = [...filteredWallets].sort((a, b) => {
     const aInstalled = a.readyState === 'Installed';
     const bInstalled = b.readyState === 'Installed';
     if (aInstalled && !bInstalled) return -1;
     if (!aInstalled && bInstalled) return 1;
+    // Prioritize known wallets
+    const priority = ['phantom', 'solflare', 'backpack'];
+    const aIdx = priority.findIndex(p => a.adapter.name.toLowerCase().includes(p));
+    const bIdx = priority.findIndex(p => b.adapter.name.toLowerCase().includes(p));
+    if (aIdx !== -1 && bIdx === -1) return -1;
+    if (aIdx === -1 && bIdx !== -1) return 1;
+    if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx;
     return 0;
   });
 
-  // Connection timeout state
-  if (connecting && connectTimeout) {
+  // Connection timeout state - show retry UI
+  if ((connecting || connectingWallet) && connectTimeout) {
     return (
-      <div className="flex flex-col items-center gap-2 p-4">
+      <div className="flex flex-col items-center gap-2 p-4 bg-card rounded-lg border">
         <AlertCircle className="text-amber-500" size={24} />
-        <p className="text-sm text-muted-foreground text-center">
-          Connection is taking longer than expected.
+        <p className="text-sm text-muted-foreground text-center max-w-xs">
+          Connection didn't start. Please open this site inside your wallet's browser (Phantom/Solflare/Backpack) and try again.
         </p>
-        <div className="flex gap-2">
+        <div className="flex gap-2 mt-2">
           <Button size="sm" variant="outline" onClick={handleRetryConnect}>
             Retry
           </Button>
-          <Button size="sm" variant="ghost" onClick={handleDisconnect}>
+          <Button size="sm" variant="ghost" onClick={() => {
+            setConnectTimeout(false);
+            setConnectingWallet(null);
+            handleDisconnect();
+          }}>
             Cancel
           </Button>
         </div>
         {isMobile && (
-          <p className="text-xs text-muted-foreground flex items-center gap-1 mt-2">
+          <p className="text-xs text-amber-500 flex items-center gap-1 mt-2">
             <Smartphone size={12} />
-            Try opening this page in your wallet browser
+            Open in wallet browser for best experience
           </p>
         )}
       </div>
+    );
+  }
+
+  // Show connecting state with wallet name
+  if (connecting || connectingWallet) {
+    return (
+      <Button disabled variant="default" size="sm" className="gap-2">
+        <Loader2 size={16} className="animate-spin" />
+        Connecting{connectingWallet ? ` to ${connectingWallet}` : ''}...
+      </Button>
     );
   }
 
@@ -186,13 +212,12 @@ export function WalletButton() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogTrigger asChild>
           <Button
-            disabled={connecting}
             variant="default"
             size="sm"
             className="gap-2"
           >
             <Wallet size={16} />
-            {connecting ? 'Connecting...' : 'Select Wallet'}
+            Select Wallet
           </Button>
         </DialogTrigger>
         <DialogContent className="sm:max-w-md">
@@ -217,30 +242,36 @@ export function WalletButton() {
               </div>
             ) : (
               <>
-                {sortedWallets.map((w) => (
-                  <Button
-                    key={w.adapter.name}
-                    variant="outline"
-                    className="w-full justify-start gap-3 h-12"
-                    onClick={() => handleSelectWallet(w.adapter.name)}
-                  >
-                    {w.adapter.icon && (
-                      <img 
-                        src={w.adapter.icon} 
-                        alt={w.adapter.name} 
-                        className="w-6 h-6"
-                      />
-                    )}
-                    <span>{w.adapter.name}</span>
-                    {w.readyState === 'Installed' && (
-                      <span className="ml-auto text-xs text-green-500">Detected</span>
-                    )}
-                  </Button>
-                ))}
-                {isMobile && !hasInjected && (
-                  <p className="text-xs text-muted-foreground text-center mt-2 flex items-center justify-center gap-1">
+                {sortedWallets.map((w) => {
+                  const isMWA = w.adapter.name.toLowerCase().includes('mobile wallet adapter');
+                  return (
+                    <Button
+                      key={w.adapter.name}
+                      variant="outline"
+                      className="w-full justify-start gap-3 h-12"
+                      onClick={() => handleSelectWallet(w.adapter.name)}
+                    >
+                      {w.adapter.icon && (
+                        <img 
+                          src={w.adapter.icon} 
+                          alt={w.adapter.name} 
+                          className="w-6 h-6"
+                        />
+                      )}
+                      <span>{w.adapter.name}</span>
+                      {w.readyState === 'Installed' && (
+                        <span className="ml-auto text-xs text-green-500">Detected</span>
+                      )}
+                      {isMWA && (
+                        <span className="ml-auto text-xs text-muted-foreground">Mobile</span>
+                      )}
+                    </Button>
+                  );
+                })}
+                {isMobile && (
+                  <p className="text-xs text-amber-500 text-center mt-3 flex items-center justify-center gap-1 bg-amber-500/10 p-2 rounded">
                     <Smartphone size={12} />
-                    Tip: Open in your wallet's browser for best experience
+                    On mobile, open 1mgaming.com inside your wallet's built-in browser for the smoothest connect.
                   </p>
                 )}
               </>
