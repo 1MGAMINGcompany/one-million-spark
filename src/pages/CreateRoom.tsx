@@ -62,8 +62,8 @@ export default function CreateRoom() {
   const handleCreateRoom = async () => {
     if (activeRoom) {
       toast({
-        title: "Active room exists",
-        description: "Cancel your existing room before creating a new one",
+        title: t("createRoom.activeRoomExists"),
+        description: t("createRoom.cancelExistingRoom"),
         variant: "destructive",
       });
       return;
@@ -71,8 +71,8 @@ export default function CreateRoom() {
 
     if (entryFeeNum < dynamicMinFee) {
       toast({
-        title: "Invalid entry fee",
-        description: `Minimum entry fee is ${dynamicMinFee.toFixed(4)} SOL (~$${MIN_FEE_USD.toFixed(2)})`,
+        title: t("createRoom.invalidFee"),
+        description: t("createRoom.minFeeError", { amount: dynamicMinFee.toFixed(4), usd: MIN_FEE_USD.toFixed(2) }),
         variant: "destructive",
       });
       return;
@@ -80,8 +80,8 @@ export default function CreateRoom() {
 
     if (entryFeeNum > balance) {
       toast({
-        title: "Insufficient balance",
-        description: `You need ${entryFeeNum} SOL but only have ${balance.toFixed(4)} SOL`,
+        title: t("createRoom.insufficientBalance"),
+        description: t("createRoom.insufficientBalanceDesc", { need: entryFeeNum, have: balance.toFixed(4) }),
         variant: "destructive",
       });
       return;
@@ -110,11 +110,11 @@ export default function CreateRoom() {
             <Wallet className="h-12 w-12 text-primary mx-auto" />
             <h2 className="text-xl font-cinzel">{t("createRoom.connectWallet")}</h2>
             <p className="text-muted-foreground text-sm">
-              Connect your Solana wallet to create a game room and compete for SOL prizes.
+              {t("createRoom.connectWalletDesc")}
             </p>
             <ConnectWalletGate />
             <p className="text-xs text-muted-foreground pt-2">
-              No funds are moved when connecting.
+              {t("createRoom.noFundsMoved")}
             </p>
           </CardContent>
         </Card>
@@ -138,15 +138,15 @@ export default function CreateRoom() {
             <div className="flex items-start gap-2 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
               <AlertCircle className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
               <div className="text-sm">
-                <p className="text-amber-200 font-medium">You have an active room</p>
-                <p className="text-amber-200/70">Cancel your existing room before creating a new one.</p>
+                <p className="text-amber-200 font-medium">{t("createRoom.activeRoomExists")}</p>
+                <p className="text-amber-200/70">{t("createRoom.cancelExistingRoom")}</p>
                 <Button 
                   variant="link" 
                   size="sm" 
                   className="text-amber-400 p-0 h-auto mt-1"
                   onClick={() => navigate(`/room/${activeRoom.roomId}`)}
                 >
-                  Go to your room →
+                  {t("createRoom.goToRoom")} →
                 </Button>
               </div>
             </div>
@@ -155,7 +155,7 @@ export default function CreateRoom() {
           {/* Balance & Price */}
           <div className="flex items-center justify-between p-2.5 bg-muted/50 rounded-lg text-sm">
             <div>
-              <span className="text-muted-foreground">Balance:</span>{" "}
+              <span className="text-muted-foreground">{t("createRoom.balance")}:</span>{" "}
               <span className="font-semibold">{balance.toFixed(4)} SOL</span>
             </div>
             <div className="text-muted-foreground">
@@ -172,18 +172,18 @@ export default function CreateRoom() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="1">Chess</SelectItem>
-                <SelectItem value="2">Dominos</SelectItem>
-                <SelectItem value="3">Backgammon</SelectItem>
-                <SelectItem value="4">Checkers</SelectItem>
-                <SelectItem value="5">Ludo</SelectItem>
+                <SelectItem value="1">{t("games.chess")}</SelectItem>
+                <SelectItem value="2">{t("games.dominos")}</SelectItem>
+                <SelectItem value="3">{t("games.backgammon")}</SelectItem>
+                <SelectItem value="4">{t("games.checkers")}</SelectItem>
+                <SelectItem value="5">{t("games.ludo")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           {/* Entry Fee */}
           <div className="space-y-1.5">
-            <Label className="text-sm">Entry Fee (SOL)</Label>
+            <Label className="text-sm">{t("createRoom.entryFeeSol")}</Label>
             <div className="flex items-center gap-2">
               <Input
                 type="number"
@@ -201,42 +201,42 @@ export default function CreateRoom() {
               )}
             </div>
             <p className="text-xs text-muted-foreground">
-              Min: {dynamicMinFee.toFixed(4)} SOL (~${MIN_FEE_USD.toFixed(2)})
+              {t("createRoom.min")}: {dynamicMinFee.toFixed(4)} SOL (~${MIN_FEE_USD.toFixed(2)})
             </p>
           </div>
 
           {/* Turn Time */}
           <div className="space-y-1.5">
-            <Label className="text-sm">Turn Time</Label>
+            <Label className="text-sm">{t("createRoom.timePerTurn")}</Label>
             <Select value={turnTime} onValueChange={setTurnTime}>
               <SelectTrigger className="h-9">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="5">5 seconds</SelectItem>
-                <SelectItem value="10">10 seconds</SelectItem>
-                <SelectItem value="15">15 seconds</SelectItem>
-                <SelectItem value="0">Unlimited</SelectItem>
+                <SelectItem value="5">{t("createRoom.seconds", { count: 5 })}</SelectItem>
+                <SelectItem value="10">{t("createRoom.seconds", { count: 10 })}</SelectItem>
+                <SelectItem value="15">{t("createRoom.seconds", { count: 15 })}</SelectItem>
+                <SelectItem value="0">{t("createRoom.unlimited")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           {/* Private Room Toggle */}
           <div className="flex items-center justify-between">
-            <Label className="text-sm">Private Room</Label>
+            <Label className="text-sm">{t("createRoom.privateRoom")}</Label>
             <Switch checked={isPrivate} onCheckedChange={setIsPrivate} />
           </div>
 
           {/* Prize Info */}
           <div className="p-2.5 bg-primary/10 border border-primary/20 rounded-lg text-sm">
             <div className="flex justify-between mb-1">
-              <span className="text-muted-foreground">Prize Pool:</span>
+              <span className="text-muted-foreground">{t("createRoom.prizePool")}:</span>
               <span className="font-semibold text-primary">
                 {(entryFeeNum * parseInt(maxPlayers)).toFixed(3)} SOL
               </span>
             </div>
             <div className="flex justify-between text-xs text-muted-foreground">
-              <span>Platform Fee:</span>
+              <span>{t("createRoom.platformFee")}:</span>
               <span>5%</span>
             </div>
           </div>
@@ -251,22 +251,22 @@ export default function CreateRoom() {
             {txPending ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Creating...
+                {t("createRoom.creatingRoom")}
               </>
             ) : checkingActiveRoom ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Checking...
+                {t("createRoom.checking")}
               </>
             ) : activeRoom ? (
-              "Cancel Active Room First"
+              t("createRoom.cancelActiveFirst")
             ) : (
-              "Create Room"
+              t("createRoom.createRoom")
             )}
           </Button>
 
           <p className="text-xs text-center text-muted-foreground">
-            Connected: {address?.slice(0, 6)}...{address?.slice(-4)}
+            {t("createRoom.connected")}: {address?.slice(0, 6)}...{address?.slice(-4)}
           </p>
         </CardContent>
       </Card>
