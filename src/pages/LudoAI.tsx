@@ -13,7 +13,6 @@ import { useLudoEngine } from "@/hooks/useLudoEngine";
 import { useTurnNotifications, TurnPlayer } from "@/hooks/useTurnNotifications";
 import TurnStatusHeader from "@/components/TurnStatusHeader";
 import TurnHistoryDrawer from "@/components/TurnHistoryDrawer";
-import NotificationToggle from "@/components/NotificationToggle";
 import TurnBanner from "@/components/TurnBanner";
 import GoldConfettiExplosion from "@/components/GoldConfettiExplosion";
 
@@ -332,13 +331,6 @@ const LudoAI = () => {
           <div className="flex items-center gap-2">
             {/* Turn History Drawer */}
             <TurnHistoryDrawer events={turnHistory} />
-            
-            {/* Notification Toggle */}
-            <NotificationToggle
-              enabled={notificationsEnabled}
-              hasPermission={hasPermission}
-              onToggle={toggleNotifications}
-            />
             
             <Button onClick={resetGame} variant="outline" size="sm" className="border-primary/30">
               <RotateCcw size={16} />
