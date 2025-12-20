@@ -57,18 +57,18 @@ const DominosAI = () => {
   const [aiHand, setAiHand] = useState<Domino[]>([]);
   const [boneyard, setBoneyard] = useState<Domino[]>([]);
   const [isPlayerTurn, setIsPlayerTurn] = useState(true);
-  const [gameStatus, setGameStatus] = useState("Your turn");
+  const [gameStatus, setGameStatus] = useState(t('gameAI.yourTurn'));
   const [gameOver, setGameOver] = useState(false);
   const [selectedDomino, setSelectedDomino] = useState<number | null>(null);
   const [isThinking, setIsThinking] = useState(false);
 
   const difficultyLabel = useMemo(() => {
     switch (difficulty) {
-      case "easy": return "EASY";
-      case "medium": return "MEDIUM";
-      case "hard": return "HARD";
+      case "easy": return t('playAi.easy');
+      case "medium": return t('playAi.medium');
+      case "hard": return t('playAi.hard');
     }
-  }, [difficulty]);
+  }, [difficulty, t]);
 
   const difficultyDescription = useMemo(() => {
     switch (difficulty) {
@@ -129,13 +129,13 @@ const DominosAI = () => {
   // Check for game over
   const checkGameOver = useCallback((pHand: Domino[], aHand: Domino[], bone: Domino[]) => {
     if (pHand.length === 0) {
-      setGameStatus("You win! 🎉");
+      setGameStatus(t('gameAI.youWin'));
       setGameOver(true);
       play('domino_win');
       return true;
     }
     if (aHand.length === 0) {
-      setGameStatus("You lose!");
+      setGameStatus(t('gameAI.youLose'));
       setGameOver(true);
       play('domino_lose');
       return true;
@@ -157,20 +157,20 @@ const DominosAI = () => {
       const aiPips = aHand.reduce((sum, d) => sum + d.left + d.right, 0);
       
       if (playerPips < aiPips) {
-        setGameStatus("Game blocked - You win! (fewer pips)");
+        setGameStatus(t('gameAI.gameBlocked') + " - " + t('gameAI.youWin') + " (" + t('gameAI.fewerPips') + ")");
         play('domino_win');
       } else if (aiPips < playerPips) {
-        setGameStatus("Game blocked - You lose! (more pips)");
+        setGameStatus(t('gameAI.gameBlocked') + " - " + t('gameAI.youLose') + " (" + t('gameAI.morePips') + ")");
         play('domino_lose');
       } else {
-        setGameStatus("Game blocked - Draw!");
+        setGameStatus(t('gameAI.gameBlocked') + " - " + t('gameAI.draw'));
       }
       setGameOver(true);
       return true;
     }
     
     return false;
-  }, [canPlay, play]);
+  }, [canPlay, play, t]);
 
   // Play a domino
   const playDomino = useCallback((domino: Domino, side: "left" | "right", isPlayer: boolean) => {
@@ -209,7 +209,7 @@ const DominosAI = () => {
     const { canPlayLeft, canPlayRight } = canPlay(domino);
     
     if (!canPlayLeft && !canPlayRight) {
-      setGameStatus("That tile doesn't match!");
+      setGameStatus(t('gameAI.tileNoMatch'));
       return;
     }
     
@@ -226,7 +226,7 @@ const DominosAI = () => {
         setSelectedDomino(null);
       } else {
         setSelectedDomino(domino.id);
-        setGameStatus("Click again to play on right, or click another tile");
+        setGameStatus(t('gameAI.clickAgainToPlay'));
         return;
       }
     }
@@ -242,7 +242,7 @@ const DominosAI = () => {
     const drawn = boneyard[0];
     setPlayerHand(prev => [...prev, drawn]);
     setBoneyard(prev => prev.slice(1));
-    setGameStatus("Drew a tile - your turn");
+    setGameStatus(t('gameAI.drewTile'));
     play('domino_draw');
   }, [isPlayerTurn, gameOver, boneyard, play]);
 
@@ -257,7 +257,7 @@ const DominosAI = () => {
     if (isPlayerTurn || gameOver) return;
     
     setIsThinking(true);
-    setGameStatus("AI is thinking...");
+    setGameStatus(t('gameAI.aiThinking'));
     
     const timeout = setTimeout(() => {
       const legalMoves = getLegalMoves(aiHand);
@@ -268,7 +268,7 @@ const DominosAI = () => {
           const drawn = boneyard[0];
           setAiHand(prev => [...prev, drawn]);
           setBoneyard(prev => prev.slice(1));
-          setGameStatus("AI drew a tile");
+          setGameStatus(t('gameAI.aiDrewTile'));
           play('domino_draw');
           // Check if AI can now play
           setTimeout(() => {
@@ -278,7 +278,7 @@ const DominosAI = () => {
           return;
         } else {
           // AI passes
-          setGameStatus("AI passes");
+          setGameStatus(t('gameAI.aiPasses'));
           setIsPlayerTurn(true);
           setIsThinking(false);
           checkGameOver(playerHand, aiHand, boneyard);
@@ -356,7 +356,7 @@ const DominosAI = () => {
       const newAiHand = aiHand.filter(d => d.id !== chosenDomino.id);
       if (!checkGameOver(playerHand, newAiHand, boneyard)) {
         setIsPlayerTurn(true);
-        setGameStatus("Your turn");
+        setGameStatus(t('gameAI.yourTurn'));
       }
     }, 800);
     
@@ -543,7 +543,7 @@ const DominosAI = () => {
                 {/* Gold frame */}
                 <div className="relative p-1 rounded-xl bg-gradient-to-br from-primary/40 via-primary/20 to-primary/40 shadow-[0_0_40px_-10px_hsl(45_93%_54%_/_0.4)]">
                   <div className="bg-gradient-to-br from-midnight-light via-background to-background rounded-lg p-6 min-h-[140px]">
-                    <p className="text-xs text-primary/60 uppercase tracking-wider mb-4 font-medium text-center">Game Table</p>
+                    <p className="text-xs text-primary/60 uppercase tracking-wider mb-4 font-medium text-center">{t('gameAI.gameTable')}</p>
                     {/* Chain End Indicators */}
                     {chain.length > 0 && getChainEnds() && (
                       <div className="flex justify-between items-center mb-4 px-2">
@@ -551,11 +551,11 @@ const DominosAI = () => {
                           <div className="w-10 h-10 rounded-lg bg-primary/20 border-2 border-primary/50 flex items-center justify-center shadow-lg shadow-primary/20">
                             <span className="text-xl font-bold text-primary">{getChainEnds()!.left}</span>
                           </div>
-                          <span className="text-xs text-muted-foreground uppercase tracking-wider">Left End</span>
+                          <span className="text-xs text-muted-foreground uppercase tracking-wider">{t('gameAI.leftEnd')}</span>
                         </div>
                         <div className="flex-1 h-px bg-gradient-to-r from-primary/30 via-primary/10 to-primary/30 mx-4" />
                         <div className="flex items-center gap-2">
-                          <span className="text-xs text-muted-foreground uppercase tracking-wider">Right End</span>
+                          <span className="text-xs text-muted-foreground uppercase tracking-wider">{t('gameAI.rightEnd')}</span>
                           <div className="w-10 h-10 rounded-lg bg-primary/20 border-2 border-primary/50 flex items-center justify-center shadow-lg shadow-primary/20">
                             <span className="text-xl font-bold text-primary">{getChainEnds()!.right}</span>
                           </div>
@@ -564,7 +564,7 @@ const DominosAI = () => {
                     )}
                     {chain.length === 0 ? (
                       <p className="text-muted-foreground/60 text-center py-6">
-                        Play any tile to start the game
+                        {t('gameAI.playAnyTile')}
                       </p>
                     ) : (
                       <div className="flex flex-wrap gap-1.5 justify-center items-center">
@@ -706,7 +706,7 @@ const DominosAI = () => {
                   />
                 </div>
                 
-                <p className="text-xs text-primary/60 uppercase tracking-wider mb-3 font-medium">{t('common.gameInfo') || 'Game Info'}</p>
+                <p className="text-xs text-primary/60 uppercase tracking-wider mb-3 font-medium">{t('common.gameInfo')}</p>
                 <div className="text-sm space-y-2">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">{t('gameAI.yourHand')}</span>
@@ -735,7 +735,7 @@ const DominosAI = () => {
                   />
                 </div>
                 
-                <p className="text-xs text-primary/60 uppercase tracking-wider mb-3 font-medium">Actions</p>
+                <p className="text-xs text-primary/60 uppercase tracking-wider mb-3 font-medium">{t('common.actions')}</p>
                 <div className="space-y-2">
                   <Button onClick={initGame} className="w-full" variant="gold" size="sm">
                     <RotateCcw size={16} />
@@ -744,7 +744,7 @@ const DominosAI = () => {
 
                   <Button asChild variant="ghost" size="sm" className="w-full text-muted-foreground hover:text-primary">
                     <Link to="/play-ai">
-                      Change Difficulty
+                      {t('gameAI.changeDifficulty')}
                     </Link>
                   </Button>
                 </div>

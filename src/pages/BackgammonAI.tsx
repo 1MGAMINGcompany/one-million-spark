@@ -119,11 +119,11 @@ const BackgammonAI = () => {
 
   const difficultyLabel = useMemo(() => {
     switch (difficulty) {
-      case "easy": return "EASY";
-      case "medium": return "MEDIUM";
-      case "hard": return "HARD";
+      case "easy": return t('playAi.easy');
+      case "medium": return t('playAi.medium');
+      case "hard": return t('playAi.hard');
     }
-  }, [difficulty]);
+  }, [difficulty, t]);
 
   const difficultyDescription = useMemo(() => {
     switch (difficulty) {
@@ -238,24 +238,24 @@ const BackgammonAI = () => {
       const result = getGameResult(newState);
       setGameResultInfo(result);
       const resultDisplay = formatResultType(result.resultType);
-      setGameStatus(`You win! ${resultDisplay.label}`);
+      setGameStatus(`${t('gameAI.youWin')} ${resultDisplay.label}`);
       setGameOver(true);
       play('chess_win');
     } else if (newRemaining.length === 0) {
-      setGameStatus("AI's turn");
+      setGameStatus(t('gameAI.aiTurn'));
       setCurrentPlayer("ai");
       setDice([]);
     } else {
       const allMoves = getAllLegalMoves(newState, newRemaining, "player");
       if (allMoves.length === 0) {
-        setGameStatus("No more moves - AI's turn");
+        setGameStatus(t('gameAI.noLegalMoves'));
         setCurrentPlayer("ai");
         setDice([]);
         setRemainingMoves([]);
       } else if (newState.bar.player > 0) {
-        setGameStatus("Click the bar to re-enter");
+        setGameStatus(t('gameAI.barReenter'));
       } else {
-        setGameStatus("Continue moving");
+        setGameStatus(t('gameAI.continueMoving'));
       }
     }
   }, [gameState, remainingMoves, animateMove, play]);
@@ -276,18 +276,18 @@ const BackgammonAI = () => {
       // Clicking the bar itself - select it and show targets
       if (pointIndex === -1) {
         if (selectedPoint === -1) {
-          // Already selected, deselect
+        // Already selected, deselect
           setSelectedPoint(null);
           setValidMoves([]);
-          setGameStatus("Click the bar to re-enter");
+          setGameStatus(t('gameAI.barReenter'));
         } else {
           // Select the bar
           if (barMoves.length > 0) {
             setSelectedPoint(-1);
             setValidMoves(barMoves.map(m => m.to));
-            setGameStatus("Select where to re-enter");
+            setGameStatus(t('gameAI.selectEntry'));
           } else {
-            setGameStatus("All entry points are blocked!");
+            setGameStatus(t('gameAI.allBlocked'));
           }
         }
         return;
@@ -304,9 +304,9 @@ const BackgammonAI = () => {
       
       // Not a valid bar entry point - prompt user
       if (selectedPoint !== -1) {
-        setGameStatus("You must click the bar first to re-enter!");
+        setGameStatus(t('gameAI.mustClickBar'));
       } else {
-        setGameStatus("Select a highlighted entry point");
+        setGameStatus(t('gameAI.selectHighlightedEntry'));
       }
       return;
     }
@@ -318,16 +318,16 @@ const BackgammonAI = () => {
         if (pointMoves.length > 0) {
           setSelectedPoint(pointIndex);
           setValidMoves(pointMoves.map(m => m.to));
-          setGameStatus("Select where to move");
+          setGameStatus(t('gameAI.selectWhereToMove'));
         } else {
-          setGameStatus("No legal moves from this point");
+          setGameStatus(t('gameAI.noLegalMovesFromPoint'));
         }
       }
     } else {
       if (pointIndex === selectedPoint) {
         setSelectedPoint(null);
         setValidMoves([]);
-        setGameStatus("Select a checker to move");
+        setGameStatus(t('gameAI.selectChecker'));
         return;
       }
       
@@ -353,7 +353,7 @@ const BackgammonAI = () => {
     if (currentPlayer !== "ai" || gameOver || dice.length > 0) return;
     
     setIsThinking(true);
-    setGameStatus("AI is rolling...");
+    setGameStatus(t('gameAI.aiRolling'));
     
     const runAiTurn = async () => {
       // Roll dice
@@ -369,7 +369,7 @@ const BackgammonAI = () => {
       // Wait for dice animation
       await new Promise(resolve => setTimeout(resolve, 1200));
       
-      setGameStatus("AI is thinking...");
+      setGameStatus(t('gameAI.aiThinking'));
       
       // Use the unified engine for AI moves
       let state = gameState;

@@ -139,7 +139,20 @@
     "greedyStrategy": "Greedy strategy",
     "advancedTactics": "Advanced tactics",
     "movesTowardHome": "Moves toward home",
-    "hitsAndStacks": "Hits and stacks"
+    "hitsAndStacks": "Hits and stacks",
+    "changeDifficulty": "Change Difficulty",
+    "aiTurn": "AI's turn",
+    "selectEntry": "Select where to re-enter",
+    "mustClickBar": "You must click the bar first to re-enter!",
+    "selectHighlightedEntry": "Select a highlighted entry point",
+    "selectWhereToMove": "Select where to move",
+    "noLegalMovesFromPoint": "No legal moves from this point",
+    "clickAgainToPlay": "Click again to play on right, or click another tile",
+    "gameTable": "Game Table",
+    "leftEnd": "Left End",
+    "rightEnd": "Right End",
+    "victory": "Victory!",
+    "wins": "wins"
   },
   "nav": {
     "home": "Home",
@@ -323,7 +336,12 @@
     "invite": "Invite",
     "settings": "Settings",
     "language": "Language",
-    "sec": "sec"
+    "sec": "sec",
+    "gameInfo": "Game Info",
+    "you": "You",
+    "ai": "AI",
+    "totalMoves": "Total Moves",
+    "actions": "Actions"
   },
   "footer": {
     "company": "1 MILLION GAMING co",

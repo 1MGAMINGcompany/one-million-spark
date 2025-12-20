@@ -162,7 +162,20 @@
     "greedyStrategy": "Estrategia codiciosa",
     "advancedTactics": "Tácticas avanzadas",
     "movesTowardHome": "Mueve hacia casa",
-    "hitsAndStacks": "Golpea y apila"
+    "hitsAndStacks": "Golpea y apila",
+    "changeDifficulty": "Cambiar Dificultad",
+    "aiTurn": "Turno de IA",
+    "selectEntry": "Selecciona dónde reentrar",
+    "mustClickBar": "¡Primero debes hacer clic en la barra para reentrar!",
+    "selectHighlightedEntry": "Selecciona un punto de entrada resaltado",
+    "selectWhereToMove": "Selecciona a dónde mover",
+    "noLegalMovesFromPoint": "Sin movimientos legales desde este punto",
+    "clickAgainToPlay": "Haz clic de nuevo para jugar a la derecha, o selecciona otra ficha",
+    "gameTable": "Mesa de Juego",
+    "leftEnd": "Extremo Izquierdo",
+    "rightEnd": "Extremo Derecho",
+    "victory": "¡Victoria!",
+    "wins": "gana"
   },
   "nav": {
     "home": "Inicio",
@@ -440,7 +453,12 @@
     "invite": "Invitar",
     "settings": "Configuración",
     "language": "Idioma",
-    "sec": "seg"
+    "sec": "seg",
+    "gameInfo": "Info del Juego",
+    "you": "Tú",
+    "ai": "IA",
+    "totalMoves": "Movimientos Totales",
+    "actions": "Acciones"
   },
   "footer": {
     "company": "1 MILLION GAMING co",

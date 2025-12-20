@@ -600,7 +600,7 @@ const CheckersAI = () => {
       <div className="py-8 flex items-center justify-center gap-3">
         <Star className="w-3 h-3 text-primary/40 fill-primary/20" />
         <Gem className="w-4 h-4 text-primary/40" />
-        <span className="text-xs text-muted-foreground/60 uppercase tracking-wider">Conquer the Pharaoh's Grid</span>
+        <span className="text-xs text-muted-foreground/60 uppercase tracking-wider">{t('games.checkersTagline')}</span>
         <Gem className="w-4 h-4 text-primary/40" />
         <Star className="w-3 h-3 text-primary/40 fill-primary/20" />
       </div>
