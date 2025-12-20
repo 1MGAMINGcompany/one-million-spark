@@ -149,8 +149,8 @@ const LudoAI = () => {
     
     if (movable.length === 0) {
       toast({
-        title: "No valid moves",
-        description: `${player.isAI ? 'AI' : 'You'} cannot move any token.`,
+        title: t('gameAI.noValidMoves'),
+        description: player.isAI ? t('gameAI.cannotMove') : t('gameAI.cannotMove'),
         duration: 1500,
       });
       noMoveTimeoutRef.current = setTimeout(() => {
@@ -158,7 +158,7 @@ const LudoAI = () => {
         advanceTurn(dice);
       }, 1000);
     }
-  }, [players, currentPlayerIndex, advanceTurn]);
+  }, [players, currentPlayerIndex, advanceTurn, t]);
 
   // Human player rolls dice
   const handleRollDice = useCallback(() => {
@@ -185,8 +185,8 @@ const LudoAI = () => {
     
     if (!movableTokens.includes(tokenIndex)) {
       toast({
-        title: "Illegal move",
-        description: "This token cannot move with the current dice roll.",
+        title: t('gameAI.illegalMove'),
+        description: t('gameAI.illegalMoveDesc'),
         variant: "destructive",
         duration: 2000,
       });
@@ -242,8 +242,8 @@ const LudoAI = () => {
           
           if (movable.length === 0) {
             toast({
-              title: "AI cannot move any token.",
-              description: "No valid moves",
+              title: t('gameAI.noValidMoves'),
+              description: t('gameAI.cannotMove'),
               duration: 1500,
             });
             aiAdvanceTimeoutRef.current = setTimeout(() => {
@@ -285,15 +285,26 @@ const LudoAI = () => {
           }
         });
       }, delay);
-      
-      return () => {
-        if (aiTimeoutRef.current) {
-          clearTimeout(aiTimeoutRef.current);
-          aiTimeoutRef.current = null;
-        }
-      };
     }
-  }, [currentPlayer.isAI, currentPlayer.color, gameOver, diceValue, isRolling, isAnimating, difficulty, players, currentPlayerIndex, rollDice, executeMove, advanceTurn, setDiceValue, setMovableTokens, turnSignal]);
+    
+    // Cleanup function - also reset AI lock to prevent freezing
+    return () => {
+      if (aiTimeoutRef.current) {
+        clearTimeout(aiTimeoutRef.current);
+        aiTimeoutRef.current = null;
+      }
+      if (aiMoveTimeoutRef.current) {
+        clearTimeout(aiMoveTimeoutRef.current);
+        aiMoveTimeoutRef.current = null;
+      }
+      if (aiAdvanceTimeoutRef.current) {
+        clearTimeout(aiAdvanceTimeoutRef.current);
+        aiAdvanceTimeoutRef.current = null;
+      }
+      // CRITICAL: Reset AI lock on cleanup to prevent freeze
+      aiMoveInProgressRef.current = false;
+    };
+  }, [currentPlayer.isAI, currentPlayer.color, gameOver, diceValue, isRolling, isAnimating, difficulty, players, currentPlayerIndex, rollDice, executeMove, advanceTurn, setDiceValue, setMovableTokens, turnSignal, t]);
 
   return (
     <div className="min-h-screen bg-background flex flex-col relative">
