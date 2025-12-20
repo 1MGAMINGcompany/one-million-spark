@@ -89,7 +89,7 @@ const ChessGame = () => {
   const { isConnected: walletConnected, address } = useWallet();
 
   const [game, setGame] = useState(new Chess());
-  const [gameStatus, setGameStatus] = useState<string>("Waiting for opponent...");
+  const [gameStatus, setGameStatus] = useState<string>(t("gameMultiplayer.waitingForOpponent"));
   const [moveHistory, setMoveHistory] = useState<string[]>([]);
   const [gameOver, setGameOver] = useState(false);
   const [animationsEnabled, setAnimationsEnabled] = useState(true);
@@ -129,7 +129,7 @@ const ChessGame = () => {
       const color = index === 0 ? "white" : "black";
       return {
         address: playerAddress,
-        name: isMe ? "You" : "Opponent",
+        name: isMe ? t("common.you") : t("game.opponent"),
         color,
         status: "active" as const,
         seatIndex: index,
@@ -230,7 +230,7 @@ const ChessGame = () => {
     // Notify opponent via WebRTC
     sendRematchAcceptRef.current?.(rematchRoomId);
     if (result.allAccepted) {
-      toast({ title: "All players accepted!", description: "Game is starting..." });
+      toast({ title: t("gameMultiplayer.allPlayersAccepted"), description: t("gameMultiplayer.gameStarting") });
       sendRematchReadyRef.current?.(rematchRoomId);
       window.location.href = `/game/chess/${rematchRoomId}`;
     }
@@ -255,7 +255,7 @@ const ChessGame = () => {
   // Add system message when game starts
   useEffect(() => {
     if (roomPlayers.length === 2 && chat.messages.length === 0) {
-      chat.addSystemMessage("Game started! Good luck!");
+      chat.addSystemMessage(t("gameMultiplayer.gameStarted"));
     }
   }, [roomPlayers.length]);
 
@@ -316,49 +316,48 @@ const ChessGame = () => {
         console.error("[ChessGame] Error applying opponent move:", error);
       }
     } else if (message.type === "resign") {
-      setGameStatus("Opponent resigned - You win!");
+      setGameStatus(t("gameMultiplayer.opponentResignedWin"));
       setGameOver(true);
       play('chess_win');
-      chat.addSystemMessage("Opponent resigned");
+      chat.addSystemMessage(t("gameMultiplayer.opponentResigned"));
       toast({
-        title: "Victory!",
-        description: "Your opponent has resigned.",
+        title: t("gameMultiplayer.victory"),
+        description: t("gameMultiplayer.opponentResignedVictory"),
       });
     } else if (message.type === "draw_offer") {
       setDrawOffered(true);
       setDrawOfferFrom(message.sender || "opponent");
       toast({
-        title: "Draw Offered",
-        description: "Your opponent is offering a draw.",
+        title: t("gameMultiplayer.drawOffered"),
+        description: t("gameMultiplayer.drawOfferedDesc"),
       });
     } else if (message.type === "draw_accept") {
-      setGameStatus("Draw by agreement");
+      setGameStatus(t("gameMultiplayer.drawByAgreement"));
       setGameOver(true);
-      chat.addSystemMessage("Game ended in a draw");
+      chat.addSystemMessage(t("gameMultiplayer.drawByAgreement"));
       toast({
-        title: "Draw",
-        description: "Game ended in a draw by agreement.",
+        title: t("game.draw"),
+        description: t("gameMultiplayer.drawByAgreement"),
       });
     } else if (message.type === "draw_reject") {
       setDrawOffered(false);
       setDrawOfferFrom(null);
       toast({
-        title: "Draw Declined",
-        description: "Your draw offer was declined.",
+        title: t("gameMultiplayer.drawDeclined"),
+        description: t("gameMultiplayer.drawDeclinedDesc"),
       });
     } else if (message.type === "rematch_invite" && message.payload) {
       // Opponent sent a rematch invite
       setRematchInviteData(message.payload);
       setShowAcceptModal(true);
       toast({
-        title: "Rematch Invite",
-        description: "Your opponent wants a rematch!",
+        title: t("gameMultiplayer.rematchInvite"),
+        description: t("gameMultiplayer.rematchInviteDesc"),
       });
     } else if (message.type === "rematch_accept" && message.payload) {
-      // Opponent accepted our rematch
       toast({
-        title: "Rematch Accepted!",
-        description: "Opponent accepted. Starting new game...",
+        title: t("gameMultiplayer.rematchAccepted"),
+        description: t("gameMultiplayer.rematchAcceptedDesc"),
       });
       // Update local rematch data
       if (rematch.state.newRoomId) {
@@ -366,16 +365,15 @@ const ChessGame = () => {
       }
     } else if (message.type === "rematch_decline") {
       toast({
-        title: "Rematch Declined",
-        description: "Opponent declined the rematch.",
+        title: t("gameMultiplayer.rematchDeclined"),
+        description: t("gameMultiplayer.rematchDeclinedDesc"),
         variant: "destructive",
       });
       rematch.closeRematchModal();
     } else if (message.type === "rematch_ready" && message.payload) {
-      // Both players accepted, navigate to new game
       toast({
-        title: "Rematch Ready!",
-        description: "Starting new game...",
+        title: t("gameMultiplayer.rematchReady"),
+        description: t("gameMultiplayer.rematchReadyDesc"),
       });
       navigate(`/game/chess/${message.payload.roomId}`);
     }
@@ -412,32 +410,32 @@ const ChessGame = () => {
 
   useEffect(() => {
     if (roomPlayers.length < 2) {
-      setGameStatus("Waiting for opponent...");
+      setGameStatus(t("gameMultiplayer.waitingForOpponent"));
     } else if (connectionState === "connecting") {
-      setGameStatus("Connecting to opponent...");
+      setGameStatus(t("gameMultiplayer.connectingToOpponent"));
     } else if (connectionState === "connected") {
-      setGameStatus(isMyTurn ? "Your turn" : "Opponent's turn");
+      setGameStatus(isMyTurn ? t("gameMultiplayer.yourTurn") : t("gameMultiplayer.opponentsTurn"));
     } else if (connectionState === "disconnected") {
-      setGameStatus("Connection lost - Reconnecting...");
+      setGameStatus(t("gameMultiplayer.connectionLost"));
     }
   }, [roomPlayers.length, connectionState, isMyTurn]);
 
   const checkGameOver = useCallback((currentGame: Chess) => {
     if (currentGame.isCheckmate()) {
       const isPlayerWin = currentGame.turn() !== myColor;
-      const winner = isPlayerWin ? "Checkmate - You win!" : "Checkmate - You lose!";
+      const winner = isPlayerWin ? t("gameMultiplayer.checkmateYouWin") : t("gameMultiplayer.checkmateYouLose");
       setGameStatus(winner);
       setGameOver(true);
       play(isPlayerWin ? 'chess_win' : 'chess_lose');
       return true;
     }
     if (currentGame.isStalemate()) {
-      setGameStatus("Draw - Stalemate");
+      setGameStatus(t("gameMultiplayer.drawStalemate"));
       setGameOver(true);
       return true;
     }
     if (currentGame.isDraw()) {
-      setGameStatus("Draw");
+      setGameStatus(t("game.draw"));
       setGameOver(true);
       return true;
     }
@@ -497,9 +495,8 @@ const ChessGame = () => {
       // Record move for turn history
       recordPlayerMove(address || "", move.san);
 
-      // Check game over
       if (!checkGameOver(gameCopy)) {
-        setGameStatus("Opponent's turn");
+        setGameStatus(t("gameMultiplayer.opponentsTurn"));
       }
 
       return true;
@@ -510,7 +507,7 @@ const ChessGame = () => {
 
   const handleResign = useCallback(() => {
     sendResign();
-    setGameStatus("You resigned - Opponent wins!");
+    setGameStatus(t("gameMultiplayer.youResignedLose"));
     setGameOver(true);
     play('chess_lose');
   }, [sendResign, play]);
@@ -522,7 +519,7 @@ const ChessGame = () => {
 
   const handleAcceptDraw = useCallback(() => {
     sendDrawAccept();
-    setGameStatus("Draw by agreement");
+    setGameStatus(t("gameMultiplayer.drawByAgreement"));
     setGameOver(true);
     setDrawOffered(false);
     setDrawOfferFrom(null);
@@ -548,12 +545,12 @@ const ChessGame = () => {
     return (
       <div className="container max-w-4xl py-8 px-4">
         <Button variant="ghost" size="sm" className="mb-4" onClick={() => navigate("/room-list")}>
-          <ArrowLeft className="mr-2 h-4 w-4" /> Back to Rooms
+          <ArrowLeft className="mr-2 h-4 w-4" /> {t("gameMultiplayer.backToRooms")}
         </Button>
         <div className="text-center py-12">
           <Users className="h-16 w-16 text-primary mx-auto mb-4" />
-          <h3 className="text-xl font-semibold mb-2">Connect Wallet to Play</h3>
-          <p className="text-muted-foreground">Please connect your wallet to join this game.</p>
+          <h3 className="text-xl font-semibold mb-2">{t("gameMultiplayer.connectWalletToPlay")}</h3>
+          <p className="text-muted-foreground">{t("gameMultiplayer.connectWalletDesc")}</p>
         </div>
       </div>
     );
@@ -586,7 +583,7 @@ const ChessGame = () => {
               <Button asChild variant="ghost" size="sm" className="text-muted-foreground hover:text-primary">
                 <Link to="/room-list" className="flex items-center gap-2">
                   <ArrowLeft size={18} />
-                  <span className="hidden sm:inline">Rooms</span>
+                  <span className="hidden sm:inline">{t("gameMultiplayer.rooms")}</span>
                 </Link>
               </Button>
               <div>
@@ -598,12 +595,12 @@ const ChessGame = () => {
                 </div>
                 <p className="text-xs text-muted-foreground flex items-center gap-1">
                   {peerConnected ? (
-                    <><Wifi className="w-3 h-3 text-green-500" /> Connected</>
+                    <><Wifi className="w-3 h-3 text-green-500" /> {t("gameMultiplayer.connected")}</>
                   ) : (
                     <><WifiOff className="w-3 h-3 text-yellow-500" /> {connectionState}</>
                   )}
                   <span className="mx-1">•</span>
-                  Playing as {myColor === "w" ? "White" : "Black"}
+                  {t("gameMultiplayer.playingAs")} {myColor === "w" ? t("gameMultiplayer.white") : t("gameMultiplayer.black")}
                 </p>
               </div>
             </div>
@@ -688,14 +685,13 @@ const ChessGame = () => {
                       >
                         Offer Draw
                       </Button>
-                      <Button 
-                        size="sm" 
+                      <Button
+                        size="sm"
                         variant="destructive" 
                         onClick={handleResign}
-                        className="text-xs"
-                      >
+                        className="text-xs">
+                        {t("gameMultiplayer.offerDraw")}
                         <Flag className="w-3 h-3 mr-1" />
-                        Resign
                       </Button>
                     </div>
                   )}
@@ -705,10 +701,10 @@ const ChessGame = () => {
               {/* Draw Offer Dialog */}
               {drawOffered && drawOfferFrom && drawOfferFrom !== address && (
                 <div className="bg-primary/10 border border-primary/30 rounded-lg p-4">
-                  <p className="text-sm mb-3">Your opponent has offered a draw.</p>
+                  <p className="text-sm mb-3">{t("gameMultiplayer.opponentOfferedDraw")}</p>
                   <div className="flex gap-2">
-                    <Button size="sm" onClick={handleAcceptDraw}>Accept</Button>
-                    <Button size="sm" variant="outline" onClick={handleRejectDraw}>Decline</Button>
+                    <Button size="sm" onClick={handleAcceptDraw}>{t("gameMultiplayer.accept")}</Button>
+                    <Button size="sm" variant="outline" onClick={handleRejectDraw}>{t("gameMultiplayer.decline")}</Button>
                   </div>
                 </div>
               )}
@@ -720,11 +716,11 @@ const ChessGame = () => {
               <div className="bg-card/50 border border-border/50 rounded-lg p-4">
                 <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
                   <Star className="w-4 h-4 text-primary" />
-                  Move History
+                  {t("gameMultiplayer.moveHistory")}
                 </h3>
                 <div className="max-h-64 overflow-y-auto space-y-1 text-sm">
                   {formattedMoves.length === 0 ? (
-                    <p className="text-muted-foreground text-xs">No moves yet</p>
+                    <p className="text-muted-foreground text-xs">{t("gameMultiplayer.noMovesYet")}</p>
                   ) : (
                     formattedMoves.map((move) => (
                       <div key={move.number} className="flex gap-2 font-mono text-xs">
@@ -740,14 +736,14 @@ const ChessGame = () => {
               {/* Game Over Actions */}
               {gameOver && (
                 <div className="bg-card/50 border border-border/50 rounded-lg p-4 space-y-3">
-                  <h3 className="text-sm font-semibold">Game Over</h3>
+                  <h3 className="text-sm font-semibold">{t("gameMultiplayer.gameOver")}</h3>
                   <div className="flex flex-col gap-2">
                     <Button onClick={() => rematch.openRematchModal()} className="w-full gap-2">
                       <RotateCcw className="w-4 h-4" />
-                      Rematch
+                      {t("gameMultiplayer.rematch")}
                     </Button>
                     <Button asChild variant="outline" className="w-full">
-                      <Link to="/room-list">Find New Game</Link>
+                      <Link to="/room-list">{t("gameMultiplayer.findNewGame")}</Link>
                     </Button>
                   </div>
                 </div>
