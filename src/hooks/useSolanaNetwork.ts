@@ -1,10 +1,11 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
-import { LAMPORTS_PER_SOL } from "@solana/web3.js";
+import { Connection, LAMPORTS_PER_SOL } from "@solana/web3.js";
+import { getFallbackEndpoint, MAINNET_GENESIS_HASH } from "@/lib/solana-config";
 
 // Known genesis hashes for cluster identification
 const GENESIS_HASHES = {
-  "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d": "mainnet-beta",
+  [MAINNET_GENESIS_HASH]: "mainnet-beta",
   "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG": "devnet",
   "4uhcVJyU9pJkvQyS88uRDiswHXSCkY3zQawwpjk2NsNY": "testnet",
 } as const;
@@ -88,7 +89,7 @@ export function useSolanaNetwork() {
     }
   }, [connection]);
   
-  // Fetch balance - DO NOT return 0 on error, expose actual error
+  // Fetch balance with RPC failover - DO NOT return 0 on error, expose actual error
   const fetchBalance = useCallback(async (): Promise<{ lamports: number; sol: number } | null> => {
     if (!connected || !publicKey) {
       setBalanceInfo({
@@ -111,11 +112,12 @@ export function useSolanaNetwork() {
     fetchingRef.current = true;
     setBalanceInfo(prev => ({ ...prev, loading: true, error: null }));
     
+    // Try primary endpoint first
     try {
       const lamports = await connection.getBalance(publicKey, "confirmed");
       const sol = lamports / LAMPORTS_PER_SOL;
       
-      console.info(`[Balance] ${sol.toFixed(6)} SOL (${lamports} lamports) | Address: ${publicKey.toBase58().slice(0, 8)}...`);
+      console.info(`[Balance] ${sol.toFixed(6)} SOL via primary RPC | Address: ${publicKey.toBase58().slice(0, 8)}...`);
       
       setBalanceInfo({
         lamports,
@@ -126,19 +128,41 @@ export function useSolanaNetwork() {
       });
       
       return { lamports, sol };
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : "Failed to fetch balance";
-      console.error("[Balance] Error:", errorMsg);
+    } catch (primaryErr) {
+      const primaryMsg = primaryErr instanceof Error ? primaryErr.message : String(primaryErr);
+      console.warn("[Balance] Primary RPC failed:", primaryMsg);
       
-      // DO NOT set balance to 0 on error - keep previous value or null
-      setBalanceInfo(prev => ({
-        ...prev,
-        loading: false,
-        error: errorMsg,
-        // Keep previous balance if we had one
-      }));
-      
-      return null;
+      // Try fallback endpoint
+      try {
+        const fallbackConnection = new Connection(getFallbackEndpoint(), "confirmed");
+        const lamports = await fallbackConnection.getBalance(publicKey, "confirmed");
+        const sol = lamports / LAMPORTS_PER_SOL;
+        
+        console.info(`[Balance] ${sol.toFixed(6)} SOL via FALLBACK RPC | Address: ${publicKey.toBase58().slice(0, 8)}...`);
+        
+        setBalanceInfo({
+          lamports,
+          sol,
+          loading: false,
+          error: null,
+          lastFetched: new Date(),
+        });
+        
+        return { lamports, sol };
+      } catch (fallbackErr) {
+        const fallbackMsg = fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr);
+        const combinedError = `Primary: ${primaryMsg} | Fallback: ${fallbackMsg}`;
+        console.error("[Balance] All RPC endpoints failed:", combinedError);
+        
+        // DO NOT set balance to 0 on error - keep previous value or null
+        setBalanceInfo(prev => ({
+          ...prev,
+          loading: false,
+          error: combinedError,
+        }));
+        
+        return null;
+      }
     } finally {
       fetchingRef.current = false;
     }

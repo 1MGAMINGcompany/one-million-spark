@@ -6,11 +6,26 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Wallet, LogOut, RefreshCw, Copy, Check, AlertCircle, Smartphone, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { fetchBalanceWithFailover, is403Error } from "@/lib/solana-rpc";
+import { NetworkProofBadge } from "./NetworkProofBadge";
 
 const CONNECT_TIMEOUT_MS = 8000;
 
 // Device detection using navigator.userAgent
 const getIsMobile = () => /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+// SOLANA-ONLY: Allowed wallet names (case-insensitive substring match)
+const ALLOWED_SOLANA_WALLETS = ['phantom', 'solflare', 'backpack', 'glow', 'trust'];
+
+// Wallets to explicitly BLOCK (EVM/non-Solana)
+const BLOCKED_WALLET_NAMES = [
+  'metamask',
+  'mobile wallet adapter', // MWA doesn't work well on desktop
+  'walletconnect',
+  'coinbase',
+  'rainbow',
+  'ledger live',
+  'torus',
+];
 
 export function WalletButton() {
   const { connected, publicKey, disconnect, connecting, wallets, select, wallet } = useWallet();
@@ -137,27 +152,41 @@ export function WalletButton() {
     }
   };
 
-  // Filter wallets based on device type
+  // SOLANA-ONLY: Filter to allowed wallets, block EVM/MetaMask
   const filteredWallets = wallets.filter(w => {
     const name = w.adapter.name.toLowerCase();
-    const isMWA = name.includes('mobile wallet adapter');
     
-    // On desktop: NEVER show Mobile Wallet Adapter
-    if (!isMobile && isMWA) {
+    // Block any explicitly blocked wallets (MetaMask, WalletConnect, etc.)
+    if (BLOCKED_WALLET_NAMES.some(blocked => name.includes(blocked))) {
       return false;
     }
     
-    return true;
+    // On desktop: never show MWA
+    if (!isMobile && name.includes('mobile wallet adapter')) {
+      return false;
+    }
+    
+    // Only allow known Solana wallets
+    const isAllowed = ALLOWED_SOLANA_WALLETS.some(allowed => name.includes(allowed));
+    
+    // Also allow MWA on mobile
+    const isMWA = name.includes('mobile wallet adapter');
+    if (isMobile && isMWA) {
+      return true;
+    }
+    
+    return isAllowed;
   });
 
-  // Sort: Installed wallets first, then by name
+  // Sort: Installed wallets first, then by priority
   const sortedWallets = [...filteredWallets].sort((a, b) => {
     const aInstalled = a.readyState === 'Installed';
     const bInstalled = b.readyState === 'Installed';
     if (aInstalled && !bInstalled) return -1;
     if (!aInstalled && bInstalled) return 1;
-    // Prioritize known wallets
-    const priority = ['phantom', 'solflare', 'backpack'];
+    
+    // Prioritize known wallets in order
+    const priority = ['phantom', 'solflare', 'backpack', 'glow', 'trust'];
     const aIdx = priority.findIndex(p => a.adapter.name.toLowerCase().includes(p));
     const bIdx = priority.findIndex(p => b.adapter.name.toLowerCase().includes(p));
     if (aIdx !== -1 && bIdx === -1) return -1;
@@ -288,7 +317,7 @@ export function WalletButton() {
     : '--';
 
   return (
-    <div className="flex flex-col items-end gap-1">
+    <div className="flex flex-col items-end gap-2">
       {/* Main wallet button with disconnect option */}
       <div className="flex items-center gap-1">
         <Button
@@ -321,13 +350,15 @@ export function WalletButton() {
         </Button>
       </div>
       
-      {/* Balance display */}
+      {/* Balance display with error banner */}
       <div className="flex items-center gap-2 text-xs">
         {balanceError ? (
-          <span className="text-destructive flex items-center gap-1" title={balanceError}>
+          <div className="bg-destructive/10 border border-destructive/30 rounded px-2 py-1 text-destructive flex items-center gap-1">
             <AlertCircle size={12} />
-            RPC Error
-          </span>
+            <span className="max-w-[200px] truncate" title={balanceError}>
+              {balanceError.slice(0, 50)}{balanceError.length > 50 ? '...' : ''}
+            </span>
+          </div>
         ) : balanceLoading ? (
           <span className="text-muted-foreground">Loading...</span>
         ) : balance !== null ? (
@@ -336,6 +367,9 @@ export function WalletButton() {
           <span className="text-muted-foreground">--</span>
         )}
       </div>
+      
+      {/* Network Proof Badge - compact view */}
+      <NetworkProofBadge compact showBalance={false} />
     </div>
   );
 }
