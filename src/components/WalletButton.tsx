@@ -1,125 +1,193 @@
+import { useState, useCallback, useEffect } from "react";
 import { useWallet, useConnection } from "@solana/wallet-adapter-react";
-import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
-import { useState, useEffect, useCallback } from "react";
 import { LAMPORTS_PER_SOL } from "@solana/web3.js";
-
-// Mobile detection helper
-function isMobileDevice(): boolean {
-  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-}
-
-// Check if we're in a wallet's in-app browser
-function isInWalletBrowser(): boolean {
-  const win = window as any;
-  return !!(
-    win.phantom?.solana?.isPhantom ||
-    win.solana?.isPhantom ||
-    win.solflare?.isSolflare ||
-    win.backpack?.isBackpack
-  );
-}
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Wallet, LogOut, RefreshCw, Copy, Check, AlertCircle } from "lucide-react";
+import { toast } from "sonner";
 
 export function WalletButton() {
-  const { connected, publicKey } = useWallet();
+  const { connected, publicKey, disconnect, connecting, wallets, select, wallet } = useWallet();
   const { connection } = useConnection();
+  
   const [balance, setBalance] = useState<number | null>(null);
-  const [loadingBalance, setLoadingBalance] = useState(false);
-  const [showMobileHint, setShowMobileHint] = useState(false);
-
-  // Show mobile hint on mobile if not in wallet browser
-  useEffect(() => {
-    if (isMobileDevice() && !isInWalletBrowser() && !connected) {
-      setShowMobileHint(true);
-    } else {
-      setShowMobileHint(false);
-    }
-  }, [connected]);
+  const [balanceLoading, setBalanceLoading] = useState(false);
+  const [balanceError, setBalanceError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
 
   const fetchBalance = useCallback(async () => {
-    // Only check balance when wallet is fully connected with publicKey
-    if (!connected || !publicKey || !connection) {
+    if (!connected || !publicKey) {
       setBalance(null);
       return;
     }
     
+    setBalanceLoading(true);
+    setBalanceError(null);
+    
     try {
-      setLoadingBalance(true);
-      // Use 'confirmed' commitment for reliable balance
       const lamports = await connection.getBalance(publicKey, 'confirmed');
       const sol = lamports / LAMPORTS_PER_SOL;
       setBalance(sol);
-      
-      // Log for debugging (minimal, non-debug way)
-      console.info(`[Wallet] Balance: ${sol.toFixed(4)} SOL | Address: ${publicKey.toBase58().slice(0, 8)}...`);
+      console.info(`[Wallet] Balance: ${sol.toFixed(6)} SOL (${lamports} lamports)`);
     } catch (err) {
-      console.warn('[Wallet] Failed to fetch balance:', err);
-      setBalance(null);
+      const msg = err instanceof Error ? err.message : 'Failed to fetch balance';
+      console.error('[Wallet] Balance error:', msg);
+      setBalanceError(msg);
+      toast.error(`Balance fetch failed: ${msg}`);
     } finally {
-      setLoadingBalance(false);
+      setBalanceLoading(false);
     }
   }, [connected, publicKey, connection]);
 
-  // Fetch balance on mount and when connection state changes
+  // Fetch balance when connected
   useEffect(() => {
     if (connected && publicKey) {
       fetchBalance();
-      
-      // Refresh balance every 30 seconds
-      const interval = setInterval(fetchBalance, 30000);
-      return () => clearInterval(interval);
-    } else {
-      setBalance(null);
     }
   }, [connected, publicKey, fetchBalance]);
 
-  // Subscribe to account changes for real-time updates
-  useEffect(() => {
-    if (!connected || !publicKey || !connection) return;
+  const handleSelectWallet = async (walletName: string) => {
+    const selectedWallet = wallets.find(w => w.adapter.name === walletName);
+    if (selectedWallet) {
+      try {
+        select(selectedWallet.adapter.name);
+        setDialogOpen(false);
+      } catch (err) {
+        console.error('[Wallet] Select error:', err);
+        toast.error('Failed to select wallet');
+      }
+    }
+  };
 
-    const subId = connection.onAccountChange(
-      publicKey,
-      (accountInfo) => {
-        const sol = accountInfo.lamports / LAMPORTS_PER_SOL;
-        setBalance(sol);
-      },
-      'confirmed'
+  const handleDisconnect = async () => {
+    try {
+      await disconnect();
+      setBalance(null);
+      setBalanceError(null);
+    } catch (err) {
+      console.error('[Wallet] Disconnect error:', err);
+    }
+  };
+
+  const handleCopyAddress = async () => {
+    if (!publicKey) return;
+    try {
+      await navigator.clipboard.writeText(publicKey.toBase58());
+      setCopied(true);
+      toast.success('Address copied!');
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast.error('Failed to copy');
+    }
+  };
+
+  // Not connected state
+  if (!connected) {
+    return (
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogTrigger asChild>
+          <Button
+            disabled={connecting}
+            variant="default"
+            size="sm"
+            className="gap-2"
+          >
+            <Wallet size={16} />
+            {connecting ? 'Connecting...' : 'Select Wallet'}
+          </Button>
+        </DialogTrigger>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Connect Wallet</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-2 py-4">
+            {wallets.length === 0 ? (
+              <p className="text-center text-muted-foreground py-4">
+                No wallets detected. Please install Phantom, Solflare, or Backpack.
+              </p>
+            ) : (
+              wallets.map((w) => (
+                <Button
+                  key={w.adapter.name}
+                  variant="outline"
+                  className="w-full justify-start gap-3 h-12"
+                  onClick={() => handleSelectWallet(w.adapter.name)}
+                >
+                  {w.adapter.icon && (
+                    <img 
+                      src={w.adapter.icon} 
+                      alt={w.adapter.name} 
+                      className="w-6 h-6"
+                    />
+                  )}
+                  <span>{w.adapter.name}</span>
+                  {w.readyState === 'Installed' && (
+                    <span className="ml-auto text-xs text-green-500">Detected</span>
+                  )}
+                </Button>
+              ))
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     );
+  }
 
-    return () => {
-      connection.removeAccountChangeListener(subId);
-    };
-  }, [connected, publicKey, connection]);
+  // Connected state
+  const shortAddress = publicKey 
+    ? `${publicKey.toBase58().slice(0, 4)}...${publicKey.toBase58().slice(-4)}`
+    : '--';
 
   return (
     <div className="flex flex-col items-end gap-1">
-      {/* Standard Wallet Multi Button */}
-      <WalletMultiButton 
-        style={{
-          backgroundColor: 'hsl(var(--primary))',
-          color: 'hsl(var(--primary-foreground))',
-          borderRadius: '0.5rem',
-          fontSize: '0.875rem',
-          height: '2.25rem',
-          padding: '0 1rem',
-        }}
-      />
+      {/* Main wallet button with disconnect option */}
+      <div className="flex items-center gap-1">
+        <Button
+          onClick={handleCopyAddress}
+          variant="outline"
+          size="sm"
+          className="gap-2 font-mono text-xs"
+        >
+          {copied ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
+          {shortAddress}
+        </Button>
+        
+        <Button
+          onClick={fetchBalance}
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8"
+          disabled={balanceLoading}
+        >
+          <RefreshCw size={14} className={balanceLoading ? 'animate-spin' : ''} />
+        </Button>
+        
+        <Button
+          onClick={handleDisconnect}
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 text-destructive hover:text-destructive"
+        >
+          <LogOut size={14} />
+        </Button>
+      </div>
       
-      {/* Mobile helper hint */}
-      {showMobileHint && (
-        <p className="text-xs text-muted-foreground max-w-[200px] text-right">
-          💡 For best results, open this site in your wallet's browser
-        </p>
-      )}
-      
-      {/* Balance display when connected */}
-      {connected && publicKey && (
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span className="font-mono">{publicKey.toBase58().slice(0, 4)}...{publicKey.toBase58().slice(-4)}</span>
-          <span className="text-primary font-medium">
-            {loadingBalance ? '...' : balance !== null ? `${balance.toFixed(4)} SOL` : '--'}
+      {/* Balance display */}
+      <div className="flex items-center gap-2 text-xs">
+        {balanceError ? (
+          <span className="text-destructive flex items-center gap-1">
+            <AlertCircle size={12} />
+            Error
           </span>
-        </div>
-      )}
+        ) : balanceLoading ? (
+          <span className="text-muted-foreground">Loading...</span>
+        ) : balance !== null ? (
+          <span className="text-primary font-medium">{balance.toFixed(4)} SOL</span>
+        ) : (
+          <span className="text-muted-foreground">--</span>
+        )}
+      </div>
     </div>
   );
 }

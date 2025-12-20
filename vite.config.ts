@@ -16,16 +16,30 @@ export default defineConfig(({ mode }) => ({
     alias: {
       "@": path.resolve(__dirname, "./src"),
       // Stub out native modules that can't run in browser
-      // These are pulled in by hardware wallet adapters but not needed for browser wallets
       "usb": path.resolve(__dirname, "./src/lib/empty-module.ts"),
       "node-hid": path.resolve(__dirname, "./src/lib/empty-module.ts"),
       // Stub out @coral-xyz/anchor to avoid native deps
       "@coral-xyz/anchor": path.resolve(__dirname, "./src/lib/empty-module.ts"),
     },
+    // Dedupe wallet adapter packages to ensure single context
+    dedupe: [
+      "@solana/wallet-adapter-react",
+      "@solana/wallet-adapter-react-ui", 
+      "@solana/wallet-adapter-base",
+      "@solana/web3.js",
+      "react",
+      "react-dom",
+    ],
   },
   // Optimize deps to exclude problematic native modules
   optimizeDeps: {
     exclude: ['usb', 'node-hid', '@coral-xyz/anchor'],
+    include: [
+      '@solana/wallet-adapter-react',
+      '@solana/wallet-adapter-react-ui',
+      '@solana/wallet-adapter-base',
+      '@solana/web3.js',
+    ],
     esbuildOptions: {
       define: {
         global: 'globalThis',
