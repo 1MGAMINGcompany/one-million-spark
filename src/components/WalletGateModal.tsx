@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useWalletModal } from "@/components/SolanaProvider";
+import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import {
   Dialog,
   DialogContent,
