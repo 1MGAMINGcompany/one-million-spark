@@ -15,30 +15,24 @@ export const SOLANA_CLUSTER = "mainnet-beta" as const;
 export const SOLANA_ENABLED = true;
 
 // RPC endpoint configuration - MAINNET ONLY
-// Priority:
-// 1. VITE_SOLANA_RPC_URL (QuickNode/Helius mainnet)
-// 2. Public mainnet RPC (rate limited but always mainnet)
-// NEVER use devnet/testnet/localhost URLs
-// Last updated: 2024-12-20 - triggers rebuild on secret change
-const envRpcUrl = import.meta.env.VITE_SOLANA_RPC_URL as string | undefined;
+// Primary: Public Solana RPC (reliable, no auth required)
+// Fallback: Project Serum public RPC
+export const RPC_ENDPOINTS = [
+  "https://api.mainnet-beta.solana.com",
+  "https://solana-api.projectserum.com",
+] as const;
 
-// Validate that env URL doesn't contain devnet/testnet
-function validateMainnetUrl(url: string | undefined): string | undefined {
-  if (!url) return undefined;
-  const lowerUrl = url.toLowerCase();
-  if (lowerUrl.includes("devnet") || lowerUrl.includes("testnet") || lowerUrl.includes("localhost")) {
-    console.error("[SOLANA] Invalid RPC URL: devnet/testnet/localhost not allowed. Using public mainnet.");
-    return undefined;
-  }
-  return url;
-}
-
-// Use validated env URL or public mainnet fallback
-export const SOLANA_RPC_URL = validateMainnetUrl(envRpcUrl) || "https://api.mainnet-beta.solana.com";
+// Primary endpoint - always use public mainnet (no 403 issues)
+export const SOLANA_RPC_URL = RPC_ENDPOINTS[0];
 
 // Get current RPC endpoint (mainnet only)
 export function getSolanaEndpoint(): string {
   return SOLANA_RPC_URL;
+}
+
+// Get fallback endpoint
+export function getFallbackEndpoint(): string {
+  return RPC_ENDPOINTS[1];
 }
 
 // Get network enum for wallet adapters
@@ -84,4 +78,23 @@ export function formatSol(lamports: number | bigint): string {
 // Parse SOL string to lamports
 export function parseSolToLamports(sol: string | number): number {
   return Math.floor(Number(sol) * LAMPORTS_PER_SOL);
+}
+
+// Detect if running on mobile device
+export function isMobileDevice(): boolean {
+  if (typeof window === "undefined") return false;
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+    navigator.userAgent
+  );
+}
+
+// Check if injected wallet (Phantom/Solflare) is available
+export function hasInjectedWallet(): boolean {
+  if (typeof window === "undefined") return false;
+  return !!(
+    (window as any).solana ||
+    (window as any).phantom?.solana ||
+    (window as any).solflare ||
+    (window as any).backpack
+  );
 }
