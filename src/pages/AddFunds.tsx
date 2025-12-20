@@ -2,7 +2,7 @@ import { useWallet } from "@/hooks/useWallet";
 import { useSolPrice } from "@/hooks/useSolPrice";
 import { Wallet, CreditCard, Gamepad2, Link2, CheckCircle2, ExternalLink, RefreshCw, Sparkles, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useWalletModal } from "@/components/SolanaProvider";
+import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import { useNavigate } from "react-router-dom";
 
 const AddFunds = () => {

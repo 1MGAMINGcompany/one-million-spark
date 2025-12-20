@@ -363,16 +363,23 @@ export function useSolanaRooms() {
     }
   }, [publicKey, connected, connection, sendTransaction, toast, fetchRooms]);
 
-  // Get user's SOL balance
+  // Get user's SOL balance - only after wallet is connected with publicKey
   const getBalance = useCallback(async (): Promise<number> => {
-    if (!publicKey) return 0;
-    try {
-      const balance = await connection.getBalance(publicKey);
-      return balance / LAMPORTS_PER_SOL;
-    } catch {
+    if (!connected || !publicKey) {
+      console.info('[Wallet] getBalance: Not connected or no publicKey');
       return 0;
     }
-  }, [publicKey, connection]);
+    try {
+      // Use 'confirmed' commitment for reliable balance
+      const lamports = await connection.getBalance(publicKey, 'confirmed');
+      const sol = lamports / LAMPORTS_PER_SOL;
+      console.info(`[Wallet] getBalance: ${sol.toFixed(4)} SOL | Address: ${publicKey.toBase58().slice(0, 8)}...`);
+      return sol;
+    } catch (err) {
+      console.warn('[Wallet] getBalance failed:', err);
+      return 0;
+    }
+  }, [connected, publicKey, connection]);
 
   return {
     rooms,
