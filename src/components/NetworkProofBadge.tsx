@@ -124,9 +124,18 @@ export function NetworkProofBadge({
       
       {/* Balance Section */}
       {showBalance && isConnected && (
-        <div className="pt-2 border-t border-border/50 space-y-1">
+        <div className="pt-2 border-t border-border/50 space-y-2">
+          {/* Full Address */}
+          <div className="space-y-1">
+            <span className="text-muted-foreground">Connected Address (Full):</span>
+            <div className="font-mono text-[10px] bg-muted/50 px-2 py-1 rounded break-all select-all">
+              {address || "--"}
+            </div>
+          </div>
+          
+          {/* Short Address */}
           <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">Connected Address:</span>
+            <span className="text-muted-foreground">Short:</span>
             <span className="font-mono">
               {address ? `${address.slice(0, 6)}...${address.slice(-4)}` : "--"}
             </span>
