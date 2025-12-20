@@ -19,11 +19,13 @@ export default defineConfig(({ mode }) => ({
       // These are pulled in by hardware wallet adapters but not needed for browser wallets
       "usb": path.resolve(__dirname, "./src/lib/empty-module.ts"),
       "node-hid": path.resolve(__dirname, "./src/lib/empty-module.ts"),
+      // Stub out @coral-xyz/anchor to avoid native deps
+      "@coral-xyz/anchor": path.resolve(__dirname, "./src/lib/empty-module.ts"),
     },
   },
   // Optimize deps to exclude problematic native modules
   optimizeDeps: {
-    exclude: ['usb', 'node-hid'],
+    exclude: ['usb', 'node-hid', '@coral-xyz/anchor'],
     esbuildOptions: {
       define: {
         global: 'globalThis',
