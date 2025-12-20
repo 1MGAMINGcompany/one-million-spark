@@ -1,0 +1,3 @@
+[install]
+# Skip running lifecycle scripts (postinstall, etc.) to avoid native compilation
+lifecycle = false

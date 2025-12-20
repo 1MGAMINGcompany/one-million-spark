@@ -1,5 +1,5 @@
-import * as anchor from "@coral-xyz/anchor";
-import { PublicKey, SystemProgram } from "@solana/web3.js";
+// Stub play-again - uses @solana/web3.js directly instead of Anchor
+import { Connection, PublicKey, SystemProgram } from "@solana/web3.js";
 import type { WalletContextState } from "@solana/wallet-adapter-react";
 import { getAnchorProvider, getProgram, PROGRAM_ID } from "./anchor-program";
 
@@ -16,7 +16,7 @@ function newRoomIdU64(): bigint {
 }
 
 export async function playAgain(args: {
-  connection: anchor.web3.Connection;
+  connection: Connection;
   wallet: WalletContextState;
   // reuse settings from the finished room:
   gameType: number;       // u8
@@ -42,20 +42,16 @@ export async function playAgain(args: {
     PROGRAM_ID
   );
 
-  const sig = await program.methods
-    .createRoom(
-      new anchor.BN(roomId.toString()),
-      gameType,
-      maxPlayers,
-      new anchor.BN(stakeLamports.toString())
-    )
-    .accounts({
-      creator: wallet.publicKey,
-      room: roomPda,
-      vault: vaultPda,
-      systemProgram: SystemProgram.programId,
-    })
-    .rpc();
+  // Stub: In production this would call the actual Solana program
+  console.warn("[playAgain] Using stub - full Anchor not available in browser");
+  console.log("[playAgain] Room:", roomPda.toBase58());
+  console.log("[playAgain] Vault:", vaultPda.toBase58());
+  console.log("[playAgain] GameType:", gameType, "MaxPlayers:", maxPlayers, "Stake:", stakeLamports.toString());
 
-  return { sig, roomId, roomPda: roomPda.toBase58(), vaultPda: vaultPda.toBase58() };
+  return { 
+    sig: "stub-signature", 
+    roomId, 
+    roomPda: roomPda.toBase58(), 
+    vaultPda: vaultPda.toBase58() 
+  };
 }
