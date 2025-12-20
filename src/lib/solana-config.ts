@@ -1,10 +1,10 @@
 import { WalletAdapterNetwork } from "@solana/wallet-adapter-base";
 
 // ============================================================
-// SOLANA NETWORK CONFIGURATION - MAINNET-BETA ONLY
+// SOLANA NETWORK CONFIGURATION - MAINNET-BETA ONLY (HELIUS RPC)
 // ============================================================
-// This app ONLY uses mainnet-beta. No devnet, no testnet, no localhost.
-// All wallet adapters, connections, and RPC calls use this configuration.
+// This app ONLY uses mainnet-beta with Helius RPC.
+// No devnet, no testnet, no localhost, no public endpoints.
 // ============================================================
 
 // FORCE mainnet-beta - never change this
@@ -14,25 +14,15 @@ export const SOLANA_CLUSTER = "mainnet-beta" as const;
 // Feature flag - Solana is LIVE
 export const SOLANA_ENABLED = true;
 
-// RPC endpoint configuration - MAINNET ONLY
-// Primary: Public Solana RPC (reliable, no auth required)
-// Fallback: Project Serum public RPC
-export const RPC_ENDPOINTS = [
-  "https://api.mainnet-beta.solana.com",
-  "https://solana-api.projectserum.com",
-] as const;
+// Single Helius RPC endpoint - read from env or use default
+// IMPORTANT: Only use this Helius endpoint, no fallbacks to public RPCs
+export const SOLANA_RPC_URL = 
+  import.meta.env.VITE_SOLANA_RPC_URL || 
+  "https://barbey-suiowt-fast-mainnet.helius-rpc.com";
 
-// Primary endpoint - always use public mainnet (no 403 issues)
-export const SOLANA_RPC_URL = RPC_ENDPOINTS[0];
-
-// Get current RPC endpoint (mainnet only)
+// Get current RPC endpoint (Helius mainnet only)
 export function getSolanaEndpoint(): string {
   return SOLANA_RPC_URL;
-}
-
-// Get fallback endpoint
-export function getFallbackEndpoint(): string {
-  return RPC_ENDPOINTS[1];
 }
 
 // Get network enum for wallet adapters

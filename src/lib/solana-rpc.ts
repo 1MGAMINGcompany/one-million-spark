@@ -1,37 +1,19 @@
 import { Connection, PublicKey } from "@solana/web3.js";
-import { RPC_ENDPOINTS, getSolanaEndpoint, getFallbackEndpoint } from "./solana-config";
+import { getSolanaEndpoint } from "./solana-config";
 
-// RPC request with automatic failover
-export async function fetchBalanceWithFailover(
+// Fetch balance using the single Helius RPC endpoint
+export async function fetchBalance(
   publicKey: PublicKey,
-  primaryConnection: Connection
+  connection: Connection
 ): Promise<{ balance: number; endpoint: string }> {
-  const errors: string[] = [];
-
-  // Try primary endpoint first
   try {
-    const balance = await primaryConnection.getBalance(publicKey, "confirmed");
+    const balance = await connection.getBalance(publicKey, "confirmed");
     return { balance, endpoint: getSolanaEndpoint() };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    errors.push(`Primary (${getSolanaEndpoint()}): ${msg}`);
-    console.warn("[RPC] Primary endpoint failed:", msg);
+    console.error("[RPC] Balance fetch failed:", msg);
+    throw new Error(`RPC error (${getSolanaEndpoint()}): ${msg}`);
   }
-
-  // Try fallback endpoint
-  try {
-    const fallbackConnection = new Connection(getFallbackEndpoint(), "confirmed");
-    const balance = await fallbackConnection.getBalance(publicKey, "confirmed");
-    console.info("[RPC] Fallback endpoint succeeded");
-    return { balance, endpoint: getFallbackEndpoint() };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    errors.push(`Fallback (${getFallbackEndpoint()}): ${msg}`);
-    console.warn("[RPC] Fallback endpoint failed:", msg);
-  }
-
-  // All endpoints failed - throw with details
-  throw new Error(`All RPC endpoints failed:\n${errors.join("\n")}`);
 }
 
 // Check if an RPC error is a 403/auth error
