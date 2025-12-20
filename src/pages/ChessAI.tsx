@@ -129,11 +129,11 @@ const ChessAI = () => {
 
   const difficultyLabel = useMemo(() => {
     switch (difficulty) {
-      case "easy": return "EASY";
-      case "medium": return "MEDIUM";
-      case "hard": return "HARD";
+      case "easy": return t('playAi.easy');
+      case "medium": return t('playAi.medium');
+      case "hard": return t('playAi.hard');
     }
-  }, [difficulty]);
+  }, [difficulty, t]);
 
   const difficultyDescription = useMemo(() => {
     switch (difficulty) {
@@ -180,7 +180,7 @@ const ChessAI = () => {
     if (currentGame.isGameOver()) return;
     
     setIsThinking(true);
-    setGameStatus("AI is thinking...");
+    setGameStatus(t('gameAI.aiThinking'));
 
     try {
       let uciMove: string;
@@ -209,7 +209,7 @@ const ChessAI = () => {
         }
         setIsThinking(false);
         if (!checkGameOver(currentGame)) {
-          setGameStatus("Your turn");
+          setGameStatus(t('gameAI.yourTurn'));
         }
         return;
       }
@@ -244,7 +244,7 @@ const ChessAI = () => {
         }
         setIsThinking(false);
         if (!checkGameOver(currentGame)) {
-          setGameStatus("Your turn");
+          setGameStatus(t('gameAI.yourTurn'));
         }
         return;
       }
@@ -271,7 +271,7 @@ const ChessAI = () => {
       setIsThinking(false);
 
       if (!checkGameOver(currentGame)) {
-        setGameStatus("Your turn");
+        setGameStatus(t('gameAI.yourTurn'));
       }
     } catch (error) {
       console.error('Stockfish error:', error);
@@ -286,10 +286,10 @@ const ChessAI = () => {
       }
       setIsThinking(false);
       if (!checkGameOver(currentGame)) {
-        setGameStatus("Your turn");
+        setGameStatus(t('gameAI.yourTurn'));
       }
     }
-  }, [checkGameOver, triggerAnimation, play, getRandomMove]);
+  }, [checkGameOver, triggerAnimation, play, getRandomMove, t]);
 
   const handleMove = useCallback((from: Square, to: Square): boolean => {
     if (gameOver || isThinking) return false;
@@ -342,10 +342,10 @@ const ChessAI = () => {
   const restartGame = useCallback(() => {
     setGame(new Chess());
     setMoveHistory([]);
-    setGameStatus("Your turn");
+    setGameStatus(t('gameAI.yourTurn'));
     setGameOver(false);
     setIsThinking(false);
-  }, []);
+  }, [t]);
 
   const formattedMoves = [];
   for (let i = 0; i < moveHistory.length; i += 2) {
@@ -529,7 +529,7 @@ const ChessAI = () => {
                     {gameStatus || (isThinking ? t('gameAI.aiThinking') : t('gameAI.yourTurn'))}
                   </p>
                   {game.isCheck() && !gameOver && (
-                    <p className="text-sm text-red-400/80 mt-1 font-medium animate-pulse">⚠ Check!</p>
+                    <p className="text-sm text-red-400/80 mt-1 font-medium animate-pulse">⚠ {t('game.check')}</p>
                   )}
                 </div>
               </div>
@@ -579,18 +579,18 @@ const ChessAI = () => {
                   />
                 </div>
                 
-                <p className="text-xs text-primary/60 uppercase tracking-wider mb-3 font-medium">{t('common.gameInfo') || 'Game Info'}</p>
+                <p className="text-xs text-primary/60 uppercase tracking-wider mb-3 font-medium">{t('common.gameInfo')}</p>
                 <div className="text-sm space-y-2">
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">{t('common.you') || 'You'}</span>
+                    <span className="text-muted-foreground">{t('common.you')}</span>
                     <span className="text-foreground font-medium">{t('gameAI.white')} ♔</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">AI</span>
+                    <span className="text-muted-foreground">{t('common.ai')}</span>
                     <span className="text-foreground font-medium">{t('gameAI.black')} ♚</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">{t('common.totalMoves') || 'Total Moves'}</span>
+                    <span className="text-muted-foreground">{t('common.totalMoves')}</span>
                     <span className="text-primary font-medium">{moveHistory.length}</span>
                   </div>
                 </div>
@@ -638,7 +638,7 @@ const ChessAI = () => {
 
               <Button asChild variant="ghost" className="w-full text-muted-foreground hover:text-primary">
                 <Link to="/play-ai">
-                  Change Difficulty
+                  {t('gameAI.changeDifficulty')}
                 </Link>
               </Button>
             </div>
