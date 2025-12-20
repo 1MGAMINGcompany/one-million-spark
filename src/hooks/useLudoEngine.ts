@@ -34,8 +34,10 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
   const playersRef = useRef(players);
   const currentPlayerIndexRef = useRef(currentPlayerIndex);
   const animationRef = useRef<NodeJS.Timeout | null>(null);
+  const diceIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const moveInProgressRef = useRef(false);
   const consumedDiceRef = useRef<number | null>(null);
+  const isMountedRef = useRef(true);
   
   useEffect(() => { playersRef.current = players; }, [players]);
   useEffect(() => { currentPlayerIndexRef.current = currentPlayerIndex; }, [currentPlayerIndex]);
@@ -83,7 +85,10 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
     // Clear any pending animation
     if (animationRef.current) {
       clearTimeout(animationRef.current);
+      animationRef.current = null;
     }
+    
+    if (!isMountedRef.current) return;
     
     setIsAnimating(true);
     
@@ -112,6 +117,11 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
     let stepIndex = 0;
     
     const performStep = () => {
+      if (!isMountedRef.current) {
+        setIsAnimating(false);
+        return;
+      }
+      
       const stepPosition = positions[stepIndex];
       stepIndex++;
       
@@ -131,7 +141,12 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
       
       if (stepIndex >= totalSteps) {
         // Animation complete - FORCE exact final position
-        setTimeout(() => {
+        animationRef.current = setTimeout(() => {
+          if (!isMountedRef.current) {
+            setIsAnimating(false);
+            return;
+          }
+          
           setPlayers(prev => prev.map((p, pIdx) => ({
             ...p,
             tokens: p.tokens.map((t, tIdx) => {
@@ -291,18 +306,35 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
   const rollDice = useCallback((onRollComplete?: (dice: number, movable: number[]) => void) => {
     if (isRolling || diceValue !== null || isAnimating) return;
     
+    // Clear any existing dice interval
+    if (diceIntervalRef.current) {
+      clearInterval(diceIntervalRef.current);
+      diceIntervalRef.current = null;
+    }
+    
     setIsRolling(true);
     onSoundPlay?.('ludo_dice');
     
     let rolls = 0;
     const maxRolls = 10;
     
-    const interval = setInterval(() => {
+    diceIntervalRef.current = setInterval(() => {
+      if (!isMountedRef.current) {
+        if (diceIntervalRef.current) {
+          clearInterval(diceIntervalRef.current);
+          diceIntervalRef.current = null;
+        }
+        return;
+      }
+      
       setDiceValue(Math.floor(Math.random() * 6) + 1);
       rolls++;
       
       if (rolls >= maxRolls) {
-        clearInterval(interval);
+        if (diceIntervalRef.current) {
+          clearInterval(diceIntervalRef.current);
+          diceIntervalRef.current = null;
+        }
         const finalValue = Math.floor(Math.random() * 6) + 1;
         setDiceValue(finalValue);
         setIsRolling(false);
@@ -362,9 +394,16 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
 
   // Cleanup on unmount
   useEffect(() => {
+    isMountedRef.current = true;
     return () => {
+      isMountedRef.current = false;
       if (animationRef.current) {
         clearTimeout(animationRef.current);
+        animationRef.current = null;
+      }
+      if (diceIntervalRef.current) {
+        clearInterval(diceIntervalRef.current);
+        diceIntervalRef.current = null;
       }
     };
   }, []);
