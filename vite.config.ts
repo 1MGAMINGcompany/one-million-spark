@@ -15,6 +15,24 @@ export default defineConfig(({ mode }) => ({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      // Stub out native modules that can't run in browser
+      // These are pulled in by hardware wallet adapters but not needed for browser wallets
+      "usb": path.resolve(__dirname, "./src/lib/empty-module.ts"),
+      "node-hid": path.resolve(__dirname, "./src/lib/empty-module.ts"),
+    },
+  },
+  // Optimize deps to exclude problematic native modules
+  optimizeDeps: {
+    exclude: ['usb', 'node-hid'],
+    esbuildOptions: {
+      define: {
+        global: 'globalThis',
+      },
+    },
+  },
+  build: {
+    rollupOptions: {
+      external: ['usb', 'node-hid'],
     },
   },
 }));
