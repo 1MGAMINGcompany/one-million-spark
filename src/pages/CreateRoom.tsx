@@ -341,15 +341,21 @@ export default function CreateRoom() {
             {t("createRoom.connected")}: {address?.slice(0, 6)}...{address?.slice(-4)}
           </p>
           
-          {/* Network Proof Badge - Collapsible */}
-          <details className="text-xs">
-            <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
-              Network Details
-            </summary>
-            <div className="mt-2">
-              <NetworkProofBadge showBalance={false} />
+          {/* RPC Status - Always Visible */}
+          <div className="p-2.5 bg-muted/30 rounded-lg text-xs space-y-1.5 border border-border/30">
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">RPC Status</span>
+              <span className={networkInfo.isMainnet ? "text-green-400 font-medium" : "text-red-400 font-medium"}>
+                {networkInfo.loading ? "..." : networkInfo.isMainnet ? "MAINNET" : "NOT MAINNET"}
+              </span>
             </div>
-          </details>
+            <div className="font-mono text-[10px] text-muted-foreground truncate" title={networkInfo.rpcEndpoint}>
+              {networkInfo.rpcEndpoint}
+            </div>
+            <div className="font-mono text-[10px] text-muted-foreground truncate" title={networkInfo.genesisHash || ""}>
+              Genesis: {networkInfo.loading ? "..." : networkInfo.genesisHash?.slice(0, 16) || "Unknown"}...
+            </div>
+          </div>
         </CardContent>
       </Card>
     </div>

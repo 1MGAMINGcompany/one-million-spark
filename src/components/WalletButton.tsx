@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Wallet, LogOut, RefreshCw, Copy, Check, AlertCircle, Smartphone, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { fetchBalanceWithFailover, is403Error } from "@/lib/solana-rpc";
+import { fetchBalance as fetchBalanceRpc, is403Error } from "@/lib/solana-rpc";
 import { NetworkProofBadge } from "./NetworkProofBadge";
 
 const CONNECT_TIMEOUT_MS = 8000;
@@ -67,7 +67,7 @@ export function WalletButton() {
     setBalanceError(null);
     
     try {
-      const { balance: lamports, endpoint } = await fetchBalanceWithFailover(publicKey, connection);
+      const { balance: lamports, endpoint } = await fetchBalanceRpc(publicKey, connection);
       const sol = lamports / LAMPORTS_PER_SOL;
       setBalance(sol);
       console.info(`[Wallet] Balance: ${sol.toFixed(6)} SOL via ${endpoint}`);
