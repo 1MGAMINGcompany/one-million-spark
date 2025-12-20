@@ -118,7 +118,7 @@ const CheckersGame = () => {
       const color = index === 0 ? "gold" : "obsidian";
       return {
         address: playerAddress,
-        name: isMe ? "You" : "Opponent",
+        name: isMe ? t("common.you") : t("game.opponent"),
         color,
         status: "active" as const,
         seatIndex: index,
@@ -193,7 +193,7 @@ const CheckersGame = () => {
     const result = await rematch.acceptRematch(rematchRoomId);
     sendRematchAcceptRef.current?.(rematchRoomId);
     if (result.allAccepted) {
-      toast({ title: "All players accepted!", description: "Game is starting..." });
+      toast({ title: t("gameMultiplayer.allPlayersAccepted"), description: t("gameMultiplayer.gameStarting") });
       sendRematchReadyRef.current?.(rematchRoomId);
       window.location.href = `/game/checkers/${rematchRoomId}`;
     }
@@ -393,30 +393,30 @@ const CheckersGame = () => {
       const result = checkGameOver(moveData.board);
       if (result) {
         setGameOver(result);
-        chatRef.current?.addSystemMessage(result === myColor ? "You win!" : "Opponent wins!");
+        chatRef.current?.addSystemMessage(result === myColor ? t("gameMultiplayer.youWin") : t("gameMultiplayer.opponentWins"));
         play(result === myColor ? 'checkers_win' : 'checkers_lose');
       } else {
         setCurrentPlayer(moveData.player === "gold" ? "obsidian" : "gold");
       }
     } else if (message.type === "resign") {
       setGameOver(myColor);
-      chatRef.current?.addSystemMessage("Opponent resigned");
+      chatRef.current?.addSystemMessage(t("gameMultiplayer.opponentResigned"));
       play('checkers_win');
       toast({
-        title: "Victory!",
-        description: "Your opponent has resigned.",
+        title: t("gameMultiplayer.victory"),
+        description: t("gameMultiplayer.opponentResignedVictory"),
       });
     } else if (message.type === "rematch_invite" && message.payload) {
       setRematchInviteData(message.payload);
       setShowAcceptModal(true);
-      toast({ title: "Rematch Invite", description: "Your opponent wants a rematch!" });
+      toast({ title: t("gameMultiplayer.rematchInvite"), description: t("gameMultiplayer.rematchInviteDesc") });
     } else if (message.type === "rematch_accept") {
-      toast({ title: "Rematch Accepted!", description: "Opponent accepted. Starting new game..." });
+      toast({ title: t("gameMultiplayer.rematchAccepted"), description: t("gameMultiplayer.rematchAcceptedDesc") });
     } else if (message.type === "rematch_decline") {
-      toast({ title: "Rematch Declined", description: "Opponent declined the rematch.", variant: "destructive" });
+      toast({ title: t("gameMultiplayer.rematchDeclined"), description: t("gameMultiplayer.rematchDeclinedDesc"), variant: "destructive" });
       rematch.closeRematchModal();
     } else if (message.type === "rematch_ready" && message.payload) {
-      toast({ title: "Rematch Ready!", description: "Starting new game..." });
+      toast({ title: t("gameMultiplayer.rematchReady"), description: t("gameMultiplayer.rematchReadyDesc") });
       navigate(`/game/checkers/${message.payload.roomId}`);
     }
   }, [play, checkGameOver, myColor, recordPlayerMove, roomPlayers, rematch, navigate]);
@@ -462,10 +462,9 @@ const CheckersGame = () => {
   });
   chatRef.current = chat;
 
-  // Add system message when game starts
   useEffect(() => {
     if (roomPlayers.length === 2 && chat.messages.length === 0) {
-      chat.addSystemMessage("Game started! Good luck!");
+      chat.addSystemMessage(t("gameMultiplayer.gameStarted"));
     }
   }, [roomPlayers.length]);
 
@@ -679,12 +678,12 @@ const CheckersGame = () => {
     return (
       <div className="container max-w-4xl py-8 px-4">
         <Button variant="ghost" size="sm" className="mb-4" onClick={() => navigate("/room-list")}>
-          <ArrowLeft className="mr-2 h-4 w-4" /> Back to Rooms
+          <ArrowLeft className="mr-2 h-4 w-4" /> {t("gameMultiplayer.backToRooms")}
         </Button>
         <div className="text-center py-12">
           <Users className="h-16 w-16 text-primary mx-auto mb-4" />
-          <h3 className="text-xl font-semibold mb-2">Connect Wallet to Play</h3>
-          <p className="text-muted-foreground">Please connect your wallet to join this game.</p>
+          <h3 className="text-xl font-semibold mb-2">{t("gameMultiplayer.connectWalletToPlay")}</h3>
+          <p className="text-muted-foreground">{t("gameMultiplayer.connectWalletDesc")}</p>
         </div>
       </div>
     );
@@ -710,7 +709,7 @@ const CheckersGame = () => {
               <Button asChild variant="ghost" size="sm" className="text-muted-foreground hover:text-primary">
                 <Link to="/room-list" className="flex items-center gap-2">
                   <ArrowLeft size={18} />
-                  <span className="hidden sm:inline">Rooms</span>
+                  <span className="hidden sm:inline">{t("gameMultiplayer.rooms")}</span>
                 </Link>
               </Button>
               <div>
@@ -722,12 +721,12 @@ const CheckersGame = () => {
                 </div>
                 <p className="text-xs text-muted-foreground flex items-center gap-1">
                   {peerConnected ? (
-                    <><Wifi className="w-3 h-3 text-green-500" /> Connected</>
+                    <><Wifi className="w-3 h-3 text-green-500" /> {t("gameMultiplayer.connected")}</>
                   ) : (
                     <><WifiOff className="w-3 h-3 text-yellow-500" /> {connectionState}</>
                   )}
                   <span className="mx-1">•</span>
-                  Playing as {myColor === "gold" ? "Gold" : "Obsidian"}
+                  {t("gameMultiplayer.playingAs")} {myColor === "gold" ? t("gameMultiplayer.gold") : t("gameMultiplayer.obsidian")}
                 </p>
               </div>
             </div>
@@ -775,15 +774,15 @@ const CheckersGame = () => {
                   <div className={`text-xl font-display font-bold ${
                     gameOver === myColor ? "text-green-400" : "text-red-400"
                   }`}>
-                    {gameOver === myColor ? "🎉 You Win!" : gameOver === "draw" ? "Draw!" : "You Lose!"}
+                    {gameOver === myColor ? `🎉 ${t("gameMultiplayer.youWin")}` : gameOver === "draw" ? `${t("game.draw")}!` : `${t("gameMultiplayer.youLose")}`}
                   </div>
                   <div className="flex gap-3 justify-center">
                     <Button onClick={() => rematch.openRematchModal()} className="gap-2">
                       <RotateCcw className="w-4 h-4" />
-                      Rematch
+                      {t("gameMultiplayer.rematch")}
                     </Button>
                     <Button asChild variant="outline">
-                      <Link to="/room-list">Exit</Link>
+                      <Link to="/room-list">{t("gameMultiplayer.exit")}</Link>
                     </Button>
                   </div>
                 </div>
@@ -796,10 +795,9 @@ const CheckersGame = () => {
                 variant="outline"
                 size="sm"
                 onClick={handleResign}
-                className="border-red-500/30 text-red-400 hover:bg-red-500/10"
-              >
+                className="border-red-500/30 text-red-400 hover:bg-red-500/10">
                 <Flag className="w-4 h-4 mr-2" />
-                Resign
+                {t("gameMultiplayer.resign")}
               </Button>
             )}
           </div>
