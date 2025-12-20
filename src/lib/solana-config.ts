@@ -19,6 +19,7 @@ export const SOLANA_ENABLED = true;
 // 1. VITE_SOLANA_RPC_URL (QuickNode/Helius mainnet)
 // 2. Public mainnet RPC (rate limited but always mainnet)
 // NEVER use devnet/testnet/localhost URLs
+// Last updated: 2024-12-20 - triggers rebuild on secret change
 const envRpcUrl = import.meta.env.VITE_SOLANA_RPC_URL as string | undefined;
 
 // Validate that env URL doesn't contain devnet/testnet
