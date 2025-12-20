@@ -1,7 +1,7 @@
 import React, { ReactNode, useMemo, useCallback } from "react";
 import { ConnectionProvider, WalletProvider } from "@solana/wallet-adapter-react";
 import { WalletModalProvider } from "@solana/wallet-adapter-react-ui";
-import { getSolanaEndpoint } from "@/lib/solana-config";
+import { getSolanaEndpoint, getSolanaNetwork } from "@/lib/solana-config";
 
 // Import wallet adapter styles
 import "@solana/wallet-adapter-react-ui/styles.css";
@@ -14,24 +14,35 @@ interface SolanaProviderProps {
 }
 
 export function SolanaProvider({ children }: SolanaProviderProps) {
-  const endpoint = useMemo(() => getSolanaEndpoint(), []);
+  // Get mainnet endpoint - NEVER devnet/testnet
+  const endpoint = useMemo(() => {
+    const url = getSolanaEndpoint();
+    console.info(`[SolanaProvider] Using RPC endpoint: ${url}`);
+    console.info(`[SolanaProvider] Network: ${getSolanaNetwork()}`);
+    return url;
+  }, []);
 
   // ============================================================
-  // SOLANA WALLET STANDARD - NO LEGACY ADAPTERS
+  // WALLET ADAPTERS - Wallet Standard Auto-Discovery
   // ============================================================
-  // Wallets that implement the Solana Wallet Standard are auto-discovered.
-  // We pass an EMPTY array - no legacy adapters needed.
-  // This uses the standard WalletModalProvider from @solana/wallet-adapter-react-ui
-  // which handles all wallet connections including Phantom, Solflare, Backpack, etc.
+  // Modern wallets (Phantom, Solflare, Backpack, etc.) implement
+  // the Solana Wallet Standard and are auto-discovered.
+  // We pass an EMPTY array to rely on standard detection.
+  // This ensures all detected wallets use the SAME mainnet connection.
   // ============================================================
   const wallets = useMemo(() => [], []);
 
-  // Handle wallet errors silently (user-facing errors are handled by the modal)
+  // Handle wallet errors - log but don't crash
   const onError = useCallback((error: Error) => {
+    // Ignore common non-errors
     if (error.name === 'WalletNotSelectedError') {
       return;
     }
-    console.warn('Wallet error:', error.message);
+    if (error.name === 'WalletNotReadyError') {
+      console.info('[Wallet] Wallet not ready - user may need to install extension');
+      return;
+    }
+    console.warn('[Wallet] Error:', error.message);
   }, []);
 
   return (

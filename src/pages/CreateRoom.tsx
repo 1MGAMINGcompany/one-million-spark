@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
@@ -17,10 +17,12 @@ import { useToast } from "@/hooks/use-toast";
 import { useSound } from "@/contexts/SoundContext";
 import { useSolPrice } from "@/hooks/useSolPrice";
 import { useSolanaRooms } from "@/hooks/useSolanaRooms";
-import { Wallet, Loader2, AlertCircle } from "lucide-react";
+import { useSolanaNetwork } from "@/hooks/useSolanaNetwork";
+import { Wallet, Loader2, AlertCircle, RefreshCw } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { GameType } from "@/lib/solana-program";
 import { ConnectWalletGate } from "@/components/ConnectWalletGate";
+import { NetworkProofBadge } from "@/components/NetworkProofBadge";
 
 // Target minimum fee in USD
 const MIN_FEE_USD = 0.50;
@@ -34,32 +36,59 @@ export default function CreateRoom() {
   const { toast } = useToast();
   const { play } = useSound();
   const { price, formatUsd, loading: priceLoading, refetch: refetchPrice } = useSolPrice();
-  const { createRoom, txPending, getBalance, activeRoom, fetchCreatorActiveRoom } = useSolanaRooms();
+  const { createRoom, txPending, activeRoom, fetchCreatorActiveRoom } = useSolanaRooms();
+  const { 
+    balanceInfo, 
+    fetchBalance, 
+    networkInfo, 
+    checkNetworkMismatch 
+  } = useSolanaNetwork();
 
   const [gameType, setGameType] = useState<string>("1"); // Chess
   const [entryFee, setEntryFee] = useState<string>("0.1");
   const [maxPlayers, setMaxPlayers] = useState<string>("2");
   const [isPrivate, setIsPrivate] = useState<boolean>(false);
   const [turnTime, setTurnTime] = useState<string>("10");
-  const [balance, setBalance] = useState<number>(0);
   const [checkingActiveRoom, setCheckingActiveRoom] = useState(true);
+  const [refreshingBalance, setRefreshingBalance] = useState(false);
+  
+  // Use balance from network hook (null means not fetched, not 0)
+  const balance = balanceInfo.sol ?? 0;
+  
   // Dynamic minimum fee based on current SOL price (~$0.50 USD)
   const dynamicMinFee = price ? Math.ceil((MIN_FEE_USD / price) * 10000) / 10000 : FALLBACK_MIN_SOL;
   
   const entryFeeNum = parseFloat(entryFee) || 0;
   const entryFeeUsd = formatUsd(entryFee);
 
-  // Fetch balance and check for active room on mount
+  // Check for active room on mount
   useEffect(() => {
     if (isConnected) {
-      getBalance().then(setBalance);
       fetchCreatorActiveRoom().finally(() => setCheckingActiveRoom(false));
     } else {
       setCheckingActiveRoom(false);
     }
-  }, [isConnected, getBalance, fetchCreatorActiveRoom]);
+  }, [isConnected, fetchCreatorActiveRoom]);
+  
+  // Manual balance refresh
+  const handleRefreshBalance = useCallback(async () => {
+    setRefreshingBalance(true);
+    await fetchBalance();
+    setRefreshingBalance(false);
+  }, [fetchBalance]);
 
   const handleCreateRoom = async () => {
+    // Check network first
+    const networkError = checkNetworkMismatch();
+    if (networkError) {
+      toast({
+        title: "Wrong Network",
+        description: networkError,
+        variant: "destructive",
+      });
+      return;
+    }
+    
     if (activeRoom) {
       toast({
         title: t("createRoom.activeRoomExists"),
@@ -78,10 +107,14 @@ export default function CreateRoom() {
       return;
     }
 
-    if (entryFeeNum > balance) {
+    // Re-fetch balance before checking (fresh balance)
+    const freshBalance = await fetchBalance();
+    const currentBalance = freshBalance?.sol ?? balance;
+    
+    if (entryFeeNum > currentBalance) {
       toast({
         title: t("createRoom.insufficientBalance"),
-        description: t("createRoom.insufficientBalanceDesc", { need: entryFeeNum, have: balance.toFixed(4) }),
+        description: t("createRoom.insufficientBalanceDesc", { need: entryFeeNum, have: currentBalance.toFixed(4) }),
         variant: "destructive",
       });
       return;
@@ -152,16 +185,55 @@ export default function CreateRoom() {
             </div>
           )}
 
-          {/* Balance & Price */}
+          {/* Balance & Price with Refresh */}
           <div className="flex items-center justify-between p-2.5 bg-muted/50 rounded-lg text-sm">
-            <div>
-              <span className="text-muted-foreground">{t("createRoom.balance")}:</span>{" "}
-              <span className="font-semibold">{balance.toFixed(4)} SOL</span>
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground">{t("createRoom.balance")}:</span>
+              {balanceInfo.loading ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : balanceInfo.error ? (
+                <span className="text-red-400 text-xs" title={balanceInfo.error}>Error</span>
+              ) : (
+                <span className="font-semibold">{balance.toFixed(4)} SOL</span>
+              )}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-5 w-5"
+                onClick={handleRefreshBalance}
+                disabled={refreshingBalance || balanceInfo.loading}
+              >
+                <RefreshCw className={`w-3 h-3 ${refreshingBalance ? 'animate-spin' : ''}`} />
+              </Button>
             </div>
             <div className="text-muted-foreground">
               1 SOL ≈ ${price?.toFixed(2) || "..."}
             </div>
           </div>
+          
+          {/* Balance Error Display */}
+          {balanceInfo.error && (
+            <div className="flex items-start gap-2 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
+              <AlertCircle className="h-4 w-4 text-red-500 mt-0.5 shrink-0" />
+              <div className="text-sm text-red-400">
+                <p className="font-medium">Balance Error</p>
+                <p className="text-xs opacity-80">{balanceInfo.error}</p>
+              </div>
+            </div>
+          )}
+          
+          {/* Network Warning */}
+          {!networkInfo.loading && !networkInfo.isMainnet && networkInfo.cluster !== "unknown" && (
+            <div className="flex items-start gap-2 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+              <AlertCircle className="h-4 w-4 text-yellow-500 mt-0.5 shrink-0" />
+              <div className="text-sm text-yellow-400">
+                <p className="font-medium">Wrong Network</p>
+                <p className="text-xs opacity-80">
+                  App is connected to {networkInfo.cluster} but wallet funds are on Mainnet.
+                </p>
+              </div>
+            </div>
+          )}
 
 
           {/* Game Type */}
@@ -268,6 +340,16 @@ export default function CreateRoom() {
           <p className="text-xs text-center text-muted-foreground">
             {t("createRoom.connected")}: {address?.slice(0, 6)}...{address?.slice(-4)}
           </p>
+          
+          {/* Network Proof Badge - Collapsible */}
+          <details className="text-xs">
+            <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
+              Network Details
+            </summary>
+            <div className="mt-2">
+              <NetworkProofBadge showBalance={false} />
+            </div>
+          </details>
         </CardContent>
       </Card>
     </div>
