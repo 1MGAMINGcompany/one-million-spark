@@ -1,10 +1,14 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useWallet, useConnection } from "@solana/wallet-adapter-react";
 import { LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Wallet, LogOut, RefreshCw, Copy, Check, AlertCircle } from "lucide-react";
+import { Wallet, LogOut, RefreshCw, Copy, Check, AlertCircle, Smartphone } from "lucide-react";
 import { toast } from "sonner";
+import { fetchBalanceWithFailover, is403Error } from "@/lib/solana-rpc";
+import { isMobileDevice, hasInjectedWallet } from "@/lib/solana-config";
+
+const CONNECT_TIMEOUT_MS = 8000;
 
 export function WalletButton() {
   const { connected, publicKey, disconnect, connecting, wallets, select, wallet } = useWallet();
@@ -15,6 +19,25 @@ export function WalletButton() {
   const [balanceError, setBalanceError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [connectTimeout, setConnectTimeout] = useState(false);
+  const connectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const isMobile = isMobileDevice();
+  const hasInjected = hasInjectedWallet();
+
+  // Clear timeout on unmount or when connected
+  useEffect(() => {
+    if (connected && connectTimeoutRef.current) {
+      clearTimeout(connectTimeoutRef.current);
+      connectTimeoutRef.current = null;
+      setConnectTimeout(false);
+    }
+    return () => {
+      if (connectTimeoutRef.current) {
+        clearTimeout(connectTimeoutRef.current);
+      }
+    };
+  }, [connected]);
 
   const fetchBalance = useCallback(async () => {
     if (!connected || !publicKey) {
@@ -26,15 +49,21 @@ export function WalletButton() {
     setBalanceError(null);
     
     try {
-      const lamports = await connection.getBalance(publicKey, 'confirmed');
+      const { balance: lamports, endpoint } = await fetchBalanceWithFailover(publicKey, connection);
       const sol = lamports / LAMPORTS_PER_SOL;
       setBalance(sol);
-      console.info(`[Wallet] Balance: ${sol.toFixed(6)} SOL (${lamports} lamports)`);
+      console.info(`[Wallet] Balance: ${sol.toFixed(6)} SOL via ${endpoint}`);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to fetch balance';
       console.error('[Wallet] Balance error:', msg);
       setBalanceError(msg);
-      toast.error(`Balance fetch failed: ${msg}`);
+      
+      // Show specific error for 403
+      if (is403Error(err)) {
+        toast.error('RPC access denied - using public fallback failed');
+      } else {
+        toast.error(`Balance fetch failed: ${msg.slice(0, 100)}`);
+      }
     } finally {
       setBalanceLoading(false);
     }
@@ -51,6 +80,14 @@ export function WalletButton() {
     const selectedWallet = wallets.find(w => w.adapter.name === walletName);
     if (selectedWallet) {
       try {
+        // Start timeout for connection
+        setConnectTimeout(false);
+        connectTimeoutRef.current = setTimeout(() => {
+          if (!connected) {
+            setConnectTimeout(true);
+          }
+        }, CONNECT_TIMEOUT_MS);
+
         select(selectedWallet.adapter.name);
         setDialogOpen(false);
       } catch (err) {
@@ -60,11 +97,23 @@ export function WalletButton() {
     }
   };
 
+  const handleRetryConnect = () => {
+    setConnectTimeout(false);
+    if (wallet) {
+      try {
+        wallet.adapter.connect();
+      } catch (err) {
+        console.error('[Wallet] Retry connect error:', err);
+      }
+    }
+  };
+
   const handleDisconnect = async () => {
     try {
       await disconnect();
       setBalance(null);
       setBalanceError(null);
+      setConnectTimeout(false);
     } catch (err) {
       console.error('[Wallet] Disconnect error:', err);
     }
@@ -81,6 +130,55 @@ export function WalletButton() {
       toast.error('Failed to copy');
     }
   };
+
+  // Filter wallets: On desktop, prioritize installed injected wallets
+  // On mobile without injected wallet, show MWA
+  const filteredWallets = wallets.filter(w => {
+    const name = w.adapter.name.toLowerCase();
+    const isMWA = name.includes('mobile wallet adapter');
+    
+    // On desktop with injected wallets, hide MWA
+    if (!isMobile && hasInjected && isMWA) {
+      return false;
+    }
+    
+    return true;
+  });
+
+  // Sort: Installed wallets first
+  const sortedWallets = [...filteredWallets].sort((a, b) => {
+    const aInstalled = a.readyState === 'Installed';
+    const bInstalled = b.readyState === 'Installed';
+    if (aInstalled && !bInstalled) return -1;
+    if (!aInstalled && bInstalled) return 1;
+    return 0;
+  });
+
+  // Connection timeout state
+  if (connecting && connectTimeout) {
+    return (
+      <div className="flex flex-col items-center gap-2 p-4">
+        <AlertCircle className="text-amber-500" size={24} />
+        <p className="text-sm text-muted-foreground text-center">
+          Connection is taking longer than expected.
+        </p>
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" onClick={handleRetryConnect}>
+            Retry
+          </Button>
+          <Button size="sm" variant="ghost" onClick={handleDisconnect}>
+            Cancel
+          </Button>
+        </div>
+        {isMobile && (
+          <p className="text-xs text-muted-foreground flex items-center gap-1 mt-2">
+            <Smartphone size={12} />
+            Try opening this page in your wallet browser
+          </p>
+        )}
+      </div>
+    );
+  }
 
   // Not connected state
   if (!connected) {
@@ -102,31 +200,50 @@ export function WalletButton() {
             <DialogTitle>Connect Wallet</DialogTitle>
           </DialogHeader>
           <div className="grid gap-2 py-4">
-            {wallets.length === 0 ? (
-              <p className="text-center text-muted-foreground py-4">
-                No wallets detected. Please install Phantom, Solflare, or Backpack.
-              </p>
+            {sortedWallets.length === 0 ? (
+              <div className="text-center py-4">
+                <p className="text-muted-foreground mb-2">
+                  No wallets detected.
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Please install Phantom, Solflare, or Backpack.
+                </p>
+                {isMobile && (
+                  <p className="text-xs text-amber-500 mt-3 flex items-center justify-center gap-1">
+                    <Smartphone size={12} />
+                    Open this page in your wallet's browser
+                  </p>
+                )}
+              </div>
             ) : (
-              wallets.map((w) => (
-                <Button
-                  key={w.adapter.name}
-                  variant="outline"
-                  className="w-full justify-start gap-3 h-12"
-                  onClick={() => handleSelectWallet(w.adapter.name)}
-                >
-                  {w.adapter.icon && (
-                    <img 
-                      src={w.adapter.icon} 
-                      alt={w.adapter.name} 
-                      className="w-6 h-6"
-                    />
-                  )}
-                  <span>{w.adapter.name}</span>
-                  {w.readyState === 'Installed' && (
-                    <span className="ml-auto text-xs text-green-500">Detected</span>
-                  )}
-                </Button>
-              ))
+              <>
+                {sortedWallets.map((w) => (
+                  <Button
+                    key={w.adapter.name}
+                    variant="outline"
+                    className="w-full justify-start gap-3 h-12"
+                    onClick={() => handleSelectWallet(w.adapter.name)}
+                  >
+                    {w.adapter.icon && (
+                      <img 
+                        src={w.adapter.icon} 
+                        alt={w.adapter.name} 
+                        className="w-6 h-6"
+                      />
+                    )}
+                    <span>{w.adapter.name}</span>
+                    {w.readyState === 'Installed' && (
+                      <span className="ml-auto text-xs text-green-500">Detected</span>
+                    )}
+                  </Button>
+                ))}
+                {isMobile && !hasInjected && (
+                  <p className="text-xs text-muted-foreground text-center mt-2 flex items-center justify-center gap-1">
+                    <Smartphone size={12} />
+                    Tip: Open in your wallet's browser for best experience
+                  </p>
+                )}
+              </>
             )}
           </div>
         </DialogContent>
@@ -176,9 +293,9 @@ export function WalletButton() {
       {/* Balance display */}
       <div className="flex items-center gap-2 text-xs">
         {balanceError ? (
-          <span className="text-destructive flex items-center gap-1">
+          <span className="text-destructive flex items-center gap-1" title={balanceError}>
             <AlertCircle size={12} />
-            Error
+            RPC Error
           </span>
         ) : balanceLoading ? (
           <span className="text-muted-foreground">Loading...</span>
