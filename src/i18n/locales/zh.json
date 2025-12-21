@@ -413,6 +413,12 @@
     "mobileBrowserLimitation": "移动浏览器无法直接连接钱包。请在钱包应用的浏览器中打开此页面。",
     "desktopWalletRequired": "请安装Solana钱包扩展",
     "retryConnection": "重试连接",
+    "showHelp": "显示帮助",
+    "retry": "重试",
+    "copyFailed": "复制失败",
+    "noWalletsDetected": "未检测到钱包",
+    "installWallet": "请安装Phantom、Solflare或Backpack",
+    "detected": "已检测",
     "wallets": {
       "phantom": "Phantom",
       "solflare": "Solflare",
