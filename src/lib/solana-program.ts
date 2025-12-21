@@ -305,24 +305,19 @@ export function roomToDisplay(room: RoomAccount): RoomDisplay {
 }
 
 // ============================================
-// TRANSACTION BUILDERS
+// INSTRUCTION BUILDERS (for VersionedTransaction)
 // ============================================
 
 /**
- * Build createRoom transaction
- * @param creator - Room creator's public key
- * @param roomId - Unique room ID (fetch from global state or generate)
- * @param gameType - Game type enum value
- * @param entryFeeSol - Entry fee in SOL
- * @param maxPlayers - Maximum players (2-4)
+ * Build createRoom instruction (for VersionedTransaction - MWA compatible)
  */
-export async function buildCreateRoomTx(
+export function buildCreateRoomIx(
   creator: PublicKey,
   roomId: number,
   gameType: GameType,
   entryFeeSol: number,
   maxPlayers: number
-): Promise<Transaction> {
+): TransactionInstruction {
   const [roomPda] = getRoomPDA(creator, roomId);
   const [vaultPda] = getVaultPDA(roomPda);
   
@@ -354,7 +349,7 @@ export async function buildCreateRoomTx(
   // stake_lamports: u64
   data.writeBigUInt64LE(stakeLamports, offset);
   
-  const instruction = new TransactionInstruction({
+  return new TransactionInstruction({
     keys: [
       { pubkey: creator, isSigner: true, isWritable: true },
       { pubkey: roomPda, isSigner: false, isWritable: true },
@@ -364,22 +359,16 @@ export async function buildCreateRoomTx(
     programId: PROGRAM_ID,
     data,
   });
-  
-  const tx = new Transaction().add(instruction);
-  return tx;
 }
 
 /**
- * Build joinRoom transaction
- * @param player - Player's public key
- * @param roomCreator - Room creator's public key (needed for PDA)
- * @param roomId - Room ID to join
+ * Build joinRoom instruction (for VersionedTransaction - MWA compatible)
  */
-export async function buildJoinRoomTx(
+export function buildJoinRoomIx(
   player: PublicKey,
   roomCreator: PublicKey,
   roomId: number
-): Promise<Transaction> {
+): TransactionInstruction {
   const [roomPda] = getRoomPDA(roomCreator, roomId);
   const [vaultPda] = getVaultPDA(roomPda);
   
@@ -389,7 +378,7 @@ export async function buildJoinRoomTx(
   // No args for join_room, just the discriminator
   const data = Buffer.from(discriminator);
   
-  const instruction = new TransactionInstruction({
+  return new TransactionInstruction({
     keys: [
       { pubkey: player, isSigner: true, isWritable: true },
       { pubkey: roomPda, isSigner: false, isWritable: true },
@@ -399,7 +388,36 @@ export async function buildJoinRoomTx(
     programId: PROGRAM_ID,
     data,
   });
-  
+}
+
+// ============================================
+// LEGACY TRANSACTION BUILDERS (for desktop fallback)
+// ============================================
+
+/**
+ * Build createRoom transaction (legacy format)
+ */
+export async function buildCreateRoomTx(
+  creator: PublicKey,
+  roomId: number,
+  gameType: GameType,
+  entryFeeSol: number,
+  maxPlayers: number
+): Promise<Transaction> {
+  const instruction = buildCreateRoomIx(creator, roomId, gameType, entryFeeSol, maxPlayers);
+  const tx = new Transaction().add(instruction);
+  return tx;
+}
+
+/**
+ * Build joinRoom transaction (legacy format)
+ */
+export async function buildJoinRoomTx(
+  player: PublicKey,
+  roomCreator: PublicKey,
+  roomId: number
+): Promise<Transaction> {
+  const instruction = buildJoinRoomIx(player, roomCreator, roomId);
   const tx = new Transaction().add(instruction);
   return tx;
 }

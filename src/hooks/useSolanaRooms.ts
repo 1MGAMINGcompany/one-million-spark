@@ -1,6 +1,14 @@
 import { useState, useCallback } from "react";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
-import { PublicKey, LAMPORTS_PER_SOL, SendTransactionError, Transaction } from "@solana/web3.js";
+import { 
+  PublicKey, 
+  LAMPORTS_PER_SOL, 
+  SendTransactionError, 
+  Transaction,
+  TransactionInstruction,
+  VersionedTransaction,
+  TransactionMessage,
+} from "@solana/web3.js";
 import { useToast } from "@/hooks/use-toast";
 import { buildTxDebugInfo } from "@/components/TxDebugPanel";
 import {
@@ -11,8 +19,8 @@ import {
   fetchAllRooms,
   fetchRoomsByCreator,
   fetchNextRoomIdForCreator,
-  buildCreateRoomTx,
-  buildJoinRoomTx,
+  buildCreateRoomIx,
+  buildJoinRoomIx,
   buildCancelRoomTx,
   buildPingRoomTx,
   buildCancelAbandonedRoomTx,
@@ -28,6 +36,7 @@ export interface TxDebugInfo {
   methodUsed?: string;
   adapterName?: string;
   hasAdapterSendTx?: boolean;
+  txType?: 'legacy' | 'versioned';
 }
 
 export function useSolanaRooms() {
@@ -52,32 +61,64 @@ export function useSolanaRooms() {
     setTxDebugInfo(null);
   }, []);
 
-  // Helper: Send transaction using best available method
+  // Helper: Build and send VersionedTransaction (MWA compatible)
+  const sendVersionedTx = useCallback(async (
+    instructions: TransactionInstruction[]
+  ): Promise<{ signature: string; blockhash: string; lastValidBlockHeight: number }> => {
+    if (!publicKey) throw new Error("Wallet not connected");
+    
+    // Get fresh blockhash
+    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
+    
+    // Build V0 message
+    const messageV0 = new TransactionMessage({
+      payerKey: publicKey,
+      recentBlockhash: blockhash,
+      instructions,
+    }).compileToV0Message();
+    
+    // Create VersionedTransaction
+    const vtx = new VersionedTransaction(messageV0);
+    
+    console.log("[Tx] VersionedTransaction prepared:", {
+      txType: "versioned",
+      payerKey: publicKey.toBase58().slice(0, 8),
+      blockhash: blockhash.slice(0, 12),
+      adapterName,
+      hasAdapterSendTx,
+    });
+    
+    // Send using adapter.sendTransaction (works for both legacy and versioned)
+    let signature: string;
+    if (hasAdapterSendTx) {
+      console.log("[Tx] Using adapter.sendTransaction (VersionedTx) -", adapterName);
+      signature = await adapter.sendTransaction(vtx, connection);
+    } else {
+      console.log("[Tx] Using useWallet.sendTransaction (VersionedTx)");
+      signature = await sendTransaction(vtx, connection);
+    }
+    
+    console.log("[Tx] Signature:", signature);
+    return { signature, blockhash, lastValidBlockHeight };
+  }, [publicKey, connection, adapter, adapterName, hasAdapterSendTx, sendTransaction]);
+
+  // Legacy sendTx helper (for cancelRoom, pingRoom, cancelAbandonedRoom)
   const sendTx = useCallback(async (tx: Transaction): Promise<string> => {
-    console.log("[Tx] Wallet info:", {
+    console.log("[Tx] Legacy transaction:", {
       adapterName,
       hasAdapterSendTx,
       feePayer: tx.feePayer?.toBase58()?.slice(0, 8),
       blockhash: tx.recentBlockhash?.slice(0, 12),
     });
     
-    // PRIMARY: Use adapter.sendTransaction directly (most compatible with mobile)
     if (hasAdapterSendTx) {
-      console.log("[Tx] Using adapter.sendTransaction (PRIMARY) -", adapterName);
-      try {
-        const signature = await adapter.sendTransaction(tx, connection);
-        console.log("[Tx] adapter.sendTransaction succeeded:", signature);
-        return signature;
-      } catch (err) {
-        console.error("[Tx] adapter.sendTransaction failed:", err);
-        throw err;
-      }
+      console.log("[Tx] Using adapter.sendTransaction (legacy) -", adapterName);
+      const signature = await adapter.sendTransaction(tx, connection);
+      return signature;
     }
     
-    // FALLBACK: Use sendTransaction from useWallet hook
-    console.log("[Tx] Using sendTransaction from useWallet (FALLBACK)");
+    console.log("[Tx] Using sendTransaction from useWallet (legacy)");
     const signature = await sendTransaction(tx, connection);
-    console.log("[Tx] useWallet.sendTransaction succeeded:", signature);
     return signature;
   }, [adapter, adapterName, hasAdapterSendTx, sendTransaction, connection]);
 
@@ -154,14 +195,12 @@ export function useSolanaRooms() {
     setTxPending(true);
     setTxDebugInfo(null);
     
-    let tx: Transaction | null = null;
-    
     try {
       // Get next unique room ID for this creator
       const roomId = await fetchNextRoomIdForCreator(connection, publicKey);
       
-      // Build transaction (ONLY creates tx and adds instructions - no feePayer/blockhash)
-      tx = await buildCreateRoomTx(
+      // Build instruction (for VersionedTransaction - MWA compatible)
+      const ix = buildCreateRoomIx(
         publicKey,
         roomId,
         gameType,
@@ -169,22 +208,15 @@ export function useSolanaRooms() {
         maxPlayers
       );
       
-      // Set feePayer and recentBlockhash BEFORE signing
-      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
-      tx.feePayer = publicKey;
-      tx.recentBlockhash = blockhash;
-      
-      console.log("[CreateRoom] Tx prepared:", {
-        feePayer: tx.feePayer?.toBase58(),
-        blockhash: blockhash.slice(0, 12),
-        signers: tx.signatures.map(s => ({ 
-          pk: s.publicKey.toBase58().slice(0, 8), 
-          signed: !!s.signature 
-        })),
+      console.log("[CreateRoom] Building VersionedTransaction:", {
+        roomId,
+        gameType,
+        entryFeeSol,
+        maxPlayers,
       });
       
-      // Send using best available method
-      const signature = await sendTx(tx);
+      // Send as VersionedTransaction
+      const { signature, blockhash, lastValidBlockHeight } = await sendVersionedTx([ix]);
       
       toast({
         title: "Transaction sent",
@@ -209,12 +241,17 @@ export function useSolanaRooms() {
     } catch (err: any) {
       console.error("Create room error:", err);
       
-      // Build and set debug info with method info
+      // Build debug info for versioned tx
       setTxDebugInfo({
-        ...buildTxDebugInfo(tx, publicKey?.toBase58() || null, err),
+        publicKey: publicKey?.toBase58() || null,
+        feePayer: publicKey?.toBase58() || null,
+        recentBlockhash: null,
+        signatures: [],
+        errorMessage: err instanceof Error ? err.message : String(err),
         methodUsed: hasAdapterSendTx ? 'adapter.sendTransaction' : 'useWallet.sendTransaction',
         adapterName,
         hasAdapterSendTx,
+        txType: 'versioned',
       });
       
       // Extract better error message
@@ -232,7 +269,7 @@ export function useSolanaRooms() {
     } finally {
       setTxPending(false);
     }
-  }, [publicKey, connected, connection, sendTx, toast, fetchRooms, fetchCreatorActiveRoom]);
+  }, [publicKey, connected, connection, sendVersionedTx, toast, fetchRooms, fetchCreatorActiveRoom]);
 
   // Join room
   const joinRoom = useCallback(async (roomId: number, roomCreator: string): Promise<boolean> => {
@@ -259,30 +296,19 @@ export function useSolanaRooms() {
     setTxPending(true);
     setTxDebugInfo(null);
     
-    let tx: Transaction | null = null;
-    
     try {
       const creatorPubkey = new PublicKey(roomCreator);
       
-      // Build transaction (ONLY creates tx and adds instructions - no feePayer/blockhash)
-      tx = await buildJoinRoomTx(publicKey, creatorPubkey, roomId);
+      // Build instruction (for VersionedTransaction - MWA compatible)
+      const ix = buildJoinRoomIx(publicKey, creatorPubkey, roomId);
       
-      // Set feePayer and recentBlockhash BEFORE signing
-      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
-      tx.feePayer = publicKey;
-      tx.recentBlockhash = blockhash;
-      
-      console.log("[JoinRoom] Tx prepared:", {
-        feePayer: tx.feePayer?.toBase58(),
-        blockhash: blockhash.slice(0, 12),
-        signers: tx.signatures.map(s => ({ 
-          pk: s.publicKey.toBase58().slice(0, 8), 
-          signed: !!s.signature 
-        })),
+      console.log("[JoinRoom] Building VersionedTransaction:", {
+        roomId,
+        roomCreator: roomCreator.slice(0, 8),
       });
       
-      // Send using best available method
-      const signature = await sendTx(tx);
+      // Send as VersionedTransaction
+      const { signature, blockhash, lastValidBlockHeight } = await sendVersionedTx([ix]);
       
       toast({
         title: "Transaction sent",
@@ -306,12 +332,17 @@ export function useSolanaRooms() {
     } catch (err: any) {
       console.error("Join room error:", err);
       
-      // Build and set debug info with method info
+      // Build debug info for versioned tx
       setTxDebugInfo({
-        ...buildTxDebugInfo(tx, publicKey?.toBase58() || null, err),
+        publicKey: publicKey?.toBase58() || null,
+        feePayer: publicKey?.toBase58() || null,
+        recentBlockhash: null,
+        signatures: [],
+        errorMessage: err instanceof Error ? err.message : String(err),
         methodUsed: hasAdapterSendTx ? 'adapter.sendTransaction' : 'useWallet.sendTransaction',
         adapterName,
         hasAdapterSendTx,
+        txType: 'versioned',
       });
       
       toast({
@@ -323,7 +354,7 @@ export function useSolanaRooms() {
     } finally {
       setTxPending(false);
     }
-  }, [publicKey, connected, connection, sendTx, toast, fetchRooms, fetchCreatorActiveRoom]);
+  }, [publicKey, connected, connection, sendVersionedTx, toast, fetchRooms, fetchCreatorActiveRoom]);
 
   // Cancel room
   const cancelRoom = useCallback(async (roomId: number): Promise<boolean> => {
