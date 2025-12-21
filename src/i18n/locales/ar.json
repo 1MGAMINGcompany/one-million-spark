@@ -391,12 +391,49 @@
     "opponentsTurn": "دور الخصم"
   },
   "wallet": {
-    "connect": "ربط المحفظة",
+    "connect": "اختر المحفظة",
     "disconnect": "قطع الاتصال",
     "wrongNetwork": "شبكة خاطئة",
-    "switchNetwork": "التبديل إلى Polygon",
+    "switchNetwork": "التحويل إلى Solana",
     "walletRequired": "المحفظة مطلوبة",
-    "pleaseConnect": "يرجى ربط محفظتك لاستخدام هذه الميزة"
+    "pleaseConnect": "يرجى توصيل محفظة Solana الخاصة بك لاستخدام هذه الميزة",
+    "connectWallet": "ربط المحفظة",
+    "connectWalletSubtitle": "اربط محفظة Solana الخاصة بك للعب",
+    "chooseYourWallet": "اختر محفظتك",
+    "recommended": "موصى به",
+    "connecting": "جارٍ الاتصال...",
+    "cancel": "إلغاء",
+    "back": "رجوع",
+    "copyLink": "نسخ الرابط",
+    "copied": "تم النسخ!",
+    "openInWalletBrowser": "فتح في متصفح المحفظة",
+    "tryInBrowserConnect": "حاول الاتصال في هذا المتصفح",
+    "connectionTimedOut": "انتهت مهلة الاتصال",
+    "wrongWalletBrowserHint": "تأكد من فتح هذه الصفحة داخل متصفح محفظتك",
+    "mobileBrowserLimitation": "لا يمكن لمتصفحات الجوال الاتصال مباشرة بالمحافظ. افتح هذه الصفحة في متصفح تطبيق المحفظة.",
+    "desktopWalletRequired": "يرجى تثبيت إضافة محفظة Solana",
+    "retryConnection": "إعادة المحاولة",
+    "wallets": {
+      "phantom": "Phantom",
+      "solflare": "Solflare",
+      "backpack": "Backpack"
+    },
+    "phantom": {
+      "title": "الاتصال بـ Phantom",
+      "step1": "افتح تطبيق Phantom",
+      "step2": "اضغط على علامة استكشاف (أيقونة البوصلة)",
+      "step3": "الصق الرابط واضغط على اتصال"
+    },
+    "solflare": {
+      "title": "الاتصال بـ Solflare",
+      "openButton": "فتح في Solflare",
+      "note": "فتح بنقرة واحدة"
+    },
+    "backpack": {
+      "title": "الاتصال بـ Backpack",
+      "step1": "افتح تطبيق Backpack",
+      "step2": "اضغط على أيقونة المتصفح"
+    }
   },
   "common": {
     "loading": "جارٍ التحميل...",

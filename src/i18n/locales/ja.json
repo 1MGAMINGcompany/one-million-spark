@@ -391,12 +391,49 @@
     "opponentsTurn": "相手の番"
   },
   "wallet": {
-    "connect": "ウォレット接続",
+    "connect": "ウォレットを選択",
     "disconnect": "切断",
-    "wrongNetwork": "ネットワークエラー",
-    "switchNetwork": "Polygonに切り替え",
-    "walletRequired": "ウォレットが必要です",
-    "pleaseConnect": "この機能を使用するにはウォレットを接続してください"
+    "wrongNetwork": "間違ったネットワーク",
+    "switchNetwork": "Solanaに切り替え",
+    "walletRequired": "ウォレットが必要",
+    "pleaseConnect": "この機能を使用するにはSolanaウォレットを接続してください",
+    "connectWallet": "ウォレット接続",
+    "connectWalletSubtitle": "プレイするにはSolanaウォレットを接続",
+    "chooseYourWallet": "ウォレットを選択",
+    "recommended": "おすすめ",
+    "connecting": "接続中...",
+    "cancel": "キャンセル",
+    "back": "戻る",
+    "copyLink": "リンクをコピー",
+    "copied": "コピーしました！",
+    "openInWalletBrowser": "ウォレットブラウザで開く",
+    "tryInBrowserConnect": "このブラウザで接続を試す",
+    "connectionTimedOut": "接続がタイムアウトしました",
+    "wrongWalletBrowserHint": "ウォレットのブラウザ内でこのページを開いてください",
+    "mobileBrowserLimitation": "モバイルブラウザはウォレットに直接接続できません。ウォレットアプリのブラウザでこのページを開いてください。",
+    "desktopWalletRequired": "Solanaウォレット拡張機能をインストールしてください",
+    "retryConnection": "再接続",
+    "wallets": {
+      "phantom": "Phantom",
+      "solflare": "Solflare",
+      "backpack": "Backpack"
+    },
+    "phantom": {
+      "title": "Phantomで接続",
+      "step1": "Phantomアプリを開く",
+      "step2": "探索タブをタップ（コンパスアイコン）",
+      "step3": "リンクを貼り付けて接続をタップ"
+    },
+    "solflare": {
+      "title": "Solflareで接続",
+      "openButton": "Solflareで開く",
+      "note": "ワンタップで開く"
+    },
+    "backpack": {
+      "title": "Backpackで接続",
+      "step1": "Backpackアプリを開く",
+      "step2": "ブラウザアイコンをタップ"
+    }
   },
   "common": {
     "loading": "読み込み中...",

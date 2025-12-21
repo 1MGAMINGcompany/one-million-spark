@@ -391,12 +391,49 @@
     "opponentsTurn": "对手回合"
   },
   "wallet": {
-    "connect": "连接钱包",
+    "connect": "选择钱包",
     "disconnect": "断开连接",
     "wrongNetwork": "网络错误",
-    "switchNetwork": "切换到Polygon",
+    "switchNetwork": "切换到Solana",
     "walletRequired": "需要钱包",
-    "pleaseConnect": "请连接您的钱包以使用此功能"
+    "pleaseConnect": "请连接您的Solana钱包以使用此功能",
+    "connectWallet": "连接钱包",
+    "connectWalletSubtitle": "连接您的Solana钱包开始游戏",
+    "chooseYourWallet": "选择您的钱包",
+    "recommended": "推荐",
+    "connecting": "连接中...",
+    "cancel": "取消",
+    "back": "返回",
+    "copyLink": "复制链接",
+    "copied": "已复制！",
+    "openInWalletBrowser": "在钱包浏览器中打开",
+    "tryInBrowserConnect": "尝试在此浏览器中连接",
+    "connectionTimedOut": "连接超时",
+    "wrongWalletBrowserHint": "请确保在钱包的浏览器中打开此页面",
+    "mobileBrowserLimitation": "移动浏览器无法直接连接钱包。请在钱包应用的浏览器中打开此页面。",
+    "desktopWalletRequired": "请安装Solana钱包扩展",
+    "retryConnection": "重试连接",
+    "wallets": {
+      "phantom": "Phantom",
+      "solflare": "Solflare",
+      "backpack": "Backpack"
+    },
+    "phantom": {
+      "title": "使用Phantom连接",
+      "step1": "打开Phantom应用",
+      "step2": "点击探索标签（指南针图标）",
+      "step3": "粘贴链接并点击连接"
+    },
+    "solflare": {
+      "title": "使用Solflare连接",
+      "openButton": "在Solflare中打开",
+      "note": "一键打开"
+    },
+    "backpack": {
+      "title": "使用Backpack连接",
+      "step1": "打开Backpack应用",
+      "step2": "点击浏览器图标"
+    }
   },
   "common": {
     "loading": "加载中...",

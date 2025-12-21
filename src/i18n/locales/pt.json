@@ -391,12 +391,49 @@
     "opponentsTurn": "Vez do oponente"
   },
   "wallet": {
-    "connect": "Conectar Carteira",
+    "connect": "Selecionar Carteira",
     "disconnect": "Desconectar",
     "wrongNetwork": "Rede Incorreta",
-    "switchNetwork": "Mudar para Polygon",
+    "switchNetwork": "Mudar para Solana",
     "walletRequired": "Carteira Necessária",
-    "pleaseConnect": "Por favor conecte sua carteira para usar este recurso"
+    "pleaseConnect": "Por favor conecte sua carteira Solana para usar este recurso",
+    "connectWallet": "Conectar Carteira",
+    "connectWalletSubtitle": "Conecte sua carteira Solana para jogar",
+    "chooseYourWallet": "Escolha sua carteira",
+    "recommended": "Recomendado",
+    "connecting": "Conectando...",
+    "cancel": "Cancelar",
+    "back": "Voltar",
+    "copyLink": "Copiar Link",
+    "copied": "Copiado!",
+    "openInWalletBrowser": "Abrir no navegador da carteira",
+    "tryInBrowserConnect": "Tentar conectar neste navegador",
+    "connectionTimedOut": "Conexão expirou",
+    "wrongWalletBrowserHint": "Certifique-se de abrir esta página dentro do navegador da sua carteira",
+    "mobileBrowserLimitation": "Navegadores móveis não podem se conectar diretamente às carteiras. Abra esta página no navegador do seu aplicativo de carteira.",
+    "desktopWalletRequired": "Por favor instale uma extensão de carteira Solana",
+    "retryConnection": "Tentar Novamente",
+    "wallets": {
+      "phantom": "Phantom",
+      "solflare": "Solflare",
+      "backpack": "Backpack"
+    },
+    "phantom": {
+      "title": "Conectar com Phantom",
+      "step1": "Abra o app Phantom",
+      "step2": "Toque na aba Explorar (ícone de bússola)",
+      "step3": "Cole o link e toque em Conectar"
+    },
+    "solflare": {
+      "title": "Conectar com Solflare",
+      "openButton": "Abrir no Solflare",
+      "note": "Abertura com um toque"
+    },
+    "backpack": {
+      "title": "Conectar com Backpack",
+      "step1": "Abra o app Backpack",
+      "step2": "Toque no ícone do Navegador"
+    }
   },
   "common": {
     "loading": "Carregando...",

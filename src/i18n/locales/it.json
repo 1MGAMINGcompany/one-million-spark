@@ -391,12 +391,49 @@
     "opponentsTurn": "Turno dell'avversario"
   },
   "wallet": {
-    "connect": "Connetti Portafoglio",
+    "connect": "Seleziona Portafoglio",
     "disconnect": "Disconnetti",
-    "wrongNetwork": "Rete Sbagliata",
-    "switchNetwork": "Passa a Polygon",
+    "wrongNetwork": "Rete Errata",
+    "switchNetwork": "Passa a Solana",
     "walletRequired": "Portafoglio Richiesto",
-    "pleaseConnect": "Connetti il tuo portafoglio per usare questa funzione"
+    "pleaseConnect": "Connetti il tuo portafoglio Solana per utilizzare questa funzione",
+    "connectWallet": "Connetti Portafoglio",
+    "connectWalletSubtitle": "Connetti il tuo portafoglio Solana per giocare",
+    "chooseYourWallet": "Scegli il tuo portafoglio",
+    "recommended": "Consigliato",
+    "connecting": "Connessione...",
+    "cancel": "Annulla",
+    "back": "Indietro",
+    "copyLink": "Copia Link",
+    "copied": "Copiato!",
+    "openInWalletBrowser": "Apri nel browser del portafoglio",
+    "tryInBrowserConnect": "Prova a connetterti in questo browser",
+    "connectionTimedOut": "Connessione scaduta",
+    "wrongWalletBrowserHint": "Assicurati di aprire questa pagina nel browser del tuo portafoglio",
+    "mobileBrowserLimitation": "I browser mobili non possono connettersi direttamente ai portafogli. Apri questa pagina nel browser dell'app del tuo portafoglio.",
+    "desktopWalletRequired": "Installa un'estensione del portafoglio Solana",
+    "retryConnection": "Riprova Connessione",
+    "wallets": {
+      "phantom": "Phantom",
+      "solflare": "Solflare",
+      "backpack": "Backpack"
+    },
+    "phantom": {
+      "title": "Connetti con Phantom",
+      "step1": "Apri l'app Phantom",
+      "step2": "Tocca la scheda Esplora (icona bussola)",
+      "step3": "Incolla il link e tocca Connetti"
+    },
+    "solflare": {
+      "title": "Connetti con Solflare",
+      "openButton": "Apri in Solflare",
+      "note": "Apertura con un tocco"
+    },
+    "backpack": {
+      "title": "Connetti con Backpack",
+      "step1": "Apri l'app Backpack",
+      "step2": "Tocca l'icona Browser"
+    }
   },
   "common": {
     "loading": "Caricamento...",
