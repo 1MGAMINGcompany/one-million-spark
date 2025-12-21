@@ -413,6 +413,8 @@
     "mobileBrowserLimitation": "モバイルブラウザはウォレットに直接接続できません。ウォレットアプリのブラウザでこのページを開いてください。",
     "desktopWalletRequired": "Solanaウォレット拡張機能をインストールしてください",
     "retryConnection": "再接続",
+    "getWallet": "ウォレットを取得",
+    "getWalletDesc": "ウォレットをお持ちでないですか？無料でダウンロード：",
     "wallets": {
       "phantom": "Phantom",
       "solflare": "Solflare",

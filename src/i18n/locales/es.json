@@ -550,6 +550,8 @@
     "mobileBrowserLimitation": "Los navegadores móviles no pueden conectarse directamente a las billeteras. Abre esta página en el navegador de tu billetera.",
     "desktopWalletRequired": "Por favor instala una extensión de billetera Solana",
     "retryConnection": "Reintentar Conexión",
+    "getWallet": "Obtener una Billetera",
+    "getWalletDesc": "¿No tienes billetera? Descarga una gratis:",
     "wallets": {
       "phantom": "Phantom",
       "solflare": "Solflare",
