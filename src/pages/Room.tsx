@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Construction, ArrowLeft, Loader2, Users, Clock, Coins, XCircle, AlertTriangle, Radio } from "lucide-react";
 import { WalletGateModal } from "@/components/WalletGateModal";
+import { TxDebugPanel } from "@/components/TxDebugPanel";
 import { toast } from "sonner";
 
 const STATUS_OPEN = 1;
@@ -56,7 +57,7 @@ export default function Room() {
   const { isConnected, address } = useWallet();
   const { connection } = useConnection();
   const wallet = useSolanaWallet();
-  const { activeRoom, fetchCreatorActiveRoom, cancelRoom, pingRoom, cancelAbandonedRoom, txPending: cancelPending } = useSolanaRooms();
+  const { activeRoom, fetchCreatorActiveRoom, cancelRoom, pingRoom, cancelAbandonedRoom, txPending: cancelPending, txDebugInfo, clearTxDebug } = useSolanaRooms();
   const [showWalletGate, setShowWalletGate] = useState(false);
 
   const [room, setRoom] = useState<any>(null);
@@ -582,6 +583,9 @@ export default function Room() {
         title="Connect a Solana Wallet to Play"
         description="Connect your wallet to join this room and compete for SOL prizes."
       />
+      
+      {/* Transaction Debug Panel - shown on tx failure */}
+      <TxDebugPanel debugInfo={txDebugInfo} onClose={clearTxDebug} />
     </div>
   );
 }
