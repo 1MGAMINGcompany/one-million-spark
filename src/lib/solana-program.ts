@@ -6,6 +6,7 @@ import {
   LAMPORTS_PER_SOL,
   Connection
 } from "@solana/web3.js";
+import bs58 from "bs58";
 import { getSolanaEndpoint } from "./solana-config";
 
 // ============================================
@@ -578,7 +579,7 @@ export async function fetchAllRooms(connection: Connection): Promise<RoomDisplay
         {
           memcmp: {
             offset: 0,
-            bytes: discriminator.toString("base64"),
+            bytes: bs58.encode(discriminator),
           },
         },
       ],
@@ -596,6 +597,105 @@ export async function fetchAllRooms(connection: Connection): Promise<RoomDisplay
   } catch (err) {
     console.error("Failed to fetch rooms:", err);
     return [];
+  }
+}
+
+/**
+ * Fetch rooms created by a specific creator using memcmp filter
+ * More efficient than fetching all rooms and filtering in JS
+ * 
+ * Room account layout:
+ * - Offset 0: 8-byte discriminator
+ * - Offset 8: 8-byte room_id (u64)
+ * - Offset 16: 32-byte creator pubkey
+ */
+export async function fetchRoomsByCreator(
+  connection: Connection,
+  creator: PublicKey
+): Promise<RoomDisplay[]> {
+  try {
+    const discriminator = Buffer.from([156, 199, 67, 27, 222, 23, 185, 94]);
+    
+    const accounts = await connection.getProgramAccounts(PROGRAM_ID, {
+      filters: [
+        // Filter by discriminator at offset 0
+        {
+          memcmp: {
+            offset: 0,
+            bytes: bs58.encode(discriminator),
+          },
+        },
+        // Filter by creator pubkey at offset 16 (8-byte discriminator + 8-byte room_id)
+        {
+          memcmp: {
+            offset: 16,
+            bytes: creator.toBase58(),
+          },
+        },
+      ],
+    });
+    
+    const rooms: RoomDisplay[] = [];
+    for (const { account } of accounts) {
+      const parsed = parseRoomAccount(account.data as Buffer);
+      if (parsed) {
+        rooms.push(roomToDisplay(parsed));
+      }
+    }
+    
+    return rooms;
+  } catch (err) {
+    console.error("Failed to fetch rooms by creator:", err);
+    return [];
+  }
+}
+
+/**
+ * Fetch next room ID for a specific creator
+ * Finds max roomId among creator's existing rooms and returns max + 1
+ * Falls back to timestamp if RPC fails to ensure uniqueness
+ */
+export async function fetchNextRoomIdForCreator(
+  connection: Connection,
+  creator: PublicKey
+): Promise<number> {
+  try {
+    const creatorRooms = await fetchRoomsByCreator(connection, creator);
+    
+    if (creatorRooms.length === 0) {
+      return 1; // First room for this creator
+    }
+    
+    // Find max room ID and add 1
+    const maxRoomId = Math.max(...creatorRooms.map(r => r.roomId));
+    return maxRoomId + 1;
+  } catch (err) {
+    console.error("Failed to fetch next room ID for creator:", err);
+    // Fallback to timestamp-based ID for uniqueness
+    return Math.floor(Date.now() / 1000) % 1000000;
+  }
+}
+
+/**
+ * @deprecated Use fetchNextRoomIdForCreator instead
+ * Fetch next room ID from global state
+ */
+export async function fetchNextRoomId(connection: Connection): Promise<number> {
+  try {
+    const [globalStatePda] = getGlobalStatePDA();
+    const accountInfo = await connection.getAccountInfo(globalStatePda);
+    
+    if (!accountInfo) {
+      console.log("Global state not initialized, defaulting to 1");
+      return 1;
+    }
+    
+    // Skip 8-byte discriminator, read next_room_id: u64
+    const nextRoomId = Number((accountInfo.data as Buffer).readBigUInt64LE(8));
+    return nextRoomId;
+  } catch (err) {
+    console.error("Failed to fetch next room ID:", err);
+    return 1;
   }
 }
 
@@ -630,28 +730,6 @@ export async function fetchRoomById(connection: Connection, creator: PublicKey, 
   } catch (err) {
     console.error("Failed to fetch room:", err);
     return null;
-  }
-}
-
-/**
- * Fetch next room ID from global state
- */
-export async function fetchNextRoomId(connection: Connection): Promise<number> {
-  try {
-    const [globalStatePda] = getGlobalStatePDA();
-    const accountInfo = await connection.getAccountInfo(globalStatePda);
-    
-    if (!accountInfo) {
-      console.log("Global state not initialized, defaulting to 1");
-      return 1;
-    }
-    
-    // Skip 8-byte discriminator, read next_room_id: u64
-    const nextRoomId = Number((accountInfo.data as Buffer).readBigUInt64LE(8));
-    return nextRoomId;
-  } catch (err) {
-    console.error("Failed to fetch next room ID:", err);
-    return 1;
   }
 }
 

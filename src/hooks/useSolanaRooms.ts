@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback } from "react";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { useToast } from "@/hooks/use-toast";
@@ -8,13 +8,13 @@ import {
   RoomStatus,
   fetchOpenPublicRooms,
   fetchAllRooms,
-  fetchNextRoomId,
+  fetchRoomsByCreator,
+  fetchNextRoomIdForCreator,
   buildCreateRoomTx,
   buildJoinRoomTx,
   buildCancelRoomTx,
   buildPingRoomTx,
   buildCancelAbandonedRoomTx,
-  PROGRAM_ID,
 } from "@/lib/solana-program";
 
 // Program is deployed on mainnet - no preview guards needed
@@ -38,9 +38,10 @@ export function useSolanaRooms() {
     }
     
     try {
-      const allRooms = await fetchAllRooms(connection);
-      const userActiveRoom = allRooms.find(
-        room => room.creator === publicKey.toBase58() && room.status === RoomStatus.Created
+      // Use creator-scoped fetch - more efficient than fetching all rooms
+      const creatorRooms = await fetchRoomsByCreator(connection, publicKey);
+      const userActiveRoom = creatorRooms.find(
+        room => room.status === RoomStatus.Created
       );
       setActiveRoom(userActiveRoom || null);
       return userActiveRoom || null;
@@ -103,8 +104,8 @@ export function useSolanaRooms() {
     setTxPending(true);
     
     try {
-      // Get next room ID
-      const roomId = await fetchNextRoomId(connection);
+      // Get next unique room ID for this creator
+      const roomId = await fetchNextRoomIdForCreator(connection, publicKey);
       
       // Build transaction
       const tx = await buildCreateRoomTx(
