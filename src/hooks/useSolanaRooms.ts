@@ -21,7 +21,7 @@ import {
 
 export function useSolanaRooms() {
   const { connection } = useConnection();
-  const { publicKey, signTransaction, sendTransaction, connected } = useWallet();
+  const { publicKey, sendTransaction, connected } = useWallet();
   const { toast } = useToast();
   
   const [rooms, setRooms] = useState<RoomDisplay[]>([]);
@@ -121,25 +121,11 @@ export function useSolanaRooms() {
       tx.recentBlockhash = blockhash;
       tx.feePayer = publicKey;
       
-      let signature: string;
-      
-      // Use signTransaction + sendRawTransaction for better mobile wallet compatibility
-      if (signTransaction) {
-        try {
-          const signedTx = await signTransaction(tx);
-          signature = await connection.sendRawTransaction(signedTx.serialize(), {
-            skipPreflight: false,
-            preflightCommitment: 'confirmed',
-          });
-        } catch (signErr: any) {
-          // Fallback to sendTransaction if signTransaction fails
-          console.warn("signTransaction failed, falling back to sendTransaction:", signErr);
-          signature = await sendTransaction(tx, connection);
-        }
-      } else {
-        // Fallback for wallets that don't support signTransaction
-        signature = await sendTransaction(tx, connection);
-      }
+      // Use sendTransaction directly - handles signing internally for mobile compatibility
+      const signature = await sendTransaction(tx, connection, {
+        skipPreflight: false,
+        preflightCommitment: 'confirmed',
+      });
       
       toast({
         title: "Transaction sent",
@@ -179,7 +165,7 @@ export function useSolanaRooms() {
     } finally {
       setTxPending(false);
     }
-  }, [publicKey, connected, connection, signTransaction, sendTransaction, toast, fetchRooms, fetchCreatorActiveRoom]);
+  }, [publicKey, connected, connection, sendTransaction, toast, fetchRooms, fetchCreatorActiveRoom]);
 
   // Join room
   const joinRoom = useCallback(async (roomId: number, roomCreator: string): Promise<boolean> => {
@@ -214,23 +200,11 @@ export function useSolanaRooms() {
       tx.recentBlockhash = blockhash;
       tx.feePayer = publicKey;
       
-      let signature: string;
-      
-      // Use signTransaction + sendRawTransaction for better mobile wallet compatibility
-      if (signTransaction) {
-        try {
-          const signedTx = await signTransaction(tx);
-          signature = await connection.sendRawTransaction(signedTx.serialize(), {
-            skipPreflight: false,
-            preflightCommitment: 'confirmed',
-          });
-        } catch (signErr: any) {
-          console.warn("signTransaction failed, falling back to sendTransaction:", signErr);
-          signature = await sendTransaction(tx, connection);
-        }
-      } else {
-        signature = await sendTransaction(tx, connection);
-      }
+      // Use sendTransaction directly - handles signing internally for mobile compatibility
+      const signature = await sendTransaction(tx, connection, {
+        skipPreflight: false,
+        preflightCommitment: 'confirmed',
+      });
       
       toast({
         title: "Transaction sent",
@@ -261,7 +235,7 @@ export function useSolanaRooms() {
     } finally {
       setTxPending(false);
     }
-  }, [publicKey, connected, connection, signTransaction, sendTransaction, toast, fetchRooms, fetchCreatorActiveRoom]);
+  }, [publicKey, connected, connection, sendTransaction, toast, fetchRooms, fetchCreatorActiveRoom]);
 
   // Cancel room
   const cancelRoom = useCallback(async (roomId: number): Promise<boolean> => {
