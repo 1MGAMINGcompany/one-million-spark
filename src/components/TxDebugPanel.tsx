@@ -8,6 +8,9 @@ interface TxDebugInfo {
   recentBlockhash: string | null;
   signatures: Array<{ pubkey: string; signature: string | null }>;
   errorMessage: string;
+  methodUsed?: string;
+  adapterName?: string;
+  hasAdapterSendTx?: boolean;
 }
 
 interface TxDebugPanelProps {
@@ -28,6 +31,26 @@ export function TxDebugPanel({ debugInfo, onClose }: TxDebugPanelProps) {
       </div>
       
       <div className="space-y-2 text-xs font-mono">
+        {/* Adapter info */}
+        <div className="flex justify-between">
+          <span className="text-red-300">adapter:</span>
+          <span className="text-white">{debugInfo.adapterName || "unknown"}</span>
+        </div>
+        
+        <div className="flex justify-between">
+          <span className="text-red-300">method:</span>
+          <span className="text-white">{debugInfo.methodUsed || "unknown"}</span>
+        </div>
+        
+        <div className="flex justify-between">
+          <span className="text-red-300">adapter.sendTx:</span>
+          <span className={debugInfo.hasAdapterSendTx ? "text-green-400" : "text-red-400"}>
+            {debugInfo.hasAdapterSendTx ? "YES" : "NO"}
+          </span>
+        </div>
+        
+        <div className="border-t border-red-500/30 pt-2 mt-2" />
+        
         <div className="flex justify-between">
           <span className="text-red-300">publicKey:</span>
           <span className="text-white truncate max-w-[200px]">
