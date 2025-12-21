@@ -222,6 +222,53 @@ const AddFunds = () => {
             </ul>
           </section>
 
+          {/* Get Wallet Links */}
+          <section className="bg-card border border-border rounded-xl p-5">
+            <h3 className="font-medium text-foreground mb-2">Don't have a wallet yet?</h3>
+            <p className="text-sm text-muted-foreground mb-4">Download one of these free wallets to get started:</p>
+            <div className="grid grid-cols-3 gap-3">
+              <a 
+                href="https://phantom.app/download" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="flex flex-col items-center gap-2 p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors border border-border/50"
+              >
+                <div className="w-10 h-10 rounded-full bg-purple-500/20 flex items-center justify-center">
+                  <span className="text-lg">👻</span>
+                </div>
+                <span className="text-sm font-medium flex items-center gap-1">
+                  Phantom <ExternalLink className="h-3 w-3" />
+                </span>
+              </a>
+              <a 
+                href="https://solflare.com/download" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="flex flex-col items-center gap-2 p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors border border-border/50"
+              >
+                <div className="w-10 h-10 rounded-full bg-orange-500/20 flex items-center justify-center">
+                  <span className="text-lg">🔆</span>
+                </div>
+                <span className="text-sm font-medium flex items-center gap-1">
+                  Solflare <ExternalLink className="h-3 w-3" />
+                </span>
+              </a>
+              <a 
+                href="https://backpack.app/download" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="flex flex-col items-center gap-2 p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors border border-border/50"
+              >
+                <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center">
+                  <span className="text-lg">🎒</span>
+                </div>
+                <span className="text-sm font-medium flex items-center gap-1">
+                  Backpack <ExternalLink className="h-3 w-3" />
+                </span>
+              </a>
+            </div>
+          </section>
+
           {/* Fun CTA - Play with Friends */}
           <section className="bg-gradient-to-r from-primary/20 to-primary/10 border border-primary/30 rounded-xl p-6 text-center">
             <div className="flex justify-center mb-3">

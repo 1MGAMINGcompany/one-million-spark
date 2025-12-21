@@ -413,6 +413,8 @@
     "mobileBrowserLimitation": "لا يمكن لمتصفحات الجوال الاتصال مباشرة بالمحافظ. افتح هذه الصفحة في متصفح تطبيق المحفظة.",
     "desktopWalletRequired": "يرجى تثبيت إضافة محفظة Solana",
     "retryConnection": "إعادة المحاولة",
+    "getWallet": "احصل على محفظة",
+    "getWalletDesc": "ليس لديك محفظة؟ حمّل واحدة مجانًا:",
     "wallets": {
       "phantom": "Phantom",
       "solflare": "Solflare",

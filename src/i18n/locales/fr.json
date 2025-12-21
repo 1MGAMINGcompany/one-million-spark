@@ -413,6 +413,8 @@
     "mobileBrowserLimitation": "Les navigateurs mobiles ne peuvent pas se connecter directement aux portefeuilles. Ouvrez cette page dans le navigateur de votre application portefeuille.",
     "desktopWalletRequired": "Veuillez installer une extension de portefeuille Solana",
     "retryConnection": "Réessayer",
+    "getWallet": "Obtenir un portefeuille",
+    "getWalletDesc": "Vous n'avez pas de portefeuille ? Téléchargez-en un gratuitement :",
     "wallets": {
       "phantom": "Phantom",
       "solflare": "Solflare",

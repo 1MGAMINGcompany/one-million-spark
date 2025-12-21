@@ -449,6 +449,47 @@ export function WalletButton() {
               </>
             )}
 
+            {/* Get Wallet Section */}
+            <div className="border-t border-border pt-4 mt-2">
+              <p className="text-sm font-medium text-foreground mb-2">{t("wallet.getWallet")}</p>
+              <p className="text-xs text-muted-foreground mb-3">{t("wallet.getWalletDesc")}</p>
+              <div className="grid grid-cols-3 gap-2">
+                <a
+                  href="https://phantom.app/download"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex flex-col items-center gap-1.5 p-2 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors border border-border/50"
+                >
+                  <img src="https://raw.githubusercontent.com/solana-labs/wallet-adapter/master/packages/wallets/icons/phantom.svg" alt="Phantom" className="w-6 h-6" />
+                  <span className="text-xs font-medium flex items-center gap-1">
+                    Phantom <ExternalLink size={10} />
+                  </span>
+                </a>
+                <a
+                  href="https://solflare.com/download"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex flex-col items-center gap-1.5 p-2 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors border border-border/50"
+                >
+                  <img src="https://raw.githubusercontent.com/solana-labs/wallet-adapter/master/packages/wallets/icons/solflare.svg" alt="Solflare" className="w-6 h-6" />
+                  <span className="text-xs font-medium flex items-center gap-1">
+                    Solflare <ExternalLink size={10} />
+                  </span>
+                </a>
+                <a
+                  href="https://backpack.app/download"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex flex-col items-center gap-1.5 p-2 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors border border-border/50"
+                >
+                  <img src="https://raw.githubusercontent.com/solana-labs/wallet-adapter/master/packages/wallets/icons/backpack.svg" alt="Backpack" className="w-6 h-6" />
+                  <span className="text-xs font-medium flex items-center gap-1">
+                    Backpack <ExternalLink size={10} />
+                  </span>
+                </a>
+              </div>
+            </div>
+
             {/* Mobile guidance */}
             {isMobile && !isInWalletBrowser && (
               <div className="text-xs text-amber-500 text-center mt-3 flex flex-col gap-1 bg-amber-500/10 p-3 rounded">
