@@ -25,6 +25,9 @@ export interface TxDebugInfo {
   recentBlockhash: string | null;
   signatures: Array<{ pubkey: string; signature: string | null }>;
   errorMessage: string;
+  methodUsed?: string;
+  adapterName?: string;
+  hasAdapterSendTx?: boolean;
 }
 
 export function useSolanaRooms() {
@@ -32,8 +35,10 @@ export function useSolanaRooms() {
   const { publicKey, sendTransaction, connected, wallet } = useWallet();
   const { toast } = useToast();
   
-  // Get the wallet adapter for signAndSendTransaction (MWA/mobile)
+  // Get the wallet adapter for mobile compatibility
   const adapter = wallet?.adapter as any;
+  const adapterName = adapter?.name || 'unknown';
+  const hasAdapterSendTx = typeof adapter?.sendTransaction === 'function';
   
   const [rooms, setRooms] = useState<RoomDisplay[]>([]);
   const [loading, setLoading] = useState(false);
@@ -49,18 +54,32 @@ export function useSolanaRooms() {
 
   // Helper: Send transaction using best available method
   const sendTx = useCallback(async (tx: Transaction): Promise<string> => {
-    // Use signAndSendTransaction if available (best for MWA/mobile)
-    if (adapter?.signAndSendTransaction) {
-      console.log("[Tx] Using adapter.signAndSendTransaction (MWA)");
-      const result = await adapter.signAndSendTransaction(tx);
-      // Result can be { signature: string } or string depending on adapter
-      return typeof result === 'string' ? result : result.signature;
+    console.log("[Tx] Wallet info:", {
+      adapterName,
+      hasAdapterSendTx,
+      feePayer: tx.feePayer?.toBase58()?.slice(0, 8),
+      blockhash: tx.recentBlockhash?.slice(0, 12),
+    });
+    
+    // PRIMARY: Use adapter.sendTransaction directly (most compatible with mobile)
+    if (hasAdapterSendTx) {
+      console.log("[Tx] Using adapter.sendTransaction (PRIMARY) -", adapterName);
+      try {
+        const signature = await adapter.sendTransaction(tx, connection);
+        console.log("[Tx] adapter.sendTransaction succeeded:", signature);
+        return signature;
+      } catch (err) {
+        console.error("[Tx] adapter.sendTransaction failed:", err);
+        throw err;
+      }
     }
     
-    // Fallback to sendTransaction from useWallet
-    console.log("[Tx] Using sendTransaction fallback");
-    return await sendTransaction(tx, connection);
-  }, [adapter, sendTransaction, connection]);
+    // FALLBACK: Use sendTransaction from useWallet hook
+    console.log("[Tx] Using sendTransaction from useWallet (FALLBACK)");
+    const signature = await sendTransaction(tx, connection);
+    console.log("[Tx] useWallet.sendTransaction succeeded:", signature);
+    return signature;
+  }, [adapter, adapterName, hasAdapterSendTx, sendTransaction, connection]);
 
   // Fetch user's active open room (created by them, status Open)
   const fetchCreatorActiveRoom = useCallback(async (): Promise<RoomDisplay | null> => {
@@ -190,8 +209,13 @@ export function useSolanaRooms() {
     } catch (err: any) {
       console.error("Create room error:", err);
       
-      // Build and set debug info
-      setTxDebugInfo(buildTxDebugInfo(tx, publicKey?.toBase58() || null, err));
+      // Build and set debug info with method info
+      setTxDebugInfo({
+        ...buildTxDebugInfo(tx, publicKey?.toBase58() || null, err),
+        methodUsed: hasAdapterSendTx ? 'adapter.sendTransaction' : 'useWallet.sendTransaction',
+        adapterName,
+        hasAdapterSendTx,
+      });
       
       // Extract better error message
       let errorMsg = err.message || "Transaction failed";
@@ -282,8 +306,13 @@ export function useSolanaRooms() {
     } catch (err: any) {
       console.error("Join room error:", err);
       
-      // Build and set debug info
-      setTxDebugInfo(buildTxDebugInfo(tx, publicKey?.toBase58() || null, err));
+      // Build and set debug info with method info
+      setTxDebugInfo({
+        ...buildTxDebugInfo(tx, publicKey?.toBase58() || null, err),
+        methodUsed: hasAdapterSendTx ? 'adapter.sendTransaction' : 'useWallet.sendTransaction',
+        adapterName,
+        hasAdapterSendTx,
+      });
       
       toast({
         title: "Failed to join room",
@@ -346,8 +375,13 @@ export function useSolanaRooms() {
     } catch (err: any) {
       console.error("Cancel room error:", err);
       
-      // Build and set debug info
-      setTxDebugInfo(buildTxDebugInfo(tx, publicKey?.toBase58() || null, err));
+      // Build and set debug info with method info
+      setTxDebugInfo({
+        ...buildTxDebugInfo(tx, publicKey?.toBase58() || null, err),
+        methodUsed: hasAdapterSendTx ? 'adapter.sendTransaction' : 'useWallet.sendTransaction',
+        adapterName,
+        hasAdapterSendTx,
+      });
       
       toast({
         title: "Failed to cancel room",
@@ -438,8 +472,13 @@ export function useSolanaRooms() {
     } catch (err: any) {
       console.error("Cancel abandoned room error:", err);
       
-      // Build and set debug info
-      setTxDebugInfo(buildTxDebugInfo(tx, publicKey?.toBase58() || null, err));
+      // Build and set debug info with method info
+      setTxDebugInfo({
+        ...buildTxDebugInfo(tx, publicKey?.toBase58() || null, err),
+        methodUsed: hasAdapterSendTx ? 'adapter.sendTransaction' : 'useWallet.sendTransaction',
+        adapterName,
+        hasAdapterSendTx,
+      });
       
       toast({
         title: "Failed to cancel room",
