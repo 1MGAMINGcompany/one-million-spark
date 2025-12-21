@@ -391,12 +391,49 @@
     "opponentsTurn": "Tour de l'adversaire"
   },
   "wallet": {
-    "connect": "Connecter le Portefeuille",
+    "connect": "Sélectionner le Portefeuille",
     "disconnect": "Déconnecter",
     "wrongNetwork": "Mauvais Réseau",
-    "switchNetwork": "Passer à Polygon",
+    "switchNetwork": "Passer à Solana",
     "walletRequired": "Portefeuille Requis",
-    "pleaseConnect": "Veuillez connecter votre portefeuille pour utiliser cette fonctionnalité"
+    "pleaseConnect": "Veuillez connecter votre portefeuille Solana pour utiliser cette fonctionnalité",
+    "connectWallet": "Connecter le Portefeuille",
+    "connectWalletSubtitle": "Connectez votre portefeuille Solana pour jouer",
+    "chooseYourWallet": "Choisissez votre portefeuille",
+    "recommended": "Recommandé",
+    "connecting": "Connexion...",
+    "cancel": "Annuler",
+    "back": "Retour",
+    "copyLink": "Copier le Lien",
+    "copied": "Copié !",
+    "openInWalletBrowser": "Ouvrir dans le navigateur du portefeuille",
+    "tryInBrowserConnect": "Essayer de se connecter dans ce navigateur",
+    "connectionTimedOut": "Connexion expirée",
+    "wrongWalletBrowserHint": "Assurez-vous d'ouvrir cette page dans le navigateur de votre portefeuille",
+    "mobileBrowserLimitation": "Les navigateurs mobiles ne peuvent pas se connecter directement aux portefeuilles. Ouvrez cette page dans le navigateur de votre application portefeuille.",
+    "desktopWalletRequired": "Veuillez installer une extension de portefeuille Solana",
+    "retryConnection": "Réessayer",
+    "wallets": {
+      "phantom": "Phantom",
+      "solflare": "Solflare",
+      "backpack": "Backpack"
+    },
+    "phantom": {
+      "title": "Connecter avec Phantom",
+      "step1": "Ouvrez l'application Phantom",
+      "step2": "Appuyez sur l'onglet Explorer (icône boussole)",
+      "step3": "Collez le lien et appuyez sur Connecter"
+    },
+    "solflare": {
+      "title": "Connecter avec Solflare",
+      "openButton": "Ouvrir dans Solflare",
+      "note": "Ouverture en un clic"
+    },
+    "backpack": {
+      "title": "Connecter avec Backpack",
+      "step1": "Ouvrez l'application Backpack",
+      "step2": "Appuyez sur l'icône Navigateur"
+    }
   },
   "common": {
     "loading": "Chargement...",

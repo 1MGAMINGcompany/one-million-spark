@@ -391,12 +391,49 @@
     "opponentsTurn": "प्रतिद्वंद्वी की बारी"
   },
   "wallet": {
-    "connect": "वॉलेट कनेक्ट करें",
+    "connect": "वॉलेट चुनें",
     "disconnect": "डिस्कनेक्ट करें",
     "wrongNetwork": "गलत नेटवर्क",
-    "switchNetwork": "Polygon पर स्विच करें",
+    "switchNetwork": "Solana पर स्विच करें",
     "walletRequired": "वॉलेट आवश्यक",
-    "pleaseConnect": "इस सुविधा का उपयोग करने के लिए अपना वॉलेट कनेक्ट करें"
+    "pleaseConnect": "इस सुविधा का उपयोग करने के लिए कृपया अपना Solana वॉलेट कनेक्ट करें",
+    "connectWallet": "वॉलेट कनेक्ट करें",
+    "connectWalletSubtitle": "खेलने के लिए अपना Solana वॉलेट कनेक्ट करें",
+    "chooseYourWallet": "अपना वॉलेट चुनें",
+    "recommended": "अनुशंसित",
+    "connecting": "कनेक्ट हो रहा है...",
+    "cancel": "रद्द करें",
+    "back": "वापस",
+    "copyLink": "लिंक कॉपी करें",
+    "copied": "कॉपी हो गया!",
+    "openInWalletBrowser": "वॉलेट ब्राउज़र में खोलें",
+    "tryInBrowserConnect": "इस ब्राउज़र में कनेक्ट करने का प्रयास करें",
+    "connectionTimedOut": "कनेक्शन समय समाप्त",
+    "wrongWalletBrowserHint": "सुनिश्चित करें कि आप इस पेज को अपने वॉलेट के ब्राउज़र में खोल रहे हैं",
+    "mobileBrowserLimitation": "मोबाइल ब्राउज़र सीधे वॉलेट से कनेक्ट नहीं कर सकते। इस पेज को अपने वॉलेट ऐप के ब्राउज़र में खोलें।",
+    "desktopWalletRequired": "कृपया Solana वॉलेट एक्सटेंशन इंस्टॉल करें",
+    "retryConnection": "पुनः प्रयास करें",
+    "wallets": {
+      "phantom": "Phantom",
+      "solflare": "Solflare",
+      "backpack": "Backpack"
+    },
+    "phantom": {
+      "title": "Phantom से कनेक्ट करें",
+      "step1": "Phantom ऐप खोलें",
+      "step2": "एक्सप्लोर टैब पर टैप करें (कम्पास आइकन)",
+      "step3": "लिंक पेस्ट करें और कनेक्ट पर टैप करें"
+    },
+    "solflare": {
+      "title": "Solflare से कनेक्ट करें",
+      "openButton": "Solflare में खोलें",
+      "note": "एक टैप में खोलें"
+    },
+    "backpack": {
+      "title": "Backpack से कनेक्ट करें",
+      "step1": "Backpack ऐप खोलें",
+      "step2": "ब्राउज़र आइकन पर टैप करें"
+    }
   },
   "common": {
     "loading": "लोड हो रहा है...",

@@ -391,12 +391,49 @@
     "opponentsTurn": "Gegner ist am Zug"
   },
   "wallet": {
-    "connect": "Wallet verbinden",
+    "connect": "Wallet auswählen",
     "disconnect": "Trennen",
     "wrongNetwork": "Falsches Netzwerk",
-    "switchNetwork": "Zu Polygon wechseln",
+    "switchNetwork": "Zu Solana wechseln",
     "walletRequired": "Wallet erforderlich",
-    "pleaseConnect": "Bitte verbinden Sie Ihr Wallet, um diese Funktion zu nutzen"
+    "pleaseConnect": "Bitte verbinden Sie Ihr Solana-Wallet, um diese Funktion zu nutzen",
+    "connectWallet": "Wallet verbinden",
+    "connectWalletSubtitle": "Verbinden Sie Ihr Solana-Wallet zum Spielen",
+    "chooseYourWallet": "Wählen Sie Ihr Wallet",
+    "recommended": "Empfohlen",
+    "connecting": "Verbinden...",
+    "cancel": "Abbrechen",
+    "back": "Zurück",
+    "copyLink": "Link kopieren",
+    "copied": "Kopiert!",
+    "openInWalletBrowser": "Im Wallet-Browser öffnen",
+    "tryInBrowserConnect": "Versuchen Sie, in diesem Browser zu verbinden",
+    "connectionTimedOut": "Verbindung abgelaufen",
+    "wrongWalletBrowserHint": "Stellen Sie sicher, dass Sie diese Seite im Browser Ihres Wallets öffnen",
+    "mobileBrowserLimitation": "Mobile Browser können nicht direkt mit Wallets verbunden werden. Öffnen Sie diese Seite im Browser Ihrer Wallet-App.",
+    "desktopWalletRequired": "Bitte installieren Sie eine Solana-Wallet-Erweiterung",
+    "retryConnection": "Erneut versuchen",
+    "wallets": {
+      "phantom": "Phantom",
+      "solflare": "Solflare",
+      "backpack": "Backpack"
+    },
+    "phantom": {
+      "title": "Mit Phantom verbinden",
+      "step1": "Öffnen Sie die Phantom-App",
+      "step2": "Tippen Sie auf den Tab Erkunden (Kompass-Symbol)",
+      "step3": "Fügen Sie den Link ein und tippen Sie auf Verbinden"
+    },
+    "solflare": {
+      "title": "Mit Solflare verbinden",
+      "openButton": "In Solflare öffnen",
+      "note": "Ein-Klick-Öffnung"
+    },
+    "backpack": {
+      "title": "Mit Backpack verbinden",
+      "step1": "Öffnen Sie die Backpack-App",
+      "step2": "Tippen Sie auf das Browser-Symbol"
+    }
   },
   "common": {
     "loading": "Laden...",
