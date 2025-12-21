@@ -121,11 +121,8 @@ export function useSolanaRooms() {
       tx.recentBlockhash = blockhash;
       tx.feePayer = publicKey;
       
-      // Use sendTransaction directly - handles signing internally for mobile compatibility
-      const signature = await sendTransaction(tx, connection, {
-        skipPreflight: false,
-        preflightCommitment: 'confirmed',
-      });
+      // Use sendTransaction directly - no options for mobile wallet compatibility
+      const signature = await sendTransaction(tx, connection);
       
       toast({
         title: "Transaction sent",
@@ -143,8 +140,8 @@ export function useSolanaRooms() {
         description: `Room #${roomId} created successfully`,
       });
       
-      // Refresh rooms
-      await fetchRooms();
+      // Refresh rooms and active room state
+      await Promise.all([fetchRooms(), fetchCreatorActiveRoom()]);
       
       return roomId;
     } catch (err: any) {
@@ -200,11 +197,8 @@ export function useSolanaRooms() {
       tx.recentBlockhash = blockhash;
       tx.feePayer = publicKey;
       
-      // Use sendTransaction directly - handles signing internally for mobile compatibility
-      const signature = await sendTransaction(tx, connection, {
-        skipPreflight: false,
-        preflightCommitment: 'confirmed',
-      });
+      // Use sendTransaction directly - no options for mobile wallet compatibility
+      const signature = await sendTransaction(tx, connection);
       
       toast({
         title: "Transaction sent",
@@ -222,7 +216,8 @@ export function useSolanaRooms() {
         description: `Successfully joined room #${roomId}`,
       });
       
-      await fetchRooms();
+      // Refresh rooms and active room state
+      await Promise.all([fetchRooms(), fetchCreatorActiveRoom()]);
       return true;
     } catch (err: any) {
       console.error("Join room error:", err);

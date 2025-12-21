@@ -35,7 +35,7 @@ export default function CreateRoom() {
   const { toast } = useToast();
   const { play } = useSound();
   const { price, formatUsd, loading: priceLoading, refetch: refetchPrice } = useSolPrice();
-  const { createRoom, txPending, activeRoom, fetchCreatorActiveRoom } = useSolanaRooms();
+  const { createRoom, txPending, activeRoom, fetchCreatorActiveRoom, cancelRoom, fetchRooms } = useSolanaRooms();
   const { 
     balanceInfo, 
     fetchBalance, 
@@ -166,17 +166,31 @@ export default function CreateRoom() {
           {activeRoom && (
             <div className="flex items-start gap-2 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
               <AlertCircle className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
-              <div className="text-sm">
+              <div className="text-sm flex-1">
                 <p className="text-amber-200 font-medium">{t("createRoom.activeRoomExists")}</p>
                 <p className="text-amber-200/70">{t("createRoom.cancelExistingRoom")}</p>
-                <Button 
-                  variant="link" 
-                  size="sm" 
-                  className="text-amber-400 p-0 h-auto mt-1"
-                  onClick={() => navigate(`/room/${activeRoom.roomId}`)}
-                >
-                  {t("createRoom.goToRoom")} →
-                </Button>
+                <div className="flex gap-2 mt-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => navigate(`/room/${activeRoom.roomId}`)}
+                  >
+                    {t("createRoom.goToRoom")} →
+                  </Button>
+                  <Button 
+                    variant="destructive" 
+                    size="sm"
+                    onClick={async () => {
+                      const success = await cancelRoom(activeRoom.roomId);
+                      if (success) {
+                        await Promise.all([fetchCreatorActiveRoom(), fetchRooms()]);
+                      }
+                    }}
+                    disabled={txPending}
+                  >
+                    Cancel Room
+                  </Button>
+                </div>
               </div>
             </div>
           )}
