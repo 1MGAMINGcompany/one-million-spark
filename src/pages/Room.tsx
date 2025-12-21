@@ -266,14 +266,15 @@ export default function Room() {
   };
 
   const onCancelAbandonedRoom = async () => {
-    if (!room?.roomId) return;
+    if (!room?.roomId || !room?.creator) return;
     
     const roomId = typeof room.roomId === 'object' ? room.roomId.toNumber() : room.roomId;
+    const roomCreator = room.creator.toBase58();
     
     // Get player pubkeys for refunds
     const playerPubkeys = activePlayers.map((p: any) => new PublicKey(p.toBase58()));
     
-    const success = await cancelAbandonedRoom(roomId, playerPubkeys);
+    const success = await cancelAbandonedRoom(roomId, roomCreator, playerPubkeys);
     
     if (success) {
       navigate("/room-list");

@@ -8,7 +8,6 @@ import {
   RoomStatus,
   fetchOpenPublicRooms,
   fetchAllRooms,
-  fetchRoomById,
   fetchNextRoomId,
   buildCreateRoomTx,
   buildJoinRoomTx,
@@ -69,18 +68,17 @@ export function useSolanaRooms() {
     }
   }, [connection]);
 
-  // Fetch single room
+  // Fetch single room by ID (searches all rooms)
   const getRoom = useCallback(async (roomId: number): Promise<RoomDisplay | null> => {
-    return fetchRoomById(connection, roomId);
+    const allRooms = await fetchAllRooms(connection);
+    return allRooms.find(r => r.roomId === roomId) || null;
   }, [connection]);
 
   // Create room
   const createRoom = useCallback(async (
     gameType: GameType,
     entryFeeSol: number,
-    maxPlayers: number,
-    turnTimeSec: number,
-    isPrivate: boolean
+    maxPlayers: number
   ): Promise<number | null> => {
     if (!publicKey || !connected) {
       toast({
@@ -114,9 +112,7 @@ export function useSolanaRooms() {
         roomId,
         gameType,
         entryFeeSol,
-        maxPlayers,
-        turnTimeSec,
-        isPrivate
+        maxPlayers
       );
       
       // Get recent blockhash
@@ -161,7 +157,7 @@ export function useSolanaRooms() {
   }, [publicKey, connected, connection, sendTransaction, toast, fetchRooms, fetchCreatorActiveRoom]);
 
   // Join room
-  const joinRoom = useCallback(async (roomId: number): Promise<boolean> => {
+  const joinRoom = useCallback(async (roomId: number, roomCreator: string): Promise<boolean> => {
     if (!publicKey || !connected) {
       toast({
         title: "Wallet not connected",
@@ -186,7 +182,8 @@ export function useSolanaRooms() {
     setTxPending(true);
     
     try {
-      const tx = await buildJoinRoomTx(publicKey, roomId);
+      const creatorPubkey = new PublicKey(roomCreator);
+      const tx = await buildJoinRoomTx(publicKey, creatorPubkey, roomId);
       
       const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
       tx.recentBlockhash = blockhash;
@@ -310,7 +307,7 @@ export function useSolanaRooms() {
   }, [publicKey, connected, connection, sendTransaction]);
 
   // Cancel abandoned room (anyone can call if creator timed out)
-  const cancelAbandonedRoom = useCallback(async (roomId: number, players: PublicKey[]): Promise<boolean> => {
+  const cancelAbandonedRoom = useCallback(async (roomId: number, roomCreator: string, players: PublicKey[]): Promise<boolean> => {
     if (!publicKey || !connected) {
       toast({
         title: "Wallet not connected",
@@ -324,7 +321,8 @@ export function useSolanaRooms() {
     setTxPending(true);
     
     try {
-      const tx = await buildCancelAbandonedRoomTx(publicKey, roomId, players);
+      const creatorPubkey = new PublicKey(roomCreator);
+      const tx = await buildCancelAbandonedRoomTx(publicKey, creatorPubkey, roomId, players);
       
       const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
       tx.recentBlockhash = blockhash;

@@ -125,9 +125,7 @@ export default function CreateRoom() {
     const roomId = await createRoom(
       parseInt(gameType) as GameType,
       entryFeeNum,
-      parseInt(maxPlayers),
-      parseInt(turnTime),
-      isPrivate
+      parseInt(maxPlayers)
     );
 
     if (roomId) {

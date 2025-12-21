@@ -77,22 +77,19 @@ export interface RoomDisplay {
 // PDA DERIVATION
 // ============================================
 
-export function getRoomPDA(roomId: number): [PublicKey, number] {
+export function getRoomPDA(creator: PublicKey, roomId: number): [PublicKey, number] {
   const roomIdBuffer = Buffer.alloc(8);
   roomIdBuffer.writeBigUInt64LE(BigInt(roomId));
   
   return PublicKey.findProgramAddressSync(
-    [Buffer.from("room"), roomIdBuffer],
+    [Buffer.from("room"), creator.toBuffer(), roomIdBuffer],
     PROGRAM_ID
   );
 }
 
-export function getVaultPDA(roomId: number): [PublicKey, number] {
-  const roomIdBuffer = Buffer.alloc(8);
-  roomIdBuffer.writeBigUInt64LE(BigInt(roomId));
-  
+export function getVaultPDA(roomPda: PublicKey): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
-    [Buffer.from("vault"), roomIdBuffer],
+    [Buffer.from("vault"), roomPda.toBuffer()],
     PROGRAM_ID
   );
 }
@@ -314,29 +311,24 @@ export function roomToDisplay(room: RoomAccount): RoomDisplay {
  * @param gameType - Game type enum value
  * @param entryFeeSol - Entry fee in SOL
  * @param maxPlayers - Maximum players (2-4)
- * @param turnTimeSec - Turn time in seconds (0 = unlimited)
- * @param isPrivate - Whether room is private
  */
 export async function buildCreateRoomTx(
   creator: PublicKey,
   roomId: number,
   gameType: GameType,
   entryFeeSol: number,
-  maxPlayers: number,
-  turnTimeSec: number,
-  isPrivate: boolean
+  maxPlayers: number
 ): Promise<Transaction> {
-  const [roomPda] = getRoomPDA(roomId);
-  const [vaultPda] = getVaultPDA(roomId);
-  const [globalStatePda] = getGlobalStatePDA();
+  const [roomPda] = getRoomPDA(creator, roomId);
+  const [vaultPda] = getVaultPDA(roomPda);
   
-  const entryFeeLamports = BigInt(Math.floor(entryFeeSol * LAMPORTS_PER_SOL));
+  const stakeLamports = BigInt(Math.floor(entryFeeSol * LAMPORTS_PER_SOL));
   
-  // Anchor discriminator for "create_room" instruction
-  // This is sha256("global:create_room")[0..8]
-  const discriminator = Buffer.from([0x5d, 0x7c, 0x5c, 0x7c, 0x5c, 0x7c, 0x5c, 0x7c]); // Placeholder
+  // Anchor discriminator for "create_room" instruction from IDL
+  const discriminator = Buffer.from([130, 166, 32, 2, 247, 120, 178, 53]);
   
-  const data = Buffer.alloc(8 + 8 + 1 + 8 + 1 + 2 + 1);
+  // Args: room_id (u64), game_type (u8), max_players (u8), stake_lamports (u64)
+  const data = Buffer.alloc(8 + 8 + 1 + 1 + 8);
   let offset = 0;
   
   // Discriminator
@@ -351,27 +343,18 @@ export async function buildCreateRoomTx(
   data.writeUInt8(gameType, offset);
   offset += 1;
   
-  // entry_fee: u64
-  data.writeBigUInt64LE(entryFeeLamports, offset);
-  offset += 8;
-  
   // max_players: u8
   data.writeUInt8(maxPlayers, offset);
   offset += 1;
   
-  // turn_time_sec: u16
-  data.writeUInt16LE(turnTimeSec, offset);
-  offset += 2;
-  
-  // is_private: bool
-  data.writeUInt8(isPrivate ? 1 : 0, offset);
+  // stake_lamports: u64
+  data.writeBigUInt64LE(stakeLamports, offset);
   
   const instruction = new TransactionInstruction({
     keys: [
       { pubkey: creator, isSigner: true, isWritable: true },
       { pubkey: roomPda, isSigner: false, isWritable: true },
       { pubkey: vaultPda, isSigner: false, isWritable: true },
-      { pubkey: globalStatePda, isSigner: false, isWritable: true },
       { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
     ],
     programId: PROGRAM_ID,
@@ -385,21 +368,22 @@ export async function buildCreateRoomTx(
 /**
  * Build joinRoom transaction
  * @param player - Player's public key
+ * @param roomCreator - Room creator's public key (needed for PDA)
  * @param roomId - Room ID to join
  */
 export async function buildJoinRoomTx(
   player: PublicKey,
+  roomCreator: PublicKey,
   roomId: number
 ): Promise<Transaction> {
-  const [roomPda] = getRoomPDA(roomId);
-  const [vaultPda] = getVaultPDA(roomId);
+  const [roomPda] = getRoomPDA(roomCreator, roomId);
+  const [vaultPda] = getVaultPDA(roomPda);
   
-  // Anchor discriminator for "join_room" instruction
-  const discriminator = Buffer.from([0x6d, 0x8c, 0x6c, 0x8c, 0x6c, 0x8c, 0x6c, 0x8c]); // Placeholder
+  // Anchor discriminator for "join_room" instruction from IDL (no args)
+  const discriminator = Buffer.from([95, 232, 188, 81, 124, 130, 78, 139]);
   
-  const data = Buffer.alloc(8 + 8);
-  discriminator.copy(data, 0);
-  data.writeBigUInt64LE(BigInt(roomId), 8);
+  // No args for join_room, just the discriminator
+  const data = Buffer.from(discriminator);
   
   const instruction = new TransactionInstruction({
     keys: [
@@ -417,41 +401,40 @@ export async function buildJoinRoomTx(
 }
 
 /**
- * Build submitResultAndSettle transaction (authority-signed)
- * @param authority - Result authority public key (must sign)
+ * Build submitResult transaction (verifier-signed)
+ * @param verifier - Verifier public key (must sign)
+ * @param roomCreator - Room creator's public key (for PDA)
  * @param roomId - Room ID
  * @param winner - Winner's public key
+ * @param feeRecipient - Fee recipient public key
  */
 export async function buildSettleTx(
-  authority: PublicKey,
+  verifier: PublicKey,
+  roomCreator: PublicKey,
   roomId: number,
-  winner: PublicKey
+  winner: PublicKey,
+  feeRecipient: PublicKey
 ): Promise<Transaction> {
-  const [roomPda] = getRoomPDA(roomId);
-  const [vaultPda] = getVaultPDA(roomId);
+  const [roomPda] = getRoomPDA(roomCreator, roomId);
+  const [vaultPda] = getVaultPDA(roomPda);
+  const [configPda] = getConfigPDA();
   
-  // Anchor discriminator for "submit_result_and_settle" instruction
-  const discriminator = Buffer.from([0x7d, 0x9c, 0x7c, 0x9c, 0x7c, 0x9c, 0x7c, 0x9c]); // Placeholder
+  // Anchor discriminator for "submit_result" instruction from IDL
+  const discriminator = Buffer.from([240, 42, 89, 180, 10, 239, 9, 214]);
   
-  const data = Buffer.alloc(8 + 8 + 32);
-  let offset = 0;
-  
-  discriminator.copy(data, offset);
-  offset += 8;
-  
-  data.writeBigUInt64LE(BigInt(roomId), offset);
-  offset += 8;
-  
-  winner.toBuffer().copy(data, offset);
+  // Args: winner (pubkey)
+  const data = Buffer.alloc(8 + 32);
+  discriminator.copy(data, 0);
+  winner.toBuffer().copy(data, 8);
   
   const instruction = new TransactionInstruction({
     keys: [
-      { pubkey: authority, isSigner: true, isWritable: false },
+      { pubkey: verifier, isSigner: true, isWritable: false },
+      { pubkey: configPda, isSigner: false, isWritable: false },
       { pubkey: roomPda, isSigner: false, isWritable: true },
       { pubkey: vaultPda, isSigner: false, isWritable: true },
       { pubkey: winner, isSigner: false, isWritable: true },
-      { pubkey: FEE_RECIPIENT, isSigner: false, isWritable: true },
-      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      { pubkey: feeRecipient, isSigner: false, isWritable: true },
     ],
     programId: PROGRAM_ID,
     data,
@@ -463,6 +446,8 @@ export async function buildSettleTx(
 
 /**
  * Build cancelRoom transaction (creator only)
+ * Note: cancel_room instruction is not in the current IDL
+ * This is a placeholder - implement when instruction is added to program
  * @param creator - Room creator's public key
  * @param roomId - Room ID to cancel
  */
@@ -470,15 +455,15 @@ export async function buildCancelRoomTx(
   creator: PublicKey,
   roomId: number
 ): Promise<Transaction> {
-  const [roomPda] = getRoomPDA(roomId);
-  const [vaultPda] = getVaultPDA(roomId);
+  const [roomPda] = getRoomPDA(creator, roomId);
+  const [vaultPda] = getVaultPDA(roomPda);
   
-  // Anchor discriminator for "cancel_room" instruction
-  const discriminator = Buffer.from([0x4d, 0x6c, 0x4c, 0x6c, 0x4c, 0x6c, 0x4c, 0x6c]); // Placeholder
+  // Note: cancel_room is not in the current IDL
+  // Using a placeholder discriminator - update when instruction is deployed
+  const discriminator = Buffer.from([0x4d, 0x6c, 0x4c, 0x6c, 0x4c, 0x6c, 0x4c, 0x6c]);
   
-  const data = Buffer.alloc(8 + 8);
+  const data = Buffer.alloc(8);
   discriminator.copy(data, 0);
-  data.writeBigUInt64LE(BigInt(roomId), 8);
   
   const instruction = new TransactionInstruction({
     keys: [
@@ -497,6 +482,8 @@ export async function buildCancelRoomTx(
 
 /**
  * Build pingRoom transaction (creator presence heartbeat)
+ * Note: ping_room instruction is not in the current IDL
+ * This is a placeholder - implement when instruction is added to program
  * @param creator - Room creator's public key
  * @param roomId - Room ID to ping
  */
@@ -504,14 +491,14 @@ export async function buildPingRoomTx(
   creator: PublicKey,
   roomId: number
 ): Promise<Transaction> {
-  const [roomPda] = getRoomPDA(roomId);
+  const [roomPda] = getRoomPDA(creator, roomId);
   
-  // Anchor discriminator for "ping_room" instruction
-  const discriminator = Buffer.from([0x8d, 0xac, 0x8c, 0xac, 0x8c, 0xac, 0x8c, 0xac]); // Placeholder
+  // Note: ping_room is not in the current IDL
+  // Using a placeholder discriminator - update when instruction is deployed
+  const discriminator = Buffer.from([0x8d, 0xac, 0x8c, 0xac, 0x8c, 0xac, 0x8c, 0xac]);
   
-  const data = Buffer.alloc(8 + 8);
+  const data = Buffer.alloc(8);
   discriminator.copy(data, 0);
-  data.writeBigUInt64LE(BigInt(roomId), 8);
   
   const instruction = new TransactionInstruction({
     keys: [
@@ -528,24 +515,28 @@ export async function buildPingRoomTx(
 
 /**
  * Build cancelRoomIfAbandoned transaction (anyone can call if creator timed out)
+ * Note: cancel_room_if_abandoned instruction is not in the current IDL
+ * This is a placeholder - implement when instruction is added to program
  * @param caller - Anyone's public key
+ * @param roomCreator - Room creator's public key (for PDA)
  * @param roomId - Room ID to cancel
  * @param players - Array of player pubkeys to refund
  */
 export async function buildCancelAbandonedRoomTx(
   caller: PublicKey,
+  roomCreator: PublicKey,
   roomId: number,
   players: PublicKey[]
 ): Promise<Transaction> {
-  const [roomPda] = getRoomPDA(roomId);
-  const [vaultPda] = getVaultPDA(roomId);
+  const [roomPda] = getRoomPDA(roomCreator, roomId);
+  const [vaultPda] = getVaultPDA(roomPda);
   
-  // Anchor discriminator for "cancel_room_if_abandoned" instruction
-  const discriminator = Buffer.from([0x9d, 0xbc, 0x9c, 0xbc, 0x9c, 0xbc, 0x9c, 0xbc]); // Placeholder
+  // Note: cancel_room_if_abandoned is not in the current IDL
+  // Using a placeholder discriminator - update when instruction is deployed
+  const discriminator = Buffer.from([0x9d, 0xbc, 0x9c, 0xbc, 0x9c, 0xbc, 0x9c, 0xbc]);
   
-  const data = Buffer.alloc(8 + 8);
+  const data = Buffer.alloc(8);
   discriminator.copy(data, 0);
-  data.writeBigUInt64LE(BigInt(roomId), 8);
   
   // Build account keys: caller, room, vault, system_program, then all players for refunds
   const keys = [
@@ -579,8 +570,8 @@ export async function buildCancelAbandonedRoomTx(
  */
 export async function fetchAllRooms(connection: Connection): Promise<RoomDisplay[]> {
   try {
-    // Room account discriminator (first 8 bytes of sha256("account:Room"))
-    const discriminator = Buffer.from([0x52, 0x6f, 0x6f, 0x6d, 0x41, 0x63, 0x63, 0x74]); // Placeholder
+    // Room account discriminator from IDL: [156, 199, 67, 27, 222, 23, 185, 94]
+    const discriminator = Buffer.from([156, 199, 67, 27, 222, 23, 185, 94]);
     
     const accounts = await connection.getProgramAccounts(PROGRAM_ID, {
       filters: [
@@ -621,11 +612,13 @@ export async function fetchOpenPublicRooms(connection: Connection): Promise<Room
 }
 
 /**
- * Fetch a single room by ID
+ * Fetch a single room by ID and creator
+ * Note: This function now requires knowing the creator to derive the PDA
+ * For fetching rooms without knowing the creator, use fetchAllRooms and filter
  */
-export async function fetchRoomById(connection: Connection, roomId: number): Promise<RoomDisplay | null> {
+export async function fetchRoomById(connection: Connection, creator: PublicKey, roomId: number): Promise<RoomDisplay | null> {
   try {
-    const [roomPda] = getRoomPDA(roomId);
+    const [roomPda] = getRoomPDA(creator, roomId);
     const accountInfo = await connection.getAccountInfo(roomPda);
     
     if (!accountInfo) return null;
