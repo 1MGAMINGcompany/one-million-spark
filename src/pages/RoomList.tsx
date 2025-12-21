@@ -18,6 +18,7 @@ import { useWallet } from "@/hooks/useWallet";
 import { WalletRequired } from "@/components/WalletRequired";
 import { useSolanaRooms } from "@/hooks/useSolanaRooms";
 import { SOLANA_ENABLED, getSolanaCluster, formatSol } from "@/lib/solana-config";
+import { GameType } from "@/lib/solana-program";
 
 export default function RoomList() {
   const navigate = useNavigate();
@@ -38,7 +39,7 @@ export default function RoomList() {
       
       return () => clearInterval(interval);
     }
-  }, [isConnected]);
+  }, [isConnected, fetchRooms]);
 
   if (!isConnected) {
     return <WalletRequired message="Connect your Solana wallet to browse game rooms." />;
@@ -68,22 +69,22 @@ export default function RoomList() {
 
   const getGameIcon = (gameType: number) => {
     const icons: Record<number, string> = {
-      0: "♟️", // Chess
-      1: "🎲", // Backgammon
-      2: "⚫", // Checkers
-      3: "🁡", // Dominos
-      4: "🎯", // Ludo
+      [GameType.Chess]: "♟️",
+      [GameType.Dominos]: "🁡",
+      [GameType.Backgammon]: "🎲",
+      [GameType.Checkers]: "⚫",
+      [GameType.Ludo]: "🎯",
     };
     return icons[gameType] || "🎮";
   };
 
   const getGameName = (gameType: number) => {
     const names: Record<number, string> = {
-      0: "Chess",
-      1: "Backgammon", 
-      2: "Checkers",
-      3: "Dominos",
-      4: "Ludo",
+      [GameType.Chess]: "Chess",
+      [GameType.Dominos]: "Dominos",
+      [GameType.Backgammon]: "Backgammon",
+      [GameType.Checkers]: "Checkers",
+      [GameType.Ludo]: "Ludo",
     };
     return names[gameType] || "Unknown";
   };
