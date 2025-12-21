@@ -4,7 +4,6 @@ import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -47,7 +46,6 @@ export default function CreateRoom() {
   const [gameType, setGameType] = useState<string>("1"); // Chess
   const [entryFee, setEntryFee] = useState<string>("0.1");
   const [maxPlayers, setMaxPlayers] = useState<string>("2");
-  const [isPrivate, setIsPrivate] = useState<boolean>(false);
   const [turnTime, setTurnTime] = useState<string>("10");
   const [checkingActiveRoom, setCheckingActiveRoom] = useState(true);
   const [refreshingBalance, setRefreshingBalance] = useState(false);
@@ -289,12 +287,6 @@ export default function CreateRoom() {
                 <SelectItem value="0">{t("createRoom.unlimited")}</SelectItem>
               </SelectContent>
             </Select>
-          </div>
-
-          {/* Private Room Toggle */}
-          <div className="flex items-center justify-between">
-            <Label className="text-sm">{t("createRoom.privateRoom")}</Label>
-            <Switch checked={isPrivate} onCheckedChange={setIsPrivate} />
           </div>
 
           {/* Prize Info */}
