@@ -45,13 +45,15 @@ export interface RoomAccount {
   roomId: number;
   creator: PublicKey;
   gameType: GameType;
-  entryFee: number; // in lamports
+  entryFee: number; // stake_lamports on-chain, in lamports
   maxPlayers: number;
-  turnTimeSec: number;
-  isPrivate: boolean;
+  playerCount: number; // on-chain: player_count
   status: RoomStatus;
   players: PublicKey[];
   winner: PublicKey | null;
+  // Client-side only (not on-chain):
+  turnTimeSec: number;
+  isPrivate: boolean;
   createdAt: number;
   bump: number;
 }
@@ -201,8 +203,18 @@ const STATUS_NAMES: Record<number, string> = {
 
 export function parseRoomAccount(data: Buffer): RoomAccount | null {
   try {
-    // Skip 8-byte discriminator
-    let offset = 8;
+    // On-chain Room struct layout (from IDL):
+    // - room_id: u64
+    // - creator: pubkey (32)
+    // - game_type: u8
+    // - max_players: u8
+    // - player_count: u8
+    // - status: u8
+    // - stake_lamports: u64
+    // - winner: pubkey (32)
+    // - players: [pubkey; 4] (128 bytes fixed array)
+    
+    let offset = 8; // Skip 8-byte discriminator
     
     // room_id: u64
     const roomId = Number(data.readBigUInt64LE(offset));
@@ -216,47 +228,36 @@ export function parseRoomAccount(data: Buffer): RoomAccount | null {
     const gameType = data.readUInt8(offset) as GameType;
     offset += 1;
     
-    // entry_fee: u64
-    const entryFee = Number(data.readBigUInt64LE(offset));
-    offset += 8;
-    
     // max_players: u8
     const maxPlayers = data.readUInt8(offset);
     offset += 1;
     
-    // turn_time_sec: u16
-    const turnTimeSec = data.readUInt16LE(offset);
-    offset += 2;
-    
-    // is_private: bool
-    const isPrivate = data.readUInt8(offset) === 1;
+    // player_count: u8
+    const playerCount = data.readUInt8(offset);
     offset += 1;
     
     // status: u8
     const status = data.readUInt8(offset) as RoomStatus;
     offset += 1;
     
-    // players: Vec<Pubkey> - length prefix (4 bytes) + pubkeys
-    const playersLen = data.readUInt32LE(offset);
-    offset += 4;
-    const players: PublicKey[] = [];
-    for (let i = 0; i < playersLen; i++) {
-      players.push(new PublicKey(data.subarray(offset, offset + 32)));
-      offset += 32;
-    }
-    
-    // winner: Option<Pubkey> - 1 byte discriminant + 32 bytes if Some
-    const hasWinner = data.readUInt8(offset) === 1;
-    offset += 1;
-    const winner = hasWinner ? new PublicKey(data.subarray(offset, offset + 32)) : null;
-    if (hasWinner) offset += 32;
-    
-    // created_at: i64
-    const createdAt = Number(data.readBigInt64LE(offset));
+    // stake_lamports: u64
+    const entryFee = Number(data.readBigUInt64LE(offset));
     offset += 8;
     
-    // bump: u8
-    const bump = data.readUInt8(offset);
+    // winner: pubkey (32 bytes) - always present, check for all zeros
+    const winnerBytes = data.subarray(offset, offset + 32);
+    const winner = winnerBytes.every(b => b === 0) ? null : new PublicKey(winnerBytes);
+    offset += 32;
+    
+    // players: [pubkey; 4] - fixed array, use player_count to know how many are valid
+    const players: PublicKey[] = [];
+    for (let i = 0; i < playerCount; i++) {
+      const playerBytes = data.subarray(offset + (i * 32), offset + ((i + 1) * 32));
+      // Skip zero pubkeys
+      if (!playerBytes.every(b => b === 0)) {
+        players.push(new PublicKey(playerBytes));
+      }
+    }
     
     return {
       roomId,
@@ -264,13 +265,15 @@ export function parseRoomAccount(data: Buffer): RoomAccount | null {
       gameType,
       entryFee,
       maxPlayers,
-      turnTimeSec,
-      isPrivate,
+      playerCount,
       status,
       players,
       winner,
-      createdAt,
-      bump,
+      // Client-side defaults (not on-chain):
+      turnTimeSec: 0,
+      isPrivate: false,
+      createdAt: 0,
+      bump: 0,
     };
   } catch (err) {
     console.error("Failed to parse room account:", err);
@@ -280,7 +283,7 @@ export function parseRoomAccount(data: Buffer): RoomAccount | null {
 
 export function roomToDisplay(room: RoomAccount): RoomDisplay {
   const entryFeeSol = room.entryFee / LAMPORTS_PER_SOL;
-  const prizePoolSol = entryFeeSol * room.players.length;
+  const prizePoolSol = entryFeeSol * room.playerCount;
   
   return {
     roomId: room.roomId,
@@ -290,11 +293,11 @@ export function roomToDisplay(room: RoomAccount): RoomDisplay {
     entryFeeSol,
     maxPlayers: room.maxPlayers,
     turnTimeSec: room.turnTimeSec,
-    isPrivate: room.isPrivate,
+    isPrivate: room.isPrivate, // Always false since not on-chain
     status: room.status,
     statusName: STATUS_NAMES[room.status] || "Unknown",
     players: room.players.map(p => p.toBase58()),
-    playerCount: room.players.length,
+    playerCount: room.playerCount,
     winner: room.winner?.toBase58() || null,
     createdAt: new Date(room.createdAt * 1000),
     prizePoolSol,
@@ -700,13 +703,13 @@ export async function fetchNextRoomId(connection: Connection): Promise<number> {
 }
 
 /**
- * Fetch public, open rooms only
+ * Fetch open rooms (status = Created, not full)
+ * Note: All rooms are public since there's no is_private field on-chain
  */
 export async function fetchOpenPublicRooms(connection: Connection): Promise<RoomDisplay[]> {
   const allRooms = await fetchAllRooms(connection);
   return allRooms.filter(
-    room => !room.isPrivate && 
-            room.status === RoomStatus.Created && 
+    room => room.status === RoomStatus.Created && 
             room.playerCount < room.maxPlayers
   );
 }
