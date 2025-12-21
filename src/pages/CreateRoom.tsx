@@ -22,6 +22,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { GameType } from "@/lib/solana-program";
 import { ConnectWalletGate } from "@/components/ConnectWalletGate";
 import { NetworkProofBadge } from "@/components/NetworkProofBadge";
+import { TxDebugPanel } from "@/components/TxDebugPanel";
 
 // Target minimum fee in USD
 const MIN_FEE_USD = 0.50;
@@ -35,7 +36,7 @@ export default function CreateRoom() {
   const { toast } = useToast();
   const { play } = useSound();
   const { price, formatUsd, loading: priceLoading, refetch: refetchPrice } = useSolPrice();
-  const { createRoom, txPending, activeRoom, fetchCreatorActiveRoom, cancelRoom, fetchRooms } = useSolanaRooms();
+  const { createRoom, txPending, activeRoom, fetchCreatorActiveRoom, cancelRoom, fetchRooms, txDebugInfo, clearTxDebug } = useSolanaRooms();
   const { 
     balanceInfo, 
     fetchBalance, 
@@ -362,6 +363,9 @@ export default function CreateRoom() {
           </div>
         </CardContent>
       </Card>
+      
+      {/* Transaction Debug Panel - shown on tx failure */}
+      <TxDebugPanel debugInfo={txDebugInfo} onClose={clearTxDebug} />
     </div>
   );
 }
