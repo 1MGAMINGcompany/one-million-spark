@@ -40,6 +40,31 @@ const BLOCKED_WALLET_NAMES = [
   'torus',
 ];
 
+// Official wallet icons - use these instead of adapter icons for consistency
+const WALLET_ICONS: Record<string, string> = {
+  phantom: 'https://raw.githubusercontent.com/solana-labs/wallet-adapter/master/packages/wallets/icons/phantom.svg',
+  solflare: 'https://raw.githubusercontent.com/solana-labs/wallet-adapter/master/packages/wallets/icons/solflare.svg',
+  backpack: 'https://raw.githubusercontent.com/solana-labs/wallet-adapter/master/packages/wallets/icons/backpack.svg',
+  glow: 'https://raw.githubusercontent.com/solana-labs/wallet-adapter/master/packages/wallets/icons/glow.svg',
+  trust: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/solana/info/logo.png',
+  'mobile wallet adapter': 'https://raw.githubusercontent.com/solana-labs/wallet-adapter/master/packages/wallets/icons/solana.svg',
+};
+
+// Get the best icon for a wallet
+const getWalletIcon = (walletName: string, adapterIcon?: string): string => {
+  const nameLower = walletName.toLowerCase();
+  
+  // Check for exact or partial matches in our icon map
+  for (const [key, iconUrl] of Object.entries(WALLET_ICONS)) {
+    if (nameLower.includes(key)) {
+      return iconUrl;
+    }
+  }
+  
+  // Fall back to adapter-provided icon
+  return adapterIcon || WALLET_ICONS['mobile wallet adapter'];
+};
+
 export function WalletButton() {
   const { t } = useTranslation();
   const { connected, publicKey, disconnect, connecting, wallets, select, wallet } = useWallet();
@@ -429,13 +454,11 @@ export function WalletButton() {
                       className="w-full justify-start gap-3 h-12"
                       onClick={() => handleSelectWallet(w.adapter.name)}
                     >
-                      {w.adapter.icon && (
-                        <img 
-                          src={w.adapter.icon} 
-                          alt={w.adapter.name} 
-                          className="w-6 h-6"
-                        />
-                      )}
+                      <img 
+                        src={getWalletIcon(w.adapter.name, w.adapter.icon)} 
+                        alt={w.adapter.name} 
+                        className="w-6 h-6"
+                      />
                       <span>{w.adapter.name}</span>
                       {w.readyState === 'Installed' && (
                         <span className="ml-auto text-xs text-green-500">{t("wallet.detected")}</span>
