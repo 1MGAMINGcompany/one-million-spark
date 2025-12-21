@@ -416,7 +416,72 @@
     "wrongNetwork": "Wrong Network",
     "switchNetwork": "Switch to Solana",
     "walletRequired": "Wallet Required",
-    "pleaseConnect": "Please connect your Solana wallet to use this feature"
+    "pleaseConnect": "Please connect your Solana wallet to use this feature",
+    "connectWallet": "Connect Wallet",
+    "connectWalletSubtitle": "Connect your Solana wallet to play",
+    "chooseYourWallet": "Choose your wallet",
+    "recommended": "Recommended",
+    "connecting": "Connecting...",
+    "cancel": "Cancel",
+    "back": "Back",
+    "copyLink": "Copy Link",
+    "copied": "Copied!",
+    "openInWalletBrowser": "Open in wallet browser",
+    "tryInBrowserConnect": "Try connecting in this browser",
+    "connectionTimedOut": "Connection timed out",
+    "wrongWalletBrowserHint": "Make sure you're opening this page inside your wallet's browser",
+    "mobileBrowserLimitation": "Mobile browsers can't connect directly to wallets. Open this page in your wallet app's browser.",
+    "desktopWalletRequired": "Please install a Solana wallet extension",
+    "retryConnection": "Retry Connection",
+    "balance": "Balance",
+    "connected": "Connected",
+    "noWalletsDetected": "No wallets detected",
+    "installWallet": "Please install Phantom, Solflare, or Backpack",
+    "detected": "Detected",
+    "android": "Android",
+    "recommendedIPhone": "Recommended for iPhone",
+    "alternativeMethod": "Alternative method",
+    "inWalletBrowser": "You're in a wallet browser - select your wallet above to connect",
+    "iphoneHint": "iPhone: Use 'Open in wallet browser' for best results",
+    "androidHint": "Android: Try MWA first, or open in wallet browser",
+    "walletDidntOpen": "If your wallet didn't open, use 'Open in wallet browser' below.",
+    "iphoneBrowserLimit": "iPhone browsers may not connect directly. Open inside Phantom/Solflare browser.",
+    "connectionFailed": "Connection didn't start. Please try again.",
+    "retry": "Retry",
+    "wallets": {
+      "phantom": "Phantom",
+      "solflare": "Solflare",
+      "backpack": "Backpack"
+    },
+    "phantom": {
+      "title": "Connect with Phantom",
+      "step1": "Open the Phantom app",
+      "step2": "Tap the Explore tab (compass icon)",
+      "step3": "Paste the link and tap Connect",
+      "manualSteps": "Manual steps"
+    },
+    "solflare": {
+      "title": "Connect with Solflare",
+      "openButton": "Open in Solflare",
+      "note": "One-tap open"
+    },
+    "backpack": {
+      "title": "Connect with Backpack",
+      "step1": "Open the Backpack app",
+      "step2": "Tap the Browser icon",
+      "step3": "Navigate to the site and tap Connect",
+      "manualSteps": "Manual steps"
+    },
+    "qrCode": {
+      "show": "Show QR Code",
+      "hide": "Hide QR Code",
+      "scanHint": "Scan this QR code from your wallet app's browser"
+    },
+    "copySite": "Copy 1mgaming.com",
+    "copyPage": "Copy page link",
+    "siteLinkCopied": "Site link copied!",
+    "pageLinkCopied": "Page link copied!",
+    "openingWallet": "Opening wallet app..."
   },
   "common": {
     "loading": "Loading...",
