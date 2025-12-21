@@ -550,13 +550,6 @@
     "mobileBrowserLimitation": "Los navegadores móviles no pueden conectarse directamente a las billeteras. Abre esta página en el navegador de tu billetera.",
     "desktopWalletRequired": "Por favor instala una extensión de billetera Solana",
     "retryConnection": "Reintentar Conexión",
-    "showHelp": "Mostrar Ayuda",
-    "retry": "Reintentar",
-    "copyFailed": "Error al copiar",
-    "noWalletsDetected": "No se detectaron billeteras",
-    "installWallet": "Por favor instala Phantom, Solflare o Backpack",
-    "detected": "Detectado",
-    "connectionTimedOut": "La conexión ha expirado",
     "wallets": {
       "phantom": "Phantom",
       "solflare": "Solflare",

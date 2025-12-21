@@ -448,9 +448,6 @@
     "iphoneBrowserLimit": "iPhone browsers may not connect directly. Open inside Phantom/Solflare browser.",
     "connectionFailed": "Connection didn't start. Please try again.",
     "retry": "Retry",
-    "showHelp": "Show Help",
-    "copied": "Copied!",
-    "copyFailed": "Failed to copy",
     "wallets": {
       "phantom": "Phantom",
       "solflare": "Solflare",

@@ -413,12 +413,6 @@
     "mobileBrowserLimitation": "I browser mobili non possono connettersi direttamente ai portafogli. Apri questa pagina nel browser dell'app del tuo portafoglio.",
     "desktopWalletRequired": "Installa un'estensione del portafoglio Solana",
     "retryConnection": "Riprova Connessione",
-    "showHelp": "Mostra Aiuto",
-    "retry": "Riprova",
-    "copyFailed": "Copia fallita",
-    "noWalletsDetected": "Nessun portafoglio rilevato",
-    "installWallet": "Installa Phantom, Solflare o Backpack",
-    "detected": "Rilevato",
     "wallets": {
       "phantom": "Phantom",
       "solflare": "Solflare",

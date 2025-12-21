@@ -413,12 +413,6 @@
     "mobileBrowserLimitation": "Navegadores móveis não podem se conectar diretamente às carteiras. Abra esta página no navegador do seu aplicativo de carteira.",
     "desktopWalletRequired": "Por favor instale uma extensão de carteira Solana",
     "retryConnection": "Tentar Novamente",
-    "showHelp": "Mostrar Ajuda",
-    "retry": "Tentar Novamente",
-    "copyFailed": "Falha ao copiar",
-    "noWalletsDetected": "Nenhuma carteira detectada",
-    "installWallet": "Por favor instale Phantom, Solflare ou Backpack",
-    "detected": "Detectado",
     "wallets": {
       "phantom": "Phantom",
       "solflare": "Solflare",
