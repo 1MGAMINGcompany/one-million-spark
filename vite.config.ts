@@ -35,10 +35,13 @@ export default defineConfig(({ mode }) => ({
   optimizeDeps: {
     exclude: ['usb', 'node-hid', '@coral-xyz/anchor'],
     include: [
+      'buffer',
       '@solana/wallet-adapter-react',
       '@solana/wallet-adapter-react-ui',
       '@solana/wallet-adapter-base',
       '@solana/web3.js',
+      'react',
+      'react-dom',
     ],
     esbuildOptions: {
       define: {
