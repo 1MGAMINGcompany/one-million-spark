@@ -413,6 +413,12 @@
     "mobileBrowserLimitation": "Mobile Browser können nicht direkt mit Wallets verbunden werden. Öffnen Sie diese Seite im Browser Ihrer Wallet-App.",
     "desktopWalletRequired": "Bitte installieren Sie eine Solana-Wallet-Erweiterung",
     "retryConnection": "Erneut versuchen",
+    "showHelp": "Hilfe anzeigen",
+    "retry": "Wiederholen",
+    "copyFailed": "Kopieren fehlgeschlagen",
+    "noWalletsDetected": "Keine Wallets erkannt",
+    "installWallet": "Bitte installieren Sie Phantom, Solflare oder Backpack",
+    "detected": "Erkannt",
     "wallets": {
       "phantom": "Phantom",
       "solflare": "Solflare",
