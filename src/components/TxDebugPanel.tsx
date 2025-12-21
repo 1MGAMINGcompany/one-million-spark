@@ -11,6 +11,7 @@ interface TxDebugInfo {
   methodUsed?: string;
   adapterName?: string;
   hasAdapterSendTx?: boolean;
+  txType?: 'legacy' | 'versioned';
 }
 
 interface TxDebugPanelProps {
@@ -46,6 +47,13 @@ export function TxDebugPanel({ debugInfo, onClose }: TxDebugPanelProps) {
           <span className="text-red-300">adapter.sendTx:</span>
           <span className={debugInfo.hasAdapterSendTx ? "text-green-400" : "text-red-400"}>
             {debugInfo.hasAdapterSendTx ? "YES" : "NO"}
+          </span>
+        </div>
+        
+        <div className="flex justify-between">
+          <span className="text-red-300">tx type:</span>
+          <span className={debugInfo.txType === 'versioned' ? "text-green-400" : "text-yellow-400"}>
+            {debugInfo.txType || "legacy"}
           </span>
         </div>
         
