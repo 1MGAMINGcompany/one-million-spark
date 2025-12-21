@@ -1,6 +1,5 @@
 import React, { ReactNode, useMemo, useCallback } from "react";
 import { ConnectionProvider, WalletProvider } from "@solana/wallet-adapter-react";
-import { WalletModalProvider } from "@solana/wallet-adapter-react-ui";
 import { PhantomWalletAdapter } from "@solana/wallet-adapter-phantom";
 import { SolflareWalletAdapter } from "@solana/wallet-adapter-solflare";
 import { BackpackWalletAdapter } from "@solana/wallet-adapter-backpack";
@@ -22,8 +21,8 @@ export function SolanaProvider({ children }: SolanaProviderProps) {
     return url;
   }, []);
 
-  // Wallet adapters - works on both desktop and mobile
-  // Mobile Wallet Adapter is automatically included by standard wallet adapters
+  // Explicitly add wallet adapters for desktop compatibility
+  // These will be detected alongside standard wallet discovery
   const wallets = useMemo(() => [
     new PhantomWalletAdapter(),
     new SolflareWalletAdapter(),
@@ -48,9 +47,7 @@ export function SolanaProvider({ children }: SolanaProviderProps) {
         onError={onError}
         localStorageKey="1m-gaming-wallet"
       >
-        <WalletModalProvider>
-          {children}
-        </WalletModalProvider>
+        {children}
       </WalletProvider>
     </ConnectionProvider>
   );
