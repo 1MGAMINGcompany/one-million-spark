@@ -199,7 +199,8 @@ export function WalletButton() {
     }
   };
 
-  const handleOpenFallbackPanel = () => {
+  const handleOpenFallbackPanel = (walletType: 'phantom' | 'solflare' | 'backpack') => {
+    setSelectedWalletType(walletType);
     setDialogOpen(false);
     setShowFallbackPanel(true);
   };
@@ -288,7 +289,7 @@ export function WalletButton() {
             {t("wallet.retry")}
           </Button>
           {isMobile && (
-            <Button size="sm" variant="default" onClick={() => setShowFallbackPanel(true)} className="gap-1">
+            <Button size="sm" variant="default" onClick={() => handleOpenFallbackPanel('phantom')} className="gap-1">
               <ExternalLink size={14} />
               {t("wallet.openInWalletBrowser")}
             </Button>
@@ -339,21 +340,47 @@ export function WalletButton() {
             <DialogTitle>{t("wallet.connectWallet")}</DialogTitle>
           </DialogHeader>
           <div className="grid gap-2 py-4">
-            {/* Mobile: Show "Open in wallet browser" as primary option for iOS */}
+            {/* Mobile: Show wallet-specific buttons */}
             {isMobile && !isInWalletBrowser && (
-              <Button
-                variant={isIOS ? "default" : "outline"}
-                className="w-full justify-start gap-3 h-12"
-                onClick={handleOpenFallbackPanel}
-              >
-                <Smartphone size={20} />
-                <div className="flex flex-col items-start">
-                  <span>{t("wallet.openInWalletBrowser")}</span>
-                  <span className="text-xs text-muted-foreground">
-                    {isIOS ? t("wallet.recommendedIPhone") : t("wallet.alternativeMethod")}
-                  </span>
-                </div>
-              </Button>
+              <>
+                <p className="text-sm text-muted-foreground mb-2">{t("wallet.chooseYourWallet")}</p>
+                <Button
+                  variant="outline"
+                  className="w-full justify-start gap-3 h-12"
+                  onClick={() => handleOpenFallbackPanel('phantom')}
+                >
+                  <img src="https://raw.githubusercontent.com/solana-labs/wallet-adapter/master/packages/wallets/icons/phantom.svg" alt="Phantom" className="w-6 h-6" />
+                  <div className="flex flex-col items-start">
+                    <span>{t("wallet.phantom.title")}</span>
+                    <span className="text-xs text-muted-foreground">{t("wallet.openInWalletBrowser")}</span>
+                  </div>
+                </Button>
+                <Button
+                  variant="outline"
+                  className="w-full justify-start gap-3 h-12"
+                  onClick={() => handleOpenFallbackPanel('solflare')}
+                >
+                  <img src="https://raw.githubusercontent.com/solana-labs/wallet-adapter/master/packages/wallets/icons/solflare.svg" alt="Solflare" className="w-6 h-6" />
+                  <div className="flex flex-col items-start">
+                    <span>{t("wallet.solflare.title")}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {isIOS ? t("wallet.recommendedIPhone") : t("wallet.openInWalletBrowser")}
+                    </span>
+                  </div>
+                  {isIOS && <span className="ml-auto text-xs text-green-500">★</span>}
+                </Button>
+                <Button
+                  variant="outline"
+                  className="w-full justify-start gap-3 h-12"
+                  onClick={() => handleOpenFallbackPanel('backpack')}
+                >
+                  <img src="https://raw.githubusercontent.com/solana-labs/wallet-adapter/master/packages/wallets/icons/backpack.svg" alt="Backpack" className="w-6 h-6" />
+                  <div className="flex flex-col items-start">
+                    <span>{t("wallet.backpack.title")}</span>
+                    <span className="text-xs text-muted-foreground">{t("wallet.openInWalletBrowser")}</span>
+                  </div>
+                </Button>
+              </>
             )}
 
             {/* Wallet list */}
