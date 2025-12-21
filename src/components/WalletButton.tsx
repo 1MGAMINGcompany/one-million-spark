@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useWallet, useConnection } from "@solana/wallet-adapter-react";
 import { LAMPORTS_PER_SOL } from "@solana/web3.js";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Wallet, LogOut, RefreshCw, Copy, Check, AlertCircle, Smartphone, Loader2, ExternalLink } from "lucide-react";
@@ -40,6 +41,7 @@ const BLOCKED_WALLET_NAMES = [
 ];
 
 export function WalletButton() {
+  const { t } = useTranslation();
   const { connected, publicKey, disconnect, connecting, wallets, select, wallet } = useWallet();
   const { connection } = useConnection();
   
@@ -51,6 +53,7 @@ export function WalletButton() {
   const [connectTimeout, setConnectTimeout] = useState(false);
   const [connectingWallet, setConnectingWallet] = useState<string | null>(null);
   const [showFallbackPanel, setShowFallbackPanel] = useState(false);
+  const [selectedWalletType, setSelectedWalletType] = useState<'phantom' | 'solflare' | 'backpack' | null>(null);
   const connectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Platform detection
@@ -138,7 +141,7 @@ export function WalletButton() {
         
         // For MWA on Android, show immediate feedback
         if (isMWA && isAndroid) {
-          toast.info("Opening wallet app...");
+          toast.info(t("wallet.openingWallet"));
         }
       } catch (err) {
         console.error('[Wallet] Select error:', err);
@@ -258,9 +261,11 @@ export function WalletButton() {
           setShowFallbackPanel(false);
           setConnectTimeout(false);
           setConnectingWallet(null);
+          setSelectedWalletType(null);
         }}
         isAndroid={isAndroid}
         isIOS={isIOS}
+        selectedWallet={selectedWalletType}
       />
     );
   }
@@ -272,20 +277,20 @@ export function WalletButton() {
         <AlertCircle className="text-amber-500" size={24} />
         <p className="text-sm text-muted-foreground text-center max-w-xs">
           {isAndroid 
-            ? "If your wallet didn't open, use 'Open in wallet browser' below."
+            ? t("wallet.walletDidntOpen")
             : isIOS
-            ? "iPhone browsers may not connect directly. Open inside Phantom/Solflare browser."
-            : "Connection didn't start. Please try again."
+            ? t("wallet.iphoneBrowserLimit")
+            : t("wallet.connectionFailed")
           }
         </p>
         <div className="flex gap-2 mt-2">
           <Button size="sm" variant="outline" onClick={handleRetryConnect}>
-            Retry
+            {t("wallet.retry")}
           </Button>
           {isMobile && (
             <Button size="sm" variant="default" onClick={() => setShowFallbackPanel(true)} className="gap-1">
               <ExternalLink size={14} />
-              Open in wallet browser
+              {t("wallet.openInWalletBrowser")}
             </Button>
           )}
         </div>
@@ -299,7 +304,7 @@ export function WalletButton() {
           }}
           className="mt-1"
         >
-          Cancel
+          {t("wallet.cancel")}
         </Button>
       </div>
     );
@@ -310,7 +315,7 @@ export function WalletButton() {
     return (
       <Button disabled variant="default" size="sm" className="gap-2">
         <Loader2 size={16} className="animate-spin" />
-        Connecting{connectingWallet ? ` to ${connectingWallet}` : ''}...
+        {t("wallet.connecting")}
       </Button>
     );
   }
@@ -326,12 +331,12 @@ export function WalletButton() {
             className="gap-2"
           >
             <Wallet size={16} />
-            Select Wallet
+            {t("wallet.connect")}
           </Button>
         </DialogTrigger>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Connect Wallet</DialogTitle>
+            <DialogTitle>{t("wallet.connectWallet")}</DialogTitle>
           </DialogHeader>
           <div className="grid gap-2 py-4">
             {/* Mobile: Show "Open in wallet browser" as primary option for iOS */}
@@ -343,9 +348,9 @@ export function WalletButton() {
               >
                 <Smartphone size={20} />
                 <div className="flex flex-col items-start">
-                  <span>Open in wallet browser</span>
+                  <span>{t("wallet.openInWalletBrowser")}</span>
                   <span className="text-xs text-muted-foreground">
-                    {isIOS ? "Recommended for iPhone" : "Alternative method"}
+                    {isIOS ? t("wallet.recommendedIPhone") : t("wallet.alternativeMethod")}
                   </span>
                 </div>
               </Button>
@@ -355,10 +360,10 @@ export function WalletButton() {
             {sortedWallets.length === 0 && !isMobile ? (
               <div className="text-center py-4">
                 <p className="text-muted-foreground mb-2">
-                  No wallets detected.
+                  {t("wallet.noWalletsDetected")}
                 </p>
                 <p className="text-sm text-muted-foreground">
-                  Please install Phantom, Solflare, or Backpack.
+                  {t("wallet.installWallet")}
                 </p>
               </div>
             ) : (
@@ -368,7 +373,7 @@ export function WalletButton() {
                   return (
                     <Button
                       key={w.adapter.name}
-                      variant={isIOS && isMobile && !isInWalletBrowser ? "outline" : "outline"}
+                      variant="outline"
                       className="w-full justify-start gap-3 h-12"
                       onClick={() => handleSelectWallet(w.adapter.name)}
                     >
@@ -381,10 +386,10 @@ export function WalletButton() {
                       )}
                       <span>{w.adapter.name}</span>
                       {w.readyState === 'Installed' && (
-                        <span className="ml-auto text-xs text-green-500">Detected</span>
+                        <span className="ml-auto text-xs text-green-500">{t("wallet.detected")}</span>
                       )}
                       {isMWA && (
-                        <span className="ml-auto text-xs text-blue-500">Android</span>
+                        <span className="ml-auto text-xs text-blue-500">{t("wallet.android")}</span>
                       )}
                     </Button>
                   );
@@ -397,17 +402,14 @@ export function WalletButton() {
               <div className="text-xs text-amber-500 text-center mt-3 flex flex-col gap-1 bg-amber-500/10 p-3 rounded">
                 <p className="flex items-center justify-center gap-1">
                   <Smartphone size={12} />
-                  {isIOS 
-                    ? "iPhone: Use 'Open in wallet browser' for best results"
-                    : "Android: Try MWA first, or open in wallet browser"
-                  }
+                  {isIOS ? t("wallet.iphoneHint") : t("wallet.androidHint")}
                 </p>
               </div>
             )}
 
             {isMobile && isInWalletBrowser && (
               <p className="text-xs text-green-500 text-center mt-3 bg-green-500/10 p-2 rounded">
-                ✓ You're in a wallet browser - select your wallet above to connect
+                ✓ {t("wallet.inWalletBrowser")}
               </p>
             )}
           </div>
@@ -465,7 +467,7 @@ export function WalletButton() {
             </span>
           </div>
         ) : balanceLoading ? (
-          <span className="text-muted-foreground">Loading...</span>
+          <span className="text-muted-foreground">{t("common.loading")}</span>
         ) : balance !== null ? (
           <span className="text-primary font-medium">{balance.toFixed(4)} SOL</span>
         ) : (
