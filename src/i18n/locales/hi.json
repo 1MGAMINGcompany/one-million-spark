@@ -413,6 +413,7 @@
     "mobileBrowserLimitation": "मोबाइल ब्राउज़र सीधे वॉलेट से कनेक्ट नहीं कर सकते। इस पेज को अपने वॉलेट ऐप के ब्राउज़र में खोलें।",
     "desktopWalletRequired": "कृपया Solana वॉलेट एक्सटेंशन इंस्टॉल करें",
     "retryConnection": "पुनः प्रयास करें",
+    "tryTheseSteps": "ये चरण आज़माएं:",
     "wallets": {
       "phantom": "Phantom",
       "solflare": "Solflare",

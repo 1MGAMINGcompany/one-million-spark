@@ -433,6 +433,7 @@
     "mobileBrowserLimitation": "Mobile browsers can't connect directly to wallets. Open this page in your wallet app's browser.",
     "desktopWalletRequired": "Please install a Solana wallet extension",
     "retryConnection": "Retry Connection",
+    "tryTheseSteps": "Try these steps:",
     "balance": "Balance",
     "connected": "Connected",
     "noWalletsDetected": "No wallets detected",
