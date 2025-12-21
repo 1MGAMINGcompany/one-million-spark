@@ -199,10 +199,35 @@ export function WalletButton() {
     }
   };
 
-  const handleOpenFallbackPanel = (walletType: 'phantom' | 'solflare' | 'backpack') => {
+  const getWalletDeepLink = (walletType: 'phantom' | 'solflare' | 'backpack'): string => {
+    const currentUrl = window.location.href;
+    const encodedUrl = encodeURIComponent(currentUrl);
+    
+    switch (walletType) {
+      case 'phantom':
+        return `https://phantom.app/ul/browse/${encodedUrl}?ref=${encodeURIComponent('https://www.1mgaming.com')}`;
+      case 'solflare':
+        return `https://solflare.com/ul/v1/browse/${encodedUrl}?ref=${encodeURIComponent('https://www.1mgaming.com')}`;
+      case 'backpack':
+        return `https://backpack.app/ul/browse/${encodedUrl}`;
+      default:
+        return currentUrl;
+    }
+  };
+
+  const handleWalletDeepLink = (walletType: 'phantom' | 'solflare' | 'backpack') => {
     setSelectedWalletType(walletType);
     setDialogOpen(false);
-    setShowFallbackPanel(true);
+    
+    const deepLink = getWalletDeepLink(walletType);
+    
+    // Try to open the deep link
+    window.location.href = deepLink;
+    
+    // Show fallback panel after a short delay in case user comes back
+    setTimeout(() => {
+      setShowFallbackPanel(true);
+    }, 1500);
   };
 
   // SOLANA-ONLY: Filter to allowed wallets, block EVM/MetaMask
@@ -289,7 +314,7 @@ export function WalletButton() {
             {t("wallet.retry")}
           </Button>
           {isMobile && (
-            <Button size="sm" variant="default" onClick={() => handleOpenFallbackPanel('phantom')} className="gap-1">
+            <Button size="sm" variant="default" onClick={() => handleWalletDeepLink('phantom')} className="gap-1">
               <ExternalLink size={14} />
               {t("wallet.openInWalletBrowser")}
             </Button>
@@ -347,7 +372,7 @@ export function WalletButton() {
                 <Button
                   variant="outline"
                   className="w-full justify-start gap-3 h-12"
-                  onClick={() => handleOpenFallbackPanel('phantom')}
+                  onClick={() => handleWalletDeepLink('phantom')}
                 >
                   <img src="https://raw.githubusercontent.com/solana-labs/wallet-adapter/master/packages/wallets/icons/phantom.svg" alt="Phantom" className="w-6 h-6" />
                   <div className="flex flex-col items-start">
@@ -358,7 +383,7 @@ export function WalletButton() {
                 <Button
                   variant="outline"
                   className="w-full justify-start gap-3 h-12"
-                  onClick={() => handleOpenFallbackPanel('solflare')}
+                  onClick={() => handleWalletDeepLink('solflare')}
                 >
                   <img src="https://raw.githubusercontent.com/solana-labs/wallet-adapter/master/packages/wallets/icons/solflare.svg" alt="Solflare" className="w-6 h-6" />
                   <div className="flex flex-col items-start">
@@ -372,7 +397,7 @@ export function WalletButton() {
                 <Button
                   variant="outline"
                   className="w-full justify-start gap-3 h-12"
-                  onClick={() => handleOpenFallbackPanel('backpack')}
+                  onClick={() => handleWalletDeepLink('backpack')}
                 >
                   <img src="https://raw.githubusercontent.com/solana-labs/wallet-adapter/master/packages/wallets/icons/backpack.svg" alt="Backpack" className="w-6 h-6" />
                   <div className="flex flex-col items-start">
