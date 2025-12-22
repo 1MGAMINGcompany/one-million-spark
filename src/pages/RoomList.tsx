@@ -29,21 +29,18 @@ export default function RoomList() {
   const targetCluster = getSolanaCluster();
 
   // Initial fetch and auto-refresh every 30 seconds
+  // Rooms are fetched for ALL users (wallet connected or not)
   useEffect(() => {
-    if (isConnected && SOLANA_ENABLED) {
+    if (!SOLANA_ENABLED) return;
+    
+    fetchRooms();
+    
+    const interval = setInterval(() => {
       fetchRooms();
-      
-      const interval = setInterval(() => {
-        fetchRooms();
-      }, 30000);
-      
-      return () => clearInterval(interval);
-    }
-  }, [isConnected, fetchRooms]);
-
-  if (!isConnected) {
-    return <WalletRequired message="Connect your Solana wallet to browse game rooms." />;
-  }
+    }, 30000);
+    
+    return () => clearInterval(interval);
+  }, [fetchRooms]);
 
   // Feature flag disabled - show coming soon
   if (!SOLANA_ENABLED) {
@@ -108,7 +105,11 @@ export default function RoomList() {
           >
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
           </Button>
-          <Button onClick={() => navigate("/create-room")}>
+          <Button 
+            onClick={() => navigate("/create-room")}
+            disabled={!isConnected}
+            title={!isConnected ? "Connect wallet to create room" : undefined}
+          >
             <Plus className="h-4 w-4 mr-2" />
             {t("roomList.createRoom")}
           </Button>
@@ -162,9 +163,14 @@ export default function RoomList() {
               <p className="text-muted-foreground mb-6">
                 Be the first to create a room and start playing!
               </p>
-              <Button onClick={() => navigate("/create-room")} size="lg">
+              <Button 
+                onClick={() => navigate("/create-room")} 
+                size="lg"
+                disabled={!isConnected}
+                title={!isConnected ? "Connect wallet to create room" : undefined}
+              >
                 <Plus className="h-5 w-5 mr-2" />
-                Create the First Room
+                {isConnected ? "Create the First Room" : "Connect Wallet to Create Room"}
               </Button>
             </div>
           </CardContent>
@@ -233,7 +239,10 @@ export default function RoomList() {
 
       {/* Connected wallet info */}
       <p className="text-xs text-muted-foreground text-center mt-6">
-        Connected: {address?.slice(0, 8)}...{address?.slice(-4)}
+        {isConnected 
+          ? `Connected: ${address?.slice(0, 8)}...${address?.slice(-4)}`
+          : "Connect wallet to create or join rooms"
+        }
       </p>
     </div>
   );
