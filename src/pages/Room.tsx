@@ -141,8 +141,6 @@ export default function Room() {
       const data = Buffer.from(accountInfo.data);
       const parsed = parseRoomAccount(data);
       
-      console.log("[Room] parsed.entryFee (lamports) =", parsed?.entryFee);
-      console.log("[Room] computed SOL =", parsed ? Number(parsed.entryFee) / LAMPORTS_PER_SOL : "N/A");
       
       if (!parsed) {
         console.log("[Room] Failed to parse room account");
@@ -203,8 +201,6 @@ export default function Room() {
               const data = Buffer.from(accountInfo.data);
               const parsed = parseRoomAccount(data);
               if (parsed) {
-                console.log("[Room] (realtime) parsed.entryFee (lamports) =", parsed.entryFee);
-                console.log("[Room] (realtime) computed SOL =", Number(parsed.entryFee) / LAMPORTS_PER_SOL);
                 const roomAccount = {
                   roomId: parsed.roomId,
                   creator: parsed.creator,
@@ -510,9 +506,6 @@ export default function Room() {
                   </div>
                 </div>
                 <p className="text-xs text-muted-foreground">5% platform fee deducted from winnings</p>
-                <p className="text-xs text-amber-400/70 font-mono mt-2">
-                  [Debug] Entry: {stakeLamports.toString()} lamports | Current deposited: {formatSol(currentPotLamports)} SOL
-                </p>
               </div>
 
               {/* Players List */}
