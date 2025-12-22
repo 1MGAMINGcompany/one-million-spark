@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
 
 import { useConnection, useWallet as useSolanaWallet } from "@solana/wallet-adapter-react";
-import { getAnchorProvider, getProgram } from "@/lib/anchor-program";
+import { parseRoomAccount } from "@/lib/solana-program";
 import { playAgain } from "@/lib/play-again";
 import { joinRoomByPda } from "@/lib/join-room";
 import { useWallet } from "@/hooks/useWallet";
@@ -114,7 +114,7 @@ export default function Room() {
 
       const roomPda = new PublicKey(roomPdaParam);
       
-      // Fetch directly by PDA - no RoomList logic
+      // Fetch directly by PDA using web3.js (no Anchor)
       const accountInfo = await connection.getAccountInfo(roomPda);
       
       if (!accountInfo) {
@@ -123,13 +123,33 @@ export default function Room() {
         return;
       }
       
-      // Use Anchor to deserialize the room account
-      const provider = getAnchorProvider(connection, wallet);
-      const program = getProgram(provider);
-      const roomAccount = await (program.account as any).room.fetch(roomPda);
+      // Parse using parseRoomAccount (no Anchor needed)
+      const data = Buffer.from(accountInfo.data);
+      const parsed = parseRoomAccount(data);
+      
+      if (!parsed) {
+        console.log("[Room] Failed to parse room account");
+        setError("Failed to parse room data");
+        return;
+      }
+      
+      // Convert to room-like object with PublicKey objects for compatibility
+      const roomAccount = {
+        roomId: parsed.roomId,
+        creator: parsed.creator,
+        gameType: parsed.gameType,
+        maxPlayers: parsed.maxPlayers,
+        playerCount: parsed.playerCount,
+        status: parsed.status,
+        stakeLamports: parsed.entryFee,
+        players: parsed.players,
+        winner: parsed.winner,
+        lastCreatorPing: parsed.createdAt,
+        isPrivate: parsed.isPrivate,
+      };
       
       console.log("[Room] Room loaded:", {
-        roomId: roomAccount.roomId?.toString(),
+        roomId: roomAccount.roomId,
         status: roomAccount.status,
         creator: roomAccount.creator?.toBase58()?.slice(0, 8),
       });
@@ -160,15 +180,29 @@ export default function Room() {
 
         subId = connection.onAccountChange(
           roomPda,
-          async () => {
-            // Refetch latest room when it changes
+          async (accountInfo) => {
+            // Parse room directly from account change data (no Anchor)
             try {
-              const provider = getAnchorProvider(connection, wallet);
-              const program = getProgram(provider);
-              const latest = await (program.account as any).room.fetch(roomPda);
-              setRoom(latest);
+              const data = Buffer.from(accountInfo.data);
+              const parsed = parseRoomAccount(data);
+              if (parsed) {
+                const roomAccount = {
+                  roomId: parsed.roomId,
+                  creator: parsed.creator,
+                  gameType: parsed.gameType,
+                  maxPlayers: parsed.maxPlayers,
+                  playerCount: parsed.playerCount,
+                  status: parsed.status,
+                  stakeLamports: parsed.entryFee,
+                  players: parsed.players,
+                  winner: parsed.winner,
+                  lastCreatorPing: parsed.createdAt,
+                  isPrivate: parsed.isPrivate,
+                };
+                setRoom(roomAccount);
+              }
             } catch (e) {
-              console.error("Failed to refetch room on change", e);
+              console.error("Failed to parse room on change", e);
             }
           },
           "confirmed"
