@@ -31,11 +31,16 @@ export default function RoomList() {
   // Initial fetch and auto-refresh every 30 seconds
   // Rooms are fetched for ALL users (wallet connected or not)
   useEffect(() => {
-    if (!SOLANA_ENABLED) return;
+    if (!SOLANA_ENABLED) {
+      console.log("[RoomList] SOLANA_ENABLED is false, skipping fetch");
+      return;
+    }
     
+    console.log("[RoomList] useEffect triggered, calling fetchRooms()");
     fetchRooms();
     
     const interval = setInterval(() => {
+      console.log("[RoomList] Auto-refresh interval, calling fetchRooms()");
       fetchRooms();
     }, 30000);
     

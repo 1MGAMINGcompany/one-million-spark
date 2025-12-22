@@ -153,14 +153,21 @@ export function useSolanaRooms() {
 
   // Fetch all open public rooms
   const fetchRooms = useCallback(async () => {
+    console.log("[RoomList] fetchRooms() called", {
+      rpc: connection.rpcEndpoint,
+      timestamp: new Date().toISOString(),
+    });
+    
     setLoading(true);
     setError(null);
     
     try {
+      console.log("[RoomList] Calling fetchOpenPublicRooms...");
       const fetchedRooms = await fetchOpenPublicRooms(connection);
+      console.log("[RoomList] fetchOpenPublicRooms returned", fetchedRooms.length, "rooms");
       setRooms(fetchedRooms);
     } catch (err) {
-      console.error("Error fetching rooms:", err);
+      console.error("[RoomList] Error fetching rooms:", err);
       setError("Failed to fetch rooms");
     } finally {
       setLoading(false);
