@@ -460,11 +460,23 @@ export default function Room() {
                     Your Room
                   </span>
                 )}
-                {/* Creator presence indicator */}
-                {status === STATUS_OPEN && !isAbandoned && (
-                  <span className="px-3 py-1 rounded-full text-sm font-medium bg-green-500/10 text-green-400 flex items-center gap-1">
+                {/* Creator presence indicator with countdown */}
+                {status === STATUS_OPEN && !isAbandoned && !room?.isPrivate && (
+                  <span className="px-3 py-1 rounded-full text-sm font-medium bg-green-500/10 text-green-400 flex items-center gap-2">
                     <Radio className="h-3 w-3 animate-pulse" />
-                    Creator Online
+                    <span>Creator Online</span>
+                    {lastCreatorPing > 0 && (
+                      <span className="flex items-center gap-1 text-xs opacity-80">
+                        <Clock className="h-3 w-3" />
+                        {Math.max(0, CREATOR_TIMEOUT_SECS - secondsSinceLastPing)}s
+                      </span>
+                    )}
+                  </span>
+                )}
+                {status === STATUS_OPEN && room?.isPrivate && (
+                  <span className="px-3 py-1 rounded-full text-sm font-medium bg-blue-500/10 text-blue-400 flex items-center gap-1">
+                    <Clock className="h-3 w-3" />
+                    Private (no expiry)
                   </span>
                 )}
               </div>
