@@ -14,6 +14,16 @@ import { Construction, ArrowLeft, Loader2, Users, Clock, Coins, XCircle, AlertTr
 import { WalletGateModal } from "@/components/WalletGateModal";
 import { TxDebugPanel } from "@/components/TxDebugPanel";
 import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const STATUS_OPEN = 1;
 const STATUS_STARTED = 2;
@@ -64,6 +74,7 @@ export default function Room() {
   const wallet = useSolanaWallet();
   const { activeRoom, fetchCreatorActiveRoom, cancelRoom, pingRoom, cancelAbandonedRoom, txPending: cancelPending, txDebugInfo, clearTxDebug } = useSolanaRooms();
   const [showWalletGate, setShowWalletGate] = useState(false);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
 
   const [room, setRoom] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -623,7 +634,7 @@ export default function Room() {
             {canCancel && (
               <div className="flex justify-center pt-2 border-t border-border/30">
                 <Button 
-                  onClick={onCancelRoom}
+                  onClick={() => setShowCancelConfirm(true)}
                   variant="destructive"
                   size="sm"
                   disabled={cancelPending || txPending}
@@ -689,6 +700,27 @@ export default function Room() {
         title="Connect a Solana Wallet to Play"
         description="Connect your wallet to join this room and compete for SOL prizes."
       />
+
+      {/* Cancel Room Confirmation Modal */}
+      <AlertDialog open={showCancelConfirm} onOpenChange={setShowCancelConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel Room?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Cancel room and refund all players? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep Room</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={onCancelRoom}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Yes, Cancel Room
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       
       {/* Transaction Debug Panel - shown on tx failure */}
       <TxDebugPanel debugInfo={txDebugInfo} onClose={clearTxDebug} />

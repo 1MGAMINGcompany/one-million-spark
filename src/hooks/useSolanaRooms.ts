@@ -22,8 +22,8 @@ import {
   fetchNextRoomIdForCreator,
   buildCreateRoomIx,
   buildJoinRoomIx,
-  buildCancelRoomTx,
-  buildPingRoomTx,
+  buildCancelRoomIx,
+  buildPingRoomIx,
   buildCancelAbandonedRoomTx,
 } from "@/lib/solana-program";
 
@@ -370,7 +370,7 @@ export function useSolanaRooms() {
     }
   }, [publicKey, connected, connection, sendVersionedTx, toast, fetchRooms, fetchCreatorActiveRoom]);
 
-  // Cancel room
+  // Cancel room (VersionedTransaction - MWA compatible)
   const cancelRoom = useCallback(async (roomId: number): Promise<boolean> => {
     if (!publicKey || !connected) {
       toast({
@@ -384,19 +384,14 @@ export function useSolanaRooms() {
     setTxPending(true);
     setTxDebugInfo(null);
     
-    let tx: Transaction | null = null;
-    
     try {
-      // Build transaction
-      tx = await buildCancelRoomTx(publicKey, roomId);
+      // Build instruction (for VersionedTransaction - MWA compatible)
+      const ix = buildCancelRoomIx(publicKey, roomId);
       
-      // Set feePayer and recentBlockhash BEFORE signing
-      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
-      tx.feePayer = publicKey;
-      tx.recentBlockhash = blockhash;
+      console.log("[CancelRoom] Building VersionedTransaction:", { roomId });
       
-      // Send using best available method
-      const signature = await sendTx(tx);
+      // Send as VersionedTransaction
+      const { signature, blockhash, lastValidBlockHeight } = await sendVersionedTx([ix]);
       
       toast({
         title: "Transaction sent",
@@ -420,12 +415,17 @@ export function useSolanaRooms() {
     } catch (err: any) {
       console.error("Cancel room error:", err);
       
-      // Build and set debug info with method info
+      // Build debug info for versioned tx
       setTxDebugInfo({
-        ...buildTxDebugInfo(tx, publicKey?.toBase58() || null, err),
+        publicKey: publicKey?.toBase58() || null,
+        feePayer: publicKey?.toBase58() || null,
+        recentBlockhash: null,
+        signatures: [],
+        errorMessage: err instanceof Error ? err.message : String(err),
         methodUsed: hasAdapterSendTx ? 'adapter.sendTransaction' : 'useWallet.sendTransaction',
         adapterName,
         hasAdapterSendTx,
+        txType: 'versioned',
       });
       
       toast({
@@ -437,24 +437,22 @@ export function useSolanaRooms() {
     } finally {
       setTxPending(false);
     }
-  }, [publicKey, connected, connection, sendTx, toast, fetchRooms]);
+  }, [publicKey, connected, connection, sendVersionedTx, toast, fetchRooms, hasAdapterSendTx, adapterName]);
 
-  // Ping room (creator presence heartbeat)
+  // Ping room (creator presence heartbeat) - VersionedTransaction for MWA
   const pingRoom = useCallback(async (roomId: number): Promise<boolean> => {
     if (!publicKey || !connected) {
       return false;
     }
-
-    let tx: Transaction | null = null;
     
     try {
-      tx = await buildPingRoomTx(publicKey, roomId);
+      // Build instruction (for VersionedTransaction - MWA compatible)
+      const ix = buildPingRoomIx(publicKey, roomId);
       
-      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
-      tx.feePayer = publicKey;
-      tx.recentBlockhash = blockhash;
+      console.log("[PingRoom] Building VersionedTransaction:", { roomId });
       
-      const signature = await sendTx(tx);
+      // Send as VersionedTransaction
+      const { signature, blockhash, lastValidBlockHeight } = await sendVersionedTx([ix]);
       
       await connection.confirmTransaction({
         signature,
@@ -468,7 +466,7 @@ export function useSolanaRooms() {
       console.error("Ping room error:", err);
       return false;
     }
-  }, [publicKey, connected, connection, sendTx]);
+  }, [publicKey, connected, connection, sendVersionedTx]);
 
   // Cancel abandoned room (anyone can call if creator timed out)
   const cancelAbandonedRoom = useCallback(async (roomId: number, roomCreator: string, players: PublicKey[]): Promise<boolean> => {
