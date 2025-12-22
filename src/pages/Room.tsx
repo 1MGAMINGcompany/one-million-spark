@@ -46,14 +46,14 @@ function isDefaultPubkey(p: any) {
   }
 }
 
-function formatSol(lamports: bigint | number | string): string {
-  const value = typeof lamports === "bigint" ? lamports : BigInt(lamports.toString());
-  const solValue = Number(value) / LAMPORTS_PER_SOL;
-  // For small bets, show up to 4 decimals and trim trailing zeros
-  if (solValue > 0 && solValue < 0.01) {
-    return solValue.toFixed(4).replace(/\.?0+$/, "");
-  }
-  return solValue.toFixed(2);
+function formatSol(lamports: bigint | number | string, maxDecimals = 4): string {
+  const v = typeof lamports === "bigint" ? lamports : BigInt(lamports.toString());
+  const sol = Number(v) / LAMPORTS_PER_SOL;
+  // Show up to maxDecimals, but trim trailing zeros
+  return sol
+    .toFixed(maxDecimals)
+    .replace(/(\.\d*?[1-9])0+$/, "$1")
+    .replace(/\.0+$/, "");
 }
 
 export default function Room() {
@@ -499,9 +499,10 @@ export default function Room() {
                     <p className="text-muted-foreground">Entry Fee</p>
                     <p className="font-semibold">{stakeSOL} SOL</p>
                   </div>
-                  <div>
-                    <p className="text-muted-foreground">Total Pot</p>
+                <div>
+                    <p className="text-muted-foreground">Pot (when full)</p>
                     <p className="font-semibold">{formatSol(fullPotLamports)} SOL</p>
+                    <p className="text-xs text-muted-foreground/70">Current deposited: {formatSol(currentPotLamports)} SOL</p>
                   </div>
                   <div>
                     <p className="text-muted-foreground">Winner Gets</p>
