@@ -104,9 +104,18 @@ export default function Room() {
   // Stake calculations
   const stakeLamports = room?.stakeLamports ? BigInt(room.stakeLamports.toString()) : 0n;
   const stakeSOL = formatSol(stakeLamports);
+  const playerCount = room?.playerCount ?? 0;
   const maxPlayers = room?.maxPlayers ?? 2;
-  const totalPot = stakeLamports * BigInt(maxPlayers);
-  const winnerPayout = (totalPot * 95n) / 100n; // 5% platform fee
+  
+  // Full pot = entry fee × maxPlayers (what the winner will get from)
+  const fullPotLamports = stakeLamports * BigInt(maxPlayers);
+  // Current deposited = entry fee × current players (for debug)
+  const currentPotLamports = stakeLamports * BigInt(playerCount);
+  
+  // Fee calc using basis points (5% = 500 BPS)
+  const FEE_BPS = 500n;
+  const BPS = 10_000n;
+  const winnerGetsFullLamports = (fullPotLamports * (BPS - FEE_BPS)) / BPS;
 
   const fetchRoom = async () => {
     if (!roomPdaParam) return;
@@ -492,16 +501,16 @@ export default function Room() {
                   </div>
                   <div>
                     <p className="text-muted-foreground">Total Pot</p>
-                    <p className="font-semibold">{formatSol(totalPot)} SOL</p>
+                    <p className="font-semibold">{formatSol(fullPotLamports)} SOL</p>
                   </div>
                   <div>
                     <p className="text-muted-foreground">Winner Gets</p>
-                    <p className="font-semibold text-green-400">{formatSol(winnerPayout)} SOL</p>
+                    <p className="font-semibold text-green-400">{formatSol(winnerGetsFullLamports)} SOL</p>
                   </div>
                 </div>
                 <p className="text-xs text-muted-foreground">5% platform fee deducted from winnings</p>
                 <p className="text-xs text-amber-400/70 font-mono mt-2">
-                  [Debug] {stakeLamports.toString()} lamports ({Number(stakeLamports) / LAMPORTS_PER_SOL} SOL)
+                  [Debug] Entry: {stakeLamports.toString()} lamports | Current deposited: {formatSol(currentPotLamports)} SOL
                 </p>
               </div>
 
