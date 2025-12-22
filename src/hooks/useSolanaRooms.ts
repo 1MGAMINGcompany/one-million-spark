@@ -388,10 +388,12 @@ export function useSolanaRooms() {
       // Build instruction (for VersionedTransaction - MWA compatible)
       const ix = buildCancelRoomIx(publicKey, roomId);
       
-      console.log("[CancelRoom] Building VersionedTransaction:", { roomId });
+      console.log("[CancelRoom] sending v0 tx:", { roomId });
       
       // Send as VersionedTransaction
       const { signature, blockhash, lastValidBlockHeight } = await sendVersionedTx([ix]);
+      
+      console.log("[CancelRoom] signature:", signature);
       
       toast({
         title: "Transaction sent",
@@ -449,10 +451,12 @@ export function useSolanaRooms() {
       // Build instruction (for VersionedTransaction - MWA compatible)
       const ix = buildPingRoomIx(publicKey, roomId);
       
-      console.log("[PingRoom] Building VersionedTransaction:", { roomId });
+      console.log("[PingRoom] sending v0 tx:", { roomId });
       
       // Send as VersionedTransaction
       const { signature, blockhash, lastValidBlockHeight } = await sendVersionedTx([ix]);
+      
+      console.log("[PingRoom] signature:", signature);
       
       await connection.confirmTransaction({
         signature,
