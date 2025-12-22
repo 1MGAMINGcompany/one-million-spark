@@ -370,14 +370,18 @@ export default function Room() {
     }
   };
 
-  const onCancelRoom = async () => {
-    if (!room?.roomId) return;
+  const handleCancelRoomClick = async () => {
+    if (!room || !isCreator) return;
     
     const roomId = typeof room.roomId === 'object' ? room.roomId.toNumber() : room.roomId;
-    const success = await cancelRoom(roomId);
     
-    if (success) {
-      navigate("/room-list");
+    try {
+      const success = await cancelRoom(roomId);
+      if (success) {
+        navigate("/room-list");
+      }
+    } catch (e) {
+      console.error("Cancel failed", e);
     }
   };
 
@@ -740,7 +744,7 @@ export default function Room() {
           <AlertDialogFooter>
             <AlertDialogCancel>Keep Room</AlertDialogCancel>
             <AlertDialogAction 
-              onClick={onCancelRoom}
+              onClick={handleCancelRoomClick}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Yes, Cancel Room
