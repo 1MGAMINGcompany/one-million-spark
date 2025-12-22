@@ -52,7 +52,7 @@ function formatSol(lamports: bigint | number | string): string {
 }
 
 export default function Room() {
-  const { roomAddress } = useParams<{ roomAddress: string }>();
+  const { roomPda: roomPdaParam } = useParams<{ roomPda: string }>();
   const navigate = useNavigate();
   const { isConnected, address } = useWallet();
   const { connection } = useConnection();
@@ -104,20 +104,39 @@ export default function Room() {
   const winnerPayout = (totalPot * 95n) / 100n; // 5% platform fee
 
   const fetchRoom = async () => {
-    if (!roomAddress) return;
+    if (!roomPdaParam) return;
+    
+    console.log("[Room] Fetching room by PDA:", roomPdaParam);
+    
     try {
       setLoading(true);
       setError(null);
 
+      const roomPda = new PublicKey(roomPdaParam);
+      
+      // Fetch directly by PDA - no RoomList logic
+      const accountInfo = await connection.getAccountInfo(roomPda);
+      
+      if (!accountInfo) {
+        console.log("[Room] Room not found - accountInfo is null");
+        setRoom(null);
+        return;
+      }
+      
+      // Use Anchor to deserialize the room account
       const provider = getAnchorProvider(connection, wallet);
       const program = getProgram(provider);
-
-      const roomPda = new PublicKey(roomAddress);
       const roomAccount = await (program.account as any).room.fetch(roomPda);
+      
+      console.log("[Room] Room loaded:", {
+        roomId: roomAccount.roomId?.toString(),
+        status: roomAccount.status,
+        creator: roomAccount.creator?.toBase58()?.slice(0, 8),
+      });
 
       setRoom(roomAccount);
     } catch (e: any) {
-      console.error(e);
+      console.error("[Room] Failed to fetch room:", e);
       setError(e?.message ?? "Failed to load room");
     } finally {
       setLoading(false);
@@ -125,18 +144,19 @@ export default function Room() {
   };
 
   useEffect(() => {
+    console.log("[Room] useEffect triggered, roomPda:", roomPdaParam);
     fetchRoom();
-  }, [roomAddress, connection, wallet]);
+  }, [roomPdaParam, connection, wallet]);
 
   // Real-time subscription to room changes
   useEffect(() => {
-    if (!roomAddress) return;
+    if (!roomPdaParam) return;
 
     let subId: number | null = null;
 
     (async () => {
       try {
-        const roomPda = new PublicKey(roomAddress);
+        const roomPda = new PublicKey(roomPdaParam);
 
         subId = connection.onAccountChange(
           roomPda,
@@ -163,7 +183,7 @@ export default function Room() {
         connection.removeAccountChangeListener(subId);
       }
     };
-  }, [roomAddress, connection, wallet]);
+  }, [roomPdaParam, connection, wallet]);
 
   // Fetch user's active room on mount
   useEffect(() => {
@@ -219,7 +239,7 @@ export default function Room() {
   const hasBlockingActiveRoom = activeRoom && activeRoom.roomId !== room?.roomId?.toNumber?.();
 
   const onJoinRoom = async () => {
-    if (!roomAddress) return;
+    if (!roomPdaParam) return;
 
     if (!isConnected) {
       setShowWalletGate(true);
@@ -234,7 +254,7 @@ export default function Room() {
 
     try {
       setTxPending(true);
-      const roomPda = new PublicKey(roomAddress);
+      const roomPda = new PublicKey(roomPdaParam);
 
       const res = await joinRoomByPda({
         connection,
@@ -323,7 +343,7 @@ export default function Room() {
         <CardHeader>
           <CardTitle className="text-2xl font-cinzel flex items-center gap-3">
             <Construction className="h-6 w-6 text-primary" />
-            Room {roomAddress ? `${roomAddress.slice(0, 8)}...` : ""}
+            Room {roomPdaParam ? `${roomPdaParam.slice(0, 8)}...` : ""}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">

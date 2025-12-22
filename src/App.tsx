@@ -57,7 +57,7 @@ const App = () => (
                     <Route path="/add-funds" element={<AddFunds />} />
                     <Route path="/create-room" element={<CreateRoom />} />
                     <Route path="/room-list" element={<RoomList />} />
-                    <Route path="/room/:roomId" element={<Room />} />
+                    <Route path="/room/:roomPda" element={<Room />} />
                     <Route path="/join" element={<JoinRoom />} />
                     <Route path="/game/chess/:roomId" element={<ChessGame />} />
                     <Route path="/game/dominos/:roomId" element={<DominosGame />} />
