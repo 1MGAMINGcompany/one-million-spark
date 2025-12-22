@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
 
 import { useConnection, useWallet as useSolanaWallet } from "@solana/wallet-adapter-react";
-import { parseRoomAccount } from "@/lib/solana-program";
+import { parseRoomAccount, getVaultPDA } from "@/lib/solana-program";
 import { playAgain } from "@/lib/play-again";
 import { joinRoomByPda } from "@/lib/join-room";
 import { useWallet } from "@/hooks/useWallet";
@@ -70,6 +70,8 @@ export default function Room() {
   const [error, setError] = useState<string | null>(null);
   const [txPending, setTxPending] = useState(false);
   const [currentTime, setCurrentTime] = useState(Date.now());
+  const [vaultLamports, setVaultLamports] = useState<bigint>(0n);
+  const [vaultPdaStr, setVaultPdaStr] = useState<string>("");
   const pingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const status = room?.status ?? 0;
@@ -170,6 +172,16 @@ export default function Room() {
       });
 
       setRoom(roomAccount);
+
+      // Fetch vault balance
+      try {
+        const [vaultPda] = getVaultPDA(roomPda);
+        setVaultPdaStr(vaultPda.toBase58());
+        const vaultBal = await connection.getBalance(vaultPda, "confirmed");
+        setVaultLamports(BigInt(vaultBal));
+      } catch (vaultErr) {
+        console.error("[Room] Failed to fetch vault balance:", vaultErr);
+      }
     } catch (e: any) {
       console.error("[Room] Failed to fetch room:", e);
       setError(e?.message ?? "Failed to load room");
@@ -201,6 +213,7 @@ export default function Room() {
               const data = Buffer.from(accountInfo.data);
               const parsed = parseRoomAccount(data);
               if (parsed) {
+              const roomPda = new PublicKey(roomPdaParam);
                 const roomAccount = {
                   roomId: parsed.roomId,
                   creator: parsed.creator,
@@ -215,6 +228,15 @@ export default function Room() {
                   isPrivate: parsed.isPrivate,
                 };
                 setRoom(roomAccount);
+
+                // Refresh vault balance
+                try {
+                  const [vaultPda] = getVaultPDA(roomPda);
+                  const vaultBal = await connection.getBalance(vaultPda, "confirmed");
+                  setVaultLamports(BigInt(vaultBal));
+                } catch (vaultErr) {
+                  console.error("[Room] Failed to refresh vault balance:", vaultErr);
+                }
               }
             } catch (e) {
               console.error("Failed to parse room on change", e);
@@ -510,7 +532,8 @@ export default function Room() {
                 <div>
                     <p className="text-muted-foreground">Pot (when full)</p>
                     <p className="font-semibold">{formatSol(fullPotLamports)} SOL</p>
-                    <p className="text-xs text-muted-foreground/70">Current deposited: {formatSol(currentPotLamports)} SOL</p>
+                    <p className="text-xs text-muted-foreground/70">Current deposited: {formatSol(vaultLamports)} SOL</p>
+                    <p className="text-xs text-muted-foreground/50">[{vaultPdaStr.slice(0, 6)}...{vaultPdaStr.slice(-4)}]</p>
                   </div>
                   <div>
                     <p className="text-muted-foreground">Winner Gets</p>
