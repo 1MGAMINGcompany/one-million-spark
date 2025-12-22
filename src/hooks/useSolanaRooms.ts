@@ -285,15 +285,15 @@ export function useSolanaRooms() {
     }
   }, [publicKey, connected, connection, sendVersionedTx, toast, fetchRooms, fetchCreatorActiveRoom]);
 
-  // Join room
-  const joinRoom = useCallback(async (roomId: number, roomCreator: string): Promise<boolean> => {
+  // Join room - returns structured TxResult
+  const joinRoom = useCallback(async (roomId: number, roomCreator: string): Promise<{ ok: boolean; signature?: string; reason?: string }> => {
     if (!publicKey || !connected) {
       toast({
         title: "Wallet not connected",
         description: "Please connect your wallet first",
         variant: "destructive",
       });
-      return false;
+      return { ok: false, reason: "WALLET_NOT_CONNECTED" };
     }
 
     // Check for existing active room
@@ -304,7 +304,7 @@ export function useSolanaRooms() {
         description: "Cancel your existing room before joining another",
         variant: "destructive",
       });
-      return false;
+      return { ok: false, reason: "ACTIVE_ROOM_EXISTS" };
     }
 
     setTxPending(true);
@@ -342,7 +342,7 @@ export function useSolanaRooms() {
       
       // Refresh rooms and active room state
       await Promise.all([fetchRooms(), fetchCreatorActiveRoom()]);
-      return true;
+      return { ok: true, signature };
     } catch (err: any) {
       console.error("Join room error:", err);
       
@@ -359,26 +359,37 @@ export function useSolanaRooms() {
         txType: 'versioned',
       });
       
+      // Check for user rejection / Phantom block
+      const errorMsg = err?.message?.toLowerCase() || "";
+      if (errorMsg.includes("reject") || errorMsg.includes("cancel") || errorMsg.includes("user denied") || errorMsg.includes("blocked")) {
+        toast({
+          title: "Transaction cancelled",
+          description: "Phantom blocked or you rejected the request. No changes were made. Please refresh and try again.",
+          variant: "destructive",
+        });
+        return { ok: false, reason: "PHANTOM_BLOCKED_OR_REJECTED" };
+      }
+      
       toast({
         title: "Failed to join room",
         description: err.message || "Transaction failed",
         variant: "destructive",
       });
-      return false;
+      return { ok: false, reason: "ERROR" };
     } finally {
       setTxPending(false);
     }
-  }, [publicKey, connected, connection, sendVersionedTx, toast, fetchRooms, fetchCreatorActiveRoom]);
+  }, [publicKey, connected, connection, sendVersionedTx, toast, fetchRooms, fetchCreatorActiveRoom, hasAdapterSendTx, adapterName]);
 
-  // Cancel room (VersionedTransaction - MWA compatible)
-  const cancelRoom = useCallback(async (roomId: number): Promise<boolean> => {
+  // Cancel room (VersionedTransaction - MWA compatible) - returns structured TxResult
+  const cancelRoom = useCallback(async (roomId: number): Promise<{ ok: boolean; signature?: string; reason?: string }> => {
     if (!publicKey || !connected) {
       toast({
         title: "Wallet not connected",
         description: "Please connect your wallet first",
         variant: "destructive",
       });
-      return false;
+      return { ok: false, reason: "WALLET_NOT_CONNECTED" };
     }
 
     setTxPending(true);
@@ -413,7 +424,7 @@ export function useSolanaRooms() {
       
       setActiveRoom(null);
       await fetchRooms();
-      return true;
+      return { ok: true, signature };
     } catch (err: any) {
       console.error("Cancel room error:", err);
       
@@ -430,12 +441,23 @@ export function useSolanaRooms() {
         txType: 'versioned',
       });
       
+      // Check for user rejection / Phantom block
+      const errorMsg = err?.message?.toLowerCase() || "";
+      if (errorMsg.includes("reject") || errorMsg.includes("cancel") || errorMsg.includes("user denied") || errorMsg.includes("blocked")) {
+        toast({
+          title: "Transaction cancelled",
+          description: "Phantom blocked or you rejected the request. No changes were made. Please refresh and try again.",
+          variant: "destructive",
+        });
+        return { ok: false, reason: "PHANTOM_BLOCKED_OR_REJECTED" };
+      }
+      
       toast({
         title: "Failed to cancel room",
         description: err.message || "Transaction failed",
         variant: "destructive",
       });
-      return false;
+      return { ok: false, reason: "ERROR" };
     } finally {
       setTxPending(false);
     }
@@ -443,9 +465,9 @@ export function useSolanaRooms() {
 
   // Ping room (creator presence heartbeat) - VersionedTransaction for MWA
   // triggeredBy: 'userClick' = explicit button press, 'interval' = auto-ping after presence enabled
-  const pingRoom = useCallback(async (roomId: number, triggeredBy: 'userClick' | 'interval'): Promise<boolean> => {
+  const pingRoom = useCallback(async (roomId: number, triggeredBy: 'userClick' | 'interval'): Promise<{ ok: boolean; signature?: string; reason?: string }> => {
     if (!publicKey || !connected) {
-      return false;
+      return { ok: false, reason: "WALLET_NOT_CONNECTED" };
     }
     
     try {
@@ -466,10 +488,17 @@ export function useSolanaRooms() {
       }, 'confirmed');
       
       console.log("[PingRoom] confirmed, triggeredBy:", triggeredBy);
-      return true;
+      return { ok: true, signature };
     } catch (err: any) {
       console.error("[PingRoom] error:", err, "triggeredBy:", triggeredBy);
-      return false;
+      
+      // Check for user rejection / Phantom block
+      const errorMsg = err?.message?.toLowerCase() || "";
+      if (errorMsg.includes("reject") || errorMsg.includes("cancel") || errorMsg.includes("user denied") || errorMsg.includes("blocked")) {
+        return { ok: false, reason: "PHANTOM_BLOCKED_OR_REJECTED" };
+      }
+      
+      return { ok: false, reason: "ERROR" };
     }
   }, [publicKey, connected, connection, sendVersionedTx]);
 

@@ -6,6 +6,7 @@ import { SolanaProvider } from "./components/SolanaProvider";
 import { LoadingProvider } from "./contexts/LoadingContext";
 import { AudioProvider } from "./contexts/AudioContext";
 import { SoundProvider } from "./contexts/SoundContext";
+import { TxLockProvider } from "./contexts/TxLockContext";
 import { GlobalBackgroundMusic } from "./components/GlobalBackgroundMusic";
 import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
@@ -38,16 +39,17 @@ import DebugJoinRoom from "./pages/DebugJoinRoom";
 
 const App = () => (
   <SolanaProvider>
-    <LoadingProvider>
-      <AudioProvider>
-        <SoundProvider>
-          <TooltipProvider>
-            <Toaster />
-            <Sonner />
-            <PyramidLoader />
-            <GoldenParticles />
-            <AgeConfirmation />
-            <BrowserRouter>
+    <TxLockProvider>
+      <LoadingProvider>
+        <AudioProvider>
+          <SoundProvider>
+            <TooltipProvider>
+              <Toaster />
+              <Sonner />
+              <PyramidLoader />
+              <GoldenParticles />
+              <AgeConfirmation />
+              <BrowserRouter>
               <GlobalBackgroundMusic />
               <div className="flex flex-col min-h-screen">
                 <Navbar />
@@ -80,11 +82,12 @@ const App = () => (
                 </main>
                 <Footer />
               </div>
-            </BrowserRouter>
-          </TooltipProvider>
-        </SoundProvider>
-      </AudioProvider>
-    </LoadingProvider>
+              </BrowserRouter>
+            </TooltipProvider>
+          </SoundProvider>
+        </AudioProvider>
+      </LoadingProvider>
+    </TxLockProvider>
   </SolanaProvider>
 );
 

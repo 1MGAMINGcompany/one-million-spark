@@ -4,10 +4,9 @@ import { PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
 
 import { useConnection, useWallet as useSolanaWallet } from "@solana/wallet-adapter-react";
 import { parseRoomAccount, getVaultPDA } from "@/lib/solana-program";
-import { playAgain } from "@/lib/play-again";
-import { joinRoomByPda } from "@/lib/join-room";
 import { useWallet } from "@/hooks/useWallet";
 import { useSolanaRooms } from "@/hooks/useSolanaRooms";
+import { useTxLock } from "@/contexts/TxLockContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Construction, ArrowLeft, Loader2, Users, Clock, Coins, XCircle, AlertTriangle, Radio } from "lucide-react";
@@ -72,20 +71,19 @@ export default function Room() {
   const { isConnected, address } = useWallet();
   const { connection } = useConnection();
   const wallet = useSolanaWallet();
-  const { activeRoom, fetchCreatorActiveRoom, cancelRoom, pingRoom, cancelAbandonedRoom, txPending: cancelPending, txDebugInfo, clearTxDebug } = useSolanaRooms();
+  const { activeRoom, fetchCreatorActiveRoom, joinRoom, cancelRoom, pingRoom, cancelAbandonedRoom, createRoom, txPending: hookTxPending, txDebugInfo, clearTxDebug } = useSolanaRooms();
+  const { isTxInFlight, withTxLock } = useTxLock();
   const [showWalletGate, setShowWalletGate] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
 
   const [room, setRoom] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [txPending, setTxPending] = useState(false);
   const [currentTime, setCurrentTime] = useState(Date.now());
   const [vaultLamports, setVaultLamports] = useState<bigint>(0n);
   const [vaultPdaStr, setVaultPdaStr] = useState<string>("");
   const pingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const [presenceEnabled, setPresenceEnabled] = useState(false);
-  const [isCancelling, setIsCancelling] = useState(false);
 
   const status = room?.status ?? 0;
   const statusName = STATUS_NAMES[status] || "Unknown";
@@ -286,21 +284,24 @@ export default function Room() {
 
   // Handler for manual presence enable (explicit user action)
   const handleEnablePresence = async () => {
-    if (!room) return;
+    if (!room || isTxInFlight) return;
     const roomId = typeof room.roomId === 'object' ? room.roomId.toNumber() : room.roomId;
     
     if (!presenceEnabled) {
-      // First click: ping immediately with explicit user action
-      try {
-        await pingRoom(roomId, 'userClick');
-      } catch (e) {
-        console.error("Failed to ping room:", e);
+      // First click: ping immediately with explicit user action, wrapped in tx lock
+      const result = await withTxLock(async () => {
+        return await pingRoom(roomId, 'userClick');
+      });
+      if (!result?.ok) {
+        toast.error("Failed to enable presence. Please try again.");
+        return;
       }
     }
     setPresenceEnabled(!presenceEnabled);
   };
 
   // Creator presence ping - ONLY runs when presenceEnabled is true (manual toggle)
+  // Now checks isTxInFlight to avoid overlapping wallet prompts
   useEffect(() => {
     // Only run if presence is manually enabled
     if (!presenceEnabled || !isCreator || !room || status !== STATUS_OPEN) {
@@ -315,10 +316,23 @@ export default function Room() {
 
     // Ping every 60 seconds (rate limited, only after user enabled presence)
     pingIntervalRef.current = setInterval(async () => {
+      // Skip if tx in flight or document hidden
+      if (isTxInFlight || document.visibilityState !== 'visible') {
+        console.log("[PingRoom] Skipping interval ping - tx in flight or hidden");
+        return;
+      }
+      
       try {
-        await pingRoom(roomId, 'interval');
+        const result = await pingRoom(roomId, 'interval');
+        if (!result?.ok) {
+          console.warn("[PingRoom] Interval ping failed, stopping presence");
+          setPresenceEnabled(false);
+          toast.info("Presence paused — click Enable Presence again");
+        }
       } catch (e) {
         console.error("Failed to ping room:", e);
+        setPresenceEnabled(false);
+        toast.info("Presence paused — click Enable Presence again");
       }
     }, PING_INTERVAL_MS);
 
@@ -328,13 +342,13 @@ export default function Room() {
         pingIntervalRef.current = null;
       }
     };
-  }, [presenceEnabled, isCreator, room?.roomId, status, pingRoom]);
+  }, [presenceEnabled, isCreator, room?.roomId, status, pingRoom, isTxInFlight]);
 
   // Check if user has an active room that blocks joining
   const hasBlockingActiveRoom = activeRoom && activeRoom.roomId !== room?.roomId?.toNumber?.();
 
   const onJoinRoom = async () => {
-    if (!roomPdaParam) return;
+    if (!roomPdaParam || !room) return;
 
     if (!isConnected) {
       setShowWalletGate(true);
@@ -347,47 +361,57 @@ export default function Room() {
       return;
     }
 
-    try {
-      setTxPending(true);
-      const roomPda = new PublicKey(roomPdaParam);
+    // Get room details for joinRoom
+    const roomId = typeof room.roomId === 'object' ? room.roomId.toNumber() : room.roomId;
+    const roomCreator = room.creator?.toBase58?.();
+    
+    if (!roomCreator) {
+      toast.error("Invalid room data");
+      return;
+    }
 
-      const res = await joinRoomByPda({
-        connection,
-        wallet,
-        roomPda,
-        entryFeeLamports: stakeLamports,
-      });
+    // Use withTxLock to prevent overlapping wallet prompts
+    const result = await withTxLock(async () => {
+      return await joinRoom(roomId, roomCreator);
+    });
 
-      console.log("Joined room:", res);
-      toast.success("Successfully joined room!");
-
-      // Refresh room state
-      await fetchRoom();
-    } catch (e: any) {
-      console.error(e);
-      toast.error(e?.message ?? "Failed to join room");
-    } finally {
-      setTxPending(false);
+    if (result?.ok) {
+      // Navigate to game on success
+      const gameNameLower = gameName.toLowerCase().replace(/\s+/g, "");
+      navigate(`/game/${gameNameLower}/${roomId}`);
+    } else if (!result) {
+      // null means blocked by tx lock - toast already shown
+    } else if (result.reason === "PHANTOM_BLOCKED_OR_REJECTED") {
+      // Error toast already shown by useSolanaRooms
+    } else {
+      // Show generic error if no signature produced
+      if (!result.signature) {
+        toast.error("Wallet signature was not created. Please try again.");
+      }
     }
   };
 
   const handleCancelRoomClick = async () => {
-    if (!room || !isCreator || isCancelling) return;
+    if (!room || !isCreator || isTxInFlight) return;
 
-    setIsCancelling(true);
-    try {
-      const roomId = typeof room.roomId === 'object' ? room.roomId.toNumber() : room.roomId;
-      const success = await cancelRoom(roomId);
-      if (success) navigate("/room-list");
-    } catch (e) {
-      console.error("Cancel failed", e);
-    } finally {
-      setIsCancelling(false);
+    // Close modal BEFORE calling cancelRoom to prevent double prompts
+    setShowCancelConfirm(false);
+
+    const roomId = typeof room.roomId === 'object' ? room.roomId.toNumber() : room.roomId;
+    
+    // Use withTxLock to prevent overlapping wallet prompts
+    const result = await withTxLock(async () => {
+      return await cancelRoom(roomId);
+    });
+
+    if (result?.ok) {
+      navigate("/room-list", { replace: true });
     }
+    // Errors are handled by useSolanaRooms with toasts
   };
 
   const onCancelAbandonedRoom = async () => {
-    if (!room?.roomId || !room?.creator) return;
+    if (!room?.roomId || !room?.creator || isTxInFlight) return;
     
     const roomId = typeof room.roomId === 'object' ? room.roomId.toNumber() : room.roomId;
     const roomCreator = room.creator.toBase58();
@@ -395,10 +419,12 @@ export default function Room() {
     // Get player pubkeys for refunds
     const playerPubkeys = activePlayers.map((p: any) => new PublicKey(p.toBase58()));
     
-    const success = await cancelAbandonedRoom(roomId, roomCreator, playerPubkeys);
+    const result = await withTxLock(async () => {
+      return await cancelAbandonedRoom(roomId, roomCreator, playerPubkeys);
+    });
     
-    if (success) {
-      navigate("/room-list");
+    if (result) {
+      navigate("/room-list", { replace: true });
     }
   };
 
@@ -409,27 +435,21 @@ export default function Room() {
       return;
     }
 
-    try {
-      setTxPending(true);
-      const gameType = room?.gameType ?? 2;
-      const stakeLamportsValue = room?.stakeLamports ? BigInt(room.stakeLamports.toString()) : 200_000_000n;
+    if (isTxInFlight) return;
 
-      const res = await playAgain({
-        connection,
-        wallet,
-        gameType,
-        maxPlayers,
-        stakeLamports: stakeLamportsValue,
-      });
+    const gameType = room?.gameType ?? 2;
+    const entryFeeSol = Number(stakeLamports) / LAMPORTS_PER_SOL;
 
-      console.log("Play again created room:", res);
+    // Use createRoom from useSolanaRooms with withTxLock
+    const result = await withTxLock(async () => {
+      return await createRoom(gameType, entryFeeSol, maxPlayers);
+    });
+
+    if (result) {
       toast.success("New room created!");
-      navigate(`/room/${res.roomPda}`);
-    } catch (e: any) {
-      console.error(e);
-      toast.error(e?.message ?? "Failed to create new room");
-    } finally {
-      setTxPending(false);
+      // createRoom returns roomId, we need to find the room PDA
+      // For now, navigate to room list where user can find their new room
+      navigate("/room-list");
     }
   };
 
@@ -607,13 +627,13 @@ export default function Room() {
                 <Button 
                   onClick={onJoinRoom} 
                   size="lg" 
-                  disabled={txPending}
+                  disabled={isTxInFlight || hookTxPending}
                   className="min-w-32"
                 >
-                  {txPending ? (
+                  {isTxInFlight ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Joining...
+                      Waiting for wallet...
                     </>
                   ) : (
                     `Join Room (${stakeSOL} SOL)`
@@ -626,13 +646,13 @@ export default function Room() {
                   onClick={onPlayAgain} 
                   size="lg" 
                   variant="outline"
-                  disabled={txPending}
+                  disabled={isTxInFlight || hookTxPending}
                   className="min-w-32"
                 >
-                  {txPending ? (
+                  {isTxInFlight ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Creating...
+                      Waiting for wallet...
                     </>
                   ) : (
                     'Play Again'
@@ -654,10 +674,20 @@ export default function Room() {
                   onClick={handleEnablePresence}
                   variant={presenceEnabled ? "default" : "outline"}
                   size="sm"
+                  disabled={isTxInFlight}
                   className="gap-2"
                 >
-                  <Radio className={`h-4 w-4 ${presenceEnabled ? 'animate-pulse' : ''}`} />
-                  {presenceEnabled ? "Presence Active" : "Enable Presence"}
+                  {isTxInFlight ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Waiting for wallet...
+                    </>
+                  ) : (
+                    <>
+                      <Radio className={`h-4 w-4 ${presenceEnabled ? 'animate-pulse' : ''}`} />
+                      {presenceEnabled ? "Presence Active" : "Enable Presence"}
+                    </>
+                  )}
                 </Button>
               </div>
             )}
@@ -669,13 +699,13 @@ export default function Room() {
                   onClick={() => setShowCancelConfirm(true)}
                   variant="destructive"
                   size="sm"
-                  disabled={cancelPending || txPending}
+                  disabled={isTxInFlight || hookTxPending}
                   className="gap-2"
                 >
-                  {cancelPending ? (
+                  {isTxInFlight ? (
                     <>
                       <Loader2 className="h-4 w-4 animate-spin" />
-                      Cancelling...
+                      Waiting for wallet...
                     </>
                   ) : (
                     <>
@@ -694,13 +724,13 @@ export default function Room() {
                   onClick={onCancelAbandonedRoom}
                   variant="destructive"
                   size="lg"
-                  disabled={cancelPending || txPending}
+                  disabled={isTxInFlight || hookTxPending}
                   className="gap-2"
                 >
-                  {cancelPending ? (
+                  {isTxInFlight ? (
                     <>
                       <Loader2 className="h-4 w-4 animate-spin" />
-                      Cancelling & Refunding...
+                      Waiting for wallet...
                     </>
                   ) : (
                     <>
@@ -746,10 +776,10 @@ export default function Room() {
             <AlertDialogCancel>Keep Room</AlertDialogCancel>
             <AlertDialogAction 
               onClick={handleCancelRoomClick}
-              disabled={isCancelling}
+              disabled={isTxInFlight}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {isCancelling ? "Cancelling..." : "Yes, Cancel Room"}
+              {isTxInFlight ? "Waiting for wallet..." : "Yes, Cancel Room"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
