@@ -31,7 +31,7 @@ const STATUS_FINISHED = 3;
 
 // Presence timeout in seconds
 const CREATOR_TIMEOUT_SECS = 60;
-const PING_INTERVAL_MS = 30000; // 30 seconds
+const PING_INTERVAL_MS = 60000; // 60 seconds (only runs when presence is manually enabled)
 
 // Human-readable mappings
 const STATUS_NAMES: Record<number, string> = {
@@ -84,6 +84,7 @@ export default function Room() {
   const [vaultLamports, setVaultLamports] = useState<bigint>(0n);
   const [vaultPdaStr, setVaultPdaStr] = useState<string>("");
   const pingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [presenceEnabled, setPresenceEnabled] = useState(false);
 
   const status = room?.status ?? 0;
   const statusName = STATUS_NAMES[status] || "Unknown";
@@ -282,10 +283,26 @@ export default function Room() {
     return () => clearInterval(interval);
   }, []);
 
-  // Creator presence ping - ping immediately and every 30 seconds
+  // Handler for manual presence enable (explicit user action)
+  const handleEnablePresence = async () => {
+    if (!room) return;
+    const roomId = typeof room.roomId === 'object' ? room.roomId.toNumber() : room.roomId;
+    
+    if (!presenceEnabled) {
+      // First click: ping immediately with explicit user action
+      try {
+        await pingRoom(roomId, 'userClick');
+      } catch (e) {
+        console.error("Failed to ping room:", e);
+      }
+    }
+    setPresenceEnabled(!presenceEnabled);
+  };
+
+  // Creator presence ping - ONLY runs when presenceEnabled is true (manual toggle)
   useEffect(() => {
-    if (!isCreator || !room || status !== STATUS_OPEN) {
-      // Clear any existing interval
+    // Only run if presence is manually enabled
+    if (!presenceEnabled || !isCreator || !room || status !== STATUS_OPEN) {
       if (pingIntervalRef.current) {
         clearInterval(pingIntervalRef.current);
         pingIntervalRef.current = null;
@@ -295,19 +312,14 @@ export default function Room() {
 
     const roomId = typeof room.roomId === 'object' ? room.roomId.toNumber() : room.roomId;
 
-    // Ping immediately on mount
-    const doPing = async () => {
+    // Ping every 60 seconds (rate limited, only after user enabled presence)
+    pingIntervalRef.current = setInterval(async () => {
       try {
-        await pingRoom(roomId);
+        await pingRoom(roomId, 'interval');
       } catch (e) {
         console.error("Failed to ping room:", e);
       }
-    };
-    
-    doPing();
-
-    // Then ping every 30 seconds
-    pingIntervalRef.current = setInterval(doPing, PING_INTERVAL_MS);
+    }, PING_INTERVAL_MS);
 
     return () => {
       if (pingIntervalRef.current) {
@@ -315,7 +327,7 @@ export default function Room() {
         pingIntervalRef.current = null;
       }
     };
-  }, [isCreator, room?.roomId, status, pingRoom]);
+  }, [presenceEnabled, isCreator, room?.roomId, status, pingRoom]);
 
   // Check if user has an active room that blocks joining
   const hasBlockingActiveRoom = activeRoom && activeRoom.roomId !== room?.roomId?.toNumber?.();
@@ -629,6 +641,21 @@ export default function Room() {
                 </p>
               )}
             </div>
+
+            {/* Enable Presence Toggle - Only for creator when room is open */}
+            {isCreator && status === STATUS_OPEN && !isAbandoned && (
+              <div className="flex justify-center pt-2">
+                <Button 
+                  onClick={handleEnablePresence}
+                  variant={presenceEnabled ? "default" : "outline"}
+                  size="sm"
+                  className="gap-2"
+                >
+                  <Radio className={`h-4 w-4 ${presenceEnabled ? 'animate-pulse' : ''}`} />
+                  {presenceEnabled ? "Presence Active" : "Enable Presence"}
+                </Button>
+              </div>
+            )}
 
             {/* Cancel Room Button - Only for creator when room is open */}
             {canCancel && (

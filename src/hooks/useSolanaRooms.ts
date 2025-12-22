@@ -442,7 +442,8 @@ export function useSolanaRooms() {
   }, [publicKey, connected, connection, sendVersionedTx, toast, fetchRooms, hasAdapterSendTx, adapterName]);
 
   // Ping room (creator presence heartbeat) - VersionedTransaction for MWA
-  const pingRoom = useCallback(async (roomId: number): Promise<boolean> => {
+  // triggeredBy: 'userClick' = explicit button press, 'interval' = auto-ping after presence enabled
+  const pingRoom = useCallback(async (roomId: number, triggeredBy: 'userClick' | 'interval'): Promise<boolean> => {
     if (!publicKey || !connected) {
       return false;
     }
@@ -451,12 +452,12 @@ export function useSolanaRooms() {
       // Build instruction (for VersionedTransaction - MWA compatible)
       const ix = buildPingRoomIx(publicKey, roomId);
       
-      console.log("[PingRoom] sending v0 tx:", { roomId });
+      console.log("[PingRoom] sending v0 tx:", { roomId, triggeredBy });
       
       // Send as VersionedTransaction
       const { signature, blockhash, lastValidBlockHeight } = await sendVersionedTx([ix]);
       
-      console.log("[PingRoom] signature:", signature);
+      console.log("[PingRoom] signature:", signature, "triggeredBy:", triggeredBy);
       
       await connection.confirmTransaction({
         signature,
@@ -464,10 +465,10 @@ export function useSolanaRooms() {
         lastValidBlockHeight,
       }, 'confirmed');
       
-      console.log("Room pinged successfully");
+      console.log("[PingRoom] confirmed, triggeredBy:", triggeredBy);
       return true;
     } catch (err: any) {
-      console.error("Ping room error:", err);
+      console.error("[PingRoom] error:", err, "triggeredBy:", triggeredBy);
       return false;
     }
   }, [publicKey, connected, connection, sendVersionedTx]);
