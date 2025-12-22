@@ -186,7 +186,7 @@ export async function getResultAuthority(connection: Connection): Promise<Public
 // ACCOUNT PARSING
 // ============================================
 
-const GAME_TYPE_NAMES: Record<number, string> = {
+export const GAME_TYPE_NAMES: Record<number, string> = {
   1: "Chess",
   2: "Dominos",
   3: "Backgammon",
@@ -194,7 +194,7 @@ const GAME_TYPE_NAMES: Record<number, string> = {
   5: "Ludo",
 };
 
-const STATUS_NAMES: Record<number, string> = {
+export const STATUS_NAMES: Record<number, string> = {
   0: "Open",
   1: "In Progress",
   2: "Completed",
