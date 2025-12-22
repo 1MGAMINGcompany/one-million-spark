@@ -22,9 +22,8 @@ import {
   fetchNextRoomIdForCreator,
   buildCreateRoomIx,
   buildJoinRoomIx,
-  buildCancelRoomIx,
-  buildPingRoomIx,
-  buildCancelAbandonedRoomTx,
+  // Note: buildCancelRoomIx, buildPingRoomIx, buildCancelAbandonedRoomTx are not in the current IDL
+  // They will be re-enabled when the program is updated to include cancel_room and ping_room
 } from "@/lib/solana-program";
 
 // Debug info type for failed transactions
@@ -381,192 +380,34 @@ export function useSolanaRooms() {
     }
   }, [publicKey, connected, connection, sendVersionedTx, toast, fetchRooms, fetchCreatorActiveRoom, hasAdapterSendTx, adapterName]);
 
-  // Cancel room (VersionedTransaction - MWA compatible) - returns structured TxResult
+  // cancelRoom is disabled - cancel_room instruction not in current on-chain program
+  // When the program is updated, re-enable this function
   const cancelRoom = useCallback(async (roomId: number): Promise<{ ok: boolean; signature?: string; reason?: string }> => {
-    if (!publicKey || !connected) {
-      toast({
-        title: "Wallet not connected",
-        description: "Please connect your wallet first",
-        variant: "destructive",
-      });
-      return { ok: false, reason: "WALLET_NOT_CONNECTED" };
-    }
+    toast({
+      title: "Cancel Room Unavailable",
+      description: "This feature is not yet available on mainnet. Please wait for the next program update.",
+      variant: "destructive",
+    });
+    return { ok: false, reason: "NOT_IN_PROGRAM" };
+  }, [toast]);
 
-    setTxPending(true);
-    setTxDebugInfo(null);
-    
-    try {
-      // Build instruction (for VersionedTransaction - MWA compatible)
-      const ix = buildCancelRoomIx(publicKey, roomId);
-      
-      console.log("[CancelRoom] sending v0 tx:", { roomId });
-      
-      // Send as VersionedTransaction
-      const { signature, blockhash, lastValidBlockHeight } = await sendVersionedTx([ix]);
-      
-      console.log("[CancelRoom] signature:", signature);
-      
-      toast({
-        title: "Transaction sent",
-        description: "Waiting for confirmation...",
-      });
-      
-      await connection.confirmTransaction({
-        signature,
-        blockhash,
-        lastValidBlockHeight,
-      }, 'confirmed');
-      
-      toast({
-        title: "Room cancelled",
-        description: `Room #${roomId} has been cancelled`,
-      });
-      
-      setActiveRoom(null);
-      await fetchRooms();
-      return { ok: true, signature };
-    } catch (err: any) {
-      console.error("Cancel room error:", err);
-      
-      // Build debug info for versioned tx
-      setTxDebugInfo({
-        publicKey: publicKey?.toBase58() || null,
-        feePayer: publicKey?.toBase58() || null,
-        recentBlockhash: null,
-        signatures: [],
-        errorMessage: err instanceof Error ? err.message : String(err),
-        methodUsed: hasAdapterSendTx ? 'adapter.sendTransaction' : 'useWallet.sendTransaction',
-        adapterName,
-        hasAdapterSendTx,
-        txType: 'versioned',
-      });
-      
-      // Check for user rejection / Phantom block
-      const errorMsg = err?.message?.toLowerCase() || "";
-      if (errorMsg.includes("reject") || errorMsg.includes("cancel") || errorMsg.includes("user denied") || errorMsg.includes("blocked")) {
-        toast({
-          title: "Transaction cancelled",
-          description: "Phantom blocked or you rejected the request. No changes were made. Please refresh and try again.",
-          variant: "destructive",
-        });
-        return { ok: false, reason: "PHANTOM_BLOCKED_OR_REJECTED" };
-      }
-      
-      toast({
-        title: "Failed to cancel room",
-        description: err.message || "Transaction failed",
-        variant: "destructive",
-      });
-      return { ok: false, reason: "ERROR" };
-    } finally {
-      setTxPending(false);
-    }
-  }, [publicKey, connected, connection, sendVersionedTx, toast, fetchRooms, hasAdapterSendTx, adapterName]);
-
-  // Ping room (creator presence heartbeat) - VersionedTransaction for MWA
-  // triggeredBy: 'userClick' = explicit button press, 'interval' = auto-ping after presence enabled
+  // pingRoom is disabled - ping_room instruction not in current on-chain program
+  // When the program is updated, re-enable this function
   const pingRoom = useCallback(async (roomId: number, triggeredBy: 'userClick' | 'interval'): Promise<{ ok: boolean; signature?: string; reason?: string }> => {
-    if (!publicKey || !connected) {
-      return { ok: false, reason: "WALLET_NOT_CONNECTED" };
-    }
-    
-    try {
-      // Build instruction (for VersionedTransaction - MWA compatible)
-      const ix = buildPingRoomIx(publicKey, roomId);
-      
-      console.log("[PingRoom] sending v0 tx:", { roomId, triggeredBy });
-      
-      // Send as VersionedTransaction
-      const { signature, blockhash, lastValidBlockHeight } = await sendVersionedTx([ix]);
-      
-      console.log("[PingRoom] signature:", signature, "triggeredBy:", triggeredBy);
-      
-      await connection.confirmTransaction({
-        signature,
-        blockhash,
-        lastValidBlockHeight,
-      }, 'confirmed');
-      
-      console.log("[PingRoom] confirmed, triggeredBy:", triggeredBy);
-      return { ok: true, signature };
-    } catch (err: any) {
-      console.error("[PingRoom] error:", err, "triggeredBy:", triggeredBy);
-      
-      // Check for user rejection / Phantom block
-      const errorMsg = err?.message?.toLowerCase() || "";
-      if (errorMsg.includes("reject") || errorMsg.includes("cancel") || errorMsg.includes("user denied") || errorMsg.includes("blocked")) {
-        return { ok: false, reason: "PHANTOM_BLOCKED_OR_REJECTED" };
-      }
-      
-      return { ok: false, reason: "ERROR" };
-    }
-  }, [publicKey, connected, connection, sendVersionedTx]);
+    console.log("[PingRoom] Disabled - ping_room not in current program");
+    return { ok: false, reason: "NOT_IN_PROGRAM" };
+  }, []);
 
-  // Cancel abandoned room (anyone can call if creator timed out)
+  // cancelAbandonedRoom is disabled - cancel_room_if_abandoned instruction not in current on-chain program
+  // When the program is updated, re-enable this function
   const cancelAbandonedRoom = useCallback(async (roomId: number, roomCreator: string, players: PublicKey[]): Promise<boolean> => {
-    if (!publicKey || !connected) {
-      toast({
-        title: "Wallet not connected",
-        description: "Please connect your wallet first",
-        variant: "destructive",
-      });
-      return false;
-    }
-
-    setTxPending(true);
-    setTxDebugInfo(null);
-    
-    let tx: Transaction | null = null;
-    
-    try {
-      const creatorPubkey = new PublicKey(roomCreator);
-      tx = await buildCancelAbandonedRoomTx(publicKey, creatorPubkey, roomId, players);
-      
-      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
-      tx.feePayer = publicKey;
-      tx.recentBlockhash = blockhash;
-      
-      const signature = await sendTx(tx);
-      
-      toast({
-        title: "Transaction sent",
-        description: "Cancelling abandoned room...",
-      });
-      
-      await connection.confirmTransaction({
-        signature,
-        blockhash,
-        lastValidBlockHeight,
-      }, 'confirmed');
-      
-      toast({
-        title: "Room cancelled",
-        description: "All players have been refunded",
-      });
-      
-      await fetchRooms();
-      return true;
-    } catch (err: any) {
-      console.error("Cancel abandoned room error:", err);
-      
-      // Build and set debug info with method info
-      setTxDebugInfo({
-        ...buildTxDebugInfo(tx, publicKey?.toBase58() || null, err),
-        methodUsed: hasAdapterSendTx ? 'adapter.sendTransaction' : 'useWallet.sendTransaction',
-        adapterName,
-        hasAdapterSendTx,
-      });
-      
-      toast({
-        title: "Failed to cancel room",
-        description: err.message || "Transaction failed",
-        variant: "destructive",
-      });
-      return false;
-    } finally {
-      setTxPending(false);
-    }
-  }, [publicKey, connected, connection, sendTx, toast, fetchRooms]);
+    toast({
+      title: "Cancel Abandoned Room Unavailable",
+      description: "This feature is not yet available on mainnet. Please wait for the next program update.",
+      variant: "destructive",
+    });
+    return false;
+  }, [toast]);
 
   // Get user's SOL balance - only after wallet is connected with publicKey
   const getBalance = useCallback(async (): Promise<number> => {

@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
 
@@ -9,28 +9,18 @@ import { useSolanaRooms } from "@/hooks/useSolanaRooms";
 import { useTxLock } from "@/contexts/TxLockContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Construction, ArrowLeft, Loader2, Users, Clock, Coins, XCircle, AlertTriangle, Radio } from "lucide-react";
+import { Construction, ArrowLeft, Loader2, Users, Coins, AlertTriangle } from "lucide-react";
 import { WalletGateModal } from "@/components/WalletGateModal";
 import { TxDebugPanel } from "@/components/TxDebugPanel";
 import { toast } from "sonner";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 
 const STATUS_OPEN = 1;
 const STATUS_STARTED = 2;
 const STATUS_FINISHED = 3;
 
-// Presence timeout in seconds
-const CREATOR_TIMEOUT_SECS = 60;
-const PING_INTERVAL_MS = 60000; // 60 seconds (only runs when presence is manually enabled)
+// Presence feature disabled until program supports ping_room
+// const CREATOR_TIMEOUT_SECS = 60;
+// const PING_INTERVAL_MS = 60000;
 
 // Human-readable mappings
 const STATUS_NAMES: Record<number, string> = {
@@ -71,10 +61,11 @@ export default function Room() {
   const { isConnected, address } = useWallet();
   const { connection } = useConnection();
   const wallet = useSolanaWallet();
-  const { activeRoom, fetchCreatorActiveRoom, joinRoom, cancelRoom, pingRoom, cancelAbandonedRoom, createRoom, txPending: hookTxPending, txDebugInfo, clearTxDebug } = useSolanaRooms();
+  const { activeRoom, fetchCreatorActiveRoom, joinRoom, createRoom, txPending: hookTxPending, txDebugInfo, clearTxDebug } = useSolanaRooms();
   const { isTxInFlight, withTxLock } = useTxLock();
   const [showWalletGate, setShowWalletGate] = useState(false);
-  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  // Cancel room feature disabled - not in current on-chain program
+  // const [showCancelConfirm, setShowCancelConfirm] = useState(false);
 
   const [room, setRoom] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -82,8 +73,9 @@ export default function Room() {
   const [currentTime, setCurrentTime] = useState(Date.now());
   const [vaultLamports, setVaultLamports] = useState<bigint>(0n);
   const [vaultPdaStr, setVaultPdaStr] = useState<string>("");
-  const pingIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const [presenceEnabled, setPresenceEnabled] = useState(false);
+  // Ping/presence feature disabled - not in current on-chain program
+  // const pingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  // const [presenceEnabled, setPresenceEnabled] = useState(false);
 
   const status = room?.status ?? 0;
   const statusName = STATUS_NAMES[status] || "Unknown";
@@ -102,16 +94,17 @@ export default function Room() {
   // Check if current wallet is the room creator
   const isCreator = room?.creator?.toBase58?.() === address;
   
-  // Check if room is abandoned (creator hasn't pinged in > 60 seconds)
-  // Private rooms never expire - only public rooms can be abandoned
-  const lastCreatorPing = room?.lastCreatorPing ? Number(room.lastCreatorPing) * 1000 : 0; // Convert to ms
-  const secondsSinceLastPing = lastCreatorPing ? Math.floor((currentTime - lastCreatorPing) / 1000) : 0;
-  const isAbandoned = status === STATUS_OPEN && !room?.isPrivate && lastCreatorPing > 0 && secondsSinceLastPing > CREATOR_TIMEOUT_SECS;
+  // Abandoned room detection disabled - no ping_room / last_creator_ping on-chain
+  // const lastCreatorPing = room?.lastCreatorPing ? Number(room.lastCreatorPing) * 1000 : 0;
+  // const secondsSinceLastPing = lastCreatorPing ? Math.floor((currentTime - lastCreatorPing) / 1000) : 0;
+  // const isAbandoned = status === STATUS_OPEN && !room?.isPrivate && lastCreatorPing > 0 && secondsSinceLastPing > CREATOR_TIMEOUT_SECS;
+  const isAbandoned = false; // Disabled until program supports ping_room
   
   // Role-based button visibility
-  const canJoin = status === STATUS_OPEN && !isPlayer && isConnected && !isAbandoned;
-  const canCancel = status === STATUS_OPEN && isCreator;
-  const canCancelAbandoned = status === STATUS_OPEN && isAbandoned && !isCreator && isConnected;
+  // Note: canCancel disabled - cancel_room not in current on-chain program
+  const canJoin = status === STATUS_OPEN && !isPlayer && isConnected;
+  const canCancel = false; // Disabled: cancel_room not in IDL
+  const canCancelAbandoned = false; // Disabled: cancel_room_if_abandoned not in IDL
   const canPlayAgain = status === STATUS_FINISHED && isPlayer;
   
   // Stake calculations
@@ -282,67 +275,8 @@ export default function Room() {
     return () => clearInterval(interval);
   }, []);
 
-  // Handler for manual presence enable (explicit user action)
-  const handleEnablePresence = async () => {
-    if (!room || isTxInFlight) return;
-    const roomId = typeof room.roomId === 'object' ? room.roomId.toNumber() : room.roomId;
-    
-    if (!presenceEnabled) {
-      // First click: ping immediately with explicit user action, wrapped in tx lock
-      const result = await withTxLock(async () => {
-        return await pingRoom(roomId, 'userClick');
-      });
-      if (!result?.ok) {
-        toast.error("Failed to enable presence. Please try again.");
-        return;
-      }
-    }
-    setPresenceEnabled(!presenceEnabled);
-  };
-
-  // Creator presence ping - ONLY runs when presenceEnabled is true (manual toggle)
-  // Now checks isTxInFlight to avoid overlapping wallet prompts
-  useEffect(() => {
-    // Only run if presence is manually enabled
-    if (!presenceEnabled || !isCreator || !room || status !== STATUS_OPEN) {
-      if (pingIntervalRef.current) {
-        clearInterval(pingIntervalRef.current);
-        pingIntervalRef.current = null;
-      }
-      return;
-    }
-
-    const roomId = typeof room.roomId === 'object' ? room.roomId.toNumber() : room.roomId;
-
-    // Ping every 60 seconds (rate limited, only after user enabled presence)
-    pingIntervalRef.current = setInterval(async () => {
-      // Skip if tx in flight or document hidden
-      if (isTxInFlight || document.visibilityState !== 'visible') {
-        console.log("[PingRoom] Skipping interval ping - tx in flight or hidden");
-        return;
-      }
-      
-      try {
-        const result = await pingRoom(roomId, 'interval');
-        if (!result?.ok) {
-          console.warn("[PingRoom] Interval ping failed, stopping presence");
-          setPresenceEnabled(false);
-          toast.info("Presence paused — click Enable Presence again");
-        }
-      } catch (e) {
-        console.error("Failed to ping room:", e);
-        setPresenceEnabled(false);
-        toast.info("Presence paused — click Enable Presence again");
-      }
-    }, PING_INTERVAL_MS);
-
-    return () => {
-      if (pingIntervalRef.current) {
-        clearInterval(pingIntervalRef.current);
-        pingIntervalRef.current = null;
-      }
-    };
-  }, [presenceEnabled, isCreator, room?.roomId, status, pingRoom, isTxInFlight]);
+  // Presence/ping feature disabled - ping_room not in current on-chain program
+  // When the program is updated to include ping_room, re-enable this feature
 
   // Check if user has an active room that blocks joining
   const hasBlockingActiveRoom = activeRoom && activeRoom.roomId !== room?.roomId?.toNumber?.();
@@ -391,42 +325,10 @@ export default function Room() {
     }
   };
 
-  const handleCancelRoomClick = async () => {
-    if (!room || !isCreator || isTxInFlight) return;
-
-    // Close modal BEFORE calling cancelRoom to prevent double prompts
-    setShowCancelConfirm(false);
-
-    const roomId = typeof room.roomId === 'object' ? room.roomId.toNumber() : room.roomId;
-    
-    // Use withTxLock to prevent overlapping wallet prompts
-    const result = await withTxLock(async () => {
-      return await cancelRoom(roomId);
-    });
-
-    if (result?.ok) {
-      navigate("/room-list", { replace: true });
-    }
-    // Errors are handled by useSolanaRooms with toasts
-  };
-
-  const onCancelAbandonedRoom = async () => {
-    if (!room?.roomId || !room?.creator || isTxInFlight) return;
-    
-    const roomId = typeof room.roomId === 'object' ? room.roomId.toNumber() : room.roomId;
-    const roomCreator = room.creator.toBase58();
-    
-    // Get player pubkeys for refunds
-    const playerPubkeys = activePlayers.map((p: any) => new PublicKey(p.toBase58()));
-    
-    const result = await withTxLock(async () => {
-      return await cancelAbandonedRoom(roomId, roomCreator, playerPubkeys);
-    });
-    
-    if (result) {
-      navigate("/room-list", { replace: true });
-    }
-  };
+  // Cancel room handlers disabled - cancel_room not in current on-chain program
+  // When the program is updated to include cancel_room, re-enable these handlers
+  // const handleCancelRoomClick = async () => { ... };
+  // const onCancelAbandonedRoom = async () => { ... };
 
   const onPlayAgain = async () => {
     // Check if user has an active room
@@ -496,19 +398,7 @@ export default function Room() {
                 </div>
               )}
 
-              {/* Abandoned Room Warning */}
-              {isAbandoned && (
-                <div className="flex items-start gap-2 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
-                  <AlertTriangle className="h-4 w-4 text-red-500 mt-0.5 shrink-0" />
-                  <div className="text-sm">
-                    <p className="text-red-200 font-medium">Room Abandoned</p>
-                    <p className="text-red-200/70">
-                      Creator has been inactive for {secondsSinceLastPing} seconds. 
-                      Anyone can cancel this room and get refunded.
-                    </p>
-                  </div>
-                </div>
-              )}
+              {/* Abandoned Room Warning - Disabled until program supports ping_room */}
 
               {/* Status Badge */}
               <div className="flex items-center gap-2 flex-wrap">
@@ -530,25 +420,7 @@ export default function Room() {
                     Your Room
                   </span>
                 )}
-                {/* Creator presence indicator with countdown */}
-                {status === STATUS_OPEN && !isAbandoned && !room?.isPrivate && (
-                  <span className="px-3 py-1 rounded-full text-sm font-medium bg-green-500/10 text-green-400 flex items-center gap-2">
-                    <Radio className="h-3 w-3 animate-pulse" />
-                    <span>Creator Online</span>
-                    {lastCreatorPing > 0 && (
-                      <span className="flex items-center gap-1 text-xs opacity-80">
-                        <Clock className="h-3 w-3" />
-                        {Math.max(0, CREATOR_TIMEOUT_SECS - secondsSinceLastPing)}s
-                      </span>
-                    )}
-                  </span>
-                )}
-                {status === STATUS_OPEN && room?.isPrivate && (
-                  <span className="px-3 py-1 rounded-full text-sm font-medium bg-blue-500/10 text-blue-400 flex items-center gap-1">
-                    <Clock className="h-3 w-3" />
-                    Private (no expiry)
-                  </span>
-                )}
+                {/* Creator presence indicator - Disabled until program supports ping_room */}
               </div>
 
               {/* Game Info Grid */}
@@ -667,92 +539,13 @@ export default function Room() {
               )}
             </div>
 
-            {/* Enable Presence Toggle - Only for creator when room is open */}
-            {isCreator && status === STATUS_OPEN && !isAbandoned && (
-              <div className="flex justify-center pt-2">
-                <Button 
-                  onClick={handleEnablePresence}
-                  variant={presenceEnabled ? "default" : "outline"}
-                  size="sm"
-                  disabled={isTxInFlight}
-                  className="gap-2"
-                >
-                  {isTxInFlight ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Waiting for wallet...
-                    </>
-                  ) : (
-                    <>
-                      <Radio className={`h-4 w-4 ${presenceEnabled ? 'animate-pulse' : ''}`} />
-                      {presenceEnabled ? "Presence Active" : "Enable Presence"}
-                    </>
-                  )}
-                </Button>
-              </div>
-            )}
+            {/* Enable Presence Toggle - Disabled until program supports ping_room */}
 
-            {/* Cancel Room Button - Only for creator when room is open */}
-            {canCancel && (
-              <div className="flex justify-center pt-2 border-t border-border/30">
-                <Button 
-                  onClick={() => setShowCancelConfirm(true)}
-                  variant="destructive"
-                  size="sm"
-                  disabled={isTxInFlight || hookTxPending}
-                  className="gap-2"
-                >
-                  {isTxInFlight ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Waiting for wallet...
-                    </>
-                  ) : (
-                    <>
-                      <XCircle className="h-4 w-4" />
-                      Cancel Room
-                    </>
-                  )}
-                </Button>
-              </div>
-            )}
-
-            {/* Cancel Abandoned Room Button - Anyone can cancel if creator timed out */}
-            {canCancelAbandoned && (
-              <div className="flex justify-center pt-2 border-t border-border/30">
-                <Button 
-                  onClick={onCancelAbandonedRoom}
-                  variant="destructive"
-                  size="lg"
-                  disabled={isTxInFlight || hookTxPending}
-                  className="gap-2"
-                >
-                  {isTxInFlight ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Waiting for wallet...
-                    </>
-                  ) : (
-                    <>
-                      <XCircle className="h-4 w-4" />
-                      Cancel Abandoned Room & Refund All
-                    </>
-                  )}
-                </Button>
-              </div>
-            )}
+            {/* Cancel Room Button - Disabled until program supports cancel_room */}
+            {/* Cancel Abandoned Room Button - Disabled until program supports cancel_room */}
           </div>
 
-          {/* Presence Info Message */}
-          {status === STATUS_OPEN && (
-            <div className="bg-muted/20 rounded-lg p-3 text-xs text-muted-foreground space-y-1">
-              <p className="flex items-center gap-1">
-                <Radio className="h-3 w-3" />
-                <span className="font-medium">Presence-Based Rooms</span>
-              </p>
-              <p>Rooms stay open only while the creator is present. If the creator leaves for 60 seconds, the room becomes abandoned and all players are refunded automatically.</p>
-            </div>
-          )}
+          {/* Presence Info Message - Disabled until program supports ping_room */}
         </CardContent>
       </Card>
 
@@ -763,27 +556,7 @@ export default function Room() {
         description="Connect your wallet to join this room and compete for SOL prizes."
       />
 
-      {/* Cancel Room Confirmation Modal */}
-      <AlertDialog open={showCancelConfirm} onOpenChange={setShowCancelConfirm}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Cancel Room?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Cancel room and refund all players? This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Keep Room</AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={handleCancelRoomClick}
-              disabled={isTxInFlight}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {isTxInFlight ? "Waiting for wallet..." : "Yes, Cancel Room"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* Cancel Room Confirmation Modal - Disabled until program supports cancel_room */}
       
       {/* Transaction Debug Panel - shown on tx failure */}
       <TxDebugPanel debugInfo={txDebugInfo} onClose={clearTxDebug} />
