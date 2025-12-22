@@ -85,6 +85,7 @@ export default function Room() {
   const [vaultPdaStr, setVaultPdaStr] = useState<string>("");
   const pingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const [presenceEnabled, setPresenceEnabled] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
 
   const status = room?.status ?? 0;
   const statusName = STATUS_NAMES[status] || "Unknown";
@@ -371,17 +372,17 @@ export default function Room() {
   };
 
   const handleCancelRoomClick = async () => {
-    if (!room || !isCreator) return;
-    
-    const roomId = typeof room.roomId === 'object' ? room.roomId.toNumber() : room.roomId;
-    
+    if (!room || !isCreator || isCancelling) return;
+
+    setIsCancelling(true);
     try {
+      const roomId = typeof room.roomId === 'object' ? room.roomId.toNumber() : room.roomId;
       const success = await cancelRoom(roomId);
-      if (success) {
-        navigate("/room-list");
-      }
+      if (success) navigate("/room-list");
     } catch (e) {
       console.error("Cancel failed", e);
+    } finally {
+      setIsCancelling(false);
     }
   };
 
@@ -745,9 +746,10 @@ export default function Room() {
             <AlertDialogCancel>Keep Room</AlertDialogCancel>
             <AlertDialogAction 
               onClick={handleCancelRoomClick}
+              disabled={isCancelling}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Yes, Cancel Room
+              {isCancelling ? "Cancelling..." : "Yes, Cancel Room"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
