@@ -47,8 +47,13 @@ function isDefaultPubkey(p: any) {
 }
 
 function formatSol(lamports: bigint | number | string): string {
-  const value = typeof lamports === 'bigint' ? lamports : BigInt(lamports.toString());
-  return (Number(value) / LAMPORTS_PER_SOL).toFixed(2);
+  const value = typeof lamports === "bigint" ? lamports : BigInt(lamports.toString());
+  const solValue = Number(value) / LAMPORTS_PER_SOL;
+  // For small bets, show up to 4 decimals and trim trailing zeros
+  if (solValue > 0 && solValue < 0.01) {
+    return solValue.toFixed(4).replace(/\.?0+$/, "");
+  }
+  return solValue.toFixed(2);
 }
 
 export default function Room() {
@@ -127,6 +132,9 @@ export default function Room() {
       const data = Buffer.from(accountInfo.data);
       const parsed = parseRoomAccount(data);
       
+      console.log("[Room] parsed.entryFee (lamports) =", parsed?.entryFee);
+      console.log("[Room] computed SOL =", parsed ? Number(parsed.entryFee) / LAMPORTS_PER_SOL : "N/A");
+      
       if (!parsed) {
         console.log("[Room] Failed to parse room account");
         setError("Failed to parse room data");
@@ -186,6 +194,8 @@ export default function Room() {
               const data = Buffer.from(accountInfo.data);
               const parsed = parseRoomAccount(data);
               if (parsed) {
+                console.log("[Room] (realtime) parsed.entryFee (lamports) =", parsed.entryFee);
+                console.log("[Room] (realtime) computed SOL =", Number(parsed.entryFee) / LAMPORTS_PER_SOL);
                 const roomAccount = {
                   roomId: parsed.roomId,
                   creator: parsed.creator,
@@ -490,6 +500,9 @@ export default function Room() {
                   </div>
                 </div>
                 <p className="text-xs text-muted-foreground">5% platform fee deducted from winnings</p>
+                <p className="text-xs text-amber-400/70 font-mono mt-2">
+                  [Debug] {stakeLamports.toString()} lamports ({Number(stakeLamports) / LAMPORTS_PER_SOL} SOL)
+                </p>
               </div>
 
               {/* Players List */}
