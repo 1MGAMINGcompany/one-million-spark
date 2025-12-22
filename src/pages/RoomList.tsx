@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
@@ -12,21 +12,27 @@ import {
   RefreshCw,
   AlertTriangle,
   Coins,
-  Clock
+  Clock,
+  Bug
 } from "lucide-react";
 import { useWallet } from "@/hooks/useWallet";
 import { WalletRequired } from "@/components/WalletRequired";
 import { useSolanaRooms } from "@/hooks/useSolanaRooms";
-import { SOLANA_ENABLED, getSolanaCluster, formatSol } from "@/lib/solana-config";
-import { GameType } from "@/lib/solana-program";
+import { SOLANA_ENABLED, getSolanaCluster, formatSol, getSolanaEndpoint } from "@/lib/solana-config";
+import { GameType, PROGRAM_ID } from "@/lib/solana-program";
+
+const BUILD_VERSION = "2024-01-22-v3";
 
 export default function RoomList() {
   const navigate = useNavigate();
   const { t } = useTranslation();
   const { isConnected, address } = useWallet();
   const { rooms, loading, error, fetchRooms } = useSolanaRooms();
+  const [showDebug, setShowDebug] = useState(false);
+  const [lastFetch, setLastFetch] = useState<string | null>(null);
 
   const targetCluster = getSolanaCluster();
+  const rpcEndpoint = getSolanaEndpoint();
 
   // Initial fetch and auto-refresh every 30 seconds
   // Rooms are fetched for ALL users (wallet connected or not)
@@ -37,10 +43,12 @@ export default function RoomList() {
     }
     
     console.log("[RoomList] useEffect triggered, calling fetchRooms()");
+    setLastFetch(new Date().toISOString());
     fetchRooms();
     
     const interval = setInterval(() => {
       console.log("[RoomList] Auto-refresh interval, calling fetchRooms()");
+      setLastFetch(new Date().toISOString());
       fetchRooms();
     }, 30000);
     
@@ -103,9 +111,20 @@ export default function RoomList() {
         </div>
         <div className="flex gap-2">
           <Button 
+            variant="ghost" 
+            size="icon"
+            onClick={() => setShowDebug(!showDebug)}
+            title="Toggle debug info"
+          >
+            <Bug className="h-4 w-4" />
+          </Button>
+          <Button 
             variant="outline" 
             size="icon"
-            onClick={() => fetchRooms()}
+            onClick={() => {
+              setLastFetch(new Date().toISOString());
+              fetchRooms();
+            }}
             disabled={loading}
           >
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
@@ -120,6 +139,30 @@ export default function RoomList() {
           </Button>
         </div>
       </div>
+
+      {/* Debug Panel */}
+      {showDebug && (
+        <Card className="mb-6 border-primary/50 bg-primary/5">
+          <CardContent className="p-4 text-xs font-mono space-y-1">
+            <p><strong>Build:</strong> {BUILD_VERSION}</p>
+            <p><strong>RPC:</strong> {rpcEndpoint}</p>
+            <p><strong>Program ID:</strong> {PROGRAM_ID.toBase58()}</p>
+            <p><strong>SOLANA_ENABLED:</strong> {String(SOLANA_ENABLED)}</p>
+            <p><strong>Last Fetch:</strong> {lastFetch || "Never"}</p>
+            <p><strong>Rooms Found:</strong> {rooms.length}</p>
+            <p><strong>Loading:</strong> {String(loading)}</p>
+            <p><strong>Error:</strong> {error || "None"}</p>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="mt-2"
+              onClick={() => navigate("/debug/join")}
+            >
+              Open Debug Tool
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Loading State */}
       {loading && (
