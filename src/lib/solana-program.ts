@@ -33,6 +33,15 @@ export enum RoomStatus {
   Cancelled = 3,
 }
 
+/**
+ * Check if a room status indicates it's open for joining
+ * On-chain status=1 appears to be the "open/joinable" state
+ * We treat both 0 and 1 as joinable to be safe
+ */
+export function isOpenStatus(status: number): boolean {
+  return status === 0 || status === 1;
+}
+
 export enum GameType {
   Chess = 1,
   Dominos = 2,
@@ -736,10 +745,11 @@ export async function fetchOpenPublicRooms(connection: Connection): Promise<Room
   console.log("[fetchOpenPublicRooms] Starting...");
   const allRooms = await fetchAllRooms(connection);
   
-  const openRooms = allRooms.filter(
-    room => room.status === RoomStatus.Created && 
-            room.playerCount < room.maxPlayers
-  );
+  const openRooms = allRooms.filter(room => {
+    const isOpen = isOpenStatus(room.status);
+    console.log(`[RoomStatus] roomId=${room.roomId}, status=${room.status}, players=${room.playerCount}/${room.maxPlayers}, isOpen=${isOpen}`);
+    return isOpen && room.playerCount < room.maxPlayers;
+  });
   
   console.log(`[fetchOpenPublicRooms] Filtered to ${openRooms.length} open room(s) from ${allRooms.length} total`);
   return openRooms;
