@@ -72,7 +72,7 @@ export default function DebugJoinRoom() {
         return;
       }
 
-      const display = roomToDisplay(parsed);
+      const display = roomToDisplay(parsed, roomPda);
       console.log("[DebugJoinRoom] Parsed room:", display);
       setRoomData({ ...display, raw: parsed });
 

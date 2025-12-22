@@ -68,6 +68,7 @@ export interface RoomAccount {
 }
 
 export interface RoomDisplay {
+  pda: string; // Room PDA address - use this for navigation/fetching
   roomId: number;
   creator: string;
   gameType: GameType;
@@ -290,11 +291,12 @@ export function parseRoomAccount(data: Buffer): RoomAccount | null {
   }
 }
 
-export function roomToDisplay(room: RoomAccount): RoomDisplay {
+export function roomToDisplay(room: RoomAccount, pda: PublicKey): RoomDisplay {
   const entryFeeSol = room.entryFee / LAMPORTS_PER_SOL;
   const prizePoolSol = entryFeeSol * room.playerCount;
   
   return {
+    pda: pda.toBase58(),
     roomId: room.roomId,
     creator: room.creator.toBase58(),
     gameType: room.gameType,
@@ -628,7 +630,7 @@ export async function fetchAllRooms(connection: Connection): Promise<RoomDisplay
     const parsed = parseRoomAccount(account.data as Buffer);
     if (parsed) {
       console.log(`[fetchAllRooms] Parsed room #${parsed.roomId}: status=${parsed.status}, players=${parsed.playerCount}/${parsed.maxPlayers}, pda=${pubkey.toBase58()}`);
-      rooms.push(roomToDisplay(parsed));
+      rooms.push(roomToDisplay(parsed, pubkey));
     } else {
       console.warn(`[fetchAllRooms] Failed to parse account: ${pubkey.toBase58()}`);
     }
@@ -674,10 +676,10 @@ export async function fetchRoomsByCreator(
     });
     
     const rooms: RoomDisplay[] = [];
-    for (const { account } of accounts) {
+    for (const { pubkey, account } of accounts) {
       const parsed = parseRoomAccount(account.data as Buffer);
       if (parsed) {
-        rooms.push(roomToDisplay(parsed));
+        rooms.push(roomToDisplay(parsed, pubkey));
       }
     }
     
@@ -770,7 +772,7 @@ export async function fetchRoomById(connection: Connection, creator: PublicKey, 
     const parsed = parseRoomAccount(accountInfo.data as Buffer);
     if (!parsed) return null;
     
-    return roomToDisplay(parsed);
+    return roomToDisplay(parsed, roomPda);
   } catch (err) {
     console.error("Failed to fetch room:", err);
     return null;

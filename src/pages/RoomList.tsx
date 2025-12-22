@@ -230,9 +230,9 @@ export default function RoomList() {
         <div className="grid gap-4">
           {rooms.map((room) => (
             <Card 
-              key={room.roomId} 
+              key={room.pda} 
               className="border-border/50 bg-card/80 backdrop-blur hover:bg-card/90 transition-colors cursor-pointer"
-              onClick={() => navigate(`/room/${room.roomId}`)}
+              onClick={() => navigate(`/room/${room.pda}`)}
             >
               <CardContent className="p-4">
                 <div className="flex items-center gap-4">
@@ -273,7 +273,7 @@ export default function RoomList() {
                     size="sm"
                     onClick={(e) => {
                       e.stopPropagation();
-                      navigate(`/room/${room.roomId}`);
+                      navigate(`/room/${room.pda}`);
                     }}
                   >
                     Join
