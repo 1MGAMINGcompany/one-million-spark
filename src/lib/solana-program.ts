@@ -401,6 +401,55 @@ export function buildJoinRoomIx(
   });
 }
 
+/**
+ * Build cancelRoom instruction (for VersionedTransaction - MWA compatible)
+ */
+export function buildCancelRoomIx(
+  creator: PublicKey,
+  roomId: number
+): TransactionInstruction {
+  const [roomPda] = getRoomPDA(creator, roomId);
+  const [vaultPda] = getVaultPDA(roomPda);
+  
+  // Anchor discriminator for "cancel_room" - placeholder, update when deployed
+  const discriminator = Buffer.from([0x4d, 0x6c, 0x4c, 0x6c, 0x4c, 0x6c, 0x4c, 0x6c]);
+  const data = Buffer.from(discriminator);
+  
+  return new TransactionInstruction({
+    keys: [
+      { pubkey: creator, isSigner: true, isWritable: true },
+      { pubkey: roomPda, isSigner: false, isWritable: true },
+      { pubkey: vaultPda, isSigner: false, isWritable: true },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+    ],
+    programId: PROGRAM_ID,
+    data,
+  });
+}
+
+/**
+ * Build pingRoom instruction (for VersionedTransaction - MWA compatible)
+ */
+export function buildPingRoomIx(
+  creator: PublicKey,
+  roomId: number
+): TransactionInstruction {
+  const [roomPda] = getRoomPDA(creator, roomId);
+  
+  // Anchor discriminator for "ping_room" - placeholder, update when deployed
+  const discriminator = Buffer.from([0x8d, 0xac, 0x8c, 0xac, 0x8c, 0xac, 0x8c, 0xac]);
+  const data = Buffer.from(discriminator);
+  
+  return new TransactionInstruction({
+    keys: [
+      { pubkey: creator, isSigner: true, isWritable: false },
+      { pubkey: roomPda, isSigner: false, isWritable: true },
+    ],
+    programId: PROGRAM_ID,
+    data,
+  });
+}
+
 // ============================================
 // LEGACY TRANSACTION BUILDERS (for desktop fallback)
 // ============================================
