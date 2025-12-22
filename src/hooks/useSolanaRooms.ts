@@ -11,6 +11,7 @@ import {
 } from "@solana/web3.js";
 import { useToast } from "@/hooks/use-toast";
 import { buildTxDebugInfo } from "@/components/TxDebugPanel";
+import { normalizeSignature } from "@/lib/solana-utils";
 import {
   RoomDisplay,
   GameType,
@@ -89,16 +90,18 @@ export function useSolanaRooms() {
     });
     
     // Send using adapter.sendTransaction (works for both legacy and versioned)
-    let signature: string;
+    let rawSignature: string | Uint8Array;
     if (hasAdapterSendTx) {
       console.log("[Tx] Using adapter.sendTransaction (VersionedTx) -", adapterName);
-      signature = await adapter.sendTransaction(vtx, connection);
+      rawSignature = await adapter.sendTransaction(vtx, connection);
     } else {
       console.log("[Tx] Using useWallet.sendTransaction (VersionedTx)");
-      signature = await sendTransaction(vtx, connection);
+      rawSignature = await sendTransaction(vtx, connection);
     }
     
-    console.log("[Tx] Signature:", signature);
+    // Normalize signature to base58 (handles mobile wallet formats)
+    const signature = normalizeSignature(rawSignature);
+    console.log("[Tx] Signature (normalized):", signature);
     return { signature, blockhash, lastValidBlockHeight };
   }, [publicKey, connection, adapter, adapterName, hasAdapterSendTx, sendTransaction]);
 
@@ -111,14 +114,18 @@ export function useSolanaRooms() {
       blockhash: tx.recentBlockhash?.slice(0, 12),
     });
     
+    let rawSignature: string | Uint8Array;
     if (hasAdapterSendTx) {
       console.log("[Tx] Using adapter.sendTransaction (legacy) -", adapterName);
-      const signature = await adapter.sendTransaction(tx, connection);
-      return signature;
+      rawSignature = await adapter.sendTransaction(tx, connection);
+    } else {
+      console.log("[Tx] Using sendTransaction from useWallet (legacy)");
+      rawSignature = await sendTransaction(tx, connection);
     }
     
-    console.log("[Tx] Using sendTransaction from useWallet (legacy)");
-    const signature = await sendTransaction(tx, connection);
+    // Normalize signature to base58 (handles mobile wallet formats)
+    const signature = normalizeSignature(rawSignature);
+    console.log("[Tx] Signature (normalized):", signature);
     return signature;
   }, [adapter, adapterName, hasAdapterSendTx, sendTransaction, connection]);
 
