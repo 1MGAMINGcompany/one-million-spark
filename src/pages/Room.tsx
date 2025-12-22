@@ -294,6 +294,7 @@ export default function Room() {
         connection,
         wallet,
         roomPda,
+        entryFeeLamports: stakeLamports,
       });
 
       console.log("Joined room:", res);
