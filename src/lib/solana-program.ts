@@ -591,34 +591,42 @@ export async function buildCancelAbandonedRoomTx(
  * Fetch all rooms from the program
  */
 export async function fetchAllRooms(connection: Connection): Promise<RoomDisplay[]> {
-  try {
-    // Room account discriminator from IDL: [156, 199, 67, 27, 222, 23, 185, 94]
-    const discriminator = Buffer.from([156, 199, 67, 27, 222, 23, 185, 94]);
-    
-    const accounts = await connection.getProgramAccounts(PROGRAM_ID, {
-      filters: [
-        {
-          memcmp: {
-            offset: 0,
-            bytes: bs58.encode(discriminator),
-          },
+  // Room account discriminator from IDL: [156, 199, 67, 27, 222, 23, 185, 94]
+  const discriminator = Buffer.from([156, 199, 67, 27, 222, 23, 185, 94]);
+  
+  console.log("[fetchAllRooms] Starting fetch:", {
+    rpc: connection.rpcEndpoint,
+    programId: PROGRAM_ID.toBase58(),
+    discriminator: bs58.encode(discriminator),
+  });
+  
+  // Let errors propagate to caller - don't swallow them
+  const accounts = await connection.getProgramAccounts(PROGRAM_ID, {
+    filters: [
+      {
+        memcmp: {
+          offset: 0,
+          bytes: bs58.encode(discriminator),
         },
-      ],
-    });
-    
-    const rooms: RoomDisplay[] = [];
-    for (const { account } of accounts) {
-      const parsed = parseRoomAccount(account.data as Buffer);
-      if (parsed) {
-        rooms.push(roomToDisplay(parsed));
-      }
+      },
+    ],
+  });
+  
+  console.log(`[fetchAllRooms] getProgramAccounts returned ${accounts.length} account(s)`);
+  
+  const rooms: RoomDisplay[] = [];
+  for (const { pubkey, account } of accounts) {
+    const parsed = parseRoomAccount(account.data as Buffer);
+    if (parsed) {
+      console.log(`[fetchAllRooms] Parsed room #${parsed.roomId}: status=${parsed.status}, players=${parsed.playerCount}/${parsed.maxPlayers}, pda=${pubkey.toBase58()}`);
+      rooms.push(roomToDisplay(parsed));
+    } else {
+      console.warn(`[fetchAllRooms] Failed to parse account: ${pubkey.toBase58()}`);
     }
-    
-    return rooms;
-  } catch (err) {
-    console.error("Failed to fetch rooms:", err);
-    return [];
   }
+  
+  console.log(`[fetchAllRooms] Returning ${rooms.length} valid room(s)`);
+  return rooms;
 }
 
 /**
@@ -725,11 +733,16 @@ export async function fetchNextRoomId(connection: Connection): Promise<number> {
  * Note: All rooms are public since there's no is_private field on-chain
  */
 export async function fetchOpenPublicRooms(connection: Connection): Promise<RoomDisplay[]> {
+  console.log("[fetchOpenPublicRooms] Starting...");
   const allRooms = await fetchAllRooms(connection);
-  return allRooms.filter(
+  
+  const openRooms = allRooms.filter(
     room => room.status === RoomStatus.Created && 
             room.playerCount < room.maxPlayers
   );
+  
+  console.log(`[fetchOpenPublicRooms] Filtered to ${openRooms.length} open room(s) from ${allRooms.length} total`);
+  return openRooms;
 }
 
 /**
