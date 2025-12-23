@@ -53,7 +53,7 @@ export default function Room() {
   const { isConnected, address } = useWallet();
   const { connection } = useConnection();
   const wallet = useSolanaWallet();
-  const { activeRoom, fetchCreatorActiveRoom, joinRoom, createRoom, cancelRoom, txPending: hookTxPending, txDebugInfo, clearTxDebug } = useSolanaRooms();
+  const { activeRoom, joinRoom, createRoom, cancelRoom, txPending: hookTxPending, txDebugInfo, clearTxDebug } = useSolanaRooms();
   const { isTxInFlight, withTxLock } = useTxLock();
   const [showWalletGate, setShowWalletGate] = useState(false);
   const [showMobileWalletRedirect, setShowMobileWalletRedirect] = useState(false);
@@ -270,12 +270,8 @@ export default function Room() {
     };
   }, [roomPdaParam, connection, wallet]);
 
-  // Fetch user's active room on mount
-  useEffect(() => {
-    if (isConnected) {
-      fetchCreatorActiveRoom();
-    }
-  }, [isConnected, fetchCreatorActiveRoom]);
+  // Note: Active room polling is now centralized in useSolanaRooms
+  // This page only CONSUMES activeRoom - it doesn't trigger fetches
 
   // Update current time every second for abandoned check
   useEffect(() => {

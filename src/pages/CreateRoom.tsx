@@ -43,7 +43,7 @@ export default function CreateRoom() {
   const { toast } = useToast();
   const { play } = useSound();
   const { price, formatUsd, loading: priceLoading, refetch: refetchPrice } = useSolPrice();
-  const { createRoom, txPending, activeRoom, fetchCreatorActiveRoom, cancelRoom, fetchRooms, txDebugInfo, clearTxDebug } = useSolanaRooms();
+  const { createRoom, txPending, activeRoom, cancelRoom, fetchRooms, txDebugInfo, clearTxDebug } = useSolanaRooms();
   const { 
     balanceInfo, 
     fetchBalance, 
@@ -78,25 +78,17 @@ export default function CreateRoom() {
   const entryFeeNum = parseFloat(entryFee) || 0;
   const entryFeeUsd = formatUsd(entryFee);
 
-  // Poll for active room every 5 seconds when connected
+  // Note: Active room polling is now centralized in useSolanaRooms
+  // Pages only CONSUME activeRoom - they don't trigger fetches
   useEffect(() => {
     if (!isConnected) {
       setCheckingActiveRoom(false);
       return;
     }
-    
-    // Immediate fetch on mount
-    console.log("[CreateRoom] Fetching creator active room immediately");
-    fetchCreatorActiveRoom().finally(() => setCheckingActiveRoom(false));
-    hasNavigatedRef.current = false; // Reset on reconnect
-    
-    const pollInterval = setInterval(() => {
-      console.log("[CreateRoom] Polling creator active room");
-      fetchCreatorActiveRoom();
-    }, 5000);
-    
-    return () => clearInterval(pollInterval);
-  }, [isConnected, fetchCreatorActiveRoom]);
+    // Just mark as done checking - polling happens in hook
+    setCheckingActiveRoom(false);
+    hasNavigatedRef.current = false;
+  }, [isConnected]);
 
   // Detect status change: Created -> Started and redirect
   useEffect(() => {

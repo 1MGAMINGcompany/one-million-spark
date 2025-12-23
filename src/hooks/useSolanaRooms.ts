@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { 
   PublicKey, 
@@ -12,6 +12,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { buildTxDebugInfo } from "@/components/TxDebugPanel";
 import { normalizeSignature } from "@/lib/solana-utils";
+import { isRoomArchived } from "@/lib/roomArchive";
 import {
   RoomDisplay,
   GameType,
@@ -39,6 +40,9 @@ export interface TxDebugInfo {
   txType?: 'legacy' | 'versioned';
 }
 
+// Active room polling interval (5 seconds)
+const ACTIVE_ROOM_POLL_INTERVAL = 5000;
+
 export function useSolanaRooms() {
   const { connection } = useConnection();
   const { publicKey, sendTransaction, connected, wallet } = useWallet();
@@ -55,6 +59,9 @@ export function useSolanaRooms() {
   const [txPending, setTxPending] = useState(false);
   const [activeRoom, setActiveRoom] = useState<RoomDisplay | null>(null);
   const [txDebugInfo, setTxDebugInfo] = useState<TxDebugInfo | null>(null);
+  
+  // Track polling interval ref
+  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Clear debug info
   const clearTxDebug = useCallback(() => {
@@ -130,6 +137,7 @@ export function useSolanaRooms() {
 
   // Fetch user's active room (created by them, status Created or Started)
   // Returns the newest active room by roomId (descending) to handle collisions
+  // Also filters out archived rooms
   const fetchCreatorActiveRoom = useCallback(async (): Promise<RoomDisplay | null> => {
     if (!publicKey) {
       setActiveRoom(null);
@@ -141,7 +149,10 @@ export function useSolanaRooms() {
       const creatorRooms = await fetchRoomsByCreator(connection, publicKey);
       
       // Filter to active statuses: Open (0 or 1) or Started (2)
-      const activeRooms = creatorRooms.filter(room => isActiveStatus(room.status));
+      // Also exclude archived rooms
+      const activeRooms = creatorRooms.filter(room => 
+        isActiveStatus(room.status) && !isRoomArchived(room.pda)
+      );
       
       if (activeRooms.length === 0) {
         setActiveRoom(null);
@@ -149,6 +160,7 @@ export function useSolanaRooms() {
       }
       
       // Pick newest by roomId (descending) to handle multiple active rooms
+      // This ensures only ONE active room is returned (deduplication)
       const newestActiveRoom = activeRooms.reduce((newest, room) => 
         room.roomId > newest.roomId ? room : newest
       );
@@ -168,6 +180,38 @@ export function useSolanaRooms() {
       return null;
     }
   }, [connection, publicKey]);
+
+  // AUTO-POLL: Centralized active room polling (SINGLE SOURCE OF TRUTH)
+  // Pages should NOT call fetchCreatorActiveRoom - they only consume activeRoom
+  useEffect(() => {
+    // Clear any existing interval
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
+
+    // Only poll when connected
+    if (!connected || !publicKey) {
+      setActiveRoom(null);
+      return;
+    }
+
+    // Fetch immediately on connect
+    console.log("[useSolanaRooms] Starting active room polling");
+    fetchCreatorActiveRoom();
+
+    // Set up polling interval
+    pollIntervalRef.current = setInterval(() => {
+      fetchCreatorActiveRoom();
+    }, ACTIVE_ROOM_POLL_INTERVAL);
+
+    return () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
+    };
+  }, [connected, publicKey, fetchCreatorActiveRoom]);
 
   // Fetch all open public rooms
   const fetchRooms = useCallback(async () => {
