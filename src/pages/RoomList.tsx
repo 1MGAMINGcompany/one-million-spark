@@ -22,6 +22,7 @@ import { SOLANA_ENABLED, getSolanaCluster, formatSol, getSolanaEndpoint } from "
 import { GameType, RoomStatus, PROGRAM_ID } from "@/lib/solana-program";
 import { ActiveGameBanner } from "@/components/ActiveGameBanner";
 import { useToast } from "@/hooks/use-toast";
+import { AudioManager } from "@/lib/AudioManager";
 
 const BUILD_VERSION = "2024-01-22-v3";
 
@@ -86,6 +87,9 @@ export default function RoomList() {
     
     // Detect transition: Created -> Started means opponent joined
     if (prevStatus === RoomStatus.Created && currentStatus === RoomStatus.Started) {
+      // Play attention-grabbing sound
+      AudioManager.playPlayerJoined();
+      
       toast({
         title: "🎮 Opponent joined — your game is ready!",
         description: `Your ${activeRoom.gameTypeName} match is starting. Enter now!`,

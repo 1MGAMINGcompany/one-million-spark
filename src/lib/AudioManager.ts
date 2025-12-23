@@ -226,6 +226,47 @@ class AudioManagerClass {
     });
   }
 
+  // Player joined notification - attention-grabbing chime
+  playPlayerJoined(): void {
+    if (this.isMuted) return;
+    const ctx = this.getContext();
+    const now = ctx.currentTime;
+
+    // Two-tone ascending chime (like a doorbell/notification)
+    const notes = [523.25, 659.25, 783.99]; // C5, E5, G5 - major chord arpeggio
+    const delays = [0, 0.12, 0.24];
+    
+    notes.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, now + delays[i]);
+
+      gain.gain.setValueAtTime(0, now + delays[i]);
+      gain.gain.linearRampToValueAtTime(0.2, now + delays[i] + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + delays[i] + 0.4);
+
+      osc.connect(gain);
+      gain.connect(this.getMasterGain());
+
+      osc.start(now + delays[i]);
+      osc.stop(now + delays[i] + 0.4);
+    });
+
+    // Add a subtle shimmer overlay
+    const shimmer = ctx.createOscillator();
+    const shimmerGain = ctx.createGain();
+    shimmer.type = 'triangle';
+    shimmer.frequency.setValueAtTime(1046.5, now + 0.3); // C6
+    shimmerGain.gain.setValueAtTime(0.08, now + 0.3);
+    shimmerGain.gain.exponentialRampToValueAtTime(0.001, now + 0.8);
+    shimmer.connect(shimmerGain);
+    shimmerGain.connect(this.getMasterGain());
+    shimmer.start(now + 0.3);
+    shimmer.stop(now + 0.8);
+  }
+
   // Background music using actual mp3 file
   private backgroundAudio: HTMLAudioElement | null = null;
 
