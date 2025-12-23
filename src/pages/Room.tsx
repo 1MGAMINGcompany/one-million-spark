@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
 
 import { useConnection, useWallet as useSolanaWallet } from "@solana/wallet-adapter-react";
-import { parseRoomAccount, getVaultPDA } from "@/lib/solana-program";
+import { parseRoomAccount, getVaultPDA, RoomStatus, statusToName, isOpenStatus } from "@/lib/solana-program";
 import { useWallet } from "@/hooks/useWallet";
 import { useSolanaRooms } from "@/hooks/useSolanaRooms";
 import { useTxLock } from "@/contexts/TxLockContext";
@@ -17,20 +17,9 @@ import { PreviewDomainBanner, useSigningDisabled } from "@/components/PreviewDom
 import { validatePublicKey, isMobileDevice, hasInjectedSolanaWallet, getRoomPda } from "@/lib/solana-utils";
 import { toast } from "sonner";
 
-const STATUS_OPEN = 1;
-const STATUS_STARTED = 2;
-const STATUS_FINISHED = 3;
-
 // Presence feature disabled until program supports ping_room
 // const CREATOR_TIMEOUT_SECS = 60;
 // const PING_INTERVAL_MS = 60000;
-
-// Human-readable mappings
-const STATUS_NAMES: Record<number, string> = {
-  1: "Open",
-  2: "In Progress",
-  3: "Finished",
-};
 
 const GAME_NAMES: Record<number, string> = {
   1: "Chess",
@@ -100,7 +89,7 @@ export default function Room() {
   }, [roomPdaParam]);
 
   const status = room?.status ?? 0;
-  const statusName = STATUS_NAMES[status] || "Unknown";
+  const statusName = statusToName(status);
   const gameName = GAME_NAMES[room?.gameType] || `Game ${room?.gameType}`;
   
   // Get active players (non-default pubkeys)
@@ -134,10 +123,10 @@ export default function Room() {
   const currentPotLamports = stakeLamports * BigInt(playerCount);
 
   // Role-based button visibility
-  const canJoin = status === STATUS_OPEN && !isPlayer && isConnected;
-  const canCancel = status === STATUS_OPEN && playerCount === 1 && isCreator && isConnected;
+  const canJoin = isOpenStatus(status) && !isPlayer && isConnected;
+  const canCancel = isOpenStatus(status) && playerCount === 1 && isCreator && isConnected;
   const canCancelAbandoned = false; // Disabled: cancel_room_if_abandoned not in IDL
-  const canPlayAgain = status === STATUS_FINISHED && isPlayer;
+  const canPlayAgain = status === RoomStatus.Finished && isPlayer;
   
   // Fee calc using basis points (5% = 500 BPS)
   const FEE_BPS = 500n;
@@ -494,8 +483,8 @@ export default function Room() {
               <div className="flex items-center gap-2 flex-wrap">
                 <span className={`px-3 py-1 rounded-full text-sm font-medium ${
                   isAbandoned ? 'bg-red-500/20 text-red-400' :
-                  status === STATUS_OPEN ? 'bg-green-500/20 text-green-400' :
-                  status === STATUS_STARTED ? 'bg-yellow-500/20 text-yellow-400' :
+                  isOpenStatus(status) ? 'bg-green-500/20 text-green-400' :
+                  status === RoomStatus.Started ? 'bg-yellow-500/20 text-yellow-400' :
                   'bg-muted text-muted-foreground'
                 }`}>
                   {isAbandoned ? 'Abandoned' : statusName}
@@ -626,7 +615,7 @@ export default function Room() {
                 </Button>
               )}
 
-              {status === STATUS_OPEN && isPlayer && !isCreator && (
+              {isOpenStatus(status) && isPlayer && !isCreator && (
                 <p className="text-muted-foreground text-sm">
                   Waiting for other players to join...
                 </p>

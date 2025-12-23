@@ -20,7 +20,7 @@ import { useSolanaRooms } from "@/hooks/useSolanaRooms";
 import { useSolanaNetwork } from "@/hooks/useSolanaNetwork";
 import { Wallet, Loader2, AlertCircle, RefreshCw } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { GameType, RoomStatus } from "@/lib/solana-program";
+import { GameType, RoomStatus, isOpenStatus } from "@/lib/solana-program";
 import { ConnectWalletGate } from "@/components/ConnectWalletGate";
 import { TxDebugPanel } from "@/components/TxDebugPanel";
 import { MobileWalletRedirect } from "@/components/MobileWalletRedirect";
@@ -108,8 +108,8 @@ export default function CreateRoom() {
     const prevStatus = prevStatusRef.current;
     const currentStatus = activeRoom.status;
     
-    // Detect transition: Created -> Started means opponent joined
-    if (prevStatus === RoomStatus.Created && currentStatus === RoomStatus.Started && !hasNavigatedRef.current) {
+    // Detect transition: Open (0 or 1) -> Started (2) means opponent joined
+    if (prevStatus !== null && isOpenStatus(prevStatus) && currentStatus === RoomStatus.Started && !hasNavigatedRef.current) {
       console.log("[CreateRoom] Opponent joined! Triggering notifications and redirect");
       hasNavigatedRef.current = true;
       
@@ -264,7 +264,7 @@ export default function CreateRoom() {
           )}
 
           {/* Active Room Warning - only for waiting rooms */}
-          {activeRoom && activeRoom.status === RoomStatus.Created && (
+          {activeRoom && isOpenStatus(activeRoom.status) && (
             <div className="flex items-start gap-2 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
               <AlertCircle className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
               <div className="text-sm flex-1">

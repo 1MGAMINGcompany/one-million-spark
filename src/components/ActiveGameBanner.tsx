@@ -2,7 +2,7 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Play, Users } from "lucide-react";
-import { GameType, RoomDisplay, RoomStatus } from "@/lib/solana-program";
+import { GameType, RoomDisplay, RoomStatus, isOpenStatus } from "@/lib/solana-program";
 
 interface ActiveGameBannerProps {
   room: RoomDisplay;
@@ -21,7 +21,7 @@ export function ActiveGameBanner({ room }: ActiveGameBannerProps) {
 
   const gameRoute = GAME_ROUTES[room.gameType] || "chess";
   const isStarted = room.status === RoomStatus.Started;
-  const isWaiting = room.status === RoomStatus.Created;
+  const isWaiting = isOpenStatus(room.status);
 
   const handleEnterGame = () => {
     navigate(`/game/${gameRoute}/${room.pda}`);

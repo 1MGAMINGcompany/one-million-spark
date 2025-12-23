@@ -16,6 +16,7 @@ import {
   RoomDisplay,
   GameType,
   RoomStatus,
+  isActiveStatus,
   fetchOpenPublicRooms,
   fetchAllRooms,
   fetchRoomsByCreator,
@@ -139,10 +140,8 @@ export function useSolanaRooms() {
       // Use creator-scoped fetch - filters by creator pubkey on-chain
       const creatorRooms = await fetchRoomsByCreator(connection, publicKey);
       
-      // Filter to active statuses: Created (waiting) or Started (in-progress)
-      const activeRooms = creatorRooms.filter(
-        room => room.status === RoomStatus.Created || room.status === RoomStatus.Started
-      );
+      // Filter to active statuses: Open (0 or 1) or Started (2)
+      const activeRooms = creatorRooms.filter(room => isActiveStatus(room.status));
       
       if (activeRooms.length === 0) {
         setActiveRoom(null);

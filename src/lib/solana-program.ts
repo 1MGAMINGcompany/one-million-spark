@@ -26,20 +26,40 @@ export const PLATFORM_FEE_BPS = 500; // 5% = 500 basis points
 // TYPES
 // ============================================
 
+// ============================================
+// CANONICAL ROOM STATUS - Single source of truth
+// Matches on-chain program (mainnet observed: 1=Open, 2=Started)
+// ============================================
+
 export enum RoomStatus {
-  Created = 0,
-  Started = 1,
-  Completed = 2,
-  Cancelled = 3,
+  LegacyOpen = 0,  // Backward compatibility for any legacy rooms
+  Open = 1,        // Room created, waiting for players (on-chain status after create)
+  Started = 2,     // Game in progress (opponent joined)
+  Finished = 3,    // Game completed
+  Cancelled = 4,   // Room cancelled
 }
 
 /**
- * Check if a room status indicates it's open for joining
- * On-chain status=1 appears to be the "open/joinable" state
- * We treat both 0 and 1 as joinable to be safe
+ * Check if a room status indicates it's open for joining.
+ * Handles both legacy (0) and current (1) open states.
  */
 export function isOpenStatus(status: number): boolean {
-  return status === 0 || status === 1;
+  return status === RoomStatus.LegacyOpen || status === RoomStatus.Open;
+}
+
+/**
+ * Check if a room status indicates it's active (not finished/cancelled).
+ * Active rooms are either waiting for players or in progress.
+ */
+export function isActiveStatus(status: number): boolean {
+  return isOpenStatus(status) || status === RoomStatus.Started;
+}
+
+/**
+ * Get human-readable status name from status number.
+ */
+export function statusToName(status: number): string {
+  return STATUS_NAMES[status] || "Unknown";
 }
 
 export enum GameType {
@@ -205,10 +225,11 @@ export const GAME_TYPE_NAMES: Record<number, string> = {
 };
 
 export const STATUS_NAMES: Record<number, string> = {
-  0: "Open",
-  1: "In Progress",
-  2: "Completed",
-  3: "Cancelled",
+  0: "Open",         // Legacy - treat as Open
+  1: "Open",         // Waiting for opponent (on-chain after create)
+  2: "In Progress",  // Game started (after join)
+  3: "Finished",     // Game completed
+  4: "Cancelled",    // Room cancelled
 };
 
 export function parseRoomAccount(data: Buffer): RoomAccount | null {
