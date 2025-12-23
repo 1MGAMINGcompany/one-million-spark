@@ -676,7 +676,6 @@ export default function Room() {
       <MobileWalletRedirect 
         isOpen={showMobileWalletRedirect}
         onClose={() => setShowMobileWalletRedirect(false)}
-        action="join"
       />
 
       {/* Cancel Room Confirmation Modal - Disabled until program supports cancel_room */}
