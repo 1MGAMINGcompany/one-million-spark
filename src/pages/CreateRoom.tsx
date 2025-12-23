@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { PublicKey } from "@solana/web3.js";
@@ -28,6 +28,8 @@ import { PreviewDomainBanner, useSigningDisabled } from "@/components/PreviewDom
 import { getRoomPda, isMobileDevice, hasInjectedSolanaWallet } from "@/lib/solana-utils";
 import { ActiveGameBanner } from "@/components/ActiveGameBanner";
 import { requestNotificationPermission } from "@/lib/pushNotifications";
+import { AudioManager } from "@/lib/AudioManager";
+import { showBrowserNotification } from "@/lib/pushNotifications";
 
 // Target minimum fee in USD
 const MIN_FEE_USD = 0.50;
@@ -57,6 +59,10 @@ export default function CreateRoom() {
   const [refreshingBalance, setRefreshingBalance] = useState(false);
   const [showMobileWalletRedirect, setShowMobileWalletRedirect] = useState(false);
   
+  // Track previous status and navigation state
+  const prevStatusRef = useRef<number | null>(null);
+  const hasNavigatedRef = useRef(false);
+  
   // Check if signing is disabled (preview domain)
   const signingDisabled = useSigningDisabled();
   
@@ -72,14 +78,72 @@ export default function CreateRoom() {
   const entryFeeNum = parseFloat(entryFee) || 0;
   const entryFeeUsd = formatUsd(entryFee);
 
-  // Check for active room on mount
+  // Poll for active room every 5 seconds when connected
   useEffect(() => {
-    if (isConnected) {
-      fetchCreatorActiveRoom().finally(() => setCheckingActiveRoom(false));
-    } else {
+    if (!isConnected) {
       setCheckingActiveRoom(false);
+      return;
     }
+    
+    // Immediate fetch on mount
+    console.log("[CreateRoom] Fetching creator active room immediately");
+    fetchCreatorActiveRoom().finally(() => setCheckingActiveRoom(false));
+    hasNavigatedRef.current = false; // Reset on reconnect
+    
+    const pollInterval = setInterval(() => {
+      console.log("[CreateRoom] Polling creator active room");
+      fetchCreatorActiveRoom();
+    }, 5000);
+    
+    return () => clearInterval(pollInterval);
   }, [isConnected, fetchCreatorActiveRoom]);
+
+  // Detect status change: Created -> Started and redirect
+  useEffect(() => {
+    if (!activeRoom || !address) {
+      prevStatusRef.current = null;
+      return;
+    }
+    
+    const prevStatus = prevStatusRef.current;
+    const currentStatus = activeRoom.status;
+    
+    // Detect transition: Created -> Started means opponent joined
+    if (prevStatus === RoomStatus.Created && currentStatus === RoomStatus.Started && !hasNavigatedRef.current) {
+      console.log("[CreateRoom] Opponent joined! Triggering notifications and redirect");
+      hasNavigatedRef.current = true;
+      
+      // Play attention-grabbing sound
+      AudioManager.playPlayerJoined();
+      
+      // Show browser notification (works even in background)
+      showBrowserNotification(
+        "🎮 Opponent Joined!",
+        `Your ${activeRoom.gameTypeName} match is ready. Enter now!`,
+        { requireInteraction: true }
+      );
+      
+      toast({
+        title: "🎮 Opponent joined — your game is ready!",
+        description: `Your ${activeRoom.gameTypeName} match is starting. Enter now!`,
+      });
+      
+      // Navigate to room using PDA
+      try {
+        const creatorPubkey = new PublicKey(address);
+        const roomPda = getRoomPda(creatorPubkey, activeRoom.roomId);
+        console.log("[CreateRoom] Navigating to room:", roomPda.toBase58());
+        navigate(`/room/${roomPda.toBase58()}`);
+      } catch (e) {
+        console.error("[CreateRoom] Failed to compute room PDA:", e);
+        if (activeRoom.pda) {
+          navigate(`/room/${activeRoom.pda}`);
+        }
+      }
+    }
+    
+    prevStatusRef.current = currentStatus;
+  }, [activeRoom, address, toast, navigate]);
   
   // Manual balance refresh
   const handleRefreshBalance = useCallback(async () => {
