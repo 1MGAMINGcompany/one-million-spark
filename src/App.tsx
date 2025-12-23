@@ -8,6 +8,7 @@ import { AudioProvider } from "./contexts/AudioContext";
 import { SoundProvider } from "./contexts/SoundContext";
 import { TxLockProvider } from "./contexts/TxLockContext";
 import { GlobalBackgroundMusic } from "./components/GlobalBackgroundMusic";
+import { GlobalActiveRoomBanner } from "./components/GlobalActiveRoomBanner";
 import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
 import PyramidLoader from "./components/PyramidLoader";
@@ -53,6 +54,7 @@ const App = () => (
               <GlobalBackgroundMusic />
               <div className="flex flex-col min-h-screen">
                 <Navbar />
+                <GlobalActiveRoomBanner />
                 <main className="pt-16 relative flex-1">
                   <Routes>
                     <Route path="/" element={<Home />} />
