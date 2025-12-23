@@ -2,29 +2,21 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Play, Users } from "lucide-react";
-import { GameType, RoomDisplay, RoomStatus, isOpenStatus } from "@/lib/solana-program";
+import { RoomDisplay, RoomStatus, isOpenStatus } from "@/lib/solana-program";
 
 interface ActiveGameBannerProps {
   room: RoomDisplay;
 }
 
-const GAME_ROUTES: Record<number, string> = {
-  [GameType.Chess]: "chess",
-  [GameType.Dominos]: "dominos",
-  [GameType.Backgammon]: "backgammon",
-  [GameType.Checkers]: "checkers",
-  [GameType.Ludo]: "ludo",
-};
-
 export function ActiveGameBanner({ room }: ActiveGameBannerProps) {
   const navigate = useNavigate();
 
-  const gameRoute = GAME_ROUTES[room.gameType] || "chess";
   const isStarted = room.status === RoomStatus.Started;
   const isWaiting = isOpenStatus(room.status);
 
   const handleEnterGame = () => {
-    navigate(`/game/${gameRoute}/${room.pda}`);
+    // Use canonical /play/:pda route - game type comes from on-chain data
+    navigate(`/play/${room.pda}`);
   };
 
   const handleViewRoom = () => {

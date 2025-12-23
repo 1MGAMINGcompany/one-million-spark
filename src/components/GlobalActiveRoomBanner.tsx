@@ -10,13 +10,7 @@ import { toast } from "@/hooks/use-toast";
 import { AudioManager } from "@/lib/AudioManager";
 import { showBrowserNotification } from "@/lib/pushNotifications";
 
-const GAME_ROUTES: Record<number, string> = {
-  0: "chess",
-  1: "dominos",
-  2: "backgammon",
-  3: "ludo",
-  4: "checkers",
-};
+// REMOVED: GAME_ROUTES - game type comes from on-chain data via /play/:pda, not URL
 
 export function GlobalActiveRoomBanner() {
   const navigate = useNavigate();
@@ -77,12 +71,11 @@ export function GlobalActiveRoomBanner() {
     return null;
   }
 
-  // Don't show if already on the room page or game page for this room
+  // Don't show if already on the room page or play page for this room
   const isOnRoomPage = location.pathname === `/room/${activeRoom.pda}`;
-  const gameRoute = GAME_ROUTES[activeRoom.gameType] || "chess";
-  const isOnGamePage = location.pathname === `/game/${gameRoute}/${activeRoom.pda}`;
+  const isOnPlayPage = location.pathname === `/play/${activeRoom.pda}`;
   
-  if (isOnRoomPage || isOnGamePage) {
+  if (isOnRoomPage || isOnPlayPage) {
     return null;
   }
 
@@ -90,7 +83,8 @@ export function GlobalActiveRoomBanner() {
   const isWaiting = isOpenStatus(activeRoom.status);
 
   const handleEnterGame = () => {
-    navigate(`/game/${gameRoute}/${activeRoom.pda}`);
+    // Use canonical /play/:pda route - game type comes from on-chain data
+    navigate(`/play/${activeRoom.pda}`);
   };
 
   const handleViewRoom = () => {

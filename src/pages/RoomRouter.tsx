@@ -13,19 +13,14 @@ import { useEffect, useState, lazy, Suspense } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useConnection } from "@solana/wallet-adapter-react";
 import { PublicKey } from "@solana/web3.js";
-import { parseRoomAccount, GameType, RoomStatus, isOpenStatus } from "@/lib/solana-program";
+import { parseRoomAccount, RoomStatus, isOpenStatus } from "@/lib/solana-program";
 import { validatePublicKey } from "@/lib/solana-utils";
 import { Loader2, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
-// Lazy load game components for better performance
+// Lazy load Room component - game pages are handled by /play/:roomPda
 const Room = lazy(() => import("./Room"));
-const ChessGame = lazy(() => import("./ChessGame"));
-const DominosGame = lazy(() => import("./DominosGame"));
-const BackgammonGame = lazy(() => import("./BackgammonGame"));
-const CheckersGame = lazy(() => import("./CheckersGame"));
-const LudoGame = lazy(() => import("./LudoGame"));
 
 // Loading fallback component
 function GameLoading() {
@@ -47,7 +42,7 @@ export default function RoomRouter() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [roomData, setRoomData] = useState<{
-    gameType: GameType;
+    gameType: number;
     status: number;
     playerCount: number;
   } | null>(null);
@@ -98,6 +93,14 @@ export default function RoomRouter() {
           playerCount: parsed.playerCount,
         });
 
+        // If room is started (In Progress), redirect to canonical /play/:pda route
+        // This ensures game type is determined from on-chain data, not URL
+        if (parsed.status === RoomStatus.Started) {
+          console.log("[RoomRouter] Room started, redirecting to /play/:pda");
+          navigate(`/play/${roomPdaParam}`, { replace: true });
+          return;
+        }
+
         setRoomData({
           gameType: parsed.gameType,
           status: parsed.status,
@@ -112,7 +115,7 @@ export default function RoomRouter() {
     }
 
     fetchRoomData();
-  }, [roomPdaParam, connection]);
+  }, [roomPdaParam, connection, navigate]);
 
   // Loading state
   if (loading) {
@@ -146,7 +149,6 @@ export default function RoomRouter() {
 
   // Determine which component to render based on status and gameType
   const isWaiting = isOpenStatus(roomData.status);
-  const isStarted = roomData.status === RoomStatus.Started;
   const isFinished = roomData.status === RoomStatus.Finished;
 
   // If room is waiting (Open) or finished, show the Room lobby/details page
@@ -158,42 +160,10 @@ export default function RoomRouter() {
     );
   }
 
-  // If room is started (In Progress), render the appropriate game component
-  if (isStarted) {
-    const GameComponent = getGameComponent(roomData.gameType);
-    return (
-      <Suspense fallback={<GameLoading />}>
-        <GameComponent />
-      </Suspense>
-    );
-  }
-
   // Fallback to Room for any other status
   return (
     <Suspense fallback={<GameLoading />}>
       <Room />
     </Suspense>
   );
-}
-
-/**
- * Get the correct game component based on gameType from on-chain data.
- * This is the ONLY place where gameType determines the game view.
- */
-function getGameComponent(gameType: GameType) {
-  switch (gameType) {
-    case GameType.Chess:
-      return ChessGame;
-    case GameType.Dominos:
-      return DominosGame;
-    case GameType.Backgammon:
-      return BackgammonGame;
-    case GameType.Checkers:
-      return CheckersGame;
-    case GameType.Ludo:
-      return LudoGame;
-    default:
-      console.warn("[RoomRouter] Unknown gameType:", gameType, "- defaulting to Room");
-      return Room;
-  }
 }

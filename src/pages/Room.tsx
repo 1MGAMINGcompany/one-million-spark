@@ -328,9 +328,9 @@ export default function Room() {
     });
 
     if (result?.ok) {
-      // Navigate to game on success using PDA (the ONLY unique identifier)
-      const gameNameLower = gameName.toLowerCase().replace(/\s+/g, "");
-      navigate(`/game/${gameNameLower}/${roomPdaParam}`);
+      // Navigate to canonical play route - game type determined from on-chain data
+      // NEVER use URL slug to determine game type
+      navigate(`/play/${roomPdaParam}`);
     } else if (!result) {
       // null means blocked by tx lock - toast already shown
     } else if (result.reason === "PHANTOM_BLOCKED_OR_REJECTED") {

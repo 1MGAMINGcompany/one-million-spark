@@ -27,7 +27,7 @@ import { AudioManager } from "@/lib/AudioManager";
 import { showBrowserNotification } from "@/lib/pushNotifications";
 // getRoomPda import removed - we use activeRoom.pda directly
 
-const BUILD_VERSION = "2024-01-22-v4";
+import { BUILD_VERSION } from "@/lib/buildVersion";
 
 export default function RoomList() {
   const navigate = useNavigate();
