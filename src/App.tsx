@@ -18,6 +18,7 @@ import AddFunds from "./pages/AddFunds";
 import CreateRoom from "./pages/CreateRoom";
 import RoomList from "./pages/RoomList";
 import RoomRouter from "./pages/RoomRouter";
+import PlayRoom from "./pages/PlayRoom";
 import { GameRedirect } from "./components/GameRedirect";
 import PlayAILobby from "./pages/PlayAILobby";
 import ChessAI from "./pages/ChessAI";
@@ -57,10 +58,12 @@ const App = () => (
                     <Route path="/add-funds" element={<AddFunds />} />
                     <Route path="/create-room" element={<CreateRoom />} />
                     <Route path="/room-list" element={<RoomList />} />
-                    {/* Canonical route: PDA is the ONLY source of truth */}
+                    {/* Canonical routes: PDA is the ONLY source of truth */}
                     <Route path="/room/:roomPda" element={<RoomRouter />} />
+                    {/* Canonical play route - game type from on-chain data ONLY */}
+                    <Route path="/play/:roomPda" element={<PlayRoom />} />
                     <Route path="/join" element={<JoinRoom />} />
-                    {/* Legacy routes redirect to canonical /room/:pda */}
+                    {/* Legacy routes redirect to canonical /room/:pda - slug is IGNORED */}
                     <Route path="/game/:slug/:roomPda" element={<GameRedirect />} />
                     <Route path="/play-ai" element={<PlayAILobby />} />
                     <Route path="/play-ai/chess" element={<ChessAI />} />

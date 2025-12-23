@@ -52,6 +52,12 @@ export default defineConfig(({ mode }) => ({
   build: {
     rollupOptions: {
       external: ['usb', 'node-hid'],
+      output: {
+        // Add hash to all chunks for cache busting
+        entryFileNames: `assets/[name]-[hash].js`,
+        chunkFileNames: `assets/[name]-[hash].js`,
+        assetFileNames: `assets/[name]-[hash].[ext]`,
+      },
     },
   },
 }));
