@@ -61,11 +61,11 @@ const App = () => (
                     <Route path="/room-list" element={<RoomList />} />
                     <Route path="/room/:roomPda" element={<Room />} />
                     <Route path="/join" element={<JoinRoom />} />
-                    <Route path="/game/chess/:roomId" element={<ChessGame />} />
-                    <Route path="/game/dominos/:roomId" element={<DominosGame />} />
-                    <Route path="/game/backgammon/:roomId" element={<BackgammonGame />} />
-                    <Route path="/game/checkers/:roomId" element={<CheckersGame />} />
-                    <Route path="/game/ludo/:roomId" element={<LudoGame />} />
+                    <Route path="/game/chess/:roomPda" element={<ChessGame />} />
+                    <Route path="/game/dominos/:roomPda" element={<DominosGame />} />
+                    <Route path="/game/backgammon/:roomPda" element={<BackgammonGame />} />
+                    <Route path="/game/checkers/:roomPda" element={<CheckersGame />} />
+                    <Route path="/game/ludo/:roomPda" element={<LudoGame />} />
                     <Route path="/play-ai" element={<PlayAILobby />} />
                     <Route path="/play-ai/chess" element={<ChessAI />} />
                     <Route path="/play-ai/dominos" element={<DominosAI />} />

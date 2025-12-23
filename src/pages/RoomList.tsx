@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { PublicKey } from "@solana/web3.js";
+// PublicKey import removed - we use room.pda directly as the unique identifier
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -25,7 +25,7 @@ import { ActiveGameBanner } from "@/components/ActiveGameBanner";
 import { useToast } from "@/hooks/use-toast";
 import { AudioManager } from "@/lib/AudioManager";
 import { showBrowserNotification } from "@/lib/pushNotifications";
-import { getRoomPda } from "@/lib/solana-utils";
+// getRoomPda import removed - we use activeRoom.pda directly
 
 const BUILD_VERSION = "2024-01-22-v4";
 
@@ -114,19 +114,9 @@ export default function RoomList() {
         description: `Your ${activeRoom.gameTypeName} match is starting. Enter now!`,
       });
       
-      // Navigate to room using PDA
-      try {
-        const creatorPubkey = new PublicKey(address);
-        const roomPda = getRoomPda(creatorPubkey, activeRoom.roomId);
-        console.log("[RoomList] Navigating to room:", roomPda.toBase58());
-        navigate(`/room/${roomPda.toBase58()}`);
-      } catch (e) {
-        console.error("[RoomList] Failed to compute room PDA:", e);
-        // Use pda from activeRoom if available
-        if (activeRoom.pda) {
-          navigate(`/room/${activeRoom.pda}`);
-        }
-      }
+      // Navigate to room using PDA from activeRoom (the ONLY unique identifier)
+      console.log("[RoomList] Navigating to room via PDA:", activeRoom.pda);
+      navigate(`/room/${activeRoom.pda}`);
     }
     
     prevStatusRef.current = currentStatus;

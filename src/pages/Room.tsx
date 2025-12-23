@@ -299,8 +299,8 @@ export default function Room() {
   // Presence/ping feature disabled - ping_room not in current on-chain program
   // When the program is updated to include ping_room, re-enable this feature
 
-  // Check if user has an active room that blocks joining
-  const hasBlockingActiveRoom = activeRoom && activeRoom.roomId !== room?.roomId?.toNumber?.();
+  // Check if user has an active room that blocks joining (compare by PDA - the ONLY unique identifier)
+  const hasBlockingActiveRoom = activeRoom && activeRoom.pda !== roomPdaParam;
 
   const onJoinRoom = async () => {
     if (!roomPdaParam || !room) return;
@@ -343,9 +343,9 @@ export default function Room() {
     });
 
     if (result?.ok) {
-      // Navigate to game on success
+      // Navigate to game on success using PDA (the ONLY unique identifier)
       const gameNameLower = gameName.toLowerCase().replace(/\s+/g, "");
-      navigate(`/game/${gameNameLower}/${roomId}`);
+      navigate(`/game/${gameNameLower}/${roomPdaParam}`);
     } else if (!result) {
       // null means blocked by tx lock - toast already shown
     } else if (result.reason === "PHANTOM_BLOCKED_OR_REJECTED") {

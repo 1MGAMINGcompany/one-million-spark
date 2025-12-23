@@ -72,7 +72,8 @@ const initializeBoard = (): (Piece | null)[][] => {
 };
 
 const CheckersGame = () => {
-  const { roomId } = useParams<{ roomId: string }>();
+  const { roomPda } = useParams<{ roomPda: string }>();
+  const roomId = roomPda; // Alias for backward compatibility with hooks/display
   const navigate = useNavigate();
   const { t } = useTranslation();
   const { play } = useSound();
