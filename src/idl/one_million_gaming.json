@@ -8,6 +8,87 @@
   },
   "instructions": [
     {
+      "name": "cancel_room",
+      "docs": [
+        "Cancel rules:",
+        "- Only creator can cancel",
+        "- Only when OPEN",
+        "- Only when player_count == 1",
+        "- Refund stake by closing vault to creator (returns ALL lamports in vault)",
+        "- Close room + vault (removes from lists and returns rent)"
+      ],
+      "discriminator": [
+        91,
+        107,
+        215,
+        178,
+        200,
+        224,
+        241,
+        237
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "room",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "creator"
+              },
+              {
+                "kind": "account",
+                "path": "room.room_id",
+                "account": "Room"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "create_room",
       "discriminator": [
         130,
@@ -225,6 +306,9 @@
     },
     {
       "name": "submit_result",
+      "docs": [
+        "Trusted verifier settles the game and pays out immediately"
+      ],
       "discriminator": [
         240,
         42,
@@ -430,6 +514,16 @@
       "code": 6012,
       "name": "InsufficientVault",
       "msg": "Vault does not have enough SOL"
+    },
+    {
+      "code": 6013,
+      "name": "OnlyCreator",
+      "msg": "Only the room creator can perform this action"
+    },
+    {
+      "code": 6014,
+      "name": "CannotCancelAfterJoin",
+      "msg": "Cannot cancel after another player has joined"
     }
   ],
   "types": [
