@@ -127,7 +127,7 @@ export function useSolanaRooms() {
     return signature;
   }, [adapter, adapterName, hasAdapterSendTx, sendTransaction, connection]);
 
-  // Fetch user's active open room (created by them, status Open)
+  // Fetch user's active room (created by them, status Created or Started)
   const fetchCreatorActiveRoom = useCallback(async (): Promise<RoomDisplay | null> => {
     if (!publicKey) {
       setActiveRoom(null);
@@ -137,8 +137,9 @@ export function useSolanaRooms() {
     try {
       // Use creator-scoped fetch - more efficient than fetching all rooms
       const creatorRooms = await fetchRoomsByCreator(connection, publicKey);
+      // Find room that's either waiting (Created) or in-progress (Started)
       const userActiveRoom = creatorRooms.find(
-        room => room.status === RoomStatus.Created
+        room => room.status === RoomStatus.Created || room.status === RoomStatus.Started
       );
       setActiveRoom(userActiveRoom || null);
       return userActiveRoom || null;

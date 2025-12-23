@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
@@ -19,17 +19,23 @@ import { useWallet } from "@/hooks/useWallet";
 import { WalletRequired } from "@/components/WalletRequired";
 import { useSolanaRooms } from "@/hooks/useSolanaRooms";
 import { SOLANA_ENABLED, getSolanaCluster, formatSol, getSolanaEndpoint } from "@/lib/solana-config";
-import { GameType, PROGRAM_ID } from "@/lib/solana-program";
+import { GameType, RoomStatus, PROGRAM_ID } from "@/lib/solana-program";
+import { ActiveGameBanner } from "@/components/ActiveGameBanner";
+import { useToast } from "@/hooks/use-toast";
 
 const BUILD_VERSION = "2024-01-22-v3";
 
 export default function RoomList() {
   const navigate = useNavigate();
   const { t } = useTranslation();
+  const { toast } = useToast();
   const { isConnected, address } = useWallet();
-  const { rooms, loading, error, fetchRooms } = useSolanaRooms();
+  const { rooms, loading, error, fetchRooms, activeRoom, fetchCreatorActiveRoom } = useSolanaRooms();
   const [showDebug, setShowDebug] = useState(false);
   const [lastFetch, setLastFetch] = useState<string | null>(null);
+  
+  // Track previous status to detect when opponent joins
+  const prevStatusRef = useRef<number | null>(null);
 
   const targetCluster = getSolanaCluster();
   const rpcEndpoint = getSolanaEndpoint();
@@ -45,15 +51,49 @@ export default function RoomList() {
     console.log("[RoomList] useEffect triggered, calling fetchRooms()");
     setLastFetch(new Date().toISOString());
     fetchRooms();
+    fetchCreatorActiveRoom();
     
     const interval = setInterval(() => {
       console.log("[RoomList] Auto-refresh interval, calling fetchRooms()");
       setLastFetch(new Date().toISOString());
       fetchRooms();
+      fetchCreatorActiveRoom();
     }, 30000);
     
     return () => clearInterval(interval);
-  }, [fetchRooms]);
+  }, [fetchRooms, fetchCreatorActiveRoom]);
+
+  // Poll for active room status changes more frequently (every 5s)
+  useEffect(() => {
+    if (!SOLANA_ENABLED || !isConnected) return;
+    
+    const pollInterval = setInterval(() => {
+      fetchCreatorActiveRoom();
+    }, 5000);
+    
+    return () => clearInterval(pollInterval);
+  }, [isConnected, fetchCreatorActiveRoom]);
+
+  // Show toast when room status changes from Created to Started (opponent joined)
+  useEffect(() => {
+    if (!activeRoom) {
+      prevStatusRef.current = null;
+      return;
+    }
+    
+    const prevStatus = prevStatusRef.current;
+    const currentStatus = activeRoom.status;
+    
+    // Detect transition: Created -> Started means opponent joined
+    if (prevStatus === RoomStatus.Created && currentStatus === RoomStatus.Started) {
+      toast({
+        title: "🎮 Opponent joined — your game is ready!",
+        description: `Your ${activeRoom.gameTypeName} match is starting. Enter now!`,
+      });
+    }
+    
+    prevStatusRef.current = currentStatus;
+  }, [activeRoom, toast]);
 
   // Feature flag disabled - show coming soon
   if (!SOLANA_ENABLED) {
@@ -140,6 +180,11 @@ export default function RoomList() {
         </div>
       </div>
 
+      {/* Active Game Banner - shows when creator's room has started */}
+      {isConnected && activeRoom && (
+        <ActiveGameBanner room={activeRoom} />
+      )}
+
       {/* Debug Panel */}
       {showDebug && (
         <Card className="mb-6 border-primary/50 bg-primary/5">
@@ -152,6 +197,7 @@ export default function RoomList() {
             <p><strong>Rooms Found:</strong> {rooms.length}</p>
             <p><strong>Loading:</strong> {String(loading)}</p>
             <p><strong>Error:</strong> {error || "None"}</p>
+            <p><strong>Active Room:</strong> {activeRoom ? `#${activeRoom.roomId} (${activeRoom.statusName})` : "None"}</p>
             <Button 
               variant="outline" 
               size="sm" 

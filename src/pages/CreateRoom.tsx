@@ -20,12 +20,13 @@ import { useSolanaRooms } from "@/hooks/useSolanaRooms";
 import { useSolanaNetwork } from "@/hooks/useSolanaNetwork";
 import { Wallet, Loader2, AlertCircle, RefreshCw } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { GameType } from "@/lib/solana-program";
+import { GameType, RoomStatus } from "@/lib/solana-program";
 import { ConnectWalletGate } from "@/components/ConnectWalletGate";
 import { TxDebugPanel } from "@/components/TxDebugPanel";
 import { MobileWalletRedirect } from "@/components/MobileWalletRedirect";
 import { PreviewDomainBanner, useSigningDisabled } from "@/components/PreviewDomainBanner";
 import { getRoomPda, isMobileDevice, hasInjectedSolanaWallet } from "@/lib/solana-utils";
+import { ActiveGameBanner } from "@/components/ActiveGameBanner";
 
 // Target minimum fee in USD
 const MIN_FEE_USD = 0.50;
@@ -198,8 +199,13 @@ export default function CreateRoom() {
           </div>
         </CardHeader>
         <CardContent className="space-y-4 px-4 pb-5">
-          {/* Active Room Warning */}
-          {activeRoom && (
+          {/* Active Game Banner - shows when room is started (opponent joined) */}
+          {activeRoom && activeRoom.status === RoomStatus.Started && (
+            <ActiveGameBanner room={activeRoom} />
+          )}
+
+          {/* Active Room Warning - only for waiting rooms */}
+          {activeRoom && activeRoom.status === RoomStatus.Created && (
             <div className="flex items-start gap-2 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
               <AlertCircle className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
               <div className="text-sm flex-1">
