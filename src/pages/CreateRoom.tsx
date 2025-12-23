@@ -128,18 +128,9 @@ export default function CreateRoom() {
         description: `Your ${activeRoom.gameTypeName} match is starting. Enter now!`,
       });
       
-      // Navigate to room using PDA
-      try {
-        const creatorPubkey = new PublicKey(address);
-        const roomPda = getRoomPda(creatorPubkey, activeRoom.roomId);
-        console.log("[CreateRoom] Navigating to room:", roomPda.toBase58());
-        navigate(`/room/${roomPda.toBase58()}`);
-      } catch (e) {
-        console.error("[CreateRoom] Failed to compute room PDA:", e);
-        if (activeRoom.pda) {
-          navigate(`/room/${activeRoom.pda}`);
-        }
-      }
+      // Navigate to room using PDA from activeRoom (the ONLY unique identifier)
+      console.log("[CreateRoom] Navigating to room via PDA:", activeRoom.pda);
+      navigate(`/room/${activeRoom.pda}`);
     }
     
     prevStatusRef.current = currentStatus;
@@ -284,19 +275,8 @@ export default function CreateRoom() {
                     variant="outline" 
                     size="sm"
                     onClick={() => {
-                      // Navigate using the pda from activeRoom if available
-                      if (activeRoom.pda) {
-                        navigate(`/room/${activeRoom.pda}`);
-                      } else if (address) {
-                        // Compute PDA from creator + roomId
-                        try {
-                          const creatorPubkey = new PublicKey(address);
-                          const roomPda = getRoomPda(creatorPubkey, activeRoom.roomId);
-                          navigate(`/room/${roomPda.toBase58()}`);
-                        } catch {
-                          navigate("/room-list");
-                        }
-                      }
+                      // Navigate using the pda (the ONLY unique identifier)
+                      navigate(`/room/${activeRoom.pda}`);
                     }}
                   >
                     {t("createRoom.goToRoom")} →

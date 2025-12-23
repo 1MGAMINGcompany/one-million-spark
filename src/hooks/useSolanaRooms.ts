@@ -128,6 +128,7 @@ export function useSolanaRooms() {
   }, [adapter, adapterName, hasAdapterSendTx, sendTransaction, connection]);
 
   // Fetch user's active room (created by them, status Created or Started)
+  // Returns the newest active room by roomId (descending) to handle collisions
   const fetchCreatorActiveRoom = useCallback(async (): Promise<RoomDisplay | null> => {
     if (!publicKey) {
       setActiveRoom(null);
@@ -135,14 +136,33 @@ export function useSolanaRooms() {
     }
     
     try {
-      // Use creator-scoped fetch - more efficient than fetching all rooms
+      // Use creator-scoped fetch - filters by creator pubkey on-chain
       const creatorRooms = await fetchRoomsByCreator(connection, publicKey);
-      // Find room that's either waiting (Created) or in-progress (Started)
-      const userActiveRoom = creatorRooms.find(
+      
+      // Filter to active statuses: Created (waiting) or Started (in-progress)
+      const activeRooms = creatorRooms.filter(
         room => room.status === RoomStatus.Created || room.status === RoomStatus.Started
       );
-      setActiveRoom(userActiveRoom || null);
-      return userActiveRoom || null;
+      
+      if (activeRooms.length === 0) {
+        setActiveRoom(null);
+        return null;
+      }
+      
+      // Pick newest by roomId (descending) to handle multiple active rooms
+      const newestActiveRoom = activeRooms.reduce((newest, room) => 
+        room.roomId > newest.roomId ? room : newest
+      );
+      
+      console.log("[fetchCreatorActiveRoom] Found active room:", {
+        pda: newestActiveRoom.pda,
+        roomId: newestActiveRoom.roomId,
+        status: newestActiveRoom.statusName,
+        playerCount: newestActiveRoom.playerCount,
+      });
+      
+      setActiveRoom(newestActiveRoom);
+      return newestActiveRoom;
     } catch (err) {
       console.error("Error fetching active room:", err);
       setActiveRoom(null);

@@ -28,7 +28,8 @@ import { RematchAcceptModal } from "@/components/RematchAcceptModal";
 const PLAYER_COLORS: PlayerColor[] = ["gold", "ruby", "emerald", "sapphire"];
 
 const LudoGame = () => {
-  const { roomId } = useParams<{ roomId: string }>();
+  const { roomPda } = useParams<{ roomPda: string }>();
+  const roomId = roomPda; // Alias for backward compatibility with hooks/display
   const navigate = useNavigate();
   const { t } = useTranslation();
   const { play } = useSound();
