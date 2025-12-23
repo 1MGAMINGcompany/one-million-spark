@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import { PublicKey } from "@solana/web3.js";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,8 +22,10 @@ import { Wallet, Loader2, AlertCircle, RefreshCw } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { GameType } from "@/lib/solana-program";
 import { ConnectWalletGate } from "@/components/ConnectWalletGate";
-import { NetworkProofBadge } from "@/components/NetworkProofBadge";
 import { TxDebugPanel } from "@/components/TxDebugPanel";
+import { MobileWalletRedirect } from "@/components/MobileWalletRedirect";
+import { PreviewDomainBanner, useSigningDisabled } from "@/components/PreviewDomainBanner";
+import { getRoomPda, isMobileDevice, hasInjectedSolanaWallet } from "@/lib/solana-utils";
 
 // Target minimum fee in USD
 const MIN_FEE_USD = 0.50;
@@ -50,6 +53,13 @@ export default function CreateRoom() {
   const [turnTime, setTurnTime] = useState<string>("10");
   const [checkingActiveRoom, setCheckingActiveRoom] = useState(true);
   const [refreshingBalance, setRefreshingBalance] = useState(false);
+  const [showMobileWalletRedirect, setShowMobileWalletRedirect] = useState(false);
+  
+  // Check if signing is disabled (preview domain)
+  const signingDisabled = useSigningDisabled();
+  
+  // Check if we need to redirect to wallet app
+  const needsMobileWalletRedirect = isMobileDevice() && !hasInjectedSolanaWallet();
   
   // Use balance from network hook (null means not fetched, not 0)
   const balance = balanceInfo.sol ?? 0;
@@ -77,6 +87,22 @@ export default function CreateRoom() {
   }, [fetchBalance]);
 
   const handleCreateRoom = async () => {
+    // Check if we're on a preview domain
+    if (signingDisabled) {
+      toast({
+        title: "Signing Disabled",
+        description: "Wallet signing is disabled on preview domains. Please use 1mgaming.com",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    // Check if we need mobile wallet redirect
+    if (needsMobileWalletRedirect) {
+      setShowMobileWalletRedirect(true);
+      return;
+    }
+    
     // Check network first
     const networkError = checkNetworkMismatch();
     if (networkError) {
@@ -127,8 +153,17 @@ export default function CreateRoom() {
       parseInt(maxPlayers)
     );
 
-    if (roomId) {
-      navigate(`/room/${roomId}`);
+    if (roomId && address) {
+      // Navigate using the Room PDA (base58) - NOT the numeric roomId
+      try {
+        const creatorPubkey = new PublicKey(address);
+        const roomPda = getRoomPda(creatorPubkey, roomId);
+        navigate(`/room/${roomPda.toBase58()}`);
+      } catch (e) {
+        console.error("[CreateRoom] Failed to compute room PDA:", e);
+        // Fallback to room list if PDA computation fails
+        navigate("/room-list");
+      }
     }
   };
 
@@ -174,23 +209,25 @@ export default function CreateRoom() {
                   <Button 
                     variant="outline" 
                     size="sm"
-                    onClick={() => navigate(`/room/${activeRoom.roomId}`)}
+                    onClick={() => {
+                      // Navigate using the pda from activeRoom if available
+                      if (activeRoom.pda) {
+                        navigate(`/room/${activeRoom.pda}`);
+                      } else if (address) {
+                        // Compute PDA from creator + roomId
+                        try {
+                          const creatorPubkey = new PublicKey(address);
+                          const roomPda = getRoomPda(creatorPubkey, activeRoom.roomId);
+                          navigate(`/room/${roomPda.toBase58()}`);
+                        } catch {
+                          navigate("/room-list");
+                        }
+                      }
+                    }}
                   >
                     {t("createRoom.goToRoom")} →
                   </Button>
-                  <Button 
-                    variant="destructive" 
-                    size="sm"
-                    onClick={async () => {
-                      const success = await cancelRoom(activeRoom.roomId);
-                      if (success) {
-                        await Promise.all([fetchCreatorActiveRoom(), fetchRooms()]);
-                      }
-                    }}
-                    disabled={txPending}
-                  >
-                    Cancel Room
-                  </Button>
+                  {/* Cancel Room button disabled - not in current on-chain program */}
                 </div>
               </div>
             </div>
@@ -321,7 +358,7 @@ export default function CreateRoom() {
           {/* Create Button */}
           <Button 
             onClick={handleCreateRoom}
-            disabled={txPending || !!activeRoom || checkingActiveRoom}
+            disabled={txPending || !!activeRoom || checkingActiveRoom || signingDisabled}
             className="w-full"
             size="sm"
           >
@@ -335,6 +372,8 @@ export default function CreateRoom() {
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 {t("createRoom.checking")}
               </>
+            ) : signingDisabled ? (
+              "Signing Disabled"
             ) : activeRoom ? (
               t("createRoom.cancelActiveFirst")
             ) : (
@@ -363,6 +402,16 @@ export default function CreateRoom() {
           </div>
         </CardContent>
       </Card>
+      
+      {/* Preview Domain Banner */}
+      <PreviewDomainBanner />
+      
+      {/* Mobile Wallet Redirect Modal */}
+      <MobileWalletRedirect 
+        isOpen={showMobileWalletRedirect}
+        onClose={() => setShowMobileWalletRedirect(false)}
+        action="create"
+      />
       
       {/* Transaction Debug Panel - shown on tx failure */}
       <TxDebugPanel debugInfo={txDebugInfo} onClose={clearTxDebug} />

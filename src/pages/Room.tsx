@@ -12,6 +12,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Construction, ArrowLeft, Loader2, Users, Coins, AlertTriangle } from "lucide-react";
 import { WalletGateModal } from "@/components/WalletGateModal";
 import { TxDebugPanel } from "@/components/TxDebugPanel";
+import { MobileWalletRedirect } from "@/components/MobileWalletRedirect";
+import { PreviewDomainBanner, useSigningDisabled } from "@/components/PreviewDomainBanner";
+import { validatePublicKey, isMobileDevice, hasInjectedSolanaWallet, getRoomPda } from "@/lib/solana-utils";
 import { toast } from "sonner";
 
 const STATUS_OPEN = 1;
@@ -64,18 +67,37 @@ export default function Room() {
   const { activeRoom, fetchCreatorActiveRoom, joinRoom, createRoom, txPending: hookTxPending, txDebugInfo, clearTxDebug } = useSolanaRooms();
   const { isTxInFlight, withTxLock } = useTxLock();
   const [showWalletGate, setShowWalletGate] = useState(false);
-  // Cancel room feature disabled - not in current on-chain program
-  // const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [showMobileWalletRedirect, setShowMobileWalletRedirect] = useState(false);
 
   const [room, setRoom] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pdaError, setPdaError] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(Date.now());
   const [vaultLamports, setVaultLamports] = useState<bigint>(0n);
   const [vaultPdaStr, setVaultPdaStr] = useState<string>("");
-  // Ping/presence feature disabled - not in current on-chain program
-  // const pingIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  // const [presenceEnabled, setPresenceEnabled] = useState(false);
+  
+  // Check if signing is disabled (preview domain)
+  const signingDisabled = useSigningDisabled();
+  
+  // Check if we need to redirect to wallet app
+  const needsMobileWalletRedirect = isMobileDevice() && !hasInjectedSolanaWallet();
+  
+  // Validate PDA param on mount
+  useEffect(() => {
+    if (!roomPdaParam) {
+      setPdaError("No room specified");
+      return;
+    }
+    
+    const validPda = validatePublicKey(roomPdaParam);
+    if (!validPda) {
+      setPdaError("Invalid room link");
+      console.error("[Room] Invalid PDA param:", roomPdaParam);
+    } else {
+      setPdaError(null);
+    }
+  }, [roomPdaParam]);
 
   const status = room?.status ?? 0;
   const statusName = STATUS_NAMES[status] || "Unknown";
@@ -288,6 +310,18 @@ export default function Room() {
       setShowWalletGate(true);
       return;
     }
+    
+    // Check if we're on a preview domain
+    if (signingDisabled) {
+      toast.error("Wallet signing is disabled on preview domains. Please use 1mgaming.com");
+      return;
+    }
+    
+    // Check if we need mobile wallet redirect
+    if (needsMobileWalletRedirect) {
+      setShowMobileWalletRedirect(true);
+      return;
+    }
 
     // Check if user has an active room
     if (hasBlockingActiveRoom) {
@@ -331,6 +365,18 @@ export default function Room() {
   // const onCancelAbandonedRoom = async () => { ... };
 
   const onPlayAgain = async () => {
+    // Check if we're on a preview domain
+    if (signingDisabled) {
+      toast.error("Wallet signing is disabled on preview domains. Please use 1mgaming.com");
+      return;
+    }
+    
+    // Check if we need mobile wallet redirect
+    if (needsMobileWalletRedirect) {
+      setShowMobileWalletRedirect(true);
+      return;
+    }
+    
     // Check if user has an active room
     if (hasBlockingActiveRoom) {
       toast.error("You have an active room. Cancel it before creating a new one.");
@@ -347,13 +393,38 @@ export default function Room() {
       return await createRoom(gameType, entryFeeSol, maxPlayers);
     });
 
-    if (result) {
+    if (result && address) {
       toast.success("New room created!");
-      // createRoom returns roomId, we need to find the room PDA
-      // For now, navigate to room list where user can find their new room
-      navigate("/room-list");
+      // Navigate to the new room using PDA
+      try {
+        const creatorPubkey = new PublicKey(address);
+        const newRoomPda = getRoomPda(creatorPubkey, result);
+        navigate(`/room/${newRoomPda.toBase58()}`);
+      } catch {
+        navigate("/room-list");
+      }
     }
   };
+  
+  // Show friendly error UI for invalid PDA
+  if (pdaError) {
+    return (
+      <div className="container max-w-2xl py-8 px-4">
+        <Card className="border-border/50 bg-card/80 backdrop-blur">
+          <CardContent className="text-center py-12">
+            <AlertTriangle className="h-12 w-12 text-amber-500 mx-auto mb-4" />
+            <h3 className="text-xl font-semibold mb-2">{pdaError}</h3>
+            <p className="text-muted-foreground mb-6">
+              The room link appears to be invalid or malformed.
+            </p>
+            <Button onClick={() => navigate("/room-list")}>
+              Back to Room List
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="container max-w-2xl py-8 px-4">
@@ -499,7 +570,7 @@ export default function Room() {
                 <Button 
                   onClick={onJoinRoom} 
                   size="lg" 
-                  disabled={isTxInFlight || hookTxPending}
+                  disabled={isTxInFlight || hookTxPending || signingDisabled}
                   className="min-w-32"
                 >
                   {isTxInFlight ? (
@@ -507,6 +578,8 @@ export default function Room() {
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       Waiting for wallet...
                     </>
+                  ) : signingDisabled ? (
+                    "Signing Disabled"
                   ) : (
                     `Join Room (${stakeSOL} SOL)`
                   )}
@@ -518,7 +591,7 @@ export default function Room() {
                   onClick={onPlayAgain} 
                   size="lg" 
                   variant="outline"
-                  disabled={isTxInFlight || hookTxPending}
+                  disabled={isTxInFlight || hookTxPending || signingDisabled}
                   className="min-w-32"
                 >
                   {isTxInFlight ? (
@@ -526,6 +599,8 @@ export default function Room() {
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       Waiting for wallet...
                     </>
+                  ) : signingDisabled ? (
+                    "Signing Disabled"
                   ) : (
                     'Play Again'
                   )}
@@ -554,6 +629,16 @@ export default function Room() {
         onClose={() => setShowWalletGate(false)}
         title="Connect a Solana Wallet to Play"
         description="Connect your wallet to join this room and compete for SOL prizes."
+      />
+      
+      {/* Preview Domain Banner */}
+      <PreviewDomainBanner />
+      
+      {/* Mobile Wallet Redirect Modal */}
+      <MobileWalletRedirect 
+        isOpen={showMobileWalletRedirect}
+        onClose={() => setShowMobileWalletRedirect(false)}
+        action="join"
       />
 
       {/* Cancel Room Confirmation Modal - Disabled until program supports cancel_room */}
