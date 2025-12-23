@@ -252,8 +252,9 @@ export default function DebugJoinRoom() {
               </div>
 
               <Button 
-                onClick={() => navigate(`/room/${roomData.creator}/${roomData.roomId}`)}
+                onClick={() => navigate(`/room/${pdaInfo?.roomPda}`)}
                 className="w-full"
+                disabled={!pdaInfo?.roomPda}
               >
                 Go to Room Page
               </Button>

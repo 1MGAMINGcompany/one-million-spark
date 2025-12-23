@@ -480,7 +480,7 @@ export default function Room() {
                       variant="link" 
                       size="sm" 
                       className="text-amber-400 p-0 h-auto mt-1"
-                      onClick={() => navigate(`/room/${activeRoom?.roomId}`)}
+                      onClick={() => navigate(`/room/${activeRoom?.pda}`)}
                     >
                       Go to your room →
                     </Button>
