@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Play, Users } from "lucide-react";
 import { useSolanaRooms } from "@/hooks/useSolanaRooms";
-import { RoomStatus } from "@/lib/solana-program";
+import { RoomStatus, isOpenStatus } from "@/lib/solana-program";
 import { toast } from "@/hooks/use-toast";
 import { AudioManager } from "@/lib/AudioManager";
 import { showBrowserNotification } from "@/lib/pushNotifications";
@@ -53,9 +53,10 @@ export function GlobalActiveRoomBanner() {
     const currentStatus = activeRoom.status;
     const prevStatus = previousStatusRef.current;
 
-    // Detect transition from Created (1) to Started (2)
+    // Detect transition from Open (0 or 1) to Started (2)
     if (
-      prevStatus === RoomStatus.Created &&
+      prevStatus !== null &&
+      isOpenStatus(prevStatus) &&
       currentStatus === RoomStatus.Started &&
       !hasNavigatedRef.current
     ) {
@@ -98,7 +99,7 @@ export function GlobalActiveRoomBanner() {
   }
 
   const isStarted = activeRoom.status === RoomStatus.Started;
-  const isWaiting = activeRoom.status === RoomStatus.Created;
+  const isWaiting = isOpenStatus(activeRoom.status);
 
   const handleEnterGame = () => {
     navigate(`/game/${gameRoute}/${activeRoom.pda}`);

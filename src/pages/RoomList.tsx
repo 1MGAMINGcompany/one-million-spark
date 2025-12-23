@@ -20,7 +20,7 @@ import { useWallet } from "@/hooks/useWallet";
 import { WalletRequired } from "@/components/WalletRequired";
 import { useSolanaRooms } from "@/hooks/useSolanaRooms";
 import { SOLANA_ENABLED, getSolanaCluster, formatSol, getSolanaEndpoint } from "@/lib/solana-config";
-import { GameType, RoomStatus, PROGRAM_ID } from "@/lib/solana-program";
+import { GameType, RoomStatus, PROGRAM_ID, isOpenStatus } from "@/lib/solana-program";
 import { ActiveGameBanner } from "@/components/ActiveGameBanner";
 import { useToast } from "@/hooks/use-toast";
 import { AudioManager } from "@/lib/AudioManager";
@@ -94,8 +94,8 @@ export default function RoomList() {
     const prevStatus = prevStatusRef.current;
     const currentStatus = activeRoom.status;
     
-    // Detect transition: Created -> Started means opponent joined
-    if (prevStatus === RoomStatus.Created && currentStatus === RoomStatus.Started && !hasNavigatedRef.current) {
+    // Detect transition: Open (0 or 1) -> Started (2) means opponent joined
+    if (prevStatus !== null && isOpenStatus(prevStatus) && currentStatus === RoomStatus.Started && !hasNavigatedRef.current) {
       console.log("[RoomList] Opponent joined! Triggering notifications and redirect");
       hasNavigatedRef.current = true;
       

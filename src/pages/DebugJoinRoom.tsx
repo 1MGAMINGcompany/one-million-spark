@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Search, RefreshCw } from "lucide-react";
-import { PROGRAM_ID, RoomStatus, GAME_TYPE_NAMES, STATUS_NAMES, parseRoomAccount, roomToDisplay, getRoomPDA, getVaultPDA, fetchAllRooms } from "@/lib/solana-program";
+import { PROGRAM_ID, RoomStatus, GAME_TYPE_NAMES, STATUS_NAMES, parseRoomAccount, roomToDisplay, getRoomPDA, getVaultPDA, fetchAllRooms, isOpenStatus } from "@/lib/solana-program";
 import { getSolanaEndpoint } from "@/lib/solana-config";
 
 const BUILD_VERSION = "2024-01-22-v3";
@@ -233,7 +233,7 @@ export default function DebugJoinRoom() {
                 </div>
                 <div>
                   <span className="text-muted-foreground">Status:</span>
-                  <Badge className="ml-2" variant={roomData.status === RoomStatus.Created ? "default" : "secondary"}>
+                  <Badge className="ml-2" variant={isOpenStatus(roomData.status) ? "default" : "secondary"}>
                     {STATUS_NAMES[roomData.status] || roomData.status}
                   </Badge>
                 </div>
