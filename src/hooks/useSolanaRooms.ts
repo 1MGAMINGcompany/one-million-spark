@@ -22,8 +22,7 @@ import {
   fetchNextRoomIdForCreator,
   buildCreateRoomIx,
   buildJoinRoomIx,
-  // Note: buildCancelRoomIx, buildPingRoomIx, buildCancelAbandonedRoomTx are not in the current IDL
-  // They will be re-enabled when the program is updated to include cancel_room and ping_room
+  buildCancelRoomIx,
 } from "@/lib/solana-program";
 
 // Debug info type for failed transactions
@@ -380,16 +379,82 @@ export function useSolanaRooms() {
     }
   }, [publicKey, connected, connection, sendVersionedTx, toast, fetchRooms, fetchCreatorActiveRoom, hasAdapterSendTx, adapterName]);
 
-  // cancelRoom is disabled - cancel_room instruction not in current on-chain program
-  // When the program is updated, re-enable this function
-  const cancelRoom = useCallback(async (roomId: number): Promise<{ ok: boolean; signature?: string; reason?: string }> => {
-    toast({
-      title: "Cancel Room Unavailable",
-      description: "This feature is not yet available on mainnet. Please wait for the next program update.",
-      variant: "destructive",
-    });
-    return { ok: false, reason: "NOT_IN_PROGRAM" };
-  }, [toast]);
+  // cancelRoom - cancel an open room (only creator, only when playerCount == 1)
+  const cancelRoom = useCallback(
+    async (roomId: number): Promise<{ ok: boolean; signature?: string; reason?: string }> => {
+      if (!publicKey || !connected) {
+        toast({
+          title: "Wallet not connected",
+          variant: "destructive",
+        });
+        return { ok: false, reason: "WALLET_NOT_CONNECTED" };
+      }
+
+      setTxPending(true);
+      setTxDebugInfo(null);
+
+      try {
+        const ix = buildCancelRoomIx(publicKey, roomId);
+
+        // Send as VersionedTransaction (mobile-safe)
+        const { signature, blockhash, lastValidBlockHeight } = await sendVersionedTx([ix]);
+
+        toast({
+          title: "Transaction sent",
+          description: "Waiting for confirmation...",
+        });
+
+        // CRITICAL: wait for confirmation BEFORE success UI
+        await connection.confirmTransaction(
+          { signature, blockhash, lastValidBlockHeight },
+          "confirmed"
+        );
+
+        toast({
+          title: "Room cancelled",
+          description: "Your stake has been refunded",
+        });
+
+        // Refresh state AFTER confirmed
+        await Promise.all([fetchRooms(), fetchCreatorActiveRoom()]);
+
+        return { ok: true, signature };
+      } catch (err: any) {
+        const msg = err?.message?.toLowerCase?.() || "";
+
+        if (
+          msg.includes("reject") ||
+          msg.includes("denied") ||
+          msg.includes("cancel") ||
+          msg.includes("blocked")
+        ) {
+          toast({
+            title: "Transaction cancelled",
+            description: "No changes were made",
+            variant: "destructive",
+          });
+          return { ok: false, reason: "PHANTOM_BLOCKED_OR_REJECTED" };
+        }
+
+        let displayError = err?.message || "Transaction failed";
+        if (err?.logs) {
+          const anchorErr = err.logs.find((l: string) => l.includes("Error Code:"));
+          if (anchorErr) displayError = anchorErr;
+        }
+
+        toast({
+          title: "Failed to cancel room",
+          description: displayError,
+          variant: "destructive",
+        });
+
+        return { ok: false, reason: "ERROR" };
+      } finally {
+        setTxPending(false);
+      }
+    },
+    [publicKey, connected, connection, sendVersionedTx, toast, fetchRooms, fetchCreatorActiveRoom]
+  );
 
   // pingRoom is disabled - ping_room instruction not in current on-chain program
   // When the program is updated, re-enable this function
