@@ -27,6 +27,7 @@ import { MobileWalletRedirect } from "@/components/MobileWalletRedirect";
 import { PreviewDomainBanner, useSigningDisabled } from "@/components/PreviewDomainBanner";
 import { getRoomPda, isMobileDevice, hasInjectedSolanaWallet } from "@/lib/solana-utils";
 import { ActiveGameBanner } from "@/components/ActiveGameBanner";
+import { requestNotificationPermission } from "@/lib/pushNotifications";
 
 // Target minimum fee in USD
 const MIN_FEE_USD = 0.50;
@@ -155,6 +156,9 @@ export default function CreateRoom() {
     );
 
     if (roomId && address) {
+      // Request notification permission so we can alert when opponent joins
+      requestNotificationPermission();
+      
       // Navigate using the Room PDA (base58) - NOT the numeric roomId
       try {
         const creatorPubkey = new PublicKey(address);
