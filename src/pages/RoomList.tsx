@@ -23,6 +23,7 @@ import { GameType, RoomStatus, PROGRAM_ID } from "@/lib/solana-program";
 import { ActiveGameBanner } from "@/components/ActiveGameBanner";
 import { useToast } from "@/hooks/use-toast";
 import { AudioManager } from "@/lib/AudioManager";
+import { showBrowserNotification } from "@/lib/pushNotifications";
 
 const BUILD_VERSION = "2024-01-22-v3";
 
@@ -89,6 +90,13 @@ export default function RoomList() {
     if (prevStatus === RoomStatus.Created && currentStatus === RoomStatus.Started) {
       // Play attention-grabbing sound
       AudioManager.playPlayerJoined();
+      
+      // Show browser notification (works even in background)
+      showBrowserNotification(
+        "🎮 Opponent Joined!",
+        `Your ${activeRoom.gameTypeName} match is ready. Enter now!`,
+        { requireInteraction: true }
+      );
       
       toast({
         title: "🎮 Opponent joined — your game is ready!",
