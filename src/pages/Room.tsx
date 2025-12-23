@@ -64,7 +64,7 @@ export default function Room() {
   const { isConnected, address } = useWallet();
   const { connection } = useConnection();
   const wallet = useSolanaWallet();
-  const { activeRoom, fetchCreatorActiveRoom, joinRoom, createRoom, txPending: hookTxPending, txDebugInfo, clearTxDebug } = useSolanaRooms();
+  const { activeRoom, fetchCreatorActiveRoom, joinRoom, createRoom, cancelRoom, txPending: hookTxPending, txDebugInfo, clearTxDebug } = useSolanaRooms();
   const { isTxInFlight, withTxLock } = useTxLock();
   const [showWalletGate, setShowWalletGate] = useState(false);
   const [showMobileWalletRedirect, setShowMobileWalletRedirect] = useState(false);
@@ -122,13 +122,6 @@ export default function Room() {
   // const isAbandoned = status === STATUS_OPEN && !room?.isPrivate && lastCreatorPing > 0 && secondsSinceLastPing > CREATOR_TIMEOUT_SECS;
   const isAbandoned = false; // Disabled until program supports ping_room
   
-  // Role-based button visibility
-  // Note: canCancel disabled - cancel_room not in current on-chain program
-  const canJoin = status === STATUS_OPEN && !isPlayer && isConnected;
-  const canCancel = false; // Disabled: cancel_room not in IDL
-  const canCancelAbandoned = false; // Disabled: cancel_room_if_abandoned not in IDL
-  const canPlayAgain = status === STATUS_FINISHED && isPlayer;
-  
   // Stake calculations
   const stakeLamports = room?.stakeLamports ? BigInt(room.stakeLamports.toString()) : 0n;
   const stakeSOL = formatSol(stakeLamports);
@@ -139,6 +132,12 @@ export default function Room() {
   const fullPotLamports = stakeLamports * BigInt(maxPlayers);
   // Current deposited = entry fee × current players (for debug)
   const currentPotLamports = stakeLamports * BigInt(playerCount);
+
+  // Role-based button visibility
+  const canJoin = status === STATUS_OPEN && !isPlayer && isConnected;
+  const canCancel = status === STATUS_OPEN && playerCount === 1 && isCreator && isConnected;
+  const canCancelAbandoned = false; // Disabled: cancel_room_if_abandoned not in IDL
+  const canPlayAgain = status === STATUS_FINISHED && isPlayer;
   
   // Fee calc using basis points (5% = 500 BPS)
   const FEE_BPS = 500n;
@@ -359,10 +358,30 @@ export default function Room() {
     }
   };
 
-  // Cancel room handlers disabled - cancel_room not in current on-chain program
-  // When the program is updated to include cancel_room, re-enable these handlers
-  // const handleCancelRoomClick = async () => { ... };
-  // const onCancelAbandonedRoom = async () => { ... };
+  // Cancel room handler
+  const onCancelRoom = async () => {
+    if (!room) return;
+
+    if (signingDisabled) {
+      toast.error("Wallet signing is disabled on preview domains. Please use 1mgaming.com");
+      return;
+    }
+
+    if (needsMobileWalletRedirect) {
+      setShowMobileWalletRedirect(true);
+      return;
+    }
+
+    const roomId = typeof room.roomId === "object" ? room.roomId.toNumber() : room.roomId;
+
+    const result = await withTxLock(async () => {
+      return await cancelRoom(roomId);
+    });
+
+    if (result?.ok) {
+      navigate("/room-list");
+    }
+  };
 
   const onPlayAgain = async () => {
     // Check if we're on a preview domain
@@ -616,8 +635,27 @@ export default function Room() {
 
             {/* Enable Presence Toggle - Disabled until program supports ping_room */}
 
-            {/* Cancel Room Button - Disabled until program supports cancel_room */}
-            {/* Cancel Abandoned Room Button - Disabled until program supports cancel_room */}
+            {/* Cancel Room Button */}
+            {canCancel && (
+              <Button
+                onClick={onCancelRoom}
+                size="lg"
+                variant="destructive"
+                disabled={isTxInFlight || hookTxPending || signingDisabled}
+                className="min-w-32"
+              >
+                {isTxInFlight || hookTxPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Cancelling…
+                  </>
+                ) : signingDisabled ? (
+                  "Signing Disabled"
+                ) : (
+                  "Cancel Room"
+                )}
+              </Button>
+            )}
           </div>
 
           {/* Presence Info Message - Disabled until program supports ping_room */}

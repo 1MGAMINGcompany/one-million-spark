@@ -411,9 +411,8 @@ export function buildCancelRoomIx(
   const [roomPda] = getRoomPDA(creator, roomId);
   const [vaultPda] = getVaultPDA(roomPda);
   
-  // Anchor discriminator for "cancel_room" - placeholder, update when deployed
-  const discriminator = Buffer.from([0x4d, 0x6c, 0x4c, 0x6c, 0x4c, 0x6c, 0x4c, 0x6c]);
-  const data = Buffer.from(discriminator);
+  // Anchor discriminator for "cancel_room" from IDL
+  const data = Buffer.from([91, 107, 215, 178, 200, 224, 241, 237]);
   
   return new TransactionInstruction({
     keys: [
