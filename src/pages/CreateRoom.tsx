@@ -410,7 +410,6 @@ export default function CreateRoom() {
       <MobileWalletRedirect 
         isOpen={showMobileWalletRedirect}
         onClose={() => setShowMobileWalletRedirect(false)}
-        action="create"
       />
       
       {/* Transaction Debug Panel - shown on tx failure */}

@@ -5,26 +5,26 @@ import { Smartphone, ExternalLink } from "lucide-react";
 interface MobileWalletRedirectProps {
   isOpen: boolean;
   onClose: () => void;
-  action: "create" | "join";
 }
 
 /**
  * Deep links for opening the current URL inside wallet in-app browsers
  */
 function getWalletDeepLinks() {
-  const currentUrl = encodeURIComponent(window.location.href);
+  // Use production domain for deep links, not preview domains
+  const currentPath = window.location.pathname + window.location.search;
+  const productionUrl = `https://1mgaming.com${currentPath}`;
+  const encodedUrl = encodeURIComponent(productionUrl);
   
   return {
-    phantom: `https://phantom.app/ul/browse/${currentUrl}?ref=1mgaming`,
-    solflare: `https://solflare.com/ul/v1/browse/${currentUrl}`,
-    backpack: `https://backpack.app/ul/browse/${currentUrl}`,
+    phantom: `https://phantom.app/ul/browse/${encodedUrl}?ref=1mgaming`,
+    solflare: `https://solflare.com/ul/v1/browse/${encodedUrl}`,
+    backpack: `https://backpack.app/ul/browse/${encodedUrl}`,
   };
 }
 
-export function MobileWalletRedirect({ isOpen, onClose, action }: MobileWalletRedirectProps) {
+export function MobileWalletRedirect({ isOpen, onClose }: MobileWalletRedirectProps) {
   const deepLinks = getWalletDeepLinks();
-  
-  const actionText = action === "create" ? "create a room" : "join this room";
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -32,10 +32,10 @@ export function MobileWalletRedirect({ isOpen, onClose, action }: MobileWalletRe
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Smartphone className="h-5 w-5 text-primary" />
-            Open in Wallet App
+            Open in a Wallet to Sign
           </DialogTitle>
           <DialogDescription>
-            To {actionText}, open this page in your wallet's browser for secure signing.
+            On mobile, you must open 1mgaming.com inside your wallet's browser to sign transactions.
           </DialogDescription>
         </DialogHeader>
         
@@ -96,7 +96,7 @@ export function MobileWalletRedirect({ isOpen, onClose, action }: MobileWalletRe
         </div>
         
         <p className="text-xs text-muted-foreground text-center pt-2">
-          Don't have a wallet? Download one of the apps above to get started.
+          After opening in your wallet, you can sign transactions securely.
         </p>
       </DialogContent>
     </Dialog>
