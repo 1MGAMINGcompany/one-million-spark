@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import { PublicKey } from "@solana/web3.js";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -24,8 +25,9 @@ import { ActiveGameBanner } from "@/components/ActiveGameBanner";
 import { useToast } from "@/hooks/use-toast";
 import { AudioManager } from "@/lib/AudioManager";
 import { showBrowserNotification } from "@/lib/pushNotifications";
+import { getRoomPda } from "@/lib/solana-utils";
 
-const BUILD_VERSION = "2024-01-22-v3";
+const BUILD_VERSION = "2024-01-22-v4";
 
 export default function RoomList() {
   const navigate = useNavigate();
@@ -38,47 +40,53 @@ export default function RoomList() {
   
   // Track previous status to detect when opponent joins
   const prevStatusRef = useRef<number | null>(null);
+  // Track if we already navigated to avoid double navigation
+  const hasNavigatedRef = useRef(false);
 
   const targetCluster = getSolanaCluster();
   const rpcEndpoint = getSolanaEndpoint();
 
-  // Initial fetch and auto-refresh every 30 seconds
-  // Rooms are fetched for ALL users (wallet connected or not)
+  // Initial fetch of rooms (for all users)
   useEffect(() => {
     if (!SOLANA_ENABLED) {
       console.log("[RoomList] SOLANA_ENABLED is false, skipping fetch");
       return;
     }
     
-    console.log("[RoomList] useEffect triggered, calling fetchRooms()");
+    console.log("[RoomList] Initial fetch");
     setLastFetch(new Date().toISOString());
     fetchRooms();
-    fetchCreatorActiveRoom();
     
+    // Refresh room list every 30 seconds
     const interval = setInterval(() => {
-      console.log("[RoomList] Auto-refresh interval, calling fetchRooms()");
+      console.log("[RoomList] Auto-refresh room list");
       setLastFetch(new Date().toISOString());
       fetchRooms();
-      fetchCreatorActiveRoom();
     }, 30000);
     
     return () => clearInterval(interval);
-  }, [fetchRooms, fetchCreatorActiveRoom]);
+  }, [fetchRooms]);
 
-  // Poll for active room status changes more frequently (every 5s)
+  // Poll for creator's active room every 5 seconds (when connected)
   useEffect(() => {
     if (!SOLANA_ENABLED || !isConnected) return;
     
+    // Immediate fetch on mount/connect
+    console.log("[RoomList] Fetching creator active room immediately");
+    fetchCreatorActiveRoom();
+    hasNavigatedRef.current = false; // Reset on reconnect
+    
     const pollInterval = setInterval(() => {
+      console.log("[RoomList] Polling creator active room");
       fetchCreatorActiveRoom();
     }, 5000);
     
     return () => clearInterval(pollInterval);
   }, [isConnected, fetchCreatorActiveRoom]);
 
-  // Show toast when room status changes from Created to Started (opponent joined)
+  // Detect status change: Created -> Started and redirect
   useEffect(() => {
-    if (!activeRoom) {
+    if (!activeRoom || !address) {
       prevStatusRef.current = null;
       return;
     }
@@ -87,7 +95,10 @@ export default function RoomList() {
     const currentStatus = activeRoom.status;
     
     // Detect transition: Created -> Started means opponent joined
-    if (prevStatus === RoomStatus.Created && currentStatus === RoomStatus.Started) {
+    if (prevStatus === RoomStatus.Created && currentStatus === RoomStatus.Started && !hasNavigatedRef.current) {
+      console.log("[RoomList] Opponent joined! Triggering notifications and redirect");
+      hasNavigatedRef.current = true;
+      
       // Play attention-grabbing sound
       AudioManager.playPlayerJoined();
       
@@ -102,10 +113,24 @@ export default function RoomList() {
         title: "🎮 Opponent joined — your game is ready!",
         description: `Your ${activeRoom.gameTypeName} match is starting. Enter now!`,
       });
+      
+      // Navigate to room using PDA
+      try {
+        const creatorPubkey = new PublicKey(address);
+        const roomPda = getRoomPda(creatorPubkey, activeRoom.roomId);
+        console.log("[RoomList] Navigating to room:", roomPda.toBase58());
+        navigate(`/room/${roomPda.toBase58()}`);
+      } catch (e) {
+        console.error("[RoomList] Failed to compute room PDA:", e);
+        // Use pda from activeRoom if available
+        if (activeRoom.pda) {
+          navigate(`/room/${activeRoom.pda}`);
+        }
+      }
     }
     
     prevStatusRef.current = currentStatus;
-  }, [activeRoom, toast]);
+  }, [activeRoom, address, toast, navigate]);
 
   // Feature flag disabled - show coming soon
   if (!SOLANA_ENABLED) {
