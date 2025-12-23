@@ -1,11 +1,12 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Home, Wallet, PlusCircle, LayoutList, Menu, X, Coins, Volume2, VolumeX } from "lucide-react";
+import { Home, Wallet, PlusCircle, LayoutList, Menu, X, Coins, Volume2, VolumeX, Bell, BellOff } from "lucide-react";
 import { WalletButton } from "./WalletButton";
 import BrandLogo from "./BrandLogo";
 import LanguageSelector from "./LanguageSelector";
 import { useSound } from "@/contexts/SoundContext";
+import { requestNotificationPermission } from "@/lib/pushNotifications";
 import type { LucideIcon } from "lucide-react";
 
 interface NavItem {
@@ -19,6 +20,14 @@ const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
   const { soundEnabled, toggleSound, play } = useSound();
   const { t, i18n } = useTranslation();
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+
+  // Check notification permission on mount
+  useEffect(() => {
+    if ("Notification" in window) {
+      setNotificationsEnabled(Notification.permission === "granted");
+    }
+  }, []);
 
   // Set document direction based on language
   useEffect(() => {
@@ -35,6 +44,20 @@ const Navbar = () => {
   const handleNavClick = () => {
     play('ui_click');
   };
+
+  const handleToggleNotifications = useCallback(async () => {
+    if (notificationsEnabled) {
+      // Can't revoke programmatically, just inform user
+      play('system_toggle_off');
+      setNotificationsEnabled(false);
+    } else {
+      const granted = await requestNotificationPermission();
+      if (granted) {
+        play('system_toggle_on');
+        setNotificationsEnabled(true);
+      }
+    }
+  }, [notificationsEnabled, play]);
 
   const navItems: NavItem[] = [
     { path: "/", labelKey: "nav.home", icon: Home },
@@ -93,6 +116,20 @@ const Navbar = () => {
               title={soundEnabled ? t("nav.soundOn") : t("nav.soundOff")}
             >
               {soundEnabled ? <Volume2 size={20} /> : <VolumeX size={20} />}
+            </button>
+            
+            {/* Notification Toggle Button */}
+            <button
+              onClick={handleToggleNotifications}
+              className={`p-2 rounded-lg transition-all duration-200 ${
+                !notificationsEnabled
+                  ? "text-muted-foreground/50 hover:text-muted-foreground hover:bg-secondary"
+                  : "text-primary hover:text-primary/80 hover:bg-secondary drop-shadow-[0_0_6px_hsl(45_93%_54%_/_0.4)]"
+              }`}
+              aria-label={notificationsEnabled ? "Notifications on" : "Notifications off"}
+              title={notificationsEnabled ? "Notifications on" : "Enable notifications"}
+            >
+              {notificationsEnabled ? <Bell size={20} /> : <BellOff size={20} />}
             </button>
             
             <WalletButton />
@@ -156,6 +193,19 @@ const Navbar = () => {
               >
                 {soundEnabled ? <Volume2 size={20} /> : <VolumeX size={20} />}
                 <span>{soundEnabled ? t("nav.soundOn") : t("nav.soundOff")}</span>
+              </button>
+              
+              {/* Notification Toggle (Mobile) */}
+              <button
+                onClick={handleToggleNotifications}
+                className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 ${
+                  !notificationsEnabled
+                    ? "text-muted-foreground/50 hover:text-muted-foreground hover:bg-secondary"
+                    : "text-primary hover:bg-secondary"
+                }`}
+              >
+                {notificationsEnabled ? <Bell size={20} /> : <BellOff size={20} />}
+                <span>{notificationsEnabled ? "Notifications On" : "Notifications Off"}</span>
               </button>
               
               {/* Wallet Button (Mobile) */}
