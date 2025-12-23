@@ -34,7 +34,7 @@ export default function RoomList() {
   const { t } = useTranslation();
   const { toast } = useToast();
   const { isConnected, address } = useWallet();
-  const { rooms, loading, error, fetchRooms, activeRoom, fetchCreatorActiveRoom } = useSolanaRooms();
+  const { rooms, loading, error, fetchRooms, activeRoom } = useSolanaRooms();
   const [showDebug, setShowDebug] = useState(false);
   const [lastFetch, setLastFetch] = useState<string | null>(null);
   
@@ -67,22 +67,8 @@ export default function RoomList() {
     return () => clearInterval(interval);
   }, [fetchRooms]);
 
-  // Poll for creator's active room every 5 seconds (when connected)
-  useEffect(() => {
-    if (!SOLANA_ENABLED || !isConnected) return;
-    
-    // Immediate fetch on mount/connect
-    console.log("[RoomList] Fetching creator active room immediately");
-    fetchCreatorActiveRoom();
-    hasNavigatedRef.current = false; // Reset on reconnect
-    
-    const pollInterval = setInterval(() => {
-      console.log("[RoomList] Polling creator active room");
-      fetchCreatorActiveRoom();
-    }, 5000);
-    
-    return () => clearInterval(pollInterval);
-  }, [isConnected, fetchCreatorActiveRoom]);
+  // Note: Active room polling is now centralized in useSolanaRooms
+  // Pages only CONSUME activeRoom - they don't trigger fetches
 
   // Detect status change: Created -> Started and redirect
   useEffect(() => {

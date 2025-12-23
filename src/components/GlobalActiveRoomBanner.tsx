@@ -22,25 +22,13 @@ export function GlobalActiveRoomBanner() {
   const navigate = useNavigate();
   const location = useLocation();
   const { connected } = useWallet();
-  const { activeRoom, fetchCreatorActiveRoom } = useSolanaRooms();
+  const { activeRoom } = useSolanaRooms();
+  
+  // Note: Active room polling is now centralized in useSolanaRooms
+  // This component only CONSUMES activeRoom - it doesn't trigger fetches
   
   const previousStatusRef = useRef<number | null>(null);
   const hasNavigatedRef = useRef(false);
-
-  // Poll for active room every 5 seconds
-  useEffect(() => {
-    if (!connected) return;
-
-    // Fetch immediately
-    fetchCreatorActiveRoom();
-
-    // Then poll every 5 seconds
-    const interval = setInterval(() => {
-      fetchCreatorActiveRoom();
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, [connected, fetchCreatorActiveRoom]);
 
   // Handle status change to STARTED - notify and redirect
   useEffect(() => {

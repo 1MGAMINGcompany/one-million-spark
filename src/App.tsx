@@ -17,18 +17,14 @@ import Home from "./pages/Home";
 import AddFunds from "./pages/AddFunds";
 import CreateRoom from "./pages/CreateRoom";
 import RoomList from "./pages/RoomList";
-import ChessGame from "./pages/ChessGame";
-import DominosGame from "./pages/DominosGame";
-import BackgammonGame from "./pages/BackgammonGame";
-import CheckersGame from "./pages/CheckersGame";
-import LudoGame from "./pages/LudoGame";
+import RoomRouter from "./pages/RoomRouter";
+import { GameRedirect } from "./components/GameRedirect";
 import PlayAILobby from "./pages/PlayAILobby";
 import ChessAI from "./pages/ChessAI";
 import DominosAI from "./pages/DominosAI";
 import BackgammonAI from "./pages/BackgammonAI";
 import CheckersAI from "./pages/CheckersAI";
 import LudoAI from "./pages/LudoAI";
-import Room from "./pages/Room";
 import JoinRoom from "./pages/JoinRoom";
 import GameRules from "./pages/GameRules";
 import Support from "./pages/Support";
@@ -61,13 +57,11 @@ const App = () => (
                     <Route path="/add-funds" element={<AddFunds />} />
                     <Route path="/create-room" element={<CreateRoom />} />
                     <Route path="/room-list" element={<RoomList />} />
-                    <Route path="/room/:roomPda" element={<Room />} />
+                    {/* Canonical route: PDA is the ONLY source of truth */}
+                    <Route path="/room/:roomPda" element={<RoomRouter />} />
                     <Route path="/join" element={<JoinRoom />} />
-                    <Route path="/game/chess/:roomPda" element={<ChessGame />} />
-                    <Route path="/game/dominos/:roomPda" element={<DominosGame />} />
-                    <Route path="/game/backgammon/:roomPda" element={<BackgammonGame />} />
-                    <Route path="/game/checkers/:roomPda" element={<CheckersGame />} />
-                    <Route path="/game/ludo/:roomPda" element={<LudoGame />} />
+                    {/* Legacy routes redirect to canonical /room/:pda */}
+                    <Route path="/game/:slug/:roomPda" element={<GameRedirect />} />
                     <Route path="/play-ai" element={<PlayAILobby />} />
                     <Route path="/play-ai/chess" element={<ChessAI />} />
                     <Route path="/play-ai/dominos" element={<DominosAI />} />
