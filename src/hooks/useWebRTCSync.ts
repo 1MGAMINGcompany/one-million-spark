@@ -64,17 +64,15 @@ export function useWebRTCSync({
 
     const peer = new WebRTCPeer(roomId, localAddress, {
       onConnected: () => {
-        console.log("[WebRTCSync] Connected!");
+        console.log("[WebRTCSync] ✅ Data channel connected!");
         setIsConnected(true);
         setConnectionState("connected");
-        setIsPushEnabled(peer.isPushEnabled());
+        setIsPushEnabled(true); // Data channel is open
         reconnectAttempts.current = 0;
         play("rooms/player-join");
         toast({
           title: "Connected",
-          description: peer.isPushEnabled() 
-            ? "Cross-device P2P sync established via Push Protocol" 
-            : "Real-time sync established with opponent",
+          description: "Real-time game sync established",
         });
       },
       onDisconnected: () => {
@@ -118,10 +116,11 @@ export function useWebRTCSync({
     clearOldSignals();
 
     if (enabled && localAddress && remoteAddress) {
-      console.log(`[WebRTCSync] Ready to connect - local: ${localAddress.slice(0, 8)}, remote: ${remoteAddress.slice(0, 8)}`);
+      console.log(`[WebRTCSync] Ready to connect - local: ${localAddress.slice(0, 8)}, remote: ${remoteAddress.slice(0, 8)}, initiator: ${isInitiator}`);
       
-      // Responder waits a bit longer to ensure initiator's signaling is ready
-      const delay = isInitiator ? 500 : 1500;
+      // Initiator starts immediately, responder waits to ensure signaling is subscribed
+      const delay = isInitiator ? 1000 : 2500;
+      console.log(`[WebRTCSync] Waiting ${delay}ms before connecting...`);
       
       const timeout = setTimeout(() => {
         connect();

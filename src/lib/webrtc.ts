@@ -23,13 +23,23 @@ export interface WebRTCPeerOptions {
   usePushProtocol?: boolean; // Deprecated, kept for compatibility
 }
 
-// Free STUN/TURN servers for NAT traversal
+// Free STUN servers for NAT traversal
 const ICE_SERVERS: RTCIceServer[] = [
   { urls: "stun:stun.l.google.com:19302" },
   { urls: "stun:stun1.l.google.com:19302" },
   { urls: "stun:stun2.l.google.com:19302" },
-  { urls: "stun:stun3.l.google.com:19302" },
-  { urls: "stun:stun4.l.google.com:19302" },
+  { urls: "stun:stun.cloudflare.com:3478" },
+  // Free TURN server for mobile/restricted networks
+  {
+    urls: "turn:openrelay.metered.ca:80",
+    username: "openrelayproject",
+    credential: "openrelayproject",
+  },
+  {
+    urls: "turn:openrelay.metered.ca:443",
+    username: "openrelayproject",
+    credential: "openrelayproject",
+  },
 ];
 
 export class WebRTCPeer {
@@ -78,8 +88,9 @@ export class WebRTCPeer {
       });
       this.setupDataChannel(this.dc);
 
-      // Small delay to ensure responder is subscribed
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      // Wait for responder to be subscribed to signaling
+      console.log("[WebRTC] Initiator waiting 2s for responder to subscribe...");
+      await new Promise(resolve => setTimeout(resolve, 2000));
 
       // Create and send offer
       console.log("[WebRTC] Creating offer...");
@@ -95,8 +106,9 @@ export class WebRTCPeer {
         payload: offer,
         timestamp: Date.now(),
       });
+      console.log("[WebRTC] Offer sent, waiting for answer...");
     } else {
-      console.log("[WebRTC] Responder waiting for offer...");
+      console.log("[WebRTC] Responder ready, waiting for offer...");
     }
   }
 
@@ -130,19 +142,31 @@ export class WebRTCPeer {
 
     // Handle ICE connection state
     this.pc.oniceconnectionstatechange = () => {
-      console.log(`[WebRTC] ICE connection state: ${this.pc?.iceConnectionState}`);
+      const state = this.pc?.iceConnectionState;
+      console.log(`[WebRTC] ICE connection state: ${state}`);
+      
+      if (state === "failed") {
+        console.error("[WebRTC] ICE connection failed - may need TURN server");
+        this.callbacks.onError(new Error("Connection failed - network may be restricted"));
+      }
     };
 
     // Handle connection state
     this.pc.onconnectionstatechange = () => {
-      console.log(`[WebRTC] Connection state: ${this.pc?.connectionState}`);
-      if (this.pc?.connectionState === "connected") {
+      const state = this.pc?.connectionState;
+      console.log(`[WebRTC] Connection state: ${state}`);
+      
+      if (state === "connected") {
+        console.log("[WebRTC] ✅ Peer connection established!");
         this.connectionEstablished = true;
-        this.callbacks.onConnected();
-      } else if (
-        this.pc?.connectionState === "disconnected" ||
-        this.pc?.connectionState === "failed"
-      ) {
+        // Note: onConnected is called when data channel opens, not here
+      } else if (state === "disconnected") {
+        console.log("[WebRTC] Peer connection disconnected");
+        this.connectionEstablished = false;
+        this.callbacks.onDisconnected();
+      } else if (state === "failed") {
+        console.error("[WebRTC] Peer connection failed");
+        this.connectionEstablished = false;
         this.callbacks.onDisconnected();
       }
     };
@@ -207,13 +231,14 @@ export class WebRTCPeer {
     this.dc = channel;
 
     channel.onopen = () => {
-      console.log("[WebRTC] ✅ Data channel OPEN!");
+      console.log("[WebRTC] ✅ Data channel OPEN! Ready for messages.");
       this.connectionEstablished = true;
       this.callbacks.onConnected();
     };
 
     channel.onclose = () => {
       console.log("[WebRTC] Data channel closed");
+      this.connectionEstablished = false;
       this.callbacks.onDisconnected();
     };
 
@@ -225,11 +250,19 @@ export class WebRTCPeer {
     channel.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
+        console.log("[WebRTC] Message received:", data.type || "unknown");
         this.callbacks.onMessage(data);
       } catch (e) {
         console.error("[WebRTC] Failed to parse message:", e);
       }
     };
+    
+    // If channel is already open (can happen), trigger connected immediately
+    if (channel.readyState === "open") {
+      console.log("[WebRTC] Data channel already open, triggering connected callback");
+      this.connectionEstablished = true;
+      this.callbacks.onConnected();
+    }
   }
 
   private async handleOffer(offer: RTCSessionDescriptionInit): Promise<void> {
@@ -311,13 +344,19 @@ export class WebRTCPeer {
   }
 
   send(data: any): boolean {
-    if (!this.dc || this.dc.readyState !== "open") {
-      console.warn("[WebRTC] Cannot send: data channel not open");
+    if (!this.dc) {
+      console.warn("[WebRTC] Cannot send: no data channel");
+      return false;
+    }
+    
+    if (this.dc.readyState !== "open") {
+      console.warn(`[WebRTC] Cannot send: data channel state is ${this.dc.readyState}`);
       return false;
     }
 
     try {
       this.dc.send(JSON.stringify(data));
+      console.log("[WebRTC] Message sent successfully");
       return true;
     } catch (e) {
       console.error("[WebRTC] Failed to send:", e);
@@ -326,11 +365,14 @@ export class WebRTCPeer {
   }
 
   isConnected(): boolean {
-    return this.dc?.readyState === "open" || this.connectionEstablished;
+    const dcOpen = this.dc?.readyState === "open";
+    console.log(`[WebRTC] isConnected check: dcOpen=${dcOpen}, connectionEstablished=${this.connectionEstablished}`);
+    return dcOpen;
   }
 
   isPushEnabled(): boolean {
-    return this.supabaseSignaling?.getIsConnected() ?? false;
+    // Only return true if data channel is actually open (not just signaling)
+    return this.dc?.readyState === "open";
   }
 
   disconnect(): void {
