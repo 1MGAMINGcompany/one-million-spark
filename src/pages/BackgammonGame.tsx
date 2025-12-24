@@ -220,7 +220,11 @@ const BackgammonGame = () => {
   // Game chat hook ref (sendChat defined after WebRTC hook)
   const chatRef = useRef<ReturnType<typeof useGameChat> | null>(null);
 
-  // Handle WebRTC messages
+  // Refs for stable callback access
+  const recordPlayerMoveRef = useRef(recordPlayerMove);
+  useEffect(() => { recordPlayerMoveRef.current = recordPlayerMove; }, [recordPlayerMove]);
+
+  // Handle WebRTC messages - stable with refs
   const handleWebRTCMessage = useCallback((message: GameMessage) => {
     // Handle chat messages
     if (message.type === "chat" && message.payload) {
@@ -255,7 +259,7 @@ const BackgammonGame = () => {
         }
         setGameState(moveMsg.gameState);
         setRemainingMoves(moveMsg.remainingMoves);
-        recordPlayerMove(roomPlayers[currentPlayer === "player" ? 0 : 1] || "", `Moved checker`);
+        recordPlayerMoveRef.current(roomPlayersRef.current[currentPlayerRef.current === "player" ? 0 : 1] || "", `Moved checker`);
         
         // Check for winner
         const winner = checkWinner(moveMsg.gameState);
@@ -263,16 +267,17 @@ const BackgammonGame = () => {
           const result = getGameResult(moveMsg.gameState);
           setGameResultInfo(result);
           const resultDisplay = formatResultType(result.resultType);
-          setGameStatus(winner === myRole ? `You win! ${resultDisplay.label}` : `You lose! ${resultDisplay.label}`);
+          setGameStatus(winner === myRoleRef.current ? `You win! ${resultDisplay.label}` : `You lose! ${resultDisplay.label}`);
           setGameOver(true);
-          chatRef.current?.addSystemMessage(winner === myRole ? "You win!" : "Opponent wins!");
-          play(winner === myRole ? 'chess_win' : 'chess_lose');
+          chatRef.current?.addSystemMessage(winner === myRoleRef.current ? "You win!" : "Opponent wins!");
+          play(winner === myRoleRef.current ? 'chess_win' : 'chess_lose');
         }
       } else if (moveMsg.type === "turn_end") {
         setCurrentPlayer(prev => prev === "player" ? "ai" : "player");
         setDice([]);
         setRemainingMoves([]);
-        setGameStatus(isMyTurn ? "Opponent's turn" : "Your turn - Roll the dice!");
+        // Use current state to determine message
+        setGameStatus("Your turn - Roll the dice!");
       }
     } else if (message.type === "resign") {
       setGameStatus("Opponent resigned - You win!");
@@ -293,7 +298,7 @@ const BackgammonGame = () => {
       toast({ title: "Rematch Ready!", description: "Starting new game..." });
       navigate(`/game/backgammon/${message.payload.roomId}`);
     }
-  }, [play, recordPlayerMove, roomPlayers, currentPlayer, myRole, isMyTurn, rematch, navigate]);
+  }, [play, rematch, navigate]); // Stable deps - uses refs
 
   // WebRTC sync
   const {
