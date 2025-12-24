@@ -43,6 +43,10 @@ const LudoGame = () => {
   // For testing, we simulate 4 players with the current wallet as gold
   const [roomPlayers, setRoomPlayers] = useState<string[]>([]);
   
+  // Refs for stable callback access
+  const roomPlayersRef = useRef<string[]>([]);
+  useEffect(() => { roomPlayersRef.current = roomPlayers; }, [roomPlayers]);
+  
   useEffect(() => {
     if (address) {
       // Simulate room with 4 players - real implementation would fetch from contract

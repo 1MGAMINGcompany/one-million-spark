@@ -26,6 +26,8 @@ export function useRealtimeGameSync({
   const channelRef = useRef<RealtimeChannel | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const processedIds = useRef<Set<string>>(new Set());
+  const lastMessageTime = useRef<number>(Date.now());
+  const reconnectAttempts = useRef(0);
   
   // Store onMessage in a ref to avoid subscription re-creation on every render
   const onMessageRef = useRef(onMessage);
@@ -76,12 +78,16 @@ export function useRealtimeGameSync({
         }
         
         console.log(`[RealtimeGameSync] Received: ${payload.type} from ${payload.sender?.slice(0, 8)}...`);
+        lastMessageTime.current = Date.now();
+        reconnectAttempts.current = 0; // Reset on successful message
         onMessageRef.current(payload as RealtimeGameMessage);
       })
       .subscribe((status) => {
         console.log(`[RealtimeGameSync] Status: ${status}`);
         if (status === "SUBSCRIBED") {
           setIsConnected(true);
+          lastMessageTime.current = Date.now();
+          reconnectAttempts.current = 0;
         } else if (status === "CLOSED" || status === "CHANNEL_ERROR") {
           setIsConnected(false);
         }
@@ -89,8 +95,50 @@ export function useRealtimeGameSync({
 
     channelRef.current = channel;
 
+    // Heartbeat check - reconnect if no messages for 30 seconds
+    const heartbeatInterval = setInterval(() => {
+      const timeSinceLastMessage = Date.now() - lastMessageTime.current;
+      if (timeSinceLastMessage > 30000 && channelRef.current && reconnectAttempts.current < 3) {
+        console.log(`[RealtimeGameSync] No messages for ${Math.round(timeSinceLastMessage / 1000)}s, reconnecting...`);
+        reconnectAttempts.current++;
+        
+        // Unsubscribe and resubscribe
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+        setIsConnected(false);
+        
+        // Small delay before reconnecting
+        setTimeout(() => {
+          const newChannel = supabase.channel(channelName, {
+            config: { broadcast: { self: false } },
+          });
+          
+          newChannel
+            .on("broadcast", { event: "game_move" }, ({ payload }) => {
+              if (!payload) return;
+              const msgId = `${payload.type}-${payload.sender}-${payload.timestamp}`;
+              if (processedIds.current.has(msgId)) return;
+              processedIds.current.add(msgId);
+              if (payload.sender?.toLowerCase() === localAddressRef.current.toLowerCase()) return;
+              lastMessageTime.current = Date.now();
+              reconnectAttempts.current = 0;
+              onMessageRef.current(payload as RealtimeGameMessage);
+            })
+            .subscribe((status) => {
+              if (status === "SUBSCRIBED") {
+                setIsConnected(true);
+                lastMessageTime.current = Date.now();
+              }
+            });
+          
+          channelRef.current = newChannel;
+        }, 500);
+      }
+    }, 10000);
+
     return () => {
       console.log(`[RealtimeGameSync] Unsubscribing from ${channelName}`);
+      clearInterval(heartbeatInterval);
       if (channelRef.current) {
         supabase.removeChannel(channelRef.current);
         channelRef.current = null;

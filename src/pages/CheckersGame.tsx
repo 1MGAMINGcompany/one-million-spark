@@ -93,6 +93,12 @@ const CheckersGame = () => {
   const [roomPlayers, setRoomPlayers] = useState<string[]>([]);
   const [myColor, setMyColor] = useState<Player>("gold");
   const [flipped, setFlipped] = useState(false);
+  
+  // Refs for stable callback access
+  const roomPlayersRef = useRef<string[]>([]);
+  const myColorRef = useRef<Player>("gold");
+  useEffect(() => { roomPlayersRef.current = roomPlayers; }, [roomPlayers]);
+  useEffect(() => { myColorRef.current = myColor; }, [myColor]);
 
   // Setup room players
   useEffect(() => {

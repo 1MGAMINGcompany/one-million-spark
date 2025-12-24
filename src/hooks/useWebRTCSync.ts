@@ -36,6 +36,13 @@ export function useWebRTCSync({
   const reconnectAttempts = useRef(0);
   const maxReconnectAttempts = 3; // Reduced since we have fallback
   const hasShownConnectedToast = useRef(false);
+  const lastMessageTime = useRef<number>(Date.now());
+
+  // Store onMessage in a ref to avoid callback recreation issues
+  const onMessageRef = useRef(onMessage);
+  useEffect(() => {
+    onMessageRef.current = onMessage;
+  }, [onMessage]);
 
   // Determine if we're the initiator (based on address sorting)
   const localAddress = address?.toLowerCase() || "";
@@ -48,16 +55,17 @@ export function useWebRTCSync({
     ? localAddress < remoteAddress 
     : false;
 
-  // Supabase Realtime fallback handler
+  // Supabase Realtime fallback handler - uses ref to always have fresh callback
   const handleRealtimeMessage = useCallback((msg: RealtimeGameMessage) => {
     console.log("[WebRTCSync] Received via Realtime fallback:", msg.type);
-    onMessage?.({
+    lastMessageTime.current = Date.now();
+    onMessageRef.current?.({
       type: msg.type as GameMessage["type"],
       payload: msg.payload,
       timestamp: msg.timestamp,
       sender: msg.sender,
     });
-  }, [onMessage]);
+  }, []); // Empty deps - uses ref
 
   // Supabase Realtime fallback - ALWAYS connected as backup
   const { 
@@ -121,7 +129,8 @@ export function useWebRTCSync({
       },
       onMessage: (data: GameMessage) => {
         console.log("[WebRTCSync] Received via WebRTC:", data.type);
-        onMessage?.(data);
+        lastMessageTime.current = Date.now();
+        onMessageRef.current?.(data);
       },
       onError: (error) => {
         console.error("[WebRTCSync] WebRTC error (using Realtime fallback):", error.message);
@@ -136,7 +145,7 @@ export function useWebRTCSync({
     } catch (e) {
       console.error("[WebRTCSync] WebRTC connection failed, using Realtime fallback");
     }
-  }, [enabled, localAddress, remoteAddress, roomId, isInitiator, onMessage]);
+  }, [enabled, localAddress, remoteAddress, roomId, isInitiator]); // Removed onMessage - using ref
 
   // Initialize connection
   useEffect(() => {

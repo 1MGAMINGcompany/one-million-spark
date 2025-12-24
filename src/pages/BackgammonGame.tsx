@@ -88,6 +88,14 @@ const BackgammonGame = () => {
   const [roomPlayers, setRoomPlayers] = useState<string[]>([]);
   const [myRole, setMyRole] = useState<"player" | "ai">("player"); // "player" = Gold, "ai" = Black
 
+  // Refs for stable callback access
+  const roomPlayersRef = useRef<string[]>([]);
+  const currentPlayerRef = useRef<"player" | "ai">("player");
+  const myRoleRef = useRef<"player" | "ai">("player");
+  useEffect(() => { roomPlayersRef.current = roomPlayers; }, [roomPlayers]);
+  useEffect(() => { currentPlayerRef.current = currentPlayer; }, [currentPlayer]);
+  useEffect(() => { myRoleRef.current = myRole; }, [myRole]);
+
   // Setup room players when wallet connects
   useEffect(() => {
     if (address && roomId) {
