@@ -175,15 +175,16 @@ export function useSolanaRooms() {
 
       const newestActiveRoom = sortedActiveRooms[0];
       
-      console.log("[fetchCreatorActiveRoom] Selected:", {
-        selectedPda: newestActiveRoom.pda,
-        selectedStatus: newestActiveRoom.statusName,
-        selectedGameTypeName: newestActiveRoom.gameTypeName,
-        selectedRoomId: newestActiveRoom.roomId,
-        candidateCount: activeRooms.length,
-      });
+      // Single-line log for easy debugging
+      console.log(`[fetchCreatorActiveRoom] candidateCount=${activeRooms.length} | selected: status=${newestActiveRoom.statusName}, roomId=${newestActiveRoom.roomId}, game=${newestActiveRoom.gameTypeName}, pda=${newestActiveRoom.pda.slice(0, 8)}...`);
       
-      setActiveRoom(newestActiveRoom);
+      // Only update state if PDA changed to prevent flicker
+      setActiveRoom(prev => {
+        if (prev?.pda === newestActiveRoom.pda && prev?.status === newestActiveRoom.status) {
+          return prev; // No change, keep stable reference
+        }
+        return newestActiveRoom;
+      });
       return newestActiveRoom;
     } catch (err) {
       console.error("Error fetching active room:", err);
