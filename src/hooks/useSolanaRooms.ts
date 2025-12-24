@@ -175,12 +175,12 @@ export function useSolanaRooms() {
 
       const newestActiveRoom = sortedActiveRooms[0];
       
-      console.log("[fetchCreatorActiveRoom] Selected active room:", {
-        pda: newestActiveRoom.pda,
-        gameTypeName: newestActiveRoom.gameTypeName,
-        roomId: newestActiveRoom.roomId,
-        status: newestActiveRoom.statusName,
-        totalActiveRooms: activeRooms.length,
+      console.log("[fetchCreatorActiveRoom] Selected:", {
+        selectedPda: newestActiveRoom.pda,
+        selectedStatus: newestActiveRoom.statusName,
+        selectedGameTypeName: newestActiveRoom.gameTypeName,
+        selectedRoomId: newestActiveRoom.roomId,
+        candidateCount: activeRooms.length,
       });
       
       setActiveRoom(newestActiveRoom);

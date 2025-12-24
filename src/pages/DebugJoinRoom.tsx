@@ -9,8 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Search, RefreshCw } from "lucide-react";
 import { PROGRAM_ID, RoomStatus, GAME_TYPE_NAMES, STATUS_NAMES, parseRoomAccount, roomToDisplay, getRoomPDA, getVaultPDA, fetchAllRooms, isOpenStatus } from "@/lib/solana-program";
 import { getSolanaEndpoint } from "@/lib/solana-config";
-
-const BUILD_VERSION = "2024-01-22-v3";
+import { BUILD_VERSION } from "@/lib/buildVersion";
 const RPC_ENDPOINT = getSolanaEndpoint();
 
 export default function DebugJoinRoom() {

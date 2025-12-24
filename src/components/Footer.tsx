@@ -7,6 +7,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import { BUILD_VERSION } from "@/lib/buildVersion";
 
 const Footer = () => {
   const { t } = useTranslation();
@@ -66,6 +67,9 @@ const Footer = () => {
         </p>
         <p className="text-xs text-primary/40 tracking-[0.2em] uppercase">
           {t("footer.tagline")}
+        </p>
+        <p className="text-[10px] text-muted-foreground/40 mt-2 font-mono">
+          {BUILD_VERSION}
         </p>
       </div>
     </footer>

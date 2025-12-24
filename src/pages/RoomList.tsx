@@ -21,7 +21,7 @@ import { WalletRequired } from "@/components/WalletRequired";
 import { useSolanaRooms } from "@/hooks/useSolanaRooms";
 import { SOLANA_ENABLED, getSolanaCluster, formatSol, getSolanaEndpoint } from "@/lib/solana-config";
 import { GameType, RoomStatus, PROGRAM_ID, isOpenStatus } from "@/lib/solana-program";
-import { ActiveGameBanner } from "@/components/ActiveGameBanner";
+// ActiveGameBanner removed - using GlobalActiveRoomBanner from App.tsx instead
 import { useToast } from "@/hooks/use-toast";
 import { AudioManager } from "@/lib/AudioManager";
 import { showBrowserNotification } from "@/lib/pushNotifications";
@@ -193,10 +193,7 @@ export default function RoomList() {
         </div>
       </div>
 
-      {/* Active Game Banner - shows when creator's room has started */}
-      {isConnected && activeRoom && (
-        <ActiveGameBanner room={activeRoom} />
-      )}
+      {/* Active Game Banner handled by GlobalActiveRoomBanner in App.tsx */}
 
       {/* Debug Panel */}
       {showDebug && (
