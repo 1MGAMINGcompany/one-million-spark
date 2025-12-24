@@ -26,26 +26,37 @@ export class SupabaseSignaling {
   async connect(): Promise<void> {
     console.log(`[SupabaseSignaling] Connecting to room: webrtc-${this.roomId}`);
     
-    // Create a broadcast channel for WebRTC signaling
-    this.channel = supabase.channel(`webrtc-${this.roomId}`, {
-      config: {
-        broadcast: { self: false }, // Don't receive own messages
-      },
-    });
-
-    this.channel
-      .on("broadcast", { event: "signal" }, ({ payload }) => {
-        console.log(`[SupabaseSignaling] Received signal:`, payload?.type);
-        
-        // Only process signals meant for us
-        if (payload && payload.to?.toLowerCase() === this.localAddress.toLowerCase()) {
-          this.onSignal(payload as SignalingMessage);
-        }
-      })
-      .subscribe((status) => {
-        console.log(`[SupabaseSignaling] Subscription status:`, status);
-        this.isConnected = status === "SUBSCRIBED";
+    return new Promise((resolve) => {
+      // Create a broadcast channel for WebRTC signaling
+      this.channel = supabase.channel(`webrtc-${this.roomId}`, {
+        config: {
+          broadcast: { self: false }, // Don't receive own messages
+        },
       });
+
+      this.channel
+        .on("broadcast", { event: "signal" }, ({ payload }) => {
+          console.log(`[SupabaseSignaling] Received signal:`, payload?.type);
+          
+          // Only process signals meant for us
+          if (payload && payload.to?.toLowerCase() === this.localAddress.toLowerCase()) {
+            this.onSignal(payload as SignalingMessage);
+          }
+        })
+        .subscribe((status) => {
+          console.log(`[SupabaseSignaling] Subscription status:`, status);
+          this.isConnected = status === "SUBSCRIBED";
+          if (status === "SUBSCRIBED") {
+            resolve();
+          }
+        });
+      
+      // Timeout fallback - resolve after 3 seconds even if not subscribed
+      setTimeout(() => {
+        console.log("[SupabaseSignaling] Subscription timeout, proceeding anyway");
+        resolve();
+      }, 3000);
+    });
   }
 
   async sendSignal(signal: SignalingMessage): Promise<void> {
