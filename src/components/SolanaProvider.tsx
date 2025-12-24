@@ -1,12 +1,8 @@
 import React, { ReactNode, useMemo, useCallback } from "react";
 import { ConnectionProvider, WalletProvider } from "@solana/wallet-adapter-react";
-import { PhantomWalletAdapter } from "@solana/wallet-adapter-phantom";
-import { SolflareWalletAdapter } from "@solana/wallet-adapter-solflare";
-import { BackpackWalletAdapter } from "@solana/wallet-adapter-backpack";
 import { getSolanaEndpoint, getSolanaNetwork } from "@/lib/solana-config";
 
-// IMPORTANT: Import wallet adapter styles
-import '@solana/wallet-adapter-react-ui/styles.css';
+// Note: We do NOT import wallet-adapter-react-ui styles since we use custom UI
 
 interface SolanaProviderProps {
   children: ReactNode;
@@ -21,13 +17,10 @@ export function SolanaProvider({ children }: SolanaProviderProps) {
     return url;
   }, []);
 
-  // Explicitly add wallet adapters for desktop compatibility
-  // These will be detected alongside standard wallet discovery
-  const wallets = useMemo(() => [
-    new PhantomWalletAdapter(),
-    new SolflareWalletAdapter(),
-    new BackpackWalletAdapter(),
-  ], []);
+  // IMPORTANT: Do NOT add explicit wallet adapters!
+  // The wallet-adapter will automatically detect installed wallets via Standard Wallet interface.
+  // Adding PhantomWalletAdapter/SolflareWalletAdapter causes DUPLICATES.
+  const wallets = useMemo(() => [], []);
 
   // Handle wallet errors - log but don't crash
   const onError = useCallback((error: Error) => {

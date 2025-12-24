@@ -371,6 +371,48 @@ export function WalletButton() {
     );
   }
 
+  // Wallet config for clean UI
+  const WALLET_CONFIG = [
+    {
+      id: 'phantom',
+      name: 'Phantom',
+      icon: 'https://raw.githubusercontent.com/solana-labs/wallet-adapter/master/packages/wallets/icons/phantom.svg',
+    },
+    {
+      id: 'solflare', 
+      name: 'Solflare',
+      icon: 'https://raw.githubusercontent.com/solana-labs/wallet-adapter/master/packages/wallets/icons/solflare.svg',
+    },
+    {
+      id: 'backpack',
+      name: 'Backpack', 
+      icon: 'https://raw.githubusercontent.com/solana-labs/wallet-adapter/master/packages/wallets/icons/backpack.svg',
+    },
+  ];
+
+  const isWalletDetected = (walletId: string) => {
+    return sortedWallets.some(w => 
+      w.adapter.name.toLowerCase().includes(walletId) && 
+      w.readyState === 'Installed'
+    );
+  };
+
+  const handleWalletClick = (walletId: string) => {
+    // Find matching wallet from detected wallets
+    const matchingWallet = sortedWallets.find(w => 
+      w.adapter.name.toLowerCase().includes(walletId)
+    );
+    
+    if (matchingWallet) {
+      handleSelectWallet(matchingWallet.adapter.name);
+    } else if (isMobile && !isInWalletBrowser) {
+      // On mobile outside wallet browser, open deep link
+      handleWalletDeepLink(walletId as 'phantom' | 'solflare' | 'backpack');
+    } else {
+      toast.error(`${walletId} wallet not detected. Please install it first.`);
+    }
+  };
+
   // Not connected state
   if (!connected) {
     return (
@@ -389,87 +431,108 @@ export function WalletButton() {
           <DialogHeader>
             <DialogTitle>{t("wallet.connectWallet")}</DialogTitle>
           </DialogHeader>
-          <div className="grid gap-2 py-4">
-            {/* Mobile: Show wallet-specific buttons */}
+          <div className="grid gap-3 py-4">
+            {/* Mobile helper text */}
             {isMobile && !isInWalletBrowser && (
-              <>
-                <p className="text-sm text-muted-foreground mb-2">{t("wallet.chooseYourWallet")}</p>
-                <Button
-                  variant="outline"
-                  className="w-full justify-start gap-3 h-12"
-                  onClick={() => handleWalletDeepLink('phantom')}
-                >
-                  <img src="https://raw.githubusercontent.com/solana-labs/wallet-adapter/master/packages/wallets/icons/phantom.svg" alt="Phantom" className="w-6 h-6" />
-                  <div className="flex flex-col items-start">
-                    <span>{t("wallet.phantom.title")}</span>
-                    <span className="text-xs text-muted-foreground">{t("wallet.openInWalletBrowser")}</span>
-                  </div>
-                </Button>
-                <Button
-                  variant="outline"
-                  className="w-full justify-start gap-3 h-12"
-                  onClick={() => handleWalletDeepLink('solflare')}
-                >
-                  <img src="https://raw.githubusercontent.com/solana-labs/wallet-adapter/master/packages/wallets/icons/solflare.svg" alt="Solflare" className="w-6 h-6" />
-                  <div className="flex flex-col items-start">
-                    <span>{t("wallet.solflare.title")}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {isIOS ? t("wallet.recommendedIPhone") : t("wallet.openInWalletBrowser")}
-                    </span>
-                  </div>
-                  {isIOS && <span className="ml-auto text-xs text-green-500">★</span>}
-                </Button>
-                <Button
-                  variant="outline"
-                  className="w-full justify-start gap-3 h-12"
-                  onClick={() => handleWalletDeepLink('backpack')}
-                >
-                  <img src="https://raw.githubusercontent.com/solana-labs/wallet-adapter/master/packages/wallets/icons/backpack.svg" alt="Backpack" className="w-6 h-6" />
-                  <div className="flex flex-col items-start">
-                    <span>{t("wallet.backpack.title")}</span>
-                    <span className="text-xs text-muted-foreground">{t("wallet.openInWalletBrowser")}</span>
-                  </div>
-                </Button>
-              </>
+              <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 mb-2">
+                <div className="flex items-start gap-2">
+                  <Smartphone size={16} className="text-amber-500 mt-0.5 flex-shrink-0" />
+                  <p className="text-sm text-amber-600 dark:text-amber-400">
+                    For best experience, open this site inside your wallet's built-in browser (Phantom/Solflare/Backpack).
+                  </p>
+                </div>
+              </div>
             )}
 
-            {/* Wallet list */}
-            {sortedWallets.length === 0 && !isMobile ? (
-              <div className="text-center py-4">
-                <p className="text-muted-foreground mb-2">
-                  {t("wallet.noWalletsDetected")}
+            {/* 3 Wallet buttons with icons - clean custom UI */}
+            {WALLET_CONFIG.map((wallet) => {
+              const detected = isWalletDetected(wallet.id);
+              return (
+                <Button
+                  key={wallet.id}
+                  variant="outline"
+                  className="w-full justify-start gap-3 h-14"
+                  onClick={() => handleWalletClick(wallet.id)}
+                >
+                  <img 
+                    src={wallet.icon} 
+                    alt={wallet.name} 
+                    className="w-8 h-8"
+                  />
+                  <div className="flex flex-col items-start">
+                    <span className="font-medium">{wallet.name}</span>
+                    {detected && (
+                      <span className="text-xs text-green-500">{t("wallet.detected")}</span>
+                    )}
+                    {isMobile && !isInWalletBrowser && !detected && (
+                      <span className="text-xs text-muted-foreground">{t("wallet.openInWalletBrowser")}</span>
+                    )}
+                  </div>
+                </Button>
+              );
+            })}
+
+            {/* Mobile: How to open in wallet browser with globe images */}
+            {isMobile && !isInWalletBrowser && (
+              <div className="border-t border-border pt-4 mt-2">
+                <p className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
+                  <span className="text-lg">🌐</span>
+                  How to open in wallet browser
                 </p>
-                <p className="text-sm text-muted-foreground">
-                  {t("wallet.installWallet")}
+                <div className="grid grid-cols-3 gap-2">
+                  {/* Phantom */}
+                  <div className="flex flex-col items-center gap-1.5 p-2 rounded-lg bg-muted/30 border border-border/50">
+                    <img 
+                      src="https://raw.githubusercontent.com/solana-labs/wallet-adapter/master/packages/wallets/icons/phantom.svg" 
+                      alt="Phantom" 
+                      className="w-6 h-6"
+                    />
+                    <span className="text-[10px] font-medium">Phantom</span>
+                    <div className="w-full aspect-square bg-muted/50 rounded flex flex-col items-center justify-center p-1">
+                      <span className="text-2xl mb-0.5">🌐</span>
+                      <span className="text-[8px] text-muted-foreground text-center leading-tight">Tap globe<br/>bottom nav</span>
+                    </div>
+                  </div>
+                  
+                  {/* Solflare */}
+                  <div className="flex flex-col items-center gap-1.5 p-2 rounded-lg bg-muted/30 border border-border/50">
+                    <img 
+                      src="https://raw.githubusercontent.com/solana-labs/wallet-adapter/master/packages/wallets/icons/solflare.svg" 
+                      alt="Solflare" 
+                      className="w-6 h-6"
+                    />
+                    <span className="text-[10px] font-medium">Solflare</span>
+                    <div className="w-full aspect-square bg-muted/50 rounded flex flex-col items-center justify-center p-1">
+                      <span className="text-2xl mb-0.5">🌐</span>
+                      <span className="text-[8px] text-muted-foreground text-center leading-tight">Browser<br/>tab</span>
+                    </div>
+                  </div>
+                  
+                  {/* Backpack */}
+                  <div className="flex flex-col items-center gap-1.5 p-2 rounded-lg bg-muted/30 border border-border/50">
+                    <img 
+                      src="https://raw.githubusercontent.com/solana-labs/wallet-adapter/master/packages/wallets/icons/backpack.svg" 
+                      alt="Backpack" 
+                      className="w-6 h-6"
+                    />
+                    <span className="text-[10px] font-medium">Backpack</span>
+                    <div className="w-full aspect-square bg-muted/50 rounded flex flex-col items-center justify-center p-1">
+                      <span className="text-2xl mb-0.5">🌐</span>
+                      <span className="text-[8px] text-muted-foreground text-center leading-tight">Tap globe<br/>icon</span>
+                    </div>
+                  </div>
+                </div>
+                <p className="text-[10px] text-muted-foreground text-center mt-2">
+                  Open wallet app → tap globe icon → paste 1mgaming.com
                 </p>
               </div>
-            ) : (
-              <>
-                {sortedWallets.map((w) => {
-                  const isMWA = w.adapter.name.toLowerCase().includes('mobile wallet adapter');
-                  return (
-                    <Button
-                      key={w.adapter.name}
-                      variant="outline"
-                      className="w-full justify-start gap-3 h-12"
-                      onClick={() => handleSelectWallet(w.adapter.name)}
-                    >
-                      <img 
-                        src={getWalletIcon(w.adapter.name, w.adapter.icon)} 
-                        alt={w.adapter.name} 
-                        className="w-6 h-6"
-                      />
-                      <span>{w.adapter.name}</span>
-                      {w.readyState === 'Installed' && (
-                        <span className="ml-auto text-xs text-green-500">{t("wallet.detected")}</span>
-                      )}
-                      {isMWA && (
-                        <span className="ml-auto text-xs text-blue-500">{t("wallet.android")}</span>
-                      )}
-                    </Button>
-                  );
-                })}
-              </>
+            )}
+
+            {/* In wallet browser success */}
+            {isMobile && isInWalletBrowser && (
+              <p className="text-xs text-green-500 text-center mt-2 bg-green-500/10 p-2 rounded">
+                ✓ {t("wallet.inWalletBrowser")}
+              </p>
             )}
 
             {/* Get Wallet Section */}
@@ -512,22 +575,6 @@ export function WalletButton() {
                 </a>
               </div>
             </div>
-
-            {/* Mobile guidance */}
-            {isMobile && !isInWalletBrowser && (
-              <div className="text-xs text-amber-500 text-center mt-3 flex flex-col gap-1 bg-amber-500/10 p-3 rounded">
-                <p className="flex items-center justify-center gap-1">
-                  <Smartphone size={12} />
-                  {isIOS ? t("wallet.iphoneHint") : t("wallet.androidHint")}
-                </p>
-              </div>
-            )}
-
-            {isMobile && isInWalletBrowser && (
-              <p className="text-xs text-green-500 text-center mt-3 bg-green-500/10 p-2 rounded">
-                ✓ {t("wallet.inWalletBrowser")}
-              </p>
-            )}
           </div>
         </DialogContent>
       </Dialog>
