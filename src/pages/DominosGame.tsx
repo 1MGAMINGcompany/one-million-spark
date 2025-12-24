@@ -81,10 +81,26 @@ const DominosGame = () => {
   const [winner, setWinner] = useState<"me" | "opponent" | "draw" | null>(null);
   const [gameInitialized, setGameInitialized] = useState(false);
 
+  // Refs to hold current state for stable callbacks (prevents stale closures)
+  const chainRef = useRef<PlacedDomino[]>([]);
+  const myHandRef = useRef<Domino[]>([]);
+  const boneyardRef = useRef<Domino[]>([]);
+  const amIPlayer1Ref = useRef(false);
+  const roomPlayersRef = useRef<string[]>([]);
+
+  // Keep refs in sync with state
+  useEffect(() => { chainRef.current = chain; }, [chain]);
+  useEffect(() => { myHandRef.current = myHand; }, [myHand]);
+  useEffect(() => { boneyardRef.current = boneyard; }, [boneyard]);
+
   // Multiplayer state - REAL players from on-chain
   const [roomPlayers, setRoomPlayers] = useState<string[]>([]);
   const [amIPlayer1, setAmIPlayer1] = useState(false);
   const [loadingRoom, setLoadingRoom] = useState(true);
+
+  // Keep multiplayer refs in sync
+  useEffect(() => { amIPlayer1Ref.current = amIPlayer1; }, [amIPlayer1]);
+  useEffect(() => { roomPlayersRef.current = roomPlayers; }, [roomPlayers]);
 
   // Fetch REAL players from on-chain room account
   useEffect(() => {
@@ -345,7 +361,26 @@ const DominosGame = () => {
     });
   }, [canPlay]);
 
-  // WebRTC message handler
+  // Stable version of getLegalMoves that uses refs
+  const getLegalMovesFromRef = useCallback((): Domino[] => {
+    const currentChain = chainRef.current;
+    if (currentChain.length === 0) return myHandRef.current;
+    
+    const first = currentChain[0];
+    const last = currentChain[currentChain.length - 1];
+    const left = first.flipped ? first.right : first.left;
+    const right = last.flipped ? last.left : last.right;
+    
+    return myHandRef.current.filter(d => 
+      d.left === left || d.right === left || d.left === right || d.right === right
+    );
+  }, []); // Stable - uses refs
+
+  // Ref for recordPlayerMove to avoid stale closure
+  const recordPlayerMoveRef = useRef(recordPlayerMove);
+  useEffect(() => { recordPlayerMoveRef.current = recordPlayerMove; }, [recordPlayerMove]);
+
+  // WebRTC message handler - STABLE with refs
   const handleWebRTCMessage = useCallback((message: GameMessage) => {
     console.log("[DominosGame] Received message:", message.type);
     
@@ -365,7 +400,6 @@ const DominosGame = () => {
     // Handle sync request - send our game state to peer
     if (message.type === "sync_request") {
       console.log("[DominosGame] Peer requested sync");
-      // Respond with current state (handled by respondSync in useWebRTCSync)
       return;
     }
     
@@ -376,7 +410,6 @@ const DominosGame = () => {
       setChain(state.chain);
       setOpponentHandCount(state.opponentHandCount);
       setBoneyard(state.boneyard);
-      // Note: We keep our own hand as it's dealt deterministically
       setIsMyTurn(state.isMyTurn);
       setGameStatus(state.isMyTurn ? "Your turn" : "Opponent's turn");
       return;
@@ -391,9 +424,10 @@ const DominosGame = () => {
         setOpponentHandCount(moveData.playerHand.length);
         setBoneyard(moveData.boneyard);
         
-        recordPlayerMove(roomPlayers[amIPlayer1 ? 1 : 0] || "", "played");
+        // Use refs for stable access
+        const opponentIndex = amIPlayer1Ref.current ? 1 : 0;
+        recordPlayerMoveRef.current(roomPlayersRef.current[opponentIndex] || "", "played");
         
-        // Check win
         if (moveData.playerHand.length === 0) {
           setGameOver(true);
           setWinner("opponent");
@@ -413,10 +447,15 @@ const DominosGame = () => {
         setGameStatus("Opponent passed");
         setIsMyTurn(true);
         
-        // Check blocked game
-        const myLegalMoves = getLegalMoves(myHand);
+        // Use stable ref-based function
+        const myLegalMoves = getLegalMovesFromRef();
         if (myLegalMoves.length === 0 && moveData.boneyard.length === 0) {
-          checkBlockedGame();
+          // Check blocked game inline to avoid stale closure
+          const myPips = myHandRef.current.reduce((sum, d) => sum + d.left + d.right, 0);
+          setGameOver(true);
+          setWinner("draw");
+          setGameStatus("Game blocked - Draw!");
+          chatRef.current?.addSystemMessage("Game blocked - Draw!");
         }
       }
     } else if (message.type === "resign") {
@@ -442,7 +481,7 @@ const DominosGame = () => {
       toast({ title: "Rematch Ready!", description: "Starting new game..." });
       navigate(`/game/dominos/${message.payload.roomId}`);
     }
-  }, [play, amIPlayer1, roomPlayers, recordPlayerMove, getLegalMoves, myHand, rematch, navigate]);
+  }, [play, getLegalMovesFromRef, rematch, navigate]); // Minimal stable deps
 
   // WebRTC sync
   const {

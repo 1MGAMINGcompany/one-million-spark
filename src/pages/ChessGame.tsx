@@ -101,6 +101,15 @@ const ChessGame = () => {
   const [roomPlayers, setRoomPlayers] = useState<string[]>([]);
   const [myColor, setMyColor] = useState<"w" | "b">("w");
 
+  // Refs for stable callback access
+  const gameRef = useRef(game);
+  const roomPlayersRef = useRef<string[]>([]);
+  const animationsEnabledRef = useRef(animationsEnabled);
+  
+  useEffect(() => { gameRef.current = game; }, [game]);
+  useEffect(() => { roomPlayersRef.current = roomPlayers; }, [roomPlayers]);
+  useEffect(() => { animationsEnabledRef.current = animationsEnabled; }, [animationsEnabled]);
+
   // Setup room players when wallet connects
   useEffect(() => {
     if (address && roomId) {
@@ -260,6 +269,12 @@ const ChessGame = () => {
     }
   }, [roomPlayers.length]);
 
+  // Ref for stable callback access
+  const chatRef = useRef(chat);
+  const recordPlayerMoveRef = useRef(recordPlayerMove);
+  useEffect(() => { chatRef.current = chat; }, [chat]);
+  useEffect(() => { recordPlayerMoveRef.current = recordPlayerMove; }, [recordPlayerMove]);
+
   const handleWebRTCMessage = useCallback((message: GameMessage) => {
     console.log("[ChessGame] Received message:", message.type);
     
@@ -269,7 +284,7 @@ const ChessGame = () => {
         const chatMsg = typeof message.payload === "string" 
           ? JSON.parse(message.payload) 
           : message.payload;
-        chat.receiveMessage(chatMsg);
+        chatRef.current.receiveMessage(chatMsg);
       } catch (e) {
         console.error("[ChessGame] Failed to parse chat message:", e);
       }
@@ -278,9 +293,8 @@ const ChessGame = () => {
     
     if (message.type === "move" && message.payload) {
       const move = message.payload as ChessMove;
-      const gameCopy = new Chess(game.fen());
+      const gameCopy = new Chess(gameRef.current.fen());
       
-      // Get piece info before move for animations
       const attackingPiece = gameCopy.get(move.from);
       const targetPiece = gameCopy.get(move.to);
       
@@ -292,10 +306,9 @@ const ChessGame = () => {
         });
         
         if (result) {
-          // Play appropriate sound
           if (targetPiece) {
             play('chess_capture');
-            if (animationsEnabled && attackingPiece) {
+            if (animationsEnabledRef.current && attackingPiece) {
               triggerAnimation(attackingPiece.type, targetPiece.type, move.to);
             }
           } else {
@@ -308,9 +321,8 @@ const ChessGame = () => {
           
           setGame(new Chess(gameCopy.fen()));
           setMoveHistory(gameCopy.history());
-          recordPlayerMove(roomPlayers[game.turn() === "w" ? 1 : 0] || "", result.san);
+          recordPlayerMoveRef.current(roomPlayersRef.current[gameRef.current.turn() === "w" ? 1 : 0] || "", result.san);
           
-          // Check game over
           checkGameOver(gameCopy);
         }
       } catch (error) {
@@ -320,7 +332,7 @@ const ChessGame = () => {
       setGameStatus(t("gameMultiplayer.opponentResignedWin"));
       setGameOver(true);
       play('chess_win');
-      chat.addSystemMessage(t("gameMultiplayer.opponentResigned"));
+      chatRef.current.addSystemMessage(t("gameMultiplayer.opponentResigned"));
       toast({
         title: t("gameMultiplayer.victory"),
         description: t("gameMultiplayer.opponentResignedVictory"),
@@ -335,7 +347,7 @@ const ChessGame = () => {
     } else if (message.type === "draw_accept") {
       setGameStatus(t("gameMultiplayer.drawByAgreement"));
       setGameOver(true);
-      chat.addSystemMessage(t("gameMultiplayer.drawByAgreement"));
+      chatRef.current.addSystemMessage(t("gameMultiplayer.drawByAgreement"));
       toast({
         title: t("game.draw"),
         description: t("gameMultiplayer.drawByAgreement"),
@@ -348,7 +360,6 @@ const ChessGame = () => {
         description: t("gameMultiplayer.drawDeclinedDesc"),
       });
     } else if (message.type === "rematch_invite" && message.payload) {
-      // Opponent sent a rematch invite
       setRematchInviteData(message.payload);
       setShowAcceptModal(true);
       toast({
@@ -360,7 +371,6 @@ const ChessGame = () => {
         title: t("gameMultiplayer.rematchAccepted"),
         description: t("gameMultiplayer.rematchAcceptedDesc"),
       });
-      // Update local rematch data
       if (rematch.state.newRoomId) {
         rematch.acceptRematch(rematch.state.newRoomId);
       }
@@ -378,7 +388,7 @@ const ChessGame = () => {
       });
       navigate(`/game/chess/${message.payload.roomId}`);
     }
-  }, [game, play, animationsEnabled, triggerAnimation, recordPlayerMove, roomPlayers, chat, rematch, navigate]);
+  }, [play, triggerAnimation, checkGameOver, t, rematch, navigate]); // Minimal stable deps
 
   // WebRTC sync
   const {
