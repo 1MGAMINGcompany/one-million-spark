@@ -35,11 +35,12 @@ export class SupabaseSignaling {
         config: {
           broadcast: { 
             self: false, // Don't receive own messages
-            ack: true,   // Wait for acknowledgment
           },
         },
       });
 
+      let resolved = false;
+      
       this.channel
         .on("broadcast", { event: "signal" }, ({ payload }) => {
           if (!payload) {
@@ -66,24 +67,38 @@ export class SupabaseSignaling {
             
             // Send any queued messages
             this.flushQueue();
-            resolve();
+            
+            if (!resolved) {
+              resolved = true;
+              resolve();
+            }
           } else if (status === "CHANNEL_ERROR") {
             console.error("[SupabaseSignaling] Channel error:", err);
-            reject(new Error(`Channel error: ${err}`));
+            if (!resolved) {
+              resolved = true;
+              reject(new Error(`Channel error: ${err}`));
+            }
           } else if (status === "TIMED_OUT") {
             console.error("[SupabaseSignaling] Subscription timed out");
-            reject(new Error("Subscription timed out"));
+            if (!resolved) {
+              resolved = true;
+              reject(new Error("Subscription timed out"));
+            }
+          } else if (status === "CLOSED") {
+            console.log("[SupabaseSignaling] Channel closed");
+            this.isConnected = false;
           }
         });
       
-      // Timeout fallback - resolve after 5 seconds even if not subscribed
+      // Timeout fallback - resolve after 3 seconds even if not subscribed
       setTimeout(() => {
-        if (!this.isConnected) {
+        if (!resolved) {
           console.warn("[SupabaseSignaling] Subscription timeout, proceeding anyway");
           this.isConnected = true; // Assume it will connect
+          resolved = true;
           resolve();
         }
-      }, 5000);
+      }, 3000);
     });
   }
 
@@ -114,21 +129,33 @@ export class SupabaseSignaling {
 
     console.log(`[SupabaseSignaling] Sending signal: ${signal.type} to ${signal.to.slice(0, 8)}...`);
     
-    try {
-      const result = await this.channel.send({
-        type: "broadcast",
-        event: "signal",
-        payload: signal,
-      });
-      
-      if (result === "ok") {
-        console.log(`[SupabaseSignaling] ✅ Signal sent successfully`);
-      } else {
-        console.warn(`[SupabaseSignaling] Signal send result: ${result}`);
+    // Retry up to 3 times
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const result = await this.channel.send({
+          type: "broadcast",
+          event: "signal",
+          payload: signal,
+        });
+        
+        if (result === "ok") {
+          console.log(`[SupabaseSignaling] ✅ Signal sent successfully (attempt ${attempt + 1})`);
+          return;
+        } else {
+          console.warn(`[SupabaseSignaling] Signal send result: ${result}, attempt ${attempt + 1}`);
+          if (attempt < 2) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+        }
+      } catch (e) {
+        console.error(`[SupabaseSignaling] Failed to send signal (attempt ${attempt + 1}):`, e);
+        if (attempt < 2) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
       }
-    } catch (e) {
-      console.error("[SupabaseSignaling] Failed to send signal:", e);
     }
+    
+    console.error("[SupabaseSignaling] Failed to send signal after 3 attempts");
   }
 
   getIsConnected(): boolean {
