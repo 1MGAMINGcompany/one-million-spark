@@ -90,16 +90,17 @@ export const getTokenCoords = (
     // In home base
     return HOME_BASE_COORDS[color][tokenId];
   }
-  if (position === 62) {
+  if (position === 57) {
     // Finished - center area
     return [7, 7];
   }
-  if (position >= 56 && position <= 61) {
-    // In home column (positions 56-61 = indices 0-5)
-    return HOME_COLUMN_COORDS[color][position - 56];
+  if (position >= 51 && position <= 56) {
+    // In home column (positions 51-56 = indices 0-5)
+    return HOME_COLUMN_COORDS[color][position - 51];
   }
-  if (position >= 0 && position < TRACK_SIZE) {
-    // On main track - convert relative to absolute
+  if (position >= 0 && position < 51) {
+    // On main track - convert relative to absolute (51 cells per player lap)
+    // Each player's relative position maps to absolute track position
     const absolutePos = getAbsolutePosition(position, color);
     return MAIN_TRACK_COORDS[absolutePos];
   }
