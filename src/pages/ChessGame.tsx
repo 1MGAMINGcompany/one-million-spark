@@ -275,6 +275,32 @@ const ChessGame = () => {
   useEffect(() => { chatRef.current = chat; }, [chat]);
   useEffect(() => { recordPlayerMoveRef.current = recordPlayerMove; }, [recordPlayerMove]);
 
+  // Inline checkGameOver logic for stable callback (avoids circular dependency)
+  const checkGameOverInline = useCallback((currentGame: Chess) => {
+    if (currentGame.isCheckmate()) {
+      const isPlayerWin = currentGame.turn() !== myColor;
+      const winner = isPlayerWin ? t("gameMultiplayer.checkmateYouWin") : t("gameMultiplayer.checkmateYouLose");
+      setGameStatus(winner);
+      setGameOver(true);
+      play(isPlayerWin ? 'chess_win' : 'chess_lose');
+      return true;
+    }
+    if (currentGame.isStalemate()) {
+      setGameStatus(t("gameMultiplayer.drawStalemate"));
+      setGameOver(true);
+      return true;
+    }
+    if (currentGame.isDraw()) {
+      setGameStatus(t("game.draw"));
+      setGameOver(true);
+      return true;
+    }
+    if (currentGame.isCheck()) {
+      play('chess_check');
+    }
+    return false;
+  }, [myColor, play, t]);
+
   const handleWebRTCMessage = useCallback((message: GameMessage) => {
     console.log("[ChessGame] Received message:", message.type);
     
@@ -323,7 +349,7 @@ const ChessGame = () => {
           setMoveHistory(gameCopy.history());
           recordPlayerMoveRef.current(roomPlayersRef.current[gameRef.current.turn() === "w" ? 1 : 0] || "", result.san);
           
-          checkGameOver(gameCopy);
+          checkGameOverInline(gameCopy);
         }
       } catch (error) {
         console.error("[ChessGame] Error applying opponent move:", error);
@@ -388,7 +414,7 @@ const ChessGame = () => {
       });
       navigate(`/game/chess/${message.payload.roomId}`);
     }
-  }, [play, triggerAnimation, checkGameOver, t, rematch, navigate]); // Minimal stable deps
+  }, [play, triggerAnimation, checkGameOverInline, t, rematch, navigate]); // Stable deps
 
   // WebRTC sync
   const {

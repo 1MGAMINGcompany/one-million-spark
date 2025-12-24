@@ -209,7 +209,11 @@ const LudoGame = () => {
   // Game chat hook ref (sendChat defined after WebRTC hook)
   const chatRef = useRef<ReturnType<typeof useGameChat> | null>(null);
 
-  // WebRTC sync for multiplayer
+  // Refs for stable callback access
+  const recordPlayerMoveRef = useRef(recordPlayerMove);
+  useEffect(() => { recordPlayerMoveRef.current = recordPlayerMove; }, [recordPlayerMove]);
+
+  // WebRTC sync for multiplayer - stable with refs
   const handleWebRTCMessage = useCallback((message: GameMessage) => {
     // Handle chat messages
     if (message.type === "chat" && message.payload) {
@@ -227,7 +231,7 @@ const LudoGame = () => {
     if (message.type === "move" && message.payload) {
       const move = message.payload as LudoMove;
       applyExternalMove(move);
-      recordPlayerMove(roomPlayers[move.playerIndex] || "", `Moved to position ${move.endPosition}`);
+      recordPlayerMoveRef.current(roomPlayersRef.current[move.playerIndex] || "", `Moved to position ${move.endPosition}`);
     } else if (message.type === "rematch_invite" && message.payload) {
       setRematchInviteData(message.payload);
       setShowAcceptModal(true);
@@ -241,7 +245,7 @@ const LudoGame = () => {
       toast({ title: "Rematch Ready!", description: "Starting new game..." });
       navigate(`/game/ludo/${message.payload.roomId}`);
     }
-  }, [applyExternalMove, recordPlayerMove, roomPlayers, rematch, navigate]);
+  }, [applyExternalMove, rematch, navigate]); // Stable deps - uses refs
 
   // WebRTC sync
   const {

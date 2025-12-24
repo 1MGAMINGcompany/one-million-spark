@@ -366,7 +366,13 @@ const CheckersGame = () => {
     return null;
   }, [getAllMoves]);
 
-  // WebRTC message handler
+  // Refs for stable callback access
+  const recordPlayerMoveRef = useRef(recordPlayerMove);
+  const checkGameOverRef = useRef(checkGameOver);
+  useEffect(() => { recordPlayerMoveRef.current = recordPlayerMove; }, [recordPlayerMove]);
+  useEffect(() => { checkGameOverRef.current = checkGameOver; }, [checkGameOver]);
+
+  // WebRTC message handler - stable with refs
   const handleWebRTCMessage = useCallback((message: GameMessage) => {
     console.log("[CheckersGame] Received message:", message.type);
     
@@ -395,18 +401,18 @@ const CheckersGame = () => {
       setBoard(moveData.board);
       boardRef.current = moveData.board;
       
-      recordPlayerMove(roomPlayers[moveData.player === "gold" ? 0 : 1] || "", "move");
+      recordPlayerMoveRef.current(roomPlayersRef.current[moveData.player === "gold" ? 0 : 1] || "", "move");
       
-      const result = checkGameOver(moveData.board);
+      const result = checkGameOverRef.current(moveData.board);
       if (result) {
         setGameOver(result);
-        chatRef.current?.addSystemMessage(result === myColor ? t("gameMultiplayer.youWin") : t("gameMultiplayer.opponentWins"));
-        play(result === myColor ? 'checkers_win' : 'checkers_lose');
+        chatRef.current?.addSystemMessage(result === myColorRef.current ? t("gameMultiplayer.youWin") : t("gameMultiplayer.opponentWins"));
+        play(result === myColorRef.current ? 'checkers_win' : 'checkers_lose');
       } else {
         setCurrentPlayer(moveData.player === "gold" ? "obsidian" : "gold");
       }
     } else if (message.type === "resign") {
-      setGameOver(myColor);
+      setGameOver(myColorRef.current);
       chatRef.current?.addSystemMessage(t("gameMultiplayer.opponentResigned"));
       play('checkers_win');
       toast({
@@ -426,7 +432,7 @@ const CheckersGame = () => {
       toast({ title: t("gameMultiplayer.rematchReady"), description: t("gameMultiplayer.rematchReadyDesc") });
       navigate(`/game/checkers/${message.payload.roomId}`);
     }
-  }, [play, checkGameOver, myColor, recordPlayerMove, roomPlayers, rematch, navigate]);
+  }, [play, t, rematch, navigate]); // Stable deps - uses refs
 
   // WebRTC sync
   const {
