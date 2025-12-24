@@ -26,6 +26,18 @@ export function useRealtimeGameSync({
   const channelRef = useRef<RealtimeChannel | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const processedIds = useRef<Set<string>>(new Set());
+  
+  // Store onMessage in a ref to avoid subscription re-creation on every render
+  const onMessageRef = useRef(onMessage);
+  useEffect(() => {
+    onMessageRef.current = onMessage;
+  }, [onMessage]);
+
+  // Store localAddress in ref too for stable comparisons
+  const localAddressRef = useRef(localAddress);
+  useEffect(() => {
+    localAddressRef.current = localAddress;
+  }, [localAddress]);
 
   useEffect(() => {
     if (!enabled || !roomId || !localAddress) return;
@@ -43,7 +55,7 @@ export function useRealtimeGameSync({
       .on("broadcast", { event: "game_move" }, ({ payload }) => {
         if (!payload) return;
         
-        // Deduplicate
+        // Deduplicate by message ID
         const msgId = `${payload.type}-${payload.sender}-${payload.timestamp}`;
         if (processedIds.current.has(msgId)) {
           console.log(`[RealtimeGameSync] Skipping duplicate: ${msgId}`);
@@ -51,13 +63,20 @@ export function useRealtimeGameSync({
         }
         processedIds.current.add(msgId);
         
+        // Limit processed IDs set size to prevent memory leak
+        if (processedIds.current.size > 500) {
+          const ids = Array.from(processedIds.current);
+          processedIds.current = new Set(ids.slice(-250));
+        }
+        
         // Ignore our own messages
-        if (payload.sender?.toLowerCase() === localAddress.toLowerCase()) {
+        if (payload.sender?.toLowerCase() === localAddressRef.current.toLowerCase()) {
+          console.log(`[RealtimeGameSync] Ignoring own message: ${payload.type}`);
           return;
         }
         
         console.log(`[RealtimeGameSync] Received: ${payload.type} from ${payload.sender?.slice(0, 8)}...`);
-        onMessage(payload as RealtimeGameMessage);
+        onMessageRef.current(payload as RealtimeGameMessage);
       })
       .subscribe((status) => {
         console.log(`[RealtimeGameSync] Status: ${status}`);
@@ -78,7 +97,7 @@ export function useRealtimeGameSync({
       }
       setIsConnected(false);
     };
-  }, [enabled, roomId, localAddress, onMessage]);
+  }, [enabled, roomId, localAddress]); // Removed onMessage from deps - using ref instead
 
   const sendMessage = useCallback(async (message: Omit<RealtimeGameMessage, "sender" | "timestamp">) => {
     if (!channelRef.current) {
@@ -88,7 +107,7 @@ export function useRealtimeGameSync({
 
     const fullMessage: RealtimeGameMessage = {
       ...message,
-      sender: localAddress,
+      sender: localAddressRef.current,
       timestamp: Date.now(),
     };
 
@@ -105,7 +124,7 @@ export function useRealtimeGameSync({
       console.error("[RealtimeGameSync] Send error:", e);
       return false;
     }
-  }, [localAddress]);
+  }, []);
 
   return {
     isConnected,
