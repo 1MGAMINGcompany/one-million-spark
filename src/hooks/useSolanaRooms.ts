@@ -22,6 +22,7 @@ import {
   fetchAllRooms,
   fetchRoomsByCreator,
   fetchNextRoomIdForCreator,
+  fetchActiveRoomsForUser,
   buildCreateRoomIx,
   buildJoinRoomIx,
   buildCancelRoomIx,
@@ -135,24 +136,22 @@ export function useSolanaRooms() {
     return signature;
   }, [adapter, adapterName, hasAdapterSendTx, sendTransaction, connection]);
 
-  // Fetch user's active room (created by them, status Created or Started)
-  // Returns the newest active room by roomId (descending) to handle collisions
+  // Fetch user's active room (where user is a PLAYER - creator OR joiner)
+  // This is critical for multiplayer: both creator and joiner need to see the same activeRoom
+  // Returns the highest priority active room: Started first, then by roomId
   // Also filters out archived rooms
-  const fetchCreatorActiveRoom = useCallback(async (): Promise<RoomDisplay | null> => {
+  const fetchUserActiveRoom = useCallback(async (): Promise<RoomDisplay | null> => {
     if (!publicKey) {
       setActiveRoom(null);
       return null;
     }
     
     try {
-      // Use creator-scoped fetch - filters by creator pubkey on-chain
-      const creatorRooms = await fetchRoomsByCreator(connection, publicKey);
+      // Fetch all active rooms where user is a player (creator OR joiner)
+      const userRooms = await fetchActiveRoomsForUser(connection, publicKey);
       
-      // Filter to active statuses: Open (0 or 1) or Started (2)
-      // Also exclude archived rooms
-      const activeRooms = creatorRooms.filter(room => 
-        isActiveStatus(room.status) && !isRoomArchived(room.pda)
-      );
+      // Filter out archived rooms
+      const activeRooms = userRooms.filter(room => !isRoomArchived(room.pda));
       
       if (activeRooms.length === 0) {
         setActiveRoom(null);
@@ -160,7 +159,7 @@ export function useSolanaRooms() {
       }
       
       // Priority: 1) Started rooms first (in-progress games), 2) Then by highest roomId (newest)
-      // This ensures if you have a Started Backgammon + Open Dominos, banner shows Backgammon
+      // This ensures both creator and joiner see the same Started room
       const sortedActiveRooms = [...activeRooms].sort((a, b) => {
         const aStarted = a.status === RoomStatus.Started ? 1 : 0;
         const bStarted = b.status === RoomStatus.Started ? 1 : 0;
@@ -176,9 +175,9 @@ export function useSolanaRooms() {
       const newestActiveRoom = sortedActiveRooms[0];
       
       // Single-line log for easy debugging
-      console.log(`[fetchCreatorActiveRoom] candidateCount=${activeRooms.length} | selected: status=${newestActiveRoom.statusName}, roomId=${newestActiveRoom.roomId}, game=${newestActiveRoom.gameTypeName}, pda=${newestActiveRoom.pda.slice(0, 8)}...`);
+      console.log(`[fetchUserActiveRoom] candidateCount=${activeRooms.length} | selected: status=${newestActiveRoom.statusName}, roomId=${newestActiveRoom.roomId}, game=${newestActiveRoom.gameTypeName}, pda=${newestActiveRoom.pda.slice(0, 8)}...`);
       
-      // Only update state if PDA changed to prevent flicker
+      // Only update state if PDA or status changed to prevent flicker
       setActiveRoom(prev => {
         if (prev?.pda === newestActiveRoom.pda && prev?.status === newestActiveRoom.status) {
           return prev; // No change, keep stable reference
@@ -187,14 +186,14 @@ export function useSolanaRooms() {
       });
       return newestActiveRoom;
     } catch (err) {
-      console.error("Error fetching active room:", err);
+      console.error("Error fetching user active room:", err);
       setActiveRoom(null);
       return null;
     }
   }, [connection, publicKey]);
 
   // AUTO-POLL: Centralized active room polling (SINGLE SOURCE OF TRUTH)
-  // Pages should NOT call fetchCreatorActiveRoom - they only consume activeRoom
+  // Pages should NOT call fetchUserActiveRoom - they only consume activeRoom
   useEffect(() => {
     // Clear any existing interval
     if (pollIntervalRef.current) {
@@ -210,11 +209,11 @@ export function useSolanaRooms() {
 
     // Fetch immediately on connect
     console.log("[useSolanaRooms] Starting active room polling");
-    fetchCreatorActiveRoom();
+    fetchUserActiveRoom();
 
     // Set up polling interval
     pollIntervalRef.current = setInterval(() => {
-      fetchCreatorActiveRoom();
+      fetchUserActiveRoom();
     }, ACTIVE_ROOM_POLL_INTERVAL);
 
     return () => {
@@ -223,7 +222,7 @@ export function useSolanaRooms() {
         pollIntervalRef.current = null;
       }
     };
-  }, [connected, publicKey, fetchCreatorActiveRoom]);
+  }, [connected, publicKey, fetchUserActiveRoom]);
 
   // Fetch all open public rooms
   const fetchRooms = useCallback(async () => {
@@ -270,7 +269,7 @@ export function useSolanaRooms() {
     }
 
     // Check for existing active room
-    const existingRoom = await fetchCreatorActiveRoom();
+    const existingRoom = await fetchUserActiveRoom();
     if (existingRoom) {
       toast({
         title: "Active room exists",
@@ -323,7 +322,7 @@ export function useSolanaRooms() {
       });
       
       // Refresh rooms and active room state
-      await Promise.all([fetchRooms(), fetchCreatorActiveRoom()]);
+      await Promise.all([fetchRooms(), fetchUserActiveRoom()]);
       
       return roomId;
     } catch (err: any) {
@@ -357,7 +356,7 @@ export function useSolanaRooms() {
     } finally {
       setTxPending(false);
     }
-  }, [publicKey, connected, connection, sendVersionedTx, toast, fetchRooms, fetchCreatorActiveRoom]);
+  }, [publicKey, connected, connection, sendVersionedTx, toast, fetchRooms, fetchUserActiveRoom]);
 
   // Join room - returns structured TxResult
   const joinRoom = useCallback(async (roomId: number, roomCreator: string): Promise<{ ok: boolean; signature?: string; reason?: string }> => {
@@ -371,7 +370,7 @@ export function useSolanaRooms() {
     }
 
     // Check for existing active room
-    const existingRoom = await fetchCreatorActiveRoom();
+    const existingRoom = await fetchUserActiveRoom();
     if (existingRoom) {
       toast({
         title: "Active room exists",
@@ -415,7 +414,7 @@ export function useSolanaRooms() {
       });
       
       // Refresh rooms and active room state
-      await Promise.all([fetchRooms(), fetchCreatorActiveRoom()]);
+      await Promise.all([fetchRooms(), fetchUserActiveRoom()]);
       return { ok: true, signature };
     } catch (err: any) {
       console.error("Join room error:", err);
@@ -453,7 +452,7 @@ export function useSolanaRooms() {
     } finally {
       setTxPending(false);
     }
-  }, [publicKey, connected, connection, sendVersionedTx, toast, fetchRooms, fetchCreatorActiveRoom, hasAdapterSendTx, adapterName]);
+  }, [publicKey, connected, connection, sendVersionedTx, toast, fetchRooms, fetchUserActiveRoom, hasAdapterSendTx, adapterName]);
 
   // cancelRoom - cancel an open room (only creator, only when playerCount == 1)
   const cancelRoom = useCallback(
@@ -492,7 +491,7 @@ export function useSolanaRooms() {
         });
 
         // Refresh state AFTER confirmed
-        await Promise.all([fetchRooms(), fetchCreatorActiveRoom()]);
+        await Promise.all([fetchRooms(), fetchUserActiveRoom()]);
 
         return { ok: true, signature };
       } catch (err: any) {
@@ -529,7 +528,7 @@ export function useSolanaRooms() {
         setTxPending(false);
       }
     },
-    [publicKey, connected, connection, sendVersionedTx, toast, fetchRooms, fetchCreatorActiveRoom]
+    [publicKey, connected, connection, sendVersionedTx, toast, fetchRooms, fetchUserActiveRoom]
   );
 
   // pingRoom is disabled - ping_room instruction not in current on-chain program
@@ -584,6 +583,6 @@ export function useSolanaRooms() {
     pingRoom,
     cancelAbandonedRoom,
     getBalance,
-    fetchCreatorActiveRoom,
+    fetchUserActiveRoom,
   };
 }
