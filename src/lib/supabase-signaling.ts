@@ -16,6 +16,7 @@ export interface SignalingMessage {
 export class SupabaseSignaling {
   private channel: RealtimeChannel | null = null;
   private isConnected: boolean = false;
+  private messageQueue: SignalingMessage[] = [];
 
   constructor(
     private roomId: string,
@@ -24,54 +25,110 @@ export class SupabaseSignaling {
   ) {}
 
   async connect(): Promise<void> {
-    console.log(`[SupabaseSignaling] Connecting to room: webrtc-${this.roomId}`);
+    const channelName = `webrtc-${this.roomId}`;
+    console.log(`[SupabaseSignaling] Connecting to channel: ${channelName}`);
+    console.log(`[SupabaseSignaling] Local address: ${this.localAddress.slice(0, 8)}...`);
     
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       // Create a broadcast channel for WebRTC signaling
-      this.channel = supabase.channel(`webrtc-${this.roomId}`, {
+      this.channel = supabase.channel(channelName, {
         config: {
-          broadcast: { self: false }, // Don't receive own messages
+          broadcast: { 
+            self: false, // Don't receive own messages
+            ack: true,   // Wait for acknowledgment
+          },
         },
       });
 
       this.channel
         .on("broadcast", { event: "signal" }, ({ payload }) => {
-          console.log(`[SupabaseSignaling] Received signal:`, payload?.type);
+          if (!payload) {
+            console.log("[SupabaseSignaling] Received empty payload, ignoring");
+            return;
+          }
+          
+          console.log(`[SupabaseSignaling] Received signal: ${payload.type} from ${payload.from?.slice(0, 8)}... to ${payload.to?.slice(0, 8)}...`);
           
           // Only process signals meant for us
-          if (payload && payload.to?.toLowerCase() === this.localAddress.toLowerCase()) {
+          if (payload.to?.toLowerCase() === this.localAddress.toLowerCase()) {
+            console.log(`[SupabaseSignaling] Signal is for us, processing...`);
             this.onSignal(payload as SignalingMessage);
+          } else {
+            console.log(`[SupabaseSignaling] Signal not for us (we are ${this.localAddress.slice(0, 8)}...), ignoring`);
           }
         })
-        .subscribe((status) => {
-          console.log(`[SupabaseSignaling] Subscription status:`, status);
-          this.isConnected = status === "SUBSCRIBED";
+        .subscribe((status, err) => {
+          console.log(`[SupabaseSignaling] Subscription status: ${status}`);
+          
           if (status === "SUBSCRIBED") {
+            this.isConnected = true;
+            console.log("[SupabaseSignaling] ✅ Successfully subscribed to channel");
+            
+            // Send any queued messages
+            this.flushQueue();
             resolve();
+          } else if (status === "CHANNEL_ERROR") {
+            console.error("[SupabaseSignaling] Channel error:", err);
+            reject(new Error(`Channel error: ${err}`));
+          } else if (status === "TIMED_OUT") {
+            console.error("[SupabaseSignaling] Subscription timed out");
+            reject(new Error("Subscription timed out"));
           }
         });
       
-      // Timeout fallback - resolve after 3 seconds even if not subscribed
+      // Timeout fallback - resolve after 5 seconds even if not subscribed
       setTimeout(() => {
-        console.log("[SupabaseSignaling] Subscription timeout, proceeding anyway");
-        resolve();
-      }, 3000);
+        if (!this.isConnected) {
+          console.warn("[SupabaseSignaling] Subscription timeout, proceeding anyway");
+          this.isConnected = true; // Assume it will connect
+          resolve();
+        }
+      }, 5000);
     });
+  }
+
+  private async flushQueue(): Promise<void> {
+    if (this.messageQueue.length === 0) return;
+    
+    console.log(`[SupabaseSignaling] Flushing ${this.messageQueue.length} queued messages`);
+    const queue = [...this.messageQueue];
+    this.messageQueue = [];
+    
+    for (const signal of queue) {
+      await this.sendSignal(signal);
+    }
   }
 
   async sendSignal(signal: SignalingMessage): Promise<void> {
     if (!this.channel) {
-      console.warn("[SupabaseSignaling] Cannot send: channel not initialized");
+      console.warn("[SupabaseSignaling] Cannot send: channel not initialized, queuing...");
+      this.messageQueue.push(signal);
       return;
     }
 
-    console.log(`[SupabaseSignaling] Sending signal: ${signal.type} to ${signal.to}`);
+    if (!this.isConnected) {
+      console.warn("[SupabaseSignaling] Not connected yet, queuing signal...");
+      this.messageQueue.push(signal);
+      return;
+    }
+
+    console.log(`[SupabaseSignaling] Sending signal: ${signal.type} to ${signal.to.slice(0, 8)}...`);
     
-    await this.channel.send({
-      type: "broadcast",
-      event: "signal",
-      payload: signal,
-    });
+    try {
+      const result = await this.channel.send({
+        type: "broadcast",
+        event: "signal",
+        payload: signal,
+      });
+      
+      if (result === "ok") {
+        console.log(`[SupabaseSignaling] ✅ Signal sent successfully`);
+      } else {
+        console.warn(`[SupabaseSignaling] Signal send result: ${result}`);
+      }
+    } catch (e) {
+      console.error("[SupabaseSignaling] Failed to send signal:", e);
+    }
   }
 
   getIsConnected(): boolean {
@@ -85,5 +142,6 @@ export class SupabaseSignaling {
       this.channel = null;
     }
     this.isConnected = false;
+    this.messageQueue = [];
   }
 }
