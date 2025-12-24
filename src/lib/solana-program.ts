@@ -848,6 +848,42 @@ export async function fetchRoomById(connection: Connection, creator: PublicKey, 
   }
 }
 
+/**
+ * Fetch all active rooms where the user is a player (creator OR joiner).
+ * This is critical for multiplayer: when Wallet B joins Wallet A's room,
+ * Wallet B's activeRoom should reflect the joined room.
+ * 
+ * Fetches all active rooms (Open or Started) and filters client-side
+ * to rooms where userPubkey is in the players[] array.
+ */
+export async function fetchActiveRoomsForUser(
+  connection: Connection,
+  userPubkey: PublicKey
+): Promise<RoomDisplay[]> {
+  try {
+    const userPubkeyStr = userPubkey.toBase58();
+    
+    // Fetch all rooms from the program
+    const allRooms = await fetchAllRooms(connection);
+    
+    // Filter to:
+    // 1. Active status (Open or Started)
+    // 2. User is in players[] array
+    const userActiveRooms = allRooms.filter(room => {
+      const isActive = isActiveStatus(room.status);
+      const isUserPlayer = room.players.includes(userPubkeyStr);
+      return isActive && isUserPlayer;
+    });
+    
+    console.log(`[fetchActiveRoomsForUser] Found ${userActiveRooms.length} active room(s) for user ${userPubkeyStr.slice(0, 8)}...`);
+    
+    return userActiveRooms;
+  } catch (err) {
+    console.error("Failed to fetch active rooms for user:", err);
+    return [];
+  }
+}
+
 // ============================================
 // CONNECTION HELPER
 // ============================================
