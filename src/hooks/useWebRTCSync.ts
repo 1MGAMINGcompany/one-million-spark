@@ -3,6 +3,7 @@ import { WebRTCPeer, clearOldSignals } from "@/lib/webrtc";
 import { useWallet } from "@/hooks/useWallet";
 import { useToast } from "@/hooks/use-toast";
 import { useSound } from "@/contexts/SoundContext";
+import { useRealtimeGameSync, RealtimeGameMessage } from "@/hooks/useRealtimeGameSync";
 
 export interface GameMessage {
   type: "move" | "resign" | "draw_offer" | "draw_accept" | "draw_reject" | "sync_request" | "sync_response" | "heartbeat" | "chat" | "rematch_invite" | "rematch_accept" | "rematch_decline" | "rematch_ready";
@@ -33,7 +34,8 @@ export function useWebRTCSync({
   const [connectionState, setConnectionState] = useState<"connecting" | "connected" | "disconnected">("connecting");
   const peerRef = useRef<WebRTCPeer | null>(null);
   const reconnectAttempts = useRef(0);
-  const maxReconnectAttempts = 5;
+  const maxReconnectAttempts = 3; // Reduced since we have fallback
+  const hasShownConnectedToast = useRef(false);
 
   // Determine if we're the initiator (based on address sorting)
   const localAddress = address?.toLowerCase() || "";
@@ -46,7 +48,43 @@ export function useWebRTCSync({
     ? localAddress < remoteAddress 
     : false;
 
-  // Connect to peer
+  // Supabase Realtime fallback handler
+  const handleRealtimeMessage = useCallback((msg: RealtimeGameMessage) => {
+    console.log("[WebRTCSync] Received via Realtime fallback:", msg.type);
+    onMessage?.({
+      type: msg.type as GameMessage["type"],
+      payload: msg.payload,
+      timestamp: msg.timestamp,
+      sender: msg.sender,
+    });
+  }, [onMessage]);
+
+  // Supabase Realtime fallback - ALWAYS connected as backup
+  const { 
+    isConnected: realtimeConnected, 
+    sendMessage: sendRealtimeMessage 
+  } = useRealtimeGameSync({
+    roomId: roomId || "",
+    localAddress,
+    onMessage: handleRealtimeMessage,
+    enabled: enabled && !!localAddress && !!roomId,
+  });
+
+  // Show connected toast when Realtime connects (even if WebRTC fails)
+  useEffect(() => {
+    if (realtimeConnected && !hasShownConnectedToast.current) {
+      hasShownConnectedToast.current = true;
+      setConnectionState("connected");
+      setIsPushEnabled(true);
+      play("rooms/player-join");
+      toast({
+        title: "Connected",
+        description: "Game sync established",
+      });
+    }
+  }, [realtimeConnected, play, toast]);
+
+  // Connect to peer (WebRTC)
   const connect = useCallback(async () => {
     if (!enabled || !localAddress || !remoteAddress || !roomId) {
       console.log("[WebRTCSync] Not ready to connect:", { enabled, localAddress, remoteAddress, roomId });
@@ -59,45 +97,35 @@ export function useWebRTCSync({
       peerRef.current = null;
     }
 
-    setConnectionState("connecting");
-    console.log(`[WebRTCSync] Connecting to peer ${remoteAddress}`);
+    console.log(`[WebRTCSync] Connecting WebRTC to peer ${remoteAddress.slice(0, 8)}...`);
 
     const peer = new WebRTCPeer(roomId, localAddress, {
       onConnected: () => {
-        console.log("[WebRTCSync] ✅ Data channel connected!");
+        console.log("[WebRTCSync] ✅ WebRTC data channel connected!");
         setIsConnected(true);
         setConnectionState("connected");
-        setIsPushEnabled(true); // Data channel is open
+        setIsPushEnabled(true);
         reconnectAttempts.current = 0;
-        play("rooms/player-join");
-        toast({
-          title: "Connected",
-          description: "Real-time game sync established",
-        });
       },
       onDisconnected: () => {
-        console.log("[WebRTCSync] Disconnected");
+        console.log("[WebRTCSync] WebRTC disconnected, using Realtime fallback");
         setIsConnected(false);
-        setConnectionState("disconnected");
+        // Don't set disconnected state - Realtime is still working
         
-        // Auto-reconnect
+        // Try reconnect WebRTC in background
         if (reconnectAttempts.current < maxReconnectAttempts) {
           reconnectAttempts.current++;
-          console.log(`[WebRTCSync] Reconnecting (attempt ${reconnectAttempts.current})`);
-          setTimeout(connect, 2000 * reconnectAttempts.current);
+          console.log(`[WebRTCSync] WebRTC reconnect attempt ${reconnectAttempts.current}`);
+          setTimeout(connect, 3000 * reconnectAttempts.current);
         }
       },
       onMessage: (data: GameMessage) => {
-        console.log("[WebRTCSync] Received:", data.type);
+        console.log("[WebRTCSync] Received via WebRTC:", data.type);
         onMessage?.(data);
       },
       onError: (error) => {
-        console.error("[WebRTCSync] Error:", error);
-        toast({
-          title: "Connection Error",
-          description: error.message,
-          variant: "destructive",
-        });
+        console.error("[WebRTCSync] WebRTC error (using Realtime fallback):", error.message);
+        // Don't show toast - Realtime fallback is working
       },
     });
 
@@ -106,9 +134,9 @@ export function useWebRTCSync({
     try {
       await peer.connect(remoteAddress, isInitiator);
     } catch (e) {
-      console.error("[WebRTCSync] Connection failed:", e);
+      console.error("[WebRTCSync] WebRTC connection failed, using Realtime fallback");
     }
-  }, [enabled, localAddress, remoteAddress, roomId, isInitiator, onMessage, play, toast]);
+  }, [enabled, localAddress, remoteAddress, roomId, isInitiator, onMessage]);
 
   // Initialize connection
   useEffect(() => {
@@ -136,7 +164,7 @@ export function useWebRTCSync({
     }
   }, [enabled, localAddress, remoteAddress, isInitiator, connect]);
 
-  // Send heartbeat
+  // Send heartbeat (only via WebRTC if connected)
   useEffect(() => {
     if (!isConnected) return;
 
@@ -149,17 +177,27 @@ export function useWebRTCSync({
     return () => clearInterval(interval);
   }, [isConnected]);
 
-  // Send a message
+  // Send a message - try WebRTC first, fallback to Realtime
   const sendMessage = useCallback((message: Omit<GameMessage, "timestamp">): boolean => {
-    if (!peerRef.current) return false;
-    
     const fullMessage: GameMessage = {
       ...message,
       timestamp: Date.now(),
     };
     
-    return peerRef.current.send(fullMessage);
-  }, []);
+    // Try WebRTC first
+    if (peerRef.current && peerRef.current.isConnected()) {
+      const sent = peerRef.current.send(fullMessage);
+      if (sent) {
+        console.log(`[WebRTCSync] Sent via WebRTC: ${message.type}`);
+        return true;
+      }
+    }
+    
+    // Fallback to Supabase Realtime
+    console.log(`[WebRTCSync] Sending via Realtime fallback: ${message.type}`);
+    sendRealtimeMessage({ type: message.type, payload: message.payload });
+    return true; // Realtime is fire-and-forget but reliable
+  }, [sendRealtimeMessage]);
 
   // Send a game move
   const sendMove = useCallback((moveData: any): boolean => {
@@ -232,8 +270,8 @@ export function useWebRTCSync({
   }, [connect]);
 
   return {
-    isConnected,
-    isPushEnabled,
+    isConnected: isConnected || realtimeConnected, // Connected if either works
+    isPushEnabled: isPushEnabled || realtimeConnected,
     connectionState,
     sendMove,
     sendResign,
