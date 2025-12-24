@@ -1,12 +1,7 @@
 // WebRTC Peer Connection Manager for P2P Game Sync
-// Uses localStorage for signaling (Push Protocol stubbed for Solana migration)
-import {
-  initPushUser,
-  sendPushSignal,
-  startPushSignalListener,
-  fetchRecentSignals,
-  PushSignal,
-} from "./pushSignaling";
+// Uses Supabase Realtime for cross-device signaling
+
+import { SupabaseSignaling, SignalingMessage } from "./supabase-signaling";
 
 export interface RTCSignal {
   type: "offer" | "answer" | "ice-candidate";
@@ -25,7 +20,7 @@ export interface WebRTCCallbacks {
 }
 
 export interface WebRTCPeerOptions {
-  usePushProtocol?: boolean;
+  usePushProtocol?: boolean; // Deprecated, kept for compatibility
 }
 
 // Free STUN servers for NAT traversal
@@ -36,9 +31,6 @@ const ICE_SERVERS: RTCIceServer[] = [
   { urls: "stun:stun.stunprotocol.org:3478" },
 ];
 
-const SIGNAL_KEY_PREFIX = "webrtc_signal_";
-const SIGNAL_POLL_INTERVAL = 500; // ms
-
 export class WebRTCPeer {
   private pc: RTCPeerConnection | null = null;
   private dc: RTCDataChannel | null = null;
@@ -46,27 +38,22 @@ export class WebRTCPeer {
   private localAddress: string;
   private remoteAddress: string | null = null;
   private callbacks: WebRTCCallbacks;
-  private signalPollInterval: NodeJS.Timeout | null = null;
   private processedSignals: Set<number> = new Set();
   private isInitiator: boolean = false;
   private connectionEstablished: boolean = false;
   
-  // Push Protocol (stubbed for Solana)
-  private usePushProtocol: boolean;
-  private pushUser: any = null;
-  private pushStreamCleanup: (() => void) | null = null;
-  private pushInitialized: boolean = false;
+  // Supabase Realtime signaling
+  private supabaseSignaling: SupabaseSignaling | null = null;
 
   constructor(
     roomId: string,
     localAddress: string,
     callbacks: WebRTCCallbacks,
-    options: WebRTCPeerOptions = {}
+    _options: WebRTCPeerOptions = {}
   ) {
     this.roomId = roomId;
     this.localAddress = localAddress.toLowerCase();
     this.callbacks = callbacks;
-    this.usePushProtocol = options.usePushProtocol ?? true;
   }
 
   async connect(remoteAddress: string, isInitiator: boolean): Promise<void> {
@@ -75,20 +62,17 @@ export class WebRTCPeer {
 
     console.log(`[WebRTC] Connecting as ${isInitiator ? "initiator" : "responder"}`);
     console.log(`[WebRTC] Local: ${this.localAddress}, Remote: ${this.remoteAddress}`);
-    console.log(`[WebRTC] Using Push Protocol: ${this.usePushProtocol}`);
 
-    // Initialize Push Protocol if enabled
-    if (this.usePushProtocol) {
-      await this.initPushProtocol();
-    }
+    // Initialize Supabase Realtime signaling
+    await this.initSupabaseSignaling();
 
     // Create peer connection
     this.pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
 
     // Handle ICE candidates
     this.pc.onicecandidate = (event) => {
-      if (event.candidate) {
-        this.sendSignal({
+      if (event.candidate && this.supabaseSignaling) {
+        this.supabaseSignaling.sendSignal({
           type: "ice-candidate",
           roomId: this.roomId,
           from: this.localAddress,
@@ -119,14 +103,6 @@ export class WebRTCPeer {
       this.setupDataChannel(event.channel);
     };
 
-    // Start polling for localStorage signals (fallback)
-    this.startSignalPolling();
-
-    // Fetch any recent Push signals we might have missed
-    if (this.usePushProtocol && this.pushUser) {
-      await this.fetchMissedPushSignals();
-    }
-
     if (isInitiator) {
       // Create data channel (initiator creates it)
       this.dc = this.pc.createDataChannel("game-sync", {
@@ -138,64 +114,39 @@ export class WebRTCPeer {
       const offer = await this.pc.createOffer();
       await this.pc.setLocalDescription(offer);
 
-      this.sendSignal({
-        type: "offer",
-        roomId: this.roomId,
-        from: this.localAddress,
-        to: this.remoteAddress,
-        payload: offer,
-        timestamp: Date.now(),
-      });
-    }
-  }
-
-  private async initPushProtocol(): Promise<void> {
-    try {
-      console.log("[WebRTC] Initializing Push Protocol...");
-      this.pushUser = await initPushUser(this.localAddress);
-      
-      // Start listening for Push signals
-      this.pushStreamCleanup = await startPushSignalListener(
-        this.pushUser,
-        this.roomId,
-        this.localAddress,
-        (signal) => this.handlePushSignal(signal)
-      );
-      
-      this.pushInitialized = true;
-      console.log("[WebRTC] Push Protocol initialized successfully");
-    } catch (error) {
-      console.warn("[WebRTC] Push Protocol initialization failed, using localStorage only:", error);
-      this.usePushProtocol = false;
-    }
-  }
-
-  private async fetchMissedPushSignals(): Promise<void> {
-    if (!this.pushUser || !this.remoteAddress) return;
-
-    try {
-      const signals = await fetchRecentSignals(
-        this.pushUser,
-        this.remoteAddress,
-        this.roomId,
-        this.localAddress
-      );
-
-      for (const signal of signals) {
-        await this.handlePushSignal(signal);
+      if (this.supabaseSignaling) {
+        await this.supabaseSignaling.sendSignal({
+          type: "offer",
+          roomId: this.roomId,
+          from: this.localAddress,
+          to: this.remoteAddress,
+          payload: offer,
+          timestamp: Date.now(),
+        });
       }
-    } catch (error) {
-      console.warn("[WebRTC] Failed to fetch missed signals:", error);
     }
   }
 
-  private async handlePushSignal(signal: PushSignal): Promise<void> {
+  private async initSupabaseSignaling(): Promise<void> {
+    console.log("[WebRTC] Initializing Supabase Realtime signaling...");
+    
+    this.supabaseSignaling = new SupabaseSignaling(
+      this.roomId,
+      this.localAddress,
+      (signal) => this.handleSupabaseSignal(signal)
+    );
+
+    await this.supabaseSignaling.connect();
+    console.log("[WebRTC] Supabase Realtime signaling initialized");
+  }
+
+  private async handleSupabaseSignal(signal: SignalingMessage): Promise<void> {
     if (this.processedSignals.has(signal.timestamp)) return;
     this.processedSignals.add(signal.timestamp);
 
     if (signal.from.toLowerCase() !== this.remoteAddress) return;
 
-    console.log(`[WebRTC] Processing Push signal: ${signal.type}`);
+    console.log(`[WebRTC] Processing Supabase signal: ${signal.type}`);
 
     try {
       switch (signal.type) {
@@ -210,7 +161,7 @@ export class WebRTCPeer {
           break;
       }
     } catch (e) {
-      console.error(`[WebRTC] Error processing Push signal:`, e);
+      console.error(`[WebRTC] Error processing signal:`, e);
     }
   }
 
@@ -242,80 +193,6 @@ export class WebRTCPeer {
     };
   }
 
-  private async sendSignal(signal: RTCSignal): Promise<void> {
-    // Send via Push Protocol if available
-    if (this.usePushProtocol && this.pushUser && signal.to) {
-      try {
-        await sendPushSignal(this.pushUser, {
-          type: signal.type,
-          roomId: signal.roomId,
-          from: signal.from,
-          to: signal.to,
-          payload: signal.payload,
-          timestamp: signal.timestamp,
-        });
-        console.log(`[WebRTC] Sent Push signal: ${signal.type}`);
-      } catch (error) {
-        console.warn("[WebRTC] Push signal failed, using localStorage:", error);
-      }
-    }
-
-    // Always send via localStorage as fallback (for same-browser tabs)
-    const key = `${SIGNAL_KEY_PREFIX}${this.roomId}_${signal.to}`;
-    const existing = localStorage.getItem(key);
-    const signals: RTCSignal[] = existing ? JSON.parse(existing) : [];
-    signals.push(signal);
-    
-    // Keep only recent signals (last 50)
-    const trimmed = signals.slice(-50);
-    localStorage.setItem(key, JSON.stringify(trimmed));
-
-    console.log(`[WebRTC] Sent localStorage signal: ${signal.type}`);
-  }
-
-  private startSignalPolling(): void {
-    this.signalPollInterval = setInterval(() => {
-      this.pollSignals();
-    }, SIGNAL_POLL_INTERVAL);
-  }
-
-  private async pollSignals(): Promise<void> {
-    if (!this.pc) return;
-
-    const key = `${SIGNAL_KEY_PREFIX}${this.roomId}_${this.localAddress}`;
-    const existing = localStorage.getItem(key);
-    if (!existing) return;
-
-    const signals: RTCSignal[] = JSON.parse(existing);
-
-    for (const signal of signals) {
-      // Skip already processed signals
-      if (this.processedSignals.has(signal.timestamp)) continue;
-      this.processedSignals.add(signal.timestamp);
-
-      // Skip signals not from our peer
-      if (signal.from !== this.remoteAddress) continue;
-
-      console.log(`[WebRTC] Processing localStorage signal: ${signal.type}`);
-
-      try {
-        switch (signal.type) {
-          case "offer":
-            await this.handleOffer(signal.payload as RTCSessionDescriptionInit);
-            break;
-          case "answer":
-            await this.handleAnswer(signal.payload as RTCSessionDescriptionInit);
-            break;
-          case "ice-candidate":
-            await this.handleIceCandidate(signal.payload as RTCIceCandidateInit);
-            break;
-        }
-      } catch (e) {
-        console.error(`[WebRTC] Error processing signal:`, e);
-      }
-    }
-  }
-
   private async handleOffer(offer: RTCSessionDescriptionInit): Promise<void> {
     if (!this.pc) return;
 
@@ -323,14 +200,16 @@ export class WebRTCPeer {
     const answer = await this.pc.createAnswer();
     await this.pc.setLocalDescription(answer);
 
-    this.sendSignal({
-      type: "answer",
-      roomId: this.roomId,
-      from: this.localAddress,
-      to: this.remoteAddress!,
-      payload: answer,
-      timestamp: Date.now(),
-    });
+    if (this.supabaseSignaling) {
+      await this.supabaseSignaling.sendSignal({
+        type: "answer",
+        roomId: this.roomId,
+        from: this.localAddress,
+        to: this.remoteAddress!,
+        payload: answer,
+        timestamp: Date.now(),
+      });
+    }
   }
 
   private async handleAnswer(answer: RTCSessionDescriptionInit): Promise<void> {
@@ -367,21 +246,16 @@ export class WebRTCPeer {
   }
 
   isPushEnabled(): boolean {
-    return this.pushInitialized;
+    return this.supabaseSignaling?.getIsConnected() ?? false;
   }
 
   disconnect(): void {
     console.log("[WebRTC] Disconnecting");
 
-    if (this.signalPollInterval) {
-      clearInterval(this.signalPollInterval);
-      this.signalPollInterval = null;
-    }
-
-    // Cleanup Push Protocol stream
-    if (this.pushStreamCleanup) {
-      this.pushStreamCleanup();
-      this.pushStreamCleanup = null;
+    // Cleanup Supabase signaling
+    if (this.supabaseSignaling) {
+      this.supabaseSignaling.disconnect();
+      this.supabaseSignaling = null;
     }
 
     if (this.dc) {
@@ -394,35 +268,12 @@ export class WebRTCPeer {
       this.pc = null;
     }
 
-    // Clean up localStorage signals
-    const key = `${SIGNAL_KEY_PREFIX}${this.roomId}_${this.localAddress}`;
-    localStorage.removeItem(key);
-
     this.connectionEstablished = false;
-    this.pushInitialized = false;
-    this.pushUser = null;
   }
 }
 
-// Clear old signals on page load
+// Clear old signals - now a no-op since we use Supabase Realtime
 export function clearOldSignals(): void {
-  const keys = Object.keys(localStorage).filter((k) =>
-    k.startsWith(SIGNAL_KEY_PREFIX)
-  );
-  const now = Date.now();
-  const maxAge = 5 * 60 * 1000; // 5 minutes
-
-  for (const key of keys) {
-    try {
-      const signals: RTCSignal[] = JSON.parse(localStorage.getItem(key) || "[]");
-      const recent = signals.filter((s) => now - s.timestamp < maxAge);
-      if (recent.length === 0) {
-        localStorage.removeItem(key);
-      } else if (recent.length !== signals.length) {
-        localStorage.setItem(key, JSON.stringify(recent));
-      }
-    } catch (e) {
-      localStorage.removeItem(key);
-    }
-  }
+  // No-op: Supabase Realtime handles cleanup automatically
+  console.log("[WebRTC] Using Supabase Realtime - no localStorage signals to clear");
 }

@@ -18,6 +18,8 @@ import GameChatPanel from "@/components/GameChatPanel";
 import { RematchModal } from "@/components/RematchModal";
 import { RematchAcceptModal } from "@/components/RematchAcceptModal";
 import { toast } from "@/hooks/use-toast";
+import { fetchRoomByPda, getConnection } from "@/lib/solana-program";
+import { seededShuffle } from "@/lib/seedUtils";
 
 interface Domino {
   id: number;
@@ -40,6 +42,15 @@ interface DominoMove {
   action: "play" | "draw" | "pass";
 }
 
+// Full game state for sync
+interface GameState {
+  chain: PlacedDomino[];
+  myHand: Domino[];
+  opponentHandCount: number;
+  boneyard: Domino[];
+  isMyTurn: boolean;
+}
+
 const generateDominoSet = (): Domino[] => {
   const dominos: Domino[] = [];
   let id = 0;
@@ -49,15 +60,6 @@ const generateDominoSet = (): Domino[] => {
     }
   }
   return dominos;
-};
-
-const shuffle = <T,>(array: T[]): T[] => {
-  const arr = [...array];
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-  }
-  return arr;
 };
 
 const DominosGame = () => {
@@ -72,43 +74,125 @@ const DominosGame = () => {
   const [myHand, setMyHand] = useState<Domino[]>([]);
   const [opponentHandCount, setOpponentHandCount] = useState(7);
   const [boneyard, setBoneyard] = useState<Domino[]>([]);
-  const [isMyTurn, setIsMyTurn] = useState(true);
-  const [gameStatus, setGameStatus] = useState("Your turn");
+  const [isMyTurn, setIsMyTurn] = useState(false);
+  const [gameStatus, setGameStatus] = useState("Connecting...");
   const [gameOver, setGameOver] = useState(false);
   const [selectedDomino, setSelectedDomino] = useState<number | null>(null);
   const [winner, setWinner] = useState<"me" | "opponent" | "draw" | null>(null);
+  const [gameInitialized, setGameInitialized] = useState(false);
 
-  // Multiplayer state
+  // Multiplayer state - REAL players from on-chain
   const [roomPlayers, setRoomPlayers] = useState<string[]>([]);
-  const [amIPlayer1, setAmIPlayer1] = useState(true);
+  const [amIPlayer1, setAmIPlayer1] = useState(false);
+  const [loadingRoom, setLoadingRoom] = useState(true);
 
-  // Setup room players
+  // Fetch REAL players from on-chain room account
   useEffect(() => {
-    if (address && roomId) {
-      const simulatedPlayers = [
-        address,
-        `opponent-${roomId}`,
-      ];
-      setRoomPlayers(simulatedPlayers);
+    async function fetchRoomPlayers() {
+      if (!roomPda || !address) return;
       
-      const myIndex = simulatedPlayers.findIndex(p => p.toLowerCase() === address.toLowerCase());
-      setAmIPlayer1(myIndex === 0);
+      setLoadingRoom(true);
+      console.log(`[DominosGame] Fetching on-chain room data for PDA: ${roomPda}`);
+      
+      try {
+        const connection = getConnection();
+        const roomData = await fetchRoomByPda(connection, roomPda);
+        
+        if (!roomData) {
+          console.error("[DominosGame] Room not found on-chain");
+          toast({
+            title: "Room Not Found",
+            description: "This game room doesn't exist or has been closed.",
+            variant: "destructive",
+          });
+          setLoadingRoom(false);
+          return;
+        }
+        
+        // Get REAL player addresses from on-chain account
+        const realPlayers = roomData.players;
+        console.log("[DominosGame] On-chain players:", realPlayers);
+        
+        if (realPlayers.length < 2) {
+          console.log("[DominosGame] Waiting for opponent to join...");
+          setGameStatus("Waiting for opponent...");
+          setLoadingRoom(false);
+          return;
+        }
+        
+        setRoomPlayers(realPlayers);
+        
+        // Determine if I'm player 1 based on on-chain order
+        const myIndex = realPlayers.findIndex(p => 
+          p.toLowerCase() === address.toLowerCase()
+        );
+        
+        if (myIndex === -1) {
+          console.error("[DominosGame] Current wallet not found in room players");
+          toast({
+            title: "Not in Room",
+            description: "Your wallet is not a player in this room.",
+            variant: "destructive",
+          });
+          setLoadingRoom(false);
+          return;
+        }
+        
+        setAmIPlayer1(myIndex === 0);
+        console.log(`[DominosGame] I am player ${myIndex + 1} (${myIndex === 0 ? 'creator' : 'joiner'})`);
+        
+      } catch (error) {
+        console.error("[DominosGame] Failed to fetch room:", error);
+        toast({
+          title: "Connection Error",
+          description: "Failed to fetch room data from blockchain.",
+          variant: "destructive",
+        });
+      }
+      
+      setLoadingRoom(false);
     }
-  }, [address, roomId]);
+    
+    fetchRoomPlayers();
+    
+    // Poll for updates every 3 seconds in case opponent joins
+    const interval = setInterval(fetchRoomPlayers, 3000);
+    return () => clearInterval(interval);
+  }, [roomPda, address]);
 
-  // Initialize game
+  // Initialize game with DETERMINISTIC shuffle using roomPda as seed
   useEffect(() => {
-    const allDominos = shuffle(generateDominoSet());
-    setMyHand(allDominos.slice(0, 7));
+    if (!roomPda || roomPlayers.length < 2 || gameInitialized) return;
+    
+    console.log(`[DominosGame] Initializing game with seed: ${roomPda}`);
+    
+    // Use roomPda as seed - BOTH devices get identical shuffle
+    const allDominos = seededShuffle(generateDominoSet(), roomPda);
+    
+    // Player order is based on on-chain order (player 0 = creator goes first)
+    const player1Hand = allDominos.slice(0, 7);
+    const player2Hand = allDominos.slice(7, 14);
+    const initialBoneyard = allDominos.slice(14);
+    
+    console.log("[DominosGame] Deterministic game init:", {
+      amIPlayer1,
+      myHandIds: (amIPlayer1 ? player1Hand : player2Hand).map(d => d.id),
+      boneyardSize: initialBoneyard.length,
+    });
+    
+    setMyHand(amIPlayer1 ? player1Hand : player2Hand);
     setOpponentHandCount(7);
-    setBoneyard(allDominos.slice(14));
+    setBoneyard(initialBoneyard);
     setChain([]);
+    
+    // Player 1 (room creator) always goes first
     setIsMyTurn(amIPlayer1);
     setGameStatus(amIPlayer1 ? "Your turn" : "Opponent's turn");
     setGameOver(false);
     setSelectedDomino(null);
     setWinner(null);
-  }, [amIPlayer1, roomId]);
+    setGameInitialized(true);
+  }, [roomPda, roomPlayers, amIPlayer1, gameInitialized]);
 
   // Turn notification players
   const turnPlayers: TurnPlayer[] = useMemo(() => {
@@ -116,7 +200,7 @@ const DominosGame = () => {
       const isMe = playerAddress.toLowerCase() === address?.toLowerCase();
       return {
         address: playerAddress,
-        name: isMe ? "You" : "Opponent",
+        name: isMe ? "You" : `Player ${index + 1}`,
         color: index === 0 ? "gold" : "obsidian",
         status: "active" as const,
         seatIndex: index,
@@ -261,11 +345,31 @@ const DominosGame = () => {
       return;
     }
     
+    // Handle sync request - send our game state to peer
+    if (message.type === "sync_request") {
+      console.log("[DominosGame] Peer requested sync");
+      // Respond with current state (handled by respondSync in useWebRTCSync)
+      return;
+    }
+    
+    // Handle sync response - update our state from peer
+    if (message.type === "sync_response" && message.payload) {
+      console.log("[DominosGame] Received sync response");
+      const state = message.payload as GameState;
+      setChain(state.chain);
+      setOpponentHandCount(state.opponentHandCount);
+      setBoneyard(state.boneyard);
+      // Note: We keep our own hand as it's dealt deterministically
+      setIsMyTurn(state.isMyTurn);
+      setGameStatus(state.isMyTurn ? "Your turn" : "Opponent's turn");
+      return;
+    }
+    
     if (message.type === "move" && message.payload) {
       const moveData = message.payload as DominoMove;
       
       if (moveData.action === "play") {
-        play('domino_place');
+        play('domino/place');
         setChain(moveData.chain);
         setOpponentHandCount(moveData.playerHand.length);
         setBoneyard(moveData.boneyard);
@@ -278,13 +382,13 @@ const DominosGame = () => {
           setWinner("opponent");
           setGameStatus("Opponent wins!");
           chatRef.current?.addSystemMessage("Opponent wins!");
-          play('domino_lose');
+          play('domino/lose');
         } else {
           setIsMyTurn(true);
           setGameStatus("Your turn");
         }
       } else if (moveData.action === "draw") {
-        play('domino_draw');
+        play('domino/draw');
         setBoneyard(moveData.boneyard);
         setOpponentHandCount(prev => prev + 1);
         setGameStatus("Opponent drew a tile");
@@ -303,7 +407,7 @@ const DominosGame = () => {
       setWinner("me");
       setGameStatus("Opponent resigned - You win!");
       chatRef.current?.addSystemMessage("Opponent resigned");
-      play('domino_win');
+      play('domino/win');
       toast({
         title: "Victory!",
         description: "Your opponent has resigned.",
@@ -330,6 +434,8 @@ const DominosGame = () => {
     sendMove,
     sendResign,
     sendChat,
+    requestSync,
+    respondSync,
     sendRematchInvite,
     sendRematchAccept,
     sendRematchDecline,
@@ -340,6 +446,14 @@ const DominosGame = () => {
     onMessage: handleWebRTCMessage,
     enabled: roomPlayers.length === 2,
   });
+
+  // Request sync when we connect as player 2 (late joiner)
+  useEffect(() => {
+    if (peerConnected && !amIPlayer1 && chain.length === 0 && gameInitialized) {
+      console.log("[DominosGame] Player 2 connected - requesting state sync");
+      requestSync();
+    }
+  }, [peerConnected, amIPlayer1, chain.length, gameInitialized, requestSync]);
 
   // Update refs with WebRTC functions
   useEffect(() => {
@@ -366,10 +480,10 @@ const DominosGame = () => {
 
   // Add system message when game starts
   useEffect(() => {
-    if (roomPlayers.length === 2 && chat.messages.length === 0) {
+    if (roomPlayers.length === 2 && chat.messages.length === 0 && gameInitialized) {
       chat.addSystemMessage("Game started! Good luck!");
     }
-  }, [roomPlayers.length]);
+  }, [roomPlayers.length, gameInitialized]);
 
   const checkBlockedGame = useCallback(() => {
     const myPips = myHand.reduce((sum, d) => sum + d.left + d.right, 0);
@@ -399,7 +513,7 @@ const DominosGame = () => {
     const newChain = side === "left" ? [placedDomino, ...chain] : [...chain, placedDomino];
     const newHand = myHand.filter(d => d.id !== domino.id);
     
-    play('domino_place');
+    play('domino/place');
     setChain(newChain);
     setMyHand(newHand);
     
@@ -422,7 +536,7 @@ const DominosGame = () => {
       setGameOver(true);
       setWinner("me");
       setGameStatus("You win!");
-      play('domino_win');
+      play('domino/win');
     } else {
       setIsMyTurn(false);
       setGameStatus("Opponent's turn");
@@ -474,7 +588,7 @@ const DominosGame = () => {
     
     setMyHand(newHand);
     setBoneyard(newBoneyard);
-    play('domino_draw');
+    play('domino/draw');
     
     // Send draw action to opponent
     const moveData: DominoMove = {
@@ -540,7 +654,7 @@ const DominosGame = () => {
     setGameOver(true);
     setWinner("opponent");
     setGameStatus("You resigned");
-    play('domino_lose');
+    play('domino/lose');
   }, [sendResign, play]);
 
   const playerLegalMoves = useMemo(() => getLegalMoves(myHand), [getLegalMoves, myHand]);
@@ -556,6 +670,41 @@ const DominosGame = () => {
           <Users className="h-16 w-16 text-primary mx-auto mb-4" />
           <h3 className="text-xl font-semibold mb-2">Connect Wallet to Play</h3>
           <p className="text-muted-foreground">Please connect your wallet to join this game.</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Loading state
+  if (loadingRoom) {
+    return (
+      <div className="container max-w-4xl py-8 px-4">
+        <Button variant="ghost" size="sm" className="mb-4" onClick={() => navigate("/room-list")}>
+          <ArrowLeft className="mr-2 h-4 w-4" /> Back to Rooms
+        </Button>
+        <div className="text-center py-12">
+          <RefreshCw className="h-16 w-16 text-primary mx-auto mb-4 animate-spin" />
+          <h3 className="text-xl font-semibold mb-2">Loading Room...</h3>
+          <p className="text-muted-foreground">Fetching game data from blockchain</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Waiting for opponent
+  if (roomPlayers.length < 2) {
+    return (
+      <div className="container max-w-4xl py-8 px-4">
+        <Button variant="ghost" size="sm" className="mb-4" onClick={() => navigate("/room-list")}>
+          <ArrowLeft className="mr-2 h-4 w-4" /> Back to Rooms
+        </Button>
+        <div className="text-center py-12">
+          <Users className="h-16 w-16 text-primary mx-auto mb-4" />
+          <h3 className="text-xl font-semibold mb-2">Waiting for Opponent...</h3>
+          <p className="text-muted-foreground mb-4">Share this room link with your opponent</p>
+          <code className="bg-muted px-3 py-2 rounded text-sm block max-w-md mx-auto break-all">
+            {window.location.href}
+          </code>
         </div>
       </div>
     );
@@ -588,12 +737,12 @@ const DominosGame = () => {
                 <div className="flex items-center gap-2">
                   <Gem className="w-4 h-4 text-primary" />
                   <h1 className="text-lg font-display font-bold text-primary">
-                    Dominos - Room #{roomId}
+                    Dominos
                   </h1>
                 </div>
                 <p className="text-xs text-muted-foreground flex items-center gap-1">
                   {peerConnected ? (
-                    <><Wifi className="w-3 h-3 text-green-500" /> Connected</>
+                    <><Wifi className="w-3 h-3 text-green-500" /> P2P Connected</>
                   ) : (
                     <><WifiOff className="w-3 h-3 text-yellow-500" /> {connectionState}</>
                   )}
