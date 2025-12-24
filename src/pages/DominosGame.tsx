@@ -88,23 +88,33 @@ const DominosGame = () => {
 
   // Fetch REAL players from on-chain room account
   useEffect(() => {
+    let interval: ReturnType<typeof setInterval> | null = null;
+    let mounted = true;
+    
     async function fetchRoomPlayers() {
-      if (!roomPda || !address) return;
+      if (!roomPda || !address || !mounted) return;
       
-      setLoadingRoom(true);
+      // Don't keep polling once we have both players
+      if (roomPlayers.length >= 2) {
+        if (interval) clearInterval(interval);
+        return;
+      }
+      
       console.log(`[DominosGame] Fetching on-chain room data for PDA: ${roomPda}`);
       
       try {
         const connection = getConnection();
         const roomData = await fetchRoomByPda(connection, roomPda);
         
-        if (!roomData) {
-          console.error("[DominosGame] Room not found on-chain");
-          toast({
-            title: "Room Not Found",
-            description: "This game room doesn't exist or has been closed.",
-            variant: "destructive",
-          });
+        if (!roomData || !mounted) {
+          if (!roomData) {
+            console.error("[DominosGame] Room not found on-chain");
+            toast({
+              title: "Room Not Found",
+              description: "This game room doesn't exist or has been closed.",
+              variant: "destructive",
+            });
+          }
           setLoadingRoom(false);
           return;
         }
@@ -119,6 +129,9 @@ const DominosGame = () => {
           setLoadingRoom(false);
           return;
         }
+        
+        // Stop polling once we have 2 players
+        if (interval) clearInterval(interval);
         
         setRoomPlayers(realPlayers);
         
@@ -155,10 +168,14 @@ const DominosGame = () => {
     
     fetchRoomPlayers();
     
-    // Poll for updates every 3 seconds in case opponent joins
-    const interval = setInterval(fetchRoomPlayers, 3000);
-    return () => clearInterval(interval);
-  }, [roomPda, address]);
+    // Poll for updates every 5 seconds ONLY while waiting for opponent
+    interval = setInterval(fetchRoomPlayers, 5000);
+    
+    return () => {
+      mounted = false;
+      if (interval) clearInterval(interval);
+    };
+  }, [roomPda, address, roomPlayers.length]);
 
   // Initialize game with DETERMINISTIC shuffle using roomPda as seed
   useEffect(() => {
