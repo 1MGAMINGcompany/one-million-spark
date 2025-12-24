@@ -849,6 +849,36 @@ export async function fetchRoomById(connection: Connection, creator: PublicKey, 
 }
 
 /**
+ * Fetch a room by its PDA directly (base58 string)
+ * Useful when you have the roomPda from the URL but don't know creator/roomId
+ */
+export async function fetchRoomByPda(connection: Connection, pdaBase58: string): Promise<RoomDisplay | null> {
+  try {
+    const roomPda = new PublicKey(pdaBase58);
+    const accountInfo = await connection.getAccountInfo(roomPda);
+    
+    if (!accountInfo) {
+      console.log(`[fetchRoomByPda] No account found for PDA: ${pdaBase58}`);
+      return null;
+    }
+    
+    const parsed = parseRoomAccount(accountInfo.data as Buffer);
+    if (!parsed) {
+      console.log(`[fetchRoomByPda] Failed to parse account data`);
+      return null;
+    }
+    
+    console.log(`[fetchRoomByPda] Found room with ${parsed.playerCount} players:`, 
+      parsed.players.map(p => p.toBase58().slice(0, 8) + "..."));
+    
+    return roomToDisplay(parsed, roomPda);
+  } catch (err) {
+    console.error("Failed to fetch room by PDA:", err);
+    return null;
+  }
+}
+
+/**
  * Fetch all active rooms where the user is a player (creator OR joiner).
  * This is critical for multiplayer: when Wallet B joins Wallet A's room,
  * Wallet B's activeRoom should reflect the joined room.

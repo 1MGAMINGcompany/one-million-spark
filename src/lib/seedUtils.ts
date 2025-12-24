@@ -86,3 +86,45 @@ export function isValidBytes32(hex: string): hex is `0x${string}` {
 export function shortenBytes32(hash: `0x${string}`): string {
   return `${hash.slice(0, 10)}...${hash.slice(-8)}`;
 }
+
+/**
+ * Creates a deterministic hash from a string seed
+ */
+export function hashSeed(seed: string): number {
+  let hash = 0;
+  for (let i = 0; i < seed.length; i++) {
+    const char = seed.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32bit integer
+  }
+  return Math.abs(hash);
+}
+
+/**
+ * Linear Congruential Generator for deterministic random numbers
+ */
+export function createSeededRandom(seed: string): () => number {
+  let state = hashSeed(seed);
+  
+  return () => {
+    state = (state * 1103515245 + 12345) & 0x7fffffff;
+    return state / 0x7fffffff;
+  };
+}
+
+/**
+ * Deterministic shuffle using a seeded random function
+ * Same seed + same array = same result on all devices
+ */
+export function seededShuffle<T>(array: T[], seed: string): T[] {
+  const arr = [...array];
+  const random = createSeededRandom(seed);
+  
+  // Fisher-Yates shuffle with seeded random
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  
+  return arr;
+}
