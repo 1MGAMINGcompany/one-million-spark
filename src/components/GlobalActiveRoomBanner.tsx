@@ -59,8 +59,8 @@ export function GlobalActiveRoomBanner() {
         description: `Navigate to your ${activeRoom.gameTypeName} room`,
       });
 
-      // Navigate to room page using PDA
-      navigate(`/room/${activeRoom.pda}`);
+      // Navigate directly to PLAY route (game is Started)
+      navigate(`/play/${activeRoom.pda}`);
     }
 
     previousStatusRef.current = currentStatus;

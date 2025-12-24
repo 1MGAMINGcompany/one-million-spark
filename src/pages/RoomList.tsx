@@ -100,9 +100,9 @@ export default function RoomList() {
         description: `Your ${activeRoom.gameTypeName} match is starting. Enter now!`,
       });
       
-      // Navigate to room using PDA from activeRoom (the ONLY unique identifier)
-      console.log("[RoomList] Navigating to room via PDA:", activeRoom.pda);
-      navigate(`/room/${activeRoom.pda}`);
+      // Navigate directly to PLAY route (game is ready to start)
+      console.log("[RoomList] Navigating to play via PDA:", activeRoom.pda);
+      navigate(`/play/${activeRoom.pda}`);
     }
     
     prevStatusRef.current = currentStatus;

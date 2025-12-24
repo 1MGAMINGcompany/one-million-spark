@@ -159,17 +159,28 @@ export function useSolanaRooms() {
         return null;
       }
       
-      // Pick newest by roomId (descending) to handle multiple active rooms
-      // This ensures only ONE active room is returned (deduplication)
-      const newestActiveRoom = activeRooms.reduce((newest, room) => 
-        room.roomId > newest.roomId ? room : newest
-      );
+      // Priority: 1) Started rooms first (in-progress games), 2) Then by highest roomId (newest)
+      // This ensures if you have a Started Backgammon + Open Dominos, banner shows Backgammon
+      const sortedActiveRooms = [...activeRooms].sort((a, b) => {
+        const aStarted = a.status === RoomStatus.Started ? 1 : 0;
+        const bStarted = b.status === RoomStatus.Started ? 1 : 0;
+        
+        if (bStarted !== aStarted) {
+          return bStarted - aStarted; // Started rooms first
+        }
+        
+        // Same status: prefer higher roomId (newer)
+        return b.roomId - a.roomId;
+      });
+
+      const newestActiveRoom = sortedActiveRooms[0];
       
-      console.log("[fetchCreatorActiveRoom] Found active room:", {
+      console.log("[fetchCreatorActiveRoom] Selected active room:", {
         pda: newestActiveRoom.pda,
+        gameTypeName: newestActiveRoom.gameTypeName,
         roomId: newestActiveRoom.roomId,
         status: newestActiveRoom.statusName,
-        playerCount: newestActiveRoom.playerCount,
+        totalActiveRooms: activeRooms.length,
       });
       
       setActiveRoom(newestActiveRoom);
