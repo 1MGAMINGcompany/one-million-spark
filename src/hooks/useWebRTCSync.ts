@@ -118,10 +118,14 @@ export function useWebRTCSync({
     clearOldSignals();
 
     if (enabled && localAddress && remoteAddress) {
-      // Small delay to ensure both players have loaded
+      console.log(`[WebRTCSync] Ready to connect - local: ${localAddress.slice(0, 8)}, remote: ${remoteAddress.slice(0, 8)}`);
+      
+      // Responder waits a bit longer to ensure initiator's signaling is ready
+      const delay = isInitiator ? 500 : 1500;
+      
       const timeout = setTimeout(() => {
         connect();
-      }, 1000);
+      }, delay);
 
       return () => {
         clearTimeout(timeout);
@@ -131,7 +135,7 @@ export function useWebRTCSync({
         }
       };
     }
-  }, [enabled, localAddress, remoteAddress, connect]);
+  }, [enabled, localAddress, remoteAddress, isInitiator, connect]);
 
   // Send heartbeat
   useEffect(() => {

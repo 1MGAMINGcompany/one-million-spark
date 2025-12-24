@@ -23,12 +23,13 @@ export interface WebRTCPeerOptions {
   usePushProtocol?: boolean; // Deprecated, kept for compatibility
 }
 
-// Free STUN servers for NAT traversal
+// Free STUN/TURN servers for NAT traversal
 const ICE_SERVERS: RTCIceServer[] = [
   { urls: "stun:stun.l.google.com:19302" },
   { urls: "stun:stun1.l.google.com:19302" },
   { urls: "stun:stun2.l.google.com:19302" },
-  { urls: "stun:stun.stunprotocol.org:3478" },
+  { urls: "stun:stun3.l.google.com:19302" },
+  { urls: "stun:stun4.l.google.com:19302" },
 ];
 
 export class WebRTCPeer {
@@ -38,9 +39,10 @@ export class WebRTCPeer {
   private localAddress: string;
   private remoteAddress: string | null = null;
   private callbacks: WebRTCCallbacks;
-  private processedSignals: Set<number> = new Set();
+  private processedSignals: Set<string> = new Set();
   private isInitiator: boolean = false;
   private connectionEstablished: boolean = false;
+  private pendingCandidates: RTCIceCandidateInit[] = [];
   
   // Supabase Realtime signaling
   private supabaseSignaling: SupabaseSignaling | null = null;
@@ -60,27 +62,75 @@ export class WebRTCPeer {
     this.remoteAddress = remoteAddress.toLowerCase();
     this.isInitiator = isInitiator;
 
-    console.log(`[WebRTC] Connecting as ${isInitiator ? "initiator" : "responder"}`);
-    console.log(`[WebRTC] Local: ${this.localAddress}, Remote: ${this.remoteAddress}`);
+    console.log(`[WebRTC] Connecting as ${isInitiator ? "INITIATOR" : "RESPONDER"}`);
+    console.log(`[WebRTC] Local: ${this.localAddress.slice(0, 8)}..., Remote: ${this.remoteAddress.slice(0, 8)}...`);
 
-    // Initialize Supabase Realtime signaling
+    // Initialize Supabase Realtime signaling FIRST (so we can receive signals)
     await this.initSupabaseSignaling();
 
     // Create peer connection
-    this.pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+    this.createPeerConnection();
+
+    if (isInitiator) {
+      // Create data channel (initiator creates it)
+      this.dc = this.pc!.createDataChannel("game-sync", {
+        ordered: true,
+      });
+      this.setupDataChannel(this.dc);
+
+      // Small delay to ensure responder is subscribed
+      await new Promise(resolve => setTimeout(resolve, 1500));
+
+      // Create and send offer
+      console.log("[WebRTC] Creating offer...");
+      const offer = await this.pc!.createOffer();
+      await this.pc!.setLocalDescription(offer);
+
+      console.log("[WebRTC] Sending offer via Supabase Realtime...");
+      await this.supabaseSignaling!.sendSignal({
+        type: "offer",
+        roomId: this.roomId,
+        from: this.localAddress,
+        to: this.remoteAddress,
+        payload: offer,
+        timestamp: Date.now(),
+      });
+    } else {
+      console.log("[WebRTC] Responder waiting for offer...");
+    }
+  }
+
+  private createPeerConnection(): void {
+    console.log("[WebRTC] Creating RTCPeerConnection...");
+    
+    this.pc = new RTCPeerConnection({ 
+      iceServers: ICE_SERVERS,
+      iceCandidatePoolSize: 10,
+    });
 
     // Handle ICE candidates
     this.pc.onicecandidate = (event) => {
-      if (event.candidate && this.supabaseSignaling) {
+      if (event.candidate && this.supabaseSignaling && this.remoteAddress) {
+        console.log("[WebRTC] Sending ICE candidate...");
         this.supabaseSignaling.sendSignal({
           type: "ice-candidate",
           roomId: this.roomId,
           from: this.localAddress,
-          to: this.remoteAddress!,
+          to: this.remoteAddress,
           payload: event.candidate.toJSON(),
           timestamp: Date.now(),
         });
       }
+    };
+
+    // Handle ICE gathering state
+    this.pc.onicegatheringstatechange = () => {
+      console.log(`[WebRTC] ICE gathering state: ${this.pc?.iceGatheringState}`);
+    };
+
+    // Handle ICE connection state
+    this.pc.oniceconnectionstatechange = () => {
+      console.log(`[WebRTC] ICE connection state: ${this.pc?.iceConnectionState}`);
     };
 
     // Handle connection state
@@ -99,32 +149,9 @@ export class WebRTCPeer {
 
     // Handle incoming data channel (for responder)
     this.pc.ondatachannel = (event) => {
-      console.log("[WebRTC] Received data channel");
+      console.log("[WebRTC] Received data channel from initiator");
       this.setupDataChannel(event.channel);
     };
-
-    if (isInitiator) {
-      // Create data channel (initiator creates it)
-      this.dc = this.pc.createDataChannel("game-sync", {
-        ordered: true,
-      });
-      this.setupDataChannel(this.dc);
-
-      // Create and send offer
-      const offer = await this.pc.createOffer();
-      await this.pc.setLocalDescription(offer);
-
-      if (this.supabaseSignaling) {
-        await this.supabaseSignaling.sendSignal({
-          type: "offer",
-          roomId: this.roomId,
-          from: this.localAddress,
-          to: this.remoteAddress,
-          payload: offer,
-          timestamp: Date.now(),
-        });
-      }
-    }
   }
 
   private async initSupabaseSignaling(): Promise<void> {
@@ -137,16 +164,25 @@ export class WebRTCPeer {
     );
 
     await this.supabaseSignaling.connect();
-    console.log("[WebRTC] Supabase Realtime signaling initialized");
+    console.log("[WebRTC] Supabase Realtime signaling ready");
   }
 
   private async handleSupabaseSignal(signal: SignalingMessage): Promise<void> {
-    if (this.processedSignals.has(signal.timestamp)) return;
-    this.processedSignals.add(signal.timestamp);
+    // Create unique signal ID to avoid duplicates
+    const signalId = `${signal.type}-${signal.from}-${signal.timestamp}`;
+    if (this.processedSignals.has(signalId)) {
+      console.log(`[WebRTC] Skipping duplicate signal: ${signal.type}`);
+      return;
+    }
+    this.processedSignals.add(signalId);
 
-    if (signal.from.toLowerCase() !== this.remoteAddress) return;
+    // Verify it's from our expected peer
+    if (signal.from.toLowerCase() !== this.remoteAddress) {
+      console.log(`[WebRTC] Ignoring signal from unknown peer: ${signal.from.slice(0, 8)}...`);
+      return;
+    }
 
-    console.log(`[WebRTC] Processing Supabase signal: ${signal.type}`);
+    console.log(`[WebRTC] Processing signal: ${signal.type} from ${signal.from.slice(0, 8)}...`);
 
     try {
       switch (signal.type) {
@@ -162,14 +198,17 @@ export class WebRTCPeer {
       }
     } catch (e) {
       console.error(`[WebRTC] Error processing signal:`, e);
+      this.callbacks.onError(e instanceof Error ? e : new Error(String(e)));
     }
   }
 
   private setupDataChannel(channel: RTCDataChannel): void {
+    console.log(`[WebRTC] Setting up data channel, state: ${channel.readyState}`);
     this.dc = channel;
 
     channel.onopen = () => {
-      console.log("[WebRTC] Data channel opened");
+      console.log("[WebRTC] ✅ Data channel OPEN!");
+      this.connectionEstablished = true;
       this.callbacks.onConnected();
     };
 
@@ -194,33 +233,78 @@ export class WebRTCPeer {
   }
 
   private async handleOffer(offer: RTCSessionDescriptionInit): Promise<void> {
-    if (!this.pc) return;
+    if (!this.pc) {
+      console.error("[WebRTC] No peer connection for offer!");
+      return;
+    }
 
+    console.log("[WebRTC] Received offer, setting remote description...");
     await this.pc.setRemoteDescription(new RTCSessionDescription(offer));
+
+    // Add any pending ICE candidates
+    for (const candidate of this.pendingCandidates) {
+      try {
+        await this.pc.addIceCandidate(new RTCIceCandidate(candidate));
+        console.log("[WebRTC] Added pending ICE candidate");
+      } catch (e) {
+        console.warn("[WebRTC] Failed to add pending ICE candidate:", e);
+      }
+    }
+    this.pendingCandidates = [];
+
+    console.log("[WebRTC] Creating answer...");
     const answer = await this.pc.createAnswer();
     await this.pc.setLocalDescription(answer);
 
-    if (this.supabaseSignaling) {
-      await this.supabaseSignaling.sendSignal({
-        type: "answer",
-        roomId: this.roomId,
-        from: this.localAddress,
-        to: this.remoteAddress!,
-        payload: answer,
-        timestamp: Date.now(),
-      });
-    }
+    console.log("[WebRTC] Sending answer via Supabase Realtime...");
+    await this.supabaseSignaling!.sendSignal({
+      type: "answer",
+      roomId: this.roomId,
+      from: this.localAddress,
+      to: this.remoteAddress!,
+      payload: answer,
+      timestamp: Date.now(),
+    });
   }
 
   private async handleAnswer(answer: RTCSessionDescriptionInit): Promise<void> {
-    if (!this.pc) return;
+    if (!this.pc) {
+      console.error("[WebRTC] No peer connection for answer!");
+      return;
+    }
+
+    console.log("[WebRTC] Received answer, setting remote description...");
     await this.pc.setRemoteDescription(new RTCSessionDescription(answer));
+
+    // Add any pending ICE candidates
+    for (const candidate of this.pendingCandidates) {
+      try {
+        await this.pc.addIceCandidate(new RTCIceCandidate(candidate));
+        console.log("[WebRTC] Added pending ICE candidate");
+      } catch (e) {
+        console.warn("[WebRTC] Failed to add pending ICE candidate:", e);
+      }
+    }
+    this.pendingCandidates = [];
   }
 
   private async handleIceCandidate(candidate: RTCIceCandidateInit): Promise<void> {
-    if (!this.pc) return;
+    if (!this.pc) {
+      console.warn("[WebRTC] No peer connection, queuing ICE candidate");
+      this.pendingCandidates.push(candidate);
+      return;
+    }
+
+    // If remote description not set yet, queue the candidate
+    if (!this.pc.remoteDescription) {
+      console.log("[WebRTC] Remote description not set, queuing ICE candidate");
+      this.pendingCandidates.push(candidate);
+      return;
+    }
+
     try {
       await this.pc.addIceCandidate(new RTCIceCandidate(candidate));
+      console.log("[WebRTC] Added ICE candidate");
     } catch (e) {
       console.warn("[WebRTC] Failed to add ICE candidate:", e);
     }
@@ -269,6 +353,8 @@ export class WebRTCPeer {
     }
 
     this.connectionEstablished = false;
+    this.pendingCandidates = [];
+    this.processedSignals.clear();
   }
 }
 
