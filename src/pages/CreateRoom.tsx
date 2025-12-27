@@ -30,7 +30,8 @@ import { ActiveGameBanner } from "@/components/ActiveGameBanner";
 import { requestNotificationPermission } from "@/lib/pushNotifications";
 import { AudioManager } from "@/lib/AudioManager";
 import { showBrowserNotification } from "@/lib/pushNotifications";
-import { parseRematchParams, lamportsToSol, RematchPayload } from "@/lib/rematchPayload";
+import { parseRematchParams, lamportsToSol, RematchPayload, solToLamports } from "@/lib/rematchPayload";
+import { logMatchCreated } from "@/lib/matchHistory";
 
 // Game type mapping from string to number
 const GAME_TYPE_MAP: Record<string, string> = {
@@ -244,9 +245,23 @@ export default function CreateRoom() {
       try {
         const creatorPubkey = new PublicKey(address);
         const roomPda = getRoomPda(creatorPubkey, roomId);
+        const roomPdaStr = roomPda.toBase58();
+        
+        // Log match to Supabase (non-blocking)
+        const gameTypeName = Object.entries(GAME_TYPE_MAP).find(([_, v]) => v === gameType)?.[0] || 'unknown';
+        logMatchCreated({
+          roomPda: roomPdaStr,
+          originRoomPda: rematchData?.originRoomId,
+          isRematch,
+          gameType: gameTypeName,
+          maxPlayers: parseInt(maxPlayers),
+          stakeLamports: solToLamports(entryFeeNum),
+          creatorWallet: address,
+        }).catch(err => console.warn('[CreateRoom] Failed to log match:', err));
+        
         // Add rematch_created flag if this was a rematch
         const queryParam = isRematch ? '?rematch_created=1' : '';
-        navigate(`/room/${roomPda.toBase58()}${queryParam}`);
+        navigate(`/room/${roomPdaStr}${queryParam}`);
       } catch (e) {
         console.error("[CreateRoom] Failed to compute room PDA:", e);
         // Fallback to room list if PDA computation fails
