@@ -37,72 +37,88 @@ const ChessPiece = ({
     k: (
       <g>
         {/* King cross */}
-        <path d="M50 8 L50 20 M44 14 L56 14" stroke={isWhite ? "url(#goldGradient)" : "url(#obsidianTrim)"} strokeWidth="4" strokeLinecap="round"/>
+        <path d="M50 8 L50 20 M44 14 L56 14" stroke={isWhite ? "url(#darkGoldGradient)" : "url(#obsidianTrim)"} strokeWidth="4" strokeLinecap="round"/>
         {/* Crown base */}
-        <path d="M30 30 Q50 20 70 30 L75 60 Q50 55 25 60 Z" fill={isWhite ? "url(#ivoryGradient)" : "url(#obsidianGradient)"} stroke={isWhite ? "url(#goldGradient)" : "url(#obsidianTrim)"} strokeWidth="2"/>
+        <path d="M30 30 Q50 20 70 30 L75 60 Q50 55 25 60 Z" fill={isWhite ? "url(#ivoryGradient)" : "url(#obsidianGradient)"} stroke={isWhite ? "url(#darkGoldGradient)" : "url(#obsidianTrim)"} strokeWidth="2.5"/>
         {/* Base */}
-        <ellipse cx="50" cy="75" rx="28" ry="10" fill={isWhite ? "url(#ivoryGradient)" : "url(#obsidianGradient)"} stroke={isWhite ? "url(#goldGradient)" : "url(#obsidianTrim)"} strokeWidth="2"/>
-        <rect x="25" y="60" width="50" height="15" rx="3" fill={isWhite ? "url(#ivoryGradient)" : "url(#obsidianGradient)"} stroke={isWhite ? "url(#goldGradient)" : "url(#obsidianTrim)"} strokeWidth="2"/>
+        <ellipse cx="50" cy="75" rx="28" ry="10" fill={isWhite ? "url(#ivoryGradient)" : "url(#obsidianGradient)"} stroke={isWhite ? "url(#darkGoldGradient)" : "url(#obsidianTrim)"} strokeWidth="2.5"/>
+        <rect x="25" y="60" width="50" height="15" rx="3" fill={isWhite ? "url(#ivoryGradient)" : "url(#obsidianGradient)"} stroke={isWhite ? "url(#darkGoldGradient)" : "url(#obsidianTrim)"} strokeWidth="2.5"/>
       </g>
     ),
     q: (
       <g>
         {/* Crown points */}
-        <path d="M20 35 L30 55 L40 35 L50 55 L60 35 L70 55 L80 35 L75 65 L25 65 Z" fill={isWhite ? "url(#ivoryGradient)" : "url(#obsidianGradient)"} stroke={isWhite ? "url(#goldGradient)" : "url(#obsidianTrim)"} strokeWidth="2"/>
+        <path d="M20 35 L30 55 L40 35 L50 55 L60 35 L70 55 L80 35 L75 65 L25 65 Z" fill={isWhite ? "url(#ivoryGradient)" : "url(#obsidianGradient)"} stroke={isWhite ? "url(#darkGoldGradient)" : "url(#obsidianTrim)"} strokeWidth="2.5"/>
         {/* Crown jewels */}
-        <circle cx="20" cy="30" r="5" fill={isWhite ? "url(#goldGradient)" : "url(#obsidianTrim)"}/>
-        <circle cx="40" cy="30" r="5" fill={isWhite ? "url(#goldGradient)" : "url(#obsidianTrim)"}/>
-        <circle cx="60" cy="30" r="5" fill={isWhite ? "url(#goldGradient)" : "url(#obsidianTrim)"}/>
-        <circle cx="80" cy="30" r="5" fill={isWhite ? "url(#goldGradient)" : "url(#obsidianTrim)"}/>
-        <circle cx="50" cy="25" r="6" fill={isWhite ? "url(#goldGradient)" : "url(#obsidianTrim)"}/>
+        <circle cx="20" cy="30" r="5" fill={isWhite ? "url(#darkGoldGradient)" : "url(#obsidianTrim)"}/>
+        <circle cx="40" cy="30" r="5" fill={isWhite ? "url(#darkGoldGradient)" : "url(#obsidianTrim)"}/>
+        <circle cx="60" cy="30" r="5" fill={isWhite ? "url(#darkGoldGradient)" : "url(#obsidianTrim)"}/>
+        <circle cx="80" cy="30" r="5" fill={isWhite ? "url(#darkGoldGradient)" : "url(#obsidianTrim)"}/>
+        <circle cx="50" cy="25" r="6" fill={isWhite ? "url(#darkGoldGradient)" : "url(#obsidianTrim)"}/>
         {/* Base */}
-        <ellipse cx="50" cy="78" rx="28" ry="10" fill={isWhite ? "url(#ivoryGradient)" : "url(#obsidianGradient)"} stroke={isWhite ? "url(#goldGradient)" : "url(#obsidianTrim)"} strokeWidth="2"/>
-        <rect x="25" y="65" width="50" height="13" rx="3" fill={isWhite ? "url(#ivoryGradient)" : "url(#obsidianGradient)"} stroke={isWhite ? "url(#goldGradient)" : "url(#obsidianTrim)"} strokeWidth="2"/>
+        <ellipse cx="50" cy="78" rx="28" ry="10" fill={isWhite ? "url(#ivoryGradient)" : "url(#obsidianGradient)"} stroke={isWhite ? "url(#darkGoldGradient)" : "url(#obsidianTrim)"} strokeWidth="2.5"/>
+        <rect x="25" y="65" width="50" height="13" rx="3" fill={isWhite ? "url(#ivoryGradient)" : "url(#obsidianGradient)"} stroke={isWhite ? "url(#darkGoldGradient)" : "url(#obsidianTrim)"} strokeWidth="2.5"/>
       </g>
     ),
     r: (
       <g>
         {/* Tower top */}
-        <path d="M25 25 L25 40 L35 40 L35 30 L45 30 L45 40 L55 40 L55 30 L65 30 L65 40 L75 40 L75 25 Z" fill={isWhite ? "url(#ivoryGradient)" : "url(#obsidianGradient)"} stroke={isWhite ? "url(#goldGradient)" : "url(#obsidianTrim)"} strokeWidth="2"/>
+        <path d="M25 25 L25 40 L35 40 L35 30 L45 30 L45 40 L55 40 L55 30 L65 30 L65 40 L75 40 L75 25 Z" fill={isWhite ? "url(#ivoryGradient)" : "url(#obsidianGradient)"} stroke={isWhite ? "url(#darkGoldGradient)" : "url(#obsidianTrim)"} strokeWidth="2.5"/>
         {/* Tower body */}
-        <rect x="28" y="40" width="44" height="25" fill={isWhite ? "url(#ivoryGradient)" : "url(#obsidianGradient)"} stroke={isWhite ? "url(#goldGradient)" : "url(#obsidianTrim)"} strokeWidth="2"/>
+        <rect x="28" y="40" width="44" height="25" fill={isWhite ? "url(#ivoryGradient)" : "url(#obsidianGradient)"} stroke={isWhite ? "url(#darkGoldGradient)" : "url(#obsidianTrim)"} strokeWidth="2.5"/>
         {/* Base */}
-        <ellipse cx="50" cy="78" rx="28" ry="10" fill={isWhite ? "url(#ivoryGradient)" : "url(#obsidianGradient)"} stroke={isWhite ? "url(#goldGradient)" : "url(#obsidianTrim)"} strokeWidth="2"/>
-        <rect x="22" y="65" width="56" height="13" rx="3" fill={isWhite ? "url(#ivoryGradient)" : "url(#obsidianGradient)"} stroke={isWhite ? "url(#goldGradient)" : "url(#obsidianTrim)"} strokeWidth="2"/>
+        <ellipse cx="50" cy="78" rx="28" ry="10" fill={isWhite ? "url(#ivoryGradient)" : "url(#obsidianGradient)"} stroke={isWhite ? "url(#darkGoldGradient)" : "url(#obsidianTrim)"} strokeWidth="2.5"/>
+        <rect x="22" y="65" width="56" height="13" rx="3" fill={isWhite ? "url(#ivoryGradient)" : "url(#obsidianGradient)"} stroke={isWhite ? "url(#darkGoldGradient)" : "url(#obsidianTrim)"} strokeWidth="2.5"/>
       </g>
     ),
     b: (
       <g>
         {/* Bishop head */}
-        <ellipse cx="50" cy="22" rx="8" ry="10" fill={isWhite ? "url(#ivoryGradient)" : "url(#obsidianGradient)"} stroke={isWhite ? "url(#goldGradient)" : "url(#obsidianTrim)"} strokeWidth="2"/>
-        <path d="M50 12 L50 18" stroke={isWhite ? "url(#goldGradient)" : "url(#obsidianTrim)"} strokeWidth="3" strokeLinecap="round"/>
+        <ellipse cx="50" cy="22" rx="8" ry="10" fill={isWhite ? "url(#ivoryGradient)" : "url(#obsidianGradient)"} stroke={isWhite ? "url(#darkGoldGradient)" : "url(#obsidianTrim)"} strokeWidth="2.5"/>
+        <path d="M50 12 L50 18" stroke={isWhite ? "url(#darkGoldGradient)" : "url(#obsidianTrim)"} strokeWidth="3" strokeLinecap="round"/>
         {/* Body */}
-        <path d="M35 35 Q50 25 65 35 L60 65 L40 65 Z" fill={isWhite ? "url(#ivoryGradient)" : "url(#obsidianGradient)"} stroke={isWhite ? "url(#goldGradient)" : "url(#obsidianTrim)"} strokeWidth="2"/>
+        <path d="M35 35 Q50 25 65 35 L60 65 L40 65 Z" fill={isWhite ? "url(#ivoryGradient)" : "url(#obsidianGradient)"} stroke={isWhite ? "url(#darkGoldGradient)" : "url(#obsidianTrim)"} strokeWidth="2.5"/>
         {/* Base */}
-        <ellipse cx="50" cy="78" rx="26" ry="10" fill={isWhite ? "url(#ivoryGradient)" : "url(#obsidianGradient)"} stroke={isWhite ? "url(#goldGradient)" : "url(#obsidianTrim)"} strokeWidth="2"/>
-        <rect x="28" y="65" width="44" height="13" rx="3" fill={isWhite ? "url(#ivoryGradient)" : "url(#obsidianGradient)"} stroke={isWhite ? "url(#goldGradient)" : "url(#obsidianTrim)"} strokeWidth="2"/>
+        <ellipse cx="50" cy="78" rx="26" ry="10" fill={isWhite ? "url(#ivoryGradient)" : "url(#obsidianGradient)"} stroke={isWhite ? "url(#darkGoldGradient)" : "url(#obsidianTrim)"} strokeWidth="2.5"/>
+        <rect x="28" y="65" width="44" height="13" rx="3" fill={isWhite ? "url(#ivoryGradient)" : "url(#obsidianGradient)"} stroke={isWhite ? "url(#darkGoldGradient)" : "url(#obsidianTrim)"} strokeWidth="2.5"/>
       </g>
     ),
     n: (
       <g>
-        {/* Horse head */}
-        <path d="M35 65 L40 40 Q35 25 50 20 Q70 25 65 45 L60 50 Q55 45 50 50 L45 55 L50 65 Z" fill={isWhite ? "url(#ivoryGradient)" : "url(#obsidianGradient)"} stroke={isWhite ? "url(#goldGradient)" : "url(#obsidianTrim)"} strokeWidth="2"/>
-        {/* Eye */}
-        <circle cx="52" cy="32" r="3" fill={isWhite ? "hsl(35 80% 30%)" : "hsl(45 93% 54%)"}/>
+        {/* Horse head - distinctive silhouette with mane, ears, and muzzle */}
+        <path 
+          d="M30 72 L32 55 L28 48 Q26 38 32 30 Q36 22 42 18 L44 12 L48 18 Q52 14 56 16 L58 12 L62 18 Q72 22 74 35 Q75 42 70 48 L72 52 Q74 56 70 58 L65 55 Q60 60 55 58 L50 62 L48 72 Z" 
+          fill={isWhite ? "url(#ivoryGradient)" : "url(#obsidianGradient)"} 
+          stroke={isWhite ? "url(#darkGoldGradient)" : "url(#obsidianTrim)"} 
+          strokeWidth="2.5"
+        />
+        {/* Mane detail */}
+        <path 
+          d="M44 18 Q40 28 42 38 M48 18 Q46 26 48 34 M52 16 Q52 24 54 30" 
+          stroke={isWhite ? "url(#darkGoldGradient)" : "url(#obsidianTrim)"} 
+          strokeWidth="1.5" 
+          fill="none"
+          strokeLinecap="round"
+        />
+        {/* Nostril */}
+        <ellipse cx="68" cy="50" rx="2" ry="3" fill={isWhite ? "hsl(35 50% 45%)" : "hsl(220 15% 25%)"}/>
+        {/* Eye - larger and more visible */}
+        <ellipse cx="56" cy="32" rx="4" ry="5" fill={isWhite ? "hsl(35 60% 25%)" : "hsl(45 90% 50%)"}/>
+        <circle cx="55" cy="31" r="1.5" fill={isWhite ? "hsl(45 30% 90%)" : "hsl(45 93% 80%)"}/>
         {/* Base */}
-        <ellipse cx="50" cy="78" rx="26" ry="10" fill={isWhite ? "url(#ivoryGradient)" : "url(#obsidianGradient)"} stroke={isWhite ? "url(#goldGradient)" : "url(#obsidianTrim)"} strokeWidth="2"/>
-        <rect x="28" y="65" width="44" height="13" rx="3" fill={isWhite ? "url(#ivoryGradient)" : "url(#obsidianGradient)"} stroke={isWhite ? "url(#goldGradient)" : "url(#obsidianTrim)"} strokeWidth="2"/>
+        <ellipse cx="50" cy="82" rx="26" ry="8" fill={isWhite ? "url(#ivoryGradient)" : "url(#obsidianGradient)"} stroke={isWhite ? "url(#darkGoldGradient)" : "url(#obsidianTrim)"} strokeWidth="2.5"/>
+        <rect x="28" y="72" width="44" height="10" rx="3" fill={isWhite ? "url(#ivoryGradient)" : "url(#obsidianGradient)"} stroke={isWhite ? "url(#darkGoldGradient)" : "url(#obsidianTrim)"} strokeWidth="2.5"/>
       </g>
     ),
     p: (
       <g>
         {/* Pawn head */}
-        <circle cx="50" cy="28" r="14" fill={isWhite ? "url(#ivoryGradient)" : "url(#obsidianGradient)"} stroke={isWhite ? "url(#goldGradient)" : "url(#obsidianTrim)"} strokeWidth="2"/>
+        <circle cx="50" cy="28" r="14" fill={isWhite ? "url(#ivoryGradient)" : "url(#obsidianGradient)"} stroke={isWhite ? "url(#darkGoldGradient)" : "url(#obsidianTrim)"} strokeWidth="2.5"/>
         {/* Neck */}
-        <path d="M40 42 Q50 50 60 42 L58 60 L42 60 Z" fill={isWhite ? "url(#ivoryGradient)" : "url(#obsidianGradient)"} stroke={isWhite ? "url(#goldGradient)" : "url(#obsidianTrim)"} strokeWidth="2"/>
+        <path d="M40 42 Q50 50 60 42 L58 60 L42 60 Z" fill={isWhite ? "url(#ivoryGradient)" : "url(#obsidianGradient)"} stroke={isWhite ? "url(#darkGoldGradient)" : "url(#obsidianTrim)"} strokeWidth="2.5"/>
         {/* Base */}
-        <ellipse cx="50" cy="78" rx="24" ry="10" fill={isWhite ? "url(#ivoryGradient)" : "url(#obsidianGradient)"} stroke={isWhite ? "url(#goldGradient)" : "url(#obsidianTrim)"} strokeWidth="2"/>
-        <rect x="30" y="60" width="40" height="18" rx="3" fill={isWhite ? "url(#ivoryGradient)" : "url(#obsidianGradient)"} stroke={isWhite ? "url(#goldGradient)" : "url(#obsidianTrim)"} strokeWidth="2"/>
+        <ellipse cx="50" cy="78" rx="24" ry="10" fill={isWhite ? "url(#ivoryGradient)" : "url(#obsidianGradient)"} stroke={isWhite ? "url(#darkGoldGradient)" : "url(#obsidianTrim)"} strokeWidth="2.5"/>
+        <rect x="30" y="60" width="40" height="18" rx="3" fill={isWhite ? "url(#ivoryGradient)" : "url(#obsidianGradient)"} stroke={isWhite ? "url(#darkGoldGradient)" : "url(#obsidianTrim)"} strokeWidth="2.5"/>
       </g>
     ),
   };
@@ -129,6 +145,14 @@ const ChessPiece = ({
           <stop offset="0%" stopColor="hsl(45 93% 65%)" />
           <stop offset="50%" stopColor="hsl(45 93% 54%)" />
           <stop offset="100%" stopColor="hsl(35 80% 40%)" />
+        </linearGradient>
+        
+        {/* Darker gold gradient for white piece outlines - more contrast */}
+        <linearGradient id="darkGoldGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="hsl(40 85% 45%)" />
+          <stop offset="40%" stopColor="hsl(35 80% 35%)" />
+          <stop offset="70%" stopColor="hsl(30 75% 28%)" />
+          <stop offset="100%" stopColor="hsl(25 70% 22%)" />
         </linearGradient>
         
         {/* Obsidian gradient for black pieces - more contrast */}
