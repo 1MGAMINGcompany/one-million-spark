@@ -9,6 +9,7 @@ import { PublicKey } from '@solana/web3.js';
 import { finalizeRoom } from '@/lib/finalize-room';
 import { useSound } from '@/contexts/SoundContext';
 import { logMatchFinalized, updateH2HStats } from '@/lib/matchHistory';
+import { RivalryWidget } from '@/components/RivalryWidget';
 import { 
   RematchMode, 
   RematchPayload, 
@@ -35,6 +36,7 @@ interface GameEndScreenProps {
   result?: string; // e.g., "Checkmate", "Stalemate", "Timeout"
   roomPda?: string; // Room PDA for finalization
   isStaked?: boolean; // Whether this is a staked game requiring finalization
+  isRematch?: boolean; // Whether this game was created as a rematch
 }
 
 // Default pubkey (11111111111111111111111111111111) indicates no winner set yet
@@ -156,6 +158,7 @@ export function GameEndScreen({
   result,
   roomPda,
   isStaked,
+  isRematch,
 }: GameEndScreenProps) {
   const { t } = useTranslation();
   const { connection } = useConnection();
@@ -383,6 +386,16 @@ export function GameEndScreen({
               ))}
             </div>
           </div>
+
+          {/* Rivalry Widget - Show for 2-player rematches */}
+          {isRematch && players.length === 2 && myAddress && (
+            <RivalryWidget
+              playerA={myAddress}
+              playerB={players.find(p => p.address !== myAddress)?.address || ''}
+              gameType={gameType}
+              isLoser={winner !== myAddress && winner !== 'draw'}
+            />
+          )}
 
           {/* Action Buttons */}
           <div className="space-y-3">
