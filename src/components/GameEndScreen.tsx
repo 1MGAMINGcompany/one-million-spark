@@ -1,7 +1,11 @@
-import { Trophy, RefreshCw, BarChart2, Star, LogOut } from 'lucide-react';
+import { useState } from 'react';
+import { Trophy, RefreshCw, BarChart2, Star, LogOut, Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useTranslation } from 'react-i18next';
+import { useConnection, useWallet } from '@solana/wallet-adapter-react';
+import { PublicKey } from '@solana/web3.js';
+import { finalizeRoom } from '@/lib/finalize-room';
 
 interface GameEndScreenProps {
   gameType: string;
@@ -14,6 +18,8 @@ interface GameEndScreenProps {
   onFavorite?: () => void;
   onExit: () => void;
   result?: string; // e.g., "Checkmate", "Stalemate", "Timeout"
+  roomPda?: string; // Room PDA for finalization
+  isStaked?: boolean; // Whether this is a staked game requiring finalization
 }
 
 export function GameEndScreen({
@@ -27,11 +33,48 @@ export function GameEndScreen({
   onFavorite,
   onExit,
   result,
+  roomPda,
+  isStaked,
 }: GameEndScreenProps) {
   const { t } = useTranslation();
+  const { connection } = useConnection();
+  const { publicKey, sendTransaction } = useWallet();
+  
+  const [finalizeState, setFinalizeState] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [finalizeError, setFinalizeError] = useState<string | null>(null);
   
   const isWinner = winner === myAddress;
   const isDraw = winner === 'draw';
+  
+  // Show finalize button only for staked games with a winner (not draw)
+  const showFinalizeButton = isStaked && roomPda && winner && winner !== 'draw';
+  
+  const handleFinalize = async () => {
+    if (!roomPda || !winner || !publicKey || !sendTransaction) return;
+    
+    setFinalizeState('loading');
+    setFinalizeError(null);
+    
+    try {
+      const res = await finalizeRoom(
+        connection,
+        new PublicKey(roomPda),
+        new PublicKey(winner),
+        sendTransaction,
+        publicKey
+      );
+      
+      if (res.ok) {
+        setFinalizeState('success');
+      } else {
+        setFinalizeState('error');
+        setFinalizeError(res.error || 'Unknown error');
+      }
+    } catch (err: any) {
+      setFinalizeState('error');
+      setFinalizeError(err.message || 'Failed to finalize');
+    }
+  };
   
   const getResultText = () => {
     if (isDraw) return 'Draw';
@@ -112,6 +155,32 @@ export function GameEndScreen({
 
           {/* Action Buttons */}
           <div className="space-y-3">
+            {/* Finalize Payout Button - Only for staked games */}
+            {showFinalizeButton && finalizeState !== 'success' && (
+              <Button 
+                onClick={handleFinalize}
+                disabled={finalizeState === 'loading' || !publicKey}
+                className="w-full gap-2 bg-amber-600 hover:bg-amber-700 text-white font-semibold py-6"
+              >
+                <Wallet size={20} />
+                {finalizeState === 'loading' ? 'Finalizing…' : 'Settle Payout (Finalize)'}
+              </Button>
+            )}
+            
+            {/* Finalize Success Message */}
+            {finalizeState === 'success' && (
+              <div className="bg-emerald-500/20 border border-emerald-500/50 rounded-lg p-4 text-center">
+                <p className="text-emerald-400 font-semibold">Payout Complete</p>
+              </div>
+            )}
+            
+            {/* Finalize Error Message */}
+            {finalizeState === 'error' && finalizeError && (
+              <div className="bg-destructive/20 border border-destructive/50 rounded-lg p-3 text-center">
+                <p className="text-destructive text-sm">{finalizeError}</p>
+              </div>
+            )}
+
             {/* Primary: Rematch */}
             <Button 
               onClick={onRematch}
