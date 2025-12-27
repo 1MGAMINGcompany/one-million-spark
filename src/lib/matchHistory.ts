@@ -248,3 +248,185 @@ export async function getH2HStats(
     return { ok: false, error: err.message };
   }
 }
+
+// ============================================
+// Player Profile Updates
+// ============================================
+
+interface UpdatePlayerProfileParams {
+  wallet: string;
+  isWinner: boolean;
+  gameType: string;
+  potSolWon?: number; // SOL amount won (only for winner)
+}
+
+/**
+ * Update a single player's profile after game finalization
+ * Creates profile if it doesn't exist
+ */
+async function updateSinglePlayerProfile(params: UpdatePlayerProfileParams): Promise<{ ok: boolean; error?: string }> {
+  const { wallet, isWinner, gameType, potSolWon = 0 } = params;
+  const now = new Date().toISOString();
+
+  try {
+    // First, try to fetch existing profile
+    const { data: existing, error: fetchError } = await supabase
+      .from('player_profiles')
+      .select('*')
+      .eq('wallet', wallet)
+      .maybeSingle();
+
+    if (fetchError) {
+      console.error('[PlayerProfile] Failed to fetch profile:', fetchError);
+      return { ok: false, error: fetchError.message };
+    }
+
+    if (existing) {
+      // Update existing profile
+      const newGamesPlayed = existing.games_played + 1;
+      const newWins = isWinner ? existing.wins + 1 : existing.wins;
+      const newLosses = isWinner ? existing.losses : existing.losses + 1;
+      const newCurrentStreak = isWinner ? existing.current_streak + 1 : 0;
+      const newLongestStreak = Math.max(existing.longest_streak, newCurrentStreak);
+      const newTotalSolWon = isWinner 
+        ? Number(existing.total_sol_won) + potSolWon 
+        : Number(existing.total_sol_won);
+      const newBiggestPotWon = isWinner 
+        ? Math.max(Number(existing.biggest_pot_won), potSolWon) 
+        : Number(existing.biggest_pot_won);
+
+      // Calculate favorite game (simple: track in a separate query or use most recent)
+      // For now, we'll update favorite_game based on frequency from matches table
+      const favoriteGame = await calculateFavoriteGame(wallet) || gameType;
+
+      const { error: updateError } = await supabase
+        .from('player_profiles')
+        .update({
+          games_played: newGamesPlayed,
+          wins: newWins,
+          losses: newLosses,
+          current_streak: newCurrentStreak,
+          longest_streak: newLongestStreak,
+          total_sol_won: newTotalSolWon,
+          biggest_pot_won: newBiggestPotWon,
+          favorite_game: favoriteGame,
+          last_game_at: now,
+        })
+        .eq('wallet', wallet);
+
+      if (updateError) {
+        console.error('[PlayerProfile] Failed to update profile:', updateError);
+        return { ok: false, error: updateError.message };
+      }
+
+      console.log('[PlayerProfile] Updated profile:', { wallet: wallet.slice(0, 8), isWinner });
+    } else {
+      // Insert new profile
+      const { error: insertError } = await supabase
+        .from('player_profiles')
+        .insert({
+          wallet,
+          games_played: 1,
+          wins: isWinner ? 1 : 0,
+          losses: isWinner ? 0 : 1,
+          current_streak: isWinner ? 1 : 0,
+          longest_streak: isWinner ? 1 : 0,
+          total_sol_won: isWinner ? potSolWon : 0,
+          biggest_pot_won: isWinner ? potSolWon : 0,
+          favorite_game: gameType,
+          last_game_at: now,
+        });
+
+      if (insertError) {
+        console.error('[PlayerProfile] Failed to insert profile:', insertError);
+        return { ok: false, error: insertError.message };
+      }
+
+      console.log('[PlayerProfile] Created new profile:', { wallet: wallet.slice(0, 8), isWinner });
+    }
+
+    return { ok: true };
+  } catch (err: any) {
+    console.error('[PlayerProfile] Error updating profile:', err);
+    return { ok: false, error: err.message };
+  }
+}
+
+/**
+ * Calculate the most-played game type for a player
+ */
+async function calculateFavoriteGame(wallet: string): Promise<string | null> {
+  try {
+    // Query matches where this wallet participated (as creator or in a finalized game)
+    const { data, error } = await supabase
+      .from('matches')
+      .select('game_type')
+      .or(`creator_wallet.eq.${wallet},winner_wallet.eq.${wallet}`)
+      .eq('status', 'finalized');
+
+    if (error || !data || data.length === 0) {
+      return null;
+    }
+
+    // Count occurrences of each game type
+    const counts: Record<string, number> = {};
+    for (const match of data) {
+      counts[match.game_type] = (counts[match.game_type] || 0) + 1;
+    }
+
+    // Find the most frequent
+    let maxCount = 0;
+    let favorite: string | null = null;
+    for (const [gameType, count] of Object.entries(counts)) {
+      if (count > maxCount) {
+        maxCount = count;
+        favorite = gameType;
+      }
+    }
+
+    return favorite;
+  } catch {
+    return null;
+  }
+}
+
+interface UpdateAllPlayerProfilesParams {
+  players: string[]; // All player wallets in the game
+  winner: string; // Winner wallet
+  gameType: string;
+  potSolWon: number; // Total pot won by winner (in SOL)
+}
+
+/**
+ * Update all player profiles after a game is finalized
+ * Call this ONLY after on-chain finalize confirms
+ */
+export async function updatePlayerProfiles(params: UpdateAllPlayerProfilesParams): Promise<{ ok: boolean; errors?: string[] }> {
+  const { players, winner, gameType, potSolWon } = params;
+  const errors: string[] = [];
+
+  console.log('[PlayerProfile] Updating profiles for', players.length, 'players. Winner:', winner.slice(0, 8));
+
+  // Update each player's profile
+  for (const wallet of players) {
+    const isWinner = wallet === winner;
+    const result = await updateSinglePlayerProfile({
+      wallet,
+      isWinner,
+      gameType,
+      potSolWon: isWinner ? potSolWon : 0,
+    });
+
+    if (!result.ok && result.error) {
+      errors.push(`${wallet.slice(0, 8)}: ${result.error}`);
+    }
+  }
+
+  if (errors.length > 0) {
+    console.warn('[PlayerProfile] Some profile updates failed:', errors);
+    return { ok: false, errors };
+  }
+
+  console.log('[PlayerProfile] All profiles updated successfully');
+  return { ok: true };
+}
