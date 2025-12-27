@@ -80,18 +80,31 @@ function getFriendlyErrorMessage(rawError: string): { message: string; showDetai
  * - status is at a known offset
  * - winner pubkey is at a known offset
  */
-function parseRoomSettledStatus(data: Buffer): { isSettled: boolean; onChainWinner: string | null } {
+interface RoomPayoutInfo {
+  isSettled: boolean;
+  onChainWinner: string | null;
+  stakeLamports: number;
+  maxPlayers: number;
+}
+
+/**
+ * Parse room account data to check status, winner, and stake info
+ * Room account layout (simplified):
+ * - 8 bytes discriminator
+ * - 32 bytes host
+ * - 32 bytes guest  
+ * - 8 bytes entry_fee (stake per player in lamports)
+ * - 1 byte status (enum: 0=Open, 1=InProgress, 2=Finished)
+ * - 32 bytes winner
+ */
+function parseRoomData(data: Buffer): RoomPayoutInfo {
   try {
-    // Room account structure (based on Anchor IDL):
-    // 8 bytes discriminator
-    // 32 bytes host
-    // 32 bytes guest  
-    // 8 bytes entry_fee
-    // 1 byte status (enum: 0=Open, 1=InProgress, 2=Finished)
-    // 32 bytes winner
-    
-    const STATUS_OFFSET = 8 + 32 + 32 + 8; // = 80
+    const ENTRY_FEE_OFFSET = 8 + 32 + 32; // = 72
+    const STATUS_OFFSET = ENTRY_FEE_OFFSET + 8; // = 80
     const WINNER_OFFSET = STATUS_OFFSET + 1; // = 81
+    
+    // Read entry_fee as 64-bit little-endian
+    const stakeLamports = Number(data.readBigUInt64LE(ENTRY_FEE_OFFSET));
     
     const status = data[STATUS_OFFSET];
     const winnerBytes = data.slice(WINNER_OFFSET, WINNER_OFFSET + 32);
@@ -104,11 +117,16 @@ function parseRoomSettledStatus(data: Buffer): { isSettled: boolean; onChainWinn
     return {
       isSettled: isFinished || winnerSet,
       onChainWinner: winnerSet ? winnerPubkey : null,
+      stakeLamports,
+      maxPlayers: 2, // Currently 2-player games
     };
   } catch {
-    return { isSettled: false, onChainWinner: null };
+    return { isSettled: false, onChainWinner: null, stakeLamports: 0, maxPlayers: 2 };
   }
 }
+
+const FEE_BPS = 500; // 5% platform fee
+const LAMPORTS_PER_SOL = 1_000_000_000;
 
 export function GameEndScreen({
   gameType,
@@ -135,11 +153,12 @@ export function GameEndScreen({
   // On-chain room status check
   const [roomAlreadySettled, setRoomAlreadySettled] = useState(false);
   const [checkingRoomStatus, setCheckingRoomStatus] = useState(true);
+  const [payoutInfo, setPayoutInfo] = useState<{ pot: number; fee: number; winnerPayout: number } | null>(null);
   
   const isWinner = winner === myAddress;
   const isDraw = winner === 'draw';
   
-  // Check on-chain room status on mount
+  // Check on-chain room status on mount and compute payout info
   useEffect(() => {
     const checkRoomStatus = async () => {
       if (!roomPda || !isStaked) {
@@ -150,8 +169,19 @@ export function GameEndScreen({
       try {
         const accountInfo = await connection.getAccountInfo(new PublicKey(roomPda));
         if (accountInfo?.data) {
-          const { isSettled } = parseRoomSettledStatus(Buffer.from(accountInfo.data));
-          setRoomAlreadySettled(isSettled);
+          const roomData = parseRoomData(Buffer.from(accountInfo.data));
+          setRoomAlreadySettled(roomData.isSettled);
+          
+          // Compute payout math
+          const pot = roomData.stakeLamports * roomData.maxPlayers;
+          const fee = Math.floor(pot * FEE_BPS / 10_000);
+          const winnerPayout = pot - fee;
+          
+          setPayoutInfo({
+            pot: pot / LAMPORTS_PER_SOL,
+            fee: fee / LAMPORTS_PER_SOL,
+            winnerPayout: winnerPayout / LAMPORTS_PER_SOL,
+          });
         }
       } catch (err) {
         console.warn('Failed to check room status:', err);
@@ -291,6 +321,31 @@ export function GameEndScreen({
             {/* Finalize Payout Button - Only for staked games */}
             {showFinalizeButton && (
               <>
+                {/* Payout Summary - Show before wallet interaction */}
+                {payoutInfo && !isAlreadySettled && (
+                  <div className="bg-muted/40 border border-border/50 rounded-lg p-4 space-y-2">
+                    <p className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">
+                      Payout Summary
+                    </p>
+                    <div className="space-y-1 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Total Pot:</span>
+                        <span className="font-mono text-foreground">{payoutInfo.pot.toFixed(4)} SOL</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Platform Fee (5%):</span>
+                        <span className="font-mono text-muted-foreground">{payoutInfo.fee.toFixed(4)} SOL</span>
+                      </div>
+                      <div className="flex justify-between border-t border-border/30 pt-1">
+                        <span className="text-primary font-medium">Winner Receives:</span>
+                        <span className="font-mono text-primary font-semibold">{payoutInfo.winnerPayout.toFixed(4)} SOL</span>
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground text-center pt-1">
+                      Funds are paid directly on-chain when finalized.
+                    </p>
+                  </div>
+                )}
                 {/* Already Settled State */}
                 {isAlreadySettled ? (
                   <div className="bg-emerald-500/20 border border-emerald-500/50 rounded-lg p-4 text-center flex items-center justify-center gap-2">
