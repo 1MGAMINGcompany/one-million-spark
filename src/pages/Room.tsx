@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Construction, ArrowLeft, Loader2, Users, Coins, AlertTriangle, CheckCircle, Share2, Copy, ExternalLink } from "lucide-react";
 import { WalletGateModal } from "@/components/WalletGateModal";
+import { RivalryWidget } from "@/components/RivalryWidget";
 import { TxDebugPanel } from "@/components/TxDebugPanel";
 import { MobileWalletRedirect } from "@/components/MobileWalletRedirect";
 import { PreviewDomainBanner, useSigningDisabled } from "@/components/PreviewDomainBanner";
@@ -68,8 +69,9 @@ export default function Room() {
   const [vaultPdaStr, setVaultPdaStr] = useState<string>("");
   const [linkCopied, setLinkCopied] = useState(false);
   
-  // Check if this is a newly created rematch room
+  // Check if this is a rematch room (either just created or from rematch param)
   const isRematchCreated = searchParams.get('rematch_created') === '1';
+  const isRematch = searchParams.get('rematch') === '1' || isRematchCreated;
   
   // Generate room link
   const roomLink = `${window.location.origin}/room/${roomPdaParam}`;
@@ -554,6 +556,15 @@ export default function Room() {
                     Dismiss
                   </Button>
                 </div>
+              )}
+
+              {/* Rivalry Widget - Show for 2-player rematch games */}
+              {isRematch && activePlayers.length === 2 && address && (
+                <RivalryWidget
+                  playerA={address}
+                  playerB={activePlayers.find((p: any) => p.toBase58() !== address)?.toBase58() || ''}
+                  gameType={gameName.toLowerCase()}
+                />
               )}
 
               {/* Active Room Warning */}
