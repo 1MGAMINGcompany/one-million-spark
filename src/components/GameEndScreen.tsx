@@ -10,6 +10,7 @@ import { finalizeRoom } from '@/lib/finalize-room';
 import { useSound } from '@/contexts/SoundContext';
 import { logMatchFinalized, updateH2HStats, updatePlayerProfiles } from '@/lib/matchHistory';
 import { RivalryWidget } from '@/components/RivalryWidget';
+import { WalletLink } from '@/components/WalletLink';
 import { 
   RematchMode, 
   RematchPayload, 
@@ -364,10 +365,14 @@ export function GameEndScreen({
           </div>
 
           {/* Winner Info */}
-          {!isDraw && winnerName && (
+          {!isDraw && winner && winner !== 'draw' && (
             <div className="bg-muted/30 rounded-lg p-4 text-center">
               <p className="text-sm text-muted-foreground mb-1">Winner</p>
-              <p className="font-mono text-foreground">{winnerName}</p>
+              {winner === myAddress ? (
+                <p className="font-mono text-primary font-medium">You</p>
+              ) : (
+                <WalletLink wallet={winner} className="text-foreground" />
+              )}
             </div>
           )}
 
@@ -375,27 +380,35 @@ export function GameEndScreen({
           <div className="space-y-2">
             <p className="text-xs uppercase tracking-wider text-muted-foreground">Players</p>
             <div className="space-y-1">
-              {players.map((player) => (
-                <div 
-                  key={player.address}
-                  className={`flex items-center justify-between p-2 rounded ${
-                    player.address === winner ? 'bg-primary/10 border border-primary/30' : 'bg-muted/30'
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    {player.color && (
-                      <div 
-                        className="w-3 h-3 rounded-full"
-                        style={{ backgroundColor: player.color }}
-                      />
+              {players.map((player) => {
+                const isMe = player.address === myAddress;
+                const isWinner = player.address === winner;
+                return (
+                  <div 
+                    key={player.address}
+                    className={`flex items-center justify-between p-2 rounded ${
+                      isWinner ? 'bg-primary/10 border border-primary/30' : 'bg-muted/30'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      {player.color && (
+                        <div 
+                          className="w-3 h-3 rounded-full"
+                          style={{ backgroundColor: player.color }}
+                        />
+                      )}
+                      {isMe ? (
+                        <span className="font-mono text-sm text-primary font-medium">You</span>
+                      ) : (
+                        <WalletLink wallet={player.address} className="text-sm" />
+                      )}
+                    </div>
+                    {isWinner && (
+                      <Trophy size={14} className="text-primary" />
                     )}
-                    <span className="font-mono text-sm">{player.name}</span>
                   </div>
-                  {player.address === winner && (
-                    <Trophy size={14} className="text-primary" />
-                  )}
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 

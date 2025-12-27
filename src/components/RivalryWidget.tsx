@@ -6,18 +6,13 @@
 import { useState, useEffect } from 'react';
 import { Flame } from 'lucide-react';
 import { getH2HStats } from '@/lib/matchHistory';
+import { WalletLink, getShortenedWallet } from '@/components/WalletLink';
 
 interface RivalryWidgetProps {
   playerA: string; // Current user's wallet
   playerB: string; // Opponent's wallet
   gameType?: string;
   isLoser?: boolean; // If current user is losing the rivalry
-}
-
-// Shorten wallet address for display
-function shortenWallet(address: string): string {
-  if (!address || address.length < 10) return address;
-  return `${address.slice(0, 4)}…${address.slice(-3)}`;
 }
 
 export function RivalryWidget({ playerA, playerB, gameType, isLoser }: RivalryWidgetProps) {
@@ -90,10 +85,9 @@ export function RivalryWidget({ playerA, playerB, gameType, isLoser }: RivalryWi
       </div>
 
       {/* Matchup */}
-      <div className="flex items-center justify-between text-sm">
-        <span className="font-mono text-foreground">
-          You vs {shortenWallet(playerB)}
-        </span>
+      <div className="flex items-center gap-1 text-sm">
+        <span className="text-foreground">You vs</span>
+        <WalletLink wallet={playerB} className="text-foreground" />
       </div>
 
       {/* Record */}
@@ -108,10 +102,11 @@ export function RivalryWidget({ playerA, playerB, gameType, isLoser }: RivalryWi
 
       {/* Streak */}
       {streak > 0 && (
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <span className="text-muted-foreground text-sm">Streak:</span>
           <span className={`font-semibold ${userHasStreak ? 'text-emerald-400' : 'text-red-400'}`}>
-            {userHasStreak ? 'You' : shortenWallet(playerB)} ({streak} win{streak > 1 ? 's' : ''})
+            {userHasStreak ? 'You' : <WalletLink wallet={playerB} className={opponentHasStreak ? 'text-red-400' : ''} />}
+            <span className="ml-1">({streak} win{streak > 1 ? 's' : ''})</span>
           </span>
         </div>
       )}
