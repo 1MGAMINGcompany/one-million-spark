@@ -89,6 +89,46 @@
     opacity: 0;
   }
 }
+
+/* Chess Check Animation Keyframes */
+@keyframes checkPulse {
+  0%, 100% {
+    opacity: 0.6;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.9;
+    transform: scale(1.02);
+  }
+}
+
+@keyframes checkRing {
+  0%, 100% {
+    box-shadow: 0 0 12px 3px hsl(0 80% 50% / 0.7), inset 0 0 8px 2px hsl(0 80% 50% / 0.4);
+  }
+  50% {
+    box-shadow: 0 0 20px 5px hsl(0 85% 55% / 0.9), inset 0 0 12px 4px hsl(0 85% 55% / 0.6);
+  }
+}
+
+/* Piece capture shake animation */
+@keyframes captureShake {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-3px) rotate(-1deg);
+  }
+  40% {
+    transform: translateX(3px) rotate(1deg);
+  }
+  60% {
+    transform: translateX(-2px) rotate(-0.5deg);
+  }
+  80% {
+    transform: translateX(2px) rotate(0.5deg);
+  }
+}
 @tailwind components;
 @tailwind utilities;
 
