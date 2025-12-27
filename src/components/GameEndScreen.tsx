@@ -1,11 +1,16 @@
 import { useState, useEffect } from 'react';
-import { Trophy, RefreshCw, BarChart2, Star, LogOut, Wallet, ChevronDown, ChevronUp, CheckCircle } from 'lucide-react';
+import { Trophy, RefreshCw, BarChart2, Star, LogOut, Wallet, ChevronDown, ChevronUp, CheckCircle, ExternalLink, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useTranslation } from 'react-i18next';
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
 import { PublicKey } from '@solana/web3.js';
 import { finalizeRoom } from '@/lib/finalize-room';
+
+// Shorten wallet address for display
+function shortenAddress(address: string, chars = 4): string {
+  return `${address.slice(0, chars)}...${address.slice(-chars)}`;
+}
 
 interface GameEndScreenProps {
   gameType: string;
@@ -149,6 +154,7 @@ export function GameEndScreen({
   const [finalizeState, setFinalizeState] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [finalizeError, setFinalizeError] = useState<string | null>(null);
   const [showErrorDetails, setShowErrorDetails] = useState(false);
+  const [txSignature, setTxSignature] = useState<string | null>(null);
   
   // On-chain room status check
   const [roomAlreadySettled, setRoomAlreadySettled] = useState(false);
@@ -204,6 +210,7 @@ export function GameEndScreen({
     setFinalizeState('loading');
     setFinalizeError(null);
     setShowErrorDetails(false);
+    setTxSignature(null);
     
     try {
       const res = await finalizeRoom(
@@ -216,6 +223,7 @@ export function GameEndScreen({
       
       if (res.ok) {
         setFinalizeState('success');
+        setTxSignature(res.signature || null);
       } else {
         setFinalizeState('error');
         setFinalizeError(res.error || 'Unknown error');
@@ -321,8 +329,8 @@ export function GameEndScreen({
             {/* Finalize Payout Button - Only for staked games */}
             {showFinalizeButton && (
               <>
-                {/* Payout Summary - Show before wallet interaction */}
-                {payoutInfo && !isAlreadySettled && (
+                {/* Payout Summary - Show before wallet interaction (only when idle) */}
+                {payoutInfo && finalizeState === 'idle' && !isAlreadySettled && (
                   <div className="bg-muted/40 border border-border/50 rounded-lg p-4 space-y-2">
                     <p className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">
                       Payout Summary
@@ -346,25 +354,88 @@ export function GameEndScreen({
                     </p>
                   </div>
                 )}
-                {/* Already Settled State */}
-                {isAlreadySettled ? (
+
+                {/* Pre-transaction informational notice */}
+                {finalizeState === 'idle' && !isAlreadySettled && !checkingRoomStatus && (
+                  <p className="text-xs text-muted-foreground text-center">
+                    You're about to settle this game on-chain.<br />
+                    This will distribute the pot and cannot be undone.
+                  </p>
+                )}
+
+                {/* Success State - Payout Complete */}
+                {finalizeState === 'success' && (
+                  <div className="bg-emerald-500/20 border border-emerald-500/50 rounded-lg p-4 space-y-3">
+                    <div className="flex items-center justify-center gap-2">
+                      <CheckCircle size={24} className="text-emerald-400" />
+                      <p className="text-emerald-400 font-semibold text-lg">Payout Complete</p>
+                    </div>
+                    <div className="space-y-1 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Winner:</span>
+                        <span className="font-mono text-foreground">{winner ? shortenAddress(winner) : '—'}</span>
+                      </div>
+                      {payoutInfo && (
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Amount Received:</span>
+                          <span className="font-mono text-emerald-400 font-semibold">{payoutInfo.winnerPayout.toFixed(4)} SOL</span>
+                        </div>
+                      )}
+                    </div>
+                    {txSignature && (
+                      <a
+                        href={`https://explorer.solana.com/tx/${txSignature}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-center gap-1.5 text-xs text-primary hover:text-primary/80 transition-colors"
+                      >
+                        <ExternalLink size={12} />
+                        View transaction on Solana Explorer
+                      </a>
+                    )}
+                  </div>
+                )}
+
+                {/* Already Settled State (detected on load) */}
+                {isAlreadySettled && finalizeState !== 'success' && (
                   <div className="bg-emerald-500/20 border border-emerald-500/50 rounded-lg p-4 text-center flex items-center justify-center gap-2">
                     <CheckCircle size={20} className="text-emerald-400" />
                     <p className="text-emerald-400 font-semibold">Already Settled</p>
                   </div>
-                ) : (
-                  /* Active Finalize Button */
+                )}
+
+                {/* Loading State */}
+                {finalizeState === 'loading' && (
+                  <Button 
+                    disabled
+                    className="w-full gap-2 bg-amber-600/70 text-white font-semibold py-6"
+                  >
+                    <Loader2 size={20} className="animate-spin" />
+                    Finalizing…
+                  </Button>
+                )}
+
+                {/* Idle State - Active Finalize Button */}
+                {finalizeState === 'idle' && !isAlreadySettled && (
                   <Button 
                     onClick={handleFinalize}
-                    disabled={finalizeState === 'loading' || !publicKey || checkingRoomStatus}
+                    disabled={!publicKey || checkingRoomStatus}
                     className="w-full gap-2 bg-amber-600 hover:bg-amber-700 text-white font-semibold py-6"
                   >
                     <Wallet size={20} />
-                    {checkingRoomStatus 
-                      ? 'Checking status…' 
-                      : finalizeState === 'loading' 
-                        ? 'Finalizing…' 
-                        : 'Settle Payout (Finalize)'}
+                    {checkingRoomStatus ? 'Checking status…' : 'Settle Payout (Finalize)'}
+                  </Button>
+                )}
+
+                {/* Error State - Show button again to retry */}
+                {finalizeState === 'error' && (
+                  <Button 
+                    onClick={handleFinalize}
+                    disabled={!publicKey}
+                    className="w-full gap-2 bg-amber-600 hover:bg-amber-700 text-white font-semibold py-6"
+                  >
+                    <Wallet size={20} />
+                    Retry Settlement
                   </Button>
                 )}
               </>
