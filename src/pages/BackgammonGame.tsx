@@ -19,6 +19,7 @@ import TurnHistoryDrawer from "@/components/TurnHistoryDrawer";
 import NotificationToggle from "@/components/NotificationToggle";
 import TurnBanner from "@/components/TurnBanner";
 import GameChatPanel from "@/components/GameChatPanel";
+import { GameEndScreen } from "@/components/GameEndScreen";
 import { RematchModal } from "@/components/RematchModal";
 import { RematchAcceptModal } from "@/components/RematchAcceptModal";
 import { toast } from "@/hooks/use-toast";
@@ -167,6 +168,23 @@ const BackgammonGame = () => {
     return turnPlayers.map(tp => ({
       address: tp.address,
       name: tp.name,
+    }));
+  }, [turnPlayers]);
+
+  // Winner address for GameEndScreen
+  const winnerAddress = useMemo(() => {
+    if (!gameOver || !gameResultInfo?.winner) return null;
+    // "player" = my role, so if winner is player, winner is me
+    if (gameResultInfo.winner === myRole) return address;
+    return roomPlayers.find(p => p.toLowerCase() !== address?.toLowerCase()) || null;
+  }, [gameOver, gameResultInfo, myRole, address, roomPlayers]);
+
+  // Players for GameEndScreen
+  const gameEndPlayers = useMemo(() => {
+    return turnPlayers.map(tp => ({
+      address: tp.address,
+      name: tp.name,
+      color: tp.color === "gold" ? "#FFD700" : "#333333",
     }));
   }, [turnPlayers]);
 
@@ -936,29 +954,20 @@ const BackgammonGame = () => {
         </div>
       </div>
 
-      {/* Game Over Modal */}
+      {/* Game End Screen */}
       {gameOver && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-card border border-primary/30 rounded-lg p-8 text-center space-y-4 max-w-sm mx-4">
-            <h2 className="text-2xl font-display font-bold text-primary">
-              {gameStatus.includes("win") ? "Victory!" : "Game Over"}
-            </h2>
-            {gameResultInfo && (
-              <p className={cn("text-lg font-semibold", formatResultType(gameResultInfo.resultType).color)}>
-                {formatResultType(gameResultInfo.resultType).label} ({formatResultType(gameResultInfo.resultType).multiplier})
-              </p>
-            )}
-            <div className="flex flex-col gap-3">
-              <Button onClick={() => rematch.openRematchModal()} className="w-full gap-2">
-                <RefreshCw className="w-4 h-4" />
-                Rematch
-              </Button>
-              <Button asChild variant="outline" className="w-full">
-                <Link to="/room-list">Exit</Link>
-              </Button>
-            </div>
-          </div>
-        </div>
+        <GameEndScreen
+          gameType="Backgammon"
+          winner={winnerAddress}
+          winnerName={gameEndPlayers.find(p => p.address === winnerAddress)?.name}
+          myAddress={address}
+          players={gameEndPlayers}
+          onRematch={() => rematch.openRematchModal()}
+          onExit={() => navigate("/room-list")}
+          result={gameResultInfo ? `${formatResultType(gameResultInfo.resultType).label} (${formatResultType(gameResultInfo.resultType).multiplier})` : undefined}
+          roomPda={roomPda}
+          isStaked={false}
+        />
       )}
       
       {/* Chat Panel */}

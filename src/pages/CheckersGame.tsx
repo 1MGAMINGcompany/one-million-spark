@@ -14,6 +14,7 @@ import TurnHistoryDrawer from "@/components/TurnHistoryDrawer";
 import NotificationToggle from "@/components/NotificationToggle";
 import TurnBanner from "@/components/TurnBanner";
 import GameChatPanel from "@/components/GameChatPanel";
+import { GameEndScreen } from "@/components/GameEndScreen";
 import { RematchModal } from "@/components/RematchModal";
 import { RematchAcceptModal } from "@/components/RematchAcceptModal";
 import { toast } from "@/hooks/use-toast";
@@ -172,6 +173,23 @@ const CheckersGame = () => {
     return turnPlayers.map(tp => ({
       address: tp.address,
       name: tp.name,
+    }));
+  }, [turnPlayers]);
+
+  // Winner address for GameEndScreen
+  const winnerAddress = useMemo(() => {
+    if (!gameOver) return null;
+    if (gameOver === "draw") return "draw";
+    if (gameOver === myColor) return address;
+    return roomPlayers.find(p => p.toLowerCase() !== address?.toLowerCase()) || null;
+  }, [gameOver, myColor, address, roomPlayers]);
+
+  // Players for GameEndScreen
+  const gameEndPlayers = useMemo(() => {
+    return turnPlayers.map(tp => ({
+      address: tp.address,
+      name: tp.name,
+      color: tp.color === "gold" ? "#FFD700" : "#333333",
     }));
   }, [turnPlayers]);
 
@@ -819,6 +837,21 @@ const CheckersGame = () => {
       
       {/* Chat Panel */}
       <GameChatPanel chat={chat} />
+
+      {/* Game End Screen */}
+      {gameOver && (
+        <GameEndScreen
+          gameType="Checkers"
+          winner={winnerAddress}
+          winnerName={gameEndPlayers.find(p => p.address === winnerAddress)?.name}
+          myAddress={address}
+          players={gameEndPlayers}
+          onRematch={() => rematch.openRematchModal()}
+          onExit={() => navigate("/room-list")}
+          roomPda={roomPda}
+          isStaked={false}
+        />
+      )}
 
       {/* Rematch Modal */}
       <RematchModal
