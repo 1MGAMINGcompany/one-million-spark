@@ -22,7 +22,7 @@ const LudoAI = () => {
   const difficulty = (searchParams.get("difficulty") as Difficulty) || "medium";
   const { play } = useSound();
   
-  const [musicEnabled, setMusicEnabled] = useState(true); // Auto-start music
+  const [musicEnabled, setMusicEnabled] = useState(true);
   const [sfxEnabled, setSfxEnabled] = useState(true);
   const musicRef = useRef<HTMLAudioElement | null>(null);
 
@@ -53,7 +53,6 @@ const LudoAI = () => {
     resetGame,
     setDiceValue,
     setMovableTokens,
-    setCurrentPlayerIndex,
   } = useLudoEngine({
     onSoundPlay: playSfx,
     onToast: showToast,
@@ -79,12 +78,8 @@ const LudoAI = () => {
   // Turn notification system
   const {
     isMyTurn,
-    notificationsEnabled,
     hasPermission,
     turnHistory,
-    waitingMessage,
-    toggleNotifications,
-    recordPlayerMove,
   } = useTurnNotifications({
     gameName: "Ludo",
     roomId: "ludo-ai-test",
@@ -134,15 +129,6 @@ const LudoAI = () => {
   }, []);
 
   // Handle dice roll completion - for human player only
-  const noMoveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  
-  // Cleanup no-move timeout on unmount
-  useEffect(() => {
-    return () => {
-      if (noMoveTimeoutRef.current) clearTimeout(noMoveTimeoutRef.current);
-    };
-  }, []);
-  
   const handleRollComplete = useCallback((dice: number, movable: number[]) => {
     const player = players[currentPlayerIndex];
     console.log(`[LUDO AI] ${player.color} rolled ${dice}, movable: [${movable.join(', ')}]`);
@@ -150,15 +136,16 @@ const LudoAI = () => {
     if (movable.length === 0) {
       toast({
         title: t('gameAI.noValidMoves'),
-        description: player.isAI ? t('gameAI.cannotMove') : t('gameAI.cannotMove'),
+        description: t('gameAI.cannotMove'),
         duration: 1500,
       });
-      noMoveTimeoutRef.current = setTimeout(() => {
-        // Even with no moves, rolling 6 gives bonus turn
+      // Clear dice and advance turn after delay
+      setTimeout(() => {
+        setDiceValue(null);
         advanceTurn(dice);
       }, 1000);
     }
-  }, [players, currentPlayerIndex, advanceTurn, t]);
+  }, [players, currentPlayerIndex, advanceTurn, setDiceValue, t]);
 
   // Human player rolls dice
   const handleRollDice = useCallback(() => {
@@ -168,16 +155,14 @@ const LudoAI = () => {
   // Track if we've already consumed the current dice roll
   const moveStartedRef = useRef(false);
 
-  // Handle token click (for human player) - with double-click prevention
+  // Handle token click (for human player)
   const handleTokenClick = useCallback((playerIndex: number, tokenIndex: number) => {
-    // Early guards
     if (isAnimating) return;
     if (playerIndex !== currentPlayerIndex) return;
     if (currentPlayer.isAI) return;
     if (diceValue === null) return;
     if (isRolling) return;
     
-    // CRITICAL: Prevent consuming same dice twice
     if (moveStartedRef.current) {
       console.log('[LUDO AI] Move already started, ignoring click');
       return;
@@ -193,118 +178,97 @@ const LudoAI = () => {
       return;
     }
     
-    // Capture dice value ONCE and immediately mark as consumed
     const currentDice = diceValue;
     moveStartedRef.current = true;
-    
-    // Keep dice visible but clear movable tokens
     setMovableTokens([]);
     
     const success = executeMove(currentPlayerIndex, tokenIndex, currentDice, () => {
-      // After animation completes, clear dice and advance turn
       setDiceValue(null);
       moveStartedRef.current = false;
       setTimeout(() => advanceTurn(currentDice), 200);
     });
     
     if (!success) {
-      // If move failed, restore state
       moveStartedRef.current = false;
     }
-  }, [isAnimating, currentPlayerIndex, currentPlayer, diceValue, isRolling, movableTokens, executeMove, advanceTurn, setDiceValue, setMovableTokens]);
+  }, [isAnimating, currentPlayerIndex, currentPlayer, diceValue, isRolling, movableTokens, executeMove, advanceTurn, setDiceValue, setMovableTokens, t]);
 
-  // AI turn - trigger dice roll
-  const aiMoveInProgressRef = useRef(false);
-  const aiTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const aiMoveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const aiAdvanceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  
-  // Cleanup AI timeouts on unmount
-  useEffect(() => {
-    return () => {
-      if (aiTimeoutRef.current) clearTimeout(aiTimeoutRef.current);
-      if (aiMoveTimeoutRef.current) clearTimeout(aiMoveTimeoutRef.current);
-      if (aiAdvanceTimeoutRef.current) clearTimeout(aiAdvanceTimeoutRef.current);
-    };
-  }, []);
+  // AI turn - using simple polling approach to avoid cleanup issues
+  const aiProcessingRef = useRef(false);
   
   useEffect(() => {
-    // Include turnSignal in dependency to ensure effect re-runs on bonus turns
-    if (currentPlayer.isAI && !gameOver && diceValue === null && !isRolling && !isAnimating && !aiMoveInProgressRef.current) {
-      const delay = difficulty === "easy" ? 800 : difficulty === "medium" ? 500 : 300;
-      
-      aiTimeoutRef.current = setTimeout(() => {
-        // Lock AI turn
-        aiMoveInProgressRef.current = true;
-        
-        rollDice((dice, movable) => {
-          console.log(`[LUDO AI] AI ${currentPlayer.color} rolled ${dice}, movable: [${movable.join(', ')}]`);
-          
-          if (movable.length === 0) {
-            toast({
-              title: t('gameAI.noValidMoves'),
-              description: t('gameAI.cannotMove'),
-              duration: 1500,
-            });
-            aiAdvanceTimeoutRef.current = setTimeout(() => {
-              // Even with no moves, rolling 6 gives bonus turn
-              advanceTurn(dice);
-              aiMoveInProgressRef.current = false;
-            }, 1000);
-          } else {
-            // AI chooses a token to move - keep dice visible during animation
-            const capturedDice = dice;
-            setMovableTokens([]);
-            
-            const aiDelay = difficulty === "easy" ? 600 : difficulty === "medium" ? 400 : 200;
-            aiMoveTimeoutRef.current = setTimeout(() => {
-              let chosenToken: number;
-              
-              if (difficulty === "easy") {
-                chosenToken = movable[Math.floor(Math.random() * movable.length)];
-              } else {
-                // Prioritize tokens already on board over those in home
-                const tokens = movable.map(i => ({ index: i, token: players[currentPlayerIndex].tokens[i] }));
-                tokens.sort((a, b) => {
-                  if (a.token.position === -1 && b.token.position !== -1) return 1;
-                  if (b.token.position === -1 && a.token.position !== -1) return -1;
-                  return b.token.position - a.token.position;
-                });
-                chosenToken = tokens[0].index;
-              }
-              
-              executeMove(currentPlayerIndex, chosenToken, capturedDice, () => {
-                // Clear dice AFTER animation completes
-                setDiceValue(null);
-                aiAdvanceTimeoutRef.current = setTimeout(() => {
-                  advanceTurn(capturedDice);
-                  aiMoveInProgressRef.current = false;
-                }, 200);
-              });
-            }, aiDelay);
-          }
-        });
-      }, delay);
+    // Only process AI turns
+    if (!currentPlayer.isAI || gameOver || aiProcessingRef.current) {
+      return;
     }
     
-    // Cleanup function - also reset AI lock to prevent freezing
+    // Wait for clean state (no dice, not rolling, not animating)
+    if (diceValue !== null || isRolling || isAnimating) {
+      return;
+    }
+    
+    aiProcessingRef.current = true;
+    const delay = difficulty === "easy" ? 800 : difficulty === "medium" ? 500 : 300;
+    
+    const timeoutId = setTimeout(() => {
+      rollDice((dice, movable) => {
+        console.log(`[LUDO AI] AI ${currentPlayer.color} rolled ${dice}, movable: [${movable.join(', ')}]`);
+        
+        if (movable.length === 0) {
+          // No valid moves - advance turn after showing message
+          toast({
+            title: t('gameAI.noValidMoves'),
+            description: t('gameAI.cannotMove'),
+            duration: 1500,
+          });
+          setTimeout(() => {
+            setDiceValue(null);
+            advanceTurn(dice);
+            aiProcessingRef.current = false;
+          }, 1000);
+        } else {
+          // AI has valid moves - choose and execute
+          const capturedDice = dice;
+          setMovableTokens([]);
+          
+          const aiDelay = difficulty === "easy" ? 600 : difficulty === "medium" ? 400 : 200;
+          setTimeout(() => {
+            let chosenToken: number;
+            
+            if (difficulty === "easy") {
+              chosenToken = movable[Math.floor(Math.random() * movable.length)];
+            } else {
+              // Prioritize tokens already on board
+              const tokens = movable.map(i => ({ index: i, token: players[currentPlayerIndex].tokens[i] }));
+              tokens.sort((a, b) => {
+                if (a.token.position === -1 && b.token.position !== -1) return 1;
+                if (b.token.position === -1 && a.token.position !== -1) return -1;
+                return b.token.position - a.token.position;
+              });
+              chosenToken = tokens[0].index;
+            }
+            
+            executeMove(currentPlayerIndex, chosenToken, capturedDice, () => {
+              setDiceValue(null);
+              setTimeout(() => {
+                advanceTurn(capturedDice);
+                aiProcessingRef.current = false;
+              }, 200);
+            });
+          }, aiDelay);
+        }
+      });
+    }, delay);
+    
     return () => {
-      if (aiTimeoutRef.current) {
-        clearTimeout(aiTimeoutRef.current);
-        aiTimeoutRef.current = null;
-      }
-      if (aiMoveTimeoutRef.current) {
-        clearTimeout(aiMoveTimeoutRef.current);
-        aiMoveTimeoutRef.current = null;
-      }
-      if (aiAdvanceTimeoutRef.current) {
-        clearTimeout(aiAdvanceTimeoutRef.current);
-        aiAdvanceTimeoutRef.current = null;
-      }
-      // CRITICAL: Reset AI lock on cleanup to prevent freeze
-      aiMoveInProgressRef.current = false;
+      clearTimeout(timeoutId);
     };
   }, [currentPlayer.isAI, currentPlayer.color, gameOver, diceValue, isRolling, isAnimating, difficulty, players, currentPlayerIndex, rollDice, executeMove, advanceTurn, setDiceValue, setMovableTokens, turnSignal, t]);
+
+  // Reset AI processing flag when player changes
+  useEffect(() => {
+    aiProcessingRef.current = false;
+  }, [currentPlayerIndex]);
 
   return (
     <div className="min-h-screen bg-background flex flex-col relative">
