@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Trophy, RefreshCw, BarChart2, Star, LogOut, Wallet, ChevronDown, ChevronUp, CheckCircle, ExternalLink, Loader2 } from 'lucide-react';
+import GoldConfettiExplosion from '@/components/GoldConfettiExplosion';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useTranslation } from 'react-i18next';
@@ -261,6 +262,9 @@ export function GameEndScreen({
 
   return (
     <div className="fixed inset-0 bg-background/95 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      {/* Confetti explosion on successful payout */}
+      <GoldConfettiExplosion active={finalizeState === 'success'} originX={50} originY={30} />
+      
       <Card className="w-full max-w-md bg-card border-primary/30 shadow-2xl">
         <div className="p-6 space-y-6">
           {/* Trophy Icon */}
