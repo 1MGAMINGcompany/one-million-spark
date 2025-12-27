@@ -32,6 +32,7 @@ import Support from "./pages/Support";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfService from "./pages/TermsOfService";
 import NotFound from "./pages/NotFound";
+import PlayerProfile from "./pages/PlayerProfile";
 import AgeConfirmation from "./components/AgeConfirmation";
 import DebugJoinRoom from "./pages/DebugJoinRoom";
 
@@ -75,6 +76,7 @@ const App = () => (
                     <Route path="/support" element={<Support />} />
                     <Route path="/privacy-policy" element={<PrivacyPolicy />} />
                     <Route path="/terms-of-service" element={<TermsOfService />} />
+                    <Route path="/player/:wallet" element={<PlayerProfile />} />
                     <Route path="/debug/join" element={<DebugJoinRoom />} />
                     <Route path="*" element={<NotFound />} />
                   </Routes>
