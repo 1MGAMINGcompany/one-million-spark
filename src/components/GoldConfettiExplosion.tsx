@@ -35,10 +35,10 @@ const GoldConfettiExplosion = ({ active, originX = 50, originY = 50 }: GoldConfe
   const initialParticles = useMemo(() => {
     if (!active) return [];
     
-    const count = 80;
+    const count = 100; // More particles for a grander effect
     return Array.from({ length: count }, (_, i) => {
       const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.5;
-      const velocity = 8 + Math.random() * 12;
+      const velocity = 3 + Math.random() * 5; // Slower initial velocity
       const shapes: ('circle' | 'square' | 'star')[] = ['circle', 'square', 'star'];
       
       return {
@@ -46,10 +46,10 @@ const GoldConfettiExplosion = ({ active, originX = 50, originY = 50 }: GoldConfe
         x: originX,
         y: originY,
         vx: Math.cos(angle) * velocity,
-        vy: Math.sin(angle) * velocity - 5,
+        vy: Math.sin(angle) * velocity - 2, // Less initial upward boost
         rotation: Math.random() * 360,
-        rotationSpeed: (Math.random() - 0.5) * 20,
-        size: 4 + Math.random() * 8,
+        rotationSpeed: (Math.random() - 0.5) * 8, // Slower rotation
+        size: 5 + Math.random() * 10,
         opacity: 1,
         color: GOLD_COLORS[Math.floor(Math.random() * GOLD_COLORS.length)],
         shape: shapes[Math.floor(Math.random() * shapes.length)],
@@ -67,9 +67,9 @@ const GoldConfettiExplosion = ({ active, originX = 50, originY = 50 }: GoldConfe
 
     let animationId: number;
     let startTime = Date.now();
-    const duration = 3000;
-    const gravity = 0.3;
-    const friction = 0.98;
+    const duration = 5000; // Longer duration (5 seconds instead of 3)
+    const gravity = 0.12; // Much gentler gravity for slower fall
+    const friction = 0.995; // Less friction = particles move longer
 
     const animate = () => {
       const elapsed = Date.now() - startTime;
@@ -176,7 +176,7 @@ const GoldConfettiExplosion = ({ active, originX = 50, originY = 50 }: GoldConfe
           width: '200px',
           height: '200px',
           background: 'radial-gradient(circle, rgba(255,215,0,0.4) 0%, rgba(255,215,0,0) 70%)',
-          animation: 'confettiBurst 0.5s ease-out forwards',
+          animation: 'confettiBurst 1s ease-out forwards',
         }}
       />
       
