@@ -104,6 +104,54 @@ export type Database = {
         }
         Relationships: []
       }
+      player_profiles: {
+        Row: {
+          biggest_pot_won: number
+          created_at: string
+          current_streak: number
+          favorite_game: string | null
+          games_played: number
+          last_game_at: string | null
+          longest_streak: number
+          losses: number
+          total_sol_won: number
+          updated_at: string
+          wallet: string
+          win_rate: number | null
+          wins: number
+        }
+        Insert: {
+          biggest_pot_won?: number
+          created_at?: string
+          current_streak?: number
+          favorite_game?: string | null
+          games_played?: number
+          last_game_at?: string | null
+          longest_streak?: number
+          losses?: number
+          total_sol_won?: number
+          updated_at?: string
+          wallet: string
+          win_rate?: number | null
+          wins?: number
+        }
+        Update: {
+          biggest_pot_won?: number
+          created_at?: string
+          current_streak?: number
+          favorite_game?: string | null
+          games_played?: number
+          last_game_at?: string | null
+          longest_streak?: number
+          losses?: number
+          total_sol_won?: number
+          updated_at?: string
+          wallet?: string
+          win_rate?: number | null
+          wins?: number
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
