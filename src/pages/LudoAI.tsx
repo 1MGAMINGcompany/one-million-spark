@@ -29,6 +29,7 @@ const LudoAI = () => {
   // Wrapper for play function that respects sfxEnabled
   const playSfx = useCallback((sound: string) => {
     if (sfxEnabled) {
+      console.log(`[LUDO SFX] Playing sound: ${sound}`);
       play(sound);
     }
   }, [sfxEnabled, play]);
