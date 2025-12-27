@@ -36,8 +36,8 @@ const SOUND_FILES: Record<string, string> = {
   
   // Ludo sounds
   'ludo_dice': '/sounds/ludo/dice.mp3',
-  'ludo_move': '/sounds/chess/move.mp3',
-  'ludo_capture': '/sounds/chess/capture.mp3',
+  'ludo_move': '/sounds/backgammon/move.m4a', // Use backgammon move sound (more board-game like)
+  'ludo_capture': '/sounds/checkers/capture.mp3',
   'ludo_win': '/sounds/chess/win.wav',
   'ludo_lose': '/sounds/chess/lose.mp3',
   
@@ -186,7 +186,10 @@ export const SoundProvider = ({ children }: { children: ReactNode }) => {
   }, []);
   
   const play = useCallback((name: string) => {
-    if (!soundEnabled) return;
+    if (!soundEnabled) {
+      console.log(`[SOUND] Sound disabled, skipping: ${name}`);
+      return;
+    }
     
     // Initialize if not done yet
     if (!initializedRef.current) {
@@ -195,7 +198,19 @@ export const SoundProvider = ({ children }: { children: ReactNode }) => {
     
     const audio = soundsRef.current[name];
     if (!audio) {
-      console.warn(`Sound not found: ${name}`);
+      // Try to create the audio on-demand if not preloaded
+      const path = SOUND_FILES[name];
+      if (path) {
+        console.log(`[SOUND] Creating audio on-demand: ${name}`);
+        const newAudio = new Audio(path);
+        newAudio.volume = 1;
+        soundsRef.current[name] = newAudio;
+        newAudio.play().catch((e) => {
+          console.debug('[SOUND] Audio play failed:', e.message);
+        });
+        return;
+      }
+      console.warn(`[SOUND] Sound not found: ${name}`);
       return;
     }
     
@@ -203,7 +218,7 @@ export const SoundProvider = ({ children }: { children: ReactNode }) => {
     audio.currentTime = 0;
     audio.play().catch((e) => {
       // Silently catch iOS/autoplay errors
-      console.debug('Audio play failed:', e.message);
+      console.debug('[SOUND] Audio play failed:', e.message);
     });
   }, [soundEnabled, initializeSounds]);
   
