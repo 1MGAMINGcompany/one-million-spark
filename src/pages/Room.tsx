@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Construction, ArrowLeft, Loader2, Users, Coins, AlertTriangle, CheckCircle, Share2, Copy, ExternalLink } from "lucide-react";
 import { WalletGateModal } from "@/components/WalletGateModal";
 import { RivalryWidget } from "@/components/RivalryWidget";
+import { WalletLink } from "@/components/WalletLink";
 import { TxDebugPanel } from "@/components/TxDebugPanel";
 import { MobileWalletRedirect } from "@/components/MobileWalletRedirect";
 import { PreviewDomainBanner, useSigningDisabled } from "@/components/PreviewDomainBanner";
@@ -655,16 +656,27 @@ export default function Room() {
               <div>
                 <p className="text-sm text-muted-foreground mb-2">Players:</p>
                 <ul className="space-y-1">
-                  {activePlayers.map((p: any, i: number) => (
-                    <li key={i} className="flex items-center gap-2 text-sm">
-                      <span className="w-2 h-2 rounded-full bg-green-400" />
-                      <span className={p.toBase58() === address ? 'text-primary font-medium' : ''}>
-                        {p.toBase58().slice(0, 8)}...{p.toBase58().slice(-4)}
-                        {p.toBase58() === address && ' (You)'}
-                        {p.toBase58() === room?.creator?.toBase58?.() && ' (Creator)'}
-                      </span>
-                    </li>
-                  ))}
+                  {activePlayers.map((p: any, i: number) => {
+                    const walletAddr = p.toBase58();
+                    const isMe = walletAddr === address;
+                    const isCreator = walletAddr === room?.creator?.toBase58?.();
+                    return (
+                      <li key={i} className="flex items-center gap-2 text-sm">
+                        <span className="w-2 h-2 rounded-full bg-green-400" />
+                        {isMe ? (
+                          <span className="text-primary font-medium font-mono">
+                            {walletAddr.slice(0, 4)}…{walletAddr.slice(-4)} (You)
+                            {isCreator && ' · Creator'}
+                          </span>
+                        ) : (
+                          <WalletLink 
+                            wallet={walletAddr} 
+                            suffix={isCreator ? ' (Creator)' : ''} 
+                          />
+                        )}
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
             </div>
