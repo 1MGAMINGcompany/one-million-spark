@@ -382,9 +382,29 @@ export function ChessBoardPremium({
                     />
                   )}
                   
-                  {/* Check indicator */}
+                  {/* Check indicator - dramatic pulsing danger effect */}
                   {isCheck && (
-                    <div className="absolute inset-0 bg-red-500/40 animate-pulse" />
+                    <>
+                      {/* Radial danger gradient */}
+                      <div 
+                        className="absolute inset-0 animate-check-pulse"
+                        style={{
+                          background: "radial-gradient(circle at center, hsl(0 80% 50% / 0.6) 0%, hsl(0 70% 40% / 0.4) 50%, transparent 70%)",
+                        }}
+                      />
+                      {/* Pulsing ring around the king */}
+                      <div 
+                        className="absolute inset-1 rounded-sm animate-check-ring"
+                        style={{
+                          boxShadow: "0 0 12px 3px hsl(0 80% 50% / 0.7), inset 0 0 8px 2px hsl(0 80% 50% / 0.4)",
+                        }}
+                      />
+                      {/* Corner warning indicators */}
+                      <div className="absolute top-0 left-0 w-3 h-3 border-t-2 border-l-2 border-red-500 animate-pulse" />
+                      <div className="absolute top-0 right-0 w-3 h-3 border-t-2 border-r-2 border-red-500 animate-pulse" />
+                      <div className="absolute bottom-0 left-0 w-3 h-3 border-b-2 border-l-2 border-red-500 animate-pulse" />
+                      <div className="absolute bottom-0 right-0 w-3 h-3 border-b-2 border-r-2 border-red-500 animate-pulse" />
+                    </>
                   )}
 
                   {/* Legal move indicator */}
