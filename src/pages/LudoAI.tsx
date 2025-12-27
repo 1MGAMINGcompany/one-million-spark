@@ -20,19 +20,16 @@ const LudoAI = () => {
   const { t } = useTranslation();
   const [searchParams] = useSearchParams();
   const difficulty = (searchParams.get("difficulty") as Difficulty) || "medium";
-  const { play } = useSound();
+  const { play, soundEnabled, toggleSound } = useSound();
   
   const [musicEnabled, setMusicEnabled] = useState(true);
-  const [sfxEnabled, setSfxEnabled] = useState(true);
   const musicRef = useRef<HTMLAudioElement | null>(null);
 
-  // Wrapper for play function that respects sfxEnabled
+  // Wrapper for play function that plays sounds when global sound is enabled
   const playSfx = useCallback((sound: string) => {
-    if (sfxEnabled) {
-      console.log(`[LUDO SFX] Playing sound: ${sound}`);
-      play(sound);
-    }
-  }, [sfxEnabled, play]);
+    console.log(`[LUDO SFX] Playing sound: ${sound}, soundEnabled: ${soundEnabled}`);
+    play(sound);
+  }, [play, soundEnabled]);
 
   const showToast = useCallback((title: string, description: string, variant?: "default" | "destructive") => {
     toast({ title, description, variant, duration: 2000 });
@@ -126,8 +123,8 @@ const LudoAI = () => {
   }, []);
 
   const toggleSfx = useCallback(() => {
-    setSfxEnabled(prev => !prev);
-  }, []);
+    toggleSound();
+  }, [toggleSound]);
 
   // Handle dice roll completion - for human player only
   const handleRollComplete = useCallback((dice: number, movable: number[]) => {
@@ -394,9 +391,9 @@ const LudoAI = () => {
                 size="icon"
                 onClick={toggleSfx}
                 className="w-9 h-9 border-primary/30"
-                title={sfxEnabled ? "Disable SFX" : "Enable SFX"}
+                title={soundEnabled ? "Disable SFX" : "Enable SFX"}
               >
-                {sfxEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
+                {soundEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
               </Button>
             </div>
           </div>
