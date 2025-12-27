@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Trophy, RefreshCw, BarChart2, Star, LogOut, Wallet, ChevronDown, ChevronUp } from 'lucide-react';
+import { Trophy, RefreshCw, BarChart2, Star, LogOut, Wallet, ChevronDown, ChevronUp, CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useTranslation } from 'react-i18next';
@@ -21,6 +21,9 @@ interface GameEndScreenProps {
   roomPda?: string; // Room PDA for finalization
   isStaked?: boolean; // Whether this is a staked game requiring finalization
 }
+
+// Default pubkey (11111111111111111111111111111111) indicates no winner set yet
+const DEFAULT_PUBKEY = '11111111111111111111111111111111';
 
 /**
  * Check if error indicates room was already settled
@@ -71,6 +74,42 @@ function getFriendlyErrorMessage(rawError: string): { message: string; showDetai
   };
 }
 
+/**
+ * Parse room account data to check status and winner
+ * Room account layout (simplified):
+ * - status is at a known offset
+ * - winner pubkey is at a known offset
+ */
+function parseRoomSettledStatus(data: Buffer): { isSettled: boolean; onChainWinner: string | null } {
+  try {
+    // Room account structure (based on Anchor IDL):
+    // 8 bytes discriminator
+    // 32 bytes host
+    // 32 bytes guest  
+    // 8 bytes entry_fee
+    // 1 byte status (enum: 0=Open, 1=InProgress, 2=Finished)
+    // 32 bytes winner
+    
+    const STATUS_OFFSET = 8 + 32 + 32 + 8; // = 80
+    const WINNER_OFFSET = STATUS_OFFSET + 1; // = 81
+    
+    const status = data[STATUS_OFFSET];
+    const winnerBytes = data.slice(WINNER_OFFSET, WINNER_OFFSET + 32);
+    const winnerPubkey = new PublicKey(winnerBytes).toBase58();
+    
+    // Status 2 = Finished, or winner is set (not default pubkey)
+    const isFinished = status === 2;
+    const winnerSet = winnerPubkey !== DEFAULT_PUBKEY;
+    
+    return {
+      isSettled: isFinished || winnerSet,
+      onChainWinner: winnerSet ? winnerPubkey : null,
+    };
+  } catch {
+    return { isSettled: false, onChainWinner: null };
+  }
+}
+
 export function GameEndScreen({
   gameType,
   winner,
@@ -93,11 +132,41 @@ export function GameEndScreen({
   const [finalizeError, setFinalizeError] = useState<string | null>(null);
   const [showErrorDetails, setShowErrorDetails] = useState(false);
   
+  // On-chain room status check
+  const [roomAlreadySettled, setRoomAlreadySettled] = useState(false);
+  const [checkingRoomStatus, setCheckingRoomStatus] = useState(true);
+  
   const isWinner = winner === myAddress;
   const isDraw = winner === 'draw';
   
+  // Check on-chain room status on mount
+  useEffect(() => {
+    const checkRoomStatus = async () => {
+      if (!roomPda || !isStaked) {
+        setCheckingRoomStatus(false);
+        return;
+      }
+      
+      try {
+        const accountInfo = await connection.getAccountInfo(new PublicKey(roomPda));
+        if (accountInfo?.data) {
+          const { isSettled } = parseRoomSettledStatus(Buffer.from(accountInfo.data));
+          setRoomAlreadySettled(isSettled);
+        }
+      } catch (err) {
+        console.warn('Failed to check room status:', err);
+        // On error, allow button to show (user can still try)
+      } finally {
+        setCheckingRoomStatus(false);
+      }
+    };
+    
+    checkRoomStatus();
+  }, [roomPda, isStaked, connection]);
+  
   // Show finalize button only for staked games with a winner (not draw)
   const showFinalizeButton = isStaked && roomPda && winner && winner !== 'draw';
+  const isAlreadySettled = roomAlreadySettled || finalizeState === 'success';
   
   const handleFinalize = async () => {
     if (!roomPda || !winner || !publicKey || !sendTransaction) return;
@@ -220,22 +289,30 @@ export function GameEndScreen({
           {/* Action Buttons */}
           <div className="space-y-3">
             {/* Finalize Payout Button - Only for staked games */}
-            {showFinalizeButton && finalizeState !== 'success' && (
-              <Button 
-                onClick={handleFinalize}
-                disabled={finalizeState === 'loading' || !publicKey}
-                className="w-full gap-2 bg-amber-600 hover:bg-amber-700 text-white font-semibold py-6"
-              >
-                <Wallet size={20} />
-                {finalizeState === 'loading' ? 'Finalizing…' : 'Settle Payout (Finalize)'}
-              </Button>
-            )}
-            
-            {/* Finalize Success Message */}
-            {finalizeState === 'success' && (
-              <div className="bg-emerald-500/20 border border-emerald-500/50 rounded-lg p-4 text-center">
-                <p className="text-emerald-400 font-semibold">Payout Complete</p>
-              </div>
+            {showFinalizeButton && (
+              <>
+                {/* Already Settled State */}
+                {isAlreadySettled ? (
+                  <div className="bg-emerald-500/20 border border-emerald-500/50 rounded-lg p-4 text-center flex items-center justify-center gap-2">
+                    <CheckCircle size={20} className="text-emerald-400" />
+                    <p className="text-emerald-400 font-semibold">Already Settled</p>
+                  </div>
+                ) : (
+                  /* Active Finalize Button */
+                  <Button 
+                    onClick={handleFinalize}
+                    disabled={finalizeState === 'loading' || !publicKey || checkingRoomStatus}
+                    className="w-full gap-2 bg-amber-600 hover:bg-amber-700 text-white font-semibold py-6"
+                  >
+                    <Wallet size={20} />
+                    {checkingRoomStatus 
+                      ? 'Checking status…' 
+                      : finalizeState === 'loading' 
+                        ? 'Finalizing…' 
+                        : 'Settle Payout (Finalize)'}
+                  </Button>
+                )}
+              </>
             )}
             
             {/* Finalize Error Message */}
