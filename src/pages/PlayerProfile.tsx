@@ -49,6 +49,93 @@ function capitalize(str: string): string {
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
+// High Roller threshold in SOL
+const HIGH_ROLLER_THRESHOLD = 0.5;
+
+// Get player title (highest priority wins)
+function getPlayerTitle(profile: PlayerProfileData): { title: string; color: string } | null {
+  // Priority order (highest first)
+  
+  // Unstoppable - current streak >= 5
+  if (profile.current_streak >= 5) {
+    return { title: 'Unstoppable', color: 'text-purple-400' };
+  }
+  
+  // Hot Hand - current streak >= 3
+  if (profile.current_streak >= 3) {
+    return { title: 'Hot Hand', color: 'text-amber-400' };
+  }
+  
+  // Game-specific shark titles (favorite game + high win rate)
+  if (profile.favorite_game && profile.win_rate >= 0.6 && profile.games_played >= 5) {
+    const game = capitalize(profile.favorite_game);
+    return { title: `${game} Shark`, color: 'text-cyan-400' };
+  }
+  
+  // High Roller - biggest pot >= threshold
+  if (Number(profile.biggest_pot_won) >= HIGH_ROLLER_THRESHOLD) {
+    return { title: 'High Roller', color: 'text-emerald-400' };
+  }
+  
+  // Veteran - 50+ games
+  if (profile.games_played >= 50) {
+    return { title: 'Veteran', color: 'text-blue-400' };
+  }
+  
+  // New Challenger - < 10 games
+  if (profile.games_played < 10) {
+    return { title: 'New Challenger', color: 'text-muted-foreground' };
+  }
+  
+  return null;
+}
+
+// Badge definitions
+interface Badge {
+  id: string;
+  label: string;
+  icon: string;
+  color: string;
+}
+
+// Get player badges (max 3)
+function getPlayerBadges(profile: PlayerProfileData): Badge[] {
+  const badges: Badge[] = [];
+  
+  // Hot Streak badge
+  if (profile.current_streak >= 3) {
+    badges.push({
+      id: 'hot-streak',
+      label: 'Hot Streak',
+      icon: '🔥',
+      color: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
+    });
+  }
+  
+  // Big Winner badge (high total SOL won)
+  if (Number(profile.total_sol_won) >= 1) {
+    badges.push({
+      id: 'big-winner',
+      label: 'Big Winner',
+      icon: '💰',
+      color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
+    });
+  }
+  
+  // Strategy Master badge (high win rate with enough games)
+  if (profile.win_rate >= 0.65 && profile.games_played >= 10) {
+    badges.push({
+      id: 'strategy-master',
+      label: 'Strategy Master',
+      icon: '🧠',
+      color: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
+    });
+  }
+  
+  // Return max 3 badges
+  return badges.slice(0, 3);
+}
+
 export default function PlayerProfile() {
   const { wallet } = useParams<{ wallet: string }>();
   const navigate = useNavigate();
@@ -149,6 +236,8 @@ export default function PlayerProfile() {
   }
 
   const hasHotStreak = profile.current_streak >= 3;
+  const playerTitle = getPlayerTitle(profile);
+  const playerBadges = getPlayerBadges(profile);
 
   return (
     <div className="container max-w-2xl py-8 px-4">
@@ -159,9 +248,17 @@ export default function PlayerProfile() {
       <Card className="border-border/50 bg-card/80 backdrop-blur overflow-hidden">
         {/* Header - Fighter Record Style */}
         <div className="bg-gradient-to-br from-primary/20 via-primary/10 to-transparent p-6 border-b border-border/30">
-          <p className="font-mono text-muted-foreground text-sm mb-2">
+          <p className="font-mono text-muted-foreground text-sm mb-1">
             {shortenWallet(profile.wallet)}
           </p>
+          
+          {/* Title */}
+          {playerTitle && (
+            <p className={`text-sm font-semibold uppercase tracking-wide mb-2 ${playerTitle.color}`}>
+              {playerTitle.title}
+            </p>
+          )}
+          
           <div className="flex items-baseline gap-3">
             <span className="text-muted-foreground text-lg">Record:</span>
             <span className="text-4xl font-bold text-foreground">
@@ -173,6 +270,21 @@ export default function PlayerProfile() {
           <p className="text-sm text-muted-foreground mt-1">
             {profile.games_played} game{profile.games_played !== 1 ? 's' : ''} played
           </p>
+          
+          {/* Badges Row */}
+          {playerBadges.length > 0 && (
+            <div className="flex flex-wrap gap-2 mt-3">
+              {playerBadges.map((badge) => (
+                <span
+                  key={badge.id}
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${badge.color}`}
+                >
+                  <span>{badge.icon}</span>
+                  {badge.label}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
 
         <CardContent className="p-6 space-y-6">
