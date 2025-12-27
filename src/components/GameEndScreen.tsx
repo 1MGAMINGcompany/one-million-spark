@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
 import { PublicKey } from '@solana/web3.js';
 import { finalizeRoom } from '@/lib/finalize-room';
+import { useSound } from '@/contexts/SoundContext';
 
 // Shorten wallet address for display
 function shortenAddress(address: string, chars = 4): string {
@@ -151,6 +152,7 @@ export function GameEndScreen({
   const { t } = useTranslation();
   const { connection } = useConnection();
   const { publicKey, sendTransaction } = useWallet();
+  const { play } = useSound();
   
   const [finalizeState, setFinalizeState] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [finalizeError, setFinalizeError] = useState<string | null>(null);
@@ -225,6 +227,7 @@ export function GameEndScreen({
       if (res.ok) {
         setFinalizeState('success');
         setTxSignature(res.signature || null);
+        play('chess_win'); // Play success sound
       } else {
         setFinalizeState('error');
         setFinalizeError(res.error || 'Unknown error');
