@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Trophy, RefreshCw, BarChart2, Star, LogOut, Wallet, ChevronDown, ChevronUp, CheckCircle, ExternalLink, Loader2, Copy, Check } from 'lucide-react';
+import { Trophy, RefreshCw, BarChart2, Star, LogOut, Wallet, ChevronDown, ChevronUp, CheckCircle, ExternalLink, Loader2 } from 'lucide-react';
 import GoldConfettiExplosion from '@/components/GoldConfettiExplosion';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -173,10 +173,8 @@ export function GameEndScreen({
   const [stakeLamports, setStakeLamports] = useState<number>(0);
   
   // Rematch state
-  const [rematchMode, setRematchMode] = useState<RematchMode>('same');
   const [customStakeSol, setCustomStakeSol] = useState<string>('');
-  const [rematchLink, setRematchLink] = useState<string | null>(null);
-  const [linkCopied, setLinkCopied] = useState(false);
+  const [showCustomInput, setShowCustomInput] = useState(false);
   
   const isWinner = winner === myAddress;
   const isDraw = winner === 'draw';
@@ -266,8 +264,8 @@ export function GameEndScreen({
     }
   }, [errorInfo?.autoRefresh]);
   
-  // Generate rematch link based on selected mode
-  const handleGenerateRematchLink = () => {
+  // Navigate to rematch link
+  const handleRematchNavigate = (mode: RematchMode) => {
     if (!roomPda) return;
     
     const customLamports = customStakeSol 
@@ -278,25 +276,12 @@ export function GameEndScreen({
       originRoomId: roomPda,
       gameType,
       maxPlayers: players.length || 2,
-      stakeLamports: calculateRematchStake(stakeLamports, rematchMode, customLamports),
-      mode: rematchMode,
+      stakeLamports: calculateRematchStake(stakeLamports, mode, customLamports),
+      mode,
     };
     
     const link = generateRematchLink(payload);
-    setRematchLink(link);
-    setLinkCopied(false);
-  };
-  
-  // Copy link to clipboard
-  const handleCopyLink = async () => {
-    if (!rematchLink) return;
-    try {
-      await navigator.clipboard.writeText(rematchLink);
-      setLinkCopied(true);
-      setTimeout(() => setLinkCopied(false), 2000);
-    } catch (err) {
-      console.error('Failed to copy link:', err);
-    }
+    window.location.href = link;
   };
   
   const getResultText = () => {
@@ -525,93 +510,64 @@ export function GameEndScreen({
             {isStaked && roomPda && stakeLamports > 0 && (
               <div className="bg-muted/30 border border-border/50 rounded-lg p-4 space-y-3">
                 <p className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">
-                  Rematch Options
+                  Rematch
                 </p>
                 
-                {/* Mode Selection */}
-                <div className="flex gap-2">
-                  <Button
-                    variant={rematchMode === 'same' ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => { setRematchMode('same'); setRematchLink(null); }}
-                    className="flex-1 text-xs"
-                  >
-                    Same ({lamportsToSol(stakeLamports).toFixed(4)} SOL)
-                  </Button>
-                  <Button
-                    variant={rematchMode === 'double' ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => { setRematchMode('double'); setRematchLink(null); }}
-                    className="flex-1 text-xs"
-                  >
-                    Double ({lamportsToSol(stakeLamports * 2).toFixed(4)} SOL)
-                  </Button>
-                  <Button
-                    variant={rematchMode === 'custom' ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => { setRematchMode('custom'); setRematchLink(null); }}
-                    className="flex-1 text-xs"
-                  >
-                    Custom
-                  </Button>
-                </div>
+                {/* Same Stake Button */}
+                <Button
+                  onClick={() => handleRematchNavigate('same')}
+                  className="w-full gap-2 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold py-5"
+                >
+                  <RefreshCw size={18} />
+                  Same Stake ({lamportsToSol(stakeLamports).toFixed(4)} SOL)
+                </Button>
                 
-                {/* Custom stake input */}
-                {rematchMode === 'custom' && (
+                {/* Double Up Button */}
+                <Button
+                  onClick={() => handleRematchNavigate('double')}
+                  variant="secondary"
+                  className="w-full gap-2 font-semibold py-5"
+                >
+                  <RefreshCw size={18} />
+                  Double Up ({lamportsToSol(stakeLamports * 2).toFixed(4)} SOL)
+                </Button>
+                
+                {/* Custom Stake Section */}
+                {!showCustomInput ? (
+                  <Button
+                    onClick={() => setShowCustomInput(true)}
+                    variant="outline"
+                    className="w-full gap-2 border-border/50 py-5"
+                  >
+                    <RefreshCw size={18} />
+                    Custom Stake
+                  </Button>
+                ) : (
                   <div className="flex gap-2 items-center">
                     <input
                       type="number"
                       step="0.001"
                       min="0.001"
-                      placeholder="SOL amount"
+                      placeholder="Enter SOL"
                       value={customStakeSol}
-                      onChange={(e) => { setCustomStakeSol(e.target.value); setRematchLink(null); }}
-                      className="flex-1 bg-background border border-border rounded px-3 py-2 text-sm font-mono"
+                      onChange={(e) => setCustomStakeSol(e.target.value)}
+                      className="flex-1 bg-background border border-border rounded px-3 py-3 text-sm font-mono"
+                      autoFocus
                     />
-                    <span className="text-sm text-muted-foreground">SOL</span>
-                  </div>
-                )}
-                
-                {/* Generate Link Button */}
-                <Button
-                  onClick={handleGenerateRematchLink}
-                  disabled={rematchMode === 'custom' && (!customStakeSol || parseFloat(customStakeSol) <= 0)}
-                  className="w-full gap-2"
-                  variant="secondary"
-                >
-                  <RefreshCw size={16} />
-                  Generate Rematch Link
-                </Button>
-                
-                {/* Generated Link Display */}
-                {rematchLink && (
-                  <div className="space-y-2">
-                    <div className="flex gap-2 items-center bg-background border border-border rounded p-2">
-                      <input
-                        type="text"
-                        readOnly
-                        value={rematchLink}
-                        className="flex-1 bg-transparent text-xs font-mono truncate outline-none"
-                      />
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={handleCopyLink}
-                        className="shrink-0"
-                      >
-                        {linkCopied ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
-                      </Button>
-                    </div>
-                    <p className="text-xs text-muted-foreground text-center">
-                      Share this link with your opponent to start a rematch
-                    </p>
+                    <Button
+                      onClick={() => handleRematchNavigate('custom')}
+                      disabled={!customStakeSol || parseFloat(customStakeSol) <= 0}
+                      className="px-6 py-3"
+                    >
+                      Go
+                    </Button>
                   </div>
                 )}
               </div>
             )}
 
             {/* Primary: Rematch (for non-staked games or as fallback) */}
-            {(!isStaked || !roomPda) && (
+            {(!isStaked || !roomPda || stakeLamports === 0) && (
               <Button 
                 onClick={onRematch}
                 className="w-full gap-2 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold py-6 relative overflow-hidden group"
