@@ -20,6 +20,7 @@ import TurnHistoryDrawer from "@/components/TurnHistoryDrawer";
 import NotificationToggle from "@/components/NotificationToggle";
 import TurnBanner from "@/components/TurnBanner";
 import GameChatPanel from "@/components/GameChatPanel";
+import { GameEndScreen } from "@/components/GameEndScreen";
 import { RematchModal } from "@/components/RematchModal";
 import { RematchAcceptModal } from "@/components/RematchAcceptModal";
 
@@ -158,6 +159,22 @@ const LudoGame = () => {
     return turnPlayers.map(tp => ({
       address: tp.address,
       name: tp.name,
+    }));
+  }, [turnPlayers]);
+
+  // Winner address for GameEndScreen
+  const winnerAddress = useMemo(() => {
+    if (!gameOver) return null;
+    const winnerIndex = players.findIndex(p => p.color === gameOver);
+    return winnerIndex >= 0 ? (roomPlayers[winnerIndex] || null) : null;
+  }, [gameOver, players, roomPlayers]);
+
+  // Players for GameEndScreen
+  const gameEndPlayers = useMemo(() => {
+    return turnPlayers.map(tp => ({
+      address: tp.address,
+      name: tp.name,
+      color: tp.color === 'gold' ? '#FFD700' : tp.color === 'ruby' ? '#E74C3C' : tp.color === 'emerald' ? '#2ECC71' : '#3498DB',
     }));
   }, [turnPlayers]);
 
@@ -614,27 +631,19 @@ const LudoGame = () => {
         </div>
       </div>
 
-      {/* Game Over Modal */}
+      {/* Game End Screen */}
       {gameOver && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-card border border-primary/30 rounded-lg p-8 text-center space-y-4 max-w-sm mx-4">
-            <h2 className="text-2xl font-display font-bold text-primary">
-              {gameOver === PLAYER_COLORS[myPlayerIndex] ? "Victory!" : "Game Over"}
-            </h2>
-            <p className="text-muted-foreground capitalize">
-              {gameOver} player wins!
-            </p>
-            <div className="flex flex-col gap-3">
-              <Button onClick={() => rematch.openRematchModal()} className="w-full gap-2">
-                <RefreshCw className="w-4 h-4" />
-                Rematch
-              </Button>
-              <Button asChild variant="outline" className="w-full">
-                <Link to="/room-list">Exit</Link>
-              </Button>
-            </div>
-          </div>
-        </div>
+        <GameEndScreen
+          gameType="Ludo"
+          winner={winnerAddress}
+          winnerName={gameEndPlayers.find(p => p.address === winnerAddress)?.name}
+          myAddress={address}
+          players={gameEndPlayers}
+          onRematch={() => rematch.openRematchModal()}
+          onExit={() => navigate("/room-list")}
+          roomPda={roomPda}
+          isStaked={false}
+        />
       )}
 
       {/* Player Status Footer */}

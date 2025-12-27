@@ -15,6 +15,7 @@ import TurnHistoryDrawer from "@/components/TurnHistoryDrawer";
 import NotificationToggle from "@/components/NotificationToggle";
 import TurnBanner from "@/components/TurnBanner";
 import GameChatPanel from "@/components/GameChatPanel";
+import { GameEndScreen } from "@/components/GameEndScreen";
 import { RematchModal } from "@/components/RematchModal";
 import { RematchAcceptModal } from "@/components/RematchAcceptModal";
 import { toast } from "@/hooks/use-toast";
@@ -97,6 +98,7 @@ const DominosGame = () => {
   const [roomPlayers, setRoomPlayers] = useState<string[]>([]);
   const [amIPlayer1, setAmIPlayer1] = useState(false);
   const [loadingRoom, setLoadingRoom] = useState(true);
+  const [entryFeeSol, setEntryFeeSol] = useState(0); // Stake amount in SOL
 
   // Keep multiplayer refs in sync
   useEffect(() => { amIPlayer1Ref.current = amIPlayer1; }, [amIPlayer1]);
@@ -150,6 +152,7 @@ const DominosGame = () => {
         if (interval) clearInterval(interval);
         
         setRoomPlayers(realPlayers);
+        setEntryFeeSol(roomData.entryFeeSol); // Store stake amount
         
         // Determine if I'm player 1 based on on-chain order
         const myIndex = realPlayers.findIndex(p => 
@@ -280,6 +283,24 @@ const DominosGame = () => {
     return turnPlayers.map(tp => ({
       address: tp.address,
       name: tp.name,
+    }));
+  }, [turnPlayers]);
+
+  // Winner address for GameEndScreen
+  const winnerAddress = useMemo(() => {
+    if (!gameOver) return null;
+    if (winner === "draw") return "draw";
+    if (winner === "me") return address;
+    if (winner === "opponent") return roomPlayers.find(p => p.toLowerCase() !== address?.toLowerCase()) || null;
+    return null;
+  }, [gameOver, winner, address, roomPlayers]);
+
+  // Players for GameEndScreen
+  const gameEndPlayers = useMemo(() => {
+    return turnPlayers.map(tp => ({
+      address: tp.address,
+      name: tp.name,
+      color: tp.color === "gold" ? "#FFD700" : "#333333",
     }));
   }, [turnPlayers]);
 
@@ -956,6 +977,21 @@ const DominosGame = () => {
       
       {/* Chat Panel */}
       <GameChatPanel chat={chat} />
+
+      {/* Game End Screen */}
+      {gameOver && (
+        <GameEndScreen
+          gameType="Dominos"
+          winner={winnerAddress}
+          winnerName={winnerAddress === "draw" ? undefined : gameEndPlayers.find(p => p.address === winnerAddress)?.name}
+          myAddress={address}
+          players={gameEndPlayers}
+          onRematch={() => rematch.openRematchModal()}
+          onExit={() => navigate("/room-list")}
+          roomPda={roomPda}
+          isStaked={entryFeeSol > 0}
+        />
+      )}
 
       {/* Rematch Modal */}
       <RematchModal
