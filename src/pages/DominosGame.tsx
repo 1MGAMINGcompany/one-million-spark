@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Gem, Flag, Users, Wifi, WifiOff, Download, RefreshCw } from "lucide-react";
-import DominoTile3D, { DominoTileBack } from "@/components/DominoTile3D";
+import DominoTile3D, { DominoTileBack, TileHalfClicked } from "@/components/DominoTile3D";
 import { useSound } from "@/contexts/SoundContext";
 import { useTranslation } from "react-i18next";
 import { useWallet } from "@/hooks/useWallet";
@@ -620,8 +620,8 @@ const DominosGame = () => {
     }
   }, [chain, myHand, boneyard, opponentHandCount, getChainEnds, play, sendMove, recordPlayerMove, address]);
 
-  // Handle player play
-  const handlePlayerPlay = useCallback((domino: Domino) => {
+  // Handle player play - halfClicked indicates which pip section was touched
+  const handlePlayerPlay = useCallback((domino: Domino, halfClicked?: TileHalfClicked) => {
     if (!isMyTurn || gameOver) return;
     
     const { canPlayLeft, canPlayRight } = canPlay(domino);
@@ -641,19 +641,34 @@ const DominosGame = () => {
     } else if (canPlayRight && !canPlayLeft) {
       playDomino(domino, "right");
     } else {
-      // Both ends match - toggle selection
-      if (selectedDomino === domino.id) {
-        playDomino(domino, "right");
-        setSelectedDomino(null);
+      // Both ends match - use the clicked half to determine placement
+      // The half clicked corresponds to the pip value the player wants to place
+      // If they click the "1" side (left value), we find which chain end matches that value
+      const clickedValue = halfClicked === "left" ? domino.left : domino.right;
+      const ends = getChainEnds();
+      
+      if (ends) {
+        // Determine which chain end matches the clicked pip value
+        if (clickedValue === ends.left) {
+          playDomino(domino, "left");
+        } else if (clickedValue === ends.right) {
+          playDomino(domino, "right");
+        } else {
+          // Clicked value doesn't match either end directly, use the other value
+          const otherValue = halfClicked === "left" ? domino.right : domino.left;
+          if (otherValue === ends.left) {
+            playDomino(domino, "left");
+          } else {
+            playDomino(domino, "right");
+          }
+        }
       } else {
-        setSelectedDomino(domino.id);
-        toast({
-          title: "Choose Side",
-          description: "Click again to play on right side",
-        });
+        // No chain yet, just play left
+        playDomino(domino, "left");
       }
+      setSelectedDomino(null);
     }
-  }, [isMyTurn, gameOver, canPlay, chain.length, playDomino, selectedDomino]);
+  }, [isMyTurn, gameOver, canPlay, chain.length, playDomino, getChainEnds]);
 
   // Handle draw
   const handleDraw = useCallback(() => {
@@ -909,7 +924,7 @@ const DominosGame = () => {
                     isSelected={selectedDomino === domino.id}
                     isPlayable={isLegal}
                     isAITurn={!isMyTurn}
-                    onClick={() => handlePlayerPlay(domino)}
+                    onClick={(halfClicked) => handlePlayerPlay(domino, halfClicked)}
                   />
                 );
               })}
