@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { PublicKey } from "@solana/web3.js";
 import { Button } from "@/components/ui/button";
@@ -18,7 +18,7 @@ import { useSound } from "@/contexts/SoundContext";
 import { useSolPrice } from "@/hooks/useSolPrice";
 import { useSolanaRooms } from "@/hooks/useSolanaRooms";
 import { useSolanaNetwork } from "@/hooks/useSolanaNetwork";
-import { Wallet, Loader2, AlertCircle, RefreshCw } from "lucide-react";
+import { Wallet, Loader2, AlertCircle, RefreshCw, RefreshCcw } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { GameType, RoomStatus, isOpenStatus } from "@/lib/solana-program";
 import { ConnectWalletGate } from "@/components/ConnectWalletGate";
@@ -30,6 +30,16 @@ import { ActiveGameBanner } from "@/components/ActiveGameBanner";
 import { requestNotificationPermission } from "@/lib/pushNotifications";
 import { AudioManager } from "@/lib/AudioManager";
 import { showBrowserNotification } from "@/lib/pushNotifications";
+import { parseRematchParams, lamportsToSol, RematchPayload } from "@/lib/rematchPayload";
+
+// Game type mapping from string to number
+const GAME_TYPE_MAP: Record<string, string> = {
+  chess: "1",
+  dominos: "2",
+  backgammon: "3",
+  checkers: "4",
+  ludo: "5",
+};
 
 // Target minimum fee in USD
 const MIN_FEE_USD = 0.50;
@@ -38,6 +48,7 @@ const FALLBACK_MIN_SOL = 0.004;
 
 export default function CreateRoom() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { t } = useTranslation();
   const { isConnected, address } = useWallet();
   const { toast } = useToast();
@@ -51,6 +62,10 @@ export default function CreateRoom() {
     checkNetworkMismatch 
   } = useSolanaNetwork();
 
+  // Parse rematch params from URL
+  const rematchData = parseRematchParams(searchParams);
+  const isRematch = !!rematchData;
+
   const [gameType, setGameType] = useState<string>("1"); // Chess
   const [entryFee, setEntryFee] = useState<string>("0.1");
   const [maxPlayers, setMaxPlayers] = useState<string>("2");
@@ -62,7 +77,26 @@ export default function CreateRoom() {
   // Track previous status and navigation state
   const prevStatusRef = useRef<number | null>(null);
   const hasNavigatedRef = useRef(false);
+  const rematchAppliedRef = useRef(false);
   
+  // Pre-fill form from rematch params (once)
+  useEffect(() => {
+    if (rematchData && !rematchAppliedRef.current) {
+      rematchAppliedRef.current = true;
+      
+      // Set game type from rematch
+      const mappedGameType = GAME_TYPE_MAP[rematchData.gameType.toLowerCase()] || "1";
+      setGameType(mappedGameType);
+      
+      // Set stake from rematch (convert lamports to SOL)
+      const stakeSol = lamportsToSol(rematchData.stakeLamports);
+      setEntryFee(stakeSol.toString());
+      
+      // Set max players
+      setMaxPlayers(rematchData.maxPlayers.toString());
+    }
+  }, [rematchData]);
+
   // Check if signing is disabled (preview domain)
   const signingDisabled = useSigningDisabled();
   
@@ -245,9 +279,33 @@ export default function CreateRoom() {
         <CardHeader className="pb-3 pt-4 px-4">
           <div className="flex items-center justify-between">
             <CardTitle className="text-lg font-cinzel">
-              {t("createRoom.title")}
+              {isRematch ? "Rematch Game" : t("createRoom.title")}
             </CardTitle>
+            {isRematch && (
+              <RefreshCcw className="h-5 w-5 text-primary" />
+            )}
           </div>
+          
+          {/* Rematch Context Banner */}
+          {isRematch && rematchData && (
+            <div className="mt-3 p-3 bg-primary/10 border border-primary/30 rounded-lg">
+              <div className="flex items-center gap-2 text-primary font-medium text-sm">
+                <RefreshCcw className="h-4 w-4" />
+                <span>Rematch Game</span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Same players • New pot • New room
+              </p>
+              <div className="flex flex-wrap gap-2 mt-2 text-xs">
+                <span className="px-2 py-0.5 bg-muted/50 rounded text-muted-foreground">
+                  Mode: <span className="text-foreground font-medium capitalize">{rematchData.mode}</span>
+                </span>
+                <span className="px-2 py-0.5 bg-muted/50 rounded text-muted-foreground">
+                  From: <span className="text-foreground font-mono text-[10px]">{rematchData.originRoomId.slice(0, 8)}...</span>
+                </span>
+              </div>
+            </div>
+          )}
         </CardHeader>
         <CardContent className="space-y-4 px-4 pb-5">
           {/* Active Game Banner - shows when room is started (opponent joined) */}
@@ -332,9 +390,14 @@ export default function CreateRoom() {
 
           {/* Game Type */}
           <div className="space-y-1.5">
-            <Label className="text-sm">{t("createRoom.gameType")}</Label>
+            <div className="flex items-center justify-between">
+              <Label className="text-sm">{t("createRoom.gameType")}</Label>
+              {isRematch && (
+                <span className="text-[10px] text-primary bg-primary/10 px-1.5 py-0.5 rounded">Pre-filled from rematch</span>
+              )}
+            </div>
             <Select value={gameType} onValueChange={setGameType}>
-              <SelectTrigger className="h-9">
+              <SelectTrigger className={`h-9 ${isRematch ? 'border-primary/50' : ''}`}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -349,7 +412,12 @@ export default function CreateRoom() {
 
           {/* Entry Fee */}
           <div className="space-y-1.5">
-            <Label className="text-sm">{t("createRoom.entryFeeSol")}</Label>
+            <div className="flex items-center justify-between">
+              <Label className="text-sm">{t("createRoom.entryFeeSol")}</Label>
+              {isRematch && (
+                <span className="text-[10px] text-primary bg-primary/10 px-1.5 py-0.5 rounded">Pre-filled from rematch</span>
+              )}
+            </div>
             <div className="flex items-center gap-2">
               <Input
                 type="number"
@@ -358,7 +426,7 @@ export default function CreateRoom() {
                 placeholder={dynamicMinFee.toFixed(4)}
                 min={dynamicMinFee}
                 step="0.001"
-                className="h-9"
+                className={`h-9 ${isRematch ? 'border-primary/50' : ''}`}
               />
               {entryFeeUsd && (
                 <span className="text-sm text-muted-foreground whitespace-nowrap">
