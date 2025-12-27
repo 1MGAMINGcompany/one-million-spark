@@ -2,6 +2,9 @@ import { cn } from "@/lib/utils";
 
 type TileSize = "default" | "mobile";
 
+// Which half of the tile was clicked
+export type TileHalfClicked = "left" | "right";
+
 interface DominoTile3DProps {
   left: number;
   right: number;
@@ -11,7 +14,7 @@ interface DominoTile3DProps {
   isAITurn?: boolean;
   isChainTile?: boolean;
   size?: TileSize;
-  onClick?: () => void;
+  onClick?: (halfClicked?: TileHalfClicked) => void;
   className?: string;
 }
 
@@ -79,9 +82,29 @@ const DominoTile3D = ({
   const tileHeight = Math.round(baseTileHeight * sizeMultiplier);
   const isHorizontal = isChainTile;
 
+  // Handle click with position detection for vertical tiles
+  const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+    if (!isClickable || !onClick) return;
+    
+    // For chain tiles (horizontal), just fire the click
+    if (isChainTile) {
+      onClick();
+      return;
+    }
+    
+    // For hand tiles (vertical), detect which half was clicked
+    const rect = e.currentTarget.getBoundingClientRect();
+    const clickY = e.clientY - rect.top;
+    const halfHeight = rect.height / 2;
+    
+    // Top half = "left" value (first pip section), Bottom half = "right" value
+    const halfClicked: TileHalfClicked = clickY < halfHeight ? "left" : "right";
+    onClick(halfClicked);
+  };
+
   return (
     <button
-      onClick={onClick}
+      onClick={handleClick}
       disabled={!isClickable}
       className={cn(
         "relative group transition-all duration-300 focus:outline-none",
