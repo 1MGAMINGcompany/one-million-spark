@@ -3,10 +3,10 @@ import { Player, PlayerColor, Token, initializePlayers, TRACK_SIZE } from "@/com
 
 // Constants for game positions
 // Position -1 = in home base (not on board yet)
-// Position 0-51 = on main track (52 cells for full lap)
-// Position 52-57 = in home column (6 cells leading to center)
-// Position 58 = finished (reached home/center)
-const FINISH_POSITION = 58;
+// Position 0-55 = on main track (56 cells for full lap)
+// Position 56-61 = in home column (6 cells leading to center)
+// Position 62 = finished (reached home/center)
+const FINISH_POSITION = 62;
 
 export interface LudoMove {
   playerIndex: number;
@@ -50,14 +50,14 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
   // Calculate valid moves for a player given a dice roll
   // IMPORTANT: Position logic in Ludo:
   // - Position -1: token is in home base
-  // - Position 0-50: token is on main track (relative to player's start)  
-  // - Position 51: last position on main track before home column entry
-  // - Position 52-57: home column (6 cells)
-  // - Position 58: finished (home/center)
-  // Note: Each player has 52 cells to travel (0-51 on track, then 52-57 in home column)
-  const HOME_COLUMN_START = 52; // Position where home column begins
-  const HOME_COLUMN_END = 57;   // Last position in home column
-  const FINISH_POS = 58;        // Finished position
+  // - Position 0-54: token is on main track (relative to player's start)  
+  // - Position 55: last position on main track before home column entry
+  // - Position 56-61: home column (6 cells)
+  // - Position 62: finished (home/center)
+  // Note: Each player has 56 cells to travel (0-55 on track, then 56-61 in home column)
+  const HOME_COLUMN_START = 56; // Position where home column begins
+  const HOME_COLUMN_END = 61;   // Last position in home column
+  const FINISH_POS = 62;        // Finished position
   
   const getMovableTokens = useCallback((player: Player, dice: number): number[] => {
     const movable: number[] = [];
@@ -79,13 +79,13 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
 
   // Calculate end position for a move - pure function, no side effects
   const calculateEndPosition = useCallback((token: Token, dice: number): number | null => {
-    const FINISH_POS = 58;
+    const FINISH_POS = 62;
     
     if (token.position === -1 && dice === 6) {
       return 0; // Leave home base, enter at position 0
     } else if (token.position >= 0 && token.position < FINISH_POS) {
       const newPos = token.position + dice;
-      // Must land exactly on finish (58), cannot overshoot
+      // Must land exactly on finish (62), cannot overshoot
       if (newPos <= FINISH_POS) {
         return newPos;
       }
@@ -249,9 +249,9 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
           newPlayers[playerIndex].tokens[tokenIndex].position = endPos;
         }
         
-        // Check for captures (only on main track, positions 0-51)
-        // Home column (52-57) and finish (58) are safe
-        const MAIN_TRACK_END = 51;
+        // Check for captures (only on main track, positions 0-55)
+        // Home column (56-61) and finish (62) are safe
+        const MAIN_TRACK_END = 55;
         if (endPos >= 0 && endPos <= MAIN_TRACK_END) {
           const movingPlayer = newPlayers[playerIndex];
           const myAbsPos = (endPos + movingPlayer.startPosition) % TRACK_SIZE;

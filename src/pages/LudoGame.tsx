@@ -112,7 +112,7 @@ const LudoGame = () => {
         address: walletAddress,
         name: isHuman ? "You" : `${player.color.charAt(0).toUpperCase() + player.color.slice(1)} Player`,
         color: player.color,
-        status: player.tokens.every(t => t.position === 58) ? "finished" : "active" as const,
+        status: player.tokens.every(t => t.position === 62) ? "finished" : "active" as const,
         seatIndex: index,
       };
     });
@@ -645,7 +645,7 @@ const LudoGame = () => {
               }}>
                 {idx === myPlayerIndex ? "You" : player.color}:
               </span>
-              <span>{player.tokens.filter(t => t.position === 58).length}/4</span>
+              <span>{player.tokens.filter(t => t.position === 62).length}/4</span>
             </div>
           ))}
         </div>
