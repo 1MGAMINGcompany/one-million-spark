@@ -76,9 +76,15 @@ export const PLAYER_START_POSITIONS: Record<PlayerColor, number> = {
   emerald: 42,  // After sapphire's 14 cells (28-41)
 };
 
-// Safe squares (cannot be captured here) - adjusted for 56-cell track
-// Each player's start cell and a few cells after are safe
-export const SAFE_SQUARES = [0, 8, 14, 22, 28, 36, 42, 50];
+// Safe squares (cannot be captured here) - these are the colored starting squares for each player
+// In Ludo, tokens on their own color's starting square cannot be captured
+// These are ABSOLUTE positions on the 56-cell track
+// Gold start: position 0 (row 6, col 1) - but start square is at (6,1), colored square at entry
+// Ruby start: position 14 (row 1, col 8)
+// Sapphire start: position 28 (row 8, col 13)
+// Emerald start: position 42 (row 13, col 6)
+// The colored squares visible on the path (star cells) are the safe zones
+export const SAFE_SQUARES: number[] = [0, 14, 28, 42]; // Each player's starting position on main track
 
 // Get absolute track position from player-relative position
 export const getAbsolutePosition = (relativePos: number, color: PlayerColor): number => {
