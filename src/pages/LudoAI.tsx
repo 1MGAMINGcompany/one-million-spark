@@ -45,12 +45,14 @@ const LudoAI = () => {
     movableTokens,
     isAnimating,
     turnSignal,
+    captureEvent,
     rollDice,
     executeMove,
     advanceTurn,
     resetGame,
     setDiceValue,
     setMovableTokens,
+    clearCaptureEvent,
   } = useLudoEngine({
     onSoundPlay: playSfx,
     onToast: showToast,
@@ -334,6 +336,8 @@ const LudoAI = () => {
             currentPlayerIndex={currentPlayerIndex}
             movableTokens={isAnimating ? [] : (currentPlayer.isAI ? [] : movableTokens)}
             onTokenClick={handleTokenClick}
+            captureEvent={captureEvent}
+            onCaptureAnimationComplete={clearCaptureEvent}
           />
         </div>
 

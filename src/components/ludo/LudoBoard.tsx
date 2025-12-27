@@ -1,11 +1,14 @@
 import { memo, useEffect, useState, useRef } from "react";
 import { Token, PlayerColor, getTokenCoords } from "./ludoTypes";
+import LudoCaptureAnimation, { CaptureEvent } from "./LudoCaptureAnimation";
 
 interface LudoBoardProps {
   players: { color: PlayerColor; tokens: Token[]; isAI: boolean }[];
   currentPlayerIndex: number;
   movableTokens: number[];
   onTokenClick: (playerIndex: number, tokenIndex: number) => void;
+  captureEvent?: CaptureEvent | null;
+  onCaptureAnimationComplete?: () => void;
 }
 
 const PLAYER_COLORS: Record<PlayerColor, { 
@@ -105,6 +108,8 @@ const LudoBoard = memo(({
   currentPlayerIndex, 
   movableTokens, 
   onTokenClick,
+  captureEvent,
+  onCaptureAnimationComplete,
 }: LudoBoardProps) => {
   const boardRef = useRef<HTMLDivElement>(null);
   const [boardSize, setBoardSize] = useState(0);
@@ -418,6 +423,15 @@ const LudoBoard = memo(({
         
         {/* Tokens */}
         {renderTokens()}
+        
+        {/* Capture Animation */}
+        {captureEvent && onCaptureAnimationComplete && (
+          <LudoCaptureAnimation
+            captureEvent={captureEvent}
+            cellSize={cellSize}
+            onAnimationComplete={onCaptureAnimationComplete}
+          />
+        )}
       </div>
       
       <style>{`
