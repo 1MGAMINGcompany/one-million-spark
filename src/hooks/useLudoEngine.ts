@@ -16,6 +16,14 @@ export interface LudoMove {
   endPosition: number;
 }
 
+export interface LudoCaptureEvent {
+  id: string;
+  color: PlayerColor;
+  tokenId: number;
+  fromPosition: number;
+  startTime: number;
+}
+
 interface UseLudoEngineOptions {
   onSoundPlay?: (sound: string) => void;
   onToast?: (title: string, description: string, variant?: "default" | "destructive") => void;
@@ -32,6 +40,7 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
   const [movableTokens, setMovableTokens] = useState<number[]>([]);
   const [isAnimating, setIsAnimating] = useState(false);
   const [turnSignal, setTurnSignal] = useState(0); // Increments on every turn to force re-renders
+  const [captureEvent, setCaptureEvent] = useState<LudoCaptureEvent | null>(null);
   
   // Use refs to avoid stale closures and prevent double execution
   const playersRef = useRef(players);
@@ -272,7 +281,21 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
                     console.log(`[LUDO ENGINE] Checking capture: my abs=${myAbsPos}, other ${otherPlayer.color} token#${oti} abs=${otherAbsPos}`);
                     
                     if (otherAbsPos === myAbsPos) {
-                      // CAPTURE! Send token back to home base
+                      // CAPTURE! Trigger animation before setting position
+                      const capturedPosition = otherToken.position;
+                      const capturedColor = otherPlayer.color;
+                      const capturedTokenId = oti;
+                      
+                      // Emit capture event for animation
+                      setCaptureEvent({
+                        id: `${Date.now()}-${capturedColor}-${capturedTokenId}`,
+                        color: capturedColor,
+                        tokenId: capturedTokenId,
+                        fromPosition: capturedPosition,
+                        startTime: Date.now(),
+                      });
+                      
+                      // Send token back to home base
                       newPlayers[opi].tokens[oti].position = -1;
                       console.log(`[LUDO ENGINE] Capture: ${movingPlayer.color} captured ${otherPlayer.color} token#${oti} at absolute position ${myAbsPos}`);
                       onSoundPlay?.('ludo_capture');
@@ -444,6 +467,11 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
     };
   }, []);
 
+  // Clear capture event after animation completes
+  const clearCaptureEvent = useCallback(() => {
+    setCaptureEvent(null);
+  }, []);
+
   return {
     // State
     players,
@@ -455,6 +483,7 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
     movableTokens,
     isAnimating,
     turnSignal,
+    captureEvent,
     
     // Actions
     rollDice,
@@ -464,6 +493,7 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
     resetGame,
     getMovableTokens,
     calculateEndPosition,
+    clearCaptureEvent,
     
     // Setters for external control
     setCurrentPlayerIndex,

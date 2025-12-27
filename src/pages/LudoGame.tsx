@@ -81,6 +81,7 @@ const LudoGame = () => {
     movableTokens,
     isAnimating,
     turnSignal,
+    captureEvent,
     rollDice,
     executeMove,
     applyExternalMove,
@@ -89,6 +90,7 @@ const LudoGame = () => {
     setDiceValue,
     setMovableTokens,
     setCurrentPlayerIndex,
+    clearCaptureEvent,
   } = useLudoEngine({
     onSoundPlay: playSfx,
     onToast: showToast,
@@ -562,6 +564,8 @@ const LudoGame = () => {
             currentPlayerIndex={currentPlayerIndex}
             movableTokens={isAnimating ? [] : (currentPlayerIndex !== myPlayerIndex ? [] : movableTokens)}
             onTokenClick={handleTokenClick}
+            captureEvent={captureEvent}
+            onCaptureAnimationComplete={clearCaptureEvent}
           />
         </div>
 
