@@ -214,6 +214,15 @@ const ChessGame = () => {
     return roomPlayers.find(p => p !== address) || null;
   }, [gameOver, gameStatus, address, roomPlayers]);
 
+  // Players for GameEndScreen
+  const gameEndPlayers = useMemo(() => {
+    return turnPlayers.map(tp => ({
+      address: tp.address,
+      name: tp.name,
+      color: tp.color === "white" ? "#FFFFFF" : "#333333",
+    }));
+  }, [turnPlayers]);
+
   // Rematch acceptance modal state
   const [showAcceptModal, setShowAcceptModal] = useState(false);
   const [rematchInviteData, setRematchInviteData] = useState<any>(null);
@@ -792,6 +801,22 @@ const ChessGame = () => {
       
       {/* Chat Panel */}
       <GameChatPanel chat={chat} />
+
+      {/* Game End Screen */}
+      {gameOver && (
+        <GameEndScreen
+          gameType="Chess"
+          winner={winnerAddress}
+          winnerName={winnerAddress === "draw" ? undefined : gameEndPlayers.find(p => p.address === winnerAddress)?.name}
+          myAddress={address}
+          players={gameEndPlayers}
+          onRematch={() => rematch.openRematchModal()}
+          onExit={() => navigate("/room-list")}
+          result={gameStatus.includes("Checkmate") ? "Checkmate" : gameStatus.includes("Stalemate") ? "Stalemate" : undefined}
+          roomPda={roomPda}
+          isStaked={false}
+        />
+      )}
 
       {/* Rematch Modal */}
       <RematchModal
