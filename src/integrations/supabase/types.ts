@@ -14,7 +14,96 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      h2h: {
+        Row: {
+          a_wins: number
+          b_wins: number
+          created_at: string
+          current_streak: number
+          current_streak_owner: string | null
+          game_type: string
+          id: string
+          last_winner: string | null
+          player_a_wallet: string
+          player_b_wallet: string
+          total_games: number
+          updated_at: string
+        }
+        Insert: {
+          a_wins?: number
+          b_wins?: number
+          created_at?: string
+          current_streak?: number
+          current_streak_owner?: string | null
+          game_type: string
+          id?: string
+          last_winner?: string | null
+          player_a_wallet: string
+          player_b_wallet: string
+          total_games?: number
+          updated_at?: string
+        }
+        Update: {
+          a_wins?: number
+          b_wins?: number
+          created_at?: string
+          current_streak?: number
+          current_streak_owner?: string | null
+          game_type?: string
+          id?: string
+          last_winner?: string | null
+          player_a_wallet?: string
+          player_b_wallet?: string
+          total_games?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      matches: {
+        Row: {
+          created_at: string
+          creator_wallet: string
+          finalized_at: string | null
+          game_type: string
+          id: string
+          is_rematch: boolean
+          max_players: number
+          origin_room_pda: string | null
+          room_pda: string
+          stake_lamports: number
+          status: string
+          winner_wallet: string | null
+        }
+        Insert: {
+          created_at?: string
+          creator_wallet: string
+          finalized_at?: string | null
+          game_type: string
+          id?: string
+          is_rematch?: boolean
+          max_players?: number
+          origin_room_pda?: string | null
+          room_pda: string
+          stake_lamports?: number
+          status?: string
+          winner_wallet?: string | null
+        }
+        Update: {
+          created_at?: string
+          creator_wallet?: string
+          finalized_at?: string | null
+          game_type?: string
+          id?: string
+          is_rematch?: boolean
+          max_players?: number
+          origin_room_pda?: string | null
+          room_pda?: string
+          stake_lamports?: number
+          status?: string
+          winner_wallet?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

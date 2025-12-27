@@ -8,6 +8,7 @@ import { useConnection, useWallet } from '@solana/wallet-adapter-react';
 import { PublicKey } from '@solana/web3.js';
 import { finalizeRoom } from '@/lib/finalize-room';
 import { useSound } from '@/contexts/SoundContext';
+import { logMatchFinalized, updateH2HStats } from '@/lib/matchHistory';
 import { 
   RematchMode, 
   RematchPayload, 
@@ -241,6 +242,25 @@ export function GameEndScreen({
         setFinalizeState('success');
         setTxSignature(res.signature || null);
         play('chess_win'); // Play success sound
+        
+        // Log finalization and update h2h stats (non-blocking)
+        logMatchFinalized(roomPda, winner).catch(err => 
+          console.warn('[GameEndScreen] Failed to log finalized match:', err)
+        );
+        
+        // Update head-to-head stats if we have both players
+        if (players.length >= 2) {
+          const [playerA, playerB] = players;
+          updateH2HStats({
+            playerA: playerA.address,
+            playerB: playerB.address,
+            winner,
+            gameType,
+            roomPda,
+          }).catch(err => 
+            console.warn('[GameEndScreen] Failed to update h2h stats:', err)
+          );
+        }
       } else {
         setFinalizeState('error');
         setFinalizeError(res.error || 'Unknown error');
