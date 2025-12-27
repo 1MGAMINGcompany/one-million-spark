@@ -26,9 +26,6 @@ import { normalizeSignature } from "@/lib/solana-utils";
 // Program ID (mainnet)
 export const PROGRAM_ID = new PublicKey("4nkWS2ZYPqQrRSYbXD6XW6U6VenmBiZV2TkutY3vSPHu");
 
-// Fee recipient (from on-chain config - hardcoded for now)
-export const FEE_RECIPIENT = new PublicKey("5vT4VNWwdxKtBAwKCMYKSA1t5rKb7ujgjNe2jxcUpHFC");
-
 // Instruction discriminator for finalize_room
 // This is the first 8 bytes of sha256("global:finalize_room")
 const FINALIZE_ROOM_DISCRIMINATOR = Buffer.from([
@@ -58,15 +55,79 @@ export function getVaultPDA(roomPda: PublicKey): PublicKey {
 }
 
 /**
+ * On-chain Config account data
+ */
+export interface ProgramConfig {
+  feeRecipient: PublicKey;
+  feeBps: number;
+}
+
+// Cached config to avoid repeated fetches
+let cachedConfig: ProgramConfig | null = null;
+
+/**
+ * Fetch the on-chain Config account
+ * Returns fee_recipient and fee_bps from the program's config PDA
+ * 
+ * Config account layout (observed):
+ * - 8 bytes: discriminator
+ * - 32 bytes: fee_recipient (PublicKey)
+ * - 2 bytes: fee_bps (u16)
+ */
+export async function fetchConfig(connection: Connection): Promise<ProgramConfig> {
+  // Return cached if available
+  if (cachedConfig) {
+    console.log("[fetchConfig] Using cached config");
+    return cachedConfig;
+  }
+
+  const configPda = getConfigPDA();
+  console.log("[fetchConfig] Fetching config from PDA:", configPda.toBase58());
+
+  const accountInfo = await connection.getAccountInfo(configPda);
+  if (!accountInfo) {
+    throw new Error("Config account not found on-chain");
+  }
+
+  const data = accountInfo.data;
+  
+  // Parse config account
+  // Skip 8-byte discriminator
+  const feeRecipientBytes = data.slice(8, 40); // 32 bytes
+  const feeBpsBytes = data.slice(40, 42); // 2 bytes (u16)
+
+  const feeRecipient = new PublicKey(feeRecipientBytes);
+  const feeBps = feeBpsBytes[0] | (feeBpsBytes[1] << 8); // little-endian u16
+
+  cachedConfig = { feeRecipient, feeBps };
+
+  console.log("[fetchConfig] Config loaded:", {
+    feeRecipient: feeRecipient.toBase58(),
+    feeBps,
+  });
+
+  return cachedConfig;
+}
+
+/**
+ * Clear cached config (useful for testing or if config changes)
+ */
+export function clearConfigCache(): void {
+  cachedConfig = null;
+}
+
+/**
  * Build the finalize_room instruction
  * 
  * @param roomPda - The room's PDA
  * @param winnerPubkey - The winner's public key
+ * @param feeRecipient - The fee recipient from on-chain config
  * @returns TransactionInstruction
  */
 export function buildFinalizeRoomIx(
   roomPda: PublicKey,
-  winnerPubkey: PublicKey
+  winnerPubkey: PublicKey,
+  feeRecipient: PublicKey
 ): TransactionInstruction {
   const configPda = getConfigPDA();
   const vaultPda = getVaultPDA(roomPda);
@@ -83,7 +144,7 @@ export function buildFinalizeRoomIx(
     { pubkey: roomPda, isSigner: false, isWritable: true },          // room
     { pubkey: vaultPda, isSigner: false, isWritable: true },         // vault
     { pubkey: winnerPubkey, isSigner: false, isWritable: true },     // winner
-    { pubkey: FEE_RECIPIENT, isSigner: false, isWritable: true },    // fee_recipient
+    { pubkey: feeRecipient, isSigner: false, isWritable: true },     // fee_recipient (from config)
     { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }, // system_program
   ];
 
@@ -107,7 +168,8 @@ export interface FinalizeRoomResult {
  * Finalize a room and distribute payouts
  * 
  * This is the main action to call from UI components.
- * It builds and sends the finalize_room transaction, then waits for confirmation.
+ * It fetches the on-chain config for fee_recipient, builds and sends the 
+ * finalize_room transaction, then waits for confirmation.
  * 
  * @param connection - Solana connection
  * @param roomPda - The room's PDA (string or PublicKey)
@@ -128,14 +190,18 @@ export async function finalizeRoom(
     const roomPdaPubkey = typeof roomPda === "string" ? new PublicKey(roomPda) : roomPda;
     const winnerPubkeyPubkey = typeof winnerPubkey === "string" ? new PublicKey(winnerPubkey) : winnerPubkey;
 
+    // Fetch fee_recipient from on-chain config (cached after first call)
+    const config = await fetchConfig(connection);
+
     console.log("[finalizeRoom] Building instruction:", {
       roomPda: roomPdaPubkey.toBase58().slice(0, 8) + "...",
       winner: winnerPubkeyPubkey.toBase58().slice(0, 8) + "...",
+      feeRecipient: config.feeRecipient.toBase58().slice(0, 8) + "...",
       signer: publicKey.toBase58().slice(0, 8) + "...",
     });
 
-    // Build instruction
-    const ix = buildFinalizeRoomIx(roomPdaPubkey, winnerPubkeyPubkey);
+    // Build instruction with fee_recipient from config
+    const ix = buildFinalizeRoomIx(roomPdaPubkey, winnerPubkeyPubkey, config.feeRecipient);
 
     // Get fresh blockhash
     const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("confirmed");
