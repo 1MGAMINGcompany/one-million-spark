@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from "react";
-import { Player, PlayerColor, Token, initializePlayers, TRACK_SIZE } from "@/components/ludo/ludoTypes";
+import { Player, PlayerColor, Token, initializePlayers, TRACK_SIZE, SAFE_SQUARES } from "@/components/ludo/ludoTypes";
 
 // Constants for game positions
 // Position -1 = in home base (not on board yet)
@@ -254,23 +254,37 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
         const MAIN_TRACK_END = 55;
         if (endPos >= 0 && endPos <= MAIN_TRACK_END) {
           const movingPlayer = newPlayers[playerIndex];
+          // Calculate absolute position on the 56-cell track
           const myAbsPos = (endPos + movingPlayer.startPosition) % TRACK_SIZE;
           
-          newPlayers.forEach((otherPlayer, opi) => {
-            if (opi !== playerIndex) {
-              otherPlayer.tokens.forEach((otherToken, oti) => {
-                if (otherToken.position >= 0 && otherToken.position <= MAIN_TRACK_END) {
-                  const otherAbsPos = (otherToken.position + otherPlayer.startPosition) % TRACK_SIZE;
-                  if (otherAbsPos === myAbsPos) {
-                    newPlayers[opi].tokens[oti].position = -1;
-                    console.log(`[LUDO ENGINE] Capture: ${movingPlayer.color} captured ${otherPlayer.color} token#${oti}`);
-                    onSoundPlay?.('ludo_capture');
-                    onToast?.("Captured!", `${movingPlayer.color} captured ${otherPlayer.color}'s token!`);
+          // Check if landing on a safe square (colored starting squares)
+          const isLandingOnSafeSquare = SAFE_SQUARES.includes(myAbsPos);
+          
+          if (!isLandingOnSafeSquare) {
+            // Only capture if NOT on a safe square
+            newPlayers.forEach((otherPlayer, opi) => {
+              if (opi !== playerIndex) {
+                otherPlayer.tokens.forEach((otherToken, oti) => {
+                  if (otherToken.position >= 0 && otherToken.position <= MAIN_TRACK_END) {
+                    // Calculate the other token's absolute position
+                    const otherAbsPos = (otherToken.position + otherPlayer.startPosition) % TRACK_SIZE;
+                    
+                    console.log(`[LUDO ENGINE] Checking capture: my abs=${myAbsPos}, other ${otherPlayer.color} token#${oti} abs=${otherAbsPos}`);
+                    
+                    if (otherAbsPos === myAbsPos) {
+                      // CAPTURE! Send token back to home base
+                      newPlayers[opi].tokens[oti].position = -1;
+                      console.log(`[LUDO ENGINE] Capture: ${movingPlayer.color} captured ${otherPlayer.color} token#${oti} at absolute position ${myAbsPos}`);
+                      onSoundPlay?.('ludo_capture');
+                      onToast?.("Captured!", `${movingPlayer.color} captured ${otherPlayer.color}'s token!`);
+                    }
                   }
-                }
-              });
-            }
-          });
+                });
+              }
+            });
+          } else {
+            console.log(`[LUDO ENGINE] Landing on safe square ${myAbsPos}, no capture possible`);
+          }
         }
         
         return newPlayers;
