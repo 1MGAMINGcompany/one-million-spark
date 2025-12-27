@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Trophy, RefreshCw, BarChart2, Star, LogOut, Wallet, ChevronDown, ChevronUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -23,16 +23,25 @@ interface GameEndScreenProps {
 }
 
 /**
+ * Check if error indicates room was already settled
+ */
+function isAlreadySettledError(rawError: string): boolean {
+  const lowerError = rawError.toLowerCase();
+  return lowerError.includes('roomalreadyfinished') || lowerError.includes('already finished');
+}
+
+/**
  * Map raw error strings to user-friendly messages
  */
-function getFriendlyErrorMessage(rawError: string): { message: string; showDetails: boolean } {
+function getFriendlyErrorMessage(rawError: string): { message: string; showDetails: boolean; autoRefresh: boolean } {
   const lowerError = rawError.toLowerCase();
   
   // Already finalized
-  if (lowerError.includes('roomalreadyfinished') || lowerError.includes('already finished')) {
+  if (isAlreadySettledError(rawError)) {
     return {
-      message: 'This game was already settled. Refresh to see the payout status.',
+      message: 'This game was already settled. Refreshing to show payout status…',
       showDetails: false,
+      autoRefresh: true,
     };
   }
   
@@ -41,6 +50,7 @@ function getFriendlyErrorMessage(rawError: string): { message: string; showDetai
     return {
       message: 'Winner must be one of the players in this room.',
       showDetails: false,
+      autoRefresh: false,
     };
   }
   
@@ -49,6 +59,7 @@ function getFriendlyErrorMessage(rawError: string): { message: string; showDetai
     return {
       message: "Vault doesn't have enough SOL to pay. Double-check all players joined and deposited.",
       showDetails: false,
+      autoRefresh: false,
     };
   }
   
@@ -56,6 +67,7 @@ function getFriendlyErrorMessage(rawError: string): { message: string; showDetai
   return {
     message: 'Finalize failed. Please try again.',
     showDetails: true,
+    autoRefresh: false,
   };
 }
 
@@ -117,6 +129,16 @@ export function GameEndScreen({
   
   // Get friendly error message
   const errorInfo = finalizeError ? getFriendlyErrorMessage(finalizeError) : null;
+  
+  // Auto-refresh when "already settled" error is detected
+  useEffect(() => {
+    if (errorInfo?.autoRefresh) {
+      const timer = setTimeout(() => {
+        window.location.reload();
+      }, 2000); // 2 second delay to let user see the message
+      return () => clearTimeout(timer);
+    }
+  }, [errorInfo?.autoRefresh]);
   
   const getResultText = () => {
     if (isDraw) return 'Draw';
