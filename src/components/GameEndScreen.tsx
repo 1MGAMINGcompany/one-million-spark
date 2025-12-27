@@ -8,7 +8,7 @@ import { useConnection, useWallet } from '@solana/wallet-adapter-react';
 import { PublicKey } from '@solana/web3.js';
 import { finalizeRoom } from '@/lib/finalize-room';
 import { useSound } from '@/contexts/SoundContext';
-import { logMatchFinalized, updateH2HStats } from '@/lib/matchHistory';
+import { logMatchFinalized, updateH2HStats, updatePlayerProfiles } from '@/lib/matchHistory';
 import { RivalryWidget } from '@/components/RivalryWidget';
 import { 
   RematchMode, 
@@ -264,6 +264,18 @@ export function GameEndScreen({
             console.warn('[GameEndScreen] Failed to update h2h stats:', err)
           );
         }
+        
+        // Update player profiles for all players (non-blocking)
+        // Calculate pot won in SOL from payoutInfo
+        const potSolWon = payoutInfo?.winnerPayout || 0;
+        updatePlayerProfiles({
+          players: players.map(p => p.address),
+          winner,
+          gameType,
+          potSolWon,
+        }).catch(err => 
+          console.warn('[GameEndScreen] Failed to update player profiles:', err)
+        );
       } else {
         setFinalizeState('error');
         setFinalizeError(res.error || 'Unknown error');
