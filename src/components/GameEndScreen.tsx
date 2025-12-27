@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Trophy, RefreshCw, BarChart2, Star, LogOut, Wallet } from 'lucide-react';
+import { Trophy, RefreshCw, BarChart2, Star, LogOut, Wallet, ChevronDown, ChevronUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useTranslation } from 'react-i18next';
@@ -22,6 +22,43 @@ interface GameEndScreenProps {
   isStaked?: boolean; // Whether this is a staked game requiring finalization
 }
 
+/**
+ * Map raw error strings to user-friendly messages
+ */
+function getFriendlyErrorMessage(rawError: string): { message: string; showDetails: boolean } {
+  const lowerError = rawError.toLowerCase();
+  
+  // Already finalized
+  if (lowerError.includes('roomalreadyfinished') || lowerError.includes('already finished')) {
+    return {
+      message: 'This game was already settled. Refresh to see the payout status.',
+      showDetails: false,
+    };
+  }
+  
+  // Winner invalid
+  if (lowerError.includes('badwinner')) {
+    return {
+      message: 'Winner must be one of the players in this room.',
+      showDetails: false,
+    };
+  }
+  
+  // Not enough in vault
+  if (lowerError.includes('insufficientvault')) {
+    return {
+      message: "Vault doesn't have enough SOL to pay. Double-check all players joined and deposited.",
+      showDetails: false,
+    };
+  }
+  
+  // Default fallback
+  return {
+    message: 'Finalize failed. Please try again.',
+    showDetails: true,
+  };
+}
+
 export function GameEndScreen({
   gameType,
   winner,
@@ -42,6 +79,7 @@ export function GameEndScreen({
   
   const [finalizeState, setFinalizeState] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [finalizeError, setFinalizeError] = useState<string | null>(null);
+  const [showErrorDetails, setShowErrorDetails] = useState(false);
   
   const isWinner = winner === myAddress;
   const isDraw = winner === 'draw';
@@ -54,6 +92,7 @@ export function GameEndScreen({
     
     setFinalizeState('loading');
     setFinalizeError(null);
+    setShowErrorDetails(false);
     
     try {
       const res = await finalizeRoom(
@@ -75,6 +114,9 @@ export function GameEndScreen({
       setFinalizeError(err.message || 'Failed to finalize');
     }
   };
+  
+  // Get friendly error message
+  const errorInfo = finalizeError ? getFriendlyErrorMessage(finalizeError) : null;
   
   const getResultText = () => {
     if (isDraw) return 'Draw';
@@ -175,9 +217,27 @@ export function GameEndScreen({
             )}
             
             {/* Finalize Error Message */}
-            {finalizeState === 'error' && finalizeError && (
-              <div className="bg-destructive/20 border border-destructive/50 rounded-lg p-3 text-center">
-                <p className="text-destructive text-sm">{finalizeError}</p>
+            {finalizeState === 'error' && errorInfo && (
+              <div className="bg-destructive/20 border border-destructive/50 rounded-lg p-3 space-y-2">
+                <p className="text-destructive text-sm text-center">{errorInfo.message}</p>
+                
+                {/* Details dropdown for unknown errors */}
+                {errorInfo.showDetails && finalizeError && (
+                  <div className="space-y-1">
+                    <button
+                      onClick={() => setShowErrorDetails(!showErrorDetails)}
+                      className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors mx-auto"
+                    >
+                      {showErrorDetails ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                      Details
+                    </button>
+                    {showErrorDetails && (
+                      <pre className="text-xs text-muted-foreground bg-muted/50 rounded p-2 overflow-x-auto max-h-24 overflow-y-auto">
+                        {finalizeError}
+                      </pre>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
