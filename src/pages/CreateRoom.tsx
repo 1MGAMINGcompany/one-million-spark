@@ -244,7 +244,9 @@ export default function CreateRoom() {
       try {
         const creatorPubkey = new PublicKey(address);
         const roomPda = getRoomPda(creatorPubkey, roomId);
-        navigate(`/room/${roomPda.toBase58()}`);
+        // Add rematch_created flag if this was a rematch
+        const queryParam = isRematch ? '?rematch_created=1' : '';
+        navigate(`/room/${roomPda.toBase58()}${queryParam}`);
       } catch (e) {
         console.error("[CreateRoom] Failed to compute room PDA:", e);
         // Fallback to room list if PDA computation fails
@@ -469,31 +471,61 @@ export default function CreateRoom() {
             </div>
           </div>
 
-          {/* Create Button */}
-          <Button 
-            onClick={handleCreateRoom}
-            disabled={txPending || !!activeRoom || checkingActiveRoom || signingDisabled}
-            className="w-full"
-            size="sm"
-          >
-            {txPending ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                {t("createRoom.creatingRoom")}
-              </>
-            ) : checkingActiveRoom ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                {t("createRoom.checking")}
-              </>
-            ) : signingDisabled ? (
-              "Signing Disabled"
-            ) : activeRoom ? (
-              t("createRoom.cancelActiveFirst")
-            ) : (
-              t("createRoom.createRoom")
-            )}
-          </Button>
+          {/* Create Button - Different styles for rematch vs normal */}
+          {isRematch ? (
+            <Button 
+              onClick={handleCreateRoom}
+              disabled={txPending || !!activeRoom || checkingActiveRoom || signingDisabled}
+              className="w-full gap-2 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold py-6"
+              size="lg"
+            >
+              {txPending ? (
+                <>
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  Creating Rematch Room…
+                </>
+              ) : checkingActiveRoom ? (
+                <>
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  Checking…
+                </>
+              ) : signingDisabled ? (
+                "Signing Disabled"
+              ) : activeRoom ? (
+                t("createRoom.cancelActiveFirst")
+              ) : (
+                <>
+                  <RefreshCcw className="h-5 w-5" />
+                  Create Rematch Room
+                </>
+              )}
+            </Button>
+          ) : (
+            <Button 
+              onClick={handleCreateRoom}
+              disabled={txPending || !!activeRoom || checkingActiveRoom || signingDisabled}
+              className="w-full"
+              size="sm"
+            >
+              {txPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  {t("createRoom.creatingRoom")}
+                </>
+              ) : checkingActiveRoom ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  {t("createRoom.checking")}
+                </>
+              ) : signingDisabled ? (
+                "Signing Disabled"
+              ) : activeRoom ? (
+                t("createRoom.cancelActiveFirst")
+              ) : (
+                t("createRoom.createRoom")
+              )}
+            </Button>
+          )}
 
           <p className="text-xs text-center text-muted-foreground">
             {t("createRoom.connected")}: {address?.slice(0, 6)}...{address?.slice(-4)}

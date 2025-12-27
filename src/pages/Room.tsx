@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
 
 import { useConnection, useWallet as useSolanaWallet } from "@solana/wallet-adapter-react";
@@ -9,7 +9,7 @@ import { useSolanaRooms } from "@/hooks/useSolanaRooms";
 import { useTxLock } from "@/contexts/TxLockContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Construction, ArrowLeft, Loader2, Users, Coins, AlertTriangle } from "lucide-react";
+import { Construction, ArrowLeft, Loader2, Users, Coins, AlertTriangle, CheckCircle, Share2, Copy } from "lucide-react";
 import { WalletGateModal } from "@/components/WalletGateModal";
 import { TxDebugPanel } from "@/components/TxDebugPanel";
 import { MobileWalletRedirect } from "@/components/MobileWalletRedirect";
@@ -49,6 +49,7 @@ function formatSol(lamports: bigint | number | string, maxDecimals = 4): string 
 
 export default function Room() {
   const { roomPda: roomPdaParam } = useParams<{ roomPda: string }>();
+  const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const { isConnected, address } = useWallet();
   const { connection } = useConnection();
@@ -65,6 +66,28 @@ export default function Room() {
   const [currentTime, setCurrentTime] = useState(Date.now());
   const [vaultLamports, setVaultLamports] = useState<bigint>(0n);
   const [vaultPdaStr, setVaultPdaStr] = useState<string>("");
+  const [linkCopied, setLinkCopied] = useState(false);
+  
+  // Check if this is a newly created rematch room
+  const isRematchCreated = searchParams.get('rematch_created') === '1';
+  
+  // Dismiss rematch banner
+  const dismissRematchBanner = () => {
+    searchParams.delete('rematch_created');
+    setSearchParams(searchParams, { replace: true });
+  };
+  
+  // Copy room link
+  const copyRoomLink = async () => {
+    const link = `${window.location.origin}/room/${roomPdaParam}`;
+    try {
+      await navigator.clipboard.writeText(link);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  };
   
   // Check if signing is disabled (preview domain)
   const signingDisabled = useSigningDisabled();
@@ -454,6 +477,38 @@ export default function Room() {
 
           {room && !loading && (
             <div className="space-y-4">
+              {/* Rematch Created Success Banner */}
+              {isRematchCreated && (
+                <div className="flex items-start gap-3 p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
+                  <CheckCircle className="h-5 w-5 text-emerald-400 mt-0.5 shrink-0" />
+                  <div className="flex-1 space-y-2">
+                    <div>
+                      <p className="text-emerald-400 font-medium">Rematch room created!</p>
+                      <p className="text-sm text-muted-foreground">Share this link to invite players</p>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button 
+                        size="sm" 
+                        variant="secondary"
+                        onClick={copyRoomLink}
+                        className="gap-1.5"
+                      >
+                        {linkCopied ? <CheckCircle className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                        {linkCopied ? 'Copied!' : 'Copy Link'}
+                      </Button>
+                      <Button 
+                        size="sm" 
+                        variant="ghost"
+                        onClick={dismissRematchBanner}
+                        className="text-muted-foreground"
+                      >
+                        Dismiss
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Active Room Warning */}
               {hasBlockingActiveRoom && !isCreator && (
                 <div className="flex items-start gap-2 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
