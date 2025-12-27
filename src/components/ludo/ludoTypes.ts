@@ -2,7 +2,7 @@ export type Difficulty = "easy" | "medium" | "hard";
 export type PlayerColor = "gold" | "ruby" | "emerald" | "sapphire";
 
 export interface Token {
-  position: number; // -1 = home, 0-55 = on board path (56 cells), 56-61 = home column, 62 = finished
+  position: number; // -1 = home, 0-51 = on board path (52 cells), 52-57 = home column, 58 = finished
   color: PlayerColor;
   id: number;
 }
@@ -16,34 +16,35 @@ export interface Player {
 }
 
 // Classic Ludo board is 15x15 grid
-// Main track has 56 positions (0-55) - includes corner cells for orthogonal movement
-// Each player has 6 home column positions (56-61 relative to their path)
+// Main track has 52 positions (0-51) - 13 cells per player section
+// Each player has 6 home column positions (52-57 relative to their path)
+// Position 58 = finished
 
-// TRACK SIZE - all calculations use this constant
-export const TRACK_SIZE = 56;
+// TRACK SIZE - each player travels 52 cells on main track before entering home column
+export const TRACK_SIZE = 52;
 
 // Board cell coordinates for the 15x15 grid
-// 56-position track with ALL orthogonal moves (no diagonal transitions)
+// 52-position track (13 cells per player section x 4 players)
 export const MAIN_TRACK_COORDS: Record<number, [number, number]> = {
-  // Gold section (0-13): right along row 6, turn at corner [6,6], then up column 6
-  0: [6, 1], 1: [6, 2], 2: [6, 3], 3: [6, 4], 4: [6, 5], 5: [6, 6], // corner cell added
-  6: [5, 6], 7: [4, 6], 8: [3, 6], 9: [2, 6], 10: [1, 6], 11: [0, 6],
-  12: [0, 7], 13: [0, 8],
+  // Gold section (0-12): starts at row 6, col 1, goes right then turns up
+  0: [6, 1], 1: [6, 2], 2: [6, 3], 3: [6, 4], 4: [6, 5],
+  5: [5, 6], 6: [4, 6], 7: [3, 6], 8: [2, 6], 9: [1, 6], 10: [0, 6],
+  11: [0, 7], 12: [0, 8],
   
-  // Ruby section (14-27): down column 8, turn at corner [6,8], then right along row 6
-  14: [1, 8], 15: [2, 8], 16: [3, 8], 17: [4, 8], 18: [5, 8], 19: [6, 8], // corner cell added
-  20: [6, 9], 21: [6, 10], 22: [6, 11], 23: [6, 12], 24: [6, 13], 25: [6, 14],
-  26: [7, 14], 27: [8, 14],
+  // Ruby section (13-25): starts at row 1, col 8, goes down then turns right  
+  13: [1, 8], 14: [2, 8], 15: [3, 8], 16: [4, 8], 17: [5, 8],
+  18: [6, 9], 19: [6, 10], 20: [6, 11], 21: [6, 12], 22: [6, 13], 23: [6, 14],
+  24: [7, 14], 25: [8, 14],
   
-  // Sapphire section (28-41): left along row 8, turn at corner [8,8], then down column 8
-  28: [8, 13], 29: [8, 12], 30: [8, 11], 31: [8, 10], 32: [8, 9], 33: [8, 8], // corner cell added
-  34: [9, 8], 35: [10, 8], 36: [11, 8], 37: [12, 8], 38: [13, 8], 39: [14, 8],
-  40: [14, 7], 41: [14, 6],
+  // Sapphire section (26-38): starts at row 8, col 13, goes left then turns down
+  26: [8, 13], 27: [8, 12], 28: [8, 11], 29: [8, 10], 30: [8, 9],
+  31: [9, 8], 32: [10, 8], 33: [11, 8], 34: [12, 8], 35: [13, 8], 36: [14, 8],
+  37: [14, 7], 38: [14, 6],
   
-  // Emerald section (42-55): up column 6, turn at corner [8,6], then left along row 8
-  42: [13, 6], 43: [12, 6], 44: [11, 6], 45: [10, 6], 46: [9, 6], 47: [8, 6], // corner cell added
-  48: [8, 5], 49: [8, 4], 50: [8, 3], 51: [8, 2], 52: [8, 1], 53: [8, 0],
-  54: [7, 0], 55: [6, 0],
+  // Emerald section (39-51): starts at row 13, col 6, goes up then turns left
+  39: [13, 6], 40: [12, 6], 41: [11, 6], 42: [10, 6], 43: [9, 6],
+  44: [8, 5], 45: [8, 4], 46: [8, 3], 47: [8, 2], 48: [8, 1], 49: [8, 0],
+  50: [7, 0], 51: [6, 0],
 };
 
 // Home column coordinates for each player (6 cells leading to center)
@@ -62,16 +63,16 @@ export const HOME_BASE_COORDS: Record<PlayerColor, [number, number][]> = {
   emerald: [[10, 2], [10, 4], [12, 2], [12, 4]],
 };
 
-// Start positions on main track for each player (56-cell track)
+// Start positions on main track for each player (52-cell track)
 export const PLAYER_START_POSITIONS: Record<PlayerColor, number> = {
   gold: 0,
-  ruby: 14,    // After gold's 14 cells (0-13)
-  sapphire: 28, // After ruby's 14 cells (14-27)
-  emerald: 42,  // After sapphire's 14 cells (28-41)
+  ruby: 13,     // After gold's 13 cells (0-12)
+  sapphire: 26, // After ruby's 13 cells (13-25)
+  emerald: 39,  // After sapphire's 13 cells (26-38)
 };
 
-// Safe squares (cannot be captured here) - adjusted for 56-cell track
-export const SAFE_SQUARES = [0, 9, 14, 23, 28, 37, 42, 51];
+// Safe squares (cannot be captured here) - adjusted for 52-cell track
+export const SAFE_SQUARES = [0, 8, 13, 21, 26, 34, 39, 47];
 
 // Get absolute track position from player-relative position
 export const getAbsolutePosition = (relativePos: number, color: PlayerColor): number => {
@@ -86,20 +87,24 @@ export const getTokenCoords = (
   color: PlayerColor, 
   tokenId: number
 ): [number, number] | null => {
+  const FINISH_POS = 58;
+  const HOME_COLUMN_START = 52;
+  const HOME_COLUMN_END = 57;
+  
   if (position === -1) {
     // In home base
     return HOME_BASE_COORDS[color][tokenId];
   }
-  if (position === 62) {
+  if (position === FINISH_POS) {
     // Finished - center area
     return [7, 7];
   }
-  if (position >= 56 && position <= 61) {
-    // In home column (positions 56-61 = indices 0-5)
-    return HOME_COLUMN_COORDS[color][position - 56];
+  if (position >= HOME_COLUMN_START && position <= HOME_COLUMN_END) {
+    // In home column (positions 52-57 = indices 0-5)
+    return HOME_COLUMN_COORDS[color][position - HOME_COLUMN_START];
   }
   if (position >= 0 && position < TRACK_SIZE) {
-    // On main track (0-55) - convert relative to absolute
+    // On main track (0-51) - convert relative to absolute
     const absolutePos = getAbsolutePosition(position, color);
     return MAIN_TRACK_COORDS[absolutePos];
   }
@@ -117,7 +122,7 @@ export const initializePlayers = (): Player[] => [
     ],
     isAI: false,
     startPosition: 0,
-    homeColumn: 55, // After position 55, gold enters home column
+    homeColumn: 51, // After position 51, gold enters home column
   },
   {
     color: "ruby",
@@ -128,8 +133,8 @@ export const initializePlayers = (): Player[] => [
       { position: -1, color: "ruby", id: 3 },
     ],
     isAI: true,
-    startPosition: 14,
-    homeColumn: 13, // After completing lap, enters home column
+    startPosition: 13,
+    homeColumn: 51, // All players enter home column after position 51
   },
   {
     color: "sapphire",
@@ -140,8 +145,8 @@ export const initializePlayers = (): Player[] => [
       { position: -1, color: "sapphire", id: 3 },
     ],
     isAI: true,
-    startPosition: 28,
-    homeColumn: 27,
+    startPosition: 26,
+    homeColumn: 51,
   },
   {
     color: "emerald",
@@ -152,7 +157,7 @@ export const initializePlayers = (): Player[] => [
       { position: -1, color: "emerald", id: 3 },
     ],
     isAI: true,
-    startPosition: 42,
-    homeColumn: 41,
+    startPosition: 39,
+    homeColumn: 51,
   },
 ];
