@@ -9,7 +9,7 @@ import { useSolanaRooms } from "@/hooks/useSolanaRooms";
 import { useTxLock } from "@/contexts/TxLockContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Construction, ArrowLeft, Loader2, Users, Coins, AlertTriangle, CheckCircle, Share2, Copy } from "lucide-react";
+import { Construction, ArrowLeft, Loader2, Users, Coins, AlertTriangle, CheckCircle, Share2, Copy, ExternalLink } from "lucide-react";
 import { WalletGateModal } from "@/components/WalletGateModal";
 import { TxDebugPanel } from "@/components/TxDebugPanel";
 import { MobileWalletRedirect } from "@/components/MobileWalletRedirect";
@@ -71,6 +71,12 @@ export default function Room() {
   // Check if this is a newly created rematch room
   const isRematchCreated = searchParams.get('rematch_created') === '1';
   
+  // Generate room link
+  const roomLink = `${window.location.origin}/room/${roomPdaParam}`;
+  
+  // Check if native share is available
+  const canNativeShare = typeof navigator !== 'undefined' && !!navigator.share;
+  
   // Dismiss rematch banner
   const dismissRematchBanner = () => {
     searchParams.delete('rematch_created');
@@ -79,13 +85,32 @@ export default function Room() {
   
   // Copy room link
   const copyRoomLink = async () => {
-    const link = `${window.location.origin}/room/${roomPdaParam}`;
     try {
-      await navigator.clipboard.writeText(link);
+      await navigator.clipboard.writeText(roomLink);
       setLinkCopied(true);
       setTimeout(() => setLinkCopied(false), 2000);
     } catch (err) {
       console.error('Failed to copy:', err);
+    }
+  };
+  
+  // Native share
+  const handleNativeShare = async () => {
+    if (canNativeShare) {
+      try {
+        await navigator.share({
+          title: 'Join my game!',
+          text: 'Join my rematch game on 1M Gaming',
+          url: roomLink,
+        });
+      } catch (err) {
+        // User cancelled or share failed - fallback to copy
+        if ((err as Error).name !== 'AbortError') {
+          copyRoomLink();
+        }
+      }
+    } else {
+      copyRoomLink();
     }
   };
   
@@ -479,33 +504,55 @@ export default function Room() {
             <div className="space-y-4">
               {/* Rematch Created Success Banner */}
               {isRematchCreated && (
-                <div className="flex items-start gap-3 p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
-                  <CheckCircle className="h-5 w-5 text-emerald-400 mt-0.5 shrink-0" />
-                  <div className="flex-1 space-y-2">
-                    <div>
-                      <p className="text-emerald-400 font-medium">Rematch room created!</p>
-                      <p className="text-sm text-muted-foreground">Share this link to invite players</p>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button 
-                        size="sm" 
-                        variant="secondary"
-                        onClick={copyRoomLink}
-                        className="gap-1.5"
-                      >
-                        {linkCopied ? <CheckCircle className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-                        {linkCopied ? 'Copied!' : 'Copy Link'}
-                      </Button>
-                      <Button 
-                        size="sm" 
-                        variant="ghost"
-                        onClick={dismissRematchBanner}
-                        className="text-muted-foreground"
-                      >
-                        Dismiss
-                      </Button>
-                    </div>
+                <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-lg space-y-3">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className="h-5 w-5 text-emerald-400 shrink-0" />
+                    <p className="text-emerald-400 font-medium">Rematch room created!</p>
                   </div>
+                  
+                  <p className="text-sm text-muted-foreground">
+                    Invite players with a link. Anyone can join if they have SOL.
+                  </p>
+                  
+                  {/* Room URL input */}
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      readOnly
+                      value={roomLink}
+                      className="flex-1 bg-background border border-border rounded px-3 py-2 text-sm font-mono truncate"
+                    />
+                  </div>
+                  
+                  {/* Action buttons */}
+                  <div className="flex gap-2">
+                    <Button 
+                      size="sm" 
+                      variant="secondary"
+                      onClick={copyRoomLink}
+                      className="gap-1.5 flex-1"
+                    >
+                      {linkCopied ? <CheckCircle className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                      {linkCopied ? 'Copied!' : 'Copy Link'}
+                    </Button>
+                    <Button 
+                      size="sm" 
+                      onClick={handleNativeShare}
+                      className="gap-1.5 flex-1"
+                    >
+                      <Share2 className="h-4 w-4" />
+                      Share…
+                    </Button>
+                  </div>
+                  
+                  <Button 
+                    size="sm" 
+                    variant="ghost"
+                    onClick={dismissRematchBanner}
+                    className="text-muted-foreground w-full"
+                  >
+                    Dismiss
+                  </Button>
                 </div>
               )}
 
