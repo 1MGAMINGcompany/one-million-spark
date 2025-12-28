@@ -1,5 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { archiveRoom } from '@/lib/roomArchive';
 
 interface GameSessionData {
   room_pda: string;
@@ -104,7 +105,7 @@ export function useGameSessionPersistence({
     }
   }, [roomPda, gameType, enabled]);
 
-  // Mark session as finished
+  // Mark session as finished and archive the room
   const finishSession = useCallback(async () => {
     if (!roomPda || !enabled) return;
 
@@ -119,6 +120,10 @@ export function useGameSessionPersistence({
       if (error) {
         console.error('[GameSession] Error finishing session:', error);
       }
+      
+      // Archive the room so it won't show in active room banner
+      archiveRoom(roomPda);
+      console.log('[GameSession] Room archived:', roomPda);
     } catch (err) {
       console.error('[GameSession] Failed to finish session:', err);
     }
