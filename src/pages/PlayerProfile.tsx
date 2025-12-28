@@ -24,6 +24,14 @@ interface PlayerProfileData {
   last_game_at: string | null;
 }
 
+interface RatingData {
+  game_type: string;
+  rating: number;
+  games: number;
+  wins: number;
+  losses: number;
+}
+
 interface RecentGame {
   game_type: string;
   isWin: boolean;
@@ -90,6 +98,16 @@ function getPlayerTitle(profile: PlayerProfileData): { title: string; color: str
   return null;
 }
 
+// Get rank tier from ELO rating
+function getRankTier(rating: number): { tier: string; color: string } {
+  if (rating >= 2000) return { tier: 'Diamond', color: 'text-cyan-300' };
+  if (rating >= 1800) return { tier: 'Platinum', color: 'text-emerald-300' };
+  if (rating >= 1600) return { tier: 'Gold', color: 'text-amber-400' };
+  if (rating >= 1400) return { tier: 'Silver', color: 'text-slate-300' };
+  if (rating >= 1200) return { tier: 'Bronze', color: 'text-amber-600' };
+  return { tier: 'Unranked', color: 'text-muted-foreground' };
+}
+
 // Badge definitions
 interface Badge {
   id: string;
@@ -142,6 +160,7 @@ export default function PlayerProfile() {
   
   const [profile, setProfile] = useState<PlayerProfileData | null>(null);
   const [recentGames, setRecentGames] = useState<RecentGame[]>([]);
+  const [ratings, setRatings] = useState<RatingData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -193,6 +212,17 @@ export default function PlayerProfile() {
             finalized_at: m.finalized_at || '',
           }));
           setRecentGames(games);
+        }
+
+        // Fetch ratings for this player
+        const { data: ratingsData } = await supabase
+          .from('ratings')
+          .select('game_type, rating, games, wins, losses')
+          .eq('wallet', wallet)
+          .order('games', { ascending: false });
+
+        if (ratingsData) {
+          setRatings(ratingsData);
         }
       } catch (err) {
         console.error('[PlayerProfile] Error:', err);
@@ -283,6 +313,38 @@ export default function PlayerProfile() {
                   {badge.label}
                 </span>
               ))}
+            </div>
+          )}
+          
+          {/* ELO Ratings */}
+          {ratings.length > 0 && (
+            <div className="mt-4 pt-4 border-t border-border/30">
+              <p className="text-xs uppercase tracking-wider text-muted-foreground mb-2 font-semibold">
+                Ranked Ratings
+              </p>
+              <div className="flex flex-wrap gap-3">
+                {ratings.map((r) => {
+                  const rank = getRankTier(r.rating);
+                  return (
+                    <div key={r.game_type} className="bg-muted/40 rounded-lg px-3 py-2">
+                      <p className="text-xs text-muted-foreground capitalize">{r.game_type}</p>
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-lg font-bold text-foreground">{r.rating}</span>
+                        <span className={`text-xs font-semibold ${rank.color}`}>{rank.tier}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          
+          {/* Unrated notice if no ratings */}
+          {ratings.length === 0 && (
+            <div className="mt-4 pt-4 border-t border-border/30">
+              <p className="text-sm text-muted-foreground">
+                🎮 <span className="text-foreground">Unrated</span> — Play a ranked match to get a rating
+              </p>
             </div>
           )}
         </div>
