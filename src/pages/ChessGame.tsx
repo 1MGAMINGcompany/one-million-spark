@@ -12,6 +12,7 @@ import { useWebRTCSync, GameMessage } from "@/hooks/useWebRTCSync";
 import { useTurnNotifications, TurnPlayer } from "@/hooks/useTurnNotifications";
 import { useGameChat, ChatPlayer, ChatMessage } from "@/hooks/useGameChat";
 import { useRematch } from "@/hooks/useRematch";
+import { useGameSessionPersistence } from "@/hooks/useGameSessionPersistence";
 import TurnStatusHeader from "@/components/TurnStatusHeader";
 import TurnHistoryDrawer from "@/components/TurnHistoryDrawer";
 import NotificationToggle from "@/components/NotificationToggle";
@@ -21,6 +22,14 @@ import { GameEndScreen } from "@/components/GameEndScreen";
 import { RematchModal } from "@/components/RematchModal";
 import { RematchAcceptModal } from "@/components/RematchAcceptModal";
 import { toast } from "@/hooks/use-toast";
+
+// Persisted chess game state
+interface PersistedChessState {
+  fen: string;
+  moveHistory: string[];
+  gameOver: boolean;
+  gameStatus: string;
+}
 
 // Animation Toggle Component
 const AnimationToggle = ({ 
@@ -125,6 +134,64 @@ const ChessGame = () => {
       setMyColor(myIndex === 0 ? "w" : "b");
     }
   }, [address, roomId]);
+
+  // Game session persistence
+  const handleChessStateRestored = useCallback((state: Record<string, any>) => {
+    const persisted = state as PersistedChessState;
+    console.log('[ChessGame] Restoring state from database:', persisted);
+    
+    if (persisted.fen) {
+      const restoredGame = new Chess(persisted.fen);
+      setGame(restoredGame);
+      setMoveHistory(persisted.moveHistory || []);
+      setGameOver(persisted.gameOver || false);
+      if (persisted.gameStatus) {
+        setGameStatus(persisted.gameStatus);
+      }
+      toast({
+        title: "Game Restored",
+        description: "Your game session has been recovered.",
+      });
+    }
+  }, []);
+
+  const { loadSession: loadChessSession, saveSession: saveChessSession, finishSession: finishChessSession } = useGameSessionPersistence({
+    roomPda: roomPda,
+    gameType: 'chess',
+    enabled: roomPlayers.length >= 2 && !!address,
+    onStateRestored: handleChessStateRestored,
+  });
+
+  // Load session on mount
+  useEffect(() => {
+    if (roomPlayers.length >= 2 && address) {
+      loadChessSession().then(savedState => {
+        if (savedState && Object.keys(savedState).length > 0) {
+          handleChessStateRestored(savedState);
+        }
+      });
+    }
+  }, [roomPlayers.length, address, loadChessSession, handleChessStateRestored]);
+
+  // Save game state after each move
+  useEffect(() => {
+    if (roomPlayers.length >= 2 && moveHistory.length > 0) {
+      const currentTurnWallet = game.turn() === 'w' ? roomPlayers[0] : roomPlayers[1];
+      const persisted: PersistedChessState = {
+        fen: game.fen(),
+        moveHistory,
+        gameOver,
+        gameStatus,
+      };
+      saveChessSession(
+        persisted,
+        currentTurnWallet,
+        roomPlayers[0],
+        roomPlayers[1],
+        gameOver ? 'finished' : 'active'
+      );
+    }
+  }, [game, moveHistory, gameOver, gameStatus, roomPlayers, saveChessSession]);
 
   // Capture animations hook
   const { animations, triggerAnimation, handleAnimationComplete } = useCaptureAnimations(animationsEnabled);

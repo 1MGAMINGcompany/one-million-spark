@@ -9,6 +9,7 @@ import { useWebRTCSync, GameMessage } from "@/hooks/useWebRTCSync";
 import { useTurnNotifications, TurnPlayer } from "@/hooks/useTurnNotifications";
 import { useGameChat, ChatPlayer, ChatMessage } from "@/hooks/useGameChat";
 import { useRematch } from "@/hooks/useRematch";
+import { useGameSessionPersistence } from "@/hooks/useGameSessionPersistence";
 import TurnStatusHeader from "@/components/TurnStatusHeader";
 import TurnHistoryDrawer from "@/components/TurnHistoryDrawer";
 import NotificationToggle from "@/components/NotificationToggle";
@@ -18,6 +19,13 @@ import { GameEndScreen } from "@/components/GameEndScreen";
 import { RematchModal } from "@/components/RematchModal";
 import { RematchAcceptModal } from "@/components/RematchAcceptModal";
 import { toast } from "@/hooks/use-toast";
+
+// Persisted checkers game state
+interface PersistedCheckersState {
+  board: (Piece | null)[][];
+  currentPlayer: Player;
+  gameOver: Player | "draw" | null;
+}
 
 type Player = "gold" | "obsidian";
 type PieceType = "normal" | "king";
@@ -116,6 +124,59 @@ const CheckersGame = () => {
       setFlipped(color === "obsidian");
     }
   }, [address, roomId]);
+
+  // Game session persistence
+  const handleCheckersStateRestored = useCallback((state: Record<string, any>) => {
+    const persisted = state as PersistedCheckersState;
+    console.log('[CheckersGame] Restoring state from database:', persisted);
+    
+    if (persisted.board) {
+      setBoard(persisted.board);
+      setCurrentPlayer(persisted.currentPlayer);
+      setGameOver(persisted.gameOver);
+      toast({
+        title: "Game Restored",
+        description: "Your game session has been recovered.",
+      });
+    }
+  }, []);
+
+  const { loadSession: loadCheckersSession, saveSession: saveCheckersSession, finishSession: finishCheckersSession } = useGameSessionPersistence({
+    roomPda: roomPda,
+    gameType: 'checkers',
+    enabled: roomPlayers.length >= 2 && !!address,
+    onStateRestored: handleCheckersStateRestored,
+  });
+
+  // Load session on mount
+  useEffect(() => {
+    if (roomPlayers.length >= 2 && address) {
+      loadCheckersSession().then(savedState => {
+        if (savedState && Object.keys(savedState).length > 0) {
+          handleCheckersStateRestored(savedState);
+        }
+      });
+    }
+  }, [roomPlayers.length, address, loadCheckersSession, handleCheckersStateRestored]);
+
+  // Save game state after each move
+  useEffect(() => {
+    if (roomPlayers.length >= 2) {
+      const currentTurnWallet = currentPlayer === 'gold' ? roomPlayers[0] : roomPlayers[1];
+      const persisted: PersistedCheckersState = {
+        board,
+        currentPlayer,
+        gameOver,
+      };
+      saveCheckersSession(
+        persisted,
+        currentTurnWallet,
+        roomPlayers[0],
+        roomPlayers[1],
+        gameOver ? 'finished' : 'active'
+      );
+    }
+  }, [board, currentPlayer, gameOver, roomPlayers, saveCheckersSession]);
 
   const isMyTurn = currentPlayer === myColor;
 
