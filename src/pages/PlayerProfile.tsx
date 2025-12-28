@@ -98,14 +98,112 @@ function getPlayerTitle(profile: PlayerProfileData): { title: string; color: str
   return null;
 }
 
-// Get rank tier from ELO rating
-function getRankTier(rating: number): { tier: string; color: string } {
-  if (rating >= 2000) return { tier: 'Diamond', color: 'text-cyan-300' };
-  if (rating >= 1800) return { tier: 'Platinum', color: 'text-emerald-300' };
-  if (rating >= 1600) return { tier: 'Gold', color: 'text-amber-400' };
-  if (rating >= 1400) return { tier: 'Silver', color: 'text-slate-300' };
-  if (rating >= 1200) return { tier: 'Bronze', color: 'text-amber-600' };
-  return { tier: 'Unranked', color: 'text-muted-foreground' };
+// Tier thresholds with subtiers
+const TIER_CONFIG = [
+  { name: 'Grandmaster', min: 1700, color: 'text-purple-400', emoji: '👑' },
+  { name: 'Diamond', min: 1500, color: 'text-cyan-300', emoji: '💎' },
+  { name: 'Gold', min: 1300, color: 'text-amber-400', emoji: '🥇' },
+  { name: 'Silver', min: 1100, color: 'text-slate-300', emoji: '🥈' },
+  { name: 'Bronze', min: 0, color: 'text-amber-600', emoji: '🥉' },
+] as const;
+
+// Get subtier (I, II, III) within a tier
+function getSubtier(rating: number, tierMin: number, tierMax: number): string {
+  const range = tierMax - tierMin;
+  const position = rating - tierMin;
+  const third = range / 3;
+  
+  if (position >= third * 2) return 'III';
+  if (position >= third) return 'II';
+  return 'I';
+}
+
+// Get rank tier from ELO rating with subtiers
+function getRankTier(rating: number): { 
+  tier: string; 
+  subtier: string;
+  fullTier: string;
+  color: string; 
+  emoji: string;
+  nextTierThreshold: number | null;
+  pointsToNext: number;
+} {
+  for (let i = 0; i < TIER_CONFIG.length; i++) {
+    const tier = TIER_CONFIG[i];
+    if (rating >= tier.min) {
+      // Find the next tier's min (or use a high value for Grandmaster)
+      const nextTierMin = i === 0 ? Infinity : TIER_CONFIG[i - 1].min;
+      
+      // Grandmaster has no subtiers
+      if (tier.name === 'Grandmaster') {
+        return {
+          tier: tier.name,
+          subtier: '',
+          fullTier: tier.name,
+          color: tier.color,
+          emoji: tier.emoji,
+          nextTierThreshold: null,
+          pointsToNext: 0,
+        };
+      }
+      
+      const subtier = getSubtier(rating, tier.min, nextTierMin);
+      const tierRange = nextTierMin - tier.min;
+      const subtierSize = tierRange / 3;
+      
+      // Calculate next subtier/tier threshold
+      let nextThreshold: number;
+      if (subtier === 'I') {
+        nextThreshold = tier.min + subtierSize; // to II
+      } else if (subtier === 'II') {
+        nextThreshold = tier.min + subtierSize * 2; // to III
+      } else {
+        nextThreshold = nextTierMin; // to next tier
+      }
+      
+      return {
+        tier: tier.name,
+        subtier,
+        fullTier: `${tier.name} ${subtier}`,
+        color: tier.color,
+        emoji: tier.emoji,
+        nextTierThreshold: Math.round(nextThreshold),
+        pointsToNext: Math.max(0, Math.round(nextThreshold) - rating),
+      };
+    }
+  }
+  
+  // Fallback (should never reach)
+  return {
+    tier: 'Bronze',
+    subtier: 'I',
+    fullTier: 'Bronze I',
+    color: 'text-amber-600',
+    emoji: '🥉',
+    nextTierThreshold: TIER_CONFIG[4].min + 67,
+    pointsToNext: 67,
+  };
+}
+
+// Check if player is "one win away" (within 15 points of next tier/subtier)
+function getOneWinAwayMessage(rank: ReturnType<typeof getRankTier>): string | null {
+  if (rank.nextTierThreshold === null || rank.pointsToNext > 15) return null;
+  
+  // Figure out what they're close to
+  if (rank.subtier === 'III') {
+    // Close to next tier
+    const tierIndex = TIER_CONFIG.findIndex(t => t.name === rank.tier);
+    if (tierIndex > 0) {
+      const nextTier = TIER_CONFIG[tierIndex - 1];
+      return `One win away from ${nextTier.name}!`;
+    }
+  } else if (rank.subtier === 'II') {
+    return `One win away from ${rank.tier} III!`;
+  } else if (rank.subtier === 'I') {
+    return `One win away from ${rank.tier} II!`;
+  }
+  
+  return null;
 }
 
 // Badge definitions
@@ -325,13 +423,21 @@ export default function PlayerProfile() {
               <div className="flex flex-wrap gap-3">
                 {ratings.map((r) => {
                   const rank = getRankTier(r.rating);
+                  const oneWinAway = getOneWinAwayMessage(rank);
                   return (
-                    <div key={r.game_type} className="bg-muted/40 rounded-lg px-3 py-2">
+                    <div key={r.game_type} className="bg-muted/40 rounded-lg px-3 py-2 min-w-[140px]">
                       <p className="text-xs text-muted-foreground capitalize">{r.game_type}</p>
                       <div className="flex items-baseline gap-2">
                         <span className="text-lg font-bold text-foreground">{r.rating}</span>
-                        <span className={`text-xs font-semibold ${rank.color}`}>{rank.tier}</span>
+                        <span className={`text-xs font-semibold ${rank.color}`}>
+                          {rank.emoji} {rank.fullTier}
+                        </span>
                       </div>
+                      {oneWinAway && (
+                        <p className="text-xs text-emerald-400 font-medium mt-1 animate-pulse">
+                          🎯 {oneWinAway}
+                        </p>
+                      )}
                     </div>
                   );
                 })}

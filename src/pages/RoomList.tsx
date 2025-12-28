@@ -21,6 +21,7 @@ import { WalletRequired } from "@/components/WalletRequired";
 import { useSolanaRooms } from "@/hooks/useSolanaRooms";
 import { SOLANA_ENABLED, getSolanaCluster, formatSol, getSolanaEndpoint } from "@/lib/solana-config";
 import { GameType, RoomStatus, PROGRAM_ID, isOpenStatus } from "@/lib/solana-program";
+import { getRoomMode } from "@/hooks/useGameSessionPersistence";
 // ActiveGameBanner removed - using GlobalActiveRoomBanner from App.tsx instead
 import { useToast } from "@/hooks/use-toast";
 import { AudioManager } from "@/lib/AudioManager";
@@ -306,10 +307,20 @@ export default function RoomList() {
                       <span className="text-xs px-2 py-0.5 rounded-full bg-primary/20 text-primary">
                         #{room.roomId}
                       </span>
-                      {/* Mode Badge - Currently all games are casual */}
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                        🟢 Casual
-                      </span>
+                      {/* Mode Badge - Read from localStorage */}
+                      {(() => {
+                        const mode = getRoomMode(room.pda);
+                        const isRanked = mode === 'ranked';
+                        return (
+                          <span className={`text-xs px-2 py-0.5 rounded-full border ${
+                            isRanked 
+                              ? 'bg-red-500/20 text-red-400 border-red-500/30' 
+                              : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                          }`}>
+                            {isRanked ? '🔴 Ranked' : '🟢 Casual'}
+                          </span>
+                        );
+                      })()}
                     </div>
                     <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
                       <span className="flex items-center gap-1">
