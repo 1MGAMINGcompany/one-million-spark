@@ -8,9 +8,6 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Session token validity (4 hours)
-const SESSION_DURATION_MS = 4 * 60 * 60 * 1000;
-
 // Maximum age for acceptance timestamp (5 minutes)
 const MAX_TIMESTAMP_AGE_MS = 5 * 60 * 1000;
 
@@ -62,19 +59,7 @@ async function computeRulesHash(rules: RulesParams): Promise<string> {
   const hashBuffer = await crypto.subtle.digest("SHA-256", data);
   const hashArray = new Uint8Array(hashBuffer);
   
-  // Convert to hex string
   return Array.from(hashArray)
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}
-
-/**
- * Generate a secure random session token
- */
-function generateSessionToken(): string {
-  const bytes = new Uint8Array(32);
-  crypto.getRandomValues(bytes);
-  return Array.from(bytes)
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
 }
@@ -130,16 +115,15 @@ serve(async (req) => {
     if (timestampAge > MAX_TIMESTAMP_AGE_MS) {
       console.error("[verify-acceptance] Timestamp too old:", timestampAge);
       return new Response(
-        JSON.stringify({ error: "Acceptance timestamp expired" }),
+        JSON.stringify({ success: false, error: "Acceptance timestamp expired" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
     
     if (timestampAge < -60000) {
-      // Allow 1 minute clock skew into future
       console.error("[verify-acceptance] Timestamp in future:", timestampAge);
       return new Response(
-        JSON.stringify({ error: "Invalid timestamp" }),
+        JSON.stringify({ success: false, error: "Invalid timestamp" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -153,7 +137,7 @@ serve(async (req) => {
         provided: acceptance.rulesHash.slice(0, 16),
       });
       return new Response(
-        JSON.stringify({ error: "Rules hash mismatch" }),
+        JSON.stringify({ success: false, error: "Rules hash mismatch" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -161,7 +145,7 @@ serve(async (req) => {
     // 3. Reconstruct the signed message
     const message = `1MG_ACCEPT_V1|${acceptance.roomPda}|${acceptance.playerWallet}|${acceptance.rulesHash}|${acceptance.nonce}|${acceptance.timestamp}`;
 
-    // 4. Verify the signature
+    // 4. Verify the signature cryptographically
     const isValid = await verifySignature(
       message,
       acceptance.signature,
@@ -171,71 +155,58 @@ serve(async (req) => {
     if (!isValid) {
       console.error("[verify-acceptance] Invalid signature");
       return new Response(
-        JSON.stringify({ error: "Invalid signature" }),
+        JSON.stringify({ success: false, error: "Invalid signature" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     console.log("[verify-acceptance] Signature verified successfully");
 
-    // 5. Check nonce hasn't been used (replay protection)
-    const { data: existingNonce } = await supabase
-      .from("game_acceptances")
-      .select("id")
-      .eq("nonce", acceptance.nonce)
-      .maybeSingle();
+    // 5. Call start_session RPC with verified signature
+    // The RPC validates the nonce (exists, not expired, not used) and creates session
+    const { data: sessionToken, error: sessionError } = await supabase.rpc("start_session", {
+      p_room_pda: acceptance.roomPda,
+      p_wallet: acceptance.playerWallet,
+      p_rules_hash: acceptance.rulesHash,
+      p_nonce: acceptance.nonce,
+      p_signature: acceptance.signature,
+      p_sig_valid: true, // We verified the signature above
+    });
 
-    if (existingNonce) {
-      console.error("[verify-acceptance] Nonce already used");
+    if (sessionError) {
+      console.error("[verify-acceptance] start_session error:", sessionError);
+      
+      // Handle specific errors
+      if (sessionError.message?.includes("bad or expired nonce")) {
+        return new Response(
+          JSON.stringify({ success: false, error: "Nonce expired or already used" }),
+          { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      
       return new Response(
-        JSON.stringify({ error: "Nonce already used" }),
-        { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // 6. Generate session token
-    const sessionToken = generateSessionToken();
-    const sessionExpiresAt = new Date(now + SESSION_DURATION_MS).toISOString();
-
-    // 7. Store the acceptance (upsert to handle rejoins)
-    const { error: insertError } = await supabase
-      .from("game_acceptances")
-      .upsert(
-        {
-          room_pda: acceptance.roomPda,
-          player_wallet: acceptance.playerWallet,
-          rules_hash: acceptance.rulesHash,
-          nonce: acceptance.nonce,
-          timestamp_ms: acceptance.timestamp,
-          signature: acceptance.signature,
-          session_token: sessionToken,
-          session_expires_at: sessionExpiresAt,
-        },
-        { onConflict: "room_pda,player_wallet" }
-      );
-
-    if (insertError) {
-      console.error("[verify-acceptance] Insert error:", insertError);
-      return new Response(
-        JSON.stringify({ error: "Failed to store acceptance" }),
+        JSON.stringify({ success: false, error: "Failed to create session" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    console.log("[verify-acceptance] Acceptance stored, session created");
+    // Calculate expiry (4 hours from now)
+    const expiresAt = new Date(now + 4 * 60 * 60 * 1000).toISOString();
+
+    console.log("[verify-acceptance] Session created:", sessionToken.slice(0, 8) + "...");
 
     return new Response(
       JSON.stringify({
         success: true,
         sessionToken,
-        expiresAt: sessionExpiresAt,
+        expiresAt,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
     console.error("[verify-acceptance] Unexpected error:", error);
     return new Response(
-      JSON.stringify({ error: "Internal server error" }),
+      JSON.stringify({ success: false, error: "Internal server error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

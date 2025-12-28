@@ -6,6 +6,7 @@
  */
 
 import bs58 from "bs58";
+import { supabase } from "@/integrations/supabase/client";
 
 export interface RulesParams {
   roomPda: string;
@@ -70,17 +71,6 @@ export async function computeRulesHash(rules: RulesParams): Promise<string> {
 }
 
 /**
- * Generate a random nonce for replay protection
- */
-export function generateNonce(): string {
-  const bytes = new Uint8Array(16);
-  crypto.getRandomValues(bytes);
-  return Array.from(bytes)
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}
-
-/**
  * Build the acceptance message to be signed
  */
 export function buildAcceptanceMessage(
@@ -117,18 +107,41 @@ export function createRulesFromRoom(
 }
 
 /**
- * Sign the acceptance message using a Solana wallet
+ * Action 1: Issue nonce from server and sign acceptance message
+ * 
+ * 1. Compute rulesHash
+ * 2. Call issue_nonce RPC to get server-issued nonce
+ * 3. Build message with nonce
+ * 4. Sign message with wallet
+ * 5. Return payload for verification
  */
-export async function signAcceptance(
+export async function issueNonceAndSignAccept(
   signMessage: (message: Uint8Array) => Promise<Uint8Array>,
   roomPda: string,
   playerWallet: string,
   rules: RulesParams
 ): Promise<AcceptancePayload> {
+  // 1. Compute rules hash
   const rulesHash = await computeRulesHash(rules);
-  const nonce = generateNonce();
-  const timestamp = Date.now();
   
+  console.log("[gameAcceptance] Requesting nonce from server...");
+  
+  // 2. Call issue_nonce RPC to get server-issued nonce
+  const { data: nonce, error: nonceError } = await supabase.rpc("issue_nonce", {
+    p_room_pda: roomPda,
+    p_wallet: playerWallet,
+    p_rules_hash: rulesHash,
+  });
+  
+  if (nonceError || !nonce) {
+    console.error("[gameAcceptance] Failed to get nonce:", nonceError);
+    throw new Error("Failed to get nonce from server");
+  }
+  
+  console.log("[gameAcceptance] Got nonce:", nonce.slice(0, 8) + "...");
+  
+  // 3. Build message with server-issued nonce
+  const timestamp = Date.now();
   const message = buildAcceptanceMessage(
     roomPda,
     playerWallet,
@@ -139,10 +152,12 @@ export async function signAcceptance(
   
   console.log("[gameAcceptance] Signing message:", message.slice(0, 50) + "...");
   
+  // 4. Sign message with wallet
   const messageBytes = new TextEncoder().encode(message);
   const signatureBytes = await signMessage(messageBytes);
   const signature = bs58.encode(signatureBytes);
   
+  // 5. Return payload
   return {
     roomPda,
     playerWallet,
@@ -201,3 +216,14 @@ export function isSessionValid(session: SessionInfo | null): boolean {
   if (!session) return false;
   return new Date(session.expiresAt) > new Date();
 }
+
+// Legacy export for backwards compatibility (deprecated)
+export const signAcceptance = issueNonceAndSignAccept;
+export const generateNonce = () => {
+  console.warn("[gameAcceptance] generateNonce is deprecated, nonces are now server-issued");
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+};
