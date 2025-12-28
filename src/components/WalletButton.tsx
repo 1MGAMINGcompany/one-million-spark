@@ -376,22 +376,22 @@ export function WalletButton() {
     );
   }
 
-  // Wallet config for clean UI
+  // Wallet config for clean UI - using local assets
   const WALLET_CONFIG = [
     {
       id: 'phantom',
       name: 'Phantom',
-      icon: 'https://raw.githubusercontent.com/solana-labs/wallet-adapter/master/packages/wallets/icons/phantom.svg',
+      icon: phantomIcon,
     },
     {
       id: 'solflare', 
       name: 'Solflare',
-      icon: 'https://raw.githubusercontent.com/solana-labs/wallet-adapter/master/packages/wallets/icons/solflare.svg',
+      icon: solflareIcon,
     },
     {
       id: 'backpack',
       name: 'Backpack', 
-      icon: 'https://raw.githubusercontent.com/solana-labs/wallet-adapter/master/packages/wallets/icons/backpack.svg',
+      icon: backpackIcon,
     },
   ];
 
@@ -488,7 +488,7 @@ export function WalletButton() {
                   {/* Phantom */}
                   <div className="flex flex-col items-center gap-1.5 p-2 rounded-lg bg-muted/30 border border-border/50">
                     <img 
-                      src="https://raw.githubusercontent.com/solana-labs/wallet-adapter/master/packages/wallets/icons/phantom.svg" 
+                      src={phantomIcon} 
                       alt="Phantom" 
                       className="w-6 h-6"
                     />
@@ -502,7 +502,7 @@ export function WalletButton() {
                   {/* Solflare */}
                   <div className="flex flex-col items-center gap-1.5 p-2 rounded-lg bg-muted/30 border border-border/50">
                     <img 
-                      src="https://raw.githubusercontent.com/solana-labs/wallet-adapter/master/packages/wallets/icons/solflare.svg" 
+                      src={solflareIcon} 
                       alt="Solflare" 
                       className="w-6 h-6"
                     />
@@ -516,7 +516,7 @@ export function WalletButton() {
                   {/* Backpack */}
                   <div className="flex flex-col items-center gap-1.5 p-2 rounded-lg bg-muted/30 border border-border/50">
                     <img 
-                      src="https://raw.githubusercontent.com/solana-labs/wallet-adapter/master/packages/wallets/icons/backpack.svg" 
+                      src={backpackIcon} 
                       alt="Backpack" 
                       className="w-6 h-6"
                     />
