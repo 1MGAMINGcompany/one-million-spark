@@ -19,6 +19,9 @@ import { GameEndScreen } from "@/components/GameEndScreen";
 import { RematchModal } from "@/components/RematchModal";
 import { RematchAcceptModal } from "@/components/RematchAcceptModal";
 import { toast } from "@/hooks/use-toast";
+import { PublicKey, Connection } from "@solana/web3.js";
+import { parseRoomAccount } from "@/lib/solana-program";
+import { getSolanaEndpoint } from "@/lib/solana-config";
 
 // Persisted checkers game state
 interface PersistedCheckersState {
@@ -109,21 +112,49 @@ const CheckersGame = () => {
   useEffect(() => { roomPlayersRef.current = roomPlayers; }, [roomPlayers]);
   useEffect(() => { myColorRef.current = myColor; }, [myColor]);
 
-  // Setup room players
+  // Fetch real player order from on-chain room account
   useEffect(() => {
-    if (address && roomId) {
-      const simulatedPlayers = [
-        address,
-        `opponent-${roomId}`,
-      ];
-      setRoomPlayers(simulatedPlayers);
-      
-      const myIndex = simulatedPlayers.findIndex(p => p.toLowerCase() === address.toLowerCase());
-      const color = myIndex === 0 ? "gold" : "obsidian";
-      setMyColor(color);
-      setFlipped(color === "obsidian");
-    }
-  }, [address, roomId]);
+    if (!address || !roomPda) return;
+
+    const fetchRoomPlayers = async () => {
+      try {
+        const connection = new Connection(getSolanaEndpoint(), "confirmed");
+        const pdaKey = new PublicKey(roomPda);
+        const accountInfo = await connection.getAccountInfo(pdaKey);
+        
+        if (accountInfo?.data) {
+          const parsed = parseRoomAccount(accountInfo.data as Buffer);
+          if (parsed && parsed.players.length >= 2) {
+            // Real player order from on-chain: creator at index 0, joiner at index 1
+            const realPlayers = parsed.players.map(p => p.toBase58());
+            setRoomPlayers(realPlayers);
+            
+            // Determine my color based on on-chain position
+            const myIndex = realPlayers.findIndex(p => p.toLowerCase() === address.toLowerCase());
+            const color = myIndex === 0 ? "gold" : "obsidian";
+            setMyColor(color);
+            setFlipped(color === "obsidian"); // Flip board for obsidian player
+            console.log("[CheckersGame] On-chain players:", realPlayers, "My color:", color);
+            return;
+          }
+        }
+        
+        // Fallback if on-chain data not available yet (room still forming)
+        console.log("[CheckersGame] Room not ready, using placeholder");
+        setRoomPlayers([address, `waiting-${roomPda.slice(0, 8)}`]);
+        setMyColor("gold");
+        setFlipped(false);
+      } catch (err) {
+        console.error("[CheckersGame] Failed to fetch room players:", err);
+        // Fallback on error
+        setRoomPlayers([address, `error-${roomPda.slice(0, 8)}`]);
+        setMyColor("gold");
+        setFlipped(false);
+      }
+    };
+
+    fetchRoomPlayers();
+  }, [address, roomPda]);
 
   // Game session persistence
   const handleCheckersStateRestored = useCallback((state: Record<string, any>) => {
