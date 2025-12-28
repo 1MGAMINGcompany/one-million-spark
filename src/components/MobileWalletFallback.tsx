@@ -4,6 +4,11 @@ import { Copy, Check, ExternalLink, X, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 
+// Import local wallet icons
+import phantomIcon from "@/assets/wallets/phantom.svg";
+import solflareIcon from "@/assets/wallets/solflare.svg";
+import backpackIcon from "@/assets/wallets/backpack.svg";
+
 type WalletType = "phantom" | "solflare" | "backpack";
 
 interface MobileWalletFallbackProps {
@@ -53,10 +58,9 @@ export function MobileWalletFallback({ onClose, isAndroid, isIOS, selectedWallet
     <div className="space-y-4">
       <div className="flex items-center gap-3">
         <img 
-          src="https://raw.githubusercontent.com/nickreynolds/fotomatic/main/phantom.png" 
+          src={phantomIcon} 
           alt="Phantom" 
           className="w-10 h-10 rounded-lg"
-          onError={(e) => { e.currentTarget.style.display = 'none'; }}
         />
         <div>
           <h3 className="font-semibold text-lg">{t("wallet.phantom.title")}</h3>
@@ -103,10 +107,9 @@ export function MobileWalletFallback({ onClose, isAndroid, isIOS, selectedWallet
     <div className="space-y-4">
       <div className="flex items-center gap-3">
         <img 
-          src="https://raw.githubusercontent.com/nickreynolds/fotomatic/main/solflare.png" 
+          src={solflareIcon} 
           alt="Solflare" 
           className="w-10 h-10 rounded-lg"
-          onError={(e) => { e.currentTarget.style.display = 'none'; }}
         />
         <div>
           <h3 className="font-semibold text-lg">{t("wallet.solflare.title")}</h3>
@@ -132,10 +135,9 @@ export function MobileWalletFallback({ onClose, isAndroid, isIOS, selectedWallet
     <div className="space-y-4">
       <div className="flex items-center gap-3">
         <img 
-          src="https://raw.githubusercontent.com/nickreynolds/fotomatic/main/backpack.png" 
+          src={backpackIcon} 
           alt="Backpack" 
           className="w-10 h-10 rounded-lg"
-          onError={(e) => { e.currentTarget.style.display = 'none'; }}
         />
         <div>
           <h3 className="font-semibold text-lg">{t("wallet.backpack.title")}</h3>

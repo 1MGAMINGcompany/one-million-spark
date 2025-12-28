@@ -7,6 +7,11 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
+// Import local wallet icons
+import phantomIcon from "@/assets/wallets/phantom.svg";
+import solflareIcon from "@/assets/wallets/solflare.svg";
+import backpackIcon from "@/assets/wallets/backpack.svg";
+
 // Environment detection
 const getIsMobile = () => /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 const getIsInWalletBrowser = () => {
@@ -18,24 +23,24 @@ interface ConnectWalletGateProps {
   className?: string;
 }
 
-// Wallet icons
+// Wallet icons - using local assets
 const WALLET_CONFIG = [
   {
     id: 'phantom',
     name: 'Phantom',
-    icon: 'https://raw.githubusercontent.com/solana-labs/wallet-adapter/master/packages/wallets/icons/phantom.svg',
+    icon: phantomIcon,
     deepLinkBase: 'https://phantom.app/ul/browse/',
   },
   {
     id: 'solflare', 
     name: 'Solflare',
-    icon: 'https://raw.githubusercontent.com/solana-labs/wallet-adapter/master/packages/wallets/icons/solflare.svg',
+    icon: solflareIcon,
     deepLinkBase: 'https://solflare.com/ul/v1/browse/',
   },
   {
     id: 'backpack',
     name: 'Backpack', 
-    icon: 'https://raw.githubusercontent.com/solana-labs/wallet-adapter/master/packages/wallets/icons/backpack.svg',
+    icon: backpackIcon,
     deepLinkBase: 'https://backpack.app/ul/browse/',
   },
 ];
@@ -166,15 +171,15 @@ export function ConnectWalletGate({ className }: ConnectWalletGateProps) {
                   {/* Phantom */}
                   <div className="flex flex-col items-center gap-2 p-2 rounded-lg bg-muted/30">
                     <img 
-                      src="https://raw.githubusercontent.com/solana-labs/wallet-adapter/master/packages/wallets/icons/phantom.svg" 
+                      src={phantomIcon} 
                       alt="Phantom" 
-                      className="w-8 h-8"
+                      className="w-8 h-8 rounded-lg"
                     />
                     <span className="text-xs font-medium">Phantom</span>
                     <div className="w-full h-16 bg-muted/50 rounded flex items-center justify-center">
                       <div className="text-center">
                         <Globe size={20} className="mx-auto text-primary mb-1" />
-                        <span className="text-[10px] text-muted-foreground">Tap globe icon</span>
+                        <span className="text-[10px] text-muted-foreground">Tap globe<br/>bottom nav</span>
                       </div>
                     </div>
                   </div>
@@ -182,15 +187,15 @@ export function ConnectWalletGate({ className }: ConnectWalletGateProps) {
                   {/* Solflare */}
                   <div className="flex flex-col items-center gap-2 p-2 rounded-lg bg-muted/30">
                     <img 
-                      src="https://raw.githubusercontent.com/solana-labs/wallet-adapter/master/packages/wallets/icons/solflare.svg" 
+                      src={solflareIcon} 
                       alt="Solflare" 
-                      className="w-8 h-8"
+                      className="w-8 h-8 rounded-lg"
                     />
                     <span className="text-xs font-medium">Solflare</span>
                     <div className="w-full h-16 bg-muted/50 rounded flex items-center justify-center">
                       <div className="text-center">
                         <Globe size={20} className="mx-auto text-primary mb-1" />
-                        <span className="text-[10px] text-muted-foreground">Browser tab</span>
+                        <span className="text-[10px] text-muted-foreground">Browser<br/>tab</span>
                       </div>
                     </div>
                   </div>
@@ -198,15 +203,15 @@ export function ConnectWalletGate({ className }: ConnectWalletGateProps) {
                   {/* Backpack */}
                   <div className="flex flex-col items-center gap-2 p-2 rounded-lg bg-muted/30">
                     <img 
-                      src="https://raw.githubusercontent.com/solana-labs/wallet-adapter/master/packages/wallets/icons/backpack.svg" 
+                      src={backpackIcon} 
                       alt="Backpack" 
-                      className="w-8 h-8"
+                      className="w-8 h-8 rounded-lg"
                     />
                     <span className="text-xs font-medium">Backpack</span>
                     <div className="w-full h-16 bg-muted/50 rounded flex items-center justify-center">
                       <div className="text-center">
                         <Globe size={20} className="mx-auto text-primary mb-1" />
-                        <span className="text-[10px] text-muted-foreground">Tap globe</span>
+                        <span className="text-[10px] text-muted-foreground">Tap globe<br/>icon</span>
                       </div>
                     </div>
                   </div>

@@ -1,0 +1,12 @@
+<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="128" height="128" rx="26" fill="url(#paint0_linear_backpack)"/>
+  <path d="M44 48H84V96H44V48Z" fill="white"/>
+  <path d="M48 32H80V48H48V32Z" fill="white"/>
+  <rect x="52" y="56" width="24" height="16" rx="4" fill="#E35746"/>
+  <defs>
+    <linearGradient id="paint0_linear_backpack" x1="64" y1="0" x2="64" y2="128" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E35746"/>
+      <stop offset="1" stop-color="#C23E2E"/>
+    </linearGradient>
+  </defs>
+</svg>
