@@ -306,6 +306,10 @@ export default function RoomList() {
                       <span className="text-xs px-2 py-0.5 rounded-full bg-primary/20 text-primary">
                         #{room.roomId}
                       </span>
+                      {/* Mode Badge - Currently all games are casual */}
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                        🟢 Casual
+                      </span>
                     </div>
                     <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
                       <span className="flex items-center gap-1">

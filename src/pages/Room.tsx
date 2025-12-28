@@ -599,6 +599,10 @@ export default function Room() {
                 }`}>
                   {isAbandoned ? 'Abandoned' : statusName}
                 </span>
+                {/* Mode Badge - Currently all games are casual */}
+                <span className="px-3 py-1 rounded-full text-sm font-medium bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                  🟢 Casual
+                </span>
                 {isPlayer && (
                   <span className="px-3 py-1 rounded-full text-sm font-medium bg-primary/20 text-primary">
                     You're in this game
