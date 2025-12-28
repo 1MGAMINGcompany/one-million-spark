@@ -177,6 +177,7 @@ const CheckersGame = () => {
     gameType: 'checkers',
     enabled: roomPlayers.length >= 2 && !!address,
     onStateRestored: handleCheckersStateRestored,
+    callerWallet: address, // Pass caller wallet for secure RPC validation
   });
 
   // Load session on mount

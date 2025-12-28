@@ -188,6 +188,7 @@ const ChessGame = () => {
     gameType: 'chess',
     enabled: roomPlayers.length >= 2 && !!address,
     onStateRestored: handleChessStateRestored,
+    callerWallet: address, // Pass caller wallet for secure RPC validation
   });
 
   // Load session on mount

@@ -244,6 +244,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      finish_game_session: {
+        Args: { p_caller_wallet?: string; p_room_pda: string }
+        Returns: undefined
+      }
       record_match_result: {
         Args: {
           p_finalize_tx: string
@@ -254,6 +258,20 @@ export type Database = {
           p_room_pda: string
           p_stake_lamports: number
           p_winner_wallet: string
+        }
+        Returns: undefined
+      }
+      upsert_game_session: {
+        Args: {
+          p_caller_wallet?: string
+          p_current_turn_wallet: string
+          p_game_state: Json
+          p_game_type: string
+          p_mode?: string
+          p_player1_wallet: string
+          p_player2_wallet: string
+          p_room_pda: string
+          p_status?: string
         }
         Returns: undefined
       }

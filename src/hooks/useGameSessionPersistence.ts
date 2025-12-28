@@ -23,6 +23,7 @@ interface UseGameSessionPersistenceOptions {
   gameType: string;
   enabled: boolean;
   onStateRestored?: (state: Record<string, any>) => void;
+  callerWallet?: string; // The wallet address of the current user for security validation
 }
 
 export function useGameSessionPersistence({
@@ -30,6 +31,7 @@ export function useGameSessionPersistence({
   gameType,
   enabled,
   onStateRestored,
+  callerWallet,
 }: UseGameSessionPersistenceOptions) {
   const lastSavedRef = useRef<string>('');
   const isRestoringRef = useRef(false);
@@ -66,7 +68,7 @@ export function useGameSessionPersistence({
     }
   }, [roomPda, enabled]);
 
-  // Save session state
+  // Save session state using secure RPC function
   const saveSession = useCallback(async (
     gameState: Record<string, any>,
     currentTurnWallet: string | null,
@@ -84,22 +86,20 @@ export function useGameSessionPersistence({
     }
 
     try {
-      console.log('[GameSession] Saving session state...');
+      console.log('[GameSession] Saving session state via secure RPC...');
       
-      const sessionData: GameSessionData = {
-        room_pda: roomPda,
-        game_type: gameType,
-        game_state: gameState,
-        current_turn_wallet: currentTurnWallet,
-        player1_wallet: player1Wallet,
-        player2_wallet: player2Wallet,
-        status,
-        mode,
-      };
-
-      const { error } = await supabase
-        .from('game_sessions')
-        .upsert(sessionData, { onConflict: 'room_pda' });
+      // Use the secure RPC function instead of direct upsert
+      const { error } = await supabase.rpc('upsert_game_session', {
+        p_room_pda: roomPda,
+        p_game_type: gameType,
+        p_game_state: gameState,
+        p_current_turn_wallet: currentTurnWallet,
+        p_player1_wallet: player1Wallet,
+        p_player2_wallet: player2Wallet,
+        p_status: status,
+        p_mode: mode,
+        p_caller_wallet: callerWallet || null,
+      });
 
       if (error) {
         console.error('[GameSession] Error saving session:', error);
@@ -111,19 +111,20 @@ export function useGameSessionPersistence({
     } catch (err) {
       console.error('[GameSession] Failed to save session:', err);
     }
-  }, [roomPda, gameType, enabled]);
+  }, [roomPda, gameType, enabled, callerWallet]);
 
-  // Mark session as finished and archive the room
+  // Mark session as finished using secure RPC function and archive the room
   const finishSession = useCallback(async () => {
     if (!roomPda || !enabled) return;
 
     try {
-      console.log('[GameSession] Marking session as finished');
+      console.log('[GameSession] Marking session as finished via secure RPC');
       
-      const { error } = await supabase
-        .from('game_sessions')
-        .update({ status: 'finished' })
-        .eq('room_pda', roomPda);
+      // Use the secure RPC function instead of direct update
+      const { error } = await supabase.rpc('finish_game_session', {
+        p_room_pda: roomPda,
+        p_caller_wallet: callerWallet || null,
+      });
 
       if (error) {
         console.error('[GameSession] Error finishing session:', error);
@@ -135,7 +136,7 @@ export function useGameSessionPersistence({
     } catch (err) {
       console.error('[GameSession] Failed to finish session:', err);
     }
-  }, [roomPda, enabled]);
+  }, [roomPda, enabled, callerWallet]);
 
   // Subscribe to realtime updates
   useEffect(() => {

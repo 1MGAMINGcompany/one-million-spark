@@ -198,6 +198,7 @@ const DominosGame = () => {
     gameType: 'dominos',
     enabled: roomPlayers.length >= 2 && !!address,
     onStateRestored: handleStateRestored,
+    callerWallet: address, // Pass caller wallet for secure RPC validation
   });
 
   // Track drawn tiles for each player
