@@ -176,6 +176,7 @@ export function GameEndScreen({
   const [checkingRoomStatus, setCheckingRoomStatus] = useState(true);
   const [payoutInfo, setPayoutInfo] = useState<{ pot: number; fee: number; winnerPayout: number } | null>(null);
   const [stakeLamports, setStakeLamports] = useState<number>(0);
+  const [gameMode, setGameMode] = useState<'casual' | 'ranked'>('casual');
   
   // Rematch state
   const [customStakeSol, setCustomStakeSol] = useState<string>('');
@@ -193,6 +194,17 @@ export function GameEndScreen({
       }
       
       try {
+        // Fetch mode from game_sessions
+        const { data: sessionData } = await supabase
+          .from('game_sessions')
+          .select('mode')
+          .eq('room_pda', roomPda)
+          .maybeSingle();
+        
+        if (sessionData?.mode) {
+          setGameMode(sessionData.mode as 'casual' | 'ranked');
+        }
+        
         const accountInfo = await connection.getAccountInfo(new PublicKey(roomPda));
         if (accountInfo?.data) {
           const roomData = parseRoomData(Buffer.from(accountInfo.data));
@@ -259,7 +271,7 @@ export function GameEndScreen({
                 p_game_type: gameType,
                 p_max_players: players.length,
                 p_stake_lamports: stakeLamports,
-                p_mode: 'casual', // TODO: Add ranked mode support
+                p_mode: gameMode, // Uses mode from game_sessions DB
                 p_players: players.map(p => p.address),
               });
               if (error) {

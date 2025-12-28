@@ -38,6 +38,7 @@ export type Database = {
           current_turn_wallet: string | null
           game_state: Json
           game_type: string
+          mode: string
           player1_wallet: string
           player2_wallet: string | null
           room_pda: string
@@ -49,6 +50,7 @@ export type Database = {
           current_turn_wallet?: string | null
           game_state?: Json
           game_type: string
+          mode?: string
           player1_wallet: string
           player2_wallet?: string | null
           room_pda: string
@@ -60,6 +62,7 @@ export type Database = {
           current_turn_wallet?: string | null
           game_state?: Json
           game_type?: string
+          mode?: string
           player1_wallet?: string
           player2_wallet?: string | null
           room_pda?: string

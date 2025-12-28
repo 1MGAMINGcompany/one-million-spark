@@ -7,7 +7,7 @@ import { toast } from "@/hooks/use-toast";
 import { useSound } from "@/contexts/SoundContext";
 import { useWallet } from "@/hooks/useWallet";
 import { useWebRTCSync, GameMessage } from "@/hooks/useWebRTCSync";
-import { useGameSessionPersistence } from "@/hooks/useGameSessionPersistence";
+import { useGameSessionPersistence, getRoomMode } from "@/hooks/useGameSessionPersistence";
 import LudoBoard from "@/components/ludo/LudoBoard";
 import EgyptianDice from "@/components/ludo/EgyptianDice";
 import TurnIndicator from "@/components/ludo/TurnIndicator";
@@ -156,7 +156,8 @@ const LudoGame = () => {
         currentTurnWallet,
         roomPlayers[0],
         roomPlayers[1] || null,
-        gameOver ? 'finished' : 'active'
+        gameOver ? 'finished' : 'active',
+        getRoomMode(roomPda || '')
       );
     }
   }, [players, currentPlayerIndex, diceValue, gameOver, roomPlayers, saveLudoSession]);

@@ -9,7 +9,7 @@ import { useWebRTCSync, GameMessage } from "@/hooks/useWebRTCSync";
 import { useTurnNotifications, TurnPlayer } from "@/hooks/useTurnNotifications";
 import { useGameChat, ChatPlayer, ChatMessage } from "@/hooks/useGameChat";
 import { useRematch } from "@/hooks/useRematch";
-import { useGameSessionPersistence } from "@/hooks/useGameSessionPersistence";
+import { useGameSessionPersistence, getRoomMode } from "@/hooks/useGameSessionPersistence";
 import TurnStatusHeader from "@/components/TurnStatusHeader";
 import TurnHistoryDrawer from "@/components/TurnHistoryDrawer";
 import NotificationToggle from "@/components/NotificationToggle";
@@ -173,7 +173,8 @@ const CheckersGame = () => {
         currentTurnWallet,
         roomPlayers[0],
         roomPlayers[1],
-        gameOver ? 'finished' : 'active'
+        gameOver ? 'finished' : 'active',
+        getRoomMode(roomPda || '')
       );
     }
   }, [board, currentPlayer, gameOver, roomPlayers, saveCheckersSession]);
