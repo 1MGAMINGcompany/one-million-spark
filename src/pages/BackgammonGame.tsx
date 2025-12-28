@@ -24,6 +24,9 @@ import { GameEndScreen } from "@/components/GameEndScreen";
 import { RematchModal } from "@/components/RematchModal";
 import { RematchAcceptModal } from "@/components/RematchAcceptModal";
 import { toast } from "@/hooks/use-toast";
+import { PublicKey, Connection } from "@solana/web3.js";
+import { parseRoomAccount } from "@/lib/solana-program";
+import { getSolanaEndpoint } from "@/lib/solana-config";
 import {
   type Player,
   type GameState,
@@ -108,18 +111,46 @@ const BackgammonGame = () => {
   useEffect(() => { currentPlayerRef.current = currentPlayer; }, [currentPlayer]);
   useEffect(() => { myRoleRef.current = myRole; }, [myRole]);
 
-  // Setup room players when wallet connects
+  // Fetch real player order from on-chain room account
   useEffect(() => {
-    if (address && roomId) {
-      const simulatedPlayers = [
-        address, // Gold player
-        `opponent-${roomId}`, // Black player
-      ];
-      setRoomPlayers(simulatedPlayers);
-      const myIndex = simulatedPlayers.findIndex(p => p.toLowerCase() === address.toLowerCase());
-      setMyRole(myIndex === 0 ? "player" : "ai");
-    }
-  }, [address, roomId]);
+    if (!address || !roomPda) return;
+
+    const fetchRoomPlayers = async () => {
+      try {
+        const connection = new Connection(getSolanaEndpoint(), "confirmed");
+        const pdaKey = new PublicKey(roomPda);
+        const accountInfo = await connection.getAccountInfo(pdaKey);
+        
+        if (accountInfo?.data) {
+          const parsed = parseRoomAccount(accountInfo.data as Buffer);
+          if (parsed && parsed.players.length >= 2) {
+            // Real player order from on-chain: creator at index 0 (gold), joiner at index 1 (black)
+            const realPlayers = parsed.players.map(p => p.toBase58());
+            setRoomPlayers(realPlayers);
+            
+            // Determine my role based on on-chain position
+            const myIndex = realPlayers.findIndex(p => p.toLowerCase() === address.toLowerCase());
+            const role = myIndex === 0 ? "player" : "ai"; // "player" = gold, "ai" = black
+            setMyRole(role);
+            console.log("[BackgammonGame] On-chain players:", realPlayers, "My role:", role === "player" ? "gold" : "black");
+            return;
+          }
+        }
+        
+        // Fallback if on-chain data not available yet (room still forming)
+        console.log("[BackgammonGame] Room not ready, using placeholder");
+        setRoomPlayers([address, `waiting-${roomPda.slice(0, 8)}`]);
+        setMyRole("player");
+      } catch (err) {
+        console.error("[BackgammonGame] Failed to fetch room players:", err);
+        // Fallback on error
+        setRoomPlayers([address, `error-${roomPda.slice(0, 8)}`]);
+        setMyRole("player");
+      }
+    };
+
+    fetchRoomPlayers();
+  }, [address, roomPda]);
 
   // Game session persistence
   const handleBackgammonStateRestored = useCallback((state: Record<string, any>) => {
