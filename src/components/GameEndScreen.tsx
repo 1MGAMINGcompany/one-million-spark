@@ -8,7 +8,7 @@ import { useConnection, useWallet } from '@solana/wallet-adapter-react';
 import { PublicKey } from '@solana/web3.js';
 import { finalizeRoom } from '@/lib/finalize-room';
 import { useSound } from '@/contexts/SoundContext';
-import { logMatchFinalized, updateH2HStats, updatePlayerProfiles } from '@/lib/matchHistory';
+import { supabase } from '@/integrations/supabase/client';
 import { RivalryWidget } from '@/components/RivalryWidget';
 import { WalletLink } from '@/components/WalletLink';
 import { 
@@ -247,36 +247,31 @@ export function GameEndScreen({
         setTxSignature(res.signature || null);
         play('chess_win'); // Play success sound
         
-        // Log finalization and update h2h stats (non-blocking)
-        logMatchFinalized(roomPda, winner).catch(err => 
-          console.warn('[GameEndScreen] Failed to log finalized match:', err)
-        );
-        
-        // Update head-to-head stats if we have both players
-        if (players.length >= 2) {
-          const [playerA, playerB] = players;
-          updateH2HStats({
-            playerA: playerA.address,
-            playerB: playerB.address,
-            winner,
-            gameType,
-            roomPda,
-          }).catch(err => 
-            console.warn('[GameEndScreen] Failed to update h2h stats:', err)
-          );
+        // Call secure RPC to record match result (only after on-chain confirmation)
+        // This updates player_profiles, matches, ratings, and h2h in one atomic call
+        if (res.signature && players.length >= 2) {
+          (async () => {
+            try {
+              const { error } = await supabase.rpc('record_match_result', {
+                p_room_pda: roomPda,
+                p_finalize_tx: res.signature,
+                p_winner_wallet: winner,
+                p_game_type: gameType,
+                p_max_players: players.length,
+                p_stake_lamports: stakeLamports,
+                p_mode: 'casual', // TODO: Add ranked mode support
+                p_players: players.map(p => p.address),
+              });
+              if (error) {
+                console.warn('[GameEndScreen] RPC record_match_result failed:', error.message);
+              } else {
+                console.log('[GameEndScreen] Rankings updated successfully');
+              }
+            } catch (err) {
+              console.warn('[GameEndScreen] RPC call failed:', err);
+            }
+          })();
         }
-        
-        // Update player profiles for all players (non-blocking)
-        // Calculate pot won in SOL from payoutInfo
-        const potSolWon = payoutInfo?.winnerPayout || 0;
-        updatePlayerProfiles({
-          players: players.map(p => p.address),
-          winner,
-          gameType,
-          potSolWon,
-        }).catch(err => 
-          console.warn('[GameEndScreen] Failed to update player profiles:', err)
-        );
       } else {
         setFinalizeState('error');
         setFinalizeError(res.error || 'Unknown error');
