@@ -14,6 +14,24 @@ export type Database = {
   }
   public: {
     Tables: {
+      finalize_receipts: {
+        Row: {
+          created_at: string
+          finalize_tx: string
+          room_pda: string
+        }
+        Insert: {
+          created_at?: string
+          finalize_tx: string
+          room_pda: string
+        }
+        Update: {
+          created_at?: string
+          finalize_tx?: string
+          room_pda?: string
+        }
+        Relationships: []
+      }
       game_sessions: {
         Row: {
           created_at: string
@@ -188,12 +206,54 @@ export type Database = {
         }
         Relationships: []
       }
+      ratings: {
+        Row: {
+          game_type: string
+          games: number
+          losses: number
+          rating: number
+          updated_at: string
+          wallet: string
+          wins: number
+        }
+        Insert: {
+          game_type: string
+          games?: number
+          losses?: number
+          rating?: number
+          updated_at?: string
+          wallet: string
+          wins?: number
+        }
+        Update: {
+          game_type?: string
+          games?: number
+          losses?: number
+          rating?: number
+          updated_at?: string
+          wallet?: string
+          wins?: number
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      record_match_result: {
+        Args: {
+          p_finalize_tx: string
+          p_game_type: string
+          p_max_players: number
+          p_mode: string
+          p_players: string[]
+          p_room_pda: string
+          p_stake_lamports: number
+          p_winner_wallet: string
+        }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never
