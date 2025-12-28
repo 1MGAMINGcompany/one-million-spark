@@ -22,6 +22,9 @@ import { GameEndScreen } from "@/components/GameEndScreen";
 import { RematchModal } from "@/components/RematchModal";
 import { RematchAcceptModal } from "@/components/RematchAcceptModal";
 import { toast } from "@/hooks/use-toast";
+import { PublicKey, Connection } from "@solana/web3.js";
+import { parseRoomAccount } from "@/lib/solana-program";
+import { getSolanaEndpoint } from "@/lib/solana-config";
 
 // Persisted chess game state
 interface PersistedChessState {
@@ -119,21 +122,46 @@ const ChessGame = () => {
   useEffect(() => { roomPlayersRef.current = roomPlayers; }, [roomPlayers]);
   useEffect(() => { animationsEnabledRef.current = animationsEnabled; }, [animationsEnabled]);
 
-  // Setup room players when wallet connects
+  // Fetch real player order from on-chain room account
   useEffect(() => {
-    if (address && roomId) {
-      // Simulate 2-player room - player 1 is white, player 2 is black
-      const simulatedPlayers = [
-        address, // White player (first to join)
-        `opponent-${roomId}`, // Black player
-      ];
-      setRoomPlayers(simulatedPlayers);
-      
-      // Determine my color (first player is white)
-      const myIndex = simulatedPlayers.findIndex(p => p.toLowerCase() === address.toLowerCase());
-      setMyColor(myIndex === 0 ? "w" : "b");
-    }
-  }, [address, roomId]);
+    if (!address || !roomPda) return;
+
+    const fetchRoomPlayers = async () => {
+      try {
+        const connection = new Connection(getSolanaEndpoint(), "confirmed");
+        const pdaKey = new PublicKey(roomPda);
+        const accountInfo = await connection.getAccountInfo(pdaKey);
+        
+        if (accountInfo?.data) {
+          const parsed = parseRoomAccount(accountInfo.data as Buffer);
+          if (parsed && parsed.players.length >= 2) {
+            // Real player order from on-chain: creator at index 0, joiner at index 1
+            const realPlayers = parsed.players.map(p => p.toBase58());
+            setRoomPlayers(realPlayers);
+            
+            // Determine my color based on on-chain position (white = index 0, black = index 1)
+            const myIndex = realPlayers.findIndex(p => p.toLowerCase() === address.toLowerCase());
+            const color = myIndex === 0 ? "w" : "b";
+            setMyColor(color);
+            console.log("[ChessGame] On-chain players:", realPlayers, "My color:", color === "w" ? "white" : "black");
+            return;
+          }
+        }
+        
+        // Fallback if on-chain data not available yet (room still forming)
+        console.log("[ChessGame] Room not ready, using placeholder");
+        setRoomPlayers([address, `waiting-${roomPda.slice(0, 8)}`]);
+        setMyColor("w");
+      } catch (err) {
+        console.error("[ChessGame] Failed to fetch room players:", err);
+        // Fallback on error
+        setRoomPlayers([address, `error-${roomPda.slice(0, 8)}`]);
+        setMyColor("w");
+      }
+    };
+
+    fetchRoomPlayers();
+  }, [address, roomPda]);
 
   // Game session persistence
   const handleChessStateRestored = useCallback((state: Record<string, any>) => {
