@@ -14,6 +14,7 @@ import { useWebRTCSync, GameMessage } from "@/hooks/useWebRTCSync";
 import { useTurnNotifications, TurnPlayer } from "@/hooks/useTurnNotifications";
 import { useGameChat, ChatPlayer, ChatMessage } from "@/hooks/useGameChat";
 import { useRematch } from "@/hooks/useRematch";
+import { useGameSessionPersistence } from "@/hooks/useGameSessionPersistence";
 import TurnStatusHeader from "@/components/TurnStatusHeader";
 import TurnHistoryDrawer from "@/components/TurnHistoryDrawer";
 import NotificationToggle from "@/components/NotificationToggle";
@@ -38,6 +39,16 @@ import {
   checkWinner,
   getGameResult,
 } from "@/lib/backgammonEngine";
+
+// Persisted backgammon game state
+interface PersistedBackgammonState {
+  gameState: GameState;
+  dice: number[];
+  remainingMoves: number[];
+  currentPlayer: "player" | "ai";
+  gameOver: boolean;
+  gameStatus: string;
+}
 
 // Multiplayer move message
 interface BackgammonMoveMessage {
@@ -109,6 +120,65 @@ const BackgammonGame = () => {
       setMyRole(myIndex === 0 ? "player" : "ai");
     }
   }, [address, roomId]);
+
+  // Game session persistence
+  const handleBackgammonStateRestored = useCallback((state: Record<string, any>) => {
+    const persisted = state as PersistedBackgammonState;
+    console.log('[BackgammonGame] Restoring state from database:', persisted);
+    
+    if (persisted.gameState) {
+      setGameState(persisted.gameState);
+      setDice(persisted.dice || []);
+      setRemainingMoves(persisted.remainingMoves || []);
+      setCurrentPlayer(persisted.currentPlayer);
+      setGameOver(persisted.gameOver || false);
+      setGameStatus(persisted.gameStatus || "Your turn");
+      toast({
+        title: "Game Restored",
+        description: "Your game session has been recovered.",
+      });
+    }
+  }, []);
+
+  const { loadSession: loadBackgammonSession, saveSession: saveBackgammonSession, finishSession: finishBackgammonSession } = useGameSessionPersistence({
+    roomPda: roomPda,
+    gameType: 'backgammon',
+    enabled: roomPlayers.length >= 2 && !!address,
+    onStateRestored: handleBackgammonStateRestored,
+  });
+
+  // Load session on mount
+  useEffect(() => {
+    if (roomPlayers.length >= 2 && address) {
+      loadBackgammonSession().then(savedState => {
+        if (savedState && Object.keys(savedState).length > 0) {
+          handleBackgammonStateRestored(savedState);
+        }
+      });
+    }
+  }, [roomPlayers.length, address, loadBackgammonSession, handleBackgammonStateRestored]);
+
+  // Save game state after each move
+  useEffect(() => {
+    if (roomPlayers.length >= 2) {
+      const currentTurnWallet = currentPlayer === 'player' ? roomPlayers[0] : roomPlayers[1];
+      const persisted: PersistedBackgammonState = {
+        gameState,
+        dice,
+        remainingMoves,
+        currentPlayer,
+        gameOver,
+        gameStatus,
+      };
+      saveBackgammonSession(
+        persisted,
+        currentTurnWallet,
+        roomPlayers[0],
+        roomPlayers[1],
+        gameOver ? 'finished' : 'active'
+      );
+    }
+  }, [gameState, dice, remainingMoves, currentPlayer, gameOver, gameStatus, roomPlayers, saveBackgammonSession]);
 
   const isMyTurn = currentPlayer === myRole;
   const isFlipped = myRole === "ai"; // Black player sees flipped board

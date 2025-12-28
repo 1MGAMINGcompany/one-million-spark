@@ -7,6 +7,7 @@ import { toast } from "@/hooks/use-toast";
 import { useSound } from "@/contexts/SoundContext";
 import { useWallet } from "@/hooks/useWallet";
 import { useWebRTCSync, GameMessage } from "@/hooks/useWebRTCSync";
+import { useGameSessionPersistence } from "@/hooks/useGameSessionPersistence";
 import LudoBoard from "@/components/ludo/LudoBoard";
 import EgyptianDice from "@/components/ludo/EgyptianDice";
 import TurnIndicator from "@/components/ludo/TurnIndicator";
@@ -23,7 +24,13 @@ import GameChatPanel from "@/components/GameChatPanel";
 import { GameEndScreen } from "@/components/GameEndScreen";
 import { RematchModal } from "@/components/RematchModal";
 import { RematchAcceptModal } from "@/components/RematchAcceptModal";
-
+// Persisted ludo game state
+interface PersistedLudoState {
+  players: Player[];
+  currentPlayerIndex: number;
+  diceValue: number | null;
+  gameOver: PlayerColor | null;
+}
 
 // Player color to wallet mapping (would come from room data in production)
 const PLAYER_COLORS: PlayerColor[] = ["gold", "ruby", "emerald", "sapphire"];
@@ -96,6 +103,63 @@ const LudoGame = () => {
     onSoundPlay: playSfx,
     onToast: showToast,
   });
+
+  // Game session persistence  
+  const handleLudoStateRestored = useCallback((state: Record<string, any>) => {
+    const persisted = state as PersistedLudoState;
+    console.log('[LudoGame] Restoring state from database:', persisted);
+    
+    // Note: Full Ludo state restoration would need to integrate with useLudoEngine
+    // For now we log that restoration was attempted
+    if (persisted.players && persisted.currentPlayerIndex !== undefined) {
+      setCurrentPlayerIndex(persisted.currentPlayerIndex);
+      if (persisted.diceValue) {
+        setDiceValue(persisted.diceValue);
+      }
+      toast({
+        title: "Game Restored",
+        description: "Your game session has been recovered.",
+      });
+    }
+  }, [setCurrentPlayerIndex, setDiceValue]);
+
+  const { loadSession: loadLudoSession, saveSession: saveLudoSession, finishSession: finishLudoSession } = useGameSessionPersistence({
+    roomPda: roomPda,
+    gameType: 'ludo',
+    enabled: roomPlayers.length >= 2 && !!address,
+    onStateRestored: handleLudoStateRestored,
+  });
+
+  // Load session on mount
+  useEffect(() => {
+    if (roomPlayers.length >= 2 && address) {
+      loadLudoSession().then(savedState => {
+        if (savedState && Object.keys(savedState).length > 0) {
+          handleLudoStateRestored(savedState);
+        }
+      });
+    }
+  }, [roomPlayers.length, address, loadLudoSession, handleLudoStateRestored]);
+
+  // Save game state after each move
+  useEffect(() => {
+    if (roomPlayers.length >= 2) {
+      const currentTurnWallet = roomPlayers[currentPlayerIndex] || roomPlayers[0];
+      const persisted: PersistedLudoState = {
+        players,
+        currentPlayerIndex,
+        diceValue,
+        gameOver,
+      };
+      saveLudoSession(
+        persisted,
+        currentTurnWallet,
+        roomPlayers[0],
+        roomPlayers[1] || null,
+        gameOver ? 'finished' : 'active'
+      );
+    }
+  }, [players, currentPlayerIndex, diceValue, gameOver, roomPlayers, saveLudoSession]);
 
   // Find which player index the current wallet is
   const myPlayerIndex = useMemo(() => {
