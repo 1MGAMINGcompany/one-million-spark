@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Home, Wallet, PlusCircle, LayoutList, Menu, X, Coins, Volume2, VolumeX, Bell, BellOff } from "lucide-react";
+import { Home, Wallet, PlusCircle, LayoutList, Menu, X, Coins, Volume2, VolumeX, Bell, BellOff, Trophy } from "lucide-react";
 import { WalletButton } from "./WalletButton";
 import BrandLogo from "./BrandLogo";
 import LanguageSelector from "./LanguageSelector";
@@ -64,6 +64,7 @@ const Navbar = () => {
     { path: "/add-funds", labelKey: "nav.addFunds", icon: Coins },
     { path: "/create-room", labelKey: "nav.createRoom", icon: PlusCircle },
     { path: "/room-list", labelKey: "nav.roomList", icon: LayoutList },
+    { path: "/leaderboard/chess", labelKey: "nav.leaderboard", icon: Trophy },
   ];
 
   return (
