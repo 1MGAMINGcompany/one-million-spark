@@ -5,10 +5,11 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Trophy, Loader2, Crown, Medal, Award } from 'lucide-react';
+import { ArrowLeft, Trophy, Loader2, Crown, Medal, Award, Target, TrendingUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { supabase } from '@/integrations/supabase/client';
+import { useWallet } from '@/hooks/useWallet';
 
 interface LeaderboardEntry {
   wallet: string;
@@ -71,8 +72,12 @@ const VALID_GAMES = ['chess', 'dominos', 'backgammon', 'checkers', 'ludo'];
 export default function Leaderboard() {
   const { game } = useParams<{ game: string }>();
   const navigate = useNavigate();
+  const { isConnected, address: connectedWallet } = useWallet();
   
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
+  const [userRating, setUserRating] = useState<LeaderboardEntry | null>(null);
+  const [userGlobalRank, setUserGlobalRank] = useState<number | null>(null);
+  const [totalPlayers, setTotalPlayers] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
@@ -88,6 +93,7 @@ export default function Leaderboard() {
       }
 
       try {
+        // Fetch top 50
         const { data, error: fetchError } = await supabase
           .from('ratings')
           .select('wallet, rating, games, wins, losses')
@@ -102,6 +108,40 @@ export default function Leaderboard() {
         }
 
         setEntries(data || []);
+
+        // Fetch total player count
+        const { count } = await supabase
+          .from('ratings')
+          .select('*', { count: 'exact', head: true })
+          .eq('game_type', gameType);
+        
+        setTotalPlayers(count || 0);
+
+        // If user is connected, fetch their rating
+        if (isConnected && connectedWallet) {
+          const { data: userData } = await supabase
+            .from('ratings')
+            .select('wallet, rating, games, wins, losses')
+            .eq('game_type', gameType)
+            .eq('wallet', connectedWallet)
+            .maybeSingle();
+
+          if (userData) {
+            setUserRating(userData);
+            
+            // Count how many players have higher rating
+            const { count: higherCount } = await supabase
+              .from('ratings')
+              .select('*', { count: 'exact', head: true })
+              .eq('game_type', gameType)
+              .gt('rating', userData.rating);
+            
+            setUserGlobalRank((higherCount || 0) + 1);
+          } else {
+            setUserRating(null);
+            setUserGlobalRank(null);
+          }
+        }
       } catch (err) {
         console.error('[Leaderboard] Error:', err);
         setError('Failed to load leaderboard');
@@ -111,7 +151,7 @@ export default function Leaderboard() {
     };
 
     fetchLeaderboard();
-  }, [gameType, isValidGame, game]);
+  }, [gameType, isValidGame, game, isConnected, connectedWallet]);
 
   // Rank badge for top 3
   const getRankBadge = (rank: number) => {
@@ -119,6 +159,21 @@ export default function Leaderboard() {
     if (rank === 2) return <Medal className="h-5 w-5 text-slate-300" />;
     if (rank === 3) return <Award className="h-5 w-5 text-amber-600" />;
     return <span className="text-muted-foreground font-mono w-5 text-center">{rank}</span>;
+  };
+
+  // Calculate points needed to reach next rank
+  const getNextTarget = () => {
+    if (!userRating || userGlobalRank === null || userGlobalRank <= 1) return null;
+    
+    // Find the player just above
+    const targetRank = userGlobalRank - 1;
+    const playerAbove = entries.find((_, idx) => idx + 1 === targetRank);
+    
+    if (playerAbove && playerAbove.rating > userRating.rating) {
+      const pointsNeeded = playerAbove.rating - userRating.rating + 1;
+      return { targetRank, pointsNeeded };
+    }
+    return null;
   };
 
   if (loading) {
@@ -158,11 +213,75 @@ export default function Leaderboard() {
     );
   }
 
+  const userRank = userRating ? getRankTier(userRating.rating) : null;
+  const nextTarget = getNextTarget();
+  const userInTop50 = entries.some(e => e.wallet === connectedWallet);
+
   return (
     <div className="container max-w-3xl py-8 px-4">
       <Button variant="ghost" size="sm" className="mb-4" onClick={() => navigate(-1)}>
         <ArrowLeft className="mr-2 h-4 w-4" /> Back
       </Button>
+
+      {/* Your Rank Summary */}
+      {isConnected && (
+        <Card className="border-border/50 bg-card/80 backdrop-blur mb-4 overflow-hidden">
+          <CardContent className="p-4">
+            {userRating && userRank ? (
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="flex items-center gap-4">
+                  <div className="h-12 w-12 rounded-full bg-primary/20 flex items-center justify-center">
+                    <Target className="h-6 w-6 text-primary" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Your Rating</p>
+                    <div className="flex items-center gap-2">
+                      <span className="text-2xl font-bold">{userRating.rating}</span>
+                      <span className={`text-sm font-semibold ${userRank.color}`}>
+                        {userRank.emoji} {userRank.fullTier}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="text-right">
+                  <p className="text-sm text-muted-foreground">Your Rank</p>
+                  <p className="text-xl font-bold">
+                    #{userGlobalRank} <span className="text-sm font-normal text-muted-foreground">of {totalPlayers}</span>
+                  </p>
+                </div>
+                
+                {nextTarget && userGlobalRank && userGlobalRank > 1 && (
+                  <div className="w-full pt-3 border-t border-border/30">
+                    <div className="flex items-center gap-2 text-sm">
+                      <TrendingUp className="h-4 w-4 text-emerald-400" />
+                      <span className="text-muted-foreground">Next Target:</span>
+                      <span className="text-foreground font-medium">
+                        #{nextTarget.targetRank}
+                      </span>
+                      <span className="text-emerald-400 font-medium">
+                        (need +{nextTarget.pointsNeeded} pts)
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="flex items-center gap-4">
+                <div className="h-12 w-12 rounded-full bg-muted/50 flex items-center justify-center">
+                  <Target className="h-6 w-6 text-muted-foreground" />
+                </div>
+                <div>
+                  <p className="text-foreground font-medium">Unrated</p>
+                  <p className="text-sm text-muted-foreground">
+                    Win a ranked {capitalize(gameType)} match to join the leaderboard
+                  </p>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <Card className="border-border/50 bg-card/80 backdrop-blur overflow-hidden">
         <CardHeader className="bg-gradient-to-br from-primary/20 via-primary/10 to-transparent border-b border-border/30">
@@ -218,12 +337,17 @@ export default function Leaderboard() {
                 const rank = getRankTier(entry.rating);
                 const position = index + 1;
                 const isTopThree = position <= 3;
+                const isYou = isConnected && connectedWallet === entry.wallet;
                 
                 return (
                   <div
                     key={entry.wallet}
                     className={`grid grid-cols-12 gap-2 px-4 py-3 items-center transition-colors hover:bg-muted/20 ${
-                      isTopThree ? 'bg-primary/5' : ''
+                      isYou 
+                        ? 'bg-primary/10 border-l-2 border-l-primary' 
+                        : isTopThree 
+                          ? 'bg-primary/5' 
+                          : ''
                     }`}
                   >
                     {/* Rank */}
@@ -232,19 +356,28 @@ export default function Leaderboard() {
                     </div>
                     
                     {/* Player wallet */}
-                    <div className="col-span-4">
+                    <div className="col-span-4 flex items-center gap-2">
                       <Link
                         to={`/player/${entry.wallet}`}
-                        className="font-mono text-sm text-foreground hover:text-primary transition-colors underline-offset-2 hover:underline"
+                        className={`font-mono text-sm transition-colors underline-offset-2 hover:underline ${
+                          isYou ? 'text-primary font-semibold' : 'text-foreground hover:text-primary'
+                        }`}
                       >
                         {shortenWallet(entry.wallet)}
                       </Link>
+                      {isYou && (
+                        <span className="text-xs px-1.5 py-0.5 rounded bg-primary/20 text-primary font-medium">
+                          You
+                        </span>
+                      )}
                     </div>
                     
                     {/* Rating + Tier */}
                     <div className="col-span-3">
                       <div className="flex items-center gap-2">
-                        <span className="font-bold text-foreground">{entry.rating}</span>
+                        <span className={`font-bold ${isYou ? 'text-primary' : 'text-foreground'}`}>
+                          {entry.rating}
+                        </span>
                         <span className={`text-xs ${rank.color}`}>
                           {rank.emoji}
                         </span>
