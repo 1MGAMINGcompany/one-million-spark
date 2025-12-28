@@ -3,12 +3,13 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Play, Users } from "lucide-react";
+import { Play, Users, X } from "lucide-react";
 import { useSolanaRooms } from "@/hooks/useSolanaRooms";
 import { RoomStatus, isOpenStatus } from "@/lib/solana-program";
 import { toast } from "@/hooks/use-toast";
 import { AudioManager } from "@/lib/AudioManager";
 import { showBrowserNotification } from "@/lib/pushNotifications";
+import { archiveRoom } from "@/lib/roomArchive";
 
 // REMOVED: GAME_ROUTES - game type comes from on-chain data via /play/:pda, not URL
 
@@ -91,6 +92,14 @@ export function GlobalActiveRoomBanner() {
     navigate(`/room/${activeRoom.pda}`);
   };
 
+  const handleDismiss = () => {
+    archiveRoom(activeRoom.pda);
+    toast({
+      title: "Banner dismissed",
+      description: "This room has been hidden from the banner.",
+    });
+  };
+
   if (isStarted) {
     return (
       <div className="fixed top-16 left-0 right-0 z-40 px-4 py-2">
@@ -110,11 +119,16 @@ export function GlobalActiveRoomBanner() {
                   </p>
                 </div>
               </div>
-              <Button onClick={handleEnterGame} size="sm" className="shrink-0">
-                <Play className="h-4 w-4 mr-1 sm:mr-2" />
-                <span className="hidden sm:inline">Enter Game</span>
-                <span className="sm:hidden">Play</span>
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button onClick={handleEnterGame} size="sm" className="shrink-0">
+                  <Play className="h-4 w-4 mr-1 sm:mr-2" />
+                  <span className="hidden sm:inline">Enter Game</span>
+                  <span className="sm:hidden">Play</span>
+                </Button>
+                <Button onClick={handleDismiss} size="sm" variant="ghost" className="shrink-0 h-8 w-8 p-0">
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -141,10 +155,15 @@ export function GlobalActiveRoomBanner() {
                   </p>
                 </div>
               </div>
-              <Button variant="outline" onClick={handleViewRoom} size="sm" className="shrink-0">
-                <span className="hidden sm:inline">View Room</span>
-                <span className="sm:hidden">View</span>
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" onClick={handleViewRoom} size="sm" className="shrink-0">
+                  <span className="hidden sm:inline">View Room</span>
+                  <span className="sm:hidden">View</span>
+                </Button>
+                <Button onClick={handleDismiss} size="sm" variant="ghost" className="shrink-0 h-8 w-8 p-0">
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>
