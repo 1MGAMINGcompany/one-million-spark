@@ -32,6 +32,45 @@ export type Database = {
         }
         Relationships: []
       }
+      game_acceptances: {
+        Row: {
+          created_at: string
+          id: string
+          nonce: string
+          player_wallet: string
+          room_pda: string
+          rules_hash: string
+          session_expires_at: string
+          session_token: string
+          signature: string
+          timestamp_ms: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          nonce: string
+          player_wallet: string
+          room_pda: string
+          rules_hash: string
+          session_expires_at: string
+          session_token: string
+          signature: string
+          timestamp_ms: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          nonce?: string
+          player_wallet?: string
+          room_pda?: string
+          rules_hash?: string
+          session_expires_at?: string
+          session_token?: string
+          signature?: string
+          timestamp_ms?: number
+        }
+        Relationships: []
+      }
       game_sessions: {
         Row: {
           created_at: string
