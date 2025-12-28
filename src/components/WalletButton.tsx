@@ -10,6 +10,11 @@ import { fetchBalance as fetchBalanceRpc, is403Error } from "@/lib/solana-rpc";
 import { NetworkProofBadge } from "./NetworkProofBadge";
 import { MobileWalletFallback } from "./MobileWalletFallback";
 
+// Import local wallet icons
+import phantomIcon from "@/assets/wallets/phantom.svg";
+import solflareIcon from "@/assets/wallets/solflare.svg";
+import backpackIcon from "@/assets/wallets/backpack.svg";
+
 const CONNECT_TIMEOUT_MS = 8000;
 
 // ===== ENVIRONMENT DETECTION =====
@@ -40,14 +45,14 @@ const BLOCKED_WALLET_NAMES = [
   'torus',
 ];
 
-// Official wallet icons - use these instead of adapter icons for consistency
+// Official wallet icons - using local assets for reliability
 const WALLET_ICONS: Record<string, string> = {
-  phantom: 'https://raw.githubusercontent.com/solana-labs/wallet-adapter/master/packages/wallets/icons/phantom.svg',
-  solflare: 'https://raw.githubusercontent.com/solana-labs/wallet-adapter/master/packages/wallets/icons/solflare.svg',
-  backpack: 'https://raw.githubusercontent.com/solana-labs/wallet-adapter/master/packages/wallets/icons/backpack.svg',
-  glow: 'https://raw.githubusercontent.com/solana-labs/wallet-adapter/master/packages/wallets/icons/glow.svg',
-  trust: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/solana/info/logo.png',
-  'mobile wallet adapter': 'https://raw.githubusercontent.com/solana-labs/wallet-adapter/master/packages/wallets/icons/solana.svg',
+  phantom: phantomIcon,
+  solflare: solflareIcon,
+  backpack: backpackIcon,
+  glow: phantomIcon, // fallback
+  trust: phantomIcon, // fallback
+  'mobile wallet adapter': phantomIcon, // fallback
 };
 
 // Get the best icon for a wallet
@@ -61,8 +66,8 @@ const getWalletIcon = (walletName: string, adapterIcon?: string): string => {
     }
   }
   
-  // Fall back to adapter-provided icon
-  return adapterIcon || WALLET_ICONS['mobile wallet adapter'];
+  // Fall back to adapter-provided icon or phantom as default
+  return adapterIcon || WALLET_ICONS['phantom'];
 };
 
 export function WalletButton() {

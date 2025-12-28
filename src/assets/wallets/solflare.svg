@@ -1,0 +1,15 @@
+<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="128" height="128" rx="26" fill="url(#paint0_linear_solflare)"/>
+  <path d="M64 24L96 64L64 104L32 64L64 24Z" fill="url(#paint1_linear_solflare)"/>
+  <path d="M64 40L80 64L64 88L48 64L64 40Z" fill="#1A1A2E"/>
+  <defs>
+    <linearGradient id="paint0_linear_solflare" x1="64" y1="0" x2="64" y2="128" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FC9850"/>
+      <stop offset="1" stop-color="#FC7850"/>
+    </linearGradient>
+    <linearGradient id="paint1_linear_solflare" x1="64" y1="24" x2="64" y2="104" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFEF9"/>
+      <stop offset="1" stop-color="#FFDD99"/>
+    </linearGradient>
+  </defs>
+</svg>
