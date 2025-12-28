@@ -14,6 +14,42 @@ export type Database = {
   }
   public: {
     Tables: {
+      game_sessions: {
+        Row: {
+          created_at: string
+          current_turn_wallet: string | null
+          game_state: Json
+          game_type: string
+          player1_wallet: string
+          player2_wallet: string | null
+          room_pda: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          current_turn_wallet?: string | null
+          game_state?: Json
+          game_type: string
+          player1_wallet: string
+          player2_wallet?: string | null
+          room_pda: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          current_turn_wallet?: string | null
+          game_state?: Json
+          game_type?: string
+          player1_wallet?: string
+          player2_wallet?: string | null
+          room_pda?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       h2h: {
         Row: {
           a_wins: number

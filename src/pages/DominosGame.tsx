@@ -10,6 +10,7 @@ import { useWebRTCSync, GameMessage } from "@/hooks/useWebRTCSync";
 import { useTurnNotifications, TurnPlayer } from "@/hooks/useTurnNotifications";
 import { useGameChat, ChatPlayer, ChatMessage } from "@/hooks/useGameChat";
 import { useRematch } from "@/hooks/useRematch";
+import { useGameSessionPersistence } from "@/hooks/useGameSessionPersistence";
 import TurnStatusHeader from "@/components/TurnStatusHeader";
 import TurnHistoryDrawer from "@/components/TurnHistoryDrawer";
 import NotificationToggle from "@/components/NotificationToggle";
@@ -43,13 +44,24 @@ interface DominoMove {
   action: "play" | "draw" | "pass";
 }
 
-// Full game state for sync
+// Full game state for sync and persistence
 interface GameState {
   chain: PlacedDomino[];
   myHand: Domino[];
   opponentHandCount: number;
   boneyard: Domino[];
   isMyTurn: boolean;
+}
+
+// Persisted game state - stores shared state that can be verified by both players
+interface PersistedGameState {
+  chain: PlacedDomino[];
+  boneyardIds: number[]; // IDs of tiles remaining in boneyard
+  player1DrawnIds: number[]; // IDs player 1 drew from boneyard
+  player2DrawnIds: number[]; // IDs player 2 drew from boneyard
+  currentTurnPlayer: 1 | 2;
+  gameOver: boolean;
+  winner: "player1" | "player2" | "draw" | null;
 }
 
 const generateDominoSet = (): Domino[] => {
@@ -99,10 +111,139 @@ const DominosGame = () => {
   const [amIPlayer1, setAmIPlayer1] = useState(false);
   const [loadingRoom, setLoadingRoom] = useState(true);
   const [entryFeeSol, setEntryFeeSol] = useState(0); // Stake amount in SOL
+  const [sessionRestored, setSessionRestored] = useState(false);
 
   // Keep multiplayer refs in sync
   useEffect(() => { amIPlayer1Ref.current = amIPlayer1; }, [amIPlayer1]);
   useEffect(() => { roomPlayersRef.current = roomPlayers; }, [roomPlayers]);
+
+  // Helper to get domino by ID from the full set
+  const getDominoById = useCallback((id: number): Domino => {
+    const allDominos = generateDominoSet();
+    return allDominos.find(d => d.id === id) || { id, left: 0, right: 0 };
+  }, []);
+
+  // State restoration handler - reconstructs hands from chain, boneyard, and drawn tiles
+  const handleStateRestored = useCallback((state: Record<string, any>) => {
+    if (!roomPda) return;
+    
+    const persisted = state as PersistedGameState;
+    console.log('[DominosGame] Restoring state from database:', persisted);
+    
+    // Get the original deterministic shuffle
+    const allDominos = seededShuffle(generateDominoSet(), roomPda);
+    const originalPlayer1Hand = allDominos.slice(0, 7);
+    const originalPlayer2Hand = allDominos.slice(7, 14);
+    
+    // Restore chain
+    setChain(persisted.chain || []);
+    
+    // Figure out which tiles each player played
+    const chainIds = new Set((persisted.chain || []).map(d => d.id));
+    
+    // Get the drawn tiles for each player and restore those states
+    const restoredPlayer1DrawnIds = persisted.player1DrawnIds || [];
+    const restoredPlayer2DrawnIds = persisted.player2DrawnIds || [];
+    setPlayer1DrawnIds(restoredPlayer1DrawnIds);
+    setPlayer2DrawnIds(restoredPlayer2DrawnIds);
+    
+    const player1DrawnIdsSet = new Set(restoredPlayer1DrawnIds);
+    const player2DrawnIdsSet = new Set(restoredPlayer2DrawnIds);
+    
+    // Reconstruct hands:
+    // Hand = (original hand - tiles played to chain) + tiles drawn from boneyard
+    const player1CurrentHand = originalPlayer1Hand
+      .filter(d => !chainIds.has(d.id))
+      .concat(Array.from(player1DrawnIdsSet).map(id => getDominoById(id)));
+    
+    const player2CurrentHand = originalPlayer2Hand
+      .filter(d => !chainIds.has(d.id))
+      .concat(Array.from(player2DrawnIdsSet).map(id => getDominoById(id)));
+    
+    // Set my hand and opponent count based on which player I am
+    if (amIPlayer1Ref.current) {
+      setMyHand(player1CurrentHand);
+      setOpponentHandCount(player2CurrentHand.length);
+    } else {
+      setMyHand(player2CurrentHand);
+      setOpponentHandCount(player1CurrentHand.length);
+    }
+    
+    setBoneyard((persisted.boneyardIds || []).map(id => getDominoById(id)));
+    
+    // Restore turn state
+    const isMyTurnNow = (persisted.currentTurnPlayer === 1 && amIPlayer1Ref.current) ||
+                        (persisted.currentTurnPlayer === 2 && !amIPlayer1Ref.current);
+    setIsMyTurn(isMyTurnNow);
+    setGameStatus(isMyTurnNow ? "Your turn" : "Opponent's turn");
+    
+    // Restore game over state
+    if (persisted.gameOver) {
+      setGameOver(true);
+      if (persisted.winner === "draw") {
+        setWinner("draw");
+      } else if (persisted.winner === "player1") {
+        setWinner(amIPlayer1Ref.current ? "me" : "opponent");
+      } else if (persisted.winner === "player2") {
+        setWinner(amIPlayer1Ref.current ? "opponent" : "me");
+      }
+    }
+    
+    setSessionRestored(true);
+  }, [getDominoById, roomPda]);
+
+  // Game session persistence hook
+  const { loadSession, saveSession, finishSession } = useGameSessionPersistence({
+    roomPda,
+    gameType: 'dominos',
+    enabled: roomPlayers.length >= 2 && !!address,
+    onStateRestored: handleStateRestored,
+  });
+
+  // Track drawn tiles for each player
+  const [player1DrawnIds, setPlayer1DrawnIds] = useState<number[]>([]);
+  const [player2DrawnIds, setPlayer2DrawnIds] = useState<number[]>([]);
+
+  // Helper to create persisted state
+  const createPersistedState = useCallback((): PersistedGameState => {
+    const boneyardIds = boneyard.map(d => d.id);
+    const currentTurnPlayer: 1 | 2 = isMyTurn ? (amIPlayer1 ? 1 : 2) : (amIPlayer1 ? 2 : 1);
+    
+    let winnerValue: "player1" | "player2" | "draw" | null = null;
+    if (winner === "me") {
+      winnerValue = amIPlayer1 ? "player1" : "player2";
+    } else if (winner === "opponent") {
+      winnerValue = amIPlayer1 ? "player2" : "player1";
+    } else if (winner === "draw") {
+      winnerValue = "draw";
+    }
+    
+    return {
+      chain,
+      boneyardIds,
+      player1DrawnIds,
+      player2DrawnIds,
+      currentTurnPlayer,
+      gameOver,
+      winner: winnerValue,
+    };
+  }, [chain, boneyard, player1DrawnIds, player2DrawnIds, isMyTurn, amIPlayer1, gameOver, winner]);
+
+  // Save state whenever game state changes
+  const saveGameState = useCallback(() => {
+    if (!gameInitialized || !roomPlayers.length) return;
+    
+    const currentTurnWallet = isMyTurn ? address : roomPlayers.find(p => p.toLowerCase() !== address?.toLowerCase());
+    const persisted = createPersistedState();
+    
+    saveSession(
+      persisted,
+      currentTurnWallet || null,
+      roomPlayers[0] || '',
+      roomPlayers[1] || null,
+      gameOver ? 'finished' : 'active'
+    );
+  }, [gameInitialized, roomPlayers, isMyTurn, address, createPersistedState, saveSession, gameOver]);
 
   // Fetch REAL players from on-chain room account
   useEffect(() => {
@@ -197,38 +338,77 @@ const DominosGame = () => {
   }, [roomPda, address, roomPlayers.length]);
 
   // Initialize game with DETERMINISTIC shuffle using roomPda as seed
+  // First try to restore from saved session
   useEffect(() => {
     if (!roomPda || roomPlayers.length < 2 || gameInitialized) return;
     
-    console.log(`[DominosGame] Initializing game with seed: ${roomPda}`);
+    const initGame = async () => {
+      console.log(`[DominosGame] Checking for saved session...`);
+      
+      // Try to load existing session first
+      const savedState = await loadSession();
+      
+      if (savedState && Object.keys(savedState).length > 0) {
+        console.log('[DominosGame] Found saved session, restoring...');
+        handleStateRestored(savedState);
+        setGameInitialized(true);
+        toast({
+          title: "Game Restored",
+          description: "Your game session has been recovered.",
+        });
+        return;
+      }
+      
+      console.log(`[DominosGame] No saved session, initializing new game with seed: ${roomPda}`);
+      
+      // Use roomPda as seed - BOTH devices get identical shuffle
+      const allDominos = seededShuffle(generateDominoSet(), roomPda);
+      
+      // Player order is based on on-chain order (player 0 = creator goes first)
+      const player1Hand = allDominos.slice(0, 7);
+      const player2Hand = allDominos.slice(7, 14);
+      const initialBoneyard = allDominos.slice(14);
+      
+      console.log("[DominosGame] Deterministic game init:", {
+        amIPlayer1,
+        myHandIds: (amIPlayer1 ? player1Hand : player2Hand).map(d => d.id),
+        boneyardSize: initialBoneyard.length,
+      });
+      
+      setMyHand(amIPlayer1 ? player1Hand : player2Hand);
+      setOpponentHandCount(7);
+      setBoneyard(initialBoneyard);
+      setChain([]);
+      
+      // Player 1 (room creator) always goes first
+      setIsMyTurn(amIPlayer1);
+      setGameStatus(amIPlayer1 ? "Your turn" : "Opponent's turn");
+      setGameOver(false);
+      setSelectedDomino(null);
+      setWinner(null);
+      setGameInitialized(true);
+    };
     
-    // Use roomPda as seed - BOTH devices get identical shuffle
-    const allDominos = seededShuffle(generateDominoSet(), roomPda);
-    
-    // Player order is based on on-chain order (player 0 = creator goes first)
-    const player1Hand = allDominos.slice(0, 7);
-    const player2Hand = allDominos.slice(7, 14);
-    const initialBoneyard = allDominos.slice(14);
-    
-    console.log("[DominosGame] Deterministic game init:", {
-      amIPlayer1,
-      myHandIds: (amIPlayer1 ? player1Hand : player2Hand).map(d => d.id),
-      boneyardSize: initialBoneyard.length,
-    });
-    
-    setMyHand(amIPlayer1 ? player1Hand : player2Hand);
-    setOpponentHandCount(7);
-    setBoneyard(initialBoneyard);
-    setChain([]);
-    
-    // Player 1 (room creator) always goes first
-    setIsMyTurn(amIPlayer1);
-    setGameStatus(amIPlayer1 ? "Your turn" : "Opponent's turn");
-    setGameOver(false);
-    setSelectedDomino(null);
-    setWinner(null);
-    setGameInitialized(true);
-  }, [roomPda, roomPlayers, amIPlayer1, gameInitialized]);
+    initGame();
+  }, [roomPda, roomPlayers, amIPlayer1, gameInitialized, loadSession, handleStateRestored]);
+
+  // Save game state after each significant change
+  useEffect(() => {
+    if (gameInitialized && !sessionRestored) {
+      // Debounce saves slightly to avoid rapid updates
+      const timeout = setTimeout(() => {
+        saveGameState();
+      }, 500);
+      return () => clearTimeout(timeout);
+    }
+  }, [chain, myHand, boneyard, isMyTurn, gameOver, winner, gameInitialized, sessionRestored, saveGameState]);
+
+  // Mark session as finished when game ends
+  useEffect(() => {
+    if (gameOver && gameInitialized) {
+      finishSession();
+    }
+  }, [gameOver, gameInitialized, finishSession]);
 
   // Turn notification players
   const turnPlayers: TurnPlayer[] = useMemo(() => {
@@ -464,6 +644,15 @@ const DominosGame = () => {
         setBoneyard(moveData.boneyard);
         setOpponentHandCount(prev => prev + 1);
         setGameStatus("Opponent drew a tile");
+        
+        // Track opponent's drawn tile
+        if (amIPlayer1Ref.current) {
+          // I'm player 1, opponent is player 2
+          setPlayer2DrawnIds(prev => [...prev, moveData.domino.id]);
+        } else {
+          // I'm player 2, opponent is player 1
+          setPlayer1DrawnIds(prev => [...prev, moveData.domino.id]);
+        }
       } else if (moveData.action === "pass") {
         setGameStatus("Opponent passed");
         setIsMyTurn(true);
@@ -682,6 +871,13 @@ const DominosGame = () => {
     setBoneyard(newBoneyard);
     play('domino/draw');
     
+    // Track the drawn tile for this player
+    if (amIPlayer1) {
+      setPlayer1DrawnIds(prev => [...prev, drawn.id]);
+    } else {
+      setPlayer2DrawnIds(prev => [...prev, drawn.id]);
+    }
+    
     // Send draw action to opponent
     const moveData: DominoMove = {
       domino: drawn,
@@ -699,7 +895,7 @@ const DominosGame = () => {
       title: "Drew a Tile",
       description: "Check if you can play now.",
     });
-  }, [isMyTurn, gameOver, boneyard, myHand, chain, opponentHandCount, play, sendMove]);
+  }, [isMyTurn, gameOver, boneyard, myHand, chain, opponentHandCount, play, sendMove, amIPlayer1]);
 
   // Handle pass
   const handlePass = useCallback(() => {
