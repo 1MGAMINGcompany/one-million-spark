@@ -248,6 +248,39 @@ export type Database = {
         }
         Relationships: []
       }
+      player_sessions: {
+        Row: {
+          created_at: string
+          last_hash: string | null
+          last_turn: number
+          revoked: boolean
+          room_pda: string
+          rules_hash: string
+          session_token: string
+          wallet: string
+        }
+        Insert: {
+          created_at?: string
+          last_hash?: string | null
+          last_turn?: number
+          revoked?: boolean
+          room_pda: string
+          rules_hash: string
+          session_token: string
+          wallet: string
+        }
+        Update: {
+          created_at?: string
+          last_hash?: string | null
+          last_turn?: number
+          revoked?: boolean
+          room_pda?: string
+          rules_hash?: string
+          session_token?: string
+          wallet?: string
+        }
+        Relationships: []
+      }
       ratings: {
         Row: {
           game_type: string
@@ -278,6 +311,36 @@ export type Database = {
         }
         Relationships: []
       }
+      session_nonces: {
+        Row: {
+          created_at: string
+          expires_at: string
+          nonce: string
+          room_pda: string
+          rules_hash: string
+          used: boolean
+          wallet: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at: string
+          nonce: string
+          room_pda: string
+          rules_hash: string
+          used?: boolean
+          wallet: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          nonce?: string
+          room_pda?: string
+          rules_hash?: string
+          used?: boolean
+          wallet?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -286,6 +349,10 @@ export type Database = {
       finish_game_session: {
         Args: { p_caller_wallet?: string; p_room_pda: string }
         Returns: undefined
+      }
+      issue_nonce: {
+        Args: { p_room_pda: string; p_rules_hash: string; p_wallet: string }
+        Returns: string
       }
       record_match_result: {
         Args: {
@@ -299,6 +366,17 @@ export type Database = {
           p_winner_wallet: string
         }
         Returns: undefined
+      }
+      start_session: {
+        Args: {
+          p_nonce: string
+          p_room_pda: string
+          p_rules_hash: string
+          p_sig_valid: boolean
+          p_signature: string
+          p_wallet: string
+        }
+        Returns: string
       }
       upsert_game_session: {
         Args: {
