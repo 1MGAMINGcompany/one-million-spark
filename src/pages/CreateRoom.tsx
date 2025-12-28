@@ -71,6 +71,7 @@ export default function CreateRoom() {
   const [entryFee, setEntryFee] = useState<string>("0.1");
   const [maxPlayers, setMaxPlayers] = useState<string>("2");
   const [turnTime, setTurnTime] = useState<string>("10");
+  const [gameMode, setGameMode] = useState<'casual' | 'ranked'>('casual');
   const [checkingActiveRoom, setCheckingActiveRoom] = useState(true);
   const [refreshingBalance, setRefreshingBalance] = useState(false);
   const [showMobileWalletRedirect, setShowMobileWalletRedirect] = useState(false);
@@ -258,6 +259,9 @@ export default function CreateRoom() {
           stakeLamports: solToLamports(entryFeeNum),
           creatorWallet: address,
         }).catch(err => console.warn('[CreateRoom] Failed to log match:', err));
+        
+        // Store mode in localStorage so game pages can read it
+        localStorage.setItem(`room_mode_${roomPdaStr}`, gameMode);
         
         // Add rematch_created flag if this was a rematch
         const queryParam = isRematch ? '?rematch_created=1' : '';
@@ -470,6 +474,36 @@ export default function CreateRoom() {
                 <SelectItem value="0">{t("createRoom.unlimited")}</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+
+          {/* Game Mode Toggle (Casual vs Ranked) */}
+          <div className="space-y-1.5">
+            <Label className="text-sm">Game Mode</Label>
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                type="button"
+                variant={gameMode === 'casual' ? 'default' : 'outline'}
+                size="sm"
+                className={`h-10 ${gameMode === 'casual' ? 'bg-emerald-600 hover:bg-emerald-700' : ''}`}
+                onClick={() => setGameMode('casual')}
+              >
+                <span className="mr-1.5">🟢</span> Casual
+              </Button>
+              <Button
+                type="button"
+                variant={gameMode === 'ranked' ? 'default' : 'outline'}
+                size="sm"
+                className={`h-10 ${gameMode === 'ranked' ? 'bg-red-600 hover:bg-red-700' : ''}`}
+                onClick={() => setGameMode('ranked')}
+              >
+                <span className="mr-1.5">🔴</span> Ranked
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {gameMode === 'ranked' 
+                ? 'ELO rating will be updated after this match' 
+                : 'No rating changes — just for fun'}
+            </p>
           </div>
 
           {/* Prize Info */}

@@ -17,6 +17,7 @@ import { TxDebugPanel } from "@/components/TxDebugPanel";
 import { MobileWalletRedirect } from "@/components/MobileWalletRedirect";
 import { PreviewDomainBanner, useSigningDisabled } from "@/components/PreviewDomainBanner";
 import { validatePublicKey, isMobileDevice, hasInjectedSolanaWallet, getRoomPda } from "@/lib/solana-utils";
+import { getRoomMode } from "@/hooks/useGameSessionPersistence";
 import { toast } from "sonner";
 
 // Presence feature disabled until program supports ping_room
@@ -599,10 +600,20 @@ export default function Room() {
                 }`}>
                   {isAbandoned ? 'Abandoned' : statusName}
                 </span>
-                {/* Mode Badge - Currently all games are casual */}
-                <span className="px-3 py-1 rounded-full text-sm font-medium bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                  🟢 Casual
-                </span>
+                {/* Mode Badge - Read from localStorage */}
+                {(() => {
+                  const mode = getRoomMode(roomPdaParam || '');
+                  const isRanked = mode === 'ranked';
+                  return (
+                    <span className={`px-3 py-1 rounded-full text-sm font-medium border ${
+                      isRanked 
+                        ? 'bg-red-500/20 text-red-400 border-red-500/30' 
+                        : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                    }`}>
+                      {isRanked ? '🔴 Ranked' : '🟢 Casual'}
+                    </span>
+                  );
+                })()}
                 {isPlayer && (
                   <span className="px-3 py-1 rounded-full text-sm font-medium bg-primary/20 text-primary">
                     You're in this game

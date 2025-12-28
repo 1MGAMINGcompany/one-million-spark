@@ -2,6 +2,11 @@ import { useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { archiveRoom } from '@/lib/roomArchive';
 
+// Helper to get room mode from localStorage
+export function getRoomMode(roomPda: string): 'casual' | 'ranked' {
+  return (localStorage.getItem(`room_mode_${roomPda}`) as 'casual' | 'ranked') || 'casual';
+}
+
 interface GameSessionData {
   room_pda: string;
   game_type: string;
@@ -10,6 +15,7 @@ interface GameSessionData {
   player1_wallet: string;
   player2_wallet: string | null;
   status: 'active' | 'finished';
+  mode: 'casual' | 'ranked';
 }
 
 interface UseGameSessionPersistenceOptions {
@@ -66,7 +72,8 @@ export function useGameSessionPersistence({
     currentTurnWallet: string | null,
     player1Wallet: string,
     player2Wallet: string | null,
-    status: 'active' | 'finished' = 'active'
+    status: 'active' | 'finished' = 'active',
+    mode: 'casual' | 'ranked' = 'casual'
   ) => {
     if (!roomPda || !enabled) return;
 
@@ -87,6 +94,7 @@ export function useGameSessionPersistence({
         player1_wallet: player1Wallet,
         player2_wallet: player2Wallet,
         status,
+        mode,
       };
 
       const { error } = await supabase
