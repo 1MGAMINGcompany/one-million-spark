@@ -174,8 +174,8 @@ export default function CreateRoom() {
     // Check if we're on a preview domain
     if (signingDisabled) {
       toast({
-        title: "Signing Disabled",
-        description: "Wallet signing is disabled on preview domains. Please use 1mgaming.com",
+        title: t("createRoom.signingDisabled"),
+        description: t("createRoom.signingDisabledDesc"),
         variant: "destructive",
       });
       return;
@@ -191,7 +191,7 @@ export default function CreateRoom() {
     const networkError = checkNetworkMismatch();
     if (networkError) {
       toast({
-        title: "Wrong Network",
+        title: t("createRoom.wrongNetwork"),
         description: networkError,
         variant: "destructive",
       });
@@ -295,8 +295,8 @@ export default function CreateRoom() {
       <Card className="max-w-md w-full border-border/50 bg-card/80 backdrop-blur">
         <CardHeader className="pb-3 pt-4 px-4">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-lg font-cinzel">
-              {isRematch ? "Rematch Game" : t("createRoom.title")}
+          <CardTitle className="text-lg font-cinzel">
+              {isRematch ? t("createRoom.rematchGame") : t("createRoom.title")}
             </CardTitle>
             {isRematch && (
               <RefreshCcw className="h-5 w-5 text-primary" />
@@ -308,17 +308,17 @@ export default function CreateRoom() {
             <div className="mt-3 p-3 bg-primary/10 border border-primary/30 rounded-lg">
               <div className="flex items-center gap-2 text-primary font-medium text-sm">
                 <RefreshCcw className="h-4 w-4" />
-                <span>Rematch Game</span>
+                <span>{t("createRoom.rematchGame")}</span>
               </div>
               <p className="text-xs text-muted-foreground mt-1">
-                Same players • New pot • New room
+                {t("createRoom.rematchDesc")}
               </p>
               <div className="flex flex-wrap gap-2 mt-2 text-xs">
                 <span className="px-2 py-0.5 bg-muted/50 rounded text-muted-foreground">
-                  Mode: <span className="text-foreground font-medium capitalize">{rematchData.mode}</span>
+                  {t("createRoom.rematchMode")}: <span className="text-foreground font-medium capitalize">{rematchData.mode}</span>
                 </span>
                 <span className="px-2 py-0.5 bg-muted/50 rounded text-muted-foreground">
-                  From: <span className="text-foreground font-mono text-[10px]">{rematchData.originRoomId.slice(0, 8)}...</span>
+                  {t("createRoom.rematchFrom")}: <span className="text-foreground font-mono text-[10px]">{rematchData.originRoomId.slice(0, 8)}...</span>
                 </span>
               </div>
             </div>
@@ -385,7 +385,7 @@ export default function CreateRoom() {
             <div className="flex items-start gap-2 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
               <AlertCircle className="h-4 w-4 text-red-500 mt-0.5 shrink-0" />
               <div className="text-sm text-red-400">
-                <p className="font-medium">Balance Error</p>
+                <p className="font-medium">{t("createRoom.balanceError")}</p>
                 <p className="text-xs opacity-80">{balanceInfo.error}</p>
               </div>
             </div>
@@ -396,9 +396,9 @@ export default function CreateRoom() {
             <div className="flex items-start gap-2 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
               <AlertCircle className="h-4 w-4 text-yellow-500 mt-0.5 shrink-0" />
               <div className="text-sm text-yellow-400">
-                <p className="font-medium">Wrong Network</p>
+                <p className="font-medium">{t("createRoom.wrongNetwork")}</p>
                 <p className="text-xs opacity-80">
-                  App is connected to {networkInfo.cluster} but wallet funds are on Mainnet.
+                  {t("createRoom.wrongNetworkDesc", { cluster: networkInfo.cluster })}
                 </p>
               </div>
             </div>
@@ -410,7 +410,7 @@ export default function CreateRoom() {
             <div className="flex items-center justify-between">
               <Label className="text-sm">{t("createRoom.gameType")}</Label>
               {isRematch && (
-                <span className="text-[10px] text-primary bg-primary/10 px-1.5 py-0.5 rounded">Pre-filled from rematch</span>
+                <span className="text-[10px] text-primary bg-primary/10 px-1.5 py-0.5 rounded">{t("createRoom.prefilledFromRematch")}</span>
               )}
             </div>
             <Select value={gameType} onValueChange={setGameType}>
@@ -432,7 +432,7 @@ export default function CreateRoom() {
             <div className="flex items-center justify-between">
               <Label className="text-sm">{t("createRoom.entryFeeSol")}</Label>
               {isRematch && (
-                <span className="text-[10px] text-primary bg-primary/10 px-1.5 py-0.5 rounded">Pre-filled from rematch</span>
+                <span className="text-[10px] text-primary bg-primary/10 px-1.5 py-0.5 rounded">{t("createRoom.prefilledFromRematch")}</span>
               )}
             </div>
             <div className="flex items-center gap-2">
@@ -547,21 +547,21 @@ export default function CreateRoom() {
               {txPending ? (
                 <>
                   <Loader2 className="h-5 w-5 animate-spin" />
-                  Creating Rematch Room…
+                  {t("createRoom.creatingRematchRoom")}
                 </>
               ) : checkingActiveRoom ? (
                 <>
                   <Loader2 className="h-5 w-5 animate-spin" />
-                  Checking…
+                  {t("createRoom.checking")}
                 </>
               ) : signingDisabled ? (
-                "Signing Disabled"
+                t("createRoom.signingDisabled")
               ) : activeRoom ? (
                 t("createRoom.cancelActiveFirst")
               ) : (
                 <>
                   <RefreshCcw className="h-5 w-5" />
-                  Create Rematch Room
+                  {t("createRoom.createRematchRoom")}
                 </>
               )}
             </Button>
@@ -583,7 +583,7 @@ export default function CreateRoom() {
                   {t("createRoom.checking")}
                 </>
               ) : signingDisabled ? (
-                "Signing Disabled"
+                t("createRoom.signingDisabled")
               ) : activeRoom ? (
                 t("createRoom.cancelActiveFirst")
               ) : (
@@ -599,7 +599,7 @@ export default function CreateRoom() {
           {/* RPC Status - Always Visible */}
           <div className="p-2.5 bg-muted/30 rounded-lg text-xs space-y-1.5 border border-border/30">
             <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">RPC Status</span>
+              <span className="text-muted-foreground">{t("createRoom.rpcStatus")}</span>
               <span className={networkInfo.isMainnet ? "text-green-400 font-medium" : "text-red-400 font-medium"}>
                 {networkInfo.loading ? "..." : networkInfo.isMainnet ? "MAINNET" : "NOT MAINNET"}
               </span>
@@ -608,7 +608,7 @@ export default function CreateRoom() {
               {networkInfo.rpcEndpoint}
             </div>
             <div className="font-mono text-[10px] text-muted-foreground truncate" title={networkInfo.genesisHash || ""}>
-              Genesis: {networkInfo.loading ? "..." : networkInfo.genesisHash?.slice(0, 16) || "Unknown"}...
+              {t("createRoom.genesis")}: {networkInfo.loading ? "..." : networkInfo.genesisHash?.slice(0, 16) || "Unknown"}...
             </div>
           </div>
         </CardContent>

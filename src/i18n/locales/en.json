@@ -375,7 +375,21 @@
     "gameModeCasual": "Casual",
     "gameModeRanked": "Ranked",
     "casualDesc": "No rating changes — just for fun",
-    "rankedDesc": "ELO rating will be updated after this match"
+    "rankedDesc": "ELO rating will be updated after this match",
+    "signingDisabled": "Signing Disabled",
+    "signingDisabledDesc": "Wallet signing is disabled on preview domains. Please use 1mgaming.com",
+    "wrongNetwork": "Wrong Network",
+    "wrongNetworkDesc": "App is connected to {{cluster}} but wallet funds are on Mainnet.",
+    "balanceError": "Balance Error",
+    "rematchGame": "Rematch Game",
+    "rematchDesc": "Same players • New pot • New room",
+    "rematchMode": "Mode",
+    "rematchFrom": "From",
+    "prefilledFromRematch": "Pre-filled from rematch",
+    "creatingRematchRoom": "Creating Rematch Room…",
+    "createRematchRoom": "Create Rematch Room",
+    "rpcStatus": "RPC Status",
+    "genesis": "Genesis"
   },
   "roomList": {
     "title": "Public Game Rooms",
