@@ -247,6 +247,9 @@ const LudoGame = () => {
     navigate("/room-list");
   };
 
+  // Ref for sendPlayerEliminated to use in forfeit handler
+  const sendPlayerEliminatedRef = useRef<((playerIndex: number) => boolean) | null>(null);
+
   const handleConfirmForfeit = async () => {
     if (!roomPda || myPlayerIndex < 0) return;
     
@@ -254,6 +257,9 @@ const LudoGame = () => {
     
     // First eliminate the player locally (remove tokens, skip turns)
     eliminatePlayer(myPlayerIndex);
+    
+    // Broadcast elimination to other players via WebRTC
+    sendPlayerEliminatedRef.current?.(myPlayerIndex);
     
     // Then notify the backend
     const result = await forfeitGame(roomPda);
@@ -453,6 +459,16 @@ const LudoGame = () => {
       const move = message.payload as LudoMove;
       applyExternalMove(move);
       recordPlayerMoveRef.current(roomPlayersRef.current[move.playerIndex] || "", `Moved to position ${move.endPosition}`);
+    } else if (message.type === "player_eliminated" && message.payload) {
+      // Handle remote player elimination
+      const { playerIndex } = message.payload;
+      console.log(`[LudoGame] Player ${playerIndex} eliminated via WebRTC`);
+      eliminatePlayer(playerIndex);
+      toast({ 
+        title: t('forfeit.playerEliminated'), 
+        description: t('forfeit.playerLeft', { player: turnPlayers[playerIndex]?.name || `Player ${playerIndex + 1}` }),
+        variant: "destructive" 
+      });
     } else if (message.type === "rematch_invite" && message.payload) {
       setRematchInviteData(message.payload);
       setShowAcceptModal(true);
@@ -466,7 +482,7 @@ const LudoGame = () => {
       toast({ title: t('toast.rematchReady'), description: t('toast.startingNewGame') });
       navigate(`/game/ludo/${message.payload.roomId}`);
     }
-  }, [applyExternalMove, rematch, navigate]); // Stable deps - uses refs
+  }, [applyExternalMove, eliminatePlayer, turnPlayers, rematch, navigate, t]); // Stable deps - uses refs
 
   // WebRTC sync
   const {
@@ -478,6 +494,7 @@ const LudoGame = () => {
     sendRematchAccept,
     sendRematchDecline,
     sendRematchReady,
+    sendPlayerEliminated,
   } = useWebRTCSync({
     roomId: roomId || "",
     players: roomPlayers,
@@ -491,7 +508,8 @@ const LudoGame = () => {
     sendRematchAcceptRef.current = sendRematchAccept;
     sendRematchDeclineRef.current = sendRematchDecline;
     sendRematchReadyRef.current = sendRematchReady;
-  }, [sendRematchInvite, sendRematchAccept, sendRematchDecline, sendRematchReady]);
+    sendPlayerEliminatedRef.current = sendPlayerEliminated;
+  }, [sendRematchInvite, sendRematchAccept, sendRematchDecline, sendRematchReady, sendPlayerEliminated]);
 
   // Handle chat message sending via WebRTC
   const handleChatSend = useCallback((msg: ChatMessage) => {
