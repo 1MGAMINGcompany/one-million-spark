@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useWallet } from "@solana/wallet-adapter-react";
@@ -10,7 +10,7 @@ import { RoomStatus, isOpenStatus } from "@/lib/solana-program";
 import { toast } from "@/hooks/use-toast";
 import { AudioManager } from "@/lib/AudioManager";
 import { showBrowserNotification } from "@/lib/pushNotifications";
-import { archiveRoom } from "@/lib/roomArchive";
+import { archiveRoom, isRoomArchived } from "@/lib/roomArchive";
 
 // REMOVED: GAME_ROUTES - game type comes from on-chain data via /play/:pda, not URL
 
@@ -20,6 +20,9 @@ export function GlobalActiveRoomBanner() {
   const { t } = useTranslation();
   const { connected } = useWallet();
   const { activeRoom } = useSolanaRooms();
+  
+  // Local dismissed state for immediate UI feedback
+  const [dismissedPda, setDismissedPda] = useState<string | null>(null);
   
   // Note: Active room polling is now centralized in useSolanaRooms
   // This component only CONSUMES activeRoom - it doesn't trigger fetches
@@ -69,8 +72,20 @@ export function GlobalActiveRoomBanner() {
     previousStatusRef.current = currentStatus;
   }, [activeRoom, navigate]);
 
-  // Don't show banner if no active room or not connected
+  // Reset dismissed state when activeRoom changes to a different room
+  useEffect(() => {
+    if (activeRoom?.pda !== dismissedPda) {
+      setDismissedPda(null);
+    }
+  }, [activeRoom?.pda, dismissedPda]);
+
+  // Don't show banner if no active room, not connected, or already dismissed
   if (!connected || !activeRoom) {
+    return null;
+  }
+
+  // Hide immediately if this room was dismissed or is archived
+  if (dismissedPda === activeRoom.pda || isRoomArchived(activeRoom.pda)) {
     return null;
   }
 
@@ -95,6 +110,9 @@ export function GlobalActiveRoomBanner() {
   };
 
   const handleDismiss = () => {
+    // Immediately hide the banner via local state
+    setDismissedPda(activeRoom.pda);
+    // Also archive it so it stays hidden after polling
     archiveRoom(activeRoom.pda);
     toast({
       title: t("common.bannerDismissed"),
