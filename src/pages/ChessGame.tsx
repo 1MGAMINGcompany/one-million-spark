@@ -263,7 +263,7 @@ const ChessGame = () => {
   });
 
   const handleAcceptRules = async () => {
-    const result = await rankedGate.acceptWithSignature();
+    const result = await rankedGate.acceptRules();
     if (result.success) {
       toast({ title: t('gameSession.rulesAccepted'), description: t('gameSession.signedAndReady') });
     } else {

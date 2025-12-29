@@ -1,13 +1,13 @@
 /**
  * Hook to manage the ranked game ready gate
  * 
- * For ranked games, both players must accept the rules via wallet signature before gameplay begins.
- * This hook tracks p1_ready and p2_ready flags in game_sessions.
+ * For ranked games, both players must acknowledge the rules before gameplay begins.
+ * The on-chain stake transaction serves as implicit acceptance of the game rules.
+ * This hook simply tracks p1_ready and p2_ready flags in game_sessions.
  */
 
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { useRankedAcceptance } from "./useRankedAcceptance";
 
 interface UseRankedReadyGateOptions {
   roomPda: string | undefined;
@@ -27,10 +27,8 @@ interface UseRankedReadyGateResult {
   isSettingReady: boolean;
   /** Whether we need to show the accept modal */
   showAcceptModal: boolean;
-  /** Accept rules with wallet signature (new flow) */
-  acceptWithSignature: () => Promise<{ success: boolean; error?: string }>;
-  /** Session token after successful acceptance */
-  sessionToken: string | null;
+  /** Accept rules (marks player ready - no wallet signature needed) */
+  acceptRules: () => Promise<{ success: boolean; error?: string }>;
   /** Stake in lamports (from session) */
   stakeLamports: number;
   /** Turn time in seconds for ranked games */
@@ -47,17 +45,7 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
   const [stakeLamports, setStakeLamports] = useState(0);
   const [turnTimeSeconds, setTurnTimeSeconds] = useState(60);
   const [hasLoaded, setHasLoaded] = useState(false);
-
-  // Use the signature-based acceptance hook
-  const { 
-    acceptWithSignature, 
-    isAccepting, 
-    sessionToken 
-  } = useRankedAcceptance({
-    roomPda,
-    stakeLamports,
-    turnTimeSeconds,
-  });
+  const [isSettingReady, setIsSettingReady] = useState(false);
 
   // Determine if I'm player 1 or player 2
   const isPlayer1 = myWallet && p1Wallet && myWallet.toLowerCase() === p1Wallet.toLowerCase();
@@ -67,8 +55,39 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
   const opponentReady = isPlayer1 ? p2Ready : isPlayer2 ? p1Ready : false;
   const bothReady = p1Ready && p2Ready;
 
-  // For casual games, always consider both ready
+  // Show accept modal if ranked, loaded, and this player hasn't accepted yet
   const showAcceptModal = enabled && isRanked && hasLoaded && !iAmReady && (p1Wallet !== null || p2Wallet !== null);
+
+  // Simple accept - just marks player ready (on-chain stake is the real acceptance)
+  const acceptRules = useCallback(async (): Promise<{ success: boolean; error?: string }> => {
+    if (!roomPda || !myWallet) {
+      return { success: false, error: "Missing room or wallet" };
+    }
+
+    setIsSettingReady(true);
+    
+    try {
+      console.log("[RankedReadyGate] Marking player ready...", { roomPda, myWallet });
+      
+      const { error } = await supabase.rpc("set_player_ready", {
+        p_room_pda: roomPda,
+        p_wallet: myWallet,
+      });
+
+      if (error) {
+        console.error("[RankedReadyGate] Failed to set ready:", error);
+        return { success: false, error: error.message };
+      }
+
+      console.log("[RankedReadyGate] Player marked as ready!");
+      return { success: true };
+    } catch (err: any) {
+      console.error("[RankedReadyGate] Error:", err);
+      return { success: false, error: err.message || "Unexpected error" };
+    } finally {
+      setIsSettingReady(false);
+    }
+  }, [roomPda, myWallet]);
 
   // Load initial state and subscribe to changes
   useEffect(() => {
@@ -86,9 +105,8 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
         setP2Ready(data.p2_ready ?? false);
         setP1Wallet(data.player1_wallet);
         setP2Wallet(data.player2_wallet);
-        // Use DB turn time if available, otherwise keep localStorage value
-        if ((data as any).turn_time_seconds) {
-          setTurnTimeSeconds((data as any).turn_time_seconds);
+        if (data.turn_time_seconds) {
+          setTurnTimeSeconds(data.turn_time_seconds);
         }
         setHasLoaded(true);
       }
@@ -144,8 +162,7 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
       bothReady: true,
       isSettingReady: false,
       showAcceptModal: false,
-      acceptWithSignature: async () => ({ success: true }),
-      sessionToken: null,
+      acceptRules: async () => ({ success: true }),
       stakeLamports: 0,
       turnTimeSeconds: 0,
     };
@@ -155,10 +172,9 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
     iAmReady,
     opponentReady,
     bothReady,
-    isSettingReady: isAccepting,
+    isSettingReady,
     showAcceptModal,
-    acceptWithSignature,
-    sessionToken,
+    acceptRules,
     stakeLamports,
     turnTimeSeconds,
   };
