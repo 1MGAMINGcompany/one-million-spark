@@ -193,12 +193,21 @@ const LudoAI = () => {
     }
   }, [isAnimating, currentPlayerIndex, currentPlayer, diceValue, isRolling, movableTokens, executeMove, advanceTurn, setDiceValue, setMovableTokens, t]);
 
-  // AI turn - using simple polling approach to avoid cleanup issues
+  // AI turn - using timeout with proper cleanup
   const aiProcessingRef = useRef(false);
+  const aiTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Clear any pending AI timeout
+  const clearAiTimeout = useCallback(() => {
+    if (aiTimeoutRef.current) {
+      clearTimeout(aiTimeoutRef.current);
+      aiTimeoutRef.current = null;
+    }
+  }, []);
   
   useEffect(() => {
     // Only process AI turns
-    if (!currentPlayer.isAI || gameOver || aiProcessingRef.current) {
+    if (!currentPlayer.isAI || gameOver) {
       return;
     }
     
@@ -207,10 +216,21 @@ const LudoAI = () => {
       return;
     }
     
+    // Prevent double processing
+    if (aiProcessingRef.current) {
+      return;
+    }
+    
     aiProcessingRef.current = true;
     const delay = difficulty === "easy" ? 800 : difficulty === "medium" ? 500 : 300;
     
-    const timeoutId = setTimeout(() => {
+    aiTimeoutRef.current = setTimeout(() => {
+      // Double-check we're still on AI turn (prevents stale closure issues)
+      if (!currentPlayer.isAI || gameOver) {
+        aiProcessingRef.current = false;
+        return;
+      }
+      
       rollDice((dice, movable) => {
         console.log(`[LUDO AI] AI ${currentPlayer.color} rolled ${dice}, movable: [${movable.join(', ')}]`);
         
@@ -221,7 +241,7 @@ const LudoAI = () => {
             description: t('gameAI.cannotMove'),
             duration: 1500,
           });
-          setTimeout(() => {
+          aiTimeoutRef.current = setTimeout(() => {
             setDiceValue(null);
             advanceTurn(dice);
             aiProcessingRef.current = false;
@@ -232,7 +252,7 @@ const LudoAI = () => {
           setMovableTokens([]);
           
           const aiDelay = difficulty === "easy" ? 600 : difficulty === "medium" ? 400 : 200;
-          setTimeout(() => {
+          aiTimeoutRef.current = setTimeout(() => {
             let chosenToken: number;
             
             if (difficulty === "easy") {
@@ -250,7 +270,7 @@ const LudoAI = () => {
             
             executeMove(currentPlayerIndex, chosenToken, capturedDice, () => {
               setDiceValue(null);
-              setTimeout(() => {
+              aiTimeoutRef.current = setTimeout(() => {
                 advanceTurn(capturedDice);
                 aiProcessingRef.current = false;
               }, 200);
@@ -261,14 +281,19 @@ const LudoAI = () => {
     }, delay);
     
     return () => {
-      clearTimeout(timeoutId);
+      clearAiTimeout();
+      // CRITICAL: Reset the processing flag on cleanup to prevent freeze
+      aiProcessingRef.current = false;
     };
-  }, [currentPlayer.isAI, currentPlayer.color, gameOver, diceValue, isRolling, isAnimating, difficulty, players, currentPlayerIndex, rollDice, executeMove, advanceTurn, setDiceValue, setMovableTokens, turnSignal, t]);
+  }, [currentPlayer.isAI, currentPlayer.color, gameOver, diceValue, isRolling, isAnimating, difficulty, players, currentPlayerIndex, rollDice, executeMove, advanceTurn, setDiceValue, setMovableTokens, turnSignal, t, clearAiTimeout]);
 
-  // Reset AI processing flag when player changes
+  // Cleanup AI timeouts on unmount
   useEffect(() => {
-    aiProcessingRef.current = false;
-  }, [currentPlayerIndex]);
+    return () => {
+      clearAiTimeout();
+      aiProcessingRef.current = false;
+    };
+  }, [clearAiTimeout]);
 
   return (
     <div className="min-h-screen bg-background flex flex-col relative">
