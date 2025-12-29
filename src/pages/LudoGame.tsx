@@ -9,7 +9,8 @@ import { toast } from "@/hooks/use-toast";
 import { useSound } from "@/contexts/SoundContext";
 import { useWallet } from "@/hooks/useWallet";
 import { useWebRTCSync, GameMessage } from "@/hooks/useWebRTCSync";
-import { useGameSessionPersistence, getRoomMode } from "@/hooks/useGameSessionPersistence";
+import { useGameSessionPersistence } from "@/hooks/useGameSessionPersistence";
+import { useRoomMode } from "@/hooks/useRoomMode";
 import { useRankedReadyGate } from "@/hooks/useRankedReadyGate";
 import { useTurnTimer, DEFAULT_RANKED_TURN_TIME } from "@/hooks/useTurnTimer";
 import LudoBoard from "@/components/ludo/LudoBoard";
@@ -153,6 +154,10 @@ const LudoGame = () => {
     handleLudoStateRestored(state, false);
   }, [handleLudoStateRestored]);
 
+  // Room mode hook - fetches from DB for Player 2 who doesn't have localStorage data
+  // Must be called before any effects that use roomMode
+  const { mode: roomMode, isRanked: isRankedGame, isLoaded: modeLoaded } = useRoomMode(roomPda);
+
   const { loadSession: loadLudoSession, saveSession: saveLudoSession, finishSession: finishLudoSession } = useGameSessionPersistence({
     roomPda: roomPda,
     gameType: 'ludo',
@@ -189,10 +194,10 @@ const LudoGame = () => {
         roomPlayers[0],
         roomPlayers[1] || null,
         gameOver ? 'finished' : 'active',
-        getRoomMode(roomPda || '')
+        roomMode
       );
     }
-  }, [players, currentPlayerIndex, diceValue, gameOver, roomPlayers, saveLudoSession]);
+  }, [players, currentPlayerIndex, diceValue, gameOver, roomPlayers, saveLudoSession, roomMode]);
 
   // Finish session and archive room when game ends
   useEffect(() => {
@@ -201,15 +206,11 @@ const LudoGame = () => {
     }
   }, [gameOver, roomPlayers.length, finishLudoSession]);
 
-  // Ranked ready gate - both players must accept rules before gameplay
-  const roomMode = getRoomMode(roomPda || "");
-  const isRankedGame = roomMode === "ranked";
-  
   const rankedGate = useRankedReadyGate({
     roomPda,
     myWallet: address,
     isRanked: isRankedGame,
-    enabled: roomPlayers.length >= 2,
+    enabled: roomPlayers.length >= 2 && modeLoaded,
   });
 
   const handleAcceptRules = async () => {

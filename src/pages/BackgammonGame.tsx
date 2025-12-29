@@ -16,7 +16,8 @@ import { useWebRTCSync, GameMessage } from "@/hooks/useWebRTCSync";
 import { useTurnNotifications, TurnPlayer } from "@/hooks/useTurnNotifications";
 import { useGameChat, ChatPlayer, ChatMessage } from "@/hooks/useGameChat";
 import { useRematch } from "@/hooks/useRematch";
-import { useGameSessionPersistence, getRoomMode } from "@/hooks/useGameSessionPersistence";
+import { useGameSessionPersistence } from "@/hooks/useGameSessionPersistence";
+import { useRoomMode } from "@/hooks/useRoomMode";
 import { useRankedReadyGate } from "@/hooks/useRankedReadyGate";
 import { useTurnTimer, DEFAULT_RANKED_TURN_TIME } from "@/hooks/useTurnTimer";
 import TurnStatusHeader from "@/components/TurnStatusHeader";
@@ -198,6 +199,10 @@ const BackgammonGame = () => {
     handleBackgammonStateRestored(state, false);
   }, [handleBackgammonStateRestored]);
 
+  // Room mode hook - fetches from DB for Player 2 who doesn't have localStorage data
+  // Must be called before any effects that use roomMode
+  const { mode: roomMode, isRanked: isRankedGame, isLoaded: modeLoaded } = useRoomMode(roomPda);
+
   const { loadSession: loadBackgammonSession, saveSession: saveBackgammonSession, finishSession: finishBackgammonSession } = useGameSessionPersistence({
     roomPda: roomPda,
     gameType: 'backgammon',
@@ -236,10 +241,10 @@ const BackgammonGame = () => {
         roomPlayers[0],
         roomPlayers[1],
         gameOver ? 'finished' : 'active',
-        getRoomMode(roomPda || '')
+        roomMode
       );
     }
-  }, [gameState, dice, remainingMoves, currentPlayer, gameOver, gameStatus, roomPlayers, saveBackgammonSession]);
+  }, [gameState, dice, remainingMoves, currentPlayer, gameOver, gameStatus, roomPlayers, saveBackgammonSession, roomMode]);
 
   // Finish session and archive room when game ends
   useEffect(() => {
@@ -248,15 +253,11 @@ const BackgammonGame = () => {
     }
   }, [gameOver, roomPlayers.length, finishBackgammonSession]);
 
-  // Ranked ready gate - both players must accept rules before gameplay
-  const roomMode = getRoomMode(roomPda || "");
-  const isRankedGame = roomMode === "ranked";
-  
   const rankedGate = useRankedReadyGate({
     roomPda,
     myWallet: address,
     isRanked: isRankedGame,
-    enabled: roomPlayers.length >= 2,
+    enabled: roomPlayers.length >= 2 && modeLoaded,
   });
 
   const handleAcceptRules = async () => {
