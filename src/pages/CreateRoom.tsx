@@ -260,8 +260,13 @@ export default function CreateRoom() {
           creatorWallet: address,
         }).catch(err => console.warn('[CreateRoom] Failed to log match:', err));
         
-        // Store mode in localStorage so game pages can read it
-        localStorage.setItem(`room_mode_${roomPdaStr}`, gameMode);
+        // Store mode and turn time in localStorage so game pages can read it
+        const turnTimeSeconds = turnTime === "0" ? 300 : parseInt(turnTime) * 60; // 0 = unlimited becomes 5 min max for ranked
+        localStorage.setItem(`room_mode_${roomPdaStr}`, JSON.stringify({
+          mode: gameMode,
+          turnTimeSeconds: gameMode === 'ranked' ? turnTimeSeconds : 0,
+          stakeLamports: solToLamports(entryFeeNum),
+        }));
         
         // Add rematch_created flag if this was a rematch
         const queryParam = isRematch ? '?rematch_created=1' : '';

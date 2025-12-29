@@ -114,6 +114,7 @@ export type Database = {
           player2_wallet: string | null
           room_pda: string
           status: string
+          turn_time_seconds: number
           updated_at: string
         }
         Insert: {
@@ -128,6 +129,7 @@ export type Database = {
           player2_wallet?: string | null
           room_pda: string
           status?: string
+          turn_time_seconds?: number
           updated_at?: string
         }
         Update: {
@@ -142,6 +144,7 @@ export type Database = {
           player2_wallet?: string | null
           room_pda?: string
           status?: string
+          turn_time_seconds?: number
           updated_at?: string
         }
         Relationships: []

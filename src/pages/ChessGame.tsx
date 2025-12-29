@@ -279,8 +279,11 @@ const ChessGame = () => {
     }
   }, [gameOver, myColor, play]);
 
+  // Use turn time from ranked gate (fetched from DB/localStorage)
+  const effectiveTurnTime = rankedGate.turnTimeSeconds || DEFAULT_RANKED_TURN_TIME;
+  
   const turnTimer = useTurnTimer({
-    turnTimeSeconds: DEFAULT_RANKED_TURN_TIME,
+    turnTimeSeconds: effectiveTurnTime,
     enabled: isRankedGame && canPlay && !gameOver,
     isMyTurn,
     onTimeExpired: handleTimeExpired,
@@ -963,7 +966,7 @@ const ChessGame = () => {
       <RulesInfoPanel 
         stakeSol={rankedGate.stakeLamports / 1_000_000_000} 
         isRanked={isRankedGame}
-        turnTimeSeconds={DEFAULT_RANKED_TURN_TIME}
+        turnTimeSeconds={effectiveTurnTime}
       />
 
       {/* Game End Screen */}
@@ -1006,6 +1009,7 @@ const ChessGame = () => {
         onAccept={handleAcceptRules}
         onLeave={handleLeaveMatch}
         stakeSol={rankedGate.stakeLamports / 1_000_000_000}
+        turnTimeSeconds={effectiveTurnTime}
         isLoading={rankedGate.isSettingReady}
         opponentReady={rankedGate.opponentReady}
       />
