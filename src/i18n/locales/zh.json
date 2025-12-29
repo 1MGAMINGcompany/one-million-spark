@@ -661,5 +661,16 @@
     "addToHomeScreen": "添加到主屏幕",
     "tapAdd": "点击右上角的\"添加\"",
     "scrollAndTap": "向下滚动并点击"
+  },
+  "rulesPanel": {
+    "matchRules": "比赛规则",
+    "ranked": "排位赛",
+    "stake": "押注",
+    "winnerPayout": "获胜者奖励",
+    "platformFee": "平台费用",
+    "turnTime": "回合时间",
+    "forfeit": "弃权",
+    "timeoutForfeit": "超时 = 自动弃权",
+    "rulesAcceptedNote": "两位玩家在比赛开始前已接受这些规则。奖励在链上执行。"
   }
 }

@@ -661,5 +661,16 @@
     "addToHomeScreen": "Aggiungi alla Schermata Home",
     "tapAdd": "Tocca \"Aggiungi\" nell'angolo in alto a destra",
     "scrollAndTap": "Scorri verso il basso e tocca"
+  },
+  "rulesPanel": {
+    "matchRules": "Regole della Partita",
+    "ranked": "Classificato",
+    "stake": "Puntata",
+    "winnerPayout": "Vincita del vincitore",
+    "platformFee": "Commissione piattaforma",
+    "turnTime": "Tempo del turno",
+    "forfeit": "Abbandono",
+    "timeoutForfeit": "Tempo scaduto = abbandono automatico",
+    "rulesAcceptedNote": "Entrambi i giocatori hanno accettato queste regole prima dell'inizio della partita. I pagamenti vengono eseguiti on-chain."
   }
 }
