@@ -56,7 +56,27 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
   const bothReady = p1Ready && p2Ready;
 
   // Show accept modal if ranked, loaded, and this player hasn't accepted yet
-  const showAcceptModal = enabled && isRanked && hasLoaded && !iAmReady && (p1Wallet !== null || p2Wallet !== null);
+  // Also require that we've identified this player's role (isPlayer1 or isPlayer2)
+  const isIdentified = isPlayer1 || isPlayer2;
+  const showAcceptModal = enabled && isRanked && hasLoaded && !iAmReady && isIdentified;
+  
+  // Debug logging for ranked gate state
+  console.log("[RankedReadyGate] State:", {
+    roomPda: roomPda?.slice(0, 8),
+    myWallet: myWallet?.slice(0, 8),
+    isRanked,
+    enabled,
+    hasLoaded,
+    isPlayer1,
+    isPlayer2,
+    isIdentified,
+    p1Ready,
+    p2Ready,
+    iAmReady,
+    opponentReady,
+    bothReady,
+    showAcceptModal,
+  });
 
   // Simple accept - just marks player ready (on-chain stake is the real acceptance)
   const acceptRules = useCallback(async (): Promise<{ success: boolean; error?: string }> => {

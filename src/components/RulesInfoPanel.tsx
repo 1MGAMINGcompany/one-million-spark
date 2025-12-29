@@ -15,8 +15,14 @@ export function RulesInfoPanel({ stakeSol, isRanked, turnTimeSeconds = DEFAULT_R
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
 
+  // Debug logging
+  console.log("[RulesInfoPanel] Props:", { stakeSol, isRanked, turnTimeSeconds });
+
   // Only show for ranked games
-  if (!isRanked) return null;
+  if (!isRanked) {
+    console.log("[RulesInfoPanel] Not showing - isRanked is false");
+    return null;
+  }
 
   const potSol = stakeSol * 2;
   const feeSol = potSol * 0.05;
