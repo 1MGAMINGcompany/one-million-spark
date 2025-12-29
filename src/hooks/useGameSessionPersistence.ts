@@ -66,6 +66,7 @@ export function useGameSessionPersistence({
 }: UseGameSessionPersistenceOptions) {
   const lastSavedRef = useRef<string>('');
   const isRestoringRef = useRef(false);
+  const isSavingRef = useRef(false);
 
   // Load existing session on mount
   const loadSession = useCallback(async (): Promise<Record<string, any> | null> => {
@@ -116,6 +117,9 @@ export function useGameSessionPersistence({
       return;
     }
 
+    // Set saving flag BEFORE async operation to prevent realtime race condition
+    isSavingRef.current = true;
+
     try {
       console.log('[GameSession] Saving session state via secure RPC...');
       
@@ -141,6 +145,11 @@ export function useGameSessionPersistence({
       console.log('[GameSession] Session saved successfully');
     } catch (err) {
       console.error('[GameSession] Failed to save session:', err);
+    } finally {
+      // Clear saving flag after delay to ensure realtime event is ignored
+      setTimeout(() => {
+        isSavingRef.current = false;
+      }, 500);
     }
   }, [roomPda, gameType, enabled, callerWallet]);
 
@@ -186,11 +195,22 @@ export function useGameSessionPersistence({
           filter: `room_pda=eq.${roomPda}`,
         },
         (payload) => {
-          // Only restore if we're not the one who saved it
+          // Skip if we're currently saving (our own update coming back)
+          if (isSavingRef.current) {
+            console.log('[GameSession] Ignoring update while saving (preventing flicker)');
+            return;
+          }
+          
+          // Skip if already restoring
+          if (isRestoringRef.current) {
+            return;
+          }
+          
           const newState = payload.new as GameSessionData;
           const stateHash = JSON.stringify(newState.game_state);
           
-          if (stateHash !== lastSavedRef.current && !isRestoringRef.current) {
+          // Only restore if it's different from what we last saved
+          if (stateHash !== lastSavedRef.current) {
             console.log('[GameSession] Received state update from peer');
             isRestoringRef.current = true;
             onStateRestored?.(newState.game_state);
