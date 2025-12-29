@@ -161,8 +161,10 @@ const CheckersGame = () => {
     fetchRoomPlayers();
   }, [address, roomPda]);
 
-  // Game session persistence
-  const handleCheckersStateRestored = useCallback((state: Record<string, any>) => {
+  // Game session persistence - track if we've shown the restored toast
+  const restoredToastShownRef = useRef(false);
+
+  const handleCheckersStateRestored = useCallback((state: Record<string, any>, showToast = true) => {
     const persisted = state as PersistedCheckersState;
     console.log('[CheckersGame] Restoring state from database:', persisted);
     
@@ -170,18 +172,28 @@ const CheckersGame = () => {
       setBoard(persisted.board);
       setCurrentPlayer(persisted.currentPlayer);
       setGameOver(persisted.gameOver);
-      toast({
-        title: t('gameSession.gameRestored'),
-        description: t('gameSession.sessionRecovered'),
-      });
+      
+      // Only show toast once per session load
+      if (showToast && !restoredToastShownRef.current) {
+        restoredToastShownRef.current = true;
+        toast({
+          title: t('gameSession.gameRestored'),
+          description: t('gameSession.sessionRecovered'),
+        });
+      }
     }
   }, [t]);
+
+  // For realtime updates, don't show toast (silent sync)
+  const handleRealtimeStateRestored = useCallback((state: Record<string, any>) => {
+    handleCheckersStateRestored(state, false);
+  }, [handleCheckersStateRestored]);
 
   const { loadSession: loadCheckersSession, saveSession: saveCheckersSession, finishSession: finishCheckersSession } = useGameSessionPersistence({
     roomPda: roomPda,
     gameType: 'checkers',
     enabled: roomPlayers.length >= 2 && !!address,
-    onStateRestored: handleCheckersStateRestored,
+    onStateRestored: handleRealtimeStateRestored,
     callerWallet: address, // Pass caller wallet for secure RPC validation
   });
 
@@ -190,11 +202,12 @@ const CheckersGame = () => {
     if (roomPlayers.length >= 2 && address) {
       loadCheckersSession().then(savedState => {
         if (savedState && Object.keys(savedState).length > 0) {
-          handleCheckersStateRestored(savedState);
+          handleCheckersStateRestored(savedState, true);
         }
       });
     }
-  }, [roomPlayers.length, address, loadCheckersSession, handleCheckersStateRestored]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roomPlayers.length, address]);
 
   // Save game state after each move
   useEffect(() => {
