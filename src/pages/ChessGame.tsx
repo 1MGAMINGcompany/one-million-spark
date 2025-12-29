@@ -14,7 +14,8 @@ import { useWebRTCSync, GameMessage } from "@/hooks/useWebRTCSync";
 import { useTurnNotifications, TurnPlayer } from "@/hooks/useTurnNotifications";
 import { useGameChat, ChatPlayer, ChatMessage } from "@/hooks/useGameChat";
 import { useRematch } from "@/hooks/useRematch";
-import { useGameSessionPersistence, getRoomMode } from "@/hooks/useGameSessionPersistence";
+import { useGameSessionPersistence } from "@/hooks/useGameSessionPersistence";
+import { useRoomMode } from "@/hooks/useRoomMode";
 import { useRankedReadyGate } from "@/hooks/useRankedReadyGate";
 import { useTurnTimer, DEFAULT_RANKED_TURN_TIME } from "@/hooks/useTurnTimer";
 import TurnStatusHeader from "@/components/TurnStatusHeader";
@@ -210,6 +211,10 @@ const ChessGame = () => {
     handleChessStateRestored(state, false);
   }, [handleChessStateRestored]);
 
+  // Room mode hook - fetches from DB for Player 2 who doesn't have localStorage data
+  // Must be called before any effects that use roomMode
+  const { mode: roomMode, isRanked: isRankedGame, isLoaded: modeLoaded } = useRoomMode(roomPda);
+
   const { loadSession: loadChessSession, saveSession: saveChessSession, finishSession: finishChessSession } = useGameSessionPersistence({
     roomPda: roomPda,
     gameType: 'chess',
@@ -246,10 +251,10 @@ const ChessGame = () => {
         roomPlayers[0],
         roomPlayers[1],
         gameOver ? 'finished' : 'active',
-        getRoomMode(roomPda || '')
+        roomMode
       );
     }
-  }, [game, moveHistory, gameOver, gameStatus, roomPlayers, saveChessSession]);
+  }, [game, moveHistory, gameOver, gameStatus, roomPlayers, saveChessSession, roomMode]);
 
   // Finish session and archive room when game ends
   useEffect(() => {
@@ -261,15 +266,11 @@ const ChessGame = () => {
   // Capture animations hook
   const { animations, triggerAnimation, handleAnimationComplete } = useCaptureAnimations(animationsEnabled);
 
-  // Ranked ready gate - both players must accept rules before gameplay
-  const roomMode = getRoomMode(roomPda || "");
-  const isRankedGame = roomMode === "ranked";
-  
   const rankedGate = useRankedReadyGate({
     roomPda,
     myWallet: address,
     isRanked: isRankedGame,
-    enabled: roomPlayers.length >= 2,
+    enabled: roomPlayers.length >= 2 && modeLoaded,
   });
 
   const handleAcceptRules = async () => {

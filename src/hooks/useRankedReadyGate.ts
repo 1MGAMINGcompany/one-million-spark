@@ -96,9 +96,9 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
     const loadState = async () => {
       const { data, error } = await supabase
         .from("game_sessions")
-        .select("p1_ready, p2_ready, player1_wallet, player2_wallet, turn_time_seconds")
+        .select("p1_ready, p2_ready, player1_wallet, player2_wallet, turn_time_seconds, mode")
         .eq("room_pda", roomPda)
-        .single();
+        .maybeSingle();
 
       if (!error && data) {
         setP1Ready(data.p1_ready ?? false);
@@ -108,6 +108,31 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
         if (data.turn_time_seconds) {
           setTurnTimeSeconds(data.turn_time_seconds);
         }
+        
+        // Sync mode from DB to localStorage for joining players
+        // This ensures Player 2 sees the correct mode even without localStorage data
+        if (data.mode) {
+          try {
+            const existing = localStorage.getItem(`room_mode_${roomPda}`);
+            const existingData = existing ? JSON.parse(existing) : {};
+            
+            // Only update if mode differs or no local data
+            if (!existing || existingData.mode !== data.mode) {
+              console.log("[RankedReadyGate] Syncing mode from DB to localStorage:", data.mode);
+              localStorage.setItem(`room_mode_${roomPda}`, JSON.stringify({
+                mode: data.mode,
+                turnTimeSeconds: data.turn_time_seconds || 60,
+                stakeLamports: existingData.stakeLamports || 0,
+              }));
+            }
+          } catch (e) {
+            console.warn("[RankedReadyGate] Failed to sync mode to localStorage:", e);
+          }
+        }
+        
+        setHasLoaded(true);
+      } else {
+        // Still mark as loaded even if no data found
         setHasLoaded(true);
       }
     };
