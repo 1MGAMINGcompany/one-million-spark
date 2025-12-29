@@ -151,6 +151,13 @@ export function useSubmitMove(options: UseSubmitMoveOptions): UseSubmitMoveResul
           setErrorType("out_of_sync");
           toast.info("Out of sync. Resyncing…", { duration: 3000 });
           
+          // Report desync (silent) - increments counter, may revoke at threshold
+          const { error: desyncErr } = await supabase.rpc("report_desync", {
+            p_session_token: sessionToken,
+            p_room_pda: roomPda,
+          });
+          if (desyncErr) console.log("[submitMove] report_desync:", desyncErr.message);
+          
           if (onResyncNeeded) {
             const syncData = await onResyncNeeded();
             if (syncData) {
@@ -163,6 +170,13 @@ export function useSubmitMove(options: UseSubmitMoveOptions): UseSubmitMoveResul
         if (error.message.includes("bad prev hash")) {
           setErrorType("hash_conflict");
           toast.info("Move conflict detected. Resyncing…", { duration: 3000 });
+          
+          // Report desync (silent) - increments counter, may revoke at threshold
+          const { error: desyncErr } = await supabase.rpc("report_desync", {
+            p_session_token: sessionToken,
+            p_room_pda: roomPda,
+          });
+          if (desyncErr) console.log("[submitMove] report_desync:", desyncErr.message);
           
           if (onResyncNeeded) {
             const syncData = await onResyncNeeded();

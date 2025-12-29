@@ -290,6 +290,7 @@ export type Database = {
       player_sessions: {
         Row: {
           created_at: string
+          desync_count: number
           last_hash: string | null
           last_move_at: string | null
           last_turn: number
@@ -301,6 +302,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          desync_count?: number
           last_hash?: string | null
           last_move_at?: string | null
           last_turn?: number
@@ -312,6 +314,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          desync_count?: number
           last_hash?: string | null
           last_move_at?: string | null
           last_turn?: number
@@ -407,6 +410,10 @@ export type Database = {
           p_stake_lamports: number
           p_winner_wallet: string
         }
+        Returns: undefined
+      }
+      report_desync: {
+        Args: { p_room_pda: string; p_session_token: string }
         Returns: undefined
       }
       revoke_session: {

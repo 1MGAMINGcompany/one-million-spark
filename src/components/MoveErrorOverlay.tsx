@@ -29,9 +29,9 @@ export function MoveErrorOverlay({
               <RotateCcw className="h-6 w-6 text-amber-500" />
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-foreground">Session Expired</h3>
+              <h3 className="text-lg font-semibold text-foreground">Session Reset</h3>
               <p className="mt-1 text-sm text-muted-foreground">
-                Tap "Re-Ready" to continue playing.
+                Session reset for safety. Tap Re-Ready to continue.
               </p>
             </div>
             <Button 
