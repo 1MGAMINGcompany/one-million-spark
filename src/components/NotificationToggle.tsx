@@ -10,6 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { useTranslation } from "react-i18next";
 
 interface NotificationToggleProps {
   enabled: boolean;
@@ -155,17 +156,19 @@ function IOSInstallDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const { t } = useTranslation();
+  
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Smartphone className="w-5 h-5 text-primary" />
-            Install App for Notifications
+            {t('pwa.addToHomeScreen')}
           </DialogTitle>
           <DialogDescription className="pt-2 space-y-4">
             <p>
-              To receive turn notifications on iOS, please add 1M Gaming to your Home Screen.
+              {t('common.installAppForNotifications', { defaultValue: 'To receive turn notifications on iOS, please add 1M Gaming to your Home Screen.' })}
             </p>
             <div className="bg-muted/50 rounded-lg p-4 space-y-3 text-sm">
               <div className="flex items-start gap-3">
@@ -173,7 +176,7 @@ function IOSInstallDialog({
                   1
                 </span>
                 <p>
-                  Tap the <strong>Share</strong> button (square with arrow) at the bottom of Safari
+                  {t('common.tapShareButton', { defaultValue: 'Tap the Share button (square with arrow) at the bottom of Safari' })}
                 </p>
               </div>
               <div className="flex items-start gap-3">
@@ -181,7 +184,7 @@ function IOSInstallDialog({
                   2
                 </span>
                 <p>
-                  Scroll down and tap <strong>"Add to Home Screen"</strong>
+                  {t('pwa.scrollAndTap')} <strong>"{t('pwa.addToHomeScreen')}"</strong>
                 </p>
               </div>
               <div className="flex items-start gap-3">
@@ -189,17 +192,17 @@ function IOSInstallDialog({
                   3
                 </span>
                 <p>
-                  Tap <strong>"Add"</strong> in the top right corner
+                  {t('pwa.tapAdd')}
                 </p>
               </div>
             </div>
             <p className="text-xs text-muted-foreground">
-              Once installed, open 1M Gaming from your Home Screen and enable notifications.
+              {t('common.openFromHomeScreen', { defaultValue: 'Once installed, open 1M Gaming from your Home Screen and enable notifications.' })}
             </p>
           </DialogDescription>
         </DialogHeader>
         <Button onClick={() => onOpenChange(false)} className="w-full mt-2">
-          Got it
+          {t('common.gotIt', { defaultValue: 'Got it' })}
         </Button>
       </DialogContent>
     </Dialog>
