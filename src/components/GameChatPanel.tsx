@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -148,7 +149,8 @@ const MessageItem = ({
               onClick={() => onCopyAddress(message.wallet)}
             >
               <Copy className="w-3 h-3 mr-1" />
-              Copy Address
+              {/* Copy Address is kept simple */}
+              Copy
             </Button>
           </PopoverContent>
         </Popover>
@@ -205,7 +207,7 @@ const MentionPicker = ({
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-48 p-2" side="top" align="start">
-        <p className="text-xs text-muted-foreground mb-2 px-1">Tag a player</p>
+        <p className="text-xs text-muted-foreground mb-2 px-1">Tag player</p>
         <div className="space-y-1">
           {otherPlayers.map((player) => (
             <button
@@ -274,7 +276,7 @@ const ChatInput = ({
       onSend();
     } else if (result.error) {
       toast({
-        title: "Cannot send message",
+        title: "Error",
         description: result.error,
         variant: "destructive",
       });
@@ -308,7 +310,7 @@ const ChatInput = ({
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Type a message..."
+          placeholder="Message..."
           className="flex-1 h-9 text-sm bg-muted/30"
           maxLength={280}
         />
@@ -341,7 +343,7 @@ const MessagesList = ({ chat }: { chat: GameChatReturn }) => {
     navigator.clipboard.writeText(address);
     toast({
       title: "Copied!",
-      description: "Wallet address copied to clipboard",
+      description: "Address copied",
     });
   }, []);
   
@@ -350,8 +352,8 @@ const MessagesList = ({ chat }: { chat: GameChatReturn }) => {
       {chat.messages.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-full py-8 text-muted-foreground">
           <MessageCircle className="w-8 h-8 mb-2 opacity-50" />
-          <p className="text-sm">No messages yet</p>
-          <p className="text-xs">Say hello to your opponent!</p>
+          <p className="text-sm">No messages</p>
+          <p className="text-xs">Say hello!</p>
         </div>
       ) : (
         <div className="space-y-1">
@@ -392,9 +394,9 @@ const DesktopChatPanel = ({ chat }: { chat: GameChatReturn }) => {
           <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-muted/30">
             <div className="flex items-center gap-2">
               <MessageCircle className="w-4 h-4 text-primary" />
-              <span className="font-medium text-sm">Game Chat</span>
+              <span className="font-medium text-sm">Chat</span>
               <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
-                {chat.players.length} players
+                {chat.players.length}
               </span>
             </div>
             <Button
@@ -410,7 +412,7 @@ const DesktopChatPanel = ({ chat }: { chat: GameChatReturn }) => {
           {/* Players list */}
           <div className="px-3 py-2 border-b border-border bg-muted/10">
             <p className="text-xs text-muted-foreground mb-1.5 flex items-center gap-1">
-              <Users className="w-3 h-3" /> Players
+              <Users className="w-3 h-3" />
             </p>
             <div className="flex gap-2">
               {chat.players.map((player) => (
@@ -509,9 +511,9 @@ const MobileChatDrawer = ({ chat }: { chat: GameChatReturn }) => {
         <SheetHeader className="px-4 py-3 border-b border-border">
           <SheetTitle className="flex items-center gap-2 text-base">
             <MessageCircle className="w-4 h-4 text-primary" />
-            Game Chat
+            Chat
             <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded ml-auto">
-              {chat.players.length} players
+              {chat.players.length}
             </span>
           </SheetTitle>
         </SheetHeader>

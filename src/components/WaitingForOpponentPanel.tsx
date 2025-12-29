@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Check, Clock, Copy, CheckCheck, Users, Link2 } from "lucide-react";
 import { toast } from "sonner";
@@ -10,6 +11,7 @@ interface WaitingForOpponentPanelProps {
 
 export function WaitingForOpponentPanel({ onLeave, roomPda }: WaitingForOpponentPanelProps) {
   const [copied, setCopied] = useState(false);
+  const { t } = useTranslation();
 
   const handleCopyLink = async () => {
     const inviteUrl = roomPda 
@@ -19,10 +21,10 @@ export function WaitingForOpponentPanel({ onLeave, roomPda }: WaitingForOpponent
     try {
       await navigator.clipboard.writeText(inviteUrl);
       setCopied(true);
-      toast.success("Link copied! Share it with your opponent.");
+      toast.success(t("waitingPanel.linkCopiedToast"));
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
-      toast.error("Failed to copy link");
+      toast.error(t("common.failedToCopy"));
     }
   };
 
@@ -44,7 +46,7 @@ export function WaitingForOpponentPanel({ onLeave, roomPda }: WaitingForOpponent
               <Check className="h-4 w-4 text-emerald-500" />
             </div>
             <span className="text-sm text-emerald-600 dark:text-emerald-400 font-medium">
-              You accepted the rules
+              {t("waitingPanel.youAccepted")}
             </span>
           </div>
 
@@ -54,14 +56,14 @@ export function WaitingForOpponentPanel({ onLeave, roomPda }: WaitingForOpponent
               <Clock className="h-4 w-4 text-amber-500" />
             </div>
             <span className="text-sm text-amber-600 dark:text-amber-400 font-medium">
-              Waiting for opponent to accept…
+              {t("waitingPanel.waitingOpponentAccept")}
             </span>
           </div>
         </div>
 
         {/* Info Note */}
         <p className="text-xs text-muted-foreground">
-          Game starts automatically when both players accept.
+          {t("waitingPanel.gameStartsAuto")}
         </p>
 
         {/* Actions */}
@@ -74,12 +76,12 @@ export function WaitingForOpponentPanel({ onLeave, roomPda }: WaitingForOpponent
             {copied ? (
               <>
                 <CheckCheck className="h-4 w-4 text-emerald-500" />
-                Link Copied!
+                {t("waitingPanel.linkCopied")}
               </>
             ) : (
               <>
                 <Link2 className="h-4 w-4" />
-                Copy Invite Link
+                {t("waitingPanel.copyInviteLink")}
               </>
             )}
           </Button>
@@ -89,7 +91,7 @@ export function WaitingForOpponentPanel({ onLeave, roomPda }: WaitingForOpponent
             onClick={onLeave}
             className="w-full text-muted-foreground hover:text-foreground"
           >
-            Leave Match
+            {t("waitingPanel.leaveMatch")}
           </Button>
         </div>
       </div>

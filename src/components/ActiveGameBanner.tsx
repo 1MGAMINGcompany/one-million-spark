@@ -1,4 +1,5 @@
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Play, Users } from "lucide-react";
@@ -10,6 +11,7 @@ interface ActiveGameBannerProps {
 
 export function ActiveGameBanner({ room }: ActiveGameBannerProps) {
   const navigate = useNavigate();
+  const { t } = useTranslation();
 
   const isStarted = room.status === RoomStatus.Started;
   const isWaiting = isOpenStatus(room.status);
@@ -33,7 +35,7 @@ export function ActiveGameBanner({ room }: ActiveGameBannerProps) {
                 <Play className="h-5 w-5 text-primary" />
               </div>
               <div>
-                <p className="font-semibold text-primary">Game Ready — Opponent Joined!</p>
+                <p className="font-semibold text-primary">{t("gameBanner.gameReady")}</p>
                 <p className="text-sm text-muted-foreground">
                   {room.gameTypeName} • {room.entryFeeSol} SOL
                 </p>
@@ -41,7 +43,7 @@ export function ActiveGameBanner({ room }: ActiveGameBannerProps) {
             </div>
             <Button onClick={handleEnterGame} className="shrink-0">
               <Play className="h-4 w-4 mr-2" />
-              Enter Game
+              {t("gameBanner.enterGame")}
             </Button>
           </div>
         </CardContent>
@@ -59,14 +61,14 @@ export function ActiveGameBanner({ room }: ActiveGameBannerProps) {
                 <Users className="h-5 w-5 text-amber-500" />
               </div>
               <div>
-                <p className="font-semibold text-amber-500">Waiting for Opponent</p>
+                <p className="font-semibold text-amber-500">{t("gameBanner.waitingForOpponent")}</p>
                 <p className="text-sm text-muted-foreground">
-                  {room.gameTypeName} • Room #{room.roomId}
+                  {room.gameTypeName} • {t("game.room")} #{room.roomId}
                 </p>
               </div>
             </div>
             <Button variant="outline" onClick={handleViewRoom} className="shrink-0">
-              View Room
+              {t("gameBanner.viewRoom")}
             </Button>
           </div>
         </CardContent>
