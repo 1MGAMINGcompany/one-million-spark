@@ -41,6 +41,7 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
   const [isAnimating, setIsAnimating] = useState(false);
   const [turnSignal, setTurnSignal] = useState(0); // Increments on every turn to force re-renders
   const [captureEvent, setCaptureEvent] = useState<LudoCaptureEvent | null>(null);
+  const [eliminatedPlayers, setEliminatedPlayers] = useState<Set<number>>(new Set());
   
   // Use refs to avoid stale closures and prevent double execution
   const playersRef = useRef(players);
@@ -53,6 +54,10 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
   
   useEffect(() => { playersRef.current = players; }, [players]);
   useEffect(() => { currentPlayerIndexRef.current = currentPlayerIndex; }, [currentPlayerIndex]);
+
+  // Ref for eliminated players to avoid stale closures
+  const eliminatedPlayersRef = useRef(eliminatedPlayers);
+  useEffect(() => { eliminatedPlayersRef.current = eliminatedPlayers; }, [eliminatedPlayers]);
 
   const currentPlayer = players[currentPlayerIndex];
 
@@ -323,19 +328,31 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
     return true;
   }, [calculateEndPosition, animateMovement, onSoundPlay, onToast]);
 
-  // Check for winner - all 4 tokens at position 62 (finished)
+  // Check for winner - all 4 tokens at position 62 (finished) OR last player standing
   const checkWinner = useCallback((playersToCheck: Player[]): PlayerColor | null => {
-    for (const player of playersToCheck) {
-      if (player.tokens.every(t => t.position === FINISH_POSITION)) {
+    const eliminated = eliminatedPlayersRef.current;
+    
+    // First check if any player has all tokens finished
+    for (let i = 0; i < playersToCheck.length; i++) {
+      const player = playersToCheck[i];
+      if (!eliminated.has(i) && player.tokens.every(t => t.position === FINISH_POSITION)) {
         return player.color;
       }
     }
+    
+    // Check if only one player remains (all others eliminated)
+    const activePlayers = playersToCheck.filter((_, i) => !eliminated.has(i));
+    if (activePlayers.length === 1) {
+      return activePlayers[0].color;
+    }
+    
     return null;
   }, []);
 
   // Advance to next turn - returns true if same player gets bonus turn (rolled 6)
   const advanceTurn = useCallback((diceRolled: number): boolean => {
     const currentPlayers = playersRef.current;
+    const eliminated = eliminatedPlayersRef.current;
     const winner = checkWinner(currentPlayers);
     
     if (winner) {
@@ -348,7 +365,17 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
     
     // Only advance turn if dice wasn't 6
     if (!isBonusTurn) {
-      setCurrentPlayerIndex(prev => (prev + 1) % 4);
+      // Find next non-eliminated player
+      setCurrentPlayerIndex(prev => {
+        let next = (prev + 1) % 4;
+        let attempts = 0;
+        // Skip eliminated players (max 4 attempts to prevent infinite loop)
+        while (eliminated.has(next) && attempts < 4) {
+          next = (next + 1) % 4;
+          attempts++;
+        }
+        return next;
+      });
     } else {
       console.log(`[LUDO ENGINE] Bonus turn! Rolled 6, same player continues.`);
     }
@@ -429,7 +456,17 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
     // Advance turn after brief delay
     setTimeout(() => {
       if (move.diceValue !== 6) {
-        setCurrentPlayerIndex(prev => (prev + 1) % 4);
+        // Find next non-eliminated player
+        setCurrentPlayerIndex(prev => {
+          const eliminated = eliminatedPlayersRef.current;
+          let next = (prev + 1) % 4;
+          let attempts = 0;
+          while (eliminated.has(next) && attempts < 4) {
+            next = (next + 1) % 4;
+            attempts++;
+          }
+          return next;
+        });
       }
       setDiceValue(null);
       setMovableTokens([]);
@@ -449,7 +486,63 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
     setMovableTokens([]);
     setIsAnimating(false);
     setTurnSignal(0);
+    setEliminatedPlayers(new Set());
   }, []);
+
+  // Eliminate a player (forfeit) - removes their tokens and skips their turns
+  const eliminatePlayer = useCallback((playerIndex: number) => {
+    console.log(`[LUDO ENGINE] Eliminating player ${playerIndex}`);
+    
+    // Add to eliminated set
+    setEliminatedPlayers(prev => {
+      const newSet = new Set(prev);
+      newSet.add(playerIndex);
+      return newSet;
+    });
+    
+    // Remove all tokens from the board (send to position -2 = eliminated)
+    setPlayers(prev => prev.map((p, pIdx) => {
+      if (pIdx === playerIndex) {
+        return {
+          ...p,
+          tokens: p.tokens.map(t => ({ ...t, position: -2 })) // -2 = eliminated (different from -1 home base)
+        };
+      }
+      return p;
+    }));
+    
+    // If it was this player's turn, advance to next
+    if (currentPlayerIndexRef.current === playerIndex) {
+      setCurrentPlayerIndex(prev => {
+        let next = (prev + 1) % 4;
+        let attempts = 0;
+        const eliminated = new Set(eliminatedPlayersRef.current);
+        eliminated.add(playerIndex);
+        while (eliminated.has(next) && attempts < 4) {
+          next = (next + 1) % 4;
+          attempts++;
+        }
+        return next;
+      });
+      setDiceValue(null);
+      setMovableTokens([]);
+      setTurnSignal(prev => prev + 1);
+    }
+    
+    // Check if only one player remains
+    setTimeout(() => {
+      const currentPlayers = playersRef.current;
+      const eliminated = new Set(eliminatedPlayersRef.current);
+      eliminated.add(playerIndex);
+      
+      const activePlayers = currentPlayers.filter((_, i) => !eliminated.has(i));
+      if (activePlayers.length === 1) {
+        setGameOver(activePlayers[0].color);
+        onSoundPlay?.('ludo_win');
+        onToast?.("Victory!", `${activePlayers[0].color} wins by elimination!`);
+      }
+    }, 100);
+  }, [onSoundPlay, onToast]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -484,6 +577,7 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
     isAnimating,
     turnSignal,
     captureEvent,
+    eliminatedPlayers,
     
     // Actions
     rollDice,
@@ -494,11 +588,13 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
     getMovableTokens,
     calculateEndPosition,
     clearCaptureEvent,
+    eliminatePlayer,
     
     // Setters for external control
     setCurrentPlayerIndex,
     setDiceValue,
     setMovableTokens,
     setGameOver,
+    setEliminatedPlayers,
   };
 }
