@@ -684,17 +684,21 @@ const ChessGame = () => {
     sendRematchReadyRef.current = sendRematchReady;
   }, [sendRematchInvite, sendRematchAccept, sendRematchDecline, sendRematchReady]);
 
+  // Check if it's actually my turn (based on game state, not canPlay gate)
+  const isActuallyMyTurn = game.turn() === myColor && !gameOver;
+
   useEffect(() => {
     if (roomPlayers.length < 2) {
       setGameStatus(t("gameMultiplayer.waitingForOpponent"));
     } else if (connectionState === "connecting") {
       setGameStatus(t("gameMultiplayer.connectingToOpponent"));
     } else if (connectionState === "connected") {
-      setGameStatus(isMyTurn ? t("gameMultiplayer.yourTurn") : t("gameMultiplayer.opponentsTurn"));
+      // Show actual turn status (not gated by canPlay)
+      setGameStatus(isActuallyMyTurn ? t("gameMultiplayer.yourTurn") : t("gameMultiplayer.opponentsTurn"));
     } else if (connectionState === "disconnected") {
       setGameStatus(t("gameMultiplayer.connectionLost"));
     }
-  }, [roomPlayers.length, connectionState, isMyTurn]);
+  }, [roomPlayers.length, connectionState, isActuallyMyTurn, t]);
 
   const checkGameOver = useCallback((currentGame: Chess) => {
     if (currentGame.isCheckmate()) {
@@ -848,7 +852,7 @@ const ChessGame = () => {
       <TurnBanner
         gameName="Chess"
         roomId={roomId || "unknown"}
-        isVisible={!hasPermission && isMyTurnNotification && !gameOver}
+        isVisible={!hasPermission && isActuallyMyTurn && !gameOver}
       />
 
       <div className="relative z-10">
@@ -896,7 +900,7 @@ const ChessGame = () => {
         <div className="px-4 py-2">
           <div className="max-w-6xl mx-auto">
             <TurnStatusHeader
-              isMyTurn={isMyTurnNotification}
+              isMyTurn={isActuallyMyTurn}
               activePlayer={turnPlayers[game.turn() === "w" ? 0 : 1]}
               players={turnPlayers}
               myAddress={address}
