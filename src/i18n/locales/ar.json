@@ -254,7 +254,13 @@
     "approvalFailed": "فشلت الموافقة",
     "transactionFailed": "فشلت المعاملة",
     "roomCancelled": "تم إلغاء الغرفة",
-    "roomCancelledDesc": "تم إلغاء غرفتك."
+    "roomCancelledDesc": "تم إلغاء غرفتك.",
+    "stakeOptional": "الرهان: اختياري",
+    "stakeMinRequired": "الحد الأدنى للرهان مطلوب",
+    "gameModeCasual": "عادي",
+    "gameModeRanked": "تصنيفي",
+    "casualDesc": "لا تغيير في التصنيف — للمتعة فقط",
+    "rankedDesc": "سيتم تحديث تصنيف ELO بعد هذه المباراة"
   },
   "roomList": {
     "title": "غرف اللعب العامة",

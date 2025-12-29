@@ -254,7 +254,13 @@
     "approvalFailed": "Genehmigung fehlgeschlagen",
     "transactionFailed": "Transaktion fehlgeschlagen",
     "roomCancelled": "Raum storniert",
-    "roomCancelledDesc": "Ihr Raum wurde storniert."
+    "roomCancelledDesc": "Ihr Raum wurde storniert.",
+    "stakeOptional": "Einsatz: Optional",
+    "stakeMinRequired": "Mindesteinsatz erforderlich",
+    "gameModeCasual": "Locker",
+    "gameModeRanked": "Ranglistenspiel",
+    "casualDesc": "Keine Änderung der Rangliste — nur zum Spaß",
+    "rankedDesc": "ELO-Wertung wird nach diesem Match aktualisiert"
   },
   "roomList": {
     "title": "Öffentliche Spielräume",

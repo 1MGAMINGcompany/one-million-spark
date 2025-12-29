@@ -254,7 +254,13 @@
     "approvalFailed": "Échec de l'Approbation",
     "transactionFailed": "Transaction Échouée",
     "roomCancelled": "Salle Annulée",
-    "roomCancelledDesc": "Votre salle a été annulée."
+    "roomCancelledDesc": "Votre salle a été annulée.",
+    "stakeOptional": "Mise : Facultative",
+    "stakeMinRequired": "Mise minimale requise",
+    "gameModeCasual": "Casual",
+    "gameModeRanked": "Classé",
+    "casualDesc": "Pas de changement de classement — juste pour le plaisir",
+    "rankedDesc": "Le classement ELO sera mis à jour après ce match"
   },
   "roomList": {
     "title": "Salles de Jeu Publiques",

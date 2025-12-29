@@ -254,7 +254,13 @@
     "approvalFailed": "अनुमोदन विफल",
     "transactionFailed": "लेनदेन विफल",
     "roomCancelled": "रूम रद्द",
-    "roomCancelledDesc": "आपका रूम रद्द कर दिया गया है।"
+    "roomCancelledDesc": "आपका रूम रद्द कर दिया गया है।",
+    "stakeOptional": "दांव: वैकल्पिक",
+    "stakeMinRequired": "न्यूनतम दांव आवश्यक है",
+    "gameModeCasual": "आरामदायक",
+    "gameModeRanked": "रैंक्ड",
+    "casualDesc": "रैंकिंग में कोई बदलाव नहीं — बस मज़े के लिए",
+    "rankedDesc": "इस मैच के बाद ELO रेटिंग अपडेट होगी"
   },
   "roomList": {
     "title": "सार्वजनिक गेम रूम",

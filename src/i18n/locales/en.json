@@ -369,7 +369,13 @@
     "balance": "Balance",
     "prizePool": "Prize Pool",
     "platformFee": "Platform Fee",
-    "connected": "Connected"
+    "connected": "Connected",
+    "stakeOptional": "Stake: Optional",
+    "stakeMinRequired": "Minimum stake required",
+    "gameModeCasual": "Casual",
+    "gameModeRanked": "Ranked",
+    "casualDesc": "No rating changes — just for fun",
+    "rankedDesc": "ELO rating will be updated after this match"
   },
   "roomList": {
     "title": "Public Game Rooms",

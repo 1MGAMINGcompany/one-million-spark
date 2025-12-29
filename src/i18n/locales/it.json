@@ -254,7 +254,13 @@
     "approvalFailed": "Approvazione Fallita",
     "transactionFailed": "Transazione Fallita",
     "roomCancelled": "Stanza Annullata",
-    "roomCancelledDesc": "La tua stanza è stata annullata."
+    "roomCancelledDesc": "La tua stanza è stata annullata.",
+    "stakeOptional": "Puntata: Facoltativa",
+    "stakeMinRequired": "Puntata minima richiesta",
+    "gameModeCasual": "Casual",
+    "gameModeRanked": "Classificato",
+    "casualDesc": "Nessun cambiamento di classifica — solo per divertimento",
+    "rankedDesc": "L'ELO verrà aggiornato dopo questa partita"
   },
   "roomList": {
     "title": "Stanze di Gioco Pubbliche",

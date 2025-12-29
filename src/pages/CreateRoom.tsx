@@ -67,7 +67,7 @@ export default function CreateRoom() {
   const isRematch = !!rematchData;
 
   const [gameType, setGameType] = useState<string>("1"); // Chess
-  const [entryFee, setEntryFee] = useState<string>("0.1");
+  const [entryFee, setEntryFee] = useState<string>("0"); // Default to 0 for casual
   const [maxPlayers, setMaxPlayers] = useState<string>("2");
   const [turnTime, setTurnTime] = useState<string>("10");
   const [gameMode, setGameMode] = useState<'casual' | 'ranked'>('casual');
@@ -207,7 +207,8 @@ export default function CreateRoom() {
       return;
     }
 
-    if (entryFeeNum < dynamicMinFee) {
+    // For ranked mode, enforce minimum fee
+    if (gameMode === 'ranked' && entryFeeNum < dynamicMinFee) {
       toast({
         title: t("createRoom.invalidFee"),
         description: t("createRoom.minFeeError", { amount: dynamicMinFee.toFixed(4), usd: MIN_FEE_USD.toFixed(2) }),
@@ -215,6 +216,7 @@ export default function CreateRoom() {
       });
       return;
     }
+    // For casual mode, allow 0 or any amount
 
     // Re-fetch balance before checking (fresh balance)
     const freshBalance = await fetchBalance();
@@ -425,7 +427,7 @@ export default function CreateRoom() {
             </Select>
           </div>
 
-          {/* Entry Fee */}
+          {/* Entry Fee - Styled based on mode */}
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
               <Label className="text-sm">{t("createRoom.entryFeeSol")}</Label>
@@ -438,19 +440,26 @@ export default function CreateRoom() {
                 type="number"
                 value={entryFee}
                 onChange={(e) => setEntryFee(e.target.value)}
-                placeholder={dynamicMinFee.toFixed(4)}
-                min={dynamicMinFee}
+                placeholder={gameMode === 'ranked' ? dynamicMinFee.toFixed(4) : "0"}
+                min={gameMode === 'ranked' ? dynamicMinFee : 0}
                 step="0.001"
-                className={`h-9 ${isRematch ? 'border-primary/50' : ''}`}
+                className={`h-9 ${isRematch ? 'border-primary/50' : ''} ${
+                  gameMode === 'casual' 
+                    ? 'border-muted/50 bg-muted/20 text-muted-foreground focus:border-muted' 
+                    : 'border-primary/50 bg-primary/5 text-foreground focus:border-primary'
+                }`}
               />
-              {entryFeeUsd && (
+              {entryFeeUsd && parseFloat(entryFee) > 0 && (
                 <span className="text-sm text-muted-foreground whitespace-nowrap">
                   {entryFeeUsd}
                 </span>
               )}
             </div>
-            <p className="text-xs text-muted-foreground">
-              {t("createRoom.min")}: {dynamicMinFee.toFixed(4)} SOL (~${MIN_FEE_USD.toFixed(2)})
+            <p className={`text-xs ${gameMode === 'casual' ? 'text-muted-foreground' : 'text-primary/80'}`}>
+              {gameMode === 'casual' 
+                ? t("createRoom.stakeOptional")
+                : `${t("createRoom.stakeMinRequired")} (${dynamicMinFee.toFixed(4)} SOL ≈ $${MIN_FEE_USD.toFixed(2)})`
+              }
             </p>
           </div>
 
@@ -472,31 +481,44 @@ export default function CreateRoom() {
 
           {/* Game Mode Toggle (Casual vs Ranked) */}
           <div className="space-y-1.5">
-            <Label className="text-sm">Game Mode</Label>
+            <Label className="text-sm">{t("createRoom.roomType") || "Game Mode"}</Label>
             <div className="grid grid-cols-2 gap-2">
               <Button
                 type="button"
                 variant={gameMode === 'casual' ? 'default' : 'outline'}
                 size="sm"
                 className={`h-10 ${gameMode === 'casual' ? 'bg-emerald-600 hover:bg-emerald-700' : ''}`}
-                onClick={() => setGameMode('casual')}
+                onClick={() => {
+                  setGameMode('casual');
+                  // Default stake to 0 for casual
+                  if (!isRematch) setEntryFee("0");
+                }}
               >
-                <span className="mr-1.5">🟢</span> Casual
+                <span className="mr-1.5">🟢</span> {t("createRoom.gameModeCasual")} 
+                <span className="ml-1 opacity-70 text-xs">🎮</span>
               </Button>
               <Button
                 type="button"
                 variant={gameMode === 'ranked' ? 'default' : 'outline'}
                 size="sm"
                 className={`h-10 ${gameMode === 'ranked' ? 'bg-red-600 hover:bg-red-700' : ''}`}
-                onClick={() => setGameMode('ranked')}
+                onClick={() => {
+                  setGameMode('ranked');
+                  // Set minimum stake for ranked if current is below minimum
+                  const currentFee = parseFloat(entryFee) || 0;
+                  if (!isRematch && currentFee < dynamicMinFee) {
+                    setEntryFee(dynamicMinFee.toFixed(4));
+                  }
+                }}
               >
-                <span className="mr-1.5">🔴</span> Ranked
+                <span className="mr-1.5">🔴</span> {t("createRoom.gameModeRanked")}
+                <span className="ml-1 opacity-70 text-xs">🏆</span>
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
               {gameMode === 'ranked' 
-                ? 'ELO rating will be updated after this match' 
-                : 'No rating changes — just for fun'}
+                ? t("createRoom.rankedDesc")
+                : t("createRoom.casualDesc")}
             </p>
           </div>
 
