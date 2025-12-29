@@ -191,7 +191,7 @@ export default function RoomList() {
             title={!isConnected ? "Connect wallet to create room" : undefined}
           >
             <Plus className="h-4 w-4 mr-2" />
-            {t("roomList.createRoom")}
+            {t("createRoom.createRoom")}
           </Button>
         </div>
       </div>
