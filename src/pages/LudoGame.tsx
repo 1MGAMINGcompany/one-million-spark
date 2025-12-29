@@ -123,11 +123,11 @@ const LudoGame = () => {
         setDiceValue(persisted.diceValue);
       }
       toast({
-        title: "Game Restored",
-        description: "Your game session has been recovered.",
+        title: t('gameSession.gameRestored'),
+        description: t('gameSession.sessionRecovered'),
       });
     }
-  }, [setCurrentPlayerIndex, setDiceValue]);
+  }, [setCurrentPlayerIndex, setDiceValue, t]);
 
   const { loadSession: loadLudoSession, saveSession: saveLudoSession, finishSession: finishLudoSession } = useGameSessionPersistence({
     roomPda: roomPda,
@@ -183,9 +183,9 @@ const LudoGame = () => {
   const handleAcceptRules = async () => {
     const result = await rankedGate.acceptWithSignature();
     if (result.success) {
-      toast({ title: "Rules accepted", description: "Signed and ready! Waiting for opponent..." });
+      toast({ title: t('gameSession.rulesAccepted'), description: t('gameSession.signedAndReady') });
     } else {
-      toast({ title: "Failed to accept", description: result.error || "Please try again", variant: "destructive" });
+      toast({ title: t('gameSession.failedToAccept'), description: result.error || t('gameSession.tryAgain'), variant: "destructive" });
     }
   };
 
@@ -211,15 +211,15 @@ const LudoGame = () => {
   const handleTimeExpired = useCallback(() => {
     if (!gameOver) {
       toast({
-        title: "Time expired!",
-        description: "You ran out of time and forfeited the match.",
+        title: t('gameSession.timeExpired'),
+        description: t('gameSession.forfeitedMatch'),
         variant: "destructive",
       });
       sendResignRef.current?.();
       // Force loss - advance to next player's win or end game
       play('ludo_dice');
     }
-  }, [gameOver, play]);
+  }, [gameOver, play, t]);
 
   // Use turn time from ranked gate (fetched from DB/localStorage)
   const effectiveTurnTime = rankedGate.turnTimeSeconds || DEFAULT_RANKED_TURN_TIME;
@@ -240,13 +240,13 @@ const LudoGame = () => {
       
       return {
         address: walletAddress,
-        name: isHuman ? "You" : `${player.color.charAt(0).toUpperCase() + player.color.slice(1)} Player`,
+        name: isHuman ? t('common.you') : `${player.color.charAt(0).toUpperCase() + player.color.slice(1)} ${t('game.player')}`,
         color: player.color,
         status: player.tokens.every(t => t.position === 62) ? "finished" : "active" as const,
         seatIndex: index,
       };
     });
-  }, [players, roomPlayers, address]);
+  }, [players, roomPlayers, address, t]);
 
   // Current active player address
   const activeTurnAddress = turnPlayers[currentPlayerIndex]?.address || null;
