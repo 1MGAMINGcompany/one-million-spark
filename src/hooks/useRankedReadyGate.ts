@@ -1,12 +1,13 @@
 /**
  * Hook to manage the ranked game ready gate
  * 
- * For ranked games, both players must accept the rules before gameplay begins.
+ * For ranked games, both players must accept the rules via wallet signature before gameplay begins.
  * This hook tracks p1_ready and p2_ready flags in game_sessions.
  */
 
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useRankedAcceptance } from "./useRankedAcceptance";
 
 interface UseRankedReadyGateOptions {
   roomPda: string | undefined;
@@ -26,8 +27,10 @@ interface UseRankedReadyGateResult {
   isSettingReady: boolean;
   /** Whether we need to show the accept modal */
   showAcceptModal: boolean;
-  /** Set this player as ready */
-  setReady: () => Promise<boolean>;
+  /** Accept rules with wallet signature (new flow) */
+  acceptWithSignature: () => Promise<{ success: boolean; error?: string }>;
+  /** Session token after successful acceptance */
+  sessionToken: string | null;
   /** Stake in lamports (from session) */
   stakeLamports: number;
   /** Turn time in seconds for ranked games */
@@ -41,10 +44,20 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
   const [p2Ready, setP2Ready] = useState(false);
   const [p1Wallet, setP1Wallet] = useState<string | null>(null);
   const [p2Wallet, setP2Wallet] = useState<string | null>(null);
-  const [isSettingReady, setIsSettingReady] = useState(false);
   const [stakeLamports, setStakeLamports] = useState(0);
   const [turnTimeSeconds, setTurnTimeSeconds] = useState(60);
   const [hasLoaded, setHasLoaded] = useState(false);
+
+  // Use the signature-based acceptance hook
+  const { 
+    acceptWithSignature, 
+    isAccepting, 
+    sessionToken 
+  } = useRankedAcceptance({
+    roomPda,
+    stakeLamports,
+    turnTimeSeconds,
+  });
 
   // Determine if I'm player 1 or player 2
   const isPlayer1 = myWallet && p1Wallet && myWallet.toLowerCase() === p1Wallet.toLowerCase();
@@ -123,35 +136,6 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
     };
   }, [roomPda, enabled]);
 
-  // Set this player as ready
-  const setReady = useCallback(async (): Promise<boolean> => {
-    if (!roomPda || !myWallet) return false;
-
-    setIsSettingReady(true);
-    try {
-      const { error } = await supabase.rpc("set_player_ready", {
-        p_room_pda: roomPda,
-        p_wallet: myWallet,
-      });
-
-      if (error) {
-        console.error("[useRankedReadyGate] Failed to set ready:", error);
-        return false;
-      }
-
-      // Optimistic update
-      if (isPlayer1) setP1Ready(true);
-      if (isPlayer2) setP2Ready(true);
-
-      return true;
-    } catch (err) {
-      console.error("[useRankedReadyGate] Error setting ready:", err);
-      return false;
-    } finally {
-      setIsSettingReady(false);
-    }
-  }, [roomPda, myWallet, isPlayer1, isPlayer2]);
-
   // For casual games, return as if both are ready
   if (!isRanked) {
     return {
@@ -160,7 +144,8 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
       bothReady: true,
       isSettingReady: false,
       showAcceptModal: false,
-      setReady: async () => true,
+      acceptWithSignature: async () => ({ success: true }),
+      sessionToken: null,
       stakeLamports: 0,
       turnTimeSeconds: 0,
     };
@@ -170,9 +155,10 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
     iAmReady,
     opponentReady,
     bothReady,
-    isSettingReady,
+    isSettingReady: isAccepting,
     showAcceptModal,
-    setReady,
+    acceptWithSignature,
+    sessionToken,
     stakeLamports,
     turnTimeSeconds,
   };

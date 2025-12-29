@@ -6,7 +6,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Shield, Clock, AlertTriangle, Coins } from "lucide-react";
+import { Shield, Clock, AlertTriangle, Coins, Pen } from "lucide-react";
 
 interface AcceptRulesModalProps {
   open: boolean;
@@ -16,6 +16,8 @@ interface AcceptRulesModalProps {
   turnTimeSeconds?: number;
   isLoading?: boolean;
   opponentReady?: boolean;
+  /** Whether this is a signature-based acceptance (shows different UI) */
+  requiresSignature?: boolean;
 }
 
 export function AcceptRulesModal({
@@ -26,6 +28,7 @@ export function AcceptRulesModal({
   turnTimeSeconds = 60,
   isLoading = false,
   opponentReady = false,
+  requiresSignature = true,
 }: AcceptRulesModalProps) {
   const feeSol = stakeSol * 2 * 0.05; // 5% of total pot
   const potSol = stakeSol * 2;
@@ -50,7 +53,9 @@ export function AcceptRulesModal({
             Accept Ranked Match Rules
           </DialogTitle>
           <DialogDescription>
-            Review and accept the match conditions to start playing.
+            {requiresSignature 
+              ? "Sign with your wallet to confirm you accept these terms."
+              : "Review and accept the match conditions to start playing."}
           </DialogDescription>
         </DialogHeader>
 
@@ -98,6 +103,20 @@ export function AcceptRulesModal({
             </p>
           </div>
 
+          {/* Signature Notice */}
+          {requiresSignature && (
+            <div className="rounded-lg border border-primary/30 bg-primary/5 p-3">
+              <div className="flex items-center gap-2 text-sm text-primary">
+                <Pen className="h-4 w-4" />
+                <span className="font-medium">Wallet signature required</span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Your wallet will ask you to sign a message confirming these rules. 
+                This creates a cryptographic proof of your agreement.
+              </p>
+            </div>
+          )}
+
           {/* Opponent Status */}
           {opponentReady && (
             <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3">
@@ -121,9 +140,14 @@ export function AcceptRulesModal({
             variant="gold"
             onClick={onAccept}
             disabled={isLoading}
-            className="flex-1"
+            className="flex-1 gap-2"
           >
-            {isLoading ? "Accepting..." : "Accept & Start"}
+            {requiresSignature && <Pen className="h-4 w-4" />}
+            {isLoading 
+              ? "Signing..." 
+              : requiresSignature 
+                ? "Sign & Accept" 
+                : "Accept & Start"}
           </Button>
         </div>
       </DialogContent>
