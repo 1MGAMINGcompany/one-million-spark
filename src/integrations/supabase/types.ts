@@ -362,6 +362,36 @@ export type Database = {
         }
         Relationships: []
       }
+      recovery_logs: {
+        Row: {
+          action: string
+          caller_wallet: string
+          created_at: string | null
+          id: string
+          result: string
+          room_pda: string
+          tx_signature: string | null
+        }
+        Insert: {
+          action: string
+          caller_wallet: string
+          created_at?: string | null
+          id?: string
+          result: string
+          room_pda: string
+          tx_signature?: string | null
+        }
+        Update: {
+          action?: string
+          caller_wallet?: string
+          created_at?: string | null
+          id?: string
+          result?: string
+          room_pda?: string
+          tx_signature?: string | null
+        }
+        Relationships: []
+      }
       session_nonces: {
         Row: {
           created_at: string

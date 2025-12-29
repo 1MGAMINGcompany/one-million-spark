@@ -10,6 +10,7 @@ import { useTxLock } from "@/contexts/TxLockContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Construction, ArrowLeft, Loader2, Users, Coins, AlertTriangle, CheckCircle, Share2, Copy, ExternalLink } from "lucide-react";
+import { RecoverFundsButton } from "@/components/RecoverFundsButton";
 import { WalletGateModal } from "@/components/WalletGateModal";
 import { RivalryWidget } from "@/components/RivalryWidget";
 import { WalletLink } from "@/components/WalletLink";
@@ -780,6 +781,14 @@ export default function Room() {
                   "Cancel Room"
                 )}
               </Button>
+            )}
+            
+            {/* Recover Funds Button - for stuck/orphaned rooms */}
+            {room && isPlayer && (
+              <RecoverFundsButton 
+                roomPda={roomPdaParam || ""} 
+                onRecovered={() => window.location.reload()}
+              />
             )}
           </div>
 
