@@ -108,6 +108,8 @@ export type Database = {
           game_state: Json
           game_type: string
           mode: string
+          p1_ready: boolean
+          p2_ready: boolean
           player1_wallet: string
           player2_wallet: string | null
           room_pda: string
@@ -120,6 +122,8 @@ export type Database = {
           game_state?: Json
           game_type: string
           mode?: string
+          p1_ready?: boolean
+          p2_ready?: boolean
           player1_wallet: string
           player2_wallet?: string | null
           room_pda: string
@@ -132,6 +136,8 @@ export type Database = {
           game_state?: Json
           game_type?: string
           mode?: string
+          p1_ready?: boolean
+          p2_ready?: boolean
           player1_wallet?: string
           player2_wallet?: string | null
           room_pda?: string
@@ -399,6 +405,10 @@ export type Database = {
       }
       revoke_session: {
         Args: { p_room_pda: string; p_session_token: string }
+        Returns: undefined
+      }
+      set_player_ready: {
+        Args: { p_room_pda: string; p_wallet: string }
         Returns: undefined
       }
       start_session: {

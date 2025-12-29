@@ -10,6 +10,7 @@ import { useTurnNotifications, TurnPlayer } from "@/hooks/useTurnNotifications";
 import { useGameChat, ChatPlayer, ChatMessage } from "@/hooks/useGameChat";
 import { useRematch } from "@/hooks/useRematch";
 import { useGameSessionPersistence, getRoomMode } from "@/hooks/useGameSessionPersistence";
+import { useRankedReadyGate } from "@/hooks/useRankedReadyGate";
 import TurnStatusHeader from "@/components/TurnStatusHeader";
 import TurnHistoryDrawer from "@/components/TurnHistoryDrawer";
 import NotificationToggle from "@/components/NotificationToggle";
@@ -18,6 +19,7 @@ import GameChatPanel from "@/components/GameChatPanel";
 import { GameEndScreen } from "@/components/GameEndScreen";
 import { RematchModal } from "@/components/RematchModal";
 import { RematchAcceptModal } from "@/components/RematchAcceptModal";
+import { AcceptRulesModal } from "@/components/AcceptRulesModal";
 import { toast } from "@/hooks/use-toast";
 import { PublicKey, Connection } from "@solana/web3.js";
 import { parseRoomAccount } from "@/lib/solana-program";
@@ -211,7 +213,33 @@ const CheckersGame = () => {
     }
   }, [board, currentPlayer, gameOver, roomPlayers, saveCheckersSession]);
 
-  const isMyTurn = currentPlayer === myColor;
+  // Ranked ready gate - both players must accept rules before gameplay
+  const roomMode = getRoomMode(roomPda || "");
+  const isRankedGame = roomMode === "ranked";
+  
+  const rankedGate = useRankedReadyGate({
+    roomPda,
+    myWallet: address,
+    isRanked: isRankedGame,
+    enabled: roomPlayers.length >= 2,
+  });
+
+  const handleAcceptRules = async () => {
+    const success = await rankedGate.setReady();
+    if (success) {
+      toast({ title: "Rules accepted", description: "Waiting for opponent..." });
+    } else {
+      toast({ title: "Failed to accept", description: "Please try again", variant: "destructive" });
+    }
+  };
+
+  const handleLeaveMatch = () => {
+    navigate("/room-list");
+  };
+
+  // Block gameplay until both players are ready (for ranked games)
+  const canPlay = !isRankedGame || rankedGate.bothReady;
+  const isMyTurn = canPlay && currentPlayer === myColor;
 
   // Turn notification players
   const turnPlayers: TurnPlayer[] = useMemo(() => {
@@ -964,6 +992,36 @@ const CheckersGame = () => {
         onAccept={handleAcceptRematch}
         onDecline={handleDeclineRematch}
       />
+
+      {/* Accept Rules Modal (Ranked only) */}
+      <AcceptRulesModal
+        open={rankedGate.showAcceptModal}
+        onAccept={handleAcceptRules}
+        onLeave={handleLeaveMatch}
+        stakeSol={rankedGate.stakeLamports / 1_000_000_000}
+        isLoading={rankedGate.isSettingReady}
+        opponentReady={rankedGate.opponentReady}
+      />
+
+      {/* Waiting for opponent overlay (Ranked - I accepted, waiting for opponent) */}
+      {isRankedGame && rankedGate.iAmReady && !rankedGate.bothReady && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-40 flex items-center justify-center">
+          <div className="bg-card border rounded-lg p-6 text-center space-y-4 max-w-sm">
+            <div className="animate-pulse">
+              <div className="h-12 w-12 rounded-full bg-primary/20 mx-auto flex items-center justify-center">
+                <Users className="h-6 w-6 text-primary" />
+              </div>
+            </div>
+            <h3 className="text-lg font-semibold">Waiting for Opponent</h3>
+            <p className="text-sm text-muted-foreground">
+              Your opponent needs to accept the match rules before the game can begin.
+            </p>
+            <Button variant="outline" onClick={handleLeaveMatch}>
+              Leave Match
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
