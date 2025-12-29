@@ -114,8 +114,6 @@ const ChessGame = () => {
   const [moveHistory, setMoveHistory] = useState<string[]>([]);
   const [gameOver, setGameOver] = useState(false);
   const [animationsEnabled, setAnimationsEnabled] = useState(true);
-  const [drawOffered, setDrawOffered] = useState(false);
-  const [drawOfferFrom, setDrawOfferFrom] = useState<string | null>(null);
 
   // Room players - in production, this comes from on-chain room data
   const [roomPlayers, setRoomPlayers] = useState<string[]>([]);
@@ -602,28 +600,6 @@ const ChessGame = () => {
         title: t("gameMultiplayer.victory"),
         description: t("gameMultiplayer.opponentResignedVictory"),
       });
-    } else if (message.type === "draw_offer") {
-      setDrawOffered(true);
-      setDrawOfferFrom(message.sender || "opponent");
-      toast({
-        title: t("gameMultiplayer.drawOffered"),
-        description: t("gameMultiplayer.drawOfferedDesc"),
-      });
-    } else if (message.type === "draw_accept") {
-      setGameStatus(t("gameMultiplayer.drawByAgreement"));
-      setGameOver(true);
-      chatRef.current.addSystemMessage(t("gameMultiplayer.drawByAgreement"));
-      toast({
-        title: t("game.draw"),
-        description: t("gameMultiplayer.drawByAgreement"),
-      });
-    } else if (message.type === "draw_reject") {
-      setDrawOffered(false);
-      setDrawOfferFrom(null);
-      toast({
-        title: t("gameMultiplayer.drawDeclined"),
-        description: t("gameMultiplayer.drawDeclinedDesc"),
-      });
     } else if (message.type === "rematch_invite" && message.payload) {
       setRematchInviteData(message.payload);
       setShowAcceptModal(true);
@@ -661,9 +637,6 @@ const ChessGame = () => {
     connectionState,
     sendMove,
     sendResign,
-    sendDrawOffer,
-    sendDrawAccept,
-    sendDrawReject,
     sendChat,
     sendRematchInvite,
     sendRematchAccept,
@@ -792,24 +765,6 @@ const ChessGame = () => {
     play('chess_lose');
   }, [sendResign, play]);
 
-  const handleDrawOffer = useCallback(() => {
-    sendDrawOffer();
-    setDrawOffered(true);
-  }, [sendDrawOffer]);
-
-  const handleAcceptDraw = useCallback(() => {
-    sendDrawAccept();
-    setGameStatus(t("gameMultiplayer.drawByAgreement"));
-    setGameOver(true);
-    setDrawOffered(false);
-    setDrawOfferFrom(null);
-  }, [sendDrawAccept]);
-
-  const handleRejectDraw = useCallback(() => {
-    sendDrawReject();
-    setDrawOffered(false);
-    setDrawOfferFrom(null);
-  }, [sendDrawReject]);
 
   const formattedMoves = [];
   for (let i = 0; i < moveHistory.length; i += 2) {
@@ -958,15 +913,6 @@ const ChessGame = () => {
                   <span className="text-sm font-medium">{gameStatus}</span>
                   {!gameOver && (
                     <div className="flex gap-2">
-                      <Button 
-                        size="sm" 
-                        variant="outline" 
-                        onClick={handleDrawOffer}
-                        disabled={drawOffered}
-                        className="text-xs"
-                      >
-                        Offer Draw
-                      </Button>
                       <Button
                         size="sm"
                         variant="destructive" 
@@ -988,16 +934,6 @@ const ChessGame = () => {
                 className="mt-2"
               />
 
-              {/* Draw Offer Dialog */}
-              {drawOffered && drawOfferFrom && drawOfferFrom !== address && (
-                <div className="bg-primary/10 border border-primary/30 rounded-lg p-4">
-                  <p className="text-sm mb-3">{t("gameMultiplayer.opponentOfferedDraw")}</p>
-                  <div className="flex gap-2">
-                    <Button size="sm" onClick={handleAcceptDraw}>{t("gameMultiplayer.accept")}</Button>
-                    <Button size="sm" variant="outline" onClick={handleRejectDraw}>{t("gameMultiplayer.decline")}</Button>
-                  </div>
-                </div>
-              )}
             </div>
 
             {/* Side Panel */}
