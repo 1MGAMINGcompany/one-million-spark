@@ -6,7 +6,7 @@ import { useSound } from "@/contexts/SoundContext";
 import { useRealtimeGameSync, RealtimeGameMessage } from "@/hooks/useRealtimeGameSync";
 
 export interface GameMessage {
-  type: "move" | "resign" | "draw_offer" | "draw_accept" | "draw_reject" | "sync_request" | "sync_response" | "heartbeat" | "chat" | "rematch_invite" | "rematch_accept" | "rematch_decline" | "rematch_ready";
+  type: "move" | "resign" | "draw_offer" | "draw_accept" | "draw_reject" | "sync_request" | "sync_response" | "heartbeat" | "chat" | "rematch_invite" | "rematch_accept" | "rematch_decline" | "rematch_ready" | "player_eliminated";
   payload?: any;
   timestamp: number;
   sender?: string;
@@ -272,6 +272,11 @@ export function useWebRTCSync({
     return sendMessage({ type: "rematch_ready", payload: { roomId }, sender: localAddress });
   }, [sendMessage, localAddress]);
 
+  // Send player elimination (for Ludo)
+  const sendPlayerEliminated = useCallback((playerIndex: number): boolean => {
+    return sendMessage({ type: "player_eliminated", payload: { playerIndex }, sender: localAddress });
+  }, [sendMessage, localAddress]);
+
   // Manual reconnect
   const reconnect = useCallback(() => {
     reconnectAttempts.current = 0;
@@ -294,6 +299,7 @@ export function useWebRTCSync({
     sendRematchAccept,
     sendRematchDecline,
     sendRematchReady,
+    sendPlayerEliminated,
     reconnect,
     peerAddress: remoteAddress,
   };

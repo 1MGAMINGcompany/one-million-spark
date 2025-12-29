@@ -833,7 +833,9 @@
     "eliminated": "You have been eliminated",
     "gameContinues": "The game continues without you",
     "roomCancelled": "Room Cancelled",
-    "stakeRefunded": "Your stake has been refunded"
+    "stakeRefunded": "Your stake has been refunded",
+    "playerEliminated": "Player Eliminated",
+    "playerLeft": "{{player}} has left the game"
   },
   "common": {
     "processing": "Processing...",
