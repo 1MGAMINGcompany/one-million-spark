@@ -290,7 +290,11 @@ const LudoGame = () => {
     return roomPlayers.findIndex(p => p.toLowerCase() === address.toLowerCase());
   }, [address, roomPlayers]);
 
-  const isMyTurnLocal = canPlay && myPlayerIndex >= 0 && myPlayerIndex === currentPlayerIndex && !gameOver;
+  // Check if it's actually my turn (based on game state, not canPlay gate)
+  const isActuallyMyTurn = myPlayerIndex >= 0 && myPlayerIndex === currentPlayerIndex && !gameOver;
+
+  // isMyTurnLocal includes canPlay gate - used for board disable
+  const isMyTurnLocal = canPlay && isActuallyMyTurn;
 
   // Ref for resign/forfeit function to avoid circular deps with turn timer
   const sendResignRef = useRef<(() => boolean) | null>(null);
@@ -745,7 +749,7 @@ const LudoGame = () => {
       <TurnBanner
         gameName="Ludo"
         roomId={roomId || "unknown"}
-        isVisible={!hasPermission && isMyTurn && !gameOver}
+        isVisible={!hasPermission && isActuallyMyTurn && !gameOver}
       />
 
       {/* Header */}
@@ -791,7 +795,7 @@ const LudoGame = () => {
       <div className="px-4 pb-2">
         <div className="max-w-4xl mx-auto">
           <TurnStatusHeader
-            isMyTurn={isMyTurn}
+            isMyTurn={isActuallyMyTurn}
             activePlayer={turnPlayers[currentPlayerIndex]}
             players={turnPlayers}
             myAddress={address}

@@ -508,8 +508,11 @@ const DominosGame = () => {
   // Block gameplay until both players are ready (for ranked games)
   const canPlayRanked = !isRankedGame || rankedGate.bothReady;
 
-  // Effective isMyTurn considering ranked gate
-  const effectiveIsMyTurn = canPlayRanked && isMyTurn && !gameOver;
+  // Check if it's actually my turn (based on game state, not canPlay gate)
+  const isActuallyMyTurn = isMyTurn && !gameOver;
+
+  // Effective isMyTurn considering ranked gate - used for board disable
+  const effectiveIsMyTurn = canPlayRanked && isActuallyMyTurn;
 
   // Ref for resign/forfeit function to avoid circular deps with turn timer
   const sendResignRef = useRef<(() => boolean) | null>(null);
@@ -1138,7 +1141,7 @@ const DominosGame = () => {
       <TurnBanner
         gameName="Dominos"
         roomId={roomId || "unknown"}
-        isVisible={!hasPermission && isMyTurnNotification && !gameOver}
+        isVisible={!hasPermission && isActuallyMyTurn && !gameOver}
       />
 
       <div className="relative z-10">
@@ -1184,7 +1187,7 @@ const DominosGame = () => {
         <div className="px-4 py-2">
           <div className="max-w-6xl mx-auto">
             <TurnStatusHeader
-              isMyTurn={isMyTurnNotification}
+              isMyTurn={isActuallyMyTurn}
               activePlayer={turnPlayers[isMyTurn ? (amIPlayer1 ? 0 : 1) : (amIPlayer1 ? 1 : 0)]}
               players={turnPlayers}
               myAddress={address}

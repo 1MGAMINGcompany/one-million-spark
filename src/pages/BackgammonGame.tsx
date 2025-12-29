@@ -317,7 +317,12 @@ const BackgammonGame = () => {
   // Block gameplay until both players are ready (for ranked games)
   const canPlay = !isRankedGame || rankedGate.bothReady;
   const isMyTurnRaw = currentPlayer === myRole;
-  const isMyTurn = canPlay && isMyTurnRaw && !gameOver;
+  
+  // Check if it's actually my turn (based on game state, not canPlay gate)
+  const isActuallyMyTurn = isMyTurnRaw && !gameOver;
+  
+  // isMyTurn includes canPlay gate - used for board disable
+  const isMyTurn = canPlay && isActuallyMyTurn;
   const isFlipped = myRole === "ai"; // Black player sees flipped board
 
   // Convert to TurnPlayer format for notifications
@@ -580,9 +585,10 @@ const BackgammonGame = () => {
     } else if (connectionState === "connecting") {
       setGameStatus("Connecting to opponent...");
     } else if (connectionState === "connected" && !gameOver) {
-      setGameStatus(isMyTurn ? "Your turn - Roll the dice!" : "Opponent's turn");
+      // Show actual turn status (not gated by canPlay)
+      setGameStatus(isActuallyMyTurn ? "Your turn - Roll the dice!" : "Opponent's turn");
     }
-  }, [roomPlayers.length, connectionState, isMyTurn, gameOver]);
+  }, [roomPlayers.length, connectionState, isActuallyMyTurn, gameOver]);
 
   // Apply move with sound
   const applyMoveWithSound = useCallback((state: GameState, move: Move, player: Player): GameState => {
@@ -891,7 +897,7 @@ const BackgammonGame = () => {
       <TurnBanner
         gameName="Backgammon"
         roomId={roomId || "unknown"}
-        isVisible={!hasPermission && isMyTurnNotification && !gameOver}
+        isVisible={!hasPermission && isActuallyMyTurn && !gameOver}
       />
 
       {/* Header */}
@@ -943,7 +949,7 @@ const BackgammonGame = () => {
       <div className="px-4 py-2">
         <div className="max-w-6xl mx-auto">
           <TurnStatusHeader
-            isMyTurn={isMyTurnNotification}
+            isMyTurn={isActuallyMyTurn}
             activePlayer={turnPlayers[currentPlayer === "player" ? 0 : 1]}
             players={turnPlayers}
             myAddress={address}

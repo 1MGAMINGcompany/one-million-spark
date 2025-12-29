@@ -314,7 +314,12 @@ const CheckersGame = () => {
 
   // Block gameplay until both players are ready (for ranked games)
   const canPlay = !isRankedGame || rankedGate.bothReady;
-  const isMyTurn = canPlay && currentPlayer === myColor && !gameOver;
+  
+  // Check if it's actually my turn (based on game state, not canPlay gate)
+  const isActuallyMyTurn = currentPlayer === myColor && !gameOver;
+  
+  // isMyTurn includes canPlay gate - used for board disable
+  const isMyTurn = canPlay && isActuallyMyTurn;
 
   // Ref for resign function to avoid circular deps with turn timer
   const sendResignRef = useRef<(() => boolean) | null>(null);
@@ -956,7 +961,7 @@ const CheckersGame = () => {
       <TurnBanner
         gameName="Checkers"
         roomId={roomId || "unknown"}
-        isVisible={!hasPermission && isMyTurnNotification && !gameOver}
+        isVisible={!hasPermission && isActuallyMyTurn && !gameOver}
       />
 
       <div className="relative z-10">
@@ -1004,7 +1009,7 @@ const CheckersGame = () => {
         <div className="px-4 py-2">
           <div className="max-w-6xl mx-auto">
             <TurnStatusHeader
-              isMyTurn={isMyTurnNotification}
+              isMyTurn={isActuallyMyTurn}
               activePlayer={turnPlayers[currentPlayer === "gold" ? 0 : 1]}
               players={turnPlayers}
               myAddress={address}
