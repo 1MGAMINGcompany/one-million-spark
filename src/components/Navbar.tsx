@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Home, Wallet, PlusCircle, LayoutList, Menu, X, Coins, Volume2, VolumeX, Bell, BellOff, Trophy } from "lucide-react";
+import { useWallet } from "@solana/wallet-adapter-react";
+import { Home, Wallet, PlusCircle, LayoutList, Menu, X, Coins, Volume2, VolumeX, Bell, BellOff, Trophy, User } from "lucide-react";
 import { WalletButton } from "./WalletButton";
 import BrandLogo from "./BrandLogo";
 import LanguageSelector from "./LanguageSelector";
@@ -21,6 +22,7 @@ const Navbar = () => {
   const { soundEnabled, toggleSound, play } = useSound();
   const { t, i18n } = useTranslation();
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const { connected, publicKey } = useWallet();
 
   // Check notification permission on mount
   useEffect(() => {
@@ -208,6 +210,18 @@ const Navbar = () => {
                 {notificationsEnabled ? <Bell size={20} /> : <BellOff size={20} />}
                 <span>{notificationsEnabled ? "Notifications On" : "Notifications Off"}</span>
               </button>
+              
+              {/* My Profile (Mobile - only when connected) */}
+              {connected && publicKey && (
+                <Link
+                  to={`/player/${publicKey.toBase58()}`}
+                  onClick={() => { setIsOpen(false); handleNavClick(); }}
+                  className="group flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 text-muted-foreground hover:text-foreground hover:bg-secondary border border-transparent hover:border-primary/30"
+                >
+                  <User size={20} className="text-primary/70 group-hover:text-primary" />
+                  <span>{t("nav.myProfile")}</span>
+                </Link>
+              )}
               
               {/* Wallet Button (Mobile) */}
               <div className="pt-2">

@@ -72,12 +72,9 @@ export function GlobalActiveRoomBanner() {
     previousStatusRef.current = currentStatus;
   }, [activeRoom, navigate]);
 
-  // Reset dismissed state when activeRoom changes to a different room
-  useEffect(() => {
-    if (activeRoom?.pda !== dismissedPda) {
-      setDismissedPda(null);
-    }
-  }, [activeRoom?.pda, dismissedPda]);
+  // Note: We intentionally do NOT reset dismissedPda when activeRoom changes.
+  // The localStorage archiveRoom() is the source of truth for dismissed rooms.
+  // Local dismissedPda state is only for immediate UI feedback before the next poll.
 
   // Don't show banner if no active room, not connected, or already dismissed
   if (!connected || !activeRoom) {

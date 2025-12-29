@@ -2,9 +2,10 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { useWallet, useConnection } from "@solana/wallet-adapter-react";
 import { LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { useTranslation } from "react-i18next";
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Wallet, LogOut, RefreshCw, Copy, Check, AlertCircle, Smartphone, Loader2, ExternalLink } from "lucide-react";
+import { Wallet, LogOut, RefreshCw, Copy, Check, AlertCircle, Smartphone, Loader2, ExternalLink, User } from "lucide-react";
 import { toast } from "sonner";
 import { fetchBalance as fetchBalanceRpc, is403Error } from "@/lib/solana-rpc";
 import { NetworkProofBadge } from "./NetworkProofBadge";
@@ -595,6 +596,17 @@ export function WalletButton() {
     <div className="flex flex-col items-end gap-2">
       {/* Main wallet button with disconnect option */}
       <div className="flex items-center gap-1">
+        <Link to={`/player/${publicKey?.toBase58()}`}>
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-8 w-8"
+            title="My Profile"
+          >
+            <User size={14} />
+          </Button>
+        </Link>
+        
         <Button
           onClick={handleCopyAddress}
           variant="outline"
