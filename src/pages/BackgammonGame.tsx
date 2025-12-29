@@ -17,6 +17,8 @@ import { useTurnNotifications, TurnPlayer } from "@/hooks/useTurnNotifications";
 import { useGameChat, ChatPlayer, ChatMessage } from "@/hooks/useGameChat";
 import { useRematch } from "@/hooks/useRematch";
 import { useGameSessionPersistence, getRoomMode } from "@/hooks/useGameSessionPersistence";
+import { useRankedReadyGate } from "@/hooks/useRankedReadyGate";
+import { useTurnTimer, DEFAULT_RANKED_TURN_TIME } from "@/hooks/useTurnTimer";
 import TurnStatusHeader from "@/components/TurnStatusHeader";
 import TurnHistoryDrawer from "@/components/TurnHistoryDrawer";
 import NotificationToggle from "@/components/NotificationToggle";
@@ -25,6 +27,9 @@ import GameChatPanel from "@/components/GameChatPanel";
 import { GameEndScreen } from "@/components/GameEndScreen";
 import { RematchModal } from "@/components/RematchModal";
 import { RematchAcceptModal } from "@/components/RematchAcceptModal";
+import { AcceptRulesModal } from "@/components/AcceptRulesModal";
+import { WaitingForOpponentPanel } from "@/components/WaitingForOpponentPanel";
+import { RulesInfoPanel } from "@/components/RulesInfoPanel";
 import { toast } from "@/hooks/use-toast";
 import { PublicKey, Connection } from "@solana/web3.js";
 import { parseRoomAccount } from "@/lib/solana-program";
@@ -243,9 +248,35 @@ const BackgammonGame = () => {
     }
   }, [gameOver, roomPlayers.length, finishBackgammonSession]);
 
+  // Ranked ready gate - both players must accept rules before gameplay
+  const roomMode = getRoomMode(roomPda || "");
+  const isRankedGame = roomMode === "ranked";
+  
+  const rankedGate = useRankedReadyGate({
+    roomPda,
+    myWallet: address,
+    isRanked: isRankedGame,
+    enabled: roomPlayers.length >= 2,
+  });
+
+  const handleAcceptRules = async () => {
+    const result = await rankedGate.acceptRules();
+    if (result.success) {
+      toast({ title: t('gameSession.rulesAccepted'), description: t('gameSession.signedAndReady') });
+    } else {
+      toast({ title: t('gameSession.failedToAccept'), description: result.error || t('gameSession.tryAgain'), variant: "destructive" });
+    }
+  };
+
   const handleLeaveMatch = async () => {
-    // If creator alone (no opponent), cancel room and refund
-    if (roomPlayers.length === 1) {
+    // If game is over, just navigate away
+    if (gameOver) {
+      navigate("/room-list");
+      return;
+    }
+    
+    // If creator alone (no opponent) OR opponent hasn't accepted rules yet, cancel room and refund
+    if (roomPlayers.length === 1 || (roomPlayers.length >= 2 && !rankedGate.bothReady)) {
       const result = await cancelRoomByPda(roomPda || "");
       if (result.ok) {
         toast({ title: t('forfeit.roomCancelled'), description: t('forfeit.stakeRefunded') });
@@ -256,8 +287,8 @@ const BackgammonGame = () => {
       return;
     }
     
-    // If 2 players and game not over, show forfeit confirmation
-    if (roomPlayers.length >= 2 && !gameOver) {
+    // If 2 players, both accepted rules, and game not over, show forfeit confirmation
+    if (roomPlayers.length >= 2 && rankedGate.bothReady) {
       setShowForfeitDialog(true);
       return;
     }
@@ -282,7 +313,10 @@ const BackgammonGame = () => {
     }
   };
 
-  const isMyTurn = currentPlayer === myRole;
+  // Block gameplay until both players are ready (for ranked games)
+  const canPlay = !isRankedGame || rankedGate.bothReady;
+  const isMyTurnRaw = currentPlayer === myRole;
+  const isMyTurn = canPlay && isMyTurnRaw && !gameOver;
   const isFlipped = myRole === "ai"; // Black player sees flipped board
 
   // Convert to TurnPlayer format for notifications
@@ -1172,6 +1206,29 @@ const BackgammonGame = () => {
         gameType="2player"
         stakeSol={entryFeeSol}
       />
+
+      {/* Rules Info Panel (Ranked only) */}
+      <RulesInfoPanel 
+        stakeSol={rankedGate.stakeLamports / 1_000_000_000} 
+        isRanked={isRankedGame}
+        turnTimeSeconds={rankedGate.turnTimeSeconds || 60}
+      />
+
+      {/* Accept Rules Modal (Ranked only) */}
+      <AcceptRulesModal
+        open={rankedGate.showAcceptModal}
+        onAccept={handleAcceptRules}
+        onLeave={handleLeaveMatch}
+        stakeSol={rankedGate.stakeLamports / 1_000_000_000}
+        turnTimeSeconds={rankedGate.turnTimeSeconds || 60}
+        isLoading={rankedGate.isSettingReady}
+        opponentReady={rankedGate.opponentReady}
+      />
+
+      {/* Waiting for opponent panel (Ranked - I accepted, waiting for opponent) */}
+      {isRankedGame && rankedGate.iAmReady && !rankedGate.bothReady && (
+        <WaitingForOpponentPanel onLeave={handleLeaveMatch} roomPda={roomPda} />
+      )}
     </div>
   );
 };

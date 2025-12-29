@@ -37,9 +37,15 @@ export default function RoomList() {
   const { t } = useTranslation();
   const { toast } = useToast();
   const { isConnected, address } = useWallet();
-  const { rooms, loading, error, fetchRooms, activeRoom } = useSolanaRooms();
+  const { rooms, loading, error, fetchRooms, activeRoom, findMyActiveGameSessions } = useSolanaRooms();
   const [showDebug, setShowDebug] = useState(false);
   const [lastFetch, setLastFetch] = useState<string | null>(null);
+  const [myActiveSessions, setMyActiveSessions] = useState<Array<{
+    roomPda: string;
+    gameType: string;
+    status: string;
+    isPlayer1: boolean;
+  }>>([]);
   
   // Track previous status to detect when opponent joins
   const prevStatusRef = useRef<number | null>(null);
@@ -69,6 +75,25 @@ export default function RoomList() {
     
     return () => clearInterval(interval);
   }, [fetchRooms]);
+
+  // Fetch user's active game sessions from Supabase
+  useEffect(() => {
+    if (!isConnected || !address) {
+      setMyActiveSessions([]);
+      return;
+    }
+    
+    const fetchMySessions = async () => {
+      const sessions = await findMyActiveGameSessions();
+      setMyActiveSessions(sessions);
+    };
+    
+    fetchMySessions();
+    
+    // Refresh every 10 seconds
+    const interval = setInterval(fetchMySessions, 10000);
+    return () => clearInterval(interval);
+  }, [isConnected, address, findMyActiveGameSessions]);
 
   // Note: Active room polling is now centralized in useSolanaRooms
   // Pages only CONSUME activeRoom - they don't trigger fetches
@@ -198,6 +223,41 @@ export default function RoomList() {
 
       {/* Active Game Banner handled by GlobalActiveRoomBanner in App.tsx */}
 
+      {/* My Active Games Section */}
+      {isConnected && myActiveSessions.length > 0 && (
+        <Card className="mb-6 border-primary/50 bg-primary/10">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Gamepad className="h-5 w-5 text-primary" />
+              {t("roomList.myActiveGames")}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {myActiveSessions.map((session) => (
+              <div 
+                key={session.roomPda}
+                className="flex items-center justify-between p-3 bg-background/50 rounded-lg border border-border/50"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-xl">{getGameIcon(GameType[session.gameType as keyof typeof GameType] || 0)}</span>
+                  <div>
+                    <p className="font-medium capitalize">{session.gameType}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {session.isPlayer1 ? t("roomList.youAreCreator") : t("roomList.youJoined")}
+                    </p>
+                  </div>
+                </div>
+                <Button 
+                  size="sm" 
+                  onClick={() => navigate(`/play/${session.roomPda}`)}
+                >
+                  {t("roomList.rejoin")}
+                </Button>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
       {/* Debug Panel */}
       {showDebug && (
         <Card className="mb-6 border-primary/50 bg-primary/5">

@@ -225,8 +225,14 @@ const LudoGame = () => {
     // Count active human players
     const humanPlayers = roomPlayers.filter(p => !p.startsWith('ai-'));
     
-    // If creator alone (no human opponent), cancel room and refund
-    if (humanPlayers.length === 1 && !gameOver) {
+    // If game is over, just navigate away
+    if (gameOver) {
+      navigate("/room-list");
+      return;
+    }
+    
+    // If creator alone (no human opponent) OR opponent hasn't accepted rules yet, cancel room and refund
+    if (humanPlayers.length === 1 || (humanPlayers.length >= 2 && !rankedGate.bothReady)) {
       const result = await cancelRoomByPda(roomPda || "");
       if (result.ok) {
         toast({ title: t('forfeit.roomCancelled'), description: t('forfeit.stakeRefunded') });
@@ -237,8 +243,8 @@ const LudoGame = () => {
       return;
     }
     
-    // If 2+ human players and game not over, show forfeit confirmation (Ludo-specific)
-    if (humanPlayers.length >= 2 && !gameOver) {
+    // If 2+ human players, both accepted rules, and game not over, show forfeit confirmation
+    if (humanPlayers.length >= 2 && rankedGate.bothReady) {
       setShowForfeitDialog(true);
       return;
     }

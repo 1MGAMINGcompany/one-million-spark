@@ -673,6 +673,43 @@ export function useSolanaRooms() {
     }
   }, [connected, publicKey, connection]);
 
+  // Find all active game sessions where user is a participant (from Supabase)
+  const findMyActiveGameSessions = useCallback(async (): Promise<Array<{
+    roomPda: string;
+    gameType: string;
+    status: string;
+    isPlayer1: boolean;
+  }>> => {
+    if (!publicKey) return [];
+    
+    try {
+      // Import supabase client
+      const { supabase } = await import("@/integrations/supabase/client");
+      const walletAddress = publicKey.toBase58();
+      
+      const { data, error } = await supabase
+        .from('game_sessions')
+        .select('room_pda, game_type, status, player1_wallet, player2_wallet')
+        .eq('status', 'active')
+        .or(`player1_wallet.eq.${walletAddress},player2_wallet.eq.${walletAddress}`);
+      
+      if (error) {
+        console.error('[findMyActiveGameSessions] Error:', error);
+        return [];
+      }
+      
+      return (data || []).map(session => ({
+        roomPda: session.room_pda,
+        gameType: session.game_type,
+        status: session.status,
+        isPlayer1: session.player1_wallet === walletAddress,
+      }));
+    } catch (err) {
+      console.error('[findMyActiveGameSessions] Error:', err);
+      return [];
+    }
+  }, [publicKey]);
+
   return {
     rooms,
     loading,
@@ -692,5 +729,6 @@ export function useSolanaRooms() {
     cancelAbandonedRoom,
     getBalance,
     fetchUserActiveRoom,
+    findMyActiveGameSessions,
   };
 }
