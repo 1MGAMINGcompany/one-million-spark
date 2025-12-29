@@ -71,6 +71,36 @@ export type Database = {
         }
         Relationships: []
       }
+      game_moves: {
+        Row: {
+          created_at: string
+          move_data: Json
+          move_hash: string
+          prev_hash: string
+          room_pda: string
+          turn_number: number
+          wallet: string
+        }
+        Insert: {
+          created_at?: string
+          move_data: Json
+          move_hash: string
+          prev_hash: string
+          room_pda: string
+          turn_number: number
+          wallet: string
+        }
+        Update: {
+          created_at?: string
+          move_data?: Json
+          move_hash?: string
+          prev_hash?: string
+          room_pda?: string
+          turn_number?: number
+          wallet?: string
+        }
+        Relationships: []
+      }
       game_sessions: {
         Row: {
           created_at: string
@@ -377,6 +407,17 @@ export type Database = {
           p_wallet: string
         }
         Returns: string
+      }
+      submit_move: {
+        Args: {
+          p_move_data: Json
+          p_move_hash: string
+          p_prev_hash: string
+          p_room_pda: string
+          p_session_token: string
+          p_turn_number: number
+        }
+        Returns: undefined
       }
       upsert_game_session: {
         Args: {
