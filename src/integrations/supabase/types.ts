@@ -291,6 +291,7 @@ export type Database = {
         Row: {
           created_at: string
           last_hash: string | null
+          last_move_at: string | null
           last_turn: number
           revoked: boolean
           room_pda: string
@@ -301,6 +302,7 @@ export type Database = {
         Insert: {
           created_at?: string
           last_hash?: string | null
+          last_move_at?: string | null
           last_turn?: number
           revoked?: boolean
           room_pda: string
@@ -311,6 +313,7 @@ export type Database = {
         Update: {
           created_at?: string
           last_hash?: string | null
+          last_move_at?: string | null
           last_turn?: number
           revoked?: boolean
           room_pda?: string
