@@ -687,5 +687,16 @@
     "fairPlayText": "Alle Spiele verwenden verifizierbare On-Chain-Logik mit Commit-Reveal-Zufälligkeit für Spiele wie Ludo, Backgammon und Domino. Spielzustände werden auf der Blockchain für Transparenz und Streitbeilegung gespeichert.",
     "noticeTitle": "Wichtiger Hinweis",
     "noticeText": "Durch die Nutzung von 1M Gaming bestätigen Sie, dass Sie 18+ Jahre alt sind und stimmen zu, nur an Geschicklichkeitsspielen teilzunehmen. Wir behalten uns das Recht vor, Konten zu sperren, die an Absprachen oder unfairem Spiel beteiligt sind."
+  },
+  "rulesPanel": {
+    "matchRules": "Spielregeln",
+    "ranked": "Rangliste",
+    "stake": "Einsatz",
+    "winnerPayout": "Gewinnerauszahlung",
+    "platformFee": "Plattformgebühr",
+    "turnTime": "Zugzeit",
+    "forfeit": "Aufgabe",
+    "timeoutForfeit": "Zeitüberschreitung = automatische Aufgabe",
+    "rulesAcceptedNote": "Beide Spieler haben diese Regeln vor Spielbeginn akzeptiert. Auszahlungen werden on-chain ausgeführt."
   }
 }

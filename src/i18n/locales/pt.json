@@ -687,5 +687,16 @@
     "fairPlayText": "Todos os jogos usam lógica verificável on-chain com aleatoriedade commit-reveal para jogos como Ludo, Gamão e Dominó. Estados dos jogos são armazenados na blockchain para transparência e resolução de disputas.",
     "noticeTitle": "Aviso Importante",
     "noticeText": "Ao usar 1M Gaming, você confirma ter 18+ anos e concorda em competir apenas em jogos de habilidade. Reservamos o direito de suspender contas envolvidas em conluio ou jogo desleal."
+  },
+  "rulesPanel": {
+    "matchRules": "Regras da Partida",
+    "ranked": "Ranqueado",
+    "stake": "Aposta",
+    "winnerPayout": "Pagamento ao vencedor",
+    "platformFee": "Taxa da plataforma",
+    "turnTime": "Tempo de turno",
+    "forfeit": "Desistência",
+    "timeoutForfeit": "Tempo esgotado = desistência automática",
+    "rulesAcceptedNote": "Ambos os jogadores aceitaram estas regras antes do início da partida. Os pagamentos são executados on-chain."
   }
 }

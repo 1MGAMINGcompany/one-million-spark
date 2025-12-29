@@ -661,5 +661,16 @@
     "addToHomeScreen": "ホーム画面に追加",
     "tapAdd": "右上の\"追加\"をタップ",
     "scrollAndTap": "下にスクロールしてタップ"
+  },
+  "rulesPanel": {
+    "matchRules": "マッチルール",
+    "ranked": "ランク戦",
+    "stake": "賭け金",
+    "winnerPayout": "勝者への支払い",
+    "platformFee": "プラットフォーム手数料",
+    "turnTime": "ターン時間",
+    "forfeit": "棄権",
+    "timeoutForfeit": "タイムアウト = 自動棄権",
+    "rulesAcceptedNote": "両プレイヤーはマッチ開始前にこれらのルールに同意しました。支払いはオンチェーンで実行されます。"
   }
 }
