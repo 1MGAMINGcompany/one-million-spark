@@ -5,10 +5,12 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useWallet } from '@solana/wallet-adapter-react';
 import { ArrowLeft, Flame, Trophy, Target, Coins, Zap, Gamepad2, TrendingUp, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { supabase } from '@/integrations/supabase/client';
+import { RecoverableRoomsSection } from '@/components/RecoverableRoomsSection';
 
 interface PlayerProfileData {
   wallet: string;
@@ -255,6 +257,10 @@ function getPlayerBadges(profile: PlayerProfileData): Badge[] {
 export default function PlayerProfile() {
   const { wallet } = useParams<{ wallet: string }>();
   const navigate = useNavigate();
+  const { publicKey } = useWallet();
+  
+  // Check if user is viewing their own profile
+  const isOwnProfile = publicKey && wallet === publicKey.toBase58();
   
   const [profile, setProfile] = useState<PlayerProfileData | null>(null);
   const [recentGames, setRecentGames] = useState<RecentGame[]>([]);
@@ -574,6 +580,11 @@ export default function PlayerProfile() {
           )}
         </CardContent>
       </Card>
+
+      {/* Recoverable Rooms Section - only visible on own profile */}
+      {isOwnProfile && wallet && (
+        <RecoverableRoomsSection wallet={wallet} />
+      )}
     </div>
   );
 }
