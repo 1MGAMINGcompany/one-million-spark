@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Copy, Share2, Mail, MessageCircle, Facebook, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -36,6 +37,7 @@ export function ShareInviteDialog({
   const [copied, setCopied] = useState(false);
   const { toast } = useToast();
   const { play } = useSound();
+  const { t } = useTranslation();
 
   const inviteLink = buildInviteLink({ roomId });
 
@@ -45,14 +47,14 @@ export function ShareInviteDialog({
       setCopied(true);
       play("ui/click");
       toast({
-        title: "Link copied!",
-        description: "Share this link with friends to invite them.",
+        title: t("common.linkCopied"),
+        description: t("common.linkCopiedDesc"),
       });
       setTimeout(() => setCopied(false), 2000);
     } catch {
       toast({
-        title: "Failed to copy",
-        description: "Please copy the link manually.",
+        title: t("common.failedToCopy"),
+        description: t("common.copyManually"),
         variant: "destructive",
       });
     }
@@ -87,10 +89,10 @@ export function ShareInviteDialog({
       <DialogContent className="sm:max-w-md border-primary/30 bg-background">
         <DialogHeader>
           <DialogTitle className="text-primary font-cinzel">
-            Invite Players
+            {t("shareInvite.invitePlayers")}
           </DialogTitle>
           <DialogDescription>
-            Share this private room with friends and family.
+            {t("shareInvite.sharePrivateRoom")}
           </DialogDescription>
         </DialogHeader>
 
@@ -125,7 +127,7 @@ export function ShareInviteDialog({
                 className="border-primary/30 hover:bg-primary/10 gap-2"
               >
                 <Share2 className="h-4 w-4" />
-                Share
+                {t("shareInvite.share")}
               </Button>
             )}
 
@@ -158,7 +160,7 @@ export function ShareInviteDialog({
           </div>
 
           <p className="text-xs text-muted-foreground text-center">
-            Room #{roomId} • Players will need to connect their wallet to join
+            {t("game.room")} #{roomId} • {t("shareInvite.walletNeeded")}
           </p>
         </div>
       </DialogContent>

@@ -7,10 +7,12 @@
 
 import { useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 
 export function GameRedirect() {
   const { roomPda } = useParams<{ slug: string; roomPda: string }>();
   const navigate = useNavigate();
+  const { t } = useTranslation();
 
   useEffect(() => {
     if (roomPda) {
@@ -24,7 +26,7 @@ export function GameRedirect() {
     <div className="flex items-center justify-center min-h-[50vh]">
       <div className="text-center">
         <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full mx-auto mb-4" />
-        <p className="text-muted-foreground">Redirecting to game...</p>
+        <p className="text-muted-foreground">{t("common.redirectingToGame")}</p>
       </div>
     </div>
   );

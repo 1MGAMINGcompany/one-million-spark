@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -16,6 +17,7 @@ import { archiveRoom } from "@/lib/roomArchive";
 export function GlobalActiveRoomBanner() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { t } = useTranslation();
   const { connected } = useWallet();
   const { activeRoom } = useSolanaRooms();
   
@@ -56,8 +58,8 @@ export function GlobalActiveRoomBanner() {
 
       // Show toast
       toast({
-        title: "🎮 Opponent joined — your game is ready!",
-        description: `Navigate to your ${activeRoom.gameTypeName} room`,
+        title: `🎮 ${t("gameBanner.opponentJoined")}`,
+        description: t("gameBanner.navigateToRoom", { game: activeRoom.gameTypeName }),
       });
 
       // Navigate directly to PLAY route (game is Started)
@@ -95,8 +97,8 @@ export function GlobalActiveRoomBanner() {
   const handleDismiss = () => {
     archiveRoom(activeRoom.pda);
     toast({
-      title: "Banner dismissed",
-      description: "This room has been hidden from the banner.",
+      title: t("common.bannerDismissed"),
+      description: t("common.bannerDismissedDesc"),
     });
   };
 
@@ -112,7 +114,7 @@ export function GlobalActiveRoomBanner() {
                 </div>
                 <div className="min-w-0">
                   <p className="font-semibold text-primary text-sm sm:text-base truncate">
-                    Game Ready — Opponent Joined!
+                    {t("gameBanner.gameReady")}
                   </p>
                   <p className="text-xs sm:text-sm text-muted-foreground truncate">
                     {activeRoom.gameTypeName} • {activeRoom.entryFeeSol} SOL
@@ -122,8 +124,8 @@ export function GlobalActiveRoomBanner() {
               <div className="flex items-center gap-2">
                 <Button onClick={handleEnterGame} size="sm" className="shrink-0">
                   <Play className="h-4 w-4 mr-1 sm:mr-2" />
-                  <span className="hidden sm:inline">Enter Game</span>
-                  <span className="sm:hidden">Play</span>
+                  <span className="hidden sm:inline">{t("gameBanner.enterGame")}</span>
+                  <span className="sm:hidden">{t("gameBanner.play")}</span>
                 </Button>
                 <Button onClick={handleDismiss} size="sm" variant="ghost" className="shrink-0 h-8 w-8 p-0">
                   <X className="h-4 w-4" />
@@ -148,17 +150,17 @@ export function GlobalActiveRoomBanner() {
                 </div>
                 <div className="min-w-0">
                   <p className="font-semibold text-amber-500 text-sm sm:text-base truncate">
-                    Waiting for Opponent
+                    {t("gameBanner.waitingForOpponent")}
                   </p>
                   <p className="text-xs sm:text-sm text-muted-foreground truncate">
-                    {activeRoom.gameTypeName} • Room #{activeRoom.roomId}
+                    {activeRoom.gameTypeName} • {t("game.room")} #{activeRoom.roomId}
                   </p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
                 <Button variant="outline" onClick={handleViewRoom} size="sm" className="shrink-0">
-                  <span className="hidden sm:inline">View Room</span>
-                  <span className="sm:hidden">View</span>
+                  <span className="hidden sm:inline">{t("gameBanner.viewRoom")}</span>
+                  <span className="sm:hidden">{t("gameBanner.view")}</span>
                 </Button>
                 <Button onClick={handleDismiss} size="sm" variant="ghost" className="shrink-0 h-8 w-8 p-0">
                   <X className="h-4 w-4" />

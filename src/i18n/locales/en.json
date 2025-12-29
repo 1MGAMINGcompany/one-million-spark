@@ -419,6 +419,35 @@
     "newRoomCreated": "New Room Available",
     "newRoomCreatedDesc": "A new game room was just created!"
   },
+  "shareInvite": {
+    "invitePlayers": "Invite Players",
+    "sharePrivateRoom": "Share this private room with friends and family.",
+    "share": "Share",
+    "walletNeeded": "Players will need to connect their wallet to join"
+  },
+  "gameBanner": {
+    "gameReady": "Game Ready — Opponent Joined!",
+    "waitingForOpponent": "Waiting for Opponent",
+    "enterGame": "Enter Game",
+    "play": "Play",
+    "viewRoom": "View Room",
+    "view": "View",
+    "opponentJoined": "Opponent joined — your game is ready!",
+    "navigateToRoom": "Navigate to your {{game}} room"
+  },
+  "waitingPanel": {
+    "youAccepted": "You accepted the rules",
+    "waitingOpponentAccept": "Waiting for opponent to accept…",
+    "gameStartsAuto": "Game starts automatically when both players accept.",
+    "copyInviteLink": "Copy Invite Link",
+    "linkCopied": "Link Copied!",
+    "leaveMatch": "Leave Match",
+    "linkCopiedToast": "Link copied! Share it with your opponent."
+  },
+  "gameChat": {
+    "gameChat": "Game Chat",
+    "chat": "Chat"
+  },
   "playAi": {
     "title": "Temple of Practice",
     "subtitle": "Train your mind in the arts of strategy. No pressure, no stakes — pure skill refinement.",
@@ -534,7 +563,22 @@
     "totalMoves": "Total Moves",
     "actions": "Actions",
     "connecting": "Connecting...",
-    "prefilledFromRematch": "Pre-filled from rematch"
+    "prefilledFromRematch": "Pre-filled from rematch",
+    "players": "players",
+    "redirectingToGame": "Redirecting to game...",
+    "noMessagesYet": "No messages yet",
+    "sayHello": "Say hello to your opponent!",
+    "typeMessage": "Type a message...",
+    "tagPlayer": "Tag a player",
+    "copyAddress": "Copy Address",
+    "linkCopied": "Link copied!",
+    "linkCopiedDesc": "Share this link with friends to invite them.",
+    "failedToCopy": "Failed to copy",
+    "copyManually": "Please copy the link manually.",
+    "bannerDismissed": "Banner dismissed",
+    "bannerDismissedDesc": "This room has been hidden from the banner.",
+    "cannotSendMessage": "Cannot send message",
+    "walletCopied": "Wallet address copied to clipboard"
   },
   "rematch": {
     "title": "Rematch",
