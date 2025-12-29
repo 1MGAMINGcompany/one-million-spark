@@ -233,12 +233,13 @@ export function GameEndScreen({
     checkRoomStatus();
   }, [roomPda, isStaked, connection]);
   
-  // Show finalize button only for staked games with a winner (not draw)
-  const showFinalizeButton = isStaked && roomPda && winner && winner !== 'draw';
+  // Show finalize button for staked games with a winner OR draw
+  const showFinalizeButton = isStaked && roomPda && winner;
+  const showDrawSettlement = isStaked && roomPda && isDraw;
   const isAlreadySettled = roomAlreadySettled || finalizeState === 'success';
   
   const handleFinalize = async () => {
-    if (!roomPda || !winner || !publicKey || !sendTransaction) return;
+    if (!roomPda || !publicKey || !sendTransaction) return;
     
     setFinalizeState('loading');
     setFinalizeError(null);
@@ -246,10 +247,34 @@ export function GameEndScreen({
     setTxSignature(null);
     
     try {
+      // For draws, use the settle-draw edge function
+      if (isDraw) {
+        const { data, error } = await supabase.functions.invoke('settle-draw', {
+          body: {
+            roomPda,
+            callerWallet: publicKey.toBase58(),
+            gameType,
+          },
+        });
+        
+        if (error) throw error;
+        if (data?.error) throw new Error(data.error);
+        
+        if (data?.status === 'settled' || data?.status === 'already_resolved') {
+          setFinalizeState('success');
+          setTxSignature(data.signature || null);
+          play('chess_win');
+        } else {
+          throw new Error(data?.message || 'Failed to settle draw');
+        }
+        return;
+      }
+      
+      // Normal winner finalization
       const res = await finalizeRoom(
         connection,
         new PublicKey(roomPda),
-        new PublicKey(winner),
+        new PublicKey(winner!),
         sendTransaction,
         publicKey
       );
@@ -257,10 +282,8 @@ export function GameEndScreen({
       if (res.ok) {
         setFinalizeState('success');
         setTxSignature(res.signature || null);
-        play('chess_win'); // Play success sound
+        play('chess_win');
         
-        // Call secure RPC to record match result (only after on-chain confirmation)
-        // This updates player_profiles, matches, ratings, and h2h in one atomic call
         if (res.signature && players.length >= 2) {
           (async () => {
             try {
@@ -271,13 +294,11 @@ export function GameEndScreen({
                 p_game_type: gameType,
                 p_max_players: players.length,
                 p_stake_lamports: stakeLamports,
-                p_mode: gameMode, // Uses mode from game_sessions DB
+                p_mode: gameMode,
                 p_players: players.map(p => p.address),
               });
               if (error) {
                 console.warn('[GameEndScreen] RPC record_match_result failed:', error.message);
-              } else {
-                console.log('[GameEndScreen] Rankings updated successfully');
               }
             } catch (err) {
               console.warn('[GameEndScreen] RPC call failed:', err);

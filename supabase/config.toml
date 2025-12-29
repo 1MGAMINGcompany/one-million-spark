@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.recover-funds]
 verify_jwt = false
+
+[functions.settle-draw]
+verify_jwt = false
