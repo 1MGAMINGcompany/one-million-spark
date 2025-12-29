@@ -24,6 +24,7 @@ import { RematchModal } from "@/components/RematchModal";
 import { RematchAcceptModal } from "@/components/RematchAcceptModal";
 import { AcceptRulesModal } from "@/components/AcceptRulesModal";
 import { WaitingForOpponentPanel } from "@/components/WaitingForOpponentPanel";
+import { RulesInfoPanel } from "@/components/RulesInfoPanel";
 import { toast } from "@/hooks/use-toast";
 import { PublicKey, Connection } from "@solana/web3.js";
 import { parseRoomAccount } from "@/lib/solana-program";
@@ -928,6 +929,12 @@ const ChessGame = () => {
       
       {/* Chat Panel */}
       <GameChatPanel chat={chat} />
+
+      {/* Rules Info Panel (Ranked only) */}
+      <RulesInfoPanel 
+        stakeSol={rankedGate.stakeLamports / 1_000_000_000} 
+        isRanked={isRankedGame} 
+      />
 
       {/* Game End Screen */}
       {gameOver && (
