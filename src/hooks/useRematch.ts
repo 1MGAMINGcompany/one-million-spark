@@ -1,5 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useWallet } from '@/hooks/useWallet';
+import { useWallet as useSolanaWallet } from '@solana/wallet-adapter-react';
+import bs58 from 'bs58';
 
 export interface RematchSettings {
   gameType: string;
@@ -39,6 +41,7 @@ const initialState: RematchState = {
 
 export function useRematch(gameType: string, previousPlayers: string[]) {
   const { address, publicKey } = useWallet();
+  const { signMessage } = useSolanaWallet();
   const [state, setState] = useState<RematchState>({
     ...initialState,
     settings: {
@@ -89,33 +92,26 @@ export function useRematch(gameType: string, previousPlayers: string[]) {
       throw new Error('Wallet not connected');
     }
 
+    if (!signMessage) {
+      throw new Error('Wallet does not support message signing');
+    }
+
     const timestamp = Date.now();
     const message = `I agree to start a NEW ${state.settings.gameType} rematch with stake ${state.settings.stakeAmount} SOL and turn time ${state.settings.timePerTurn === 0 ? 'Unlimited' : `${state.settings.timePerTurn}s`}. I accept the rules and auto payout. Timestamp: ${timestamp}`;
 
     try {
-      // Request signature from wallet
+      // Request signature from wallet using standard adapter
       const encodedMessage = new TextEncoder().encode(message);
+      const signatureBytes = await signMessage(encodedMessage);
+      const signatureBase58 = bs58.encode(signatureBytes);
       
-      // Check if Phantom wallet is available
-      const provider = (window as any).solana;
-      if (!provider?.signMessage) {
-        // Fallback: simulate signature for development
-        console.log('Wallet signature requested:', message);
-        const mockSignature = `sig_${timestamp}_${address.slice(0, 8)}`;
-        setState(prev => ({ ...prev, signature: mockSignature }));
-        return mockSignature;
-      }
-
-      const { signature } = await provider.signMessage(encodedMessage, 'utf8');
-      const signatureBase64 = Buffer.from(signature).toString('base64');
-      
-      setState(prev => ({ ...prev, signature: signatureBase64 }));
-      return signatureBase64;
+      setState(prev => ({ ...prev, signature: signatureBase58 }));
+      return signatureBase58;
     } catch (error) {
       console.error('Failed to sign rematch agreement:', error);
       throw error;
     }
-  }, [publicKey, address, state.settings]);
+  }, [publicKey, address, signMessage, state.settings]);
 
   const createRematchRoom = useCallback(async () => {
     setState(prev => ({ ...prev, isCreating: true }));

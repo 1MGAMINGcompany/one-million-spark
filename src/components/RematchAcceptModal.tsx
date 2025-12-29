@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { toast } from 'sonner';
 import { useSolPrice } from '@/hooks/useSolPrice';
 import { useWallet } from '@/hooks/useWallet';
+import { useWallet as useSolanaWallet } from '@solana/wallet-adapter-react';
 
 interface RematchData {
   roomId: string;
@@ -40,6 +41,7 @@ export function RematchAcceptModal({
 }: RematchAcceptModalProps) {
   const { price: solPrice } = useSolPrice();
   const { address, publicKey } = useWallet();
+  const { signMessage } = useSolanaWallet();
   const [rulesAccepted, setRulesAccepted] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [isSigning, setIsSigning] = useState(false);
@@ -109,20 +111,19 @@ export function RematchAcceptModal({
       return;
     }
 
+    if (!signMessage) {
+      toast.error('Wallet does not support message signing');
+      return;
+    }
+
     setIsSigning(true);
     try {
-      // Request signature for acceptance
+      // Request signature for acceptance using standard wallet adapter
       const timestamp = Date.now();
       const message = `I accept the ${rematchData.settings.gameType} rematch with stake ${rematchData.settings.stakeAmount} SOL. Room: ${rematchData.roomId}. Timestamp: ${timestamp}`;
 
-      // Check if Phantom wallet is available
-      const provider = (window as any).solana;
-      if (provider?.signMessage) {
-        const encodedMessage = new TextEncoder().encode(message);
-        await provider.signMessage(encodedMessage, 'utf8');
-      } else {
-        console.log('Wallet signature requested:', message);
-      }
+      const encodedMessage = new TextEncoder().encode(message);
+      await signMessage(encodedMessage);
 
       await onAccept(rematchData.roomId);
       toast.success('Rematch accepted! Game starting...');
