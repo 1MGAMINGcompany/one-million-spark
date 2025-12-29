@@ -20,6 +20,7 @@ import { GameEndScreen } from "@/components/GameEndScreen";
 import { RematchModal } from "@/components/RematchModal";
 import { RematchAcceptModal } from "@/components/RematchAcceptModal";
 import { AcceptRulesModal } from "@/components/AcceptRulesModal";
+import { WaitingForOpponentPanel } from "@/components/WaitingForOpponentPanel";
 import { toast } from "@/hooks/use-toast";
 import { PublicKey, Connection } from "@solana/web3.js";
 import { parseRoomAccount } from "@/lib/solana-program";
@@ -1003,24 +1004,9 @@ const CheckersGame = () => {
         opponentReady={rankedGate.opponentReady}
       />
 
-      {/* Waiting for opponent overlay (Ranked - I accepted, waiting for opponent) */}
+      {/* Waiting for opponent panel (Ranked - I accepted, waiting for opponent) */}
       {isRankedGame && rankedGate.iAmReady && !rankedGate.bothReady && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-40 flex items-center justify-center">
-          <div className="bg-card border rounded-lg p-6 text-center space-y-4 max-w-sm">
-            <div className="animate-pulse">
-              <div className="h-12 w-12 rounded-full bg-primary/20 mx-auto flex items-center justify-center">
-                <Users className="h-6 w-6 text-primary" />
-              </div>
-            </div>
-            <h3 className="text-lg font-semibold">Waiting for Opponent</h3>
-            <p className="text-sm text-muted-foreground">
-              Your opponent needs to accept the match rules before the game can begin.
-            </p>
-            <Button variant="outline" onClick={handleLeaveMatch}>
-              Leave Match
-            </Button>
-          </div>
-        </div>
+        <WaitingForOpponentPanel onLeave={handleLeaveMatch} roomPda={roomPda} />
       )}
     </div>
   );
