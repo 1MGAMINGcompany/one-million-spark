@@ -31,7 +31,6 @@ import { requestNotificationPermission } from "@/lib/pushNotifications";
 import { AudioManager } from "@/lib/AudioManager";
 import { showBrowserNotification } from "@/lib/pushNotifications";
 import { parseRematchParams, lamportsToSol, RematchPayload, solToLamports } from "@/lib/rematchPayload";
-import { logMatchCreated } from "@/lib/matchHistory";
 
 // Game type mapping from string to number
 const GAME_TYPE_MAP: Record<string, string> = {
@@ -248,17 +247,7 @@ export default function CreateRoom() {
         const roomPda = getRoomPda(creatorPubkey, roomId);
         const roomPdaStr = roomPda.toBase58();
         
-        // Log match to Supabase (non-blocking)
-        const gameTypeName = Object.entries(GAME_TYPE_MAP).find(([_, v]) => v === gameType)?.[0] || 'unknown';
-        logMatchCreated({
-          roomPda: roomPdaStr,
-          originRoomPda: rematchData?.originRoomId,
-          isRematch,
-          gameType: gameTypeName,
-          maxPlayers: parseInt(maxPlayers),
-          stakeLamports: solToLamports(entryFeeNum),
-          creatorWallet: address,
-        }).catch(err => console.warn('[CreateRoom] Failed to log match:', err));
+        // Match logging is now handled by record_match_result RPC on finalize
         
         // Store mode and turn time in localStorage so game pages can read it
         const turnTimeSeconds = turnTime === "0" ? 300 : parseInt(turnTime) * 60; // 0 = unlimited becomes 5 min max for ranked
