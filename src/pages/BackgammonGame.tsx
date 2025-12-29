@@ -163,13 +163,13 @@ const BackgammonGame = () => {
       setRemainingMoves(persisted.remainingMoves || []);
       setCurrentPlayer(persisted.currentPlayer);
       setGameOver(persisted.gameOver || false);
-      setGameStatus(persisted.gameStatus || "Your turn");
+      setGameStatus(persisted.gameStatus || t('game.yourTurn'));
       toast({
-        title: "Game Restored",
-        description: "Your game session has been recovered.",
+        title: t('gameSession.gameRestored'),
+        description: t('gameSession.sessionRecovered'),
       });
     }
-  }, []);
+  }, [t]);
 
   const { loadSession: loadBackgammonSession, saveSession: saveBackgammonSession, finishSession: finishBackgammonSession } = useGameSessionPersistence({
     roomPda: roomPda,
@@ -223,13 +223,13 @@ const BackgammonGame = () => {
       const color = index === 0 ? "gold" : "black";
       return {
         address: playerAddress,
-        name: isMe ? "You" : "Opponent",
+        name: isMe ? t('common.you') : t('game.opponent'),
         color,
         status: "active" as const,
         seatIndex: index,
       };
     });
-  }, [roomPlayers, address]);
+  }, [roomPlayers, address, t]);
 
   const activeTurnAddress = useMemo(() => {
     const turnIndex = currentPlayer === "player" ? 0 : 1;

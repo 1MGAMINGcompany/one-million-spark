@@ -171,11 +171,11 @@ const CheckersGame = () => {
       setCurrentPlayer(persisted.currentPlayer);
       setGameOver(persisted.gameOver);
       toast({
-        title: "Game Restored",
-        description: "Your game session has been recovered.",
+        title: t('gameSession.gameRestored'),
+        description: t('gameSession.sessionRecovered'),
       });
     }
-  }, []);
+  }, [t]);
 
   const { loadSession: loadCheckersSession, saveSession: saveCheckersSession, finishSession: finishCheckersSession } = useGameSessionPersistence({
     roomPda: roomPda,
@@ -230,9 +230,9 @@ const CheckersGame = () => {
   const handleAcceptRules = async () => {
     const result = await rankedGate.acceptWithSignature();
     if (result.success) {
-      toast({ title: "Rules accepted", description: "Signed and ready! Waiting for opponent..." });
+      toast({ title: t('gameSession.rulesAccepted'), description: t('gameSession.signedAndReady') });
     } else {
-      toast({ title: "Failed to accept", description: result.error || "Please try again", variant: "destructive" });
+      toast({ title: t('gameSession.failedToAccept'), description: result.error || t('gameSession.tryAgain'), variant: "destructive" });
     }
   };
 
@@ -251,8 +251,8 @@ const CheckersGame = () => {
   const handleTimeExpired = useCallback(() => {
     if (!gameOver) {
       toast({
-        title: "Time expired!",
-        description: "You ran out of time and forfeited the match.",
+        title: t('gameSession.timeExpired'),
+        description: t('gameSession.forfeitedMatch'),
         variant: "destructive",
       });
       // Trigger forfeit - same as resign
@@ -260,7 +260,7 @@ const CheckersGame = () => {
       setGameOver(myColor === "gold" ? "obsidian" : "gold");
       play('checkers_lose');
     }
-  }, [gameOver, myColor, play]);
+  }, [gameOver, myColor, play, t]);
 
   // Use turn time from ranked gate (fetched from DB/localStorage)
   const effectiveTurnTime = rankedGate.turnTimeSeconds || DEFAULT_RANKED_TURN_TIME;

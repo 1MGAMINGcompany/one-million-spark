@@ -93,7 +93,7 @@ const DominosGame = () => {
   const [opponentHandCount, setOpponentHandCount] = useState(7);
   const [boneyard, setBoneyard] = useState<Domino[]>([]);
   const [isMyTurn, setIsMyTurn] = useState(false);
-  const [gameStatus, setGameStatus] = useState("Connecting...");
+  const [gameStatus, setGameStatus] = useState(t('game.connecting'));
   const [gameOver, setGameOver] = useState(false);
   const [selectedDomino, setSelectedDomino] = useState<number | null>(null);
   const [winner, setWinner] = useState<"me" | "opponent" | "draw" | null>(null);
@@ -180,7 +180,7 @@ const DominosGame = () => {
     const isMyTurnNow = (persisted.currentTurnPlayer === 1 && amIPlayer1Ref.current) ||
                         (persisted.currentTurnPlayer === 2 && !amIPlayer1Ref.current);
     setIsMyTurn(isMyTurnNow);
-    setGameStatus(isMyTurnNow ? "Your turn" : "Opponent's turn");
+    setGameStatus(isMyTurnNow ? t('game.yourTurn') : t('game.opponentsTurn'));
     
     // Restore game over state
     if (persisted.gameOver) {
@@ -360,8 +360,8 @@ const DominosGame = () => {
         handleStateRestored(savedState);
         setGameInitialized(true);
         toast({
-          title: "Game Restored",
-          description: "Your game session has been recovered.",
+          title: t('gameSession.gameRestored'),
+          description: t('gameSession.sessionRecovered'),
         });
         return;
       }
@@ -389,7 +389,7 @@ const DominosGame = () => {
       
       // Player 1 (room creator) always goes first
       setIsMyTurn(amIPlayer1);
-      setGameStatus(amIPlayer1 ? "Your turn" : "Opponent's turn");
+      setGameStatus(amIPlayer1 ? t('game.yourTurn') : t('game.opponentsTurn'));
       setGameOver(false);
       setSelectedDomino(null);
       setWinner(null);
@@ -431,9 +431,9 @@ const DominosGame = () => {
   const handleAcceptRulesModal = async () => {
     const result = await rankedGate.acceptWithSignature();
     if (result.success) {
-      toast({ title: "Rules accepted", description: "Signed and ready! Waiting for opponent..." });
+      toast({ title: t('gameSession.rulesAccepted'), description: t('gameSession.signedAndReady') });
     } else {
-      toast({ title: "Failed to accept", description: result.error || "Please try again", variant: "destructive" });
+      toast({ title: t('gameSession.failedToAccept'), description: result.error || t('gameSession.tryAgain'), variant: "destructive" });
     }
   };
 
@@ -454,17 +454,17 @@ const DominosGame = () => {
   const handleTimeExpired = useCallback(() => {
     if (!gameOver) {
       toast({
-        title: "Time expired!",
-        description: "You ran out of time and forfeited the match.",
+        title: t('gameSession.timeExpired'),
+        description: t('gameSession.forfeitedMatch'),
         variant: "destructive",
       });
       sendResignRef.current?.();
       setGameOver(true);
       setWinner("opponent");
-      setGameStatus("You lost by timeout");
+      setGameStatus(t('game.youLose') + " - timeout");
       play('domino_lose');
     }
-  }, [gameOver, play]);
+  }, [gameOver, play, t]);
 
   // Use turn time from ranked gate (fetched from DB/localStorage)
   const effectiveTurnTime = rankedGate.turnTimeSeconds || DEFAULT_RANKED_TURN_TIME;
