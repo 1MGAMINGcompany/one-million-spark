@@ -254,7 +254,13 @@
     "approvalFailed": "承認に失敗しました",
     "transactionFailed": "トランザクション失敗",
     "roomCancelled": "ルームがキャンセルされました",
-    "roomCancelledDesc": "ルームがキャンセルされました。"
+    "roomCancelledDesc": "ルームがキャンセルされました。",
+    "stakeOptional": "賭け金：任意",
+    "stakeMinRequired": "最低賭け金が必要です",
+    "gameModeCasual": "カジュアル",
+    "gameModeRanked": "ランク戦",
+    "casualDesc": "ランキング変動なし — 楽しむだけ",
+    "rankedDesc": "この試合後にELOレーティングが更新されます"
   },
   "roomList": {
     "title": "公開ゲームルーム",

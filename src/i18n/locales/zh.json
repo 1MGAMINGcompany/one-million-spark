@@ -254,7 +254,13 @@
     "approvalFailed": "授权失败",
     "transactionFailed": "交易失败",
     "roomCancelled": "房间已取消",
-    "roomCancelledDesc": "您的房间已被取消。"
+    "roomCancelledDesc": "您的房间已被取消。",
+    "stakeOptional": "赌注：可选",
+    "stakeMinRequired": "需要最低赌注",
+    "gameModeCasual": "休闲",
+    "gameModeRanked": "排位",
+    "casualDesc": "不影响排名 — 只为娱乐",
+    "rankedDesc": "本场比赛后将更新ELO评分"
   },
   "roomList": {
     "title": "公开游戏房间",

@@ -391,7 +391,13 @@
     "balance": "Saldo",
     "prizePool": "Premio Total",
     "platformFee": "Comisión de Plataforma",
-    "connected": "Conectado"
+    "connected": "Conectado",
+    "stakeOptional": "Apuesta: Opcional",
+    "stakeMinRequired": "Apuesta mínima requerida",
+    "gameModeCasual": "Casual",
+    "gameModeRanked": "Clasificatorio",
+    "casualDesc": "Sin cambios de clasificación — solo por diversión",
+    "rankedDesc": "El ELO se actualizará después de este partido"
   },
   "roomList": {
     "title": "Salas de Juego Públicas",

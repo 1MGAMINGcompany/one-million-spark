@@ -14,7 +14,9 @@ import {
   AlertTriangle,
   Coins,
   Clock,
-  Bug
+  Bug,
+  Trophy,
+  Gamepad
 } from "lucide-react";
 import { useWallet } from "@/hooks/useWallet";
 import { WalletRequired } from "@/components/WalletRequired";
@@ -312,21 +314,35 @@ export default function RoomList() {
                         const mode = getRoomMode(room.pda);
                         const isRanked = mode === 'ranked';
                         return (
-                          <span className={`text-xs px-2 py-0.5 rounded-full border ${
+                          <span className={`text-xs px-2 py-0.5 rounded-full border flex items-center gap-1 ${
                             isRanked 
                               ? 'bg-red-500/20 text-red-400 border-red-500/30' 
                               : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
                           }`}>
-                            {isRanked ? '🔴 Ranked' : '🟢 Casual'}
+                            {isRanked ? '🔴' : '🟢'} {isRanked ? t("createRoom.gameModeRanked") : t("createRoom.gameModeCasual")}
+                            <span className="opacity-70">{isRanked ? '🏆' : '🎮'}</span>
                           </span>
                         );
                       })()}
                     </div>
                     <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
-                      <span className="flex items-center gap-1">
-                        <Coins className="h-3.5 w-3.5" />
-                        {room.entryFeeSol} SOL
-                      </span>
+                      {/* Stake display - different for casual vs ranked */}
+                      {(() => {
+                        const mode = getRoomMode(room.pda);
+                        const isRanked = mode === 'ranked';
+                        const hasStake = room.entryFeeSol > 0;
+                        
+                        return (
+                          <span className={`flex items-center gap-1 ${isRanked ? 'text-foreground font-medium' : ''}`}>
+                            <Coins className="h-3.5 w-3.5" />
+                            {hasStake ? (
+                              `${room.entryFeeSol} SOL`
+                            ) : (
+                              <span className="text-muted-foreground italic">—</span>
+                            )}
+                          </span>
+                        );
+                      })()}
                       <span className="flex items-center gap-1">
                         <Users className="h-3.5 w-3.5" />
                         {room.playerCount}/{room.maxPlayers}
