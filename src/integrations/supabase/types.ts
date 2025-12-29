@@ -397,6 +397,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      revoke_session: {
+        Args: { p_room_pda: string; p_session_token: string }
+        Returns: undefined
+      }
       start_session: {
         Args: {
           p_nonce: string
