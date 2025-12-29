@@ -498,6 +498,10 @@ export function GameEndScreen({
                         View transaction on Solana Explorer
                       </a>
                     )}
+                    {/* Trust note */}
+                    <p className="text-[10px] text-muted-foreground text-center pt-1 border-t border-emerald-500/20">
+                      Payout executed on-chain via finalize_room. Funds sent directly to winner's wallet.
+                    </p>
                   </div>
                 )}
 
