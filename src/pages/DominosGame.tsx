@@ -128,8 +128,11 @@ const DominosGame = () => {
     return allDominos.find(d => d.id === id) || { id, left: 0, right: 0 };
   }, []);
 
+  // State restoration handler - track if we've shown the restored toast
+  const restoredToastShownRef = useRef(false);
+
   // State restoration handler - reconstructs hands from chain, boneyard, and drawn tiles
-  const handleStateRestored = useCallback((state: Record<string, any>) => {
+  const handleStateRestored = useCallback((state: Record<string, any>, showToast = true) => {
     if (!roomPda) return;
     
     const persisted = state as PersistedGameState;
@@ -195,14 +198,28 @@ const DominosGame = () => {
     }
     
     setSessionRestored(true);
-  }, [getDominoById, roomPda]);
+    
+    // Only show toast once per session load
+    if (showToast && !restoredToastShownRef.current) {
+      restoredToastShownRef.current = true;
+      toast({
+        title: t('gameSession.gameRestored'),
+        description: t('gameSession.sessionRecovered'),
+      });
+    }
+  }, [getDominoById, roomPda, t]);
+
+  // For realtime updates, don't show toast (silent sync)
+  const handleRealtimeStateRestored = useCallback((state: Record<string, any>) => {
+    handleStateRestored(state, false);
+  }, [handleStateRestored]);
 
   // Game session persistence hook
   const { loadSession, saveSession, finishSession } = useGameSessionPersistence({
     roomPda,
     gameType: 'dominos',
     enabled: roomPlayers.length >= 2 && !!address,
-    onStateRestored: handleStateRestored,
+    onStateRestored: handleRealtimeStateRestored,
     callerWallet: address, // Pass caller wallet for secure RPC validation
   });
 
@@ -357,12 +374,8 @@ const DominosGame = () => {
       
       if (savedState && Object.keys(savedState).length > 0) {
         console.log('[DominosGame] Found saved session, restoring...');
-        handleStateRestored(savedState);
+        handleStateRestored(savedState, true);
         setGameInitialized(true);
-        toast({
-          title: t('gameSession.gameRestored'),
-          description: t('gameSession.sessionRecovered'),
-        });
         return;
       }
       

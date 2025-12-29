@@ -152,8 +152,10 @@ const BackgammonGame = () => {
     fetchRoomPlayers();
   }, [address, roomPda]);
 
-  // Game session persistence
-  const handleBackgammonStateRestored = useCallback((state: Record<string, any>) => {
+  // Game session persistence - track if we've shown the restored toast
+  const restoredToastShownRef = useRef(false);
+
+  const handleBackgammonStateRestored = useCallback((state: Record<string, any>, showToast = true) => {
     const persisted = state as PersistedBackgammonState;
     console.log('[BackgammonGame] Restoring state from database:', persisted);
     
@@ -164,18 +166,28 @@ const BackgammonGame = () => {
       setCurrentPlayer(persisted.currentPlayer);
       setGameOver(persisted.gameOver || false);
       setGameStatus(persisted.gameStatus || t('game.yourTurn'));
-      toast({
-        title: t('gameSession.gameRestored'),
-        description: t('gameSession.sessionRecovered'),
-      });
+      
+      // Only show toast once per session load
+      if (showToast && !restoredToastShownRef.current) {
+        restoredToastShownRef.current = true;
+        toast({
+          title: t('gameSession.gameRestored'),
+          description: t('gameSession.sessionRecovered'),
+        });
+      }
     }
   }, [t]);
+
+  // For realtime updates, don't show toast (silent sync)
+  const handleRealtimeStateRestored = useCallback((state: Record<string, any>) => {
+    handleBackgammonStateRestored(state, false);
+  }, [handleBackgammonStateRestored]);
 
   const { loadSession: loadBackgammonSession, saveSession: saveBackgammonSession, finishSession: finishBackgammonSession } = useGameSessionPersistence({
     roomPda: roomPda,
     gameType: 'backgammon',
     enabled: roomPlayers.length >= 2 && !!address,
-    onStateRestored: handleBackgammonStateRestored,
+    onStateRestored: handleRealtimeStateRestored,
     callerWallet: address, // Pass caller wallet for secure RPC validation
   });
 
@@ -184,11 +196,12 @@ const BackgammonGame = () => {
     if (roomPlayers.length >= 2 && address) {
       loadBackgammonSession().then(savedState => {
         if (savedState && Object.keys(savedState).length > 0) {
-          handleBackgammonStateRestored(savedState);
+          handleBackgammonStateRestored(savedState, true);
         }
       });
     }
-  }, [roomPlayers.length, address, loadBackgammonSession, handleBackgammonStateRestored]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roomPlayers.length, address]);
 
   // Save game state after each move
   useEffect(() => {

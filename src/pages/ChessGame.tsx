@@ -168,8 +168,10 @@ const ChessGame = () => {
     fetchRoomPlayers();
   }, [address, roomPda]);
 
-  // Game session persistence
-  const handleChessStateRestored = useCallback((state: Record<string, any>) => {
+  // Game session persistence - track if we've shown the restored toast
+  const restoredToastShownRef = useRef(false);
+
+  const handleChessStateRestored = useCallback((state: Record<string, any>, showToast = true) => {
     const persisted = state as PersistedChessState;
     console.log('[ChessGame] Restoring state from database:', persisted);
     
@@ -181,18 +183,28 @@ const ChessGame = () => {
       if (persisted.gameStatus) {
         setGameStatus(persisted.gameStatus);
       }
-      toast({
-        title: t('gameSession.gameRestored'),
-        description: t('gameSession.sessionRecovered'),
-      });
+      
+      // Only show toast once per session load
+      if (showToast && !restoredToastShownRef.current) {
+        restoredToastShownRef.current = true;
+        toast({
+          title: t('gameSession.gameRestored'),
+          description: t('gameSession.sessionRecovered'),
+        });
+      }
     }
   }, [t]);
+
+  // For realtime updates, don't show toast (silent sync)
+  const handleRealtimeStateRestored = useCallback((state: Record<string, any>) => {
+    handleChessStateRestored(state, false);
+  }, [handleChessStateRestored]);
 
   const { loadSession: loadChessSession, saveSession: saveChessSession, finishSession: finishChessSession } = useGameSessionPersistence({
     roomPda: roomPda,
     gameType: 'chess',
     enabled: roomPlayers.length >= 2 && !!address,
-    onStateRestored: handleChessStateRestored,
+    onStateRestored: handleRealtimeStateRestored,
     callerWallet: address, // Pass caller wallet for secure RPC validation
   });
 
@@ -201,11 +213,12 @@ const ChessGame = () => {
     if (roomPlayers.length >= 2 && address) {
       loadChessSession().then(savedState => {
         if (savedState && Object.keys(savedState).length > 0) {
-          handleChessStateRestored(savedState);
+          handleChessStateRestored(savedState, true);
         }
       });
     }
-  }, [roomPlayers.length, address, loadChessSession, handleChessStateRestored]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roomPlayers.length, address]);
 
   // Save game state after each move
   useEffect(() => {
