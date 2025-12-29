@@ -12,6 +12,7 @@ import { useGameChat, ChatPlayer, ChatMessage } from "@/hooks/useGameChat";
 import { useRematch } from "@/hooks/useRematch";
 import { useGameSessionPersistence, getRoomMode } from "@/hooks/useGameSessionPersistence";
 import { useRankedReadyGate } from "@/hooks/useRankedReadyGate";
+import { useTurnTimer, DEFAULT_RANKED_TURN_TIME } from "@/hooks/useTurnTimer";
 import TurnStatusHeader from "@/components/TurnStatusHeader";
 import TurnHistoryDrawer from "@/components/TurnHistoryDrawer";
 import NotificationToggle from "@/components/NotificationToggle";
@@ -442,6 +443,36 @@ const DominosGame = () => {
 
   // Block gameplay until both players are ready (for ranked games)
   const canPlayRanked = !isRankedGame || rankedGate.bothReady;
+
+  // Effective isMyTurn considering ranked gate
+  const effectiveIsMyTurn = canPlayRanked && isMyTurn && !gameOver;
+
+  // Ref for resign/forfeit function to avoid circular deps with turn timer
+  const sendResignRef = useRef<(() => boolean) | null>(null);
+
+  // Turn timer for ranked games - auto-forfeit on timeout
+  const handleTimeExpired = useCallback(() => {
+    if (!gameOver) {
+      toast({
+        title: "Time expired!",
+        description: "You ran out of time and forfeited the match.",
+        variant: "destructive",
+      });
+      sendResignRef.current?.();
+      setGameOver(true);
+      setWinner("opponent");
+      setGameStatus("You lost by timeout");
+      play('domino_lose');
+    }
+  }, [gameOver, play]);
+
+  const turnTimer = useTurnTimer({
+    turnTimeSeconds: DEFAULT_RANKED_TURN_TIME,
+    enabled: isRankedGame && canPlayRanked && !gameOver,
+    isMyTurn: effectiveIsMyTurn,
+    onTimeExpired: handleTimeExpired,
+    roomId: roomPda,
+  });
 
   // Turn notification players
   const turnPlayers: TurnPlayer[] = useMemo(() => {
@@ -1090,6 +1121,8 @@ const DominosGame = () => {
               activePlayer={turnPlayers[isMyTurn ? (amIPlayer1 ? 0 : 1) : (amIPlayer1 ? 1 : 0)]}
               players={turnPlayers}
               myAddress={address}
+              remainingTime={isRankedGame ? turnTimer.remainingTime : undefined}
+              showTimer={isRankedGame && canPlayRanked}
             />
           </div>
         </div>
@@ -1225,7 +1258,8 @@ const DominosGame = () => {
       {/* Rules Info Panel (Ranked only) */}
       <RulesInfoPanel 
         stakeSol={rankedGate.stakeLamports / 1_000_000_000} 
-        isRanked={isRankedGame} 
+        isRanked={isRankedGame}
+        turnTimeSeconds={DEFAULT_RANKED_TURN_TIME}
       />
 
       {/* Game End Screen */}

@@ -14,6 +14,7 @@ import { useGameChat, ChatPlayer, ChatMessage } from "@/hooks/useGameChat";
 import { useRematch } from "@/hooks/useRematch";
 import { useGameSessionPersistence, getRoomMode } from "@/hooks/useGameSessionPersistence";
 import { useRankedReadyGate } from "@/hooks/useRankedReadyGate";
+import { useTurnTimer, DEFAULT_RANKED_TURN_TIME } from "@/hooks/useTurnTimer";
 import TurnStatusHeader from "@/components/TurnStatusHeader";
 import TurnHistoryDrawer from "@/components/TurnHistoryDrawer";
 import NotificationToggle from "@/components/NotificationToggle";
@@ -258,7 +259,33 @@ const ChessGame = () => {
   const canPlay = !isRankedGame || rankedGate.bothReady;
 
   // Check if it's my turn
-  const isMyTurn = canPlay && game.turn() === myColor;
+  const isMyTurn = canPlay && game.turn() === myColor && !gameOver;
+
+  // Ref for resign function to avoid circular deps with turn timer
+  const sendResignRef = useRef<(() => boolean) | null>(null);
+
+  // Turn timer for ranked games - auto-forfeit on timeout
+  const handleTimeExpired = useCallback(() => {
+    if (!gameOver) {
+      toast({
+        title: "Time expired!",
+        description: "You ran out of time and forfeited the match.",
+        variant: "destructive",
+      });
+      sendResignRef.current?.();
+      setGameOver(true);
+      setGameStatus(myColor === 'w' ? "Black wins by timeout" : "White wins by timeout");
+      play('chess_lose');
+    }
+  }, [gameOver, myColor, play]);
+
+  const turnTimer = useTurnTimer({
+    turnTimeSeconds: DEFAULT_RANKED_TURN_TIME,
+    enabled: isRankedGame && canPlay && !gameOver,
+    isMyTurn,
+    onTimeExpired: handleTimeExpired,
+    roomId: roomPda,
+  });
 
   // Convert to TurnPlayer format for notifications
   const turnPlayers: TurnPlayer[] = useMemo(() => {
@@ -798,6 +825,8 @@ const ChessGame = () => {
               activePlayer={turnPlayers[game.turn() === "w" ? 0 : 1]}
               players={turnPlayers}
               myAddress={address}
+              remainingTime={isRankedGame ? turnTimer.remainingTime : undefined}
+              showTimer={isRankedGame && canPlay}
             />
           </div>
         </div>
@@ -933,7 +962,8 @@ const ChessGame = () => {
       {/* Rules Info Panel (Ranked only) */}
       <RulesInfoPanel 
         stakeSol={rankedGate.stakeLamports / 1_000_000_000} 
-        isRanked={isRankedGame} 
+        isRanked={isRankedGame}
+        turnTimeSeconds={DEFAULT_RANKED_TURN_TIME}
       />
 
       {/* Game End Screen */}

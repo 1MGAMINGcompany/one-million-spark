@@ -11,6 +11,7 @@ import { useGameChat, ChatPlayer, ChatMessage } from "@/hooks/useGameChat";
 import { useRematch } from "@/hooks/useRematch";
 import { useGameSessionPersistence, getRoomMode } from "@/hooks/useGameSessionPersistence";
 import { useRankedReadyGate } from "@/hooks/useRankedReadyGate";
+import { useTurnTimer, DEFAULT_RANKED_TURN_TIME } from "@/hooks/useTurnTimer";
 import TurnStatusHeader from "@/components/TurnStatusHeader";
 import TurnHistoryDrawer from "@/components/TurnHistoryDrawer";
 import NotificationToggle from "@/components/NotificationToggle";
@@ -241,7 +242,33 @@ const CheckersGame = () => {
 
   // Block gameplay until both players are ready (for ranked games)
   const canPlay = !isRankedGame || rankedGate.bothReady;
-  const isMyTurn = canPlay && currentPlayer === myColor;
+  const isMyTurn = canPlay && currentPlayer === myColor && !gameOver;
+
+  // Ref for resign function to avoid circular deps with turn timer
+  const sendResignRef = useRef<(() => boolean) | null>(null);
+
+  // Turn timer for ranked games - auto-forfeit on timeout
+  const handleTimeExpired = useCallback(() => {
+    if (!gameOver) {
+      toast({
+        title: "Time expired!",
+        description: "You ran out of time and forfeited the match.",
+        variant: "destructive",
+      });
+      // Trigger forfeit - same as resign
+      sendResignRef.current?.();
+      setGameOver(myColor === "gold" ? "obsidian" : "gold");
+      play('checkers_lose');
+    }
+  }, [gameOver, myColor, play]);
+
+  const turnTimer = useTurnTimer({
+    turnTimeSeconds: DEFAULT_RANKED_TURN_TIME,
+    enabled: isRankedGame && canPlay && !gameOver,
+    isMyTurn,
+    onTimeExpired: handleTimeExpired,
+    roomId: roomPda,
+  });
 
   // Turn notification players
   const turnPlayers: TurnPlayer[] = useMemo(() => {
@@ -600,7 +627,8 @@ const CheckersGame = () => {
     sendRematchAcceptRef.current = sendRematchAccept;
     sendRematchDeclineRef.current = sendRematchDecline;
     sendRematchReadyRef.current = sendRematchReady;
-  }, [sendRematchInvite, sendRematchAccept, sendRematchDecline, sendRematchReady]);
+    sendResignRef.current = sendResign;
+  }, [sendRematchInvite, sendRematchAccept, sendRematchDecline, sendRematchReady, sendResign]);
 
   // Handle chat message sending via WebRTC
   const handleChatSend = useCallback((msg: ChatMessage) => {
@@ -905,6 +933,8 @@ const CheckersGame = () => {
               activePlayer={turnPlayers[currentPlayer === "gold" ? 0 : 1]}
               players={turnPlayers}
               myAddress={address}
+              remainingTime={isRankedGame ? turnTimer.remainingTime : undefined}
+              showTimer={isRankedGame && canPlay}
             />
           </div>
         </div>
@@ -965,7 +995,8 @@ const CheckersGame = () => {
       {/* Rules Info Panel (Ranked only) */}
       <RulesInfoPanel 
         stakeSol={rankedGate.stakeLamports / 1_000_000_000} 
-        isRanked={isRankedGame} 
+        isRanked={isRankedGame}
+        turnTimeSeconds={DEFAULT_RANKED_TURN_TIME}
       />
 
       {/* Game End Screen */}
