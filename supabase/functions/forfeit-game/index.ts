@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
-import { Connection, PublicKey, Keypair, Transaction, TransactionInstruction } from "https://esm.sh/@solana/web3.js@1.98.0";
+import { Connection, PublicKey, Keypair, Transaction, TransactionInstruction, SystemProgram } from "https://esm.sh/@solana/web3.js@1.98.0";
 import { decode } from "https://deno.land/std@0.168.0/encoding/base58.ts";
 
 const corsHeaders = {
@@ -8,13 +8,94 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Program ID for the on-chain game program
-const PROGRAM_ID = new PublicKey("71TYeGwaKEQ3NxJvJ3VJrP2sASLWq4wJ7Tn8ue7V1eGP");
+// Mainnet production Program ID - MUST match solana-program.ts
+const PROGRAM_ID = new PublicKey("4nkWS2ZYPqQrRSYbXD6XW6U6VenmBiZV2TkutY3vSPHu");
+
+// Platform fee recipient
+const FEE_RECIPIENT = new PublicKey("3bcV9vtxeiHsXgNx4qvQbS4ZL4cMUnAg2tF3DZjtmGUj");
 
 interface ForfeitRequest {
   roomPda: string;
   forfeitingWallet: string;
   gameType?: string;
+}
+
+// Room account layout from IDL:
+// - 8 bytes discriminator
+// - 8 bytes room_id (u64)
+// - 32 bytes creator (pubkey)
+// - 1 byte game_type (u8)
+// - 1 byte max_players (u8)
+// - 1 byte player_count (u8)
+// - 1 byte status (u8)
+// - 8 bytes stake_lamports (u64)
+// - 32 bytes winner (pubkey)
+// - 128 bytes players array (4 x 32 bytes)
+interface ParsedRoom {
+  roomId: bigint;
+  creator: PublicKey;
+  gameType: number;
+  maxPlayers: number;
+  playerCount: number;
+  status: number;
+  stakeLamports: bigint;
+  winner: PublicKey;
+  players: PublicKey[];
+}
+
+function parseRoomAccount(data: Uint8Array): ParsedRoom | null {
+  try {
+    const view = new DataView(data.buffer, data.byteOffset);
+    let offset = 8; // Skip discriminator
+    
+    const roomId = view.getBigUint64(offset, true);
+    offset += 8;
+    
+    const creator = new PublicKey(data.slice(offset, offset + 32));
+    offset += 32;
+    
+    const gameType = data[offset];
+    offset += 1;
+    
+    const maxPlayers = data[offset];
+    offset += 1;
+    
+    const playerCount = data[offset];
+    offset += 1;
+    
+    const status = data[offset];
+    offset += 1;
+    
+    const stakeLamports = view.getBigUint64(offset, true);
+    offset += 8;
+    
+    const winner = new PublicKey(data.slice(offset, offset + 32));
+    offset += 32;
+    
+    // Parse players array (max 4 players, 32 bytes each)
+    const players: PublicKey[] = [];
+    for (let i = 0; i < playerCount && i < 4; i++) {
+      const playerKey = new PublicKey(data.slice(offset + (i * 32), offset + ((i + 1) * 32)));
+      if (!playerKey.equals(PublicKey.default)) {
+        players.push(playerKey);
+      }
+    }
+    
+    return {
+      roomId,
+      creator,
+      gameType,
+      maxPlayers,
+      playerCount,
+      status,
+      stakeLamports,
+      winner,
+      players,
+    };
+  } catch (e) {
+    console.error("[forfeit-game] Failed to parse room account:", e);
+    return null;
+  }
 }
 
 serve(async (req) => {
@@ -54,8 +135,14 @@ serve(async (req) => {
     // Parse verifier keypair
     let verifierKeypair: Keypair;
     try {
-      const secretKeyBytes = decode(verifierSecretKey);
-      verifierKeypair = Keypair.fromSecretKey(new Uint8Array(secretKeyBytes));
+      const keyString = verifierSecretKey.trim();
+      let secretKeyBytes: Uint8Array;
+      if (keyString.startsWith("[")) {
+        secretKeyBytes = new Uint8Array(JSON.parse(keyString));
+      } else {
+        secretKeyBytes = new Uint8Array(decode(keyString));
+      }
+      verifierKeypair = Keypair.fromSecretKey(secretKeyBytes);
       console.log("[forfeit-game] Verifier public key:", verifierKeypair.publicKey.toBase58());
     } catch (err) {
       console.error("[forfeit-game] Failed to parse verifier key:", err);
@@ -81,42 +168,29 @@ serve(async (req) => {
       );
     }
 
-    // Parse room account data
-    // The room account layout:
-    // 0-7: discriminator (8 bytes)
-    // 8-11: room_id (4 bytes, u32)
-    // 12-43: creator (32 bytes, Pubkey)
-    // 44: status (1 byte)
-    // 45: game_type (1 byte)
-    // 46: max_players (1 byte)
-    // 47-54: entry_fee (8 bytes, u64)
-    // 55: player_count (1 byte)
-    // 56+: players array (32 bytes each)
-    
-    const data = accountInfo.data;
-    const dataView = new DataView(data.buffer, data.byteOffset, data.byteLength);
-    const roomId = dataView.getUint32(8, true);
-    const creator = new PublicKey(data.slice(12, 44));
-    const status = data[44];
-    const maxPlayers = data[46];
-    const entryFee = dataView.getBigUint64(47, true);
-    const playerCount = data[55];
-
-    console.log("[forfeit-game] Room data:", { roomId, status, maxPlayers, playerCount, entryFee: entryFee.toString() });
-
-    // Extract players from the room
-    const players: PublicKey[] = [];
-    for (let i = 0; i < playerCount; i++) {
-      const offset = 56 + (i * 32);
-      const playerPubkey = new PublicKey(data.slice(offset, offset + 32));
-      players.push(playerPubkey);
+    // Parse room account data with correct layout
+    const roomData = parseRoomAccount(accountInfo.data);
+    if (!roomData) {
+      console.error("[forfeit-game] Failed to parse room data");
+      return new Response(
+        JSON.stringify({ error: "Failed to parse room account" }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
-    console.log("[forfeit-game] Room players:", players.map(p => p.toBase58()));
+    console.log("[forfeit-game] Room data:", { 
+      roomId: roomData.roomId.toString(), 
+      status: roomData.status, 
+      maxPlayers: roomData.maxPlayers, 
+      playerCount: roomData.playerCount, 
+      stakeLamports: roomData.stakeLamports.toString(),
+      creator: roomData.creator.toBase58()
+    });
+    console.log("[forfeit-game] Room players:", roomData.players.map(p => p.toBase58()));
 
     // Verify the forfeiting wallet is in the room
     const forfeitingPubkey = new PublicKey(forfeitingWallet);
-    const playerIndex = players.findIndex(p => p.equals(forfeitingPubkey));
+    const playerIndex = roomData.players.findIndex(p => p.equals(forfeitingPubkey));
     if (playerIndex === -1) {
       console.error("[forfeit-game] Forfeiting wallet not in room:", forfeitingWallet);
       return new Response(
@@ -125,9 +199,9 @@ serve(async (req) => {
       );
     }
 
-    // Check room status (1 = Started)
-    if (status !== 1) {
-      console.error("[forfeit-game] Room not in Started status:", status);
+    // Check room status (2 = Started)
+    if (roomData.status !== 2) {
+      console.error("[forfeit-game] Room not in Started status:", roomData.status);
       return new Response(
         JSON.stringify({ error: "Room is not in active game state" }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -136,10 +210,10 @@ serve(async (req) => {
 
     // Determine the winner (for 2-player games: the other player)
     // For Ludo (4-player): mark player as eliminated, game continues
-    const isLudo = gameType === 'ludo' || maxPlayers > 2;
+    const isLudo = gameType === 'ludo' || roomData.maxPlayers > 2;
     let winnerWallet: string | null = null;
 
-    if (isLudo && playerCount > 2) {
+    if (isLudo && roomData.playerCount > 2) {
       // Ludo with 3+ players: mark as eliminated, game continues
       console.log("[forfeit-game] Ludo game with multiple players - marking player as eliminated");
       
@@ -184,56 +258,51 @@ serve(async (req) => {
 
     // 2-player game: determine winner (the other player)
     const winnerIndex = playerIndex === 0 ? 1 : 0;
-    if (winnerIndex >= players.length) {
+    if (winnerIndex >= roomData.players.length) {
       console.error("[forfeit-game] Cannot determine winner - only one player in room");
       return new Response(
         JSON.stringify({ error: "Cannot forfeit - only one player in room. Use cancel instead." }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
-    winnerWallet = players[winnerIndex].toBase58();
+    const winnerPubkey = roomData.players[winnerIndex];
+    winnerWallet = winnerPubkey.toBase58();
     console.log("[forfeit-game] Winner determined:", winnerWallet);
 
     // Build submit_result instruction
-    // discriminator for submit_result
-    const submitResultDiscriminator = new Uint8Array([152, 41, 65, 39, 109, 229, 167, 41]);
+    // Discriminator from IDL: [240, 42, 89, 180, 10, 239, 9, 214]
+    const submitResultDiscriminator = new Uint8Array([240, 42, 89, 180, 10, 239, 9, 214]);
     
-    // Config PDA for the verifier
+    // Config PDA
     const [configPda] = PublicKey.findProgramAddressSync(
       [new TextEncoder().encode("config")],
       PROGRAM_ID
     );
 
-    // Treasury PDA
-    const [treasuryPda] = PublicKey.findProgramAddressSync(
-      [new TextEncoder().encode("treasury")],
+    // Vault PDA
+    const [vaultPda] = PublicKey.findProgramAddressSync(
+      [new TextEncoder().encode("vault"), roomPdaKey.toBuffer()],
       PROGRAM_ID
     );
 
-    // Build instruction data
-    const winnerPubkey = new PublicKey(winnerWallet);
-    const resultType = 0; // 0 = normal, 1 = gammon, 2 = backgammon
-    
-    // Concatenate instruction data using Buffer for compatibility
-    const instructionDataArray = new Uint8Array(submitResultDiscriminator.length + 32 + 1);
+    // Build instruction data: discriminator (8 bytes) + winner pubkey (32 bytes)
+    const instructionDataArray = new Uint8Array(8 + 32);
     instructionDataArray.set(submitResultDiscriminator, 0);
-    instructionDataArray.set(winnerPubkey.toBytes(), submitResultDiscriminator.length);
-    instructionDataArray[submitResultDiscriminator.length + 32] = resultType;
+    instructionDataArray.set(winnerPubkey.toBytes(), 8);
 
-    // Build accounts list for submit_result
+    // Build accounts list for submit_result (from IDL order):
+    // verifier, config, room, vault, winner, fee_recipient
     const submitResultIx = new TransactionInstruction({
       programId: PROGRAM_ID,
       keys: [
         { pubkey: verifierKeypair.publicKey, isSigner: true, isWritable: false }, // verifier
         { pubkey: configPda, isSigner: false, isWritable: false }, // config
         { pubkey: roomPdaKey, isSigner: false, isWritable: true }, // room
-        { pubkey: creator, isSigner: false, isWritable: true }, // creator (for refund if applicable)
+        { pubkey: vaultPda, isSigner: false, isWritable: true }, // vault
         { pubkey: winnerPubkey, isSigner: false, isWritable: true }, // winner
-        { pubkey: treasuryPda, isSigner: false, isWritable: true }, // treasury
-        { pubkey: new PublicKey("11111111111111111111111111111111"), isSigner: false, isWritable: false }, // system_program
+        { pubkey: FEE_RECIPIENT, isSigner: false, isWritable: true }, // fee_recipient
       ],
-      // @ts-ignore - Uint8Array is compatible with Buffer in runtime
-      data: instructionDataArray,
+      data: instructionDataArray as any,
     });
 
     // Build and sign transaction
@@ -265,14 +334,14 @@ serve(async (req) => {
     console.log("[forfeit-game] Transaction confirmed:", signature);
 
     // Record match result in database
-    const playersArray = players.map(p => p.toBase58());
+    const playersArray = roomData.players.map(p => p.toBase58());
     const { error: rpcError } = await supabase.rpc('record_match_result', {
       p_room_pda: roomPda,
       p_finalize_tx: signature,
       p_winner_wallet: winnerWallet,
       p_game_type: gameType || 'unknown',
-      p_max_players: maxPlayers,
-      p_stake_lamports: Number(entryFee),
+      p_max_players: roomData.maxPlayers,
+      p_stake_lamports: Number(roomData.stakeLamports),
       p_mode: 'ranked', // Forfeit typically happens in ranked games
       p_players: playersArray,
     });

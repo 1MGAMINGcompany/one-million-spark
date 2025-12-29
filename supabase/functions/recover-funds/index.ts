@@ -8,7 +8,12 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const PROGRAM_ID = new PublicKey("GamesMmG4u79VDvhk3mv2g88zB6ogjLoFmj7kkwdsnP");
+// Mainnet production Program ID - MUST match solana-program.ts
+const PROGRAM_ID = new PublicKey("4nkWS2ZYPqQrRSYbXD6XW6U6VenmBiZV2TkutY3vSPHu");
+
+// Platform fee recipient
+const FEE_RECIPIENT = new PublicKey("3bcV9vtxeiHsXgNx4qvQbS4ZL4cMUnAg2tF3DZjtmGUj");
+
 const STALE_THRESHOLD_HOURS = 24;
 
 interface RecoverRequest {
@@ -16,16 +21,27 @@ interface RecoverRequest {
   callerWallet: string;
 }
 
+// Room account layout from IDL:
+// - 8 bytes discriminator
+// - 8 bytes room_id (u64)
+// - 32 bytes creator (pubkey)
+// - 1 byte game_type (u8)
+// - 1 byte max_players (u8)
+// - 1 byte player_count (u8)
+// - 1 byte status (u8): 1=Open, 2=Started, 3=Finished, 4=Cancelled
+// - 8 bytes stake_lamports (u64)
+// - 32 bytes winner (pubkey)
+// - 128 bytes players array (4 x 32 bytes)
 interface RoomAccountData {
   roomId: bigint;
   creator: PublicKey;
   gameType: number;
   maxPlayers: number;
-  status: number; // 1=Open, 2=Started, 3=Finished, 4=Cancelled
+  playerCount: number;
+  status: number;
   stakeAmount: bigint;
   winner: PublicKey;
   players: PublicKey[];
-  playerCount: number;
 }
 
 // Helper to convert string to Uint8Array for seeds
@@ -36,9 +52,7 @@ function textToBytes(text: string): Uint8Array {
 function parseRoomAccount(data: Uint8Array): RoomAccountData | null {
   try {
     const view = new DataView(data.buffer, data.byteOffset);
-    
-    // Skip 8-byte discriminator
-    let offset = 8;
+    let offset = 8; // Skip discriminator
     
     const roomId = view.getBigUint64(offset, true);
     offset += 8;
@@ -52,6 +66,9 @@ function parseRoomAccount(data: Uint8Array): RoomAccountData | null {
     const maxPlayers = data[offset];
     offset += 1;
     
+    const playerCount = data[offset];
+    offset += 1;
+    
     const status = data[offset];
     offset += 1;
     
@@ -63,12 +80,11 @@ function parseRoomAccount(data: Uint8Array): RoomAccountData | null {
     
     // Parse players array (max 4 players, 32 bytes each)
     const players: PublicKey[] = [];
-    for (let i = 0; i < 4; i++) {
-      const playerKey = new PublicKey(data.slice(offset, offset + 32));
+    for (let i = 0; i < playerCount && i < 4; i++) {
+      const playerKey = new PublicKey(data.slice(offset + (i * 32), offset + ((i + 1) * 32)));
       if (!playerKey.equals(PublicKey.default)) {
         players.push(playerKey);
       }
-      offset += 32;
     }
     
     return {
@@ -76,14 +92,14 @@ function parseRoomAccount(data: Uint8Array): RoomAccountData | null {
       creator,
       gameType,
       maxPlayers,
+      playerCount,
       status,
       stakeAmount,
       winner,
       players,
-      playerCount: players.length,
     };
   } catch (e) {
-    console.error("Failed to parse room account:", e);
+    console.error("[recover-funds] Failed to parse room account:", e);
     return null;
   }
 }
@@ -105,7 +121,7 @@ async function logRecoveryAttempt(
       tx_signature: txSignature || null,
     });
   } catch (e) {
-    console.error("Failed to log recovery attempt:", e);
+    console.error("[recover-funds] Failed to log recovery attempt:", e);
   }
 }
 
@@ -124,14 +140,14 @@ serve(async (req) => {
       );
     }
 
-    console.log(`Recovery request for room ${roomPda} by ${callerWallet}`);
+    console.log(`[recover-funds] Recovery request for room ${roomPda} by ${callerWallet}`);
 
     // Initialize clients
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const rpcUrl = Deno.env.get("VITE_SOLANA_RPC_URL") || "https://api.devnet.solana.com";
+    const rpcUrl = Deno.env.get("VITE_SOLANA_RPC_URL") || "https://api.mainnet-beta.solana.com";
     const connection = new Connection(rpcUrl, "confirmed");
 
     // Fetch on-chain room data
@@ -155,7 +171,7 @@ serve(async (req) => {
       );
     }
 
-    console.log(`Room status: ${roomData.status}, players: ${roomData.playerCount}, creator: ${roomData.creator.toBase58()}`);
+    console.log(`[recover-funds] Room status: ${roomData.status}, players: ${roomData.playerCount}, creator: ${roomData.creator.toBase58()}`);
 
     // Status mapping: 1=Open, 2=Started, 3=Finished, 4=Cancelled
     switch (roomData.status) {
@@ -179,22 +195,17 @@ serve(async (req) => {
             [textToBytes("vault"), roomPubkey.toBuffer()],
             PROGRAM_ID
           );
-          
-          const [configPda] = PublicKey.findProgramAddressSync(
-            [textToBytes("config")],
-            PROGRAM_ID
-          );
 
-          // cancel_room instruction discriminator (first 8 bytes of sha256("global:cancel_room"))
-          const discriminator = new Uint8Array([149, 119, 131, 119, 10, 44, 5, 220]);
+          // cancel_room discriminator from IDL: [91, 107, 215, 178, 200, 224, 241, 237]
+          const discriminator = new Uint8Array([91, 107, 215, 178, 200, 224, 241, 237]);
           
+          // Accounts from IDL: creator, room, vault, system_program
           const instruction = new TransactionInstruction({
             keys: [
-              { pubkey: roomPubkey, isSigner: false, isWritable: true },
-              { pubkey: vaultPda, isSigner: false, isWritable: true },
-              { pubkey: configPda, isSigner: false, isWritable: false },
-              { pubkey: new PublicKey(callerWallet), isSigner: true, isWritable: true },
-              { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+              { pubkey: new PublicKey(callerWallet), isSigner: true, isWritable: true }, // creator
+              { pubkey: roomPubkey, isSigner: false, isWritable: true }, // room
+              { pubkey: vaultPda, isSigner: false, isWritable: true }, // vault
+              { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }, // system_program
             ],
             programId: PROGRAM_ID,
             data: discriminator as any,
@@ -261,7 +272,7 @@ serve(async (req) => {
           ? (Date.now() - new Date(lastActivity).getTime()) / (1000 * 60 * 60)
           : Infinity;
 
-        console.log(`Hours since last activity: ${hoursSinceActivity}`);
+        console.log(`[recover-funds] Hours since last activity: ${hoursSinceActivity}`);
 
         if (hoursSinceActivity < STALE_THRESHOLD_HOURS) {
           await logRecoveryAttempt(supabase, roomPda, callerWallet, "check", "game_active");
@@ -279,7 +290,7 @@ serve(async (req) => {
         // Game is stale - verifier force-settles
         const verifierSecretKey = Deno.env.get("VERIFIER_SECRET_KEY");
         if (!verifierSecretKey) {
-          console.error("VERIFIER_SECRET_KEY not configured");
+          console.error("[recover-funds] VERIFIER_SECRET_KEY not configured");
           await logRecoveryAttempt(supabase, roomPda, callerWallet, "force_settle", "verifier_key_missing");
           return new Response(
             JSON.stringify({ status: "error", message: "Server configuration error" }),
@@ -297,7 +308,7 @@ serve(async (req) => {
             verifierKeypair = bs58.decode(keyString);
           }
         } catch (e) {
-          console.error("Failed to parse verifier key:", e);
+          console.error("[recover-funds] Failed to parse verifier key:", e);
           await logRecoveryAttempt(supabase, roomPda, callerWallet, "force_settle", "key_parse_failed");
           return new Response(
             JSON.stringify({ status: "error", message: "Server configuration error" }),
@@ -307,7 +318,7 @@ serve(async (req) => {
 
         const verifier = Keypair.fromSecretKey(verifierKeypair);
 
-        // Build submit_result instruction - declare creator as winner (refunds both)
+        // Build submit_result instruction - declare creator as winner for force-settle
         const [vaultPda] = PublicKey.findProgramAddressSync(
           [textToBytes("vault"), roomPubkey.toBuffer()],
           PROGRAM_ID
@@ -318,41 +329,23 @@ serve(async (req) => {
           PROGRAM_ID
         );
 
-        // submit_result discriminator
-        const discriminator = new Uint8Array([246, 215, 153, 130, 167, 40, 155, 42]);
+        // submit_result discriminator from IDL: [240, 42, 89, 180, 10, 239, 9, 214]
+        const discriminator = new Uint8Array([240, 42, 89, 180, 10, 239, 9, 214]);
         
-        // Winner index = 0 (creator) as a single byte
-        const data = new Uint8Array(discriminator.length + 1);
+        // Instruction data: discriminator (8) + winner pubkey (32)
+        const data = new Uint8Array(8 + 32);
         data.set(discriminator, 0);
-        data[discriminator.length] = 0; // winner_index = 0 (creator)
+        data.set(roomData.creator.toBytes(), 8); // Creator is winner for force-settle
 
-        // Get fee recipient from config
-        const configInfo = await connection.getAccountInfo(configPda);
-        let feeRecipient = roomData.creator; // fallback
-        if (configInfo) {
-          try {
-            // Config: 8 disc + 32 authority + 32 fee_recipient + 2 fee_rate + 32 verifier
-            feeRecipient = new PublicKey(configInfo.data.slice(40, 72));
-          } catch (e) {
-            console.error("Failed to parse config for fee recipient:", e);
-          }
-        }
-
-        const remainingAccounts = roomData.players.map(p => ({
-          pubkey: p,
-          isSigner: false,
-          isWritable: true,
-        }));
-
+        // Accounts from IDL: verifier, config, room, vault, winner, fee_recipient
         const instruction = new TransactionInstruction({
           keys: [
-            { pubkey: roomPubkey, isSigner: false, isWritable: true },
-            { pubkey: vaultPda, isSigner: false, isWritable: true },
-            { pubkey: configPda, isSigner: false, isWritable: false },
-            { pubkey: verifier.publicKey, isSigner: true, isWritable: false },
-            { pubkey: feeRecipient, isSigner: false, isWritable: true },
-            { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
-            ...remainingAccounts,
+            { pubkey: verifier.publicKey, isSigner: true, isWritable: false }, // verifier
+            { pubkey: configPda, isSigner: false, isWritable: false }, // config
+            { pubkey: roomPubkey, isSigner: false, isWritable: true }, // room
+            { pubkey: vaultPda, isSigner: false, isWritable: true }, // vault
+            { pubkey: roomData.creator, isSigner: false, isWritable: true }, // winner (creator)
+            { pubkey: FEE_RECIPIENT, isSigner: false, isWritable: true }, // fee_recipient
           ],
           programId: PROGRAM_ID,
           data: data as any,
@@ -379,7 +372,7 @@ serve(async (req) => {
             lastValidBlockHeight,
           }, "confirmed");
 
-          console.log(`Force-settled room ${roomPda}, tx: ${signature}`);
+          console.log(`[recover-funds] Force-settled room ${roomPda}, tx: ${signature}`);
 
           // Update game session status
           await supabase
@@ -399,7 +392,7 @@ serve(async (req) => {
             { headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         } catch (e: any) {
-          console.error("Force settle transaction failed:", e);
+          console.error("[recover-funds] Force settle transaction failed:", e);
           await logRecoveryAttempt(supabase, roomPda, callerWallet, "force_settle", `failed: ${e.message}`);
           return new Response(
             JSON.stringify({ 
@@ -419,7 +412,7 @@ serve(async (req) => {
         );
     }
   } catch (e: any) {
-    console.error("Recovery endpoint error:", e);
+    console.error("[recover-funds] Recovery endpoint error:", e);
     return new Response(
       JSON.stringify({ status: "error", message: e.message }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
