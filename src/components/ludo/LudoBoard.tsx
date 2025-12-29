@@ -9,6 +9,7 @@ interface LudoBoardProps {
   onTokenClick: (playerIndex: number, tokenIndex: number) => void;
   captureEvent?: CaptureEvent | null;
   onCaptureAnimationComplete?: () => void;
+  eliminatedPlayers?: Set<number>;
 }
 
 const PLAYER_COLORS: Record<PlayerColor, { 
@@ -58,6 +59,7 @@ const TokenPiece = memo(({
   left,
   top,
   cellSize,
+  isEliminated,
 }: { 
   color: PlayerColor; 
   isMovable: boolean; 
@@ -65,27 +67,35 @@ const TokenPiece = memo(({
   left: number;
   top: number;
   cellSize: number;
+  isEliminated?: boolean;
 }) => {
   const colors = PLAYER_COLORS[color];
   const size = cellSize * 0.7;
   
+  // Eliminated tokens are grayed out and semi-transparent
+  const eliminatedStyle = isEliminated ? {
+    filter: 'grayscale(100%) brightness(0.6)',
+    opacity: 0.4,
+  } : {};
+  
   return (
     <button
       onClick={onClick}
-      disabled={!isMovable}
-      className={`absolute transition-all duration-300 ease-out ${isMovable ? 'cursor-pointer z-20' : 'z-10'}`}
+      disabled={!isMovable || isEliminated}
+      className={`absolute transition-all duration-300 ease-out ${isMovable && !isEliminated ? 'cursor-pointer z-20' : 'z-10'}`}
       style={{
         left: left - size / 2,
         top: top - size / 2,
         width: size,
         height: size,
+        ...eliminatedStyle,
       }}
     >
       <div 
-        className={`w-full h-full flex items-center justify-center transition-transform duration-200 ${isMovable ? 'scale-110' : ''}`}
+        className={`w-full h-full flex items-center justify-center transition-transform duration-200 ${isMovable && !isEliminated ? 'scale-110' : ''}`}
         style={{
           background: `linear-gradient(145deg, ${colors.light} 0%, ${colors.bg} 40%, ${colors.dark} 100%)`,
-          boxShadow: isMovable 
+          boxShadow: isMovable && !isEliminated
             ? `0 0 12px ${colors.glow}, 0 0 20px ${colors.glow}`
             : `0 3px 6px rgba(0,0,0,0.4), inset 0 2px 3px rgba(255,255,255,0.4)`,
           clipPath: 'polygon(50% 5%, 85% 25%, 85% 85%, 50% 100%, 15% 85%, 15% 25%)',
@@ -96,8 +106,14 @@ const TokenPiece = memo(({
           <path d="M12 2L8 6v2l-2 2v3l2 2v5h8v-5l2-2v-3l-2-2V6l-4-4z"/>
         </svg>
       </div>
-      {isMovable && (
+      {isMovable && !isEliminated && (
         <div className="absolute inset-[-4px] rounded-full border-2 border-amber-300 animate-pulse pointer-events-none" />
+      )}
+      {isEliminated && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <div className="w-full h-0.5 bg-red-500/70 rotate-45 absolute" />
+          <div className="w-full h-0.5 bg-red-500/70 -rotate-45 absolute" />
+        </div>
       )}
     </button>
   );
@@ -110,6 +126,7 @@ const LudoBoard = memo(({
   onTokenClick,
   captureEvent,
   onCaptureAnimationComplete,
+  eliminatedPlayers = new Set(),
 }: LudoBoardProps) => {
   const boardRef = useRef<HTMLDivElement>(null);
   const [boardSize, setBoardSize] = useState(0);
@@ -170,7 +187,7 @@ const LudoBoard = memo(({
   };
 
   // Home base - colored corner with token slots
-  const HomeBase = ({ color, startRow, startCol }: { color: PlayerColor; startRow: number; startCol: number }) => {
+  const HomeBase = ({ color, startRow, startCol, isEliminated }: { color: PlayerColor; startRow: number; startCol: number; isEliminated?: boolean }) => {
     const colors = PLAYER_COLORS[color];
     const size = cellSize * 6;
     const innerSize = cellSize * 4;
@@ -187,6 +204,8 @@ const LudoBoard = memo(({
           background: `linear-gradient(145deg, ${colors.bg}50 0%, ${colors.bg}30 100%)`,
           border: `2px solid ${colors.bg}80`,
           boxShadow: `inset 0 0 20px ${colors.glow}`,
+          filter: isEliminated ? 'grayscale(100%) brightness(0.5)' : undefined,
+          opacity: isEliminated ? 0.6 : 1,
         }}
       >
         {/* Inner area for tokens */}
@@ -238,6 +257,17 @@ const LudoBoard = memo(({
         >
           {CORNER_SYMBOLS[color]}
         </div>
+        
+        {/* Eliminated overlay with X */}
+        {isEliminated && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+            <div className="w-3/4 h-1 bg-red-600/80 rotate-45 absolute rounded" />
+            <div className="w-3/4 h-1 bg-red-600/80 -rotate-45 absolute rounded" />
+            <span className="absolute bottom-2 text-xs font-bold text-red-500/90 uppercase tracking-wider">
+              OUT
+            </span>
+          </div>
+        )}
       </div>
     );
   };
@@ -359,6 +389,8 @@ const LudoBoard = memo(({
     const tokens: JSX.Element[] = [];
     
     players.forEach((player, playerIndex) => {
+      const isPlayerEliminated = eliminatedPlayers.has(playerIndex);
+      
       player.tokens.forEach((token, tokenIndex) => {
         const coords = getTokenCoords(token.position, player.color, token.id);
         if (!coords) {
@@ -366,7 +398,7 @@ const LudoBoard = memo(({
           return;
         }
         
-        const isMovable = currentPlayerIndex === playerIndex && movableTokens.includes(tokenIndex);
+        const isMovable = !isPlayerEliminated && currentPlayerIndex === playerIndex && movableTokens.includes(tokenIndex);
         const left = (coords[1] + 0.5) * cellSize;
         const top = (coords[0] + 0.5) * cellSize;
         
@@ -379,6 +411,7 @@ const LudoBoard = memo(({
             left={left}
             top={top}
             cellSize={cellSize}
+            isEliminated={isPlayerEliminated}
           />
         );
       });
@@ -411,10 +444,10 @@ const LudoBoard = memo(({
         {/* Home bases */}
         {boardSize > 0 && (
           <>
-            <HomeBase color="gold" startRow={0} startCol={0} />
-            <HomeBase color="ruby" startRow={0} startCol={9} />
-            <HomeBase color="sapphire" startRow={9} startCol={9} />
-            <HomeBase color="emerald" startRow={9} startCol={0} />
+            <HomeBase color="gold" startRow={0} startCol={0} isEliminated={eliminatedPlayers.has(0)} />
+            <HomeBase color="ruby" startRow={0} startCol={9} isEliminated={eliminatedPlayers.has(1)} />
+            <HomeBase color="sapphire" startRow={9} startCol={9} isEliminated={eliminatedPlayers.has(3)} />
+            <HomeBase color="emerald" startRow={9} startCol={0} isEliminated={eliminatedPlayers.has(2)} />
           </>
         )}
         

@@ -805,6 +805,7 @@ const LudoGame = () => {
             onTokenClick={handleTokenClick}
             captureEvent={captureEvent}
             onCaptureAnimationComplete={clearCaptureEvent}
+            eliminatedPlayers={eliminatedPlayers}
           />
         </div>
 
