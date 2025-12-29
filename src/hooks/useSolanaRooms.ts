@@ -13,6 +13,8 @@ import { useToast } from "@/hooks/use-toast";
 import { buildTxDebugInfo } from "@/components/TxDebugPanel";
 import { normalizeSignature } from "@/lib/solana-utils";
 import { isRoomArchived } from "@/lib/roomArchive";
+import { supabase } from "@/integrations/supabase/client";
+import { computeRulesHash, createRulesFromRoom } from "@/lib/gameAcceptance";
 import {
   RoomDisplay,
   GameType,
@@ -321,6 +323,38 @@ export function useSolanaRooms() {
         description: `Room #${roomId} created successfully`,
       });
       
+      // Record acceptance using tx signature as proof (creator is always player 1)
+      const stakeLamports = Math.floor(entryFeeSol * LAMPORTS_PER_SOL);
+      try {
+        // Fetch the room to get PDA
+        await fetchRooms();
+        const newRoom = await fetchUserActiveRoom();
+        
+        if (newRoom?.pda) {
+          const rules = createRulesFromRoom(
+            newRoom.pda,
+            gameType,
+            maxPlayers,
+            stakeLamports,
+            stakeLamports > 0 ? "ranked" : "casual"
+          );
+          const rulesHash = await computeRulesHash(rules);
+          
+          await supabase.rpc("record_acceptance", {
+            p_room_pda: newRoom.pda,
+            p_wallet: publicKey.toBase58(),
+            p_tx_signature: signature,
+            p_rules_hash: rulesHash,
+            p_stake_lamports: stakeLamports,
+            p_is_creator: true,
+          });
+          console.log("[CreateRoom] Recorded acceptance with tx signature");
+        }
+      } catch (acceptErr) {
+        console.warn("[CreateRoom] Failed to record acceptance:", acceptErr);
+        // Non-fatal - game can still proceed
+      }
+      
       // Refresh rooms and active room state
       await Promise.all([fetchRooms(), fetchUserActiveRoom()]);
       
@@ -412,6 +446,36 @@ export function useSolanaRooms() {
         title: "Joined room!",
         description: `Successfully joined room #${roomId}`,
       });
+      
+      // Record acceptance using tx signature as proof (joiner is player 2)
+      try {
+        // Fetch the room to get PDA and stake info
+        const joinedRoom = await fetchUserActiveRoom();
+        if (joinedRoom?.pda) {
+          const stakeLamports = Math.floor(joinedRoom.entryFeeSol * LAMPORTS_PER_SOL);
+          const rules = createRulesFromRoom(
+            joinedRoom.pda,
+            joinedRoom.gameType,
+            joinedRoom.maxPlayers,
+            stakeLamports,
+            stakeLamports > 0 ? "ranked" : "casual"
+          );
+          const rulesHash = await computeRulesHash(rules);
+          
+          await supabase.rpc("record_acceptance", {
+            p_room_pda: joinedRoom.pda,
+            p_wallet: publicKey.toBase58(),
+            p_tx_signature: signature,
+            p_rules_hash: rulesHash,
+            p_stake_lamports: stakeLamports,
+            p_is_creator: false,
+          });
+          console.log("[JoinRoom] Recorded acceptance with tx signature");
+        }
+      } catch (acceptErr) {
+        console.warn("[JoinRoom] Failed to record acceptance:", acceptErr);
+        // Non-fatal - game can still proceed
+      }
       
       // Refresh rooms and active room state
       await Promise.all([fetchRooms(), fetchUserActiveRoom()]);

@@ -108,7 +108,9 @@ export type Database = {
           game_state: Json
           game_type: string
           mode: string
+          p1_acceptance_tx: string | null
           p1_ready: boolean
+          p2_acceptance_tx: string | null
           p2_ready: boolean
           player1_wallet: string
           player2_wallet: string | null
@@ -123,7 +125,9 @@ export type Database = {
           game_state?: Json
           game_type: string
           mode?: string
+          p1_acceptance_tx?: string | null
           p1_ready?: boolean
+          p2_acceptance_tx?: string | null
           p2_ready?: boolean
           player1_wallet: string
           player2_wallet?: string | null
@@ -138,7 +142,9 @@ export type Database = {
           game_state?: Json
           game_type?: string
           mode?: string
+          p1_acceptance_tx?: string | null
           p1_ready?: boolean
+          p2_acceptance_tx?: string | null
           p2_ready?: boolean
           player1_wallet?: string
           player2_wallet?: string | null
@@ -398,6 +404,17 @@ export type Database = {
       issue_nonce: {
         Args: { p_room_pda: string; p_rules_hash: string; p_wallet: string }
         Returns: string
+      }
+      record_acceptance: {
+        Args: {
+          p_is_creator?: boolean
+          p_room_pda: string
+          p_rules_hash: string
+          p_stake_lamports: number
+          p_tx_signature: string
+          p_wallet: string
+        }
+        Returns: Json
       }
       record_match_result: {
         Args: {
