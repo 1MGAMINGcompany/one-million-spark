@@ -8,6 +8,7 @@ import { useSound } from "@/contexts/SoundContext";
 import { useWallet } from "@/hooks/useWallet";
 import { useWebRTCSync, GameMessage } from "@/hooks/useWebRTCSync";
 import { useGameSessionPersistence, getRoomMode } from "@/hooks/useGameSessionPersistence";
+import { useRankedReadyGate } from "@/hooks/useRankedReadyGate";
 import LudoBoard from "@/components/ludo/LudoBoard";
 import EgyptianDice from "@/components/ludo/EgyptianDice";
 import TurnIndicator from "@/components/ludo/TurnIndicator";
@@ -24,6 +25,8 @@ import GameChatPanel from "@/components/GameChatPanel";
 import { GameEndScreen } from "@/components/GameEndScreen";
 import { RematchModal } from "@/components/RematchModal";
 import { RematchAcceptModal } from "@/components/RematchAcceptModal";
+import { AcceptRulesModal } from "@/components/AcceptRulesModal";
+
 // Persisted ludo game state
 interface PersistedLudoState {
   players: Player[];
@@ -163,13 +166,40 @@ const LudoGame = () => {
     }
   }, [players, currentPlayerIndex, diceValue, gameOver, roomPlayers, saveLudoSession]);
 
+  // Ranked ready gate - both players must accept rules before gameplay
+  const roomMode = getRoomMode(roomPda || "");
+  const isRankedGame = roomMode === "ranked";
+  
+  const rankedGate = useRankedReadyGate({
+    roomPda,
+    myWallet: address,
+    isRanked: isRankedGame,
+    enabled: roomPlayers.length >= 2,
+  });
+
+  const handleAcceptRules = async () => {
+    const success = await rankedGate.setReady();
+    if (success) {
+      toast({ title: "Rules accepted", description: "Waiting for opponent..." });
+    } else {
+      toast({ title: "Failed to accept", description: "Please try again", variant: "destructive" });
+    }
+  };
+
+  const handleLeaveMatch = () => {
+    navigate("/room-list");
+  };
+
+  // Block gameplay until both players are ready (for ranked games)
+  const canPlay = !isRankedGame || rankedGate.bothReady;
+
   // Find which player index the current wallet is
   const myPlayerIndex = useMemo(() => {
     if (!address || roomPlayers.length === 0) return -1;
     return roomPlayers.findIndex(p => p.toLowerCase() === address.toLowerCase());
   }, [address, roomPlayers]);
 
-  const isMyTurnLocal = myPlayerIndex >= 0 && myPlayerIndex === currentPlayerIndex;
+  const isMyTurnLocal = canPlay && myPlayerIndex >= 0 && myPlayerIndex === currentPlayerIndex;
 
   // Convert Ludo players to TurnPlayer format for notifications
   const turnPlayers: TurnPlayer[] = useMemo(() => {
@@ -750,6 +780,36 @@ const LudoGame = () => {
         onAccept={handleAcceptRematch}
         onDecline={handleDeclineRematch}
       />
+
+      {/* Accept Rules Modal (Ranked only) */}
+      <AcceptRulesModal
+        open={rankedGate.showAcceptModal}
+        onAccept={handleAcceptRules}
+        onLeave={handleLeaveMatch}
+        stakeSol={rankedGate.stakeLamports / 1_000_000_000}
+        isLoading={rankedGate.isSettingReady}
+        opponentReady={rankedGate.opponentReady}
+      />
+
+      {/* Waiting for opponent overlay (Ranked - I accepted, waiting for opponent) */}
+      {isRankedGame && rankedGate.iAmReady && !rankedGate.bothReady && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-40 flex items-center justify-center">
+          <div className="bg-card border rounded-lg p-6 text-center space-y-4 max-w-sm">
+            <div className="animate-pulse">
+              <div className="h-12 w-12 rounded-full bg-primary/20 mx-auto flex items-center justify-center">
+                <Users className="h-6 w-6 text-primary" />
+              </div>
+            </div>
+            <h3 className="text-lg font-semibold">Waiting for Opponent</h3>
+            <p className="text-sm text-muted-foreground">
+              Your opponent needs to accept the match rules before the game can begin.
+            </p>
+            <Button variant="outline" onClick={handleLeaveMatch}>
+              Leave Match
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

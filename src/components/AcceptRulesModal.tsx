@@ -1,0 +1,120 @@
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Shield, Clock, AlertTriangle, Coins } from "lucide-react";
+
+interface AcceptRulesModalProps {
+  open: boolean;
+  onAccept: () => void;
+  onLeave: () => void;
+  stakeSol: number;
+  isLoading?: boolean;
+  opponentReady?: boolean;
+}
+
+export function AcceptRulesModal({
+  open,
+  onAccept,
+  onLeave,
+  stakeSol,
+  isLoading = false,
+  opponentReady = false,
+}: AcceptRulesModalProps) {
+  const feeSol = stakeSol * 2 * 0.05; // 5% of total pot
+  const potSol = stakeSol * 2;
+  const payoutSol = potSol - feeSol;
+
+  return (
+    <Dialog open={open} onOpenChange={() => {}}>
+      <DialogContent className="sm:max-w-md" onPointerDownOutside={(e) => e.preventDefault()}>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-xl">
+            <Shield className="h-5 w-5 text-primary" />
+            Accept Ranked Match Rules
+          </DialogTitle>
+          <DialogDescription>
+            Review and accept the match conditions to start playing.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 py-4">
+          {/* Stake & Pot */}
+          <div className="rounded-lg border bg-card p-4 space-y-2">
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <Coins className="h-4 w-4 text-amber-500" />
+              Stakes & Payout
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-sm">
+              <div className="text-muted-foreground">Your stake:</div>
+              <div className="font-mono font-medium">{stakeSol.toFixed(4)} SOL</div>
+              <div className="text-muted-foreground">Total pot:</div>
+              <div className="font-mono font-medium">{potSol.toFixed(4)} SOL</div>
+              <div className="text-muted-foreground">Platform fee (5%):</div>
+              <div className="font-mono text-muted-foreground">-{feeSol.toFixed(4)} SOL</div>
+              <div className="text-muted-foreground">Winner payout:</div>
+              <div className="font-mono font-medium text-emerald-500">{payoutSol.toFixed(4)} SOL</div>
+            </div>
+          </div>
+
+          {/* Turn Time */}
+          <div className="rounded-lg border bg-card p-4 space-y-2">
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <Clock className="h-4 w-4 text-blue-500" />
+              Turn Rules
+            </div>
+            <ul className="text-sm text-muted-foreground space-y-1">
+              <li>• Each player has reasonable time per turn</li>
+              <li>• Disconnections may result in forfeit</li>
+              <li>• No take-backs after confirming a move</li>
+            </ul>
+          </div>
+
+          {/* Forfeit Warning */}
+          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 space-y-2">
+            <div className="flex items-center gap-2 text-sm font-medium text-amber-600">
+              <AlertTriangle className="h-4 w-4" />
+              Forfeit Policy
+            </div>
+            <p className="text-sm text-amber-600/80">
+              Leaving mid-game or extended inactivity will result in automatic forfeit. 
+              Your stake will be awarded to your opponent.
+            </p>
+          </div>
+
+          {/* Opponent Status */}
+          {opponentReady && (
+            <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3">
+              <p className="text-sm text-emerald-600 text-center">
+                ✓ Your opponent has accepted the rules
+              </p>
+            </div>
+          )}
+        </div>
+
+        <div className="flex gap-3">
+          <Button
+            variant="outline"
+            onClick={onLeave}
+            disabled={isLoading}
+            className="flex-1"
+          >
+            Leave Match
+          </Button>
+          <Button
+            variant="gold"
+            onClick={onAccept}
+            disabled={isLoading}
+            className="flex-1"
+          >
+            {isLoading ? "Accepting..." : "Accept & Start"}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
