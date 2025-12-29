@@ -216,6 +216,13 @@ const CheckersGame = () => {
     }
   }, [board, currentPlayer, gameOver, roomPlayers, saveCheckersSession]);
 
+  // Finish session and archive room when game ends
+  useEffect(() => {
+    if (gameOver && roomPlayers.length >= 2) {
+      finishCheckersSession();
+    }
+  }, [gameOver, roomPlayers.length, finishCheckersSession]);
+
   // Ranked ready gate - both players must accept rules before gameplay
   const roomMode = getRoomMode(roomPda || "");
   const isRankedGame = roomMode === "ranked";

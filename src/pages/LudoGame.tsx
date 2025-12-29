@@ -169,6 +169,13 @@ const LudoGame = () => {
     }
   }, [players, currentPlayerIndex, diceValue, gameOver, roomPlayers, saveLudoSession]);
 
+  // Finish session and archive room when game ends
+  useEffect(() => {
+    if (gameOver && roomPlayers.length >= 2) {
+      finishLudoSession();
+    }
+  }, [gameOver, roomPlayers.length, finishLudoSession]);
+
   // Ranked ready gate - both players must accept rules before gameplay
   const roomMode = getRoomMode(roomPda || "");
   const isRankedGame = roomMode === "ranked";
