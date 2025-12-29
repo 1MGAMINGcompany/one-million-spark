@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.forfeit-game]
 verify_jwt = false
+
+[functions.recover-funds]
+verify_jwt = false
