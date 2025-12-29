@@ -107,6 +107,36 @@ export function useSubmitMove(options: UseSubmitMoveOptions): UseSubmitMoveResul
       if (error) {
         console.error("[submitMove] Error:", error.message);
         
+        // Silent rate limit retry (no error shown to user)
+        if (error.message.includes("rate limited")) {
+          console.log("[submitMove] Rate limited, retrying in 200ms...");
+          await new Promise(resolve => setTimeout(resolve, 200));
+          
+          const retryResult = await supabase.rpc("submit_move", {
+            p_session_token: sessionToken,
+            p_room_pda: roomPda,
+            p_turn_number: nextTurn,
+            p_move_hash: moveHash,
+            p_prev_hash: prevHash,
+            p_move_data: moveData as unknown as Record<string, never>,
+          });
+          
+          if (!retryResult.error) {
+            turnRef.current = nextTurn;
+            hashRef.current = moveHash;
+            setCurrentTurn(nextTurn);
+            setLastHash(moveHash);
+            console.log(`[submitMove] Retry success! Turn now at ${nextTurn}`);
+            return true;
+          }
+          // If still rate limited, silently fail
+          if (retryResult.error.message.includes("rate limited")) {
+            console.log("[submitMove] Still rate limited after retry");
+            return false;
+          }
+          // Fall through to other error handling if different error on retry
+        }
+        
         // Handle specific error types with friendly messages
         if (error.message.includes("invalid session") || error.message.includes("session revoked")) {
           setErrorType("session_expired");
@@ -121,7 +151,6 @@ export function useSubmitMove(options: UseSubmitMoveOptions): UseSubmitMoveResul
           setErrorType("out_of_sync");
           toast.info("Out of sync. Resyncing…", { duration: 3000 });
           
-          // Attempt to resync
           if (onResyncNeeded) {
             const syncData = await onResyncNeeded();
             if (syncData) {
@@ -135,7 +164,6 @@ export function useSubmitMove(options: UseSubmitMoveOptions): UseSubmitMoveResul
           setErrorType("hash_conflict");
           toast.info("Move conflict detected. Resyncing…", { duration: 3000 });
           
-          // Attempt to resync
           if (onResyncNeeded) {
             const syncData = await onResyncNeeded();
             if (syncData) {
