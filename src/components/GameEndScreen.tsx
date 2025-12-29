@@ -54,13 +54,13 @@ function isAlreadySettledError(rawError: string): boolean {
 /**
  * Map raw error strings to user-friendly messages
  */
-function getFriendlyErrorMessage(rawError: string): { message: string; showDetails: boolean; autoRefresh: boolean } {
+function getFriendlyErrorMessage(rawError: string, t: (key: string) => string): { message: string; showDetails: boolean; autoRefresh: boolean } {
   const lowerError = rawError.toLowerCase();
   
   // Already finalized
   if (isAlreadySettledError(rawError)) {
     return {
-      message: 'This game was already settled. Refreshing to show payout status…',
+      message: t('errors.gameAlreadySettled'),
       showDetails: false,
       autoRefresh: true,
     };
@@ -69,7 +69,7 @@ function getFriendlyErrorMessage(rawError: string): { message: string; showDetai
   // Winner invalid
   if (lowerError.includes('badwinner')) {
     return {
-      message: 'Winner must be one of the players in this room.',
+      message: t('errors.invalidWinner'),
       showDetails: false,
       autoRefresh: false,
     };
@@ -78,7 +78,7 @@ function getFriendlyErrorMessage(rawError: string): { message: string; showDetai
   // Not enough in vault
   if (lowerError.includes('insufficientvault')) {
     return {
-      message: "Vault doesn't have enough SOL to pay. Double-check all players joined and deposited.",
+      message: t('errors.insufficientVault'),
       showDetails: false,
       autoRefresh: false,
     };
@@ -86,7 +86,7 @@ function getFriendlyErrorMessage(rawError: string): { message: string; showDetai
   
   // Default fallback
   return {
-    message: 'Finalize failed. Please try again.',
+    message: t('errors.finalizeFailed'),
     showDetails: true,
     autoRefresh: false,
   };
@@ -295,7 +295,7 @@ export function GameEndScreen({
   };
   
   // Get friendly error message
-  const errorInfo = finalizeError ? getFriendlyErrorMessage(finalizeError) : null;
+  const errorInfo = finalizeError ? getFriendlyErrorMessage(finalizeError, t) : null;
   
   // Auto-refresh when "already settled" error is detected
   useEffect(() => {
