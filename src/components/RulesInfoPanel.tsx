@@ -1,14 +1,16 @@
 import { useState } from "react";
 import { ChevronDown, ChevronUp, Shield, Coins, Clock, AlertTriangle, Trophy } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { DEFAULT_RANKED_TURN_TIME } from "@/hooks/useTurnTimer";
 
 interface RulesInfoPanelProps {
   stakeSol: number;
   isRanked: boolean;
+  turnTimeSeconds?: number;
   className?: string;
 }
 
-export function RulesInfoPanel({ stakeSol, isRanked, className }: RulesInfoPanelProps) {
+export function RulesInfoPanel({ stakeSol, isRanked, turnTimeSeconds = DEFAULT_RANKED_TURN_TIME, className }: RulesInfoPanelProps) {
   const [expanded, setExpanded] = useState(false);
 
   // Only show for ranked games
@@ -17,6 +19,15 @@ export function RulesInfoPanel({ stakeSol, isRanked, className }: RulesInfoPanel
   const potSol = stakeSol * 2;
   const feeSol = potSol * 0.05;
   const payoutSol = potSol - feeSol;
+
+  const formatTurnTime = (seconds: number) => {
+    if (seconds >= 60) {
+      const mins = Math.floor(seconds / 60);
+      const secs = seconds % 60;
+      return secs > 0 ? `${mins}m ${secs}s` : `${mins} minute${mins > 1 ? 's' : ''}`;
+    }
+    return `${seconds} seconds`;
+  };
 
   return (
     <div className={cn("fixed bottom-20 left-4 z-30", className)}>
@@ -75,14 +86,14 @@ export function RulesInfoPanel({ stakeSol, isRanked, className }: RulesInfoPanel
             <div className="flex items-center gap-2">
               <Clock className="h-3.5 w-3.5 text-blue-500 flex-shrink-0" />
               <span className="text-xs text-muted-foreground">Turn time:</span>
-              <span className="text-xs font-medium ml-auto">Reasonable pace</span>
+              <span className="text-xs font-medium ml-auto">{formatTurnTime(turnTimeSeconds)}</span>
             </div>
 
             {/* Forfeit rule */}
             <div className="flex items-center gap-2">
               <AlertTriangle className="h-3.5 w-3.5 text-red-500 flex-shrink-0" />
               <span className="text-xs text-muted-foreground">Forfeit:</span>
-              <span className="text-xs font-medium ml-auto">Disconnect/AFK = loss</span>
+              <span className="text-xs font-medium ml-auto">Timeout = auto-forfeit</span>
             </div>
 
             {/* Divider */}

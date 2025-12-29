@@ -9,6 +9,7 @@ import { useWallet } from "@/hooks/useWallet";
 import { useWebRTCSync, GameMessage } from "@/hooks/useWebRTCSync";
 import { useGameSessionPersistence, getRoomMode } from "@/hooks/useGameSessionPersistence";
 import { useRankedReadyGate } from "@/hooks/useRankedReadyGate";
+import { useTurnTimer, DEFAULT_RANKED_TURN_TIME } from "@/hooks/useTurnTimer";
 import LudoBoard from "@/components/ludo/LudoBoard";
 import EgyptianDice from "@/components/ludo/EgyptianDice";
 import TurnIndicator from "@/components/ludo/TurnIndicator";
@@ -201,7 +202,32 @@ const LudoGame = () => {
     return roomPlayers.findIndex(p => p.toLowerCase() === address.toLowerCase());
   }, [address, roomPlayers]);
 
-  const isMyTurnLocal = canPlay && myPlayerIndex >= 0 && myPlayerIndex === currentPlayerIndex;
+  const isMyTurnLocal = canPlay && myPlayerIndex >= 0 && myPlayerIndex === currentPlayerIndex && !gameOver;
+
+  // Ref for resign/forfeit function to avoid circular deps with turn timer
+  const sendResignRef = useRef<(() => boolean) | null>(null);
+
+  // Turn timer for ranked games - auto-forfeit on timeout
+  const handleTimeExpired = useCallback(() => {
+    if (!gameOver) {
+      toast({
+        title: "Time expired!",
+        description: "You ran out of time and forfeited the match.",
+        variant: "destructive",
+      });
+      sendResignRef.current?.();
+      // Force loss - advance to next player's win or end game
+      play('ludo_dice');
+    }
+  }, [gameOver, play]);
+
+  const turnTimer = useTurnTimer({
+    turnTimeSeconds: DEFAULT_RANKED_TURN_TIME,
+    enabled: isRankedGame && canPlay && !gameOver,
+    isMyTurn: isMyTurnLocal,
+    onTimeExpired: handleTimeExpired,
+    roomId: roomPda,
+  });
 
   // Convert Ludo players to TurnPlayer format for notifications
   const turnPlayers: TurnPlayer[] = useMemo(() => {
@@ -666,6 +692,8 @@ const LudoGame = () => {
             activePlayer={turnPlayers[currentPlayerIndex]}
             players={turnPlayers}
             myAddress={address}
+            remainingTime={isRankedGame ? turnTimer.remainingTime : undefined}
+            showTimer={isRankedGame && canPlay}
           />
         </div>
       </div>
@@ -768,7 +796,8 @@ const LudoGame = () => {
       {/* Rules Info Panel (Ranked only) */}
       <RulesInfoPanel 
         stakeSol={rankedGate.stakeLamports / 1_000_000_000} 
-        isRanked={isRankedGame} 
+        isRanked={isRankedGame}
+        turnTimeSeconds={DEFAULT_RANKED_TURN_TIME}
       />
 
       {/* Rematch Modal */}
