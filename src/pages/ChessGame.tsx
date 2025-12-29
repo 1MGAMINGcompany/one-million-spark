@@ -272,6 +272,7 @@ const ChessGame = () => {
   };
 
   const handleLeaveMatch = () => {
+    // For now, just navigate - forfeit logic will be called from ForfeitConfirmDialog
     navigate("/room-list");
   };
 

@@ -820,5 +820,19 @@
     "forfeit": "Forfeit",
     "timeoutForfeit": "Timeout = auto-forfeit",
     "rulesAcceptedNote": "Both players accepted these rules before the match started. Payouts are executed on-chain."
+  },
+  "forfeit": {
+    "title": "Forfeit Match?",
+    "warning2Player": "Leaving now will forfeit the match. Your opponent wins and receives the stake.",
+    "warningLudo": "Leaving now will eliminate you from this game. The game continues without you.",
+    "stakeWarning": "You will lose your {{stake}} SOL stake.",
+    "confirm": "Forfeit",
+    "cancel": "Stay in Game",
+    "success": "Match forfeited",
+    "opponentWins": "Your opponent wins",
+    "eliminated": "You have been eliminated"
+  },
+  "common": {
+    "processing": "Processing..."
   }
 }

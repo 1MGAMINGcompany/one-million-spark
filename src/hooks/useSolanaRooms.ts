@@ -549,6 +549,87 @@ export function useSolanaRooms() {
     return false;
   }, [toast]);
 
+  // forfeitGame - forfeit a game in progress (2 players: opponent wins, Ludo 3+: player eliminated)
+  const forfeitGame = useCallback(async (
+    roomPda: string,
+    gameType?: string
+  ): Promise<{ ok: boolean; signature?: string; reason?: string }> => {
+    if (!publicKey || !connected) {
+      toast({
+        title: "Wallet not connected",
+        variant: "destructive",
+      });
+      return { ok: false, reason: "WALLET_NOT_CONNECTED" };
+    }
+
+    setTxPending(true);
+    
+    try {
+      console.log("[forfeitGame] Calling forfeit-game edge function:", { roomPda, gameType });
+      
+      // Import supabase client dynamically to avoid circular dependency
+      const { supabase } = await import("@/integrations/supabase/client");
+      
+      const { data, error } = await supabase.functions.invoke('forfeit-game', {
+        body: {
+          roomPda,
+          forfeitingWallet: publicKey.toBase58(),
+          gameType,
+        },
+      });
+
+      if (error) {
+        console.error("[forfeitGame] Edge function error:", error);
+        toast({
+          title: "Failed to forfeit",
+          description: error.message || "Forfeit request failed",
+          variant: "destructive",
+        });
+        return { ok: false, reason: error.message };
+      }
+
+      if (!data?.success) {
+        const errorMsg = data?.error || "Unknown error";
+        console.error("[forfeitGame] Forfeit failed:", errorMsg);
+        toast({
+          title: "Failed to forfeit",
+          description: errorMsg,
+          variant: "destructive",
+        });
+        return { ok: false, reason: errorMsg };
+      }
+
+      console.log("[forfeitGame] Forfeit successful:", data);
+      
+      if (data.action === 'eliminated') {
+        toast({
+          title: "You left the game",
+          description: "You have been eliminated. Game continues without you.",
+        });
+      } else {
+        toast({
+          title: "Match forfeited",
+          description: "Your opponent wins the match.",
+        });
+      }
+
+      // Refresh active room state
+      await fetchUserActiveRoom();
+
+      return { ok: true, signature: data.signature };
+    } catch (err: any) {
+      console.error("[forfeitGame] Unexpected error:", err);
+      toast({
+        title: "Failed to forfeit",
+        description: err.message || "Unexpected error",
+        variant: "destructive",
+      });
+      return { ok: false, reason: "ERROR" };
+    } finally {
+      setTxPending(false);
+    }
+  }, [publicKey, connected, toast, fetchUserActiveRoom]);
+
   // Get user's SOL balance - only after wallet is connected with publicKey
   const getBalance = useCallback(async (): Promise<number> => {
     if (!connected || !publicKey) {
@@ -580,6 +661,7 @@ export function useSolanaRooms() {
     createRoom,
     joinRoom,
     cancelRoom,
+    forfeitGame,
     pingRoom,
     cancelAbandonedRoom,
     getBalance,
