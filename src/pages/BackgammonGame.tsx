@@ -316,7 +316,7 @@ const BackgammonGame = () => {
     const result = await rematch.acceptRematch(rematchRoomId);
     sendRematchAcceptRef.current?.(rematchRoomId);
     if (result.allAccepted) {
-      toast({ title: "All players accepted!", description: "Game is starting..." });
+      toast({ title: t('toast.allPlayersAccepted'), description: t('toast.gameStarting') });
       sendRematchReadyRef.current?.(rematchRoomId);
       window.location.href = `/game/backgammon/${rematchRoomId}`;
     }
@@ -405,18 +405,18 @@ const BackgammonGame = () => {
       setGameOver(true);
       chatRef.current?.addSystemMessage("Opponent resigned");
       play('chess_win');
-      toast({ title: "Victory!", description: "Your opponent has resigned." });
+      toast({ title: t('toast.victory'), description: t('toast.opponentResigned') });
     } else if (message.type === "rematch_invite" && message.payload) {
       setRematchInviteData(message.payload);
       setShowAcceptModal(true);
-      toast({ title: "Rematch Invite", description: "Your opponent wants a rematch!" });
+      toast({ title: t('toast.rematchInvite'), description: t('toast.opponentWantsRematch') });
     } else if (message.type === "rematch_accept") {
-      toast({ title: "Rematch Accepted!", description: "Opponent accepted. Starting new game..." });
+      toast({ title: t('toast.rematchAccepted'), description: t('toast.opponentAcceptedRematch') });
     } else if (message.type === "rematch_decline") {
-      toast({ title: "Rematch Declined", description: "Opponent declined the rematch.", variant: "destructive" });
+      toast({ title: t('toast.rematchDeclined'), description: t('toast.opponentDeclinedRematch'), variant: "destructive" });
       rematch.closeRematchModal();
     } else if (message.type === "rematch_ready" && message.payload) {
-      toast({ title: "Rematch Ready!", description: "Starting new game..." });
+      toast({ title: t('toast.rematchReady'), description: t('toast.startingNewGame') });
       navigate(`/game/backgammon/${message.payload.roomId}`);
     }
   }, [play, rematch, navigate]); // Stable deps - uses refs

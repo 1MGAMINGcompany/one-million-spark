@@ -151,8 +151,8 @@ export default function CreateRoom() {
       );
       
       toast({
-        title: "🎮 Opponent joined — your game is ready!",
-        description: `Your ${activeRoom.gameTypeName} match is starting. Enter now!`,
+        title: `🎮 ${t("gameBanner.opponentJoined")}`,
+        description: `${activeRoom.gameTypeName} - ${t("gameBanner.enterGame")}!`,
       });
       
       // Navigate to room using PDA from activeRoom (the ONLY unique identifier)
