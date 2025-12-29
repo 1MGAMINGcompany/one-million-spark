@@ -429,11 +429,11 @@ const DominosGame = () => {
   });
 
   const handleAcceptRulesModal = async () => {
-    const success = await rankedGate.setReady();
-    if (success) {
-      toast({ title: "Rules accepted", description: "Waiting for opponent..." });
+    const result = await rankedGate.acceptWithSignature();
+    if (result.success) {
+      toast({ title: "Rules accepted", description: "Signed and ready! Waiting for opponent..." });
     } else {
-      toast({ title: "Failed to accept", description: "Please try again", variant: "destructive" });
+      toast({ title: "Failed to accept", description: result.error || "Please try again", variant: "destructive" });
     }
   };
 
