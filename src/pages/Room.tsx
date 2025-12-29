@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
 
@@ -322,6 +322,34 @@ export default function Room() {
       }
     };
   }, [roomPdaParam, connection, wallet]);
+
+  // Auto-redirect when room status changes from Open to Started
+  const prevStatusRef = useRef<number | null>(null);
+  const hasNavigatedRef = useRef(false);
+  
+  useEffect(() => {
+    if (!room || !roomPdaParam) {
+      prevStatusRef.current = null;
+      return;
+    }
+    
+    const prevStatus = prevStatusRef.current;
+    const currentStatus = room.status;
+    
+    // Detect transition: Open -> Started means game is ready
+    if (prevStatus !== null && isOpenStatus(prevStatus) && currentStatus === RoomStatus.Started && !hasNavigatedRef.current) {
+      console.log("[Room] Game started! Redirecting to play page");
+      hasNavigatedRef.current = true;
+      
+      toast.success("Game is starting!", {
+        description: `${gameName} match is ready. Entering game...`,
+      });
+      
+      navigate(`/play/${roomPdaParam}`, { replace: true });
+    }
+    
+    prevStatusRef.current = currentStatus;
+  }, [room, roomPdaParam, navigate, gameName]);
 
   // Note: Active room polling is now centralized in useSolanaRooms
   // This page only CONSUMES activeRoom - it doesn't trigger fetches

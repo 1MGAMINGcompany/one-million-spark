@@ -968,13 +968,21 @@ const ChessGame = () => {
                         variant="destructive" 
                         onClick={handleResign}
                         className="text-xs">
-                        {t("gameMultiplayer.offerDraw")}
                         <Flag className="w-3 h-3 mr-1" />
+                        {t("gameMultiplayer.resign")}
                       </Button>
                     </div>
                   )}
                 </div>
               </div>
+              
+              {/* Rules Info Panel - inline position */}
+              <RulesInfoPanel 
+                stakeSol={rankedGate.stakeLamports / 1_000_000_000} 
+                isRanked={isRankedGame}
+                turnTimeSeconds={effectiveTurnTime}
+                className="mt-2"
+              />
 
               {/* Draw Offer Dialog */}
               {drawOffered && drawOfferFrom && drawOfferFrom !== address && (
@@ -1034,12 +1042,6 @@ const ChessGame = () => {
       {/* Chat Panel */}
       <GameChatPanel chat={chat} />
 
-      {/* Rules Info Panel (Ranked only) */}
-      <RulesInfoPanel 
-        stakeSol={rankedGate.stakeLamports / 1_000_000_000} 
-        isRanked={isRankedGame}
-        turnTimeSeconds={effectiveTurnTime}
-      />
 
       {/* Game End Screen */}
       {gameOver && (
