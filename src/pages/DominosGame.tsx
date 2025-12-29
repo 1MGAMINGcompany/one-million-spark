@@ -2,6 +2,8 @@ import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Gem, Flag, Users, Wifi, WifiOff, Download, RefreshCw } from "lucide-react";
+import { ForfeitConfirmDialog } from "@/components/ForfeitConfirmDialog";
+import { useSolanaRooms } from "@/hooks/useSolanaRooms";
 import DominoTile3D, { DominoTileBack, TileHalfClicked } from "@/components/DominoTile3D";
 import { useSound } from "@/contexts/SoundContext";
 import { useTranslation } from "react-i18next";
@@ -117,6 +119,13 @@ const DominosGame = () => {
   const [loadingRoom, setLoadingRoom] = useState(true);
   const [entryFeeSol, setEntryFeeSol] = useState(0); // Stake amount in SOL
   const [sessionRestored, setSessionRestored] = useState(false);
+  
+  // Forfeit dialog state
+  const [showForfeitDialog, setShowForfeitDialog] = useState(false);
+  const [isForfeitLoading, setIsForfeitLoading] = useState(false);
+  
+  // Solana rooms hook for forfeit/cancel
+  const { cancelRoomByPda, forfeitGame } = useSolanaRooms();
 
   // Keep multiplayer refs in sync
   useEffect(() => { amIPlayer1Ref.current = amIPlayer1; }, [amIPlayer1]);
@@ -450,8 +459,43 @@ const DominosGame = () => {
     }
   };
 
-  const handleLeaveMatch = () => {
+  const handleLeaveMatch = async () => {
+    // If creator alone (no opponent), cancel room and refund
+    if (roomPlayers.length === 1) {
+      const result = await cancelRoomByPda(roomPda || "");
+      if (result.ok) {
+        toast({ title: t('forfeit.roomCancelled'), description: t('forfeit.stakeRefunded') });
+      } else {
+        toast({ title: t('common.error'), description: result.reason, variant: "destructive" });
+      }
+      navigate("/room-list");
+      return;
+    }
+    
+    // If 2 players and game not over, show forfeit confirmation
+    if (roomPlayers.length >= 2 && !gameOver) {
+      setShowForfeitDialog(true);
+      return;
+    }
+    
+    // Otherwise just navigate away
     navigate("/room-list");
+  };
+
+  const handleConfirmForfeit = async () => {
+    if (!roomPda) return;
+    
+    setIsForfeitLoading(true);
+    const result = await forfeitGame(roomPda);
+    setIsForfeitLoading(false);
+    
+    if (result.ok) {
+      toast({ title: t('forfeit.success'), description: t('forfeit.opponentWins') });
+      setShowForfeitDialog(false);
+      navigate("/room-list");
+    } else {
+      toast({ title: t('common.error'), description: result.reason, variant: "destructive" });
+    }
   };
 
   // Block gameplay until both players are ready (for ranked games)
@@ -1326,6 +1370,16 @@ const DominosGame = () => {
       {isRankedGame && rankedGate.iAmReady && !rankedGate.bothReady && (
         <WaitingForOpponentPanel onLeave={handleLeaveMatch} roomPda={roomPda} />
       )}
+
+      {/* Forfeit Confirmation Dialog */}
+      <ForfeitConfirmDialog
+        open={showForfeitDialog}
+        onOpenChange={setShowForfeitDialog}
+        onConfirm={handleConfirmForfeit}
+        isLoading={isForfeitLoading}
+        gameType="2player"
+        stakeSol={entryFeeSol}
+      />
     </div>
   );
 };

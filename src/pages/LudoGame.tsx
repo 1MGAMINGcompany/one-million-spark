@@ -3,6 +3,8 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, RotateCcw, Music, Music2, Volume2, VolumeX, Users, Wifi, WifiOff, RefreshCw } from "lucide-react";
+import { ForfeitConfirmDialog } from "@/components/ForfeitConfirmDialog";
+import { useSolanaRooms } from "@/hooks/useSolanaRooms";
 import { toast } from "@/hooks/use-toast";
 import { useSound } from "@/contexts/SoundContext";
 import { useWallet } from "@/hooks/useWallet";
@@ -56,6 +58,14 @@ const LudoGame = () => {
   // Room players (in production, this comes from on-chain room data)
   // For testing, we simulate 4 players with the current wallet as gold
   const [roomPlayers, setRoomPlayers] = useState<string[]>([]);
+  const [entryFeeSol, setEntryFeeSol] = useState(0);
+  
+  // Forfeit dialog state
+  const [showForfeitDialog, setShowForfeitDialog] = useState(false);
+  const [isForfeitLoading, setIsForfeitLoading] = useState(false);
+  
+  // Solana rooms hook for forfeit/cancel
+  const { cancelRoomByPda, forfeitGame } = useSolanaRooms();
   
   // Refs for stable callback access
   const roomPlayersRef = useRef<string[]>([]);
@@ -209,9 +219,46 @@ const LudoGame = () => {
     }
   };
 
-  const handleLeaveMatch = () => {
-    // For now, just navigate - forfeit logic will be called from ForfeitConfirmDialog
+  const handleLeaveMatch = async () => {
+    // Count active human players
+    const humanPlayers = roomPlayers.filter(p => !p.startsWith('ai-'));
+    
+    // If creator alone (no human opponent), cancel room and refund
+    if (humanPlayers.length === 1 && !gameOver) {
+      const result = await cancelRoomByPda(roomPda || "");
+      if (result.ok) {
+        toast({ title: t('forfeit.roomCancelled'), description: t('forfeit.stakeRefunded') });
+      } else {
+        toast({ title: t('common.error'), description: result.reason, variant: "destructive" });
+      }
+      navigate("/room-list");
+      return;
+    }
+    
+    // If 2+ human players and game not over, show forfeit confirmation (Ludo-specific)
+    if (humanPlayers.length >= 2 && !gameOver) {
+      setShowForfeitDialog(true);
+      return;
+    }
+    
+    // Otherwise just navigate away
     navigate("/room-list");
+  };
+
+  const handleConfirmForfeit = async () => {
+    if (!roomPda) return;
+    
+    setIsForfeitLoading(true);
+    const result = await forfeitGame(roomPda);
+    setIsForfeitLoading(false);
+    
+    if (result.ok) {
+      toast({ title: t('forfeit.eliminated'), description: t('forfeit.gameContinues') });
+      setShowForfeitDialog(false);
+      navigate("/room-list");
+    } else {
+      toast({ title: t('common.error'), description: result.reason, variant: "destructive" });
+    }
   };
 
   // Block gameplay until both players are ready (for ranked games)
@@ -857,6 +904,16 @@ const LudoGame = () => {
       {isRankedGame && rankedGate.iAmReady && !rankedGate.bothReady && (
         <WaitingForOpponentPanel onLeave={handleLeaveMatch} roomPda={roomPda} />
       )}
+
+      {/* Forfeit Confirmation Dialog - Ludo specific (player eliminated, game continues) */}
+      <ForfeitConfirmDialog
+        open={showForfeitDialog}
+        onOpenChange={setShowForfeitDialog}
+        onConfirm={handleConfirmForfeit}
+        isLoading={isForfeitLoading}
+        gameType="ludo"
+        stakeSol={entryFeeSol}
+      />
     </div>
   );
 };
