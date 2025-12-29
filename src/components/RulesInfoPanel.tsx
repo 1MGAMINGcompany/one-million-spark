@@ -32,8 +32,8 @@ export function RulesInfoPanel({ stakeSol, isRanked, turnTimeSeconds = DEFAULT_R
   };
 
   return (
-    <div className={cn("fixed bottom-4 left-4 z-30 pointer-events-none", className)}>
-      <div className="bg-card/95 backdrop-blur-sm border rounded-lg shadow-lg overflow-hidden max-w-xs pointer-events-auto">
+    <div className={cn("z-10", className)}>
+      <div className="bg-card/95 backdrop-blur-sm border rounded-lg shadow-lg overflow-hidden max-w-xs">
         {/* Header - always visible */}
         <button
           onClick={() => setExpanded(!expanded)}
