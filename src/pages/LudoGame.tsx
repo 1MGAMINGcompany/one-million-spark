@@ -106,11 +106,13 @@ const LudoGame = () => {
     isAnimating,
     turnSignal,
     captureEvent,
+    eliminatedPlayers,
     rollDice,
     executeMove,
     applyExternalMove,
     advanceTurn,
     resetGame,
+    eliminatePlayer,
     setDiceValue,
     setMovableTokens,
     setCurrentPlayerIndex,
@@ -246,9 +248,14 @@ const LudoGame = () => {
   };
 
   const handleConfirmForfeit = async () => {
-    if (!roomPda) return;
+    if (!roomPda || myPlayerIndex < 0) return;
     
     setIsForfeitLoading(true);
+    
+    // First eliminate the player locally (remove tokens, skip turns)
+    eliminatePlayer(myPlayerIndex);
+    
+    // Then notify the backend
     const result = await forfeitGame(roomPda);
     setIsForfeitLoading(false);
     
