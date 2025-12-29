@@ -260,7 +260,21 @@
     "gameModeCasual": "आरामदायक",
     "gameModeRanked": "रैंक्ड",
     "casualDesc": "रैंकिंग में कोई बदलाव नहीं — बस मज़े के लिए",
-    "rankedDesc": "इस मैच के बाद ELO रेटिंग अपडेट होगी"
+    "rankedDesc": "इस मैच के बाद ELO रेटिंग अपडेट होगी",
+    "signingDisabled": "साइनिंग अक्षम",
+    "signingDisabledDesc": "प्रीव्यू डोमेन पर वॉलेट साइनिंग अक्षम है। कृपया 1mgaming.com का उपयोग करें",
+    "wrongNetwork": "गलत नेटवर्क",
+    "wrongNetworkDesc": "ऐप {{cluster}} से जुड़ा है लेकिन वॉलेट फंड मेननेट पर हैं।",
+    "balanceError": "बैलेंस त्रुटि",
+    "rematchGame": "रीमैच",
+    "rematchDesc": "वही खिलाड़ी • नया पुरस्कार • नया कमरा",
+    "rematchMode": "मोड",
+    "rematchFrom": "से",
+    "prefilledFromRematch": "रीमैच से प्री-फिल्ड",
+    "creatingRematchRoom": "रीमैच कमरा बनाया जा रहा है…",
+    "createRematchRoom": "रीमैच कमरा बनाएं",
+    "rpcStatus": "RPC स्थिति",
+    "genesis": "जेनेसिस"
   },
   "roomList": {
     "title": "सार्वजनिक गेम रूम",

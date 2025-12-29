@@ -397,7 +397,21 @@
     "gameModeCasual": "Casual",
     "gameModeRanked": "Clasificatorio",
     "casualDesc": "Sin cambios de clasificación — solo por diversión",
-    "rankedDesc": "El ELO se actualizará después de este partido"
+    "rankedDesc": "El ELO se actualizará después de este partido",
+    "signingDisabled": "Firma Deshabilitada",
+    "signingDisabledDesc": "La firma de billetera está deshabilitada en dominios de vista previa. Por favor usa 1mgaming.com",
+    "wrongNetwork": "Red Incorrecta",
+    "wrongNetworkDesc": "La app está conectada a {{cluster}} pero los fondos de tu billetera están en Mainnet.",
+    "balanceError": "Error de Saldo",
+    "rematchGame": "Revancha",
+    "rematchDesc": "Mismos jugadores • Nuevo pozo • Nueva sala",
+    "rematchMode": "Modo",
+    "rematchFrom": "Desde",
+    "prefilledFromRematch": "Prellenado de revancha",
+    "creatingRematchRoom": "Creando Sala de Revancha…",
+    "createRematchRoom": "Crear Sala de Revancha",
+    "rpcStatus": "Estado RPC",
+    "genesis": "Génesis"
   },
   "roomList": {
     "title": "Salas de Juego Públicas",

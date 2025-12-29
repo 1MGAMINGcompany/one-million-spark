@@ -260,7 +260,21 @@
     "gameModeCasual": "休闲",
     "gameModeRanked": "排位",
     "casualDesc": "不影响排名 — 只为娱乐",
-    "rankedDesc": "本场比赛后将更新ELO评分"
+    "rankedDesc": "本场比赛后将更新ELO评分",
+    "signingDisabled": "签名已禁用",
+    "signingDisabledDesc": "预览域名上的钱包签名已禁用。请使用 1mgaming.com",
+    "wrongNetwork": "网络错误",
+    "wrongNetworkDesc": "应用连接到 {{cluster}} 但钱包资金在主网上。",
+    "balanceError": "余额错误",
+    "rematchGame": "重赛",
+    "rematchDesc": "相同玩家 • 新奖池 • 新房间",
+    "rematchMode": "模式",
+    "rematchFrom": "来自",
+    "prefilledFromRematch": "从重赛预填充",
+    "creatingRematchRoom": "正在创建重赛房间…",
+    "createRematchRoom": "创建重赛房间",
+    "rpcStatus": "RPC状态",
+    "genesis": "创世区块"
   },
   "roomList": {
     "title": "公开游戏房间",

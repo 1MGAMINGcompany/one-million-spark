@@ -260,7 +260,21 @@
     "gameModeCasual": "Locker",
     "gameModeRanked": "Ranglistenspiel",
     "casualDesc": "Keine Änderung der Rangliste — nur zum Spaß",
-    "rankedDesc": "ELO-Wertung wird nach diesem Match aktualisiert"
+    "rankedDesc": "ELO-Wertung wird nach diesem Match aktualisiert",
+    "signingDisabled": "Signierung Deaktiviert",
+    "signingDisabledDesc": "Die Wallet-Signierung ist auf Vorschau-Domains deaktiviert. Bitte verwende 1mgaming.com",
+    "wrongNetwork": "Falsches Netzwerk",
+    "wrongNetworkDesc": "Die App ist mit {{cluster}} verbunden, aber die Wallet-Mittel sind auf Mainnet.",
+    "balanceError": "Guthaben-Fehler",
+    "rematchGame": "Revanche",
+    "rematchDesc": "Gleiche Spieler • Neuer Pot • Neuer Raum",
+    "rematchMode": "Modus",
+    "rematchFrom": "Von",
+    "prefilledFromRematch": "Aus Revanche vorausgefüllt",
+    "creatingRematchRoom": "Revanche-Raum wird erstellt…",
+    "createRematchRoom": "Revanche-Raum erstellen",
+    "rpcStatus": "RPC-Status",
+    "genesis": "Genesis"
   },
   "roomList": {
     "title": "Öffentliche Spielräume",

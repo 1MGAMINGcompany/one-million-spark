@@ -260,7 +260,21 @@
     "gameModeCasual": "Casual",
     "gameModeRanked": "Ranqueado",
     "casualDesc": "Sem alterações de classificação — apenas por diversão",
-    "rankedDesc": "O ELO será atualizado após esta partida"
+    "rankedDesc": "O ELO será atualizado após esta partida",
+    "signingDisabled": "Assinatura Desativada",
+    "signingDisabledDesc": "A assinatura da carteira está desativada em domínios de preview. Por favor use 1mgaming.com",
+    "wrongNetwork": "Rede Incorreta",
+    "wrongNetworkDesc": "O app está conectado a {{cluster}} mas os fundos da carteira estão na Mainnet.",
+    "balanceError": "Erro de Saldo",
+    "rematchGame": "Revanche",
+    "rematchDesc": "Mesmos jogadores • Novo prêmio • Nova sala",
+    "rematchMode": "Modo",
+    "rematchFrom": "De",
+    "prefilledFromRematch": "Preenchido da revanche",
+    "creatingRematchRoom": "Criando Sala de Revanche…",
+    "createRematchRoom": "Criar Sala de Revanche",
+    "rpcStatus": "Status RPC",
+    "genesis": "Gênesis"
   },
   "roomList": {
     "title": "Salas de Jogo Públicas",
