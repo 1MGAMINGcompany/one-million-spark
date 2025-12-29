@@ -2,9 +2,40 @@ import { useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { archiveRoom } from '@/lib/roomArchive';
 
-// Helper to get room mode from localStorage
+// Helper to get room mode data from localStorage
+export interface RoomModeData {
+  mode: 'casual' | 'ranked';
+  turnTimeSeconds: number;
+  stakeLamports: number;
+}
+
+export function getRoomModeData(roomPda: string): RoomModeData {
+  try {
+    const stored = localStorage.getItem(`room_mode_${roomPda}`);
+    if (stored) {
+      // New format: JSON object
+      const parsed = JSON.parse(stored);
+      if (parsed.mode) {
+        return {
+          mode: parsed.mode,
+          turnTimeSeconds: parsed.turnTimeSeconds || 60,
+          stakeLamports: parsed.stakeLamports || 0,
+        };
+      }
+    }
+  } catch (e) {
+    // Legacy format: just 'casual' or 'ranked' string
+    const stored = localStorage.getItem(`room_mode_${roomPda}`);
+    if (stored === 'ranked' || stored === 'casual') {
+      return { mode: stored, turnTimeSeconds: 60, stakeLamports: 0 };
+    }
+  }
+  return { mode: 'casual', turnTimeSeconds: 60, stakeLamports: 0 };
+}
+
+// Legacy helper for backward compatibility
 export function getRoomMode(roomPda: string): 'casual' | 'ranked' {
-  return (localStorage.getItem(`room_mode_${roomPda}`) as 'casual' | 'ranked') || 'casual';
+  return getRoomModeData(roomPda).mode;
 }
 
 interface GameSessionData {

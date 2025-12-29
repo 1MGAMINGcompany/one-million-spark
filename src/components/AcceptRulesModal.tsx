@@ -13,6 +13,7 @@ interface AcceptRulesModalProps {
   onAccept: () => void;
   onLeave: () => void;
   stakeSol: number;
+  turnTimeSeconds?: number;
   isLoading?: boolean;
   opponentReady?: boolean;
 }
@@ -22,12 +23,23 @@ export function AcceptRulesModal({
   onAccept,
   onLeave,
   stakeSol,
+  turnTimeSeconds = 60,
   isLoading = false,
   opponentReady = false,
 }: AcceptRulesModalProps) {
   const feeSol = stakeSol * 2 * 0.05; // 5% of total pot
   const potSol = stakeSol * 2;
   const payoutSol = potSol - feeSol;
+  
+  // Format turn time for display
+  const formatTurnTime = (seconds: number): string => {
+    if (seconds >= 60) {
+      const mins = Math.floor(seconds / 60);
+      const secs = seconds % 60;
+      return secs > 0 ? `${mins}m ${secs}s` : `${mins} minute${mins > 1 ? 's' : ''}`;
+    }
+    return `${seconds} seconds`;
+  };
 
   return (
     <Dialog open={open} onOpenChange={() => {}}>
@@ -68,8 +80,8 @@ export function AcceptRulesModal({
               Turn Rules
             </div>
             <ul className="text-sm text-muted-foreground space-y-1">
-              <li>• Each player has reasonable time per turn</li>
-              <li>• Disconnections may result in forfeit</li>
+              <li>• <span className="font-medium text-foreground">{formatTurnTime(turnTimeSeconds)}</span> per turn</li>
+              <li>• Timer expires = automatic forfeit</li>
               <li>• No take-backs after confirming a move</li>
             </ul>
           </div>

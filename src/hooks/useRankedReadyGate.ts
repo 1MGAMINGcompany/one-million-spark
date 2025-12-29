@@ -30,6 +30,8 @@ interface UseRankedReadyGateResult {
   setReady: () => Promise<boolean>;
   /** Stake in lamports (from session) */
   stakeLamports: number;
+  /** Turn time in seconds for ranked games */
+  turnTimeSeconds: number;
 }
 
 export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRankedReadyGateResult {
@@ -41,6 +43,7 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
   const [p2Wallet, setP2Wallet] = useState<string | null>(null);
   const [isSettingReady, setIsSettingReady] = useState(false);
   const [stakeLamports, setStakeLamports] = useState(0);
+  const [turnTimeSeconds, setTurnTimeSeconds] = useState(60);
   const [hasLoaded, setHasLoaded] = useState(false);
 
   // Determine if I'm player 1 or player 2
@@ -61,7 +64,7 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
     const loadState = async () => {
       const { data, error } = await supabase
         .from("game_sessions")
-        .select("p1_ready, p2_ready, player1_wallet, player2_wallet")
+        .select("p1_ready, p2_ready, player1_wallet, player2_wallet, turn_time_seconds")
         .eq("room_pda", roomPda)
         .single();
 
@@ -70,17 +73,24 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
         setP2Ready(data.p2_ready ?? false);
         setP1Wallet(data.player1_wallet);
         setP2Wallet(data.player2_wallet);
+        // Use DB turn time if available, otherwise keep localStorage value
+        if ((data as any).turn_time_seconds) {
+          setTurnTimeSeconds((data as any).turn_time_seconds);
+        }
         setHasLoaded(true);
       }
     };
 
-    // Also try to get stake from localStorage (set by CreateRoom)
+    // Also try to get stake and turn time from localStorage (set by CreateRoom)
     try {
       const modeData = localStorage.getItem(`room_mode_${roomPda}`);
       if (modeData) {
         const parsed = JSON.parse(modeData);
         if (parsed.stakeLamports) {
           setStakeLamports(parsed.stakeLamports);
+        }
+        if (parsed.turnTimeSeconds) {
+          setTurnTimeSeconds(parsed.turnTimeSeconds);
         }
       }
     } catch (e) {
@@ -152,6 +162,7 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
       showAcceptModal: false,
       setReady: async () => true,
       stakeLamports: 0,
+      turnTimeSeconds: 0,
     };
   }
 
@@ -163,5 +174,6 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
     showAcceptModal,
     setReady,
     stakeLamports,
+    turnTimeSeconds,
   };
 }
