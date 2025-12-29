@@ -260,7 +260,21 @@
     "gameModeCasual": "Casual",
     "gameModeRanked": "Classificato",
     "casualDesc": "Nessun cambiamento di classifica — solo per divertimento",
-    "rankedDesc": "L'ELO verrà aggiornato dopo questa partita"
+    "rankedDesc": "L'ELO verrà aggiornato dopo questa partita",
+    "signingDisabled": "Firma Disabilitata",
+    "signingDisabledDesc": "La firma del wallet è disabilitata sui domini di anteprima. Per favore usa 1mgaming.com",
+    "wrongNetwork": "Rete Sbagliata",
+    "wrongNetworkDesc": "L'app è connessa a {{cluster}} ma i fondi del wallet sono su Mainnet.",
+    "balanceError": "Errore di Saldo",
+    "rematchGame": "Rivincita",
+    "rematchDesc": "Stessi giocatori • Nuovo montepremi • Nuova stanza",
+    "rematchMode": "Modalità",
+    "rematchFrom": "Da",
+    "prefilledFromRematch": "Precompilato dalla rivincita",
+    "creatingRematchRoom": "Creazione Stanza Rivincita…",
+    "createRematchRoom": "Crea Stanza Rivincita",
+    "rpcStatus": "Stato RPC",
+    "genesis": "Genesi"
   },
   "roomList": {
     "title": "Stanze di Gioco Pubbliche",

@@ -260,7 +260,21 @@
     "gameModeCasual": "عادي",
     "gameModeRanked": "تصنيفي",
     "casualDesc": "لا تغيير في التصنيف — للمتعة فقط",
-    "rankedDesc": "سيتم تحديث تصنيف ELO بعد هذه المباراة"
+    "rankedDesc": "سيتم تحديث تصنيف ELO بعد هذه المباراة",
+    "signingDisabled": "التوقيع معطل",
+    "signingDisabledDesc": "توقيع المحفظة معطل على نطاقات المعاينة. يرجى استخدام 1mgaming.com",
+    "wrongNetwork": "شبكة خاطئة",
+    "wrongNetworkDesc": "التطبيق متصل بـ {{cluster}} لكن أموال المحفظة على Mainnet.",
+    "balanceError": "خطأ في الرصيد",
+    "rematchGame": "مباراة العودة",
+    "rematchDesc": "نفس اللاعبين • جائزة جديدة • غرفة جديدة",
+    "rematchMode": "الوضع",
+    "rematchFrom": "من",
+    "prefilledFromRematch": "مملوء مسبقاً من المباراة السابقة",
+    "creatingRematchRoom": "جاري إنشاء غرفة المباراة…",
+    "createRematchRoom": "إنشاء غرفة مباراة العودة",
+    "rpcStatus": "حالة RPC",
+    "genesis": "البداية"
   },
   "roomList": {
     "title": "غرف اللعب العامة",

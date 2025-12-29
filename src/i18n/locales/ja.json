@@ -260,7 +260,21 @@
     "gameModeCasual": "カジュアル",
     "gameModeRanked": "ランク戦",
     "casualDesc": "ランキング変動なし — 楽しむだけ",
-    "rankedDesc": "この試合後にELOレーティングが更新されます"
+    "rankedDesc": "この試合後にELOレーティングが更新されます",
+    "signingDisabled": "署名が無効",
+    "signingDisabledDesc": "プレビュードメインではウォレット署名が無効です。1mgaming.comをご利用ください",
+    "wrongNetwork": "ネットワークエラー",
+    "wrongNetworkDesc": "アプリは{{cluster}}に接続していますが、ウォレットの資金はメインネットにあります。",
+    "balanceError": "残高エラー",
+    "rematchGame": "リマッチ",
+    "rematchDesc": "同じプレイヤー • 新しい賞金プール • 新しい部屋",
+    "rematchMode": "モード",
+    "rematchFrom": "元",
+    "prefilledFromRematch": "リマッチから自動入力",
+    "creatingRematchRoom": "リマッチルーム作成中…",
+    "createRematchRoom": "リマッチルームを作成",
+    "rpcStatus": "RPCステータス",
+    "genesis": "ジェネシス"
   },
   "roomList": {
     "title": "公開ゲームルーム",
