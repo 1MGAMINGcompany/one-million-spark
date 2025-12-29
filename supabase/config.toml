@@ -2,3 +2,6 @@ project_id = "mhtikjiticopicziepnj"
 
 [functions.verify-acceptance]
 verify_jwt = false
+
+[functions.forfeit-game]
+verify_jwt = false
