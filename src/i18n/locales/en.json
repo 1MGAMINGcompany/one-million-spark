@@ -417,7 +417,11 @@
     "live": "Live",
     "paused": "Paused",
     "newRoomCreated": "New Room Available",
-    "newRoomCreatedDesc": "A new game room was just created!"
+    "newRoomCreatedDesc": "A new game room was just created!",
+    "myActiveGames": "My Active Games",
+    "youAreCreator": "You created this room",
+    "youJoined": "You joined this room",
+    "rejoin": "Rejoin"
   },
   "shareInvite": {
     "invitePlayers": "Invite Players",
