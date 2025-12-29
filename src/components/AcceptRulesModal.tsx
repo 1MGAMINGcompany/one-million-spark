@@ -46,7 +46,10 @@ export function AcceptRulesModal({
 
   return (
     <Dialog open={open} onOpenChange={() => {}}>
-      <DialogContent className="sm:max-w-md" onPointerDownOutside={(e) => e.preventDefault()}>
+      <DialogContent 
+        className="sm:max-w-md max-h-[85vh] flex flex-col" 
+        onPointerDownOutside={(e) => e.preventDefault()}
+      >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-xl">
             <Shield className="h-5 w-5 text-primary" />
@@ -59,7 +62,7 @@ export function AcceptRulesModal({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-4">
+        <div className="space-y-4 py-4 overflow-y-auto flex-1">
           {/* Stake & Pot */}
           <div className="rounded-lg border bg-card p-4 space-y-2">
             <div className="flex items-center gap-2 text-sm font-medium">
@@ -127,7 +130,7 @@ export function AcceptRulesModal({
           )}
         </div>
 
-        <div className="flex gap-3">
+        <div className="flex gap-3 pt-2 pb-safe shrink-0">
           <Button
             variant="outline"
             onClick={onLeave}
