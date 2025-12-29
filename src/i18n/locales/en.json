@@ -830,9 +830,13 @@
     "cancel": "Stay in Game",
     "success": "Match forfeited",
     "opponentWins": "Your opponent wins",
-    "eliminated": "You have been eliminated"
+    "eliminated": "You have been eliminated",
+    "gameContinues": "The game continues without you",
+    "roomCancelled": "Room Cancelled",
+    "stakeRefunded": "Your stake has been refunded"
   },
   "common": {
-    "processing": "Processing..."
+    "processing": "Processing...",
+    "error": "Error"
   }
 }

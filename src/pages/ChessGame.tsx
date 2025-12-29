@@ -5,6 +5,8 @@ import { ChessBoardPremium } from "@/components/ChessBoardPremium";
 import { useCaptureAnimations } from "@/components/CaptureAnimationLayer";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, RotateCcw, Gem, Star, Flag, Users, Wifi, WifiOff } from "lucide-react";
+import { ForfeitConfirmDialog } from "@/components/ForfeitConfirmDialog";
+import { useSolanaRooms } from "@/hooks/useSolanaRooms";
 import { useSound } from "@/contexts/SoundContext";
 import { useTranslation } from "react-i18next";
 import { useWallet } from "@/hooks/useWallet";
@@ -117,6 +119,14 @@ const ChessGame = () => {
   // Room players - in production, this comes from on-chain room data
   const [roomPlayers, setRoomPlayers] = useState<string[]>([]);
   const [myColor, setMyColor] = useState<"w" | "b">("w");
+  
+  // Forfeit dialog state
+  const [showForfeitDialog, setShowForfeitDialog] = useState(false);
+  const [isForfeitLoading, setIsForfeitLoading] = useState(false);
+  const [entryFeeSol, setEntryFeeSol] = useState(0);
+  
+  // Solana rooms hook for forfeit/cancel
+  const { cancelRoomByPda, forfeitGame } = useSolanaRooms();
 
   // Refs for stable callback access
   const gameRef = useRef(game);
@@ -271,9 +281,43 @@ const ChessGame = () => {
     }
   };
 
-  const handleLeaveMatch = () => {
-    // For now, just navigate - forfeit logic will be called from ForfeitConfirmDialog
+  const handleLeaveMatch = async () => {
+    // If creator alone (no opponent), cancel room and refund
+    if (roomPlayers.length === 1) {
+      const result = await cancelRoomByPda(roomPda || "");
+      if (result.ok) {
+        toast({ title: t('forfeit.roomCancelled'), description: t('forfeit.stakeRefunded') });
+      } else {
+        toast({ title: t('common.error'), description: result.reason, variant: "destructive" });
+      }
+      navigate("/room-list");
+      return;
+    }
+    
+    // If 2 players and game not over, show forfeit confirmation
+    if (roomPlayers.length >= 2 && !gameOver) {
+      setShowForfeitDialog(true);
+      return;
+    }
+    
+    // Otherwise just navigate away
     navigate("/room-list");
+  };
+
+  const handleConfirmForfeit = async () => {
+    if (!roomPda) return;
+    
+    setIsForfeitLoading(true);
+    const result = await forfeitGame(roomPda);
+    setIsForfeitLoading(false);
+    
+    if (result.ok) {
+      toast({ title: t('forfeit.success'), description: t('forfeit.opponentWins') });
+      setShowForfeitDialog(false);
+      navigate("/room-list");
+    } else {
+      toast({ title: t('common.error'), description: result.reason, variant: "destructive" });
+    }
   };
 
   // Block gameplay until both players are ready (for ranked games)
@@ -1039,6 +1083,16 @@ const ChessGame = () => {
       {isRankedGame && rankedGate.iAmReady && !rankedGate.bothReady && (
         <WaitingForOpponentPanel onLeave={handleLeaveMatch} roomPda={roomPda} />
       )}
+
+      {/* Forfeit Confirmation Dialog */}
+      <ForfeitConfirmDialog
+        open={showForfeitDialog}
+        onOpenChange={setShowForfeitDialog}
+        onConfirm={handleConfirmForfeit}
+        isLoading={isForfeitLoading}
+        gameType="2player"
+        stakeSol={entryFeeSol}
+      />
     </div>
   );
 };

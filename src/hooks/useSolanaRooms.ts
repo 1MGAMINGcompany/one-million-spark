@@ -531,7 +531,32 @@ export function useSolanaRooms() {
     [publicKey, connected, connection, sendVersionedTx, toast, fetchRooms, fetchUserActiveRoom]
   );
 
-  // pingRoom is disabled - ping_room instruction not in current on-chain program
+  // cancelRoomByPda - cancel a room using its PDA (fetches roomId internally)
+  const cancelRoomByPda = useCallback(
+    async (roomPda: string): Promise<{ ok: boolean; signature?: string; reason?: string }> => {
+      if (!publicKey || !connected) {
+        return { ok: false, reason: "WALLET_NOT_CONNECTED" };
+      }
+
+      try {
+        // Fetch the room to get the roomId
+        const { fetchRoomByPda } = await import("@/lib/solana-program");
+        const room = await fetchRoomByPda(connection, roomPda);
+        
+        if (!room) {
+          return { ok: false, reason: "ROOM_NOT_FOUND" };
+        }
+
+        // Use the standard cancelRoom with the fetched roomId
+        return await cancelRoom(room.roomId);
+      } catch (err: any) {
+        console.error("[cancelRoomByPda] Error:", err);
+        return { ok: false, reason: err?.message || "ERROR" };
+      }
+    },
+    [publicKey, connected, connection, cancelRoom]
+  );
+
   // When the program is updated, re-enable this function
   const pingRoom = useCallback(async (roomId: number, triggeredBy: 'userClick' | 'interval'): Promise<{ ok: boolean; signature?: string; reason?: string }> => {
     console.log("[PingRoom] Disabled - ping_room not in current program");
@@ -661,6 +686,7 @@ export function useSolanaRooms() {
     createRoom,
     joinRoom,
     cancelRoom,
+    cancelRoomByPda,
     forfeitGame,
     pingRoom,
     cancelAbandonedRoom,
