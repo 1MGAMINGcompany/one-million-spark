@@ -97,7 +97,7 @@ export function MobileWalletFallback({ onClose, isAndroid, isIOS, selectedWallet
           className="w-full gap-2"
         >
           {copiedSite ? <Check size={16} className="text-green-500" /> : <Copy size={16} />}
-          Copy 1mgaming.com
+          {copiedSite ? t("wallet.copied") : t("wallet.copySite")}
         </Button>
       </div>
     </div>
@@ -170,7 +170,7 @@ export function MobileWalletFallback({ onClose, isAndroid, isIOS, selectedWallet
           className="w-full gap-2"
         >
           {copiedSite ? <Check size={16} className="text-green-500" /> : <Copy size={16} />}
-          Copy 1mgaming.com
+          {copiedSite ? t("wallet.copied") : t("wallet.copySite")}
         </Button>
       </div>
     </div>
