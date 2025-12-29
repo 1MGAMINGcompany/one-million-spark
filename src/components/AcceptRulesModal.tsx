@@ -16,7 +16,7 @@ interface AcceptRulesModalProps {
   turnTimeSeconds?: number;
   isLoading?: boolean;
   opponentReady?: boolean;
-  /** Whether this is a signature-based acceptance (shows different UI) */
+  /** Whether this is a signature-based acceptance (shows different UI) - deprecated, now always false */
   requiresSignature?: boolean;
 }
 
@@ -28,7 +28,7 @@ export function AcceptRulesModal({
   turnTimeSeconds = 60,
   isLoading = false,
   opponentReady = false,
-  requiresSignature = true,
+  requiresSignature = false, // On-chain stake is the acceptance, no separate signature needed
 }: AcceptRulesModalProps) {
   const feeSol = stakeSol * 2 * 0.05; // 5% of total pot
   const potSol = stakeSol * 2;
