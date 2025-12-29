@@ -213,6 +213,13 @@ const BackgammonGame = () => {
     }
   }, [gameState, dice, remainingMoves, currentPlayer, gameOver, gameStatus, roomPlayers, saveBackgammonSession]);
 
+  // Finish session and archive room when game ends
+  useEffect(() => {
+    if (gameOver && roomPlayers.length >= 2) {
+      finishBackgammonSession();
+    }
+  }, [gameOver, roomPlayers.length, finishBackgammonSession]);
+
   const isMyTurn = currentPlayer === myRole;
   const isFlipped = myRole === "ai"; // Black player sees flipped board
 

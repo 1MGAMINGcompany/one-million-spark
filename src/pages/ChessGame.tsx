@@ -228,6 +228,13 @@ const ChessGame = () => {
     }
   }, [game, moveHistory, gameOver, gameStatus, roomPlayers, saveChessSession]);
 
+  // Finish session and archive room when game ends
+  useEffect(() => {
+    if (gameOver && roomPlayers.length >= 2) {
+      finishChessSession();
+    }
+  }, [gameOver, roomPlayers.length, finishChessSession]);
+
   // Capture animations hook
   const { animations, triggerAnimation, handleAnimationComplete } = useCaptureAnimations(animationsEnabled);
 
