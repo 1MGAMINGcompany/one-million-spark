@@ -330,7 +330,7 @@ const LudoGame = () => {
     const result = await rematch.acceptRematch(rematchRoomId);
     sendRematchAcceptRef.current?.(rematchRoomId);
     if (result.allAccepted) {
-      toast({ title: "All players accepted!", description: "Game is starting..." });
+      toast({ title: t('toast.allPlayersAccepted'), description: t('toast.gameStarting') });
       sendRematchReadyRef.current?.(rematchRoomId);
       window.location.href = `/game/ludo/${rematchRoomId}`;
     }
@@ -381,14 +381,14 @@ const LudoGame = () => {
     } else if (message.type === "rematch_invite" && message.payload) {
       setRematchInviteData(message.payload);
       setShowAcceptModal(true);
-      toast({ title: "Rematch Invite", description: "Your opponent wants a rematch!" });
+      toast({ title: t('toast.rematchInvite'), description: t('toast.opponentWantsRematch') });
     } else if (message.type === "rematch_accept") {
-      toast({ title: "Rematch Accepted!", description: "Opponent accepted. Starting new game..." });
+      toast({ title: t('toast.rematchAccepted'), description: t('toast.opponentAcceptedRematch') });
     } else if (message.type === "rematch_decline") {
-      toast({ title: "Rematch Declined", description: "Opponent declined the rematch.", variant: "destructive" });
+      toast({ title: t('toast.rematchDeclined'), description: t('toast.opponentDeclinedRematch'), variant: "destructive" });
       rematch.closeRematchModal();
     } else if (message.type === "rematch_ready" && message.payload) {
-      toast({ title: "Rematch Ready!", description: "Starting new game..." });
+      toast({ title: t('toast.rematchReady'), description: t('toast.startingNewGame') });
       navigate(`/game/ludo/${message.payload.roomId}`);
     }
   }, [applyExternalMove, rematch, navigate]); // Stable deps - uses refs
@@ -495,8 +495,8 @@ const LudoGame = () => {
     
     if (movable.length === 0) {
       toast({
-        title: "No valid moves",
-        description: "You cannot move any token.",
+        title: t('toast.noValidMoves'),
+        description: t('toast.cannotMoveToken'),
         duration: 1500,
       });
       noMoveTimeoutRef.current = setTimeout(() => {
@@ -529,8 +529,8 @@ const LudoGame = () => {
     
     if (!movableTokens.includes(tokenIndex)) {
       toast({
-        title: "Illegal move",
-        description: "This token cannot move with the current dice roll.",
+        title: t('toast.illegalMove'),
+        description: t('toast.tokenCannotMove'),
         variant: "destructive",
         duration: 2000,
       });

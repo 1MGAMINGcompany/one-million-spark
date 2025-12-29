@@ -276,8 +276,8 @@ const DominosGame = () => {
           if (!roomData) {
             console.error("[DominosGame] Room not found on-chain");
             toast({
-              title: "Room Not Found",
-              description: "This game room doesn't exist or has been closed.",
+              title: t('toast.roomNotFound'),
+              description: t('toast.roomNotFoundDesc'),
               variant: "destructive",
             });
           }
@@ -310,8 +310,8 @@ const DominosGame = () => {
         if (myIndex === -1) {
           console.error("[DominosGame] Current wallet not found in room players");
           toast({
-            title: "Not in Room",
-            description: "Your wallet is not a player in this room.",
+            title: t('toast.notInRoom'),
+            description: t('toast.notInRoomDesc'),
             variant: "destructive",
           });
           setLoadingRoom(false);
@@ -324,8 +324,8 @@ const DominosGame = () => {
       } catch (error) {
         console.error("[DominosGame] Failed to fetch room:", error);
         toast({
-          title: "Connection Error",
-          description: "Failed to fetch room data from blockchain.",
+          title: t('toast.connectionError'),
+          description: t('toast.failedToFetchRoom'),
           variant: "destructive",
         });
       }
@@ -576,7 +576,7 @@ const DominosGame = () => {
     const result = await rematch.acceptRematch(rematchRoomId);
     sendRematchAcceptRef.current?.(rematchRoomId);
     if (result.allAccepted) {
-      toast({ title: "All players accepted!", description: "Game is starting..." });
+      toast({ title: t('toast.allPlayersAccepted'), description: t('toast.gameStarting') });
       sendRematchReadyRef.current?.(rematchRoomId);
       window.location.href = `/game/dominos/${rematchRoomId}`;
     }
@@ -742,20 +742,20 @@ const DominosGame = () => {
       chatRef.current?.addSystemMessage("Opponent resigned");
       play('domino/win');
       toast({
-        title: "Victory!",
-        description: "Your opponent has resigned.",
+        title: t('toast.victory'),
+        description: t('toast.opponentResigned'),
       });
     } else if (message.type === "rematch_invite" && message.payload) {
       setRematchInviteData(message.payload);
       setShowAcceptModal(true);
-      toast({ title: "Rematch Invite", description: "Your opponent wants a rematch!" });
+      toast({ title: t('toast.rematchInvite'), description: t('toast.opponentWantsRematch') });
     } else if (message.type === "rematch_accept") {
-      toast({ title: "Rematch Accepted!", description: "Opponent accepted. Starting new game..." });
+      toast({ title: t('toast.rematchAccepted'), description: t('toast.opponentAcceptedRematch') });
     } else if (message.type === "rematch_decline") {
-      toast({ title: "Rematch Declined", description: "Opponent declined the rematch.", variant: "destructive" });
+      toast({ title: t('toast.rematchDeclined'), description: t('toast.opponentDeclinedRematch'), variant: "destructive" });
       rematch.closeRematchModal();
     } else if (message.type === "rematch_ready" && message.payload) {
-      toast({ title: "Rematch Ready!", description: "Starting new game..." });
+      toast({ title: t('toast.rematchReady'), description: t('toast.startingNewGame') });
       navigate(`/game/dominos/${message.payload.roomId}`);
     }
   }, [play, getLegalMovesFromRef, rematch, navigate]); // Minimal stable deps
@@ -884,8 +884,8 @@ const DominosGame = () => {
     
     if (!canPlayLeft && !canPlayRight) {
       toast({
-        title: "Invalid Move",
-        description: "That tile doesn't match any end of the chain.",
+        title: t('toast.invalidMove'),
+        description: t('toast.tileNoMatch'),
         variant: "destructive",
       });
       return;
@@ -959,10 +959,10 @@ const DominosGame = () => {
     sendMove(moveData);
     
     toast({
-      title: "Drew a Tile",
-      description: "Check if you can play now.",
+      title: t('toast.drewTile'),
+      description: t('toast.checkIfCanPlay'),
     });
-  }, [isMyTurn, gameOver, boneyard, myHand, chain, opponentHandCount, play, sendMove, amIPlayer1]);
+  }, [isMyTurn, gameOver, boneyard, myHand, chain, opponentHandCount, play, sendMove, amIPlayer1, t]);
 
   // Handle pass
   const handlePass = useCallback(() => {
@@ -971,8 +971,8 @@ const DominosGame = () => {
     const legalMoves = getLegalMoves(myHand);
     if (legalMoves.length > 0) {
       toast({
-        title: "Can't Pass",
-        description: "You have legal moves available.",
+        title: t('toast.cantPass'),
+        description: t('toast.haveLegalMoves'),
         variant: "destructive",
       });
       return;
@@ -980,8 +980,8 @@ const DominosGame = () => {
     
     if (boneyard.length > 0) {
       toast({
-        title: "Can't Pass",
-        description: "You must draw from the boneyard first.",
+        title: t('toast.cantPass'),
+        description: t('toast.mustDrawFirst'),
         variant: "destructive",
       });
       return;
