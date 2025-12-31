@@ -22,7 +22,10 @@
     "room": "Salle",
     "prizePool": "Cagnotte",
     "yourTurn": "Votre Tour",
+    "myTurn": "MON TOUR",
     "opponentsTurn": "Tour de l'Adversaire",
+    "playerGame": "Partie à {{count}} joueurs",
+    "waitingForPlayer": "En attente de {{player}}",
     "remaining": "restant",
     "victory": "Victoire !",
     "defeat": "Défaite",
@@ -483,6 +486,8 @@
     "you": "Vous",
     "ai": "IA",
     "totalMoves": "Total des Coups",
+    "waiting": "En attente...",
+    "player": "Joueur",
     "actions": "Actions",
     "connecting": "Connexion...",
     "prefilledFromRematch": "Pré-rempli depuis la revanche"
@@ -559,6 +564,7 @@
   "footer": {
     "company": "1 MILLION GAMING co",
     "tagline": "Compétence · Stratégie · Succès",
+    "legalAndSupport": "Légal et Support",
     "gameRules": "Règles du Jeu",
     "termsOfService": "Conditions d'Utilisation",
     "support": "Support",
