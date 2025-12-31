@@ -22,7 +22,10 @@
     "room": "Raum",
     "prizePool": "Preispool",
     "yourTurn": "Ihr Zug",
+    "myTurn": "MEIN ZUG",
     "opponentsTurn": "Zug des Gegners",
+    "playerGame": "{{count}}-Spieler Spiel",
+    "waitingForPlayer": "Warten auf {{player}}",
     "remaining": "verbleibend",
     "victory": "Sieg!",
     "defeat": "Niederlage",
@@ -483,6 +486,8 @@
     "you": "Sie",
     "ai": "KI",
     "totalMoves": "Gesamtzüge",
+    "waiting": "Warten...",
+    "player": "Spieler",
     "actions": "Aktionen",
     "connecting": "Verbinden...",
     "prefilledFromRematch": "Vorausgefüllt aus Revanche"
@@ -559,6 +564,7 @@
   "footer": {
     "company": "1 MILLION GAMING co",
     "tagline": "Geschick · Strategie · Erfolg",
+    "legalAndSupport": "Rechtliches & Support",
     "gameRules": "Spielregeln",
     "termsOfService": "Nutzungsbedingungen",
     "support": "Support",

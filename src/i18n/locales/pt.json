@@ -22,7 +22,10 @@
     "room": "Sala",
     "prizePool": "Prêmio Total",
     "yourTurn": "Sua Vez",
+    "myTurn": "MINHA VEZ",
     "opponentsTurn": "Vez do Oponente",
+    "playerGame": "Jogo de {{count}} jogadores",
+    "waitingForPlayer": "Aguardando {{player}}",
     "remaining": "restante",
     "victory": "Vitória!",
     "defeat": "Derrota",
@@ -483,6 +486,8 @@
     "you": "Você",
     "ai": "IA",
     "totalMoves": "Total de Jogadas",
+    "waiting": "Aguardando...",
+    "player": "Jogador",
     "actions": "Ações",
     "connecting": "Conectando...",
     "prefilledFromRematch": "Pré-preenchido de revanche"
@@ -559,6 +564,7 @@
   "footer": {
     "company": "1 MILLION GAMING co",
     "tagline": "Habilidade · Estratégia · Sucesso",
+    "legalAndSupport": "Legal e Suporte",
     "gameRules": "Regras do Jogo",
     "termsOfService": "Termos de Serviço",
     "support": "Suporte",
