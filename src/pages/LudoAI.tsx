@@ -196,12 +196,17 @@ const LudoAI = () => {
   // AI turn - using unique turn ID to track active AI turn and prevent stale callbacks
   const aiTurnIdRef = useRef(0);
   const aiTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const safetyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   // Clear any pending AI timeout
   const clearAiTimeout = useCallback(() => {
     if (aiTimeoutRef.current) {
       clearTimeout(aiTimeoutRef.current);
       aiTimeoutRef.current = null;
+    }
+    if (safetyTimeoutRef.current) {
+      clearTimeout(safetyTimeoutRef.current);
+      safetyTimeoutRef.current = null;
     }
   }, []);
   
@@ -223,6 +228,20 @@ const LudoAI = () => {
     const delay = difficulty === "easy" ? 800 : difficulty === "medium" ? 500 : 300;
     
     const isCurrentTurn = () => currentTurnId === aiTurnIdRef.current;
+    
+    // Safety timeout - force advance turn if AI gets stuck for 15 seconds
+    safetyTimeoutRef.current = setTimeout(() => {
+      if (!isCurrentTurn()) return;
+      console.warn(`[LUDO AI] Safety timeout triggered for turn ${currentTurnId}`);
+      toast({
+        title: "AI Timeout",
+        description: "AI took too long, advancing turn",
+        duration: 2000,
+      });
+      setDiceValue(null);
+      setMovableTokens([]);
+      advanceTurn(1); // Pass 1 to ensure turn advances (not a 6)
+    }, 15000);
     
     aiTimeoutRef.current = setTimeout(() => {
       // Check if this turn is still valid
@@ -249,6 +268,11 @@ const LudoAI = () => {
           });
           aiTimeoutRef.current = setTimeout(() => {
             if (!isCurrentTurn()) return;
+            // Clear safety timeout since we're advancing normally
+            if (safetyTimeoutRef.current) {
+              clearTimeout(safetyTimeoutRef.current);
+              safetyTimeoutRef.current = null;
+            }
             setDiceValue(null);
             advanceTurn(dice);
           }, 1000);
@@ -278,6 +302,11 @@ const LudoAI = () => {
             
             executeMove(currentPlayerIndex, chosenToken, capturedDice, () => {
               if (!isCurrentTurn()) return;
+              // Clear safety timeout since we're advancing normally
+              if (safetyTimeoutRef.current) {
+                clearTimeout(safetyTimeoutRef.current);
+                safetyTimeoutRef.current = null;
+              }
               setDiceValue(null);
               aiTimeoutRef.current = setTimeout(() => {
                 if (!isCurrentTurn()) return;
