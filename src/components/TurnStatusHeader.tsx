@@ -1,4 +1,5 @@
 import React, { memo } from "react";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { Crown, Clock, User } from "lucide-react";
 import type { TurnPlayer } from "@/hooks/useTurnNotifications";
@@ -39,12 +40,6 @@ const PLAYER_BG_COLORS: Record<string, string> = {
   black: "bg-gray-500/20 border-gray-500/30",
 };
 
-function getPlayerDisplayName(player: TurnPlayer): string {
-  if (player.name) return player.name;
-  if (player.color) return `${player.color.charAt(0).toUpperCase() + player.color.slice(1)} Player`;
-  return `Player ${player.seatIndex + 1}`;
-}
-
 function formatTime(seconds: number): string {
   const mins = Math.floor(seconds / 60);
   const secs = seconds % 60;
@@ -60,6 +55,15 @@ export const TurnStatusHeader = memo(function TurnStatusHeader({
   showTimer = false,
   className,
 }: TurnStatusHeaderProps) {
+  const { t } = useTranslation();
+  
+  const getPlayerDisplayName = (player: TurnPlayer): string => {
+    if (player.address === myAddress) return t('common.you');
+    if (player.name) return player.name;
+    if (player.color) return `${player.color.charAt(0).toUpperCase() + player.color.slice(1)}`;
+    return `${t('common.player')} ${player.seatIndex + 1}`;
+  };
+
   const activePlayers = players.filter((p) => p.status === "active");
   const playerCount = activePlayers.length;
   const isLowTime = remainingTime <= 10;
@@ -88,8 +92,8 @@ export const TurnStatusHeader = memo(function TurnStatusHeader({
                 <div className="absolute inset-0 bg-primary/30 rounded-full blur-md animate-ping" />
               </div>
               <div>
-                <span className="text-lg font-semibold text-primary">Your Turn</span>
-                <p className="text-xs text-muted-foreground">{playerCount}-player game</p>
+                <span className="text-lg font-semibold text-primary">{t('game.yourTurn')}</span>
+                <p className="text-xs text-muted-foreground">{t('game.playerGame', { count: playerCount })}</p>
               </div>
             </>
           ) : activePlayer ? (
@@ -97,15 +101,15 @@ export const TurnStatusHeader = memo(function TurnStatusHeader({
               <User className={cn("w-5 h-5", colorClass)} />
               <div>
                 <span className={cn("text-base font-medium", colorClass)}>
-                  Waiting for {getPlayerDisplayName(activePlayer)}
+                  {t('game.waitingForPlayer', { player: getPlayerDisplayName(activePlayer) })}
                 </span>
-                <p className="text-xs text-muted-foreground">{playerCount}-player game</p>
+                <p className="text-xs text-muted-foreground">{t('game.playerGame', { count: playerCount })}</p>
               </div>
             </>
           ) : (
             <>
               <User className="w-5 h-5 text-muted-foreground" />
-              <span className="text-base text-muted-foreground">Waiting...</span>
+              <span className="text-base text-muted-foreground">{t('common.waiting')}</span>
             </>
           )}
         </div>
@@ -133,7 +137,7 @@ export const TurnStatusHeader = memo(function TurnStatusHeader({
         <div className="flex justify-center">
           <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-gradient-to-r from-primary/30 to-yellow-500/30 border border-primary/50 rounded-full shadow-[0_0_15px_rgba(250,204,21,0.25)] animate-pulse">
             <Crown className="w-4 h-4 text-primary" />
-            <span className="text-sm font-semibold text-primary">MY TURN</span>
+            <span className="text-sm font-semibold text-primary">{t('game.myTurn')}</span>
           </div>
         </div>
       )}
@@ -169,7 +173,7 @@ export const TurnStatusHeader = memo(function TurnStatusHeader({
                 )}
               />
               <span className={cn("font-medium", isMe && "text-primary")}>
-                {isMe ? "You" : getPlayerDisplayName(player)}
+                {isMe ? t('common.you') : getPlayerDisplayName(player)}
               </span>
               {player.status === "finished" && (
                 <span className="text-green-500 text-[10px]">✓</span>

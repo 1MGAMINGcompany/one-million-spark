@@ -560,7 +560,7 @@ const ChessAI = () => {
                           : "text-muted-foreground/50"
                       }`}
                     >
-                      {level.toUpperCase()}
+                      {t(`playAi.${level}`)}
                     </div>
                   ))}
                 </div>
