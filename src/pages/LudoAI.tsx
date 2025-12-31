@@ -412,7 +412,7 @@ const LudoAI = () => {
                   disabled={isRolling}
                   className="h-12 px-5 font-bold text-sm bg-primary hover:bg-primary/90"
                 >
-                  Roll Dice
+                  {t('gameAI.rollDice')}
                 </Button>
               )}
               <EgyptianDice

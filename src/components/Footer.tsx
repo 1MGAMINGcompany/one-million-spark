@@ -40,7 +40,7 @@ const Footer = () => {
         <div className="md:hidden w-full px-4">
           <Collapsible open={isOpen} onOpenChange={setIsOpen}>
             <CollapsibleTrigger className="flex items-center justify-center gap-1 text-xs text-primary/50 mx-auto">
-              <span>Legal & Support</span>
+              <span>{t('footer.legalAndSupport')}</span>
               <ChevronUp
                 className={`w-3 h-3 transition-transform ${isOpen ? "" : "rotate-180"}`}
               />
