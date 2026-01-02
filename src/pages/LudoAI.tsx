@@ -225,8 +225,8 @@ const LudoAI = () => {
       return;
     }
     
-    // Create a unique key for this turn state to prevent duplicate processing
-    const turnKey = `${currentPlayerIndex}-${diceValue}-${isRolling}-${isAnimating}`;
+    // Create a unique key for this turn state - include turnSignal to differentiate bonus turns
+    const turnKey = `${currentPlayerIndex}-${turnSignal}-${diceValue}-${isRolling}-${isAnimating}`;
     if (lastProcessedTurnRef.current === turnKey) {
       return;
     }
@@ -346,8 +346,8 @@ const LudoAI = () => {
       clearTimeout(debounceTimeout);
       clearAiTimeout();
     };
-  // REMOVED turnSignal from dependencies to prevent re-triggers
-  }, [currentPlayer.isAI, currentPlayer.color, currentPlayerIndex, gameOver, diceValue, isRolling, isAnimating, difficulty, players, rollDice, executeMove, advanceTurn, setDiceValue, setMovableTokens, t, clearAiTimeout]);
+  // Include turnSignal to detect bonus turns (rolling 6)
+  }, [currentPlayer.isAI, currentPlayer.color, currentPlayerIndex, gameOver, diceValue, isRolling, isAnimating, difficulty, players, rollDice, executeMove, advanceTurn, setDiceValue, setMovableTokens, t, clearAiTimeout, turnSignal]);
 
   // Cleanup AI timeouts on unmount
   useEffect(() => {
