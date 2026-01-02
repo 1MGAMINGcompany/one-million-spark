@@ -525,7 +525,9 @@
     "ai": "AI",
     "totalMoves": "कुल चालें",
     "waiting": "प्रतीक्षा...",
-    "player": "खिलाड़ी"
+    "player": "खिलाड़ी",
+    "actions": "क्रियाएं",
+    "connecting": "कनेक्ट हो रहा है..."
   },
   "footer": {
     "company": "1 MILLION GAMING co",

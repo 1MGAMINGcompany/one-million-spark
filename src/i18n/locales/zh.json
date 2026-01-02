@@ -506,7 +506,15 @@
     "invite": "邀请",
     "settings": "设置",
     "language": "语言",
-    "sec": "秒"
+    "sec": "秒",
+    "gameInfo": "游戏信息",
+    "totalMoves": "总步数",
+    "actions": "操作",
+    "waiting": "等待中...",
+    "player": "玩家",
+    "connecting": "连接中...",
+    "you": "你",
+    "ai": "AI"
   },
   "footer": {
     "company": "1 MILLION GAMING co",

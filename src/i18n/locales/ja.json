@@ -217,7 +217,15 @@
     "copy": "コピー",
     "share": "共有",
     "ai": "AI",
-    "you": "あなた"
+    "you": "あなた",
+    "gameInfo": "ゲーム情報",
+    "totalMoves": "総手数",
+    "actions": "アクション",
+    "waiting": "待機中...",
+    "player": "プレイヤー",
+    "connecting": "接続中...",
+    "sec": "秒",
+    "language": "言語"
   },
   "hero": {
     "badge": "プレミアムスキルゲーム",
