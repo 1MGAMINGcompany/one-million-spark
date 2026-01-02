@@ -868,9 +868,9 @@ const BackgammonAI = () => {
         {isMobile ? (
           <div className="flex-1 flex flex-col px-2 pt-1 pb-2 overflow-hidden min-h-0">
             {/* Score Row */}
-            <div className="flex justify-between items-center px-2 py-1 shrink-0">
+              <div className="flex justify-between items-center px-2 py-1 shrink-0">
               <div className="flex items-center gap-2">
-                <span className="text-[11px] text-muted-foreground">AI:</span>
+                <span className="text-[11px] text-muted-foreground">{t('common.ai')}:</span>
                 <span className="text-primary font-bold text-sm">{gameState.bearOff.ai}</span>
                 <span className="text-[10px] text-muted-foreground/60">/15</span>
               </div>
@@ -888,7 +888,7 @@ const BackgammonAI = () => {
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-[11px] text-muted-foreground">You:</span>
+                <span className="text-[11px] text-muted-foreground">{t('common.you')}:</span>
                 <span className="text-primary font-bold text-sm">{gameState.bearOff.player}</span>
                 <span className="text-[10px] text-muted-foreground/60">/15</span>
               </div>
@@ -987,7 +987,7 @@ const BackgammonAI = () => {
                     className="w-full py-3 text-base font-bold shadow-[0_0_24px_-6px_hsl(45_93%_54%_/_0.6)]" 
                     onClick={rollDice}
                   >
-                    🎲 ROLL DICE
+                    🎲 {t('gameAI.rollDice').toUpperCase()}
                   </Button>
                 ) : null}
               </div>
@@ -1007,9 +1007,9 @@ const BackgammonAI = () => {
                 {!gameOver && (
                   <div className="flex items-center justify-center gap-2 mb-0.5">
                     {currentPlayer === "player" ? (
-                      <span className="text-[10px] font-medium text-primary">YOUR TURN</span>
+                      <span className="text-[10px] font-medium text-primary">{t('game.yourTurn').toUpperCase()}</span>
                     ) : (
-                      <span className="text-[10px] font-medium text-slate-400">AI THINKING...</span>
+                      <span className="text-[10px] font-medium text-slate-400">{t('gameAI.aiThinking').toUpperCase()}</span>
                     )}
                   </div>
                 )}
@@ -1034,13 +1034,13 @@ const BackgammonAI = () => {
                   <div className="mt-2 flex items-center justify-center gap-2">
                     <Trophy className={cn("w-4 h-4", formatResultType(gameResultInfo.resultType).color)} />
                     <span className={cn("text-sm font-bold", formatResultType(gameResultInfo.resultType).color)}>
-                      {formatResultType(gameResultInfo.resultType).multiplier} Points
+                      {formatResultType(gameResultInfo.resultType).multiplier} {t('gameAI.points')}
                     </span>
                   </div>
                 )}
                 {remainingMoves.length > 0 && currentPlayer === "player" && (
                   <p className="text-[10px] text-muted-foreground mt-0.5">
-                    Moves left: {remainingMoves.join(", ")}
+                    {t('gameAI.movesLeft')}: {remainingMoves.join(", ")}
                   </p>
                 )}
               </div>
@@ -1061,7 +1061,7 @@ const BackgammonAI = () => {
                     "font-bold",
                     validMoves.includes(-2) ? "text-primary" : "text-muted-foreground"
                   )}>
-                    {validMoves.includes(-2) ? "TAP TO BEAR OFF" : `Bear Off: ${gameState.bearOff.player}/15`}
+                    {validMoves.includes(-2) ? t('gameAI.tapToBearOff') : `${t('gameAI.bearOff')}: ${gameState.bearOff.player}/15`}
                   </span>
                   {validMoves.includes(-2) && (
                     <span className="text-xs text-primary/70">({gameState.bearOff.player}/15)</span>
@@ -1073,11 +1073,11 @@ const BackgammonAI = () => {
               <div className="flex gap-2">
                 <Button onClick={restartGame} className="flex-1 py-2" variant="gold" size="sm">
                   <RotateCcw size={14} className="mr-1" />
-                  Restart
+                  {t('gameAI.restart')}
                 </Button>
                 <Button asChild variant="ghost" size="sm" className="flex-1 py-2 text-muted-foreground border border-primary/20 text-xs">
                   <Link to="/play-ai">
-                    Change AI
+                    {t('gameAI.changeDifficulty')}
                   </Link>
                 </Button>
               </div>
@@ -1101,7 +1101,7 @@ const BackgammonAI = () => {
                       {/* AI Bear Off / Bar + Direction Indicators */}
                       <div className="flex justify-between items-center mb-3 px-2">
                         <div className="text-xs text-muted-foreground flex items-center gap-2">
-                          AI Borne Off: <span className="text-primary font-bold">{gameState.bearOff.ai}</span>
+                          {t('gameAI.aiBornOff')}: <span className="text-primary font-bold">{gameState.bearOff.ai}</span>
                         </div>
                         {/* Direction indicators - Gold moves counter-clockwise (24→1), Black moves clockwise (1→24) */}
                         <div className="flex items-center gap-3">
@@ -1109,18 +1109,18 @@ const BackgammonAI = () => {
                           <div className="flex items-center gap-1.5 px-2 py-1 rounded-full border border-primary/40 bg-primary/5">
                             <div className="w-3 h-3 rounded-full bg-gradient-to-br from-primary to-amber-600 border border-amber-500/50" />
                             <RotateCcw className="w-3.5 h-3.5 text-primary" strokeWidth={2.5} />
-                            <span className="text-[10px] font-medium text-primary">CCW</span>
+                            <span className="text-[10px] font-medium text-primary">{t('gameAI.ccw')}</span>
                           </div>
                           {/* Black clockwise */}
                           <div className="flex items-center gap-1.5 px-2 py-1 rounded-full border border-slate-500/40 bg-slate-800/30">
                             <div className="w-3 h-3 rounded-full bg-gradient-to-br from-slate-600 to-slate-900 border border-slate-500/50" />
                             <RotateCw className="w-3.5 h-3.5 text-slate-400" strokeWidth={2.5} />
-                            <span className="text-[10px] font-medium text-slate-400">CW</span>
+                            <span className="text-[10px] font-medium text-slate-400">{t('gameAI.cw')}</span>
                           </div>
                         </div>
                         {gameState.bar.ai > 0 && (
                           <div className="flex items-center gap-2">
-                            <span className="text-xs text-muted-foreground">AI Bar:</span>
+                            <span className="text-xs text-muted-foreground">{t('gameAI.aiBar')}:</span>
                             <CheckerStack count={gameState.bar.ai} variant="obsidian" isTop={true} />
                           </div>
                         )}
@@ -1169,7 +1169,7 @@ const BackgammonAI = () => {
                             )}
                             onClick={() => handlePointClick(-1)}
                           >
-                            <span className="text-xs text-muted-foreground">Your Bar:</span>
+                            <span className="text-xs text-muted-foreground">{t('gameAI.yourBar')}:</span>
                             <CheckerStack 
                               count={gameState.bar.player} 
                               variant="gold" 
@@ -1197,7 +1197,7 @@ const BackgammonAI = () => {
                             "text-xs font-medium",
                             validMoves.includes(-2) ? "text-primary" : "text-muted-foreground"
                           )}>
-                            Bear Off:
+                            {t('gameAI.bearOff')}:
                           </span>
                           <span className={cn(
                             "font-bold",
@@ -1219,12 +1219,12 @@ const BackgammonAI = () => {
                 <div className="flex flex-wrap gap-3 items-center justify-center">
                   {currentPlayer === "player" && dice.length === 0 && !gameOver && (
                     <Button variant="gold" size="lg" className="min-w-[140px] shadow-[0_0_30px_-8px_hsl(45_93%_54%_/_0.5)]" onClick={rollDice}>
-                      🎲 Roll Dice
+                      🎲 {t('gameAI.rollDice')}
                     </Button>
                   )}
                   <Button onClick={restartGame} variant="ghost" className="border border-primary/20">
                     <RotateCcw size={16} className="mr-2" />
-                    Restart
+                    {t('gameAI.restart')}
                   </Button>
                 </div>
               </div>
@@ -1244,19 +1244,19 @@ const BackgammonAI = () => {
                         : "bg-card/50 border-primary/20"
                     )}
                   >
-                    <h3 className="text-sm font-medium text-muted-foreground mb-2">Game Status</h3>
+                    <h3 className="text-sm font-medium text-muted-foreground mb-2">{t('game.gameStatus')}</h3>
                     {/* Direction Indicator - Desktop: Player (Gold) = counterclockwise, AI (Black) = clockwise */}
                     {!gameOver && (
                       <div className="flex items-center justify-start gap-2 mb-2">
                         {currentPlayer === "player" ? (
                           <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/10 border border-primary/30">
                             <RotateCcw className="w-4 h-4 text-primary" strokeWidth={2.5} />
-                            <span className="text-xs font-medium text-primary">COUNTER-CW</span>
+                            <span className="text-xs font-medium text-primary">{t('gameAI.counterCw')}</span>
                           </div>
                         ) : (
                           <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-700/50 border border-slate-500/30">
                             <RotateCw className="w-4 h-4 text-slate-400" strokeWidth={2.5} />
-                            <span className="text-xs font-medium text-slate-400">CLOCKWISE</span>
+                            <span className="text-xs font-medium text-slate-400">{t('gameAI.clockwise')}</span>
                           </div>
                         )}
                       </div>
@@ -1283,19 +1283,19 @@ const BackgammonAI = () => {
                         <div className="flex items-center justify-center gap-2">
                           <Trophy className={cn("w-5 h-5", formatResultType(gameResultInfo.resultType).color)} />
                           <span className={cn("text-lg font-bold", formatResultType(gameResultInfo.resultType).color)}>
-                            {formatResultType(gameResultInfo.resultType).multiplier} Points
+                            {formatResultType(gameResultInfo.resultType).multiplier} {t('gameAI.points')}
                           </span>
                         </div>
                         <p className="text-xs text-muted-foreground text-center mt-1">
-                          {gameResultInfo.resultType === "backgammon" && "Opponent had checkers on bar or in your home!"}
-                          {gameResultInfo.resultType === "gammon" && "Opponent bore off no checkers!"}
-                          {gameResultInfo.resultType === "single" && "Standard win"}
+                          {gameResultInfo.resultType === "backgammon" && t('gameAI.backgammonResult')}
+                          {gameResultInfo.resultType === "gammon" && t('gameAI.gammonResult')}
+                          {gameResultInfo.resultType === "single" && t('gameAI.singleResult')}
                         </p>
                       </div>
                     )}
                     {remainingMoves.length > 0 && currentPlayer === "player" && (
                       <p className="text-sm text-muted-foreground mt-2">
-                        Remaining moves: {remainingMoves.join(", ")}
+                        {t('gameAI.remainingMoves')}: {remainingMoves.join(", ")}
                       </p>
                     )}
                   </div>
@@ -1305,7 +1305,7 @@ const BackgammonAI = () => {
                 <div className="relative">
                   <div className="absolute -inset-1 bg-primary/5 rounded-xl blur-lg opacity-40" />
                   <div className="relative rounded-xl border border-primary/20 bg-card/30 p-4">
-                    <h3 className="text-sm font-medium text-muted-foreground mb-2">AI Difficulty</h3>
+                    <h3 className="text-sm font-medium text-muted-foreground mb-2">{t('gameAI.aiDifficulty')}</h3>
                     <p 
                       className="font-display text-xl font-bold"
                       style={{
@@ -1320,7 +1320,7 @@ const BackgammonAI = () => {
                     <p className="text-xs text-muted-foreground mt-1">{difficultyDescription}</p>
                     <Button asChild variant="ghost" size="sm" className="mt-3 w-full border border-primary/20 text-primary/80 hover:text-primary hover:bg-primary/5">
                       <Link to="/play-ai">
-                        Change Difficulty
+                        {t('gameAI.changeDifficulty')}
                       </Link>
                     </Button>
                   </div>
@@ -1330,12 +1330,12 @@ const BackgammonAI = () => {
                 <div className="relative">
                   <div className="absolute -inset-1 bg-primary/5 rounded-xl blur-lg opacity-40" />
                   <div className="relative rounded-xl border border-primary/20 bg-card/30 p-4">
-                    <h3 className="text-sm font-medium text-muted-foreground mb-2">Quick Rules</h3>
+                    <h3 className="text-sm font-medium text-muted-foreground mb-2">{t('gameAI.quickRules')}</h3>
                     <ul className="text-xs text-muted-foreground space-y-1.5">
-                      <li>• Move all 15 checkers to your home board</li>
-                      <li>• Then bear off all checkers to win</li>
-                      <li>• Hit opponent's single checkers to send them to the bar</li>
-                      <li>• Must re-enter from bar before other moves</li>
+                      <li>• {t('gameAI.quickRule1')}</li>
+                      <li>• {t('gameAI.quickRule2')}</li>
+                      <li>• {t('gameAI.quickRule3')}</li>
+                      <li>• {t('gameAI.quickRule4')}</li>
                     </ul>
                     <div className="mt-3">
                       <BackgammonRulesDialog variant="button" className="w-full" />
