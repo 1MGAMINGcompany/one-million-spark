@@ -431,7 +431,10 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
         
         console.log(`[LUDO ENGINE] Rolled ${finalValue}, movable: [${movable.join(', ')}]`);
         
-        onRollComplete?.(finalValue, movable);
+        // CRITICAL: Only call callback if component is still mounted
+        if (isMountedRef.current) {
+          onRollComplete?.(finalValue, movable);
+        }
       }
     }, 100);
   }, [isRolling, diceValue, isAnimating, getMovableTokens, onSoundPlay]);
