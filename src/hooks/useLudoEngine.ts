@@ -42,6 +42,7 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
   const [turnSignal, setTurnSignal] = useState(0); // Increments on every turn to force re-renders
   const [captureEvent, setCaptureEvent] = useState<LudoCaptureEvent | null>(null);
   const [eliminatedPlayers, setEliminatedPlayers] = useState<Set<number>>(new Set());
+  const [gameSessionId, setGameSessionId] = useState(0); // Increments on each reset to invalidate old callbacks
   
   // Use refs to avoid stale closures and prevent double execution
   const playersRef = useRef(players);
@@ -481,6 +482,12 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
     if (animationRef.current) {
       clearTimeout(animationRef.current);
     }
+    if (diceIntervalRef.current) {
+      clearInterval(diceIntervalRef.current);
+      diceIntervalRef.current = null;
+    }
+    moveInProgressRef.current = false;
+    consumedDiceRef.current = null;
     setPlayers(initializePlayers());
     setCurrentPlayerIndex(0);
     setDiceValue(null);
@@ -490,6 +497,7 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
     setIsAnimating(false);
     setTurnSignal(0);
     setEliminatedPlayers(new Set());
+    setGameSessionId(prev => prev + 1); // Increment to invalidate old callbacks
   }, []);
 
   // Eliminate a player (forfeit) - removes their tokens and skips their turns
@@ -581,6 +589,7 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
     turnSignal,
     captureEvent,
     eliminatedPlayers,
+    gameSessionId,
     
     // Actions
     rollDice,
