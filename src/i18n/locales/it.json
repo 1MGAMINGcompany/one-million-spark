@@ -506,7 +506,15 @@
     "invite": "Invita",
     "settings": "Impostazioni",
     "language": "Lingua",
-    "sec": "sec"
+    "sec": "sec",
+    "gameInfo": "Info Partita",
+    "totalMoves": "Mosse Totali",
+    "actions": "Azioni",
+    "waiting": "In attesa...",
+    "player": "Giocatore",
+    "connecting": "Connessione...",
+    "you": "Tu",
+    "ai": "IA"
   },
   "footer": {
     "company": "1 MILLION GAMING co",

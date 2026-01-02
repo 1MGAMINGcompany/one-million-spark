@@ -506,7 +506,15 @@
     "invite": "دعوة",
     "settings": "الإعدادات",
     "language": "اللغة",
-    "sec": "ثانية"
+    "sec": "ثانية",
+    "gameInfo": "معلومات اللعبة",
+    "totalMoves": "إجمالي الحركات",
+    "actions": "الإجراءات",
+    "waiting": "انتظار...",
+    "player": "لاعب",
+    "connecting": "جارٍ الاتصال...",
+    "you": "أنت",
+    "ai": "الذكاء الاصطناعي"
   },
   "footer": {
     "company": "1 MILLION GAMING co",
