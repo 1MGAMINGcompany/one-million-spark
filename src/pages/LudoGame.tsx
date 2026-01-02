@@ -604,10 +604,11 @@ const LudoGame = () => {
         duration: 1500,
       });
       noMoveTimeoutRef.current = setTimeout(() => {
+        setDiceValue(null);
         advanceTurn(dice);
       }, 1000);
     }
-  }, [players, currentPlayerIndex, advanceTurn]);
+  }, [players, currentPlayerIndex, advanceTurn, setDiceValue, t]);
 
   // Human player rolls dice
   const handleRollDice = useCallback(() => {
@@ -665,10 +666,10 @@ const LudoGame = () => {
   }, [isAnimating, currentPlayerIndex, myPlayerIndex, diceValue, isRolling, movableTokens, players, executeMove, advanceTurn, setDiceValue, setMovableTokens, recordPlayerMove, address]);
 
   // AI turn handling (for simulated opponents)
-  const aiMoveInProgressRef = useRef(false);
   const aiTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const aiMoveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const aiAdvanceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastProcessedAiTurnRef = useRef<string | null>(null);
   
   // Cleanup AI timeouts on unmount
   useEffect(() => {
@@ -681,50 +682,63 @@ const LudoGame = () => {
   
   useEffect(() => {
     // Only trigger AI if it's not human's turn
-    if (currentPlayerIndex !== myPlayerIndex && !gameOver && diceValue === null && !isRolling && !isAnimating && !aiMoveInProgressRef.current && myPlayerIndex >= 0) {
-      const delay = 800;
-      aiTimeoutRef.current = setTimeout(() => {
-        aiMoveInProgressRef.current = true;
-        
-        rollDice((dice, movable) => {
-          console.log(`[LUDO MULTI] AI ${currentPlayer.color} rolled ${dice}, movable: [${movable.join(', ')}]`);
-          
-          if (movable.length === 0) {
-            aiAdvanceTimeoutRef.current = setTimeout(() => {
-              advanceTurn(dice);
-              aiMoveInProgressRef.current = false;
-            }, 1000);
-          } else {
-            const capturedDice = dice;
-            setMovableTokens([]);
-            
-            aiMoveTimeoutRef.current = setTimeout(() => {
-              // Simple AI: random token selection
-              const chosenToken = movable[Math.floor(Math.random() * movable.length)];
-              
-              executeMove(currentPlayerIndex, chosenToken, capturedDice, () => {
-                const token = players[currentPlayerIndex].tokens[chosenToken];
-                const endPos = token.position === -1 ? 0 : token.position + capturedDice;
-                recordPlayerMove(roomPlayers[currentPlayerIndex] || "", `Moved to position ${endPos}`);
-                
-                setDiceValue(null);
-                aiAdvanceTimeoutRef.current = setTimeout(() => {
-                  advanceTurn(capturedDice);
-                  aiMoveInProgressRef.current = false;
-                }, 200);
-              });
-            }, 600);
-          }
-        });
-      }, delay);
-      
-      return () => {
-        if (aiTimeoutRef.current) {
-          clearTimeout(aiTimeoutRef.current);
-          aiTimeoutRef.current = null;
-        }
-      };
+    if (currentPlayerIndex === myPlayerIndex || gameOver || myPlayerIndex < 0) {
+      return;
     }
+    
+    // Wait for clean state (no dice, not rolling, not animating)
+    if (diceValue !== null || isRolling || isAnimating) {
+      return;
+    }
+    
+    // Create a unique key for this turn state - include turnSignal to differentiate bonus turns
+    const turnKey = `${currentPlayerIndex}-${turnSignal}`;
+    if (lastProcessedAiTurnRef.current === turnKey) {
+      return;
+    }
+    
+    const delay = 800;
+    aiTimeoutRef.current = setTimeout(() => {
+      // Mark this turn as being processed
+      lastProcessedAiTurnRef.current = turnKey;
+      
+      rollDice((dice, movable) => {
+        console.log(`[LUDO MULTI] AI ${currentPlayer.color} rolled ${dice}, movable: [${movable.join(', ')}]`);
+        
+        if (movable.length === 0) {
+          aiAdvanceTimeoutRef.current = setTimeout(() => {
+            setDiceValue(null);
+            advanceTurn(dice);
+          }, 1000);
+        } else {
+          const capturedDice = dice;
+          setMovableTokens([]);
+          
+          aiMoveTimeoutRef.current = setTimeout(() => {
+            // Simple AI: random token selection
+            const chosenToken = movable[Math.floor(Math.random() * movable.length)];
+            
+            executeMove(currentPlayerIndex, chosenToken, capturedDice, () => {
+              const token = players[currentPlayerIndex].tokens[chosenToken];
+              const endPos = token.position === -1 ? 0 : token.position + capturedDice;
+              recordPlayerMove(roomPlayers[currentPlayerIndex] || "", `Moved to position ${endPos}`);
+              
+              setDiceValue(null);
+              aiAdvanceTimeoutRef.current = setTimeout(() => {
+                advanceTurn(capturedDice);
+              }, 200);
+            });
+          }, 600);
+        }
+      });
+    }, delay);
+    
+    return () => {
+      if (aiTimeoutRef.current) {
+        clearTimeout(aiTimeoutRef.current);
+        aiTimeoutRef.current = null;
+      }
+    };
   }, [currentPlayerIndex, myPlayerIndex, currentPlayer?.color, gameOver, diceValue, isRolling, isAnimating, players, rollDice, executeMove, advanceTurn, setDiceValue, setMovableTokens, turnSignal, recordPlayerMove, roomPlayers]);
 
   // Require wallet connection
