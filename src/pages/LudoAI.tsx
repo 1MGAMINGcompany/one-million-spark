@@ -220,6 +220,7 @@ const LudoAI = () => {
   const isRollingRef = useRef(isRolling);
   const isAnimatingRef = useRef(isAnimating);
   const currentPlayerIndexRef = useRef(currentPlayerIndex);
+  const playersRef = useRef(players);
   
   // Monotonically increasing counter - guarantees unique turn keys
   const globalTurnCounterRef = useRef(0);
@@ -230,6 +231,7 @@ const LudoAI = () => {
   useEffect(() => { isRollingRef.current = isRolling; }, [isRolling]);
   useEffect(() => { isAnimatingRef.current = isAnimating; }, [isAnimating]);
   useEffect(() => { currentPlayerIndexRef.current = currentPlayerIndex; }, [currentPlayerIndex]);
+  useEffect(() => { playersRef.current = players; }, [players]);
   
   // Track game session changes to reset refs
   useEffect(() => {
@@ -267,8 +269,9 @@ const LudoAI = () => {
   }, []);
   
   useEffect(() => {
-    // Only process AI turns
-    if (!currentPlayer.isAI || gameOver) {
+    // Only process AI turns - use REFS to avoid stale closure values
+    const initialPlayer = playersRef.current[currentPlayerIndexRef.current];
+    if (!initialPlayer?.isAI || gameOverRef.current) {
       return;
     }
     
@@ -303,8 +306,8 @@ const LudoAI = () => {
         return;
       }
       
-      // Check player is still AI using REF (game might have advanced to human turn)
-      const currentPlayerNow = players[currentPlayerIndexRef.current];
+      // Check player is still AI using REFS (game might have advanced to human turn)
+      const currentPlayerNow = playersRef.current[currentPlayerIndexRef.current];
       if (!currentPlayerNow?.isAI) {
         console.log(`[LUDO AI] Player ${currentPlayerIndexRef.current} (${currentPlayerNow?.color}) is not AI, skipping`);
         return;
@@ -392,10 +395,10 @@ const LudoAI = () => {
                     
                     let chosenToken: number;
                     
-                    // Get fresh player data from ref to avoid stale closure
-                    const currentPlayerData = players[currentPlayerIndex];
+                    // Get fresh player data from REFS to avoid stale closure
+                    const currentPlayerData = playersRef.current[currentPlayerIndexRef.current];
                     if (!currentPlayerData?.tokens) {
-                      console.warn(`[LUDO AI] No player/tokens found for index ${currentPlayerIndex}`);
+                      console.warn(`[LUDO AI] No player/tokens found for index ${currentPlayerIndexRef.current}`);
                       advanceTurn(1);
                       return;
                     }
