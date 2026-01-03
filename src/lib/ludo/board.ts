@@ -4,93 +4,108 @@
  * Maps logical positions to visual grid coordinates for rendering.
  * The board is a 15x15 grid.
  * 
- * Main track: 52 cells shared by all players
- * Home path: 6 cells per player (color-specific)
- * Home base: 4 token positions per player (off-board)
+ * Standard Ludo layout:
+ * - 4 home bases in corners (6x6 each)
+ * - Cross-shaped track in the middle
+ * - Track goes around the OUTER EDGE of the cross
+ * - Home paths go through the CENTER of each arm toward (7,7)
  */
 
 import { PlayerColor, TRACK_SIZE, START_POSITIONS } from './types';
 
 /**
- * Standard Ludo 15x15 Grid Layout:
+ * 15x15 Ludo Grid:
  * 
- * Track forms the OUTER EDGE of the cross shape, going clockwise.
- * Each player starts at their safe square and moves clockwise.
+ * Home bases: rows 0-5 cols 0-5 (gold), rows 0-5 cols 9-14 (ruby),
+ *             rows 9-14 cols 9-14 (sapphire), rows 9-14 cols 0-5 (emerald)
+ * 
+ * Track (52 cells) forms a cross:
+ * - Top arm: rows 0-5, cols 6-8 (only cols 6 and 8 are track, col 7 is home path)
+ * - Right arm: rows 6-8, cols 9-14 (only rows 6 and 8 are track, row 7 is home path)  
+ * - Bottom arm: rows 9-14, cols 6-8 (only cols 6 and 8 are track, col 7 is home path)
+ * - Left arm: rows 6-8, cols 0-5 (only rows 6 and 8 are track, row 7 is home path)
+ * - Center: rows 6-8, cols 6-8 (finish area)
+ * 
+ * Tokens move clockwise around the track.
  */
 export const TRACK_COORDS: Record<number, [number, number]> = {
-  // Track has 56 cells (0-55), forming a continuous clockwise path
+  // 52 cells total (positions 0-51), clockwise path
   
-  // === GOLD START: Left arm, row 6 going RIGHT (positions 0-5) ===
-  0: [6, 0],   // Gold START - safe square
-  1: [6, 1],
-  2: [6, 2],
-  3: [6, 3],
-  4: [6, 4],
-  5: [6, 5],   // Inside corner - turn up
+  // === GOLD START: Bottom of left arm, row 6, going LEFT to RIGHT (positions 0-5) ===
+  0: [6, 1],   // Gold START - safe square
+  1: [6, 2],
+  2: [6, 3],
+  3: [6, 4],
+  4: [6, 5],
   
-  // === Going UP left column of top arm (positions 6-13) ===
-  6: [5, 5],
-  7: [4, 5],
-  8: [3, 5],
-  9: [2, 5],
-  10: [1, 5],
-  11: [0, 5],  // Top-left corner
-  12: [0, 6],  // Top edge
-  13: [0, 7],  // Top middle
+  // === Turn UP into top arm, left column (col 6), going UP (positions 5-10) ===
+  5: [5, 6],
+  6: [4, 6],
+  7: [3, 6],
+  8: [2, 6],
+  9: [1, 6],
+  10: [0, 6],  // Top-left of top arm
   
-  // === RUBY START: Top edge going right then down (positions 14-21) ===
-  14: [0, 8],  // Ruby START - safe square  
-  15: [0, 9],  // Top-right corner
-  16: [1, 9],  // Going down right column
-  17: [2, 9],
-  18: [3, 9],
-  19: [4, 9],
-  20: [5, 9],
-  21: [6, 9],  // Inside corner - turn right
+  // === Across top edge (positions 11-12) ===
+  11: [0, 7],  // Top center
+  12: [0, 8],  // Top-right of top arm
   
-  // === Going RIGHT along top row of right arm (positions 22-27) ===
-  22: [6, 10],
-  23: [6, 11],
-  24: [6, 12],
-  25: [6, 13],
-  26: [6, 14], // Right edge top
-  27: [7, 14], // Right edge middle
+  // === RUBY START: Down right column of top arm (col 8), going DOWN (positions 13-18) ===
+  13: [1, 8],  // Ruby START - safe square
+  14: [2, 8],
+  15: [3, 8],
+  16: [4, 8],
+  17: [5, 8],
   
-  // === SAPPHIRE START: Right edge going down then left (positions 28-33) ===
-  28: [8, 14], // Sapphire START - safe square
-  29: [8, 13],
-  30: [8, 12],
-  31: [8, 11],
-  32: [8, 10],
-  33: [8, 9],  // Inside corner - turn down
+  // === Turn RIGHT into right arm, top row (row 6), going RIGHT (positions 18-23) ===
+  18: [6, 9],
+  19: [6, 10],
+  20: [6, 11],
+  21: [6, 12],
+  22: [6, 13],
+  23: [6, 14], // Right edge top
   
-  // === Going DOWN right column of bottom arm (positions 34-41) ===
-  34: [9, 9],
-  35: [10, 9],
-  36: [11, 9],
-  37: [12, 9],
-  38: [13, 9],
-  39: [14, 9], // Bottom-right corner
-  40: [14, 8], // Bottom edge
-  41: [14, 7], // Bottom middle
+  // === Down right edge (positions 24-25) ===
+  24: [7, 14], // Right center
+  25: [8, 14], // Right edge bottom
   
-  // === EMERALD START: Bottom edge going left then up (positions 42-49) ===
-  42: [14, 6], // Emerald START - safe square
-  43: [14, 5], // Bottom-left corner
-  44: [13, 5], // Going up left column
-  45: [12, 5],
-  46: [11, 5],
-  47: [10, 5],
-  48: [9, 5],
-  49: [8, 5],  // Inside corner - turn left
+  // === SAPPHIRE START: Left along bottom row of right arm (row 8), going LEFT (positions 26-31) ===
+  26: [8, 13], // Sapphire START - safe square
+  27: [8, 12],
+  28: [8, 11],
+  29: [8, 10],
+  30: [8, 9],
   
-  // === Going LEFT along bottom row back to Gold area (positions 50-55) ===
-  50: [8, 4],
-  51: [8, 3],
-  52: [8, 2],
-  53: [8, 1],
-  54: [8, 0],  // Left edge bottom
-  55: [7, 0],  // Left edge middle - completes circuit before Gold start
+  // === Turn DOWN into bottom arm, right column (col 8), going DOWN (positions 31-36) ===
+  31: [9, 8],
+  32: [10, 8],
+  33: [11, 8],
+  34: [12, 8],
+  35: [13, 8],
+  36: [14, 8], // Bottom-right of bottom arm
+  
+  // === Across bottom edge (positions 37-38) ===
+  37: [14, 7], // Bottom center
+  38: [14, 6], // Bottom-left of bottom arm
+  
+  // === EMERALD START: Up left column of bottom arm (col 6), going UP (positions 39-44) ===
+  39: [13, 6], // Emerald START - safe square
+  40: [12, 6],
+  41: [11, 6],
+  42: [10, 6],
+  43: [9, 6],
+  
+  // === Turn LEFT into left arm, bottom row (row 8), going LEFT (positions 44-49) ===
+  44: [8, 5],
+  45: [8, 4],
+  46: [8, 3],
+  47: [8, 2],
+  48: [8, 1],
+  49: [8, 0],  // Left edge bottom
+  
+  // === Up left edge (positions 50-51) ===
+  50: [7, 0],  // Left center
+  51: [6, 0],  // Left edge top - connects back to position 0
 };
 
 // Home path coordinates (6 cells leading to center, per player)
@@ -155,5 +170,5 @@ export function getTokenCoords(
  * Check if a track position is a safe square
  */
 export function isSafeSquare(trackPosition: number): boolean {
-  return [0, 14, 28, 42].includes(trackPosition);
+  return [0, 13, 26, 39].includes(trackPosition);
 }
