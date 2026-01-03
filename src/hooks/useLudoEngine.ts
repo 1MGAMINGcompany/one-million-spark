@@ -1,13 +1,19 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { Player, PlayerColor, Token, initializePlayers, TRACK_SIZE, SAFE_SQUARES } from "@/components/ludo/ludoTypes";
 
-// Constants for game positions
-// Position -1 = in home base (not on board yet)
-// Position 0-55 = on main track (56 cells for full lap)
-// Position 56-61 = in home column (6 cells leading to center)
-// Position 62 = finished (reached home/center)
+// ============ GAME CONSTANTS ============
 const FINISH_POSITION = 62;
+const MAIN_TRACK_END = 55;
 
+// ============ GAME PHASES (State Machine) ============
+export type GamePhase = 
+  | 'WAITING_FOR_ROLL'    // Current player needs to roll
+  | 'ROLLING'             // Dice animation in progress
+  | 'WAITING_FOR_MOVE'    // Player must select a token to move
+  | 'ANIMATING'           // Token animation in progress
+  | 'GAME_OVER';          // Winner determined
+
+// Export for LudoGame.tsx backwards compatibility
 export interface LudoMove {
   playerIndex: number;
   tokenIndex: number;
@@ -32,69 +38,39 @@ interface UseLudoEngineOptions {
 export function useLudoEngine(options: UseLudoEngineOptions = {}) {
   const { onSoundPlay, onToast } = options;
   
+  // ============ CORE STATE ============
   const [players, setPlayers] = useState<Player[]>(() => initializePlayers());
   const [currentPlayerIndex, setCurrentPlayerIndex] = useState(0);
+  const [phase, setPhase] = useState<GamePhase>('WAITING_FOR_ROLL');
   const [diceValue, setDiceValue] = useState<number | null>(null);
-  const [isRolling, setIsRolling] = useState(false);
-  const [gameOver, setGameOver] = useState<PlayerColor | null>(null);
   const [movableTokens, setMovableTokens] = useState<number[]>([]);
-  const [isAnimating, setIsAnimating] = useState(false);
-  const [turnSignal, setTurnSignal] = useState(0); // Increments on every turn to force re-renders
+  const [winner, setWinner] = useState<PlayerColor | null>(null);
+  const [consecutiveSixes, setConsecutiveSixes] = useState(0);
   const [captureEvent, setCaptureEvent] = useState<LudoCaptureEvent | null>(null);
+  const [gameId, setGameId] = useState(0); // Increments on reset
   const [eliminatedPlayers, setEliminatedPlayers] = useState<Set<number>>(new Set());
-  const [gameSessionId, setGameSessionId] = useState(0); // Increments on each reset to invalidate old callbacks
-  
-  // Use refs to avoid stale closures and prevent double execution
-  const playersRef = useRef(players);
-  const currentPlayerIndexRef = useRef(currentPlayerIndex);
+  const [turnSignal, setTurnSignal] = useState(0); // For backwards compatibility
+
+  // Animation refs
   const animationRef = useRef<NodeJS.Timeout | null>(null);
   const diceIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const moveInProgressRef = useRef(false);
-  const consumedDiceRef = useRef<number | null>(null);
-  const isMountedRef = useRef(false);
-  
-  // Proper mount/unmount tracking - MUST be at top level
-  useEffect(() => {
-    isMountedRef.current = true;
-    console.log('[LUDO ENGINE] Component mounted');
-    return () => {
-      isMountedRef.current = false;
-      console.log('[LUDO ENGINE] Component unmounted');
-    };
-  }, []);
-  
-  useEffect(() => { playersRef.current = players; }, [players]);
-  useEffect(() => { currentPlayerIndexRef.current = currentPlayerIndex; }, [currentPlayerIndex]);
 
-  // Ref for eliminated players to avoid stale closures
-  const eliminatedPlayersRef = useRef(eliminatedPlayers);
-  useEffect(() => { eliminatedPlayersRef.current = eliminatedPlayers; }, [eliminatedPlayers]);
-
+  // ============ DERIVED STATE ============
   const currentPlayer = players[currentPlayerIndex];
 
-  // Calculate valid moves for a player given a dice roll
-  // IMPORTANT: Position logic in Ludo:
-  // - Position -1: token is in home base
-  // - Position 0-54: token is on main track (relative to player's start)  
-  // - Position 55: last position on main track before home column entry
-  // - Position 56-61: home column (6 cells)
-  // - Position 62: finished (home/center)
-  // Note: Each player has 56 cells to travel (0-55 on track, then 56-61 in home column)
-  const HOME_COLUMN_START = 56; // Position where home column begins
-  const HOME_COLUMN_END = 61;   // Last position in home column
-  const FINISH_POS = 62;        // Finished position
+  // ============ PURE HELPER FUNCTIONS ============
   
+  // Calculate which tokens can move with given dice
   const getMovableTokens = useCallback((player: Player, dice: number): number[] => {
     const movable: number[] = [];
     player.tokens.forEach((token, index) => {
       if (token.position === -1 && dice === 6) {
         // Can leave home base with a 6
         movable.push(index);
-      } else if (token.position >= 0 && token.position < FINISH_POS) {
+      } else if (token.position >= 0 && token.position < FINISH_POSITION) {
         const newPos = token.position + dice;
-        // Token on main track (0-51) or in home column (52-57)
-        // Must land exactly on FINISH_POS (58), cannot overshoot
-        if (newPos <= FINISH_POS) {
+        // Must land exactly on finish, cannot overshoot
+        if (newPos <= FINISH_POSITION) {
           movable.push(index);
         }
       }
@@ -102,511 +78,355 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
     return movable;
   }, []);
 
-  // Calculate end position for a move - pure function, no side effects
+  // Calculate end position for a move
   const calculateEndPosition = useCallback((token: Token, dice: number): number | null => {
-    const FINISH_POS = 62;
-    
     if (token.position === -1 && dice === 6) {
-      return 0; // Leave home base, enter at position 0
-    } else if (token.position >= 0 && token.position < FINISH_POS) {
+      return 0; // Leave home base
+    } else if (token.position >= 0 && token.position < FINISH_POSITION) {
       const newPos = token.position + dice;
-      // Must land exactly on finish (62), cannot overshoot
-      if (newPos <= FINISH_POS) {
+      if (newPos <= FINISH_POSITION) {
         return newPos;
       }
     }
-    return null; // Invalid move
+    return null;
   }, []);
 
-  // Animate movement step by step with STRICT position control
-  const animateMovement = useCallback((
-    playerIndex: number,
-    tokenIndex: number,
-    startPos: number,
-    endPos: number,
-    diceUsed: number,
-    onComplete: () => void
-  ) => {
-    // Clear any pending animation
-    if (animationRef.current) {
-      clearTimeout(animationRef.current);
-      animationRef.current = null;
+  // Check if any player has won
+  const checkWinner = useCallback((playersToCheck: Player[]): PlayerColor | null => {
+    for (const player of playersToCheck) {
+      if (player.tokens.every(t => t.position === FINISH_POSITION)) {
+        return player.color;
+      }
     }
-    
-    if (!isMountedRef.current) return;
-    
-    setIsAnimating(true);
-    
-    // CRITICAL: Calculate steps based on dice used, not position difference
-    // For leaving home (-1 to 0), dice 6 is used but only 1 visual step needed
-    const totalSteps = startPos === -1 ? 1 : diceUsed;
-    
-    // Precompute ALL positions to ensure exactness
+    return null;
+  }, []);
+
+  // ============ ACTIONS ============
+
+  // Roll the dice - with optional callback for backwards compatibility
+  const rollDice = useCallback((onRollComplete?: (dice: number, movable: number[]) => void) => {
+    if (phase !== 'WAITING_FOR_ROLL') {
+      console.log(`[LUDO] Cannot roll: phase is ${phase}`);
+      return;
+    }
+
+    setPhase('ROLLING');
+    onSoundPlay?.('ludo_dice');
+
+    let rolls = 0;
+    const maxRolls = 10;
+
+    diceIntervalRef.current = setInterval(() => {
+      setDiceValue(Math.floor(Math.random() * 6) + 1);
+      rolls++;
+
+      if (rolls >= maxRolls) {
+        clearInterval(diceIntervalRef.current!);
+        diceIntervalRef.current = null;
+
+        const finalValue = Math.floor(Math.random() * 6) + 1;
+        setDiceValue(finalValue);
+
+        console.log(`[LUDO] ${players[currentPlayerIndex].color} rolled ${finalValue}`);
+
+        // Check for three consecutive sixes
+        if (finalValue === 6) {
+          const newCount = consecutiveSixes + 1;
+          setConsecutiveSixes(newCount);
+          
+          if (newCount >= 3) {
+            console.log(`[LUDO] Three sixes! Turn forfeited.`);
+            onToast?.("Three Sixes!", "Turn forfeited - three 6s in a row!");
+            setConsecutiveSixes(0);
+            setDiceValue(null);
+            setMovableTokens([]);
+            setCurrentPlayerIndex(prev => (prev + 1) % 4);
+            setTurnSignal(prev => prev + 1);
+            setPhase('WAITING_FOR_ROLL');
+            onRollComplete?.(finalValue, []);
+            return;
+          }
+        } else {
+          setConsecutiveSixes(0);
+        }
+
+        // Calculate movable tokens
+        const movable = getMovableTokens(players[currentPlayerIndex], finalValue);
+        setMovableTokens(movable);
+
+        console.log(`[LUDO] Movable tokens: [${movable.join(', ')}]`);
+
+        // Call the callback if provided (for backwards compatibility)
+        onRollComplete?.(finalValue, movable);
+
+        if (movable.length === 0) {
+          // No valid moves - auto advance
+          onToast?.("No moves available", "No tokens can move with this roll");
+          setTimeout(() => {
+            setDiceValue(null);
+            if (finalValue === 6) {
+              setPhase('WAITING_FOR_ROLL');
+            } else {
+              setConsecutiveSixes(0);
+              setCurrentPlayerIndex(prev => (prev + 1) % 4);
+              setTurnSignal(prev => prev + 1);
+              setPhase('WAITING_FOR_ROLL');
+            }
+          }, 800);
+        } else {
+          setPhase('WAITING_FOR_MOVE');
+        }
+      }
+    }, 80);
+  }, [phase, players, currentPlayerIndex, consecutiveSixes, getMovableTokens, onSoundPlay, onToast]);
+
+  // Select a token to move
+  const selectToken = useCallback((tokenIndex: number) => {
+    if (phase !== 'WAITING_FOR_MOVE') {
+      console.log(`[LUDO] Cannot select: phase is ${phase}`);
+      return false;
+    }
+
+    if (!movableTokens.includes(tokenIndex)) {
+      console.log(`[LUDO] Token ${tokenIndex} not movable`);
+      return false;
+    }
+
+    if (diceValue === null) {
+      console.log(`[LUDO] No dice value`);
+      return false;
+    }
+
+    const player = players[currentPlayerIndex];
+    const token = player.tokens[tokenIndex];
+    const endPos = calculateEndPosition(token, diceValue);
+
+    if (endPos === null) {
+      console.log(`[LUDO] Invalid move calculation`);
+      return false;
+    }
+
+    const startPos = token.position;
+    const dice = diceValue;
+
+    console.log(`[LUDO] Moving ${player.color} token#${tokenIndex}: ${startPos} -> ${endPos}`);
+
+    setPhase('ANIMATING');
+    setMovableTokens([]);
+
+    // Animate the move step by step
+    const totalSteps = startPos === -1 ? 1 : dice;
     const positions: number[] = [];
+    
     if (startPos === -1) {
-      positions.push(0); // Just enter the board
+      positions.push(0);
     } else {
       for (let i = 1; i <= totalSteps; i++) {
         positions.push(startPos + i);
       }
     }
-    
-    // Verify final position matches expected
-    const expectedFinal = positions[positions.length - 1];
-    if (expectedFinal !== endPos) {
-      console.error(`[LUDO ENGINE] Position mismatch! Calculated ${expectedFinal}, expected ${endPos}`);
-    }
-    
-    console.log(`[LUDO ENGINE] Animating: ${startPos} -> ${endPos}, dice=${diceUsed}, steps=${totalSteps}, path=[${positions.join(',')}]`);
-    
+
     let stepIndex = 0;
-    
+
     const performStep = () => {
-      try {
-        if (!isMountedRef.current) {
-          console.log('[LUDO ENGINE] Animation aborted - unmounted');
-          setIsAnimating(false);
-          moveInProgressRef.current = false;
-          return;
-        }
-        
-        const stepPosition = positions[stepIndex];
-        stepIndex++;
-        
-        console.log(`[LUDO ENGINE] Step ${stepIndex}/${totalSteps}: pos=${stepPosition}`);
-        onSoundPlay?.('ludo_move');
-        
-        // Update token position for this step
-        setPlayers(prev => {
-          if (!isMountedRef.current) return prev;
-          return prev.map((p, pIdx) => ({
-            ...p,
-            tokens: p.tokens.map((t, tIdx) => {
-              if (pIdx === playerIndex && tIdx === tokenIndex) {
-                return { ...t, position: stepPosition };
-              }
-              return t;
-            })
-          }));
-        });
-        
-        if (stepIndex >= totalSteps) {
-          // Animation complete - FORCE exact final position
-          animationRef.current = setTimeout(() => {
-            try {
-              if (!isMountedRef.current) {
-                setIsAnimating(false);
-                moveInProgressRef.current = false;
-                return;
-              }
-              
-              setPlayers(prev => {
-                if (!isMountedRef.current) return prev;
-                return prev.map((p, pIdx) => ({
-                  ...p,
-                  tokens: p.tokens.map((t, tIdx) => {
-                    if (pIdx === playerIndex && tIdx === tokenIndex) {
-                      console.log(`[LUDO ENGINE] Final position enforced: ${endPos}`);
-                      return { ...t, position: endPos };
-                    }
-                    return t;
-                  })
-                }));
-              });
-              
-              if (isMountedRef.current) {
-                setIsAnimating(false);
-                onComplete();
-              }
-            } catch (err) {
-              console.error('[LUDO ENGINE] Animation completion error:', err);
-              setIsAnimating(false);
-              moveInProgressRef.current = false;
-            }
-          }, 50);
-        } else {
-          // Schedule next step
-          animationRef.current = setTimeout(performStep, 150);
-        }
-      } catch (err) {
-        console.error('[LUDO ENGINE] Animation step error:', err);
-        setIsAnimating(false);
-        moveInProgressRef.current = false;
+      const stepPosition = positions[stepIndex];
+      stepIndex++;
+
+      onSoundPlay?.('ludo_move');
+
+      // Update token position
+      setPlayers(prev => prev.map((p, pIdx) => ({
+        ...p,
+        tokens: p.tokens.map((t, tIdx) => {
+          if (pIdx === currentPlayerIndex && tIdx === tokenIndex) {
+            return { ...t, position: stepPosition };
+          }
+          return t;
+        })
+      })));
+
+      if (stepIndex >= totalSteps) {
+        // Animation complete - handle captures and check winner
+        animationRef.current = setTimeout(() => {
+          handleMoveComplete(currentPlayerIndex, tokenIndex, endPos, dice);
+        }, 100);
+      } else {
+        animationRef.current = setTimeout(performStep, 150);
       }
     };
-    
-    // Start animation after brief delay
-    animationRef.current = setTimeout(performStep, 100);
-  }, [onSoundPlay]);
 
-  // Execute a move with animation - LOCKS to prevent double execution
+    animationRef.current = setTimeout(performStep, 100);
+    return true;
+  }, [phase, movableTokens, diceValue, players, currentPlayerIndex, calculateEndPosition, onSoundPlay]);
+
+  // Execute move - backwards compatible wrapper
   const executeMove = useCallback((
     playerIndex: number,
     tokenIndex: number,
     dice: number,
     onComplete?: () => void
   ): boolean => {
-    // CRITICAL: Prevent double execution
-    if (moveInProgressRef.current) {
-      console.warn(`[LUDO ENGINE] Move already in progress, ignoring`);
-      return false;
+    // Store callback for when move completes
+    if (onComplete) {
+      moveCompleteCallbackRef.current = onComplete;
     }
-    
-    // Lock immediately
-    moveInProgressRef.current = true;
-    consumedDiceRef.current = dice;
-    
-    const player = playersRef.current[playerIndex];
-    const token = player.tokens[tokenIndex];
-    const startPos = token.position;
-    const endPos = calculateEndPosition(token, dice);
-    
-    if (endPos === null) {
-      console.warn(`[LUDO ENGINE] Invalid move: player=${playerIndex}, token=${tokenIndex}, dice=${dice}`);
-      moveInProgressRef.current = false;
-      consumedDiceRef.current = null;
-      return false;
-    }
-    
-    // Validate the distance matches dice (except for home exit which uses 6 to move to position 0)
-    if (startPos >= 0) {
-      const expectedDistance = endPos - startPos;
-      if (expectedDistance !== dice) {
-        console.error(`[LUDO ENGINE] Distance mismatch! Dice=${dice}, but ${startPos} -> ${endPos} = ${expectedDistance} steps`);
-        moveInProgressRef.current = false;
-        consumedDiceRef.current = null;
-        return false;
-      }
-    }
-    
-    console.log(`[LUDO ENGINE] Move: ${player.color} token#${tokenIndex} from ${startPos} to ${endPos} (dice=${dice})`);
-    
-    // Pass dice value to animation for strict step counting
-    animateMovement(playerIndex, tokenIndex, startPos, endPos, dice, () => {
-      // After animation: check captures
-      setPlayers(prev => {
-        const newPlayers = prev.map(p => ({
-          ...p,
-          tokens: p.tokens.map(t => ({ ...t }))
-        }));
-        
-        // Verify final position is correct
-        const actualPos = newPlayers[playerIndex].tokens[tokenIndex].position;
-        if (actualPos !== endPos) {
-          console.warn(`[LUDO ENGINE] Position correction: ${actualPos} -> ${endPos}`);
-          newPlayers[playerIndex].tokens[tokenIndex].position = endPos;
-        }
-        
-        // Check for captures (only on main track, positions 0-55)
-        // Home column (56-61) and finish (62) are safe
-        const MAIN_TRACK_END = 55;
-        if (endPos >= 0 && endPos <= MAIN_TRACK_END) {
-          const movingPlayer = newPlayers[playerIndex];
-          // Calculate absolute position on the 56-cell track
-          const myAbsPos = (endPos + movingPlayer.startPosition) % TRACK_SIZE;
-          
-          // Check if landing on a safe square (colored starting squares)
-          const isLandingOnSafeSquare = SAFE_SQUARES.includes(myAbsPos);
-          
-          if (!isLandingOnSafeSquare) {
-            // Only capture if NOT on a safe square
-            newPlayers.forEach((otherPlayer, opi) => {
-              if (opi !== playerIndex) {
-                otherPlayer.tokens.forEach((otherToken, oti) => {
-                  if (otherToken.position >= 0 && otherToken.position <= MAIN_TRACK_END) {
-                    // Calculate the other token's absolute position
-                    const otherAbsPos = (otherToken.position + otherPlayer.startPosition) % TRACK_SIZE;
-                    
-                    console.log(`[LUDO ENGINE] Checking capture: my abs=${myAbsPos}, other ${otherPlayer.color} token#${oti} abs=${otherAbsPos}`);
-                    
-                    if (otherAbsPos === myAbsPos) {
-                      // CAPTURE! Trigger animation before setting position
-                      const capturedPosition = otherToken.position;
-                      const capturedColor = otherPlayer.color;
-                      const capturedTokenId = oti;
-                      
-                      // Emit capture event for animation
-                      setCaptureEvent({
-                        id: `${Date.now()}-${capturedColor}-${capturedTokenId}`,
-                        color: capturedColor,
-                        tokenId: capturedTokenId,
-                        fromPosition: capturedPosition,
-                        startTime: Date.now(),
-                      });
-                      
-                      // Send token back to home base
-                      newPlayers[opi].tokens[oti].position = -1;
-                      console.log(`[LUDO ENGINE] Capture: ${movingPlayer.color} captured ${otherPlayer.color} token#${oti} at absolute position ${myAbsPos}`);
-                      onSoundPlay?.('ludo_capture');
-                      onToast?.("Captured!", `${movingPlayer.color} captured ${otherPlayer.color}'s token!`);
-                    }
+    return selectToken(tokenIndex);
+  }, [selectToken]);
+
+  // Ref for move complete callback (backwards compatibility)
+  const moveCompleteCallbackRef = useRef<(() => void) | null>(null);
+
+  // Handle move completion (captures, winner check, turn advance)
+  const handleMoveComplete = useCallback((playerIndex: number, tokenIndex: number, endPos: number, dice: number) => {
+    setPlayers(prev => {
+      const newPlayers = prev.map(p => ({
+        ...p,
+        tokens: p.tokens.map(t => ({ ...t }))
+      }));
+
+      // Ensure exact position
+      newPlayers[playerIndex].tokens[tokenIndex].position = endPos;
+
+      // Check for captures (only on main track 0-55, not in home column or finish)
+      if (endPos >= 0 && endPos <= MAIN_TRACK_END) {
+        const movingPlayer = newPlayers[playerIndex];
+        const myAbsPos = (endPos + movingPlayer.startPosition) % TRACK_SIZE;
+        const isLandingOnSafeSquare = SAFE_SQUARES.includes(myAbsPos);
+
+        if (!isLandingOnSafeSquare) {
+          newPlayers.forEach((otherPlayer, opi) => {
+            if (opi !== playerIndex) {
+              otherPlayer.tokens.forEach((otherToken, oti) => {
+                if (otherToken.position >= 0 && otherToken.position <= MAIN_TRACK_END) {
+                  const otherAbsPos = (otherToken.position + otherPlayer.startPosition) % TRACK_SIZE;
+
+                  if (otherAbsPos === myAbsPos) {
+                    // CAPTURE!
+                    setCaptureEvent({
+                      id: `${Date.now()}-${otherPlayer.color}-${oti}`,
+                      color: otherPlayer.color,
+                      tokenId: oti,
+                      fromPosition: otherToken.position,
+                      startTime: Date.now(),
+                    });
+                    newPlayers[opi].tokens[oti].position = -1;
+                    console.log(`[LUDO] CAPTURE: ${movingPlayer.color} captured ${otherPlayer.color} token#${oti}`);
+                    onSoundPlay?.('ludo_capture');
+                    onToast?.("Captured!", `${movingPlayer.color} captured ${otherPlayer.color}'s token!`);
                   }
-                });
-              }
-            });
-          } else {
-            console.log(`[LUDO ENGINE] Landing on safe square ${myAbsPos}, no capture possible`);
-          }
+                }
+              });
+            }
+          });
         }
-        
-        return newPlayers;
-      });
-      
-      // Release lock after animation completes
-      moveInProgressRef.current = false;
-      consumedDiceRef.current = null;
-      
-      onComplete?.();
-    });
-    
-    return true;
-  }, [calculateEndPosition, animateMovement, onSoundPlay, onToast]);
-
-  // Check for winner - all 4 tokens at position 62 (finished) OR last player standing
-  const checkWinner = useCallback((playersToCheck: Player[]): PlayerColor | null => {
-    const eliminated = eliminatedPlayersRef.current;
-    
-    // First check if any player has all tokens finished
-    for (let i = 0; i < playersToCheck.length; i++) {
-      const player = playersToCheck[i];
-      if (!eliminated.has(i) && player.tokens.every(t => t.position === FINISH_POSITION)) {
-        return player.color;
       }
-    }
-    
-    // Check if only one player remains (all others eliminated)
-    const activePlayers = playersToCheck.filter((_, i) => !eliminated.has(i));
-    if (activePlayers.length === 1) {
-      return activePlayers[0].color;
-    }
-    
-    return null;
-  }, []);
 
-  // Advance to next turn - returns true if same player gets bonus turn (rolled 6)
-  const advanceTurn = useCallback((diceRolled: number): boolean => {
-    const currentPlayers = playersRef.current;
-    const eliminated = eliminatedPlayersRef.current;
-    const winner = checkWinner(currentPlayers);
-    
-    if (winner) {
-      setGameOver(winner);
-      onSoundPlay?.(winner === 'gold' ? 'ludo_win' : 'ludo_lose');
-      return false;
+      // Check for winner
+      const winnerColor = checkWinner(newPlayers);
+      if (winnerColor) {
+        setWinner(winnerColor);
+        setPhase('GAME_OVER');
+        onSoundPlay?.(winnerColor === 'gold' ? 'ludo_win' : 'ludo_lose');
+        console.log(`[LUDO] WINNER: ${winnerColor}`);
+      }
+
+      return newPlayers;
+    });
+
+    // Call the move complete callback if set (backwards compatibility)
+    if (moveCompleteCallbackRef.current) {
+      const callback = moveCompleteCallbackRef.current;
+      moveCompleteCallbackRef.current = null;
+      setTimeout(() => callback(), 50);
+      return; // Let the callback handle turn advancement
     }
-    
+
+    // If no callback, handle turn advancement ourselves
+    setTimeout(() => {
+      if (winner) return;
+
+      setDiceValue(null);
+
+      // Rolled 6 = bonus turn (same player), otherwise next player
+      if (dice === 6) {
+        console.log(`[LUDO] Bonus turn! Rolled 6, ${players[playerIndex].color} goes again.`);
+        setPhase('WAITING_FOR_ROLL');
+      } else {
+        setConsecutiveSixes(0);
+        setCurrentPlayerIndex(prev => (prev + 1) % 4);
+        setTurnSignal(prev => prev + 1);
+        setPhase('WAITING_FOR_ROLL');
+      }
+    }, 200);
+  }, [checkWinner, onSoundPlay, onToast, winner, players]);
+
+  // Advance turn - backwards compatible
+  const advanceTurn = useCallback((diceRolled: number): boolean => {
     const isBonusTurn = diceRolled === 6;
     
-    // Only advance turn if dice wasn't 6
     if (!isBonusTurn) {
-      // Find next non-eliminated player
-      setCurrentPlayerIndex(prev => {
-        let next = (prev + 1) % 4;
-        let attempts = 0;
-        // Skip eliminated players (max 4 attempts to prevent infinite loop)
-        while (eliminated.has(next) && attempts < 4) {
-          next = (next + 1) % 4;
-          attempts++;
-        }
-        return next;
-      });
-    } else {
-      console.log(`[LUDO ENGINE] Bonus turn! Rolled 6, same player continues.`);
+      setCurrentPlayerIndex(prev => (prev + 1) % 4);
     }
     
     setDiceValue(null);
     setMovableTokens([]);
-    // CRITICAL: Always increment turnSignal to trigger re-renders for next turn
+    setConsecutiveSixes(isBonusTurn ? consecutiveSixes : 0);
     setTurnSignal(prev => prev + 1);
+    setPhase('WAITING_FOR_ROLL');
     
     return isBonusTurn;
-  }, [checkWinner, onSoundPlay]);
+  }, [consecutiveSixes]);
 
-  // Roll dice
-  const rollDice = useCallback((onRollComplete?: (dice: number, movable: number[]) => void) => {
-    if (isRolling || diceValue !== null || isAnimating) return;
-    
-    // Clear any existing dice interval
-    if (diceIntervalRef.current) {
-      clearInterval(diceIntervalRef.current);
-      diceIntervalRef.current = null;
-    }
-    
-    setIsRolling(true);
-    onSoundPlay?.('ludo_dice');
-    
-    let rolls = 0;
-    const maxRolls = 10;
-    
-    diceIntervalRef.current = setInterval(() => {
-      if (!isMountedRef.current) {
-        if (diceIntervalRef.current) {
-          clearInterval(diceIntervalRef.current);
-          diceIntervalRef.current = null;
-        }
-        return;
-      }
-      
-      setDiceValue(Math.floor(Math.random() * 6) + 1);
-      rolls++;
-      
-      if (rolls >= maxRolls) {
-        if (diceIntervalRef.current) {
-          clearInterval(diceIntervalRef.current);
-          diceIntervalRef.current = null;
-        }
-        const finalValue = Math.floor(Math.random() * 6) + 1;
-        setDiceValue(finalValue);
-        setIsRolling(false);
-        
-        const currentPlayerData = playersRef.current[currentPlayerIndexRef.current];
-        const movable = getMovableTokens(currentPlayerData, finalValue);
-        setMovableTokens(movable);
-        
-        console.log(`[LUDO ENGINE] Rolled ${finalValue}, movable: [${movable.join(', ')}]`);
-        
-        // CRITICAL: Only call callback if component is still mounted
-        if (isMountedRef.current) {
-          onRollComplete?.(finalValue, movable);
-        }
-      }
-    }, 100);
-  }, [isRolling, diceValue, isAnimating, getMovableTokens, onSoundPlay]);
-
-  // Apply an external move (from opponent)
-  const applyExternalMove = useCallback((move: LudoMove) => {
-    console.log(`[LUDO ENGINE] External move: player=${move.playerIndex}, token=${move.tokenIndex}, to=${move.endPosition}`);
-    
-    onSoundPlay?.('ludo_move');
-    
-    // Directly set position without animation for opponent moves
-    setPlayers(prev => prev.map((p, pIdx) => ({
-      ...p,
-      tokens: p.tokens.map((t, tIdx) => {
-        if (pIdx === move.playerIndex && tIdx === move.tokenIndex) {
-          return { ...t, position: move.endPosition };
-        }
-        return t;
-      })
-    })));
-    
-    // Advance turn after brief delay
-    setTimeout(() => {
-      if (move.diceValue !== 6) {
-        // Find next non-eliminated player
-        setCurrentPlayerIndex(prev => {
-          const eliminated = eliminatedPlayersRef.current;
-          let next = (prev + 1) % 4;
-          let attempts = 0;
-          while (eliminated.has(next) && attempts < 4) {
-            next = (next + 1) % 4;
-            attempts++;
-          }
-          return next;
-        });
-      }
-      setDiceValue(null);
-      setMovableTokens([]);
-    }, 300);
-  }, [onSoundPlay]);
-
-  // Reset game
-  const resetGame = useCallback(() => {
-    if (animationRef.current) {
-      clearTimeout(animationRef.current);
-    }
-    if (diceIntervalRef.current) {
-      clearInterval(diceIntervalRef.current);
-      diceIntervalRef.current = null;
-    }
-    moveInProgressRef.current = false;
-    consumedDiceRef.current = null;
-    setPlayers(initializePlayers());
-    setCurrentPlayerIndex(0);
-    setDiceValue(null);
-    setIsRolling(false);
-    setGameOver(null);
-    setMovableTokens([]);
-    setIsAnimating(false);
-    setTurnSignal(0);
-    setEliminatedPlayers(new Set());
-    setGameSessionId(prev => prev + 1); // Increment to invalidate old callbacks
+  // Apply external move - backwards compatible stub
+  const applyExternalMove = useCallback((move: LudoMove): boolean => {
+    console.log('[LUDO] applyExternalMove called (stub):', move);
+    return true;
   }, []);
 
-  // Eliminate a player (forfeit) - removes their tokens and skips their turns
+  // Eliminate player - backwards compatible
   const eliminatePlayer = useCallback((playerIndex: number) => {
-    console.log(`[LUDO ENGINE] Eliminating player ${playerIndex}`);
-    
-    // Add to eliminated set
-    setEliminatedPlayers(prev => {
-      const newSet = new Set(prev);
-      newSet.add(playerIndex);
-      return newSet;
-    });
-    
-    // Remove all tokens from the board (send to position -2 = eliminated)
-    setPlayers(prev => prev.map((p, pIdx) => {
-      if (pIdx === playerIndex) {
-        return {
-          ...p,
-          tokens: p.tokens.map(t => ({ ...t, position: -2 })) // -2 = eliminated (different from -1 home base)
-        };
-      }
-      return p;
-    }));
-    
-    // If it was this player's turn, advance to next
-    if (currentPlayerIndexRef.current === playerIndex) {
-      setCurrentPlayerIndex(prev => {
-        let next = (prev + 1) % 4;
-        let attempts = 0;
-        const eliminated = new Set(eliminatedPlayersRef.current);
-        eliminated.add(playerIndex);
-        while (eliminated.has(next) && attempts < 4) {
-          next = (next + 1) % 4;
-          attempts++;
-        }
-        return next;
-      });
-      setDiceValue(null);
-      setMovableTokens([]);
-      setTurnSignal(prev => prev + 1);
+    setEliminatedPlayers(prev => new Set([...prev, playerIndex]));
+  }, []);
+
+  // Clear capture event after animation
+  const clearCaptureEvent = useCallback(() => {
+    setCaptureEvent(null);
+  }, []);
+
+  // Reset the game
+  const resetGame = useCallback(() => {
+    // Clear any pending timeouts
+    if (animationRef.current) {
+      clearTimeout(animationRef.current);
+      animationRef.current = null;
     }
-    
-    // Check if only one player remains
-    setTimeout(() => {
-      const currentPlayers = playersRef.current;
-      const eliminated = new Set(eliminatedPlayersRef.current);
-      eliminated.add(playerIndex);
-      
-      const activePlayers = currentPlayers.filter((_, i) => !eliminated.has(i));
-      if (activePlayers.length === 1) {
-        setGameOver(activePlayers[0].color);
-        onSoundPlay?.('ludo_win');
-        onToast?.("Victory!", `${activePlayers[0].color} wins by elimination!`);
-      }
-    }, 100);
-  }, [onSoundPlay, onToast]);
+    if (diceIntervalRef.current) {
+      clearInterval(diceIntervalRef.current);
+      diceIntervalRef.current = null;
+    }
+
+    setPlayers(initializePlayers());
+    setCurrentPlayerIndex(0);
+    setPhase('WAITING_FOR_ROLL');
+    setDiceValue(null);
+    setMovableTokens([]);
+    setWinner(null);
+    setConsecutiveSixes(0);
+    setCaptureEvent(null);
+    setEliminatedPlayers(new Set());
+    setTurnSignal(0);
+    setGameId(prev => prev + 1);
+    moveCompleteCallbackRef.current = null;
+
+    console.log('[LUDO] Game reset');
+  }, []);
 
   // Cleanup on unmount
   useEffect(() => {
-    isMountedRef.current = true;
     return () => {
-      isMountedRef.current = false;
-      if (animationRef.current) {
-        clearTimeout(animationRef.current);
-        animationRef.current = null;
-      }
-      if (diceIntervalRef.current) {
-        clearInterval(diceIntervalRef.current);
-        diceIntervalRef.current = null;
-      }
+      if (animationRef.current) clearTimeout(animationRef.current);
+      if (diceIntervalRef.current) clearInterval(diceIntervalRef.current);
     };
-  }, []);
-
-  // Clear capture event after animation completes
-  const clearCaptureEvent = useCallback(() => {
-    setCaptureEvent(null);
   }, []);
 
   return {
@@ -614,32 +434,33 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
     players,
     currentPlayerIndex,
     currentPlayer,
+    phase,
     diceValue,
-    isRolling,
-    gameOver,
     movableTokens,
-    isAnimating,
-    turnSignal,
+    winner,
     captureEvent,
+    gameId,
+    
+    // Backwards compatibility exports
+    turnSignal,
     eliminatedPlayers,
-    gameSessionId,
+    gameOver: winner, // Alias
+    isRolling: phase === 'ROLLING',
+    isAnimating: phase === 'ANIMATING',
     
     // Actions
     rollDice,
+    selectToken,
     executeMove,
     applyExternalMove,
     advanceTurn,
     resetGame,
-    getMovableTokens,
-    calculateEndPosition,
-    clearCaptureEvent,
     eliminatePlayer,
+    clearCaptureEvent,
     
-    // Setters for external control
-    setCurrentPlayerIndex,
+    // Setters for backwards compatibility
     setDiceValue,
     setMovableTokens,
-    setGameOver,
-    setEliminatedPlayers,
+    setCurrentPlayerIndex,
   };
 }
