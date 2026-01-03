@@ -349,10 +349,27 @@ serve(async (req) => {
         maxSupportedTransactionVersion: 0,
       });
       console.error("[forfeit-game] Failure logs:", tx?.meta?.logMessages);
+      
+      // Mark game session as needs_settlement for retry
+      await supabase
+        .from('game_sessions')
+        .update({ 
+          status: 'needs_settlement',
+          game_state: {
+            settlementError: JSON.stringify(confirmation.value.err),
+            intendedWinner: winnerWallet,
+            failedAt: new Date().toISOString(),
+            failedTxSignature: signature,
+          },
+          updated_at: new Date().toISOString()
+        })
+        .eq('room_pda', roomPda);
+      
       return new Response(
         JSON.stringify({
           success: false,
           error: "Payout transaction failed",
+          status: "needs_settlement",
           signature,
           txErr: confirmation.value.err,
           logs: tx?.meta?.logMessages || null,

@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, RotateCcw, Music, Music2, Volume2, VolumeX, Users, Wifi, WifiOff, RefreshCw } from "lucide-react";
 import { ForfeitConfirmDialog } from "@/components/ForfeitConfirmDialog";
+import { useForfeit } from "@/hooks/useForfeit";
 import { useSolanaRooms } from "@/hooks/useSolanaRooms";
 import { toast } from "@/hooks/use-toast";
 import { useSound } from "@/contexts/SoundContext";
@@ -69,6 +70,13 @@ const LudoGame = () => {
   
   // Solana rooms hook for forfeit/cancel
   const { cancelRoomByPda, forfeitGame } = useSolanaRooms();
+  
+  // For DiceRollStart leave (no payout, just cleanup)
+  const handleLeaveFromDice = useCallback(() => {
+    // Clear any local state and navigate
+    navigate("/room-list");
+    toast({ title: t("forfeit.leftRoom"), description: t("forfeit.returnedToLobby") });
+  }, [navigate, t]);
   
   // Refs for stable callback access
   const roomPlayersRef = useRef<string[]>([]);
@@ -795,6 +803,9 @@ const LudoGame = () => {
           player1Wallet={roomPlayers[0]}
           player2Wallet={roomPlayers[1]}
           onComplete={startRoll.handleRollComplete}
+          onLeave={handleLeaveFromDice}
+          isLeaving={false}
+          isForfeiting={false}
         />
       )}
       
