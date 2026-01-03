@@ -224,12 +224,13 @@ const TokenPiece = memo(({
     <button
       onClick={onClick}
       disabled={!isMovable || isEliminated}
-      className={`absolute transition-all duration-300 ease-out ${isMovable && !isEliminated ? 'cursor-pointer z-20' : 'z-10'}`}
+      className={`absolute ${isMovable && !isEliminated ? 'cursor-pointer z-20' : 'z-10'}`}
       style={{
         left: left - size / 2,
         top: top - size / 2,
         width: size,
         height: size,
+        transition: 'left 100ms ease-out, top 100ms ease-out',
         ...eliminatedStyle,
       }}
     >
