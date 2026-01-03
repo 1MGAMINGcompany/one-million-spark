@@ -73,7 +73,7 @@ const getWalletIcon = (walletName: string, adapterIcon?: string): string => {
 
 export function WalletButton() {
   const { t } = useTranslation();
-  const { connected, publicKey, disconnect, connecting, wallets, select, wallet } = useWallet();
+  const { connected, publicKey, disconnect, connecting, wallets, select, wallet, connect } = useWallet();
   const { connection } = useConnection();
   
   const [balance, setBalance] = useState<number | null>(null);
@@ -479,7 +479,29 @@ export function WalletButton() {
     );
     
     if (matchingWallet) {
-      handleSelectWallet(matchingWallet.adapter.name);
+      // CRITICAL: Call select() and connect() IMMEDIATELY in user gesture context
+      // No awaits/toasts/setTimeout BEFORE connect() to preserve Chrome's user gesture
+      try {
+        setConnectingWallet(matchingWallet.adapter.name);
+        setConnectTimeout(false);
+        setDialogOpen(false);
+        
+        select(matchingWallet.adapter.name);
+        connect(); // Call immediately, no awaits before this
+        
+        // Start timeout AFTER connect() is called
+        connectTimeoutRef.current = setTimeout(() => {
+          if (!connected) {
+            handleMWATimeout();
+          }
+        }, CONNECT_TIMEOUT_MS);
+      } catch (err) {
+        console.error('[Wallet] Connect failed:', err);
+        setConnectingWallet(null);
+        if (isMobile) {
+          setShowFallbackPanel(true);
+        }
+      }
     } else if (isMobile && !isInWalletBrowser) {
       // On mobile outside wallet browser, open deep link
       handleWalletDeepLink(walletId as 'phantom' | 'solflare' | 'backpack');
