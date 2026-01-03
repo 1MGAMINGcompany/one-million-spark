@@ -305,6 +305,17 @@ serve(async (req) => {
       data: instructionDataArray as any,
     });
 
+    // Log accounts before sending
+    console.log("[forfeit-game] submit_result accounts:", {
+      verifier: verifierKeypair.publicKey.toBase58(),
+      config: configPda.toBase58(),
+      room: roomPdaKey.toBase58(),
+      vault: vaultPda.toBase58(),
+      winner: winnerPubkey.toBase58(),
+      feeRecipient: FEE_RECIPIENT.toBase58(),
+      rpc: rpcUrl,
+    });
+
     // Build and sign transaction
     const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
     const transaction = new Transaction({
@@ -324,12 +335,31 @@ serve(async (req) => {
 
     console.log("[forfeit-game] Transaction sent:", signature);
 
-    // Wait for confirmation
-    await connection.confirmTransaction({
-      signature,
-      blockhash,
-      lastValidBlockHeight,
-    }, 'confirmed');
+    // Wait for confirmation + VERIFY success
+    const confirmation = await connection.confirmTransaction(
+      { signature, blockhash, lastValidBlockHeight },
+      "confirmed"
+    );
+
+    if (confirmation.value.err) {
+      console.error("[forfeit-game] Transaction FAILED:", confirmation.value.err);
+      // Fetch logs for debugging
+      const tx = await connection.getTransaction(signature, {
+        commitment: "confirmed",
+        maxSupportedTransactionVersion: 0,
+      });
+      console.error("[forfeit-game] Failure logs:", tx?.meta?.logMessages);
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: "Payout transaction failed",
+          signature,
+          txErr: confirmation.value.err,
+          logs: tx?.meta?.logMessages || null,
+        }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     console.log("[forfeit-game] Transaction confirmed:", signature);
 
