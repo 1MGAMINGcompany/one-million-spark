@@ -84,75 +84,92 @@ const CORNER_SYMBOLS: Record<PlayerColor, string> = {
  * Each arm is 6 cells wide (columns 6-8 or rows 6-8).
  * Track goes around the outside of each arm.
  */
+/**
+ * Standard Ludo 15x15 Grid Layout:
+ * 
+ * Rows 0-5: Top section (Ruby home at cols 9-14, top arm at cols 6-8)
+ * Rows 6-8: Middle horizontal band (left arm cols 0-5, center cols 6-8, right arm cols 9-14)
+ * Rows 9-14: Bottom section (Gold home at cols 0-5, Emerald home at cols 9-14, bottom arm at cols 6-8)
+ * 
+ * Track forms the OUTER EDGE of the cross shape, going clockwise.
+ */
 const TRACK_COORDS: Record<number, [number, number]> = {
-  // === GOLD'S SECTION (0-12): Start bottom-left, go UP then turn RIGHT ===
-  0: [6, 1],   // Gold START (row 6, col 1) - safe square
-  1: [5, 1],   // moving up
-  2: [4, 1],
-  3: [3, 1],
-  4: [2, 1],
-  5: [1, 1],
-  6: [0, 1],   // top-left corner area
-  7: [0, 2],   // moving right along top
-  8: [0, 3],
-  9: [0, 4],
-  10: [0, 5],
-  11: [0, 6],  // entering top arm
-  12: [1, 6],  // moving down into ruby's area
+  // === GOLD START: Left arm, middle row going RIGHT ===
+  0: [6, 0],   // Gold START - safe square (left edge, row 6)
+  1: [6, 1],
+  2: [6, 2],
+  3: [6, 3],
+  4: [6, 4],
+  5: [6, 5],   // End of left arm outer edge
   
-  // === RUBY'S SECTION (13-25): Start top, go DOWN then turn RIGHT ===
-  13: [2, 6],  // Ruby START (row 2, col 6) - safe square
-  14: [3, 6],  // moving down
-  15: [4, 6],
-  16: [5, 6],
-  17: [6, 6],  // center-left area
-  18: [6, 7],  // moving right through center
-  19: [6, 8],  
-  20: [6, 9],  // entering right arm
-  21: [6, 10],
-  22: [6, 11],
-  23: [6, 12],
-  24: [6, 13],
-  25: [7, 13], // turning down into sapphire's area
+  // === Turn UP into top arm ===
+  6: [5, 6],   // Turn corner
+  7: [4, 6],
+  8: [3, 6],
+  9: [2, 6],
+  10: [1, 6],
+  11: [0, 6],  // Top-left of top arm
+  12: [0, 7],  // Top edge of top arm
   
-  // === SAPPHIRE'S SECTION (26-38): Start top-right, go DOWN then turn LEFT ===
-  26: [8, 13], // Sapphire START (row 8, col 13) - safe square
-  27: [8, 12], // moving left
-  28: [8, 11],
-  29: [8, 10],
-  30: [8, 9],
-  31: [8, 8],  // center-right area
-  32: [9, 8],  // moving down
+  // === RUBY START: Top arm going DOWN ===
+  13: [0, 8],  // Ruby START - safe square (top edge, col 8)
+  14: [1, 8],
+  15: [2, 8],
+  16: [3, 8],
+  17: [4, 8],
+  18: [5, 8],  // End of top arm outer edge
+  
+  // === Turn RIGHT into right arm ===
+  19: [6, 9],  // Turn corner
+  20: [6, 10],
+  21: [6, 11],
+  22: [6, 12],
+  23: [6, 13],
+  24: [6, 14], // Right edge of right arm
+  25: [7, 14], // Middle of right edge
+  
+  // === SAPPHIRE START: Right arm going LEFT ===
+  26: [8, 14], // Sapphire START - safe square (right edge, row 8)
+  27: [8, 13],
+  28: [8, 12],
+  29: [8, 11],
+  30: [8, 10],
+  31: [8, 9],  // End of right arm outer edge
+  
+  // === Turn DOWN into bottom arm ===
+  32: [9, 8],  // Turn corner
   33: [10, 8],
   34: [11, 8],
   35: [12, 8],
   36: [13, 8],
-  37: [14, 8], // bottom-right corner area
-  38: [14, 7], // turning left into emerald's area
+  37: [14, 8], // Bottom-right of bottom arm
+  38: [14, 7], // Bottom edge of bottom arm
   
-  // === EMERALD'S SECTION (39-51): Start bottom, go UP then turn LEFT ===
-  39: [14, 6], // Emerald START (row 14, col 6) - safe square
-  40: [13, 6], // moving up
+  // === EMERALD START: Bottom arm going UP ===
+  39: [14, 6], // Emerald START - safe square (bottom edge, col 6)
+  40: [13, 6],
   41: [12, 6],
   42: [11, 6],
   43: [10, 6],
-  44: [9, 6],
-  45: [8, 6],  // center-bottom area
-  46: [8, 5],  // moving left
-  47: [8, 4],
-  48: [8, 3],
-  49: [8, 2],
-  50: [8, 1],
-  51: [7, 1],  // turning up to connect back to Gold's start area
+  44: [9, 6],  // End of bottom arm outer edge
+  
+  // === Turn LEFT back to Gold's area ===
+  45: [8, 5],  // Turn corner
+  46: [8, 4],
+  47: [8, 3],
+  48: [8, 2],
+  49: [8, 1],
+  50: [8, 0],  // Left edge bottom
+  51: [7, 0],  // Complete the circuit back toward Gold's start
 };
 
 // Home path coordinates (positions 56-61 in old format, 0-5 in new format)
 // These are the colored paths leading to the center (7,7)
 const HOME_PATH_COORDS: Record<PlayerColor, [number, number][]> = {
-  gold: [[7, 2], [7, 3], [7, 4], [7, 5], [7, 6], [7, 7]],     // enters from col 1, goes right
-  ruby: [[2, 7], [3, 7], [4, 7], [5, 7], [6, 7], [7, 7]],     // enters from row 1, goes down  
-  sapphire: [[7, 12], [7, 11], [7, 10], [7, 9], [7, 8], [7, 7]], // enters from col 13, goes left
-  emerald: [[12, 7], [11, 7], [10, 7], [9, 7], [8, 7], [7, 7]], // enters from row 13, goes up
+  gold: [[7, 1], [7, 2], [7, 3], [7, 4], [7, 5], [7, 6]],     // enters from left, goes right toward center
+  ruby: [[1, 7], [2, 7], [3, 7], [4, 7], [5, 7], [6, 7]],     // enters from top, goes down toward center
+  sapphire: [[7, 13], [7, 12], [7, 11], [7, 10], [7, 9], [7, 8]], // enters from right, goes left toward center
+  emerald: [[13, 7], [12, 7], [11, 7], [10, 7], [9, 7], [8, 7]], // enters from bottom, goes up toward center
 };
 
 // Home base token positions (position -1)
@@ -418,12 +435,12 @@ const LudoBoard = memo(({
     const cells: JSX.Element[] = [];
     const renderedCells = new Set<string>();
     
-    // Safe square positions (start positions)
+    // Safe square positions (start positions) - must match TRACK_COORDS positions 0, 13, 26, 39
     const safeSquares: Record<string, PlayerColor> = {
-      '6,1': 'gold',
-      '2,6': 'ruby',
-      '8,13': 'sapphire',
-      '14,6': 'emerald',
+      '6,0': 'gold',     // Position 0
+      '0,8': 'ruby',     // Position 13
+      '8,14': 'sapphire', // Position 26
+      '14,6': 'emerald', // Position 39
     };
     
     // Render all track cells
