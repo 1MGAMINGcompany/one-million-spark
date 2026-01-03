@@ -61,31 +61,32 @@ export interface GameState {
 }
 
 // Constants
-export const TRACK_SIZE = 56;           // Main track has 56 cells (0-55)
+export const TRACK_SIZE = 52;           // Main track has 52 cells (0-51)
 export const HOME_PATH_SIZE = 6;        // Each player's home path has 6 cells
 export const TOKENS_PER_PLAYER = 4;
 export const PLAYER_COLORS: PlayerColor[] = ['gold', 'ruby', 'sapphire', 'emerald'];
 
 // Starting positions on main track (where tokens enter from BASE)
+// These match the START squares in TRACK_COORDS
 export const START_POSITIONS: Record<PlayerColor, number> = {
-  gold: 0,
-  ruby: 14,
-  sapphire: 28,
-  emerald: 42,
+  gold: 0,       // Position 0: [6, 1]
+  ruby: 13,      // Position 13: [1, 8]
+  sapphire: 26,  // Position 26: [8, 13]
+  emerald: 39,   // Position 39: [13, 6]
 };
 
 // Track position where player's tokens exit to HOME_PATH
-// Each player travels 55 cells on track before entering home path
-// (one cell before their start position in the circuit)
+// Each player must travel 51 cells on track before entering home path
+// (this is the last track position before their start, where they turn into home path)
 export const HOME_ENTRY_POSITIONS: Record<PlayerColor, number> = {
-  gold: 54,      // After position 54, gold enters home path (55 is before 0)
-  ruby: 12,      // After position 12, ruby enters home path
-  sapphire: 26,  // After position 26, sapphire enters home path  
-  emerald: 40,   // After position 40, emerald enters home path
+  gold: 51,      // After position 51, gold enters home path (position 51 is [6,0], home entry from left)
+  ruby: 12,      // After position 12, ruby enters home path (position 12 is [0,8], home entry from top)  
+  sapphire: 25,  // After position 25, sapphire enters home path (position 25 is [8,14], home entry from right)
+  emerald: 38,   // After position 38, emerald enters home path (position 38 is [14,6], home entry from bottom)
 };
 
 // Safe squares - cannot be captured here (starting positions)
-export const SAFE_SQUARES: number[] = [0, 14, 28, 42];
+export const SAFE_SQUARES: number[] = [0, 13, 26, 39];
 
 // Create initial player state
 export function createPlayer(color: PlayerColor, wallet: string, isAI: boolean): Player {
