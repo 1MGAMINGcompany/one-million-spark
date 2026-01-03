@@ -1,13 +1,17 @@
 /**
  * Hook to manage deterministic dice roll for starting player selection
  * 
- * For ranked games: Uses cryptographic signatures from both players to compute
- * a deterministic dice roll via the compute_start_roll RPC.
+ * Works for BOTH casual and ranked games - all multiplayer games use dice roll
+ * to fairly determine who starts first.
  * 
- * For casual games: Uses on-chain player order (creator goes first).
+ * Flow:
+ * 1. When both players connect → ensure_game_session creates the session
+ * 2. Show dice roll UI → either player clicks to trigger compute_start_roll
+ * 3. Result stored in game_sessions, both clients see same result
+ * 4. For ranked games: also show accept rules modal after dice roll
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
 interface StartRollResult {
@@ -19,12 +23,14 @@ interface StartRollResult {
 
 interface UseStartRollOptions {
   roomPda: string | undefined;
+  gameType: string;
   myWallet: string | undefined;
   isRanked: boolean;
+  /** Array of player wallet addresses */
   roomPlayers: string[];
-  /** Whether both players are ready (ranked games) */
-  bothReady: boolean;
-  /** Initial color from on-chain order */
+  /** Whether both players are connected with real wallets */
+  hasTwoRealPlayers: boolean;
+  /** Initial color from on-chain order (fallback) */
   initialColor: "w" | "b";
 }
 
@@ -41,38 +47,78 @@ interface UseStartRollResult {
   rollResult: StartRollResult | null;
   /** Handle completion of the dice roll UI */
   handleRollComplete: (startingWallet: string) => void;
+  /** Whether session is being created */
+  isCreatingSession: boolean;
 }
 
 export function useStartRoll(options: UseStartRollOptions): UseStartRollResult {
-  const { roomPda, myWallet, isRanked, roomPlayers, bothReady, initialColor } = options;
+  const { roomPda, gameType, myWallet, isRanked, roomPlayers, hasTwoRealPlayers, initialColor } = options;
 
   const [isFinalized, setIsFinalized] = useState(false);
   const [showDiceRoll, setShowDiceRoll] = useState(false);
   const [myColor, setMyColor] = useState<"w" | "b">(initialColor);
   const [startingWallet, setStartingWallet] = useState<string | null>(null);
   const [rollResult, setRollResult] = useState<StartRollResult | null>(null);
+  const [isCreatingSession, setIsCreatingSession] = useState(false);
+  
+  const sessionCreatedRef = useRef(false);
 
-  // Update color from initial when it changes (on-chain fetch)
+  // Update color from initial when it changes (before dice roll)
   useEffect(() => {
     if (!isFinalized) {
       setMyColor(initialColor);
     }
   }, [initialColor, isFinalized]);
 
-  // Check/set start roll based on game mode
+  // Create game session when both players connect
   useEffect(() => {
-    if (!roomPda || isFinalized) return;
+    if (!roomPda || !hasTwoRealPlayers || sessionCreatedRef.current) return;
+    if (roomPlayers.length < 2) return;
+    
+    const player1 = roomPlayers[0];
+    const player2 = roomPlayers[1];
+    
+    // Validate both are real wallets
+    if (!player1 || !player2) return;
+    if (player1.startsWith("waiting-") || player1.startsWith("error-")) return;
+    if (player2.startsWith("waiting-") || player2.startsWith("error-")) return;
 
-    // Casual games: no dice roll, use on-chain order
-    if (!isRanked && roomPlayers.length >= 2 && myWallet) {
-      setIsFinalized(true);
-      setStartingWallet(roomPlayers[0]);
-      console.log("[useStartRoll] Casual game - using on-chain player order");
-      return;
-    }
+    const createSession = async () => {
+      setIsCreatingSession(true);
+      sessionCreatedRef.current = true;
+      
+      try {
+        console.log("[useStartRoll] Creating game session for both players", { roomPda, player1, player2 });
+        
+        const { error } = await supabase.rpc("ensure_game_session", {
+          p_room_pda: roomPda,
+          p_game_type: gameType,
+          p_player1_wallet: player1,
+          p_player2_wallet: player2,
+          p_mode: isRanked ? "ranked" : "casual",
+        });
 
-    // Ranked games: wait for both players to be ready
-    if (!isRanked || !bothReady) return;
+        if (error) {
+          console.error("[useStartRoll] Failed to ensure game session:", error);
+          sessionCreatedRef.current = false; // Allow retry
+        } else {
+          console.log("[useStartRoll] Game session created/ensured successfully");
+        }
+      } catch (err) {
+        console.error("[useStartRoll] Error ensuring game session:", err);
+        sessionCreatedRef.current = false;
+      } finally {
+        setIsCreatingSession(false);
+      }
+    };
+
+    createSession();
+  }, [roomPda, gameType, hasTwoRealPlayers, roomPlayers, isRanked]);
+
+  // Check for existing roll OR show dice roll UI when session is ready
+  useEffect(() => {
+    if (!roomPda || isFinalized || !hasTwoRealPlayers) return;
+    if (isCreatingSession) return;
 
     const checkStartRoll = async () => {
       try {
@@ -91,9 +137,17 @@ export function useStartRoll(options: UseStartRollOptions): UseStartRollResult {
           setRollResult(session.start_roll as unknown as StartRollResult);
           setIsFinalized(true);
           console.log("[useStartRoll] Start roll already finalized. Starter:", starter);
-        } else {
-          // Need to show dice roll
+        } else if (session) {
+          // Session exists but not finalized - show dice roll
+          console.log("[useStartRoll] Session exists, showing dice roll UI");
           setShowDiceRoll(true);
+        } else {
+          // Session doesn't exist yet - wait for it to be created
+          console.log("[useStartRoll] Session not found yet, waiting...");
+          // Re-check after a short delay
+          setTimeout(() => {
+            setShowDiceRoll(true); // Show anyway after delay
+          }, 1000);
         }
       } catch (err) {
         console.error("[useStartRoll] Failed to check start roll:", err);
@@ -102,7 +156,38 @@ export function useStartRoll(options: UseStartRollOptions): UseStartRollResult {
     };
 
     checkStartRoll();
-  }, [roomPda, bothReady, isFinalized, myWallet, isRanked, roomPlayers.length]);
+  }, [roomPda, hasTwoRealPlayers, isFinalized, myWallet, isCreatingSession]);
+
+  // Poll for roll result (in case other player triggered it)
+  useEffect(() => {
+    if (!roomPda || isFinalized || !showDiceRoll) return;
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const { data: session } = await supabase
+          .from("game_sessions")
+          .select("start_roll_finalized, start_roll, starting_player_wallet")
+          .eq("room_pda", roomPda)
+          .maybeSingle();
+
+        if (session?.start_roll_finalized && session.starting_player_wallet) {
+          const starter = session.starting_player_wallet;
+          const isStarter = starter.toLowerCase() === myWallet?.toLowerCase();
+          setMyColor(isStarter ? "w" : "b");
+          setStartingWallet(starter);
+          setRollResult(session.start_roll as unknown as StartRollResult);
+          setIsFinalized(true);
+          setShowDiceRoll(false);
+          console.log("[useStartRoll] Poll found finalized roll. Starter:", starter);
+          clearInterval(pollInterval);
+        }
+      } catch (err) {
+        // Silent fail on poll
+      }
+    }, 2000);
+
+    return () => clearInterval(pollInterval);
+  }, [roomPda, isFinalized, showDiceRoll, myWallet]);
 
   const handleRollComplete = useCallback((starter: string) => {
     const isStarter = starter.toLowerCase() === myWallet?.toLowerCase();
@@ -120,5 +205,6 @@ export function useStartRoll(options: UseStartRollOptions): UseStartRollResult {
     startingWallet,
     rollResult,
     handleRollComplete,
+    isCreatingSession,
   };
 }
