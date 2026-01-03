@@ -688,7 +688,8 @@ export function useSolanaRooms() {
         return { ok: false, reason: errorMsg };
       }
 
-      console.log("[forfeitGame] Forfeit successful:", data);
+      console.log("[forfeitGame] Forfeit response:", data);
+      if (data?.signature) console.log("[forfeitGame] Payout signature:", data.signature);
       
       if (data.action === 'eliminated') {
         toast({
@@ -698,7 +699,9 @@ export function useSolanaRooms() {
       } else {
         toast({
           title: "Match forfeited",
-          description: "Your opponent wins the match.",
+          description: data?.signature 
+            ? `Opponent wins. Payout tx: ${data.signature.slice(0, 12)}...` 
+            : "Opponent wins.",
         });
       }
 
