@@ -214,6 +214,16 @@ const LudoAI = () => {
   const lastProcessedTurnRef = useRef<string | null>(null);
   const gameSessionRef = useRef(gameSessionId);
   
+  // Refs to avoid stale closures - CRITICAL for bonus turns after rolling 6
+  const turnSignalRef = useRef(turnSignal);
+  const currentPlayerIndexRef = useRef(currentPlayerIndex);
+  const gameOverRef = useRef(gameOver);
+  
+  // Keep refs in sync with state
+  useEffect(() => { turnSignalRef.current = turnSignal; }, [turnSignal]);
+  useEffect(() => { currentPlayerIndexRef.current = currentPlayerIndex; }, [currentPlayerIndex]);
+  useEffect(() => { gameOverRef.current = gameOver; }, [gameOver]);
+  
   // Track game session changes to reset refs
   useEffect(() => {
     if (gameSessionId !== gameSessionRef.current) {
@@ -273,19 +283,23 @@ const LudoAI = () => {
         return;
       }
       
-      // Re-check conditions after debounce using fresh reads
-      if (gameOver || diceValue !== null || isRolling || isAnimating) {
+      // Re-check conditions after debounce using fresh refs to avoid stale closures
+      if (gameOverRef.current || diceValue !== null || isRolling || isAnimating) {
         return;
       }
       
+      // Read CURRENT values from refs, not stale closure values
+      const currentPlayerIdxNow = currentPlayerIndexRef.current;
+      const currentTurnSignalNow = turnSignalRef.current;
+      
       // Check player is still AI (game might have been reset)
-      const currentPlayerNow = players[currentPlayerIndex];
+      const currentPlayerNow = players[currentPlayerIdxNow];
       if (!currentPlayerNow?.isAI) {
         return;
       }
       
-      // Simplified turn key: player index + turn signal is sufficient
-      const turnKey = `${capturedSession}-${currentPlayerIndex}-${turnSignal}`;
+      // Use ref values for turn key to avoid stale closure after bonus turns
+      const turnKey = `${capturedSession}-${currentPlayerIdxNow}-${currentTurnSignalNow}`;
       
       // Check and set turn key atomically inside the debounce
       if (lastProcessedTurnRef.current === turnKey) {
@@ -302,7 +316,7 @@ const LudoAI = () => {
         currentTurnId === aiTurnIdRef.current && 
         capturedSession === gameSessionRef.current;
       
-      console.log(`[LUDO AI] Starting AI turn: session=${capturedSession}, player=${currentPlayerIndex}, turnSignal=${turnSignal}, turnId=${currentTurnId}`);
+      console.log(`[LUDO AI] Starting AI turn: session=${capturedSession}, player=${currentPlayerIdxNow}, turnSignal=${currentTurnSignalNow}, turnId=${currentTurnId}`);
       
       // Safety timeout - force advance turn if AI gets stuck for 10 seconds
       safetyTimeoutRef.current = setTimeout(() => {
