@@ -93,6 +93,7 @@ export function WalletButton() {
   const isIOS = getIsIOS();
   const isInWalletBrowser = getIsInWalletBrowser();
 
+
   // Clear timeout on unmount or when connected
   useEffect(() => {
     if (connected && connectTimeoutRef.current) {
@@ -145,11 +146,14 @@ export function WalletButton() {
     }
   }, [connected, publicKey, fetchBalance]);
 
-  // Handle MWA timeout - show fallback panel
+  // Handle MWA timeout - show fallback panel (MOBILE ONLY)
   const handleMWATimeout = useCallback(() => {
     setConnectTimeout(true);
-    setShowFallbackPanel(true);
-  }, []);
+    // Only show mobile fallback panel on mobile - desktop gets different UI
+    if (isMobile) {
+      setShowFallbackPanel(true);
+    }
+  }, [isMobile]);
 
   const handleSelectWallet = async (walletName: string) => {
     const selectedWallet = wallets.find(w => w.adapter.name === walletName);
@@ -201,7 +205,10 @@ export function WalletButton() {
         }, CONNECT_TIMEOUT_MS);
       } catch (err) {
         console.error('[Wallet] Retry connect error:', err);
-        setShowFallbackPanel(true);
+        // Only show mobile fallback on mobile
+        if (isMobile) {
+          setShowFallbackPanel(true);
+        }
       }
     }
   };
@@ -310,8 +317,22 @@ export function WalletButton() {
     return 0;
   });
 
-  // Show fallback panel
-  if (showFallbackPanel) {
+  // Debug logging for wallet detection
+  useEffect(() => {
+    const win = window as any;
+    console.log('[WalletDetect]', {
+      isMobile,
+      isInWalletBrowser,
+      hasWindowSolana: !!win.solana,
+      isPhantom: !!win.phantom?.solana?.isPhantom,
+      isSolflare: !!win.solflare?.isSolflare,
+      walletsCount: wallets.length,
+      sortedWalletsCount: sortedWallets.length,
+    });
+  }, [isMobile, isInWalletBrowser, wallets.length, sortedWallets.length]);
+
+  // Show fallback panel - MOBILE ONLY for MobileWalletFallback
+  if (showFallbackPanel && isMobile) {
     return (
       <MobileWalletFallback 
         onClose={() => {
@@ -324,6 +345,54 @@ export function WalletButton() {
         isIOS={isIOS}
         selectedWallet={selectedWalletType}
       />
+    );
+  }
+
+  // DESKTOP fallback: show install/unlock prompt when connection failed
+  if (showFallbackPanel && !isMobile) {
+    const hasAnyWallet = sortedWallets.length > 0 || !!(window as any).solana;
+    return (
+      <div className="flex flex-col items-center gap-3 p-4 bg-card rounded-lg border max-w-xs">
+        <AlertCircle className="text-amber-500" size={24} />
+        {hasAnyWallet ? (
+          <>
+            <p className="text-sm text-muted-foreground text-center">
+              Connection failed. Please unlock your wallet extension and try again.
+            </p>
+            <Button size="sm" variant="default" onClick={handleRetryConnect} className="gap-2">
+              <RefreshCw size={14} />
+              Retry Connection
+            </Button>
+          </>
+        ) : (
+          <>
+            <p className="text-sm text-muted-foreground text-center">
+              No Solana wallet detected. Install a browser extension to continue.
+            </p>
+            <Button 
+              size="sm" 
+              variant="default" 
+              onClick={() => window.open('https://phantom.app/download', '_blank')}
+              className="gap-2"
+            >
+              <ExternalLink size={14} />
+              Install Phantom
+            </Button>
+          </>
+        )}
+        <Button 
+          size="sm" 
+          variant="ghost" 
+          onClick={() => {
+            setShowFallbackPanel(false);
+            setConnectTimeout(false);
+            setConnectingWallet(null);
+            setSelectedWalletType(null);
+          }}
+        >
+          Cancel
+        </Button>
+      </div>
     );
   }
 
