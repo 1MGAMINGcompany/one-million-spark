@@ -2,6 +2,7 @@
  * Ludo AI Page - Single Player vs Computer
  * 
  * Uses the new pure LudoEngine for deterministic game logic.
+ * Features step-by-step token animation.
  */
 
 import { useState, useCallback, useEffect, useRef } from "react";
@@ -14,6 +15,7 @@ import { useTranslation } from "react-i18next";
 import GoldConfettiExplosion from "@/components/GoldConfettiExplosion";
 
 import { useLudoGame } from "@/hooks/useLudoGame";
+import { useLudoStepAnimation } from "@/hooks/useLudoStepAnimation";
 import { Difficulty } from "@/lib/ludo/ai";
 import { PlayerColor } from "@/lib/ludo/types";
 import LudoBoard from "@/components/ludo/LudoBoard";
@@ -37,6 +39,21 @@ const LudoAI = () => {
     tokenId?: number;
     fromPosition?: number;
   } | null>(null);
+
+  // Step animation hook
+  const { 
+    animation: stepAnimation, 
+    startAnimation, 
+    getAnimatedPosition,
+    clearAnimation,
+    isAnimating: isStepAnimating,
+  } = useLudoStepAnimation({
+    stepDuration: 120, // 120ms per step for smooth movement
+    onComplete: () => {
+      // Animation finished, advance turn
+      onMoveAnimationComplete();
+    },
+  });
 
   // Game hook with new engine
   const {
@@ -63,14 +80,16 @@ const LudoAI = () => {
     onDiceRolled: (value) => {
       play("dice");
     },
+    onTokenMoved: (move) => {
+      // Start step animation when a token moves
+      startAnimation(gameState.currentPlayerIndex, move.tokenIndex, move);
+      play("move");
+    },
     onCapture: (captured) => {
       const capturedPlayer = gameState.players[captured.playerIndex];
       
       // Set capture event for animation
       if (animatingMove?.move.toPosition !== null && animatingMove?.move.toState === 'TRACK') {
-        // Get board position for animation
-        const trackPos = animatingMove.move.toPosition;
-        // Simple mapping - the LudoBoard will handle actual coordinates
         setCaptureEvent({
           capturedColor: capturedPlayer.color,
           capturingColor: currentPlayer.color,
@@ -100,15 +119,17 @@ const LudoAI = () => {
     },
   });
 
-  // Handle animation complete - auto-advance turn after short delay
+  // Don't auto-advance turn anymore - step animation handles it
+  // Legacy: Keep animatingMove in case step animation doesn't trigger
   useEffect(() => {
-    if (animatingMove) {
+    if (animatingMove && !isStepAnimating) {
+      // Fallback: if step animation didn't start, advance turn after delay
       const timeout = setTimeout(() => {
         onMoveAnimationComplete();
       }, 300);
       return () => clearTimeout(timeout);
     }
-  }, [animatingMove, onMoveAnimationComplete]);
+  }, [animatingMove, isStepAnimating, onMoveAnimationComplete]);
 
   // ============ BACKGROUND MUSIC ============
   useEffect(() => {
@@ -166,20 +187,27 @@ const LudoAI = () => {
     }
 
     selectToken(tokenIndex);
-    play("move");
-  }, [gameState.currentPlayerIndex, currentPlayer.isAI, canMove, movableTokenIndices, selectToken, play, t]);
+  }, [gameState.currentPlayerIndex, currentPlayer.isAI, canMove, movableTokenIndices, selectToken, t]);
 
-  // Convert game state to LudoBoard format
-  const boardPlayers = gameState.players.map(player => ({
+  // Convert game state to LudoBoard format with animated positions
+  const boardPlayers = gameState.players.map((player, playerIndex) => ({
     color: player.color,
-    tokens: player.tokens.map(token => ({
-      position: token.state === 'BASE' ? -1 :
+    tokens: player.tokens.map((token, tokenIndex) => {
+      // Calculate base position
+      let basePosition = token.state === 'BASE' ? -1 :
                 token.state === 'FINISHED' ? 62 :
                 token.state === 'HOME_PATH' ? 56 + (token.position ?? 0) :
-                token.position ?? 0,
-      color: player.color,
-      id: token.id,
-    })),
+                token.position ?? 0;
+      
+      // Apply step animation if this token is animating
+      const animatedPosition = getAnimatedPosition(playerIndex, tokenIndex, basePosition);
+      
+      return {
+        position: animatedPosition,
+        color: player.color,
+        id: token.id,
+      };
+    }),
     isAI: player.isAI,
     startPosition: 0,
     homeColumn: 55,
