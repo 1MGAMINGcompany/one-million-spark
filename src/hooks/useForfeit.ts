@@ -1,18 +1,17 @@
 /**
- * useForfeit hook - centralized forfeit/leave logic
+ * useForfeit hook - centralized forfeit/leave logic with GUARANTEED exit
  * 
  * Provides two actions:
  * - forfeit(): Calls on-chain finalize_room with winner=opponent, then cleanup
  * - leave(): Just cleanup and navigate out (no chain call)
  * 
- * Both actions ALWAYS cleanup (WebRTC, Supabase, local state) and navigate to /room-list,
- * even if transactions fail.
+ * CRITICAL: Both actions ALWAYS navigate to /room-list within 1 second,
+ * even if transactions fail. Uses idempotent forceExit() pattern.
  */
 
 import { useState, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useConnection, useWallet as useWalletAdapter } from "@solana/wallet-adapter-react";
-import { PublicKey } from "@solana/web3.js";
 import { finalizeRoom } from "@/lib/finalize-room";
 import { toast } from "@/hooks/use-toast";
 import { useTranslation } from "react-i18next";
@@ -23,7 +22,7 @@ export interface UseForfeitOptions {
   opponentWallet: string | null;
   stakeLamports?: number;
   gameType?: string;
-  // Cleanup callbacks - called in finally block
+  // Cleanup callbacks - called in forceExit
   onCleanupWebRTC?: () => void;
   onCleanupSupabase?: () => void;
   onCleanupLocalState?: () => void;
@@ -35,6 +34,16 @@ export interface UseForfeitReturn {
   isForfeiting: boolean;
   isLeaving: boolean;
 }
+
+// Generic room storage keys that should always be cleared
+const GENERIC_ROOM_KEYS = [
+  'activeRoomPda',
+  'userActiveRoom', 
+  'selectedRoomPda',
+  'currentRoom',
+  'roomPda',
+  'inGameRoomPda',
+];
 
 export function useForfeit({
   roomPda,
@@ -54,49 +63,92 @@ export function useForfeit({
   const [isForfeiting, setIsForfeiting] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
   
-  // Prevent double-execution
+  // Idempotent exit tracking
+  const exitedRef = useRef(false);
   const executingRef = useRef(false);
+  const forceExitTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   /**
-   * Shared cleanup logic - ALWAYS runs, even on error
+   * forceExit() - Idempotent cleanup and navigation
+   * Safe to call multiple times - only executes once
    */
-  const performCleanup = useCallback(() => {
-    console.log("[useForfeit] Performing cleanup...");
+  const forceExit = useCallback(() => {
+    if (exitedRef.current) {
+      console.log("[useForfeit] forceExit already executed, skipping");
+      return;
+    }
+    exitedRef.current = true;
     
+    console.log("[useForfeit] forceExit executing...");
+    
+    // 1. Close WebRTC connections (silent fail)
     try {
-      // Close WebRTC connections
       onCleanupWebRTC?.();
     } catch (e) {
       console.warn("[useForfeit] WebRTC cleanup error:", e);
     }
     
+    // 2. Unsubscribe Supabase channels (silent fail)
     try {
-      // Unsubscribe from Supabase channels
       onCleanupSupabase?.();
     } catch (e) {
       console.warn("[useForfeit] Supabase cleanup error:", e);
     }
     
-    try {
-      // Clear local room state
-      onCleanupLocalState?.();
+    // 3. Clear room-specific storage keys
+    if (roomPda) {
+      // Session storage
+      const sessionKeys = [
+        `room-${roomPda}`,
+        `game-state-${roomPda}`,
+        `dice-roll-${roomPda}`,
+      ];
+      sessionKeys.forEach(key => {
+        try { sessionStorage.removeItem(key); } catch (e) { /* silent */ }
+      });
       
-      // Clear any room-specific session storage
-      if (roomPda) {
-        sessionStorage.removeItem(`room-${roomPda}`);
-        sessionStorage.removeItem(`game-state-${roomPda}`);
-        sessionStorage.removeItem(`dice-roll-${roomPda}`);
-      }
+      // Local storage - specific keys
+      const localKeys = [
+        `room_mode_${roomPda}`,
+        `rematch_${roomPda}`,
+        `finalSeed:${roomPda}`,
+      ];
+      localKeys.forEach(key => {
+        try { localStorage.removeItem(key); } catch (e) { /* silent */ }
+      });
+      
+      // Local storage - pattern match seedSecret:*
+      try {
+        Object.keys(localStorage).forEach(key => {
+          if (key.startsWith(`seedSecret:${roomPda}`)) {
+            localStorage.removeItem(key);
+          }
+        });
+      } catch (e) { /* silent */ }
+    }
+    
+    // 4. Clear generic active room keys from both storages
+    GENERIC_ROOM_KEYS.forEach(key => {
+      try { localStorage.removeItem(key); } catch (e) { /* silent */ }
+      try { sessionStorage.removeItem(key); } catch (e) { /* silent */ }
+    });
+    
+    // 5. Custom cleanup callback (silent fail)
+    try {
+      onCleanupLocalState?.();
     } catch (e) {
       console.warn("[useForfeit] Local state cleanup error:", e);
     }
     
-    console.log("[useForfeit] Cleanup complete");
-  }, [roomPda, onCleanupWebRTC, onCleanupSupabase, onCleanupLocalState]);
+    console.log("[useForfeit] forceExit complete, navigating to /room-list");
+    
+    // 6. Navigate with replace (no back button to stuck state)
+    navigate("/room-list", { replace: true });
+  }, [roomPda, navigate, onCleanupWebRTC, onCleanupSupabase, onCleanupLocalState]);
 
   /**
    * forfeit() - On-chain payout to opponent via finalize_room
-   * User signs the transaction (no server verifier key needed)
+   * GUARANTEED: Navigates within 1 second no matter what
    */
   const forfeit = useCallback(async () => {
     if (executingRef.current) {
@@ -104,41 +156,44 @@ export function useForfeit({
       return;
     }
     
-    if (!roomPda || !myWallet || !opponentWallet) {
-      console.error("[useForfeit] Missing required params:", { roomPda, myWallet, opponentWallet });
+    executingRef.current = true;
+    exitedRef.current = false; // Reset for new forfeit attempt
+    setIsForfeiting(true);
+    
+    // START 1-SECOND GUARANTEED EXIT TIMER
+    forceExitTimeoutRef.current = setTimeout(() => {
+      console.log("[useForfeit] Force exit after 1000ms timeout");
+      forceExit();
       toast({
-        title: t("common.error"),
-        description: "Missing room or player information",
+        title: t("forfeit.exitedMatch", "Exited match"),
+        description: t("forfeit.settlementPending", "Settlement may be pending"),
         variant: "destructive",
       });
-      // Still cleanup and navigate
-      performCleanup();
-      navigate("/room-list");
-      return;
-    }
-    
-    executingRef.current = true;
-    setIsForfeiting(true);
+    }, 1000);
     
     let success = false;
     let signature: string | undefined;
     
     try {
+      if (!roomPda || !myWallet || !opponentWallet) {
+        console.error("[useForfeit] Missing required params:", { roomPda, myWallet, opponentWallet });
+        return; // forceExit will happen via timeout or finally
+      }
+      
       console.log("[useForfeit] Starting forfeit:", {
         roomPda: roomPda.slice(0, 8) + "...",
         winner: opponentWallet.slice(0, 8) + "...",
       });
       
-      // Call on-chain finalize_room with winner = opponent
-      // User signs this transaction
       if (!publicKey || !sendTransaction) {
-        throw new Error("Wallet not connected");
+        console.warn("[useForfeit] Wallet not connected");
+        return;
       }
       
       const result = await finalizeRoom(
         connection,
         roomPda,
-        opponentWallet, // Winner is opponent
+        opponentWallet,
         sendTransaction,
         publicKey
       );
@@ -152,29 +207,25 @@ export function useForfeit({
       }
     } catch (err: any) {
       console.error("[useForfeit] Forfeit error:", err);
-      // Don't throw - we still want to cleanup and navigate
     } finally {
-      // ALWAYS cleanup and navigate, even on error
-      performCleanup();
+      // Clear the timeout (may have already fired - that's OK)
+      if (forceExitTimeoutRef.current) {
+        clearTimeout(forceExitTimeoutRef.current);
+        forceExitTimeoutRef.current = null;
+      }
       
-      // Show appropriate toast
-      if (success) {
+      // Show appropriate toast if we succeeded (before forceExit navigates away)
+      if (success && !exitedRef.current) {
         toast({
-          title: t("forfeit.success"),
+          title: t("forfeit.success", "Game forfeited"),
           description: signature 
-            ? `${t("forfeit.opponentWins")} Tx: ${signature.slice(0, 12)}...`
-            : t("forfeit.opponentWins"),
-        });
-      } else {
-        toast({
-          title: t("forfeit.exitedMatch"),
-          description: t("forfeit.settlementPending"),
-          variant: "destructive",
+            ? `${t("forfeit.opponentWins", "Opponent wins")} Tx: ${signature.slice(0, 12)}...`
+            : t("forfeit.opponentWins", "Opponent wins"),
         });
       }
       
-      // Navigate to room list
-      navigate("/room-list");
+      // Call forceExit (idempotent - safe even if timeout already fired)
+      forceExit();
       
       setIsForfeiting(false);
       executingRef.current = false;
@@ -186,14 +237,13 @@ export function useForfeit({
     connection,
     sendTransaction,
     publicKey,
-    performCleanup,
-    navigate,
+    forceExit,
     t,
   ]);
 
   /**
    * leave() - Just cleanup and navigate out (no chain call)
-   * Used when game hasn't started or for casual exit
+   * GUARANTEED: Navigates within 1 second no matter what
    */
   const leave = useCallback(() => {
     if (executingRef.current) {
@@ -202,22 +252,36 @@ export function useForfeit({
     }
     
     executingRef.current = true;
+    exitedRef.current = false; // Reset for new leave attempt
     setIsLeaving(true);
+    
+    // START 1-SECOND GUARANTEED EXIT TIMER
+    forceExitTimeoutRef.current = setTimeout(() => {
+      console.log("[useForfeit] Force exit (leave) after 1000ms timeout");
+      forceExit();
+    }, 1000);
     
     try {
       console.log("[useForfeit] Leaving room...");
-      performCleanup();
       
       toast({
-        title: t("forfeit.leftRoom"),
-        description: t("forfeit.returnedToLobby"),
+        title: t("forfeit.leftRoom", "Left room"),
+        description: t("forfeit.returnedToLobby", "Returned to lobby"),
       });
     } finally {
-      navigate("/room-list");
+      // Clear the timeout
+      if (forceExitTimeoutRef.current) {
+        clearTimeout(forceExitTimeoutRef.current);
+        forceExitTimeoutRef.current = null;
+      }
+      
+      // Call forceExit (idempotent)
+      forceExit();
+      
       setIsLeaving(false);
       executingRef.current = false;
     }
-  }, [performCleanup, navigate, t]);
+  }, [forceExit, t]);
 
   return {
     forfeit,

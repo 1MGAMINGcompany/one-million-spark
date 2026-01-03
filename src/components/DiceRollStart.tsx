@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { Dice5, Loader2, LogOut, Flag } from "lucide-react";
+import { Dice5, Loader2, LogOut, Flag, RefreshCw, Wand2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useTranslation } from "react-i18next";
@@ -127,6 +127,8 @@ export function DiceRollStart({
   const [result, setResult] = useState<StartRollResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showFallback, setShowFallback] = useState(false);
+  const [isRetrying, setIsRetrying] = useState(false);
+  const [isPickingStarter, setIsPickingStarter] = useState(false);
   
   // Timeout ref for 15s fallback
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -148,23 +150,13 @@ export function DiceRollStart({
     return starterIndex === 0 ? player1Wallet : player2Wallet;
   }, [roomPda, player1Wallet, player2Wallet]);
 
-  // 15-second timeout for fallback
+  // 15-second timeout for fallback UI
   useEffect(() => {
     // Start 15s timeout when component mounts
     timeoutRef.current = setTimeout(() => {
       if (phase !== "result" && !fallbackUsedRef.current) {
-        console.log("[DiceRollStart] Timeout - using deterministic fallback");
+        console.log("[DiceRollStart] 15s timeout - showing fallback options");
         setShowFallback(true);
-        fallbackUsedRef.current = true;
-        
-        // Compute deterministic starter WITHOUT writing to Supabase
-        const starterWallet = computeDeterministicStarter();
-        console.log("[DiceRollStart] Deterministic starter:", starterWallet);
-        
-        // Auto-proceed with fallback after a brief delay
-        setTimeout(() => {
-          onComplete(starterWallet);
-        }, 1000);
       }
     }, 15000);
     
@@ -173,7 +165,7 @@ export function DiceRollStart({
         clearTimeout(timeoutRef.current);
       }
     };
-  }, [phase, computeDeterministicStarter, onComplete]);
+  }, [phase]);
 
   // Clear timeout when dice roll completes
   useEffect(() => {
@@ -282,6 +274,7 @@ export function DiceRollStart({
 
       const rollResult = rpcResult.start_roll;
       setResult(rollResult);
+      setShowFallback(false);
       
       // Start the animation phase
       setPhase("rolling");
@@ -291,6 +284,47 @@ export function DiceRollStart({
       setPhase("waiting");
     }
   }, [roomPda]);
+
+  const handleRetrySync = useCallback(async () => {
+    setIsRetrying(true);
+    setShowFallback(false);
+    setError(null);
+    
+    try {
+      await handleRoll();
+    } finally {
+      setIsRetrying(false);
+    }
+  }, [handleRoll]);
+
+  const handlePickStarter = useCallback(async () => {
+    setIsPickingStarter(true);
+    const starterWallet = computeDeterministicStarter();
+    
+    console.log("[DiceRollStart] Manual pick - starter:", starterWallet);
+    
+    try {
+      // Call edge function to safely set starter (validates caller is participant)
+      const { error: fnError } = await supabase.functions.invoke('set-manual-starter', {
+        body: { roomPda, starterWallet, callerWallet: myWallet }
+      });
+      
+      if (fnError) {
+        console.warn("[DiceRollStart] Edge function error (proceeding anyway):", fnError);
+      }
+      
+      // Proceed with game regardless of edge function result
+      fallbackUsedRef.current = true;
+      onComplete(starterWallet);
+    } catch (e) {
+      console.warn("[DiceRollStart] Exception calling edge function (proceeding anyway):", e);
+      // Proceed locally on error
+      fallbackUsedRef.current = true;
+      onComplete(starterWallet);
+    } finally {
+      setIsPickingStarter(false);
+    }
+  }, [computeDeterministicStarter, roomPda, myWallet, onComplete]);
 
   const handleContinue = useCallback(() => {
     if (result) {
@@ -307,7 +341,7 @@ export function DiceRollStart({
     : opponentDice[0] + opponentDice[1];
   
   const isWinner = result?.winner.toLowerCase() === myWallet.toLowerCase();
-  const exitDisabled = isLeaving || isForfeiting;
+  const exitDisabled = isLeaving || isForfeiting || isRetrying || isPickingStarter;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/90 backdrop-blur-sm">
@@ -368,12 +402,42 @@ export function DiceRollStart({
           </div>
         )}
 
-        {/* Fallback Message */}
+        {/* Fallback Panel - shown after 15s timeout */}
         {showFallback && phase !== "result" && (
-          <div className="text-center mb-6 py-3 px-4 rounded-lg bg-amber-500/20 text-amber-400">
-            <p className="text-sm">
-              {t("diceRoll.usingFallback") || "Connection slow - using deterministic start order..."}
+          <div className="mb-6 p-4 rounded-lg bg-amber-950/30 border border-amber-500/30">
+            <p className="text-amber-300 text-sm mb-3 text-center">
+              {t("diceRoll.takingTooLong") || "Dice roll taking too long. Choose an option:"}
             </p>
+            <div className="flex flex-wrap gap-2 justify-center">
+              <Button 
+                size="sm" 
+                variant="outline"
+                onClick={handleRetrySync}
+                disabled={isRetrying || isPickingStarter}
+                className="gap-1"
+              >
+                {isRetrying ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="w-4 h-4" />
+                )}
+                {t("diceRoll.retrySync") || "Retry Sync"}
+              </Button>
+              <Button 
+                size="sm" 
+                variant="secondary"
+                onClick={handlePickStarter}
+                disabled={isRetrying || isPickingStarter}
+                className="gap-1"
+              >
+                {isPickingStarter ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Wand2 className="w-4 h-4" />
+                )}
+                {t("diceRoll.pickStarterAuto") || "Pick Starter (Auto)"}
+              </Button>
+            </div>
           </div>
         )}
 
@@ -424,43 +488,41 @@ export function DiceRollStart({
           )}
         </div>
 
-        {/* Exit buttons - always visible */}
-        {(onLeave || onForfeit) && (
-          <div className="mt-6 pt-4 border-t border-primary/20 flex justify-center gap-4">
-            {onLeave && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={onLeave}
-                disabled={exitDisabled}
-                className="text-muted-foreground hover:text-foreground"
-              >
-                {isLeaving ? (
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                ) : (
-                  <LogOut className="w-4 h-4 mr-2" />
-                )}
-                {t("forfeit.leave") || "Leave"}
-              </Button>
-            )}
-            {onForfeit && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={onForfeit}
-                disabled={exitDisabled}
-                className="text-destructive hover:text-destructive hover:bg-destructive/10"
-              >
-                {isForfeiting ? (
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                ) : (
-                  <Flag className="w-4 h-4 mr-2" />
-                )}
-                {t("forfeit.leaveAndForfeit") || "Leave & Forfeit"}
-              </Button>
-            )}
-          </div>
-        )}
+        {/* Exit buttons - ALWAYS visible in every phase */}
+        <div className="mt-6 pt-4 border-t border-primary/20 flex justify-center gap-4">
+          {onLeave && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onLeave}
+              disabled={exitDisabled}
+              className="text-muted-foreground hover:text-foreground"
+            >
+              {isLeaving ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <LogOut className="w-4 h-4 mr-2" />
+              )}
+              {t("forfeit.leave") || "Leave"}
+            </Button>
+          )}
+          {onForfeit && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onForfeit}
+              disabled={exitDisabled}
+              className="text-destructive hover:text-destructive hover:bg-destructive/10"
+            >
+              {isForfeiting ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Flag className="w-4 h-4 mr-2" />
+              )}
+              {t("forfeit.leaveAndForfeit") || "Leave & Forfeit"}
+            </Button>
+          )}
+        </div>
       </div>
     </div>
   );

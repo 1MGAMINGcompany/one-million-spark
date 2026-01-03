@@ -46,6 +46,9 @@ export interface TxDebugInfo {
 // Active room polling interval (5 seconds)
 const ACTIVE_ROOM_POLL_INTERVAL = 5000;
 
+// Debounce before starting polling after wallet connects
+const POLLING_DEBOUNCE_MS = 500;
+
 export function useSolanaRooms() {
   const { connection } = useConnection();
   const { publicKey, sendTransaction, connected, wallet } = useWallet();
@@ -63,8 +66,10 @@ export function useSolanaRooms() {
   const [activeRoom, setActiveRoom] = useState<RoomDisplay | null>(null);
   const [txDebugInfo, setTxDebugInfo] = useState<TxDebugInfo | null>(null);
   
-  // Track polling interval ref
+  // Track polling interval and fetch guard refs
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const isFetchingActiveRoomRef = useRef(false);
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Clear debug info
   const clearTxDebug = useCallback(() => {
@@ -148,6 +153,14 @@ export function useSolanaRooms() {
       return null;
     }
     
+    // Prevent concurrent fetches
+    if (isFetchingActiveRoomRef.current) {
+      console.log("[fetchUserActiveRoom] Already fetching, skipping");
+      return null;
+    }
+    
+    isFetchingActiveRoomRef.current = true;
+    
     try {
       // Fetch all active rooms where user is a player (creator OR joiner)
       const userRooms = await fetchActiveRoomsForUser(connection, publicKey);
@@ -156,7 +169,7 @@ export function useSolanaRooms() {
       const activeRooms = userRooms.filter(room => !isRoomArchived(room.pda));
       
       if (activeRooms.length === 0) {
-        setActiveRoom(null);
+        setActiveRoom(prev => prev === null ? prev : null);
         return null;
       }
       
@@ -179,9 +192,11 @@ export function useSolanaRooms() {
       // Single-line log for easy debugging
       console.log(`[fetchUserActiveRoom] candidateCount=${activeRooms.length} | selected: status=${newestActiveRoom.statusName}, roomId=${newestActiveRoom.roomId}, game=${newestActiveRoom.gameTypeName}, pda=${newestActiveRoom.pda.slice(0, 8)}...`);
       
-      // Only update state if PDA or status changed to prevent flicker
+      // Only update state if PDA, status, or playerCount changed to prevent re-renders
       setActiveRoom(prev => {
-        if (prev?.pda === newestActiveRoom.pda && prev?.status === newestActiveRoom.status) {
+        if (prev?.pda === newestActiveRoom.pda && 
+            prev?.status === newestActiveRoom.status &&
+            prev?.playerCount === newestActiveRoom.playerCount) {
           return prev; // No change, keep stable reference
         }
         return newestActiveRoom;
@@ -189,36 +204,52 @@ export function useSolanaRooms() {
       return newestActiveRoom;
     } catch (err) {
       console.error("Error fetching user active room:", err);
-      setActiveRoom(null);
+      setActiveRoom(prev => prev === null ? prev : null);
       return null;
+    } finally {
+      isFetchingActiveRoomRef.current = false;
     }
   }, [connection, publicKey]);
 
   // AUTO-POLL: Centralized active room polling (SINGLE SOURCE OF TRUTH)
   // Pages should NOT call fetchUserActiveRoom - they only consume activeRoom
+  // Uses debounce to prevent rapid-fire fetches on wallet connect
   useEffect(() => {
-    // Clear any existing interval
+    // Clear any existing interval and debounce timer
     if (pollIntervalRef.current) {
       clearInterval(pollIntervalRef.current);
       pollIntervalRef.current = null;
     }
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
+    }
 
     // Only poll when connected
     if (!connected || !publicKey) {
-      setActiveRoom(null);
+      setActiveRoom(prev => prev === null ? prev : null);
       return;
     }
 
-    // Fetch immediately on connect
-    console.log("[useSolanaRooms] Starting active room polling");
-    fetchUserActiveRoom();
-
-    // Set up polling interval
-    pollIntervalRef.current = setInterval(() => {
+    // Debounce: wait 500ms after connection before starting poll
+    // This prevents rapid fetches when wallet connection state flickers
+    console.log("[useSolanaRooms] Wallet connected, debouncing before poll start...");
+    
+    debounceTimerRef.current = setTimeout(() => {
+      console.log("[useSolanaRooms] Starting active room polling (debounced)");
       fetchUserActiveRoom();
-    }, ACTIVE_ROOM_POLL_INTERVAL);
+
+      // Set up polling interval
+      pollIntervalRef.current = setInterval(() => {
+        fetchUserActiveRoom();
+      }, ACTIVE_ROOM_POLL_INTERVAL);
+    }, POLLING_DEBOUNCE_MS);
 
     return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = null;
+      }
       if (pollIntervalRef.current) {
         clearInterval(pollIntervalRef.current);
         pollIntervalRef.current = null;
