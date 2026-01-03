@@ -23,11 +23,11 @@ export interface LudoMove {
 }
 
 export interface LudoCaptureEvent {
-  id: string;
-  color: PlayerColor;
-  tokenId: number;
-  fromPosition: number;
-  startTime: number;
+  capturedColor: PlayerColor;
+  capturingColor: PlayerColor;
+  position: [number, number];
+  tokenId?: number;
+  fromPosition?: number;
 }
 
 interface UseLudoEngineOptions {
@@ -303,11 +303,11 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
                   if (otherAbsPos === myAbsPos) {
                     // CAPTURE!
                     setCaptureEvent({
-                      id: `${Date.now()}-${otherPlayer.color}-${oti}`,
-                      color: otherPlayer.color,
+                      capturedColor: otherPlayer.color,
+                      capturingColor: movingPlayer.color,
+                      position: [7, 7], // Center placeholder, animation uses fromPosition
                       tokenId: oti,
                       fromPosition: otherToken.position,
-                      startTime: Date.now(),
                     });
                     newPlayers[opi].tokens[oti].position = -1;
                     console.log(`[LUDO] CAPTURE: ${movingPlayer.color} captured ${otherPlayer.color} token#${oti}`);

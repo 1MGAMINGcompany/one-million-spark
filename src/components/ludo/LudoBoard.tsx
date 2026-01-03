@@ -1,9 +1,33 @@
+/**
+ * Ludo Board Component
+ * 
+ * Renders the Egyptian-themed Ludo board with tokens.
+ * Works with both old format (position-based) and new format (state-based).
+ */
+
 import { memo, useEffect, useState, useRef } from "react";
-import { Token, PlayerColor, getTokenCoords } from "./ludoTypes";
 import LudoCaptureAnimation, { CaptureEvent } from "./LudoCaptureAnimation";
 
+// Re-export types for backward compatibility
+export type PlayerColor = 'gold' | 'ruby' | 'sapphire' | 'emerald';
+
+// Token interface that works with both old and new systems
+export interface Token {
+  id: number;
+  color: PlayerColor;
+  position: number; // -1 = BASE, 0-51 = TRACK, 56-61 = HOME_PATH, 62 = FINISHED
+}
+
+export interface Player {
+  color: PlayerColor;
+  tokens: Token[];
+  isAI: boolean;
+  startPosition?: number;
+  homeColumn?: number;
+}
+
 interface LudoBoardProps {
-  players: { color: PlayerColor; tokens: Token[]; isAI: boolean }[];
+  players: Player[];
   currentPlayerIndex: number;
   movableTokens: number[];
   onTokenClick: (playerIndex: number, tokenIndex: number) => void;
@@ -12,6 +36,7 @@ interface LudoBoardProps {
   eliminatedPlayers?: Set<number>;
 }
 
+// Color configuration
 const PLAYER_COLORS: Record<PlayerColor, { 
   bg: string;
   light: string;
@@ -51,7 +76,77 @@ const CORNER_SYMBOLS: Record<PlayerColor, string> = {
   sapphire: "△",
 };
 
-// Token piece - polished gem pharaoh look
+// Board coordinate mappings (15x15 grid)
+// Track: 52 cells (0-51)
+const TRACK_COORDS: Record<number, [number, number]> = {
+  // Gold section (0-12)
+  0: [6, 1], 1: [6, 2], 2: [6, 3], 3: [6, 4], 4: [6, 5],
+  5: [5, 6], 6: [4, 6], 7: [3, 6], 8: [2, 6], 9: [1, 6], 10: [0, 6],
+  11: [0, 7], 12: [0, 8],
+  
+  // Ruby section (13-25)
+  13: [1, 8], 14: [2, 8], 15: [3, 8], 16: [4, 8], 17: [5, 8],
+  18: [6, 9], 19: [6, 10], 20: [6, 11], 21: [6, 12], 22: [6, 13], 23: [6, 14],
+  24: [7, 14], 25: [8, 14],
+  
+  // Sapphire section (26-38)
+  26: [8, 13], 27: [8, 12], 28: [8, 11], 29: [8, 10], 30: [8, 9],
+  31: [9, 8], 32: [10, 8], 33: [11, 8], 34: [12, 8], 35: [13, 8], 36: [14, 8],
+  37: [14, 7], 38: [14, 6],
+  
+  // Emerald section (39-51)
+  39: [13, 6], 40: [12, 6], 41: [11, 6], 42: [10, 6], 43: [9, 6],
+  44: [8, 5], 45: [8, 4], 46: [8, 3], 47: [8, 2], 48: [8, 1], 49: [8, 0],
+  50: [7, 0], 51: [6, 0],
+};
+
+// Home path coordinates (positions 56-61)
+const HOME_PATH_COORDS: Record<PlayerColor, [number, number][]> = {
+  gold: [[7, 1], [7, 2], [7, 3], [7, 4], [7, 5], [7, 6]],
+  ruby: [[1, 7], [2, 7], [3, 7], [4, 7], [5, 7], [6, 7]],
+  sapphire: [[7, 13], [7, 12], [7, 11], [7, 10], [7, 9], [7, 8]],
+  emerald: [[13, 7], [12, 7], [11, 7], [10, 7], [9, 7], [8, 7]],
+};
+
+// Home base token positions (position -1)
+const HOME_BASE_COORDS: Record<PlayerColor, [number, number][]> = {
+  gold: [[2, 2], [2, 4], [4, 2], [4, 4]],
+  ruby: [[2, 10], [2, 12], [4, 10], [4, 12]],
+  sapphire: [[10, 10], [10, 12], [12, 10], [12, 12]],
+  emerald: [[10, 2], [10, 4], [12, 2], [12, 4]],
+};
+
+// Finished position (center)
+const FINISHED_COORD: [number, number] = [7, 7];
+
+// Get token coordinates from position
+function getTokenCoords(position: number, color: PlayerColor, tokenId: number): [number, number] | null {
+  // BASE
+  if (position === -1) {
+    return HOME_BASE_COORDS[color][tokenId];
+  }
+  
+  // FINISHED
+  if (position === 62) {
+    return FINISHED_COORD;
+  }
+  
+  // HOME_PATH (56-61)
+  if (position >= 56 && position <= 61) {
+    const pathIndex = position - 56;
+    return HOME_PATH_COORDS[color][pathIndex];
+  }
+  
+  // TRACK (0-51)
+  if (position >= 0 && position <= 51) {
+    return TRACK_COORDS[position];
+  }
+  
+  console.warn(`Unknown position: ${position} for ${color}`);
+  return null;
+}
+
+// Token piece component
 const TokenPiece = memo(({ 
   color, 
   isMovable, 
@@ -72,7 +167,6 @@ const TokenPiece = memo(({
   const colors = PLAYER_COLORS[color];
   const size = cellSize * 0.7;
   
-  // Eliminated tokens are grayed out and semi-transparent
   const eliminatedStyle = isEliminated ? {
     filter: 'grayscale(100%) brightness(0.6)',
     opacity: 0.4,
@@ -119,6 +213,8 @@ const TokenPiece = memo(({
   );
 });
 
+TokenPiece.displayName = 'TokenPiece';
+
 const LudoBoard = memo(({ 
   players, 
   currentPlayerIndex, 
@@ -145,7 +241,7 @@ const LudoBoard = memo(({
   const cellSize = boardSize / 15;
   const hieroglyphs = ["𓀀", "𓁀", "𓂀", "𓃀", "𓄀", "𓅀", "𓆣", "☥"];
 
-  // Carved path cell - darker carved into gold
+  // Path cell component
   const PathCell = ({ row, col, colored, isStart }: { row: number; col: number; colored?: PlayerColor; isStart?: boolean }) => {
     const colors = colored ? PLAYER_COLORS[colored] : null;
     const h = hieroglyphs[(row * 3 + col * 2) % hieroglyphs.length];
@@ -186,7 +282,7 @@ const LudoBoard = memo(({
     );
   };
 
-  // Home base - colored corner with token slots
+  // Home base component
   const HomeBase = ({ color, startRow, startCol, isEliminated }: { color: PlayerColor; startRow: number; startCol: number; isEliminated?: boolean }) => {
     const colors = PLAYER_COLORS[color];
     const size = cellSize * 6;
@@ -208,7 +304,6 @@ const LudoBoard = memo(({
           opacity: isEliminated ? 0.6 : 1,
         }}
       >
-        {/* Inner area for tokens */}
         <div
           className="absolute"
           style={{
@@ -221,7 +316,6 @@ const LudoBoard = memo(({
             boxShadow: 'inset 2px 2px 8px rgba(0,0,0,0.4)',
           }}
         >
-          {/* 4 token slots in 2x2 */}
           {[0, 1, 2, 3].map((i) => {
             const slotRow = Math.floor(i / 2);
             const slotCol = i % 2;
@@ -245,7 +339,6 @@ const LudoBoard = memo(({
           })}
         </div>
         
-        {/* Corner symbol */}
         <div
           className="absolute text-xl md:text-2xl"
           style={{
@@ -258,7 +351,6 @@ const LudoBoard = memo(({
           {CORNER_SYMBOLS[color]}
         </div>
         
-        {/* Eliminated overlay with X */}
         {isEliminated && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
             <div className="w-3/4 h-1 bg-red-600/80 rotate-45 absolute rounded" />
@@ -272,7 +364,7 @@ const LudoBoard = memo(({
     );
   };
 
-  // Build path cells
+  // Render path cells
   const renderPath = () => {
     if (cellSize === 0) return null;
     
@@ -394,7 +486,6 @@ const LudoBoard = memo(({
       player.tokens.forEach((token, tokenIndex) => {
         const coords = getTokenCoords(token.position, player.color, token.id);
         if (!coords) {
-          console.warn(`[LUDO] No coords for token ${player.color}-${token.id} at position ${token.position}`);
           return;
         }
         
@@ -477,7 +568,6 @@ const LudoBoard = memo(({
   );
 });
 
-TokenPiece.displayName = 'TokenPiece';
 LudoBoard.displayName = 'LudoBoard';
 
 export default LudoBoard;
