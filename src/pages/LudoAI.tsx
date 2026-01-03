@@ -78,12 +78,12 @@ const LudoAI = () => {
     humanPlayerIndex: 0,
     difficulty,
     onDiceRolled: (value) => {
-      play("dice");
+      play("ludo_dice");
     },
     onTokenMoved: (move) => {
       // Start step animation when a token moves
       startAnimation(gameState.currentPlayerIndex, move.tokenIndex, move);
-      play("move");
+      play("ludo_move");
     },
     onCapture: (captured) => {
       const capturedPlayer = gameState.players[captured.playerIndex];
@@ -96,20 +96,20 @@ const LudoAI = () => {
           position: [7, 7], // Center position placeholder
         });
         
-        play("capture");
+        play("ludo_capture");
         
         setTimeout(() => setCaptureEvent(null), 1500);
       }
     },
     onGameOver: (winnerColor) => {
       if (winnerColor === 'gold') {
-        play("win");
+        play("ludo_win");
         toast({
           title: t("ludo.youWin", "You Win! 🎉"),
           description: t("ludo.congratulations", "Congratulations!"),
         });
       } else {
-        play("lose");
+        play("ludo_lose");
         toast({
           title: t("ludo.gameOver", "Game Over"),
           description: t("ludo.aiWins", "AI Wins! Better luck next time."),
