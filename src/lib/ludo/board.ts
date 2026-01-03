@@ -18,73 +18,79 @@ import { PlayerColor, TRACK_SIZE, START_POSITIONS } from './types';
  * Each player starts at their safe square and moves clockwise.
  */
 export const TRACK_COORDS: Record<number, [number, number]> = {
-  // === GOLD START: Left arm, middle row going RIGHT ===
-  0: [6, 0],   // Gold START - safe square (left edge, row 6)
+  // Track has 56 cells (0-55), forming a continuous clockwise path
+  
+  // === GOLD START: Left arm, row 6 going RIGHT (positions 0-5) ===
+  0: [6, 0],   // Gold START - safe square
   1: [6, 1],
   2: [6, 2],
   3: [6, 3],
   4: [6, 4],
-  5: [6, 5],   // End of left arm outer edge
+  5: [6, 5],   // Inside corner - turn up
   
-  // === Turn UP into top arm ===
-  6: [5, 6],   // Turn corner
-  7: [4, 6],
-  8: [3, 6],
-  9: [2, 6],
-  10: [1, 6],
-  11: [0, 6],  // Top-left of top arm
-  12: [0, 7],  // Top edge of top arm
+  // === Going UP left column of top arm (positions 6-13) ===
+  6: [5, 5],
+  7: [4, 5],
+  8: [3, 5],
+  9: [2, 5],
+  10: [1, 5],
+  11: [0, 5],  // Top-left corner
+  12: [0, 6],  // Top edge
+  13: [0, 7],  // Top middle
   
-  // === RUBY START: Top arm going DOWN ===
-  13: [0, 8],  // Ruby START - safe square (top edge, col 8)
-  14: [1, 8],
-  15: [2, 8],
-  16: [3, 8],
-  17: [4, 8],
-  18: [5, 8],  // End of top arm outer edge
+  // === RUBY START: Top edge going right then down (positions 14-21) ===
+  14: [0, 8],  // Ruby START - safe square  
+  15: [0, 9],  // Top-right corner
+  16: [1, 9],  // Going down right column
+  17: [2, 9],
+  18: [3, 9],
+  19: [4, 9],
+  20: [5, 9],
+  21: [6, 9],  // Inside corner - turn right
   
-  // === Turn RIGHT into right arm ===
-  19: [6, 9],  // Turn corner
-  20: [6, 10],
-  21: [6, 11],
-  22: [6, 12],
-  23: [6, 13],
-  24: [6, 14], // Right edge of right arm
-  25: [7, 14], // Middle of right edge
+  // === Going RIGHT along top row of right arm (positions 22-27) ===
+  22: [6, 10],
+  23: [6, 11],
+  24: [6, 12],
+  25: [6, 13],
+  26: [6, 14], // Right edge top
+  27: [7, 14], // Right edge middle
   
-  // === SAPPHIRE START: Right arm going LEFT ===
-  26: [8, 14], // Sapphire START - safe square (right edge, row 8)
-  27: [8, 13],
-  28: [8, 12],
-  29: [8, 11],
-  30: [8, 10],
-  31: [8, 9],  // End of right arm outer edge
+  // === SAPPHIRE START: Right edge going down then left (positions 28-33) ===
+  28: [8, 14], // Sapphire START - safe square
+  29: [8, 13],
+  30: [8, 12],
+  31: [8, 11],
+  32: [8, 10],
+  33: [8, 9],  // Inside corner - turn down
   
-  // === Turn DOWN into bottom arm ===
-  32: [9, 8],  // Turn corner
-  33: [10, 8],
-  34: [11, 8],
-  35: [12, 8],
-  36: [13, 8],
-  37: [14, 8], // Bottom-right of bottom arm
-  38: [14, 7], // Bottom edge of bottom arm
+  // === Going DOWN right column of bottom arm (positions 34-41) ===
+  34: [9, 9],
+  35: [10, 9],
+  36: [11, 9],
+  37: [12, 9],
+  38: [13, 9],
+  39: [14, 9], // Bottom-right corner
+  40: [14, 8], // Bottom edge
+  41: [14, 7], // Bottom middle
   
-  // === EMERALD START: Bottom arm going UP ===
-  39: [14, 6], // Emerald START - safe square (bottom edge, col 6)
-  40: [13, 6],
-  41: [12, 6],
-  42: [11, 6],
-  43: [10, 6],
-  44: [9, 6],  // End of bottom arm outer edge
+  // === EMERALD START: Bottom edge going left then up (positions 42-49) ===
+  42: [14, 6], // Emerald START - safe square
+  43: [14, 5], // Bottom-left corner
+  44: [13, 5], // Going up left column
+  45: [12, 5],
+  46: [11, 5],
+  47: [10, 5],
+  48: [9, 5],
+  49: [8, 5],  // Inside corner - turn left
   
-  // === Turn LEFT back to Gold's area ===
-  45: [8, 5],  // Turn corner
-  46: [8, 4],
-  47: [8, 3],
-  48: [8, 2],
-  49: [8, 1],
-  50: [8, 0],  // Left edge bottom
-  51: [7, 0],  // Complete the circuit back toward Gold's start
+  // === Going LEFT along bottom row back to Gold area (positions 50-55) ===
+  50: [8, 4],
+  51: [8, 3],
+  52: [8, 2],
+  53: [8, 1],
+  54: [8, 0],  // Left edge bottom
+  55: [7, 0],  // Left edge middle - completes circuit before Gold start
 };
 
 // Home path coordinates (6 cells leading to center, per player)
@@ -149,5 +155,5 @@ export function getTokenCoords(
  * Check if a track position is a safe square
  */
 export function isSafeSquare(trackPosition: number): boolean {
-  return [0, 13, 26, 39].includes(trackPosition);
+  return [0, 14, 28, 42].includes(trackPosition);
 }
