@@ -51,7 +51,17 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
   const diceIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const moveInProgressRef = useRef(false);
   const consumedDiceRef = useRef<number | null>(null);
-  const isMountedRef = useRef(true);
+  const isMountedRef = useRef(false);
+  
+  // Proper mount/unmount tracking - MUST be at top level
+  useEffect(() => {
+    isMountedRef.current = true;
+    console.log('[LUDO ENGINE] Component mounted');
+    return () => {
+      isMountedRef.current = false;
+      console.log('[LUDO ENGINE] Component unmounted');
+    };
+  }, []);
   
   useEffect(() => { playersRef.current = players; }, [players]);
   useEffect(() => { currentPlayerIndexRef.current = currentPlayerIndex; }, [currentPlayerIndex]);
@@ -152,53 +162,76 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
     let stepIndex = 0;
     
     const performStep = () => {
-      if (!isMountedRef.current) {
-        setIsAnimating(false);
-        return;
-      }
-      
-      const stepPosition = positions[stepIndex];
-      stepIndex++;
-      
-      console.log(`[LUDO ENGINE] Step ${stepIndex}/${totalSteps}: pos=${stepPosition}`);
-      onSoundPlay?.('ludo_move');
-      
-      // Update token position for this step
-      setPlayers(prev => prev.map((p, pIdx) => ({
-        ...p,
-        tokens: p.tokens.map((t, tIdx) => {
-          if (pIdx === playerIndex && tIdx === tokenIndex) {
-            return { ...t, position: stepPosition };
-          }
-          return t;
-        })
-      })));
-      
-      if (stepIndex >= totalSteps) {
-        // Animation complete - FORCE exact final position
-        animationRef.current = setTimeout(() => {
-          if (!isMountedRef.current) {
-            setIsAnimating(false);
-            return;
-          }
-          
-          setPlayers(prev => prev.map((p, pIdx) => ({
+      try {
+        if (!isMountedRef.current) {
+          console.log('[LUDO ENGINE] Animation aborted - unmounted');
+          setIsAnimating(false);
+          moveInProgressRef.current = false;
+          return;
+        }
+        
+        const stepPosition = positions[stepIndex];
+        stepIndex++;
+        
+        console.log(`[LUDO ENGINE] Step ${stepIndex}/${totalSteps}: pos=${stepPosition}`);
+        onSoundPlay?.('ludo_move');
+        
+        // Update token position for this step
+        setPlayers(prev => {
+          if (!isMountedRef.current) return prev;
+          return prev.map((p, pIdx) => ({
             ...p,
             tokens: p.tokens.map((t, tIdx) => {
               if (pIdx === playerIndex && tIdx === tokenIndex) {
-                console.log(`[LUDO ENGINE] Final position enforced: ${endPos}`);
-                return { ...t, position: endPos };
+                return { ...t, position: stepPosition };
               }
               return t;
             })
-          })));
-          
-          setIsAnimating(false);
-          onComplete();
-        }, 50);
-      } else {
-        // Schedule next step
-        animationRef.current = setTimeout(performStep, 150);
+          }));
+        });
+        
+        if (stepIndex >= totalSteps) {
+          // Animation complete - FORCE exact final position
+          animationRef.current = setTimeout(() => {
+            try {
+              if (!isMountedRef.current) {
+                setIsAnimating(false);
+                moveInProgressRef.current = false;
+                return;
+              }
+              
+              setPlayers(prev => {
+                if (!isMountedRef.current) return prev;
+                return prev.map((p, pIdx) => ({
+                  ...p,
+                  tokens: p.tokens.map((t, tIdx) => {
+                    if (pIdx === playerIndex && tIdx === tokenIndex) {
+                      console.log(`[LUDO ENGINE] Final position enforced: ${endPos}`);
+                      return { ...t, position: endPos };
+                    }
+                    return t;
+                  })
+                }));
+              });
+              
+              if (isMountedRef.current) {
+                setIsAnimating(false);
+                onComplete();
+              }
+            } catch (err) {
+              console.error('[LUDO ENGINE] Animation completion error:', err);
+              setIsAnimating(false);
+              moveInProgressRef.current = false;
+            }
+          }, 50);
+        } else {
+          // Schedule next step
+          animationRef.current = setTimeout(performStep, 150);
+        }
+      } catch (err) {
+        console.error('[LUDO ENGINE] Animation step error:', err);
+        setIsAnimating(false);
+        moveInProgressRef.current = false;
       }
     };
     
