@@ -204,17 +204,18 @@ function computeTrackMove(
   
   // Check if entering home path
   // Player must travel 51 cells on track before entering home path (cell 52 = home path entry)
+  // HOME_PATH has 6 cells (positions 0-5), FINISHED is position 6
   if (newDistanceFromStart >= TRACK_SIZE) {
-    // Entering home path
+    // Entering or moving through home path
     const homePathPosition = newDistanceFromStart - TRACK_SIZE;
     
-    if (homePathPosition >= HOME_PATH_SIZE) {
+    if (homePathPosition > HOME_PATH_SIZE) {
       // Overshooting - would go past FINISHED
       return null;
     }
     
-    if (homePathPosition === HOME_PATH_SIZE - 1) {
-      // Exact roll to finish
+    if (homePathPosition === HOME_PATH_SIZE) {
+      // Exact roll to finish (landed on position 6 = FINISHED)
       return {
         tokenIndex,
         fromState: 'TRACK',
@@ -225,6 +226,7 @@ function computeTrackMove(
       };
     }
     
+    // Landing on HOME_PATH (positions 0-5)
     // Check if own token in home path position
     const ownTokenInPath = player.tokens.some(
       (t, i) => i !== tokenIndex && t.state === 'HOME_PATH' && t.position === homePathPosition
@@ -272,6 +274,8 @@ function computeTrackMove(
 
 /**
  * Compute move for token in HOME_PATH
+ * HOME_PATH positions: 0-5 (6 cells)
+ * FINISHED = conceptually position 6
  */
 function computeHomePathMove(
   state: GameState,
@@ -288,35 +292,14 @@ function computeHomePathMove(
   
   const newPosition = token.position + diceValue;
   
-  if (newPosition > HOME_PATH_SIZE - 1) {
-    // Overshooting - would go past FINISHED
+  // Check for overshoot (past FINISHED)
+  if (newPosition > HOME_PATH_SIZE) {
     return null;
-  }
-  
-  if (newPosition === HOME_PATH_SIZE - 1) {
-    // Exact roll to finish (position 5 = last cell before finish)
-    // Actually, let's make position 5 the last cell, and moving FROM position 5 with 1 = FINISHED
-    // Wait, HOME_PATH_SIZE is 6, so positions 0-5
-    // Position 5 is the last cell, need to move exactly to position 6 (which is FINISHED)
-    // Let me reconsider: if position < HOME_PATH_SIZE and newPosition === HOME_PATH_SIZE - 1,
-    // that means we land on position 5 which is still HOME_PATH, not FINISHED
-    // FINISHED requires landing on position HOME_PATH_SIZE (6), but we only have 0-5
-    // So let's say: HOME_PATH positions are 0-5 (6 cells)
-    // To FINISH, you need to move past position 5, which requires:
-    // - From position 4, roll 2+ to land on 6+ (but 6 is FINISHED)
-    // Actually, let's simplify: position 5 is the last HOME_PATH cell
-    // To FINISH, you roll exactly what's needed to land on "position 6" = FINISHED
-    
-    // Let me recalculate:
-    // HOME_PATH positions: 0, 1, 2, 3, 4, 5 (6 cells)
-    // FINISHED = conceptually position 6
-    // If at position 4, roll 2, land on position 6 = FINISHED
-    // If at position 4, roll 3, overshoot
   }
   
   // Check for exact finish
   if (newPosition === HOME_PATH_SIZE) {
-    // Exact roll to finish!
+    // Exact roll to finish! (e.g., from position 4, roll 2, land on position 6 = FINISHED)
     return {
       tokenIndex,
       fromState: 'HOME_PATH',
@@ -327,11 +310,7 @@ function computeHomePathMove(
     };
   }
   
-  if (newPosition > HOME_PATH_SIZE) {
-    // Overshoot
-    return null;
-  }
-  
+  // Normal HOME_PATH movement (newPosition is 0-5)
   // Check if own token on destination
   const ownTokenOnDest = player.tokens.some(
     (t, i) => i !== tokenIndex && t.state === 'HOME_PATH' && t.position === newPosition

@@ -11,84 +11,81 @@
 
 import { PlayerColor, TRACK_SIZE, START_POSITIONS } from './types';
 
-// Main track coordinates (52 cells, clockwise from gold's perspective)
-// Position 0 is gold's start, position 13 is ruby's start, etc.
+/**
+ * Main track coordinates (52 cells, clockwise)
+ * MUST match the TRACK_COORDS in LudoBoard.tsx exactly!
+ * 
+ * Track positions start at Gold's start (position 0) and go clockwise.
+ */
 export const TRACK_COORDS: Record<number, [number, number]> = {
-  // Gold section (0-12): bottom-left, going up then right
-  0: [6, 1],   // Gold START (safe square)
-  1: [6, 2],
-  2: [6, 3],
-  3: [6, 4],
-  4: [6, 5],
-  5: [5, 6],
-  6: [4, 6],
-  7: [3, 6],
-  8: [2, 6],
-  9: [1, 6],
-  10: [0, 6],
-  11: [0, 7],
-  12: [0, 8],
+  // === GOLD'S SECTION (0-12): Start bottom-left, go UP then turn RIGHT ===
+  0: [6, 1],   // Gold START (row 6, col 1) - safe square
+  1: [5, 1],   // moving up
+  2: [4, 1],
+  3: [3, 1],
+  4: [2, 1],
+  5: [1, 1],
+  6: [0, 1],   // top-left corner area
+  7: [0, 2],   // moving right along top
+  8: [0, 3],
+  9: [0, 4],
+  10: [0, 5],
+  11: [0, 6],  // entering top arm
+  12: [1, 6],  // moving down into ruby's area
   
-  // Ruby section (13-25): top-left, going right then down
-  13: [1, 8],  // Ruby START (safe square)
-  14: [2, 8],
-  15: [3, 8],
-  16: [4, 8],
-  17: [5, 8],
-  18: [6, 9],
-  19: [6, 10],
-  20: [6, 11],
-  21: [6, 12],
-  22: [6, 13],
-  23: [6, 14],
-  24: [7, 14],
-  25: [8, 14],
+  // === RUBY'S SECTION (13-25): Start top, go DOWN then turn RIGHT ===
+  13: [2, 6],  // Ruby START (row 2, col 6) - safe square
+  14: [3, 6],  // moving down
+  15: [4, 6],
+  16: [5, 6],
+  17: [6, 6],  // center-left area
+  18: [6, 7],  // moving right through center
+  19: [6, 8],  
+  20: [6, 9],  // entering right arm
+  21: [6, 10],
+  22: [6, 11],
+  23: [6, 12],
+  24: [6, 13],
+  25: [7, 13], // turning down into sapphire's area
   
-  // Sapphire section (26-38): top-right, going down then left
-  26: [8, 13], // Sapphire START (safe square)
-  27: [8, 12],
+  // === SAPPHIRE'S SECTION (26-38): Start top-right, go DOWN then turn LEFT ===
+  26: [8, 13], // Sapphire START (row 8, col 13) - safe square
+  27: [8, 12], // moving left
   28: [8, 11],
   29: [8, 10],
   30: [8, 9],
-  31: [9, 8],
-  32: [10, 8],
-  33: [11, 8],
-  34: [12, 8],
-  35: [13, 8],
-  36: [14, 8],
-  37: [14, 7],
-  38: [14, 6],
+  31: [8, 8],  // center-right area
+  32: [9, 8],  // moving down
+  33: [10, 8],
+  34: [11, 8],
+  35: [12, 8],
+  36: [13, 8],
+  37: [14, 8], // bottom-right corner area
+  38: [14, 7], // turning left into emerald's area
   
-  // Emerald section (39-51): bottom-right, going left then up
-  39: [13, 6], // Emerald START (safe square)
-  40: [12, 6],
-  41: [11, 6],
-  42: [10, 6],
-  43: [9, 6],
-  44: [8, 5],
-  45: [8, 4],
-  46: [8, 3],
-  47: [8, 2],
-  48: [8, 1],
-  49: [8, 0],
-  50: [7, 0],
-  51: [6, 0],
+  // === EMERALD'S SECTION (39-51): Start bottom, go UP then turn LEFT ===
+  39: [14, 6], // Emerald START (row 14, col 6) - safe square
+  40: [13, 6], // moving up
+  41: [12, 6],
+  42: [11, 6],
+  43: [10, 6],
+  44: [9, 6],
+  45: [8, 6],  // center-bottom area
+  46: [8, 5],  // moving left
+  47: [8, 4],
+  48: [8, 3],
+  49: [8, 2],
+  50: [8, 1],
+  51: [7, 1],  // turning up to connect back to Gold's start area
 };
 
 // Home path coordinates (6 cells leading to center, per player)
+// Position 0 is first cell after entering from track, position 5 is at center (7,7)
 export const HOME_PATH_COORDS: Record<PlayerColor, [number, number][]> = {
-  gold: [
-    [7, 1], [7, 2], [7, 3], [7, 4], [7, 5], [7, 6],
-  ],
-  ruby: [
-    [1, 7], [2, 7], [3, 7], [4, 7], [5, 7], [6, 7],
-  ],
-  sapphire: [
-    [7, 13], [7, 12], [7, 11], [7, 10], [7, 9], [7, 8],
-  ],
-  emerald: [
-    [13, 7], [12, 7], [11, 7], [10, 7], [9, 7], [8, 7],
-  ],
+  gold: [[7, 2], [7, 3], [7, 4], [7, 5], [7, 6], [7, 7]],     // enters from col 1, goes right
+  ruby: [[2, 7], [3, 7], [4, 7], [5, 7], [6, 7], [7, 7]],     // enters from row 1, goes down  
+  sapphire: [[7, 12], [7, 11], [7, 10], [7, 9], [7, 8], [7, 7]], // enters from col 13, goes left
+  emerald: [[12, 7], [11, 7], [10, 7], [9, 7], [8, 7], [7, 7]], // enters from row 13, goes up
 };
 
 // Home base token positions (where tokens wait before entering track)
