@@ -24,14 +24,27 @@ const LudoAI = () => {
   
   const [musicEnabled, setMusicEnabled] = useState(true);
   const musicRef = useRef<HTMLAudioElement | null>(null);
+  
+  // Component mount tracking - prevents state updates after unmount
+  const isMountedRef = useRef(false);
+  useEffect(() => {
+    isMountedRef.current = true;
+    console.log('[LUDO AI] Component mounted');
+    return () => {
+      isMountedRef.current = false;
+      console.log('[LUDO AI] Component unmounted');
+    };
+  }, []);
 
   // Wrapper for play function that plays sounds when global sound is enabled
   const playSfx = useCallback((sound: string) => {
+    if (!isMountedRef.current) return;
     console.log(`[LUDO SFX] Playing sound: ${sound}, soundEnabled: ${soundEnabled}`);
     play(sound);
   }, [play, soundEnabled]);
 
   const showToast = useCallback((title: string, description: string, variant?: "default" | "destructive") => {
+    if (!isMountedRef.current) return;
     toast({ title, description, variant, duration: 2000 });
   }, []);
 
@@ -308,97 +321,115 @@ const LudoAI = () => {
       const delay = difficulty === "easy" ? 800 : difficulty === "medium" ? 500 : 300;
       
       aiTimeoutRef.current = setTimeout(() => {
-        // Check if this turn is still valid
-        if (!isCurrentTurn()) {
-          console.log(`[LUDO AI] Turn ${currentTurnId} invalidated before roll, skipping`);
-          return;
-        }
-        
-        rollDice((dice, movable) => {
-          // CRITICAL: Re-check turn validity after async dice roll
-          if (!isCurrentTurn()) {
-            console.log(`[LUDO AI] Turn ${currentTurnId} invalidated after dice roll, skipping`);
+        try {
+          // Check if this turn is still valid AND component is mounted
+          if (!isCurrentTurn() || !isMountedRef.current) {
+            console.log(`[LUDO AI] Turn ${currentTurnId} invalidated before roll, skipping`);
             return;
           }
           
-          console.log(`[LUDO AI] AI ${currentPlayerNow.color} rolled ${dice}, movable: [${movable.join(', ')}]`);
-          
-          if (movable.length === 0) {
-            // No valid moves - advance turn after showing message
-            toast({
-              title: t('gameAI.noValidMoves'),
-              description: t('gameAI.cannotMove'),
-              duration: 1500,
-            });
-            aiTimeoutRef.current = setTimeout(() => {
-              if (!isCurrentTurn()) return;
-              // Clear safety timeout since we're advancing normally
-              if (safetyTimeoutRef.current) {
-                clearTimeout(safetyTimeoutRef.current);
-                safetyTimeoutRef.current = null;
-              }
-              setDiceValue(null);
-              advanceTurn(dice);
-            }, 1000);
-          } else {
-            // AI has valid moves - choose and execute
-            const capturedDice = dice;
-            setMovableTokens([]);
-            
-            const aiDelay = difficulty === "easy" ? 600 : difficulty === "medium" ? 400 : 200;
-            aiTimeoutRef.current = setTimeout(() => {
-              if (!isCurrentTurn()) return;
-              
-              let chosenToken: number;
-              
-              if (difficulty === "easy") {
-                chosenToken = movable[Math.floor(Math.random() * movable.length)];
-              } else {
-                // Prioritize tokens already on board
-                const currentTokens = players[currentPlayerIndex]?.tokens;
-                if (!currentTokens) {
-                  console.warn(`[LUDO AI] No tokens found for player ${currentPlayerIndex}`);
-                  return;
-                }
-                const tokens = movable.map(i => ({ index: i, token: currentTokens[i] }));
-                tokens.sort((a, b) => {
-                  if (a.token.position === -1 && b.token.position !== -1) return 1;
-                  if (b.token.position === -1 && a.token.position !== -1) return -1;
-                  return b.token.position - a.token.position;
-                });
-                chosenToken = tokens[0].index;
+          rollDice((dice, movable) => {
+            try {
+              // CRITICAL: Re-check turn validity and mount status after async dice roll
+              if (!isCurrentTurn() || !isMountedRef.current) {
+                console.log(`[LUDO AI] Turn ${currentTurnId} invalidated after dice roll, skipping`);
+                return;
               }
               
-              const moveSuccess = executeMove(currentPlayerIndex, chosenToken, capturedDice, () => {
-                if (!isCurrentTurn()) return;
-                // Clear safety timeout since we're advancing normally
-                if (safetyTimeoutRef.current) {
-                  clearTimeout(safetyTimeoutRef.current);
-                  safetyTimeoutRef.current = null;
-                }
-                setDiceValue(null);
-                aiTimeoutRef.current = setTimeout(() => {
-                  if (!isCurrentTurn()) return;
-                  advanceTurn(capturedDice);
-                }, 200);
-              });
+              console.log(`[LUDO AI] AI ${currentPlayerNow.color} rolled ${dice}, movable: [${movable.join(', ')}]`);
               
-              // If move failed, force advance turn after delay
-              if (!moveSuccess) {
-                console.warn(`[LUDO AI] Move failed for player ${currentPlayerIndex}, token ${chosenToken}`);
+              if (movable.length === 0) {
+                // No valid moves - advance turn after showing message
+                if (isMountedRef.current) {
+                  toast({
+                    title: t('gameAI.noValidMoves'),
+                    description: t('gameAI.cannotMove'),
+                    duration: 1500,
+                  });
+                }
                 aiTimeoutRef.current = setTimeout(() => {
-                  if (!isCurrentTurn()) return;
+                  if (!isCurrentTurn() || !isMountedRef.current) return;
+                  // Clear safety timeout since we're advancing normally
                   if (safetyTimeoutRef.current) {
                     clearTimeout(safetyTimeoutRef.current);
                     safetyTimeoutRef.current = null;
                   }
                   setDiceValue(null);
-                  advanceTurn(capturedDice);
-                }, 500);
+                  advanceTurn(dice);
+                }, 1000);
+              } else {
+                // AI has valid moves - choose and execute
+                const capturedDice = dice;
+                setMovableTokens([]);
+                
+                const aiDelay = difficulty === "easy" ? 600 : difficulty === "medium" ? 400 : 200;
+                aiTimeoutRef.current = setTimeout(() => {
+                  try {
+                    if (!isCurrentTurn() || !isMountedRef.current) return;
+                    
+                    let chosenToken: number;
+                    
+                    // Get fresh player data from ref to avoid stale closure
+                    const currentPlayerData = players[currentPlayerIndex];
+                    if (!currentPlayerData?.tokens) {
+                      console.warn(`[LUDO AI] No player/tokens found for index ${currentPlayerIndex}`);
+                      advanceTurn(1);
+                      return;
+                    }
+                    
+                    if (difficulty === "easy") {
+                      chosenToken = movable[Math.floor(Math.random() * movable.length)];
+                    } else {
+                      // Prioritize tokens already on board
+                      const tokens = movable.map(i => ({ index: i, token: currentPlayerData.tokens[i] }));
+                      tokens.sort((a, b) => {
+                        if (a.token.position === -1 && b.token.position !== -1) return 1;
+                        if (b.token.position === -1 && a.token.position !== -1) return -1;
+                        return b.token.position - a.token.position;
+                      });
+                      chosenToken = tokens[0].index;
+                    }
+                    
+                    const moveSuccess = executeMove(currentPlayerIndex, chosenToken, capturedDice, () => {
+                      if (!isCurrentTurn() || !isMountedRef.current) return;
+                      // Clear safety timeout since we're advancing normally
+                      if (safetyTimeoutRef.current) {
+                        clearTimeout(safetyTimeoutRef.current);
+                        safetyTimeoutRef.current = null;
+                      }
+                      setDiceValue(null);
+                      aiTimeoutRef.current = setTimeout(() => {
+                        if (!isCurrentTurn() || !isMountedRef.current) return;
+                        advanceTurn(capturedDice);
+                      }, 200);
+                    });
+                    
+                    // If move failed, force advance turn after delay
+                    if (!moveSuccess) {
+                      console.warn(`[LUDO AI] Move failed for player ${currentPlayerIndex}, token ${chosenToken}`);
+                      aiTimeoutRef.current = setTimeout(() => {
+                        if (!isCurrentTurn() || !isMountedRef.current) return;
+                        if (safetyTimeoutRef.current) {
+                          clearTimeout(safetyTimeoutRef.current);
+                          safetyTimeoutRef.current = null;
+                        }
+                        setDiceValue(null);
+                        advanceTurn(capturedDice);
+                      }, 500);
+                    }
+                  } catch (err) {
+                    console.error('[LUDO AI] Error during AI move selection:', err);
+                    advanceTurn(1);
+                  }
+                }, aiDelay);
               }
-            }, aiDelay);
-          }
-        });
+            } catch (err) {
+              console.error('[LUDO AI] Error in rollDice callback:', err);
+            }
+          });
+        } catch (err) {
+          console.error('[LUDO AI] Error starting AI turn:', err);
+        }
       }, delay);
     }, AI_DEBOUNCE_MS);
     
