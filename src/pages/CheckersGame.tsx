@@ -15,6 +15,8 @@ import { useGameSessionPersistence } from "@/hooks/useGameSessionPersistence";
 import { useRoomMode } from "@/hooks/useRoomMode";
 import { useRankedReadyGate } from "@/hooks/useRankedReadyGate";
 import { useTurnTimer, DEFAULT_RANKED_TURN_TIME } from "@/hooks/useTurnTimer";
+import { useStartRoll } from "@/hooks/useStartRoll";
+import { DiceRollStart } from "@/components/DiceRollStart";
 import TurnStatusHeader from "@/components/TurnStatusHeader";
 import TurnHistoryDrawer from "@/components/TurnHistoryDrawer";
 import NotificationToggle from "@/components/NotificationToggle";
@@ -258,6 +260,25 @@ const CheckersGame = () => {
     enabled: roomPlayers.length >= 2 && modeLoaded,
   });
 
+  // Deterministic start roll for ranked games
+  const startRoll = useStartRoll({
+    roomPda,
+    myWallet: address,
+    isRanked: isRankedGame,
+    roomPlayers,
+    bothReady: rankedGate.bothReady,
+    initialColor: myColor === "gold" ? "w" : "b",
+  });
+
+  // Update myColor based on start roll result for ranked games
+  useEffect(() => {
+    if (isRankedGame && startRoll.isFinalized && startRoll.startingWallet) {
+      const isStarter = startRoll.startingWallet.toLowerCase() === address?.toLowerCase();
+      setMyColor(isStarter ? "gold" : "obsidian");
+      setFlipped(!isStarter); // Flip board for non-starter
+    }
+  }, [isRankedGame, startRoll.isFinalized, startRoll.startingWallet, address]);
+
   const handleAcceptRules = async () => {
     const result = await rankedGate.acceptRules();
     if (result.success) {
@@ -312,8 +333,8 @@ const CheckersGame = () => {
     }
   };
 
-  // Block gameplay until both players are ready (for ranked games)
-  const canPlay = !isRankedGame || rankedGate.bothReady;
+  // Block gameplay until both players are ready (for ranked games) AND start roll is finalized
+  const canPlay = (!isRankedGame || (rankedGate.bothReady && startRoll.isFinalized));
   
   // Check if it's actually my turn (based on game state, not canPlay gate)
   const isActuallyMyTurn = currentPlayer === myColor && !gameOver;
@@ -957,11 +978,22 @@ const CheckersGame = () => {
       {/* Background */}
       <div className="absolute inset-0 bg-gradient-to-b from-midnight-light via-background to-background" />
       
+      {/* Dice Roll Start for ranked games */}
+      {startRoll.showDiceRoll && rankedGate.bothReady && roomPlayers.length >= 2 && address && (
+        <DiceRollStart
+          roomPda={roomPda || ""}
+          myWallet={address}
+          player1Wallet={roomPlayers[0]}
+          player2Wallet={roomPlayers[1]}
+          onComplete={startRoll.handleRollComplete}
+        />
+      )}
+      
       {/* Turn Banner */}
       <TurnBanner
         gameName="Checkers"
         roomId={roomId || "unknown"}
-        isVisible={!hasPermission && isActuallyMyTurn && !gameOver}
+        isVisible={!hasPermission && isActuallyMyTurn && !gameOver && !startRoll.showDiceRoll}
       />
 
       <div className="relative z-10">

@@ -20,6 +20,8 @@ import { useGameSessionPersistence } from "@/hooks/useGameSessionPersistence";
 import { useRoomMode } from "@/hooks/useRoomMode";
 import { useRankedReadyGate } from "@/hooks/useRankedReadyGate";
 import { useTurnTimer, DEFAULT_RANKED_TURN_TIME } from "@/hooks/useTurnTimer";
+import { useStartRoll } from "@/hooks/useStartRoll";
+import { DiceRollStart } from "@/components/DiceRollStart";
 import TurnStatusHeader from "@/components/TurnStatusHeader";
 import TurnHistoryDrawer from "@/components/TurnHistoryDrawer";
 import NotificationToggle from "@/components/NotificationToggle";
@@ -260,6 +262,24 @@ const BackgammonGame = () => {
     enabled: roomPlayers.length >= 2 && modeLoaded,
   });
 
+  // Deterministic start roll for ranked games
+  const startRoll = useStartRoll({
+    roomPda,
+    myWallet: address,
+    isRanked: isRankedGame,
+    roomPlayers,
+    bothReady: rankedGate.bothReady,
+    initialColor: myRole === "player" ? "w" : "b",
+  });
+
+  // Update myRole based on start roll result for ranked games
+  useEffect(() => {
+    if (isRankedGame && startRoll.isFinalized && startRoll.startingWallet) {
+      const isStarter = startRoll.startingWallet.toLowerCase() === address?.toLowerCase();
+      setMyRole(isStarter ? "player" : "ai");
+    }
+  }, [isRankedGame, startRoll.isFinalized, startRoll.startingWallet, address]);
+
   const handleAcceptRules = async () => {
     const result = await rankedGate.acceptRules();
     if (result.success) {
@@ -314,8 +334,8 @@ const BackgammonGame = () => {
     }
   };
 
-  // Block gameplay until both players are ready (for ranked games)
-  const canPlay = !isRankedGame || rankedGate.bothReady;
+  // Block gameplay until both players are ready (for ranked games) AND start roll is finalized
+  const canPlay = (!isRankedGame || (rankedGate.bothReady && startRoll.isFinalized));
   const isMyTurnRaw = currentPlayer === myRole;
   
   // Check if it's actually my turn (based on game state, not canPlay gate)
@@ -894,10 +914,22 @@ const BackgammonGame = () => {
       <GoldConfettiExplosion 
         active={gameOver && gameStatus.includes("win")} 
       />
+      
+      {/* Dice Roll Start for ranked games */}
+      {startRoll.showDiceRoll && rankedGate.bothReady && roomPlayers.length >= 2 && address && (
+        <DiceRollStart
+          roomPda={roomPda || ""}
+          myWallet={address}
+          player1Wallet={roomPlayers[0]}
+          player2Wallet={roomPlayers[1]}
+          onComplete={startRoll.handleRollComplete}
+        />
+      )}
+      
       <TurnBanner
         gameName="Backgammon"
         roomId={roomId || "unknown"}
-        isVisible={!hasPermission && isActuallyMyTurn && !gameOver}
+        isVisible={!hasPermission && isActuallyMyTurn && !gameOver && !startRoll.showDiceRoll}
       />
 
       {/* Header */}

@@ -13,6 +13,8 @@ import { useGameSessionPersistence } from "@/hooks/useGameSessionPersistence";
 import { useRoomMode } from "@/hooks/useRoomMode";
 import { useRankedReadyGate } from "@/hooks/useRankedReadyGate";
 import { useTurnTimer, DEFAULT_RANKED_TURN_TIME } from "@/hooks/useTurnTimer";
+import { useStartRoll } from "@/hooks/useStartRoll";
+import { DiceRollStart } from "@/components/DiceRollStart";
 import LudoBoard from "@/components/ludo/LudoBoard";
 import EgyptianDice from "@/components/ludo/EgyptianDice";
 import TurnIndicator from "@/components/ludo/TurnIndicator";
@@ -213,6 +215,32 @@ const LudoGame = () => {
     enabled: roomPlayers.length >= 2 && modeLoaded,
   });
 
+  // Deterministic start roll for ranked games
+  const startRoll = useStartRoll({
+    roomPda,
+    myWallet: address,
+    isRanked: isRankedGame,
+    roomPlayers,
+    bothReady: rankedGate.bothReady,
+    initialColor: "w", // Ludo doesn't use w/b, but we need a value
+  });
+
+  // Find which player index the current wallet is
+  const myPlayerIndex = useMemo(() => {
+    if (!address || roomPlayers.length === 0) return -1;
+    return roomPlayers.findIndex(p => p.toLowerCase() === address.toLowerCase());
+  }, [address, roomPlayers]);
+
+  // Update starting player based on start roll result for ranked games
+  useEffect(() => {
+    if (isRankedGame && startRoll.isFinalized && startRoll.startingWallet) {
+      const starterIndex = roomPlayers.findIndex(p => p.toLowerCase() === startRoll.startingWallet?.toLowerCase());
+      if (starterIndex >= 0 && starterIndex !== currentPlayerIndex) {
+        setCurrentPlayerIndex(starterIndex);
+      }
+    }
+  }, [isRankedGame, startRoll.isFinalized, startRoll.startingWallet, roomPlayers, currentPlayerIndex, setCurrentPlayerIndex]);
+
   const handleAcceptRules = async () => {
     const result = await rankedGate.acceptRules();
     if (result.success) {
@@ -281,14 +309,8 @@ const LudoGame = () => {
     }
   };
 
-  // Block gameplay until both players are ready (for ranked games)
-  const canPlay = !isRankedGame || rankedGate.bothReady;
-
-  // Find which player index the current wallet is
-  const myPlayerIndex = useMemo(() => {
-    if (!address || roomPlayers.length === 0) return -1;
-    return roomPlayers.findIndex(p => p.toLowerCase() === address.toLowerCase());
-  }, [address, roomPlayers]);
+  // Block gameplay until both players are ready (for ranked games) AND start roll is finalized
+  const canPlay = (!isRankedGame || (rankedGate.bothReady && startRoll.isFinalized));
 
   // Check if it's actually my turn (based on game state, not canPlay gate)
   const isActuallyMyTurn = myPlayerIndex >= 0 && myPlayerIndex === currentPlayerIndex && !gameOver;
@@ -759,11 +781,22 @@ const LudoGame = () => {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
+      {/* Dice Roll Start for ranked games */}
+      {startRoll.showDiceRoll && rankedGate.bothReady && roomPlayers.length >= 2 && address && (
+        <DiceRollStart
+          roomPda={roomPda || ""}
+          myWallet={address}
+          player1Wallet={roomPlayers[0]}
+          player2Wallet={roomPlayers[1]}
+          onComplete={startRoll.handleRollComplete}
+        />
+      )}
+      
       {/* Turn Banner (fallback for no permission) */}
       <TurnBanner
         gameName="Ludo"
         roomId={roomId || "unknown"}
-        isVisible={!hasPermission && isActuallyMyTurn && !gameOver}
+        isVisible={!hasPermission && isActuallyMyTurn && !gameOver && !startRoll.showDiceRoll}
       />
 
       {/* Header */}
