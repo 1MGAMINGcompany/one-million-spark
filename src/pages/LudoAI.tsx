@@ -211,7 +211,7 @@ const LudoAI = () => {
   const aiTurnIdRef = useRef(0);
   const aiTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const safetyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const lastProcessedTurnRef = useRef<string | null>(null);
+  const lastProcessedTurnRef = useRef<number>(0);
   const gameSessionRef = useRef(gameSessionId);
   
   // Refs to avoid stale closures - CRITICAL for bonus turns after rolling 6
@@ -235,7 +235,7 @@ const LudoAI = () => {
       // Game was reset - clear all AI refs
       console.log(`[LUDO AI] Game session changed: ${gameSessionRef.current} -> ${gameSessionId}, clearing refs`);
       gameSessionRef.current = gameSessionId;
-      lastProcessedTurnRef.current = null;
+      lastProcessedTurnRef.current = 0;
       aiTurnIdRef.current = 0;
       globalTurnCounterRef.current = 0;
       if (aiTimeoutRef.current) {
@@ -306,15 +306,12 @@ const LudoAI = () => {
         return;
       }
       
-      // Turn key uses monotonic counter - impossible to collide
-      const turnKey = `${capturedSession}-${thisTurnCounter}`;
-      
-      // Check if a NEWER effect already started processing
-      if (lastProcessedTurnRef.current !== null && lastProcessedTurnRef.current >= turnKey) {
-        console.log(`[LUDO AI] Turn ${turnKey} superseded, skipping`);
+      // Check if a NEWER effect already started processing (numeric comparison)
+      if (lastProcessedTurnRef.current >= thisTurnCounter) {
+        console.log(`[LUDO AI] Turn ${thisTurnCounter} superseded by ${lastProcessedTurnRef.current}, skipping`);
         return;
       }
-      lastProcessedTurnRef.current = turnKey;
+      lastProcessedTurnRef.current = thisTurnCounter;
       
       // Increment turn ID to invalidate any previous AI callbacks
       aiTurnIdRef.current += 1;
