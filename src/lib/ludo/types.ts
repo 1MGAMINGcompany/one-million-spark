@@ -3,7 +3,7 @@
  * 
  * Token States:
  * - BASE: Token is at home base (not on board)
- * - TRACK: Token is on main track (52 cells, shared)
+ * - TRACK: Token is on main track (56 cells, shared)
  * - HOME_PATH: Token is in final stretch (6 cells, player-specific)
  * - FINISHED: Token reached home (done)
  */
@@ -21,7 +21,7 @@ export type GamePhase =
 export interface Token {
   id: number;           // 0-3 for each player
   state: TokenState;
-  position: number | null;  // null when BASE/FINISHED, 0-51 for TRACK, 0-5 for HOME_PATH
+  position: number | null;  // null when BASE/FINISHED, 0-55 for TRACK, 0-5 for HOME_PATH
 }
 
 export interface Player {
@@ -61,32 +61,31 @@ export interface GameState {
 }
 
 // Constants
-export const TRACK_SIZE = 52;           // Main track has 52 cells (0-51)
+export const TRACK_SIZE = 56;           // Main track has 56 cells (0-55)
 export const HOME_PATH_SIZE = 6;        // Each player's home path has 6 cells
 export const TOKENS_PER_PLAYER = 4;
 export const PLAYER_COLORS: PlayerColor[] = ['gold', 'ruby', 'sapphire', 'emerald'];
 
 // Starting positions on main track (where tokens enter from BASE)
-// These match the START squares in TRACK_COORDS
+// These are the "safe squares" where each player enters
 export const START_POSITIONS: Record<PlayerColor, number> = {
   gold: 0,       // Position 0: [6, 1]
-  ruby: 13,      // Position 13: [1, 8]
-  sapphire: 26,  // Position 26: [8, 13]
-  emerald: 39,   // Position 39: [13, 6]
+  ruby: 14,      // Position 14: [1, 8]
+  sapphire: 28,  // Position 28: [8, 13]
+  emerald: 41,   // Position 41: [14, 6]
 };
 
 // Track position where player's tokens exit to HOME_PATH
-// Each player must travel 51 cells on track before entering home path
-// (this is the last track position before their start, where they turn into home path)
+// After traveling 55 cells on the track, they enter home path on the 56th step
 export const HOME_ENTRY_POSITIONS: Record<PlayerColor, number> = {
-  gold: 51,      // After position 51, gold enters home path (position 51 is [6,0], home entry from left)
-  ruby: 12,      // After position 12, ruby enters home path (position 12 is [0,8], home entry from top)  
-  sapphire: 25,  // After position 25, sapphire enters home path (position 25 is [8,14], home entry from right)
-  emerald: 38,   // After position 38, emerald enters home path (position 38 is [14,6], home entry from bottom)
+  gold: 55,      // Position 55 [6,0], next step enters home path
+  ruby: 13,      // Position 13 [0,8], next step enters home path
+  sapphire: 27,  // Position 27 [8,14], next step enters home path
+  emerald: 40,   // Position 40 [14,7], next step enters home path
 };
 
 // Safe squares - cannot be captured here (starting positions)
-export const SAFE_SQUARES: number[] = [0, 13, 26, 39];
+export const SAFE_SQUARES: number[] = [0, 14, 28, 41];
 
 // Create initial player state
 export function createPlayer(color: PlayerColor, wallet: string, isAI: boolean): Player {
