@@ -137,7 +137,27 @@ export function useRankedAcceptance(
       console.log("[RankedAcceptance] Session started, token:", token.slice(0, 16) + "...");
       setSessionToken(token);
 
-      // Step 6: Mark player as ready now that we have a valid session
+      // Step 6: Store acceptance with signature in game_acceptances for deterministic roll
+      console.log("[RankedAcceptance] Recording acceptance with signature...");
+      const { error: acceptanceError } = await supabase
+        .from("game_acceptances")
+        .insert({
+          room_pda: roomPda,
+          player_wallet: wallet,
+          rules_hash: hash,
+          nonce: nonce,
+          timestamp_ms: timestampMs,
+          signature: signatureBase58,
+          session_token: token,
+          session_expires_at: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(),
+        });
+
+      if (acceptanceError) {
+        console.error("[RankedAcceptance] Failed to record acceptance:", acceptanceError);
+        // Don't fail the flow - session is valid, acceptance record is for dice roll
+      }
+
+      // Step 7: Mark player as ready now that we have a valid session
       console.log("[RankedAcceptance] Marking player ready...");
       const { error: readyError } = await supabase.rpc("set_player_ready", {
         p_room_pda: roomPda,

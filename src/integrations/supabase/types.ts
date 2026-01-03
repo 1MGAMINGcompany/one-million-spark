@@ -115,6 +115,10 @@ export type Database = {
           player1_wallet: string
           player2_wallet: string | null
           room_pda: string
+          start_roll: Json | null
+          start_roll_finalized: boolean | null
+          start_roll_seed: string | null
+          starting_player_wallet: string | null
           status: string
           turn_time_seconds: number
           updated_at: string
@@ -132,6 +136,10 @@ export type Database = {
           player1_wallet: string
           player2_wallet?: string | null
           room_pda: string
+          start_roll?: Json | null
+          start_roll_finalized?: boolean | null
+          start_roll_seed?: string | null
+          starting_player_wallet?: string | null
           status?: string
           turn_time_seconds?: number
           updated_at?: string
@@ -149,6 +157,10 @@ export type Database = {
           player1_wallet?: string
           player2_wallet?: string | null
           room_pda?: string
+          start_roll?: Json | null
+          start_roll_finalized?: boolean | null
+          start_roll_seed?: string | null
+          starting_player_wallet?: string | null
           status?: string
           turn_time_seconds?: number
           updated_at?: string
@@ -427,6 +439,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      compute_start_roll: { Args: { p_room_pda: string }; Returns: Json }
       finish_game_session: {
         Args: { p_caller_wallet?: string; p_room_pda: string }
         Returns: undefined
