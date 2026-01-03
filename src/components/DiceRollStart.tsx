@@ -1,12 +1,22 @@
 import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { Dice5 } from "lucide-react";
+import { Dice5, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
 
 interface DiceRollStartProps {
-  onComplete: (playerStarts: boolean) => void;
-  playerName?: string;
-  opponentName?: string;
+  roomPda: string;
+  myWallet: string;
+  player1Wallet: string;
+  player2Wallet: string;
+  onComplete: (startingWallet: string) => void;
+}
+
+interface StartRollResult {
+  p1: { wallet: string; dice: number[]; total: number };
+  p2: { wallet: string; dice: number[]; total: number };
+  reroll_count: number;
+  winner: string;
 }
 
 // Single 3D-styled die component
@@ -94,17 +104,58 @@ const Die3D = ({
 };
 
 export function DiceRollStart({ 
-  onComplete, 
-  playerName = "You",
-  opponentName = "Opponent" 
+  roomPda,
+  myWallet,
+  player1Wallet,
+  player2Wallet,
+  onComplete,
 }: DiceRollStartProps) {
-  const [phase, setPhase] = useState<"waiting" | "rolling" | "result">("waiting");
+  const [phase, setPhase] = useState<"waiting" | "loading" | "rolling" | "result">("waiting");
   const [playerDice, setPlayerDice] = useState<number[]>([1, 1]);
   const [opponentDice, setOpponentDice] = useState<number[]>([1, 1]);
-  const [winner, setWinner] = useState<"player" | "opponent" | "tie" | null>(null);
-  const [rollCount, setRollCount] = useState(0);
+  const [result, setResult] = useState<StartRollResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  
+  // Determine which player is "me" for display purposes
+  const isPlayer1 = myWallet.toLowerCase() === player1Wallet.toLowerCase();
+  const myName = "You";
+  const opponentName = "Opponent";
 
-  // Roll animation effect
+  // Check if roll is already finalized on mount
+  useEffect(() => {
+    const checkExistingRoll = async () => {
+      try {
+        const { data: session } = await supabase
+          .from("game_sessions")
+          .select("start_roll_finalized, start_roll, starting_player_wallet")
+          .eq("room_pda", roomPda)
+          .maybeSingle();
+
+        if (session?.start_roll_finalized && session.start_roll && session.starting_player_wallet) {
+          // Roll already exists - display it
+          const rollData = session.start_roll as unknown as StartRollResult;
+          setResult(rollData);
+          
+          // Set dice values for display
+          if (isPlayer1) {
+            setPlayerDice(rollData.p1.dice);
+            setOpponentDice(rollData.p2.dice);
+          } else {
+            setPlayerDice(rollData.p2.dice);
+            setOpponentDice(rollData.p1.dice);
+          }
+          
+          setPhase("result");
+        }
+      } catch (err) {
+        console.error("[DiceRollStart] Failed to check existing roll:", err);
+      }
+    };
+
+    checkExistingRoll();
+  }, [roomPda, isPlayer1]);
+
+  // Rolling animation effect
   useEffect(() => {
     if (phase !== "rolling") return;
 
@@ -119,58 +170,81 @@ export function DiceRollStart({
       ]);
     }, 100);
 
+    // After animation, set final values from result
     const timeout = setTimeout(() => {
       clearInterval(interval);
       
-      // Final roll
-      const pDice = [
-        Math.floor(Math.random() * 6) + 1,
-        Math.floor(Math.random() * 6) + 1
-      ];
-      const oDice = [
-        Math.floor(Math.random() * 6) + 1,
-        Math.floor(Math.random() * 6) + 1
-      ];
-      
-      setPlayerDice(pDice);
-      setOpponentDice(oDice);
-      
-      const playerTotal = pDice[0] + pDice[1];
-      const opponentTotal = oDice[0] + oDice[1];
-      
-      if (playerTotal > opponentTotal) {
-        setWinner("player");
+      if (result) {
+        if (isPlayer1) {
+          setPlayerDice(result.p1.dice);
+          setOpponentDice(result.p2.dice);
+        } else {
+          setPlayerDice(result.p2.dice);
+          setOpponentDice(result.p1.dice);
+        }
         setPhase("result");
-      } else if (opponentTotal > playerTotal) {
-        setWinner("opponent");
-        setPhase("result");
-      } else {
-        // Tie - need to reroll (doubles)
-        setWinner("tie");
-        setPhase("result");
-        setRollCount(prev => prev + 1);
       }
-    }, 1500);
+    }, 1200);
 
     return () => {
       clearInterval(interval);
       clearTimeout(timeout);
     };
-  }, [phase, rollCount]);
+  }, [phase, result, isPlayer1]);
 
-  const handleRoll = useCallback(() => {
-    setPhase("rolling");
-    setWinner(null);
-  }, []);
+  const handleRoll = useCallback(async () => {
+    setPhase("loading");
+    setError(null);
+
+    try {
+      // Call the RPC to compute deterministic roll
+      const { data, error: rpcError } = await supabase.rpc("compute_start_roll", {
+        p_room_pda: roomPda,
+      });
+
+      if (rpcError) {
+        console.error("[DiceRollStart] RPC error:", rpcError);
+        setError(rpcError.message || "Failed to compute roll");
+        setPhase("waiting");
+        return;
+      }
+
+      // Type assertion for the RPC response
+      const rpcResult = data as unknown as { starting_player_wallet: string; start_roll: StartRollResult } | null;
+      
+      if (!rpcResult || !rpcResult.start_roll) {
+        setError("Failed to get roll result");
+        setPhase("waiting");
+        return;
+      }
+
+      const rollResult = rpcResult.start_roll;
+      setResult(rollResult);
+      
+      // Start the animation phase
+      setPhase("rolling");
+    } catch (err: any) {
+      console.error("[DiceRollStart] Error:", err);
+      setError(err.message || "Unexpected error");
+      setPhase("waiting");
+    }
+  }, [roomPda]);
 
   const handleContinue = useCallback(() => {
-    if (winner === "tie") {
-      // Reroll on tie
-      handleRoll();
-    } else if (winner) {
-      onComplete(winner === "player");
+    if (result) {
+      onComplete(result.winner);
     }
-  }, [winner, onComplete, handleRoll]);
+  }, [result, onComplete]);
+
+  // Get my total and opponent total for display
+  const myTotal = result 
+    ? (isPlayer1 ? result.p1.total : result.p2.total)
+    : playerDice[0] + playerDice[1];
+  const opponentTotal = result
+    ? (isPlayer1 ? result.p2.total : result.p1.total)
+    : opponentDice[0] + opponentDice[1];
+  
+  const isWinner = result?.winner.toLowerCase() === myWallet.toLowerCase();
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/90 backdrop-blur-sm">
@@ -190,16 +264,16 @@ export function DiceRollStart({
 
         {/* Dice Display */}
         <div className="flex justify-between items-center mb-8">
-          {/* Player Side */}
+          {/* My Side */}
           <div className="text-center flex-1">
-            <p className="text-sm font-medium text-primary mb-3">{playerName}</p>
+            <p className="text-sm font-medium text-primary mb-3">{myName}</p>
             <div className="flex justify-center gap-2">
               <Die3D value={playerDice[0]} rolling={phase === "rolling"} color="gold" />
               <Die3D value={playerDice[1]} rolling={phase === "rolling"} color="gold" />
             </div>
             {phase === "result" && (
               <p className="mt-2 text-lg font-bold text-primary">
-                {playerDice[0] + playerDice[1]}
+                {myTotal}
               </p>
             )}
           </div>
@@ -218,23 +292,34 @@ export function DiceRollStart({
             </div>
             {phase === "result" && (
               <p className="mt-2 text-lg font-bold text-muted-foreground">
-                {opponentDice[0] + opponentDice[1]}
+                {opponentTotal}
               </p>
             )}
           </div>
         </div>
 
+        {/* Error Message */}
+        {error && (
+          <div className="text-center mb-6 py-3 px-4 rounded-lg bg-red-500/20 text-red-400">
+            {error}
+          </div>
+        )}
+
         {/* Result Message */}
-        {phase === "result" && winner && (
+        {phase === "result" && result && (
           <div className={cn(
             "text-center mb-6 py-3 px-4 rounded-lg",
-            winner === "player" && "bg-green-500/20 text-green-400",
-            winner === "opponent" && "bg-red-500/20 text-red-400",
-            winner === "tie" && "bg-primary/20 text-primary"
+            isWinner ? "bg-green-500/20 text-green-400" : "bg-red-500/20 text-red-400"
           )}>
-            {winner === "player" && `${playerName} rolled higher! You go first.`}
-            {winner === "opponent" && `${opponentName} rolled higher! They go first.`}
-            {winner === "tie" && "It's a tie! Roll again."}
+            {isWinner 
+              ? `${myName} rolled higher! You go first.`
+              : `${opponentName} rolled higher! They go first.`
+            }
+            {result.reroll_count > 0 && (
+              <span className="block text-xs mt-1 opacity-70">
+                (Resolved after {result.reroll_count} tie-breaker{result.reroll_count > 1 ? 's' : ''})
+              </span>
+            )}
           </div>
         )}
 
@@ -247,6 +332,13 @@ export function DiceRollStart({
             </Button>
           )}
           
+          {phase === "loading" && (
+            <Button disabled size="lg" className="gap-2">
+              <Loader2 className="w-5 h-5 animate-spin" />
+              Computing...
+            </Button>
+          )}
+          
           {phase === "rolling" && (
             <Button disabled size="lg" className="gap-2">
               Rolling...
@@ -255,7 +347,7 @@ export function DiceRollStart({
           
           {phase === "result" && (
             <Button onClick={handleContinue} size="lg">
-              {winner === "tie" ? "Roll Again" : "Start Game"}
+              Start Game
             </Button>
           )}
         </div>
