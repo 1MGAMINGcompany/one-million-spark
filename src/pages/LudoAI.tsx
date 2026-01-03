@@ -219,6 +219,7 @@ const LudoAI = () => {
   const diceValueRef = useRef(diceValue);
   const isRollingRef = useRef(isRolling);
   const isAnimatingRef = useRef(isAnimating);
+  const currentPlayerIndexRef = useRef(currentPlayerIndex);
   
   // Monotonically increasing counter - guarantees unique turn keys
   const globalTurnCounterRef = useRef(0);
@@ -228,6 +229,7 @@ const LudoAI = () => {
   useEffect(() => { diceValueRef.current = diceValue; }, [diceValue]);
   useEffect(() => { isRollingRef.current = isRolling; }, [isRolling]);
   useEffect(() => { isAnimatingRef.current = isAnimating; }, [isAnimating]);
+  useEffect(() => { currentPlayerIndexRef.current = currentPlayerIndex; }, [currentPlayerIndex]);
   
   // Track game session changes to reset refs
   useEffect(() => {
@@ -301,8 +303,10 @@ const LudoAI = () => {
         return;
       }
       
-      // Check player is still AI (game might have been reset)
-      if (!currentPlayer?.isAI) {
+      // Check player is still AI using REF (game might have advanced to human turn)
+      const currentPlayerNow = players[currentPlayerIndexRef.current];
+      if (!currentPlayerNow?.isAI) {
+        console.log(`[LUDO AI] Player ${currentPlayerIndexRef.current} (${currentPlayerNow?.color}) is not AI, skipping`);
         return;
       }
       
@@ -355,7 +359,7 @@ const LudoAI = () => {
                 return;
               }
               
-              console.log(`[LUDO AI] AI ${currentPlayer.color} rolled ${dice}, movable: [${movable.join(', ')}]`);
+              console.log(`[LUDO AI] AI ${currentPlayerNow.color} rolled ${dice}, movable: [${movable.join(', ')}]`);
               
               if (movable.length === 0) {
                 // No valid moves - advance turn after showing message
