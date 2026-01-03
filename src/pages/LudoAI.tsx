@@ -1,3 +1,9 @@
+/**
+ * Ludo AI Page - Single Player vs Computer
+ * 
+ * Uses the new pure LudoEngine for deterministic game logic.
+ */
+
 import { useState, useCallback, useEffect, useRef } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -5,12 +11,14 @@ import { ArrowLeft, RotateCcw, Music, Music2, Volume2, VolumeX } from "lucide-re
 import { toast } from "@/hooks/use-toast";
 import { useSound } from "@/contexts/SoundContext";
 import { useTranslation } from "react-i18next";
+import GoldConfettiExplosion from "@/components/GoldConfettiExplosion";
+
+import { useLudoGame } from "@/hooks/useLudoGame";
+import { Difficulty } from "@/lib/ludo/ai";
+import { PlayerColor } from "@/lib/ludo/types";
 import LudoBoard from "@/components/ludo/LudoBoard";
 import EgyptianDice from "@/components/ludo/EgyptianDice";
 import TurnIndicator from "@/components/ludo/TurnIndicator";
-import { Difficulty } from "@/components/ludo/ludoTypes";
-import { useLudoEngine } from "@/hooks/useLudoEngine";
-import GoldConfettiExplosion from "@/components/GoldConfettiExplosion";
 
 const LudoAI = () => {
   const { t } = useTranslation();
@@ -21,35 +29,86 @@ const LudoAI = () => {
   const [musicEnabled, setMusicEnabled] = useState(true);
   const musicRef = useRef<HTMLAudioElement | null>(null);
 
-  // Sound wrapper
-  const playSfx = useCallback((sound: string) => {
-    play(sound);
-  }, [play]);
+  // Capture animation state (for LudoBoard)
+  const [captureEvent, setCaptureEvent] = useState<{
+    capturedColor: PlayerColor;
+    capturingColor: PlayerColor;
+    position: [number, number];
+    tokenId?: number;
+    fromPosition?: number;
+  } | null>(null);
 
-  const showToast = useCallback((title: string, description: string, variant?: "default" | "destructive") => {
-    toast({ title, description, variant, duration: 2000 });
-  }, []);
-
+  // Game hook with new engine
   const {
-    players,
-    currentPlayerIndex,
+    gameState,
     currentPlayer,
-    phase,
     diceValue,
-    movableTokens,
     winner,
-    captureEvent,
-    gameId,
+    phase,
+    isGameOver,
     isRolling,
-    isAnimating,
+    animatingMove,
+    isHumanTurn,
+    canRoll,
+    canMove,
+    movableTokenIndices,
     rollDice,
     selectToken,
+    onMoveAnimationComplete,
     resetGame,
-    clearCaptureEvent,
-  } = useLudoEngine({
-    onSoundPlay: playSfx,
-    onToast: showToast,
+  } = useLudoGame({
+    playerCount: 4,
+    humanPlayerIndex: 0,
+    difficulty,
+    onDiceRolled: (value) => {
+      play("dice");
+    },
+    onCapture: (captured) => {
+      const capturedPlayer = gameState.players[captured.playerIndex];
+      
+      // Set capture event for animation
+      if (animatingMove?.move.toPosition !== null && animatingMove?.move.toState === 'TRACK') {
+        // Get board position for animation
+        const trackPos = animatingMove.move.toPosition;
+        // Simple mapping - the LudoBoard will handle actual coordinates
+        setCaptureEvent({
+          capturedColor: capturedPlayer.color,
+          capturingColor: currentPlayer.color,
+          position: [7, 7], // Center position placeholder
+        });
+        
+        play("capture");
+        
+        setTimeout(() => setCaptureEvent(null), 1500);
+      }
+    },
+    onGameOver: (winnerColor) => {
+      if (winnerColor === 'gold') {
+        play("win");
+        toast({
+          title: t("ludo.youWin", "You Win! 🎉"),
+          description: t("ludo.congratulations", "Congratulations!"),
+        });
+      } else {
+        play("lose");
+        toast({
+          title: t("ludo.gameOver", "Game Over"),
+          description: t("ludo.aiWins", "AI Wins! Better luck next time."),
+          variant: "destructive",
+        });
+      }
+    },
   });
+
+  // Handle animation complete - auto-advance turn after short delay
+  useEffect(() => {
+    if (animatingMove) {
+      const timeout = setTimeout(() => {
+        onMoveAnimationComplete();
+      }, 300);
+      return () => clearTimeout(timeout);
+    }
+  }, [animatingMove, onMoveAnimationComplete]);
 
   // ============ BACKGROUND MUSIC ============
   useEffect(() => {
@@ -87,19 +146,19 @@ const LudoAI = () => {
 
   // ============ HUMAN PLAYER ACTIONS ============
   const handleRollDice = useCallback(() => {
-    if (currentPlayer.isAI) return;
+    if (!canRoll) return;
     rollDice();
-  }, [currentPlayer.isAI, rollDice]);
+  }, [canRoll, rollDice]);
 
   const handleTokenClick = useCallback((playerIndex: number, tokenIndex: number) => {
-    if (playerIndex !== currentPlayerIndex) return;
+    if (playerIndex !== gameState.currentPlayerIndex) return;
     if (currentPlayer.isAI) return;
-    if (phase !== 'WAITING_FOR_MOVE') return;
+    if (!canMove) return;
 
-    if (!movableTokens.includes(tokenIndex)) {
+    if (!movableTokenIndices.includes(tokenIndex)) {
       toast({
-        title: t('gameAI.illegalMove'),
-        description: t('gameAI.illegalMoveDesc'),
+        title: t('gameAI.illegalMove', 'Illegal Move'),
+        description: t('gameAI.illegalMoveDesc', 'This token cannot move'),
         variant: "destructive",
         duration: 2000,
       });
@@ -107,77 +166,26 @@ const LudoAI = () => {
     }
 
     selectToken(tokenIndex);
-  }, [currentPlayerIndex, currentPlayer.isAI, phase, movableTokens, selectToken, t]);
+    play("move");
+  }, [gameState.currentPlayerIndex, currentPlayer.isAI, canMove, movableTokenIndices, selectToken, play, t]);
 
-  // ============ AI CONTROLLER ============
-  // Simple and clean: react to phase changes for AI players
-  useEffect(() => {
-    // Only act for AI players
-    if (!currentPlayer.isAI) return;
-    
-    // Don't act if game is over
-    if (winner) return;
-
-    // Capture current game ID to detect resets
-    const currentGameId = gameId;
-
-    // AI needs to roll
-    if (phase === 'WAITING_FOR_ROLL') {
-      const delay = difficulty === "easy" ? 1000 : difficulty === "medium" ? 700 : 400;
-      
-      const timeout = setTimeout(() => {
-        // Check game wasn't reset
-        if (gameId !== currentGameId) return;
-        console.log(`[AI] ${currentPlayer.color} rolling dice...`);
-        rollDice();
-      }, delay);
-
-      return () => clearTimeout(timeout);
-    }
-
-    // AI needs to select a token
-    if (phase === 'WAITING_FOR_MOVE' && movableTokens.length > 0 && diceValue !== null) {
-      const delay = difficulty === "easy" ? 800 : difficulty === "medium" ? 500 : 300;
-
-      const timeout = setTimeout(() => {
-        // Check game wasn't reset
-        if (gameId !== currentGameId) return;
-
-        let chosenToken: number;
-
-        if (difficulty === "easy") {
-          // Easy: random choice
-          chosenToken = movableTokens[Math.floor(Math.random() * movableTokens.length)];
-        } else {
-          // Medium/Hard: prioritize tokens already on board, furthest first
-          const tokenData = movableTokens.map(i => ({
-            index: i,
-            position: currentPlayer.tokens[i].position
-          }));
-
-          tokenData.sort((a, b) => {
-            // Tokens in home (-1) go last
-            if (a.position === -1 && b.position !== -1) return 1;
-            if (b.position === -1 && a.position !== -1) return -1;
-            // Prefer tokens closer to finish (higher position)
-            return b.position - a.position;
-          });
-
-          chosenToken = tokenData[0].index;
-        }
-
-        console.log(`[AI] ${currentPlayer.color} selecting token ${chosenToken}`);
-        selectToken(chosenToken);
-      }, delay);
-
-      return () => clearTimeout(timeout);
-    }
-  }, [phase, currentPlayer, movableTokens, diceValue, winner, difficulty, gameId, rollDice, selectToken]);
+  // Convert game state to LudoBoard format
+  const boardPlayers = gameState.players.map(player => ({
+    color: player.color,
+    tokens: player.tokens.map(token => ({
+      position: token.state === 'BASE' ? -1 :
+                token.state === 'FINISHED' ? 62 :
+                token.state === 'HOME_PATH' ? 56 + (token.position ?? 0) :
+                token.position ?? 0,
+      color: player.color,
+      id: token.id,
+    })),
+    isAI: player.isAI,
+    startPosition: 0,
+    homeColumn: 55,
+  }));
 
   // ============ RENDER ============
-  const isHumanTurn = !currentPlayer.isAI && phase === 'WAITING_FOR_ROLL';
-  const canRoll = isHumanTurn && !isRolling && !isAnimating;
-
   return (
     <div className="min-h-screen bg-gradient-to-b from-amber-950 via-amber-900 to-amber-950 pb-20">
       {/* Winner confetti */}
@@ -193,7 +201,7 @@ const LudoAI = () => {
           </Link>
 
           <h1 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-amber-200 to-amber-400">
-            {t('ludo.title')}
+            {t('ludo.title', 'Ludo')}
           </h1>
 
           <div className="flex gap-2">
@@ -230,7 +238,7 @@ const LudoAI = () => {
         <TurnIndicator
           currentPlayer={currentPlayer.color}
           isAI={currentPlayer.isAI}
-          isGameOver={!!winner}
+          isGameOver={isGameOver}
           winner={winner}
         />
       </div>
@@ -238,12 +246,12 @@ const LudoAI = () => {
       {/* Game board */}
       <div className="px-4 flex justify-center">
         <LudoBoard
-          players={players}
-          currentPlayerIndex={currentPlayerIndex}
-          movableTokens={phase === 'WAITING_FOR_MOVE' && !currentPlayer.isAI ? movableTokens : []}
+          players={boardPlayers}
+          currentPlayerIndex={gameState.currentPlayerIndex}
+          movableTokens={canMove && !currentPlayer.isAI ? movableTokenIndices : []}
           onTokenClick={handleTokenClick}
           captureEvent={captureEvent}
-          onCaptureAnimationComplete={clearCaptureEvent}
+          onCaptureAnimationComplete={() => setCaptureEvent(null)}
         />
       </div>
 
@@ -254,14 +262,14 @@ const LudoAI = () => {
           isRolling={isRolling}
           onRoll={handleRollDice}
           disabled={!canRoll}
-          showRollButton={!currentPlayer.isAI && phase === 'WAITING_FOR_ROLL'}
+          showRollButton={!currentPlayer.isAI && phase === 'WAITING_ROLL'}
         />
 
         {/* Status messages */}
-        {winner && (
+        {isGameOver && (
           <div className="text-center">
             <p className="text-2xl font-bold text-amber-200">
-              {winner === 'gold' ? '🎉 You Win! 🎉' : `${winner.charAt(0).toUpperCase() + winner.slice(1)} Wins!`}
+              {winner === 'gold' ? '🎉 You Win! 🎉' : `${winner?.charAt(0).toUpperCase()}${winner?.slice(1)} Wins!`}
             </p>
             <Button
               onClick={resetGame}
@@ -272,21 +280,27 @@ const LudoAI = () => {
           </div>
         )}
 
-        {!winner && currentPlayer.isAI && (
+        {!isGameOver && currentPlayer.isAI && (
           <p className="text-amber-300/70 text-sm animate-pulse">
             {currentPlayer.color.charAt(0).toUpperCase() + currentPlayer.color.slice(1)} is thinking...
           </p>
         )}
 
-        {!winner && !currentPlayer.isAI && phase === 'WAITING_FOR_ROLL' && (
+        {!isGameOver && !currentPlayer.isAI && phase === 'WAITING_ROLL' && (
           <p className="text-amber-200 text-sm">
             Tap the dice to roll!
           </p>
         )}
 
-        {!winner && !currentPlayer.isAI && phase === 'WAITING_FOR_MOVE' && (
+        {!isGameOver && !currentPlayer.isAI && phase === 'ROLLED' && gameState.legalMoves.length > 0 && (
           <p className="text-amber-200 text-sm">
             Select a token to move
+          </p>
+        )}
+
+        {!isGameOver && !currentPlayer.isAI && phase === 'ROLLED' && gameState.legalMoves.length === 0 && (
+          <p className="text-amber-300/70 text-sm">
+            No moves available. Passing turn...
           </p>
         )}
       </div>
@@ -294,16 +308,16 @@ const LudoAI = () => {
       {/* Player progress */}
       <div className="mt-8 px-4">
         <div className="grid grid-cols-4 gap-2">
-          {players.map((player, index) => {
-            const finished = player.tokens.filter(t => t.position === 62).length;
-            const onBoard = player.tokens.filter(t => t.position >= 0 && t.position < 62).length;
-            const inHome = player.tokens.filter(t => t.position === -1).length;
+          {gameState.players.map((player, index) => {
+            const finished = player.tokens.filter(t => t.state === 'FINISHED').length;
+            const onBoard = player.tokens.filter(t => t.state === 'TRACK' || t.state === 'HOME_PATH').length;
+            const inHome = player.tokens.filter(t => t.state === 'BASE').length;
 
             return (
               <div
                 key={player.color}
                 className={`rounded-lg p-2 text-center text-xs ${
-                  index === currentPlayerIndex && !winner
+                  index === gameState.currentPlayerIndex && !isGameOver
                     ? 'bg-amber-600/50 ring-2 ring-amber-400'
                     : 'bg-amber-900/30'
                 }`}

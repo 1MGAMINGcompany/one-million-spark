@@ -1,12 +1,13 @@
 import { memo, useEffect, useState } from "react";
-import { PlayerColor, HOME_BASE_COORDS, MAIN_TRACK_COORDS, getAbsolutePosition } from "./ludoTypes";
+import { PlayerColor } from "@/lib/ludo/types";
+import { TRACK_COORDS, HOME_BASE_COORDS } from "@/lib/ludo/board";
 
-interface CaptureEvent {
-  id: string;
-  color: PlayerColor;
-  tokenId: number;
-  fromPosition: number; // Position on track where capture happened
-  startTime: number;
+export interface CaptureEvent {
+  capturedColor: PlayerColor;
+  capturingColor: PlayerColor;
+  position: [number, number]; // Grid coordinates where capture happened
+  tokenId?: number;
+  fromPosition?: number;
 }
 
 interface LudoCaptureAnimationProps {
@@ -61,14 +62,13 @@ const LudoCaptureAnimation = memo(({
     setIsAnimating(true);
     setAnimationProgress(0);
 
-    const duration = 600; // Animation duration in ms
+    const duration = 600;
     const startTime = performance.now();
 
     const animate = (currentTime: number) => {
       const elapsed = currentTime - startTime;
       const progress = Math.min(elapsed / duration, 1);
       
-      // Easing function for smooth arc animation
       const easeOutCubic = 1 - Math.pow(1 - progress, 3);
       setAnimationProgress(easeOutCubic);
 
@@ -85,17 +85,15 @@ const LudoCaptureAnimation = memo(({
 
   if (!captureEvent || !isAnimating || cellSize === 0) return null;
 
-  const { color, tokenId, fromPosition } = captureEvent;
-  const colors = PLAYER_COLORS[color];
+  const { capturedColor, position } = captureEvent;
+  const colors = PLAYER_COLORS[capturedColor];
+  const tokenId = captureEvent.tokenId ?? 0;
 
-  // Calculate start position (where capture happened on the track)
-  const absolutePos = getAbsolutePosition(fromPosition, color);
-  const startCoords = MAIN_TRACK_COORDS[absolutePos];
-  if (!startCoords) return null;
-
-  // Calculate end position (home base)
-  const homeCoords = HOME_BASE_COORDS[color][tokenId];
-  if (!homeCoords) return null;
+  // Start position (where capture happened)
+  const startCoords = position;
+  
+  // End position (home base)
+  const homeCoords = HOME_BASE_COORDS[capturedColor][tokenId];
 
   const startX = (startCoords[1] + 0.5) * cellSize;
   const startY = (startCoords[0] + 0.5) * cellSize;
@@ -103,14 +101,14 @@ const LudoCaptureAnimation = memo(({
   const endY = (homeCoords[0] + 0.5) * cellSize;
 
   // Calculate current position with arc
-  const arcHeight = Math.abs(endX - startX) * 0.5 + 50; // Arc height based on distance
+  const arcHeight = Math.abs(endX - startX) * 0.5 + 50;
   const currentX = startX + (endX - startX) * animationProgress;
   const currentY = startY + (endY - startY) * animationProgress 
-    - Math.sin(animationProgress * Math.PI) * arcHeight; // Parabolic arc
+    - Math.sin(animationProgress * Math.PI) * arcHeight;
 
   const size = cellSize * 0.7;
-  const scale = 1 + Math.sin(animationProgress * Math.PI) * 0.3; // Grow in middle of animation
-  const rotation = animationProgress * 720; // Spin twice during flight
+  const scale = 1 + Math.sin(animationProgress * Math.PI) * 0.3;
+  const rotation = animationProgress * 720;
 
   return (
     <div className="absolute inset-0 pointer-events-none z-30">
@@ -207,4 +205,3 @@ const LudoCaptureAnimation = memo(({
 LudoCaptureAnimation.displayName = 'LudoCaptureAnimation';
 
 export default LudoCaptureAnimation;
-export type { CaptureEvent };
