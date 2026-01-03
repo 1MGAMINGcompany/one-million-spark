@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { Dice5, Loader2 } from "lucide-react";
+import { Dice5, Loader2, LogOut, Flag } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
+import { useTranslation } from "react-i18next";
 
 interface DiceRollStartProps {
   roomPda: string;
@@ -10,6 +11,11 @@ interface DiceRollStartProps {
   player1Wallet: string;
   player2Wallet: string;
   onComplete: (startingWallet: string) => void;
+  // Exit handlers
+  onLeave?: () => void;
+  onForfeit?: () => void;
+  isLeaving?: boolean;
+  isForfeiting?: boolean;
 }
 
 interface StartRollResult {
@@ -109,17 +115,73 @@ export function DiceRollStart({
   player1Wallet,
   player2Wallet,
   onComplete,
+  onLeave,
+  onForfeit,
+  isLeaving = false,
+  isForfeiting = false,
 }: DiceRollStartProps) {
+  const { t } = useTranslation();
   const [phase, setPhase] = useState<"waiting" | "loading" | "rolling" | "result">("waiting");
   const [playerDice, setPlayerDice] = useState<number[]>([1, 1]);
   const [opponentDice, setOpponentDice] = useState<number[]>([1, 1]);
   const [result, setResult] = useState<StartRollResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showFallback, setShowFallback] = useState(false);
+  
+  // Timeout ref for 15s fallback
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const fallbackUsedRef = useRef(false);
   
   // Determine which player is "me" for display purposes
   const isPlayer1 = myWallet.toLowerCase() === player1Wallet.toLowerCase();
-  const myName = "You";
-  const opponentName = "Opponent";
+  const myName = t("common.you") || "You";
+  const opponentName = t("game.opponent") || "Opponent";
+
+  /**
+   * Compute deterministic starter from roomPda
+   * Both clients will compute the same result
+   */
+  const computeDeterministicStarter = useCallback((): string => {
+    // Simple hash: sum of char codes mod 2
+    const sum = roomPda.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
+    const starterIndex = sum % 2;
+    return starterIndex === 0 ? player1Wallet : player2Wallet;
+  }, [roomPda, player1Wallet, player2Wallet]);
+
+  // 15-second timeout for fallback
+  useEffect(() => {
+    // Start 15s timeout when component mounts
+    timeoutRef.current = setTimeout(() => {
+      if (phase !== "result" && !fallbackUsedRef.current) {
+        console.log("[DiceRollStart] Timeout - using deterministic fallback");
+        setShowFallback(true);
+        fallbackUsedRef.current = true;
+        
+        // Compute deterministic starter WITHOUT writing to Supabase
+        const starterWallet = computeDeterministicStarter();
+        console.log("[DiceRollStart] Deterministic starter:", starterWallet);
+        
+        // Auto-proceed with fallback after a brief delay
+        setTimeout(() => {
+          onComplete(starterWallet);
+        }, 1000);
+      }
+    }, 15000);
+    
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, [phase, computeDeterministicStarter, onComplete]);
+
+  // Clear timeout when dice roll completes
+  useEffect(() => {
+    if (phase === "result" && timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      setShowFallback(false);
+    }
+  }, [phase]);
 
   // Check if roll is already finalized on mount
   useEffect(() => {
@@ -245,6 +307,7 @@ export function DiceRollStart({
     : opponentDice[0] + opponentDice[1];
   
   const isWinner = result?.winner.toLowerCase() === myWallet.toLowerCase();
+  const exitDisabled = isLeaving || isForfeiting;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/90 backdrop-blur-sm">
@@ -256,10 +319,10 @@ export function DiceRollStart({
         <div className="absolute bottom-2 right-2 w-8 h-8 border-r-2 border-b-2 border-primary/40 rounded-br-lg" />
 
         <h2 className="text-center font-display text-2xl mb-2 text-primary">
-          Roll to Start
+          {t("diceRoll.rollToStart") || "Roll to Start"}
         </h2>
         <p className="text-center text-muted-foreground text-sm mb-8">
-          Highest total goes first
+          {t("diceRoll.highestGoesFirst") || "Highest total goes first"}
         </p>
 
         {/* Dice Display */}
@@ -300,8 +363,17 @@ export function DiceRollStart({
 
         {/* Error Message */}
         {error && (
-          <div className="text-center mb-6 py-3 px-4 rounded-lg bg-red-500/20 text-red-400">
+          <div className="text-center mb-6 py-3 px-4 rounded-lg bg-destructive/20 text-destructive">
             {error}
+          </div>
+        )}
+
+        {/* Fallback Message */}
+        {showFallback && phase !== "result" && (
+          <div className="text-center mb-6 py-3 px-4 rounded-lg bg-amber-500/20 text-amber-400">
+            <p className="text-sm">
+              {t("diceRoll.usingFallback") || "Connection slow - using deterministic start order..."}
+            </p>
           </div>
         )}
 
@@ -312,12 +384,12 @@ export function DiceRollStart({
             isWinner ? "bg-green-500/20 text-green-400" : "bg-red-500/20 text-red-400"
           )}>
             {isWinner 
-              ? `${myName} rolled higher! You go first.`
-              : `${opponentName} rolled higher! They go first.`
+              ? `${myName} ${t("diceRoll.rolledHigher") || "rolled higher! You go first."}`
+              : `${opponentName} ${t("diceRoll.theyGoFirst") || "rolled higher! They go first."}`
             }
             {result.reroll_count > 0 && (
               <span className="block text-xs mt-1 opacity-70">
-                (Resolved after {result.reroll_count} tie-breaker{result.reroll_count > 1 ? 's' : ''})
+                ({t("diceRoll.resolvedAfter") || "Resolved after"} {result.reroll_count} {t("diceRoll.tieBreaker") || "tie-breaker"}{result.reroll_count > 1 ? 's' : ''})
               </span>
             )}
           </div>
@@ -325,32 +397,70 @@ export function DiceRollStart({
 
         {/* Action Button */}
         <div className="text-center">
-          {phase === "waiting" && (
+          {phase === "waiting" && !showFallback && (
             <Button onClick={handleRoll} size="lg" className="gap-2">
               <Dice5 className="w-5 h-5" />
-              Roll Dice
+              {t("diceRoll.rollDice") || "Roll Dice"}
             </Button>
           )}
           
           {phase === "loading" && (
             <Button disabled size="lg" className="gap-2">
               <Loader2 className="w-5 h-5 animate-spin" />
-              Computing...
+              {t("diceRoll.computing") || "Computing..."}
             </Button>
           )}
           
           {phase === "rolling" && (
             <Button disabled size="lg" className="gap-2">
-              Rolling...
+              {t("diceRoll.rolling") || "Rolling..."}
             </Button>
           )}
           
           {phase === "result" && (
             <Button onClick={handleContinue} size="lg">
-              Start Game
+              {t("diceRoll.startGame") || "Start Game"}
             </Button>
           )}
         </div>
+
+        {/* Exit buttons - always visible */}
+        {(onLeave || onForfeit) && (
+          <div className="mt-6 pt-4 border-t border-primary/20 flex justify-center gap-4">
+            {onLeave && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onLeave}
+                disabled={exitDisabled}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                {isLeaving ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <LogOut className="w-4 h-4 mr-2" />
+                )}
+                {t("forfeit.leave") || "Leave"}
+              </Button>
+            )}
+            {onForfeit && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onForfeit}
+                disabled={exitDisabled}
+                className="text-destructive hover:text-destructive hover:bg-destructive/10"
+              >
+                {isForfeiting ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Flag className="w-4 h-4 mr-2" />
+                )}
+                {t("forfeit.leaveAndForfeit") || "Leave & Forfeit"}
+              </Button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

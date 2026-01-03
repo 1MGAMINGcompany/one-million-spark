@@ -3,6 +3,7 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, RotateCcw, RotateCw, Gem, Flag, Users, Wifi, WifiOff, RefreshCw } from "lucide-react";
 import { ForfeitConfirmDialog } from "@/components/ForfeitConfirmDialog";
+import { useForfeit } from "@/hooks/useForfeit";
 import { useSolanaRooms } from "@/hooks/useSolanaRooms";
 import { BackgammonRulesDialog } from "@/components/BackgammonRulesDialog";
 import { Dice3D, CheckerStack } from "@/components/BackgammonPieces";
@@ -116,10 +117,9 @@ const BackgammonGame = () => {
   
   // Forfeit dialog state
   const [showForfeitDialog, setShowForfeitDialog] = useState(false);
-  const [isForfeitLoading, setIsForfeitLoading] = useState(false);
   
   // Solana rooms hook for forfeit/cancel
-  const { cancelRoomByPda, forfeitGame } = useSolanaRooms();
+  const { cancelRoomByPda } = useSolanaRooms();
 
   // Refs for stable callback access
   const roomPlayersRef = useRef<string[]>([]);
@@ -324,21 +324,11 @@ const BackgammonGame = () => {
     navigate("/room-list");
   };
 
-  const handleConfirmForfeit = async () => {
-    if (!roomPda) return;
-    
-    setIsForfeitLoading(true);
-    const result = await forfeitGame(roomPda);
-    setIsForfeitLoading(false);
-    
-    if (result.ok) {
-      toast({ title: t('forfeit.success'), description: t('forfeit.opponentWins') });
-      setShowForfeitDialog(false);
-      navigate("/room-list");
-    } else {
-      toast({ title: t('common.error'), description: result.reason, variant: "destructive" });
-    }
-  };
+  // Opponent wallet for forfeit
+  const opponentWallet = useMemo(() => {
+    if (!address || roomPlayers.length < 2) return null;
+    return roomPlayers.find(p => p.toLowerCase() !== address.toLowerCase()) || null;
+  }, [address, roomPlayers]);
 
   // Block gameplay until start roll is finalized (for ranked games, also need rules accepted)
   const canPlay = startRoll.isFinalized && (!isRankedGame || rankedGate.bothReady);
@@ -581,6 +571,17 @@ const BackgammonGame = () => {
     sendRematchDeclineRef.current = sendRematchDecline;
     sendRematchReadyRef.current = sendRematchReady;
   }, [sendRematchInvite, sendRematchAccept, sendRematchDecline, sendRematchReady]);
+
+  // useForfeit hook - centralized forfeit/leave logic
+  const { forfeit, leave, isForfeiting, isLeaving } = useForfeit({
+    roomPda: roomPda || null,
+    myWallet: address || null,
+    opponentWallet,
+    stakeLamports: entryFeeSol * 1_000_000_000,
+    gameType: "backgammon",
+    onCleanupWebRTC: () => console.log("[BackgammonGame] Cleaning up WebRTC"),
+    onCleanupSupabase: () => console.log("[BackgammonGame] Cleaning up Supabase"),
+  });
 
   // Handle chat message sending via WebRTC
   const handleChatSend = useCallback((msg: ChatMessage) => {
@@ -929,6 +930,10 @@ const BackgammonGame = () => {
           player1Wallet={roomPlayers[0]}
           player2Wallet={roomPlayers[1]}
           onComplete={startRoll.handleRollComplete}
+          onLeave={leave}
+          onForfeit={forfeit}
+          isLeaving={isLeaving}
+          isForfeiting={isForfeiting}
         />
       )}
       
@@ -1246,8 +1251,8 @@ const BackgammonGame = () => {
       <ForfeitConfirmDialog
         open={showForfeitDialog}
         onOpenChange={setShowForfeitDialog}
-        onConfirm={handleConfirmForfeit}
-        isLoading={isForfeitLoading}
+        onConfirm={forfeit}
+        isLoading={isForfeiting}
         gameType="2player"
         stakeSol={entryFeeSol}
       />

@@ -6,6 +6,7 @@ import { useCaptureAnimations } from "@/components/CaptureAnimationLayer";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, RotateCcw, Gem, Star, Flag, Users, Wifi, WifiOff } from "lucide-react";
 import { ForfeitConfirmDialog } from "@/components/ForfeitConfirmDialog";
+import { useForfeit } from "@/hooks/useForfeit";
 import { useSolanaRooms } from "@/hooks/useSolanaRooms";
 import { useSound } from "@/contexts/SoundContext";
 import { useTranslation } from "react-i18next";
@@ -124,11 +125,14 @@ const ChessGame = () => {
   
   // Forfeit dialog state
   const [showForfeitDialog, setShowForfeitDialog] = useState(false);
-  const [isForfeitLoading, setIsForfeitLoading] = useState(false);
   const [entryFeeSol, setEntryFeeSol] = useState(0);
   
   // Solana rooms hook for forfeit/cancel
-  const { cancelRoomByPda, forfeitGame } = useSolanaRooms();
+  const { cancelRoomByPda } = useSolanaRooms();
+  
+  // WebRTC refs for cleanup
+  const webrtcCleanupRef = useRef<(() => void) | null>(null);
+  const supabaseCleanupRef = useRef<(() => void) | null>(null);
 
   // Refs for stable callback access
   const gameRef = useRef(game);
@@ -369,21 +373,14 @@ const ChessGame = () => {
     navigate("/room-list");
   };
 
-  const handleConfirmForfeit = async () => {
-    if (!roomPda) return;
-    
-    setIsForfeitLoading(true);
-    const result = await forfeitGame(roomPda);
-    setIsForfeitLoading(false);
-    
-    if (result.ok) {
-      toast({ title: t('forfeit.success'), description: t('forfeit.opponentWins') });
-      setShowForfeitDialog(false);
-      navigate("/room-list");
-    } else {
-      toast({ title: t('common.error'), description: result.reason, variant: "destructive" });
-    }
-  };
+  // Opponent wallet for forfeit
+  const opponentWallet = useMemo(() => {
+    if (!address || roomPlayers.length < 2) return null;
+    return roomPlayers.find(p => p.toLowerCase() !== address.toLowerCase()) || null;
+  }, [address, roomPlayers]);
+
+  // useForfeit hook - will be set up after WebRTC is available
+  // Placeholder for now - actual hook is added after WebRTC initialization
 
   // Block gameplay until start roll is finalized (for ranked games, also need rules accepted)
   const canPlay = startRoll.isFinalized && (!isRankedGame || rankedGate.bothReady);
@@ -716,6 +713,23 @@ const ChessGame = () => {
     sendRematchDeclineRef.current = sendRematchDecline;
     sendRematchReadyRef.current = sendRematchReady;
   }, [sendRematchInvite, sendRematchAccept, sendRematchDecline, sendRematchReady]);
+
+  // useForfeit hook - centralized forfeit/leave logic with guaranteed cleanup
+  const { forfeit, leave, isForfeiting, isLeaving } = useForfeit({
+    roomPda: roomPda || null,
+    myWallet: address || null,
+    opponentWallet,
+    stakeLamports: entryFeeSol * 1_000_000_000,
+    gameType: "chess",
+    onCleanupWebRTC: () => {
+      // Close WebRTC connection - the hook handles this internally
+      console.log("[ChessGame] Cleaning up WebRTC via useForfeit");
+    },
+    onCleanupSupabase: () => {
+      // Supabase channels are cleaned up by the hook
+      console.log("[ChessGame] Cleaning up Supabase via useForfeit");
+    },
+  });
 
   // Check if it's actually my turn (based on game state, not canPlay gate)
   const isActuallyMyTurn = game.turn() === myColor && !gameOver;
@@ -1101,6 +1115,10 @@ const ChessGame = () => {
           player1Wallet={roomPlayers[0]}
           player2Wallet={roomPlayers[1]}
           onComplete={startRoll.handleRollComplete}
+          onLeave={leave}
+          onForfeit={forfeit}
+          isLeaving={isLeaving}
+          isForfeiting={isForfeiting}
         />
       )}
 
@@ -1108,8 +1126,8 @@ const ChessGame = () => {
       <ForfeitConfirmDialog
         open={showForfeitDialog}
         onOpenChange={setShowForfeitDialog}
-        onConfirm={handleConfirmForfeit}
-        isLoading={isForfeitLoading}
+        onConfirm={forfeit}
+        isLoading={isForfeiting}
         gameType="2player"
         stakeSol={entryFeeSol}
       />
