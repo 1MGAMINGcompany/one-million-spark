@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.settle-draw]
 verify_jwt = false
+
+[functions.set-manual-starter]
+verify_jwt = false

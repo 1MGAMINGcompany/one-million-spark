@@ -36,7 +36,7 @@ export function SolanaProvider({ children }: SolanaProviderProps) {
     <ConnectionProvider endpoint={endpoint}>
       <WalletProvider 
         wallets={wallets} 
-        autoConnect={true}
+        autoConnect={false}
         onError={onError}
         localStorageKey="1m-gaming-wallet"
       >
