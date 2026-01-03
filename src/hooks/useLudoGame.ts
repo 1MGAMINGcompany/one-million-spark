@@ -183,6 +183,21 @@ export function useLudoGame(options: LudoGameOptions = {}) {
     updateState(newState);
   }, [playerCount, humanPlayerIndex, updateState]);
   
+  // Auto-skip when no legal moves (for BOTH human and AI)
+  useEffect(() => {
+    const state = gameState;
+    
+    if (state.phase !== 'ROLLED' || isRolling) return;
+    if (state.legalMoves.length > 0) return;
+    
+    // No legal moves - auto skip after a brief delay
+    const timeout = setTimeout(() => {
+      skipCurrentTurn();
+    }, 800);
+    
+    return () => clearTimeout(timeout);
+  }, [gameState, isRolling, skipCurrentTurn]);
+  
   // AI turn handling
   useEffect(() => {
     const state = gameState;
@@ -210,17 +225,8 @@ export function useLudoGame(options: LudoGameOptions = {}) {
       return () => clearTimeout(timeout);
     }
     
-    if (state.phase === 'ROLLED') {
-      if (state.legalMoves.length === 0) {
-        // No legal moves, skip turn
-        const timeout = setTimeout(() => {
-          skipCurrentTurn();
-        }, delays.move);
-        
-        return () => clearTimeout(timeout);
-      }
-      
-      // AI selects a move
+    if (state.phase === 'ROLLED' && state.legalMoves.length > 0) {
+      // AI selects a move (no-moves case is handled by the auto-skip effect)
       const timeout = setTimeout(() => {
         const move = selectAIMove(state, difficulty);
         if (move) {
