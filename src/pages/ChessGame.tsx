@@ -17,6 +17,7 @@ import { useRematch } from "@/hooks/useRematch";
 import { useGameSessionPersistence } from "@/hooks/useGameSessionPersistence";
 import { useRoomMode } from "@/hooks/useRoomMode";
 import { useRankedReadyGate } from "@/hooks/useRankedReadyGate";
+import { useStartRoll } from "@/hooks/useStartRoll";
 import { useTurnTimer, DEFAULT_RANKED_TURN_TIME } from "@/hooks/useTurnTimer";
 import TurnStatusHeader from "@/components/TurnStatusHeader";
 import TurnHistoryDrawer from "@/components/TurnHistoryDrawer";
@@ -120,10 +121,6 @@ const ChessGame = () => {
   // Room players - in production, this comes from on-chain room data
   const [roomPlayers, setRoomPlayers] = useState<string[]>([]);
   const [myColor, setMyColor] = useState<"w" | "b">("w");
-  
-  // Start roll state - shows dice roll screen when both players ready
-  const [showDiceRoll, setShowDiceRoll] = useState(false);
-  const [startRollFinalized, setStartRollFinalized] = useState(false);
   
   // Forfeit dialog state
   const [showForfeitDialog, setShowForfeitDialog] = useState(false);
@@ -310,64 +307,29 @@ const ChessGame = () => {
     enabled: hasTwoRealPlayers && modeLoaded,
   });
 
-  // For casual games: use on-chain player order (no dice roll needed, creator = white)
-  // For ranked games: check if start roll is already finalized when both players are ready
+  // Deterministic start roll for ALL games (casual + ranked)
+  const startRoll = useStartRoll({
+    roomPda,
+    gameType: "chess",
+    myWallet: address,
+    isRanked: isRankedGame,
+    roomPlayers,
+    hasTwoRealPlayers,
+    initialColor: roomPlayers[0]?.toLowerCase() === address?.toLowerCase() ? "w" : "b",
+  });
+
+  // Update myColor based on start roll result
   useEffect(() => {
-    if (!roomPda || startRollFinalized) return;
-
-    // Casual games: no dice roll, use on-chain order (only when we have 2 REAL players)
-    if (!isRankedGame && hasTwoRealPlayers && address) {
-      // Already have myColor set from on-chain fetch, just mark as finalized
-      setStartRollFinalized(true);
-      console.log("[ChessGame] Casual game - using on-chain player order, both players connected");
-      return;
+    if (startRoll.isFinalized && startRoll.startingWallet) {
+      const isStarter = startRoll.startingWallet.toLowerCase() === address?.toLowerCase();
+      setMyColor(isStarter ? "w" : "b");
+      
+      toast({
+        title: isStarter ? t("gameMultiplayer.youGoFirst") : t("gameMultiplayer.opponentGoesFirst"),
+        description: isStarter ? t("gameMultiplayer.playAsWhite") : t("gameMultiplayer.playAsBlack"),
+      });
     }
-
-    // Ranked games: wait for both players to be ready, then check/show dice roll
-    if (!isRankedGame || !rankedGate.bothReady) return;
-
-    const checkStartRoll = async () => {
-      try {
-        const { data: session } = await supabase
-          .from("game_sessions")
-          .select("start_roll_finalized, start_roll, starting_player_wallet")
-          .eq("room_pda", roomPda)
-          .maybeSingle();
-
-        if (session?.start_roll_finalized && session.starting_player_wallet) {
-          // Roll already finalized - set color based on starter
-          const starter = session.starting_player_wallet;
-          const isStarter = starter.toLowerCase() === address?.toLowerCase();
-          setMyColor(isStarter ? "w" : "b");
-          setStartRollFinalized(true);
-          console.log("[ChessGame] Start roll already finalized. Starter:", starter, "My color:", isStarter ? "white" : "black");
-        } else {
-          // Need to show dice roll
-          setShowDiceRoll(true);
-        }
-      } catch (err) {
-        console.error("[ChessGame] Failed to check start roll:", err);
-        // Fallback - show dice roll
-        setShowDiceRoll(true);
-      }
-    };
-
-    checkStartRoll();
-  }, [roomPda, rankedGate.bothReady, startRollFinalized, address, isRankedGame, hasTwoRealPlayers]);
-
-  // Handle start roll completion
-  const handleStartRollComplete = useCallback((startingWallet: string) => {
-    const isStarter = startingWallet.toLowerCase() === address?.toLowerCase();
-    setMyColor(isStarter ? "w" : "b");
-    setStartRollFinalized(true);
-    setShowDiceRoll(false);
-    console.log("[ChessGame] Start roll complete. Starter:", startingWallet, "My color:", isStarter ? "white" : "black");
-    
-    toast({
-      title: isStarter ? t("gameMultiplayer.youGoFirst") : t("gameMultiplayer.opponentGoesFirst"),
-      description: isStarter ? t("gameMultiplayer.playAsWhite") : t("gameMultiplayer.playAsBlack"),
-    });
-  }, [address, t]);
+  }, [startRoll.isFinalized, startRoll.startingWallet, address, t]);
 
   const handleAcceptRules = async () => {
     const result = await rankedGate.acceptRules();
@@ -423,8 +385,8 @@ const ChessGame = () => {
     }
   };
 
-  // Block gameplay until both players are ready AND start roll is finalized (for ranked games)
-  const canPlay = (!isRankedGame || rankedGate.bothReady) && startRollFinalized;
+  // Block gameplay until start roll is finalized (for ranked games, also need rules accepted)
+  const canPlay = startRoll.isFinalized && (!isRankedGame || rankedGate.bothReady);
 
   // Check if it's my turn
   const isMyTurn = canPlay && game.turn() === myColor && !gameOver;
@@ -1131,14 +1093,14 @@ const ChessGame = () => {
         <WaitingForOpponentPanel onLeave={handleLeaveMatch} roomPda={roomPda} />
       )}
 
-      {/* Dice Roll Start - show when both ready but start roll not finalized */}
-      {showDiceRoll && rankedGate.bothReady && roomPlayers.length >= 2 && address && (
+      {/* Dice Roll Start - show for all games when both players connected */}
+      {startRoll.showDiceRoll && roomPlayers.length >= 2 && address && (
         <DiceRollStart
           roomPda={roomPda || ""}
           myWallet={address}
           player1Wallet={roomPlayers[0]}
           player2Wallet={roomPlayers[1]}
-          onComplete={handleStartRollComplete}
+          onComplete={startRoll.handleRollComplete}
         />
       )}
 

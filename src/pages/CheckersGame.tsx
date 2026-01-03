@@ -260,13 +260,19 @@ const CheckersGame = () => {
     enabled: roomPlayers.length >= 2 && modeLoaded,
   });
 
-  // Deterministic start roll for ranked games
+  // Check if we have 2 real player wallets
+  const hasTwoRealPlayers = roomPlayers.length >= 2 &&
+    !roomPlayers[1]?.startsWith("waiting-") &&
+    !roomPlayers[1]?.startsWith("error-");
+
+  // Deterministic start roll for ALL games (casual + ranked)
   const startRoll = useStartRoll({
     roomPda,
+    gameType: "checkers",
     myWallet: address,
     isRanked: isRankedGame,
     roomPlayers,
-    bothReady: rankedGate.bothReady,
+    hasTwoRealPlayers,
     initialColor: myColor === "gold" ? "w" : "b",
   });
 
@@ -333,8 +339,8 @@ const CheckersGame = () => {
     }
   };
 
-  // Block gameplay until both players are ready (for ranked games) AND start roll is finalized
-  const canPlay = (!isRankedGame || (rankedGate.bothReady && startRoll.isFinalized));
+  // Block gameplay until start roll is finalized (for ranked games, also need rules accepted)
+  const canPlay = startRoll.isFinalized && (!isRankedGame || rankedGate.bothReady);
   
   // Check if it's actually my turn (based on game state, not canPlay gate)
   const isActuallyMyTurn = currentPlayer === myColor && !gameOver;
@@ -978,8 +984,8 @@ const CheckersGame = () => {
       {/* Background */}
       <div className="absolute inset-0 bg-gradient-to-b from-midnight-light via-background to-background" />
       
-      {/* Dice Roll Start for ranked games */}
-      {startRoll.showDiceRoll && rankedGate.bothReady && roomPlayers.length >= 2 && address && (
+      {/* Dice Roll Start - show for all games when both players connected */}
+      {startRoll.showDiceRoll && roomPlayers.length >= 2 && address && (
         <DiceRollStart
           roomPda={roomPda || ""}
           myWallet={address}

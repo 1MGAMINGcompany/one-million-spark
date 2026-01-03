@@ -440,6 +440,16 @@ export type Database = {
     }
     Functions: {
       compute_start_roll: { Args: { p_room_pda: string }; Returns: Json }
+      ensure_game_session: {
+        Args: {
+          p_game_type: string
+          p_mode?: string
+          p_player1_wallet: string
+          p_player2_wallet: string
+          p_room_pda: string
+        }
+        Returns: undefined
+      }
       finish_game_session: {
         Args: { p_caller_wallet?: string; p_room_pda: string }
         Returns: undefined
