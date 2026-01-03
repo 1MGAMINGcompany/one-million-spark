@@ -142,11 +142,15 @@ const ChessGame = () => {
   useEffect(() => { roomPlayersRef.current = roomPlayers; }, [roomPlayers]);
   useEffect(() => { animationsEnabledRef.current = animationsEnabled; }, [animationsEnabled]);
 
-  // Fetch real player order from on-chain room account
+  // Fetch real player order from on-chain room account with polling for second player
   useEffect(() => {
     if (!address || !roomPda) return;
 
-    const fetchRoomPlayers = async () => {
+    let pollCount = 0;
+    const MAX_POLLS = 30; // 30 seconds max wait
+    let pollInterval: NodeJS.Timeout | null = null;
+
+    const fetchRoomPlayers = async (): Promise<boolean> => {
       try {
         const connection = new Connection(getSolanaEndpoint(), "confirmed");
         const pdaKey = new PublicKey(roomPda);
@@ -164,23 +168,47 @@ const ChessGame = () => {
             const color = myIndex === 0 ? "w" : "b";
             setMyColor(color);
             console.log("[ChessGame] On-chain players:", realPlayers, "My color:", color === "w" ? "white" : "black");
-            return;
+            return true; // Stop polling
           }
         }
         
-        // Fallback if on-chain data not available yet (room still forming)
-        console.log("[ChessGame] Room not ready, using placeholder");
-        setRoomPlayers([address, `waiting-${roomPda.slice(0, 8)}`]);
-        setMyColor("w");
+        // Room not ready yet (waiting for second player)
+        console.log("[ChessGame] Waiting for second player... (poll", pollCount + 1, "/", MAX_POLLS, ")");
+        return false; // Continue polling
       } catch (err) {
         console.error("[ChessGame] Failed to fetch room players:", err);
-        // Fallback on error
-        setRoomPlayers([address, `error-${roomPda.slice(0, 8)}`]);
-        setMyColor("w");
+        return false; // Continue polling on error
       }
     };
 
-    fetchRoomPlayers();
+    // Initial fetch
+    fetchRoomPlayers().then(success => {
+      if (!success) {
+        // Start polling if room not ready
+        pollInterval = setInterval(async () => {
+          pollCount++;
+          const success = await fetchRoomPlayers();
+          if (success || pollCount >= MAX_POLLS) {
+            if (pollInterval) {
+              clearInterval(pollInterval);
+              pollInterval = null;
+            }
+            // If max polls reached without 2 players, set waiting state
+            if (!success && pollCount >= MAX_POLLS) {
+              console.log("[ChessGame] Max polls reached, still waiting for opponent");
+              setRoomPlayers([address, `waiting-${roomPda.slice(0, 8)}`]);
+              setMyColor("w");
+            }
+          }
+        }, 1000);
+      }
+    });
+
+    return () => {
+      if (pollInterval) {
+        clearInterval(pollInterval);
+      }
+    };
   }, [address, roomPda]);
 
   // Game session persistence - track if we've shown the restored toast
@@ -270,11 +298,16 @@ const ChessGame = () => {
   // Capture animations hook
   const { animations, triggerAnimation, handleAnimationComplete } = useCaptureAnimations(animationsEnabled);
 
+  // Check if we have 2 real player wallets (not placeholders)
+  const hasTwoRealPlayers = roomPlayers.length >= 2 && 
+    !roomPlayers[1]?.startsWith('waiting-') && 
+    !roomPlayers[1]?.startsWith('error-');
+
   const rankedGate = useRankedReadyGate({
     roomPda,
     myWallet: address,
     isRanked: isRankedGame,
-    enabled: roomPlayers.length >= 2 && modeLoaded,
+    enabled: hasTwoRealPlayers && modeLoaded,
   });
 
   // For casual games: use on-chain player order (no dice roll needed, creator = white)
@@ -282,11 +315,11 @@ const ChessGame = () => {
   useEffect(() => {
     if (!roomPda || startRollFinalized) return;
 
-    // Casual games: no dice roll, use on-chain order
-    if (!isRankedGame && roomPlayers.length >= 2 && address) {
+    // Casual games: no dice roll, use on-chain order (only when we have 2 REAL players)
+    if (!isRankedGame && hasTwoRealPlayers && address) {
       // Already have myColor set from on-chain fetch, just mark as finalized
       setStartRollFinalized(true);
-      console.log("[ChessGame] Casual game - using on-chain player order");
+      console.log("[ChessGame] Casual game - using on-chain player order, both players connected");
       return;
     }
 
@@ -320,7 +353,7 @@ const ChessGame = () => {
     };
 
     checkStartRoll();
-  }, [roomPda, rankedGate.bothReady, startRollFinalized, address, isRankedGame, roomPlayers.length]);
+  }, [roomPda, rankedGate.bothReady, startRollFinalized, address, isRankedGame, hasTwoRealPlayers]);
 
   // Handle start roll completion
   const handleStartRollComplete = useCallback((startingWallet: string) => {
