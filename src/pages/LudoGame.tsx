@@ -2,8 +2,9 @@ import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, RotateCcw, Music, Music2, Volume2, VolumeX, Users, Wifi, WifiOff, RefreshCw } from "lucide-react";
+import { ArrowLeft, RotateCcw, Music, Music2, Volume2, VolumeX, Users, Wifi, WifiOff, RefreshCw, LogOut } from "lucide-react";
 import { ForfeitConfirmDialog } from "@/components/ForfeitConfirmDialog";
+import { LeaveMatchModal, MatchState } from "@/components/LeaveMatchModal";
 import { useForfeit } from "@/hooks/useForfeit";
 import { useSolanaRooms } from "@/hooks/useSolanaRooms";
 import { toast } from "@/hooks/use-toast";
@@ -64,9 +65,11 @@ const LudoGame = () => {
   const [roomPlayers, setRoomPlayers] = useState<string[]>([]);
   const [entryFeeSol, setEntryFeeSol] = useState(0);
   
-  // Forfeit dialog state
+  // Leave/Forfeit dialog states
   const [showForfeitDialog, setShowForfeitDialog] = useState(false);
+  const [showLeaveModal, setShowLeaveModal] = useState(false);
   const [isForfeitLoading, setIsForfeitLoading] = useState(false);
+  const [isCancellingRoom, setIsCancellingRoom] = useState(false);
   
   // Solana rooms hook for forfeit/cancel
   const { cancelRoomByPda, forfeitGame } = useSolanaRooms();
@@ -264,37 +267,30 @@ const LudoGame = () => {
     }
   };
 
-  const handleLeaveMatch = async () => {
-    // Count active human players
-    const humanPlayers = roomPlayers.filter(p => !p.startsWith('ai-'));
-    
-    // If game is over, just navigate away
-    if (gameOver) {
-      navigate("/room-list");
-      return;
-    }
-    
-    // If creator alone (no human opponent) OR opponent hasn't accepted rules yet, cancel room and refund
-    if (humanPlayers.length === 1 || (humanPlayers.length >= 2 && !rankedGate.bothReady)) {
-      const result = await cancelRoomByPda(roomPda || "");
-      if (result.ok) {
-        toast({ title: t('forfeit.roomCancelled'), description: t('forfeit.stakeRefunded') });
-      } else {
-        toast({ title: t('common.error'), description: result.reason, variant: "destructive" });
-      }
-      navigate("/room-list");
-      return;
-    }
-    
-    // If 2+ human players, both accepted rules, and game not over, show forfeit confirmation
-    if (humanPlayers.length >= 2 && rankedGate.bothReady) {
-      setShowForfeitDialog(true);
-      return;
-    }
-    
-    // Otherwise just navigate away
-    navigate("/room-list");
-  };
+  // Determine match state for LeaveMatchModal
+  const humanPlayers = useMemo(() => roomPlayers.filter(p => !p.startsWith('ai-')), [roomPlayers]);
+  
+  const matchState: MatchState = useMemo(() => {
+    if (gameOver) return "game_over";
+    if (humanPlayers.length < 2) return "waiting_for_opponent";
+    if (!rankedGate.iAmReady || !rankedGate.opponentReady) return "rules_pending";
+    if (rankedGate.bothReady && startRoll.isFinalized) return "match_active";
+    return "opponent_joined";
+  }, [gameOver, humanPlayers.length, rankedGate.iAmReady, rankedGate.opponentReady, rankedGate.bothReady, startRoll.isFinalized]);
+
+  // Is current user the room creator? (first player in roomPlayers)
+  const isCreator = useMemo(() => {
+    if (!address || roomPlayers.length === 0) return false;
+    return roomPlayers[0]?.toLowerCase() === address.toLowerCase();
+  }, [address, roomPlayers]);
+
+  // Open leave modal - NEVER triggers wallet
+  const handleLeaveClick = useCallback(() => {
+    console.log("[LeaveMatch] Opening leave modal (UI only)");
+    setShowLeaveModal(true);
+  }, []);
+
+  // NOTE: handleUILeave, handleCancelRoom, handleForfeitMatch are defined AFTER useForfeit hook
 
   // Ref for sendPlayerEliminated to use in forfeit handler
   const sendPlayerEliminatedRef = useRef<((playerIndex: number) => boolean) | null>(null);
@@ -338,6 +334,38 @@ const LudoGame = () => {
   // Connect forfeit ref to handleConfirmForfeit
   useEffect(() => {
     forfeitFnRef.current = handleConfirmForfeit;
+  }, [handleConfirmForfeit]);
+
+  // ========== Leave/Forfeit handlers ==========
+  
+  // UI-only leave handler - NO wallet calls
+  const handleUILeave = useCallback(() => {
+    console.log("[LeaveMatch] UI exit only");
+    navigate("/room-list");
+    toast({ title: t("forfeit.leftRoom"), description: t("forfeit.returnedToLobby") });
+  }, [navigate, t]);
+
+  // On-chain: Cancel room and get refund (creator only)
+  const handleCancelRoom = useCallback(async () => {
+    console.log("[LeaveMatch] On-chain action: Cancel room (refund)");
+    setIsCancellingRoom(true);
+    try {
+      const result = await cancelRoomByPda(roomPda || "");
+      if (result.ok) {
+        toast({ title: t('forfeit.roomCancelled'), description: t('forfeit.stakeRefunded') });
+      } else {
+        toast({ title: t('common.error'), description: result.reason, variant: "destructive" });
+      }
+      navigate("/room-list");
+    } finally {
+      setIsCancellingRoom(false);
+    }
+  }, [cancelRoomByPda, roomPda, navigate, t]);
+
+  // On-chain: Forfeit match (calls handleConfirmForfeit for Ludo)
+  const handleForfeitMatch = useCallback(async () => {
+    console.log("[ForfeitMatch] On-chain action requested");
+    await handleConfirmForfeit();
   }, [handleConfirmForfeit]);
 
   // Turn timer for ranked games - auto-forfeit on timeout
@@ -821,7 +849,7 @@ const LudoGame = () => {
             <AcceptRulesModal
               open={true}
               onAccept={handleAcceptRules}
-              onLeave={handleLeaveMatch}
+              onLeave={handleLeaveClick}
               stakeSol={rankedGate.stakeLamports / 1_000_000_000}
               turnTimeSeconds={effectiveTurnTime}
               isLoading={rankedGate.isSettingReady}
@@ -829,7 +857,7 @@ const LudoGame = () => {
             />
           ) : (
             <WaitingForOpponentPanel 
-              onLeave={handleLeaveMatch} 
+              onLeave={handleLeaveClick} 
               roomPda={roomPda}
               opponentWallet={roomPlayers.find(p => p.toLowerCase() !== address?.toLowerCase())}
               waitingFor="rules"
@@ -1029,6 +1057,21 @@ const LudoGame = () => {
         isLoading={isForfeitLoading}
         gameType="ludo"
         stakeSol={entryFeeSol}
+      />
+
+      {/* Leave Match Modal - Safe UI with explicit on-chain action separation */}
+      <LeaveMatchModal
+        open={showLeaveModal}
+        onOpenChange={setShowLeaveModal}
+        matchState={matchState}
+        roomPda={roomPda || ""}
+        isCreator={isCreator}
+        stakeSol={entryFeeSol}
+        onUILeave={handleUILeave}
+        onCancelRoom={handleCancelRoom}
+        onForfeitMatch={handleForfeitMatch}
+        isCancelling={isCancellingRoom}
+        isForfeiting={isForfeitLoading}
       />
     </div>
   );

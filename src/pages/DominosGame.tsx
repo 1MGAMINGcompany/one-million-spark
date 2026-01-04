@@ -1,8 +1,9 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Gem, Flag, Users, Wifi, WifiOff, Download, RefreshCw } from "lucide-react";
+import { ArrowLeft, Gem, Flag, Users, Wifi, WifiOff, Download, RefreshCw, LogOut } from "lucide-react";
 import { ForfeitConfirmDialog } from "@/components/ForfeitConfirmDialog";
+import { LeaveMatchModal, MatchState } from "@/components/LeaveMatchModal";
 import { useForfeit } from "@/hooks/useForfeit";
 import { useSolanaRooms } from "@/hooks/useSolanaRooms";
 import DominoTile3D, { DominoTileBack, TileHalfClicked } from "@/components/DominoTile3D";
@@ -125,7 +126,10 @@ const DominosGame = () => {
   const [sessionRestored, setSessionRestored] = useState(false);
   
   // Forfeit dialog state
+  // Leave/Forfeit dialog states
   const [showForfeitDialog, setShowForfeitDialog] = useState(false);
+  const [showLeaveModal, setShowLeaveModal] = useState(false);
+  const [isCancellingRoom, setIsCancellingRoom] = useState(false);
   
   // Solana rooms hook for forfeit/cancel
   const { cancelRoomByPda } = useSolanaRooms();
@@ -487,34 +491,28 @@ const DominosGame = () => {
     }
   };
 
-  const handleLeaveMatch = async () => {
-    // If game is over, just navigate away
-    if (gameOver) {
-      navigate("/room-list");
-      return;
-    }
-    
-    // If creator alone (no opponent) OR opponent hasn't accepted rules yet, cancel room and refund
-    if (roomPlayers.length === 1 || (roomPlayers.length >= 2 && !rankedGate.bothReady)) {
-      const result = await cancelRoomByPda(roomPda || "");
-      if (result.ok) {
-        toast({ title: t('forfeit.roomCancelled'), description: t('forfeit.stakeRefunded') });
-      } else {
-        toast({ title: t('common.error'), description: result.reason, variant: "destructive" });
-      }
-      navigate("/room-list");
-      return;
-    }
-    
-    // If 2 players, both accepted rules, and game not over, show forfeit confirmation
-    if (roomPlayers.length >= 2 && rankedGate.bothReady) {
-      setShowForfeitDialog(true);
-      return;
-    }
-    
-    // Otherwise just navigate away
-    navigate("/room-list");
-  };
+  // Determine match state for LeaveMatchModal
+  const matchState: MatchState = useMemo(() => {
+    if (gameOver) return "game_over";
+    if (roomPlayers.length < 2) return "waiting_for_opponent";
+    if (!rankedGate.iAmReady || !rankedGate.opponentReady) return "rules_pending";
+    if (rankedGate.bothReady && startRoll.isFinalized) return "match_active";
+    return "opponent_joined";
+  }, [gameOver, roomPlayers.length, rankedGate.iAmReady, rankedGate.opponentReady, rankedGate.bothReady, startRoll.isFinalized]);
+
+  // Is current user the room creator? (first player in roomPlayers)
+  const isCreator = useMemo(() => {
+    if (!address || roomPlayers.length === 0) return false;
+    return roomPlayers[0]?.toLowerCase() === address.toLowerCase();
+  }, [address, roomPlayers]);
+
+  // Open leave modal - NEVER triggers wallet
+  const handleLeaveClick = useCallback(() => {
+    console.log("[LeaveMatch] Opening leave modal (UI only)");
+    setShowLeaveModal(true);
+  }, []);
+
+  // NOTE: handleUILeave, handleCancelRoom, handleForfeitMatch are defined AFTER useForfeit hook
 
   // Opponent wallet for forfeit
   const opponentWallet = useMemo(() => {
@@ -883,6 +881,37 @@ const DominosGame = () => {
     forfeitFnRef.current = forfeitRef.current;
   }, [forfeitRef]);
 
+  // ========== Leave/Forfeit handlers (defined after useForfeit) ==========
+  
+  // UI-only leave handler - NO wallet calls
+  const handleUILeave = useCallback(() => {
+    console.log("[LeaveMatch] UI exit only");
+    leave();
+  }, [leave]);
+
+  // On-chain: Cancel room and get refund (creator only)
+  const handleCancelRoom = useCallback(async () => {
+    console.log("[LeaveMatch] On-chain action: Cancel room (refund)");
+    setIsCancellingRoom(true);
+    try {
+      const result = await cancelRoomByPda(roomPda || "");
+      if (result.ok) {
+        toast({ title: t('forfeit.roomCancelled'), description: t('forfeit.stakeRefunded') });
+      } else {
+        toast({ title: t('common.error'), description: result.reason, variant: "destructive" });
+      }
+      navigate("/room-list");
+    } finally {
+      setIsCancellingRoom(false);
+    }
+  }, [cancelRoomByPda, roomPda, navigate, t]);
+
+  // On-chain: Forfeit match (pay opponent)
+  const handleForfeitMatch = useCallback(async () => {
+    console.log("[ForfeitMatch] On-chain action requested");
+    await forfeit();
+  }, [forfeit]);
+
   // Request sync when we connect as player 2 (late joiner)
   useEffect(() => {
     if (peerConnected && !amIPlayer1 && chain.length === 0 && gameInitialized) {
@@ -1195,7 +1224,7 @@ const DominosGame = () => {
             <AcceptRulesModal
               open={true}
               onAccept={handleAcceptRulesModal}
-              onLeave={handleLeaveMatch}
+              onLeave={handleLeaveClick}
               stakeSol={rankedGate.stakeLamports / 1_000_000_000}
               turnTimeSeconds={effectiveTurnTime}
               isLoading={rankedGate.isSettingReady}
@@ -1203,7 +1232,7 @@ const DominosGame = () => {
             />
           ) : (
             <WaitingForOpponentPanel 
-              onLeave={handleLeaveMatch} 
+              onLeave={handleLeaveClick} 
               roomPda={roomPda}
               opponentWallet={roomPlayers.find(p => p.toLowerCase() !== address?.toLowerCase())}
               waitingFor="rules"
@@ -1450,6 +1479,21 @@ const DominosGame = () => {
         isLoading={isForfeiting}
         gameType="2player"
         stakeSol={entryFeeSol}
+      />
+
+      {/* Leave Match Modal - Safe UI with explicit on-chain action separation */}
+      <LeaveMatchModal
+        open={showLeaveModal}
+        onOpenChange={setShowLeaveModal}
+        matchState={matchState}
+        roomPda={roomPda || ""}
+        isCreator={isCreator}
+        stakeSol={entryFeeSol}
+        onUILeave={handleUILeave}
+        onCancelRoom={handleCancelRoom}
+        onForfeitMatch={handleForfeitMatch}
+        isCancelling={isCancellingRoom}
+        isForfeiting={isForfeiting}
       />
     </div>
   );
