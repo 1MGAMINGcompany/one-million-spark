@@ -61,7 +61,7 @@ export interface GameState {
 }
 
 // Constants
-export const TRACK_SIZE = 56;           // Main track has 56 cells (0-55)
+export const TRACK_SIZE = 54;           // Main track has 54 cells (0-53)
 export const HOME_PATH_SIZE = 6;        // Each player's home path has 6 cells
 export const TOKENS_PER_PLAYER = 4;
 export const PLAYER_COLORS: PlayerColor[] = ['gold', 'ruby', 'sapphire', 'emerald'];
@@ -72,20 +72,20 @@ export const START_POSITIONS: Record<PlayerColor, number> = {
   gold: 0,       // Position 0: [6, 1]
   ruby: 14,      // Position 14: [1, 8]
   sapphire: 28,  // Position 28: [8, 13]
-  emerald: 41,   // Position 41: [14, 6]
+  emerald: 40,   // Position 40: [13, 6] - shifted up from row 14
 };
 
 // Track position where player's tokens exit to HOME_PATH
-// After traveling 55 cells on the track, they enter home path on the 56th step
+// After traveling around the track, they enter home path
 export const HOME_ENTRY_POSITIONS: Record<PlayerColor, number> = {
-  gold: 55,      // Position 55 [6,0], next step enters home path
+  gold: 53,      // Position 53 [6,0], next step enters home path
   ruby: 13,      // Position 13 [0,8], next step enters home path
   sapphire: 27,  // Position 27 [8,14], next step enters home path
-  emerald: 40,   // Position 40 [14,7], next step enters home path
+  emerald: 39,   // Position 39 [13,7], next step enters home path
 };
 
 // Safe squares - cannot be captured here (starting positions)
-export const SAFE_SQUARES: number[] = [0, 14, 28, 41];
+export const SAFE_SQUARES: number[] = [0, 14, 28, 40];
 
 // Create initial player state
 export function createPlayer(color: PlayerColor, wallet: string, isAI: boolean): Player {
