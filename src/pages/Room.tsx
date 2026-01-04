@@ -17,6 +17,7 @@ import { WalletLink } from "@/components/WalletLink";
 import { TxDebugPanel } from "@/components/TxDebugPanel";
 import { MobileWalletRedirect } from "@/components/MobileWalletRedirect";
 import { PreviewDomainBanner, useSigningDisabled } from "@/components/PreviewDomainBanner";
+import { JoinRulesModal } from "@/components/JoinRulesModal";
 import { validatePublicKey, isMobileDevice, hasInjectedSolanaWallet, getRoomPda } from "@/lib/solana-utils";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -62,6 +63,8 @@ export default function Room() {
   const { isTxInFlight, withTxLock } = useTxLock();
   const [showWalletGate, setShowWalletGate] = useState(false);
   const [showMobileWalletRedirect, setShowMobileWalletRedirect] = useState(false);
+  const [showJoinRulesModal, setShowJoinRulesModal] = useState(false);
+  const [joinInProgress, setJoinInProgress] = useState(false);
 
   const [room, setRoom] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -219,7 +222,8 @@ export default function Room() {
   const currentPotLamports = stakeLamports * BigInt(playerCount);
 
   // Role-based button visibility
-  const canJoin = isOpenStatus(status) && !isPlayer && isConnected;
+  // canJoin: room is Open, user NOT in players, room NOT full, wallet connected
+  const canJoin = isOpenStatus(status) && !isPlayer && playerCount < maxPlayers && isConnected;
   const canCancel = isOpenStatus(status) && playerCount === 1 && isCreator && isConnected;
   const canCancelAbandoned = false; // Disabled: cancel_room_if_abandoned not in IDL
   const canPlayAgain = status === RoomStatus.Finished && isPlayer;
@@ -418,7 +422,8 @@ export default function Room() {
   // Check if user has an active room that blocks joining (compare by PDA - the ONLY unique identifier)
   const hasBlockingActiveRoom = activeRoom && activeRoom.pda !== roomPdaParam;
 
-  const onJoinRoom = async () => {
+  // Show join rules modal first (pre-validation)
+  const handleJoinButtonClick = () => {
     if (!roomPdaParam || !room) return;
 
     if (!isConnected) {
@@ -444,12 +449,24 @@ export default function Room() {
       return;
     }
 
+    // Show the rules modal - actual join happens on confirm
+    setShowJoinRulesModal(true);
+  };
+
+  // Actually execute the join transaction (called after user confirms rules)
+  const executeJoinRoom = async () => {
+    if (!roomPdaParam || !room) return;
+
+    setJoinInProgress(true);
+
     // Get room details for joinRoom
     const roomId = typeof room.roomId === 'object' ? room.roomId.toNumber() : room.roomId;
     const roomCreator = room.creator?.toBase58?.();
     
     if (!roomCreator) {
       toast.error("Invalid room data");
+      setJoinInProgress(false);
+      setShowJoinRulesModal(false);
       return;
     }
 
@@ -457,6 +474,9 @@ export default function Room() {
     const result = await withTxLock(async () => {
       return await joinRoom(roomId, roomCreator);
     });
+
+    setJoinInProgress(false);
+    setShowJoinRulesModal(false);
 
     if (result?.ok) {
       // Navigate to canonical play route - game type determined from on-chain data
@@ -791,10 +811,11 @@ export default function Room() {
             <div className="flex justify-center gap-3">
               {canJoin && !hasBlockingActiveRoom && (
                 <Button 
-                  onClick={onJoinRoom} 
+                  onClick={handleJoinButtonClick} 
                   size="lg" 
+                  variant="gold"
                   disabled={isTxInFlight || hookTxPending || signingDisabled}
-                  className="min-w-32"
+                  className="min-w-40"
                 >
                   {isTxInFlight ? (
                     <>
@@ -803,8 +824,10 @@ export default function Room() {
                     </>
                   ) : signingDisabled ? (
                     "Signing Disabled"
+                  ) : Number(stakeLamports) > 0 ? (
+                    `Join Game & Stake ${stakeSOL} SOL`
                   ) : (
-                    `Join Room (${stakeSOL} SOL)`
+                    "Join Game"
                   )}
                 </Button>
               )}
@@ -830,10 +853,39 @@ export default function Room() {
                 </Button>
               )}
 
+              {/* Player status messages */}
               {isOpenStatus(status) && isPlayer && !isCreator && (
-                <p className="text-muted-foreground text-sm">
-                  Waiting for other players to join...
-                </p>
+                <div className="flex items-center gap-2 px-4 py-2 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
+                  <CheckCircle className="h-4 w-4 text-emerald-500" />
+                  <span className="text-sm text-emerald-400">You're in this game. Waiting for opponent...</span>
+                </div>
+              )}
+              
+              {isOpenStatus(status) && isPlayer && isCreator && (
+                <div className="flex items-center gap-2 px-4 py-2 bg-primary/10 border border-primary/30 rounded-lg">
+                  <Users className="h-4 w-4 text-primary" />
+                  <span className="text-sm text-primary">Waiting for opponent to join...</span>
+                </div>
+              )}
+
+              {/* Room full message (for non-players) */}
+              {status === RoomStatus.Started && !isPlayer && (
+                <div className="flex items-center gap-2 px-4 py-2 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                  <AlertTriangle className="h-4 w-4 text-amber-500" />
+                  <span className="text-sm text-amber-400">Game in progress</span>
+                </div>
+              )}
+
+              {/* Connect wallet prompt for non-connected users */}
+              {!isConnected && isOpenStatus(status) && playerCount < maxPlayers && (
+                <Button 
+                  onClick={() => setShowWalletGate(true)} 
+                  size="lg"
+                  variant="outline"
+                  className="min-w-40"
+                >
+                  Connect Wallet to Join
+                </Button>
               )}
             </div>
 
@@ -879,6 +931,17 @@ export default function Room() {
         onClose={() => setShowWalletGate(false)}
         title="Connect a Solana Wallet to Play"
         description="Connect your wallet to join this room and compete for SOL prizes."
+      />
+      
+      {/* Join Rules Modal - shown before joining */}
+      <JoinRulesModal
+        open={showJoinRulesModal}
+        onConfirmJoin={executeJoinRoom}
+        onCancel={() => setShowJoinRulesModal(false)}
+        gameName={gameName}
+        stakeSol={Number(stakeLamports) / LAMPORTS_PER_SOL}
+        isRanked={roomMode === 'ranked'}
+        isLoading={joinInProgress}
       />
       
       {/* Preview Domain Banner */}
