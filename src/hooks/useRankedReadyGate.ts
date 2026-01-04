@@ -29,10 +29,12 @@ interface UseRankedReadyGateResult {
   showAcceptModal: boolean;
   /** Accept rules (marks player ready - no wallet signature needed) */
   acceptRules: () => Promise<{ success: boolean; error?: string }>;
-  /** Stake in lamports (from session) */
+  /** Stake in lamports (from session) - DEPRECATED: Use external on-chain stake */
   stakeLamports: number;
   /** Turn time in seconds for ranked games */
   turnTimeSeconds: number;
+  /** Whether gate data has loaded (use to block modal rendering with defaults) */
+  isDataLoaded: boolean;
 }
 
 export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRankedReadyGateResult {
@@ -179,6 +181,7 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
       acceptRules: async () => ({ success: true }),
       stakeLamports: 0,
       turnTimeSeconds: 0,
+      isDataLoaded: true,
     };
   }
 
@@ -191,5 +194,6 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
     acceptRules,
     stakeLamports,
     turnTimeSeconds,
+    isDataLoaded: hasLoaded,
   };
 }

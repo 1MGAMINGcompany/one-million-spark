@@ -167,11 +167,16 @@ const ChessGame = () => {
             const realPlayers = parsed.players.map(p => p.toBase58());
             setRoomPlayers(realPlayers);
             
+            // Extract entry fee from on-chain (CRITICAL for correct modal display)
+            if (parsed.entryFee) {
+              setEntryFeeSol(parsed.entryFee / 1_000_000_000);
+            }
+            
             // Determine my color based on on-chain position (white = index 0, black = index 1)
             const myIndex = realPlayers.findIndex(p => p.toLowerCase() === address.toLowerCase());
             const color = myIndex === 0 ? "w" : "b";
             setMyColor(color);
-            console.log("[ChessGame] On-chain players:", realPlayers, "My color:", color === "w" ? "white" : "black");
+            console.log("[ChessGame] On-chain players:", realPlayers, "My color:", color === "w" ? "white" : "black", "Entry fee:", parsed.entryFee);
             return true; // Stop polling
           }
         }
@@ -1174,10 +1179,13 @@ const ChessGame = () => {
               open={true}
               onAccept={handleAcceptRules}
               onLeave={handleLeaveClick}
-              stakeSol={rankedGate.stakeLamports / 1_000_000_000}
+              stakeSol={entryFeeSol}
               turnTimeSeconds={effectiveTurnTime}
               isLoading={rankedGate.isSettingReady}
               opponentReady={rankedGate.opponentReady}
+              isDataLoaded={rankedGate.isDataLoaded && entryFeeSol > 0}
+              connectedWallet={address}
+              roomPda={roomPda}
             />
           ) : (
             <WaitingForOpponentPanel 

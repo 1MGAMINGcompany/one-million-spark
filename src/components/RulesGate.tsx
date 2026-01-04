@@ -34,7 +34,7 @@ interface RulesGateProps {
   bothReady: boolean;
   /** Whether we're currently setting ready */
   isSettingReady: boolean;
-  /** Stake in lamports */
+  /** Stake in lamports - MUST come from on-chain data */
   stakeLamports: number;
   /** Turn time in seconds */
   turnTimeSeconds: number;
@@ -44,6 +44,8 @@ interface RulesGateProps {
   onAcceptRules: () => void;
   /** Called when user leaves */
   onLeave: () => void;
+  /** Whether authoritative room data has loaded */
+  isDataLoaded: boolean;
   /** Children (DiceRollStart/GameBoard) - only rendered when both ready */
   children: React.ReactNode;
 }
@@ -61,6 +63,7 @@ export function RulesGate({
   opponentWallet,
   onAcceptRules,
   onLeave,
+  isDataLoaded,
   children,
 }: RulesGateProps) {
   // Debug logging for cross-device sync and invalid state detection
@@ -102,6 +105,9 @@ export function RulesGate({
         turnTimeSeconds={turnTimeSeconds}
         isLoading={isSettingReady}
         opponentReady={opponentReady}
+        isDataLoaded={isDataLoaded}
+        connectedWallet={myWallet}
+        roomPda={roomPda}
       />
     );
   }
