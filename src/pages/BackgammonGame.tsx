@@ -573,12 +573,13 @@ const BackgammonGame = () => {
   }, [sendRematchInvite, sendRematchAccept, sendRematchDecline, sendRematchReady]);
 
   // useForfeit hook - centralized forfeit/leave logic
-  const { forfeit, leave, isForfeiting, isLeaving } = useForfeit({
+  const { forfeit, leave, isForfeiting, isLeaving, forfeitRef } = useForfeit({
     roomPda: roomPda || null,
     myWallet: address || null,
     opponentWallet,
     stakeLamports: entryFeeSol * 1_000_000_000,
     gameType: "backgammon",
+    mode: isRankedGame ? 'ranked' : 'casual',
     onCleanupWebRTC: () => console.log("[BackgammonGame] Cleaning up WebRTC"),
     onCleanupSupabase: () => console.log("[BackgammonGame] Cleaning up Supabase"),
   });

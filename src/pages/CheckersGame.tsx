@@ -338,8 +338,8 @@ const CheckersGame = () => {
   // isMyTurn includes canPlay gate - used for board disable
   const isMyTurn = canPlay && isActuallyMyTurn;
 
-  // Ref for resign function to avoid circular deps with turn timer
-  const sendResignRef = useRef<(() => boolean) | null>(null);
+  // Ref for forfeit function - will be set by useForfeit hook
+  const forfeitFnRef = useRef<(() => Promise<void>) | null>(null);
 
   // Turn timer for ranked games - auto-forfeit on timeout
   const handleTimeExpired = useCallback(() => {
@@ -349,8 +349,8 @@ const CheckersGame = () => {
         description: t('gameSession.forfeitedMatch'),
         variant: "destructive",
       });
-      // Trigger forfeit - same as resign
-      sendResignRef.current?.();
+      // Trigger forfeit via finalizeGame (single authoritative payout)
+      forfeitFnRef.current?.();
       setGameOver(myColor === "gold" ? "obsidian" : "gold");
       play('checkers_lose');
     }
@@ -724,19 +724,24 @@ const CheckersGame = () => {
     sendRematchAcceptRef.current = sendRematchAccept;
     sendRematchDeclineRef.current = sendRematchDecline;
     sendRematchReadyRef.current = sendRematchReady;
-    sendResignRef.current = sendResign;
-  }, [sendRematchInvite, sendRematchAccept, sendRematchDecline, sendRematchReady, sendResign]);
+  }, [sendRematchInvite, sendRematchAccept, sendRematchDecline, sendRematchReady]);
 
   // useForfeit hook - centralized forfeit/leave logic
-  const { forfeit, leave, isForfeiting, isLeaving } = useForfeit({
+  const { forfeit, leave, isForfeiting, isLeaving, forfeitRef } = useForfeit({
     roomPda: roomPda || null,
     myWallet: address || null,
     opponentWallet,
     stakeLamports: entryFeeSol * 1_000_000_000,
     gameType: "checkers",
+    mode: isRankedGame ? 'ranked' : 'casual',
     onCleanupWebRTC: () => console.log("[CheckersGame] Cleaning up WebRTC"),
     onCleanupSupabase: () => console.log("[CheckersGame] Cleaning up Supabase"),
   });
+  
+  // Connect forfeit ref for timeout handler
+  useEffect(() => {
+    forfeitFnRef.current = forfeitRef.current;
+  }, [forfeitRef]);
 
   // Handle chat message sending via WebRTC
   const handleChatSend = useCallback((msg: ChatMessage) => {

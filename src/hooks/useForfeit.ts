@@ -2,17 +2,19 @@
  * useForfeit hook - centralized forfeit/leave logic with GUARANTEED exit
  * 
  * Provides two actions:
- * - forfeit(): Calls on-chain finalize_room with winner=opponent, then cleanup
+ * - forfeit(): Calls finalizeGame with winner=opponent, then cleanup
  * - leave(): Just cleanup and navigate out (no chain call)
  * 
  * CRITICAL: Both actions ALWAYS navigate to /room-list within 1 second,
  * even if transactions fail. Uses idempotent forceExit() pattern.
+ * 
+ * NOW USES: finalizeGame() as the single authoritative payout function
  */
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { useConnection, useWallet as useWalletAdapter } from "@solana/wallet-adapter-react";
-import { finalizeRoom } from "@/lib/finalize-room";
+import { useConnection } from "@solana/wallet-adapter-react";
+import { finalizeGame } from "@/lib/finalizeGame";
 import { toast } from "@/hooks/use-toast";
 import { useTranslation } from "react-i18next";
 
@@ -22,6 +24,7 @@ export interface UseForfeitOptions {
   opponentWallet: string | null;
   stakeLamports?: number;
   gameType?: string;
+  mode?: 'casual' | 'ranked';
   // Cleanup callbacks - called in forceExit
   onCleanupWebRTC?: () => void;
   onCleanupSupabase?: () => void;
@@ -33,6 +36,8 @@ export interface UseForfeitReturn {
   leave: () => void;
   isForfeiting: boolean;
   isLeaving: boolean;
+  /** Ref for timeout handlers - call forfeitRef.current() to trigger forfeit */
+  forfeitRef: React.MutableRefObject<(() => Promise<void>) | null>;
 }
 
 // Generic room storage keys that should always be cleared
@@ -51,6 +56,7 @@ export function useForfeit({
   opponentWallet,
   stakeLamports = 0,
   gameType = "unknown",
+  mode = "casual",
   onCleanupWebRTC,
   onCleanupSupabase,
   onCleanupLocalState,
@@ -58,7 +64,6 @@ export function useForfeit({
   const navigate = useNavigate();
   const { t } = useTranslation();
   const { connection } = useConnection();
-  const { sendTransaction, publicKey } = useWalletAdapter();
   
   const [isForfeiting, setIsForfeiting] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
@@ -67,6 +72,9 @@ export function useForfeit({
   const exitedRef = useRef(false);
   const executingRef = useRef(false);
   const forceExitTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Ref for timeout handlers to call forfeit
+  const forfeitRef = useRef<(() => Promise<void>) | null>(null);
 
   /**
    * forceExit() - Idempotent cleanup and navigation
@@ -180,28 +188,30 @@ export function useForfeit({
         return; // forceExit will happen via timeout or finally
       }
       
-      console.log("[useForfeit] Starting forfeit:", {
+      console.log("[useForfeit] Starting forfeit via finalizeGame:", {
         roomPda: roomPda.slice(0, 8) + "...",
         winner: opponentWallet.slice(0, 8) + "...",
+        loser: myWallet.slice(0, 8) + "...",
       });
       
-      if (!publicKey || !sendTransaction) {
-        console.warn("[useForfeit] Wallet not connected");
-        return;
-      }
-      
-      const result = await finalizeRoom(
-        connection,
+      // Use the authoritative finalizeGame function with forfeit mode
+      const result = await finalizeGame({
         roomPda,
-        opponentWallet,
-        sendTransaction,
-        publicKey
-      );
+        winnerWallet: opponentWallet,
+        loserWallet: myWallet,
+        gameType,
+        stakeLamports,
+        mode,
+        players: [myWallet, opponentWallet],
+        endReason: 'forfeit',
+        connection,
+        // No sendTransaction/signerPubkey - use edge function for forfeit
+      });
       
-      if (result.ok) {
+      if (result.success) {
         success = true;
         signature = result.signature;
-        console.log("[useForfeit] Forfeit successful:", signature);
+        console.log("[useForfeit] Forfeit successful:", signature || "(already settled)");
       } else {
         console.error("[useForfeit] Forfeit failed:", result.error);
       }
@@ -234,9 +244,10 @@ export function useForfeit({
     roomPda,
     myWallet,
     opponentWallet,
+    stakeLamports,
+    mode,
+    gameType,
     connection,
-    sendTransaction,
-    publicKey,
     forceExit,
     t,
   ]);
@@ -283,10 +294,16 @@ export function useForfeit({
     }
   }, [forceExit, t]);
 
+  // Update forfeitRef when forfeit function changes
+  useEffect(() => {
+    forfeitRef.current = forfeit;
+  }, [forfeit]);
+
   return {
     forfeit,
     leave,
     isForfeiting,
     isLeaving,
+    forfeitRef,
   };
 }
