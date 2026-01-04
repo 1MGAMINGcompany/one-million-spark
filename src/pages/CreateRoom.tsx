@@ -233,10 +233,13 @@ export default function CreateRoom() {
 
     play("rooms_created");
     
+    // Pass mode to createRoom - this is the AUTHORITATIVE source of truth
+    // Mode is written to DB immediately, not localStorage
     const roomId = await createRoom(
       parseInt(gameType) as GameType,
       entryFeeNum,
-      parseInt(maxPlayers)
+      parseInt(maxPlayers),
+      gameMode // Pass mode directly to createRoom
     );
 
     if (roomId && address) {
@@ -249,12 +252,11 @@ export default function CreateRoom() {
         const roomPda = getRoomPda(creatorPubkey, roomId);
         const roomPdaStr = roomPda.toBase58();
         
-        // Match logging is now handled by record_match_result RPC on finalize
-        
-        // Store mode and turn time in localStorage so game pages can read it
-        const turnTimeSeconds = turnTime === "0" ? 300 : parseInt(turnTime) * 60; // 0 = unlimited becomes 5 min max for ranked
-        localStorage.setItem(`room_mode_${roomPdaStr}`, JSON.stringify({
-          mode: gameMode,
+        // Mode is now stored in DB via createRoom → ensure_game_session
+        // localStorage is NO LONGER the source of truth for mode
+        // Keeping localStorage only for turnTimeSeconds as a display hint
+        const turnTimeSeconds = turnTime === "0" ? 300 : parseInt(turnTime) * 60;
+        localStorage.setItem(`room_settings_${roomPdaStr}`, JSON.stringify({
           turnTimeSeconds: gameMode === 'ranked' ? turnTimeSeconds : 0,
           stakeLamports: solToLamports(entryFeeNum),
         }));

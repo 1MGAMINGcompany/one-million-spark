@@ -145,7 +145,11 @@ export default function Room() {
     }
   }, [roomPdaParam]);
   
-  // Fetch room mode from DB (single source of truth)
+  // Fetch room mode from DB (single source of truth - NOT localStorage)
+  // The mode is set by the creator in createRoom and stored in game_sessions
+  const [modeFetchAttempts, setModeFetchAttempts] = useState(0);
+  const MAX_MODE_RETRIES = 5;
+  
   useEffect(() => {
     if (!roomPdaParam) return;
     
@@ -160,20 +164,25 @@ export default function Room() {
         if (data?.mode) {
           setRoomMode(data.mode as 'casual' | 'ranked');
           console.log("[RoomMode] DB mode:", data.mode);
+          setRoomModeLoaded(true);
+        } else if (modeFetchAttempts < MAX_MODE_RETRIES) {
+          // Retry - game_session might not be created yet
+          console.log("[RoomMode] No game_session found, retry", modeFetchAttempts + 1);
+          setTimeout(() => setModeFetchAttempts(prev => prev + 1), 800);
         } else {
-          // No game_session yet - default to casual but don't block
-          console.log("[RoomMode] No game_session found, defaulting to casual");
-          setRoomMode('casual');
+          // Max retries reached - this is an error state, not a default
+          console.warn("[RoomMode] No game_session after retries - mode unknown");
+          setRoomModeLoaded(true);
+          // Keep default casual but log warning
         }
       } catch (err) {
         console.error("[RoomMode] Failed to fetch mode:", err);
-      } finally {
         setRoomModeLoaded(true);
       }
     };
     
     fetchRoomMode();
-  }, [roomPdaParam]);
+  }, [roomPdaParam, modeFetchAttempts]);
 
   const status = room?.status ?? 0;
   const statusName = statusToName(status);
@@ -671,13 +680,19 @@ export default function Room() {
                   {isAbandoned ? 'Abandoned' : statusName}
                 </span>
                 {/* Mode Badge - from DB (single source of truth) */}
-                <span className={`px-3 py-1 rounded-full text-sm font-medium border ${
-                  roomMode === 'ranked' 
-                    ? 'bg-red-500/20 text-red-400 border-red-500/30' 
-                    : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
-                }`}>
-                  {roomMode === 'ranked' ? '🔴 Ranked' : '🟢 Casual'}
-                </span>
+                {!roomModeLoaded ? (
+                  <span className="px-3 py-1 rounded-full text-sm font-medium border bg-muted/50 text-muted-foreground border-muted animate-pulse">
+                    Loading...
+                  </span>
+                ) : (
+                  <span className={`px-3 py-1 rounded-full text-sm font-medium border ${
+                    roomMode === 'ranked' 
+                      ? 'bg-red-500/20 text-red-400 border-red-500/30' 
+                      : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                  }`}>
+                    {roomMode === 'ranked' ? '🔴 Ranked' : '🟢 Casual'}
+                  </span>
+                )}
                 {isPlayer && (
                   <span className="px-3 py-1 rounded-full text-sm font-medium bg-primary/20 text-primary">
                     You're in this game
