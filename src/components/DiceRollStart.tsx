@@ -19,8 +19,8 @@ interface DiceRollStartProps {
 }
 
 interface StartRollResult {
-  p1: { wallet: string; dice: number[]; total: number };
-  p2: { wallet: string; dice: number[]; total: number };
+  p1: { wallet: string; die?: number; dice?: number[]; total: number };
+  p2: { wallet: string; die?: number; dice?: number[]; total: number };
   reroll_count: number;
   winner: string;
 }
@@ -122,8 +122,8 @@ export function DiceRollStart({
 }: DiceRollStartProps) {
   const { t } = useTranslation();
   const [phase, setPhase] = useState<"waiting" | "loading" | "rolling" | "result">("waiting");
-  const [playerDice, setPlayerDice] = useState<number[]>([1, 1]);
-  const [opponentDice, setOpponentDice] = useState<number[]>([1, 1]);
+  const [playerDie, setPlayerDie] = useState<number>(1);
+  const [opponentDie, setOpponentDie] = useState<number>(1);
   const [result, setResult] = useState<StartRollResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showFallback, setShowFallback] = useState(false);
@@ -190,13 +190,13 @@ export function DiceRollStart({
           const rollData = session.start_roll as unknown as StartRollResult;
           setResult(rollData);
           
-          // Set dice values for display
+          // Set die values for display (support both old 2-dice and new 1-die format)
           if (isPlayer1) {
-            setPlayerDice(rollData.p1.dice);
-            setOpponentDice(rollData.p2.dice);
+            setPlayerDie(rollData.p1.die ?? rollData.p1.dice?.[0] ?? 1);
+            setOpponentDie(rollData.p2.die ?? rollData.p2.dice?.[0] ?? 1);
           } else {
-            setPlayerDice(rollData.p2.dice);
-            setOpponentDice(rollData.p1.dice);
+            setPlayerDie(rollData.p2.die ?? rollData.p2.dice?.[0] ?? 1);
+            setOpponentDie(rollData.p1.die ?? rollData.p1.dice?.[0] ?? 1);
           }
           
           setPhase("result");
@@ -214,14 +214,8 @@ export function DiceRollStart({
     if (phase !== "rolling") return;
 
     const interval = setInterval(() => {
-      setPlayerDice([
-        Math.floor(Math.random() * 6) + 1,
-        Math.floor(Math.random() * 6) + 1
-      ]);
-      setOpponentDice([
-        Math.floor(Math.random() * 6) + 1,
-        Math.floor(Math.random() * 6) + 1
-      ]);
+      setPlayerDie(Math.floor(Math.random() * 6) + 1);
+      setOpponentDie(Math.floor(Math.random() * 6) + 1);
     }, 100);
 
     // After animation, set final values from result
@@ -230,11 +224,11 @@ export function DiceRollStart({
       
       if (result) {
         if (isPlayer1) {
-          setPlayerDice(result.p1.dice);
-          setOpponentDice(result.p2.dice);
+          setPlayerDie(result.p1.die ?? result.p1.dice?.[0] ?? 1);
+          setOpponentDie(result.p2.die ?? result.p2.dice?.[0] ?? 1);
         } else {
-          setPlayerDice(result.p2.dice);
-          setOpponentDice(result.p1.dice);
+          setPlayerDie(result.p2.die ?? result.p2.dice?.[0] ?? 1);
+          setOpponentDie(result.p1.die ?? result.p1.dice?.[0] ?? 1);
         }
         setPhase("result");
       }
@@ -335,10 +329,10 @@ export function DiceRollStart({
   // Get my total and opponent total for display
   const myTotal = result 
     ? (isPlayer1 ? result.p1.total : result.p2.total)
-    : playerDice[0] + playerDice[1];
+    : playerDie;
   const opponentTotal = result
     ? (isPlayer1 ? result.p2.total : result.p1.total)
-    : opponentDice[0] + opponentDice[1];
+    : opponentDie;
   
   const isWinner = result?.winner.toLowerCase() === myWallet.toLowerCase();
   const exitDisabled = isLeaving || isForfeiting || isRetrying || isPickingStarter;
@@ -364,31 +358,29 @@ export function DiceRollStart({
           {/* My Side */}
           <div className="text-center flex-1">
             <p className="text-sm font-medium text-primary mb-3">{myName}</p>
-            <div className="flex justify-center gap-2">
-              <Die3D value={playerDice[0]} rolling={phase === "rolling"} color="gold" />
-              <Die3D value={playerDice[1]} rolling={phase === "rolling"} color="gold" />
+            <div className="flex justify-center">
+              <Die3D value={playerDie} rolling={phase === "rolling"} color="gold" size="lg" />
             </div>
             {phase === "result" && (
-              <p className="mt-2 text-lg font-bold text-primary">
+              <p className="mt-3 text-xl font-bold text-primary">
                 {myTotal}
               </p>
             )}
           </div>
 
           {/* VS */}
-          <div className="px-4">
-            <span className="text-2xl font-display text-muted-foreground/50">VS</span>
+          <div className="px-6">
+            <span className="text-3xl font-display text-muted-foreground/50">VS</span>
           </div>
 
           {/* Opponent Side */}
           <div className="text-center flex-1">
             <p className="text-sm font-medium text-muted-foreground mb-3">{opponentName}</p>
-            <div className="flex justify-center gap-2">
-              <Die3D value={opponentDice[0]} rolling={phase === "rolling"} color="obsidian" />
-              <Die3D value={opponentDice[1]} rolling={phase === "rolling"} color="obsidian" />
+            <div className="flex justify-center">
+              <Die3D value={opponentDie} rolling={phase === "rolling"} color="obsidian" size="lg" />
             </div>
             {phase === "result" && (
-              <p className="mt-2 text-lg font-bold text-muted-foreground">
+              <p className="mt-3 text-xl font-bold text-muted-foreground">
                 {opponentTotal}
               </p>
             )}
