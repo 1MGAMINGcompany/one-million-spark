@@ -55,7 +55,7 @@ export const TRACK_COORDS: Record<number, [number, number]> = {
   26: [7, 14], // Right center
   27: [8, 14], // Right-bottom
   
-  // === SAPPHIRE SECTION (positions 28-40): Right arm row 8 → corner → Bottom arm col 8 → bottom edge ===
+  // === SAPPHIRE SECTION (positions 28-41): Right arm row 8 → corner → Bottom arm col 8 → bottom edge ===
   28: [8, 13], // Sapphire START - safe square
   29: [8, 12],
   30: [8, 11],
@@ -66,24 +66,26 @@ export const TRACK_COORDS: Record<number, [number, number]> = {
   35: [10, 8],
   36: [11, 8],
   37: [12, 8],
-  38: [13, 8], // Bottom-right (shifted up from row 14)
-  39: [13, 7], // Bottom center (shifted up from row 14)
+  38: [13, 8],
+  39: [14, 8], // Bottom-right edge (row 14)
+  40: [14, 7], // Bottom center
+  41: [14, 6], // Bottom-left edge (row 14)
   
-  // === EMERALD SECTION (positions 40-53): Bottom arm col 6 → corner → Left arm row 8 → left edge ===
-  40: [13, 6], // Emerald START - safe square (shifted up from row 14)
-  41: [12, 6], // Going UP col 6 (shifted up)
-  42: [11, 6],
-  43: [10, 6],
-  44: [9, 6],
-  45: [8, 6],  // Corner cell (row 8, col 6)
-  46: [8, 5],  // Going LEFT row 8
-  47: [8, 4],
-  48: [8, 3],
-  49: [8, 2],
-  50: [8, 1],
-  51: [8, 0],  // Left-bottom
-  52: [7, 0],  // Left center
-  53: [6, 0],  // Left-top - next would be position 0 at [6, 1]
+  // === EMERALD SECTION (positions 42-55): Bottom arm col 6 → corner → Left arm row 8 → left edge ===
+  42: [13, 6], // Emerald START - safe square
+  43: [12, 6], // Going UP col 6
+  44: [11, 6],
+  45: [10, 6],
+  46: [9, 6],
+  47: [8, 6],  // Corner cell (row 8, col 6)
+  48: [8, 5],  // Going LEFT row 8
+  49: [8, 4],
+  50: [8, 3],
+  51: [8, 2],
+  52: [8, 1],
+  53: [8, 0],  // Left-bottom
+  54: [7, 0],  // Left center
+  55: [6, 0],  // Left-top - next would be position 0 at [6, 1]
 };
 
 // Home path coordinates (6 cells leading to center, per player)
@@ -149,5 +151,5 @@ export function getTokenCoords(
  */
 export function isSafeSquare(trackPosition: number): boolean {
   // Safe squares are the starting positions for each color
-  return [0, 14, 28, 40].includes(trackPosition);
+  return [0, 14, 28, 42].includes(trackPosition);
 }
