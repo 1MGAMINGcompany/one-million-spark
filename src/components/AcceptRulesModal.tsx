@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -6,16 +7,22 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Shield, Clock, AlertTriangle, Coins } from "lucide-react";
+import { Shield, Clock, AlertTriangle, Coins, Loader2, Wallet } from "lucide-react";
 
 interface AcceptRulesModalProps {
   open: boolean;
   onAccept: () => void;
   onLeave: () => void;
   stakeSol: number;
-  turnTimeSeconds?: number;
+  turnTimeSeconds: number;
   isLoading?: boolean;
   opponentReady?: boolean;
+  /** Whether authoritative room data has loaded - blocks modal if false */
+  isDataLoaded: boolean;
+  /** Connected wallet address for verification display */
+  connectedWallet?: string;
+  /** Room PDA for debugging */
+  roomPda?: string;
 }
 
 export function AcceptRulesModal({
@@ -23,10 +30,25 @@ export function AcceptRulesModal({
   onAccept,
   onLeave,
   stakeSol,
-  turnTimeSeconds = 60,
+  turnTimeSeconds,
   isLoading = false,
   opponentReady = false,
+  isDataLoaded,
+  connectedWallet,
+  roomPda,
 }: AcceptRulesModalProps) {
+  // Debug logging when modal opens with loaded data
+  useEffect(() => {
+    if (open && isDataLoaded) {
+      console.log("[RulesModalData]", {
+        roomPda: roomPda?.slice(0, 8),
+        stakeLamports: Math.round(stakeSol * 1_000_000_000),
+        turnTimeSeconds,
+        source: "onchain-room",
+        connectedWallet: connectedWallet?.slice(0, 8),
+      });
+    }
+  }, [open, isDataLoaded, roomPda, stakeSol, turnTimeSeconds, connectedWallet]);
   const feeSol = stakeSol * 2 * 0.05; // 5% of total pot
   const potSol = stakeSol * 2;
   const payoutSol = potSol - feeSol;
@@ -40,6 +62,29 @@ export function AcceptRulesModal({
     }
     return `${seconds} seconds`;
   };
+
+  // Format wallet address for display
+  const formatWallet = (wallet: string): string => {
+    if (wallet.length <= 12) return wallet;
+    return `${wallet.slice(0, 4)}...${wallet.slice(-4)}`;
+  };
+
+  // Show loading state if data not loaded yet
+  if (!isDataLoaded) {
+    return (
+      <Dialog open={open} onOpenChange={() => {}}>
+        <DialogContent 
+          className="sm:max-w-md" 
+          onPointerDownOutside={(e) => e.preventDefault()}
+        >
+          <div className="flex flex-col items-center justify-center py-12 gap-4">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <p className="text-muted-foreground text-sm">Loading match details...</p>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
 
   return (
     <Dialog open={open} onOpenChange={() => {}}>
@@ -114,6 +159,19 @@ export function AcceptRulesModal({
               <p className="text-sm text-emerald-600 text-center">
                 ✓ Your opponent is ready
               </p>
+            </div>
+          )}
+
+          {/* Connected Wallet Verification */}
+          {connectedWallet && (
+            <div className="rounded-lg border bg-muted/30 p-3">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Wallet className="h-3 w-3" />
+                <span>Connected wallet:</span>
+                <span className="font-mono font-medium text-foreground">
+                  {formatWallet(connectedWallet)}
+                </span>
+              </div>
             </div>
           )}
         </div>

@@ -850,10 +850,13 @@ const LudoGame = () => {
               open={true}
               onAccept={handleAcceptRules}
               onLeave={handleLeaveClick}
-              stakeSol={rankedGate.stakeLamports / 1_000_000_000}
+              stakeSol={entryFeeSol}
               turnTimeSeconds={effectiveTurnTime}
               isLoading={rankedGate.isSettingReady}
               opponentReady={rankedGate.opponentReady}
+              isDataLoaded={rankedGate.isDataLoaded && entryFeeSol > 0}
+              connectedWallet={address}
+              roomPda={roomPda}
             />
           ) : (
             <WaitingForOpponentPanel 

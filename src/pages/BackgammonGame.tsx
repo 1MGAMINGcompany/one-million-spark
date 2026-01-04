@@ -149,11 +149,16 @@ const BackgammonGame = () => {
             const realPlayers = parsed.players.map(p => p.toBase58());
             setRoomPlayers(realPlayers);
             
+            // Extract entry fee from on-chain (CRITICAL for correct modal display)
+            if (parsed.entryFee) {
+              setEntryFeeSol(parsed.entryFee / 1_000_000_000);
+            }
+            
             // Determine my role based on on-chain position
             const myIndex = realPlayers.findIndex(p => p.toLowerCase() === address.toLowerCase());
             const role = myIndex === 0 ? "player" : "ai"; // "player" = gold, "ai" = black
             setMyRole(role);
-            console.log("[BackgammonGame] On-chain players:", realPlayers, "My role:", role === "player" ? "gold" : "black");
+            console.log("[BackgammonGame] On-chain players:", realPlayers, "My role:", role === "player" ? "gold" : "black", "Entry fee:", parsed.entryFee);
             return;
           }
         }
@@ -977,10 +982,13 @@ const BackgammonGame = () => {
               open={true}
               onAccept={handleAcceptRules}
               onLeave={handleLeaveClick}
-              stakeSol={rankedGate.stakeLamports / 1_000_000_000}
+              stakeSol={entryFeeSol}
               turnTimeSeconds={rankedGate.turnTimeSeconds || 60}
               isLoading={rankedGate.isSettingReady}
               opponentReady={rankedGate.opponentReady}
+              isDataLoaded={rankedGate.isDataLoaded && entryFeeSol > 0}
+              connectedWallet={address}
+              roomPda={roomPda}
             />
           ) : (
             <WaitingForOpponentPanel 
