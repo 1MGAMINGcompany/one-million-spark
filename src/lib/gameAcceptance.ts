@@ -62,7 +62,7 @@ export async function computeRulesHash(rules: RulesParams): Promise<string> {
   const encoder = new TextEncoder();
   const data = encoder.encode(jsonString);
   
-  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data.buffer as ArrayBuffer);
   const hashArray = new Uint8Array(hashBuffer);
   
   return Array.from(hashArray)
