@@ -2,40 +2,27 @@ import { useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { archiveRoom } from '@/lib/roomArchive';
 
-// Helper to get room mode data from localStorage
+// NOTE: Room mode (casual/ranked) is now determined SOLELY from the database.
+// These legacy helpers are deprecated and should NOT be used for UI decisions.
+// They exist only for cleanup purposes during forfeit/leave.
+
 export interface RoomModeData {
   mode: 'casual' | 'ranked';
   turnTimeSeconds: number;
   stakeLamports: number;
 }
 
+/** @deprecated Use useRoomMode hook instead - this reads localStorage which is not authoritative */
 export function getRoomModeData(roomPda: string): RoomModeData {
-  try {
-    const stored = localStorage.getItem(`room_mode_${roomPda}`);
-    if (stored) {
-      // New format: JSON object
-      const parsed = JSON.parse(stored);
-      if (parsed.mode) {
-        return {
-          mode: parsed.mode,
-          turnTimeSeconds: parsed.turnTimeSeconds || 60,
-          stakeLamports: parsed.stakeLamports || 0,
-        };
-      }
-    }
-  } catch (e) {
-    // Legacy format: just 'casual' or 'ranked' string
-    const stored = localStorage.getItem(`room_mode_${roomPda}`);
-    if (stored === 'ranked' || stored === 'casual') {
-      return { mode: stored, turnTimeSeconds: 60, stakeLamports: 0 };
-    }
-  }
+  // Return default - DO NOT read localStorage for mode decisions
+  console.warn("[getRoomModeData] DEPRECATED: Use useRoomMode hook for authoritative mode");
   return { mode: 'casual', turnTimeSeconds: 60, stakeLamports: 0 };
 }
 
-// Legacy helper for backward compatibility
+/** @deprecated Use useRoomMode hook instead */
 export function getRoomMode(roomPda: string): 'casual' | 'ranked' {
-  return getRoomModeData(roomPda).mode;
+  console.warn("[getRoomMode] DEPRECATED: Use useRoomMode hook for authoritative mode");
+  return 'casual';
 }
 
 interface GameSessionData {

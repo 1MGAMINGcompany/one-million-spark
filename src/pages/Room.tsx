@@ -18,7 +18,7 @@ import { TxDebugPanel } from "@/components/TxDebugPanel";
 import { MobileWalletRedirect } from "@/components/MobileWalletRedirect";
 import { PreviewDomainBanner, useSigningDisabled } from "@/components/PreviewDomainBanner";
 import { validatePublicKey, isMobileDevice, hasInjectedSolanaWallet, getRoomPda } from "@/lib/solana-utils";
-import { getRoomMode } from "@/hooks/useGameSessionPersistence";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 // Presence feature disabled until program supports ping_room
@@ -71,6 +71,10 @@ export default function Room() {
   const [vaultLamports, setVaultLamports] = useState<bigint>(0n);
   const [vaultPdaStr, setVaultPdaStr] = useState<string>("");
   const [linkCopied, setLinkCopied] = useState(false);
+  
+  // Room mode from DB (single source of truth - NOT localStorage)
+  const [roomMode, setRoomMode] = useState<'casual' | 'ranked'>('casual');
+  const [roomModeLoaded, setRoomModeLoaded] = useState(false);
   
   // Check if this is a rematch room (either just created or from rematch param)
   const isRematchCreated = searchParams.get('rematch_created') === '1';
@@ -140,6 +144,36 @@ export default function Room() {
       setPdaError(null);
     }
   }, [roomPdaParam]);
+  
+  // Fetch room mode from DB (single source of truth)
+  useEffect(() => {
+    if (!roomPdaParam) return;
+    
+    const fetchRoomMode = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("game_sessions")
+          .select("mode")
+          .eq("room_pda", roomPdaParam)
+          .maybeSingle();
+        
+        if (data?.mode) {
+          setRoomMode(data.mode as 'casual' | 'ranked');
+          console.log("[RoomMode] DB mode:", data.mode);
+        } else {
+          // No game_session yet - default to casual but don't block
+          console.log("[RoomMode] No game_session found, defaulting to casual");
+          setRoomMode('casual');
+        }
+      } catch (err) {
+        console.error("[RoomMode] Failed to fetch mode:", err);
+      } finally {
+        setRoomModeLoaded(true);
+      }
+    };
+    
+    fetchRoomMode();
+  }, [roomPdaParam]);
 
   const status = room?.status ?? 0;
   const statusName = statusToName(status);
@@ -189,7 +223,11 @@ export default function Room() {
   const fetchRoom = async () => {
     if (!roomPdaParam) return;
     
-    console.log("[Room] Fetching room by PDA:", roomPdaParam);
+    // Debug logging for room mode investigation
+    console.log("[RoomMode] Fetching room:", {
+      roomPda: roomPdaParam,
+      localStorageKeys: Object.keys(localStorage).filter(k => k.includes(roomPdaParam.slice(0, 8))),
+    });
     
     try {
       setLoading(true);
@@ -232,9 +270,12 @@ export default function Room() {
         isPrivate: parsed.isPrivate,
       };
       
-      console.log("[Room] Room loaded:", {
-        roomId: roomAccount.roomId,
-        status: roomAccount.status,
+      console.log("[RoomMode] Room loaded:", {
+        roomPda: roomPdaParam,
+        chainStatus: roomAccount.status,
+        playerCount: roomAccount.playerCount,
+        maxPlayers: roomAccount.maxPlayers,
+        dbMode: roomMode,
         creator: roomAccount.creator?.toBase58()?.slice(0, 8),
       });
 
@@ -629,20 +670,14 @@ export default function Room() {
                 }`}>
                   {isAbandoned ? 'Abandoned' : statusName}
                 </span>
-                {/* Mode Badge - Read from localStorage */}
-                {(() => {
-                  const mode = getRoomMode(roomPdaParam || '');
-                  const isRanked = mode === 'ranked';
-                  return (
-                    <span className={`px-3 py-1 rounded-full text-sm font-medium border ${
-                      isRanked 
-                        ? 'bg-red-500/20 text-red-400 border-red-500/30' 
-                        : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
-                    }`}>
-                      {isRanked ? '🔴 Ranked' : '🟢 Casual'}
-                    </span>
-                  );
-                })()}
+                {/* Mode Badge - from DB (single source of truth) */}
+                <span className={`px-3 py-1 rounded-full text-sm font-medium border ${
+                  roomMode === 'ranked' 
+                    ? 'bg-red-500/20 text-red-400 border-red-500/30' 
+                    : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                }`}>
+                  {roomMode === 'ranked' ? '🔴 Ranked' : '🟢 Casual'}
+                </span>
                 {isPlayer && (
                   <span className="px-3 py-1 rounded-full text-sm font-medium bg-primary/20 text-primary">
                     You're in this game

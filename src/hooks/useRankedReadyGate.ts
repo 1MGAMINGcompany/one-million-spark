@@ -128,27 +128,8 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
         if (data.turn_time_seconds) {
           setTurnTimeSeconds(data.turn_time_seconds);
         }
-        
-        // Sync mode from DB to localStorage for joining players
-        // This ensures Player 2 sees the correct mode even without localStorage data
-        if (data.mode) {
-          try {
-            const existing = localStorage.getItem(`room_mode_${roomPda}`);
-            const existingData = existing ? JSON.parse(existing) : {};
-            
-            // Only update if mode differs or no local data
-            if (!existing || existingData.mode !== data.mode) {
-              console.log("[RankedReadyGate] Syncing mode from DB to localStorage:", data.mode);
-              localStorage.setItem(`room_mode_${roomPda}`, JSON.stringify({
-                mode: data.mode,
-                turnTimeSeconds: data.turn_time_seconds || 60,
-                stakeLamports: existingData.stakeLamports || 0,
-              }));
-            }
-          } catch (e) {
-            console.warn("[RankedReadyGate] Failed to sync mode to localStorage:", e);
-          }
-        }
+        // Note: Mode now comes from DB (single source of truth)
+        // No localStorage sync needed - useRoomMode fetches directly from DB
         
         setHasLoaded(true);
       } else {
@@ -156,22 +137,6 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
         setHasLoaded(true);
       }
     };
-
-    // Also try to get stake and turn time from localStorage (set by CreateRoom)
-    try {
-      const modeData = localStorage.getItem(`room_mode_${roomPda}`);
-      if (modeData) {
-        const parsed = JSON.parse(modeData);
-        if (parsed.stakeLamports) {
-          setStakeLamports(parsed.stakeLamports);
-        }
-        if (parsed.turnTimeSeconds) {
-          setTurnTimeSeconds(parsed.turnTimeSeconds);
-        }
-      }
-    } catch (e) {
-      console.warn("[useRankedReadyGate] Failed to parse room mode data:", e);
-    }
 
     loadState();
 
