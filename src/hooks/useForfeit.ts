@@ -25,6 +25,10 @@ export interface UseForfeitOptions {
   stakeLamports?: number;
   gameType?: string;
   mode?: 'casual' | 'ranked';
+  /** CRITICAL: For ranked games, forfeit only allowed when both rules accepted */
+  bothRulesAccepted?: boolean;
+  /** Whether game has officially started (dice roll complete) */
+  gameStarted?: boolean;
   // Cleanup callbacks - called in forceExit
   onCleanupWebRTC?: () => void;
   onCleanupSupabase?: () => void;
@@ -57,6 +61,8 @@ export function useForfeit({
   stakeLamports = 0,
   gameType = "unknown",
   mode = "casual",
+  bothRulesAccepted = true, // Default true for casual games
+  gameStarted = true, // Default true for backward compatibility
   onCleanupWebRTC,
   onCleanupSupabase,
   onCleanupLocalState,
@@ -186,6 +192,27 @@ export function useForfeit({
       if (!roomPda || !myWallet || !opponentWallet) {
         console.error("[useForfeit] Missing required params:", { roomPda, myWallet, opponentWallet });
         return; // forceExit will happen via timeout or finally
+      }
+      
+      // CRITICAL: Block forfeit in invalid states for ranked games
+      if (mode === 'ranked' && !bothRulesAccepted) {
+        console.error("[useForfeit] BLOCKED: Cannot forfeit ranked game - rules not accepted by both players");
+        toast({
+          title: t("forfeit.invalidState", "Cannot forfeit"),
+          description: t("forfeit.rulesNotAccepted", "Game has not properly started"),
+          variant: "destructive",
+        });
+        return; // forceExit will happen via finally
+      }
+      
+      if (!gameStarted) {
+        console.warn("[useForfeit] BLOCKED: Cannot forfeit - game not started");
+        toast({
+          title: t("forfeit.invalidState", "Cannot forfeit"),
+          description: t("forfeit.gameNotStarted", "Game has not started yet"),
+          variant: "destructive",
+        });
+        return;
       }
       
       console.log("[useForfeit] Starting forfeit via finalizeGame:", {

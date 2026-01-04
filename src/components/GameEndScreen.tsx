@@ -324,39 +324,76 @@ export function GameEndScreen({
     window.location.href = link;
   };
   
+  // CRITICAL: For staked games, only show definitive win AFTER payout confirmed
+  // This prevents "YOU WIN" UI when funds are actually still locked
+  const isPayoutConfirmed = finalizeState === 'success' || isAlreadySettled;
+  
   const getResultText = () => {
     if (isDraw) return 'Draw';
-    if (isWinner) return 'You Won!';
+    if (isWinner) {
+      // For staked games, show pending until payout confirmed
+      if (isStaked && !isPayoutConfirmed && !checkingRoomStatus) {
+        return 'Awaiting Payout...';
+      }
+      return 'You Won!';
+    }
     return 'You Lost';
   };
 
   const getResultColor = () => {
     if (isDraw) return 'text-muted-foreground';
-    if (isWinner) return 'text-primary';
+    if (isWinner) {
+      // Show muted color until payout confirmed for staked games
+      if (isStaked && !isPayoutConfirmed) {
+        return 'text-amber-500';
+      }
+      return 'text-primary';
+    }
     return 'text-destructive';
   };
 
+  // Log state for debugging invalid transitions
+  useEffect(() => {
+    console.log("[GameEndScreen]", {
+      isStaked,
+      isWinner,
+      finalizeState,
+      isPayoutConfirmed,
+      roomAlreadySettled,
+    });
+  }, [isStaked, isWinner, finalizeState, isPayoutConfirmed, roomAlreadySettled]);
+
   return (
     <div className="fixed inset-0 bg-background/95 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      {/* Confetti explosion on successful payout */}
-      <GoldConfettiExplosion active={finalizeState === 'success'} originX={50} originY={30} />
+      {/* Confetti explosion ONLY on confirmed payout (not optimistic) */}
+      <GoldConfettiExplosion active={finalizeState === 'success' && isWinner} originX={50} originY={30} />
       
       <Card className="w-full max-w-md bg-card border-primary/30 shadow-2xl">
         <div className="p-6 space-y-6">
-          {/* Trophy Icon */}
+          {/* Trophy Icon - pending state for staked games awaiting payout */}
           <div className="flex justify-center">
-            <div className={`p-4 rounded-full ${isWinner ? 'bg-primary/20' : isDraw ? 'bg-muted' : 'bg-destructive/20'}`}>
-              <Trophy 
-                size={48} 
-                className={isWinner ? 'text-primary' : isDraw ? 'text-muted-foreground' : 'text-destructive'} 
-              />
+            <div className={`p-4 rounded-full ${
+              isWinner 
+                ? (isStaked && !isPayoutConfirmed ? 'bg-amber-500/20' : 'bg-primary/20')
+                : isDraw ? 'bg-muted' : 'bg-destructive/20'
+            }`}>
+              {isStaked && isWinner && !isPayoutConfirmed && !checkingRoomStatus ? (
+                <Loader2 size={48} className="text-amber-500 animate-spin" />
+              ) : (
+                <Trophy 
+                  size={48} 
+                  className={isWinner ? 'text-primary' : isDraw ? 'text-muted-foreground' : 'text-destructive'} 
+                />
+              )}
             </div>
           </div>
 
           {/* Result Text */}
           <div className="text-center space-y-2">
             <h2 className="text-sm uppercase tracking-wider text-muted-foreground">
-              Match Complete
+              {isStaked && !isPayoutConfirmed && !checkingRoomStatus 
+                ? 'Settling On-Chain...' 
+                : 'Match Complete'}
             </h2>
             <h1 className={`text-3xl font-bold ${getResultColor()}`}>
               {getResultText()}

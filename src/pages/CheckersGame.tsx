@@ -731,6 +731,9 @@ const CheckersGame = () => {
     stakeLamports: entryFeeSol * 1_000_000_000,
     gameType: "checkers",
     mode: isRankedGame ? 'ranked' : 'casual',
+    // CRITICAL: Pass validation state for ranked games
+    bothRulesAccepted: rankedGate.bothReady,
+    gameStarted: startRoll.isFinalized,
     onCleanupWebRTC: () => console.log("[CheckersGame] Cleaning up WebRTC"),
     onCleanupSupabase: () => console.log("[CheckersGame] Cleaning up Supabase"),
   });
