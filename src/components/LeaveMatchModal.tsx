@@ -153,10 +153,14 @@ export function LeaveMatchModal({
   };
 
   // Determine which actions are available based on match state
+  // CRITICAL: Forfeit ONLY available when match is truly IN_PROGRESS (both rules accepted + game started)
   const canCancel = isCreator && (matchState === "waiting_for_opponent" || matchState === "opponent_joined" || matchState === "rules_pending");
-  const canForfeit = matchState === "match_active" && stakeSol > 0;
+  const canForfeit = matchState === "match_active" && stakeSol > 0 && onForfeitMatch !== undefined;
   const canSimplyLeave = matchState === "game_over" || matchState === "waiting_for_opponent";
   const showCopyLink = matchState === "waiting_for_opponent";
+  
+  // Log match state for debugging invalid state transitions
+  console.log("[LeaveMatchModal] matchState:", matchState, "canCancel:", canCancel, "canForfeit:", canForfeit);
 
   // Determine warning message based on state
   const getWarningMessage = () => {

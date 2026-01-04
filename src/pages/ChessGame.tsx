@@ -715,6 +715,9 @@ const ChessGame = () => {
     stakeLamports: entryFeeSol * 1_000_000_000,
     gameType: "chess",
     mode: isRankedGame ? 'ranked' : 'casual',
+    // CRITICAL: Pass validation state for ranked games
+    bothRulesAccepted: rankedGate.bothReady,
+    gameStarted: startRoll.isFinalized,
     onCleanupWebRTC: () => {
       // Close WebRTC connection - the hook handles this internally
       console.log("[ChessGame] Cleaning up WebRTC via useForfeit");
@@ -975,29 +978,32 @@ const ChessGame = () => {
           </div>
         </div>
 
-        {/* Main Content */}
-        <div className="max-w-6xl mx-auto px-4 py-4">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Chess Board Column */}
-            <div className="lg:col-span-2 space-y-4">
-              {/* Board Container */}
-              <div className="relative">
-                <div className="absolute -inset-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 rounded-2xl blur-xl opacity-50" />
-                <div className="relative p-1 rounded-xl bg-gradient-to-br from-primary/40 via-primary/20 to-primary/40 shadow-[0_0_40px_-10px_hsl(45_93%_54%_/_0.4)]">
-                  <div className="bg-gradient-to-b from-midnight-light via-background to-midnight-light rounded-lg overflow-hidden p-4">
-                    <ChessBoardPremium
-                      game={game}
-                      onMove={handleMove}
-                      disabled={gameOver || !isMyTurn}
-                      captureAnimations={animations}
-                      onAnimationComplete={handleAnimationComplete}
-                      animationsEnabled={animationsEnabled}
-                      flipped={myColor === "b"}
-                      playerColor={myColor}
-                    />
+        {/* Main Content - HARD GATED: Only render game board when game can actually be played */}
+        {/* For ranked games: requires bothReady + dice roll finalized */}
+        {/* For casual games: requires dice roll finalized */}
+        {canPlay ? (
+          <div className="max-w-6xl mx-auto px-4 py-4">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Chess Board Column */}
+              <div className="lg:col-span-2 space-y-4">
+                {/* Board Container */}
+                <div className="relative">
+                  <div className="absolute -inset-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 rounded-2xl blur-xl opacity-50" />
+                  <div className="relative p-1 rounded-xl bg-gradient-to-br from-primary/40 via-primary/20 to-primary/40 shadow-[0_0_40px_-10px_hsl(45_93%_54%_/_0.4)]">
+                    <div className="bg-gradient-to-b from-midnight-light via-background to-midnight-light rounded-lg overflow-hidden p-4">
+                      <ChessBoardPremium
+                        game={game}
+                        onMove={handleMove}
+                        disabled={gameOver || !isMyTurn}
+                        captureAnimations={animations}
+                        onAnimationComplete={handleAnimationComplete}
+                        animationsEnabled={animationsEnabled}
+                        flipped={myColor === "b"}
+                        playerColor={myColor}
+                      />
+                    </div>
                   </div>
                 </div>
-              </div>
 
               {/* Animation Toggle */}
               <div className="flex justify-center">
@@ -1087,6 +1093,20 @@ const ChessGame = () => {
             </div>
           </div>
         </div>
+        ) : (
+          /* Waiting state - show when game cannot be played yet */
+          <div className="max-w-6xl mx-auto px-4 py-8 text-center">
+            <div className="text-muted-foreground">
+              {roomPlayers.length < 2 ? (
+                <p>{t("gameMultiplayer.waitingForOpponent")}</p>
+              ) : isRankedGame && !rankedGate.bothReady ? (
+                <p>{t("gameSession.waitingForRulesAcceptance", "Waiting for rules acceptance...")}</p>
+              ) : (
+                <p>{t("gameMultiplayer.preparingGame", "Preparing game...")}</p>
+              )}
+            </div>
+          </div>
+        )}
       </div>
       
       {/* Chat Panel */}

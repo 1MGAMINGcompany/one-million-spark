@@ -577,6 +577,9 @@ const BackgammonGame = () => {
     stakeLamports: entryFeeSol * 1_000_000_000,
     gameType: "backgammon",
     mode: isRankedGame ? 'ranked' : 'casual',
+    // CRITICAL: Pass validation state for ranked games
+    bothRulesAccepted: rankedGate.bothReady,
+    gameStarted: startRoll.isFinalized,
     onCleanupWebRTC: () => console.log("[BackgammonGame] Cleaning up WebRTC"),
     onCleanupSupabase: () => console.log("[BackgammonGame] Cleaning up Supabase"),
   });

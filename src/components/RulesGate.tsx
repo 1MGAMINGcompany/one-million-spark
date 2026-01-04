@@ -1,10 +1,15 @@
 /**
  * RulesGate - Hard gate for ranked games
  * 
+ * CRITICAL SAFETY INVARIANTS:
+ * 1. Ranked games may ONLY proceed if both players accepted rules
+ * 2. Game board/DiceRoll MUST NOT render unless bothReady === true (for ranked)
+ * 3. This prevents mobile race conditions and ensures funds safety
+ * 
  * For ranked rooms, this component enforces a strict render order:
  * 1. If not ready → AcceptRulesModal (blocking)
  * 2. If ready but opponent not → WaitingForOpponentPanel
- * 3. Only when both ready → children (DiceRollStart)
+ * 3. Only when both ready → children (DiceRollStart/GameBoard)
  * 
  * This prevents mobile race conditions where DiceRollStart could render
  * before the rules modal was shown.
@@ -39,7 +44,7 @@ interface RulesGateProps {
   onAcceptRules: () => void;
   /** Called when user leaves */
   onLeave: () => void;
-  /** Children (DiceRollStart) - only rendered when both ready */
+  /** Children (DiceRollStart/GameBoard) - only rendered when both ready */
   children: React.ReactNode;
 }
 
@@ -58,16 +63,22 @@ export function RulesGate({
   onLeave,
   children,
 }: RulesGateProps) {
-  // Debug logging for cross-device sync
+  // Debug logging for cross-device sync and invalid state detection
   useEffect(() => {
-    console.log("[RulesGate]", {
+    const state = {
       roomPda: roomPda?.slice(0, 8),
       isRanked,
       myWallet: myWallet?.slice(0, 8),
       myRulesAccepted: iAmReady,
       opponentRulesAccepted: opponentReady,
       bothAccepted: bothReady,
-    });
+    };
+    console.log("[RulesGate]", state);
+    
+    // CRITICAL: Log warning if ranked game attempts to render children without both ready
+    if (isRanked && !bothReady) {
+      console.warn("[RulesGate] BLOCKED: Ranked game children blocked - not both ready", state);
+    }
   }, [roomPda, isRanked, myWallet, iAmReady, opponentReady, bothReady]);
 
   // For casual games, bypass the gate entirely

@@ -872,6 +872,9 @@ const DominosGame = () => {
     stakeLamports: entryFeeSol * 1_000_000_000,
     gameType: "dominos",
     mode: isRankedGame ? 'ranked' : 'casual',
+    // CRITICAL: Pass validation state for ranked games
+    bothRulesAccepted: rankedGate.bothReady,
+    gameStarted: startRoll.isFinalized,
     onCleanupWebRTC: () => console.log("[DominosGame] Cleaning up WebRTC"),
     onCleanupSupabase: () => console.log("[DominosGame] Cleaning up Supabase"),
   });
