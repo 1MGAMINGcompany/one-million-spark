@@ -6,7 +6,7 @@ import { Card } from '@/components/ui/card';
 import { useTranslation } from 'react-i18next';
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
 import { PublicKey } from '@solana/web3.js';
-import { finalizeRoom } from '@/lib/finalize-room';
+import { finalizeGame, isRoomFinalized } from '@/lib/finalizeGame';
 import { useSound } from '@/contexts/SoundContext';
 import { supabase } from '@/integrations/supabase/client';
 import { RivalryWidget } from '@/components/RivalryWidget';
@@ -205,6 +205,14 @@ export function GameEndScreen({
           setGameMode(sessionData.mode as 'casual' | 'ranked');
         }
         
+        // Check if already finalized via finalize_receipts
+        const alreadyFinalized = await isRoomFinalized(roomPda);
+        if (alreadyFinalized) {
+          setRoomAlreadySettled(true);
+          setCheckingRoomStatus(false);
+          return;
+        }
+        
         const accountInfo = await connection.getAccountInfo(new PublicKey(roomPda));
         if (accountInfo?.data) {
           const roomData = parseRoomData(Buffer.from(accountInfo.data));
@@ -247,67 +255,35 @@ export function GameEndScreen({
     setTxSignature(null);
     
     try {
-      // For draws, use the settle-draw edge function
-      if (isDraw) {
-        const { data, error } = await supabase.functions.invoke('settle-draw', {
-          body: {
-            roomPda,
-            callerWallet: publicKey.toBase58(),
-            gameType,
-          },
-        });
-        
-        if (error) throw error;
-        if (data?.error) throw new Error(data.error);
-        
-        if (data?.status === 'settled' || data?.status === 'already_resolved') {
-          setFinalizeState('success');
-          setTxSignature(data.signature || null);
-          play('chess_win');
-        } else {
-          throw new Error(data?.message || 'Failed to settle draw');
-        }
-        return;
-      }
+      // Find loser wallet for forfeit-style finalization
+      const loserWallet = players.find(p => p.address !== winner)?.address;
       
-      // Normal winner finalization
-      const res = await finalizeRoom(
+      // Use the authoritative finalizeGame function
+      const result = await finalizeGame({
+        roomPda,
+        winnerWallet: isDraw ? publicKey.toBase58() : winner!,
+        loserWallet,
+        gameType,
+        stakeLamports,
+        mode: gameMode,
+        players: players.map(p => p.address),
+        endReason: isDraw ? 'draw' : 'win',
         connection,
-        new PublicKey(roomPda),
-        new PublicKey(winner!),
         sendTransaction,
-        publicKey
-      );
+        signerPubkey: publicKey,
+      });
       
-      if (res.ok) {
+      if (result.success) {
         setFinalizeState('success');
-        setTxSignature(res.signature || null);
+        setTxSignature(result.signature || null);
         play('chess_win');
         
-        if (res.signature && players.length >= 2) {
-          (async () => {
-            try {
-              const { error } = await supabase.rpc('record_match_result', {
-                p_room_pda: roomPda,
-                p_finalize_tx: res.signature,
-                p_winner_wallet: winner,
-                p_game_type: gameType,
-                p_max_players: players.length,
-                p_stake_lamports: stakeLamports,
-                p_mode: gameMode,
-                p_players: players.map(p => p.address),
-              });
-              if (error) {
-                console.warn('[GameEndScreen] RPC record_match_result failed:', error.message);
-              }
-            } catch (err) {
-              console.warn('[GameEndScreen] RPC call failed:', err);
-            }
-          })();
+        if (result.alreadySettled) {
+          console.log('[GameEndScreen] Room was already settled');
         }
       } else {
         setFinalizeState('error');
-        setFinalizeError(res.error || 'Unknown error');
+        setFinalizeError(result.error || 'Unknown error');
       }
     } catch (err: any) {
       setFinalizeState('error');

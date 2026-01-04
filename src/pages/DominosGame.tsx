@@ -532,7 +532,8 @@ const DominosGame = () => {
   const effectiveIsMyTurn = canPlayRanked && isActuallyMyTurn;
 
   // Ref for resign/forfeit function to avoid circular deps with turn timer
-  const sendResignRef = useRef<(() => boolean) | null>(null);
+  // Ref for forfeit function - will be set by useForfeit hook
+  const forfeitFnRef = useRef<(() => Promise<void>) | null>(null);
 
   // Turn timer for ranked games - auto-forfeit on timeout
   const handleTimeExpired = useCallback(() => {
@@ -542,7 +543,8 @@ const DominosGame = () => {
         description: t('gameSession.forfeitedMatch'),
         variant: "destructive",
       });
-      sendResignRef.current?.();
+      // Trigger forfeit via finalizeGame (single authoritative payout)
+      forfeitFnRef.current?.();
       setGameOver(true);
       setWinner("opponent");
       setGameStatus(t('game.youLose') + " - timeout");
@@ -865,15 +867,21 @@ const DominosGame = () => {
   });
 
   // useForfeit hook - centralized forfeit/leave logic
-  const { forfeit, leave, isForfeiting, isLeaving } = useForfeit({
+  const { forfeit, leave, isForfeiting, isLeaving, forfeitRef } = useForfeit({
     roomPda: roomPda || null,
     myWallet: address || null,
     opponentWallet,
     stakeLamports: entryFeeSol * 1_000_000_000,
     gameType: "dominos",
+    mode: isRankedGame ? 'ranked' : 'casual',
     onCleanupWebRTC: () => console.log("[DominosGame] Cleaning up WebRTC"),
     onCleanupSupabase: () => console.log("[DominosGame] Cleaning up Supabase"),
   });
+  
+  // Connect forfeit ref for timeout handler
+  useEffect(() => {
+    forfeitFnRef.current = forfeitRef.current;
+  }, [forfeitRef]);
 
   // Request sync when we connect as player 2 (late joiner)
   useEffect(() => {

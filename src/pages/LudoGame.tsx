@@ -299,7 +299,7 @@ const LudoGame = () => {
   // Ref for sendPlayerEliminated to use in forfeit handler
   const sendPlayerEliminatedRef = useRef<((playerIndex: number) => boolean) | null>(null);
 
-  const handleConfirmForfeit = async () => {
+  const handleConfirmForfeit = useCallback(async () => {
     if (!roomPda || myPlayerIndex < 0) return;
     
     setIsForfeitLoading(true);
@@ -321,7 +321,7 @@ const LudoGame = () => {
     } else {
       toast({ title: t('common.error'), description: result.reason, variant: "destructive" });
     }
-  };
+  }, [roomPda, myPlayerIndex, eliminatePlayer, forfeitGame, navigate, t]);
 
   // Block gameplay until start roll is finalized (for ranked games, also need rules accepted)
   const canPlay = startRoll.isFinalized && (!isRankedGame || rankedGate.bothReady);
@@ -332,8 +332,13 @@ const LudoGame = () => {
   // isMyTurnLocal includes canPlay gate - used for board disable
   const isMyTurnLocal = canPlay && isActuallyMyTurn;
 
-  // Ref for resign/forfeit function to avoid circular deps with turn timer
-  const sendResignRef = useRef<(() => boolean) | null>(null);
+  // Ref for forfeit function - will be set to handleConfirmForfeit
+  const forfeitFnRef = useRef<(() => void) | null>(null);
+  
+  // Connect forfeit ref to handleConfirmForfeit
+  useEffect(() => {
+    forfeitFnRef.current = handleConfirmForfeit;
+  }, [handleConfirmForfeit]);
 
   // Turn timer for ranked games - auto-forfeit on timeout
   const handleTimeExpired = useCallback(() => {
@@ -343,8 +348,8 @@ const LudoGame = () => {
         description: t('gameSession.forfeitedMatch'),
         variant: "destructive",
       });
-      sendResignRef.current?.();
-      // Force loss - advance to next player's win or end game
+      // Trigger forfeit via the forfeit handler
+      forfeitFnRef.current?.();
       play('ludo_dice');
     }
   }, [gameOver, play, t]);

@@ -388,8 +388,8 @@ const ChessGame = () => {
   // Check if it's my turn
   const isMyTurn = canPlay && game.turn() === myColor && !gameOver;
 
-  // Ref for resign function to avoid circular deps with turn timer
-  const sendResignRef = useRef<(() => boolean) | null>(null);
+  // Ref for forfeit function - will be set by useForfeit hook
+  const forfeitFnRef = useRef<(() => Promise<void>) | null>(null);
 
   // Turn timer for ranked games - auto-forfeit on timeout
   const handleTimeExpired = useCallback(() => {
@@ -399,7 +399,8 @@ const ChessGame = () => {
         description: t('gameSession.forfeitedMatch'),
         variant: "destructive",
       });
-      sendResignRef.current?.();
+      // Trigger forfeit via finalizeGame (single authoritative payout)
+      forfeitFnRef.current?.();
       setGameOver(true);
       setGameStatus(myColor === 'w' ? t('game.black') + " wins by timeout" : t('game.white') + " wins by timeout");
       play('chess_lose');
@@ -715,12 +716,13 @@ const ChessGame = () => {
   }, [sendRematchInvite, sendRematchAccept, sendRematchDecline, sendRematchReady]);
 
   // useForfeit hook - centralized forfeit/leave logic with guaranteed cleanup
-  const { forfeit, leave, isForfeiting, isLeaving } = useForfeit({
+  const { forfeit, leave, isForfeiting, isLeaving, forfeitRef } = useForfeit({
     roomPda: roomPda || null,
     myWallet: address || null,
     opponentWallet,
     stakeLamports: entryFeeSol * 1_000_000_000,
     gameType: "chess",
+    mode: isRankedGame ? 'ranked' : 'casual',
     onCleanupWebRTC: () => {
       // Close WebRTC connection - the hook handles this internally
       console.log("[ChessGame] Cleaning up WebRTC via useForfeit");
@@ -730,6 +732,11 @@ const ChessGame = () => {
       console.log("[ChessGame] Cleaning up Supabase via useForfeit");
     },
   });
+  
+  // Connect forfeit ref for timeout handler
+  useEffect(() => {
+    forfeitFnRef.current = forfeitRef.current;
+  }, [forfeitRef]);
 
   // Check if it's actually my turn (based on game state, not canPlay gate)
   const isActuallyMyTurn = game.turn() === myColor && !gameOver;
