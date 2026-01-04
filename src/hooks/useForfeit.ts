@@ -253,7 +253,13 @@ export function useForfeit({
   ]);
 
   /**
-   * leave() - Just cleanup and navigate out (no chain call)
+   * leave() - UI-ONLY cleanup and navigate out (NO chain call, NO wallet)
+   * CRITICAL: This function NEVER calls any wallet methods:
+   * - No signMessage
+   * - No signTransaction
+   * - No sendTransaction
+   * - No wallet.connect/disconnect
+   * 
    * GUARANTEED: Navigates within 1 second no matter what
    */
   const leave = useCallback(() => {
@@ -266,14 +272,17 @@ export function useForfeit({
     exitedRef.current = false; // Reset for new leave attempt
     setIsLeaving(true);
     
+    // LOG: UI exit only - no wallet action
+    console.log("[LeaveMatch] UI exit only - no wallet action");
+    
     // START 1-SECOND GUARANTEED EXIT TIMER
     forceExitTimeoutRef.current = setTimeout(() => {
-      console.log("[useForfeit] Force exit (leave) after 1000ms timeout");
+      console.log("[LeaveMatch] Force exit after 1000ms timeout");
       forceExit();
     }, 1000);
     
     try {
-      console.log("[useForfeit] Leaving room...");
+      console.log("[LeaveMatch] Leaving room (UI only, no on-chain action)...");
       
       toast({
         title: t("forfeit.leftRoom", "Left room"),
@@ -286,7 +295,7 @@ export function useForfeit({
         forceExitTimeoutRef.current = null;
       }
       
-      // Call forceExit (idempotent)
+      // Call forceExit (idempotent) - cleanup + navigate
       forceExit();
       
       setIsLeaving(false);
