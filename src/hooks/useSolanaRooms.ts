@@ -287,10 +287,12 @@ export function useSolanaRooms() {
   }, [connection]);
 
   // Create room
+  // mode is the AUTHORITATIVE mode - passed from CreateRoom form, stored in DB
   const createRoom = useCallback(async (
     gameType: GameType,
     entryFeeSol: number,
-    maxPlayers: number
+    maxPlayers: number,
+    mode: 'casual' | 'ranked' = 'casual'
   ): Promise<number | null> => {
     if (!publicKey || !connected) {
       toast({
@@ -362,12 +364,23 @@ export function useSolanaRooms() {
         const newRoom = await fetchUserActiveRoom();
         
         if (newRoom?.pda) {
+          // CRITICAL: Create game_sessions with correct mode IMMEDIATELY
+          // This ensures Player 2 sees the correct mode when they join
+          console.log("[CreateRoom] Creating game_session with mode:", mode);
+          await supabase.rpc("ensure_game_session", {
+            p_room_pda: newRoom.pda,
+            p_game_type: gameType.toString(),
+            p_player1_wallet: publicKey.toBase58(),
+            p_player2_wallet: publicKey.toBase58(), // Will be updated when player 2 joins
+            p_mode: mode, // Use authoritative mode from CreateRoom form
+          });
+          
           const rules = createRulesFromRoom(
             newRoom.pda,
             gameType,
             maxPlayers,
             stakeLamports,
-            stakeLamports > 0 ? "ranked" : "casual"
+            mode // Use authoritative mode, NOT stake-derived
           );
           const rulesHash = await computeRulesHash(rules);
           
@@ -379,7 +392,7 @@ export function useSolanaRooms() {
             p_stake_lamports: stakeLamports,
             p_is_creator: true,
           });
-          console.log("[CreateRoom] Recorded acceptance with tx signature");
+          console.log("[CreateRoom] Recorded acceptance with tx signature and mode:", mode);
         }
       } catch (acceptErr) {
         console.warn("[CreateRoom] Failed to record acceptance:", acceptErr);
@@ -484,12 +497,23 @@ export function useSolanaRooms() {
         const joinedRoom = await fetchUserActiveRoom();
         if (joinedRoom?.pda) {
           const stakeLamports = Math.floor(joinedRoom.entryFeeSol * LAMPORTS_PER_SOL);
+          
+          // Fetch mode from DB (the AUTHORITATIVE source set by creator)
+          const { data: sessionData } = await supabase
+            .from("game_sessions")
+            .select("mode")
+            .eq("room_pda", joinedRoom.pda)
+            .maybeSingle();
+          
+          const mode = (sessionData?.mode as 'casual' | 'ranked') || 'casual';
+          console.log("[JoinRoom] Fetched mode from DB:", mode);
+          
           const rules = createRulesFromRoom(
             joinedRoom.pda,
             joinedRoom.gameType,
             joinedRoom.maxPlayers,
             stakeLamports,
-            stakeLamports > 0 ? "ranked" : "casual"
+            mode // Use DB mode, NOT stake-derived
           );
           const rulesHash = await computeRulesHash(rules);
           
@@ -501,7 +525,7 @@ export function useSolanaRooms() {
             p_stake_lamports: stakeLamports,
             p_is_creator: false,
           });
-          console.log("[JoinRoom] Recorded acceptance with tx signature");
+          console.log("[JoinRoom] Recorded acceptance with tx signature and mode:", mode);
         }
       } catch (acceptErr) {
         console.warn("[JoinRoom] Failed to record acceptance:", acceptErr);
