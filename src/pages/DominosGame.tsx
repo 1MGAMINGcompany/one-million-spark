@@ -1173,8 +1173,8 @@ const DominosGame = () => {
       {/* Background */}
       <div className="absolute inset-0 bg-gradient-to-b from-midnight-light via-background to-background" />
       
-      {/* Dice Roll Start - show for all games when both players connected */}
-      {startRoll.showDiceRoll && roomPlayers.length >= 2 && address && (
+      {/* Dice Roll Start - HARD GATED: For ranked games, only show when BOTH players accepted rules */}
+      {startRoll.showDiceRoll && roomPlayers.length >= 2 && address && (!isRankedGame || rankedGate.bothReady) && (
         <DiceRollStart
           roomPda={roomPda || ""}
           myWallet={address}
@@ -1186,6 +1186,30 @@ const DominosGame = () => {
           isLeaving={isLeaving}
           isForfeiting={isForfeiting}
         />
+      )}
+
+      {/* Rules Gate for ranked games - shows AcceptRulesModal or WaitingForOpponentPanel */}
+      {isRankedGame && startRoll.showDiceRoll && roomPlayers.length >= 2 && address && !rankedGate.bothReady && (
+        <>
+          {!rankedGate.iAmReady ? (
+            <AcceptRulesModal
+              open={true}
+              onAccept={handleAcceptRulesModal}
+              onLeave={handleLeaveMatch}
+              stakeSol={rankedGate.stakeLamports / 1_000_000_000}
+              turnTimeSeconds={effectiveTurnTime}
+              isLoading={rankedGate.isSettingReady}
+              opponentReady={rankedGate.opponentReady}
+            />
+          ) : (
+            <WaitingForOpponentPanel 
+              onLeave={handleLeaveMatch} 
+              roomPda={roomPda}
+              opponentWallet={roomPlayers.find(p => p.toLowerCase() !== address?.toLowerCase())}
+              waitingFor="rules"
+            />
+          )}
+        </>
       )}
       
       {/* Turn Banner */}
@@ -1416,21 +1440,7 @@ const DominosGame = () => {
         onDecline={handleDeclineRematch}
       />
 
-      {/* Accept Rules Modal (Ranked only) */}
-      <AcceptRulesModal
-        open={rankedGate.showAcceptModal}
-        onAccept={handleAcceptRulesModal}
-        onLeave={handleLeaveMatch}
-        stakeSol={rankedGate.stakeLamports / 1_000_000_000}
-        turnTimeSeconds={effectiveTurnTime}
-        isLoading={rankedGate.isSettingReady}
-        opponentReady={rankedGate.opponentReady}
-      />
-
-      {/* Waiting for opponent panel (Ranked - I accepted, waiting for opponent) */}
-      {isRankedGame && rankedGate.iAmReady && !rankedGate.bothReady && (
-        <WaitingForOpponentPanel onLeave={handleLeaveMatch} roomPda={roomPda} />
-      )}
+      {/* Accept Rules Modal and Waiting Panel - REMOVED: Now handled by Rules Gate above */}
 
       {/* Forfeit Confirmation Dialog */}
       <ForfeitConfirmDialog

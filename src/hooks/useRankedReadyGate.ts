@@ -60,23 +60,27 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
   const isIdentified = isPlayer1 || isPlayer2;
   const showAcceptModal = enabled && isRanked && hasLoaded && !iAmReady && isIdentified;
   
-  // Debug logging for ranked gate state
-  console.log("[RankedReadyGate] State:", {
-    roomPda: roomPda?.slice(0, 8),
-    myWallet: myWallet?.slice(0, 8),
-    isRanked,
-    enabled,
-    hasLoaded,
-    isPlayer1,
-    isPlayer2,
-    isIdentified,
-    p1Ready,
-    p2Ready,
-    iAmReady,
-    opponentReady,
-    bothReady,
-    showAcceptModal,
-  });
+  // Debug logging for ranked gate state - consistent format for cross-device debugging
+  useEffect(() => {
+    if (isRanked && hasLoaded) {
+      console.log("[RankedReadyGate] State:", {
+        roomPda: roomPda?.slice(0, 8),
+        myWallet: myWallet?.slice(0, 8),
+        isRanked,
+        enabled,
+        hasLoaded,
+        isPlayer1,
+        isPlayer2,
+        isIdentified,
+        p1Ready,
+        p2Ready,
+        iAmReady,
+        opponentReady,
+        bothReady,
+        showAcceptModal,
+      });
+    }
+  }, [roomPda, myWallet, isRanked, enabled, hasLoaded, isPlayer1, isPlayer2, isIdentified, p1Ready, p2Ready, iAmReady, opponentReady, bothReady, showAcceptModal]);
 
   // Simple accept - just marks player ready (on-chain stake is the real acceptance)
   const acceptRules = useCallback(async (): Promise<{ success: boolean; error?: string }> => {
