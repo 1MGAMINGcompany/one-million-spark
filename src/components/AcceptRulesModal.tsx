@@ -23,6 +23,8 @@ interface AcceptRulesModalProps {
   connectedWallet?: string;
   /** Room PDA for debugging */
   roomPda?: string;
+  /** Room players for wallet validation */
+  roomPlayers?: string[];
 }
 
 export function AcceptRulesModal({
@@ -36,7 +38,15 @@ export function AcceptRulesModal({
   isDataLoaded,
   connectedWallet,
   roomPda,
+  roomPlayers = [],
 }: AcceptRulesModalProps) {
+  // Validate wallet is in room (prevent accepting with wrong wallet)
+  const walletInRoom = connectedWallet && roomPlayers.length > 0
+    ? roomPlayers.some(p => p.toLowerCase() === connectedWallet.toLowerCase())
+    : true; // Allow if roomPlayers not passed
+
+  // Disable accept if data not loaded OR wallet not in room
+  const canAccept = isDataLoaded && walletInRoom && stakeSol > 0;
   // Debug logging when modal opens with loaded data
   useEffect(() => {
     if (open && isDataLoaded) {
@@ -188,10 +198,17 @@ export function AcceptRulesModal({
           <Button
             variant="gold"
             onClick={onAccept}
-            disabled={isLoading}
+            disabled={isLoading || !canAccept}
             className="flex-1"
           >
-            {isLoading ? "Please wait..." : "I'm Ready"}
+            {isLoading 
+              ? "Please wait..." 
+              : !walletInRoom 
+                ? "Wrong wallet connected" 
+                : !isDataLoaded 
+                  ? "Loading..." 
+                  : "I'm Ready"
+            }
           </Button>
         </div>
       </DialogContent>

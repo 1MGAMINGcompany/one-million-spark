@@ -33,11 +33,13 @@ import { AcceptRulesModal } from "@/components/AcceptRulesModal";
 import { WaitingForOpponentPanel } from "@/components/WaitingForOpponentPanel";
 import { RulesInfoPanel } from "@/components/RulesInfoPanel";
 import { DiceRollStart } from "@/components/DiceRollStart";
+import { RulesGate } from "@/components/RulesGate";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { PublicKey, Connection } from "@solana/web3.js";
 import { parseRoomAccount } from "@/lib/solana-program";
 import { getSolanaEndpoint } from "@/lib/solana-config";
+import { useTxLock } from "@/contexts/TxLockContext";
 
 // Persisted chess game state
 interface PersistedChessState {
@@ -128,6 +130,7 @@ const ChessGame = () => {
   const [showForfeitDialog, setShowForfeitDialog] = useState(false);
   const [showLeaveModal, setShowLeaveModal] = useState(false);
   const [entryFeeSol, setEntryFeeSol] = useState(0);
+  const [stakeLamports, setStakeLamports] = useState<number | undefined>(undefined); // Guardrail A: Canonical on-chain stake
   const [isCancellingRoom, setIsCancellingRoom] = useState(false);
   
   // Solana rooms hook for forfeit/cancel
@@ -168,7 +171,9 @@ const ChessGame = () => {
             setRoomPlayers(realPlayers);
             
             // Extract entry fee from on-chain (CRITICAL for correct modal display)
-            if (parsed.entryFee) {
+            // Guardrail A: Store canonical lamports directly from on-chain
+            if (parsed.entryFee !== undefined) {
+              setStakeLamports(parsed.entryFee);
               setEntryFeeSol(parsed.entryFee / 1_000_000_000);
             }
             
@@ -318,6 +323,20 @@ const ChessGame = () => {
     isRanked: isRankedGame,
     enabled: hasTwoRealPlayers && modeLoaded,
   });
+
+  // TxLock for preventing Phantom "Request blocked" popups
+  const { isTxInFlight, withTxLock } = useTxLock();
+
+  // Guardrail B: isDataLoaded must mean "room + session + wallet loaded", not dependent on entryFeeSol > 0
+  const isDataLoaded = useMemo(() => {
+    return (
+      !!roomPda &&
+      roomPlayers.length > 0 &&
+      stakeLamports !== undefined &&
+      (rankedGate.turnTimeSeconds > 0 || !isRankedGame) &&
+      rankedGate.isDataLoaded
+    );
+  }, [roomPda, roomPlayers.length, stakeLamports, rankedGate.turnTimeSeconds, isRankedGame, rankedGate.isDataLoaded]);
 
   // Deterministic start roll for ALL games (casual + ranked)
   const startRoll = useStartRoll({
@@ -1152,50 +1171,39 @@ const ChessGame = () => {
         onDecline={handleDeclineRematch}
       />
 
-      {/* Accept Rules Modal (Ranked only) - REMOVED: Now handled by RulesGate */}
-      
-      {/* Waiting for opponent panel (Ranked - I accepted, waiting for opponent) - REMOVED: Now handled by RulesGate */}
-
-      {/* Dice Roll Start - HARD GATED: For ranked games, only show when BOTH players accepted rules */}
-      {startRoll.showDiceRoll && roomPlayers.length >= 2 && address && (!isRankedGame || rankedGate.bothReady) && (
-        <DiceRollStart
-          roomPda={roomPda || ""}
+      {/* RulesGate - Hard gate for ranked games */}
+      {/* This handles: loading state, wallet-not-connected, wallet-mismatch, AcceptRulesModal, WaitingForOpponent */}
+      {startRoll.showDiceRoll && roomPlayers.length >= 2 && address && (
+        <RulesGate
+          isRanked={isRankedGame}
+          roomPda={roomPda}
           myWallet={address}
-          player1Wallet={roomPlayers[0]}
-          player2Wallet={roomPlayers[1]}
-          onComplete={startRoll.handleRollComplete}
+          roomPlayers={roomPlayers}
+          iAmReady={rankedGate.iAmReady}
+          opponentReady={rankedGate.opponentReady}
+          bothReady={rankedGate.bothReady}
+          isSettingReady={rankedGate.isSettingReady}
+          stakeLamports={stakeLamports}
+          turnTimeSeconds={effectiveTurnTime}
+          opponentWallet={roomPlayers.find(p => p.toLowerCase() !== address?.toLowerCase())}
+          onAcceptRules={handleAcceptRules}
           onLeave={handleLeaveClick}
-          onForfeit={handleForfeitMatch}
-          isLeaving={isLeaving}
-          isForfeiting={isForfeiting}
-        />
-      )}
-
-      {/* Rules Gate for ranked games - shows AcceptRulesModal or WaitingForOpponentPanel */}
-      {isRankedGame && startRoll.showDiceRoll && roomPlayers.length >= 2 && address && !rankedGate.bothReady && (
-        <>
-          {!rankedGate.iAmReady ? (
-            <AcceptRulesModal
-              open={true}
-              onAccept={handleAcceptRules}
-              onLeave={handleLeaveClick}
-              stakeSol={entryFeeSol}
-              turnTimeSeconds={effectiveTurnTime}
-              isLoading={rankedGate.isSettingReady}
-              opponentReady={rankedGate.opponentReady}
-              isDataLoaded={rankedGate.isDataLoaded && entryFeeSol > 0}
-              connectedWallet={address}
-              roomPda={roomPda}
-            />
-          ) : (
-            <WaitingForOpponentPanel 
-              onLeave={handleLeaveClick} 
-              roomPda={roomPda}
-              opponentWallet={roomPlayers.find(p => p.toLowerCase() !== address?.toLowerCase())}
-              waitingFor="rules"
-            />
-          )}
-        </>
+          isDataLoaded={isDataLoaded}
+          startRollFinalized={startRoll.isFinalized}
+        >
+          {/* DiceRollStart - Only renders when RulesGate allows */}
+          <DiceRollStart
+            roomPda={roomPda || ""}
+            myWallet={address}
+            player1Wallet={roomPlayers[0]}
+            player2Wallet={roomPlayers[1]}
+            onComplete={startRoll.handleRollComplete}
+            onLeave={handleLeaveClick}
+            onForfeit={handleForfeitMatch}
+            isLeaving={isLeaving}
+            isForfeiting={isForfeiting}
+          />
+        </RulesGate>
       )}
 
       {/* Leave Match Modal - Safe UI with explicit on-chain action separation */}

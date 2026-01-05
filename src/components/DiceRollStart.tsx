@@ -346,18 +346,21 @@ export function DiceRollStart({
         <div className="absolute bottom-2 left-2 w-8 h-8 border-l-2 border-b-2 border-primary/40 rounded-bl-lg" />
         <div className="absolute bottom-2 right-2 w-8 h-8 border-r-2 border-b-2 border-primary/40 rounded-br-lg" />
 
-        <h2 className="text-center font-display text-2xl mb-2 text-primary">
+        <h2 className="text-center font-display text-3xl mb-2 text-primary drop-shadow-lg">
           {t("diceRoll.rollToStart") || "Roll to Start"}
         </h2>
         <p className="text-center text-muted-foreground text-sm mb-8">
           {t("diceRoll.highestGoesFirst") || "Highest total goes first"}
         </p>
 
-        {/* Dice Display */}
+        {/* Dice Display - with wallet addresses */}
         <div className="flex justify-between items-center mb-8">
           {/* My Side */}
           <div className="text-center flex-1">
-            <p className="text-sm font-medium text-primary mb-3">{myName}</p>
+            <p className="text-sm font-medium text-amber-400 mb-2">{myName}</p>
+            <p className="text-xs font-mono text-muted-foreground/70 mb-3">
+              ({myWallet.slice(0, 4)}...{myWallet.slice(-4)})
+            </p>
             <div className="flex justify-center">
               <Die3D value={playerDie} rolling={phase === "rolling"} color="gold" size="lg" />
             </div>
@@ -375,7 +378,10 @@ export function DiceRollStart({
 
           {/* Opponent Side */}
           <div className="text-center flex-1">
-            <p className="text-sm font-medium text-muted-foreground mb-3">{opponentName}</p>
+            <p className="text-sm font-medium text-slate-400 mb-2">{opponentName}</p>
+            <p className="text-xs font-mono text-muted-foreground/70 mb-3">
+              ({(isPlayer1 ? player2Wallet : player1Wallet).slice(0, 4)}...{(isPlayer1 ? player2Wallet : player1Wallet).slice(-4)})
+            </p>
             <div className="flex justify-center">
               <Die3D value={opponentDie} rolling={phase === "rolling"} color="obsidian" size="lg" />
             </div>
@@ -454,10 +460,15 @@ export function DiceRollStart({
         {/* Action Button */}
         <div className="text-center">
           {phase === "waiting" && !showFallback && (
-            <Button onClick={handleRoll} size="lg" className="gap-2">
-              <Dice5 className="w-5 h-5" />
-              {t("diceRoll.rollDice") || "Roll Dice"}
-            </Button>
+            <div className="space-y-4">
+              <p className="text-muted-foreground text-sm">
+                {t("diceRoll.bothReady") || "Both players ready. Roll to decide who goes first!"}
+              </p>
+              <Button onClick={handleRoll} size="lg" className="gap-2 animate-pulse">
+                <Dice5 className="w-5 h-5" />
+                {t("diceRoll.rollDice") || "Roll Dice"}
+              </Button>
+            </div>
           )}
           
           {phase === "loading" && (

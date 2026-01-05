@@ -215,10 +215,11 @@ export function useForfeit({
         return;
       }
       
-      console.log("[useForfeit] Starting forfeit via finalizeGame:", {
+      console.log("[FinalizeForfeit] start", {
         roomPda: roomPda.slice(0, 8) + "...",
         winner: opponentWallet.slice(0, 8) + "...",
         loser: myWallet.slice(0, 8) + "...",
+        stakeLamports,
       });
       
       // Use the authoritative finalizeGame function with forfeit mode
@@ -238,9 +239,24 @@ export function useForfeit({
       if (result.success) {
         success = true;
         signature = result.signature;
-        console.log("[useForfeit] Forfeit successful:", signature || "(already settled)");
+        console.log("[FinalizeForfeit] edge_response", { ok: true, sig: signature });
+        
+        // Poll for on-chain confirmation if signature is returned
+        if (signature && connection) {
+          try {
+            console.log("[FinalizeForfeit] Polling for confirmation...");
+            const confirmation = await connection.confirmTransaction(signature, 'confirmed');
+            if (confirmation.value.err) {
+              console.warn("[FinalizeForfeit] Transaction failed on-chain:", confirmation.value.err);
+            } else {
+              console.log("[FinalizeForfeit] confirmed", { sig: signature });
+            }
+          } catch (pollErr) {
+            console.warn("[FinalizeForfeit] Confirmation timeout (may still succeed):", pollErr);
+          }
+        }
       } else {
-        console.error("[useForfeit] Forfeit failed:", result.error);
+        console.error("[FinalizeForfeit] failed:", result.error);
       }
     } catch (err: any) {
       console.error("[useForfeit] Forfeit error:", err);

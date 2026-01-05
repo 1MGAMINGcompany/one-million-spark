@@ -7,17 +7,24 @@
  * 3. This prevents mobile race conditions and ensures funds safety
  * 
  * For ranked rooms, this component enforces a strict render order:
- * 1. If not ready → AcceptRulesModal (blocking)
- * 2. If ready but opponent not → WaitingForOpponentPanel
- * 3. Only when both ready → children (DiceRollStart/GameBoard)
+ * 1. If not loaded → blocking loading state
+ * 2. If no wallet connected → blocking "Connect wallet" panel
+ * 3. If wallet not in room → WalletMismatchPanel
+ * 4. If not ready → AcceptRulesModal (blocking)
+ * 5. If ready but opponent not → WaitingForOpponentPanel
+ * 6. Only when both ready → children (DiceRollStart/GameBoard)
  * 
  * This prevents mobile race conditions where DiceRollStart could render
  * before the rules modal was shown.
  */
 
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { AcceptRulesModal } from "@/components/AcceptRulesModal";
 import { WaitingForOpponentPanel } from "@/components/WaitingForOpponentPanel";
+import { WalletMismatchPanel } from "@/components/WalletMismatchPanel";
+import { Button } from "@/components/ui/button";
+import { Loader2, Wallet } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 interface RulesGateProps {
   /** Whether this is a ranked game */
@@ -26,6 +33,8 @@ interface RulesGateProps {
   roomPda?: string;
   /** Current wallet address */
   myWallet?: string;
+  /** Room players from on-chain data */
+  roomPlayers: string[];
   /** Whether I have accepted rules */
   iAmReady: boolean;
   /** Whether opponent has accepted rules */
@@ -34,9 +43,9 @@ interface RulesGateProps {
   bothReady: boolean;
   /** Whether we're currently setting ready */
   isSettingReady: boolean;
-  /** Stake in lamports - MUST come from on-chain data */
-  stakeLamports: number;
-  /** Turn time in seconds */
+  /** Stake in lamports - MUST come from on-chain data (Guardrail A) */
+  stakeLamports: number | undefined;
+  /** Turn time in seconds - MUST come from canonical source */
   turnTimeSeconds: number;
   /** Opponent wallet for display */
   opponentWallet?: string;
@@ -44,8 +53,12 @@ interface RulesGateProps {
   onAcceptRules: () => void;
   /** Called when user leaves */
   onLeave: () => void;
-  /** Whether authoritative room data has loaded */
+  /** Called when user wants to switch wallet */
+  onOpenWalletSelector?: () => void;
+  /** Whether authoritative room data has loaded (Guardrail B) */
   isDataLoaded: boolean;
+  /** Whether start roll is finalized */
+  startRollFinalized: boolean;
   /** Children (DiceRollStart/GameBoard) - only rendered when both ready */
   children: React.ReactNode;
 }
@@ -54,6 +67,7 @@ export function RulesGate({
   isRanked,
   roomPda,
   myWallet,
+  roomPlayers,
   iAmReady,
   opponentReady,
   bothReady,
@@ -63,18 +77,43 @@ export function RulesGate({
   opponentWallet,
   onAcceptRules,
   onLeave,
+  onOpenWalletSelector,
   isDataLoaded,
+  startRollFinalized,
   children,
 }: RulesGateProps) {
+  const { t } = useTranslation();
+
+  // Check if my wallet is in the room players list
+  const myWalletInRoom = useMemo(() => {
+    if (!myWallet || !roomPlayers.length) return false;
+    return roomPlayers.some(
+      p => p.toLowerCase() === myWallet.toLowerCase()
+    );
+  }, [myWallet, roomPlayers]);
+
+  // Filter valid players (exclude placeholders)
+  const validPlayers = useMemo(() => {
+    return roomPlayers.filter(
+      p => !p.startsWith("waiting-") && !p.startsWith("error-") && !p.startsWith("ai-")
+    );
+  }, [roomPlayers]);
+
   // Debug logging for cross-device sync and invalid state detection
   useEffect(() => {
     const state = {
       roomPda: roomPda?.slice(0, 8),
       isRanked,
       myWallet: myWallet?.slice(0, 8),
-      myRulesAccepted: iAmReady,
-      opponentRulesAccepted: opponentReady,
-      bothAccepted: bothReady,
+      myInRoom: myWalletInRoom,
+      validPlayers: validPlayers.length,
+      myReady: iAmReady,
+      opponentReady,
+      bothReady,
+      stakeLamports,
+      turnTimeSeconds,
+      startRollFinalized,
+      isDataLoaded,
     };
     console.log("[RulesGate]", state);
     
@@ -82,19 +121,70 @@ export function RulesGate({
     if (isRanked && !bothReady) {
       console.warn("[RulesGate] BLOCKED: Ranked game children blocked - not both ready", state);
     }
-  }, [roomPda, isRanked, myWallet, iAmReady, opponentReady, bothReady]);
+  }, [roomPda, isRanked, myWallet, myWalletInRoom, validPlayers.length, iAmReady, opponentReady, bothReady, stakeLamports, turnTimeSeconds, startRollFinalized, isDataLoaded]);
 
   // For casual games, bypass the gate entirely
   if (!isRanked) {
     return <>{children}</>;
   }
 
-  // Convert lamports to SOL for display
-  const stakeSol = stakeLamports / 1_000_000_000;
+  // Convert lamports to SOL for display (handle undefined)
+  const stakeSol = stakeLamports !== undefined ? stakeLamports / 1_000_000_000 : 0;
 
   // Hard gate order for ranked games:
   
-  // 1. If I haven't accepted → show AcceptRulesModal (blocking)
+  // 1. If data not loaded → show blocking loading state
+  if (!isDataLoaded) {
+    return (
+      <div className="fixed inset-0 z-50 bg-background/95 backdrop-blur-sm flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto" />
+          <p className="text-muted-foreground">
+            {t("common.loadingMatchDetails", "Loading match details...")}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // 2. If no wallet connected → show blocking "Connect wallet" panel
+  if (!myWallet) {
+    return (
+      <div className="fixed inset-0 z-50 bg-background/95 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-card border rounded-xl p-8 text-center space-y-4">
+          <Wallet className="h-12 w-12 text-primary mx-auto" />
+          <h2 className="text-xl font-semibold">
+            {t("wallet.connectToContinue", "Connect Wallet to Continue")}
+          </h2>
+          <p className="text-muted-foreground text-sm">
+            {t("wallet.needWalletForRanked", "You need to connect your wallet to participate in this ranked match.")}
+          </p>
+          {onOpenWalletSelector && (
+            <Button onClick={onOpenWalletSelector} className="w-full">
+              {t("wallet.connectWallet", "Connect Wallet")}
+            </Button>
+          )}
+          <Button variant="ghost" onClick={onLeave} className="w-full">
+            {t("leaveMatch.backToRooms", "Back to Rooms")}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // 3. If wallet connected but not in room → show WalletMismatchPanel
+  if (!myWalletInRoom && validPlayers.length > 0) {
+    return (
+      <WalletMismatchPanel
+        connectedWallet={myWallet}
+        roomPlayers={roomPlayers}
+        onSwitchWallet={onOpenWalletSelector}
+        onBackToRooms={onLeave}
+      />
+    );
+  }
+
+  // 4. If I haven't accepted → show AcceptRulesModal (blocking)
   if (!iAmReady) {
     return (
       <AcceptRulesModal
@@ -108,11 +198,12 @@ export function RulesGate({
         isDataLoaded={isDataLoaded}
         connectedWallet={myWallet}
         roomPda={roomPda}
+        roomPlayers={roomPlayers}
       />
     );
   }
 
-  // 2. If I accepted but opponent hasn't → show WaitingForOpponentPanel
+  // 5. If I accepted but opponent hasn't → show WaitingForOpponentPanel
   if (!bothReady) {
     return (
       <WaitingForOpponentPanel
@@ -124,6 +215,6 @@ export function RulesGate({
     );
   }
 
-  // 3. Both ready → render children (DiceRollStart)
+  // 6. Both ready → render children (DiceRollStart or GameBoard)
   return <>{children}</>;
 }

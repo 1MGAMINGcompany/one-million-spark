@@ -369,10 +369,12 @@ export default function RoomList() {
                       <span className="text-xs px-2 py-0.5 rounded-full bg-primary/20 text-primary">
                         #{room.roomId}
                       </span>
-                      {/* Mode Badge - Read from localStorage */}
+                      {/* Mode Badge - GUARDRAIL C: stake-first priority */}
                       {(() => {
-                        const mode = getRoomMode(room.pda);
-                        const isRanked = mode === 'ranked';
+                        // Priority: 1) stake > 0 = always ranked, 2) localStorage mode
+                        const hasStake = room.entryFeeSol > 0;
+                        const localMode = getRoomMode(room.pda);
+                        const isRanked = hasStake || localMode === 'ranked';
                         return (
                           <span className={`text-xs px-2 py-0.5 rounded-full border flex items-center gap-1 ${
                             isRanked 
@@ -386,11 +388,11 @@ export default function RoomList() {
                       })()}
                     </div>
                     <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
-                      {/* Stake display - different for casual vs ranked */}
+                      {/* Stake display - GUARDRAIL C: stake-first priority */}
                       {(() => {
-                        const mode = getRoomMode(room.pda);
-                        const isRanked = mode === 'ranked';
                         const hasStake = room.entryFeeSol > 0;
+                        const localMode = getRoomMode(room.pda);
+                        const isRanked = hasStake || localMode === 'ranked';
                         
                         return (
                           <span className={`flex items-center gap-1 ${isRanked ? 'text-foreground font-medium' : ''}`}>
