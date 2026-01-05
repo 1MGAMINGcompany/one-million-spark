@@ -18,6 +18,7 @@ import { useRoomMode } from "@/hooks/useRoomMode";
 import { useRankedReadyGate } from "@/hooks/useRankedReadyGate";
 import { useTurnTimer, DEFAULT_RANKED_TURN_TIME } from "@/hooks/useTurnTimer";
 import { useStartRoll } from "@/hooks/useStartRoll";
+import { useTxLock } from "@/contexts/TxLockContext";
 import { DiceRollStart } from "@/components/DiceRollStart";
 import TurnStatusHeader from "@/components/TurnStatusHeader";
 import TurnHistoryDrawer from "@/components/TurnHistoryDrawer";
@@ -27,8 +28,7 @@ import GameChatPanel from "@/components/GameChatPanel";
 import { GameEndScreen } from "@/components/GameEndScreen";
 import { RematchModal } from "@/components/RematchModal";
 import { RematchAcceptModal } from "@/components/RematchAcceptModal";
-import { AcceptRulesModal } from "@/components/AcceptRulesModal";
-import { WaitingForOpponentPanel } from "@/components/WaitingForOpponentPanel";
+import { RulesGate } from "@/components/RulesGate";
 import { RulesInfoPanel } from "@/components/RulesInfoPanel";
 import { toast } from "@/hooks/use-toast";
 import { PublicKey, Connection } from "@solana/web3.js";
@@ -122,7 +122,11 @@ const CheckersGame = () => {
   const [showForfeitDialog, setShowForfeitDialog] = useState(false);
   const [showLeaveModal, setShowLeaveModal] = useState(false);
   const [entryFeeSol, setEntryFeeSol] = useState(0);
+  const [stakeLamports, setStakeLamports] = useState<number | undefined>(undefined);
   const [isCancellingRoom, setIsCancellingRoom] = useState(false);
+  
+  // TxLock for preventing Phantom "Request blocked"
+  const { isTxInFlight, withTxLock } = useTxLock();
   
   // Solana rooms hook for forfeit/cancel
   const { cancelRoomByPda } = useSolanaRooms();
@@ -150,8 +154,9 @@ const CheckersGame = () => {
             const realPlayers = parsed.players.map(p => p.toBase58());
             setRoomPlayers(realPlayers);
             
-            // Extract entry fee from on-chain (CRITICAL for correct modal display)
-            if (parsed.entryFee) {
+            // Extract entry fee from on-chain (CRITICAL - Guardrail A: canonical stake)
+            if (parsed.entryFee !== undefined) {
+              setStakeLamports(parsed.entryFee);
               setEntryFeeSol(parsed.entryFee / 1_000_000_000);
             }
             
@@ -302,6 +307,20 @@ const CheckersGame = () => {
     }
   };
 
+  // Guardrail B: Proper isDataLoaded computation (not dependent on entryFeeSol > 0)
+  const isDataLoaded = useMemo(() => {
+    return (
+      !!roomPda &&
+      roomPlayers.length > 0 &&
+      stakeLamports !== undefined &&
+      (rankedGate.turnTimeSeconds > 0 || !isRankedGame) &&
+      rankedGate.isDataLoaded
+    );
+  }, [roomPda, roomPlayers.length, stakeLamports, rankedGate.turnTimeSeconds, isRankedGame, rankedGate.isDataLoaded]);
+
+  // Use canonical stake for turn time
+  const effectiveTurnTime = rankedGate.turnTimeSeconds || DEFAULT_RANKED_TURN_TIME;
+
   // Determine match state for LeaveMatchModal
   const matchState: MatchState = useMemo(() => {
     if (gameOver) return "game_over";
@@ -358,8 +377,7 @@ const CheckersGame = () => {
     }
   }, [gameOver, myColor, play, t]);
 
-  // Use turn time from ranked gate (fetched from DB/localStorage)
-  const effectiveTurnTime = rankedGate.turnTimeSeconds || DEFAULT_RANKED_TURN_TIME;
+  // effectiveTurnTime already defined above in isDataLoaded block
   
   const turnTimer = useTurnTimer({
     turnTimeSeconds: effectiveTurnTime,
@@ -1026,47 +1044,40 @@ const CheckersGame = () => {
       {/* Background */}
       <div className="absolute inset-0 bg-gradient-to-b from-midnight-light via-background to-background" />
       
-      {/* Dice Roll Start - HARD GATED: For ranked games, only show when BOTH players accepted rules */}
-      {startRoll.showDiceRoll && roomPlayers.length >= 2 && address && (!isRankedGame || rankedGate.bothReady) && (
-        <DiceRollStart
-          roomPda={roomPda || ""}
-          myWallet={address}
-          player1Wallet={roomPlayers[0]}
-          player2Wallet={roomPlayers[1]}
-          onComplete={startRoll.handleRollComplete}
-          onLeave={leave}
-          onForfeit={forfeit}
-          isLeaving={isLeaving}
-          isForfeiting={isForfeiting}
-        />
-      )}
-
-      {/* Rules Gate for ranked games - shows AcceptRulesModal or WaitingForOpponentPanel */}
-      {isRankedGame && startRoll.showDiceRoll && roomPlayers.length >= 2 && address && !rankedGate.bothReady && (
-        <>
-          {!rankedGate.iAmReady ? (
-            <AcceptRulesModal
-              open={true}
-              onAccept={handleAcceptRules}
-              onLeave={handleLeaveClick}
-              stakeSol={entryFeeSol}
-              turnTimeSeconds={effectiveTurnTime}
-              isLoading={rankedGate.isSettingReady}
-              opponentReady={rankedGate.opponentReady}
-              isDataLoaded={rankedGate.isDataLoaded && entryFeeSol > 0}
-              connectedWallet={address}
-              roomPda={roomPda}
-            />
-          ) : (
-            <WaitingForOpponentPanel 
-              onLeave={handleLeaveClick} 
-              roomPda={roomPda}
-              opponentWallet={roomPlayers.find(p => p.toLowerCase() !== address?.toLowerCase())}
-              waitingFor="rules"
-            />
-          )}
-        </>
-      )}
+      {/* RulesGate - Hard gate for ranked games */}
+      <RulesGate
+        isRanked={isRankedGame}
+        roomPda={roomPda}
+        myWallet={address}
+        roomPlayers={roomPlayers}
+        iAmReady={rankedGate.iAmReady}
+        opponentReady={rankedGate.opponentReady}
+        bothReady={rankedGate.bothReady}
+        isSettingReady={rankedGate.isSettingReady}
+        stakeLamports={stakeLamports}
+        turnTimeSeconds={effectiveTurnTime}
+        opponentWallet={opponentWallet || undefined}
+        onAcceptRules={handleAcceptRules}
+        onLeave={handleUILeave}
+        onOpenWalletSelector={() => {}}
+        isDataLoaded={isDataLoaded}
+        startRollFinalized={startRoll.isFinalized}
+      >
+        {/* Dice Roll Start - only rendered when RulesGate allows */}
+        {startRoll.showDiceRoll && roomPlayers.length >= 2 && address && (
+          <DiceRollStart
+            roomPda={roomPda || ""}
+            myWallet={address}
+            player1Wallet={roomPlayers[0]}
+            player2Wallet={roomPlayers[1]}
+            onComplete={startRoll.handleRollComplete}
+            onLeave={leave}
+            onForfeit={forfeit}
+            isLeaving={isLeaving}
+            isForfeiting={isForfeiting}
+          />
+        )}
+      </RulesGate>
       
       {/* Turn Banner */}
       <TurnBanner
