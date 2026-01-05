@@ -16,6 +16,7 @@ import { useRoomMode } from "@/hooks/useRoomMode";
 import { useRankedReadyGate } from "@/hooks/useRankedReadyGate";
 import { useTurnTimer, DEFAULT_RANKED_TURN_TIME } from "@/hooks/useTurnTimer";
 import { useStartRoll } from "@/hooks/useStartRoll";
+import { useTxLock } from "@/contexts/TxLockContext";
 import { DiceRollStart } from "@/components/DiceRollStart";
 import LudoBoard from "@/components/ludo/LudoBoard";
 import EgyptianDice from "@/components/ludo/EgyptianDice";
@@ -33,8 +34,7 @@ import GameChatPanel from "@/components/GameChatPanel";
 import { GameEndScreen } from "@/components/GameEndScreen";
 import { RematchModal } from "@/components/RematchModal";
 import { RematchAcceptModal } from "@/components/RematchAcceptModal";
-import { AcceptRulesModal } from "@/components/AcceptRulesModal";
-import { WaitingForOpponentPanel } from "@/components/WaitingForOpponentPanel";
+import { RulesGate } from "@/components/RulesGate";
 import { RulesInfoPanel } from "@/components/RulesInfoPanel";
 
 // Persisted ludo game state
@@ -64,12 +64,16 @@ const LudoGame = () => {
   // For testing, we simulate 4 players with the current wallet as gold
   const [roomPlayers, setRoomPlayers] = useState<string[]>([]);
   const [entryFeeSol, setEntryFeeSol] = useState(0);
+  const [stakeLamports, setStakeLamports] = useState<number | undefined>(undefined);
   
   // Leave/Forfeit dialog states
   const [showForfeitDialog, setShowForfeitDialog] = useState(false);
   const [showLeaveModal, setShowLeaveModal] = useState(false);
   const [isForfeitLoading, setIsForfeitLoading] = useState(false);
   const [isCancellingRoom, setIsCancellingRoom] = useState(false);
+  
+  // TxLock for preventing Phantom "Request blocked"
+  const { isTxInFlight, withTxLock } = useTxLock();
   
   // Solana rooms hook for forfeit/cancel
   const { cancelRoomByPda, forfeitGame } = useSolanaRooms();
@@ -266,6 +270,17 @@ const LudoGame = () => {
       toast({ title: t('gameSession.failedToAccept'), description: result.error || t('gameSession.tryAgain'), variant: "destructive" });
     }
   };
+
+  // Guardrail B: Proper isDataLoaded computation (not dependent on entryFeeSol > 0)
+  const isDataLoaded = useMemo(() => {
+    return (
+      !!roomPda &&
+      roomPlayers.length > 0 &&
+      stakeLamports !== undefined &&
+      (rankedGate.turnTimeSeconds > 0 || !isRankedGame) &&
+      rankedGate.isDataLoaded
+    );
+  }, [roomPda, roomPlayers.length, stakeLamports, rankedGate.turnTimeSeconds, isRankedGame, rankedGate.isDataLoaded]);
 
   // Determine match state for LeaveMatchModal
   const humanPlayers = useMemo(() => roomPlayers.filter(p => !p.startsWith('ai-')), [roomPlayers]);
@@ -828,46 +843,39 @@ const LudoGame = () => {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      {/* Dice Roll Start - HARD GATED: For ranked games, only show when BOTH players accepted rules */}
-      {startRoll.showDiceRoll && roomPlayers.length >= 2 && address && (!isRankedGame || rankedGate.bothReady) && (
-        <DiceRollStart
-          roomPda={roomPda || ""}
-          myWallet={address}
-          player1Wallet={roomPlayers[0]}
-          player2Wallet={roomPlayers[1]}
-          onComplete={startRoll.handleRollComplete}
-          onLeave={handleLeaveFromDice}
-          isLeaving={false}
-          isForfeiting={false}
-        />
-      )}
-
-      {/* Rules Gate for ranked games - shows AcceptRulesModal or WaitingForOpponentPanel */}
-      {isRankedGame && startRoll.showDiceRoll && roomPlayers.length >= 2 && address && !rankedGate.bothReady && (
-        <>
-          {!rankedGate.iAmReady ? (
-            <AcceptRulesModal
-              open={true}
-              onAccept={handleAcceptRules}
-              onLeave={handleLeaveClick}
-              stakeSol={entryFeeSol}
-              turnTimeSeconds={effectiveTurnTime}
-              isLoading={rankedGate.isSettingReady}
-              opponentReady={rankedGate.opponentReady}
-              isDataLoaded={rankedGate.isDataLoaded && entryFeeSol > 0}
-              connectedWallet={address}
-              roomPda={roomPda}
-            />
-          ) : (
-            <WaitingForOpponentPanel 
-              onLeave={handleLeaveClick} 
-              roomPda={roomPda}
-              opponentWallet={roomPlayers.find(p => p.toLowerCase() !== address?.toLowerCase())}
-              waitingFor="rules"
-            />
-          )}
-        </>
-      )}
+      {/* RulesGate - Hard gate for ranked games */}
+      <RulesGate
+        isRanked={isRankedGame}
+        roomPda={roomPda}
+        myWallet={address}
+        roomPlayers={roomPlayers}
+        iAmReady={rankedGate.iAmReady}
+        opponentReady={rankedGate.opponentReady}
+        bothReady={rankedGate.bothReady}
+        isSettingReady={rankedGate.isSettingReady}
+        stakeLamports={stakeLamports}
+        turnTimeSeconds={effectiveTurnTime}
+        opponentWallet={roomPlayers.find(p => p.toLowerCase() !== address?.toLowerCase())}
+        onAcceptRules={handleAcceptRules}
+        onLeave={handleUILeave}
+        onOpenWalletSelector={() => {}}
+        isDataLoaded={isDataLoaded}
+        startRollFinalized={startRoll.isFinalized}
+      >
+        {/* Dice Roll Start - only rendered when RulesGate allows */}
+        {startRoll.showDiceRoll && roomPlayers.length >= 2 && address && (
+          <DiceRollStart
+            roomPda={roomPda || ""}
+            myWallet={address}
+            player1Wallet={roomPlayers[0]}
+            player2Wallet={roomPlayers[1]}
+            onComplete={startRoll.handleRollComplete}
+            onLeave={handleLeaveFromDice}
+            isLeaving={false}
+            isForfeiting={false}
+          />
+        )}
+      </RulesGate>
       
       {/* Turn Banner (fallback for no permission) */}
       <TurnBanner
