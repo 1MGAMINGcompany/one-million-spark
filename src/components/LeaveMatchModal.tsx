@@ -5,6 +5,7 @@
  * 1. "Leave Match" button NEVER triggers any wallet method
  * 2. Only explicit on-chain buttons can trigger wallet popups
  * 3. Each on-chain button shows confirmation with SOL amount
+ * 4. All on-chain actions MUST use TxLock to prevent Phantom "Request blocked"
  * 
  * UI-Only Actions (no wallet):
  * - "Back to Rooms" - just navigate away
@@ -46,6 +47,7 @@ import {
   Check
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { useTxLock } from "@/contexts/TxLockContext";
 
 export type MatchState = 
   | "waiting_for_opponent"    // Creator waiting, no one joined
@@ -95,6 +97,9 @@ export function LeaveMatchModal({
 }: LeaveMatchModalProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  
+  // TxLock to prevent Phantom "Request blocked" popups
+  const { isTxInFlight } = useTxLock();
   
   // Confirmation dialogs for on-chain actions
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
@@ -160,7 +165,7 @@ export function LeaveMatchModal({
   const showCopyLink = matchState === "waiting_for_opponent";
   
   // Log match state for debugging invalid state transitions
-  console.log("[LeaveMatchModal] matchState:", matchState, "canCancel:", canCancel, "canForfeit:", canForfeit);
+  console.log("[LeaveMatchModal]", { matchState, canCancel, canForfeit, isTxInFlight });
 
   // Determine warning message based on state
   const getWarningMessage = () => {
@@ -179,7 +184,8 @@ export function LeaveMatchModal({
     }
   };
 
-  const isLoading = isCancelling || isForfeiting;
+  // Block all tx buttons if any tx in flight (prevent Phantom "Request blocked")
+  const isLoading = isCancelling || isForfeiting || isTxInFlight;
 
   return (
     <>

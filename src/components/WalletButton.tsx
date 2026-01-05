@@ -331,6 +331,45 @@ export function WalletButton() {
     });
   }, [isMobile, isInWalletBrowser, wallets.length, sortedWallets.length]);
 
+  // Auto-sync for in-app wallet browsers (Solflare, Phantom, etc.)
+  // CRITICAL: Runs ONCE on mount to detect already-connected wallet
+  // This fixes the "Connect Wallet" loop in Solflare in-app browser
+  useEffect(() => {
+    const win = window as any;
+    
+    // Skip if already connected or currently connecting
+    if (connected || connecting) return;
+    
+    // Only auto-sync in wallet browser environments
+    if (!isInWalletBrowser) return;
+    
+    // Check if window.solana reports connected
+    if (win.solana?.isConnected && win.solana?.publicKey) {
+      console.log("[WalletState] In-app browser has connected wallet, syncing...");
+      
+      // Find matching installed adapter
+      const installedWallet = wallets.find(w => w.readyState === 'Installed');
+      if (installedWallet) {
+        select(installedWallet.adapter.name);
+        // Single connect call (NOT in a loop)
+        connect().catch(err => {
+          console.warn("[WalletState] Auto-connect failed:", err);
+        });
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty deps - run ONCE on mount
+
+  // Log wallet state changes for debugging
+  useEffect(() => {
+    console.log('[WalletState]', {
+      connected,
+      publicKey: publicKey?.toBase58()?.slice(0, 8),
+      adapterName: wallet?.adapter?.name,
+      inWalletBrowser: isInWalletBrowser,
+    });
+  }, [connected, publicKey, wallet?.adapter?.name, isInWalletBrowser]);
+
   // Show fallback panel - MOBILE ONLY for MobileWalletFallback
   if (showFallbackPanel && isMobile) {
     return (
