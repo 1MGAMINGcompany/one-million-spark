@@ -15,6 +15,8 @@ import backpackIcon from "@/assets/wallets/backpack.svg";
 
 // Environment detection
 const getIsMobile = () => /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+const getIsAndroid = () => /Android/i.test(navigator.userAgent);
+const getIsIOS = () => /iPhone|iPad|iPod/i.test(navigator.userAgent);
 const getIsInWalletBrowser = () => {
   const win = window as any;
   return !!win?.phantom?.solana?.isPhantom || !!win?.solflare?.isSolflare || !!win?.solana;
@@ -34,6 +36,19 @@ const isSolflareAvailable = () => {
 const isBackpackAvailable = () => {
   const win = window as any;
   return !!win?.backpack?.isBackpack;
+};
+
+// Deep link helpers for opening dapp in wallet browser
+const getWalletBrowseDeepLink = (walletType: 'phantom' | 'solflare', url: string): string => {
+  const encodedUrl = encodeURIComponent(url);
+  switch (walletType) {
+    case 'phantom':
+      return `https://phantom.app/ul/browse/${encodedUrl}?ref=${encodeURIComponent(url)}`;
+    case 'solflare':
+      return `https://solflare.com/ul/v1/browse/${encodedUrl}?redirect_link=${encodedUrl}`;
+    default:
+      return url;
+  }
 };
 
 interface ConnectWalletGateProps {
@@ -72,7 +87,31 @@ export function ConnectWalletGate({ className }: ConnectWalletGateProps) {
   const [notDetectedWallet, setNotDetectedWallet] = useState<'phantom' | 'solflare' | 'backpack' | null>(null);
   
   const isMobile = getIsMobile();
+  const isAndroid = getIsAndroid();
+  const isIOS = getIsIOS();
   const isInWalletBrowser = getIsInWalletBrowser();
+
+  // Check if MWA is available (Android only)
+  const hasMWA = isAndroid && wallets.some(w => 
+    w.adapter.name.toLowerCase().includes('mobile wallet adapter')
+  );
+
+  // Handle MWA connect (Android)
+  const handleMWAConnect = () => {
+    const mwaWallet = wallets.find(w => 
+      w.adapter.name.toLowerCase().includes('mobile wallet adapter')
+    );
+    if (mwaWallet) {
+      select(mwaWallet.adapter.name);
+      setDialogOpen(false);
+    }
+  };
+
+  // Handle deep link to open dapp in wallet browser (iOS)
+  const handleOpenInWallet = (walletType: 'phantom' | 'solflare') => {
+    const deepLink = getWalletBrowseDeepLink(walletType, window.location.href);
+    window.location.href = deepLink;
+  };
 
   const handleSelectWallet = (walletId: string) => {
     // Find matching wallet from detected wallets
@@ -149,40 +188,111 @@ export function ConnectWalletGate({ className }: ConnectWalletGateProps) {
             <DialogTitle>{t("wallet.connectWallet")}</DialogTitle>
           </DialogHeader>
           
-          <div className="grid gap-3 py-4">
-            {/* Mobile friendly helper text (non-blocking) */}
-            {isMobile && !isInWalletBrowser && !isPhantomAvailable() && (
-              <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 mb-2">
-                <p className="text-sm text-blue-600 dark:text-blue-400">
-                  {t("wallet.mobileHelperText")}
-                </p>
-              </div>
+        <div className="grid gap-3 py-4">
+            
+            {/* ANDROID: Show MWA as top option */}
+            {isAndroid && hasMWA && (
+              <Button
+                variant="default"
+                className="w-full justify-start gap-3 h-14 bg-primary"
+                onClick={handleMWAConnect}
+              >
+                <Wallet size={24} />
+                <div className="flex flex-col items-start">
+                  <span className="font-medium">Use Installed Wallet</span>
+                  <span className="text-xs opacity-80">Phantom, Solflare, Backpack</span>
+                </div>
+              </Button>
             )}
 
-            {/* Wallet buttons with icons */}
-            {WALLET_CONFIG.map((wallet) => {
-              const detected = isWalletDetected(wallet.id);
-              return (
+            {/* iOS: Show deep link buttons to open dapp in wallet browser */}
+            {isIOS && !isInWalletBrowser && (
+              <>
+                <p className="text-sm text-muted-foreground text-center">
+                  Open this page in your wallet app:
+                </p>
                 <Button
-                  key={wallet.id}
                   variant="outline"
                   className="w-full justify-start gap-3 h-14"
-                  onClick={() => handleSelectWallet(wallet.id)}
+                  onClick={() => handleOpenInWallet('phantom')}
                 >
-                  <img 
-                    src={wallet.icon} 
-                    alt={wallet.name} 
-                    className="w-8 h-8"
-                  />
+                  <img src={phantomIcon} alt="Phantom" className="w-8 h-8" />
                   <div className="flex flex-col items-start">
-                    <span className="font-medium">{wallet.name}</span>
-                    {detected && (
-                      <span className="text-xs text-green-500">{t("wallet.detected")}</span>
-                    )}
+                    <span className="font-medium">Open in Phantom</span>
+                    <span className="text-xs text-muted-foreground">Opens wallet browser</span>
                   </div>
                 </Button>
-              );
-            })}
+                <Button
+                  variant="outline"
+                  className="w-full justify-start gap-3 h-14"
+                  onClick={() => handleOpenInWallet('solflare')}
+                >
+                  <img src={solflareIcon} alt="Solflare" className="w-8 h-8" />
+                  <div className="flex flex-col items-start">
+                    <span className="font-medium">Open in Solflare</span>
+                    <span className="text-xs text-muted-foreground">Opens wallet browser</span>
+                  </div>
+                </Button>
+              </>
+            )}
+
+            {/* In wallet browser or desktop: show wallet buttons to connect */}
+            {(!isMobile || isInWalletBrowser) && (
+              <>
+                {WALLET_CONFIG.map((wallet) => {
+                  const detected = isWalletDetected(wallet.id);
+                  return (
+                    <Button
+                      key={wallet.id}
+                      variant="outline"
+                      className="w-full justify-start gap-3 h-14"
+                      onClick={() => handleSelectWallet(wallet.id)}
+                    >
+                      <img 
+                        src={wallet.icon} 
+                        alt={wallet.name} 
+                        className="w-8 h-8"
+                      />
+                      <div className="flex flex-col items-start">
+                        <span className="font-medium">{wallet.name}</span>
+                        {detected && (
+                          <span className="text-xs text-green-500">{t("wallet.detected")}</span>
+                        )}
+                      </div>
+                    </Button>
+                  );
+                })}
+              </>
+            )}
+
+            {/* Android (not in wallet browser): also show deep link fallback */}
+            {isAndroid && !isInWalletBrowser && (
+              <div className="border-t border-border pt-3 mt-1">
+                <p className="text-xs text-muted-foreground text-center mb-3">
+                  Or open in wallet browser:
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    onClick={() => handleOpenInWallet('phantom')}
+                  >
+                    <img src={phantomIcon} alt="Phantom" className="w-5 h-5" />
+                    Phantom
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    onClick={() => handleOpenInWallet('solflare')}
+                  >
+                    <img src={solflareIcon} alt="Solflare" className="w-5 h-5" />
+                    Solflare
+                  </Button>
+                </div>
+              </div>
+            )}
 
             {/* In wallet browser success */}
             {isMobile && isInWalletBrowser && (
