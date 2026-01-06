@@ -199,14 +199,30 @@ serve(async (req) => {
       );
     }
 
-    // Check room status (2 = Started)
-    if (roomData.status !== 2) {
-      console.error("[forfeit-game] Room not in Started status:", roomData.status);
+    // Allow forfeit if:
+    // 1. Room has 2+ players
+    // 2. Room is not finished (status !== 3)
+    // 3. Room is not cancelled (status !== 4)
+    // REMOVED: requirement for status === 2 ("Started") - this was blocking stuck rooms
+    // This allows forfeit even if game never "properly started"
+    
+    if (roomData.playerCount < 2) {
+      console.error("[forfeit-game] Only 1 player - use cancel instead");
       return new Response(
-        JSON.stringify({ error: "Room is not in active game state" }),
+        JSON.stringify({ error: "Room has only 1 player. Use Cancel to get refund." }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
+    if (roomData.status === 3 || roomData.status === 4) {
+      console.error("[forfeit-game] Room already finished/cancelled:", roomData.status);
+      return new Response(
+        JSON.stringify({ error: "Room is already finished or cancelled" }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log("[forfeit-game] Allowing forfeit - 2+ players and room not finished/cancelled");
 
     // Determine the winner (for 2-player games: the other player)
     // For Ludo (4-player): mark player as eliminated, game continues
