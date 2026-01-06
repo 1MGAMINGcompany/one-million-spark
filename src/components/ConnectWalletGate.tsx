@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Wallet, Info, Smartphone, Globe } from "lucide-react";
+import { Wallet, Info } from "lucide-react";
 import { HowToConnectSolModal } from "./HowToConnectSolModal";
+import { WalletNotDetectedModal } from "./WalletNotDetectedModal";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -19,6 +20,22 @@ const getIsInWalletBrowser = () => {
   return !!win?.phantom?.solana?.isPhantom || !!win?.solflare?.isSolflare || !!win?.solana;
 };
 
+// Explicit wallet detection helpers
+const isPhantomAvailable = () => {
+  const win = window as any;
+  return !!win?.solana?.isPhantom;
+};
+
+const isSolflareAvailable = () => {
+  const win = window as any;
+  return !!win?.solflare?.isSolflare;
+};
+
+const isBackpackAvailable = () => {
+  const win = window as any;
+  return !!win?.backpack?.isBackpack;
+};
+
 interface ConnectWalletGateProps {
   className?: string;
 }
@@ -29,32 +46,30 @@ const WALLET_CONFIG = [
     id: 'phantom',
     name: 'Phantom',
     icon: phantomIcon,
-    deepLinkBase: 'https://phantom.app/ul/browse/',
   },
   {
     id: 'solflare', 
     name: 'Solflare',
     icon: solflareIcon,
-    deepLinkBase: 'https://solflare.com/ul/v1/browse/',
   },
   {
     id: 'backpack',
     name: 'Backpack', 
     icon: backpackIcon,
-    deepLinkBase: 'https://backpack.app/ul/browse/',
   },
 ];
 
 /**
  * A component to display when wallet connection is required.
  * Shows custom wallet picker with 3 buttons + icons.
- * On mobile: shows helper text and globe images for wallet browser.
+ * On mobile: shows friendly helper text (non-blocking).
  */
 export function ConnectWalletGate({ className }: ConnectWalletGateProps) {
   const { t } = useTranslation();
   const { wallets, select, connecting } = useWallet();
   const [showHelp, setShowHelp] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [notDetectedWallet, setNotDetectedWallet] = useState<'phantom' | 'solflare' | 'backpack' | null>(null);
   
   const isMobile = getIsMobile();
   const isInWalletBrowser = getIsInWalletBrowser();
@@ -68,16 +83,31 @@ export function ConnectWalletGate({ className }: ConnectWalletGateProps) {
     if (matchingWallet) {
       select(matchingWallet.adapter.name);
       setDialogOpen(false);
-    } else if (isMobile && !isInWalletBrowser) {
-      // On mobile outside wallet browser, open deep link
-      const walletConfig = WALLET_CONFIG.find(w => w.id === walletId);
-      if (walletConfig) {
-        const currentUrl = encodeURIComponent(window.location.href);
-        const deepLink = `${walletConfig.deepLinkBase}${currentUrl}`;
-        window.location.href = deepLink;
-      }
+    } else if (isMobile) {
+      // On mobile with no wallet detected: show modal with 2 options
+      setNotDetectedWallet(walletId as 'phantom' | 'solflare' | 'backpack');
+      setDialogOpen(false);
     } else {
+      // Desktop: just show toast
       toast.error(`${walletId} wallet not detected. Please install it first.`);
+    }
+  };
+
+  const handleRetryCheck = () => {
+    // Re-check if wallet is now available
+    const checkFns: Record<string, () => boolean> = {
+      phantom: isPhantomAvailable,
+      solflare: isSolflareAvailable,
+      backpack: isBackpackAvailable,
+    };
+    
+    if (notDetectedWallet && checkFns[notDetectedWallet]?.()) {
+      // Wallet now detected! Try to connect
+      const walletId = notDetectedWallet;
+      setNotDetectedWallet(null);
+      handleSelectWallet(walletId);
+    } else {
+      toast.error(t("wallet.stillNotDetected"));
     }
   };
 
@@ -120,15 +150,12 @@ export function ConnectWalletGate({ className }: ConnectWalletGateProps) {
           </DialogHeader>
           
           <div className="grid gap-3 py-4">
-            {/* Mobile helper text */}
-            {isMobile && !isInWalletBrowser && (
-              <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 mb-2">
-                <div className="flex items-start gap-2">
-                  <Smartphone size={16} className="text-amber-500 mt-0.5 flex-shrink-0" />
-                  <p className="text-sm text-amber-600 dark:text-amber-400">
-                    For best experience, open this site inside your wallet's built-in browser (Phantom/Solflare/Backpack).
-                  </p>
-                </div>
+            {/* Mobile friendly helper text (non-blocking) */}
+            {isMobile && !isInWalletBrowser && !isPhantomAvailable() && (
+              <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 mb-2">
+                <p className="text-sm text-blue-600 dark:text-blue-400">
+                  {t("wallet.mobileHelperText")}
+                </p>
               </div>
             )}
 
@@ -152,75 +179,10 @@ export function ConnectWalletGate({ className }: ConnectWalletGateProps) {
                     {detected && (
                       <span className="text-xs text-green-500">{t("wallet.detected")}</span>
                     )}
-                    {isMobile && !isInWalletBrowser && !detected && (
-                      <span className="text-xs text-muted-foreground">{t("wallet.openInWalletBrowser")}</span>
-                    )}
                   </div>
                 </Button>
               );
             })}
-
-            {/* Mobile: How to open in wallet browser with globe images */}
-            {isMobile && !isInWalletBrowser && (
-              <div className="border-t border-border pt-4 mt-2">
-                <p className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
-                  <Globe size={16} className="text-primary" />
-                  How to open in wallet browser
-                </p>
-                <div className="grid grid-cols-3 gap-3">
-                  {/* Phantom */}
-                  <div className="flex flex-col items-center gap-2 p-2 rounded-lg bg-muted/30">
-                    <img 
-                      src={phantomIcon} 
-                      alt="Phantom" 
-                      className="w-8 h-8 rounded-lg"
-                    />
-                    <span className="text-xs font-medium">Phantom</span>
-                    <div className="w-full h-16 bg-muted/50 rounded flex items-center justify-center">
-                      <div className="text-center">
-                        <Globe size={20} className="mx-auto text-primary mb-1" />
-                        <span className="text-[10px] text-muted-foreground">Tap globe<br/>bottom nav</span>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  {/* Solflare */}
-                  <div className="flex flex-col items-center gap-2 p-2 rounded-lg bg-muted/30">
-                    <img 
-                      src={solflareIcon} 
-                      alt="Solflare" 
-                      className="w-8 h-8 rounded-lg"
-                    />
-                    <span className="text-xs font-medium">Solflare</span>
-                    <div className="w-full h-16 bg-muted/50 rounded flex items-center justify-center">
-                      <div className="text-center">
-                        <Globe size={20} className="mx-auto text-primary mb-1" />
-                        <span className="text-[10px] text-muted-foreground">Browser<br/>tab</span>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  {/* Backpack */}
-                  <div className="flex flex-col items-center gap-2 p-2 rounded-lg bg-muted/30">
-                    <img 
-                      src={backpackIcon} 
-                      alt="Backpack" 
-                      className="w-8 h-8 rounded-lg"
-                    />
-                    <span className="text-xs font-medium">Backpack</span>
-                    <div className="w-full h-16 bg-muted/50 rounded flex items-center justify-center">
-                      <div className="text-center">
-                        <Globe size={20} className="mx-auto text-primary mb-1" />
-                        <span className="text-[10px] text-muted-foreground">Tap globe<br/>icon</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <p className="text-xs text-muted-foreground text-center mt-2">
-                  Open the wallet app → tap the globe/browser icon → paste 1mgaming.com
-                </p>
-              </div>
-            )}
 
             {/* In wallet browser success */}
             {isMobile && isInWalletBrowser && (
@@ -231,6 +193,14 @@ export function ConnectWalletGate({ className }: ConnectWalletGateProps) {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Wallet Not Detected Modal */}
+      <WalletNotDetectedModal
+        open={!!notDetectedWallet}
+        onOpenChange={(open) => !open && setNotDetectedWallet(null)}
+        walletType={notDetectedWallet || 'phantom'}
+        onRetryCheck={handleRetryCheck}
+      />
 
       <HowToConnectSolModal 
         isOpen={showHelp} 
