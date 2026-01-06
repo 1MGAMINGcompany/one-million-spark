@@ -5,11 +5,12 @@ import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Wallet, LogOut, RefreshCw, Copy, Check, AlertCircle, Smartphone, Loader2, ExternalLink, User } from "lucide-react";
+import { Wallet, LogOut, RefreshCw, Copy, Check, AlertCircle, Loader2, ExternalLink, User } from "lucide-react";
 import { toast } from "sonner";
 import { fetchBalance as fetchBalanceRpc, is403Error } from "@/lib/solana-rpc";
 import { NetworkProofBadge } from "./NetworkProofBadge";
 import { MobileWalletFallback } from "./MobileWalletFallback";
+import { WalletNotDetectedModal } from "./WalletNotDetectedModal";
 
 // Import local wallet icons
 import phantomIcon from "@/assets/wallets/phantom.svg";
@@ -31,6 +32,22 @@ const getIsInWalletBrowser = () => {
   // Check for any injected Solana provider (covers other wallet browsers)
   const hasSolanaProvider = !!win?.solana;
   return isInPhantom || isInSolflare || hasSolanaProvider;
+};
+
+// Explicit wallet detection helpers
+const isPhantomAvailable = () => {
+  const win = window as any;
+  return !!win?.solana?.isPhantom;
+};
+
+const isSolflareAvailable = () => {
+  const win = window as any;
+  return !!win?.solflare?.isSolflare;
+};
+
+const isBackpackAvailable = () => {
+  const win = window as any;
+  return !!win?.backpack?.isBackpack;
 };
 
 // SOLANA-ONLY: Allowed wallet names (case-insensitive substring match)
@@ -85,6 +102,7 @@ export function WalletButton() {
   const [connectingWallet, setConnectingWallet] = useState<string | null>(null);
   const [showFallbackPanel, setShowFallbackPanel] = useState(false);
   const [selectedWalletType, setSelectedWalletType] = useState<'phantom' | 'solflare' | 'backpack' | null>(null);
+  const [notDetectedWallet, setNotDetectedWallet] = useState<'phantom' | 'solflare' | 'backpack' | null>(null);
   const connectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Platform detection
@@ -541,11 +559,31 @@ export function WalletButton() {
           setShowFallbackPanel(true);
         }
       }
-    } else if (isMobile && !isInWalletBrowser) {
-      // On mobile outside wallet browser, open deep link
-      handleWalletDeepLink(walletId as 'phantom' | 'solflare' | 'backpack');
+    } else if (isMobile) {
+      // On mobile with no wallet detected: show modal with 2 options
+      setNotDetectedWallet(walletId as 'phantom' | 'solflare' | 'backpack');
+      setDialogOpen(false);
     } else {
+      // Desktop: just show toast
       toast.error(`${walletId} wallet not detected. Please install it first.`);
+    }
+  };
+
+  // Handle retry check from WalletNotDetectedModal
+  const handleRetryCheck = () => {
+    const checkFns: Record<string, () => boolean> = {
+      phantom: isPhantomAvailable,
+      solflare: isSolflareAvailable,
+      backpack: isBackpackAvailable,
+    };
+    
+    if (notDetectedWallet && checkFns[notDetectedWallet]?.()) {
+      // Wallet now detected! Try to connect
+      const walletId = notDetectedWallet;
+      setNotDetectedWallet(null);
+      handleWalletClick(walletId);
+    } else {
+      toast.error(t("wallet.stillNotDetected"));
     }
   };
 
@@ -568,15 +606,12 @@ export function WalletButton() {
             <DialogTitle>{t("wallet.connectWallet")}</DialogTitle>
           </DialogHeader>
           <div className="grid gap-3 py-4">
-            {/* Mobile helper text */}
-            {isMobile && !isInWalletBrowser && (
-              <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 mb-2">
-                <div className="flex items-start gap-2">
-                  <Smartphone size={16} className="text-amber-500 mt-0.5 flex-shrink-0" />
-                  <p className="text-sm text-amber-600 dark:text-amber-400">
-                    For best experience, open this site inside your wallet's built-in browser (Phantom/Solflare/Backpack).
-                  </p>
-                </div>
+            {/* Mobile friendly helper text (non-blocking) */}
+            {isMobile && !isInWalletBrowser && !isPhantomAvailable() && (
+              <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 mb-2">
+                <p className="text-sm text-blue-600 dark:text-blue-400">
+                  {t("wallet.mobileHelperText")}
+                </p>
               </div>
             )}
 
@@ -600,69 +635,10 @@ export function WalletButton() {
                     {detected && (
                       <span className="text-xs text-green-500">{t("wallet.detected")}</span>
                     )}
-                    {isMobile && !isInWalletBrowser && !detected && (
-                      <span className="text-xs text-muted-foreground">{t("wallet.openInWalletBrowser")}</span>
-                    )}
                   </div>
                 </Button>
               );
             })}
-
-            {/* Mobile: How to open in wallet browser with globe images */}
-            {isMobile && !isInWalletBrowser && (
-              <div className="border-t border-border pt-4 mt-2">
-                <p className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
-                  <span className="text-lg">🌐</span>
-                  How to open in wallet browser
-                </p>
-                <div className="grid grid-cols-3 gap-2">
-                  {/* Phantom */}
-                  <div className="flex flex-col items-center gap-1.5 p-2 rounded-lg bg-muted/30 border border-border/50">
-                    <img 
-                      src={phantomIcon} 
-                      alt="Phantom" 
-                      className="w-6 h-6"
-                    />
-                    <span className="text-[10px] font-medium">Phantom</span>
-                    <div className="w-full aspect-square bg-muted/50 rounded flex flex-col items-center justify-center p-1">
-                      <span className="text-2xl mb-0.5">🌐</span>
-                      <span className="text-[8px] text-muted-foreground text-center leading-tight">Tap globe<br/>bottom nav</span>
-                    </div>
-                  </div>
-                  
-                  {/* Solflare */}
-                  <div className="flex flex-col items-center gap-1.5 p-2 rounded-lg bg-muted/30 border border-border/50">
-                    <img 
-                      src={solflareIcon} 
-                      alt="Solflare" 
-                      className="w-6 h-6"
-                    />
-                    <span className="text-[10px] font-medium">Solflare</span>
-                    <div className="w-full aspect-square bg-muted/50 rounded flex flex-col items-center justify-center p-1">
-                      <span className="text-2xl mb-0.5">🌐</span>
-                      <span className="text-[8px] text-muted-foreground text-center leading-tight">Browser<br/>tab</span>
-                    </div>
-                  </div>
-                  
-                  {/* Backpack */}
-                  <div className="flex flex-col items-center gap-1.5 p-2 rounded-lg bg-muted/30 border border-border/50">
-                    <img 
-                      src={backpackIcon} 
-                      alt="Backpack" 
-                      className="w-6 h-6"
-                    />
-                    <span className="text-[10px] font-medium">Backpack</span>
-                    <div className="w-full aspect-square bg-muted/50 rounded flex flex-col items-center justify-center p-1">
-                      <span className="text-2xl mb-0.5">🌐</span>
-                      <span className="text-[8px] text-muted-foreground text-center leading-tight">Tap globe<br/>icon</span>
-                    </div>
-                  </div>
-                </div>
-                <p className="text-[10px] text-muted-foreground text-center mt-2">
-                  Open wallet app → tap globe icon → paste 1mgaming.com
-                </p>
-              </div>
-            )}
 
             {/* In wallet browser success */}
             {isMobile && isInWalletBrowser && (
@@ -713,6 +689,14 @@ export function WalletButton() {
             </div>
           </div>
         </DialogContent>
+
+        {/* Wallet Not Detected Modal */}
+        <WalletNotDetectedModal
+          open={!!notDetectedWallet}
+          onOpenChange={(open) => !open && setNotDetectedWallet(null)}
+          walletType={notDetectedWallet || 'phantom'}
+          onRetryCheck={handleRetryCheck}
+        />
       </Dialog>
     );
   }

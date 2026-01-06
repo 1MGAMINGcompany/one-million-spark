@@ -193,9 +193,9 @@ export function MobileWalletFallback({ onClose, isAndroid, isIOS, selectedWallet
       <div className="flex-1 overflow-y-auto p-6">
         <div className="max-w-sm mx-auto">
           {/* Platform hint */}
-          <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 mb-6">
-            <p className="text-sm text-amber-600 dark:text-amber-400">
-              {isIOS ? t("wallet.mobileBrowserLimitation") : t("wallet.wrongWalletBrowserHint")}
+          <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 mb-6">
+            <p className="text-sm text-blue-600 dark:text-blue-400">
+              {t("wallet.retryHelperText")}
             </p>
           </div>
 

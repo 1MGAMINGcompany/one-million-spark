@@ -542,6 +542,12 @@
     "iphoneBrowserLimit": "iPhone browsers may not connect directly. Open inside Phantom/Solflare browser.",
     "connectionFailed": "Connection didn't start. Please try again.",
     "retry": "Retry",
+    "mobileHelperText": "If you're on mobile, Phantom may open in your system browser. This is normal.",
+    "retryHelperText": "If connection didn't work, try tapping Connect again.",
+    "walletNotDetected": "{{wallet}} not detected",
+    "openWalletApp": "Open {{wallet}} App",
+    "alreadyInWallet": "I'm Already in {{wallet}}",
+    "stillNotDetected": "Wallet still not detected. Make sure the app is open.",
     "getWallet": "Get a Wallet",
     "getWalletDesc": "Don't have a wallet? Download one for free:",
     "wallets": {
