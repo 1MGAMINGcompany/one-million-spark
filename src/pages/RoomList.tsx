@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 // PublicKey import removed - we use room.pda directly as the unique identifier
@@ -16,19 +16,21 @@ import {
   Clock,
   Bug,
   Trophy,
-  Gamepad
+  Gamepad,
+  Settings2
 } from "lucide-react";
 import { useWallet } from "@/hooks/useWallet";
 import { WalletRequired } from "@/components/WalletRequired";
 import { useSolanaRooms } from "@/hooks/useSolanaRooms";
 import { SOLANA_ENABLED, getSolanaCluster, formatSol, getSolanaEndpoint } from "@/lib/solana-config";
-import { GameType, RoomStatus, PROGRAM_ID, isOpenStatus } from "@/lib/solana-program";
+import { GameType, RoomStatus, PROGRAM_ID, isOpenStatus, RoomDisplay, isActiveStatus } from "@/lib/solana-program";
 import { getRoomMode } from "@/hooks/useGameSessionPersistence";
 // ActiveGameBanner removed - using GlobalActiveRoomBanner from App.tsx instead
 import { useToast } from "@/hooks/use-toast";
 import { AudioManager } from "@/lib/AudioManager";
 import { showBrowserNotification } from "@/lib/pushNotifications";
 // getRoomPda import removed - we use activeRoom.pda directly
+import { ResolveRoomModal } from "@/components/ResolveRoomModal";
 
 import { BUILD_VERSION } from "@/lib/buildVersion";
 
@@ -46,6 +48,13 @@ export default function RoomList() {
     status: string;
     isPlayer1: boolean;
   }>>([]);
+  
+  // On-chain active rooms (filtered from all rooms)
+  const [myOnChainRooms, setMyOnChainRooms] = useState<RoomDisplay[]>([]);
+  
+  // Resolve modal state
+  const [resolveModalOpen, setResolveModalOpen] = useState(false);
+  const [selectedRoomForResolve, setSelectedRoomForResolve] = useState<RoomDisplay | null>(null);
   
   // Track previous status to detect when opponent joins
   const prevStatusRef = useRef<number | null>(null);
@@ -94,6 +103,25 @@ export default function RoomList() {
     const interval = setInterval(fetchMySessions, 10000);
     return () => clearInterval(interval);
   }, [isConnected, address, findMyActiveGameSessions]);
+
+  // Filter on-chain rooms where this wallet is a player and room is active
+  useEffect(() => {
+    if (!address || rooms.length === 0) {
+      setMyOnChainRooms([]);
+      return;
+    }
+    
+    const myRooms = rooms.filter(room => 
+      room.players.includes(address) && isActiveStatus(room.status)
+    );
+    
+    // Also check activeRoom if it exists and isn't in the filtered list
+    if (activeRoom && !myRooms.find(r => r.pda === activeRoom.pda) && isActiveStatus(activeRoom.status)) {
+      myRooms.push(activeRoom);
+    }
+    
+    setMyOnChainRooms(myRooms);
+  }, [address, rooms, activeRoom]);
 
   // Note: Active room polling is now centralized in useSolanaRooms
   // Pages only CONSUME activeRoom - they don't trigger fetches
@@ -229,36 +257,55 @@ export default function RoomList() {
 
       {/* Active Game Banner handled by GlobalActiveRoomBanner in App.tsx */}
 
-      {/* My Active Games Section */}
-      {isConnected && myActiveSessions.length > 0 && (
+      {/* My Active Games Section - Show ALL rooms for this wallet */}
+      {isConnected && myOnChainRooms.length > 0 && (
         <Card className="mb-6 border-primary/50 bg-primary/10">
           <CardHeader className="pb-2">
             <CardTitle className="text-lg flex items-center gap-2">
               <Gamepad className="h-5 w-5 text-primary" />
               {t("roomList.myActiveGames")}
+              <span className="text-xs bg-primary/20 px-2 py-0.5 rounded-full ml-2">
+                {myOnChainRooms.length}
+              </span>
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            {myActiveSessions.map((session) => (
+            {myOnChainRooms.map((room) => (
               <div 
-                key={session.roomPda}
+                key={room.pda}
                 className="flex items-center justify-between p-3 bg-background/50 rounded-lg border border-border/50"
               >
                 <div className="flex items-center gap-3">
-                  <span className="text-xl">{getGameIcon(GameType[session.gameType as keyof typeof GameType] || 0)}</span>
+                  <span className="text-xl">{getGameIcon(room.gameType)}</span>
                   <div>
-                    <p className="font-medium capitalize">{session.gameType}</p>
+                    <p className="font-medium">{room.gameTypeName}</p>
                     <p className="text-xs text-muted-foreground">
-                      {session.isPlayer1 ? t("roomList.youAreCreator") : t("roomList.youJoined")}
+                      {room.creator === address ? t("roomList.youAreCreator") : t("roomList.youJoined")}
+                      {" • "}
+                      {room.playerCount}/{room.maxPlayers} players
+                      {room.entryFeeSol > 0 && ` • ${room.entryFeeSol} SOL`}
                     </p>
                   </div>
                 </div>
-                <Button 
-                  size="sm" 
-                  onClick={() => navigate(`/play/${session.roomPda}`)}
-                >
-                  {t("roomList.rejoin")}
-                </Button>
+                <div className="flex gap-2">
+                  <Button 
+                    size="sm" 
+                    variant="outline"
+                    onClick={() => {
+                      setSelectedRoomForResolve(room);
+                      setResolveModalOpen(true);
+                    }}
+                  >
+                    <Settings2 className="h-4 w-4 mr-1" />
+                    {t("roomList.resolve", "Resolve")}
+                  </Button>
+                  <Button 
+                    size="sm" 
+                    onClick={() => navigate(`/play/${room.pda}`)}
+                  >
+                    {t("roomList.rejoin")}
+                  </Button>
+                </div>
               </div>
             ))}
           </CardContent>
@@ -455,6 +502,31 @@ export default function RoomList() {
           : "Connect wallet to create or join rooms"
         }
       </p>
+
+      {/* Resolve Room Modal */}
+      {selectedRoomForResolve && address && (
+        <ResolveRoomModal
+          open={resolveModalOpen}
+          onClose={() => {
+            setResolveModalOpen(false);
+            setSelectedRoomForResolve(null);
+          }}
+          roomPda={selectedRoomForResolve.pda}
+          roomData={{
+            playerCount: selectedRoomForResolve.playerCount,
+            creator: selectedRoomForResolve.creator,
+            status: selectedRoomForResolve.status,
+            stakeLamports: selectedRoomForResolve.entryFeeSol * 1e9,
+            gameType: selectedRoomForResolve.gameTypeName.toLowerCase(),
+            roomId: selectedRoomForResolve.roomId,
+          }}
+          walletAddress={address}
+          onResolved={() => {
+            fetchRooms();
+            setMyOnChainRooms([]);
+          }}
+        />
+      )}
     </div>
   );
 }

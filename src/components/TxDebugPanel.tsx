@@ -20,7 +20,10 @@ interface TxDebugPanelProps {
 }
 
 export function TxDebugPanel({ debugInfo, onClose }: TxDebugPanelProps) {
-  if (!debugInfo) return null;
+  // Only show in development mode OR if DEBUG_MODE is explicitly enabled
+  const isDebugMode = import.meta.env.DEV || localStorage.getItem('DEBUG_MODE') === 'true';
+  
+  if (!isDebugMode || !debugInfo) return null;
 
   return (
     <div className="fixed bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-96 bg-red-950/95 border border-red-500/50 rounded-lg p-4 z-50 shadow-xl">
