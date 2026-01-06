@@ -1,4 +1,5 @@
 import "./polyfills"; // Must be first - Buffer/process polyfills for Solana
+import "./lib/mobileWalletAdapter"; // Register MWA before React renders (Android only)
 import React from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
