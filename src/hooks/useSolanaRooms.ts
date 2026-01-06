@@ -103,7 +103,21 @@ export function useSolanaRooms() {
       hasAdapterSendTx,
     });
     
-    // Send using adapter.sendTransaction (works for both legacy and versioned)
+    // ✅ PRE-FLIGHT SIMULATION (NO WALLET POPUP)
+    console.log("[TX_PREVIEW] Simulating...");
+    const sim = await connection.simulateTransaction(vtx, {
+      sigVerify: false,
+      replaceRecentBlockhash: true,
+    });
+    
+    if (sim.value.err) {
+      console.error("[TX_PREVIEW] Failed:", sim.value.err, sim.value.logs);
+      throw new Error("TX_SIMULATION_FAILED");
+    }
+    console.log("[TX_PREVIEW] OK");
+    
+    // ✅ ONLY NOW invoke wallet
+    console.log("[TX_REQUEST] Wallet send...");
     let rawSignature: string | Uint8Array;
     if (hasAdapterSendTx) {
       console.log("[Tx] Using adapter.sendTransaction (VersionedTx) -", adapterName);
@@ -615,6 +629,16 @@ export function useSolanaRooms() {
         return { ok: true, signature };
       } catch (err: any) {
         const msg = err?.message?.toLowerCase?.() || "";
+
+        // Handle simulation failure with clean message
+        if (err?.message === "TX_SIMULATION_FAILED") {
+          toast({
+            title: "Action not available",
+            description: "This action isn't valid for the room's current state.",
+            variant: "destructive",
+          });
+          return { ok: false, reason: "TX_SIMULATION_FAILED" };
+        }
 
         if (
           msg.includes("reject") ||
