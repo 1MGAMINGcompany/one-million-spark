@@ -1078,6 +1078,7 @@ const LudoGame = () => {
         roomPda={roomPda || ""}
         isCreator={isCreator}
         stakeSol={entryFeeSol}
+        playerCount={roomPlayers.filter(p => !p.startsWith('ai-')).length}
         onUILeave={handleUILeave}
         onCancelRoom={handleCancelRoom}
         onForfeitMatch={handleForfeitMatch}
