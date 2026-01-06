@@ -9,13 +9,13 @@
  * This permanently fixes "Dominos card opens Backgammon" - URL slug is never used.
  */
 
-import { useEffect, useState, lazy, Suspense } from "react";
+import { useEffect, useState, useCallback, lazy, Suspense } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useConnection } from "@solana/wallet-adapter-react";
 import { PublicKey } from "@solana/web3.js";
 import { parseRoomAccount, RoomStatus, isOpenStatus } from "@/lib/solana-program";
 import { validatePublicKey } from "@/lib/solana-utils";
-import { Loader2, AlertTriangle } from "lucide-react";
+import { Loader2, AlertTriangle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -46,6 +46,13 @@ export default function RoomRouter() {
     status: number;
     playerCount: number;
   } | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
+
+  const handleRetry = useCallback(() => {
+    setError(null);
+    setLoading(true);
+    setRetryCount(prev => prev + 1);
+  }, []);
 
   useEffect(() => {
     async function fetchRoomData() {
@@ -69,6 +76,7 @@ export default function RoomRouter() {
 
         const roomPda = new PublicKey(roomPdaParam);
         const accountInfo = await connection.getAccountInfo(roomPda);
+        console.log("[RoomRouter] roomPdaParam=", roomPdaParam, "accountInfo=", !!accountInfo);
 
         if (!accountInfo) {
           setError("Room not found");
@@ -115,7 +123,7 @@ export default function RoomRouter() {
     }
 
     fetchRoomData();
-  }, [roomPdaParam, connection, navigate]);
+  }, [roomPdaParam, connection, navigate, retryCount]);
 
   // Loading state
   if (loading) {
@@ -133,18 +141,45 @@ export default function RoomRouter() {
             <p className="text-muted-foreground mb-6">
               The room link appears to be invalid or the room no longer exists.
             </p>
-            <Button onClick={() => navigate("/room-list")}>
-              Back to Room List
-            </Button>
+            <div className="flex gap-3 justify-center flex-wrap">
+              <Button variant="outline" onClick={handleRetry}>
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Retry
+              </Button>
+              <Button onClick={() => navigate("/room-list")}>
+                Back to Room List
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </div>
     );
   }
 
-  // No room data - shouldn't happen but handle gracefully
+  // No room data after fetch completed - show error with retry, not spinner
   if (!roomData) {
-    return <GameLoading />;
+    return (
+      <div className="container max-w-2xl py-8 px-4">
+        <Card className="border-border/50 bg-card/80 backdrop-blur">
+          <CardContent className="text-center py-12">
+            <AlertTriangle className="h-12 w-12 text-amber-500 mx-auto mb-4" />
+            <h3 className="text-xl font-semibold mb-2">Room not found</h3>
+            <p className="text-muted-foreground mb-6">
+              Room data could not be loaded. This may be a timing issue.
+            </p>
+            <div className="flex gap-3 justify-center flex-wrap">
+              <Button variant="outline" onClick={handleRetry}>
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Retry
+              </Button>
+              <Button onClick={() => navigate("/room-list")}>
+                Browse Rooms
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
   }
 
   // Determine which component to render based on status and gameType
