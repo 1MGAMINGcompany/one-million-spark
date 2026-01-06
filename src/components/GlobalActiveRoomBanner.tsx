@@ -4,13 +4,12 @@ import { useTranslation } from "react-i18next";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Play, Users, X } from "lucide-react";
+import { Play, Users, Settings } from "lucide-react";
 import { useSolanaRooms } from "@/hooks/useSolanaRooms";
 import { RoomStatus, isOpenStatus } from "@/lib/solana-program";
 import { toast } from "@/hooks/use-toast";
 import { AudioManager } from "@/lib/AudioManager";
 import { showBrowserNotification } from "@/lib/pushNotifications";
-import { archiveRoom, isRoomArchived } from "@/lib/roomArchive";
 
 // REMOVED: GAME_ROUTES - game type comes from on-chain data via /play/:pda, not URL
 
@@ -20,9 +19,6 @@ export function GlobalActiveRoomBanner() {
   const { t } = useTranslation();
   const { connected } = useWallet();
   const { activeRoom } = useSolanaRooms();
-  
-  // Local dismissed state for immediate UI feedback
-  const [dismissedPda, setDismissedPda] = useState<string | null>(null);
   
   // Note: Active room polling is now centralized in useSolanaRooms
   // This component only CONSUMES activeRoom - it doesn't trigger fetches
@@ -72,17 +68,8 @@ export function GlobalActiveRoomBanner() {
     previousStatusRef.current = currentStatus;
   }, [activeRoom, navigate]);
 
-  // Note: We intentionally do NOT reset dismissedPda when activeRoom changes.
-  // The localStorage archiveRoom() is the source of truth for dismissed rooms.
-  // Local dismissedPda state is only for immediate UI feedback before the next poll.
-
-  // Don't show banner if no active room, not connected, or already dismissed
+  // Don't show banner if no active room or not connected
   if (!connected || !activeRoom) {
-    return null;
-  }
-
-  // Hide immediately if this room was dismissed or is archived
-  if (dismissedPda === activeRoom.pda || isRoomArchived(activeRoom.pda)) {
     return null;
   }
 
@@ -106,15 +93,9 @@ export function GlobalActiveRoomBanner() {
     navigate(`/room/${activeRoom.pda}`);
   };
 
-  const handleDismiss = () => {
-    // Immediately hide the banner via local state
-    setDismissedPda(activeRoom.pda);
-    // Also archive it so it stays hidden after polling
-    archiveRoom(activeRoom.pda);
-    toast({
-      title: t("common.bannerDismissed"),
-      description: t("common.bannerDismissedDesc"),
-    });
+  // Navigate to room page for resolution (cancel/forfeit options are there)
+  const handleResolve = () => {
+    navigate(`/room/${activeRoom.pda}`);
   };
 
   if (isStarted) {
@@ -142,8 +123,9 @@ export function GlobalActiveRoomBanner() {
                   <span className="hidden sm:inline">{t("gameBanner.enterGame")}</span>
                   <span className="sm:hidden">{t("gameBanner.play")}</span>
                 </Button>
-                <Button onClick={handleDismiss} size="sm" variant="ghost" className="shrink-0 h-8 w-8 p-0">
-                  <X className="h-4 w-4" />
+                <Button onClick={handleResolve} size="sm" variant="outline" className="shrink-0">
+                  <Settings className="h-4 w-4 mr-1" />
+                  <span className="hidden sm:inline">{t("gameBanner.resolve")}</span>
                 </Button>
               </div>
             </div>
@@ -173,12 +155,13 @@ export function GlobalActiveRoomBanner() {
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <Button variant="outline" onClick={handleViewRoom} size="sm" className="shrink-0">
-                  <span className="hidden sm:inline">{t("gameBanner.viewRoom")}</span>
+                <Button onClick={handleViewRoom} size="sm" className="shrink-0">
+                  <span className="hidden sm:inline">{t("gameBanner.goToRoom")}</span>
                   <span className="sm:hidden">{t("gameBanner.view")}</span>
                 </Button>
-                <Button onClick={handleDismiss} size="sm" variant="ghost" className="shrink-0 h-8 w-8 p-0">
-                  <X className="h-4 w-4" />
+                <Button onClick={handleResolve} size="sm" variant="outline" className="shrink-0">
+                  <Settings className="h-4 w-4 mr-1" />
+                  <span className="hidden sm:inline">{t("gameBanner.resolve")}</span>
                 </Button>
               </div>
             </div>
