@@ -420,6 +420,16 @@ export function useSolanaRooms() {
     } catch (err: any) {
       console.error("Create room error:", err);
       
+      // Handle simulation failure with clean message - NO wallet popup occurred
+      if (err?.message === "TX_SIMULATION_FAILED") {
+        toast({
+          title: "Action not available",
+          description: "This action isn't valid for the current room state.",
+          variant: "destructive",
+        });
+        return null;
+      }
+      
       // Build debug info for versioned tx
       setTxDebugInfo({
         publicKey: publicKey?.toBase58() || null,
@@ -433,15 +443,20 @@ export function useSolanaRooms() {
         txType: 'versioned',
       });
       
-      // Extract better error message
-      let errorMsg = err.message || "Transaction failed";
-      if (err instanceof SendTransactionError) {
-        errorMsg = err.message;
+      // Check for user rejection / Phantom block
+      const errorMsg = err?.message?.toLowerCase() || "";
+      if (errorMsg.includes("reject") || errorMsg.includes("cancel") || errorMsg.includes("user denied") || errorMsg.includes("blocked")) {
+        toast({
+          title: "Transaction cancelled",
+          description: "No changes were made",
+          variant: "destructive",
+        });
+        return null;
       }
       
       toast({
         title: "Failed to create room",
-        description: errorMsg,
+        description: err.message || "Transaction failed",
         variant: "destructive",
       });
       return null;
@@ -552,6 +567,16 @@ export function useSolanaRooms() {
     } catch (err: any) {
       console.error("Join room error:", err);
       
+      // Handle simulation failure with clean message - NO wallet popup occurred
+      if (err?.message === "TX_SIMULATION_FAILED") {
+        toast({
+          title: "Action not available",
+          description: "This room may be full or no longer accepting players.",
+          variant: "destructive",
+        });
+        return { ok: false, reason: "TX_SIMULATION_FAILED" };
+      }
+      
       // Build debug info for versioned tx
       setTxDebugInfo({
         publicKey: publicKey?.toBase58() || null,
@@ -570,7 +595,7 @@ export function useSolanaRooms() {
       if (errorMsg.includes("reject") || errorMsg.includes("cancel") || errorMsg.includes("user denied") || errorMsg.includes("blocked")) {
         toast({
           title: "Transaction cancelled",
-          description: "Phantom blocked or you rejected the request. No changes were made. Please refresh and try again.",
+          description: "No changes were made",
           variant: "destructive",
         });
         return { ok: false, reason: "PHANTOM_BLOCKED_OR_REJECTED" };

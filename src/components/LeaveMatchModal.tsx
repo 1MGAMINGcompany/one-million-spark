@@ -209,13 +209,22 @@ export function LeaveMatchModal({
   const showRefundUnavailable = isCreator && 
     (matchState === "opponent_joined" || matchState === "rules_pending") && 
     playerCount !== undefined && playerCount >= 2;
-    
-  const canForfeit = matchState === "match_active" && stakeSol > 0 && onForfeitMatch !== undefined;
+  
+  // CRITICAL: When playerCount >= 2, ALWAYS show forfeit option if stake > 0
+  // This ensures funds are NEVER locked - either cancel (1 player) or forfeit (2+ players)
+  const canForfeit = (
+    (matchState === "match_active" || matchState === "opponent_joined" || matchState === "rules_pending") && 
+    stakeSol > 0 && 
+    onForfeitMatch !== undefined &&
+    playerCount !== undefined && 
+    playerCount >= 2
+  );
+  
   const canSimplyLeave = matchState === "game_over" || matchState === "waiting_for_opponent";
   const showCopyLink = matchState === "waiting_for_opponent";
   
   // Log match state for debugging invalid state transitions
-  console.log("[LeaveMatchModal]", { matchState, canCancel, canForfeit, isTxInFlight });
+  console.log("[LeaveMatchModal]", { matchState, playerCount, canCancel, canForfeit, stakeSol, isTxInFlight });
 
   // Determine warning message based on state
   const getWarningMessage = () => {
@@ -311,22 +320,26 @@ export function LeaveMatchModal({
                 </Button>
               )}
               
-              {/* Refund not available message - when playerCount >= 2 but game not started */}
-              {showRefundUnavailable && (
+              {/* Refund not available message - when playerCount >= 2 but game not started AND no forfeit */}
+              {showRefundUnavailable && !canForfeit && (
                 <div className="rounded-lg p-3 text-sm bg-muted border">
                   <p className="text-muted-foreground">
-                    Refund not available after opponent joins. Use "Back to Rooms" to leave safely.
+                    Refund not available after opponent joins. Use "Forfeit" to pay opponent and exit.
                   </p>
                 </div>
               )}
 
-              {/* Forfeit Match - ON-CHAIN action */}
+              {/* Forfeit Match - ON-CHAIN action (always visible when 2+ players and stake > 0) */}
               {canForfeit && (
                 <Button
                   type="button"
                   variant="outline"
                   className="w-full justify-start gap-2 border-destructive/50 text-destructive hover:bg-destructive/10"
-                  onClick={() => setShowForfeitConfirm(true)}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setShowForfeitConfirm(true);
+                  }}
                   disabled={isLoading}
                 >
                   {isForfeiting ? (
@@ -334,7 +347,7 @@ export function LeaveMatchModal({
                   ) : (
                     <Flag className="h-4 w-4" />
                   )}
-                  {t("leaveMatch.forfeit", "Forfeit Match")}
+                  {t("leaveMatch.forfeitOpponentWins", "Forfeit (Opponent wins)")}
                   <span className="ml-auto text-xs font-mono">
                     -{stakeSol.toFixed(4)} SOL
                   </span>
