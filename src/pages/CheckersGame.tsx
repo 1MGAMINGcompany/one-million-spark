@@ -1224,6 +1224,7 @@ const CheckersGame = () => {
         roomPda={roomPda || ""}
         isCreator={isCreator}
         stakeSol={entryFeeSol}
+        playerCount={roomPlayers.length}
         onUILeave={handleUILeave}
         onCancelRoom={handleCancelRoom}
         onForfeitMatch={handleForfeitMatch}

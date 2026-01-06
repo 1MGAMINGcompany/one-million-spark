@@ -72,6 +72,9 @@ interface LeaveMatchModalProps {
   /** Stake in SOL (for forfeit warning) */
   stakeSol: number;
   
+  /** On-chain player count - CRITICAL: cancel_room only works when playerCount === 1 */
+  playerCount?: number;
+  
   /** Callbacks for actions */
   onUILeave: () => void;           // UI-only: cleanup + navigate (NO wallet)
   onCancelRoom?: () => Promise<void>;  // On-chain: cancel room (creator refund)
@@ -89,6 +92,7 @@ export function LeaveMatchModal({
   roomPda,
   isCreator,
   stakeSol,
+  playerCount,
   onUILeave,
   onCancelRoom,
   onForfeitMatch,
@@ -100,6 +104,9 @@ export function LeaveMatchModal({
   
   // TxLock to prevent Phantom "Request blocked" popups
   const { isTxInFlight } = useTxLock();
+  
+  // Local submitting guard to prevent double-clicks
+  const [localSubmitting, setLocalSubmitting] = useState(false);
   
   // Confirmation dialogs for on-chain actions
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
@@ -138,28 +145,71 @@ export function LeaveMatchModal({
   };
 
   // Cancel room - ON-CHAIN action (show confirmation first)
-  const handleCancelConfirmed = async () => {
-    console.log("[LeaveMatch] On-chain action: Cancel room (refund)");
-    setShowCancelConfirm(false);
-    if (onCancelRoom) {
-      await onCancelRoom();
+  // ALL SAFETY GUARDS: preventDefault, stopPropagation, localSubmitting, isTxInFlight
+  const handleCancelConfirmed = async (e: React.MouseEvent) => {
+    // Stop event propagation
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // Guard: already submitting
+    if (localSubmitting || isTxInFlight) {
+      console.log("[TX] Already submitting, ignoring click");
+      return;
     }
-    onOpenChange(false);
+    
+    console.log("[TX_REQUEST] action=cancel_room");
+    setLocalSubmitting(true);
+    setShowCancelConfirm(false);
+    
+    try {
+      if (onCancelRoom) {
+        await onCancelRoom();
+      }
+    } finally {
+      setLocalSubmitting(false);
+      onOpenChange(false);
+    }
   };
 
   // Forfeit match - ON-CHAIN action (show confirmation first)
-  const handleForfeitConfirmed = async () => {
-    console.log("[ForfeitMatch] On-chain action requested");
-    setShowForfeitConfirm(false);
-    if (onForfeitMatch) {
-      await onForfeitMatch();
+  // ALL SAFETY GUARDS: preventDefault, stopPropagation, localSubmitting, isTxInFlight
+  const handleForfeitConfirmed = async (e: React.MouseEvent) => {
+    // Stop event propagation
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // Guard: already submitting
+    if (localSubmitting || isTxInFlight) {
+      console.log("[TX] Already submitting, ignoring click");
+      return;
     }
-    onOpenChange(false);
+    
+    console.log("[TX_REQUEST] action=forfeit");
+    setLocalSubmitting(true);
+    setShowForfeitConfirm(false);
+    
+    try {
+      if (onForfeitMatch) {
+        await onForfeitMatch();
+      }
+    } finally {
+      setLocalSubmitting(false);
+      onOpenChange(false);
+    }
   };
 
   // Determine which actions are available based on match state
-  // CRITICAL: Forfeit ONLY available when match is truly IN_PROGRESS (both rules accepted + game started)
-  const canCancel = isCreator && (matchState === "waiting_for_opponent" || matchState === "opponent_joined" || matchState === "rules_pending");
+  // CRITICAL: cancel_room only works when player_count === 1
+  // Only show "Cancel Room (Refund)" when playerCount === 1 AND waiting_for_opponent
+  const canCancel = isCreator && 
+    matchState === "waiting_for_opponent" && 
+    (playerCount === undefined || playerCount === 1);
+  
+  // Show "refund not available" message when opponent joined but game not started (can't cancel on-chain)
+  const showRefundUnavailable = isCreator && 
+    (matchState === "opponent_joined" || matchState === "rules_pending") && 
+    playerCount !== undefined && playerCount >= 2;
+    
   const canForfeit = matchState === "match_active" && stakeSol > 0 && onForfeitMatch !== undefined;
   const canSimplyLeave = matchState === "game_over" || matchState === "waiting_for_opponent";
   const showCopyLink = matchState === "waiting_for_opponent";
@@ -185,7 +235,7 @@ export function LeaveMatchModal({
   };
 
   // Block all tx buttons if any tx in flight (prevent Phantom "Request blocked")
-  const isLoading = isCancelling || isForfeiting || isTxInFlight;
+  const isLoading = isCancelling || isForfeiting || isTxInFlight || localSubmitting;
 
   return (
     <>
@@ -238,9 +288,10 @@ export function LeaveMatchModal({
                 </Button>
               )}
 
-              {/* Cancel Room (Refund) - ON-CHAIN action */}
+              {/* Cancel Room (Refund) - ON-CHAIN action - ONLY when playerCount === 1 */}
               {canCancel && (
                 <Button
+                  type="button"
                   variant="outline"
                   className="w-full justify-start gap-2 border-amber-500/50 text-amber-600 hover:bg-amber-500/10"
                   onClick={() => setShowCancelConfirm(true)}
@@ -259,10 +310,20 @@ export function LeaveMatchModal({
                   )}
                 </Button>
               )}
+              
+              {/* Refund not available message - when playerCount >= 2 but game not started */}
+              {showRefundUnavailable && (
+                <div className="rounded-lg p-3 text-sm bg-muted border">
+                  <p className="text-muted-foreground">
+                    Refund not available after opponent joins. Use "Back to Rooms" to leave safely.
+                  </p>
+                </div>
+              )}
 
               {/* Forfeit Match - ON-CHAIN action */}
               {canForfeit && (
                 <Button
+                  type="button"
                   variant="outline"
                   className="w-full justify-start gap-2 border-destructive/50 text-destructive hover:bg-destructive/10"
                   onClick={() => setShowForfeitConfirm(true)}
@@ -323,15 +384,16 @@ export function LeaveMatchModal({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={isCancelling}>
+            <AlertDialogCancel disabled={isLoading}>
               {t("common.back", "Back")}
             </AlertDialogCancel>
-            <AlertDialogAction
+            <Button
+              type="button"
               onClick={handleCancelConfirmed}
-              disabled={isCancelling}
+              disabled={isLoading}
               className="bg-amber-600 hover:bg-amber-700"
             >
-              {isCancelling ? (
+              {isCancelling || localSubmitting ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   {t("common.processing", "Processing...")}
@@ -339,7 +401,7 @@ export function LeaveMatchModal({
               ) : (
                 t("leaveMatch.confirmCancelBtn", "Cancel & Refund")
               )}
-            </AlertDialogAction>
+            </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -360,15 +422,16 @@ export function LeaveMatchModal({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={isForfeiting}>
+            <AlertDialogCancel disabled={isLoading}>
               {t("common.back", "Back")}
             </AlertDialogCancel>
-            <AlertDialogAction
+            <Button
+              type="button"
               onClick={handleForfeitConfirmed}
-              disabled={isForfeiting}
+              disabled={isLoading}
               className="bg-destructive hover:bg-destructive/90"
             >
-              {isForfeiting ? (
+              {isForfeiting || localSubmitting ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   {t("common.processing", "Processing...")}
@@ -379,7 +442,7 @@ export function LeaveMatchModal({
                   {t("leaveMatch.confirmForfeitBtn", "Forfeit Match")}
                 </>
               )}
-            </AlertDialogAction>
+            </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
