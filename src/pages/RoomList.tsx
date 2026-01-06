@@ -212,8 +212,14 @@ export default function RoomList() {
           </Button>
           <Button 
             onClick={() => navigate("/create-room")}
-            disabled={!isConnected}
-            title={!isConnected ? "Connect wallet to create room" : undefined}
+            disabled={!isConnected || !!activeRoom}
+            title={
+              !isConnected 
+                ? "Connect wallet to create room" 
+                : activeRoom 
+                  ? t("roomList.resolveFirst")
+                  : undefined
+            }
           >
             <Plus className="h-4 w-4 mr-2" />
             {t("createRoom.createRoom")}
@@ -333,8 +339,14 @@ export default function RoomList() {
               <Button 
                 onClick={() => navigate("/create-room")} 
                 size="lg"
-                disabled={!isConnected}
-                title={!isConnected ? "Connect wallet to create room" : undefined}
+                disabled={!isConnected || !!activeRoom}
+                title={
+                  !isConnected 
+                    ? "Connect wallet to create room" 
+                    : activeRoom 
+                      ? t("roomList.resolveFirst")
+                      : undefined
+                }
               >
                 <Plus className="h-5 w-5 mr-2" />
                 {isConnected ? "Create the First Room" : "Connect Wallet to Create Room"}
@@ -420,6 +432,8 @@ export default function RoomList() {
                   <Button 
                     variant="default" 
                     size="sm"
+                    disabled={!!activeRoom}
+                    title={activeRoom ? t("roomList.resolveFirst") : undefined}
                     onClick={(e) => {
                       e.stopPropagation();
                       navigate(`/room/${room.pda}`);

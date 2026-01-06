@@ -458,7 +458,8 @@
     "myActiveGames": "My Active Games",
     "youAreCreator": "You created this room",
     "youJoined": "You joined this room",
-    "rejoin": "Rejoin"
+    "rejoin": "Rejoin",
+    "resolveFirst": "Resolve your active room first"
   },
   "shareInvite": {
     "invitePlayers": "Invite Players",
@@ -472,6 +473,8 @@
     "enterGame": "Enter Game",
     "play": "Play",
     "viewRoom": "View Room",
+    "goToRoom": "Go to Room",
+    "resolve": "Resolve",
     "view": "View",
     "opponentJoined": "Opponent joined — your game is ready!",
     "navigateToRoom": "Navigate to your {{game}} room"

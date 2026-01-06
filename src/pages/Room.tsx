@@ -809,12 +809,12 @@ export default function Room() {
           {/* Action Buttons */}
           <div className="flex flex-col gap-3">
             <div className="flex justify-center gap-3">
-              {canJoin && !hasBlockingActiveRoom && (
+              {canJoin && (
                 <Button 
                   onClick={handleJoinButtonClick} 
                   size="lg" 
                   variant="gold"
-                  disabled={isTxInFlight || hookTxPending || signingDisabled}
+                  disabled={isTxInFlight || hookTxPending || signingDisabled || hasBlockingActiveRoom}
                   className="min-w-40"
                 >
                   {isTxInFlight ? (
@@ -824,6 +824,8 @@ export default function Room() {
                     </>
                   ) : signingDisabled ? (
                     "Signing Disabled"
+                  ) : hasBlockingActiveRoom ? (
+                    "Resolve Active Room First"
                   ) : Number(stakeLamports) > 0 ? (
                     `Join Game & Stake ${stakeSOL} SOL`
                   ) : (
@@ -832,12 +834,12 @@ export default function Room() {
                 </Button>
               )}
               
-              {canPlayAgain && !hasBlockingActiveRoom && (
+              {canPlayAgain && (
                 <Button 
                   onClick={onPlayAgain} 
                   size="lg" 
                   variant="outline"
-                  disabled={isTxInFlight || hookTxPending || signingDisabled}
+                  disabled={isTxInFlight || hookTxPending || signingDisabled || hasBlockingActiveRoom}
                   className="min-w-32"
                 >
                   {isTxInFlight ? (
@@ -847,6 +849,8 @@ export default function Room() {
                     </>
                   ) : signingDisabled ? (
                     "Signing Disabled"
+                  ) : hasBlockingActiveRoom ? (
+                    "Resolve Active Room First"
                   ) : (
                     'Play Again'
                   )}
