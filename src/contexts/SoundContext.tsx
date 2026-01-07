@@ -84,6 +84,9 @@ export const SoundProvider = ({ children }: { children: ReactNode }) => {
   const wantsBackgroundMusicRef = useRef(false);
   const initializedRef = useRef(false);
   
+  // Track if audio context has been unlocked on mobile
+  const audioUnlockedRef = useRef(false);
+
   // Initialize background music immediately (but won't play until interaction)
   useEffect(() => {
     if (!backgroundMusicRef.current) {
@@ -91,6 +94,34 @@ export const SoundProvider = ({ children }: { children: ReactNode }) => {
       backgroundMusicRef.current.loop = true;
       backgroundMusicRef.current.volume = 0.35;
     }
+  }, []);
+
+  // Unlock audio on mobile - must happen on user interaction
+  useEffect(() => {
+    const unlockAudio = () => {
+      if (audioUnlockedRef.current) return;
+      audioUnlockedRef.current = true;
+      
+      // Create and play a silent audio to unlock audio context
+      const silentAudio = new Audio();
+      silentAudio.play().catch(() => {});
+      
+      // Also try to resume any existing AudioContext
+      if (typeof AudioContext !== 'undefined') {
+        const ctx = new AudioContext();
+        ctx.resume().catch(() => {});
+      }
+      
+      console.log('[SOUND] Audio unlocked by user interaction');
+    };
+    
+    document.addEventListener('touchstart', unlockAudio, { once: true });
+    document.addEventListener('click', unlockAudio, { once: true });
+    
+    return () => {
+      document.removeEventListener('touchstart', unlockAudio);
+      document.removeEventListener('click', unlockAudio);
+    };
   }, []);
   
   // Preload all sounds after first user interaction
