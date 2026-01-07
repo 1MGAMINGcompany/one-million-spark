@@ -1,5 +1,6 @@
 import React, { ReactNode, useMemo, useCallback } from "react";
 import { ConnectionProvider, WalletProvider } from "@solana/wallet-adapter-react";
+import { WalletModalProvider } from "@solana/wallet-adapter-react-ui";
 import { getSolanaEndpoint, getSolanaNetwork } from "@/lib/solana-config";
 
 // Note: We do NOT import wallet-adapter-react-ui styles since we use custom UI
@@ -39,7 +40,9 @@ export function SolanaProvider({ children }: SolanaProviderProps) {
         onError={onError}
         localStorageKey="1m-gaming-wallet"
       >
-        {children}
+        <WalletModalProvider>
+          {children}
+        </WalletModalProvider>
       </WalletProvider>
     </ConnectionProvider>
   );

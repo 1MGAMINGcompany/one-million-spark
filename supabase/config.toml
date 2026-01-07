@@ -14,3 +14,9 @@ verify_jwt = false
 
 [functions.set-manual-starter]
 verify_jwt = false
+
+[functions.submit-move]
+verify_jwt = false
+
+[functions.get-moves]
+verify_jwt = false
