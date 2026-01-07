@@ -174,7 +174,7 @@ export function HowToConnectSolModal({ isOpen, onClose }: HowToConnectSolModalPr
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-md bg-background border-border">
+      <DialogContent className="sm:max-w-md bg-background border-border" aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-lg font-cinzel">
             <Sparkles className="text-primary" size={20} />
