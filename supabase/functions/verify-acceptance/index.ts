@@ -1,7 +1,7 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
-import * as ed from "https://esm.sh/@noble/ed25519@2.0.0";
-import bs58 from "https://esm.sh/bs58@5.0.0";
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from "npm:@supabase/supabase-js@2";
+import * as ed from "npm:@noble/ed25519@2.0.0";
+import bs58 from "npm:bs58@5.0.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -74,8 +74,8 @@ async function verifySignature(
 ): Promise<boolean> {
   try {
     const messageBytes = new TextEncoder().encode(message);
-    const signatureBytes = decodeBase58(signatureBase58);
-    const publicKeyBytes = decodeBase58(publicKeyBase58);
+    const signatureBytes = bs58.decode(signatureBase58);
+    const publicKeyBytes = bs58.decode(publicKeyBase58);
     
     return await ed.verifyAsync(signatureBytes, messageBytes, publicKeyBytes);
   } catch (error) {
@@ -84,7 +84,7 @@ async function verifySignature(
   }
 }
 
-serve(async (req) => {
+Deno.serve(async (req: Request) => {
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
