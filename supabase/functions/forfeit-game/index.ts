@@ -124,23 +124,41 @@ serve(async (req) => {
       );
     }
 
-    // Parse verifier keypair - supports both Base58 and JSON array formats
+    // Helper function to load verifier keypair - supports JSON array, base58, and 32-byte seeds
+    function loadVerifierKeypair(verifierSecretKeyStr: string): Keypair {
+      const keyString = verifierSecretKeyStr.trim();
+      let bytes: Uint8Array;
+
+      if (keyString.startsWith("[")) {
+        // JSON array format: [1,2,3,...,64 numbers]
+        console.log("[forfeit-game] Parsing verifier key as JSON array");
+        bytes = new Uint8Array(JSON.parse(keyString));
+      } else {
+        // Base58 format
+        console.log("[forfeit-game] Parsing verifier key as Base58");
+        bytes = bs58.decode(keyString);
+      }
+
+      console.log("[forfeit-game] Decoded key length:", bytes.length);
+
+      // Solana keypair secretKey is 64 bytes
+      if (bytes.length === 64) {
+        return Keypair.fromSecretKey(bytes);
+      }
+
+      // Some people store 32-byte seeds by mistake - support it
+      if (bytes.length === 32) {
+        console.log("[forfeit-game] Using 32-byte seed format");
+        return Keypair.fromSeed(bytes);
+      }
+
+      throw new Error(`Invalid verifier key length: ${bytes.length} (expected 64 or 32)`);
+    }
+
+    // Parse verifier keypair
     let verifierKeypair: Keypair;
     try {
-      const keyString = verifierSecretKey.trim();
-      let secretKeyBytes: Uint8Array;
-      
-      if (keyString.startsWith("[")) {
-        // JSON array format: [1,2,3,...]
-        console.log("[forfeit-game] Parsing verifier key as JSON array");
-        secretKeyBytes = new Uint8Array(JSON.parse(keyString));
-      } else {
-        // Base58 format (most common)
-        console.log("[forfeit-game] Parsing verifier key as Base58");
-        secretKeyBytes = bs58.decode(keyString);
-      }
-      
-      verifierKeypair = Keypair.fromSecretKey(secretKeyBytes);
+      verifierKeypair = loadVerifierKeypair(verifierSecretKey);
       console.log("[forfeit-game] ✅ Verifier key loaded OK");
       console.log("[forfeit-game] Verifier pubkey:", verifierKeypair.publicKey.toBase58());
     } catch (err) {
