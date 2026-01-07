@@ -41,7 +41,7 @@ export default function RoomList() {
   const { t } = useTranslation();
   const { toast } = useToast();
   const { isConnected, address } = useWallet();
-  const { rooms, loading, error, fetchRooms, activeRoom, findMyActiveGameSessions } = useSolanaRooms();
+  const { rooms, loading, error, fetchRooms, activeRoom, blockingRoom: hookBlockingRoom, findMyActiveGameSessions } = useSolanaRooms();
   const [showDebug, setShowDebug] = useState(false);
   const [lastFetch, setLastFetch] = useState<string | null>(null);
   const [myActiveSessions, setMyActiveSessions] = useState<Array<{
@@ -60,7 +60,7 @@ export default function RoomList() {
   
   // Unresolved room modal state (for smart blocking)
   const [showUnresolvedModal, setShowUnresolvedModal] = useState(false);
-  const [blockingRoom, setBlockingRoom] = useState<RoomDisplay | null>(null);
+  const [modalBlockingRoom, setModalBlockingRoom] = useState<RoomDisplay | null>(null);
   
   // Track previous status to detect when opponent joins
   const prevStatusRef = useRef<number | null>(null);
@@ -246,9 +246,11 @@ export default function RoomList() {
           </Button>
           <Button 
             onClick={() => {
-              // Smart blocking: if truly blocked, show modal
-              if (activeRoom && isBlockingRoom(activeRoom)) {
-                setBlockingRoom(activeRoom);
+              // Smart blocking: use pre-computed blockingRoom from hook
+              console.log("[RoomList] Create clicked, blockingRoom:", hookBlockingRoom?.pda?.slice(0, 8));
+              if (hookBlockingRoom) {
+                console.log("[RoomList] BLOCKED - showing modal");
+                setModalBlockingRoom(hookBlockingRoom);
                 setShowUnresolvedModal(true);
                 return;
               }
@@ -258,7 +260,7 @@ export default function RoomList() {
             title={
               !isConnected 
                 ? "Connect wallet to create room" 
-                : activeRoom && isBlockingRoom(activeRoom)
+                : hookBlockingRoom
                   ? t("roomList.resolveFirst")
                   : undefined
             }
@@ -399,8 +401,10 @@ export default function RoomList() {
               </p>
               <Button 
                 onClick={() => {
-                  if (activeRoom && isBlockingRoom(activeRoom)) {
-                    setBlockingRoom(activeRoom);
+                  console.log("[RoomList] Empty state Create clicked, blockingRoom:", hookBlockingRoom?.pda?.slice(0, 8));
+                  if (hookBlockingRoom) {
+                    console.log("[RoomList] BLOCKED - showing modal");
+                    setModalBlockingRoom(hookBlockingRoom);
                     setShowUnresolvedModal(true);
                     return;
                   }
@@ -411,7 +415,7 @@ export default function RoomList() {
                 title={
                   !isConnected 
                     ? "Connect wallet to create room" 
-                    : activeRoom && isBlockingRoom(activeRoom)
+                    : hookBlockingRoom
                       ? t("roomList.resolveFirst")
                       : undefined
                 }
@@ -500,12 +504,14 @@ export default function RoomList() {
                   <Button 
                     variant="default" 
                     size="sm"
-                    title={activeRoom && isBlockingRoom(activeRoom) ? t("roomList.resolveFirst") : undefined}
+                    title={hookBlockingRoom ? t("roomList.resolveFirst") : undefined}
                     onClick={(e) => {
                       e.stopPropagation();
-                      // Smart blocking: if truly blocked, show modal
-                      if (activeRoom && isBlockingRoom(activeRoom)) {
-                        setBlockingRoom(activeRoom);
+                      // Smart blocking: use pre-computed blockingRoom from hook
+                      console.log("[Join] clicked, blockingRoom:", hookBlockingRoom?.pda?.slice(0, 8));
+                      if (hookBlockingRoom) {
+                        console.log("[Join] BLOCKED - showing modal");
+                        setModalBlockingRoom(hookBlockingRoom);
                         setShowUnresolvedModal(true);
                         return;
                       }
@@ -558,7 +564,7 @@ export default function RoomList() {
       <UnresolvedRoomModal
         open={showUnresolvedModal}
         onClose={() => setShowUnresolvedModal(false)}
-        room={blockingRoom}
+        room={modalBlockingRoom}
         onResolve={(roomPda) => {
           setShowUnresolvedModal(false);
           navigate(`/room/${roomPda}`);

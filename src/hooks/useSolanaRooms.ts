@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { 
   PublicKey, 
@@ -11,7 +11,7 @@ import {
 } from "@solana/web3.js";
 import { useToast } from "@/hooks/use-toast";
 import { buildTxDebugInfo } from "@/components/TxDebugPanel";
-import { normalizeSignature } from "@/lib/solana-utils";
+import { normalizeSignature, isBlockingRoom } from "@/lib/solana-utils";
 import { isRoomArchived } from "@/lib/roomArchive";
 import { supabase } from "@/integrations/supabase/client";
 import { computeRulesHash, createRulesFromRoom } from "@/lib/gameAcceptance";
@@ -64,12 +64,31 @@ export function useSolanaRooms() {
   const [error, setError] = useState<string | null>(null);
   const [txPending, setTxPending] = useState(false);
   const [activeRoom, setActiveRoom] = useState<RoomDisplay | null>(null);
+  const [activeRooms, setActiveRooms] = useState<RoomDisplay[]>([]); // Full array of active rooms
   const [txDebugInfo, setTxDebugInfo] = useState<TxDebugInfo | null>(null);
   
   // Track polling interval and fetch guard refs
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const isFetchingActiveRoomRef = useRef(false);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Memoized blocking room: first unresolved room from activeRooms, fallback to activeRoom
+  const blockingRoom = useMemo(() => {
+    // Prefer checking full array if populated
+    if (activeRooms.length > 0) {
+      const found = activeRooms.find(isBlockingRoom);
+      if (found) {
+        console.log("[useSolanaRooms] blockingRoom computed from activeRooms:", found.pda.slice(0, 8));
+      }
+      return found ?? null;
+    }
+    // Fallback to single activeRoom
+    if (activeRoom && isBlockingRoom(activeRoom)) {
+      console.log("[useSolanaRooms] blockingRoom computed from activeRoom:", activeRoom.pda.slice(0, 8));
+      return activeRoom;
+    }
+    return null;
+  }, [activeRooms, activeRoom]);
 
   // Clear debug info
   const clearTxDebug = useCallback(() => {
@@ -180,16 +199,19 @@ export function useSolanaRooms() {
       const userRooms = await fetchActiveRoomsForUser(connection, publicKey);
       
       // Filter out archived rooms
-      const activeRooms = userRooms.filter(room => !isRoomArchived(room.pda));
+      const filteredActiveRooms = userRooms.filter(room => !isRoomArchived(room.pda));
       
-      if (activeRooms.length === 0) {
+      // Store the full array for blockingRoom computation
+      setActiveRooms(filteredActiveRooms);
+      
+      if (filteredActiveRooms.length === 0) {
         setActiveRoom(prev => prev === null ? prev : null);
         return null;
       }
       
       // Priority: 1) Started rooms first (in-progress games), 2) Then by highest roomId (newest)
       // This ensures both creator and joiner see the same Started room
-      const sortedActiveRooms = [...activeRooms].sort((a, b) => {
+      const sortedActiveRooms = [...filteredActiveRooms].sort((a, b) => {
         const aStarted = a.status === RoomStatus.Started ? 1 : 0;
         const bStarted = b.status === RoomStatus.Started ? 1 : 0;
         
@@ -204,7 +226,7 @@ export function useSolanaRooms() {
       const newestActiveRoom = sortedActiveRooms[0];
       
       // Single-line log for easy debugging
-      console.log(`[fetchUserActiveRoom] candidateCount=${activeRooms.length} | selected: status=${newestActiveRoom.statusName}, roomId=${newestActiveRoom.roomId}, game=${newestActiveRoom.gameTypeName}, pda=${newestActiveRoom.pda.slice(0, 8)}...`);
+      console.log(`[fetchUserActiveRoom] candidateCount=${filteredActiveRooms.length} | selected: status=${newestActiveRoom.statusName}, roomId=${newestActiveRoom.roomId}, game=${newestActiveRoom.gameTypeName}, pda=${newestActiveRoom.pda.slice(0, 8)}...`);
       
       // Only update state if PDA, status, or playerCount changed to prevent re-renders
       setActiveRoom(prev => {
@@ -242,6 +264,7 @@ export function useSolanaRooms() {
     // Only poll when connected
     if (!connected || !publicKey) {
       setActiveRoom(prev => prev === null ? prev : null);
+      setActiveRooms([]);
       return;
     }
 
@@ -887,6 +910,8 @@ export function useSolanaRooms() {
     error,
     txPending,
     activeRoom,
+    activeRooms,
+    blockingRoom,
     txDebugInfo,
     clearTxDebug,
     fetchRooms,
