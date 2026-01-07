@@ -348,6 +348,54 @@ serve(async (req) => {
       PROGRAM_ID,
     );
 
+    // Check vault balance BEFORE attempting submit_result
+    const vaultLamports = await connection.getBalance(vaultPda, "confirmed");
+    console.log("[forfeit-game] Vault balance:", vaultLamports);
+
+    // If vault is empty, void-clear the room instead of failing on-chain tx
+    if (vaultLamports === 0) {
+      console.log("[forfeit-game] Vault empty - void clearing room");
+
+      // Fetch existing game state
+      const { data: sessionData } = await supabase
+        .from("game_sessions")
+        .select("game_state")
+        .eq("room_pda", roomPda)
+        .single();
+
+      const existingState = (sessionData?.game_state || {}) as Record<string, unknown>;
+
+      // Update game_sessions to mark as finished with void settlement
+      const { error: updateError } = await supabase
+        .from("game_sessions")
+        .update({
+          status: "finished",
+          game_state: {
+            ...existingState,
+            voidSettlement: true,
+            reason: "vault_empty",
+            clearedAt: new Date().toISOString(),
+            intendedWinner: winnerWallet,
+          },
+          updated_at: new Date().toISOString(),
+        })
+        .eq("room_pda", roomPda);
+
+      if (updateError) {
+        console.error("[forfeit-game] Failed to void-clear session:", updateError);
+      }
+
+      return json200({
+        success: true,
+        action: "void_cleared",
+        message: "Vault empty; room cleared with no payout",
+        roomPda,
+        vault: vaultPda.toBase58(),
+        vaultLamports: 0,
+        intendedWinner: winnerWallet,
+      });
+    }
+
     // data = discriminator (8) + winner pubkey (32)
     const ixData = new Uint8Array(8 + 32);
     ixData.set(submitResultDiscriminator, 0);
