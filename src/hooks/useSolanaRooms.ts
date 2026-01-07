@@ -421,7 +421,7 @@ export function useSolanaRooms() {
           );
           const rulesHash = await computeRulesHash(rules);
           
-          await supabase.rpc("record_acceptance", {
+          const { error: rpcError } = await supabase.rpc("record_acceptance", {
             p_room_pda: newRoom.pda,
             p_wallet: publicKey.toBase58(),
             p_tx_signature: signature,
@@ -429,11 +429,64 @@ export function useSolanaRooms() {
             p_stake_lamports: stakeLamports,
             p_is_creator: true,
           });
-          console.log("[CreateRoom] Recorded acceptance with tx signature and mode:", mode);
+          
+          if (rpcError) {
+            console.warn("[CreateRoom] RPC record_acceptance failed:", rpcError);
+            // Check if 404 (function not found) - fallback to edge function
+            if (rpcError.message?.includes("404") || rpcError.code === "PGRST116") {
+              console.log("[CreateRoom] Trying verify-acceptance edge function fallback...");
+              const { error: fnError } = await supabase.functions.invoke("verify-acceptance", {
+                body: {
+                  acceptance: {
+                    roomPda: newRoom.pda,
+                    playerWallet: publicKey.toBase58(),
+                    rulesHash,
+                    nonce: crypto.randomUUID(),
+                    timestamp: Date.now(),
+                    signature,
+                  },
+                  rules: {
+                    roomPda: newRoom.pda,
+                    gameType,
+                    mode,
+                    maxPlayers,
+                    stakeLamports,
+                    feeBps: 250,
+                    turnTimeSeconds: 60,
+                    forfeitPolicy: "timeout",
+                    version: 1,
+                  },
+                },
+              });
+              
+              if (fnError) {
+                console.error("[CreateRoom] Both RPC and edge function failed:", fnError);
+                toast({
+                  title: "Acceptance Recording Failed",
+                  description: "Game will proceed but ranked features may not work",
+                  variant: "destructive",
+                });
+              } else {
+                console.log("[CreateRoom] Recorded acceptance via edge function fallback");
+              }
+            } else {
+              toast({
+                title: "Acceptance Recording Failed",
+                description: rpcError.message || "Unknown error",
+                variant: "destructive",
+              });
+            }
+          } else {
+            console.log("[CreateRoom] Recorded acceptance with tx signature and mode:", mode);
+          }
         }
-      } catch (acceptErr) {
-        console.warn("[CreateRoom] Failed to record acceptance:", acceptErr);
-        // Non-fatal - game can still proceed
+      } catch (acceptErr: any) {
+        console.error("[CreateRoom] Failed to record acceptance:", acceptErr);
+        toast({
+          title: "Acceptance Error",
+          description: acceptErr?.message || "Could not record game acceptance",
+          variant: "destructive",
+        });
       }
       
       // Refresh rooms and active room state
@@ -569,7 +622,7 @@ export function useSolanaRooms() {
           );
           const rulesHash = await computeRulesHash(rules);
           
-          await supabase.rpc("record_acceptance", {
+          const { error: rpcError } = await supabase.rpc("record_acceptance", {
             p_room_pda: joinedRoom.pda,
             p_wallet: publicKey.toBase58(),
             p_tx_signature: signature,
@@ -577,11 +630,64 @@ export function useSolanaRooms() {
             p_stake_lamports: stakeLamports,
             p_is_creator: false,
           });
-          console.log("[JoinRoom] Recorded acceptance with tx signature and mode:", mode);
+          
+          if (rpcError) {
+            console.warn("[JoinRoom] RPC record_acceptance failed:", rpcError);
+            // Check if 404 (function not found) - fallback to edge function
+            if (rpcError.message?.includes("404") || rpcError.code === "PGRST116") {
+              console.log("[JoinRoom] Trying verify-acceptance edge function fallback...");
+              const { error: fnError } = await supabase.functions.invoke("verify-acceptance", {
+                body: {
+                  acceptance: {
+                    roomPda: joinedRoom.pda,
+                    playerWallet: publicKey.toBase58(),
+                    rulesHash,
+                    nonce: crypto.randomUUID(),
+                    timestamp: Date.now(),
+                    signature,
+                  },
+                  rules: {
+                    roomPda: joinedRoom.pda,
+                    gameType: joinedRoom.gameType,
+                    mode,
+                    maxPlayers: joinedRoom.maxPlayers,
+                    stakeLamports,
+                    feeBps: 250,
+                    turnTimeSeconds: 60,
+                    forfeitPolicy: "timeout",
+                    version: 1,
+                  },
+                },
+              });
+              
+              if (fnError) {
+                console.error("[JoinRoom] Both RPC and edge function failed:", fnError);
+                toast({
+                  title: "Acceptance Recording Failed",
+                  description: "Game will proceed but ranked features may not work",
+                  variant: "destructive",
+                });
+              } else {
+                console.log("[JoinRoom] Recorded acceptance via edge function fallback");
+              }
+            } else {
+              toast({
+                title: "Acceptance Recording Failed",
+                description: rpcError.message || "Unknown error",
+                variant: "destructive",
+              });
+            }
+          } else {
+            console.log("[JoinRoom] Recorded acceptance with tx signature and mode:", mode);
+          }
         }
-      } catch (acceptErr) {
-        console.warn("[JoinRoom] Failed to record acceptance:", acceptErr);
-        // Non-fatal - game can still proceed
+      } catch (acceptErr: any) {
+        console.error("[JoinRoom] Failed to record acceptance:", acceptErr);
+        toast({
+          title: "Acceptance Error",
+          description: acceptErr?.message || "Could not record game acceptance",
+          variant: "destructive",
+        });
       }
       
       // Refresh rooms and active room state
