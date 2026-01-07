@@ -301,46 +301,35 @@ export async function finalizeGame(params: FinalizeGameParams): Promise<Finalize
   let result: FinalizeGameResult;
   
   if (endReason === 'forfeit' || endReason === 'timeout') {
-    // Use edge function (verifier signs) for forfeit/timeout
-    if (!loserWallet) {
-      return {
-        success: false,
-        error: 'loserWallet required for forfeit/timeout',
-      };
-    }
-    
-    // Try edge function first
-    result = await finalizeViaEdgeFunction(roomPda, loserWallet, gameType);
-    
-    // FALLBACK: If edge function failed and we have wallet, try client-side
-    if (!result.success && sendTransaction && signerPubkey) {
-      console.log('[finalizeGame] Edge function failed, trying client-side fallback...');
-      console.log('[finalizeGame] Fallback reason:', result.error);
+    // CLIENT-FIRST: Use wallet signing directly if available (skip edge function)
+    if (sendTransaction && signerPubkey) {
+      console.log('[finalizeGame] Using client-side finalize_room for forfeit/timeout');
       
-      try {
-        const clientResult = await finalizeViaClientWallet(
-          connection,
-          roomPda,
-          winnerWallet, // Winner still receives payout
-          sendTransaction,
-          signerPubkey
-        );
-        
-        if (clientResult.ok) {
-          console.log('[finalizeGame] Client fallback succeeded:', clientResult.signature);
-          result = {
-            success: true,
-            signature: clientResult.signature,
-            details: 'Used client-side fallback after edge function failure',
-          };
-        } else {
-          // Keep the original error but add fallback failure info
-          result.details = `Edge function failed: ${result.error}. Client fallback also failed: ${clientResult.error}`;
-        }
-      } catch (fallbackErr: any) {
-        console.error('[finalizeGame] Client fallback exception:', fallbackErr);
-        result.details = `Edge function failed: ${result.error}. Client fallback exception: ${fallbackErr.message}`;
+      const clientResult = await finalizeViaClientWallet(
+        connection,
+        roomPda,
+        winnerWallet,
+        sendTransaction,
+        signerPubkey
+      );
+      
+      result = {
+        success: clientResult.ok,
+        signature: clientResult.signature,
+        error: clientResult.error,
+        details: 'Client-side finalize_room used for forfeit/timeout',
+      };
+    } else {
+      // FALLBACK: No wallet info, use edge function (server-side verifier)
+      if (!loserWallet) {
+        return {
+          success: false,
+          error: 'loserWallet required for forfeit/timeout without wallet',
+        };
       }
+      
+      console.log('[finalizeGame] No wallet info, falling back to edge function');
+      result = await finalizeViaEdgeFunction(roomPda, loserWallet, gameType);
     }
   } else if (endReason === 'draw') {
     // Draw settlement via settle-draw edge function

@@ -229,8 +229,13 @@ export function useForfeit({
         stakeLamports,
       });
       
+      // Show settling toast immediately
+      toast({
+        title: t("forfeit.settling", "Settling on-chain..."),
+      });
+      
       // Use the authoritative finalizeGame function with forfeit mode
-      // Pass wallet for client-side fallback if edge function fails
+      // CLIENT-FIRST: Passes wallet for direct on-chain settlement
       const result = await finalizeGame({
         roomPda,
         winnerWallet: opponentWallet,
@@ -276,14 +281,22 @@ export function useForfeit({
         forceExitTimeoutRef.current = null;
       }
       
-      // Show appropriate toast if we succeeded (before forceExit navigates away)
-      if (success && !exitedRef.current) {
-        toast({
-          title: t("forfeit.success", "Game forfeited"),
-          description: signature 
-            ? `${t("forfeit.opponentWins", "Opponent wins")} Tx: ${signature.slice(0, 12)}...`
-            : t("forfeit.opponentWins", "Opponent wins"),
-        });
+      // Show appropriate toast based on result
+      if (!exitedRef.current) {
+        if (success) {
+          toast({
+            title: t("forfeit.success", "Game forfeited"),
+            description: signature 
+              ? `Settled on-chain. Tx: ${signature.slice(0, 12)}...`
+              : t("forfeit.opponentWins", "Opponent wins"),
+          });
+        } else {
+          toast({
+            title: t("forfeit.failed", "Settlement failed"),
+            description: t("forfeit.tryAgain", "Please try again"),
+            variant: "destructive",
+          });
+        }
       }
       
       // Call forceExit (idempotent - safe even if timeout already fired)

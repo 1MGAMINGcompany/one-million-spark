@@ -216,6 +216,20 @@ export async function finalizeRoom(
     // Create VersionedTransaction
     const vtx = new VersionedTransaction(messageV0);
 
+    // Pre-send simulation (log only, don't block)
+    try {
+      console.log("[finalizeRoom] Simulating transaction...");
+      const simulation = await connection.simulateTransaction(vtx);
+      if (simulation.value.err) {
+        console.warn("[finalizeRoom] Simulation failed (proceeding anyway):", simulation.value.err);
+        console.warn("[finalizeRoom] Simulation logs:", simulation.value.logs);
+      } else {
+        console.log("[finalizeRoom] Simulation passed");
+      }
+    } catch (simErr) {
+      console.warn("[finalizeRoom] Simulation error (proceeding anyway):", simErr);
+    }
+
     console.log("[finalizeRoom] Sending transaction...");
 
     // Send transaction (one wallet prompt)
