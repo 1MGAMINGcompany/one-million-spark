@@ -730,6 +730,16 @@ export function useSolanaRooms() {
         return { ok: false, reason: "PHANTOM_BLOCKED_OR_REJECTED" };
       }
       
+      // Check for insufficient funds for rent
+      if (errorMsg.includes("insufficientfundsforrent") || errorMsg.includes("insufficient funds for rent")) {
+        toast({
+          title: "Insufficient SOL",
+          description: "Add more SOL to cover stake + rent (~0.003 SOL extra needed)",
+          variant: "destructive",
+        });
+        return { ok: false, reason: "INSUFFICIENT_FUNDS" };
+      }
+      
       toast({
         title: "Failed to join room",
         description: err.message || "Transaction failed",
