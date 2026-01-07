@@ -1,13 +1,13 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from "npm:@supabase/supabase-js@2";
 import {
   Connection,
   PublicKey,
   Keypair,
   Transaction,
   TransactionInstruction,
-} from "https://esm.sh/@solana/web3.js@1.98.0";
-import bs58 from "https://esm.sh/bs58@6.0.0";
+} from "npm:@solana/web3.js@1.95.0";
+import bs58 from "npm:bs58@5.0.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -133,7 +133,7 @@ function loadVerifierKeypair(secret: string): { keypair: Keypair; decodedLen: nu
   throw new Error(`Invalid verifier key length: ${decodedLen} (expected 64 or 32)`);
 }
 
-serve(async (req) => {
+Deno.serve(async (req: Request) => {
   // CORS preflight
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -247,7 +247,6 @@ serve(async (req) => {
         .update({
           player1_wallet: playersOnChain[0] ?? null,
           player2_wallet: playersOnChain[1] ?? null,
-          game_state: supabase.rpc ? undefined : undefined, // Keep existing game_state
           updated_at: new Date().toISOString(),
         })
         .eq("room_pda", roomPda);

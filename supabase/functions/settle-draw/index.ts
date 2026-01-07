@@ -1,7 +1,7 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
-import { Connection, PublicKey, Transaction, TransactionInstruction, Keypair, LAMPORTS_PER_SOL } from "https://esm.sh/@solana/web3.js@1.98.0";
-import bs58 from "https://esm.sh/bs58@6.0.0";
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from "npm:@supabase/supabase-js@2";
+import { Connection, PublicKey, Transaction, TransactionInstruction, Keypair, LAMPORTS_PER_SOL } from "npm:@solana/web3.js@1.95.0";
+import bs58 from "npm:bs58@5.0.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -95,7 +95,7 @@ function parseRoomAccount(data: Uint8Array): RoomAccountData | null {
   }
 }
 
-serve(async (req) => {
+Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
