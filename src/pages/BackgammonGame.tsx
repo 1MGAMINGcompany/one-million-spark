@@ -1259,8 +1259,7 @@ const BackgammonGame = () => {
         <div className="max-w-4xl w-full">
           {/* Mobile Layout */}
           {isMobile ? (
-            <div className="flex flex-col h-full">
-              {/* Score Row */}
+            <div className="flex-1 flex flex-col px-2 pt-1 pb-2 overflow-hidden min-h-0">
               {/* Score Row */}
               <div className="flex justify-between items-center px-2 py-1 shrink-0">
                 <div className="flex items-center gap-2">
@@ -1268,6 +1267,7 @@ const BackgammonGame = () => {
                   <span className="text-primary font-bold text-sm">{myRole === "player" ? gameState.bearOff.ai : gameState.bearOff.player}</span>
                   <span className="text-[10px] text-muted-foreground/60">/15</span>
                 </div>
+                {/* Direction indicators */}
                 <div className="flex items-center gap-3">
                   <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-full border border-primary/40 bg-primary/5">
                     <div className="w-2.5 h-2.5 rounded-full bg-gradient-to-br from-primary to-amber-600" />
@@ -1285,9 +1285,12 @@ const BackgammonGame = () => {
                 </div>
               </div>
 
-              {/* Mobile Board */}
+              {/* Board Container - Flexible height that fits remaining space */}
               <div className="relative w-full flex-1 min-h-0" style={{ maxHeight: '55vh' }}>
+                {/* Subtle glow */}
                 <div className="absolute -inset-1 bg-primary/10 rounded-xl blur-lg opacity-30" />
+                
+                {/* Gold frame */}
                 <div className="relative h-full p-[3px] rounded-lg bg-gradient-to-br from-primary/40 via-primary/20 to-primary/40">
                   <div className="h-full flex bg-gradient-to-b from-midnight-light via-background to-midnight-light rounded-md overflow-hidden">
                     
@@ -1302,7 +1305,7 @@ const BackgammonGame = () => {
                     </div>
 
                     {/* Center Bar */}
-                    <div className="w-14 bg-gradient-to-b from-background via-amber-950/50 to-background border-x border-primary/20 flex flex-col items-center justify-center shrink-0">
+                    <div className="w-14 bg-gradient-to-b from-background via-midnight-light to-background border-x border-primary/20 flex flex-col items-center justify-center shrink-0">
                       {/* Opponent Bar */}
                       {(myRole === "player" ? gameState.bar.ai : gameState.bar.player) > 0 && (
                         <div className="flex flex-col items-center mb-2">
@@ -1358,32 +1361,70 @@ const BackgammonGame = () => {
                 </div>
               </div>
 
-              {/* Mobile Controls */}
-              <div className="shrink-0 mt-2 space-y-2">
-                {isMyTurn && dice.length === 0 && !gameOver && (
-                  <Button variant="gold" size="lg" className="w-full py-3 text-base font-bold" onClick={rollDice}>
-                    🎲 ROLL DICE
-                  </Button>
-                )}
-                
-                <div className={cn(
-                  "rounded-lg border px-3 py-1.5",
-                  gameOver 
-                    ? gameStatus.includes("win") 
-                      ? "bg-green-500/10 border-green-500/30" 
-                      : "bg-red-500/10 border-red-500/30"
-                    : "bg-primary/5 border-primary/20"
-                )}>
-                  <p className={cn(
-                    "font-display font-bold text-sm text-center",
+              {/* Controls Area - Fixed height section below board */}
+              <div className="shrink-0 mt-2 space-y-2" style={{ minHeight: '80px' }}>
+                {/* Roll Button */}
+                <div style={{ minHeight: '52px' }}>
+                  {isMyTurn && dice.length === 0 && !gameOver ? (
+                    <Button 
+                      variant="gold" 
+                      size="lg" 
+                      className="w-full py-3 text-base font-bold shadow-[0_0_24px_-6px_hsl(45_93%_54%_/_0.6)]" 
+                      onClick={rollDice}
+                    >
+                      🎲 ROLL DICE
+                    </Button>
+                  ) : null}
+                </div>
+
+                {/* Status Bar */}
+                <div 
+                  className={cn(
+                    "rounded-lg border px-3 py-1.5",
                     gameOver 
-                      ? gameStatus.includes("win") ? "text-green-400" : "text-red-400"
-                      : "text-primary"
-                  )}>
+                      ? gameStatus.includes("win") 
+                        ? "bg-green-500/10 border-green-500/30" 
+                        : "bg-red-500/10 border-red-500/30"
+                      : "bg-primary/5 border-primary/20"
+                  )}
+                >
+                  {/* Turn Indicator */}
+                  {!gameOver && (
+                    <div className="flex items-center justify-center gap-2 mb-0.5">
+                      {isMyTurn ? (
+                        <span className="text-[10px] font-medium text-primary">YOUR TURN</span>
+                      ) : (
+                        <span className="text-[10px] font-medium text-slate-400">OPPONENT'S TURN</span>
+                      )}
+                    </div>
+                  )}
+                  <p 
+                    className={cn(
+                      "font-display font-bold text-sm text-center",
+                      gameOver 
+                        ? gameStatus.includes("win") ? "text-green-400" : "text-red-400"
+                        : "text-primary"
+                    )}
+                    style={!gameOver ? {
+                      background: "linear-gradient(135deg, #FCE68A 0%, #FACC15 50%, #AB8215 100%)",
+                      WebkitBackgroundClip: "text",
+                      WebkitTextFillColor: "transparent",
+                      backgroundClip: "text",
+                    } : undefined}
+                  >
                     {gameStatus}
                   </p>
+                  {/* Game Result Display */}
+                  {gameOver && gameResultInfo && (
+                    <div className="mt-2 flex items-center justify-center gap-2">
+                      <Trophy className={cn("w-4 h-4", formatResultType(gameResultInfo.resultType).color)} />
+                      <span className={cn("text-sm font-bold", formatResultType(gameResultInfo.resultType).color)}>
+                        {formatResultType(gameResultInfo.resultType).multiplier} Points
+                      </span>
+                    </div>
+                  )}
                   {remainingMoves.length > 0 && isMyTurn && (
-                    <p className="text-[10px] text-muted-foreground text-center mt-0.5">
+                    <p className="text-[10px] text-muted-foreground mt-0.5 text-center">
                       Moves left: {remainingMoves.join(", ")}
                     </p>
                   )}
@@ -1395,18 +1436,21 @@ const BackgammonGame = () => {
                     className={cn(
                       "w-full py-2 rounded-lg flex items-center justify-center gap-2 transition-all",
                       validMoves.includes(-2) 
-                        ? "bg-primary/20 border-2 border-primary animate-pulse cursor-pointer" 
+                        ? "bg-primary/20 border-2 border-primary animate-pulse cursor-pointer shadow-[0_0_20px_hsl(45_93%_54%_/_0.4)]" 
                         : "border border-primary/30 bg-primary/5"
                     )}
                     onClick={() => validMoves.includes(-2) && handlePointClick(-2)}
                   >
-                    <Gem className={cn("w-4 h-4", validMoves.includes(-2) ? "text-primary" : "text-primary/50")} />
+                    <Trophy className={cn("w-4 h-4", validMoves.includes(-2) ? "text-primary" : "text-primary/50")} />
                     <span className={cn(
                       "font-bold",
                       validMoves.includes(-2) ? "text-primary" : "text-muted-foreground"
                     )}>
                       {validMoves.includes(-2) ? "Tap to Bear Off" : `Bear Off: ${myRole === "player" ? gameState.bearOff.player : gameState.bearOff.ai}/15`}
                     </span>
+                    {validMoves.includes(-2) && (
+                      <span className="text-xs text-primary/70">({myRole === "player" ? gameState.bearOff.player : gameState.bearOff.ai}/15)</span>
+                    )}
                   </div>
                 )}
 
@@ -1420,10 +1464,6 @@ const BackgammonGame = () => {
             </div>
           ) : (
             /* Desktop Layout - Premium version matching AI */
-            <div className="relative">
-        /* Desktop Layout - with wrapper */
-        <div className="flex-1 flex items-center justify-center p-4">
-          <div className="max-w-4xl w-full">
             <div className="relative">
               {/* Outer glow */}
               <div className="absolute -inset-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 rounded-2xl blur-xl opacity-50" />
@@ -1544,45 +1584,44 @@ const BackgammonGame = () => {
                 </div>
               </div>
             </div>
-          </div>
+          )}
 
           {/* Controls - Desktop only */}
-            {!isMobile && (
-              <div className="mt-4 flex flex-wrap gap-3 items-center justify-center">
-                {isMyTurn && dice.length === 0 && !gameOver && (
-                  <Button variant="gold" size="lg" className="min-w-[140px] shadow-[0_0_30px_-8px_hsl(45_93%_54%_/_0.5)]" onClick={rollDice}>
-                    🎲 Roll Dice
-                  </Button>
-                )}
-                
-                {/* Dice display when rolled */}
-                {dice.length > 0 && (
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    Moves left: {remainingMoves.length > 0 ? remainingMoves.join(", ") : "None"}
-                  </div>
-                )}
-                
-                {/* Status */}
-                <div className={cn(
-                  "px-4 py-2 rounded-lg border text-sm font-medium",
-                  gameOver 
-                    ? gameStatus.includes("win") 
-                      ? "bg-green-500/10 border-green-500/30 text-green-400"
-                      : "bg-red-500/10 border-red-500/30 text-red-400"
-                    : "bg-primary/10 border-primary/30 text-primary"
-                )}>
-                  {gameStatus}
+          {!isMobile && (
+            <div className="mt-4 flex flex-wrap gap-3 items-center justify-center">
+              {isMyTurn && dice.length === 0 && !gameOver && (
+                <Button variant="gold" size="lg" className="min-w-[140px] shadow-[0_0_30px_-8px_hsl(45_93%_54%_/_0.5)]" onClick={rollDice}>
+                  🎲 Roll Dice
+                </Button>
+              )}
+              
+              {/* Dice display when rolled */}
+              {dice.length > 0 && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  Moves left: {remainingMoves.length > 0 ? remainingMoves.join(", ") : "None"}
                 </div>
-
-                {/* Resign button */}
-                {!gameOver && isMyTurn && (
-                  <Button variant="destructive" size="sm" onClick={handleResign}>
-                    <Flag className="w-4 h-4 mr-1" /> Resign
-                  </Button>
-                )}
+              )}
+              
+              {/* Status */}
+              <div className={cn(
+                "px-4 py-2 rounded-lg border text-sm font-medium",
+                gameOver 
+                  ? gameStatus.includes("win") 
+                    ? "bg-green-500/10 border-green-500/30 text-green-400"
+                    : "bg-red-500/10 border-red-500/30 text-red-400"
+                  : "bg-primary/10 border-primary/30 text-primary"
+              )}>
+                {gameStatus}
               </div>
-            )}
-          </div>
+
+              {/* Resign button */}
+              {!gameOver && isMyTurn && (
+                <Button variant="destructive" size="sm" onClick={handleResign}>
+                  <Flag className="w-4 h-4 mr-1" /> Resign
+                </Button>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
