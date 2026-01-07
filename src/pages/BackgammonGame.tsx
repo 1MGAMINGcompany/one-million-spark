@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, RotateCcw, RotateCw, Gem, Flag, Users, Wifi, WifiOff, RefreshCw, LogOut } from "lucide-react";
+import { ArrowLeft, RotateCcw, RotateCw, Gem, Flag, Users, Wifi, WifiOff, RefreshCw, LogOut, Trophy } from "lucide-react";
 import { ForfeitConfirmDialog } from "@/components/ForfeitConfirmDialog";
 import { LeaveMatchModal, MatchState } from "@/components/LeaveMatchModal";
 import { useForfeit } from "@/hooks/useForfeit";
@@ -962,6 +962,7 @@ const BackgammonGame = () => {
         )}
         style={{ width: 48 }}
       >
+        {/* Triangle */}
         <svg
           width={48}
           height={140}
@@ -969,46 +970,67 @@ const BackgammonGame = () => {
           className={cn(
             "transition-all duration-200",
             isTop ? "" : "rotate-180",
-            isValidTarget && "drop-shadow-[0_0_25px_hsl(45_93%_70%)]"
+            isValidTarget && "drop-shadow-[0_0_25px_hsl(45_93%_70%)] drop-shadow-[0_0_50px_hsl(45_93%_60%)]"
           )}
         >
+          <defs>
+            <linearGradient id={`goldTri-mp-${displayIndex}`} x1="0%" y1="100%" x2="0%" y2="0%">
+              <stop offset="0%" stopColor="hsl(45 93% 50%)" />
+              <stop offset="40%" stopColor="hsl(45 80% 45%)" />
+              <stop offset="100%" stopColor="hsl(35 70% 35%)" />
+            </linearGradient>
+            <linearGradient id={`sandTri-mp-${displayIndex}`} x1="0%" y1="100%" x2="0%" y2="0%">
+              <stop offset="0%" stopColor="hsl(35 50% 55%)" />
+              <stop offset="40%" stopColor="hsl(35 45% 45%)" />
+              <stop offset="100%" stopColor="hsl(30 40% 35%)" />
+            </linearGradient>
+          </defs>
+
+          <polygon points="24,5 3,135 45,135" fill="rgba(0,0,0,0.2)" transform="translate(1, 1)" />
           <polygon
-            points="24,0 0,140 48,140"
-            fill={index % 2 === 0 ? "hsl(45 80% 45%)" : "hsl(35 50% 45%)"}
-            stroke="hsl(35 60% 30%)"
+            points="24,5 3,135 45,135"
+            fill={displayIndex % 2 === 0 ? `url(#goldTri-mp-${displayIndex})` : `url(#sandTri-mp-${displayIndex})`}
+            stroke={displayIndex % 2 === 0 ? "hsl(35 80% 35%)" : "hsl(30 40% 30%)"}
             strokeWidth="1"
           />
+          <polygon
+            points="24,18 10,125 38,125"
+            fill="none"
+            stroke={displayIndex % 2 === 0 ? "hsl(45 93% 65% / 0.25)" : "hsl(35 50% 60% / 0.25)"}
+            strokeWidth="1"
+          />
+          {isValidTarget && (
+            <>
+              <polygon points="24,5 3,135 45,135" fill="hsl(45 93% 75% / 0.7)" className="animate-pulse" />
+              <polygon points="24,5 3,135 45,135" fill="none" stroke="hsl(45 100% 80%)" strokeWidth="4" className="animate-pulse" />
+            </>
+          )}
         </svg>
         
-        {/* Checkers */}
-        <div className={cn(
-          "absolute left-1/2 -translate-x-1/2 flex gap-0.5",
-          isTop ? "top-2 flex-col" : "bottom-2 flex-col-reverse"
-        )}>
-          {Array.from({ length: Math.min(checkerCount, 5) }).map((_, i) => (
-            <div
-              key={i}
-              className={cn(
-                "w-10 h-10 rounded-full border-2 shadow-lg transition-all",
-                isPlayer 
-                  ? "bg-gradient-to-br from-yellow-400 to-yellow-600 border-yellow-300"
-                  : "bg-gradient-to-br from-gray-700 to-gray-900 border-gray-500",
-                isSelected && "ring-2 ring-primary animate-pulse"
-              )}
-            >
-              {i === Math.min(checkerCount, 5) - 1 && checkerCount > 5 && (
-                <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-white">
-                  {checkerCount}
-                </span>
-              )}
-            </div>
-          ))}
-        </div>
-        
-        {/* Valid move indicator */}
-        {isValidTarget && (
-          <div className="absolute inset-0 bg-primary/20 rounded animate-pulse" />
+        {/* Checkers - positioned on triangle */}
+        {checkerCount > 0 && (
+          <div 
+            className={cn(
+              "absolute transition-all duration-500",
+              isTop ? "top-2" : "bottom-2"
+            )}
+            style={{ left: '50%', transform: 'translateX(-50%)' }}
+          >
+            <CheckerStack
+              count={checkerCount}
+              variant={isPlayer ? "gold" : "obsidian"}
+              isSelected={isSelected}
+              isValidTarget={isValidTarget}
+              onClick={() => handlePointClick(displayIndex)}
+              isTop={isTop}
+              size="md"
+            />
+          </div>
         )}
+        
+        <span className={`absolute ${isTop ? "-bottom-5" : "-top-5"} text-xs text-primary/40 font-medium`}>
+          {displayIndex + 1}
+        </span>
       </div>
     );
   };
@@ -1400,190 +1422,145 @@ const BackgammonGame = () => {
               </div>
             </div>
           ) : (
-            /* Desktop Layout */
-            <div className="bg-gradient-to-br from-amber-900 to-amber-950 rounded-xl p-4 border-4 border-primary/30 shadow-2xl">
-              {/* Top row (points 13-24 or 12-1 when flipped) */}
-              <div className="flex justify-between mb-2">
-                <div className="flex">
-                  {Array.from({ length: 6 }).map((_, i) => renderPoint(isFlipped ? 11 - i : 12 + i, true))}
-                </div>
-                {/* Bar */}
-                <div 
-                  className="w-12 flex flex-col items-center justify-start pt-2 bg-amber-950/50 rounded cursor-pointer"
-                  onClick={() => handlePointClick(-1)}
-                >
-                  {(myRole === "ai" ? gameState.bar.ai : gameState.bar.player) > 0 && (
-                    <div className={cn(
-                      "w-8 h-8 rounded-full border-2 shadow-md",
-                      myRole === "player" 
-                        ? "bg-gradient-to-br from-yellow-400 to-yellow-600 border-yellow-300"
-                        : "bg-gradient-to-br from-gray-700 to-gray-900 border-gray-500",
-                      selectedPoint === -1 && "ring-2 ring-primary animate-pulse"
-                    )}>
-                      <span className="flex items-center justify-center h-full text-xs font-bold text-white">
-                        {myRole === "ai" ? gameState.bar.ai : gameState.bar.player}
-                      </span>
-                    </div>
-                  )}
-                </div>
-                <div className="flex">
-                  {Array.from({ length: 6 }).map((_, i) => renderPoint(isFlipped ? 5 - i : 18 + i, true))}
-                </div>
-              </div>
-
-              {/* Bottom row (points 12-1 or 13-24 when flipped) */}
-              <div className="flex justify-between mt-2">
-                <div className="flex">
-                  {Array.from({ length: 6 }).map((_, i) => renderPoint(isFlipped ? 12 + i : 11 - i, false))}
-                </div>
-                {/* Bar (opponent) */}
-                <div className="w-12 flex flex-col items-center justify-end pb-2 bg-amber-950/50 rounded">
-                  {(myRole === "player" ? gameState.bar.ai : gameState.bar.player) > 0 && (
-                    <div className={cn(
-                      "w-8 h-8 rounded-full border-2 shadow-md",
-                      myRole === "ai" 
-                        ? "bg-gradient-to-br from-yellow-400 to-yellow-600 border-yellow-300"
-                        : "bg-gradient-to-br from-gray-700 to-gray-900 border-gray-500"
-                    )}>
-                      <span className="flex items-center justify-center h-full text-xs font-bold text-white">
-                        {myRole === "player" ? gameState.bar.ai : gameState.bar.player}
-                      </span>
-                    </div>
-                  )}
-                </div>
-                <div className="flex">
-                  {Array.from({ length: 6 }).map((_, i) => renderPoint(isFlipped ? 18 + i : 5 - i, false))}
-                </div>
-              </div>
-
-            {/* Home Board Status & Bear off areas */}
-            {(() => {
-              // Calculate checkers in home board
-              // points array: positive = player checkers, negative = AI checkers
-              const myHomeRange = myRole === "player" ? [0, 1, 2, 3, 4, 5] : [18, 19, 20, 21, 22, 23];
-              const isPlayer = myRole === "player";
-              const checkersInHome = myHomeRange.reduce((sum, pt) => {
-                const val = gameState.points[pt];
-                // Player: count positive values, AI: count absolute of negative values
-                return sum + (isPlayer ? (val > 0 ? val : 0) : (val < 0 ? Math.abs(val) : 0));
-              }, 0);
-              const myBarCount = isPlayer ? gameState.bar.player : gameState.bar.ai;
-              const myBearOff = isPlayer ? gameState.bearOff.player : gameState.bearOff.ai;
-              const totalCheckers = 15;
-              const checkersOutside = totalCheckers - checkersInHome - myBearOff - myBarCount;
-              const canBearOffNow = canBearOff(gameState, isPlayer ? "player" : "ai");
+            /* Desktop Layout - Premium version matching AI */
+            <div className="relative">
+              {/* Outer glow */}
+              <div className="absolute -inset-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 rounded-2xl blur-xl opacity-50" />
               
-              return (
-                <div className="flex flex-col gap-3 mt-4">
-                  {/* Home Board Status Indicator */}
-                  <div className={cn(
-                    "flex items-center justify-between px-3 py-2 rounded-lg border transition-all",
-                    canBearOffNow 
-                      ? "bg-green-500/20 border-green-500/50 text-green-400" 
-                      : "bg-muted/10 border-border/50 text-muted-foreground"
-                  )}>
-                    <div className="flex items-center gap-2">
-                      <div className={cn(
-                        "w-3 h-3 rounded-full",
-                        canBearOffNow ? "bg-green-500 animate-pulse" : "bg-muted-foreground/50"
-                      )} />
-                      <span className="text-xs font-medium">
-                        {canBearOffNow ? "Bear-Off Ready!" : "Move to Home Board"}
-                      </span>
+              {/* Gold frame */}
+              <div className="relative p-1 rounded-xl bg-gradient-to-br from-primary/40 via-primary/20 to-primary/40 shadow-[0_0_40px_-10px_hsl(45_93%_54%_/_0.4)]">
+                <div className="bg-gradient-to-b from-midnight-light via-background to-midnight-light rounded-lg p-2 md:p-4 overflow-hidden">
+                      
+                  {/* Opponent Bear Off / Bar + Direction Indicators */}
+                  <div className="flex justify-between items-center mb-3 px-2">
+                    <div className="text-xs text-muted-foreground flex items-center gap-2">
+                      Opp. Bear Off: <span className="text-primary font-bold">{myRole === "player" ? gameState.bearOff.ai : gameState.bearOff.player}</span>
                     </div>
-                    <div className="flex items-center gap-3 text-xs">
-                      <div className="flex items-center gap-1">
-                        <span className="text-muted-foreground">Home:</span>
-                        <span className={cn("font-bold", canBearOffNow && "text-green-400")}>
-                          {checkersInHome}/15
-                        </span>
+                    {/* Direction indicators */}
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-1.5 px-2 py-1 rounded-full border border-primary/40 bg-primary/5">
+                        <div className="w-3 h-3 rounded-full bg-gradient-to-br from-primary to-amber-600 border border-amber-500/50" />
+                        <RotateCcw className="w-3.5 h-3.5 text-primary" strokeWidth={2.5} />
+                        <span className="text-[10px] font-medium text-primary">CCW</span>
                       </div>
-                      {checkersOutside > 0 && (
-                        <div className="flex items-center gap-1">
-                          <span className="text-muted-foreground">Outside:</span>
-                          <span className="font-bold text-orange-400">{checkersOutside}</span>
-                        </div>
-                      )}
-                      {myBarCount > 0 && (
-                        <div className="flex items-center gap-1">
-                          <span className="text-muted-foreground">Bar:</span>
-                          <span className="font-bold text-red-400">{myBarCount}</span>
-                        </div>
-                      )}
+                      <div className="flex items-center gap-1.5 px-2 py-1 rounded-full border border-slate-500/40 bg-slate-800/30">
+                        <div className="w-3 h-3 rounded-full bg-gradient-to-br from-slate-600 to-slate-900 border border-slate-500/50" />
+                        <RotateCw className="w-3.5 h-3.5 text-slate-400" strokeWidth={2.5} />
+                        <span className="text-[10px] font-medium text-slate-400">CW</span>
+                      </div>
+                    </div>
+                    {(myRole === "player" ? gameState.bar.ai : gameState.bar.player) > 0 && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">Opp. Bar:</span>
+                        <CheckerStack count={myRole === "player" ? gameState.bar.ai : gameState.bar.player} variant="obsidian" isTop={true} />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Top points (13-24 or flipped) */}
+                  <div className="flex justify-center gap-0.5 mb-1">
+                    <div className="flex gap-0.5">
+                      {[12, 13, 14, 15, 16, 17].map(i => renderPoint(isFlipped ? 23 - i : i, true))}
+                    </div>
+                    <div className="w-6 md:w-8 bg-gradient-to-b from-primary/20 to-primary/10 rounded border border-primary/20" />
+                    <div className="flex gap-0.5">
+                      {[18, 19, 20, 21, 22, 23].map(i => renderPoint(isFlipped ? 23 - i : i, true))}
                     </div>
                   </div>
-                  
-                  {/* Bear off areas */}
-                  <div className="flex justify-between">
-                    <div className="text-center">
-                      <p className={cn(
-                        "text-xs mb-1 transition-colors",
-                        canBearOffNow ? "text-green-400 font-medium" : "text-muted-foreground"
-                      )}>Your Bear Off</p>
+
+                  {/* Middle bar with dice */}
+                  <div className="h-16 bg-gradient-to-r from-midnight-light via-background to-midnight-light my-2 rounded-lg border border-primary/20 flex items-center justify-center gap-1">
+                    {dice.length > 0 && (
+                      <div className="flex gap-4 items-center">
+                        <Dice3D value={dice[0]} variant={isMyTurn ? "ivory" : "obsidian"} />
+                        <Dice3D value={dice[1]} variant={isMyTurn ? "ivory" : "obsidian"} />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Bottom points (1-12 or flipped) */}
+                  <div className="flex justify-center gap-0.5 mt-1">
+                    <div className="flex gap-0.5">
+                      {[11, 10, 9, 8, 7, 6].map(i => renderPoint(isFlipped ? 23 - i : i, false))}
+                    </div>
+                    <div className="w-6 md:w-8 bg-gradient-to-t from-primary/20 to-primary/10 rounded border border-primary/20" />
+                    <div className="flex gap-0.5">
+                      {[5, 4, 3, 2, 1, 0].map(i => renderPoint(isFlipped ? 23 - i : i, false))}
+                    </div>
+                  </div>
+
+                  {/* Player Bar / Bear Off Zone */}
+                  <div className="flex justify-between items-center mt-3 px-2">
+                    {(myRole === "player" ? gameState.bar.player : gameState.bar.ai) > 0 ? (
                       <div 
-                        onClick={() => handlePointClick(-2)}
                         className={cn(
-                          "w-16 h-12 rounded flex items-center justify-center transition-all relative",
-                          // Base state
-                          !canBearOffNow && "bg-primary/20",
-                          // Ready to bear off (glowing highlight)
-                          canBearOffNow && !validMoves.includes(-2) && "bg-green-500/30 ring-2 ring-green-500/50 shadow-[0_0_20px_hsl(142_76%_36%/0.4)]",
-                          // Active target (can tap now)
-                          validMoves.includes(-2) && "cursor-pointer ring-2 ring-primary animate-pulse shadow-[0_0_30px_hsl(45_93%_70%/0.6)] bg-primary/50"
+                          "flex items-center gap-2 cursor-pointer transition-all rounded-lg p-1",
+                          selectedPoint === -1 && "ring-2 ring-primary bg-primary/10"
                         )}
+                        onClick={() => handlePointClick(-1)}
                       >
-                        {/* Glow overlay when bearing off is available */}
-                        {canBearOffNow && (
-                          <div className="absolute inset-0 rounded bg-gradient-to-t from-green-500/20 to-transparent animate-pulse" />
-                        )}
-                        <span className={cn(
-                          "font-bold text-lg relative z-10",
-                          canBearOffNow ? "text-green-400" : "text-primary"
-                        )}>
-                          {myBearOff}
-                        </span>
+                        <span className="text-xs text-muted-foreground">Your Bar:</span>
+                        <CheckerStack 
+                          count={myRole === "player" ? gameState.bar.player : gameState.bar.ai} 
+                          variant="gold" 
+                          isSelected={selectedPoint === -1}
+                          onClick={() => handlePointClick(-1)}
+                          isTop={false} 
+                        />
                       </div>
-                      {validMoves.includes(-2) ? (
-                        <p className="text-xs text-primary mt-1 animate-pulse font-medium">Tap to bear off!</p>
-                      ) : canBearOffNow && (
-                        <p className="text-xs text-green-400/80 mt-1">Ready</p>
+                    ) : <div />}
+                    
+                    {/* Bear Off Zone - clickable when valid */}
+                    <div 
+                      className={cn(
+                        "flex items-center gap-2 rounded-lg px-3 py-2 transition-all",
+                        validMoves.includes(-2) 
+                          ? "cursor-pointer bg-primary/20 border-2 border-primary animate-pulse hover:bg-primary/30 shadow-[0_0_20px_hsl(45_93%_54%_/_0.4)]" 
+                          : canBearOff(gameState, myRole) 
+                            ? "border border-primary/30 bg-primary/5" 
+                            : "border border-primary/10"
                       )}
-                    </div>
-                    <div className="text-center">
-                      <p className="text-xs text-muted-foreground mb-1">Opponent Bear Off</p>
-                      <div className="w-16 h-12 bg-muted/20 rounded flex items-center justify-center">
-                        <span className="font-bold text-muted-foreground text-lg">
-                          {myRole === "player" ? gameState.bearOff.ai : gameState.bearOff.player}
-                        </span>
-                      </div>
+                      onClick={() => validMoves.includes(-2) && handlePointClick(-2)}
+                    >
+                      <span className={cn(
+                        "text-xs font-medium",
+                        validMoves.includes(-2) ? "text-primary" : "text-muted-foreground"
+                      )}>
+                        Bear Off:
+                      </span>
+                      <span className={cn(
+                        "font-bold",
+                        validMoves.includes(-2) ? "text-primary text-lg" : "text-primary"
+                      )}>
+                        {myRole === "player" ? gameState.bearOff.player : gameState.bearOff.ai}
+                      </span>
+                      <span className="text-xs text-muted-foreground">/15</span>
+                      {validMoves.includes(-2) && (
+                        <Trophy className="w-4 h-4 text-primary ml-1" />
+                      )}
                     </div>
                   </div>
                 </div>
-              );
-            })()}
+              </div>
+            </div>
+          )}
 
-              {/* Controls */}
-              <div className="mt-4 flex flex-col items-center gap-4">
-                {/* Dice */}
-                <div className="flex items-center gap-4">
-                  {dice.length > 0 ? (
-                    <div className="flex gap-2">
-                      {dice.map((d, i) => (
-                        <div key={i} className={cn(
-                          "w-12 h-12 bg-white rounded-lg flex items-center justify-center text-2xl font-bold shadow-lg",
-                          !remainingMoves.includes(d) && "opacity-30"
-                        )}>
-                          {d}
-                        </div>
-                      ))}
-                    </div>
-                  ) : isMyTurn && !gameOver ? (
-                    <Button onClick={rollDice} size="lg" className="px-8">
-                      Roll Dice
-                    </Button>
-                  ) : null}
-                </div>
-
+            {/* Controls - Desktop only */}
+            {!isMobile && (
+              <div className="mt-4 flex flex-wrap gap-3 items-center justify-center">
+                {isMyTurn && dice.length === 0 && !gameOver && (
+                  <Button variant="gold" size="lg" className="min-w-[140px] shadow-[0_0_30px_-8px_hsl(45_93%_54%_/_0.5)]" onClick={rollDice}>
+                    🎲 Roll Dice
+                  </Button>
+                )}
+                
+                {/* Dice display when rolled */}
+                {dice.length > 0 && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    Moves left: {remainingMoves.length > 0 ? remainingMoves.join(", ") : "None"}
+                  </div>
+                )}
+                
                 {/* Status */}
                 <div className={cn(
                   "px-4 py-2 rounded-lg border text-sm font-medium",
@@ -1596,15 +1573,14 @@ const BackgammonGame = () => {
                   {gameStatus}
                 </div>
 
-                {/* Actions */}
+                {/* Resign button */}
                 {!gameOver && isMyTurn && (
                   <Button variant="destructive" size="sm" onClick={handleResign}>
                     <Flag className="w-4 h-4 mr-1" /> Resign
                   </Button>
                 )}
               </div>
-            </div>
-          )}
+            )}
         </div>
       </div>
 
