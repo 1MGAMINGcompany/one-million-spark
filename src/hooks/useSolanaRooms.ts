@@ -131,6 +131,20 @@ export function useSolanaRooms() {
     
     if (sim.value.err) {
       console.error("[TX_PREVIEW] Failed:", sim.value.err, sim.value.logs);
+      
+      // Check for insufficient funds error
+      const errJson = JSON.stringify(sim.value.err);
+      const logs = sim.value.logs?.join(' ') || '';
+      
+      if (errJson.includes('InsufficientFundsForRent') || 
+          errJson.includes('InsufficientFunds') || 
+          logs.includes('insufficient lamports') ||
+          logs.includes('insufficient funds') ||
+          errJson.includes('0x1') // Custom program error for insufficient balance
+      ) {
+        throw new Error("INSUFFICIENT_BALANCE");
+      }
+      
       throw new Error("TX_SIMULATION_FAILED");
     }
     console.log("[TX_PREVIEW] OK");
@@ -497,6 +511,16 @@ export function useSolanaRooms() {
       console.error("Create room error:", err);
       
       // Handle simulation failure with clean message - NO wallet popup occurred
+      // Handle insufficient balance error
+      if (err?.message === "INSUFFICIENT_BALANCE") {
+        toast({
+          title: "Insufficient SOL",
+          description: "You don't have enough SOL to create this room. Add funds and try again.",
+          variant: "destructive",
+        });
+        return null;
+      }
+      
       if (err?.message === "TX_SIMULATION_FAILED") {
         toast({
           title: "Action not available",
@@ -695,6 +719,16 @@ export function useSolanaRooms() {
       return { ok: true, signature };
     } catch (err: any) {
       console.error("Join room error:", err);
+      
+      // Handle insufficient balance error
+      if (err?.message === "INSUFFICIENT_BALANCE") {
+        toast({
+          title: "Insufficient SOL",
+          description: "You don't have enough SOL to join this room. Add funds and try again.",
+          variant: "destructive",
+        });
+        return { ok: false, reason: "INSUFFICIENT_BALANCE" };
+      }
       
       // Handle simulation failure with clean message - NO wallet popup occurred
       if (err?.message === "TX_SIMULATION_FAILED") {

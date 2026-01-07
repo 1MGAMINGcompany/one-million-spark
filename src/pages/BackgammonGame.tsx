@@ -1259,7 +1259,8 @@ const BackgammonGame = () => {
         <div className="max-w-4xl w-full">
           {/* Mobile Layout */}
           {isMobile ? (
-            <div className="flex-1 flex flex-col px-2 pt-1 pb-2 overflow-hidden min-h-0">
+            <div className="flex flex-col h-full">
+              {/* Score Row */}
               {/* Score Row */}
               <div className="flex justify-between items-center px-2 py-1 shrink-0">
                 <div className="flex items-center gap-2">
@@ -1420,6 +1421,10 @@ const BackgammonGame = () => {
           ) : (
             /* Desktop Layout - Premium version matching AI */
             <div className="relative">
+        /* Desktop Layout - with wrapper */
+        <div className="flex-1 flex items-center justify-center p-4">
+          <div className="max-w-4xl w-full">
+            <div className="relative">
               {/* Outer glow */}
               <div className="absolute -inset-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 rounded-2xl blur-xl opacity-50" />
               
@@ -1539,9 +1544,9 @@ const BackgammonGame = () => {
                 </div>
               </div>
             </div>
-          )}
+          </div>
 
-            {/* Controls - Desktop only */}
+          {/* Controls - Desktop only */}
             {!isMobile && (
               <div className="mt-4 flex flex-wrap gap-3 items-center justify-center">
                 {isMyTurn && dice.length === 0 && !gameOver && (
@@ -1577,6 +1582,7 @@ const BackgammonGame = () => {
                 )}
               </div>
             )}
+          </div>
         </div>
       </div>
 
