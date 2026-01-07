@@ -34,7 +34,7 @@ export function ForfeitConfirmDialog({
 
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent className="border-destructive/20 bg-card">
+      <AlertDialogContent className="border-destructive/20 bg-card max-w-[90vw] sm:max-w-lg max-h-[90vh] overflow-y-auto p-4 sm:p-6">
         <AlertDialogHeader>
           <AlertDialogTitle className="flex items-center gap-2 text-destructive">
             <AlertTriangle className="h-5 w-5" />

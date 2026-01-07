@@ -249,7 +249,7 @@ export function LeaveMatchModal({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="max-w-[90vw] sm:max-w-md max-h-[90vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <LogOut className="h-5 w-5 text-muted-foreground" />
@@ -381,7 +381,7 @@ export function LeaveMatchModal({
 
       {/* Cancel Room Confirmation - ON-CHAIN */}
       <AlertDialog open={showCancelConfirm} onOpenChange={setShowCancelConfirm}>
-        <AlertDialogContent>
+        <AlertDialogContent className="max-w-[90vw] sm:max-w-md max-h-[90vh] overflow-y-auto p-4 sm:p-6">
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
               <Undo2 className="h-5 w-5 text-amber-500" />
@@ -421,7 +421,7 @@ export function LeaveMatchModal({
 
       {/* Forfeit Match Confirmation - ON-CHAIN */}
       <AlertDialog open={showForfeitConfirm} onOpenChange={setShowForfeitConfirm}>
-        <AlertDialogContent className="border-destructive/20">
+        <AlertDialogContent className="border-destructive/20 max-w-[90vw] sm:max-w-md max-h-[90vh] overflow-y-auto p-4 sm:p-6">
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2 text-destructive">
               <Flag className="h-5 w-5" />
