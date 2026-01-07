@@ -61,7 +61,7 @@ export default function CreateRoom() {
   const { toast } = useToast();
   const { play } = useSound();
   const { price, formatUsd, loading: priceLoading, refetch: refetchPrice } = useSolPrice();
-  const { createRoom, txPending, activeRoom, cancelRoom, fetchRooms, txDebugInfo, clearTxDebug } = useSolanaRooms();
+  const { createRoom, txPending, activeRoom, blockingRoom: hookBlockingRoom, cancelRoom, fetchRooms, txDebugInfo, clearTxDebug } = useSolanaRooms();
   const { 
     balanceInfo, 
     fetchBalance, 
@@ -82,7 +82,7 @@ export default function CreateRoom() {
   const [refreshingBalance, setRefreshingBalance] = useState(false);
   const [showMobileWalletRedirect, setShowMobileWalletRedirect] = useState(false);
   const [showUnresolvedModal, setShowUnresolvedModal] = useState(false);
-  const [blockingRoom, setBlockingRoom] = useState<RoomDisplay | null>(null);
+  const [modalBlockingRoom, setModalBlockingRoom] = useState<RoomDisplay | null>(null);
   
   // Track previous status and navigation state
   const prevStatusRef = useRef<number | null>(null);
@@ -213,9 +213,11 @@ export default function CreateRoom() {
       return;
     }
     
-    // Smart blocking: only block for truly unresolved games
-    if (activeRoom && isBlockingRoom(activeRoom)) {
-      setBlockingRoom(activeRoom);
+    // Smart blocking: use pre-computed blockingRoom from hook
+    console.log("[CreateRoom] handleCreateRoom, blockingRoom:", hookBlockingRoom?.pda?.slice(0, 8));
+    if (hookBlockingRoom) {
+      console.log("[CreateRoom] BLOCKED - showing modal");
+      setModalBlockingRoom(hookBlockingRoom);
       setShowUnresolvedModal(true);
       return;
     }
@@ -668,7 +670,7 @@ export default function CreateRoom() {
       <UnresolvedRoomModal
         open={showUnresolvedModal}
         onClose={() => setShowUnresolvedModal(false)}
-        room={blockingRoom}
+        room={modalBlockingRoom}
         onResolve={handleResolveBlockingRoom}
       />
     </div>

@@ -13,7 +13,7 @@
 
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { useConnection } from "@solana/wallet-adapter-react";
+import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { finalizeGame } from "@/lib/finalizeGame";
 import { toast } from "@/hooks/use-toast";
 import { useTranslation } from "react-i18next";
@@ -70,6 +70,7 @@ export function useForfeit({
   const navigate = useNavigate();
   const { t } = useTranslation();
   const { connection } = useConnection();
+  const { sendTransaction, publicKey } = useWallet();
   
   const [isForfeiting, setIsForfeiting] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
@@ -223,6 +224,7 @@ export function useForfeit({
       });
       
       // Use the authoritative finalizeGame function with forfeit mode
+      // Pass wallet for client-side fallback if edge function fails
       const result = await finalizeGame({
         roomPda,
         winnerWallet: opponentWallet,
@@ -233,7 +235,8 @@ export function useForfeit({
         players: [myWallet, opponentWallet],
         endReason: 'forfeit',
         connection,
-        // No sendTransaction/signerPubkey - use edge function for forfeit
+        sendTransaction,           // Enable client-side fallback
+        signerPubkey: publicKey ?? undefined,  // Enable client-side fallback
       });
       
       if (result.success) {
@@ -293,6 +296,8 @@ export function useForfeit({
     connection,
     forceExit,
     t,
+    sendTransaction,
+    publicKey,
   ]);
 
   /**
