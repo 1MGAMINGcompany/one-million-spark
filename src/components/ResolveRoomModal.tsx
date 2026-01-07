@@ -10,7 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, ArrowLeft, RefreshCw, XCircle, Trophy } from "lucide-react";
+import { AlertTriangle, ArrowLeft, RefreshCw, XCircle, Trophy, Wallet } from "lucide-react";
 import { useSolanaRooms } from "@/hooks/useSolanaRooms";
 import { RoomStatus } from "@/lib/solana-program";
 import { useToast } from "@/hooks/use-toast";
@@ -29,9 +29,10 @@ interface ResolveRoomModalProps {
   };
   walletAddress: string;
   onResolved: () => void;
+  winnerWallet?: string | null;
 }
 
-type ResolveAction = "cancel" | "forfeit" | "return";
+type ResolveAction = "cancel" | "forfeit" | "return" | "claim";
 
 export function ResolveRoomModal({
   open,
@@ -40,6 +41,7 @@ export function ResolveRoomModal({
   roomData,
   walletAddress,
   onResolved,
+  winnerWallet,
 }: ResolveRoomModalProps) {
   const navigate = useNavigate();
   const { t } = useTranslation();
@@ -52,6 +54,18 @@ export function ResolveRoomModal({
   const playerCount = roomData.playerCount;
   const isFinished = roomData.status === RoomStatus.Finished;
   const isCancelled = roomData.status === RoomStatus.Cancelled;
+
+  // Check if this is a recoverable unsettled room where connected wallet is winner
+  const isRecoverableUnsettled =
+    roomData.status === RoomStatus.Started && // Started (2)
+    playerCount >= 2 &&
+    !isFinished &&
+    !isCancelled;
+
+  const isWinner =
+    winnerWallet &&
+    walletAddress &&
+    winnerWallet.toLowerCase() === walletAddress.toLowerCase();
 
   // Determine available action
   let action: ResolveAction = "return";
@@ -69,6 +83,16 @@ export function ResolveRoomModal({
     );
     buttonText = t("resolveRoom.returnToRooms", "Return to Rooms");
     buttonVariant = "outline";
+  } else if (isRecoverableUnsettled && isWinner) {
+    // PRIORITY: Claim payout if you're the winner and room is unsettled
+    action = "claim";
+    title = t("resolveRoom.claimWinnings", "Claim Your Winnings");
+    description = t(
+      "resolveRoom.claimWinningsDesc",
+      "You won this match. Claim your payout to receive funds directly to your wallet."
+    );
+    buttonText = t("resolveRoom.claimPayout", "Claim Payout");
+    buttonVariant = "default";
   } else if (playerCount === 1 && isCreator) {
     action = "cancel";
     title = t("resolveRoom.cancelRoom", "Cancel Room (Refund)");
@@ -163,6 +187,17 @@ export function ResolveRoomModal({
           });
         }
       }
+
+      if (action === "claim") {
+        // TODO: Implement finalizeGame call in next step
+        toast({
+          title: t("resolveRoom.claimPending", "Claim Not Ready"),
+          description: t(
+            "resolveRoom.claimPendingDesc",
+            "Claim payout functionality will be enabled soon."
+          ),
+        });
+      }
     } catch (err) {
       console.error("[ResolveRoomModal] Action failed:", err);
       toast({
@@ -183,6 +218,7 @@ export function ResolveRoomModal({
             {action === "cancel" && <RefreshCw className="h-5 w-5 text-primary" />}
             {action === "forfeit" && <AlertTriangle className="h-5 w-5 text-destructive" />}
             {action === "return" && <Trophy className="h-5 w-5 text-primary" />}
+            {action === "claim" && <Wallet className="h-5 w-5 text-primary" />}
             {title}
           </DialogTitle>
           <DialogDescription>{description}</DialogDescription>
