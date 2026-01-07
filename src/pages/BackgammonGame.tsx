@@ -568,6 +568,12 @@ const BackgammonGame = () => {
         setGameStatus("Your turn - Roll the dice!");
       }
     } else if (message.type === "resign") {
+      // Opponent resigned - I WIN
+      const forfeitingWallet = message.payload?.forfeitingWallet;
+      console.log("[BackgammonGame] Received resign from:", forfeitingWallet?.slice(0, 8));
+      
+      // Set game result - I win because opponent resigned
+      setGameResultInfo({ winner: myRoleRef.current, resultType: "single", multiplier: 1 });
       setGameStatus("Opponent resigned - You win!");
       setGameOver(true);
       chatRef.current?.addSystemMessage("Opponent resigned");
@@ -913,10 +919,13 @@ const BackgammonGame = () => {
 
   const handleResign = useCallback(() => {
     sendResign();
+    // I resigned - opponent wins, so set winner to OPPONENT's role
+    const opponentRole = myRole === "player" ? "ai" : "player";
+    setGameResultInfo({ winner: opponentRole, resultType: "single", multiplier: 1 });
     setGameStatus("You resigned - Opponent wins!");
     setGameOver(true);
     play('chess_lose');
-  }, [sendResign, play]);
+  }, [sendResign, play, myRole]);
 
   // Require wallet
   if (!walletConnected || !address) {
@@ -1000,6 +1009,117 @@ const BackgammonGame = () => {
         {isValidTarget && (
           <div className="absolute inset-0 bg-primary/20 rounded animate-pulse" />
         )}
+      </div>
+    );
+  };
+
+  // Render point for mobile (vertical layout)
+  const renderMobilePoint = (index: number, isLeftSide: boolean) => {
+    const displayIndex = isFlipped ? 23 - index : index;
+    const value = gameState.points[displayIndex];
+    const checkerCount = Math.abs(value);
+    const isPlayer = value > 0;
+    const isSelected = selectedPoint === displayIndex;
+    const isValidTarget = validMoves.includes(displayIndex);
+    
+    return (
+      <div
+        key={displayIndex}
+        onClick={() => handlePointClick(displayIndex)}
+        className={cn(
+          "relative flex items-center cursor-pointer transition-all",
+          "h-[calc((100%-8px)/6)]",
+          isLeftSide ? "flex-row" : "flex-row-reverse"
+        )}
+      >
+        {/* Triangle pointing toward center */}
+        <svg
+          viewBox="0 0 60 28"
+          className={cn(
+            "h-full w-[50px] shrink-0 transition-all duration-300",
+            isValidTarget && "drop-shadow-[0_0_12px_hsl(45_93%_70%)]",
+            isSelected && "drop-shadow-[0_0_8px_hsl(45_93%_60%/_0.5)]"
+          )}
+          preserveAspectRatio="none"
+        >
+          <defs>
+            <linearGradient id={`mGold-mp-${displayIndex}`} x1={isLeftSide ? "0%" : "100%"} y1="0%" x2={isLeftSide ? "100%" : "0%"} y2="0%">
+              <stop offset="0%" stopColor="hsl(45 93% 48%)" />
+              <stop offset="100%" stopColor="hsl(35 70% 32%)" />
+            </linearGradient>
+            <linearGradient id={`mSand-mp-${displayIndex}`} x1={isLeftSide ? "0%" : "100%"} y1="0%" x2={isLeftSide ? "100%" : "0%"} y2="0%">
+              <stop offset="0%" stopColor="hsl(35 50% 50%)" />
+              <stop offset="100%" stopColor="hsl(30 40% 32%)" />
+            </linearGradient>
+          </defs>
+
+          <polygon
+            points={isLeftSide ? "0,2 0,26 58,14" : "60,2 60,26 2,14"}
+            fill={displayIndex % 2 === 0 ? `url(#mGold-mp-${displayIndex})` : `url(#mSand-mp-${displayIndex})`}
+            stroke={displayIndex % 2 === 0 ? "hsl(35 80% 30%)" : "hsl(30 40% 28%)"}
+            strokeWidth="0.5"
+          />
+          {isValidTarget && (
+            <>
+              <polygon
+                points={isLeftSide ? "0,2 0,26 58,14" : "60,2 60,26 2,14"}
+                fill="hsl(45 93% 65% / 0.5)"
+              />
+              <polygon
+                points={isLeftSide ? "0,2 0,26 58,14" : "60,2 60,26 2,14"}
+                fill="none"
+                stroke="hsl(45 100% 75%)"
+                strokeWidth="1.5"
+                className="animate-pulse"
+              />
+            </>
+          )}
+        </svg>
+        
+        {/* Checker stack */}
+        <div 
+          className={cn(
+            "absolute flex items-center justify-center cursor-pointer min-w-[48px] min-h-[48px] transition-all active:scale-95",
+            isLeftSide ? "left-[50px]" : "right-[50px]"
+          )}
+          onClick={(e) => {
+            e.stopPropagation();
+            handlePointClick(displayIndex);
+          }}
+        >
+          {checkerCount > 0 && (
+            <div className="flex flex-row items-center gap-0">
+              {Array.from({ length: Math.min(checkerCount, 4) }).map((_, i) => (
+                <div
+                  key={i}
+                  className="transition-all"
+                  style={{
+                    marginLeft: i > 0 ? '-8px' : 0,
+                    zIndex: i,
+                  }}
+                >
+                  <div
+                    className={cn(
+                      "w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold shadow-md",
+                      isPlayer 
+                        ? "bg-gradient-to-br from-primary via-primary to-amber-700 text-amber-900 border-2 border-amber-500" 
+                        : "bg-gradient-to-br from-slate-600 via-slate-800 to-slate-900 text-primary border-2 border-primary/40",
+                      isSelected && i === Math.min(checkerCount, 4) - 1 && "ring-2 ring-primary ring-offset-1 ring-offset-background",
+                      isValidTarget && i === Math.min(checkerCount, 4) - 1 && "ring-2 ring-primary"
+                    )}
+                    style={{
+                      boxShadow: isSelected 
+                        ? '0 0 12px hsl(45 93% 60% / 0.6), 0 2px 4px rgba(0,0,0,0.3)' 
+                        : '0 2px 4px rgba(0,0,0,0.3)'
+                    }}
+                  >
+                    {i === Math.min(checkerCount, 4) - 1 && checkerCount > 4 ? checkerCount : ''}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     );
   };
@@ -1110,63 +1230,231 @@ const BackgammonGame = () => {
       </div>
 
       {/* Game Area */}
-      <div className="flex-1 flex items-center justify-center p-4">
+      <div className={cn(
+        "flex-1 flex items-center justify-center",
+        isMobile ? "p-2" : "p-4"
+      )}>
         <div className="max-w-4xl w-full">
-          {/* Board */}
-          <div className="bg-gradient-to-br from-amber-900 to-amber-950 rounded-xl p-4 border-4 border-primary/30 shadow-2xl">
-            {/* Top row (points 13-24 or 12-1 when flipped) */}
-            <div className="flex justify-between mb-2">
-              <div className="flex">
-                {Array.from({ length: 6 }).map((_, i) => renderPoint(isFlipped ? 11 - i : 12 + i, true))}
-              </div>
-              {/* Bar */}
-              <div 
-                className="w-12 flex flex-col items-center justify-start pt-2 bg-amber-950/50 rounded cursor-pointer"
-                onClick={() => handlePointClick(-1)}
-              >
-                {(myRole === "ai" ? gameState.bar.ai : gameState.bar.player) > 0 && (
-                  <div className={cn(
-                    "w-8 h-8 rounded-full border-2 shadow-md",
-                    myRole === "player" 
-                      ? "bg-gradient-to-br from-yellow-400 to-yellow-600 border-yellow-300"
-                      : "bg-gradient-to-br from-gray-700 to-gray-900 border-gray-500",
-                    selectedPoint === -1 && "ring-2 ring-primary animate-pulse"
-                  )}>
-                    <span className="flex items-center justify-center h-full text-xs font-bold text-white">
-                      {myRole === "ai" ? gameState.bar.ai : gameState.bar.player}
-                    </span>
+          {/* Mobile Layout */}
+          {isMobile ? (
+            <div className="flex flex-col h-full">
+              {/* Score Row */}
+              <div className="flex justify-between items-center px-2 py-1 shrink-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] text-muted-foreground">Opponent:</span>
+                  <span className="text-primary font-bold text-sm">{myRole === "player" ? gameState.bearOff.ai : gameState.bearOff.player}</span>
+                  <span className="text-[10px] text-muted-foreground/60">/15</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-full border border-primary/40 bg-primary/5">
+                    <div className="w-2.5 h-2.5 rounded-full bg-gradient-to-br from-primary to-amber-600" />
+                    <RotateCcw className="w-3 h-3 text-primary" strokeWidth={2.5} />
                   </div>
-                )}
+                  <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-full border border-slate-500/40 bg-slate-800/30">
+                    <div className="w-2.5 h-2.5 rounded-full bg-gradient-to-br from-slate-600 to-slate-900" />
+                    <RotateCw className="w-3 h-3 text-slate-400" strokeWidth={2.5} />
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] text-muted-foreground">You:</span>
+                  <span className="text-primary font-bold text-sm">{myRole === "player" ? gameState.bearOff.player : gameState.bearOff.ai}</span>
+                  <span className="text-[10px] text-muted-foreground/60">/15</span>
+                </div>
               </div>
-              <div className="flex">
-                {Array.from({ length: 6 }).map((_, i) => renderPoint(isFlipped ? 5 - i : 18 + i, true))}
-              </div>
-            </div>
 
-            {/* Bottom row (points 12-1 or 13-24 when flipped) */}
-            <div className="flex justify-between mt-2">
-              <div className="flex">
-                {Array.from({ length: 6 }).map((_, i) => renderPoint(isFlipped ? 12 + i : 11 - i, false))}
+              {/* Mobile Board */}
+              <div className="relative w-full" style={{ height: '55vh' }}>
+                <div className="absolute -inset-1 bg-primary/10 rounded-xl blur-lg opacity-30" />
+                <div className="relative h-full p-[3px] rounded-lg bg-gradient-to-br from-primary/40 via-primary/20 to-primary/40">
+                  <div className="h-full flex bg-gradient-to-b from-amber-950 via-background to-amber-950 rounded-md overflow-hidden">
+                    
+                    {/* LEFT Column - Points 24→13 */}
+                    <div className="flex-1 flex flex-col p-1">
+                      <div className="flex-1 flex flex-col justify-evenly border-b border-primary/20">
+                        {[23, 22, 21, 20, 19, 18].map(i => renderMobilePoint(i, true))}
+                      </div>
+                      <div className="flex-1 flex flex-col justify-evenly">
+                        {[17, 16, 15, 14, 13, 12].map(i => renderMobilePoint(i, true))}
+                      </div>
+                    </div>
+
+                    {/* Center Bar */}
+                    <div className="w-14 bg-gradient-to-b from-background via-amber-950/50 to-background border-x border-primary/20 flex flex-col items-center justify-center shrink-0">
+                      {/* Opponent Bar */}
+                      {(myRole === "player" ? gameState.bar.ai : gameState.bar.player) > 0 && (
+                        <div className="flex flex-col items-center mb-2">
+                          <span className="text-[8px] text-muted-foreground mb-0.5">OPP</span>
+                          <div className="w-6 h-6 rounded-full bg-gradient-to-br from-slate-600 to-slate-900 border border-primary/30 flex items-center justify-center text-[10px] text-primary font-bold">
+                            {myRole === "player" ? gameState.bar.ai : gameState.bar.player}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Dice */}
+                      {dice.length > 0 && (
+                        <div className="flex flex-col gap-1 my-2">
+                          {dice.map((d, i) => (
+                            <div key={i} className={cn(
+                              "w-8 h-8 bg-white rounded flex items-center justify-center text-lg font-bold shadow-md",
+                              !remainingMoves.includes(d) && "opacity-30"
+                            )}>{d}</div>
+                          ))}
+                        </div>
+                      )}
+                      
+                      {/* My Bar */}
+                      {(myRole === "player" ? gameState.bar.player : gameState.bar.ai) > 0 && (
+                        <div 
+                          className={cn(
+                            "flex flex-col items-center justify-center cursor-pointer rounded-lg p-2 min-w-[44px] min-h-[44px] transition-all active:scale-95",
+                            selectedPoint === -1 
+                              ? "ring-2 ring-primary bg-primary/20 shadow-[0_0_12px_hsl(45_93%_54%_/_0.4)]" 
+                              : isMyTurn && remainingMoves.length > 0 && !gameOver
+                                ? "bg-primary/10 animate-pulse"
+                                : ""
+                          )}
+                          onClick={() => handlePointClick(-1)}
+                        >
+                          <div className={cn(
+                            "w-7 h-7 rounded-full bg-gradient-to-br from-primary to-amber-700 border-2 border-amber-500 flex items-center justify-center text-[11px] text-amber-900 font-bold shadow-md",
+                            selectedPoint === -1 && "ring-2 ring-offset-1 ring-offset-background ring-primary"
+                          )}>
+                            {myRole === "player" ? gameState.bar.player : gameState.bar.ai}
+                          </div>
+                          <span className="text-[9px] text-primary font-medium mt-1">TAP</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* RIGHT Column - Points 12→1 */}
+                    <div className="flex-1 flex flex-col p-1">
+                      <div className="flex-1 flex flex-col justify-evenly border-b border-primary/20">
+                        {[0, 1, 2, 3, 4, 5].map(i => renderMobilePoint(i, false))}
+                      </div>
+                      <div className="flex-1 flex flex-col justify-evenly">
+                        {[6, 7, 8, 9, 10, 11].map(i => renderMobilePoint(i, false))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
-              {/* Bar (opponent) */}
-              <div className="w-12 flex flex-col items-center justify-end pb-2 bg-amber-950/50 rounded">
-                {(myRole === "player" ? gameState.bar.ai : gameState.bar.player) > 0 && (
-                  <div className={cn(
-                    "w-8 h-8 rounded-full border-2 shadow-md",
-                    myRole === "ai" 
-                      ? "bg-gradient-to-br from-yellow-400 to-yellow-600 border-yellow-300"
-                      : "bg-gradient-to-br from-gray-700 to-gray-900 border-gray-500"
+
+              {/* Mobile Controls */}
+              <div className="shrink-0 mt-2 space-y-2">
+                {isMyTurn && dice.length === 0 && !gameOver && (
+                  <Button variant="gold" size="lg" className="w-full py-3 text-base font-bold" onClick={rollDice}>
+                    🎲 ROLL DICE
+                  </Button>
+                )}
+                
+                <div className={cn(
+                  "rounded-lg border px-3 py-1.5",
+                  gameOver 
+                    ? gameStatus.includes("win") 
+                      ? "bg-green-500/10 border-green-500/30" 
+                      : "bg-red-500/10 border-red-500/30"
+                    : "bg-primary/5 border-primary/20"
+                )}>
+                  <p className={cn(
+                    "font-display font-bold text-sm text-center",
+                    gameOver 
+                      ? gameStatus.includes("win") ? "text-green-400" : "text-red-400"
+                      : "text-primary"
                   )}>
-                    <span className="flex items-center justify-center h-full text-xs font-bold text-white">
-                      {myRole === "player" ? gameState.bar.ai : gameState.bar.player}
+                    {gameStatus}
+                  </p>
+                  {remainingMoves.length > 0 && isMyTurn && (
+                    <p className="text-[10px] text-muted-foreground text-center mt-0.5">
+                      Moves left: {remainingMoves.join(", ")}
+                    </p>
+                  )}
+                </div>
+
+                {/* Bear Off Zone - Mobile */}
+                {canBearOff(gameState, myRole) && (
+                  <div 
+                    className={cn(
+                      "w-full py-2 rounded-lg flex items-center justify-center gap-2 transition-all",
+                      validMoves.includes(-2) 
+                        ? "bg-primary/20 border-2 border-primary animate-pulse cursor-pointer" 
+                        : "border border-primary/30 bg-primary/5"
+                    )}
+                    onClick={() => validMoves.includes(-2) && handlePointClick(-2)}
+                  >
+                    <Gem className={cn("w-4 h-4", validMoves.includes(-2) ? "text-primary" : "text-primary/50")} />
+                    <span className={cn(
+                      "font-bold",
+                      validMoves.includes(-2) ? "text-primary" : "text-muted-foreground"
+                    )}>
+                      {validMoves.includes(-2) ? "Tap to Bear Off" : `Bear Off: ${myRole === "player" ? gameState.bearOff.player : gameState.bearOff.ai}/15`}
                     </span>
                   </div>
                 )}
-              </div>
-              <div className="flex">
-                {Array.from({ length: 6 }).map((_, i) => renderPoint(isFlipped ? 18 + i : 5 - i, false))}
+
+                {/* Resign button - mobile */}
+                {!gameOver && isMyTurn && (
+                  <Button variant="destructive" size="sm" className="w-full" onClick={handleResign}>
+                    <Flag className="w-4 h-4 mr-1" /> Resign
+                  </Button>
+                )}
               </div>
             </div>
+          ) : (
+            /* Desktop Layout */
+            <div className="bg-gradient-to-br from-amber-900 to-amber-950 rounded-xl p-4 border-4 border-primary/30 shadow-2xl">
+              {/* Top row (points 13-24 or 12-1 when flipped) */}
+              <div className="flex justify-between mb-2">
+                <div className="flex">
+                  {Array.from({ length: 6 }).map((_, i) => renderPoint(isFlipped ? 11 - i : 12 + i, true))}
+                </div>
+                {/* Bar */}
+                <div 
+                  className="w-12 flex flex-col items-center justify-start pt-2 bg-amber-950/50 rounded cursor-pointer"
+                  onClick={() => handlePointClick(-1)}
+                >
+                  {(myRole === "ai" ? gameState.bar.ai : gameState.bar.player) > 0 && (
+                    <div className={cn(
+                      "w-8 h-8 rounded-full border-2 shadow-md",
+                      myRole === "player" 
+                        ? "bg-gradient-to-br from-yellow-400 to-yellow-600 border-yellow-300"
+                        : "bg-gradient-to-br from-gray-700 to-gray-900 border-gray-500",
+                      selectedPoint === -1 && "ring-2 ring-primary animate-pulse"
+                    )}>
+                      <span className="flex items-center justify-center h-full text-xs font-bold text-white">
+                        {myRole === "ai" ? gameState.bar.ai : gameState.bar.player}
+                      </span>
+                    </div>
+                  )}
+                </div>
+                <div className="flex">
+                  {Array.from({ length: 6 }).map((_, i) => renderPoint(isFlipped ? 5 - i : 18 + i, true))}
+                </div>
+              </div>
+
+              {/* Bottom row (points 12-1 or 13-24 when flipped) */}
+              <div className="flex justify-between mt-2">
+                <div className="flex">
+                  {Array.from({ length: 6 }).map((_, i) => renderPoint(isFlipped ? 12 + i : 11 - i, false))}
+                </div>
+                {/* Bar (opponent) */}
+                <div className="w-12 flex flex-col items-center justify-end pb-2 bg-amber-950/50 rounded">
+                  {(myRole === "player" ? gameState.bar.ai : gameState.bar.player) > 0 && (
+                    <div className={cn(
+                      "w-8 h-8 rounded-full border-2 shadow-md",
+                      myRole === "ai" 
+                        ? "bg-gradient-to-br from-yellow-400 to-yellow-600 border-yellow-300"
+                        : "bg-gradient-to-br from-gray-700 to-gray-900 border-gray-500"
+                    )}>
+                      <span className="flex items-center justify-center h-full text-xs font-bold text-white">
+                        {myRole === "player" ? gameState.bar.ai : gameState.bar.player}
+                      </span>
+                    </div>
+                  )}
+                </div>
+                <div className="flex">
+                  {Array.from({ length: 6 }).map((_, i) => renderPoint(isFlipped ? 18 + i : 5 - i, false))}
+                </div>
+              </div>
 
             {/* Home Board Status & Bear off areas */}
             {(() => {
@@ -1275,47 +1563,49 @@ const BackgammonGame = () => {
             })()}
           </div>
 
-          {/* Controls */}
-          <div className="mt-4 flex flex-col items-center gap-4">
-            {/* Dice */}
-            <div className="flex items-center gap-4">
-              {dice.length > 0 ? (
-                <div className="flex gap-2">
-                  {dice.map((d, i) => (
-                    <div key={i} className={cn(
-                      "w-12 h-12 bg-white rounded-lg flex items-center justify-center text-2xl font-bold shadow-lg",
-                      !remainingMoves.includes(d) && "opacity-30"
-                    )}>
-                      {d}
+              {/* Controls */}
+              <div className="mt-4 flex flex-col items-center gap-4">
+                {/* Dice */}
+                <div className="flex items-center gap-4">
+                  {dice.length > 0 ? (
+                    <div className="flex gap-2">
+                      {dice.map((d, i) => (
+                        <div key={i} className={cn(
+                          "w-12 h-12 bg-white rounded-lg flex items-center justify-center text-2xl font-bold shadow-lg",
+                          !remainingMoves.includes(d) && "opacity-30"
+                        )}>
+                          {d}
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  ) : isMyTurn && !gameOver ? (
+                    <Button onClick={rollDice} size="lg" className="px-8">
+                      Roll Dice
+                    </Button>
+                  ) : null}
                 </div>
-              ) : isMyTurn && !gameOver ? (
-                <Button onClick={rollDice} size="lg" className="px-8">
-                  Roll Dice
-                </Button>
-              ) : null}
-            </div>
 
-            {/* Status */}
-            <div className={cn(
-              "px-4 py-2 rounded-lg border text-sm font-medium",
-              gameOver 
-                ? gameStatus.includes("win") 
-                  ? "bg-green-500/10 border-green-500/30 text-green-400"
-                  : "bg-red-500/10 border-red-500/30 text-red-400"
-                : "bg-primary/10 border-primary/30 text-primary"
-            )}>
-              {gameStatus}
-            </div>
+                {/* Status */}
+                <div className={cn(
+                  "px-4 py-2 rounded-lg border text-sm font-medium",
+                  gameOver 
+                    ? gameStatus.includes("win") 
+                      ? "bg-green-500/10 border-green-500/30 text-green-400"
+                      : "bg-red-500/10 border-red-500/30 text-red-400"
+                    : "bg-primary/10 border-primary/30 text-primary"
+                )}>
+                  {gameStatus}
+                </div>
 
-            {/* Actions */}
-            {!gameOver && isMyTurn && (
-              <Button variant="destructive" size="sm" onClick={handleResign}>
-                <Flag className="w-4 h-4 mr-1" /> Resign
-              </Button>
-            )}
-          </div>
+                {/* Actions */}
+                {!gameOver && isMyTurn && (
+                  <Button variant="destructive" size="sm" onClick={handleResign}>
+                    <Flag className="w-4 h-4 mr-1" /> Resign
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

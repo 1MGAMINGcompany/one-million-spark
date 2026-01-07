@@ -338,8 +338,8 @@ export function DiceRollStart({
   const exitDisabled = isLeaving || isForfeiting || isRetrying || isPickingStarter;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/90 backdrop-blur-sm">
-      <div className="relative max-w-lg w-full mx-4 p-8 rounded-2xl border border-primary/30 bg-card/95 shadow-[0_0_60px_-10px_hsl(45_93%_54%_/_0.3)]">
+    <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/95 backdrop-blur-sm overflow-auto">
+      <div className="relative max-w-lg w-full mx-4 my-4 p-8 rounded-2xl border border-primary/30 bg-card/95 shadow-[0_0_60px_-10px_hsl(45_93%_54%_/_0.3)]">
         {/* Decorative corners */}
         <div className="absolute top-2 left-2 w-8 h-8 border-l-2 border-t-2 border-primary/40 rounded-tl-lg" />
         <div className="absolute top-2 right-2 w-8 h-8 border-r-2 border-t-2 border-primary/40 rounded-tr-lg" />
@@ -464,7 +464,7 @@ export function DiceRollStart({
               <p className="text-muted-foreground text-sm">
                 {t("diceRoll.bothReady") || "Both players ready. Roll to decide who goes first!"}
               </p>
-              <Button onClick={handleRoll} size="lg" className="gap-2 animate-pulse">
+              <Button onClick={handleRoll} size="lg" className="gap-2">
                 <Dice5 className="w-5 h-5" />
                 {t("diceRoll.rollDice") || "Roll Dice"}
               </Button>
