@@ -1259,7 +1259,7 @@ const BackgammonGame = () => {
         <div className="max-w-4xl w-full">
           {/* Mobile Layout */}
           {isMobile ? (
-            <div className="flex flex-col h-full">
+            <div className="flex-1 flex flex-col px-2 pt-1 pb-2 overflow-hidden min-h-0">
               {/* Score Row */}
               <div className="flex justify-between items-center px-2 py-1 shrink-0">
                 <div className="flex items-center gap-2">
@@ -1285,10 +1285,10 @@ const BackgammonGame = () => {
               </div>
 
               {/* Mobile Board */}
-              <div className="relative w-full" style={{ height: '55vh' }}>
+              <div className="relative w-full flex-1 min-h-0" style={{ maxHeight: '55vh' }}>
                 <div className="absolute -inset-1 bg-primary/10 rounded-xl blur-lg opacity-30" />
                 <div className="relative h-full p-[3px] rounded-lg bg-gradient-to-br from-primary/40 via-primary/20 to-primary/40">
-                  <div className="h-full flex bg-gradient-to-b from-amber-950 via-background to-amber-950 rounded-md overflow-hidden">
+                  <div className="h-full flex bg-gradient-to-b from-midnight-light via-background to-midnight-light rounded-md overflow-hidden">
                     
                     {/* LEFT Column - Points 24→13 */}
                     <div className="flex-1 flex flex-col p-1">
@@ -1315,12 +1315,8 @@ const BackgammonGame = () => {
                       {/* Dice */}
                       {dice.length > 0 && (
                         <div className="flex flex-col gap-1 my-2">
-                          {dice.map((d, i) => (
-                            <div key={i} className={cn(
-                              "w-8 h-8 bg-white rounded flex items-center justify-center text-lg font-bold shadow-md",
-                              !remainingMoves.includes(d) && "opacity-30"
-                            )}>{d}</div>
-                          ))}
+                          <Dice3D value={dice[0]} variant={isMyTurn ? "ivory" : "obsidian"} size="xs" />
+                          <Dice3D value={dice[1]} variant={isMyTurn ? "ivory" : "obsidian"} size="xs" />
                         </div>
                       )}
                       

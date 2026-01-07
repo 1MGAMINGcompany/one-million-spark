@@ -576,6 +576,17 @@ export default function CreateRoom() {
             </div>
           </div>
 
+          {/* Rent Fee Information */}
+          <div className="p-2.5 bg-amber-500/10 border border-amber-500/20 rounded-lg text-sm">
+            <div className="flex items-center gap-2 mb-1">
+              <Info className="h-4 w-4 text-amber-400" />
+              <span className="font-medium text-amber-300">{t("createRoom.rentDeposit", "Rent Deposit (Refundable)")}</span>
+            </div>
+            <p className="text-xs text-amber-200/80">
+              {t("createRoom.rentDepositDesc", "Creating a room requires a ~0.002 SOL temporary storage deposit. This rent is always returned to you when the game ends — whether you win, lose, forfeit, or cancel.")}
+            </p>
+          </div>
+
           {/* Create Button - Different styles for rematch vs normal */}
           {isRematch ? (
             <Button 
