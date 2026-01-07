@@ -461,12 +461,14 @@ serve(async (req) => {
     }
 
     // Finish session (best effort)
-    await supabase
-      .rpc("finish_game_session", {
-        p_room_pda: roomPda,
-        p_caller_wallet: forfeitingWallet,
-      })
-      .catch((e) => console.error("[forfeit-game] finish_game_session failed:", e));
+    const { error: finishErr } = await supabase.rpc("finish_game_session", {
+      p_room_pda: roomPda,
+      p_caller_wallet: forfeitingWallet,
+    });
+
+    if (finishErr) {
+      console.error("[forfeit-game] finish_game_session failed:", finishErr);
+    }
 
     return json200({
       success: true,
