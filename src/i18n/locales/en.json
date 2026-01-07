@@ -893,5 +893,16 @@
   "common": {
     "processing": "Processing...",
     "error": "Error"
+  },
+  "unresolvedRoom": {
+    "title": "Finish Your Active Game",
+    "description": "You already have an active game that hasn't been settled yet.",
+    "explanation": "Solana requires games to be finalized to protect player funds.",
+    "resolveButton": "Resolve Game",
+    "cancelButton": "Cancel"
+  },
+  "creatorDeposit": {
+    "title": "Creator Deposit (Refundable)",
+    "desc": "Creating a room requires a small temporary Solana storage deposit. You get this back when the game ends — win, lose, forfeit, or cancel."
   }
 }

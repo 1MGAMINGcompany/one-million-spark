@@ -1,5 +1,6 @@
 import bs58 from "bs58";
 import { PublicKey } from "@solana/web3.js";
+import { RoomStatus, type RoomDisplay } from "@/lib/solana-program";
 
 // Mainnet program ID
 export const PROGRAM_ID = new PublicKey("4nkWS2ZYPqQrRSYbXD6XW6U6VenmBiZV2TkutY3vSPHu");
@@ -89,4 +90,17 @@ export function validatePublicKey(str: string): PublicKey | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * Check if a room is truly blocking (requires resolution before new games)
+ * Only blocks for: Started + 2+ players + no winner settled
+ * Does NOT block: Open rooms, Finished rooms, Cancelled rooms
+ */
+export function isBlockingRoom(room: RoomDisplay): boolean {
+  return (
+    room.status === RoomStatus.Started &&
+    room.playerCount >= 2 &&
+    room.winner === null
+  );
 }

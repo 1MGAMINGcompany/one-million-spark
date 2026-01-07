@@ -12,21 +12,28 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useWallet } from "@/hooks/useWallet";
 import { useToast } from "@/hooks/use-toast";
 import { useSound } from "@/contexts/SoundContext";
 import { useSolPrice } from "@/hooks/useSolPrice";
 import { useSolanaRooms } from "@/hooks/useSolanaRooms";
 import { useSolanaNetwork } from "@/hooks/useSolanaNetwork";
-import { Wallet, Loader2, AlertCircle, RefreshCw, RefreshCcw } from "lucide-react";
+import { Wallet, Loader2, AlertCircle, RefreshCw, RefreshCcw, Info } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { GameType, RoomStatus, isOpenStatus } from "@/lib/solana-program";
+import { GameType, RoomStatus, isOpenStatus, type RoomDisplay } from "@/lib/solana-program";
 import { ConnectWalletGate } from "@/components/ConnectWalletGate";
 import { TxDebugPanel } from "@/components/TxDebugPanel";
 import { MobileWalletRedirect } from "@/components/MobileWalletRedirect";
 import { PreviewDomainBanner, useSigningDisabled } from "@/components/PreviewDomainBanner";
-import { getRoomPda, isMobileDevice, hasInjectedSolanaWallet } from "@/lib/solana-utils";
+import { getRoomPda, isMobileDevice, hasInjectedSolanaWallet, isBlockingRoom } from "@/lib/solana-utils";
 import { ActiveGameBanner } from "@/components/ActiveGameBanner";
+import { UnresolvedRoomModal } from "@/components/UnresolvedRoomModal";
 import { requestNotificationPermission } from "@/lib/pushNotifications";
 import { AudioManager } from "@/lib/AudioManager";
 import { showBrowserNotification } from "@/lib/pushNotifications";
@@ -74,6 +81,8 @@ export default function CreateRoom() {
   const [checkingActiveRoom, setCheckingActiveRoom] = useState(true);
   const [refreshingBalance, setRefreshingBalance] = useState(false);
   const [showMobileWalletRedirect, setShowMobileWalletRedirect] = useState(false);
+  const [showUnresolvedModal, setShowUnresolvedModal] = useState(false);
+  const [blockingRoom, setBlockingRoom] = useState<RoomDisplay | null>(null);
   
   // Track previous status and navigation state
   const prevStatusRef = useRef<number | null>(null);
@@ -170,6 +179,12 @@ export default function CreateRoom() {
     setRefreshingBalance(false);
   }, [fetchBalance]);
 
+  // Handler for resolving blocking room
+  const handleResolveBlockingRoom = useCallback((roomPda: string) => {
+    setShowUnresolvedModal(false);
+    navigate(`/room/${roomPda}`);
+  }, [navigate]);
+
   const handleCreateRoom = async () => {
     // Check if we're on a preview domain
     if (signingDisabled) {
@@ -198,6 +213,14 @@ export default function CreateRoom() {
       return;
     }
     
+    // Smart blocking: only block for truly unresolved games
+    if (activeRoom && isBlockingRoom(activeRoom)) {
+      setBlockingRoom(activeRoom);
+      setShowUnresolvedModal(true);
+      return;
+    }
+    
+    // Non-blocking active room (e.g., Open/waiting) - still prevent but allow navigation
     if (activeRoom) {
       toast({
         title: t("createRoom.activeRoomExists"),
@@ -206,8 +229,6 @@ export default function CreateRoom() {
       });
       return;
     }
-
-    // For ranked mode, enforce minimum fee
     if (gameMode === 'ranked' && entryFeeNum < dynamicMinFee) {
       toast({
         title: t("createRoom.invalidFee"),
@@ -524,10 +545,25 @@ export default function CreateRoom() {
             </p>
           </div>
 
-          {/* Prize Info */}
+          {/* Prize Info with Creator Deposit Tooltip */}
           <div className="p-2.5 bg-primary/10 border border-primary/20 rounded-lg text-sm">
             <div className="flex justify-between mb-1">
-              <span className="text-muted-foreground">{t("createRoom.prizePool")}:</span>
+              <span className="text-muted-foreground flex items-center gap-1">
+                {t("createRoom.prizePool")}:
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Info className="h-3 w-3 text-muted-foreground cursor-help" />
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="max-w-xs">
+                      <p className="font-semibold">{t("creatorDeposit.title", "Creator Deposit (Refundable)")}</p>
+                      <p className="text-xs mt-1">
+                        {t("creatorDeposit.desc", "Creating a room requires a small temporary Solana storage deposit. You get this back when the game ends — win, lose, forfeit, or cancel.")}
+                      </p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </span>
               <span className="font-semibold text-primary">
                 {(entryFeeNum * parseInt(maxPlayers)).toFixed(3)} SOL
               </span>
@@ -627,6 +663,14 @@ export default function CreateRoom() {
       
       {/* Transaction Debug Panel - shown on tx failure */}
       <TxDebugPanel debugInfo={txDebugInfo} onClose={clearTxDebug} />
+      
+      {/* Unresolved Room Modal - shows when trying to create with a blocking room */}
+      <UnresolvedRoomModal
+        open={showUnresolvedModal}
+        onClose={() => setShowUnresolvedModal(false)}
+        room={blockingRoom}
+        onResolve={handleResolveBlockingRoom}
+      />
     </div>
   );
 }
