@@ -227,6 +227,9 @@ serve(async (req) => {
       });
     }
 
+    // Extract players array for later use
+    const playersOnChain = roomData.players.map((p) => p.toBase58());
+
     console.log("[forfeit-game] Room:", {
       roomId: roomData.roomId.toString(),
       status: roomData.status,
@@ -235,10 +238,29 @@ serve(async (req) => {
       stakeLamports: roomData.stakeLamports.toString(),
       creator: roomData.creator.toBase58(),
     });
-    console.log(
-      "[forfeit-game] Players:",
-      roomData.players.map((p) => p.toBase58()),
-    );
+    console.log("[forfeit-game] Players on-chain:", playersOnChain);
+
+    // FIX B: Sync on-chain players to game_sessions (prevent player2_wallet corruption)
+    if (playersOnChain.length >= 1) {
+      const { error: syncError } = await supabase
+        .from("game_sessions")
+        .update({
+          player1_wallet: playersOnChain[0] ?? null,
+          player2_wallet: playersOnChain[1] ?? null,
+          game_state: supabase.rpc ? undefined : undefined, // Keep existing game_state
+          updated_at: new Date().toISOString(),
+        })
+        .eq("room_pda", roomPda);
+
+      if (syncError) {
+        console.error("[forfeit-game] Failed to sync players to DB:", syncError);
+      } else {
+        console.log("[forfeit-game] ✅ Synced on-chain players to game_sessions:", {
+          player1: playersOnChain[0],
+          player2: playersOnChain[1] ?? "none",
+        });
+      }
+    }
 
     // Validate forfeiter is in room
     const forfeitingPubkey = new PublicKey(forfeitingWallet);
@@ -350,29 +372,33 @@ serve(async (req) => {
       PROGRAM_ID,
     );
 
-    // Check vault balance BEFORE attempting submit_result
+    // FIX A: Enhanced vault sanity check with better diagnostics
     const vaultLamports = await connection.getBalance(vaultPda, "confirmed");
-    console.log("[forfeit-game] Vault balance:", vaultLamports);
-
-    // Calculate expected minimum vault balance for payout
-    // Total stake = stakeLamports * playerCount, need at least that much minus rent (~890880)
     const stakePerPlayer = Number(roomData.stakeLamports);
-    const expectedMinimum = stakePerPlayer * 2; // 2 players
+    const playerCount = roomData.playerCount;
+    const expectedPot = stakePerPlayer * playerCount;
     const RENT_EXEMPT_MINIMUM = 890880; // ~0.00089 SOL rent-exempt minimum
-    const effectiveBalance = vaultLamports - RENT_EXEMPT_MINIMUM;
-    
-    console.log("[forfeit-game] Stake check:", { 
-      vaultLamports, 
-      stakePerPlayer, 
-      expectedMinimum, 
+    const effectiveBalance = Math.max(0, vaultLamports - RENT_EXEMPT_MINIMUM);
+
+    console.log("[forfeit-game] 🏦 Vault sanity check:", {
+      vault: vaultPda.toBase58(),
+      vaultLamports,
+      stakePerPlayer,
+      playerCount,
+      expectedPot,
+      rentExempt: RENT_EXEMPT_MINIMUM,
       effectiveBalance,
-      canPayout: effectiveBalance >= expectedMinimum 
+      canPayout: effectiveBalance >= expectedPot,
     });
 
-    // If vault doesn't have enough to cover the stake payout, void-clear the room
-    // This catches both empty vaults AND vaults with only rent-exempt balance
-    if (effectiveBalance < expectedMinimum) {
-      console.log("[forfeit-game] Vault insufficient for payout - void clearing room");
+    // FIX A: If vault doesn't have enough to cover the stake payout, return detailed error
+    if (effectiveBalance < expectedPot) {
+      console.error("[forfeit-game] ❌ Vault underfunded - cannot settle:", {
+        vault: vaultPda.toBase58(),
+        vaultLamports,
+        expectedPot,
+        shortfall: expectedPot - effectiveBalance,
+      });
 
       // Fetch existing game state
       const { data: sessionData } = await supabase
@@ -390,10 +416,12 @@ serve(async (req) => {
           status: "finished",
           game_state: {
             ...existingState,
+            playersOnChain: playersOnChain, // Store synced players
             voidSettlement: true,
-            reason: "vault_insufficient",
+            reason: "vault_underfunded",
             vaultLamports,
-            expectedMinimum,
+            expectedPot,
+            shortfall: expectedPot - effectiveBalance,
             clearedAt: new Date().toISOString(),
             intendedWinner: winnerWallet,
           },
@@ -406,13 +434,19 @@ serve(async (req) => {
       }
 
       return json200({
-        success: true,
+        success: false,
+        error: "Vault underfunded",
         action: "void_cleared",
-        message: "Vault has insufficient funds; room cleared with no payout",
+        message: "Vault has insufficient funds for payout. Deposits may have gone to wrong address.",
+        details: {
+          vault: vaultPda.toBase58(),
+          vaultLamports,
+          expectedPot,
+          shortfall: expectedPot - effectiveBalance,
+          stakePerPlayer,
+          playerCount,
+        },
         roomPda,
-        vault: vaultPda.toBase58(),
-        vaultLamports,
-        expectedMinimum,
         intendedWinner: winnerWallet,
       });
     }
@@ -478,9 +512,7 @@ serve(async (req) => {
 
       console.log("[forfeit-game] Confirmed:", signature);
 
-      // Record match result (best effort)
-      const playersArray = roomData.players.map((p) => p.toBase58());
-
+      // Record match result (best effort) - use already extracted playersOnChain
       const { error: rpcError } = await supabase.rpc("record_match_result", {
         p_room_pda: roomPda,
         p_finalize_tx: signature,
@@ -489,7 +521,7 @@ serve(async (req) => {
         p_max_players: roomData.maxPlayers,
         p_stake_lamports: Number(roomData.stakeLamports),
         p_mode: "ranked",
-        p_players: playersArray,
+        p_players: playersOnChain,
       });
 
       if (rpcError) {
@@ -527,18 +559,21 @@ serve(async (req) => {
 
       const existingState = (sessionData?.game_state || {}) as Record<string, unknown>;
 
-      // Update session to finished with void settlement
+      // Update session to finished with void settlement - include players and vault info
       const { error: updateError } = await supabase
         .from("game_sessions")
         .update({
           status: "finished",
           game_state: {
             ...existingState,
+            playersOnChain: playersOnChain, // Store synced players
             voidSettlement: true,
             reason: "settlement_failed",
             clearedAt: new Date().toISOString(),
             intendedWinner: winnerWallet,
             settlementError: String((settlementError as Error)?.message ?? settlementError),
+            vaultLamports,
+            expectedPot,
           },
           updated_at: new Date().toISOString(),
         })
@@ -554,6 +589,8 @@ serve(async (req) => {
         message: "Settlement failed; room cleared without payout",
         roomPda,
         intendedWinner: winnerWallet,
+        vaultLamports,
+        expectedPot,
       });
     }
   } catch (error) {
