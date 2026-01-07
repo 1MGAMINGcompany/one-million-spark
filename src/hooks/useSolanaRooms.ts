@@ -408,7 +408,7 @@ export function useSolanaRooms() {
             p_room_pda: newRoom.pda,
             p_game_type: gameType.toString(),
             p_player1_wallet: publicKey.toBase58(),
-            p_player2_wallet: publicKey.toBase58(), // Will be updated when player 2 joins
+            p_player2_wallet: null, // Will be set when player 2 joins via record_acceptance
             p_mode: mode, // Use authoritative mode from CreateRoom form
           });
           
