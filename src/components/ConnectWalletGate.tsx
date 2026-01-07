@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Wallet, Info } from "lucide-react";
 import { HowToConnectSolModal } from "./HowToConnectSolModal";
 import { WalletNotDetectedModal } from "./WalletNotDetectedModal";
@@ -183,9 +183,12 @@ export function ConnectWalletGate({ className }: ConnectWalletGateProps) {
 
       {/* Custom Wallet Picker Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-md" aria-describedby={undefined}>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>{t("wallet.connectWallet")}</DialogTitle>
+            <DialogDescription className="text-sm text-muted-foreground">
+              Select your wallet provider to connect
+            </DialogDescription>
           </DialogHeader>
           
         <div className="grid gap-3 py-4">

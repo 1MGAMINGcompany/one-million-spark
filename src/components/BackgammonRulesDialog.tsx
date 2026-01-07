@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -51,7 +52,7 @@ export const BackgammonRulesDialog = ({
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[500px] bg-background/95 backdrop-blur border-primary/30 p-0 max-h-[85vh]" aria-describedby={undefined}>
+      <DialogContent className="sm:max-w-[500px] bg-background/95 backdrop-blur border-primary/30 p-0 max-h-[85vh]">
         <DialogHeader className="p-6 pb-0">
           <DialogTitle
             className="text-xl font-display flex items-center gap-2"
@@ -65,6 +66,9 @@ export const BackgammonRulesDialog = ({
             <Gamepad2 className="h-5 w-5 text-primary" />
             Backgammon
           </DialogTitle>
+          <DialogDescription className="sr-only">
+            Learn the official rules and gameplay mechanics for Backgammon
+          </DialogDescription>
         </DialogHeader>
         
         <Tabs defaultValue="rules" className="w-full">

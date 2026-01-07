@@ -1,6 +1,7 @@
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -174,12 +175,15 @@ export function HowToConnectSolModal({ isOpen, onClose }: HowToConnectSolModalPr
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-md bg-background border-border" aria-describedby={undefined}>
+      <DialogContent className="sm:max-w-md bg-background border-border">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-lg font-cinzel">
             <Sparkles className="text-primary" size={20} />
             Getting Started
           </DialogTitle>
+          <DialogDescription className="text-sm text-muted-foreground">
+            Step-by-step guide to set up your Solana wallet and add funds
+          </DialogDescription>
         </DialogHeader>
         <div className="max-h-[60vh] overflow-y-auto pr-2">
           {content}

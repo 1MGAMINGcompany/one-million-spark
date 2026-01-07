@@ -1,4 +1,4 @@
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ExternalLink, RefreshCw } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -62,7 +62,7 @@ export function WalletNotDetectedModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-sm" aria-describedby={undefined}>
+      <DialogContent className="sm:max-w-sm">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-3">
             <img 
@@ -72,6 +72,9 @@ export function WalletNotDetectedModal({
             />
             {t("wallet.walletNotDetected", { wallet: walletInfo.name })}
           </DialogTitle>
+          <DialogDescription className="text-sm text-muted-foreground">
+            Install the wallet extension or open in wallet browser to continue
+          </DialogDescription>
         </DialogHeader>
         
         <div className="space-y-4 py-4">
