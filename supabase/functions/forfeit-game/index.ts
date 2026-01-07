@@ -207,6 +207,29 @@ Deno.serve(async (req: Request) => {
     const rpcUrl = Deno.env.get("VITE_SOLANA_RPC_URL") || "https://api.mainnet-beta.solana.com";
     const connection = new Connection(rpcUrl, "confirmed");
 
+    // CRITICAL: Check verifier wallet has enough SOL for transaction fees
+    const MIN_VERIFIER_BALANCE = 10_000_000; // 0.01 SOL minimum for tx fees
+    const verifierBalance = await connection.getBalance(verifierKeypair.publicKey, "confirmed");
+
+    console.log("[forfeit-game] 💰 Verifier balance check:", {
+      pubkey: verifierKeypair.publicKey.toBase58(),
+      lamports: verifierBalance,
+      minRequired: MIN_VERIFIER_BALANCE,
+      hasSufficientFunds: verifierBalance >= MIN_VERIFIER_BALANCE,
+    });
+
+    if (verifierBalance < MIN_VERIFIER_BALANCE) {
+      console.error("[forfeit-game] ❌ Verifier wallet has insufficient SOL for fees!");
+      return json200({
+        success: false,
+        error: "Server payout wallet needs funding",
+        details: `Verifier ${verifierKeypair.publicKey.toBase58()} has ${(verifierBalance / 1_000_000_000).toFixed(6)} SOL, needs at least 0.01 SOL for transaction fees`,
+        verifierPubkey: verifierKeypair.publicKey.toBase58(),
+        verifierBalance,
+        minRequired: MIN_VERIFIER_BALANCE,
+      });
+    }
+
     // Fetch room account
     const roomPdaKey = new PublicKey(roomPda);
     const accountInfo = await connection.getAccountInfo(roomPdaKey);

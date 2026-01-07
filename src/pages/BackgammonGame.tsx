@@ -1186,6 +1186,16 @@ const BackgammonGame = () => {
             isForfeiting={isForfeiting}
           />
         )}
+        
+        {/* Loading fallback when RulesGate passed but dice roll not ready */}
+        {!startRoll.showDiceRoll && !startRoll.isFinalized && rankedGate.bothReady && (
+          <div className="fixed inset-0 z-50 bg-background/95 backdrop-blur-sm flex items-center justify-center">
+            <div className="text-center space-y-4">
+              <RefreshCw className="h-12 w-12 animate-spin text-primary mx-auto" />
+              <p className="text-muted-foreground">{t('game.preparingDiceRoll', 'Preparing dice roll...')}</p>
+            </div>
+          </div>
+        )}
       </RulesGate>
       
       <TurnBanner
