@@ -25,9 +25,13 @@ export interface UseForfeitOptions {
   stakeLamports?: number;
   gameType?: string;
   mode?: 'casual' | 'ranked';
-  /** CRITICAL: For ranked games, forfeit only allowed when both rules accepted */
+  /** On-chain room status (authoritative): 1=Open, 2=Started, 3=Finished, 4=Cancelled */
+  roomStatus?: number;
+  /** On-chain player count (authoritative) */
+  playerCount?: number;
+  /** @deprecated Use roomStatus + playerCount instead */
   bothRulesAccepted?: boolean;
-  /** Whether game has officially started (dice roll complete) */
+  /** @deprecated Use roomStatus + playerCount instead */
   gameStarted?: boolean;
   // Cleanup callbacks - called in forceExit
   onCleanupWebRTC?: () => void;
@@ -61,8 +65,11 @@ export function useForfeit({
   stakeLamports = 0,
   gameType = "unknown",
   mode = "casual",
-  bothRulesAccepted = true, // Default true for casual games
-  gameStarted = true, // Default true for backward compatibility
+  roomStatus,
+  playerCount,
+  // Deprecated props (no-ops, kept for backward compat)
+  bothRulesAccepted: _bothRulesAccepted,
+  gameStarted: _gameStarted,
   onCleanupWebRTC,
   onCleanupSupabase,
   onCleanupLocalState,
@@ -195,22 +202,21 @@ export function useForfeit({
         return; // forceExit will happen via timeout or finally
       }
       
-      // CRITICAL: Block forfeit in invalid states for ranked games
-      if (mode === 'ranked' && !bothRulesAccepted) {
-        console.error("[useForfeit] BLOCKED: Cannot forfeit ranked game - rules not accepted by both players");
-        toast({
-          title: t("forfeit.invalidState", "Cannot forfeit"),
-          description: t("forfeit.rulesNotAccepted", "Game has not properly started"),
-          variant: "destructive",
+      // Use ON-CHAIN STATE as authoritative gate for forfeit
+      // Forfeit allowed when: room.status === Started (2) AND playerCount >= 2
+      // If roomStatus/playerCount not provided, allow forfeit (backward compat)
+      const canForfeitOnChain = 
+        (roomStatus === undefined || roomStatus === 2) && 
+        (playerCount === undefined || playerCount >= 2);
+
+      if (!canForfeitOnChain) {
+        console.warn("[useForfeit] BLOCKED: On-chain state does not allow forfeit", {
+          roomStatus,
+          playerCount,
         });
-        return; // forceExit will happen via finally
-      }
-      
-      if (!gameStarted) {
-        console.warn("[useForfeit] BLOCKED: Cannot forfeit - game not started");
         toast({
           title: t("forfeit.invalidState", "Cannot forfeit"),
-          description: t("forfeit.gameNotStarted", "Game has not started yet"),
+          description: t("forfeit.onChainNotReady", "Room is not in a forfeitable state"),
           variant: "destructive",
         });
         return;
