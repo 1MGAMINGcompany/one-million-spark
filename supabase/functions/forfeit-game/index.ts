@@ -352,9 +352,25 @@ serve(async (req) => {
     const vaultLamports = await connection.getBalance(vaultPda, "confirmed");
     console.log("[forfeit-game] Vault balance:", vaultLamports);
 
-    // If vault is empty, void-clear the room instead of failing on-chain tx
-    if (vaultLamports === 0) {
-      console.log("[forfeit-game] Vault empty - void clearing room");
+    // Calculate expected minimum vault balance for payout
+    // Total stake = stakeLamports * playerCount, need at least that much minus rent (~890880)
+    const stakePerPlayer = Number(roomData.stakeLamports);
+    const expectedMinimum = stakePerPlayer * 2; // 2 players
+    const RENT_EXEMPT_MINIMUM = 890880; // ~0.00089 SOL rent-exempt minimum
+    const effectiveBalance = vaultLamports - RENT_EXEMPT_MINIMUM;
+    
+    console.log("[forfeit-game] Stake check:", { 
+      vaultLamports, 
+      stakePerPlayer, 
+      expectedMinimum, 
+      effectiveBalance,
+      canPayout: effectiveBalance >= expectedMinimum 
+    });
+
+    // If vault doesn't have enough to cover the stake payout, void-clear the room
+    // This catches both empty vaults AND vaults with only rent-exempt balance
+    if (effectiveBalance < expectedMinimum) {
+      console.log("[forfeit-game] Vault insufficient for payout - void clearing room");
 
       // Fetch existing game state
       const { data: sessionData } = await supabase
@@ -373,7 +389,9 @@ serve(async (req) => {
           game_state: {
             ...existingState,
             voidSettlement: true,
-            reason: "vault_empty",
+            reason: "vault_insufficient",
+            vaultLamports,
+            expectedMinimum,
             clearedAt: new Date().toISOString(),
             intendedWinner: winnerWallet,
           },
@@ -388,10 +406,11 @@ serve(async (req) => {
       return json200({
         success: true,
         action: "void_cleared",
-        message: "Vault empty; room cleared with no payout",
+        message: "Vault has insufficient funds; room cleared with no payout",
         roomPda,
         vault: vaultPda.toBase58(),
-        vaultLamports: 0,
+        vaultLamports,
+        expectedMinimum,
         intendedWinner: winnerWallet,
       });
     }
