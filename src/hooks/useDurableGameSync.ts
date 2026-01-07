@@ -12,11 +12,24 @@ export interface GameMove {
   created_at: string;
 }
 
+interface SubmitMoveResponse {
+  success: boolean;
+  moveHash?: string;
+  turnNumber?: number;
+  error?: string;
+  expected?: number;
+  received?: number;
+  lastHash?: string;
+  expectedPlayer?: string;
+}
+
 interface UseDurableGameSyncOptions {
   roomPda: string;
   enabled?: boolean;
   onMoveReceived?: (move: GameMove) => void;
   onMovesLoaded?: (moves: GameMove[]) => void;
+  onTurnMismatch?: (expected: number) => void;
+  onNotYourTurn?: () => void;
 }
 
 export function useDurableGameSync({
@@ -24,6 +37,8 @@ export function useDurableGameSync({
   enabled = true,
   onMoveReceived,
   onMovesLoaded,
+  onTurnMismatch,
+  onNotYourTurn,
 }: UseDurableGameSyncOptions) {
   const { toast } = useToast();
   const [moves, setMoves] = useState<GameMove[]>([]);
@@ -77,10 +92,11 @@ export function useDurableGameSync({
     return [];
   }, [roomPda, toast, isDev, onMovesLoaded]);
 
-  // Submit a move to DB
+  // Submit a move to DB - server validates turn and player
   const submitMove = useCallback(async (moveData: any, wallet: string): Promise<boolean> => {
     if (!roomPda) return false;
 
+    // Use local turn as hint, but server is authoritative
     const turnNumber = lastTurnRef.current + 1;
 
     try {
@@ -101,21 +117,59 @@ export function useDurableGameSync({
         throw error;
       }
 
-      const result = data as { success: boolean; moveHash?: string; error?: string };
+      const result = data as SubmitMoveResponse;
 
       if (result.success && result.moveHash) {
-        console.log("[DurableSync] Move saved:", { turn: turnNumber, hash: result.moveHash.slice(0, 8) });
+        console.log("[DurableSync] Move saved:", { turn: result.turnNumber, hash: result.moveHash.slice(0, 8) });
         if (isDev) {
           toast({
-            title: `Move ${turnNumber} Saved`,
+            title: `Move ${result.turnNumber} Saved`,
             description: `Hash: ${result.moveHash.slice(0, 8)}...`,
           });
         }
         setLastHash(result.moveHash);
-        lastTurnRef.current = turnNumber;
+        lastTurnRef.current = result.turnNumber || turnNumber;
         return true;
       } else {
-        throw new Error(result.error || "Submit failed");
+        // Handle specific server errors
+        switch (result.error) {
+          case "turn_mismatch":
+            console.warn("[DurableSync] Turn mismatch - resyncing. Expected:", result.expected);
+            onTurnMismatch?.(result.expected || 0);
+            // Reload moves to get back in sync
+            await loadMoves();
+            toast({
+              title: "Turn Out of Sync",
+              description: "Resyncing with server...",
+              variant: "destructive",
+            });
+            return false;
+            
+          case "not_your_turn":
+            console.warn("[DurableSync] Not your turn");
+            onNotYourTurn?.();
+            // Don't show toast - this is expected when opponent's move hasn't arrived yet
+            return false;
+            
+          case "turn_already_taken":
+            console.warn("[DurableSync] Turn already taken (race condition)");
+            // Reload moves to get the winning move
+            await loadMoves();
+            return false;
+            
+          case "hash_mismatch":
+            console.warn("[DurableSync] Hash mismatch - resyncing");
+            await loadMoves();
+            toast({
+              title: "Sync Error",
+              description: "State mismatch detected, resyncing...",
+              variant: "destructive",
+            });
+            return false;
+            
+          default:
+            throw new Error(result.error || "Submit failed");
+        }
       }
     } catch (err: any) {
       console.error("[DurableSync] Failed to save move:", err);
@@ -126,7 +180,7 @@ export function useDurableGameSync({
       });
       return false;
     }
-  }, [roomPda, lastHash, toast, isDev]);
+  }, [roomPda, lastHash, toast, isDev, loadMoves, onTurnMismatch, onNotYourTurn]);
 
   // Subscribe to realtime updates on game_moves
   useEffect(() => {

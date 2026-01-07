@@ -213,10 +213,13 @@ export function useWebRTCSync({
     return sendMessage({ type: "move", payload: moveData });
   }, [sendMessage]);
 
-  // Send resignation
+  // Send resignation with forfeiting player's wallet
   const sendResign = useCallback((): boolean => {
-    return sendMessage({ type: "resign" });
-  }, [sendMessage]);
+    return sendMessage({ 
+      type: "resign", 
+      payload: { forfeitingWallet: localAddress } 
+    });
+  }, [sendMessage, localAddress]);
 
   // Send draw offer
   const sendDrawOffer = useCallback((): boolean => {
