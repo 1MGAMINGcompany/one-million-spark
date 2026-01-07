@@ -1600,10 +1600,8 @@ const BackgammonGame = () => {
         />
       )}
       
-      {/* Chat Panel - hidden on mobile to prevent overlap */}
-      <div className="hidden md:block">
-        <GameChatPanel chat={chat} />
-      </div>
+      {/* Chat Panel */}
+      <GameChatPanel chat={chat} />
 
       {/* Rematch Modal */}
       <RematchModal
