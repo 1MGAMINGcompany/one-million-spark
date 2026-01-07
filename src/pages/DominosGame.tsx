@@ -20,6 +20,7 @@ import { useRankedReadyGate } from "@/hooks/useRankedReadyGate";
 import { useTurnTimer, DEFAULT_RANKED_TURN_TIME } from "@/hooks/useTurnTimer";
 import { useStartRoll } from "@/hooks/useStartRoll";
 import { useTxLock } from "@/contexts/TxLockContext";
+import { useDurableGameSync, GameMove } from "@/hooks/useDurableGameSync";
 import { DiceRollStart } from "@/components/DiceRollStart";
 import TurnStatusHeader from "@/components/TurnStatusHeader";
 import TurnHistoryDrawer from "@/components/TurnHistoryDrawer";
@@ -460,6 +461,27 @@ const DominosGame = () => {
     myWallet: address,
     isRanked: isRankedGame,
     enabled: roomPlayers.length >= 2 && modeLoaded,
+  });
+
+  // Durable game sync - persists moves to DB for reliability
+  const handleDurableMoveReceived = useCallback((move: GameMove) => {
+    // Only apply moves from opponents (we already applied our own locally)
+    if (move.wallet.toLowerCase() !== address?.toLowerCase()) {
+      console.log("[DominosGame] Applying move from DB:", move.turn_number);
+      const dominoMove = move.move_data as DominoMove;
+      if (dominoMove && dominoMove.chain) {
+        setChain(dominoMove.chain);
+        setOpponentHandCount(dominoMove.playerHand?.length || opponentHandCount);
+        if (dominoMove.boneyard) setBoneyard(dominoMove.boneyard);
+        setIsMyTurn(true);
+      }
+    }
+  }, [address, opponentHandCount]);
+
+  const { submitMove: persistMove, moves: dbMoves, isLoading: isSyncLoading } = useDurableGameSync({
+    roomPda: roomPda || "",
+    enabled: isRankedGame && roomPlayers.length >= 2,
+    onMoveReceived: handleDurableMoveReceived,
   });
 
   // Check if we have 2 real player wallets
@@ -1013,6 +1035,12 @@ const DominosGame = () => {
       action: "play",
     };
     sendMove(moveData);
+    
+    // Persist move to DB for ranked games
+    if (isRankedGame && address) {
+      persistMove(moveData, address);
+    }
+    
     recordPlayerMove(address || "", "played");
     
     // Check win

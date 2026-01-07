@@ -21,6 +21,7 @@ import { useRoomMode } from "@/hooks/useRoomMode";
 import { useRankedReadyGate } from "@/hooks/useRankedReadyGate";
 import { useStartRoll } from "@/hooks/useStartRoll";
 import { useTurnTimer, DEFAULT_RANKED_TURN_TIME } from "@/hooks/useTurnTimer";
+import { useDurableGameSync, GameMove } from "@/hooks/useDurableGameSync";
 import TurnStatusHeader from "@/components/TurnStatusHeader";
 import TurnHistoryDrawer from "@/components/TurnHistoryDrawer";
 import NotificationToggle from "@/components/NotificationToggle";
@@ -311,6 +312,37 @@ const ChessGame = () => {
 
   // Capture animations hook
   const { animations, triggerAnimation, handleAnimationComplete } = useCaptureAnimations(animationsEnabled);
+
+  // Durable game sync - persists moves to DB for reliability
+  const handleDurableMoveReceived = useCallback((move: GameMove) => {
+    // Only apply moves from opponents (we already applied our own locally)
+    if (move.wallet.toLowerCase() !== address?.toLowerCase()) {
+      console.log("[ChessGame] Applying move from DB:", move.turn_number);
+      const chessMove = move.move_data as ChessMove;
+      if (chessMove && chessMove.from && chessMove.to) {
+        const gameCopy = new Chess(gameRef.current.fen());
+        try {
+          const result = gameCopy.move({
+            from: chessMove.from,
+            to: chessMove.to,
+            promotion: (chessMove.promotion || 'q') as 'q' | 'r' | 'b' | 'n',
+          });
+          if (result) {
+            setGame(new Chess(gameCopy.fen()));
+            setMoveHistory(gameCopy.history());
+          }
+        } catch (e) {
+          console.error("[ChessGame] Failed to apply DB move:", e);
+        }
+      }
+    }
+  }, [address]);
+
+  const { submitMove: persistMove, moves: dbMoves, isLoading: isSyncLoading } = useDurableGameSync({
+    roomPda: roomPda || "",
+    enabled: isRankedGame && roomPlayers.length >= 2,
+    onMoveReceived: handleDurableMoveReceived,
+  });
 
   // Check if we have 2 real player wallets (not placeholders)
   const hasTwoRealPlayers = roomPlayers.length >= 2 && 
@@ -881,6 +913,11 @@ const ChessGame = () => {
         san: move.san,
       };
       sendMove(moveData);
+
+      // Persist move to DB for ranked games (durable sync)
+      if (isRankedGame && address) {
+        persistMove(moveData, address);
+      }
 
       // Record move for turn history
       recordPlayerMove(address || "", move.san);

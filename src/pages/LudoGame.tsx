@@ -17,6 +17,7 @@ import { useRankedReadyGate } from "@/hooks/useRankedReadyGate";
 import { useTurnTimer, DEFAULT_RANKED_TURN_TIME } from "@/hooks/useTurnTimer";
 import { useStartRoll } from "@/hooks/useStartRoll";
 import { useTxLock } from "@/contexts/TxLockContext";
+import { useDurableGameSync, GameMove } from "@/hooks/useDurableGameSync";
 import { DiceRollStart } from "@/components/DiceRollStart";
 import LudoBoard from "@/components/ludo/LudoBoard";
 import EgyptianDice from "@/components/ludo/EgyptianDice";
@@ -228,6 +229,24 @@ const LudoGame = () => {
     myWallet: address,
     isRanked: isRankedGame,
     enabled: roomPlayers.length >= 2 && modeLoaded,
+  });
+
+  // Durable game sync - persists moves to DB for reliability
+  const handleDurableMoveReceived = useCallback((move: GameMove) => {
+    // Only apply moves from opponents (we already applied our own locally)
+    if (move.wallet.toLowerCase() !== address?.toLowerCase()) {
+      console.log("[LudoGame] Applying move from DB:", move.turn_number);
+      const ludoMove = move.move_data as LudoMove;
+      if (ludoMove) {
+        applyExternalMove(ludoMove);
+      }
+    }
+  }, [address, applyExternalMove]);
+
+  const { submitMove: persistMove, moves: dbMoves, isLoading: isSyncLoading } = useDurableGameSync({
+    roomPda: roomPda || "",
+    enabled: isRankedGame && roomPlayers.length >= 2,
+    onMoveReceived: handleDurableMoveReceived,
   });
 
   // Check if we have 2 real player wallets
@@ -739,6 +758,18 @@ const LudoGame = () => {
       // Record the move for turn history
       recordPlayerMove(address || "", `Moved token to position ${endPos}`);
       
+      // Persist move to DB for ranked games (durable sync)
+      if (isRankedGame && address) {
+        const moveData: LudoMove = {
+          playerIndex: currentPlayerIndex,
+          tokenIndex,
+          diceValue: currentDice,
+          startPosition: startPos,
+          endPosition: endPos,
+        };
+        persistMove(moveData, address);
+      }
+      
       setDiceValue(null);
       moveStartedRef.current = false;
       setTimeout(() => advanceTurn(currentDice), 200);
@@ -747,7 +778,7 @@ const LudoGame = () => {
     if (!success) {
       moveStartedRef.current = false;
     }
-  }, [isAnimating, currentPlayerIndex, myPlayerIndex, diceValue, isRolling, movableTokens, players, executeMove, advanceTurn, setDiceValue, setMovableTokens, recordPlayerMove, address]);
+  }, [isAnimating, currentPlayerIndex, myPlayerIndex, diceValue, isRolling, movableTokens, players, executeMove, advanceTurn, setDiceValue, setMovableTokens, recordPlayerMove, address, isRankedGame, persistMove]);
 
   // AI turn handling (for simulated opponents)
   const aiTimeoutRef = useRef<NodeJS.Timeout | null>(null);

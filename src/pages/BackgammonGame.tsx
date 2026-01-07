@@ -24,6 +24,7 @@ import { useRankedReadyGate } from "@/hooks/useRankedReadyGate";
 import { useTurnTimer, DEFAULT_RANKED_TURN_TIME } from "@/hooks/useTurnTimer";
 import { useStartRoll } from "@/hooks/useStartRoll";
 import { useTxLock } from "@/contexts/TxLockContext";
+import { useDurableGameSync, GameMove } from "@/hooks/useDurableGameSync";
 import { DiceRollStart } from "@/components/DiceRollStart";
 import TurnStatusHeader from "@/components/TurnStatusHeader";
 import TurnHistoryDrawer from "@/components/TurnHistoryDrawer";
@@ -273,6 +274,26 @@ const BackgammonGame = () => {
     myWallet: address,
     isRanked: isRankedGame,
     enabled: roomPlayers.length >= 2 && modeLoaded,
+  });
+
+  // Durable game sync - persists moves to DB for reliability
+  const handleDurableMoveReceived = useCallback((move: GameMove) => {
+    // Only apply moves from opponents (we already applied our own locally)
+    if (move.wallet.toLowerCase() !== address?.toLowerCase()) {
+      console.log("[BackgammonGame] Applying move from DB:", move.turn_number);
+      const bgMove = move.move_data as BackgammonMoveMessage;
+      if (bgMove && bgMove.gameState) {
+        setGameState(bgMove.gameState);
+        if (bgMove.remainingMoves) setRemainingMoves(bgMove.remainingMoves);
+        if (bgMove.dice) setDice(bgMove.dice);
+      }
+    }
+  }, [address]);
+
+  const { submitMove: persistMove, moves: dbMoves, isLoading: isSyncLoading } = useDurableGameSync({
+    roomPda: roomPda || "",
+    enabled: isRankedGame && roomPlayers.length >= 2,
+    onMoveReceived: handleDurableMoveReceived,
   });
 
   // Check if we have 2 real player wallets
@@ -784,6 +805,12 @@ const BackgammonGame = () => {
           remainingMoves: newRemaining,
         };
         sendMove(moveMsg);
+        
+        // Persist move to DB for ranked games
+        if (isRankedGame && address) {
+          persistMove(moveMsg, address);
+        }
+        
         recordPlayerMove(address || "", "Re-entered from bar");
         
         // Check winner or end turn
@@ -849,6 +876,12 @@ const BackgammonGame = () => {
             remainingMoves: newRemaining,
           };
           sendMove(moveMsg);
+          
+          // Persist move to DB for ranked games
+          if (isRankedGame && address) {
+            persistMove(moveMsg, address);
+          }
+          
           recordPlayerMove(address || "", `Moved from ${selectedPoint + 1}`);
           
           // Check winner

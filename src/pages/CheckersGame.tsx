@@ -19,6 +19,7 @@ import { useRankedReadyGate } from "@/hooks/useRankedReadyGate";
 import { useTurnTimer, DEFAULT_RANKED_TURN_TIME } from "@/hooks/useTurnTimer";
 import { useStartRoll } from "@/hooks/useStartRoll";
 import { useTxLock } from "@/contexts/TxLockContext";
+import { useDurableGameSync, GameMove } from "@/hooks/useDurableGameSync";
 import { DiceRollStart } from "@/components/DiceRollStart";
 import TurnStatusHeader from "@/components/TurnStatusHeader";
 import TurnHistoryDrawer from "@/components/TurnHistoryDrawer";
@@ -271,6 +272,25 @@ const CheckersGame = () => {
     myWallet: address,
     isRanked: isRankedGame,
     enabled: roomPlayers.length >= 2 && modeLoaded,
+  });
+
+  // Durable game sync - persists moves to DB for reliability
+  const handleDurableMoveReceived = useCallback((move: GameMove) => {
+    // Only apply moves from opponents (we already applied our own locally)
+    if (move.wallet.toLowerCase() !== address?.toLowerCase()) {
+      console.log("[CheckersGame] Applying move from DB:", move.turn_number);
+      const checkersMove = move.move_data as CheckersMove;
+      if (checkersMove && checkersMove.board) {
+        setBoard(checkersMove.board);
+        setCurrentPlayer(checkersMove.player === "gold" ? "obsidian" : "gold");
+      }
+    }
+  }, [address]);
+
+  const { submitMove: persistMove, moves: dbMoves, isLoading: isSyncLoading } = useDurableGameSync({
+    roomPda: roomPda || "",
+    enabled: isRankedGame && roomPlayers.length >= 2,
+    onMoveReceived: handleDurableMoveReceived,
   });
 
   // Check if we have 2 real player wallets
@@ -843,7 +863,7 @@ const CheckersGame = () => {
           setSelectedPiece(move.to);
           setValidMoves(moreCaptures);
         } else {
-          // Send move to opponent
+        // Send move to opponent
           const moveData: CheckersMove = {
             from: move.from,
             to: move.to,
@@ -852,6 +872,12 @@ const CheckersGame = () => {
             player: myColor,
           };
           sendMove(moveData);
+          
+          // Persist move to DB for ranked games (durable sync)
+          if (isRankedGame && address) {
+            persistMove(moveData, address);
+          }
+          
           recordPlayerMove(address || "", "capture");
           
           setChainCapture(null);
@@ -903,6 +929,12 @@ const CheckersGame = () => {
           player: myColor,
         };
         sendMove(moveData);
+        
+        // Persist move to DB for ranked games (durable sync)
+        if (isRankedGame && address) {
+          persistMove(moveData, address);
+        }
+        
         recordPlayerMove(address || "", move.captures ? "capture" : "move");
         
         setSelectedPiece(null);
