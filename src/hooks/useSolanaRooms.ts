@@ -12,7 +12,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { buildTxDebugInfo } from "@/components/TxDebugPanel";
 import { normalizeSignature, isBlockingRoom } from "@/lib/solana-utils";
-import { isRoomArchived } from "@/lib/roomArchive";
+import { isRoomArchived, archiveRoom } from "@/lib/roomArchive";
 import { supabase } from "@/integrations/supabase/client";
 import { computeRulesHash, createRulesFromRoom } from "@/lib/gameAcceptance";
 import {
@@ -818,10 +818,24 @@ export function useSolanaRooms() {
       console.log("[forfeitGame] Forfeit response:", data);
       if (data?.signature) console.log("[forfeitGame] Payout signature:", data.signature);
       
-      if (data.action === 'eliminated') {
+      if (data.action === "eliminated") {
         toast({
           title: "You left the game",
           description: "You have been eliminated. Game continues without you.",
+        });
+      } else if (data.action === "void_cleared") {
+        archiveRoom(roomPda);
+        console.log("[forfeitGame] Room void-cleared, archived locally:", roomPda);
+        toast({
+          title: "Room Cleared",
+          description: "This match couldn't be settled on-chain. It has been removed from your active games.",
+        });
+      } else if (data.action === "already_closed") {
+        archiveRoom(roomPda);
+        console.log("[forfeitGame] Room already closed, archived locally:", roomPda);
+        toast({
+          title: "Room Already Closed",
+          description: "This room was already closed and has been removed from your active games.",
         });
       } else {
         toast({
