@@ -198,6 +198,11 @@ export function useForfeit({
     try {
       if (!roomPda || !myWallet || !opponentWallet) {
         console.error("[useForfeit] Missing required params:", { roomPda, myWallet, opponentWallet });
+        toast({
+          title: "Forfeit Error",
+          description: `Missing: ${!roomPda ? 'room' : ''} ${!myWallet ? 'wallet' : ''} ${!opponentWallet ? 'opponent' : ''}`.trim(),
+          variant: "destructive",
+        });
         return; // forceExit will happen via timeout or finally
       }
       
@@ -215,11 +220,17 @@ export function useForfeit({
         });
         toast({
           title: t("forfeit.invalidState", "Cannot forfeit"),
-          description: t("forfeit.onChainNotReady", "Room is not in a forfeitable state"),
+          description: `Room status: ${roomStatus}, Players: ${playerCount}`,
           variant: "destructive",
         });
         return;
       }
+      
+      // Show debug info for mobile users
+      toast({
+        title: "Forfeiting...",
+        description: `Room: ${roomPda.slice(0, 8)}... | Opponent: ${opponentWallet.slice(0, 8)}...`,
+      });
       
       console.log("[FinalizeForfeit] start", {
         roomPda: roomPda.slice(0, 8) + "...",
@@ -272,6 +283,12 @@ export function useForfeit({
       }
     } catch (err: any) {
       console.error("[useForfeit] Forfeit error:", err);
+      // Show detailed error to user (for mobile debugging)
+      toast({
+        title: "Forfeit Exception",
+        description: err?.message || String(err) || "Unknown error",
+        variant: "destructive",
+      });
     } finally {
       // Clear the timeout (may have already fired - that's OK)
       if (forceExitTimeoutRef.current) {
