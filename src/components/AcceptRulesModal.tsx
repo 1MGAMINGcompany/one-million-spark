@@ -86,6 +86,7 @@ export function AcceptRulesModal({
         <DialogContent 
           className="sm:max-w-md" 
           onPointerDownOutside={(e) => e.preventDefault()}
+          aria-describedby={undefined}
         >
           <div className="flex flex-col items-center justify-center py-12 gap-4">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />

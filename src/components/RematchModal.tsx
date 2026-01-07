@@ -138,7 +138,7 @@ export function RematchModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-lg bg-card border-primary/30">
+      <DialogContent className="sm:max-w-lg bg-card border-primary/30" aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle className="text-xl font-bold text-foreground flex items-center gap-2">
             <span className="text-primary">{t('rematch.title')}</span> — {gameType}

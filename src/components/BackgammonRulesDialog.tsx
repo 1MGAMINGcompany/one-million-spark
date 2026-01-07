@@ -51,9 +51,9 @@ export const BackgammonRulesDialog = ({
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[500px] bg-background/95 backdrop-blur border-primary/30 p-0 max-h-[85vh]">
+      <DialogContent className="sm:max-w-[500px] bg-background/95 backdrop-blur border-primary/30 p-0 max-h-[85vh]" aria-describedby={undefined}>
         <DialogHeader className="p-6 pb-0">
-          <DialogTitle 
+          <DialogTitle
             className="text-xl font-display flex items-center gap-2"
             style={{
               background: "linear-gradient(135deg, #FCE68A 0%, #FACC15 50%, #AB8215 100%)",

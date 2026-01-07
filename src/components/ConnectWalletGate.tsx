@@ -183,7 +183,7 @@ export function ConnectWalletGate({ className }: ConnectWalletGateProps) {
 
       {/* Custom Wallet Picker Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md" aria-describedby={undefined}>
           <DialogHeader>
             <DialogTitle>{t("wallet.connectWallet")}</DialogTitle>
           </DialogHeader>
