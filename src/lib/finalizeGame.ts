@@ -38,10 +38,9 @@ export interface FinalizeGameParams {
   endReason: 'win' | 'forfeit' | 'timeout' | 'draw';
   /** Connection for on-chain calls */
   connection: Connection;
-  /** Wallet sendTransaction function (for client-side finalization) */
-  sendTransaction?: (tx: VersionedTransaction, connection: Connection) => Promise<string | Uint8Array>;
-  /** Signer public key (for client-side finalization) */
-  signerPubkey?: PublicKey;
+  // NOTE: sendTransaction and signerPubkey are NO LONGER USED for settlement
+  // ALL settlement (forfeit/timeout/win) now goes through edge functions
+  // These params are kept for backward compatibility but are no-ops
 }
 
 export interface FinalizeGameResult {
@@ -274,8 +273,6 @@ export async function finalizeGame(params: FinalizeGameParams): Promise<Finalize
     players,
     endReason,
     connection,
-    sendTransaction,
-    signerPubkey,
   } = params;
   
   console.log('[finalizeGame] Starting finalization:', {
@@ -298,39 +295,21 @@ export async function finalizeGame(params: FinalizeGameParams): Promise<Finalize
   }
   
   // Step 2: Execute payout based on end reason
+  // CRITICAL: ALL settlement goes through edge functions (server-side verifier)
+  // No client-side wallet signing for forfeit/timeout/win - eliminates scary wallet popups
   let result: FinalizeGameResult;
   
   if (endReason === 'forfeit' || endReason === 'timeout') {
-    // CLIENT-FIRST: Use wallet signing directly if available (skip edge function)
-    if (sendTransaction && signerPubkey) {
-      console.log('[finalizeGame] Using client-side finalize_room for forfeit/timeout');
-      
-      const clientResult = await finalizeViaClientWallet(
-        connection,
-        roomPda,
-        winnerWallet,
-        sendTransaction,
-        signerPubkey
-      );
-      
-      result = {
-        success: clientResult.ok,
-        signature: clientResult.signature,
-        error: clientResult.error,
-        details: 'Client-side finalize_room used for forfeit/timeout',
+    // ALWAYS use edge function for forfeit/timeout - NO wallet popup
+    if (!loserWallet) {
+      return {
+        success: false,
+        error: 'loserWallet required for forfeit/timeout',
       };
-    } else {
-      // FALLBACK: No wallet info, use edge function (server-side verifier)
-      if (!loserWallet) {
-        return {
-          success: false,
-          error: 'loserWallet required for forfeit/timeout without wallet',
-        };
-      }
-      
-      console.log('[finalizeGame] No wallet info, falling back to edge function');
-      result = await finalizeViaEdgeFunction(roomPda, loserWallet, gameType);
     }
+    
+    console.log('[finalizeGame] Forfeit/timeout: using server-side settlement (no wallet popup)');
+    result = await finalizeViaEdgeFunction(roomPda, loserWallet, gameType);
   } else if (endReason === 'draw') {
     // Draw settlement via settle-draw edge function
     console.log('[finalizeGame] Processing draw settlement...');
@@ -354,29 +333,16 @@ export async function finalizeGame(params: FinalizeGameParams): Promise<Finalize
       result = { success: false, error: err.message || 'Draw settlement exception' };
     }
   } else {
-    // Normal win - use client wallet if available, else edge function
-    if (sendTransaction && signerPubkey) {
-      const clientResult = await finalizeViaClientWallet(
-        connection,
-        roomPda,
-        winnerWallet,
-        sendTransaction,
-        signerPubkey
-      );
-      result = {
-        success: clientResult.ok,
-        signature: clientResult.signature,
-        error: clientResult.error,
-      };
-    } else if (loserWallet) {
-      // Fallback to edge function
-      result = await finalizeViaEdgeFunction(roomPda, loserWallet, gameType);
-    } else {
+    // Normal win - ALWAYS use edge function (no wallet popup)
+    if (!loserWallet) {
       return {
         success: false,
-        error: 'Either sendTransaction+signerPubkey or loserWallet required',
+        error: 'loserWallet required for win settlement',
       };
     }
+    
+    console.log('[finalizeGame] Win: using server-side settlement (no wallet popup)');
+    result = await finalizeViaEdgeFunction(roomPda, loserWallet, gameType);
   }
   
   // Step 3: If payout succeeded, record receipt and update database
