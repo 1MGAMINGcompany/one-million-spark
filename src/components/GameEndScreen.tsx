@@ -247,7 +247,7 @@ export function GameEndScreen({
   const isAlreadySettled = roomAlreadySettled || finalizeState === 'success';
   
   const handleFinalize = async () => {
-    if (!roomPda || !publicKey || !sendTransaction) return;
+    if (!roomPda || !publicKey) return;
     
     setFinalizeState('loading');
     setFinalizeError(null);
@@ -255,10 +255,11 @@ export function GameEndScreen({
     setTxSignature(null);
     
     try {
-      // Find loser wallet for forfeit-style finalization
+      // Find loser wallet for edge function settlement
       const loserWallet = players.find(p => p.address !== winner)?.address;
       
       // Use the authoritative finalizeGame function
+      // SERVER-ONLY: No wallet popup - edge function handles settlement
       const result = await finalizeGame({
         roomPda,
         winnerWallet: isDraw ? publicKey.toBase58() : winner!,
@@ -269,8 +270,7 @@ export function GameEndScreen({
         players: players.map(p => p.address),
         endReason: isDraw ? 'draw' : 'win',
         connection,
-        sendTransaction,
-        signerPubkey: publicKey,
+        // NO sendTransaction or signerPubkey - forces edge function path
       });
       
       if (result.success) {
@@ -565,8 +565,8 @@ export function GameEndScreen({
                     disabled={!publicKey || checkingRoomStatus}
                     className="w-full gap-2 bg-amber-600 hover:bg-amber-700 text-white font-semibold py-6"
                   >
-                    <Wallet size={20} />
-                    {checkingRoomStatus ? 'Checking status…' : 'Settle Payout (Finalize)'}
+                    <CheckCircle size={20} />
+                    {checkingRoomStatus ? 'Checking status…' : 'Settle Payout'}
                   </Button>
                 )}
 
@@ -577,7 +577,7 @@ export function GameEndScreen({
                     disabled={!publicKey}
                     className="w-full gap-2 bg-amber-600 hover:bg-amber-700 text-white font-semibold py-6"
                   >
-                    <Wallet size={20} />
+                    <RefreshCw size={20} />
                     Retry Settlement
                   </Button>
                 )}

@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
-import { Connection, PublicKey, Keypair, Transaction, TransactionInstruction, SystemProgram } from "https://esm.sh/@solana/web3.js@1.98.0";
-import { decode } from "https://deno.land/std@0.168.0/encoding/base58.ts";
+import { Connection, PublicKey, Keypair, Transaction, TransactionInstruction } from "https://esm.sh/@solana/web3.js@1.98.0";
+import bs58 from "https://esm.sh/bs58@6.0.0";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -18,19 +18,10 @@ interface ForfeitRequest {
   roomPda: string;
   forfeitingWallet: string;
   gameType?: string;
+  winnerWallet?: string; // Optional: explicit winner (for win settlement)
 }
 
-// Room account layout from IDL:
-// - 8 bytes discriminator
-// - 8 bytes room_id (u64)
-// - 32 bytes creator (pubkey)
-// - 1 byte game_type (u8)
-// - 1 byte max_players (u8)
-// - 1 byte player_count (u8)
-// - 1 byte status (u8)
-// - 8 bytes stake_lamports (u64)
-// - 32 bytes winner (pubkey)
-// - 128 bytes players array (4 x 32 bytes)
+// Room account layout from IDL
 interface ParsedRoom {
   roomId: bigint;
   creator: PublicKey;
@@ -105,17 +96,18 @@ serve(async (req) => {
   }
 
   try {
-    const { roomPda, forfeitingWallet, gameType } = await req.json() as ForfeitRequest;
+    const { roomPda, forfeitingWallet, gameType, winnerWallet: explicitWinner } = await req.json() as ForfeitRequest;
 
     if (!roomPda || !forfeitingWallet) {
       console.error("[forfeit-game] Missing required fields:", { roomPda, forfeitingWallet });
+      // Return 200 with success:false for consistent client handling
       return new Response(
-        JSON.stringify({ error: "Missing roomPda or forfeitingWallet" }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ success: false, error: "Missing roomPda or forfeitingWallet" }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log("[forfeit-game] Processing forfeit:", { roomPda, forfeitingWallet, gameType });
+    console.log("[forfeit-game] Processing forfeit:", { roomPda, forfeitingWallet, gameType, explicitWinner });
 
     // Initialize Supabase client
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -127,28 +119,39 @@ serve(async (req) => {
     if (!verifierSecretKey) {
       console.error("[forfeit-game] VERIFIER_SECRET_KEY not configured");
       return new Response(
-        JSON.stringify({ error: "Server configuration error: verifier not configured" }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ success: false, error: "Server configuration error: verifier not configured" }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Parse verifier keypair
+    // Parse verifier keypair - supports both Base58 and JSON array formats
     let verifierKeypair: Keypair;
     try {
       const keyString = verifierSecretKey.trim();
       let secretKeyBytes: Uint8Array;
+      
       if (keyString.startsWith("[")) {
+        // JSON array format: [1,2,3,...]
+        console.log("[forfeit-game] Parsing verifier key as JSON array");
         secretKeyBytes = new Uint8Array(JSON.parse(keyString));
       } else {
-        secretKeyBytes = new Uint8Array(decode(keyString));
+        // Base58 format (most common)
+        console.log("[forfeit-game] Parsing verifier key as Base58");
+        secretKeyBytes = bs58.decode(keyString);
       }
+      
       verifierKeypair = Keypair.fromSecretKey(secretKeyBytes);
-      console.log("[forfeit-game] Verifier public key:", verifierKeypair.publicKey.toBase58());
+      console.log("[forfeit-game] ✅ Verifier key loaded OK");
+      console.log("[forfeit-game] Verifier pubkey:", verifierKeypair.publicKey.toBase58());
     } catch (err) {
       console.error("[forfeit-game] Failed to parse verifier key:", err);
       return new Response(
-        JSON.stringify({ error: "Server configuration error: invalid verifier key" }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ 
+          success: false, 
+          error: "Server configuration error: invalid verifier key format",
+          details: err instanceof Error ? err.message : String(err)
+        }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -163,8 +166,8 @@ serve(async (req) => {
     if (!accountInfo) {
       console.error("[forfeit-game] Room not found on-chain:", roomPda);
       return new Response(
-        JSON.stringify({ error: "Room not found on-chain" }),
-        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ success: false, error: "Room not found on-chain" }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -173,8 +176,8 @@ serve(async (req) => {
     if (!roomData) {
       console.error("[forfeit-game] Failed to parse room data");
       return new Response(
-        JSON.stringify({ error: "Failed to parse room account" }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ success: false, error: "Failed to parse room account" }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -194,8 +197,8 @@ serve(async (req) => {
     if (playerIndex === -1) {
       console.error("[forfeit-game] Forfeiting wallet not in room:", forfeitingWallet);
       return new Response(
-        JSON.stringify({ error: "Player not in this room" }),
-        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ success: false, error: "Player not in this room" }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -203,29 +206,26 @@ serve(async (req) => {
     // 1. Room has 2+ players
     // 2. Room is not finished (status !== 3)
     // 3. Room is not cancelled (status !== 4)
-    // REMOVED: requirement for status === 2 ("Started") - this was blocking stuck rooms
-    // This allows forfeit even if game never "properly started"
     
     if (roomData.playerCount < 2) {
       console.error("[forfeit-game] Only 1 player - use cancel instead");
       return new Response(
-        JSON.stringify({ error: "Room has only 1 player. Use Cancel to get refund." }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ success: false, error: "Room has only 1 player. Use Cancel to get refund." }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
     if (roomData.status === 3 || roomData.status === 4) {
       console.error("[forfeit-game] Room already finished/cancelled:", roomData.status);
       return new Response(
-        JSON.stringify({ error: "Room is already finished or cancelled" }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ success: false, error: "Room is already finished or cancelled" }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
     console.log("[forfeit-game] Allowing forfeit - 2+ players and room not finished/cancelled");
 
-    // Determine the winner (for 2-player games: the other player)
-    // For Ludo (4-player): mark player as eliminated, game continues
+    // Determine the winner
     const isLudo = gameType === 'ludo' || roomData.maxPlayers > 2;
     let winnerWallet: string | null = null;
 
@@ -233,7 +233,6 @@ serve(async (req) => {
       // Ludo with 3+ players: mark as eliminated, game continues
       console.log("[forfeit-game] Ludo game with multiple players - marking player as eliminated");
       
-      // Get current game state from database
       const { data: sessionData, error: sessionError } = await supabase
         .from('game_sessions')
         .select('game_state')
@@ -243,7 +242,6 @@ serve(async (req) => {
       if (sessionError) {
         console.error("[forfeit-game] Failed to fetch game session:", sessionError);
       } else {
-        // Update game state to mark player as eliminated
         const currentState = sessionData?.game_state || {};
         const eliminatedPlayers = (currentState as Record<string, unknown>).eliminatedPlayers as string[] || [];
         eliminatedPlayers.push(forfeitingWallet);
@@ -272,56 +270,56 @@ serve(async (req) => {
       );
     }
 
-    // 2-player game: determine winner (the other player)
-    const winnerIndex = playerIndex === 0 ? 1 : 0;
-    if (winnerIndex >= roomData.players.length) {
-      console.error("[forfeit-game] Cannot determine winner - only one player in room");
-      return new Response(
-        JSON.stringify({ error: "Cannot forfeit - only one player in room. Use cancel instead." }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    // 2-player game: use explicit winner if provided, otherwise determine from players
+    let winnerPubkey: PublicKey;
+    if (explicitWinner) {
+      winnerPubkey = new PublicKey(explicitWinner);
+      winnerWallet = explicitWinner;
+      console.log("[forfeit-game] Using explicit winner:", winnerWallet);
+    } else {
+      const winnerIndex = playerIndex === 0 ? 1 : 0;
+      if (winnerIndex >= roomData.players.length) {
+        console.error("[forfeit-game] Cannot determine winner - only one player in room");
+        return new Response(
+          JSON.stringify({ success: false, error: "Cannot forfeit - only one player in room. Use cancel instead." }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      winnerPubkey = roomData.players[winnerIndex];
+      winnerWallet = winnerPubkey.toBase58();
+      console.log("[forfeit-game] Winner determined:", winnerWallet);
     }
-    const winnerPubkey = roomData.players[winnerIndex];
-    winnerWallet = winnerPubkey.toBase58();
-    console.log("[forfeit-game] Winner determined:", winnerWallet);
 
     // Build submit_result instruction
-    // Discriminator from IDL: [240, 42, 89, 180, 10, 239, 9, 214]
     const submitResultDiscriminator = new Uint8Array([240, 42, 89, 180, 10, 239, 9, 214]);
     
-    // Config PDA
     const [configPda] = PublicKey.findProgramAddressSync(
       [new TextEncoder().encode("config")],
       PROGRAM_ID
     );
 
-    // Vault PDA
     const [vaultPda] = PublicKey.findProgramAddressSync(
       [new TextEncoder().encode("vault"), roomPdaKey.toBuffer()],
       PROGRAM_ID
     );
 
-    // Build instruction data: discriminator (8 bytes) + winner pubkey (32 bytes)
     const instructionDataArray = new Uint8Array(8 + 32);
     instructionDataArray.set(submitResultDiscriminator, 0);
     instructionDataArray.set(winnerPubkey.toBytes(), 8);
 
-    // Build accounts list for submit_result (from IDL order):
-    // verifier, config, room, vault, winner, fee_recipient
     const submitResultIx = new TransactionInstruction({
       programId: PROGRAM_ID,
       keys: [
-        { pubkey: verifierKeypair.publicKey, isSigner: true, isWritable: false }, // verifier
-        { pubkey: configPda, isSigner: false, isWritable: false }, // config
-        { pubkey: roomPdaKey, isSigner: false, isWritable: true }, // room
-        { pubkey: vaultPda, isSigner: false, isWritable: true }, // vault
-        { pubkey: winnerPubkey, isSigner: false, isWritable: true }, // winner
-        { pubkey: FEE_RECIPIENT, isSigner: false, isWritable: true }, // fee_recipient
+        { pubkey: verifierKeypair.publicKey, isSigner: true, isWritable: false },
+        { pubkey: configPda, isSigner: false, isWritable: false },
+        { pubkey: roomPdaKey, isSigner: false, isWritable: true },
+        { pubkey: vaultPda, isSigner: false, isWritable: true },
+        { pubkey: winnerPubkey, isSigner: false, isWritable: true },
+        { pubkey: FEE_RECIPIENT, isSigner: false, isWritable: true },
       ],
       data: instructionDataArray as any,
     });
 
-    // Log accounts before sending
     console.log("[forfeit-game] submit_result accounts:", {
       verifier: verifierKeypair.publicKey.toBase58(),
       config: configPda.toBase58(),
@@ -343,30 +341,27 @@ serve(async (req) => {
 
     console.log("[forfeit-game] Sending submit_result transaction...");
     
-    // Send transaction
     const signature = await connection.sendRawTransaction(transaction.serialize(), {
       skipPreflight: false,
       preflightCommitment: 'confirmed',
     });
 
-    console.log("[forfeit-game] Transaction sent:", signature);
+    console.log("[forfeit-game] ✅ Transaction sent:", signature);
 
-    // Wait for confirmation + VERIFY success
+    // Wait for confirmation
     const confirmation = await connection.confirmTransaction(
       { signature, blockhash, lastValidBlockHeight },
       "confirmed"
     );
 
     if (confirmation.value.err) {
-      console.error("[forfeit-game] Transaction FAILED:", confirmation.value.err);
-      // Fetch logs for debugging
+      console.error("[forfeit-game] ❌ Transaction FAILED:", confirmation.value.err);
       const tx = await connection.getTransaction(signature, {
         commitment: "confirmed",
         maxSupportedTransactionVersion: 0,
       });
       console.error("[forfeit-game] Failure logs:", tx?.meta?.logMessages);
       
-      // Mark game session as needs_settlement for retry
       await supabase
         .from('game_sessions')
         .update({ 
@@ -381,6 +376,7 @@ serve(async (req) => {
         })
         .eq('room_pda', roomPda);
       
+      // Return 200 with success:false for consistent client handling
       return new Response(
         JSON.stringify({
           success: false,
@@ -390,11 +386,11 @@ serve(async (req) => {
           txErr: confirmation.value.err,
           logs: tx?.meta?.logMessages || null,
         }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    console.log("[forfeit-game] Transaction confirmed:", signature);
+    console.log("[forfeit-game] ✅ Transaction confirmed:", signature);
 
     // Record match result in database
     const playersArray = roomData.players.map(p => p.toBase58());
@@ -405,13 +401,12 @@ serve(async (req) => {
       p_game_type: gameType || 'unknown',
       p_max_players: roomData.maxPlayers,
       p_stake_lamports: Number(roomData.stakeLamports),
-      p_mode: 'ranked', // Forfeit typically happens in ranked games
+      p_mode: 'ranked',
       p_players: playersArray,
     });
 
     if (rpcError) {
       console.error("[forfeit-game] Failed to record match result:", rpcError);
-      // Don't fail the request - the on-chain tx succeeded
     } else {
       console.log("[forfeit-game] Match result recorded in database");
     }
@@ -435,9 +430,14 @@ serve(async (req) => {
 
   } catch (error) {
     console.error("[forfeit-game] Unexpected error:", error);
+    // Return 200 with success:false for consistent client handling
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : "Internal server error" }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ 
+        success: false, 
+        error: error instanceof Error ? error.message : "Internal server error",
+        details: error instanceof Error ? error.stack : undefined
+      }),
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });
