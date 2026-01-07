@@ -114,15 +114,28 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Get verifier secret key
+    // ======== DEBUG: Verifier Key Diagnostics ========
     const verifierSecretKey = Deno.env.get('VERIFIER_SECRET_KEY');
+    
+    // Log existence (never log the full value!)
+    console.log("[forfeit-game] 🔑 VERIFIER_SECRET_KEY exists:", !!verifierSecretKey);
+    
     if (!verifierSecretKey) {
-      console.error("[forfeit-game] VERIFIER_SECRET_KEY not configured");
+      console.error("[forfeit-game] ❌ VERIFIER_SECRET_KEY is NOT set in environment");
       return new Response(
-        JSON.stringify({ success: false, error: "Server configuration error: verifier not configured" }),
+        JSON.stringify({ 
+          success: false, 
+          error: "Server configuration error: VERIFIER_SECRET_KEY not configured",
+          details: "The secret is missing from Supabase Edge Function secrets"
+        }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+    
+    // Log first 2 chars only (safe preview)
+    const keyPreview = verifierSecretKey.substring(0, 2);
+    console.log("[forfeit-game] 🔑 Key starts with:", keyPreview);
+    console.log("[forfeit-game] 🔑 Key total length (chars):", verifierSecretKey.length);
 
     // Helper function to load verifier keypair - supports JSON array, base58, and 32-byte seeds
     function loadVerifierKeypair(verifierSecretKeyStr: string): Keypair {
@@ -131,24 +144,33 @@ serve(async (req) => {
 
       if (keyString.startsWith("[")) {
         // JSON array format: [1,2,3,...,64 numbers]
-        console.log("[forfeit-game] Parsing verifier key as JSON array");
-        bytes = new Uint8Array(JSON.parse(keyString));
+        console.log("[forfeit-game] 📋 Parsing verifier key as JSON array");
+        try {
+          bytes = new Uint8Array(JSON.parse(keyString));
+        } catch (parseErr) {
+          throw new Error(`JSON parse failed: ${parseErr instanceof Error ? parseErr.message : parseErr}`);
+        }
       } else {
         // Base58 format
-        console.log("[forfeit-game] Parsing verifier key as Base58");
-        bytes = bs58.decode(keyString);
+        console.log("[forfeit-game] 🔤 Parsing verifier key as Base58");
+        try {
+          bytes = bs58.decode(keyString);
+        } catch (decodeErr) {
+          throw new Error(`Base58 decode failed: ${decodeErr instanceof Error ? decodeErr.message : decodeErr}`);
+        }
       }
 
-      console.log("[forfeit-game] Decoded key length:", bytes.length);
+      console.log("[forfeit-game] 📏 Decoded byte length:", bytes.length);
 
       // Solana keypair secretKey is 64 bytes
       if (bytes.length === 64) {
+        console.log("[forfeit-game] ✅ Using 64-byte secret key format");
         return Keypair.fromSecretKey(bytes);
       }
 
       // Some people store 32-byte seeds by mistake - support it
       if (bytes.length === 32) {
-        console.log("[forfeit-game] Using 32-byte seed format");
+        console.log("[forfeit-game] ⚠️ Using 32-byte seed format (not recommended)");
         return Keypair.fromSeed(bytes);
       }
 
@@ -159,15 +181,16 @@ serve(async (req) => {
     let verifierKeypair: Keypair;
     try {
       verifierKeypair = loadVerifierKeypair(verifierSecretKey);
-      console.log("[forfeit-game] ✅ Verifier key loaded OK");
-      console.log("[forfeit-game] Verifier pubkey:", verifierKeypair.publicKey.toBase58());
+      console.log("[forfeit-game] ✅ Verifier keypair loaded successfully");
+      console.log("[forfeit-game] 🔑 Verifier pubkey:", verifierKeypair.publicKey.toBase58());
     } catch (err) {
-      console.error("[forfeit-game] Failed to parse verifier key:", err);
+      const errMsg = err instanceof Error ? err.message : String(err);
+      console.error("[forfeit-game] ❌ Failed to parse verifier key:", errMsg);
       return new Response(
         JSON.stringify({ 
           success: false, 
           error: "Server configuration error: invalid verifier key format",
-          details: err instanceof Error ? err.message : String(err)
+          details: errMsg
         }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
