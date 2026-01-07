@@ -262,8 +262,10 @@ serve(async (req) => {
     // 3 finished, 4 cancelled
     if (roomData.status === 3 || roomData.status === 4) {
       return json200({
-        success: false,
-        error: "Room is already finished or cancelled",
+        success: true,
+        action: "already_closed",
+        message: "Room is already closed",
+        roomPda,
       });
     }
 
@@ -415,135 +417,145 @@ serve(async (req) => {
       });
     }
 
-    // data = discriminator (8) + winner pubkey (32)
-    const ixData = new Uint8Array(8 + 32);
-    ixData.set(submitResultDiscriminator, 0);
-    ixData.set(winnerPubkey.toBytes(), 8);
+    // Wrap settlement in try/catch - void-clear on ANY failure
+    try {
+      // data = discriminator (8) + winner pubkey (32)
+      const ixData = new Uint8Array(8 + 32);
+      ixData.set(submitResultDiscriminator, 0);
+      ixData.set(winnerPubkey.toBytes(), 8);
 
-    const submitResultIx = new TransactionInstruction({
-      programId: PROGRAM_ID,
-      keys: [
-        { pubkey: verifierKeypair.publicKey, isSigner: true, isWritable: false }, // verifier
-        { pubkey: configPda, isSigner: false, isWritable: false }, // config
-        { pubkey: roomPdaKey, isSigner: false, isWritable: true }, // room
-        { pubkey: vaultPda, isSigner: false, isWritable: true }, // vault
-        { pubkey: winnerPubkey, isSigner: false, isWritable: true }, // winner
-        { pubkey: FEE_RECIPIENT, isSigner: false, isWritable: true }, // fee recipient
-      ],
-      data: ixData as any,
-    });
+      const submitResultIx = new TransactionInstruction({
+        programId: PROGRAM_ID,
+        keys: [
+          { pubkey: verifierKeypair.publicKey, isSigner: true, isWritable: false }, // verifier
+          { pubkey: configPda, isSigner: false, isWritable: false }, // config
+          { pubkey: roomPdaKey, isSigner: false, isWritable: true }, // room
+          { pubkey: vaultPda, isSigner: false, isWritable: true }, // vault
+          { pubkey: winnerPubkey, isSigner: false, isWritable: true }, // winner
+          { pubkey: FEE_RECIPIENT, isSigner: false, isWritable: true }, // fee recipient
+        ],
+        data: ixData as any,
+      });
 
-    console.log("[forfeit-game] submit_result accounts:", {
-      verifier: verifierKeypair.publicKey.toBase58(),
-      config: configPda.toBase58(),
-      room: roomPdaKey.toBase58(),
-      vault: vaultPda.toBase58(),
-      winner: winnerPubkey.toBase58(),
-      feeRecipient: FEE_RECIPIENT.toBase58(),
-      rpc: rpcUrl,
-      decodedLen,
-    });
+      console.log("[forfeit-game] submit_result accounts:", {
+        verifier: verifierKeypair.publicKey.toBase58(),
+        config: configPda.toBase58(),
+        room: roomPdaKey.toBase58(),
+        vault: vaultPda.toBase58(),
+        winner: winnerPubkey.toBase58(),
+        feeRecipient: FEE_RECIPIENT.toBase58(),
+        rpc: rpcUrl,
+        decodedLen,
+      });
 
-    // Build + sign tx
-    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("confirmed");
-    const tx = new Transaction({
-      feePayer: verifierKeypair.publicKey,
-      recentBlockhash: blockhash,
-    }).add(submitResultIx);
+      // Build + sign tx
+      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("confirmed");
+      const tx = new Transaction({
+        feePayer: verifierKeypair.publicKey,
+        recentBlockhash: blockhash,
+      }).add(submitResultIx);
 
-    tx.sign(verifierKeypair);
+      tx.sign(verifierKeypair);
 
-    console.log("[forfeit-game] Sending submit_result...");
+      console.log("[forfeit-game] Sending submit_result...");
 
-    const signature = await connection.sendRawTransaction(tx.serialize(), {
-      skipPreflight: false,
-      preflightCommitment: "confirmed",
-    });
+      const signature = await connection.sendRawTransaction(tx.serialize(), {
+        skipPreflight: false,
+        preflightCommitment: "confirmed",
+      });
 
-    console.log("[forfeit-game] Sent:", signature);
+      console.log("[forfeit-game] Sent:", signature);
 
-    const confirmation = await connection.confirmTransaction(
-      { signature, blockhash, lastValidBlockHeight },
-      "confirmed",
-    );
+      const confirmation = await connection.confirmTransaction(
+        { signature, blockhash, lastValidBlockHeight },
+        "confirmed",
+      );
 
-    if (confirmation.value.err) {
-      console.error("[forfeit-game] Transaction FAILED:", confirmation.value.err);
+      if (confirmation.value.err) {
+        // Throw to trigger void-clear in catch block
+        throw new Error(`Transaction failed: ${JSON.stringify(confirmation.value.err)}`);
+      }
 
-      // attempt fetch logs (best effort)
-      const txInfo = await connection
-        .getTransaction(signature, {
-          commitment: "confirmed",
-          maxSupportedTransactionVersion: 0,
-        })
-        .catch(() => null);
+      console.log("[forfeit-game] Confirmed:", signature);
 
-      console.error("[forfeit-game] Failure logs:", txInfo?.meta?.logMessages);
+      // Record match result (best effort)
+      const playersArray = roomData.players.map((p) => p.toBase58());
 
-      // mark session for retry (best effort, non-blocking)
-      await supabase
+      const { error: rpcError } = await supabase.rpc("record_match_result", {
+        p_room_pda: roomPda,
+        p_finalize_tx: signature,
+        p_winner_wallet: winnerWallet,
+        p_game_type: gameType || "unknown",
+        p_max_players: roomData.maxPlayers,
+        p_stake_lamports: Number(roomData.stakeLamports),
+        p_mode: "ranked",
+        p_players: playersArray,
+      });
+
+      if (rpcError) {
+        console.error("[forfeit-game] record_match_result failed:", rpcError);
+        // not fatal
+      }
+
+      // Finish session (best effort)
+      const { error: finishErr } = await supabase.rpc("finish_game_session", {
+        p_room_pda: roomPda,
+        p_caller_wallet: forfeitingWallet,
+      });
+
+      if (finishErr) {
+        console.error("[forfeit-game] finish_game_session failed:", finishErr);
+      }
+
+      return json200({
+        success: true,
+        action: "forfeit",
+        signature,
+        winnerWallet,
+        forfeitingWallet,
+      });
+
+    } catch (settlementError) {
+      console.error("[forfeit-game] Settlement failed - void clearing room:", settlementError);
+
+      // Fetch existing game state for merge
+      const { data: sessionData } = await supabase
+        .from("game_sessions")
+        .select("game_state")
+        .eq("room_pda", roomPda)
+        .single();
+
+      const existingState = (sessionData?.game_state || {}) as Record<string, unknown>;
+
+      // Update session to finished with void settlement
+      const { error: updateError } = await supabase
         .from("game_sessions")
         .update({
-          status: "needs_settlement",
+          status: "finished",
           game_state: {
-            settlementError: JSON.stringify(confirmation.value.err),
+            ...existingState,
+            voidSettlement: true,
+            reason: "settlement_failed",
+            clearedAt: new Date().toISOString(),
             intendedWinner: winnerWallet,
-            failedAt: new Date().toISOString(),
-            failedTxSignature: signature,
+            settlementError: String((settlementError as Error)?.message ?? settlementError),
           },
           updated_at: new Date().toISOString(),
         })
         .eq("room_pda", roomPda);
 
+      if (updateError) {
+        console.error("[forfeit-game] Failed to void-clear session:", updateError);
+      }
+
       return json200({
-        success: false,
-        error: "Payout transaction failed",
-        details: JSON.stringify(confirmation.value.err),
-        signature,
-        logs: txInfo?.meta?.logMessages ?? null,
-        winnerWallet,
-        forfeitingWallet,
+        success: true,
+        action: "void_cleared",
+        message: "Settlement failed; room cleared without payout",
+        roomPda,
+        intendedWinner: winnerWallet,
       });
     }
-
-    console.log("[forfeit-game] Confirmed:", signature);
-
-    // Record match result (best effort)
-    const playersArray = roomData.players.map((p) => p.toBase58());
-
-    const { error: rpcError } = await supabase.rpc("record_match_result", {
-      p_room_pda: roomPda,
-      p_finalize_tx: signature,
-      p_winner_wallet: winnerWallet,
-      p_game_type: gameType || "unknown",
-      p_max_players: roomData.maxPlayers,
-      p_stake_lamports: Number(roomData.stakeLamports),
-      p_mode: "ranked",
-      p_players: playersArray,
-    });
-
-    if (rpcError) {
-      console.error("[forfeit-game] record_match_result failed:", rpcError);
-      // not fatal
-    }
-
-    // Finish session (best effort)
-    const { error: finishErr } = await supabase.rpc("finish_game_session", {
-      p_room_pda: roomPda,
-      p_caller_wallet: forfeitingWallet,
-    });
-
-    if (finishErr) {
-      console.error("[forfeit-game] finish_game_session failed:", finishErr);
-    }
-
-    return json200({
-      success: true,
-      action: "forfeit",
-      signature,
-      winnerWallet,
-      forfeitingWallet,
-    });
   } catch (error) {
     console.error("[forfeit-game] Unexpected error:", error);
     return json200({
