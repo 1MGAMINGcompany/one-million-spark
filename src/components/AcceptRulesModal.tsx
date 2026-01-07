@@ -86,8 +86,11 @@ export function AcceptRulesModal({
         <DialogContent 
           className="sm:max-w-md" 
           onPointerDownOutside={(e) => e.preventDefault()}
-          aria-describedby={undefined}
         >
+          <DialogHeader className="sr-only">
+            <DialogTitle>Loading</DialogTitle>
+            <DialogDescription>Please wait while the match details load</DialogDescription>
+          </DialogHeader>
           <div className="flex flex-col items-center justify-center py-12 gap-4">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
             <p className="text-muted-foreground text-sm">Loading match details...</p>

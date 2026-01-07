@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useRematch, RematchSettings, TIME_OPTIONS, STAKE_OPTIONS } from '@/hooks/useRematch';
 import { toast } from 'sonner';
 import { useSolPrice } from '@/hooks/useSolPrice';
@@ -138,11 +138,14 @@ export function RematchModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-lg bg-card border-primary/30" aria-describedby={undefined}>
+      <DialogContent className="sm:max-w-lg bg-card border-primary/30">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold text-foreground flex items-center gap-2">
             <span className="text-primary">{t('rematch.title')}</span> — {gameType}
           </DialogTitle>
+          <DialogDescription className="text-sm text-muted-foreground">
+            {t('rematch.description', 'Challenge your opponent to another match')}
+          </DialogDescription>
         </DialogHeader>
 
         {/* Progress Steps */}

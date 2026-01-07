@@ -3,7 +3,7 @@ import { X, Check, Loader2, Clock, Coins, Users, AlertCircle } from 'lucide-reac
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { useSolPrice } from '@/hooks/useSolPrice';
 import { useWallet } from '@/hooks/useWallet';
@@ -146,11 +146,14 @@ export function RematchAcceptModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-md bg-card border-primary/30" aria-describedby={undefined}>
+      <DialogContent className="sm:max-w-md bg-card border-primary/30">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold text-foreground flex items-center gap-2">
             <span className="text-primary">Rematch Invitation</span>
           </DialogTitle>
+          <DialogDescription className="text-sm text-muted-foreground">
+            Your opponent has challenged you to another match
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-2">
