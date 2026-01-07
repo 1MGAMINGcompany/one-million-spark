@@ -1561,7 +1561,6 @@ const BackgammonGame = () => {
                 </div>
               );
             })()}
-          </div>
 
               {/* Controls */}
               <div className="mt-4 flex flex-col items-center gap-4">
