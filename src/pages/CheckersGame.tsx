@@ -972,11 +972,26 @@ const CheckersGame = () => {
   }, [board, gameOver, isMyTurn, selectedPiece, validMoves, chainCapture, myColor, flipped,
       getCaptures, getSimpleMoves, playerHasCaptures, applyMove, checkGameOver, play, sendMove, recordPlayerMove, address]);
 
-  const handleResign = useCallback(() => {
+  const handleResign = useCallback(async () => {
+    // 1. Send WebRTC message immediately for instant opponent UX
     sendResign();
+    
+    // 2. Update local UI optimistically
     setGameOver(myColor === "gold" ? "obsidian" : "gold");
     play('checkers_lose');
-  }, [sendResign, myColor, play]);
+    
+    // 3. CRITICAL: Trigger on-chain settlement via edge function
+    try {
+      await forfeit();
+    } catch (err) {
+      console.error("[handleResign] forfeit settlement failed:", err);
+      toast({
+        title: "Settlement pending",
+        description: "On-chain settlement may still complete",
+        variant: "destructive",
+      });
+    }
+  }, [sendResign, myColor, play, forfeit]);
 
   const isValidMoveTarget = (row: number, col: number) => {
     const actualRow = flipped ? BOARD_SIZE - 1 - row : row;
@@ -1214,9 +1229,9 @@ const CheckersGame = () => {
                 variant="outline"
                 size="sm"
                 onClick={handleResign}
+                disabled={isForfeiting}
                 className="border-red-500/30 text-red-400 hover:bg-red-500/10">
-                <Flag className="w-4 h-4 mr-2" />
-                {t("gameMultiplayer.resign")}
+                {isForfeiting ? "Settling..." : <><Flag className="w-4 h-4 mr-2" />{t("gameMultiplayer.resign")}</>}
               </Button>
             )}
           </div>

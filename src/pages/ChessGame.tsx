@@ -932,12 +932,27 @@ const ChessGame = () => {
     }
   }, [game, gameOver, isMyTurn, checkGameOver, animationsEnabled, triggerAnimation, play, sendMove, recordPlayerMove, address]);
 
-  const handleResign = useCallback(() => {
+  const handleResign = useCallback(async () => {
+    // 1. Send WebRTC message immediately for instant opponent UX
     sendResign();
+    
+    // 2. Update local UI optimistically
     setGameStatus(t("gameMultiplayer.youResignedLose"));
     setGameOver(true);
     play('chess_lose');
-  }, [sendResign, play]);
+    
+    // 3. CRITICAL: Trigger on-chain settlement via edge function
+    try {
+      await forfeit();
+    } catch (err) {
+      console.error("[handleResign] forfeit settlement failed:", err);
+      toast({
+        title: "Settlement pending",
+        description: "On-chain settlement may still complete",
+        variant: "destructive",
+      });
+    }
+  }, [sendResign, play, t, forfeit]);
 
 
   const formattedMoves = [];
@@ -1094,9 +1109,9 @@ const ChessGame = () => {
                         size="sm"
                         variant="destructive" 
                         onClick={handleResign}
+                        disabled={isForfeiting}
                         className="text-xs">
-                        <Flag className="w-3 h-3 mr-1" />
-                        {t("gameMultiplayer.resign")}
+                        {isForfeiting ? "Settling..." : <><Flag className="w-3 h-3 mr-1" />{t("gameMultiplayer.resign")}</>}
                       </Button>
                     </div>
                   )}
