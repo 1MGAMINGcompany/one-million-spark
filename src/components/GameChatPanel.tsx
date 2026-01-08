@@ -477,7 +477,7 @@ const ChatToggleButton = ({ chat }: { chat: GameChatReturn }) => {
   );
 };
 
-// Mobile drawer component
+// Mobile drawer component - Uses pointer-events-none on trigger when open to not block board
 const MobileChatDrawer = ({ chat }: { chat: GameChatReturn }) => {
   const handleSend = useCallback(() => {
     // Scroll handled by MessagesList
@@ -489,7 +489,10 @@ const MobileChatDrawer = ({ chat }: { chat: GameChatReturn }) => {
         <Button
           variant="outline"
           size="sm"
-          className="fixed bottom-4 right-4 z-50 gap-2 shadow-lg border-primary/30"
+          className={cn(
+            "fixed bottom-4 right-4 z-50 gap-2 shadow-lg border-primary/30",
+            chat.isOpen && "pointer-events-none opacity-0"
+          )}
         >
           <MessageCircle className="w-4 h-4" />
           Chat
@@ -507,14 +510,22 @@ const MobileChatDrawer = ({ chat }: { chat: GameChatReturn }) => {
           )}
         </Button>
       </SheetTrigger>
-      <SheetContent side="bottom" className="h-[70vh] p-0 flex flex-col">
-        <SheetHeader className="px-4 py-3 border-b border-border">
+      <SheetContent side="bottom" className="h-[60vh] max-h-[60vh] p-0 flex flex-col pointer-events-auto">
+        <SheetHeader className="px-4 py-3 border-b border-border flex-shrink-0">
           <SheetTitle className="flex items-center gap-2 text-base">
             <MessageCircle className="w-4 h-4 text-primary" />
             Chat
-            <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded ml-auto">
+            <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded ml-auto mr-2">
               {chat.players.length}
             </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 w-7 p-0 hover:bg-destructive/10 hover:text-destructive ml-auto"
+              onClick={() => chat.setIsOpen(false)}
+            >
+              <X className="w-4 h-4" />
+            </Button>
           </SheetTitle>
         </SheetHeader>
         

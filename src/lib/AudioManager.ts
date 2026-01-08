@@ -7,6 +7,36 @@ class AudioManagerClass {
   private ambientNode: OscillatorNode | null = null;
   private ambientGain: GainNode | null = null;
   private masterGain: GainNode | null = null;
+  private isUnlocked: boolean = false;
+
+  /**
+   * Unlock audio on mobile browsers - call on first user gesture (tap, click, etc.)
+   * This must happen before any sounds can play on iOS/Safari/mobile Chrome
+   */
+  unlockAudio(): void {
+    if (this.isUnlocked) return;
+    
+    try {
+      const ctx = this.getContext();
+      // Create and immediately stop a silent oscillator to unlock audio
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0, ctx.currentTime);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.001);
+      
+      this.isUnlocked = true;
+      console.log('[AudioManager] Audio unlocked successfully');
+    } catch (e) {
+      console.warn('[AudioManager] Failed to unlock audio:', e);
+    }
+  }
+
+  get audioUnlocked(): boolean {
+    return this.isUnlocked;
+  }
 
   private getContext(): AudioContext {
     if (!this.audioContext) {

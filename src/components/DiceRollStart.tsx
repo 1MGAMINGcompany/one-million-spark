@@ -5,6 +5,7 @@ import { Dice5, Loader2, LogOut, Flag, RefreshCw, Wand2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useTranslation } from "react-i18next";
+import { AudioManager } from "@/lib/AudioManager";
 
 interface DiceRollStartProps {
   roomPda: string;
@@ -242,6 +243,9 @@ export function DiceRollStart({
   }, [phase, result, isPlayer1]);
 
   const handleRoll = useCallback(async () => {
+    // Unlock audio on first user gesture (mobile browsers require this)
+    AudioManager.unlockAudio();
+    
     setPhase("loading");
     setError(null);
 
