@@ -1183,13 +1183,28 @@ const DominosGame = () => {
     setGameStatus("Opponent's turn");
   }, [isMyTurn, gameOver, myHand, boneyard, chain, opponentHandCount, getLegalMoves, sendMove]);
 
-  const handleResign = useCallback(() => {
+  const handleResign = useCallback(async () => {
+    // 1. Send WebRTC message immediately for instant opponent UX
     sendResign();
+    
+    // 2. Update local UI optimistically
     setGameOver(true);
     setWinner("opponent");
     setGameStatus("You resigned");
     play('domino/lose');
-  }, [sendResign, play]);
+    
+    // 3. CRITICAL: Trigger on-chain settlement via edge function
+    try {
+      await forfeit();
+    } catch (err) {
+      console.error("[handleResign] forfeit settlement failed:", err);
+      toast({
+        title: "Settlement pending",
+        description: "On-chain settlement may still complete",
+        variant: "destructive",
+      });
+    }
+  }, [sendResign, play, forfeit]);
 
   const playerLegalMoves = useMemo(() => getLegalMoves(myHand), [getLegalMoves, myHand]);
 
@@ -1457,10 +1472,10 @@ const DominosGame = () => {
                     variant="outline"
                     size="sm"
                     onClick={handleResign}
+                    disabled={isForfeiting}
                     className="border-red-500/30 text-red-400 hover:bg-red-500/10"
                   >
-                    <Flag className="w-4 h-4 mr-2" />
-                    Resign
+                    {isForfeiting ? "Settling..." : <><Flag className="w-4 h-4 mr-2" />Resign</>}
                   </Button>
                 </div>
               )}

@@ -921,15 +921,29 @@ const BackgammonGame = () => {
     }
   }, [isMyTurn, remainingMoves, gameOver, myRole, gameState, selectedPoint, validMoves, applyMoveWithSound, sendMove, recordPlayerMove, address, endTurn, play]);
 
-  const handleResign = useCallback(() => {
+  const handleResign = useCallback(async () => {
+    // 1. Send WebRTC message immediately for instant opponent UX
     sendResign();
-    // I resigned - opponent wins, so set winner to OPPONENT's role
+    
+    // 2. Update local UI optimistically
     const opponentRole = myRole === "player" ? "ai" : "player";
     setGameResultInfo({ winner: opponentRole, resultType: "single", multiplier: 1 });
     setGameStatus("You resigned - Opponent wins!");
     setGameOver(true);
     play('chess_lose');
-  }, [sendResign, play, myRole]);
+    
+    // 3. CRITICAL: Trigger on-chain settlement via edge function
+    try {
+      await forfeit();
+    } catch (err) {
+      console.error("[handleResign] forfeit settlement failed:", err);
+      toast({
+        title: "Settlement pending",
+        description: "On-chain settlement may still complete",
+        variant: "destructive",
+      });
+    }
+  }, [sendResign, play, myRole, forfeit]);
 
   // Require wallet
   if (!walletConnected || !address) {
@@ -1479,8 +1493,8 @@ const BackgammonGame = () => {
 
                 {/* Resign button - mobile */}
                 {!gameOver && isMyTurn && (
-                  <Button variant="destructive" size="sm" className="w-full" onClick={handleResign}>
-                    <Flag className="w-4 h-4 mr-1" /> Resign
+                  <Button variant="destructive" size="sm" className="w-full" onClick={handleResign} disabled={isForfeiting}>
+                    {isForfeiting ? "Settling..." : <><Flag className="w-4 h-4 mr-1" /> Resign</>}
                   </Button>
                 )}
               </div>
@@ -1640,8 +1654,8 @@ const BackgammonGame = () => {
 
               {/* Resign button */}
               {!gameOver && isMyTurn && (
-                <Button variant="destructive" size="sm" onClick={handleResign}>
-                  <Flag className="w-4 h-4 mr-1" /> Resign
+                <Button variant="destructive" size="sm" onClick={handleResign} disabled={isForfeiting}>
+                  {isForfeiting ? "Settling..." : <><Flag className="w-4 h-4 mr-1" /> Resign</>}
                 </Button>
               )}
             </div>
