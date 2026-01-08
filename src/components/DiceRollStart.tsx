@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { Dice5, Loader2, LogOut, Flag, RefreshCw, Wand2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -337,9 +338,10 @@ export function DiceRollStart({
   const isWinner = result?.winner.toLowerCase() === myWallet.toLowerCase();
   const exitDisabled = isLeaving || isForfeiting || isRetrying || isPickingStarter;
 
+  // STEP 3 FIX: Use a contained Card instead of fixed inset-0 overlay
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/95 backdrop-blur-sm overflow-auto min-h-screen p-4">
-      <div className="relative max-w-lg w-full mx-auto p-6 md:p-8 rounded-2xl border border-primary/30 bg-card/95 shadow-[0_0_60px_-10px_hsl(45_93%_54%_/_0.3)]">
+    <div className="w-full min-h-[60vh] flex items-center justify-center p-4">
+      <Card className="relative w-full max-w-lg p-6 md:p-8 border-primary/30 bg-card/95 shadow-[0_0_60px_-10px_hsl(45_93%_54%_/_0.3)]">
         {/* Decorative corners */}
         <div className="absolute top-2 left-2 w-8 h-8 border-l-2 border-t-2 border-primary/40 rounded-tl-lg" />
         <div className="absolute top-2 right-2 w-8 h-8 border-r-2 border-t-2 border-primary/40 rounded-tr-lg" />
@@ -485,48 +487,49 @@ export function DiceRollStart({
           )}
           
           {phase === "result" && (
-            <Button onClick={handleContinue} size="lg">
-              {t("diceRoll.startGame") || "Start Game"}
+            <Button onClick={handleContinue} size="lg" className="gap-2">
+              {t("diceRoll.continueToGame") || "Continue to Game"}
             </Button>
           )}
         </div>
 
-        {/* Exit buttons - ALWAYS visible in every phase */}
-        <div className="mt-6 pt-4 border-t border-primary/20 flex justify-center gap-4">
+        {/* Exit Buttons - Leave and Forfeit */}
+        <div className="mt-6 pt-4 border-t border-border/50 flex gap-2 justify-center flex-wrap">
           {onLeave && (
             <Button
               variant="ghost"
               size="sm"
               onClick={onLeave}
               disabled={exitDisabled}
-              className="text-muted-foreground hover:text-foreground"
+              className="gap-1 text-muted-foreground hover:text-foreground"
             >
               {isLeaving ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
-                <LogOut className="w-4 h-4 mr-2" />
+                <LogOut className="w-4 h-4" />
               )}
-              {t("forfeit.leave") || "Leave"}
+              {t("game.leave") || "Leave"}
             </Button>
           )}
+          
           {onForfeit && (
             <Button
               variant="ghost"
               size="sm"
               onClick={onForfeit}
               disabled={exitDisabled}
-              className="text-destructive hover:text-destructive hover:bg-destructive/10"
+              className="gap-1 text-destructive hover:text-destructive"
             >
               {isForfeiting ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
-                <Flag className="w-4 h-4 mr-2" />
+                <Flag className="w-4 h-4" />
               )}
-              {t("forfeit.leaveAndForfeit") || "Leave & Forfeit"}
+              {t("game.forfeit") || "Leave & Forfeit"}
             </Button>
           )}
         </div>
-      </div>
+      </Card>
     </div>
   );
 }

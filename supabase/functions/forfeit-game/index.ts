@@ -133,11 +133,36 @@ function loadVerifierKeypair(secret: string): { keypair: Keypair; decodedLen: nu
   throw new Error(`Invalid verifier key length: ${decodedLen} (expected 64 or 32)`);
 }
 
+// Helper to log settlement attempt (success or failure)
+// deno-lint-ignore no-explicit-any
+async function logSettlement(
+  supabase: any,
+  log: Record<string, unknown>
+) {
+  try {
+    const { error } = await supabase.from("settlement_logs").insert(log);
+    if (error) {
+      console.error("[forfeit-game] Failed to log settlement:", error);
+    } else {
+      console.log("[forfeit-game] 📝 Settlement logged:", { success: log.success, action: log.action });
+    }
+  } catch (e) {
+    console.error("[forfeit-game] Exception logging settlement:", e);
+  }
+}
+
 Deno.serve(async (req: Request) => {
   // CORS preflight
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
+
+  // Initialize supabase early for logging
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const supabase = supabaseUrl && supabaseServiceKey
+    ? createClient(supabaseUrl, supabaseServiceKey)
+    : null;
 
   try {
     const body = (await req.json().catch(() => null)) as ForfeitRequest | null;
@@ -158,16 +183,13 @@ Deno.serve(async (req: Request) => {
     console.log("[forfeit-game] Request:", { roomPda, forfeitingWallet, gameType, winnerWalletOverride });
 
     // Supabase client
-    const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    if (!supabaseUrl || !supabaseServiceKey) {
+    if (!supabase) {
       console.error("[forfeit-game] Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
       return json200({
         success: false,
         error: "Server configuration error: Supabase service credentials missing",
       });
     }
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // Load verifier key
     const verifierSecretKey = Deno.env.get("VERIFIER_SECRET_KEY") ?? "";
@@ -178,6 +200,13 @@ Deno.serve(async (req: Request) => {
     console.log("[forfeit-game] 🔑 Key starts with:", keyStart);
 
     if (!exists) {
+      await logSettlement(supabase, {
+        room_pda: roomPda,
+        action: "forfeit",
+        success: false,
+        forfeiting_wallet: forfeitingWallet,
+        error_message: "VERIFIER_SECRET_KEY is missing",
+      });
       return json200({
         success: false,
         error: "Server configuration error: verifier not configured",
@@ -196,6 +225,13 @@ Deno.serve(async (req: Request) => {
       console.log("[forfeit-game] 🔑 Verifier pubkey:", verifierKeypair.publicKey.toBase58());
     } catch (err) {
       console.error("[forfeit-game] Failed to parse verifier key:", err);
+      await logSettlement(supabase, {
+        room_pda: roomPda,
+        action: "forfeit",
+        success: false,
+        forfeiting_wallet: forfeitingWallet,
+        error_message: `Invalid verifier key format: ${String((err as Error)?.message ?? err)}`,
+      });
       return json200({
         success: false,
         error: "Server configuration error: invalid verifier key format",
@@ -220,12 +256,21 @@ Deno.serve(async (req: Request) => {
 
     if (verifierBalance < MIN_VERIFIER_BALANCE) {
       console.error("[forfeit-game] ❌ Verifier wallet has insufficient SOL for fees!");
+      await logSettlement(supabase, {
+        room_pda: roomPda,
+        action: "forfeit",
+        success: false,
+        forfeiting_wallet: forfeitingWallet,
+        verifier_pubkey: verifierKeypair.publicKey.toBase58(),
+        verifier_lamports: verifierBalance,
+        error_message: `Verifier needs funding: ${(verifierBalance / 1_000_000_000).toFixed(6)} SOL < 0.01 SOL required`,
+      });
       return json200({
         success: false,
         error: "Server payout wallet needs funding",
         details: `Verifier ${verifierKeypair.publicKey.toBase58()} has ${(verifierBalance / 1_000_000_000).toFixed(6)} SOL, needs at least 0.01 SOL for transaction fees`,
         verifierPubkey: verifierKeypair.publicKey.toBase58(),
-        verifierBalance,
+        verifierLamports: verifierBalance,
         minRequired: MIN_VERIFIER_BALANCE,
       });
     }
@@ -236,6 +281,15 @@ Deno.serve(async (req: Request) => {
 
     if (!accountInfo) {
       console.error("[forfeit-game] Room not found on-chain:", roomPda);
+      await logSettlement(supabase, {
+        room_pda: roomPda,
+        action: "forfeit",
+        success: false,
+        forfeiting_wallet: forfeitingWallet,
+        verifier_pubkey: verifierKeypair.publicKey.toBase58(),
+        verifier_lamports: verifierBalance,
+        error_message: "Room not found on-chain",
+      });
       return json200({
         success: false,
         error: "Room not found on-chain",
@@ -244,6 +298,15 @@ Deno.serve(async (req: Request) => {
 
     const roomData = parseRoomAccount(accountInfo.data);
     if (!roomData) {
+      await logSettlement(supabase, {
+        room_pda: roomPda,
+        action: "forfeit",
+        success: false,
+        forfeiting_wallet: forfeitingWallet,
+        verifier_pubkey: verifierKeypair.publicKey.toBase58(),
+        verifier_lamports: verifierBalance,
+        error_message: "Failed to parse room account",
+      });
       return json200({
         success: false,
         error: "Failed to parse room account",
@@ -288,6 +351,16 @@ Deno.serve(async (req: Request) => {
     const forfeitingPubkey = new PublicKey(forfeitingWallet);
     const playerIndex = roomData.players.findIndex((p) => p.equals(forfeitingPubkey));
     if (playerIndex === -1) {
+      await logSettlement(supabase, {
+        room_pda: roomPda,
+        action: "forfeit",
+        success: false,
+        forfeiting_wallet: forfeitingWallet,
+        verifier_pubkey: verifierKeypair.publicKey.toBase58(),
+        verifier_lamports: verifierBalance,
+        room_status: roomData.status,
+        error_message: "Player not in this room",
+      });
       return json200({
         success: false,
         error: "Player not in this room",
@@ -296,6 +369,17 @@ Deno.serve(async (req: Request) => {
 
     // Validate room state (must have 2+ players and not finished/cancelled)
     if (roomData.playerCount < 2) {
+      await logSettlement(supabase, {
+        room_pda: roomPda,
+        action: "forfeit",
+        success: false,
+        forfeiting_wallet: forfeitingWallet,
+        verifier_pubkey: verifierKeypair.publicKey.toBase58(),
+        verifier_lamports: verifierBalance,
+        player_count: roomData.playerCount,
+        room_status: roomData.status,
+        error_message: "Room has only 1 player",
+      });
       return json200({
         success: false,
         error: "Room has only 1 player. Use Cancel to get refund.",
@@ -305,6 +389,16 @@ Deno.serve(async (req: Request) => {
     // status values depend on your program; keeping your logic:
     // 3 finished, 4 cancelled
     if (roomData.status === 3 || roomData.status === 4) {
+      await logSettlement(supabase, {
+        room_pda: roomPda,
+        action: "forfeit",
+        success: true,
+        forfeiting_wallet: forfeitingWallet,
+        verifier_pubkey: verifierKeypair.publicKey.toBase58(),
+        verifier_lamports: verifierBalance,
+        room_status: roomData.status,
+        error_message: "Room already closed (no action needed)",
+      });
       return json200({
         success: true,
         action: "already_closed",
@@ -328,7 +422,6 @@ Deno.serve(async (req: Request) => {
 
       if (sessionError) {
         console.error("[forfeit-game] Failed to fetch game session:", sessionError);
-        // still return success false? In your old code you continued. We'll keep it non-blocking:
       } else {
         const currentState = (sessionData?.game_state || {}) as Record<string, unknown>;
         const eliminatedPlayers = (currentState.eliminatedPlayers as string[] | undefined) || [];
@@ -365,6 +458,17 @@ Deno.serve(async (req: Request) => {
       // safety: ensure winner is actually in room
       const ok = roomData.players.some((p) => p.equals(winnerPubkey));
       if (!ok) {
+        await logSettlement(supabase, {
+          room_pda: roomPda,
+          action: "forfeit",
+          success: false,
+          forfeiting_wallet: forfeitingWallet,
+          winner_wallet: winnerWalletOverride,
+          verifier_pubkey: verifierKeypair.publicKey.toBase58(),
+          verifier_lamports: verifierBalance,
+          room_status: roomData.status,
+          error_message: "winnerWallet is not a player in this room",
+        });
         return json200({
           success: false,
           error: "winnerWallet is not a player in this room",
@@ -373,6 +477,17 @@ Deno.serve(async (req: Request) => {
     } else {
       const winnerIndex = playerIndex === 0 ? 1 : 0;
       if (winnerIndex >= roomData.players.length) {
+        await logSettlement(supabase, {
+          room_pda: roomPda,
+          action: "forfeit",
+          success: false,
+          forfeiting_wallet: forfeitingWallet,
+          verifier_pubkey: verifierKeypair.publicKey.toBase58(),
+          verifier_lamports: verifierBalance,
+          player_count: roomData.playerCount,
+          room_status: roomData.status,
+          error_message: "Cannot determine winner - only one player",
+        });
         return json200({
           success: false,
           error: "Cannot determine winner - room appears to have only one player",
@@ -422,6 +537,24 @@ Deno.serve(async (req: Request) => {
         shortfall: expectedPot - effectiveBalance,
       });
 
+      // Log the failure
+      await logSettlement(supabase, {
+        room_pda: roomPda,
+        action: "forfeit",
+        success: false,
+        winner_wallet: winnerWallet,
+        forfeiting_wallet: forfeitingWallet,
+        vault_pda: vaultPda.toBase58(),
+        vault_lamports: vaultLamports,
+        verifier_pubkey: verifierKeypair.publicKey.toBase58(),
+        verifier_lamports: verifierBalance,
+        stake_per_player: stakePerPlayer,
+        player_count: playerCount,
+        expected_pot: expectedPot,
+        room_status: roomData.status,
+        error_message: `Vault underfunded: ${vaultLamports} lamports, need ${expectedPot}`,
+      });
+
       // Fetch existing game state
       const { data: sessionData } = await supabase
         .from("game_sessions")
@@ -438,7 +571,7 @@ Deno.serve(async (req: Request) => {
           status: "finished",
           game_state: {
             ...existingState,
-            playersOnChain: playersOnChain, // Store synced players
+            playersOnChain: playersOnChain,
             voidSettlement: true,
             reason: "vault_underfunded",
             vaultLamports,
@@ -470,6 +603,8 @@ Deno.serve(async (req: Request) => {
         },
         roomPda,
         intendedWinner: winnerWallet,
+        vaultLamports,
+        verifierLamports: verifierBalance,
       });
     }
 
@@ -532,7 +667,25 @@ Deno.serve(async (req: Request) => {
         throw new Error(`Transaction failed: ${JSON.stringify(confirmation.value.err)}`);
       }
 
-      console.log("[forfeit-game] Confirmed:", signature);
+      console.log("[forfeit-game] ✅ Confirmed:", signature);
+
+      // LOG SUCCESS
+      await logSettlement(supabase, {
+        room_pda: roomPda,
+        action: "forfeit",
+        success: true,
+        signature,
+        winner_wallet: winnerWallet,
+        forfeiting_wallet: forfeitingWallet,
+        vault_pda: vaultPda.toBase58(),
+        vault_lamports: vaultLamports,
+        verifier_pubkey: verifierKeypair.publicKey.toBase58(),
+        verifier_lamports: verifierBalance,
+        stake_per_player: stakePerPlayer,
+        player_count: playerCount,
+        expected_pot: expectedPot,
+        room_status: roomData.status,
+      });
 
       // Record match result (best effort) - use already extracted playersOnChain
       const { error: rpcError } = await supabase.rpc("record_match_result", {
@@ -567,10 +720,30 @@ Deno.serve(async (req: Request) => {
         signature,
         winnerWallet,
         forfeitingWallet,
+        vaultLamports,
+        verifierLamports: verifierBalance,
       });
 
     } catch (settlementError) {
       console.error("[forfeit-game] Settlement failed - void clearing room:", settlementError);
+
+      // LOG FAILURE
+      await logSettlement(supabase, {
+        room_pda: roomPda,
+        action: "forfeit",
+        success: false,
+        winner_wallet: winnerWallet,
+        forfeiting_wallet: forfeitingWallet,
+        vault_pda: vaultPda.toBase58(),
+        vault_lamports: vaultLamports,
+        verifier_pubkey: verifierKeypair.publicKey.toBase58(),
+        verifier_lamports: verifierBalance,
+        stake_per_player: stakePerPlayer,
+        player_count: playerCount,
+        expected_pot: expectedPot,
+        room_status: roomData.status,
+        error_message: String((settlementError as Error)?.message ?? settlementError),
+      });
 
       // Fetch existing game state for merge
       const { data: sessionData } = await supabase
@@ -588,7 +761,7 @@ Deno.serve(async (req: Request) => {
           status: "finished",
           game_state: {
             ...existingState,
-            playersOnChain: playersOnChain, // Store synced players
+            playersOnChain: playersOnChain,
             voidSettlement: true,
             reason: "settlement_failed",
             clearedAt: new Date().toISOString(),
@@ -606,13 +779,14 @@ Deno.serve(async (req: Request) => {
       }
 
       return json200({
-        success: true,
+        success: false,
         action: "void_cleared",
         message: "Settlement failed; room cleared without payout",
+        error: String((settlementError as Error)?.message ?? settlementError),
         roomPda,
         intendedWinner: winnerWallet,
         vaultLamports,
-        expectedPot,
+        verifierLamports: verifierBalance,
       });
     }
   } catch (error) {

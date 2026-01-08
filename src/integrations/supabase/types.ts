@@ -434,6 +434,66 @@ export type Database = {
         }
         Relationships: []
       }
+      settlement_logs: {
+        Row: {
+          action: string
+          created_at: string
+          error_message: string | null
+          expected_pot: number | null
+          forfeiting_wallet: string | null
+          id: string
+          player_count: number | null
+          room_pda: string
+          room_status: number | null
+          signature: string | null
+          stake_per_player: number | null
+          success: boolean
+          vault_lamports: number | null
+          vault_pda: string | null
+          verifier_lamports: number | null
+          verifier_pubkey: string | null
+          winner_wallet: string | null
+        }
+        Insert: {
+          action?: string
+          created_at?: string
+          error_message?: string | null
+          expected_pot?: number | null
+          forfeiting_wallet?: string | null
+          id?: string
+          player_count?: number | null
+          room_pda: string
+          room_status?: number | null
+          signature?: string | null
+          stake_per_player?: number | null
+          success?: boolean
+          vault_lamports?: number | null
+          vault_pda?: string | null
+          verifier_lamports?: number | null
+          verifier_pubkey?: string | null
+          winner_wallet?: string | null
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          error_message?: string | null
+          expected_pot?: number | null
+          forfeiting_wallet?: string | null
+          id?: string
+          player_count?: number | null
+          room_pda?: string
+          room_status?: number | null
+          signature?: string | null
+          stake_per_player?: number | null
+          success?: boolean
+          vault_lamports?: number | null
+          vault_pda?: string | null
+          verifier_lamports?: number | null
+          verifier_pubkey?: string | null
+          winner_wallet?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
