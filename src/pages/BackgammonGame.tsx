@@ -12,6 +12,7 @@ import GoldConfettiExplosion from "@/components/GoldConfettiExplosion";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useSound } from "@/contexts/SoundContext";
+import { AudioManager } from "@/lib/AudioManager";
 import { useTranslation } from "react-i18next";
 import { useWallet } from "@/hooks/useWallet";
 import { useWebRTCSync, GameMessage } from "@/hooks/useWebRTCSync";
@@ -718,6 +719,9 @@ const BackgammonGame = () => {
   const rollDice = useCallback(() => {
     if (!isMyTurn || dice.length > 0 || gameOver) return;
     
+    // Unlock audio on first user gesture (mobile browsers require this)
+    AudioManager.unlockAudio();
+    
     const d1 = Math.floor(Math.random() * 6) + 1;
     const d2 = Math.floor(Math.random() * 6) + 1;
     const newDice = [d1, d2];
@@ -1267,9 +1271,9 @@ const BackgammonGame = () => {
         isMobile ? "p-2" : "p-4"
       )}>
         <div className="max-w-4xl w-full">
-          {/* Mobile Layout */}
+          {/* Mobile Layout - Viewport-fit container to prevent zoom */}
           {isMobile ? (
-            <div className="flex-1 flex flex-col px-2 pt-1 pb-2 overflow-hidden min-h-0">
+            <div className="flex-1 flex flex-col px-1 pt-1 pb-2 overflow-hidden min-h-0 w-full max-w-[100vw]">
               {/* Score Row */}
               <div className="flex justify-between items-center px-2 py-1 shrink-0">
                 <div className="flex items-center gap-2">
@@ -1295,8 +1299,8 @@ const BackgammonGame = () => {
                 </div>
               </div>
 
-              {/* Board Container - Flexible height that fits remaining space */}
-              <div className="relative w-full flex-1 min-h-0" style={{ maxHeight: '55vh' }}>
+              {/* Board Container - Aspect-ratio scaling to 100vw, max-height to fit viewport */}
+              <div className="relative w-full flex-1 min-h-0" style={{ maxHeight: 'calc(100vh - 200px)', aspectRatio: '4/3' }}>
                 {/* Subtle glow */}
                 <div className="absolute -inset-1 bg-primary/10 rounded-xl blur-lg opacity-30" />
                 
@@ -1440,29 +1444,38 @@ const BackgammonGame = () => {
                   )}
                 </div>
 
-                {/* Bear Off Zone - Mobile */}
-                {canBearOff(gameState, myRole) && (
-                  <div 
-                    className={cn(
-                      "w-full py-2 rounded-lg flex items-center justify-center gap-2 transition-all",
-                      validMoves.includes(-2) 
-                        ? "bg-primary/20 border-2 border-primary animate-pulse cursor-pointer shadow-[0_0_20px_hsl(45_93%_54%_/_0.4)]" 
-                        : "border border-primary/30 bg-primary/5"
-                    )}
-                    onClick={() => validMoves.includes(-2) && handlePointClick(-2)}
-                  >
-                    <Trophy className={cn("w-4 h-4", validMoves.includes(-2) ? "text-primary" : "text-primary/50")} />
-                    <span className={cn(
-                      "font-bold",
-                      validMoves.includes(-2) ? "text-primary" : "text-muted-foreground"
-                    )}>
-                      {validMoves.includes(-2) ? "Tap to Bear Off" : `Bear Off: ${myRole === "player" ? gameState.bearOff.player : gameState.bearOff.ai}/15`}
-                    </span>
-                    {validMoves.includes(-2) && (
-                      <span className="text-xs text-primary/70">({myRole === "player" ? gameState.bearOff.player : gameState.bearOff.ai}/15)</span>
-                    )}
-                  </div>
-                )}
+                {/* Bear Off Zone - Mobile - Always visible, disabled when not allowed */}
+                <div 
+                  className={cn(
+                    "w-full py-2 rounded-lg flex items-center justify-center gap-2 transition-all",
+                    validMoves.includes(-2) 
+                      ? "bg-primary/20 border-2 border-primary animate-pulse cursor-pointer shadow-[0_0_20px_hsl(45_93%_54%_/_0.4)]" 
+                      : canBearOff(gameState, myRole)
+                        ? "border border-primary/30 bg-primary/5 cursor-pointer"
+                        : "border border-primary/10 bg-muted/5 opacity-50"
+                  )}
+                  onClick={() => {
+                    if (validMoves.includes(-2)) handlePointClick(-2);
+                  }}
+                >
+                  <Trophy className={cn("w-4 h-4", validMoves.includes(-2) ? "text-primary" : "text-primary/50")} />
+                  <span className={cn(
+                    "font-bold",
+                    validMoves.includes(-2) ? "text-primary" : canBearOff(gameState, myRole) ? "text-muted-foreground" : "text-muted-foreground/50"
+                  )}>
+                    {validMoves.includes(-2) 
+                      ? "Tap to Bear Off" 
+                      : canBearOff(gameState, myRole)
+                        ? `Bear Off: ${myRole === "player" ? gameState.bearOff.player : gameState.bearOff.ai}/15`
+                        : "Bear Off (locked)"}
+                  </span>
+                  {validMoves.includes(-2) && (
+                    <span className="text-xs text-primary/70">({myRole === "player" ? gameState.bearOff.player : gameState.bearOff.ai}/15)</span>
+                  )}
+                  {!canBearOff(gameState, myRole) && (
+                    <span className="text-[10px] text-muted-foreground/50">Move all to home first</span>
+                  )}
+                </div>
 
                 {/* Resign button - mobile */}
                 {!gameOver && isMyTurn && (
@@ -1561,27 +1574,28 @@ const BackgammonGame = () => {
                       </div>
                     ) : <div />}
                     
-                    {/* Bear Off Zone - clickable when valid */}
+                    {/* Bear Off Zone - Always visible, clickable when valid */}
                     <div 
                       className={cn(
                         "flex items-center gap-2 rounded-lg px-3 py-2 transition-all",
                         validMoves.includes(-2) 
                           ? "cursor-pointer bg-primary/20 border-2 border-primary animate-pulse hover:bg-primary/30 shadow-[0_0_20px_hsl(45_93%_54%_/_0.4)]" 
                           : canBearOff(gameState, myRole) 
-                            ? "border border-primary/30 bg-primary/5" 
-                            : "border border-primary/10"
+                            ? "border border-primary/30 bg-primary/5 cursor-pointer" 
+                            : "border border-primary/10 opacity-50"
                       )}
                       onClick={() => validMoves.includes(-2) && handlePointClick(-2)}
                     >
+                      <Trophy className={cn("w-4 h-4", validMoves.includes(-2) ? "text-primary" : "text-primary/40")} />
                       <span className={cn(
                         "text-xs font-medium",
-                        validMoves.includes(-2) ? "text-primary" : "text-muted-foreground"
+                        validMoves.includes(-2) ? "text-primary" : canBearOff(gameState, myRole) ? "text-muted-foreground" : "text-muted-foreground/50"
                       )}>
-                        Bear Off:
+                        {canBearOff(gameState, myRole) ? "Bear Off:" : "Bear Off (locked)"}
                       </span>
                       <span className={cn(
                         "font-bold",
-                        validMoves.includes(-2) ? "text-primary text-lg" : "text-primary"
+                        validMoves.includes(-2) ? "text-primary text-lg" : canBearOff(gameState, myRole) ? "text-primary" : "text-muted-foreground/50"
                       )}>
                         {myRole === "player" ? gameState.bearOff.player : gameState.bearOff.ai}
                       </span>
