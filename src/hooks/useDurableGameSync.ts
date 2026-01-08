@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
 export interface GameMove {
   room_pda: string;
@@ -40,13 +40,13 @@ export function useDurableGameSync({
   onTurnMismatch,
   onNotYourTurn,
 }: UseDurableGameSyncOptions) {
-  const { toast } = useToast();
   const [moves, setMoves] = useState<GameMove[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [lastHash, setLastHash] = useState<string>("genesis");
   const lastTurnRef = useRef<number>(0);
-  const isDev = import.meta.env.DEV;
   const loadedRef = useRef(false);
+  const resyncToastIdRef = useRef<string | number | null>(null);
+  const lastResyncTimeRef = useRef<number>(0);
 
   // Load existing moves from DB on mount
   const loadMoves = useCallback(async (): Promise<GameMove[]> => {
@@ -68,12 +68,6 @@ export function useDurableGameSync({
 
       if (result.success && result.moves) {
         console.log("[DurableSync] Loaded moves from DB:", result.moves.length);
-        if (isDev && result.moves.length > 0) {
-          toast({
-            title: "State Restored",
-            description: `Loaded ${result.moves.length} moves from server`,
-          });
-        }
         setMoves(result.moves);
         if (result.moves.length > 0) {
           const lastMove = result.moves[result.moves.length - 1];
@@ -81,6 +75,13 @@ export function useDurableGameSync({
           lastTurnRef.current = lastMove.turn_number;
         }
         onMovesLoaded?.(result.moves);
+        
+        // Dismiss any active resync toast on successful load
+        if (resyncToastIdRef.current) {
+          toast.dismiss(resyncToastIdRef.current);
+          resyncToastIdRef.current = null;
+        }
+        
         return result.moves;
       } else {
         console.warn("[DurableSync] No moves returned:", result.error);
@@ -90,7 +91,7 @@ export function useDurableGameSync({
     }
     
     return [];
-  }, [roomPda, toast, isDev, onMovesLoaded]);
+  }, [roomPda, onMovesLoaded]);
 
   // Submit a move to DB - server validates turn and player
   const submitMove = useCallback(async (moveData: any, wallet: string): Promise<boolean> => {
@@ -121,28 +122,29 @@ export function useDurableGameSync({
 
       if (result.success && result.moveHash) {
         console.log("[DurableSync] Move saved:", { turn: result.turnNumber, hash: result.moveHash.slice(0, 8) });
-        if (isDev) {
-          toast({
-            title: `Move ${result.turnNumber} Saved`,
-            description: `Hash: ${result.moveHash.slice(0, 8)}...`,
-          });
-        }
         setLastHash(result.moveHash);
         lastTurnRef.current = result.turnNumber || turnNumber;
         return true;
       } else {
-        // Handle specific server errors
+        // Handle specific server errors with NON-BLOCKING feedback
+        const now = Date.now();
+        const RESYNC_COOLDOWN = 3000; // Don't spam toasts within 3 seconds
+        
         switch (result.error) {
           case "turn_mismatch":
             console.warn("[DurableSync] Turn mismatch - resyncing. Expected:", result.expected);
             onTurnMismatch?.(result.expected || 0);
             // Reload moves to get back in sync
             await loadMoves();
-            toast({
-              title: "Turn Out of Sync",
-              description: "Resyncing with server...",
-              variant: "destructive",
-            });
+            
+            // Show non-blocking toast with cooldown
+            if (now - lastResyncTimeRef.current > RESYNC_COOLDOWN) {
+              lastResyncTimeRef.current = now;
+              resyncToastIdRef.current = toast("Resyncing...", {
+                description: "Catching up with opponent's moves",
+                duration: 2000,
+              });
+            }
             return false;
             
           case "not_your_turn":
@@ -160,11 +162,15 @@ export function useDurableGameSync({
           case "hash_mismatch":
             console.warn("[DurableSync] Hash mismatch - resyncing");
             await loadMoves();
-            toast({
-              title: "Sync Error",
-              description: "State mismatch detected, resyncing...",
-              variant: "destructive",
-            });
+            
+            // Show non-blocking toast with cooldown
+            if (now - lastResyncTimeRef.current > RESYNC_COOLDOWN) {
+              lastResyncTimeRef.current = now;
+              resyncToastIdRef.current = toast("Resyncing...", {
+                description: "State mismatch detected",
+                duration: 2000,
+              });
+            }
             return false;
             
           default:
@@ -173,14 +179,14 @@ export function useDurableGameSync({
       }
     } catch (err: any) {
       console.error("[DurableSync] Failed to save move:", err);
-      toast({
-        title: "Move Save Failed",
-        description: err?.message || "Could not persist move to server",
-        variant: "destructive",
+      // Only show error for unexpected failures, not sync issues
+      toast.error("Move failed", {
+        description: "Could not submit move to server",
+        duration: 3000,
       });
       return false;
     }
-  }, [roomPda, lastHash, toast, isDev, loadMoves, onTurnMismatch, onNotYourTurn]);
+  }, [roomPda, lastHash, loadMoves, onTurnMismatch, onNotYourTurn]);
 
   // Subscribe to realtime updates on game_moves
   useEffect(() => {
