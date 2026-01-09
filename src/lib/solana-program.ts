@@ -448,6 +448,32 @@ export function buildCancelRoomIx(
 }
 
 /**
+ * Build closeRoom instruction (for VersionedTransaction - MWA compatible)
+ * Only works when room.status == Finished
+ * Closes the Room account (rent returned to creator)
+ * Does NOT pay the winner (payout already happens via submit_result)
+ */
+export function buildCloseRoomIx(
+  creator: PublicKey,
+  roomId: number
+): TransactionInstruction {
+  const [roomPda] = getRoomPDA(creator, roomId);
+  
+  // Anchor discriminator for "close_room" - placeholder, replace with real discriminator from IDL
+  const discriminator = Buffer.from([0, 0, 0, 0, 0, 0, 0, 0]);
+  
+  return new TransactionInstruction({
+    keys: [
+      { pubkey: creator, isSigner: true, isWritable: true },
+      { pubkey: roomPda, isSigner: false, isWritable: true },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+    ],
+    programId: PROGRAM_ID,
+    data: discriminator,
+  });
+}
+
+/**
  * Build pingRoom instruction (for VersionedTransaction - MWA compatible)
  */
 export function buildPingRoomIx(
