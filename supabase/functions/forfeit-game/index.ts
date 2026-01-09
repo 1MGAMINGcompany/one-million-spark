@@ -264,6 +264,25 @@ Deno.serve(async (req: Request) => {
         skLen: skRaw.length,
         decodedLen,
       });
+
+      // HARD SAFETY CHECK: Ensure we loaded the correct verifier
+      const REQUIRED_VERIFIER = "HrQiwW3WZXdDC8c7wbsuBAw2nP1EVtzZyokp7xPJ6Wjx";
+      const actual = verifierKeypair.publicKey.toBase58();
+
+      if (actual !== REQUIRED_VERIFIER) {
+        console.error("[forfeit-game] WRONG VERIFIER LOADED", {
+          expected: REQUIRED_VERIFIER,
+          actual,
+        });
+        return new Response(JSON.stringify({
+          ok: false,
+          code: "WRONG_VERIFIER_SECRET",
+          expected: REQUIRED_VERIFIER,
+          actual,
+        }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" }});
+      }
+
+      console.log("[forfeit-game] ✅ Verifier pubkey matches on-chain config");
     } catch (err) {
       console.error("[forfeit-game] Failed to parse verifier key:", err);
       await logSettlement(supabase, {
