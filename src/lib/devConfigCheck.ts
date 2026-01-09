@@ -7,12 +7,11 @@ import { getConfigPDA, parseConfigAccount, PROGRAM_ID } from "./solana-program";
 import { getSolanaEndpoint } from "./solana-config";
 
 export async function devLogProgramConfig(): Promise<void> {
-  if (import.meta.env.PROD) {
-    console.warn("[CONFIG] devLogProgramConfig is DEV-only, skipping in production");
-    return;
-  }
+  // Only log once per session
+  if (sessionStorage.getItem("did_log_config") === "1") return;
+  sessionStorage.setItem("did_log_config", "1");
 
-  console.log("[CONFIG] === DEV CONFIG CHECK ===");
+  console.log("[CONFIG] === CONFIG CHECK ===");
   console.log("[CONFIG] Program ID:", PROGRAM_ID.toBase58());
 
   try {
@@ -62,10 +61,7 @@ export async function devLogProgramConfig(): Promise<void> {
   }
 }
 
-// Auto-run in dev when this module is imported
-if (import.meta.env.DEV) {
-  // Delay slightly to ensure RPC is ready
-  setTimeout(() => {
-    devLogProgramConfig();
-  }, 1000);
-}
+// Auto-run on import (all builds, but only once per session)
+setTimeout(() => {
+  devLogProgramConfig();
+}, 1000);
