@@ -152,8 +152,16 @@ async function logSettlement(
 }
 
 Deno.serve(async (req: Request) => {
+  // DEBUG: First log immediately on entry
+  console.log("[forfeit-game] HIT", {
+    ts: new Date().toISOString(),
+    method: req.method,
+    url: req.url,
+  });
+
   // CORS preflight
   if (req.method === "OPTIONS") {
+    console.log("[forfeit-game] OPTIONS preflight");
     return new Response(null, { headers: corsHeaders });
   }
 
@@ -171,6 +179,15 @@ Deno.serve(async (req: Request) => {
     const forfeitingWallet = body?.forfeitingWallet;
     const gameType = body?.gameType;
     const winnerWalletOverride = body?.winnerWallet;
+
+    // DEBUG: Log after parsing body
+    console.log("[forfeit-game] HIT with body", {
+      ts: new Date().toISOString(),
+      roomPda,
+      forfeitingWallet,
+      gameType,
+      winnerWalletOverride,
+    });
 
     if (!roomPda || !forfeitingWallet) {
       console.error("[forfeit-game] Missing required fields:", { roomPda, forfeitingWallet });
