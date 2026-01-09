@@ -176,6 +176,14 @@ async function finalizeViaEdgeFunction(
 ): Promise<FinalizeGameResult> {
   console.log('[finalizeGame] Calling forfeit-game edge function...');
   
+  // DEBUG: Log before edge function invocation
+  console.log("[FORFEIT] supabase.functions.invoke('forfeit-game') STARTING", {
+    roomPda,
+    loserWallet,
+    gameType,
+    ts: new Date().toISOString(),
+  });
+  
   try {
     const { data, error } = await supabase.functions.invoke('forfeit-game', {
       body: {

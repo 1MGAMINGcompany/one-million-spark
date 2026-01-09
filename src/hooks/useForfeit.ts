@@ -244,6 +244,16 @@ export function useForfeit({
         title: t("forfeit.settling", "Settling on-chain..."),
       });
       
+      // DEBUG: Log before calling finalizeGame
+      console.log("[FORFEIT] invoking forfeit via finalizeGame", {
+        roomPda,
+        forfeitingWallet: myWallet,
+        winnerWallet: opponentWallet,
+        stakeLamports,
+        gameType,
+        ts: new Date().toISOString(),
+      });
+
       // Use the authoritative finalizeGame function with forfeit mode
       // SERVER-ONLY: No wallet popup - edge function handles settlement
       const result = await finalizeGame({
