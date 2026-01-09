@@ -208,13 +208,32 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Load verifier key
-    const verifierSecretKey = Deno.env.get("VERIFIER_SECRET_KEY") ?? "";
-    const exists = verifierSecretKey.trim().length > 0;
-    const keyStart = exists ? verifierSecretKey.trim().slice(0, 2) : "";
+    // Load verifier key - check multiple possible env var names
+    const skRaw =
+      Deno.env.get("VERIFIER_SECRET_KEY") ??
+      Deno.env.get("VERIFIER_PRIVATE_KEY") ??
+      Deno.env.get("SERVER_PAYOUT_SECRET") ??
+      Deno.env.get("SERVER_WALLET_SECRET") ??
+      "";
 
-    console.log("[forfeit-game] 🔑 VERIFIER_SECRET_KEY exists:", exists);
-    console.log("[forfeit-game] 🔑 Key starts with:", keyStart);
+    // Log which env vars exist (booleans only, no secrets)
+    console.log("[forfeit-game] ENV present", {
+      VERIFIER_SECRET_KEY: !!Deno.env.get("VERIFIER_SECRET_KEY"),
+      VERIFIER_PRIVATE_KEY: !!Deno.env.get("VERIFIER_PRIVATE_KEY"),
+      SERVER_PAYOUT_SECRET: !!Deno.env.get("SERVER_PAYOUT_SECRET"),
+      SERVER_WALLET_SECRET: !!Deno.env.get("SERVER_WALLET_SECRET"),
+    });
+
+    // Log which key name is being used
+    const keyName = Deno.env.get("VERIFIER_SECRET_KEY") ? "VERIFIER_SECRET_KEY"
+      : Deno.env.get("VERIFIER_PRIVATE_KEY") ? "VERIFIER_PRIVATE_KEY"
+      : Deno.env.get("SERVER_PAYOUT_SECRET") ? "SERVER_PAYOUT_SECRET"
+      : Deno.env.get("SERVER_WALLET_SECRET") ? "SERVER_WALLET_SECRET"
+      : "NONE";
+
+    console.log("[forfeit-game] Using env key name", { keyName });
+
+    const exists = skRaw.trim().length > 0;
 
     if (!exists) {
       await logSettlement(supabase, {
@@ -222,12 +241,12 @@ Deno.serve(async (req: Request) => {
         action: "forfeit",
         success: false,
         forfeiting_wallet: forfeitingWallet,
-        error_message: "VERIFIER_SECRET_KEY is missing",
+        error_message: "No verifier secret key found in any env var",
       });
       return json200({
         success: false,
         error: "Server configuration error: verifier not configured",
-        details: "VERIFIER_SECRET_KEY is missing",
+        details: "No verifier secret key found (checked VERIFIER_SECRET_KEY, VERIFIER_PRIVATE_KEY, SERVER_PAYOUT_SECRET, SERVER_WALLET_SECRET)",
       });
     }
 
@@ -235,11 +254,16 @@ Deno.serve(async (req: Request) => {
     let decodedLen = 0;
 
     try {
-      const loaded = loadVerifierKeypair(verifierSecretKey);
+      const loaded = loadVerifierKeypair(skRaw);
       verifierKeypair = loaded.keypair;
       decodedLen = loaded.decodedLen;
-      console.log("[forfeit-game] 📏 Decoded byte length:", decodedLen);
-      console.log("[forfeit-game] 🔑 Verifier pubkey:", verifierKeypair.publicKey.toBase58());
+
+      // Enhanced logging: pubkey + length (no secret content)
+      console.log("[forfeit-game] verifier pubkey", {
+        verifierPubkey: verifierKeypair.publicKey.toBase58(),
+        skLen: skRaw.length,
+        decodedLen,
+      });
     } catch (err) {
       console.error("[forfeit-game] Failed to parse verifier key:", err);
       await logSettlement(supabase, {
