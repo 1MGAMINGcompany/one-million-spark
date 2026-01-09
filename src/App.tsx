@@ -37,6 +37,9 @@ import Leaderboard from "./pages/Leaderboard";
 import AgeConfirmation from "./components/AgeConfirmation";
 import DebugJoinRoom from "./pages/DebugJoinRoom";
 
+// DEV-ONLY: Import to auto-run config check on app load
+import "./lib/devConfigCheck";
+
 const App = () => (
   <SolanaProvider>
     <TxLockProvider>
