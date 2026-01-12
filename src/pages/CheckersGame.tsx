@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Gem, Star, Flag, Users, Wifi, WifiOff, Crown, RotateCcw, LogOut } from "lucide-react";
+import { ArrowLeft, Gem, Star, Flag, Users, Wifi, WifiOff, Crown, RotateCcw, LogOut, Loader2 } from "lucide-react";
 import { ForfeitConfirmDialog } from "@/components/ForfeitConfirmDialog";
 import { LeaveMatchModal, MatchState } from "@/components/LeaveMatchModal";
 import { useForfeit } from "@/hooks/useForfeit";
@@ -20,6 +20,7 @@ import { useTurnTimer, DEFAULT_RANKED_TURN_TIME } from "@/hooks/useTurnTimer";
 import { useStartRoll } from "@/hooks/useStartRoll";
 import { useTxLock } from "@/contexts/TxLockContext";
 import { useDurableGameSync, GameMove } from "@/hooks/useDurableGameSync";
+import { useAutoSettlement } from "@/hooks/useAutoSettlement";
 import { DiceRollStart } from "@/components/DiceRollStart";
 import TurnStatusHeader from "@/components/TurnStatusHeader";
 import TurnHistoryDrawer from "@/components/TurnHistoryDrawer";
@@ -471,6 +472,44 @@ const CheckersGame = () => {
     if (gameOver === myColor) return address;
     return roomPlayers.find(p => p.toLowerCase() !== address?.toLowerCase()) || null;
   }, [gameOver, myColor, address, roomPlayers]);
+
+  // Winner map for auto-settlement: gold → player1, obsidian → player2
+  const winnerMap = useMemo(() => ({
+    gold: roomPlayers[0] || "",
+    obsidian: roomPlayers[1] || "",
+  }), [roomPlayers]);
+
+  // Auto-settlement hook - triggers settle-game edge function when game ends
+  const autoSettlement = useAutoSettlement({
+    roomPda,
+    winner: gameOver,
+    winnerMap,
+    players: roomPlayers,
+    gameType: "checkers",
+    mode: isRankedGame ? "ranked" : "casual",
+    reason: "gameover",
+    isRanked: isRankedGame,
+    myWallet: address,
+  });
+
+  // Show toast when settlement completes
+  useEffect(() => {
+    if (autoSettlement.result?.success && autoSettlement.result.signature) {
+      toast({
+        title: "On-chain settlement complete",
+        description: `Tx: ${autoSettlement.result.signature.slice(0, 8)}...`,
+      });
+    } else if (autoSettlement.result && !autoSettlement.result.success && autoSettlement.result.error) {
+      // Only show error if it's not an "already settled" case
+      if (!autoSettlement.result.alreadySettled && !autoSettlement.result.alreadyClosed) {
+        toast({
+          title: "Settlement issue",
+          description: autoSettlement.result.error,
+          variant: "destructive",
+        });
+      }
+    }
+  }, [autoSettlement.result]);
 
   // Players for GameEndScreen
   const gameEndPlayers = useMemo(() => {
@@ -1259,8 +1298,19 @@ const CheckersGame = () => {
           onRematch={() => rematch.openRematchModal()}
           onExit={() => navigate("/room-list")}
           roomPda={roomPda}
-          isStaked={false}
+          isStaked={isRankedGame}
         />
+      )}
+
+      {/* Settlement status overlay - show while settling */}
+      {autoSettlement.isSettling && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-[60] flex items-center justify-center">
+          <div className="bg-card border border-primary/30 rounded-xl p-6 text-center space-y-4">
+            <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto" />
+            <p className="text-lg font-semibold">Settling on-chain...</p>
+            <p className="text-sm text-muted-foreground">Finalizing payout and closing room</p>
+          </div>
+        </div>
       )}
 
       {/* Leave Match Modal - Safe UI with explicit on-chain action separation */}
