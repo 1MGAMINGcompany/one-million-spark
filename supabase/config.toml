@@ -20,3 +20,6 @@ verify_jwt = false
 
 [functions.get-moves]
 verify_jwt = false
+
+[functions.settle-game]
+verify_jwt = false
