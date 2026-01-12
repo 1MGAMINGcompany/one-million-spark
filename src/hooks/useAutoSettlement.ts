@@ -24,34 +24,19 @@ export interface SettlementResult {
 
 export interface UseAutoSettlementParams {
   roomPda: string | undefined;
-  /** Winner identifier - can be "gold"/"obsidian", "player1"/"player2", "me"/"opponent", or wallet address */
+  /** Winner identifier - used to detect when game ends (actual wallet resolved server-side) */
   winner: string | null;
-  /** Map winner color to wallet: { gold: wallet1, obsidian: wallet2 } */
-  winnerMap: Record<string, string>;
-  /** Array of player wallets [player1, player2] for fallback */
-  players: string[];
-  /** Game type for logging */
-  gameType: string;
-  /** Game mode */
-  mode?: "casual" | "ranked";
   /** Reason for game end */
   reason?: "gameover" | "resign" | "timeout";
   /** Only settle for ranked/staked games */
   isRanked?: boolean;
-  /** My wallet address - used for "me"/"opponent" mapping */
-  myWallet?: string | null;
 }
 
 export function useAutoSettlement({
   roomPda,
   winner,
-  winnerMap,
-  players,
-  gameType,
-  mode = "ranked",
   reason = "gameover",
   isRanked = true,
-  myWallet,
 }: UseAutoSettlementParams) {
   const [isSettling, setIsSettling] = useState(false);
   const [result, setResult] = useState<SettlementResult | null>(null);
@@ -59,45 +44,6 @@ export function useAutoSettlement({
   // Idempotency guard - prevent double-calling
   const isSettlingRef = useRef(false);
   const hasAttemptedRef = useRef(false);
-  // Track the winner we settled for (to allow retry on different winner)
-  const settledWinnerRef = useRef<string | null>(null);
-  
-  /**
-   * Map winner identifier to wallet address
-   */
-  const resolveWinnerWallet = useCallback((): string | null => {
-    if (!winner) return null;
-    
-    // If winner is already a full wallet address (44 chars base58)
-    if (winner.length > 30) {
-      return winner;
-    }
-    
-    // Special case: "draw" - no winner
-    if (winner === "draw") {
-      return null;
-    }
-    
-    // Map "me"/"opponent" using myWallet
-    if (winner === "me" && myWallet) {
-      return myWallet;
-    }
-    if (winner === "opponent" && myWallet && players.length >= 2) {
-      return players.find(p => p.toLowerCase() !== myWallet.toLowerCase()) || null;
-    }
-    
-    // Map using provided winnerMap (e.g., { gold: wallet1, obsidian: wallet2 })
-    if (winnerMap[winner]) {
-      return winnerMap[winner];
-    }
-    
-    // Fallback: player1/player2 mapping
-    if (winner === "player1" && players[0]) return players[0];
-    if (winner === "player2" && players[1]) return players[1];
-    
-    console.warn("[useAutoSettlement] Could not resolve winner:", winner);
-    return null;
-  }, [winner, winnerMap, players, myWallet]);
   
   /**
    * Trigger settlement manually (can be called from UI if auto-trigger fails)
@@ -105,11 +51,6 @@ export function useAutoSettlement({
   const settle = useCallback(async (): Promise<SettlementResult> => {
     if (!roomPda) {
       return { success: false, error: "Missing roomPda" };
-    }
-    
-    const winnerWallet = resolveWinnerWallet();
-    if (!winnerWallet) {
-      return { success: false, error: "Could not resolve winner wallet" };
     }
     
     // Guard: already settling
@@ -123,19 +64,15 @@ export function useAutoSettlement({
     
     console.log("[settle] Calling settle-game", { 
       roomPda: roomPda.slice(0, 8) + "...", 
-      winnerWallet: winnerWallet.slice(0, 8) + "...",
       reason,
-      gameType,
     });
     
     try {
+      // Winner wallet is now determined server-side from game_sessions.game_state.gameOver
       const { data, error } = await supabase.functions.invoke("settle-game", {
         body: {
           roomPda,
-          winnerWallet,
           reason,
-          gameType,
-          mode,
         },
       });
       
@@ -159,7 +96,6 @@ export function useAutoSettlement({
           signature: data.signature,
         };
         setResult(successResult);
-        settledWinnerRef.current = winnerWallet;
         return successResult;
       }
       
@@ -171,7 +107,6 @@ export function useAutoSettlement({
           closeRoomSignature: data.closeRoomSignature,
         };
         setResult(successResult);
-        settledWinnerRef.current = winnerWallet;
         return successResult;
       }
       
@@ -196,7 +131,7 @@ export function useAutoSettlement({
       setIsSettling(false);
       hasAttemptedRef.current = true;
     }
-  }, [roomPda, resolveWinnerWallet, reason, gameType, mode]);
+  }, [roomPda, reason]);
   
   /**
    * Auto-trigger settlement when winner is detected
@@ -211,31 +146,24 @@ export function useAutoSettlement({
     // Skip if winner is "draw" (handled differently)
     if (winner === "draw") return;
     
-    // Resolve winner wallet
-    const winnerWallet = resolveWinnerWallet();
-    if (!winnerWallet) return;
-    
-    // Skip if we've already attempted to settle this winner
-    if (hasAttemptedRef.current && settledWinnerRef.current === winnerWallet) {
-      return;
-    }
+    // Skip if we've already attempted
+    if (hasAttemptedRef.current) return;
     
     // Skip if already settling
     if (isSettlingRef.current) return;
     
-    console.log("[useAutoSettlement] Auto-triggering settlement for winner:", winnerWallet.slice(0, 8));
+    console.log("[useAutoSettlement] Auto-triggering settlement for room:", roomPda.slice(0, 8));
     
-    // Trigger settlement
+    // Trigger settlement - winner wallet resolved server-side
     settle();
     
-  }, [winner, roomPda, isRanked, resolveWinnerWallet, settle]);
+  }, [winner, roomPda, isRanked, settle]);
   
   /**
    * Reset state (useful for rematch)
    */
   const reset = useCallback(() => {
     hasAttemptedRef.current = false;
-    settledWinnerRef.current = null;
     setResult(null);
   }, []);
   

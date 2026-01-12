@@ -26,7 +26,6 @@ const PROGRAM_ID = new PublicKey("4nkWS2ZYPqQrRSYbXD6XW6U6VenmBiZV2TkutY3vSPHu")
 
 interface SettleGameRequest {
   roomPda: string;
-  winnerWallet: string;      // REQUIRED
   reason?: "gameover" | "resign" | "timeout";
   gameType?: string;
   mode?: "casual" | "ranked";
@@ -194,9 +193,8 @@ Deno.serve(async (req: Request) => {
     const body = (await req.json().catch(() => null)) as SettleGameRequest | null;
 
     const roomPda = body?.roomPda;
-    const winnerWallet = body?.winnerWallet;
     const reason = body?.reason || "gameover";
-    const gameType = body?.gameType;
+    const requestedGameType = body?.gameType;
     const mode = body?.mode || "ranked";
 
     const requestId = crypto.randomUUID();
@@ -206,19 +204,13 @@ Deno.serve(async (req: Request) => {
       requestId,
       ts,
       roomPda,
-      winnerWallet,
       reason,
-      gameType,
       mode,
     });
 
     // Validate required fields
     if (!roomPda) {
       return json200({ success: false, error: "Missing roomPda" });
-    }
-
-    if (!winnerWallet) {
-      return json200({ success: false, error: "Missing winnerWallet" });
     }
 
     if (!supabase) {
@@ -228,6 +220,73 @@ Deno.serve(async (req: Request) => {
         error: "Server configuration error: Supabase service credentials missing",
       });
     }
+
+    // ─────────────────────────────────────────────────────────────
+    // FETCH GAME SESSION TO DETERMINE WINNER FROM DATABASE
+    // ─────────────────────────────────────────────────────────────
+    const { data: sessionRow, error: sessionError } = await supabase
+      .from("game_sessions")
+      .select("player1_wallet, player2_wallet, game_state, game_type")
+      .eq("room_pda", roomPda)
+      .single();
+
+    if (sessionError || !sessionRow) {
+      console.error("[settle-game] Game session not found:", sessionError);
+      return json200({
+        success: false,
+        error: "Game session not found",
+        roomPda,
+      });
+    }
+
+    // Extract winner color from game_state.gameOver
+    const gameState = sessionRow.game_state as Record<string, unknown> | null;
+    const winnerColor = gameState?.gameOver as string | undefined;
+
+    if (!winnerColor) {
+      console.error("[settle-game] No winner in game_state.gameOver:", { gameState });
+      return json200({
+        success: false,
+        error: "No winner determined in game_state.gameOver",
+        roomPda,
+      });
+    }
+
+    // Map winner color to wallet: gold -> player1_wallet, obsidian -> player2_wallet
+    let winnerWallet: string;
+    if (winnerColor === "gold") {
+      winnerWallet = sessionRow.player1_wallet;
+    } else if (winnerColor === "obsidian") {
+      winnerWallet = sessionRow.player2_wallet;
+    } else {
+      console.error("[settle-game] Unknown winner color:", winnerColor);
+      return json200({
+        success: false,
+        error: `Unknown winner color: ${winnerColor}`,
+        roomPda,
+      });
+    }
+
+    if (!winnerWallet) {
+      console.error("[settle-game] Winner wallet is null:", { winnerColor, sessionRow });
+      return json200({
+        success: false,
+        error: "Winner wallet is null in game session",
+        roomPda,
+        winnerColor,
+      });
+    }
+
+    // Use gameType from DB if not provided in request
+    const gameType = sessionRow.game_type || requestedGameType || "unknown";
+
+    console.log("[settle-game] 🏆 Winner determined from DB:", {
+      winnerColor,
+      winnerWallet: winnerWallet.slice(0, 8) + "...",
+      player1: sessionRow.player1_wallet?.slice(0, 8),
+      player2: sessionRow.player2_wallet?.slice(0, 8),
+      gameType,
+    });
 
     // Load verifier key
     const skRaw = Deno.env.get("VERIFIER_SECRET_KEY_V2") ?? "";

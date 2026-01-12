@@ -473,23 +473,13 @@ const CheckersGame = () => {
     return roomPlayers.find(p => p.toLowerCase() !== address?.toLowerCase()) || null;
   }, [gameOver, myColor, address, roomPlayers]);
 
-  // Winner map for auto-settlement: gold → player1, obsidian → player2
-  const winnerMap = useMemo(() => ({
-    gold: roomPlayers[0] || "",
-    obsidian: roomPlayers[1] || "",
-  }), [roomPlayers]);
-
   // Auto-settlement hook - triggers settle-game edge function when game ends
+  // Winner wallet is now determined server-side from game_sessions.game_state.gameOver
   const autoSettlement = useAutoSettlement({
     roomPda,
     winner: gameOver,
-    winnerMap,
-    players: roomPlayers,
-    gameType: "checkers",
-    mode: isRankedGame ? "ranked" : "casual",
     reason: "gameover",
     isRanked: isRankedGame,
-    myWallet: address,
   });
 
   // Show toast when settlement completes
