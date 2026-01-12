@@ -63,9 +63,39 @@ const LEGACY_COLOR_MAPS: Record<string, Record<string, number>> = {
   ludo: { red: 0, blue: 1, green: 2, yellow: 3 },
 };
 
+// Normalize gameType from number or string to canonical lowercase key
+function normalizeGameType(gameType: string | number | undefined): string {
+  if (gameType === undefined || gameType === null) {
+    return "unknown";
+  }
+  
+  // Map numeric game types to canonical names
+  const numericMap: Record<number, string> = {
+    1: "chess",
+    2: "dominos",
+    3: "backgammon",
+    4: "checkers",
+    5: "ludo",
+  };
+  
+  if (typeof gameType === "number") {
+    return numericMap[gameType] ?? "unknown";
+  }
+  
+  // Handle string: could be numeric string or name
+  const trimmed = String(gameType).trim();
+  const parsed = parseInt(trimmed, 10);
+  if (!isNaN(parsed) && numericMap[parsed]) {
+    return numericMap[parsed];
+  }
+  
+  // Already a string name - lowercase it
+  return trimmed.toLowerCase();
+}
+
 function resolveWinnerSeat(
   gameState: Record<string, unknown> | null,
-  gameType: string
+  gameType: string | number | undefined
 ): WinnerSeatResult | { error: string } {
   if (!gameState) {
     return { error: "game_state is null" };
@@ -86,7 +116,7 @@ function resolveWinnerSeat(
     }
 
     // Priority 3: Legacy color mapping by game type
-    const normalizedGameType = gameType.toLowerCase();
+    const normalizedGameType = normalizeGameType(gameType);
     const colorMap = LEGACY_COLOR_MAPS[normalizedGameType];
     if (colorMap) {
       const normalizedColor = gameOver.toLowerCase();
@@ -96,7 +126,7 @@ function resolveWinnerSeat(
     }
 
     // gameOver is a string but not recognized
-    return { error: `Unknown gameOver value: "${gameOver}" for gameType: ${gameType}` };
+    return { error: `Unknown gameOver value: "${gameOver}" for gameType: ${normalizeGameType(gameType)}` };
   }
 
   // gameOver is number directly (unlikely but handle it)
@@ -333,15 +363,71 @@ Deno.serve(async (req: Request) => {
       players: playersOnChain,
     });
 
-    // IDEMPOTENCY: If room is already Finished (status == 3)
+    // IDEMPOTENCY: If room is already Finished (status == 3), still attempt close_room
     if (roomData.status === 3) {
-      console.log("[settle-game] Room already settled (status=3):", roomPda);
+      console.log("[settle-game] Room already settled (status=3), attempting close_room:", roomPda);
+      
+      let closeRoomSignature: string | null = null;
+      let closeRoomError: string | null = null;
+      
+      try {
+        // close_room discriminator: [152, 197, 88, 192, 98, 197, 51, 211]
+        const closeRoomDiscriminator = new Uint8Array([152, 197, 88, 192, 98, 197, 51, 211]);
+        
+        // Load verifier for close_room tx
+        const skRaw = Deno.env.get("VERIFIER_SECRET_KEY_V2") ?? "";
+        if (skRaw.trim()) {
+          const { keypair: verifierKeypair } = loadVerifierKeypair(skRaw);
+          
+          // close_room accounts ORDER: room, creator
+          const closeRoomIx = new TransactionInstruction({
+            programId: PROGRAM_ID,
+            keys: [
+              { pubkey: roomPdaKey, isSigner: false, isWritable: true },         // room
+              { pubkey: roomData.creator, isSigner: false, isWritable: true },   // creator
+            ],
+            data: closeRoomDiscriminator as any,
+          });
+          
+          const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("confirmed");
+          const closeTx = new Transaction({
+            feePayer: verifierKeypair.publicKey,
+            recentBlockhash: blockhash,
+          }).add(closeRoomIx);
+          
+          closeTx.sign(verifierKeypair);
+          
+          closeRoomSignature = await connection.sendRawTransaction(closeTx.serialize(), {
+            skipPreflight: false,
+            preflightCommitment: "confirmed",
+          });
+          
+          console.log("[settle-game] close_room sent (idempotent):", closeRoomSignature);
+          
+          const closeConfirmation = await connection.confirmTransaction(
+            { signature: closeRoomSignature, blockhash, lastValidBlockHeight },
+            "confirmed",
+          );
+          
+          if (closeConfirmation.value.err) {
+            throw new Error(`close_room failed: ${JSON.stringify(closeConfirmation.value.err)}`);
+          }
+          
+          console.log("[settle-game] ✅ close_room confirmed (idempotent):", closeRoomSignature);
+        }
+      } catch (closeErr) {
+        closeRoomError = String((closeErr as Error)?.message ?? closeErr);
+        console.warn("[settle-game] ⚠️ close_room failed (idempotent):", closeRoomError);
+      }
+      
       return json200({
         success: true,
         alreadySettled: true,
         message: "Room already settled (status=Finished)",
         roomPda,
         winner: roomData.winner.toBase58(),
+        closeRoomSignature,
+        closeRoomError,
       });
     }
 
