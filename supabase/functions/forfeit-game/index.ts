@@ -24,8 +24,8 @@ function json200(body: Record<string, unknown>) {
 // Mainnet production Program ID - MUST match solana-program.ts
 const PROGRAM_ID = new PublicKey("4nkWS2ZYPqQrRSYbXD6XW6U6VenmBiZV2TkutY3vSPHu");
 
-// Platform fee recipient
-const FEE_RECIPIENT = new PublicKey("3bcV9vtxeiHsXgNx4qvQbS4ZL4cMUnAg2tF3DZjtmGUj");
+// NOTE: FEE_RECIPIENT is now fetched dynamically from on-chain Config account
+// to avoid BadFeeRecipient (0x177a) error caused by mismatch with config.fee_recipient
 
 interface ForfeitRequest {
   roomPda: string;
@@ -107,6 +107,47 @@ function parseRoomAccount(data: Uint8Array): ParsedRoom | null {
     };
   } catch (e) {
     console.error("[forfeit-game] Failed to parse room account:", e);
+    return null;
+  }
+}
+
+// Config account layout from IDL:
+// - 8 bytes discriminator
+// - 32 bytes authority (pubkey)
+// - 32 bytes fee_recipient (pubkey)
+// - 2 bytes fee_bps (u16, little-endian)
+// - 32 bytes verifier (pubkey)
+// Total: 106 bytes
+interface ParsedConfig {
+  authority: PublicKey;
+  feeRecipient: PublicKey;
+  feeBps: number;
+  verifier: PublicKey;
+}
+
+function parseConfigAccount(data: Uint8Array): ParsedConfig | null {
+  try {
+    const view = new DataView(data.buffer, data.byteOffset);
+    let offset = 8; // Skip 8-byte discriminator
+
+    // authority: Pubkey (32 bytes)
+    const authority = new PublicKey(data.slice(offset, offset + 32));
+    offset += 32;
+
+    // fee_recipient: Pubkey (32 bytes)
+    const feeRecipient = new PublicKey(data.slice(offset, offset + 32));
+    offset += 32;
+
+    // fee_bps: u16 (2 bytes, little-endian)
+    const feeBps = view.getUint16(offset, true);
+    offset += 2;
+
+    // verifier: Pubkey (32 bytes)
+    const verifier = new PublicKey(data.slice(offset, offset + 32));
+
+    return { authority, feeRecipient, feeBps, verifier };
+  } catch (e) {
+    console.error("[forfeit-game] Failed to parse config account:", e);
     return null;
   }
 }
@@ -553,6 +594,75 @@ Deno.serve(async (req: Request) => {
 
     const [configPda] = PublicKey.findProgramAddressSync([new TextEncoder().encode("config")], PROGRAM_ID);
 
+    // ─────────────────────────────────────────────────────────────
+    // CRITICAL FIX: Fetch Config account to get fee_recipient dynamically
+    // This fixes BadFeeRecipient (0x177a) error
+    // ─────────────────────────────────────────────────────────────
+    const configAccountInfo = await connection.getAccountInfo(configPda);
+    if (!configAccountInfo) {
+      console.error("[forfeit-game] ❌ Config account not found on-chain");
+      await logSettlement(supabase, {
+        room_pda: roomPda,
+        action: "forfeit",
+        success: false,
+        forfeiting_wallet: forfeitingWallet,
+        verifier_pubkey: verifierKeypair.publicKey.toBase58(),
+        error_message: "Config account not found on-chain",
+      });
+      return json200({
+        success: false,
+        error: "Config account not initialized on-chain",
+      });
+    }
+
+    const configData = parseConfigAccount(configAccountInfo.data);
+    if (!configData) {
+      await logSettlement(supabase, {
+        room_pda: roomPda,
+        action: "forfeit",
+        success: false,
+        forfeiting_wallet: forfeitingWallet,
+        verifier_pubkey: verifierKeypair.publicKey.toBase58(),
+        error_message: "Failed to parse config account",
+      });
+      return json200({
+        success: false,
+        error: "Failed to parse config account",
+      });
+    }
+
+    // Log parsed config for debugging
+    console.log("[forfeit-game] 📋 On-chain config:", {
+      authority: configData.authority.toBase58(),
+      feeRecipient: configData.feeRecipient.toBase58(),
+      feeBps: configData.feeBps,
+      verifier: configData.verifier.toBase58(),
+    });
+
+    // Validate verifier matches on-chain config
+    if (!configData.verifier.equals(verifierKeypair.publicKey)) {
+      console.error("[forfeit-game] ❌ Verifier mismatch with on-chain config!", {
+        expected: configData.verifier.toBase58(),
+        actual: verifierKeypair.publicKey.toBase58(),
+      });
+      await logSettlement(supabase, {
+        room_pda: roomPda,
+        action: "forfeit",
+        success: false,
+        forfeiting_wallet: forfeitingWallet,
+        verifier_pubkey: verifierKeypair.publicKey.toBase58(),
+        error_message: `Verifier mismatch: expected ${configData.verifier.toBase58()}, got ${verifierKeypair.publicKey.toBase58()}`,
+      });
+      return json200({
+        success: false,
+        error: "Verifier mismatch with on-chain config",
+        expected: configData.verifier.toBase58(),
+        actual: verifierKeypair.publicKey.toBase58(),
+      });
+    }
+
+    console.log("[forfeit-game] ✅ Verifier matches on-chain config");
+
     const [vaultPda] = PublicKey.findProgramAddressSync(
       [new TextEncoder().encode("vault"), roomPdaKey.toBuffer()],
       PROGRAM_ID,
@@ -672,7 +782,7 @@ Deno.serve(async (req: Request) => {
           { pubkey: roomPdaKey, isSigner: false, isWritable: true }, // room
           { pubkey: vaultPda, isSigner: false, isWritable: true }, // vault
           { pubkey: winnerPubkey, isSigner: false, isWritable: true }, // winner
-          { pubkey: FEE_RECIPIENT, isSigner: false, isWritable: true }, // fee recipient
+          { pubkey: configData.feeRecipient, isSigner: false, isWritable: true }, // fee recipient (DYNAMIC from config!)
         ],
         data: ixData as any,
       });
@@ -683,7 +793,7 @@ Deno.serve(async (req: Request) => {
         room: roomPdaKey.toBase58(),
         vault: vaultPda.toBase58(),
         winner: winnerPubkey.toBase58(),
-        feeRecipient: FEE_RECIPIENT.toBase58(),
+        feeRecipient: configData.feeRecipient.toBase58(), // Now using dynamic value
         rpc: rpcUrl,
         decodedLen,
       });
