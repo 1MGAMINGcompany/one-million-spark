@@ -873,6 +873,69 @@ Deno.serve(async (req: Request) => {
         console.error("[forfeit-game] finish_game_session failed:", finishErr);
       }
 
+      // ─────────────────────────────────────────────────────────────
+      // AUTO CLOSE ROOM: Refund rent to creator after successful settlement
+      // close_room requires NO creator signature - verifier can pay fees
+      // ─────────────────────────────────────────────────────────────
+      let closeRoomSignature: string | null = null;
+      let closeRoomError: string | null = null;
+
+      try {
+        console.log("[forfeit-game] Closing room to refund rent...", {
+          room: roomPdaKey.toBase58(),
+          creator: roomData.creator.toBase58(),
+        });
+
+        // close_room discriminator: [152, 197, 88, 192, 98, 197, 51, 211]
+        const closeRoomDiscriminator = new Uint8Array([152, 197, 88, 192, 98, 197, 51, 211]);
+
+        // close_room accounts ORDER (from IDL):
+        // 1) room     signer=false writable=true
+        // 2) creator  signer=false writable=true
+        const closeRoomIx = new TransactionInstruction({
+          programId: PROGRAM_ID,
+          keys: [
+            { pubkey: roomPdaKey, isSigner: false, isWritable: true },         // room
+            { pubkey: roomData.creator, isSigner: false, isWritable: true },   // creator
+          ],
+          data: closeRoomDiscriminator as any,
+        });
+
+        // Build + sign close_room tx (verifier pays fees)
+        const { blockhash: closeBlockhash, lastValidBlockHeight: closeLastValid } = 
+          await connection.getLatestBlockhash("confirmed");
+
+        const closeTx = new Transaction({
+          feePayer: verifierKeypair.publicKey,
+          recentBlockhash: closeBlockhash,
+        }).add(closeRoomIx);
+
+        closeTx.sign(verifierKeypair);
+
+        closeRoomSignature = await connection.sendRawTransaction(closeTx.serialize(), {
+          skipPreflight: false,
+          preflightCommitment: "confirmed",
+        });
+
+        console.log("[forfeit-game] close_room sent:", closeRoomSignature);
+
+        const closeConfirmation = await connection.confirmTransaction(
+          { signature: closeRoomSignature, blockhash: closeBlockhash, lastValidBlockHeight: closeLastValid },
+          "confirmed",
+        );
+
+        if (closeConfirmation.value.err) {
+          throw new Error(`close_room failed: ${JSON.stringify(closeConfirmation.value.err)}`);
+        }
+
+        console.log("[forfeit-game] ✅ close_room confirmed", { closeSig: closeRoomSignature });
+
+      } catch (closeErr) {
+        // close_room failure is NOT fatal - forfeit payout already succeeded
+        closeRoomError = String((closeErr as Error)?.message ?? closeErr);
+        console.warn("[forfeit-game] ⚠️ close_room failed", { error: closeRoomError });
+      }
+
       return json200({
         success: true,
         action: "forfeit",
@@ -881,6 +944,8 @@ Deno.serve(async (req: Request) => {
         forfeitingWallet,
         vaultLamports,
         verifierLamports: verifierBalance,
+        closeRoomSignature,
+        closeRoomError,
       });
 
     } catch (settlementError) {
