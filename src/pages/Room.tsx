@@ -1,15 +1,15 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
+import { PublicKey, LAMPORTS_PER_SOL, VersionedTransaction, TransactionMessage } from "@solana/web3.js";
 
 import { useConnection, useWallet as useSolanaWallet } from "@solana/wallet-adapter-react";
-import { parseRoomAccount, getVaultPDA, RoomStatus, statusToName, isOpenStatus } from "@/lib/solana-program";
+import { parseRoomAccount, getVaultPDA, RoomStatus, statusToName, isOpenStatus, buildCloseRoomIx, PROGRAM_ID } from "@/lib/solana-program";
 import { useWallet } from "@/hooks/useWallet";
 import { useSolanaRooms } from "@/hooks/useSolanaRooms";
 import { useTxLock } from "@/contexts/TxLockContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Construction, ArrowLeft, Loader2, Users, Coins, AlertTriangle, CheckCircle, Share2, Copy, ExternalLink } from "lucide-react";
+import { Construction, ArrowLeft, Loader2, Users, Coins, AlertTriangle, CheckCircle, Share2, Copy, ExternalLink, Wallet } from "lucide-react";
 import { RecoverFundsButton } from "@/components/RecoverFundsButton";
 import { WalletGateModal } from "@/components/WalletGateModal";
 import { RivalryWidget } from "@/components/RivalryWidget";
@@ -560,6 +560,103 @@ export default function Room() {
       }
     }
   };
+
+  // Close room handler - allows creator to reclaim rent after game is Finished
+  const [closingRoom, setClosingRoom] = useState(false);
+  
+  const onCloseRoom = async () => {
+    if (!room || !wallet.publicKey || !wallet.signTransaction) return;
+
+    if (signingDisabled) {
+      toast.error("Wallet signing is disabled on preview domains. Please use 1mgaming.com");
+      return;
+    }
+
+    if (needsMobileWalletRedirect) {
+      setShowMobileWalletRedirect(true);
+      return;
+    }
+
+    // Verify user is the creator
+    if (!isCreator) {
+      toast.error("Only the room creator can close the room");
+      return;
+    }
+
+    // Verify room is Finished
+    if (status !== RoomStatus.Finished) {
+      toast.error("Room can only be closed after the game has finished");
+      return;
+    }
+
+    setClosingRoom(true);
+
+    try {
+      const roomId = typeof room.roomId === "object" ? room.roomId.toNumber() : room.roomId;
+      const creatorPubkey = new PublicKey(wallet.publicKey.toBase58());
+
+      // Build close_room instruction
+      const closeIx = buildCloseRoomIx(creatorPubkey, roomId);
+
+      // Build versioned transaction
+      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("confirmed");
+      
+      const messageV0 = new TransactionMessage({
+        payerKey: creatorPubkey,
+        recentBlockhash: blockhash,
+        instructions: [closeIx],
+      }).compileToV0Message();
+
+      const tx = new VersionedTransaction(messageV0);
+
+      // Sign with wallet
+      const signed = await wallet.signTransaction(tx);
+
+      // Send and confirm
+      const sig = await connection.sendRawTransaction(signed.serialize(), {
+        skipPreflight: false,
+        preflightCommitment: "confirmed",
+      });
+
+      console.log("[CloseRoom] TX sent:", sig);
+
+      await connection.confirmTransaction(
+        { signature: sig, blockhash, lastValidBlockHeight },
+        "confirmed"
+      );
+
+      toast.success("Room closed! Rent reclaimed.", {
+        description: `TX: ${sig.slice(0, 8)}...`,
+      });
+
+      // Navigate away since room no longer exists
+      navigate("/room-list");
+    } catch (err: any) {
+      console.error("[CloseRoom] Failed:", err);
+      
+      // Handle specific error cases
+      const errMsg = err?.message || String(err);
+      
+      if (errMsg.includes("already been processed") || errMsg.includes("AlreadyInUse")) {
+        toast.error("Room already closed");
+        navigate("/room-list");
+      } else if (errMsg.includes("User rejected") || errMsg.includes("rejected")) {
+        toast.error("Transaction cancelled");
+      } else if (errMsg.includes("AccountNotFound") || errMsg.includes("account does not exist")) {
+        toast.info("Room already closed or doesn't exist");
+        navigate("/room-list");
+      } else {
+        toast.error("Failed to close room", {
+          description: errMsg.slice(0, 100),
+        });
+      }
+    } finally {
+      setClosingRoom(false);
+    }
+  };
+
+  // Can close room: creator + room is Finished + wallet connected
+  const canCloseRoom = status === RoomStatus.Finished && isCreator && isConnected && room;
   
   // Show friendly error UI for invalid PDA
   if (pdaError) {
@@ -913,6 +1010,31 @@ export default function Room() {
                   "Signing Disabled"
                 ) : (
                   "Cancel Room"
+                )}
+              </Button>
+            )}
+
+            {/* Close Room Button - for creator to reclaim rent after game ends */}
+            {canCloseRoom && (
+              <Button
+                onClick={onCloseRoom}
+                size="lg"
+                variant="outline"
+                disabled={isTxInFlight || hookTxPending || signingDisabled || closingRoom}
+                className="min-w-32 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10"
+              >
+                {closingRoom ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Closing…
+                  </>
+                ) : signingDisabled ? (
+                  "Signing Disabled"
+                ) : (
+                  <>
+                    <Wallet className="mr-2 h-4 w-4" />
+                    Recover Rent (Close Room)
+                  </>
                 )}
               </Button>
             )}
