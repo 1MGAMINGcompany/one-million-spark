@@ -459,8 +459,8 @@ export function buildCloseRoomIx(
 ): TransactionInstruction {
   const [roomPda] = getRoomPDA(creator, roomId);
   
-  // Anchor discriminator for "close_room" - placeholder, replace with real discriminator from IDL
-  const discriminator = Buffer.from([0, 0, 0, 0, 0, 0, 0, 0]);
+  // Anchor discriminator for "close_room"
+  const discriminator = Buffer.from([152, 197, 88, 192, 98, 197, 51, 211]);
   
   return new TransactionInstruction({
     keys: [
