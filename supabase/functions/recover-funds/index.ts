@@ -11,8 +11,7 @@ const corsHeaders = {
 // Mainnet production Program ID - MUST match solana-program.ts
 const PROGRAM_ID = new PublicKey("4nkWS2ZYPqQrRSYbXD6XW6U6VenmBiZV2TkutY3vSPHu");
 
-// Platform fee recipient
-const FEE_RECIPIENT = new PublicKey("3bcV9vtxeiHsXgNx4qvQbS4ZL4cMUnAg2tF3DZjtmGUj");
+// Stale threshold for force-settle
 
 const STALE_THRESHOLD_HOURS = 24;
 
@@ -100,6 +99,43 @@ function parseRoomAccount(data: Uint8Array): RoomAccountData | null {
     };
   } catch (e) {
     console.error("[recover-funds] Failed to parse room account:", e);
+    return null;
+  }
+}
+
+// Config account layout from IDL:
+// - 8 bytes discriminator
+// - 32 bytes authority (pubkey)
+// - 32 bytes fee_recipient (pubkey)
+// - 2 bytes fee_bps (u16, little-endian)
+// - 32 bytes verifier (pubkey)
+// Total: 106 bytes
+interface ParsedConfig {
+  authority: PublicKey;
+  feeRecipient: PublicKey;
+  feeBps: number;
+  verifier: PublicKey;
+}
+
+function parseConfigAccount(data: Uint8Array): ParsedConfig | null {
+  try {
+    const view = new DataView(data.buffer, data.byteOffset);
+    let offset = 8; // Skip 8-byte discriminator
+
+    const authority = new PublicKey(data.slice(offset, offset + 32));
+    offset += 32;
+
+    const feeRecipient = new PublicKey(data.slice(offset, offset + 32));
+    offset += 32;
+
+    const feeBps = view.getUint16(offset, true);
+    offset += 2;
+
+    const verifier = new PublicKey(data.slice(offset, offset + 32));
+
+    return { authority, feeRecipient, feeBps, verifier };
+  } catch (e) {
+    console.error("[recover-funds] Failed to parse config account:", e);
     return null;
   }
 }
@@ -329,6 +365,40 @@ Deno.serve(async (req: Request) => {
           PROGRAM_ID
         );
 
+        // Fetch on-chain config to get fee_recipient dynamically
+        const configInfo = await connection.getAccountInfo(configPda);
+        if (!configInfo) {
+          await logRecoveryAttempt(supabase, roomPda, callerWallet, "force_settle", "config_not_found");
+          return new Response(
+            JSON.stringify({ status: "error", message: "Config not initialized on-chain" }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        const configData = parseConfigAccount(configInfo.data);
+        if (!configData) {
+          await logRecoveryAttempt(supabase, roomPda, callerWallet, "force_settle", "config_parse_failed");
+          return new Response(
+            JSON.stringify({ status: "error", message: "Failed to parse config account" }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        console.log(`[recover-funds] Using on-chain feeRecipient: ${configData.feeRecipient.toBase58()}`);
+
+        // Validate verifier matches on-chain config
+        if (!configData.verifier.equals(verifier.publicKey)) {
+          console.error("[recover-funds] Verifier mismatch!", {
+            expected: configData.verifier.toBase58(),
+            actual: verifier.publicKey.toBase58(),
+          });
+          await logRecoveryAttempt(supabase, roomPda, callerWallet, "force_settle", "verifier_mismatch");
+          return new Response(
+            JSON.stringify({ status: "error", message: "Verifier key mismatch with on-chain config" }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
         // submit_result discriminator from IDL: [240, 42, 89, 180, 10, 239, 9, 214]
         const discriminator = new Uint8Array([240, 42, 89, 180, 10, 239, 9, 214]);
         
@@ -345,7 +415,7 @@ Deno.serve(async (req: Request) => {
             { pubkey: roomPubkey, isSigner: false, isWritable: true }, // room
             { pubkey: vaultPda, isSigner: false, isWritable: true }, // vault
             { pubkey: roomData.creator, isSigner: false, isWritable: true }, // winner (creator)
-            { pubkey: FEE_RECIPIENT, isSigner: false, isWritable: true }, // fee_recipient
+            { pubkey: configData.feeRecipient, isSigner: false, isWritable: true }, // fee_recipient (dynamic)
           ],
           programId: PROGRAM_ID,
           data: data as any,
