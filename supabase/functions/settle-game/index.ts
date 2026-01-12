@@ -44,6 +44,69 @@ interface ParsedRoom {
   players: PublicKey[];
 }
 
+// ─────────────────────────────────────────────────────────────
+// UNIVERSAL WINNER SEAT RESOLUTION
+// Maps game_state to a seat index (0..3) using on-chain players[]
+// ─────────────────────────────────────────────────────────────
+interface WinnerSeatResult {
+  seatIndex: number;
+  source: "winnerSeat" | "gameOverNumeric" | "legacyColor";
+  rawValue: string | number;
+}
+
+// Legacy color-to-seat mappings per game type (only for backward compatibility)
+const LEGACY_COLOR_MAPS: Record<string, Record<string, number>> = {
+  checkers: { gold: 0, obsidian: 1 },
+  chess: { white: 0, black: 1 },
+  backgammon: { gold: 0, obsidian: 1 },
+  dominos: { "0": 0, "1": 1 },
+  ludo: { red: 0, blue: 1, green: 2, yellow: 3 },
+};
+
+function resolveWinnerSeat(
+  gameState: Record<string, unknown> | null,
+  gameType: string
+): WinnerSeatResult | { error: string } {
+  if (!gameState) {
+    return { error: "game_state is null" };
+  }
+
+  // Priority 1: Explicit winnerSeat number (0..3)
+  const winnerSeat = gameState.winnerSeat;
+  if (typeof winnerSeat === "number" && Number.isFinite(winnerSeat) && winnerSeat >= 0 && winnerSeat <= 3) {
+    return { seatIndex: winnerSeat, source: "winnerSeat", rawValue: winnerSeat };
+  }
+
+  // Priority 2: gameOver as numeric string "0".."3"
+  const gameOver = gameState.gameOver;
+  if (typeof gameOver === "string") {
+    const parsed = parseInt(gameOver, 10);
+    if (!isNaN(parsed) && parsed >= 0 && parsed <= 3) {
+      return { seatIndex: parsed, source: "gameOverNumeric", rawValue: gameOver };
+    }
+
+    // Priority 3: Legacy color mapping by game type
+    const normalizedGameType = gameType.toLowerCase();
+    const colorMap = LEGACY_COLOR_MAPS[normalizedGameType];
+    if (colorMap) {
+      const normalizedColor = gameOver.toLowerCase();
+      if (normalizedColor in colorMap) {
+        return { seatIndex: colorMap[normalizedColor], source: "legacyColor", rawValue: gameOver };
+      }
+    }
+
+    // gameOver is a string but not recognized
+    return { error: `Unknown gameOver value: "${gameOver}" for gameType: ${gameType}` };
+  }
+
+  // gameOver is number directly (unlikely but handle it)
+  if (typeof gameOver === "number" && Number.isFinite(gameOver) && gameOver >= 0 && gameOver <= 3) {
+    return { seatIndex: gameOver, source: "gameOverNumeric", rawValue: gameOver };
+  }
+
+  return { error: "No winnerSeat or gameOver found in game_state" };
+}
+
 function parseRoomAccount(data: Uint8Array): ParsedRoom | null {
   try {
     const view = new DataView(data.buffer, data.byteOffset);
@@ -222,11 +285,81 @@ Deno.serve(async (req: Request) => {
     }
 
     // ─────────────────────────────────────────────────────────────
-    // FETCH GAME SESSION TO DETERMINE WINNER FROM DATABASE
+    // STEP 1: FETCH ON-CHAIN ROOM ACCOUNT FIRST (canonical source)
+    // ─────────────────────────────────────────────────────────────
+    const roomPdaKey = new PublicKey(roomPda);
+    
+    // Solana connection (moved up before room fetch)
+    const rpcUrl = Deno.env.get("VITE_SOLANA_RPC_URL") || "https://api.mainnet-beta.solana.com";
+    const connection = new Connection(rpcUrl, "confirmed");
+    
+    const accountInfo = await connection.getAccountInfo(roomPdaKey);
+
+    // IDEMPOTENCY: If room account not found, it's already closed
+    if (!accountInfo) {
+      console.log("[settle-game] Room account not found - already closed:", roomPda);
+      return json200({
+        success: true,
+        alreadyClosed: true,
+        message: "Room already closed (account not found)",
+        roomPda,
+      });
+    }
+
+    const roomData = parseRoomAccount(accountInfo.data);
+    if (!roomData) {
+      await logSettlement(supabase, {
+        room_pda: roomPda,
+        action: "settle",
+        success: false,
+        winner_wallet: null,
+        error_message: "Failed to parse room account",
+      });
+      return json200({
+        success: false,
+        error: "Failed to parse room account",
+      });
+    }
+
+    const playersOnChain = roomData.players.map((p) => p.toBase58());
+
+    console.log("[settle-game] 🎮 Room (on-chain):", {
+      roomId: roomData.roomId.toString(),
+      status: roomData.status,
+      maxPlayers: roomData.maxPlayers,
+      playerCount: roomData.playerCount,
+      stakeLamports: roomData.stakeLamports.toString(),
+      creator: roomData.creator.toBase58(),
+      players: playersOnChain,
+    });
+
+    // IDEMPOTENCY: If room is already Finished (status == 3)
+    if (roomData.status === 3) {
+      console.log("[settle-game] Room already settled (status=3):", roomPda);
+      return json200({
+        success: true,
+        alreadySettled: true,
+        message: "Room already settled (status=Finished)",
+        roomPda,
+        winner: roomData.winner.toBase58(),
+      });
+    }
+
+    // If room is cancelled (status == 4), return error
+    if (roomData.status === 4) {
+      return json200({
+        success: false,
+        error: "Room is cancelled - cannot settle",
+        roomPda,
+      });
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // STEP 2: FETCH GAME SESSION FOR WINNER DETERMINATION
     // ─────────────────────────────────────────────────────────────
     const { data: sessionRow, error: sessionError } = await supabase
       .from("game_sessions")
-      .select("player1_wallet, player2_wallet, game_state, game_type")
+      .select("game_state, game_type")
       .eq("room_pda", roomPda)
       .single();
 
@@ -239,53 +372,72 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Extract winner color from game_state.gameOver
     const gameState = sessionRow.game_state as Record<string, unknown> | null;
-    const winnerColor = gameState?.gameOver as string | undefined;
-
-    if (!winnerColor) {
-      console.error("[settle-game] No winner in game_state.gameOver:", { gameState });
-      return json200({
-        success: false,
-        error: "No winner determined in game_state.gameOver",
-        roomPda,
-      });
-    }
-
-    // Map winner color to wallet: gold -> player1_wallet, obsidian -> player2_wallet
-    let winnerWallet: string;
-    if (winnerColor === "gold") {
-      winnerWallet = sessionRow.player1_wallet;
-    } else if (winnerColor === "obsidian") {
-      winnerWallet = sessionRow.player2_wallet;
-    } else {
-      console.error("[settle-game] Unknown winner color:", winnerColor);
-      return json200({
-        success: false,
-        error: `Unknown winner color: ${winnerColor}`,
-        roomPda,
-      });
-    }
-
-    if (!winnerWallet) {
-      console.error("[settle-game] Winner wallet is null:", { winnerColor, sessionRow });
-      return json200({
-        success: false,
-        error: "Winner wallet is null in game session",
-        roomPda,
-        winnerColor,
-      });
-    }
-
-    // Use gameType from DB if not provided in request
     const gameType = sessionRow.game_type || requestedGameType || "unknown";
 
-    console.log("[settle-game] 🏆 Winner determined from DB:", {
-      winnerColor,
-      winnerWallet: winnerWallet.slice(0, 8) + "...",
-      player1: sessionRow.player1_wallet?.slice(0, 8),
-      player2: sessionRow.player2_wallet?.slice(0, 8),
+    // ─────────────────────────────────────────────────────────────
+    // STEP 3: RESOLVE WINNER SEAT FROM GAME STATE
+    // ─────────────────────────────────────────────────────────────
+    const seatResult = resolveWinnerSeat(gameState, gameType);
+
+    if ("error" in seatResult) {
+      console.error("[settle-game] Cannot resolve winner seat:", seatResult.error);
+      return json200({
+        success: false,
+        error: `Cannot resolve winner seat: ${seatResult.error}`,
+        roomPda,
+        gameState,
+      });
+    }
+
+    const { seatIndex, source, rawValue } = seatResult;
+
+    console.log("[settle-game] 🎯 Winner seat resolved:", {
+      seatIndex,
+      source,
+      rawValue,
       gameType,
+    });
+
+    // ─────────────────────────────────────────────────────────────
+    // STEP 4: DERIVE WINNER WALLET FROM ON-CHAIN PLAYERS[]
+    // ─────────────────────────────────────────────────────────────
+    if (seatIndex >= roomData.players.length) {
+      console.error("[settle-game] Seat index out of range:", {
+        seatIndex,
+        playerCount: roomData.players.length,
+        players: playersOnChain,
+      });
+      return json200({
+        success: false,
+        error: `Winner seat ${seatIndex} exceeds player count ${roomData.players.length}`,
+        roomPda,
+        seatIndex,
+        players: playersOnChain,
+      });
+    }
+
+    const winnerPubkey = roomData.players[seatIndex];
+    
+    // Validate winner is not default/empty pubkey
+    if (winnerPubkey.equals(PublicKey.default)) {
+      console.error("[settle-game] Winner seat points to empty player slot:", { seatIndex });
+      return json200({
+        success: false,
+        error: `Winner seat ${seatIndex} is an empty player slot`,
+        roomPda,
+        seatIndex,
+      });
+    }
+
+    const winnerWallet = winnerPubkey.toBase58();
+
+    console.log("[settle-game] 🏆 Winner determined from on-chain players[]:", {
+      seatIndex,
+      winnerWallet: winnerWallet.slice(0, 8) + "...",
+      source,
+      rawValue,
+      allPlayers: playersOnChain.map(p => p.slice(0, 8)),
     });
 
     // Load verifier key
@@ -363,11 +515,7 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Solana connection
-    const rpcUrl = Deno.env.get("VITE_SOLANA_RPC_URL") || "https://api.mainnet-beta.solana.com";
-    const connection = new Connection(rpcUrl, "confirmed");
-
-    // Check verifier balance
+    // Check verifier balance (use connection already established above)
     const MIN_VERIFIER_BALANCE = 10_000_000; // 0.01 SOL minimum
     const verifierBalance = await connection.getBalance(verifierKeypair.publicKey, "confirmed");
 
@@ -396,93 +544,6 @@ Deno.serve(async (req: Request) => {
         verifierPubkey: verifierKeypair.publicKey.toBase58(),
         verifierLamports: verifierBalance,
         minRequired: MIN_VERIFIER_BALANCE,
-      });
-    }
-
-    // Fetch room account
-    const roomPdaKey = new PublicKey(roomPda);
-    const accountInfo = await connection.getAccountInfo(roomPdaKey);
-
-    // IDEMPOTENCY: If room account not found, it's already closed
-    if (!accountInfo) {
-      console.log("[settle-game] Room account not found - already closed:", roomPda);
-      return json200({
-        success: true,
-        alreadyClosed: true,
-        message: "Room already closed (account not found)",
-        roomPda,
-      });
-    }
-
-    const roomData = parseRoomAccount(accountInfo.data);
-    if (!roomData) {
-      await logSettlement(supabase, {
-        room_pda: roomPda,
-        action: "settle",
-        success: false,
-        winner_wallet: winnerWallet,
-        verifier_pubkey: verifierKeypair.publicKey.toBase58(),
-        verifier_lamports: verifierBalance,
-        error_message: "Failed to parse room account",
-      });
-      return json200({
-        success: false,
-        error: "Failed to parse room account",
-      });
-    }
-
-    const playersOnChain = roomData.players.map((p) => p.toBase58());
-
-    console.log("[settle-game] Room:", {
-      roomId: roomData.roomId.toString(),
-      status: roomData.status,
-      maxPlayers: roomData.maxPlayers,
-      playerCount: roomData.playerCount,
-      stakeLamports: roomData.stakeLamports.toString(),
-      creator: roomData.creator.toBase58(),
-    });
-    console.log("[settle-game] Players on-chain:", playersOnChain);
-
-    // IDEMPOTENCY: If room is already Finished (status == 3)
-    if (roomData.status === 3) {
-      console.log("[settle-game] Room already settled (status=3):", roomPda);
-      return json200({
-        success: true,
-        alreadySettled: true,
-        message: "Room already settled (status=Finished)",
-        roomPda,
-        winner: roomData.winner.toBase58(),
-      });
-    }
-
-    // If room is cancelled (status == 4), return error
-    if (roomData.status === 4) {
-      return json200({
-        success: false,
-        error: "Room is cancelled - cannot settle",
-        roomPda,
-      });
-    }
-
-    // Validate winner is in room
-    const winnerPubkey = new PublicKey(winnerWallet);
-    const winnerInRoom = roomData.players.some((p) => p.equals(winnerPubkey));
-    if (!winnerInRoom) {
-      await logSettlement(supabase, {
-        room_pda: roomPda,
-        action: "settle",
-        success: false,
-        winner_wallet: winnerWallet,
-        verifier_pubkey: verifierKeypair.publicKey.toBase58(),
-        verifier_lamports: verifierBalance,
-        room_status: roomData.status,
-        error_message: "winnerWallet is not a player in this room",
-      });
-      return json200({
-        success: false,
-        error: "winnerWallet is not a player in this room",
-        providedWinner: winnerWallet,
-        playersInRoom: playersOnChain,
       });
     }
 
