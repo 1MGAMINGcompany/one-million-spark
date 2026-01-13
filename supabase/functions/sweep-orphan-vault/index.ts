@@ -171,51 +171,57 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Load verifier key
-    const verifierSecretKey = Deno.env.get("VERIFIER_SECRET_KEY");
-    if (!verifierSecretKey) {
-      console.error("[sweep-orphan-vault] VERIFIER_SECRET_KEY not configured");
+    // Load signer key from VERIFIER_SECRET_KEY_V2 (same as other edge functions)
+    const skRaw = Deno.env.get("VERIFIER_SECRET_KEY_V2") ?? "";
+    if (!skRaw) {
+      console.error("[sweep-orphan-vault] VERIFIER_SECRET_KEY_V2 not configured");
       return new Response(
-        JSON.stringify({ error: "Server configuration error - missing verifier key" }),
+        JSON.stringify({ error: "Server configuration error - missing signer key" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    let verifierKeypair: Uint8Array;
+    let signerKeyBytes: Uint8Array;
     try {
-      const keyString = verifierSecretKey.trim();
+      const keyString = skRaw.trim();
       if (keyString.startsWith("[")) {
-        verifierKeypair = new Uint8Array(JSON.parse(keyString));
+        signerKeyBytes = new Uint8Array(JSON.parse(keyString));
       } else {
-        verifierKeypair = bs58.decode(keyString);
+        signerKeyBytes = bs58.decode(keyString);
       }
     } catch (e) {
-      console.error("[sweep-orphan-vault] Failed to parse verifier key:", e);
+      console.error("[sweep-orphan-vault] Failed to parse signer key:", e);
       return new Response(
-        JSON.stringify({ error: "Server configuration error - invalid verifier key format" }),
+        JSON.stringify({ error: "Server configuration error - invalid signer key format" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const verifier = Keypair.fromSecretKey(verifierKeypair);
+    const signerKeypair = Keypair.fromSecretKey(signerKeyBytes);
 
-    // Validate verifier matches config
-    const isAuthority = configData.authority.equals(verifier.publicKey);
-    const isVerifier = configData.verifier.equals(verifier.publicKey);
+    // AUTHORITY-ONLY: signer must equal config.authority
+    const signerPubkey = signerKeypair.publicKey;
+    const authorityPubkey = configData.authority;
+    const isAuthorized = signerPubkey.equals(authorityPubkey);
 
-    if (!isAuthority && !isVerifier) {
-      console.error("[sweep-orphan-vault] Signer not authorized:", {
-        signer: verifier.publicKey.toBase58(),
-        authority: configData.authority.toBase58(),
-        verifier: configData.verifier.toBase58(),
-      });
+    console.log(`[sweep-orphan-vault] Authorization check:
+  signer: ${signerPubkey.toBase58()}
+  config.authority: ${authorityPubkey.toBase58()}
+  authorized: ${isAuthorized}`);
+
+    if (!isAuthorized) {
+      console.error("[sweep-orphan-vault] ❌ Signer is NOT the authority");
       return new Response(
-        JSON.stringify({ error: "Verifier key is neither authority nor verifier in config" }),
+        JSON.stringify({ 
+          error: "Only authority can sweep orphan vaults",
+          signer: signerPubkey.toBase58(),
+          expectedAuthority: authorityPubkey.toBase58(),
+        }),
         { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    console.log(`[sweep-orphan-vault] Authorized as ${isAuthority ? 'authority' : 'verifier'}`);
+    console.log(`[sweep-orphan-vault] ✅ Authorized as authority`);
 
     // Build sweep_orphan_vault instruction
     // Discriminator: first 8 bytes of sha256("global:sweep_orphan_vault")
@@ -236,7 +242,7 @@ Deno.serve(async (req: Request) => {
     // Accounts from IDL: signer, config, creator, vault, system_program
     const instruction = new TransactionInstruction({
       keys: [
-        { pubkey: verifier.publicKey, isSigner: true, isWritable: false }, // signer
+        { pubkey: signerKeypair.publicKey, isSigner: true, isWritable: false }, // signer (authority)
         { pubkey: configPda, isSigner: false, isWritable: false }, // config
         { pubkey: creatorPubkey, isSigner: false, isWritable: true }, // creator (refund destination)
         { pubkey: vaultPda, isSigner: false, isWritable: true }, // vault (to be closed)
@@ -247,7 +253,7 @@ Deno.serve(async (req: Request) => {
     });
 
     console.log(`[sweep-orphan-vault] Building transaction with accounts:
-  signer: ${verifier.publicKey.toBase58()}
+  signer (authority): ${signerKeypair.publicKey.toBase58()}
   config: ${configPda.toBase58()}
   creator: ${creatorPubkey.toBase58()}
   vault: ${vaultPda.toBase58()}
@@ -255,12 +261,12 @@ Deno.serve(async (req: Request) => {
 
     const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
     const transaction = new Transaction({
-      feePayer: verifier.publicKey,
+      feePayer: signerKeypair.publicKey,
       blockhash,
       lastValidBlockHeight,
     }).add(instruction);
 
-    transaction.sign(verifier);
+    transaction.sign(signerKeypair);
 
     try {
       const signature = await connection.sendRawTransaction(transaction.serialize(), {
