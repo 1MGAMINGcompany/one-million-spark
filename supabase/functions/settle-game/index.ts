@@ -363,21 +363,41 @@ Deno.serve(async (req: Request) => {
       players: playersOnChain,
     });
 
+    // ─────────────────────────────────────────────────────────────
+    // LOAD VERIFIER KEYPAIR ONCE (used for all tx paths below)
+    // ─────────────────────────────────────────────────────────────
+    const skRaw = Deno.env.get("VERIFIER_SECRET_KEY_V2") ?? "";
+    let verifierKeypair: Keypair | null = null;
+    
+    if (skRaw.trim()) {
+      try {
+        const loaded = loadVerifierKeypair(skRaw);
+        verifierKeypair = loaded.keypair;
+        console.log("[settle-game] ✅ Verifier loaded:", verifierKeypair.publicKey.toBase58().slice(0, 12) + "...");
+      } catch (loadErr) {
+        console.error("[settle-game] Failed to parse verifier key:", loadErr);
+        // Will be handled below in each branch that needs it
+      }
+    } else {
+      console.warn("[settle-game] ⚠️ VERIFIER_SECRET_KEY_V2 not configured");
+    }
+
     // IDEMPOTENCY: If room is already Finished (status == 3), still attempt close_room
     if (roomData.status === 3) {
       console.log("[settle-game] Room already settled (status=3), attempting close_room:", roomPda);
       
       let closeRoomSignature: string | null = null;
       let closeRoomError: string | null = null;
+      let alreadyClosed = false;
       
-      try {
-        // close_room discriminator: [152, 197, 88, 192, 98, 197, 51, 211]
-        const closeRoomDiscriminator = new Uint8Array([152, 197, 88, 192, 98, 197, 51, 211]);
-        
-        // Load verifier for close_room tx
-        const skRaw = Deno.env.get("VERIFIER_SECRET_KEY_V2") ?? "";
-        if (skRaw.trim()) {
-          const { keypair: verifierKeypair } = loadVerifierKeypair(skRaw);
+      // Check if verifier is available
+      if (!verifierKeypair) {
+        closeRoomError = "VERIFIER_SECRET_KEY_V2 not configured";
+        console.warn("[settle-game] ⚠️ Cannot attempt close_room:", closeRoomError);
+      } else {
+        try {
+          // close_room discriminator: [152, 197, 88, 192, 98, 197, 51, 211]
+          const closeRoomDiscriminator = new Uint8Array([152, 197, 88, 192, 98, 197, 51, 211]);
           
           // close_room accounts ORDER: room, creator
           const closeRoomIx = new TransactionInstruction({
@@ -389,7 +409,7 @@ Deno.serve(async (req: Request) => {
             data: closeRoomDiscriminator as any,
           });
           
-          const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("confirmed");
+          const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("finalized");
           const closeTx = new Transaction({
             feePayer: verifierKeypair.publicKey,
             recentBlockhash: blockhash,
@@ -406,24 +426,41 @@ Deno.serve(async (req: Request) => {
           
           const closeConfirmation = await connection.confirmTransaction(
             { signature: closeRoomSignature, blockhash, lastValidBlockHeight },
-            "confirmed",
+            "finalized",
           );
           
           if (closeConfirmation.value.err) {
             throw new Error(`close_room failed: ${JSON.stringify(closeConfirmation.value.err)}`);
           }
           
-          console.log("[settle-game] ✅ close_room confirmed (idempotent):", closeRoomSignature);
+          console.log("[settle-game] ✅ close_room finalized (idempotent):", closeRoomSignature);
+        } catch (closeErr) {
+          const errMsg = String((closeErr as Error)?.message ?? closeErr);
+          
+          // Treat "account not found" / already closed as non-fatal success
+          const isAlreadyClosedError = 
+            errMsg.includes("AccountNotFound") ||
+            errMsg.includes("account not found") ||
+            errMsg.includes("0x0") || // Account doesn't exist error
+            errMsg.includes("could not find account");
+          
+          if (isAlreadyClosedError) {
+            alreadyClosed = true;
+            console.log("[settle-game] ℹ️ Room already closed (account not found):", roomPda);
+          } else {
+            closeRoomError = errMsg;
+            console.warn("[settle-game] ⚠️ close_room failed (idempotent):", closeRoomError);
+          }
         }
-      } catch (closeErr) {
-        closeRoomError = String((closeErr as Error)?.message ?? closeErr);
-        console.warn("[settle-game] ⚠️ close_room failed (idempotent):", closeRoomError);
       }
       
       return json200({
         success: true,
         alreadySettled: true,
-        message: "Room already settled (status=Finished)",
+        alreadyClosed,
+        message: alreadyClosed 
+          ? "Room already settled and closed" 
+          : "Room already settled (status=Finished)",
         roomPda,
         winner: roomData.winner.toBase58(),
         closeRoomSignature,
@@ -526,22 +563,14 @@ Deno.serve(async (req: Request) => {
       allPlayers: playersOnChain.map(p => p.slice(0, 8)),
     });
 
-    // Load verifier key
-    const skRaw = Deno.env.get("VERIFIER_SECRET_KEY_V2") ?? "";
-
-    console.log("[settle-game] ENV check", {
-      requestId,
-      VERIFIER_SECRET_KEY_V2: !!Deno.env.get("VERIFIER_SECRET_KEY_V2"),
-      skRawLen: skRaw.length,
-    });
-
-    if (!skRaw.trim()) {
+    // Verifier already loaded at top of handler - validate it for submit_result path
+    if (!verifierKeypair) {
       await logSettlement(supabase, {
         room_pda: roomPda,
         action: "settle",
         success: false,
         winner_wallet: winnerWallet,
-        error_message: "VERIFIER_SECRET_KEY_V2 not set",
+        error_message: "VERIFIER_SECRET_KEY_V2 not configured or invalid",
       });
       return json200({
         success: false,
@@ -550,56 +579,32 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    let verifierKeypair: Keypair;
-    let decodedLen = 0;
+    console.log("[settle-game] ENV check", {
+      requestId,
+      VERIFIER_SECRET_KEY_V2: !!Deno.env.get("VERIFIER_SECRET_KEY_V2"),
+      verifierPubkey: verifierKeypair.publicKey.toBase58(),
+    });
 
-    try {
-      const loaded = loadVerifierKeypair(skRaw);
-      verifierKeypair = loaded.keypair;
-      decodedLen = loaded.decodedLen;
+    // Hard safety check for correct verifier
+    const REQUIRED_VERIFIER = "HrQiwW3WZXdDC8c7wbsuBAw2nP1EVtzZyokp7xPJ6Wjx";
+    const actualVerifier = verifierKeypair.publicKey.toBase58();
 
-      console.log("[settle-game] verifier pubkey", {
+    if (actualVerifier !== REQUIRED_VERIFIER) {
+      console.error("[settle-game] WRONG VERIFIER LOADED", {
         requestId,
-        verifierPubkey: verifierKeypair.publicKey.toBase58(),
-        decodedLen,
+        expected: REQUIRED_VERIFIER,
+        actual: actualVerifier,
       });
-
-      // Hard safety check for correct verifier
-      const REQUIRED_VERIFIER = "HrQiwW3WZXdDC8c7wbsuBAw2nP1EVtzZyokp7xPJ6Wjx";
-      const actual = verifierKeypair.publicKey.toBase58();
-
-      if (actual !== REQUIRED_VERIFIER) {
-        console.error("[settle-game] WRONG VERIFIER LOADED", {
-          requestId,
-          expected: REQUIRED_VERIFIER,
-          actual,
-        });
-        return new Response(JSON.stringify({
-          ok: false,
-          code: "WRONG_VERIFIER_SECRET",
-          expected: REQUIRED_VERIFIER,
-          actual,
-          requestId,
-        }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" }});
-      }
-
-      console.log("[settle-game] ✅ Verifier pubkey matches on-chain config", { requestId });
-    } catch (err) {
-      console.error("[settle-game] Failed to parse verifier key:", { requestId, err });
-      await logSettlement(supabase, {
-        room_pda: roomPda,
-        action: "settle",
-        success: false,
-        winner_wallet: winnerWallet,
-        error_message: `Invalid verifier key format: ${String((err as Error)?.message ?? err)}`,
-      });
-      return json200({
-        success: false,
-        error: "Server configuration error: invalid verifier key format",
-        details: String((err as Error)?.message ?? err),
+      return new Response(JSON.stringify({
+        ok: false,
+        code: "WRONG_VERIFIER_SECRET",
+        expected: REQUIRED_VERIFIER,
+        actual: actualVerifier,
         requestId,
-      });
+      }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" }});
     }
+
+    console.log("[settle-game] ✅ Verifier pubkey matches required verifier", { requestId });
 
     // Check verifier balance (use connection already established above)
     const MIN_VERIFIER_BALANCE = 10_000_000; // 0.01 SOL minimum
@@ -824,7 +829,6 @@ Deno.serve(async (req: Request) => {
         vault: vaultPda.toBase58(),
         winner: winnerPubkey.toBase58(),
         feeRecipient: configData.feeRecipient.toBase58(),
-        decodedLen,
       });
 
       const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("confirmed");
