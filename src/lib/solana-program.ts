@@ -814,71 +814,60 @@ export async function fetchNextRoomIdForCreator(
 
 /**
  * Collision-proof room ID selection.
- * Loops up to maxTries checking if the derived Room PDA already exists on-chain.
- * Falls back to timestamp-based ID if still colliding.
+ * Checks BOTH room PDA AND vault PDA existence on-chain.
+ * Starts from Date.now() to avoid reusing closed room IDs (vaults may persist).
  * 
- * @returns { roomId, roomPda } - The chosen room ID and its derived PDA (guaranteed to not exist on-chain)
+ * @returns { roomId, roomPda, vaultPda } - The chosen room ID and its derived PDAs (guaranteed to not exist on-chain)
  */
 export async function findCollisionFreeRoomId(
   connection: Connection,
   creator: PublicKey,
   maxTries: number = 20
-): Promise<{ roomId: number; roomPda: PublicKey }> {
-  // Start with the suggested next ID based on existing rooms
-  let candidateId = await fetchNextRoomIdForCreator(connection, creator);
+): Promise<{ roomId: number; roomPda: PublicKey; vaultPda: PublicKey }> {
+  // CRITICAL: Start from timestamp to avoid reusing closed room IDs
+  // Finished rooms get closed (room account deleted) but vaults may persist
+  let candidateId = Date.now();
   
-  console.log(`[findCollisionFreeRoomId] Starting search from candidateId=${candidateId}`);
+  console.log(`[findCollisionFreeRoomId] Starting search from timestamp candidateId=${candidateId}`);
   
-  // Phase 1: Try incrementing from the suggested ID
   for (let attempt = 0; attempt < maxTries; attempt++) {
     const [roomPda] = getRoomPDA(creator, candidateId);
+    const [vaultPda] = getVaultPDA(roomPda);
     
     try {
-      const accountInfo = await connection.getAccountInfo(roomPda);
+      // Check BOTH room and vault PDAs in parallel
+      const [roomInfo, vaultInfo] = await Promise.all([
+        connection.getAccountInfo(roomPda),
+        connection.getAccountInfo(vaultPda),
+      ]);
       
-      if (accountInfo === null) {
-        // PDA does not exist - safe to use
-        console.log(`[findCollisionFreeRoomId] Found free slot: roomId=${candidateId}, pda=${roomPda.toBase58().slice(0, 12)}...`);
-        return { roomId: candidateId, roomPda };
+      const roomExists = roomInfo !== null;
+      const vaultExists = vaultInfo !== null;
+      
+      console.log(`[findCollisionFreeRoomId] candidate roomId=${candidateId}, roomPda=${roomPda.toBase58().slice(0,12)}..., vaultPda=${vaultPda.toBase58().slice(0,12)}..., roomExists=${roomExists}, vaultExists=${vaultExists}`);
+      
+      if (!roomExists && !vaultExists) {
+        // BOTH are free - safe to use
+        console.log(`[findCollisionFreeRoomId] Found free slot: roomId=${candidateId}`);
+        return { roomId: candidateId, roomPda, vaultPda };
       }
       
-      // PDA exists - try next ID
-      console.log(`[findCollisionFreeRoomId] Collision at roomId=${candidateId}, pda exists. Trying next...`);
+      // Collision on room or vault - try next ID
+      console.log(`[findCollisionFreeRoomId] Collision at roomId=${candidateId} (room=${roomExists}, vault=${vaultExists}). Trying next...`);
       candidateId++;
     } catch (err) {
-      // RPC error - assume it doesn't exist and proceed
+      // RPC error - assume it doesn't exist and proceed (let TX fail if not)
       console.warn(`[findCollisionFreeRoomId] RPC error checking roomId=${candidateId}:`, err);
-      return { roomId: candidateId, roomPda };
+      return { roomId: candidateId, roomPda, vaultPda };
     }
   }
   
-  // Phase 2: Fall back to timestamp-based ID and verify
-  console.log(`[findCollisionFreeRoomId] Exhausted ${maxTries} tries, falling back to timestamp-based ID`);
-  
-  for (let timestampAttempt = 0; timestampAttempt < 5; timestampAttempt++) {
-    // Use milliseconds for more uniqueness
-    candidateId = Date.now() + timestampAttempt;
-    const [roomPda] = getRoomPDA(creator, candidateId);
-    
-    try {
-      const accountInfo = await connection.getAccountInfo(roomPda);
-      
-      if (accountInfo === null) {
-        console.log(`[findCollisionFreeRoomId] Timestamp fallback found free slot: roomId=${candidateId}`);
-        return { roomId: candidateId, roomPda };
-      }
-    } catch (err) {
-      // RPC error - assume it doesn't exist
-      console.warn(`[findCollisionFreeRoomId] Timestamp fallback RPC error:`, err);
-      return { roomId: candidateId, roomPda };
-    }
-  }
-  
-  // Ultimate fallback - just use a random large number
-  const randomId = Date.now() + Math.floor(Math.random() * 10000);
+  // Fallback: random large number based on timestamp + random offset
+  const randomId = Date.now() + Math.floor(Math.random() * 100000);
   const [roomPda] = getRoomPDA(creator, randomId);
+  const [vaultPda] = getVaultPDA(roomPda);
   console.log(`[findCollisionFreeRoomId] Ultimate fallback: roomId=${randomId}`);
-  return { roomId: randomId, roomPda };
+  return { roomId: randomId, roomPda, vaultPda };
 }
 
 /**
