@@ -32,21 +32,21 @@ export function useRoomMode(roomPda: string | undefined): UseRoomModeResult {
 
     const fetchModeFromDB = async () => {
       try {
-        console.log("[useRoomMode] Fetching mode from DB, attempt:", fetchAttempts + 1);
+        console.log("[useRoomMode] Fetching mode from DB via Edge Function, attempt:", fetchAttempts + 1);
         
-        const { data, error } = await supabase
-          .from("game_sessions")
-          .select("mode, turn_time_seconds")
-          .eq("room_pda", roomPda)
-          .maybeSingle();
+        // Use Edge Function instead of direct table access (RLS locked)
+        const { data: resp, error } = await supabase.functions.invoke("game-session-get", {
+          body: { roomPda },
+        });
 
         if (error) {
-          console.warn("[useRoomMode] DB query error:", error);
+          console.warn("[useRoomMode] Edge function error:", error);
           setIsLoaded(true);
           return;
         }
 
-        if (!data) {
+        const session = resp?.session;
+        if (!session) {
           // No data found - game_session might not be created yet
           if (fetchAttempts < MAX_RETRIES) {
             console.log("[useRoomMode] No game_session found, will retry in", RETRY_DELAY_MS, "ms");
@@ -58,8 +58,8 @@ export function useRoomMode(roomPda: string | undefined): UseRoomModeResult {
           return;
         }
 
-        const dbMode = (data.mode as 'casual' | 'ranked') || 'casual';
-        const dbTurnTime = data.turn_time_seconds || 60;
+        const dbMode = (session.mode as 'casual' | 'ranked') || 'casual';
+        const dbTurnTime = session.turn_time_seconds || 60;
 
         console.log("[useRoomMode] DB mode fetched:", { dbMode, dbTurnTime });
 

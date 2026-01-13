@@ -129,19 +129,19 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
     if (!roomPda || !enabled) return;
 
     const loadState = async () => {
-      const { data, error } = await supabase
-        .from("game_sessions")
-        .select("p1_ready, p2_ready, player1_wallet, player2_wallet, turn_time_seconds, mode")
-        .eq("room_pda", roomPda)
-        .maybeSingle();
+      // Use Edge Function instead of direct table access (RLS locked)
+      const { data: resp, error } = await supabase.functions.invoke("game-session-get", {
+        body: { roomPda },
+      });
 
-      if (!error && data) {
-        setP1Ready(data.p1_ready ?? false);
-        setP2Ready(data.p2_ready ?? false);
-        setP1Wallet(data.player1_wallet);
-        setP2Wallet(data.player2_wallet);
-        if (data.turn_time_seconds) {
-          setTurnTimeSeconds(data.turn_time_seconds);
+      const session = resp?.session;
+      if (!error && session) {
+        setP1Ready(session.p1_ready ?? false);
+        setP2Ready(session.p2_ready ?? false);
+        setP1Wallet(session.player1_wallet);
+        setP2Wallet(session.player2_wallet);
+        if (session.turn_time_seconds) {
+          setTurnTimeSeconds(session.turn_time_seconds);
         }
         // Note: Mode now comes from DB (single source of truth)
         // No localStorage sync needed - useRoomMode fetches directly from DB

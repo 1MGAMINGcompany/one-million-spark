@@ -62,21 +62,20 @@ export function useGameSessionPersistence({
     try {
       console.log('[GameSession] Loading session for room:', roomPda);
       
-      const { data, error } = await supabase
-        .from('game_sessions')
-        .select('*')
-        .eq('room_pda', roomPda)
-        .eq('status', 'active')
-        .maybeSingle();
+      // Use Edge Function instead of direct table access (RLS locked)
+      const { data: resp, error } = await supabase.functions.invoke("game-session-get", {
+        body: { roomPda },
+      });
 
       if (error) {
         console.error('[GameSession] Error loading session:', error);
         return null;
       }
 
-      if (data && data.game_state && Object.keys(data.game_state).length > 0) {
-        console.log('[GameSession] Found existing session:', data);
-        return data.game_state as Record<string, any>;
+      const session = resp?.session;
+      if (session && session.status === 'active' && session.game_state && Object.keys(session.game_state).length > 0) {
+        console.log('[GameSession] Found existing session:', session);
+        return session.game_state as Record<string, any>;
       }
 
       console.log('[GameSession] No existing session found');

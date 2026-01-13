@@ -200,15 +200,13 @@ export function GameEndScreen({
       }
       
       try {
-        // Fetch mode from game_sessions
-        const { data: sessionData } = await supabase
-          .from('game_sessions')
-          .select('mode')
-          .eq('room_pda', roomPda)
-          .maybeSingle();
+        // Fetch mode via Edge Function (RLS locked)
+        const { data: resp, error: modeError } = await supabase.functions.invoke("game-session-get", {
+          body: { roomPda },
+        });
         
-        if (sessionData?.mode) {
-          setGameMode(sessionData.mode as 'casual' | 'ranked');
+        if (!modeError && resp?.session?.mode) {
+          setGameMode(resp.session.mode as 'casual' | 'ranked');
         }
         
         // Check if already finalized via finalize_receipts
