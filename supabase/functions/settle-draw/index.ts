@@ -331,12 +331,8 @@ Deno.serve(async (req: Request) => {
       console.log(`  [${i}] ${key.pubkey.toBase58()} (signer: ${key.isSigner}, writable: ${key.isWritable})`);
     });
 
-    // refund_draw discriminator - compute from "global:refund_draw"
-    // For Anchor, it's sha256("global:refund_draw")[0..8]
-    // This needs to match your on-chain program
-    const refundDrawDiscriminator = new Uint8Array([
-      0x8a, 0x5b, 0x2e, 0x9f, 0x7c, 0x3d, 0x1a, 0x4e  // Placeholder - update with actual discriminator
-    ]);
+    // refund_draw discriminator: [27, 10, 92, 83, 43, 176, 204, 10]
+    const refundDrawDiscriminator = new Uint8Array([27, 10, 92, 83, 43, 176, 204, 10]);
 
     const refundDrawInstruction = new TransactionInstruction({
       keys: refundDrawKeys,
