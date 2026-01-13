@@ -809,6 +809,7 @@ Deno.serve(async (req: Request) => {
       ixData.set(submitResultDiscriminator, 0);
       ixData.set(winnerPubkey.toBytes(), 8);
 
+      // IDL accounts order: ['verifier','config','room','vault','winner','fee_recipient','creator']
       const submitResultIx = new TransactionInstruction({
         programId: PROGRAM_ID,
         keys: [
@@ -817,19 +818,20 @@ Deno.serve(async (req: Request) => {
           { pubkey: roomPdaKey, isSigner: false, isWritable: true },                 // room
           { pubkey: vaultPda, isSigner: false, isWritable: true },                   // vault
           { pubkey: winnerPubkey, isSigner: false, isWritable: true },               // winner
-          { pubkey: configData.feeRecipient, isSigner: false, isWritable: true },    // fee recipient
+          { pubkey: configData.feeRecipient, isSigner: false, isWritable: true },    // fee_recipient (from config)
+          { pubkey: roomData.creator, isSigner: false, isWritable: true },           // creator (for vault close refund)
         ],
         data: ixData as any,
       });
 
-      console.log("[settle-game] submit_result accounts:", {
-        verifier: verifierKeypair.publicKey.toBase58(),
-        config: configPda.toBase58(),
-        room: roomPdaKey.toBase58(),
-        vault: vaultPda.toBase58(),
-        winner: winnerPubkey.toBase58(),
-        feeRecipient: configData.feeRecipient.toBase58(),
-      });
+      console.log("[settle-game] submit_result account keys in order:");
+      console.log(`  [0] verifier: ${verifierKeypair.publicKey.toBase58()}`);
+      console.log(`  [1] config: ${configPda.toBase58()}`);
+      console.log(`  [2] room: ${roomPdaKey.toBase58()}`);
+      console.log(`  [3] vault: ${vaultPda.toBase58()}`);
+      console.log(`  [4] winner: ${winnerPubkey.toBase58()}`);
+      console.log(`  [5] fee_recipient: ${configData.feeRecipient.toBase58()}`);
+      console.log(`  [6] creator: ${roomData.creator.toBase58()}`);
 
       const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("confirmed");
       const tx = new Transaction({

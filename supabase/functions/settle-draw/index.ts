@@ -253,18 +253,39 @@ Deno.serve(async (req: Request) => {
     data.set(discriminator, 0);
     data.set(nominalWinner.toBytes(), 8);
 
+    // Fetch config for dynamic fee_recipient
+    const configInfo = await connection.getAccountInfo(configPda);
+    let feeRecipient = FEE_RECIPIENT; // fallback
+    if (configInfo) {
+      const view = new DataView(configInfo.data.buffer, configInfo.data.byteOffset);
+      // Config layout: 8 disc + 32 authority + 32 verifier + 32 feeRecipient
+      feeRecipient = new PublicKey(configInfo.data.slice(72, 104));
+      console.log(`[settle-draw] Using on-chain fee_recipient: ${feeRecipient.toBase58()}`);
+    }
+
+    // IDL accounts order: ['verifier','config','room','vault','winner','fee_recipient','creator']
     const instruction = new TransactionInstruction({
       keys: [
-        { pubkey: verifier.publicKey, isSigner: true, isWritable: false },
-        { pubkey: configPda, isSigner: false, isWritable: false },
-        { pubkey: roomPubkey, isSigner: false, isWritable: true },
-        { pubkey: vaultPda, isSigner: false, isWritable: true },
-        { pubkey: nominalWinner, isSigner: false, isWritable: true },
-        { pubkey: FEE_RECIPIENT, isSigner: false, isWritable: true },
+        { pubkey: verifier.publicKey, isSigner: true, isWritable: false },   // verifier
+        { pubkey: configPda, isSigner: false, isWritable: false },            // config
+        { pubkey: roomPubkey, isSigner: false, isWritable: true },            // room
+        { pubkey: vaultPda, isSigner: false, isWritable: true },              // vault
+        { pubkey: nominalWinner, isSigner: false, isWritable: true },         // winner
+        { pubkey: feeRecipient, isSigner: false, isWritable: true },          // fee_recipient (from config)
+        { pubkey: roomData.creator, isSigner: false, isWritable: true },      // creator (for vault close refund)
       ],
       programId: PROGRAM_ID,
       data: data as any,
     });
+
+    console.log("[settle-draw] submit_result account keys in order:");
+    console.log(`  [0] verifier: ${verifier.publicKey.toBase58()}`);
+    console.log(`  [1] config: ${configPda.toBase58()}`);
+    console.log(`  [2] room: ${roomPubkey.toBase58()}`);
+    console.log(`  [3] vault: ${vaultPda.toBase58()}`);
+    console.log(`  [4] winner: ${nominalWinner.toBase58()}`);
+    console.log(`  [5] fee_recipient: ${feeRecipient.toBase58()}`);
+    console.log(`  [6] creator: ${roomData.creator.toBase58()}`);
 
     const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
     const transaction = new Transaction({
