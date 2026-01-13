@@ -48,6 +48,8 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
   const [turnTimeSeconds, setTurnTimeSeconds] = useState(60);
   const [hasLoaded, setHasLoaded] = useState(false);
   const [isSettingReady, setIsSettingReady] = useState(false);
+  // Server-side bothAccepted from game_acceptances (more reliable than realtime)
+  const [serverBothAccepted, setServerBothAccepted] = useState(false);
 
   // Determine if I'm player 1 or player 2
   const isPlayer1 = myWallet && p1Wallet && myWallet.toLowerCase() === p1Wallet.toLowerCase();
@@ -55,7 +57,8 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
 
   const iAmReady = isPlayer1 ? p1Ready : isPlayer2 ? p2Ready : false;
   const opponentReady = isPlayer1 ? p2Ready : isPlayer2 ? p1Ready : false;
-  const bothReady = p1Ready && p2Ready;
+  // Prefer server-side bothAccepted (from polling) over client-side p1Ready && p2Ready
+  const bothReady = serverBothAccepted || (p1Ready && p2Ready);
 
   // Show accept modal if ranked, loaded, and this player hasn't accepted yet
   // Also require that we've identified this player's role (isPlayer1 or isPlayer2)
@@ -178,6 +181,60 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
       supabase.removeChannel(channel);
     };
   }, [roomPda, enabled]);
+
+  // Polling fallback: when I'm ready but opponent isn't, poll for acceptances.bothAccepted
+  useEffect(() => {
+    // Only poll if: ranked, enabled, has loaded, I'm ready, but not bothReady yet
+    if (!isRanked || !enabled || !roomPda || !hasLoaded || !iAmReady || bothReady) {
+      return;
+    }
+
+    console.log('[RankedReadyGate] Starting polling for opponent acceptance...');
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const { data: resp, error } = await supabase.functions.invoke("game-session-get", {
+          body: { roomPda },
+        });
+
+        if (error) {
+          console.warn('[RankedReadyGate] Poll error:', error);
+          return;
+        }
+
+        // Prefer acceptances.bothAccepted as truth (server-side deduplicated)
+        if (resp?.acceptances?.bothAccepted) {
+          console.log('[RankedReadyGate] Poll: bothAccepted=true from server, stopping poll');
+          setServerBothAccepted(true);
+          return; // Will trigger cleanup via bothReady change
+        }
+
+        // Also update p1_ready/p2_ready from session as fallback
+        const session = resp?.session;
+        if (session) {
+          const newP1Ready = session.p1_ready ?? false;
+          const newP2Ready = session.p2_ready ?? false;
+          
+          console.log('[RankedReadyGate] Poll result:', { 
+            p1_ready: newP1Ready, 
+            p2_ready: newP2Ready,
+            acceptances: resp?.acceptances?.players?.length ?? 0,
+            bothAccepted: resp?.acceptances?.bothAccepted ?? false
+          });
+          
+          if (newP1Ready !== p1Ready) setP1Ready(newP1Ready);
+          if (newP2Ready !== p2Ready) setP2Ready(newP2Ready);
+        }
+      } catch (err) {
+        console.warn('[RankedReadyGate] Poll exception:', err);
+      }
+    }, 2000); // Poll every 2 seconds
+
+    return () => {
+      console.log('[RankedReadyGate] Stopping poll');
+      clearInterval(pollInterval);
+    };
+  }, [isRanked, enabled, roomPda, hasLoaded, iAmReady, bothReady, p1Ready, p2Ready]);
 
   // For casual games, return as if both are ready
   if (!isRanked) {
