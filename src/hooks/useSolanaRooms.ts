@@ -372,12 +372,13 @@ export function useSolanaRooms() {
     
     // Collision-proof room ID selection with retry logic
     const attemptCreateRoom = async (isRetry: boolean = false): Promise<number | null> => {
-      // Get collision-free room ID (verifies PDA doesn't exist on-chain)
-      const { roomId, roomPda } = await findCollisionFreeRoomId(connection, publicKey);
+      // Get collision-free room ID (verifies BOTH room PDA and vault PDA don't exist)
+      const { roomId, roomPda, vaultPda } = await findCollisionFreeRoomId(connection, publicKey);
       
       console.log("[CreateRoom] Collision-free ID selected:", {
         roomId,
         roomPda: roomPda.toBase58(),
+        vaultPda: vaultPda.toBase58(),
         isRetry,
       });
       
@@ -526,6 +527,10 @@ export function useSolanaRooms() {
       
       // Check for "already in use" collision error - auto-retry once with new ID
       if (fullError.includes("already in use") || errorMsg.includes("allocate")) {
+        // Extract the colliding address for debugging
+        const addrMatch = fullError.match(/Address\s+(\w{32,})/i) || fullError.match(/account\s+(\w{32,})/i);
+        const collidingAddr = addrMatch?.[1] || "unknown";
+        console.error(`[CreateRoom] Collision on address: ${collidingAddr}`);
         console.warn("[CreateRoom] Room ID collision detected, auto-retrying with new ID...");
         toast({
           title: "Room ID collision",
