@@ -60,29 +60,52 @@ serve(async (req) => {
       console.warn('[game-session-get] Receipt query error (non-fatal):', receiptError)
     }
 
-    // Fetch match info - optional field
-    const { data: match, error: matchError } = await supabase
-      .from('matches')
-      .select('winner_wallet, status, finalized_at')
-      .eq('room_pda', roomPda)
-      .maybeSingle()
+  // Fetch match info - optional field
+  const { data: match, error: matchError } = await supabase
+    .from('matches')
+    .select('winner_wallet, status, finalized_at')
+    .eq('room_pda', roomPda)
+    .maybeSingle()
 
-    if (matchError) {
-      console.warn('[game-session-get] Match query error (non-fatal):', matchError)
+  if (matchError) {
+    console.warn('[game-session-get] Match query error (non-fatal):', matchError)
+  }
+
+  // Fetch acceptances for this room (for readiness polling)
+  const { data: rawAcceptances, error: acceptanceError } = await supabase
+    .from('game_acceptances')
+    .select('player_wallet, created_at')
+    .eq('room_pda', roomPda)
+
+  if (acceptanceError) {
+    console.warn('[game-session-get] Acceptance query error (non-fatal):', acceptanceError)
+  }
+
+  // Deduplicate by player_wallet (in case of duplicate inserts)
+  const byWallet = new Map<string, { wallet: string; accepted_at: string }>();
+  for (const a of rawAcceptances ?? []) {
+    if (!byWallet.has(a.player_wallet)) {
+      byWallet.set(a.player_wallet, { wallet: a.player_wallet, accepted_at: a.created_at });
     }
+  }
+  const players = Array.from(byWallet.values()).map(p => ({ ...p, accepted: true }));
+  const bothAccepted = players.length >= 2; // for 2-player rooms
 
-    console.log('[game-session-get] ✅ Session found:', !!session, 'Receipt:', !!receipt, 'Match:', !!match)
+  const acceptances = { players, bothAccepted };
+
+  console.log('[game-session-get] ✅ Session found:', !!session, 'Receipt:', !!receipt, 'Match:', !!match, 'Acceptances:', players.length)
     
-    // Return backward-compatible response: { ok, session } plus optional receipt/match
-    return new Response(JSON.stringify({ 
-      ok: true, 
-      session, 
-      receipt: receipt || null,
-      match: match || null
-    }), { 
-      status: 200, 
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-    })
+  // Return backward-compatible response: { ok, session } plus optional receipt/match/acceptances
+  return new Response(JSON.stringify({ 
+    ok: true, 
+    session, 
+    receipt: receipt || null,
+    match: match || null,
+    acceptances,
+  }), { 
+    status: 200, 
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+  })
   } catch (e) {
     console.error('[game-session-get] Unexpected error:', e)
     return new Response(JSON.stringify({ error: String(e) }), { 
