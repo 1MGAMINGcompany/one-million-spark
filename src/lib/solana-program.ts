@@ -828,14 +828,14 @@ export async function findCollisionFreeRoomId(
   // Finished rooms get closed (room account deleted) but vaults may persist
   let candidateId = Date.now();
   
-  console.log(`[findCollisionFreeRoomId] Starting search from timestamp candidateId=${candidateId}`);
+  console.log(`[findCollisionFreeRoomId] Starting search from timestamp candidateId=${candidateId}, creator=${creator.toBase58()}`);
   
   for (let attempt = 0; attempt < maxTries; attempt++) {
     const [roomPda] = getRoomPDA(creator, candidateId);
     const [vaultPda] = getVaultPDA(roomPda);
     
     try {
-      // Check BOTH room and vault PDAs in parallel
+      // Check BOTH room and vault PDAs in parallel - critical for orphan vault detection
       const [roomInfo, vaultInfo] = await Promise.all([
         connection.getAccountInfo(roomPda),
         connection.getAccountInfo(vaultPda),
@@ -844,16 +844,22 @@ export async function findCollisionFreeRoomId(
       const roomExists = roomInfo !== null;
       const vaultExists = vaultInfo !== null;
       
-      console.log(`[findCollisionFreeRoomId] candidate roomId=${candidateId}, roomPda=${roomPda.toBase58().slice(0,12)}..., vaultPda=${vaultPda.toBase58().slice(0,12)}..., roomExists=${roomExists}, vaultExists=${vaultExists}`);
+      console.log(`[findCollisionFreeRoomId] Checking roomId=${candidateId}:
+  roomPda: ${roomPda.toBase58()} (exists: ${roomExists})
+  vaultPda: ${vaultPda.toBase58()} (exists: ${vaultExists})`);
       
       if (!roomExists && !vaultExists) {
-        // BOTH are free - safe to use
-        console.log(`[findCollisionFreeRoomId] Found free slot: roomId=${candidateId}`);
+        // BOTH are free - safe to use (no orphan vault collision)
+        console.log(`[findCollisionFreeRoomId] ✅ Found free slot: roomId=${candidateId}, pda=${roomPda.toBase58()}`);
         return { roomId: candidateId, roomPda, vaultPda };
       }
       
-      // Collision on room or vault - try next ID
-      console.log(`[findCollisionFreeRoomId] Collision at roomId=${candidateId} (room=${roomExists}, vault=${vaultExists}). Trying next...`);
+      // Collision detected - log what's blocking
+      if (vaultExists && !roomExists) {
+        console.warn(`[findCollisionFreeRoomId] ⚠️ Orphan vault detected at roomId=${candidateId} (room deleted but vault persists)`);
+      } else {
+        console.log(`[findCollisionFreeRoomId] ❌ Slot occupied: roomId=${candidateId} (room=${roomExists}, vault=${vaultExists})`);
+      }
       candidateId++;
     } catch (err) {
       // RPC error - assume it doesn't exist and proceed (let TX fail if not)
