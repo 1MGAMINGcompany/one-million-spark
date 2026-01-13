@@ -24,11 +24,12 @@ import {
   fetchOpenPublicRooms,
   fetchAllRooms,
   fetchRoomsByCreator,
-  fetchNextRoomIdForCreator,
+  findCollisionFreeRoomId,
   fetchActiveRoomsForUser,
   buildCreateRoomIx,
   buildJoinRoomIx,
   buildCancelRoomIx,
+  getRoomPDA,
 } from "@/lib/solana-program";
 
 // Debug info type for failed transactions
@@ -369,9 +370,16 @@ export function useSolanaRooms() {
     setTxPending(true);
     setTxDebugInfo(null);
     
-    try {
-      // Get next unique room ID for this creator
-      const roomId = await fetchNextRoomIdForCreator(connection, publicKey);
+    // Collision-proof room ID selection with retry logic
+    const attemptCreateRoom = async (isRetry: boolean = false): Promise<number | null> => {
+      // Get collision-free room ID (verifies PDA doesn't exist on-chain)
+      const { roomId, roomPda } = await findCollisionFreeRoomId(connection, publicKey);
+      
+      console.log("[CreateRoom] Collision-free ID selected:", {
+        roomId,
+        roomPda: roomPda.toBase58(),
+        isRetry,
+      });
       
       // Build instruction (for VersionedTransaction - MWA compatible)
       const ix = buildCreateRoomIx(
@@ -384,6 +392,7 @@ export function useSolanaRooms() {
       
       console.log("[CreateRoom] Building VersionedTransaction:", {
         roomId,
+        roomPda: roomPda.toBase58(),
         gameType,
         entryFeeSol,
         maxPlayers,
@@ -411,89 +420,86 @@ export function useSolanaRooms() {
       // Record acceptance using tx signature as proof (creator is always player 1)
       const stakeLamports = Math.floor(entryFeeSol * LAMPORTS_PER_SOL);
       try {
-        // Fetch the room to get PDA
-        await fetchRooms();
-        const newRoom = await fetchUserActiveRoom();
+        // We already know the room PDA from findCollisionFreeRoomId
+        const roomPdaStr = roomPda.toBase58();
         
-        if (newRoom?.pda) {
-          // CRITICAL: Create game_sessions with correct mode IMMEDIATELY
-          // This ensures Player 2 sees the correct mode when they join
-          console.log("[CreateRoom] Creating game_session with mode:", mode);
-          await supabase.rpc("ensure_game_session", {
-            p_room_pda: newRoom.pda,
-            p_game_type: gameType.toString(),
-            p_player1_wallet: publicKey.toBase58(),
-            p_player2_wallet: null, // Will be set when player 2 joins via record_acceptance
-            p_mode: mode, // Use authoritative mode from CreateRoom form
-          });
-          
-          const rules = createRulesFromRoom(
-            newRoom.pda,
-            gameType,
-            maxPlayers,
-            stakeLamports,
-            mode // Use authoritative mode, NOT stake-derived
-          );
-          const rulesHash = await computeRulesHash(rules);
-          
-          const { error: rpcError } = await supabase.rpc("record_acceptance", {
-            p_room_pda: newRoom.pda,
-            p_wallet: publicKey.toBase58(),
-            p_tx_signature: signature,
-            p_rules_hash: rulesHash,
-            p_stake_lamports: stakeLamports,
-            p_is_creator: true,
-          });
-          
-          if (rpcError) {
-            console.warn("[CreateRoom] RPC record_acceptance failed:", rpcError);
-            // Check if 404 (function not found) - fallback to edge function
-            if (rpcError.message?.includes("404") || rpcError.code === "PGRST116") {
-              console.log("[CreateRoom] Trying verify-acceptance edge function fallback...");
-              const { error: fnError } = await supabase.functions.invoke("verify-acceptance", {
-                body: {
-                  acceptance: {
-                    roomPda: newRoom.pda,
-                    playerWallet: publicKey.toBase58(),
-                    rulesHash,
-                    nonce: crypto.randomUUID(),
-                    timestamp: Date.now(),
-                    signature,
-                  },
-                  rules: {
-                    roomPda: newRoom.pda,
-                    gameType,
-                    mode,
-                    maxPlayers,
-                    stakeLamports,
-                    feeBps: 250,
-                    turnTimeSeconds: 60,
-                    forfeitPolicy: "timeout",
-                    version: 1,
-                  },
+        // CRITICAL: Create game_sessions with correct mode IMMEDIATELY
+        // This ensures Player 2 sees the correct mode when they join
+        console.log("[CreateRoom] Creating game_session with mode:", mode);
+        await supabase.rpc("ensure_game_session", {
+          p_room_pda: roomPdaStr,
+          p_game_type: gameType.toString(),
+          p_player1_wallet: publicKey.toBase58(),
+          p_player2_wallet: null, // Will be set when player 2 joins via record_acceptance
+          p_mode: mode, // Use authoritative mode from CreateRoom form
+        });
+        
+        const rules = createRulesFromRoom(
+          roomPdaStr,
+          gameType,
+          maxPlayers,
+          stakeLamports,
+          mode // Use authoritative mode, NOT stake-derived
+        );
+        const rulesHash = await computeRulesHash(rules);
+        
+        const { error: rpcError } = await supabase.rpc("record_acceptance", {
+          p_room_pda: roomPdaStr,
+          p_wallet: publicKey.toBase58(),
+          p_tx_signature: signature,
+          p_rules_hash: rulesHash,
+          p_stake_lamports: stakeLamports,
+          p_is_creator: true,
+        });
+        
+        if (rpcError) {
+          console.warn("[CreateRoom] RPC record_acceptance failed:", rpcError);
+          // Check if 404 (function not found) - fallback to edge function
+          if (rpcError.message?.includes("404") || rpcError.code === "PGRST116") {
+            console.log("[CreateRoom] Trying verify-acceptance edge function fallback...");
+            const { error: fnError } = await supabase.functions.invoke("verify-acceptance", {
+              body: {
+                acceptance: {
+                  roomPda: roomPdaStr,
+                  playerWallet: publicKey.toBase58(),
+                  rulesHash,
+                  nonce: crypto.randomUUID(),
+                  timestamp: Date.now(),
+                  signature,
                 },
-              });
-              
-              if (fnError) {
-                console.error("[CreateRoom] Both RPC and edge function failed:", fnError);
-                toast({
-                  title: "Acceptance Recording Failed",
-                  description: "Game will proceed but ranked features may not work",
-                  variant: "destructive",
-                });
-              } else {
-                console.log("[CreateRoom] Recorded acceptance via edge function fallback");
-              }
-            } else {
+                rules: {
+                  roomPda: roomPdaStr,
+                  gameType,
+                  mode,
+                  maxPlayers,
+                  stakeLamports,
+                  feeBps: 250,
+                  turnTimeSeconds: 60,
+                  forfeitPolicy: "timeout",
+                  version: 1,
+                },
+              },
+            });
+            
+            if (fnError) {
+              console.error("[CreateRoom] Both RPC and edge function failed:", fnError);
               toast({
                 title: "Acceptance Recording Failed",
-                description: rpcError.message || "Unknown error",
+                description: "Game will proceed but ranked features may not work",
                 variant: "destructive",
               });
+            } else {
+              console.log("[CreateRoom] Recorded acceptance via edge function fallback");
             }
           } else {
-            console.log("[CreateRoom] Recorded acceptance with tx signature and mode:", mode);
+            toast({
+              title: "Acceptance Recording Failed",
+              description: rpcError.message || "Unknown error",
+              variant: "destructive",
+            });
           }
+        } else {
+          console.log("[CreateRoom] Recorded acceptance with tx signature and mode:", mode);
         }
       } catch (acceptErr: any) {
         console.error("[CreateRoom] Failed to record acceptance:", acceptErr);
@@ -508,8 +514,39 @@ export function useSolanaRooms() {
       await Promise.all([fetchRooms(), fetchUserActiveRoom()]);
       
       return roomId;
+    };
+    
+    try {
+      return await attemptCreateRoom(false);
     } catch (err: any) {
+      const errorMsg = err?.message?.toLowerCase() || "";
+      const fullError = String(err?.logs || err?.message || err);
+      
       console.error("Create room error:", err);
+      
+      // Check for "already in use" collision error - auto-retry once with new ID
+      if (fullError.includes("already in use") || errorMsg.includes("allocate")) {
+        console.warn("[CreateRoom] Room ID collision detected, auto-retrying with new ID...");
+        toast({
+          title: "Room ID collision",
+          description: "Retrying with a new room ID...",
+        });
+        
+        try {
+          // Wait a moment and retry with a fresh collision-free ID
+          await new Promise(resolve => setTimeout(resolve, 500));
+          const result = await attemptCreateRoom(true);
+          return result;
+        } catch (retryErr: any) {
+          console.error("[CreateRoom] Retry also failed:", retryErr);
+          toast({
+            title: "Failed to create room",
+            description: "Room ID collision persists. Please try again.",
+            variant: "destructive",
+          });
+          return null;
+        }
+      }
       
       // Handle simulation failure with clean message - NO wallet popup occurred
       // Handle insufficient balance error
@@ -523,6 +560,24 @@ export function useSolanaRooms() {
       }
       
       if (err?.message === "TX_SIMULATION_FAILED") {
+        // Check if simulation failed due to "already in use" as well
+        const simLogs = err?.logs?.join?.(" ") || "";
+        if (simLogs.includes("already in use") || simLogs.includes("Allocate")) {
+          console.warn("[CreateRoom] Simulation failed with collision, auto-retrying...");
+          toast({
+            title: "Room ID collision",
+            description: "Retrying with a new room ID...",
+          });
+          
+          try {
+            await new Promise(resolve => setTimeout(resolve, 500));
+            const result = await attemptCreateRoom(true);
+            return result;
+          } catch (retryErr) {
+            console.error("[CreateRoom] Retry failed:", retryErr);
+          }
+        }
+        
         // Detailed debug info for TX_SIMULATION_FAILED in createRoom
         const blockingInfo = blockingRoom 
           ? `Room ${blockingRoom.pda.slice(0, 12)}... | Status: ${blockingRoom.status} (${statusToName(blockingRoom.status)}) | Players: ${blockingRoom.playerCount}/${blockingRoom.maxPlayers} | Winner: ${blockingRoom.winner?.slice(0, 8) || 'none'}`
@@ -554,6 +609,7 @@ export function useSolanaRooms() {
             statusLabel: statusToName(r.status),
             playerCount: r.playerCount
           })),
+          simulationLogs: simLogs,
         });
 
         // Get room to link to
@@ -587,7 +643,6 @@ export function useSolanaRooms() {
       });
       
       // Check for user rejection / Phantom block
-      const errorMsg = err?.message?.toLowerCase() || "";
       if (errorMsg.includes("reject") || errorMsg.includes("cancel") || errorMsg.includes("user denied") || errorMsg.includes("blocked")) {
         toast({
           title: "Transaction cancelled",

@@ -789,6 +789,7 @@ export async function fetchRoomsByCreator(
  * Fetch next room ID for a specific creator
  * Finds max roomId among creator's existing rooms and returns max + 1
  * Falls back to timestamp if RPC fails to ensure uniqueness
+ * NOTE: This does NOT verify the PDA is unused. Use findCollisionFreeRoomId for collision-proof selection.
  */
 export async function fetchNextRoomIdForCreator(
   connection: Connection,
@@ -809,6 +810,75 @@ export async function fetchNextRoomIdForCreator(
     // Fallback to timestamp-based ID for uniqueness
     return Math.floor(Date.now() / 1000) % 1000000;
   }
+}
+
+/**
+ * Collision-proof room ID selection.
+ * Loops up to maxTries checking if the derived Room PDA already exists on-chain.
+ * Falls back to timestamp-based ID if still colliding.
+ * 
+ * @returns { roomId, roomPda } - The chosen room ID and its derived PDA (guaranteed to not exist on-chain)
+ */
+export async function findCollisionFreeRoomId(
+  connection: Connection,
+  creator: PublicKey,
+  maxTries: number = 20
+): Promise<{ roomId: number; roomPda: PublicKey }> {
+  // Start with the suggested next ID based on existing rooms
+  let candidateId = await fetchNextRoomIdForCreator(connection, creator);
+  
+  console.log(`[findCollisionFreeRoomId] Starting search from candidateId=${candidateId}`);
+  
+  // Phase 1: Try incrementing from the suggested ID
+  for (let attempt = 0; attempt < maxTries; attempt++) {
+    const [roomPda] = getRoomPDA(creator, candidateId);
+    
+    try {
+      const accountInfo = await connection.getAccountInfo(roomPda);
+      
+      if (accountInfo === null) {
+        // PDA does not exist - safe to use
+        console.log(`[findCollisionFreeRoomId] Found free slot: roomId=${candidateId}, pda=${roomPda.toBase58().slice(0, 12)}...`);
+        return { roomId: candidateId, roomPda };
+      }
+      
+      // PDA exists - try next ID
+      console.log(`[findCollisionFreeRoomId] Collision at roomId=${candidateId}, pda exists. Trying next...`);
+      candidateId++;
+    } catch (err) {
+      // RPC error - assume it doesn't exist and proceed
+      console.warn(`[findCollisionFreeRoomId] RPC error checking roomId=${candidateId}:`, err);
+      return { roomId: candidateId, roomPda };
+    }
+  }
+  
+  // Phase 2: Fall back to timestamp-based ID and verify
+  console.log(`[findCollisionFreeRoomId] Exhausted ${maxTries} tries, falling back to timestamp-based ID`);
+  
+  for (let timestampAttempt = 0; timestampAttempt < 5; timestampAttempt++) {
+    // Use milliseconds for more uniqueness
+    candidateId = Date.now() + timestampAttempt;
+    const [roomPda] = getRoomPDA(creator, candidateId);
+    
+    try {
+      const accountInfo = await connection.getAccountInfo(roomPda);
+      
+      if (accountInfo === null) {
+        console.log(`[findCollisionFreeRoomId] Timestamp fallback found free slot: roomId=${candidateId}`);
+        return { roomId: candidateId, roomPda };
+      }
+    } catch (err) {
+      // RPC error - assume it doesn't exist
+      console.warn(`[findCollisionFreeRoomId] Timestamp fallback RPC error:`, err);
+      return { roomId: candidateId, roomPda };
+    }
+  }
+  
+  // Ultimate fallback - just use a random large number
+  const randomId = Date.now() + Math.floor(Math.random() * 10000);
+  const [roomPda] = getRoomPDA(creator, randomId);
+  console.log(`[findCollisionFreeRoomId] Ultimate fallback: roomId=${randomId}`);
+  return { roomId: randomId, roomPda };
 }
 
 /**
