@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { Connection, PublicKey, Transaction, TransactionInstruction, Keypair, LAMPORTS_PER_SOL, SystemProgram } from "npm:@solana/web3.js@1.95.0";
+import { Connection, PublicKey, Transaction, TransactionInstruction, Keypair, LAMPORTS_PER_SOL } from "npm:@solana/web3.js@1.95.0";
 import bs58 from "npm:bs58@5.0.0";
 
 const corsHeaders = {
@@ -11,8 +11,17 @@ const corsHeaders = {
 // Mainnet production Program ID
 const PROGRAM_ID = new PublicKey("4nkWS2ZYPqQrRSYbXD6XW6U6VenmBiZV2TkutY3vSPHu");
 
+// Fixed Config PDA address (source of truth - do not derive)
+const CONFIG_PDA = new PublicKey("C91tU9iB9vG1huFsZoN45RuDLYrbJdKkKFVgHNLkxn8A");
+
+// Default pubkey for filtering empty player slots
+const DEFAULT_PUBKEY = new PublicKey("11111111111111111111111111111111");
+
 // Helius RPC endpoint
 const DEFAULT_RPC = "https://barbey-suiowt-fast-mainnet.helius-rpc.com";
+
+// refund_draw instruction discriminator
+const REFUND_DRAW_DISCRIMINATOR = new Uint8Array([27, 10, 92, 83, 43, 176, 204, 10]);
 
 interface DrawSettleRequest {
   roomPda: string;
@@ -32,11 +41,11 @@ interface RoomAccountData {
   players: PublicKey[];
 }
 
-// Config account layout
+// Config account layout: 8 disc + 32 fee_recipient + 2 fee_bps + 32 result_authority
 interface ConfigAccountData {
-  authority: PublicKey;
-  verifier: PublicKey;
   feeRecipient: PublicKey;
+  feeBps: number;
+  resultAuthority: PublicKey;
 }
 
 function textToBytes(text: string): Uint8Array {
@@ -72,13 +81,11 @@ function parseRoomAccount(data: Uint8Array): RoomAccountData | null {
     const winner = new PublicKey(data.slice(offset, offset + 32));
     offset += 32;
     
-    // Parse players array (up to 4 players)
+    // Parse players array (up to 4 players, preserve order)
     const players: PublicKey[] = [];
-    for (let i = 0; i < playerCount && i < 4; i++) {
+    for (let i = 0; i < 4; i++) {
       const playerKey = new PublicKey(data.slice(offset + (i * 32), offset + ((i + 1) * 32)));
-      if (!playerKey.equals(PublicKey.default)) {
-        players.push(playerKey);
-      }
+      players.push(playerKey);
     }
     
     return {
@@ -100,12 +107,13 @@ function parseRoomAccount(data: Uint8Array): RoomAccountData | null {
 
 function parseConfigAccount(data: Uint8Array): ConfigAccountData | null {
   try {
-    // Config layout: 8 disc + 32 authority + 32 verifier + 32 feeRecipient
-    const authority = new PublicKey(data.slice(8, 40));
-    const verifier = new PublicKey(data.slice(40, 72));
-    const feeRecipient = new PublicKey(data.slice(72, 104));
+    // Layout: 8 disc + 32 fee_recipient + 2 fee_bps + 32 result_authority
+    const view = new DataView(data.buffer, data.byteOffset);
+    const feeRecipient = new PublicKey(data.slice(8, 40));
+    const feeBps = view.getUint16(40, true);
+    const resultAuthority = new PublicKey(data.slice(42, 74));
     
-    return { authority, verifier, feeRecipient };
+    return { feeRecipient, feeBps, resultAuthority };
   } catch (e) {
     console.error("[settle-draw] Failed to parse config account:", e);
     return null;
@@ -205,12 +213,15 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // Filter out default pubkeys from players, preserve canonical order
+    const validPlayers = roomData.players.filter(p => !p.equals(DEFAULT_PUBKEY));
+
     console.log("[settle-draw] Room data:", {
       status: roomData.status,
       playerCount: roomData.playerCount,
       stake: roomData.stakeAmount.toString(),
       creator: roomData.creator.toBase58(),
-      players: roomData.players.map(p => p.toBase58()),
+      players: validPlayers.map(p => p.toBase58()),
     });
 
     // Check room is in Started status (2)
@@ -232,22 +243,17 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Derive PDAs
+    // Derive vault PDA
     const [vaultPda] = PublicKey.findProgramAddressSync(
       [textToBytes("vault"), roomPubkey.toBuffer()],
       PROGRAM_ID
     );
-    
-    const [configPda] = PublicKey.findProgramAddressSync(
-      [textToBytes("config")],
-      PROGRAM_ID
-    );
 
     console.log("[settle-draw] Vault PDA:", vaultPda.toBase58());
-    console.log("[settle-draw] Config PDA:", configPda.toBase58());
+    console.log("[settle-draw] Config PDA:", CONFIG_PDA.toBase58());
 
     // Fetch config for fee_recipient
-    const configInfo = await connection.getAccountInfo(configPda);
+    const configInfo = await connection.getAccountInfo(CONFIG_PDA);
     if (!configInfo) {
       return new Response(
         JSON.stringify({ error: "Config account not found" }),
@@ -294,50 +300,31 @@ Deno.serve(async (req: Request) => {
     }
 
     // Build refund_draw instruction
-    // Instruction discriminator for refund_draw (you'll need to compute this from anchor)
-    // Using sha256("global:refund_draw")[0..8]
-    // For now, we'll try the instruction and handle errors gracefully
-    
-    // refund_draw expected accounts (based on typical pattern):
-    // ['verifier', 'config', 'room', 'vault', 'player1', 'player2', ..., 'fee_recipient', 'creator', 'system_program']
-    
-    // Build accounts array for refund_draw
+    // refund_draw: splits vault funds equally among players, takes fee, closes vault to creator
+    // Account order: verifier, config, room, vault, fee_recipient, creator, then players as remaining_accounts
     const refundDrawKeys = [
-      { pubkey: verifierKeypair.publicKey, isSigner: true, isWritable: true },  // verifier (fee payer)
-      { pubkey: configPda, isSigner: false, isWritable: false },                 // config
-      { pubkey: roomPubkey, isSigner: false, isWritable: true },                 // room
-      { pubkey: vaultPda, isSigner: false, isWritable: true },                   // vault
+      { pubkey: verifierKeypair.publicKey, isSigner: true, isWritable: false },  // 0. verifier
+      { pubkey: CONFIG_PDA, isSigner: false, isWritable: false },                 // 1. config
+      { pubkey: roomPubkey, isSigner: false, isWritable: true },                  // 2. room
+      { pubkey: vaultPda, isSigner: false, isWritable: true },                    // 3. vault
+      { pubkey: configData.feeRecipient, isSigner: false, isWritable: true },     // 4. fee_recipient (from config)
+      { pubkey: roomData.creator, isSigner: false, isWritable: true },            // 5. creator (vault close refund)
     ];
 
-    // Add all players as writable (to receive refunds)
-    for (const player of roomData.players) {
+    // 6+. remaining_accounts = valid players (writable, filtered)
+    for (const player of validPlayers) {
       refundDrawKeys.push({ pubkey: player, isSigner: false, isWritable: true });
     }
-    
-    // Pad remaining player slots (if less than maxPlayers)
-    for (let i = roomData.players.length; i < roomData.maxPlayers; i++) {
-      // Use system program as placeholder for empty slots
-      refundDrawKeys.push({ pubkey: SystemProgram.programId, isSigner: false, isWritable: false });
-    }
-
-    refundDrawKeys.push(
-      { pubkey: configData.feeRecipient, isSigner: false, isWritable: true },  // fee_recipient
-      { pubkey: roomData.creator, isSigner: false, isWritable: true },          // creator (vault close refund)
-      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },  // system_program
-    );
 
     console.log("[settle-draw] refund_draw account keys in order:");
     refundDrawKeys.forEach((key, i) => {
       console.log(`  [${i}] ${key.pubkey.toBase58()} (signer: ${key.isSigner}, writable: ${key.isWritable})`);
     });
 
-    // refund_draw discriminator: [27, 10, 92, 83, 43, 176, 204, 10]
-    const refundDrawDiscriminator = new Uint8Array([27, 10, 92, 83, 43, 176, 204, 10]);
-
     const refundDrawInstruction = new TransactionInstruction({
       keys: refundDrawKeys,
       programId: PROGRAM_ID,
-      data: refundDrawDiscriminator as any,
+      data: REFUND_DRAW_DISCRIMINATOR as any,
     });
 
     const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
@@ -377,7 +364,7 @@ Deno.serve(async (req: Request) => {
         errorStr.includes('not found') ||
         errorStr.includes('invalid instruction') ||
         errorStr.includes('unknown instruction') ||
-        errorStr.includes('0x65') // Custom error code for unknown instruction
+        errorStr.includes('0x65')
       ) {
         return new Response(
           JSON.stringify({
@@ -391,14 +378,13 @@ Deno.serve(async (req: Request) => {
         );
       }
       
-      // Re-throw for other errors
       throw txError;
     }
 
     // Now call close_room to reclaim room rent
     console.log("[settle-draw] Calling close_room to reclaim rent...");
 
-    // close_room discriminator: sha256("global:close_room")[0..8]
+    // close_room discriminator
     const closeRoomDiscriminator = new Uint8Array([189, 91, 239, 135, 160, 46, 105, 88]);
 
     const closeRoomInstruction = new TransactionInstruction({
@@ -461,7 +447,7 @@ Deno.serve(async (req: Request) => {
         signature: refundSignature,
         closeRoomSignature: closeSignature,
         roomPda,
-        playersRefunded: roomData.players.map(p => p.toBase58()),
+        playersRefunded: validPlayers.map(p => p.toBase58()),
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
