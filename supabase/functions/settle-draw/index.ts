@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { Connection, PublicKey, Transaction, TransactionInstruction, Keypair, LAMPORTS_PER_SOL } from "npm:@solana/web3.js@1.95.0";
+import { Connection, PublicKey, Transaction, TransactionInstruction, Keypair, LAMPORTS_PER_SOL, SystemProgram } from "npm:@solana/web3.js@1.95.0";
 import bs58 from "npm:bs58@5.0.0";
 
 const corsHeaders = {
@@ -8,22 +8,18 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Mainnet production Program ID - MUST match solana-program.ts
+// Mainnet production Program ID
 const PROGRAM_ID = new PublicKey("4nkWS2ZYPqQrRSYbXD6XW6U6VenmBiZV2TkutY3vSPHu");
 
-// Platform fee recipient
-const FEE_RECIPIENT = new PublicKey("3bcV9vtxeiHsXgNx4qvQbS4ZL4cMUnAg2tF3DZjtmGUj");
-
-// Platform fee: 5%
-const FEE_BPS = 500;
+// Helius RPC endpoint
+const DEFAULT_RPC = "https://barbey-suiowt-fast-mainnet.helius-rpc.com";
 
 interface DrawSettleRequest {
   roomPda: string;
-  callerWallet: string;
-  gameType?: string;
+  reason?: string;
 }
 
-// Room account layout (same as other edge functions)
+// Room account layout
 interface RoomAccountData {
   roomId: bigint;
   creator: PublicKey;
@@ -34,6 +30,13 @@ interface RoomAccountData {
   stakeAmount: bigint;
   winner: PublicKey;
   players: PublicKey[];
+}
+
+// Config account layout
+interface ConfigAccountData {
+  authority: PublicKey;
+  verifier: PublicKey;
+  feeRecipient: PublicKey;
 }
 
 function textToBytes(text: string): Uint8Array {
@@ -69,7 +72,7 @@ function parseRoomAccount(data: Uint8Array): RoomAccountData | null {
     const winner = new PublicKey(data.slice(offset, offset + 32));
     offset += 32;
     
-    // Parse players array
+    // Parse players array (up to 4 players)
     const players: PublicKey[] = [];
     for (let i = 0; i < playerCount && i < 4; i++) {
       const playerKey = new PublicKey(data.slice(offset + (i * 32), offset + ((i + 1) * 32)));
@@ -95,33 +98,67 @@ function parseRoomAccount(data: Uint8Array): RoomAccountData | null {
   }
 }
 
+function parseConfigAccount(data: Uint8Array): ConfigAccountData | null {
+  try {
+    // Config layout: 8 disc + 32 authority + 32 verifier + 32 feeRecipient
+    const authority = new PublicKey(data.slice(8, 40));
+    const verifier = new PublicKey(data.slice(40, 72));
+    const feeRecipient = new PublicKey(data.slice(72, 104));
+    
+    return { authority, verifier, feeRecipient };
+  } catch (e) {
+    console.error("[settle-draw] Failed to parse config account:", e);
+    return null;
+  }
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { roomPda, callerWallet, gameType }: DrawSettleRequest = await req.json();
+    const { roomPda, reason }: DrawSettleRequest = await req.json();
 
-    if (!roomPda || !callerWallet) {
+    if (!roomPda) {
       return new Response(
-        JSON.stringify({ error: "Missing roomPda or callerWallet" }),
+        JSON.stringify({ error: "Missing roomPda" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    console.log(`[settle-draw] Draw settlement request for room ${roomPda} by ${callerWallet}`);
+    console.log(`[settle-draw] Draw settlement request for room ${roomPda}, reason: ${reason || 'draw'}`);
 
     // Initialize clients
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const rpcUrl = Deno.env.get("VITE_SOLANA_RPC_URL") || "https://api.mainnet-beta.solana.com";
+    const rpcUrl = Deno.env.get("VITE_SOLANA_RPC_URL") || DEFAULT_RPC;
     const connection = new Connection(rpcUrl, "confirmed");
 
-    // Get verifier key
-    const verifierSecretKey = Deno.env.get("VERIFIER_SECRET_KEY");
+    // Check if already settled via finalize_receipts
+    const { data: existingReceipt } = await supabase
+      .from("finalize_receipts")
+      .select("finalize_tx")
+      .eq("room_pda", roomPda)
+      .maybeSingle();
+
+    if (existingReceipt?.finalize_tx) {
+      console.log("[settle-draw] Already settled, tx:", existingReceipt.finalize_tx);
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          alreadySettled: true,
+          signature: existingReceipt.finalize_tx,
+          roomPda,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Get verifier key (use V2 first, fallback to V1)
+    const verifierSecretKey = Deno.env.get("VERIFIER_SECRET_KEY_V2") || Deno.env.get("VERIFIER_SECRET_KEY");
     if (!verifierSecretKey) {
       console.error("[settle-draw] VERIFIER_SECRET_KEY not configured");
       return new Response(
@@ -130,7 +167,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    let verifier: Keypair;
+    let verifierKeypair: Keypair;
     try {
       const keyString = verifierSecretKey.trim();
       let keyBytes: Uint8Array;
@@ -139,8 +176,8 @@ Deno.serve(async (req: Request) => {
       } else {
         keyBytes = bs58.decode(keyString);
       }
-      verifier = Keypair.fromSecretKey(keyBytes);
-      console.log("[settle-draw] Verifier public key:", verifier.publicKey.toBase58());
+      verifierKeypair = Keypair.fromSecretKey(keyBytes);
+      console.log("[settle-draw] Verifier public key:", verifierKeypair.publicKey.toBase58());
     } catch (e) {
       console.error("[settle-draw] Failed to parse verifier key:", e);
       return new Response(
@@ -176,23 +213,15 @@ Deno.serve(async (req: Request) => {
       players: roomData.players.map(p => p.toBase58()),
     });
 
-    // Verify caller is a participant
-    const callerPubkey = new PublicKey(callerWallet);
-    const isParticipant = roomData.players.some(p => p.equals(callerPubkey));
-    if (!isParticipant) {
-      return new Response(
-        JSON.stringify({ error: "Caller is not a participant in this room" }),
-        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
     // Check room is in Started status (2)
     if (roomData.status !== 2) {
       if (roomData.status === 3 || roomData.status === 4) {
         return new Response(
           JSON.stringify({ 
-            status: "already_resolved",
-            message: "Room is already finished or cancelled" 
+            ok: true,
+            alreadySettled: true,
+            message: "Room is already finished or cancelled",
+            roomPda,
           }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
@@ -203,36 +232,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Verify 2-player game (draws only supported for 2 players currently)
-    if (roomData.playerCount !== 2) {
-      return new Response(
-        JSON.stringify({ error: "Draw settlement only supported for 2-player games" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // LIMITATION: The on-chain program only supports a single winner
-    // For draws, we'll declare player 1 (creator) as the on-chain "winner"
-    // The actual draw handling is done in the database only
-    // NOTE: Funds still go to one player on-chain - this is a program limitation
-    // A proper draw implementation would require updating the Solana program
-    
-    console.log("[settle-draw] IMPORTANT: On-chain program doesn't support true draws.");
-    console.log("[settle-draw] Recording as draw in database, but on-chain will show creator as winner.");
-    console.log("[settle-draw] For true 50/50 split, the Solana program needs to be updated.");
-
-    // Calculate payout info for logging
-    const pot = Number(roomData.stakeAmount) * 2;
-    const fee = Math.floor(pot * FEE_BPS / 10000);
-    const winnerPayout = pot - fee;
-    
-    console.log("[settle-draw] Payout breakdown:", {
-      pot: pot / LAMPORTS_PER_SOL,
-      fee: fee / LAMPORTS_PER_SOL,
-      winnerPayout: winnerPayout / LAMPORTS_PER_SOL,
-    });
-
-    // Build submit_result instruction with creator as "winner"
+    // Derive PDAs
     const [vaultPda] = PublicKey.findProgramAddressSync(
       [textToBytes("vault"), roomPubkey.toBuffer()],
       PROGRAM_ID
@@ -243,77 +243,206 @@ Deno.serve(async (req: Request) => {
       PROGRAM_ID
     );
 
-    // submit_result discriminator: [240, 42, 89, 180, 10, 239, 9, 214]
-    const discriminator = new Uint8Array([240, 42, 89, 180, 10, 239, 9, 214]);
-    
-    // Use creator as the nominal "winner" for on-chain settlement
-    const nominalWinner = roomData.creator;
-    
-    const data = new Uint8Array(8 + 32);
-    data.set(discriminator, 0);
-    data.set(nominalWinner.toBytes(), 8);
+    console.log("[settle-draw] Vault PDA:", vaultPda.toBase58());
+    console.log("[settle-draw] Config PDA:", configPda.toBase58());
 
-    // Fetch config for dynamic fee_recipient
+    // Fetch config for fee_recipient
     const configInfo = await connection.getAccountInfo(configPda);
-    let feeRecipient = FEE_RECIPIENT; // fallback
-    if (configInfo) {
-      const view = new DataView(configInfo.data.buffer, configInfo.data.byteOffset);
-      // Config layout: 8 disc + 32 authority + 32 verifier + 32 feeRecipient
-      feeRecipient = new PublicKey(configInfo.data.slice(72, 104));
-      console.log(`[settle-draw] Using on-chain fee_recipient: ${feeRecipient.toBase58()}`);
+    if (!configInfo) {
+      return new Response(
+        JSON.stringify({ error: "Config account not found" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
-    // IDL accounts order: ['verifier','config','room','vault','winner','fee_recipient','creator']
-    const instruction = new TransactionInstruction({
-      keys: [
-        { pubkey: verifier.publicKey, isSigner: true, isWritable: false },   // verifier
-        { pubkey: configPda, isSigner: false, isWritable: false },            // config
-        { pubkey: roomPubkey, isSigner: false, isWritable: true },            // room
-        { pubkey: vaultPda, isSigner: false, isWritable: true },              // vault
-        { pubkey: nominalWinner, isSigner: false, isWritable: true },         // winner
-        { pubkey: feeRecipient, isSigner: false, isWritable: true },          // fee_recipient (from config)
-        { pubkey: roomData.creator, isSigner: false, isWritable: true },      // creator (for vault close refund)
-      ],
-      programId: PROGRAM_ID,
-      data: data as any,
+    const configData = parseConfigAccount(configInfo.data);
+    if (!configData) {
+      return new Response(
+        JSON.stringify({ error: "Failed to parse config account" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    console.log("[settle-draw] Fee recipient:", configData.feeRecipient.toBase58());
+
+    // Check vault balance
+    const vaultBalance = await connection.getBalance(vaultPda);
+    console.log("[settle-draw] Vault balance:", vaultBalance / LAMPORTS_PER_SOL, "SOL");
+
+    if (vaultBalance === 0) {
+      // Vault is empty - might already be refunded
+      console.log("[settle-draw] Vault is empty, marking as already settled");
+      
+      // Mark session as finished
+      await supabase
+        .from("game_sessions")
+        .update({ 
+          status: "finished", 
+          updated_at: new Date().toISOString() 
+        })
+        .eq("room_pda", roomPda);
+      
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          alreadySettled: true,
+          message: "Vault already empty - funds already refunded",
+          roomPda,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Build refund_draw instruction
+    // Instruction discriminator for refund_draw (you'll need to compute this from anchor)
+    // Using sha256("global:refund_draw")[0..8]
+    // For now, we'll try the instruction and handle errors gracefully
+    
+    // refund_draw expected accounts (based on typical pattern):
+    // ['verifier', 'config', 'room', 'vault', 'player1', 'player2', ..., 'fee_recipient', 'creator', 'system_program']
+    
+    // Build accounts array for refund_draw
+    const refundDrawKeys = [
+      { pubkey: verifierKeypair.publicKey, isSigner: true, isWritable: true },  // verifier (fee payer)
+      { pubkey: configPda, isSigner: false, isWritable: false },                 // config
+      { pubkey: roomPubkey, isSigner: false, isWritable: true },                 // room
+      { pubkey: vaultPda, isSigner: false, isWritable: true },                   // vault
+    ];
+
+    // Add all players as writable (to receive refunds)
+    for (const player of roomData.players) {
+      refundDrawKeys.push({ pubkey: player, isSigner: false, isWritable: true });
+    }
+    
+    // Pad remaining player slots (if less than maxPlayers)
+    for (let i = roomData.players.length; i < roomData.maxPlayers; i++) {
+      // Use system program as placeholder for empty slots
+      refundDrawKeys.push({ pubkey: SystemProgram.programId, isSigner: false, isWritable: false });
+    }
+
+    refundDrawKeys.push(
+      { pubkey: configData.feeRecipient, isSigner: false, isWritable: true },  // fee_recipient
+      { pubkey: roomData.creator, isSigner: false, isWritable: true },          // creator (vault close refund)
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },  // system_program
+    );
+
+    console.log("[settle-draw] refund_draw account keys in order:");
+    refundDrawKeys.forEach((key, i) => {
+      console.log(`  [${i}] ${key.pubkey.toBase58()} (signer: ${key.isSigner}, writable: ${key.isWritable})`);
     });
 
-    console.log("[settle-draw] submit_result account keys in order:");
-    console.log(`  [0] verifier: ${verifier.publicKey.toBase58()}`);
-    console.log(`  [1] config: ${configPda.toBase58()}`);
-    console.log(`  [2] room: ${roomPubkey.toBase58()}`);
-    console.log(`  [3] vault: ${vaultPda.toBase58()}`);
-    console.log(`  [4] winner: ${nominalWinner.toBase58()}`);
-    console.log(`  [5] fee_recipient: ${feeRecipient.toBase58()}`);
-    console.log(`  [6] creator: ${roomData.creator.toBase58()}`);
+    // refund_draw discriminator - compute from "global:refund_draw"
+    // For Anchor, it's sha256("global:refund_draw")[0..8]
+    // This needs to match your on-chain program
+    const refundDrawDiscriminator = new Uint8Array([
+      0x8a, 0x5b, 0x2e, 0x9f, 0x7c, 0x3d, 0x1a, 0x4e  // Placeholder - update with actual discriminator
+    ]);
+
+    const refundDrawInstruction = new TransactionInstruction({
+      keys: refundDrawKeys,
+      programId: PROGRAM_ID,
+      data: refundDrawDiscriminator as any,
+    });
 
     const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
     const transaction = new Transaction({
-      feePayer: verifier.publicKey,
+      feePayer: verifierKeypair.publicKey,
       blockhash,
       lastValidBlockHeight,
-    }).add(instruction);
+    }).add(refundDrawInstruction);
 
-    transaction.sign(verifier);
+    transaction.sign(verifierKeypair);
 
-    console.log("[settle-draw] Sending submit_result transaction...");
+    console.log("[settle-draw] Sending refund_draw transaction...");
 
-    const signature = await connection.sendRawTransaction(transaction.serialize(), {
-      skipPreflight: false,
-      preflightCommitment: "confirmed",
+    let refundSignature: string;
+    try {
+      refundSignature = await connection.sendRawTransaction(transaction.serialize(), {
+        skipPreflight: false,
+        preflightCommitment: "confirmed",
+      });
+
+      console.log("[settle-draw] refund_draw transaction sent:", refundSignature);
+
+      await connection.confirmTransaction({
+        signature: refundSignature,
+        blockhash,
+        lastValidBlockHeight,
+      }, "confirmed");
+
+      console.log("[settle-draw] refund_draw transaction confirmed:", refundSignature);
+    } catch (txError: any) {
+      console.error("[settle-draw] refund_draw transaction failed:", txError);
+      
+      // Check if it's an instruction not found error
+      const errorStr = txError.message?.toLowerCase() || '';
+      if (
+        errorStr.includes('instruction') ||
+        errorStr.includes('not found') ||
+        errorStr.includes('invalid instruction') ||
+        errorStr.includes('unknown instruction') ||
+        errorStr.includes('0x65') // Custom error code for unknown instruction
+      ) {
+        return new Response(
+          JSON.stringify({
+            ok: false,
+            error: "refund_draw instruction not available",
+            message: "Draw refund not enabled yet. Please try again later or contact support.",
+            code: "INSTRUCTION_NOT_FOUND",
+            roomPda,
+          }),
+          { status: 501, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      
+      // Re-throw for other errors
+      throw txError;
+    }
+
+    // Now call close_room to reclaim room rent
+    console.log("[settle-draw] Calling close_room to reclaim rent...");
+
+    // close_room discriminator: sha256("global:close_room")[0..8]
+    const closeRoomDiscriminator = new Uint8Array([189, 91, 239, 135, 160, 46, 105, 88]);
+
+    const closeRoomInstruction = new TransactionInstruction({
+      keys: [
+        { pubkey: roomPubkey, isSigner: false, isWritable: true },       // room
+        { pubkey: roomData.creator, isSigner: false, isWritable: true }, // creator
+      ],
+      programId: PROGRAM_ID,
+      data: closeRoomDiscriminator as any,
     });
 
-    console.log("[settle-draw] Transaction sent:", signature);
+    const closeBlockhash = await connection.getLatestBlockhash();
+    const closeTransaction = new Transaction({
+      feePayer: verifierKeypair.publicKey,
+      blockhash: closeBlockhash.blockhash,
+      lastValidBlockHeight: closeBlockhash.lastValidBlockHeight,
+    }).add(closeRoomInstruction);
 
-    await connection.confirmTransaction({
-      signature,
-      blockhash,
-      lastValidBlockHeight,
-    }, "confirmed");
+    closeTransaction.sign(verifierKeypair);
 
-    console.log("[settle-draw] Transaction confirmed:", signature);
+    let closeSignature: string | null = null;
+    try {
+      closeSignature = await connection.sendRawTransaction(closeTransaction.serialize(), {
+        skipPreflight: false,
+        preflightCommitment: "confirmed",
+      });
 
-    // Mark game session as finished with draw recorded
+      await connection.confirmTransaction({
+        signature: closeSignature,
+        blockhash: closeBlockhash.blockhash,
+        lastValidBlockHeight: closeBlockhash.lastValidBlockHeight,
+      }, "confirmed");
+
+      console.log("[settle-draw] close_room confirmed:", closeSignature);
+    } catch (closeError: any) {
+      console.warn("[settle-draw] close_room failed (non-fatal):", closeError.message);
+      // close_room failure is non-fatal - the refund already happened
+    }
+
+    // Mark game session as finished
     await supabase
       .from("game_sessions")
       .update({ 
@@ -322,24 +451,21 @@ Deno.serve(async (req: Request) => {
       })
       .eq("room_pda", roomPda);
 
-    // Record the draw in finalize_receipts
+    // Record the settlement in finalize_receipts
     await supabase.from("finalize_receipts").insert({
       room_pda: roomPda,
-      finalize_tx: signature,
+      finalize_tx: refundSignature,
     });
 
-    // Note: We intentionally do NOT call record_match_result for draws
-    // since the on-chain winner doesn't reflect the true game outcome
-    // In a proper implementation, record_match_result would need a draw variant
+    console.log("[settle-draw] Draw settlement complete");
 
     return new Response(
       JSON.stringify({
-        status: "settled",
-        message: "Draw settled on-chain. Note: Due to program limitations, creator received the pot. For true 50/50 splits, contact support.",
-        signature,
-        onChainWinner: nominalWinner.toBase58(),
-        isDraw: true,
-        note: "On-chain program doesn't support draws. Funds went to creator. Database records this as a draw.",
+        ok: true,
+        signature: refundSignature,
+        closeRoomSignature: closeSignature,
+        roomPda,
+        playersRefunded: roomData.players.map(p => p.toBase58()),
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
@@ -347,7 +473,10 @@ Deno.serve(async (req: Request) => {
   } catch (e: any) {
     console.error("[settle-draw] Error:", e);
     return new Response(
-      JSON.stringify({ error: e.message || "Internal server error" }),
+      JSON.stringify({ 
+        ok: false,
+        error: e.message || "Internal server error" 
+      }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

@@ -11,6 +11,8 @@ import { useSound } from '@/contexts/SoundContext';
 import { supabase } from '@/integrations/supabase/client';
 import { RivalryWidget } from '@/components/RivalryWidget';
 import { WalletLink } from '@/components/WalletLink';
+import { DrawSettlementDebug } from '@/components/DrawSettlementDebug';
+import { DrawRefundError } from '@/components/DrawRefundError';
 import { 
   RematchMode, 
   RematchPayload, 
@@ -170,6 +172,10 @@ export function GameEndScreen({
   const [finalizeError, setFinalizeError] = useState<string | null>(null);
   const [showErrorDetails, setShowErrorDetails] = useState(false);
   const [txSignature, setTxSignature] = useState<string | null>(null);
+  
+  // Draw-specific error state
+  const [drawRefundError, setDrawRefundError] = useState<string | null>(null);
+  const [isRetryingDraw, setIsRetryingDraw] = useState(false);
   
   // On-chain room status check
   const [roomAlreadySettled, setRoomAlreadySettled] = useState(false);
