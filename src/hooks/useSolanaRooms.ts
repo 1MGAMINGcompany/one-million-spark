@@ -1040,7 +1040,16 @@ export function useSolanaRooms() {
         });
       }
 
-      // Refresh active room state
+      // CRITICAL: Clear local state immediately for the forfeited room
+      // This prevents stale state from blocking create-room
+      archiveRoom(roomPda);
+      console.log("[forfeitGame] Archived room and clearing local state:", roomPda);
+      
+      // Immediately remove from local state arrays
+      setActiveRooms(prev => prev.filter(r => r.pda !== roomPda));
+      setActiveRoom(prev => (prev?.pda === roomPda ? null : prev));
+      
+      // Also refresh from on-chain to ensure consistency
       await fetchUserActiveRoom();
 
       return { ok: true, signature: data.signature };
@@ -1112,6 +1121,15 @@ export function useSolanaRooms() {
     }
   }, [publicKey]);
 
+  // Clear a specific room from local state (used after settlement/forfeit)
+  // This immediately removes the room from activeRooms/activeRoom to prevent blocking
+  const clearRoomFromState = useCallback((roomPda: string) => {
+    console.log("[clearRoomFromState] Clearing room from local state:", roomPda);
+    archiveRoom(roomPda);
+    setActiveRooms(prev => prev.filter(r => r.pda !== roomPda));
+    setActiveRoom(prev => (prev?.pda === roomPda ? null : prev));
+  }, []);
+
   return {
     rooms,
     loading,
@@ -1134,5 +1152,6 @@ export function useSolanaRooms() {
     getBalance,
     fetchUserActiveRoom,
     findMyActiveGameSessions,
+    clearRoomFromState,
   };
 }
