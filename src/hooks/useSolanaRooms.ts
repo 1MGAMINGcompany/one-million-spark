@@ -730,14 +730,14 @@ export function useSolanaRooms() {
         if (joinedRoom?.pda) {
           const stakeLamports = Math.floor(joinedRoom.entryFeeSol * LAMPORTS_PER_SOL);
           
-          // Fetch mode from DB (the AUTHORITATIVE source set by creator)
-          const { data: sessionData } = await supabase
-            .from("game_sessions")
-            .select("mode")
-            .eq("room_pda", joinedRoom.pda)
-            .maybeSingle();
-          
-          const mode = (sessionData?.mode as 'casual' | 'ranked') || 'casual';
+          // Fetch mode from DB via Edge Function (RLS locked)
+          const { data: resp, error: modeError } = await supabase.functions.invoke("game-session-get", {
+            body: { roomPda: joinedRoom.pda },
+          });
+          if (modeError) {
+            console.warn("[JoinRoom] Edge function error:", modeError);
+          }
+          const mode = (resp?.session?.mode as 'casual' | 'ranked') || 'casual';
           console.log("[JoinRoom] Fetched mode from DB:", mode);
           
           const rules = createRulesFromRoom(
@@ -1158,11 +1158,11 @@ export function useSolanaRooms() {
       const { supabase } = await import("@/integrations/supabase/client");
       const walletAddress = publicKey.toBase58();
       
-      const { data, error } = await supabase
-        .from('game_sessions')
-        .select('room_pda, game_type, status, player1_wallet, player2_wallet')
-        .eq('status', 'active')
-        .or(`player1_wallet.eq.${walletAddress},player2_wallet.eq.${walletAddress}`);
+      // Use Edge Function instead of direct table access (RLS locked)
+      const { data: resp, error } = await supabase.functions.invoke("game-sessions-list", {
+        body: { type: "recoverable_for_wallet", wallet: walletAddress },
+      });
+      const data = resp?.rows ?? [];
       
       if (error) {
         console.error('[findMyActiveGameSessions] Error:', error);

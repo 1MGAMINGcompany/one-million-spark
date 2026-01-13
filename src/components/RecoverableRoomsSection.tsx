@@ -50,19 +50,18 @@ export function RecoverableRoomsSection({ wallet }: RecoverableRoomsSectionProps
     else setLoading(true);
 
     try {
-      const { data, error } = await supabase
-        .from('game_sessions')
-        .select('room_pda, game_type, player1_wallet, player2_wallet, created_at, updated_at')
-        .eq('status', 'active')
-        .or(`player1_wallet.eq.${wallet},player2_wallet.eq.${wallet}`)
-        .order('created_at', { ascending: false });
+      // Use Edge Function instead of direct table access (RLS locked)
+      const { data: resp, error } = await supabase.functions.invoke("game-sessions-list", {
+        body: { type: "recoverable_for_wallet", wallet },
+      });
 
       if (error) {
         console.error('[RecoverableRooms] Failed to fetch:', error);
         return;
       }
 
-      setRooms(data || []);
+      const rows = resp?.rows ?? [];
+      setRooms(rows);
     } catch (err) {
       console.error('[RecoverableRooms] Error:', err);
     } finally {
