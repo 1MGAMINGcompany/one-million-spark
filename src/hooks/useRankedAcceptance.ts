@@ -117,57 +117,35 @@ export function useRankedAcceptance(
       const signatureBase58 = bs58.encode(signature);
       console.log("[RankedAcceptance] Signature obtained:", signatureBase58.slice(0, 20) + "...");
 
-      // Step 5: Verify signature and start session via RPC
-      // The start_session RPC verifies the signature server-side
-      console.log("[RankedAcceptance] Starting session...");
-      const { data: token, error: sessionError } = await supabase.rpc("start_session", {
-        p_room_pda: roomPda,
-        p_wallet: wallet,
-        p_rules_hash: hash,
-        p_nonce: nonce,
-        p_signature: signatureBase58,
-        p_sig_valid: true, // Client-side we can't verify Ed25519, server should re-verify
+      // Step 5: Call Edge Function to verify signature, create session, and record acceptance
+      console.log("[RankedAcceptance] Calling ranked-accept Edge Function...");
+      const { data, error: invokeError } = await supabase.functions.invoke("ranked-accept", {
+        body: {
+          roomPda,
+          playerWallet: wallet,
+          mode: "signed",
+          rulesHash: hash,
+          nonce,
+          timestamp: timestampMs,
+          signature: signatureBase58,
+          stakeLamports,
+          turnTimeSeconds,
+        },
       });
 
-      if (sessionError || !token) {
-        console.error("[RankedAcceptance] Session start failed:", sessionError);
-        return { success: false, error: sessionError?.message || "Failed to start session" };
+      if (invokeError) {
+        console.error("[RankedAcceptance] Edge function error:", invokeError);
+        return { success: false, error: invokeError.message || "Failed to accept" };
       }
 
+      if (!data?.success) {
+        console.error("[RankedAcceptance] Acceptance failed:", data?.error);
+        return { success: false, error: data?.error || "Failed to start session" };
+      }
+
+      const token = data.sessionToken;
       console.log("[RankedAcceptance] Session started, token:", token.slice(0, 16) + "...");
       setSessionToken(token);
-
-      // Step 6: Store acceptance with signature in game_acceptances for deterministic roll
-      console.log("[RankedAcceptance] Recording acceptance with signature...");
-      const { error: acceptanceError } = await supabase
-        .from("game_acceptances")
-        .insert({
-          room_pda: roomPda,
-          player_wallet: wallet,
-          rules_hash: hash,
-          nonce: nonce,
-          timestamp_ms: timestampMs,
-          signature: signatureBase58,
-          session_token: token,
-          session_expires_at: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(),
-        });
-
-      if (acceptanceError) {
-        console.error("[RankedAcceptance] Failed to record acceptance:", acceptanceError);
-        // Don't fail the flow - session is valid, acceptance record is for dice roll
-      }
-
-      // Step 7: Mark player as ready now that we have a valid session
-      console.log("[RankedAcceptance] Marking player ready...");
-      const { error: readyError } = await supabase.rpc("set_player_ready", {
-        p_room_pda: roomPda,
-        p_wallet: wallet,
-      });
-
-      if (readyError) {
-        console.error("[RankedAcceptance] Failed to set ready:", readyError);
-        // Don't fail the whole flow - session is valid, ready flag is secondary
-      }
 
       // Store session token in localStorage for persistence
       localStorage.setItem(`session_token_${roomPda}`, token);

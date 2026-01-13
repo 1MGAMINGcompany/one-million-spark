@@ -26,3 +26,6 @@ verify_jwt = false
 
 [functions.sweep-orphan-vault]
 verify_jwt = false
+
+[functions.ranked-accept]
+verify_jwt = false

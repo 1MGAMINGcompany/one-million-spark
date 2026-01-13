@@ -84,7 +84,7 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
     }
   }, [roomPda, myWallet, isRanked, enabled, hasLoaded, isPlayer1, isPlayer2, isIdentified, p1Ready, p2Ready, iAmReady, opponentReady, bothReady, showAcceptModal]);
 
-  // FIX C: Accept rules - records to game_acceptances THEN marks player ready
+  // Accept rules via Edge Function (no direct table access)
   const acceptRules = useCallback(async (): Promise<{ success: boolean; error?: string }> => {
     if (!roomPda || !myWallet) {
       return { success: false, error: "Missing room or wallet" };
@@ -93,46 +93,28 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
     setIsSettingReady(true);
     
     try {
-      console.log("[RankedReadyGate] Recording acceptance + marking ready...", { roomPda, myWallet });
+      console.log("[RankedReadyGate] Calling ranked-accept Edge Function...", { roomPda, myWallet });
       
-      // Step 1: Record acceptance to game_acceptances (for cross-device sync + audit)
-      const timestampMs = Date.now();
-      const nonce = crypto.randomUUID();
-      const sessionToken = crypto.randomUUID();
-      const sessionExpiresAt = new Date(timestampMs + 4 * 60 * 60 * 1000).toISOString(); // 4 hours
-      
-      const { error: acceptError } = await supabase
-        .from("game_acceptances")
-        .insert({
-          room_pda: roomPda,
-          player_wallet: myWallet,
-          nonce,
-          timestamp_ms: timestampMs,
-          signature: "implicit_stake_acceptance", // On-chain stake tx is the real signature
-          rules_hash: "stake_verified",
-          session_token: sessionToken,
-          session_expires_at: sessionExpiresAt,
-        });
-
-      if (acceptError) {
-        console.error("[RankedReadyGate] Failed to record acceptance:", acceptError);
-        // Continue anyway - the ready flag is more important for gameplay
-      } else {
-        console.log("[RankedReadyGate] ✅ Acceptance recorded to game_acceptances");
-      }
-      
-      // Step 2: Set player ready flag (this triggers realtime update for opponent)
-      const { error: readyError } = await supabase.rpc("set_player_ready", {
-        p_room_pda: roomPda,
-        p_wallet: myWallet,
+      // Call Edge Function instead of direct table insert
+      const { data, error } = await supabase.functions.invoke("ranked-accept", {
+        body: {
+          roomPda,
+          playerWallet: myWallet,
+          mode: "simple", // Simple acceptance (stake tx is implicit signature)
+        },
       });
 
-      if (readyError) {
-        console.error("[RankedReadyGate] Failed to set ready:", readyError);
-        return { success: false, error: readyError.message };
+      if (error) {
+        console.error("[RankedReadyGate] Edge function error:", error);
+        return { success: false, error: error.message || "Failed to accept" };
       }
 
-      console.log("[RankedReadyGate] ✅ Player marked as ready!");
+      if (!data?.success) {
+        console.error("[RankedReadyGate] Acceptance failed:", data?.error);
+        return { success: false, error: data?.error || "Acceptance failed" };
+      }
+
+      console.log("[RankedReadyGate] ✅ Player marked as ready via Edge Function!");
       return { success: true };
     } catch (err: any) {
       console.error("[RankedReadyGate] Error:", err);
