@@ -58,24 +58,29 @@ export interface FinalizeGameResult {
 const LAMPORTS_PER_SOL = 1_000_000_000;
 
 /**
- * Check if room is already settled via finalize_receipts
+ * Check if room is already settled via game-session-get edge function
+ * Uses service-role via edge function to bypass RLS on finalize_receipts
  */
 async function checkAlreadySettled(roomPda: string): Promise<{ settled: boolean; signature?: string }> {
   try {
-    const { data, error } = await supabase
-      .from('finalize_receipts')
-      .select('finalize_tx')
-      .eq('room_pda', roomPda)
-      .maybeSingle();
+    const { data, error } = await supabase.functions.invoke('game-session-get', {
+      body: { roomPda },
+    });
     
     if (error) {
-      console.warn('[finalizeGame] Error checking finalize_receipts:', error);
+      console.warn('[finalizeGame] Error checking settlement via edge fn:', error);
       return { settled: false };
     }
     
-    if (data?.finalize_tx) {
-      console.log('[finalizeGame] Room already settled, tx:', data.finalize_tx);
-      return { settled: true, signature: data.finalize_tx };
+    if (!data?.ok) {
+      console.warn('[finalizeGame] Edge fn returned not ok:', data);
+      return { settled: false };
+    }
+    
+    // Check if receipt exists with finalize_tx
+    if (data.receipt?.finalize_tx) {
+      console.log('[finalizeGame] Room already settled, tx:', data.receipt.finalize_tx);
+      return { settled: true, signature: data.receipt.finalize_tx };
     }
     
     return { settled: false };
@@ -85,30 +90,10 @@ async function checkAlreadySettled(roomPda: string): Promise<{ settled: boolean;
   }
 }
 
-/**
- * Record the finalization in finalize_receipts (prevents double payout)
- */
-async function recordFinalizeReceipt(roomPda: string, signature: string): Promise<void> {
-  try {
-    const { error } = await supabase
-      .from('finalize_receipts')
-      .insert({
-        room_pda: roomPda,
-        finalize_tx: signature,
-      });
-    
-    if (error) {
-      // Duplicate key error is OK (race condition protection)
-      if (!error.message?.includes('duplicate')) {
-        console.warn('[finalizeGame] Error recording receipt:', error);
-      }
-    } else {
-      console.log('[finalizeGame] Receipt recorded:', signature.slice(0, 12) + '...');
-    }
-  } catch (err) {
-    console.warn('[finalizeGame] Exception recording receipt:', err);
-  }
-}
+// NOTE: recordFinalizeReceipt has been REMOVED
+// The edge functions (forfeit-game, settle-game, settle-draw) handle 
+// recording to finalize_receipts on the server side with service role.
+// Client must NOT write to finalize_receipts directly.
 
 /**
  * Update game_sessions.status to 'finished'
@@ -353,11 +338,9 @@ export async function finalizeGame(params: FinalizeGameParams): Promise<Finalize
     result = await finalizeViaEdgeFunction(roomPda, loserWallet, gameType);
   }
   
-  // Step 3: If payout succeeded, record receipt and update database
+  // Step 3: If payout succeeded, update database
+  // NOTE: Receipt is recorded by edge functions (forfeit-game, settle-game, settle-draw)
   if (result.success && result.signature) {
-    // Record receipt (prevents double payout on retry)
-    await recordFinalizeReceipt(roomPda, result.signature);
-    
     // Record match result for stats
     await recordMatchResult(
       roomPda,
