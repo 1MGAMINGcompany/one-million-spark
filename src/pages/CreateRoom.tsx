@@ -61,7 +61,7 @@ export default function CreateRoom() {
   const { toast } = useToast();
   const { play } = useSound();
   const { price, formatUsd, loading: priceLoading, refetch: refetchPrice } = useSolPrice();
-  const { createRoom, txPending, activeRoom, blockingRoom: hookBlockingRoom, cancelRoom, fetchRooms, txDebugInfo, clearTxDebug } = useSolanaRooms();
+  const { createRoom, txPending, activeRoom, blockingRoom: hookBlockingRoom, cancelRoom, fetchRooms, txDebugInfo, clearTxDebug, fetchUserActiveRoom } = useSolanaRooms();
   const { 
     balanceInfo, 
     fetchBalance, 
@@ -122,17 +122,21 @@ export default function CreateRoom() {
   const entryFeeNum = parseFloat(entryFee) || 0;
   const entryFeeUsd = formatUsd(entryFee);
 
-  // Note: Active room polling is now centralized in useSolanaRooms
-  // Pages only CONSUME activeRoom - they don't trigger fetches
+  // CRITICAL: Force refresh active rooms on mount to clear stale state after settlement/forfeit
+  // This ensures we don't block on rooms that have been closed on-chain
   useEffect(() => {
     if (!isConnected) {
       setCheckingActiveRoom(false);
       return;
     }
-    // Just mark as done checking - polling happens in hook
-    setCheckingActiveRoom(false);
-    hasNavigatedRef.current = false;
-  }, [isConnected]);
+    
+    // Force a fresh fetch from on-chain when CreateRoom mounts
+    console.log("[CreateRoom] Mount: forcing active room refresh");
+    fetchUserActiveRoom().then(() => {
+      setCheckingActiveRoom(false);
+      hasNavigatedRef.current = false;
+    });
+  }, [isConnected, fetchUserActiveRoom]);
 
   // Detect status change: Created -> Started and redirect
   useEffect(() => {
@@ -213,17 +217,27 @@ export default function CreateRoom() {
       return;
     }
     
-    // Smart blocking: use pre-computed blockingRoom from hook
-    console.log("[CreateRoom] handleCreateRoom, blockingRoom:", hookBlockingRoom?.pda?.slice(0, 8));
-    if (hookBlockingRoom) {
+    // CRITICAL: Force a fresh active room check before blocking
+    // This handles stale state after settlement/forfeit
+    console.log("[CreateRoom] Forcing fresh active room check before create...");
+    const freshActiveRoom = await fetchUserActiveRoom();
+    
+    // Re-check blocking after fresh fetch - use isBlockingRoom to filter out closed/finished rooms
+    const freshBlockingRoom = freshActiveRoom && isBlockingRoom(freshActiveRoom) ? freshActiveRoom : null;
+    
+    console.log("[CreateRoom] handleCreateRoom, freshBlockingRoom:", freshBlockingRoom?.pda?.slice(0, 8) || 'none');
+    if (freshBlockingRoom) {
       console.log("[CreateRoom] BLOCKED - showing modal");
-      setModalBlockingRoom(hookBlockingRoom);
+      setModalBlockingRoom(freshBlockingRoom);
       setShowUnresolvedModal(true);
       return;
     }
     
     // Non-blocking active room (e.g., Open/waiting) - still prevent but allow navigation
-    if (activeRoom) {
+    // But only if the room is actually still active (not finished/cancelled)
+    // Use numeric comparison to avoid TypeScript narrowing issues
+    const statusNum = freshActiveRoom?.status as number;
+    if (freshActiveRoom && (statusNum === 0 || statusNum === 1)) {
       toast({
         title: t("createRoom.activeRoomExists"),
         description: t("createRoom.cancelExistingRoom"),

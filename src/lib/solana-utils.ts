@@ -96,8 +96,20 @@ export function validatePublicKey(str: string): PublicKey | null {
  * Check if a room is truly blocking (requires resolution before new games)
  * Only blocks for: Started + 2+ players + no winner settled
  * Does NOT block: Open rooms, Finished rooms, Cancelled rooms
+ * 
+ * CRITICAL: Also checks that room is not finished/cancelled to handle
+ * stale cache scenarios after settlement.
  */
 export function isBlockingRoom(room: RoomDisplay): boolean {
+  // Cast to number to handle stale cache with finished/cancelled rooms
+  const statusNum = room.status as number;
+  
+  // Never block on finished (3) or cancelled (4) rooms
+  if (statusNum === 3 || statusNum === 4) {
+    return false;
+  }
+  
+  // Only block on Started rooms with 2+ players and no winner
   return (
     room.status === RoomStatus.Started &&
     room.playerCount >= 2 &&
