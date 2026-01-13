@@ -299,9 +299,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Build refund_draw instruction
-    // refund_draw: splits vault funds equally among players, takes fee, closes vault to creator
-    // Account order: verifier, config, room, vault, fee_recipient, creator, then players as remaining_accounts
+    // Build refund_draw instruction (true draw refund + fee, closes vault)
     const refundDrawKeys = [
       { pubkey: verifierKeypair.publicKey, isSigner: true, isWritable: false },  // 0. verifier
       { pubkey: CONFIG_PDA, isSigner: false, isWritable: false },                 // 1. config
