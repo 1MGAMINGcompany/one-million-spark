@@ -20,6 +20,7 @@ import {
   GameType,
   RoomStatus,
   isActiveStatus,
+  statusToName,
   fetchOpenPublicRooms,
   fetchAllRooms,
   fetchRoomsByCreator,
@@ -522,11 +523,53 @@ export function useSolanaRooms() {
       }
       
       if (err?.message === "TX_SIMULATION_FAILED") {
+        // Detailed debug info for TX_SIMULATION_FAILED in createRoom
+        const blockingInfo = blockingRoom 
+          ? `Room ${blockingRoom.pda.slice(0, 12)}... | Status: ${blockingRoom.status} (${statusToName(blockingRoom.status)}) | Players: ${blockingRoom.playerCount}/${blockingRoom.maxPlayers} | Winner: ${blockingRoom.winner?.slice(0, 8) || 'none'}`
+          : activeRoom
+            ? `Active room ${activeRoom.pda.slice(0, 12)}... | Status: ${activeRoom.status} (${statusToName(activeRoom.status)}) | Players: ${activeRoom.playerCount}/${activeRoom.maxPlayers}`
+            : 'No blocking/active room detected in state';
+        
+        console.error("[CreateRoom] TX_SIMULATION_FAILED debug:", {
+          blockingRoom: blockingRoom ? {
+            pda: blockingRoom.pda,
+            status: blockingRoom.status,
+            statusLabel: statusToName(blockingRoom.status),
+            playerCount: blockingRoom.playerCount,
+            maxPlayers: blockingRoom.maxPlayers,
+            winner: blockingRoom.winner,
+            source: 'blockingRoom'
+          } : null,
+          activeRoom: activeRoom ? {
+            pda: activeRoom.pda,
+            status: activeRoom.status,
+            statusLabel: statusToName(activeRoom.status),
+            playerCount: activeRoom.playerCount,
+            maxPlayers: activeRoom.maxPlayers,
+            source: 'activeRoom'
+          } : null,
+          activeRooms: activeRooms.map(r => ({
+            pda: r.pda,
+            status: r.status,
+            statusLabel: statusToName(r.status),
+            playerCount: r.playerCount
+          })),
+        });
+
+        // Get room to link to
+        const roomToNavigate = blockingRoom?.pda || activeRoom?.pda;
+        
         toast({
           title: "Action not available",
-          description: "This action isn't valid for the current room state.",
+          description: `${blockingInfo}${roomToNavigate ? ` — Click to view room` : ''}`,
           variant: "destructive",
         });
+        
+        // Also log to help debug
+        if (roomToNavigate) {
+          console.log(`[CreateRoom] Blocking room link: /room/${roomToNavigate}`);
+        }
+        
         return null;
       }
       
@@ -828,11 +871,12 @@ export function useSolanaRooms() {
       } catch (err: any) {
         const msg = err?.message?.toLowerCase?.() || "";
 
-        // Handle simulation failure with clean message
+        // Handle simulation failure with detailed message
         if (err?.message === "TX_SIMULATION_FAILED") {
+          console.error("[CancelRoom] TX_SIMULATION_FAILED - room may already be closed or in unexpected state");
           toast({
             title: "Action not available",
-            description: "This action isn't valid for the room's current state.",
+            description: "Room may already be closed or in an unexpected state. Refresh and try again.",
             variant: "destructive",
           });
           return { ok: false, reason: "TX_SIMULATION_FAILED" };
