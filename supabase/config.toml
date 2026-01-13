@@ -23,3 +23,6 @@ verify_jwt = false
 
 [functions.settle-game]
 verify_jwt = false
+
+[functions.sweep-orphan-vault]
+verify_jwt = false

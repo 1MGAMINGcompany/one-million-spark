@@ -406,6 +406,79 @@
           "type": "pubkey"
         }
       ]
+    },
+    {
+      "name": "sweep_orphan_vault",
+      "docs": [
+        "Admin-only instruction to close orphan vault PDAs where the room account no longer exists.",
+        "This refunds the vault's lamports to the original room creator.",
+        "Only config.authority or config.verifier can call this instruction.",
+        "The caller must derive the correct vault PDA from (creator, room_id) and pass it."
+      ],
+      "discriminator": [
+        45,
+        183,
+        117,
+        42,
+        156,
+        224,
+        8,
+        201
+      ],
+      "accounts": [
+        {
+          "name": "signer",
+          "docs": [
+            "Must be config.authority or config.verifier"
+          ],
+          "signer": true
+        },
+        {
+          "name": "config",
+          "docs": [
+            "Program config PDA"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "creator",
+          "docs": [
+            "The original room creator who will receive the vault lamports"
+          ],
+          "writable": true
+        },
+        {
+          "name": "vault",
+          "docs": [
+            "The orphan vault to close - must match derived PDA from (creator, room_id)"
+          ],
+          "writable": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "room_id",
+          "type": "u64"
+        }
+      ]
     }
   ],
   "accounts": [
@@ -524,6 +597,16 @@
       "code": 6014,
       "name": "CannotCancelAfterJoin",
       "msg": "Cannot cancel after another player has joined"
+    },
+    {
+      "code": 6015,
+      "name": "UnauthorizedSweeper",
+      "msg": "Only config.authority or config.verifier can sweep orphan vaults"
+    },
+    {
+      "code": 6016,
+      "name": "InvalidVaultPda",
+      "msg": "Vault PDA does not match expected derivation from (creator, room_id)"
     }
   ],
   "types": [
