@@ -878,20 +878,100 @@ Deno.serve(async (req: Request) => {
         room_status: roomData.status,
       });
 
-      // Record match result (best effort)
-      const { error: rpcError } = await supabase.rpc("record_match_result", {
-        p_room_pda: roomPda,
-        p_finalize_tx: signature,
-        p_winner_wallet: winnerWallet,
-        p_game_type: gameType || "unknown",
-        p_max_players: roomData.maxPlayers,
-        p_stake_lamports: Number(roomData.stakeLamports),
-        p_mode: mode,
-        p_players: playersOnChain,
-      });
+      // ─────────────────────────────────────────────────────────────
+      // DATABASE RECORDING (best effort - NEVER fail on-chain success)
+      // ─────────────────────────────────────────────────────────────
+      let dbRecorded = false;
+      let dbError: string | null = null;
 
-      if (rpcError) {
-        console.error("[settle-game] record_match_result failed:", rpcError);
+      try {
+        // Step 1: Upsert finalize_receipts (idempotent - on conflict do nothing)
+        const { error: receiptError } = await supabase
+          .from("finalize_receipts")
+          .upsert(
+            { room_pda: roomPda, finalize_tx: signature },
+            { onConflict: "room_pda", ignoreDuplicates: true }
+          );
+
+        if (receiptError) {
+          console.error("[settle-game] finalize_receipts upsert failed:", receiptError);
+          dbError = `finalize_receipts: ${receiptError.message}`;
+        } else {
+          console.log("[settle-game] ✅ finalize_receipts recorded");
+        }
+
+        // Step 2: Insert into matches directly (more reliable than RPC)
+        const { error: matchError } = await supabase
+          .from("matches")
+          .upsert(
+            {
+              room_pda: roomPda,
+              game_type: gameType || "unknown",
+              max_players: roomData.maxPlayers,
+              stake_lamports: Number(roomData.stakeLamports),
+              creator_wallet: playersOnChain[0] || roomData.creator.toBase58(),
+              winner_wallet: winnerWallet,
+              status: "finalized",
+              finalized_at: new Date().toISOString(),
+            },
+            { onConflict: "room_pda", ignoreDuplicates: true }
+          );
+
+        if (matchError) {
+          console.error("[settle-game] matches upsert failed:", matchError);
+          dbError = dbError ? `${dbError}; matches: ${matchError.message}` : `matches: ${matchError.message}`;
+        } else {
+          console.log("[settle-game] ✅ matches recorded");
+        }
+
+        // Step 3: Update player_profiles (winner) - DO NOT include win_rate (generated column)
+        const { error: winnerProfileError } = await supabase
+          .from("player_profiles")
+          .upsert(
+            {
+              wallet: winnerWallet,
+              games_played: 1,
+              wins: 1,
+              losses: 0,
+              total_sol_won: (Number(roomData.stakeLamports) * roomData.maxPlayers * 0.95) / 1_000_000_000,
+              biggest_pot_won: (Number(roomData.stakeLamports) * roomData.maxPlayers) / 1_000_000_000,
+              current_streak: 1,
+              longest_streak: 1,
+              last_game_at: new Date().toISOString(),
+            },
+            { onConflict: "wallet" }
+          )
+          .select();
+
+        if (winnerProfileError) {
+          console.error("[settle-game] winner profile update failed:", winnerProfileError);
+        } else {
+          // Increment existing stats via RPC if exists
+          try {
+            const { error: rpcErr } = await supabase.rpc("record_match_result", {
+              p_room_pda: roomPda,
+              p_finalize_tx: signature,
+              p_winner_wallet: winnerWallet,
+              p_game_type: gameType || "unknown",
+              p_max_players: roomData.maxPlayers,
+              p_stake_lamports: Number(roomData.stakeLamports),
+              p_mode: mode,
+              p_players: playersOnChain,
+            });
+            if (rpcErr) {
+              console.warn("[settle-game] record_match_result RPC failed (non-fatal):", rpcErr.message);
+            }
+          } catch (rpcException) {
+            console.warn("[settle-game] record_match_result exception (non-fatal):", rpcException);
+          }
+        }
+
+        dbRecorded = !dbError;
+        console.log("[settle-game] 📊 DB recording complete:", { dbRecorded, dbError });
+
+      } catch (dbException) {
+        dbError = String((dbException as Error)?.message ?? dbException);
+        console.error("[settle-game] ⚠️ DB recording exception (non-fatal):", dbError);
       }
 
       // Finish session (best effort)
@@ -977,6 +1057,8 @@ Deno.serve(async (req: Request) => {
         verifierLamports: verifierBalance,
         closeRoomSignature,
         closeRoomError,
+        dbRecorded,
+        dbError,
       });
 
     } catch (settlementError) {
