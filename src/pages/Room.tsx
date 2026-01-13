@@ -158,15 +158,25 @@ export default function Room() {
     
     const fetchRoomMode = async () => {
       try {
-        const { data, error } = await supabase
-          .from("game_sessions")
-          .select("mode")
-          .eq("room_pda", roomPdaParam)
-          .maybeSingle();
+        // Use Edge Function instead of direct table access (RLS locked)
+        const { data: resp, error } = await supabase.functions.invoke("game-session-get", {
+          body: { roomPda: roomPdaParam },
+        });
         
-        if (data?.mode) {
-          setRoomMode(data.mode as 'casual' | 'ranked');
-          console.log("[RoomMode] DB mode:", data.mode);
+        if (error) {
+          console.error("[RoomMode] Edge function error:", error);
+          if (modeFetchAttempts < MAX_MODE_RETRIES) {
+            setTimeout(() => setModeFetchAttempts(prev => prev + 1), 800);
+          } else {
+            setRoomModeLoaded(true);
+          }
+          return;
+        }
+        
+        const session = resp?.session;
+        if (session?.mode) {
+          setRoomMode(session.mode as 'casual' | 'ranked');
+          console.log("[RoomMode] DB mode:", session.mode);
           setRoomModeLoaded(true);
         } else if (modeFetchAttempts < MAX_MODE_RETRIES) {
           // Retry - game_session might not be created yet
