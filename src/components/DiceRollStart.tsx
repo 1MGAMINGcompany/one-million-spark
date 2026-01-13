@@ -181,12 +181,17 @@ export function DiceRollStart({
   useEffect(() => {
     const checkExistingRoll = async () => {
       try {
-        const { data: session } = await supabase
-          .from("game_sessions")
-          .select("start_roll_finalized, start_roll, starting_player_wallet")
-          .eq("room_pda", roomPda)
-          .maybeSingle();
+        // Use Edge Function instead of direct table access (RLS locked)
+        const { data: resp, error } = await supabase.functions.invoke("game-session-get", {
+          body: { roomPda },
+        });
+        
+        if (error) {
+          console.error("[DiceRollStart] Edge function error:", error);
+          return;
+        }
 
+        const session = resp?.session;
         if (session?.start_roll_finalized && session.start_roll && session.starting_player_wallet) {
           // Roll already exists - display it
           const rollData = session.start_roll as unknown as StartRollResult;

@@ -122,12 +122,18 @@ export function useStartRoll(options: UseStartRollOptions): UseStartRollResult {
 
     const checkStartRoll = async () => {
       try {
-        const { data: session } = await supabase
-          .from("game_sessions")
-          .select("start_roll_finalized, start_roll, starting_player_wallet")
-          .eq("room_pda", roomPda)
-          .maybeSingle();
+        // Use Edge Function instead of direct table access (RLS locked)
+        const { data: resp, error } = await supabase.functions.invoke("game-session-get", {
+          body: { roomPda },
+        });
+        
+        if (error) {
+          console.error("[useStartRoll] Edge function error:", error);
+          setShowDiceRoll(true);
+          return;
+        }
 
+        const session = resp?.session;
         if (session?.start_roll_finalized && session.starting_player_wallet) {
           // Roll already finalized
           const starter = session.starting_player_wallet;
@@ -164,12 +170,14 @@ export function useStartRoll(options: UseStartRollOptions): UseStartRollResult {
 
     const pollInterval = setInterval(async () => {
       try {
-        const { data: session } = await supabase
-          .from("game_sessions")
-          .select("start_roll_finalized, start_roll, starting_player_wallet")
-          .eq("room_pda", roomPda)
-          .maybeSingle();
+        // Use Edge Function instead of direct table access (RLS locked)
+        const { data: resp, error } = await supabase.functions.invoke("game-session-get", {
+          body: { roomPda },
+        });
+        
+        if (error) return; // Silent fail on poll
 
+        const session = resp?.session;
         if (session?.start_roll_finalized && session.starting_player_wallet) {
           const starter = session.starting_player_wallet;
           const isStarter = starter.toLowerCase() === myWallet?.toLowerCase();
