@@ -34,22 +34,52 @@ serve(async (req) => {
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const supabase = createClient(supabaseUrl, serviceKey)
 
-    const { data, error } = await supabase
+    // Fetch game session
+    const { data: session, error: sessionError } = await supabase
       .from('game_sessions')
       .select('*')
       .eq('room_pda', roomPda)
       .maybeSingle()
 
-    if (error) {
-      console.error('[game-session-get] Query error:', error)
-      return new Response(JSON.stringify({ error: error.message }), { 
+    if (sessionError) {
+      console.error('[game-session-get] Session query error:', sessionError)
+      return new Response(JSON.stringify({ error: sessionError.message }), { 
         status: 500, 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
       })
     }
 
-    console.log('[game-session-get] ✅ Session found:', !!data)
-    return new Response(JSON.stringify({ ok: true, session: data }), { 
+    // Fetch finalize receipt (settlement status) - optional field
+    const { data: receipt, error: receiptError } = await supabase
+      .from('finalize_receipts')
+      .select('finalize_tx, created_at')
+      .eq('room_pda', roomPda)
+      .maybeSingle()
+
+    if (receiptError) {
+      console.warn('[game-session-get] Receipt query error (non-fatal):', receiptError)
+    }
+
+    // Fetch match info - optional field
+    const { data: match, error: matchError } = await supabase
+      .from('matches')
+      .select('winner_wallet, status, finalized_at')
+      .eq('room_pda', roomPda)
+      .maybeSingle()
+
+    if (matchError) {
+      console.warn('[game-session-get] Match query error (non-fatal):', matchError)
+    }
+
+    console.log('[game-session-get] ✅ Session found:', !!session, 'Receipt:', !!receipt, 'Match:', !!match)
+    
+    // Return backward-compatible response: { ok, session } plus optional receipt/match
+    return new Response(JSON.stringify({ 
+      ok: true, 
+      session, 
+      receipt: receipt || null,
+      match: match || null
+    }), { 
       status: 200, 
       headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
     })
