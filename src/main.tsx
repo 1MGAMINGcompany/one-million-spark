@@ -1,3 +1,4 @@
+// Entry
 import "./polyfills"; // Must be first - Buffer/process polyfills for Solana
 import { registerMobileWalletAdapter } from "./lib/mobileWalletAdapter";
 
