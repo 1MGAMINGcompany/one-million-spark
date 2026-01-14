@@ -18,9 +18,11 @@ import { refetchGameSession } from "@/lib/sessionRefetch";
 interface InAppBrowserRecoveryProps {
   roomPda: string;
   children: React.ReactNode;
+  /** Called before refetching session/moves to re-subscribe realtime channels */
+  onResubscribeRealtime?: () => Promise<void> | void;
 }
 
-export function InAppBrowserRecovery({ roomPda, children }: InAppBrowserRecoveryProps) {
+export function InAppBrowserRecovery({ roomPda, children, onResubscribeRealtime }: InAppBrowserRecoveryProps) {
   const wallet = useWallet();
   const [isReconnecting, setIsReconnecting] = useState(false);
   const [didReconnect, setDidReconnect] = useState(false);
@@ -61,6 +63,17 @@ export function InAppBrowserRecovery({ roomPda, children }: InAppBrowserRecovery
       setDidReconnect(true);
       console.log("[InAppRecovery] Reconnect successful");
 
+      // Re-subscribe realtime channels before refetching
+      if (onResubscribeRealtime) {
+        try {
+          console.log("[InAppRecovery] resubscribe_start");
+          await onResubscribeRealtime();
+          console.log("[InAppRecovery] resubscribe_ok");
+        } catch (e) {
+          console.warn("[InAppRecovery] resubscribe_fail:", e);
+        }
+      }
+
       // Refetch server state after reconnect
       if (roomPdaRef.current) {
         console.log("[InAppRecovery] Refetching session after reconnect...");
@@ -100,6 +113,17 @@ export function InAppBrowserRecovery({ roomPda, children }: InAppBrowserRecovery
         }
       }
 
+      // Re-subscribe realtime channels before refetching
+      if (onResubscribeRealtime) {
+        try {
+          console.log("[InAppRecovery] resubscribe_start (visibility)");
+          await onResubscribeRealtime();
+          console.log("[InAppRecovery] resubscribe_ok (visibility)");
+        } catch (e) {
+          console.warn("[InAppRecovery] resubscribe_fail (visibility):", e);
+        }
+      }
+
       // Always refetch server state on visibility change
       if (roomPdaRef.current) {
         console.log("[InAppRecovery] Refetching session on visibility change...");
@@ -125,6 +149,17 @@ export function InAppBrowserRecovery({ roomPda, children }: InAppBrowserRecovery
           console.log("[InAppRecovery] Focus auto-reconnect successful");
         } catch (e) {
           console.warn("[InAppRecovery] Focus auto-reconnect failed:", e);
+        }
+      }
+
+      // Re-subscribe realtime channels before refetching
+      if (onResubscribeRealtime) {
+        try {
+          console.log("[InAppRecovery] resubscribe_start (focus)");
+          await onResubscribeRealtime();
+          console.log("[InAppRecovery] resubscribe_ok (focus)");
+        } catch (e) {
+          console.warn("[InAppRecovery] resubscribe_fail (focus):", e);
         }
       }
 

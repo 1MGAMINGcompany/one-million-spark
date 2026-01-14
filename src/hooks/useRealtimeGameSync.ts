@@ -28,6 +28,7 @@ export function useRealtimeGameSync({
   const processedIds = useRef<Set<string>>(new Set());
   const lastMessageTime = useRef<number>(Date.now());
   const reconnectAttempts = useRef(0);
+  const resubscribeRequested = useRef(false);
   
   // Store onMessage in a ref to avoid subscription re-creation on every render
   const onMessageRef = useRef(onMessage);
@@ -174,8 +175,62 @@ export function useRealtimeGameSync({
     }
   }, []);
 
+  // Resubscribe method for InAppBrowserRecovery
+  const resubscribe = useCallback(async () => {
+    if (!enabled || !roomId || !localAddress) {
+      console.log("[RealtimeGameSync] Resubscribe skipped - not enabled or missing roomId/address");
+      return;
+    }
+
+    console.log("[RealtimeGameSync] Resubscribe requested...");
+    
+    // Mark that we want to resubscribe
+    resubscribeRequested.current = true;
+    
+    // Tear down existing channel
+    if (channelRef.current) {
+      console.log("[RealtimeGameSync] Tearing down old channel for resubscribe...");
+      await supabase.removeChannel(channelRef.current);
+      channelRef.current = null;
+      setIsConnected(false);
+    }
+
+    // Create new channel
+    const channelName = `game-sync-${roomId}`;
+    console.log("[RealtimeGameSync] Creating new channel for resubscribe:", channelName);
+    
+    const channel = supabase.channel(channelName, {
+      config: { broadcast: { self: false } },
+    });
+
+    channel
+      .on("broadcast", { event: "game_move" }, ({ payload }) => {
+        if (!payload) return;
+        const msgId = `${payload.type}-${payload.sender}-${payload.timestamp}`;
+        if (processedIds.current.has(msgId)) return;
+        processedIds.current.add(msgId);
+        if (payload.sender?.toLowerCase() === localAddressRef.current.toLowerCase()) return;
+        lastMessageTime.current = Date.now();
+        reconnectAttempts.current = 0;
+        onMessageRef.current(payload as RealtimeGameMessage);
+      })
+      .subscribe((status) => {
+        console.log("[RealtimeGameSync] Resubscribe status:", status);
+        if (status === "SUBSCRIBED") {
+          setIsConnected(true);
+          lastMessageTime.current = Date.now();
+          reconnectAttempts.current = 0;
+          resubscribeRequested.current = false;
+          console.log("[RealtimeGameSync] Resubscribe complete - channel active");
+        }
+      });
+
+    channelRef.current = channel;
+  }, [enabled, roomId, localAddress]);
+
   return {
     isConnected,
     sendMessage,
+    resubscribe,
   };
 }

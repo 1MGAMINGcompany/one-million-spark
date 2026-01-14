@@ -749,6 +749,7 @@ const ChessGame = () => {
     sendRematchAccept,
     sendRematchDecline,
     sendRematchReady,
+    resubscribeRealtime,
   } = useWebRTCSync({
     roomId: roomId || "",
     players: roomPlayers,
@@ -982,7 +983,7 @@ const ChessGame = () => {
   }
 
   return (
-    <InAppBrowserRecovery roomPda={roomPda || ""}>
+    <InAppBrowserRecovery roomPda={roomPda || ""} onResubscribeRealtime={resubscribeRealtime}>
     <div className="min-h-screen bg-background relative overflow-hidden">
       {/* Background */}
       <div className="absolute inset-0 bg-gradient-to-b from-midnight-light via-background to-background" />
