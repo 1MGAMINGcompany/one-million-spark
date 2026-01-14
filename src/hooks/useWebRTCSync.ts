@@ -4,7 +4,7 @@ import { useWallet } from "@/hooks/useWallet";
 import { useToast } from "@/hooks/use-toast";
 import { useSound } from "@/contexts/SoundContext";
 import { useRealtimeGameSync, RealtimeGameMessage } from "@/hooks/useRealtimeGameSync";
-import { shouldDisableWebRTC } from "@/lib/walletBrowserDetection";
+import { shouldDisableWebRTC, isWalletInAppBrowser } from "@/lib/walletBrowserDetection";
 
 export interface GameMessage {
   type: "move" | "resign" | "draw_offer" | "draw_accept" | "draw_reject" | "sync_request" | "sync_response" | "heartbeat" | "chat" | "rematch_invite" | "rematch_accept" | "rematch_decline" | "rematch_ready" | "player_eliminated";
@@ -41,6 +41,7 @@ export function useWebRTCSync({
 
   // HARD SWITCH: Detect wallet in-app browser and disable WebRTC entirely
   const webrtcDisabled = shouldDisableWebRTC();
+  const inWalletBrowser = isWalletInAppBrowser();
 
   // Log sync mode on mount
   useEffect(() => {
@@ -320,10 +321,29 @@ export function useWebRTCSync({
     await realtimeResubscribe();
   }, [realtimeResubscribe]);
 
+  // Compute effective connection state for UI
+  // In wallet browsers, consider "connected" if realtime is working - don't block on WebRTC
+  const effectiveConnectionState: "connecting" | "connected" | "disconnected" = 
+    (realtimeConnected || isConnected) ? "connected" : 
+    (webrtcDisabled && !realtimeConnected) ? "connecting" : // Still waiting for realtime
+    connectionState;
+
+  // Log sync health
+  useEffect(() => {
+    console.log("[SyncHealth]", {
+      inWalletBrowser,
+      realtimeStatus: realtimeConnected ? "subscribed" : "connecting",
+      webrtcConnected: isConnected,
+      effectiveState: effectiveConnectionState,
+    });
+  }, [inWalletBrowser, realtimeConnected, isConnected, effectiveConnectionState]);
+
   return {
     isConnected: isConnected || realtimeConnected, // Connected if either works
     isPushEnabled: isPushEnabled || realtimeConnected,
-    connectionState,
+    connectionState: effectiveConnectionState, // Use effective state for UI
+    realtimeConnected, // Expose for polling fallback decisions
+    inWalletBrowser, // Expose for UI decisions
     sendMove,
     sendResign,
     sendDrawOffer,

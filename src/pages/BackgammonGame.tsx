@@ -600,6 +600,7 @@ const BackgammonGame = () => {
   const {
     isConnected: peerConnected,
     connectionState,
+    inWalletBrowser,
     sendMove,
     sendResign,
     sendChat,
@@ -691,17 +692,18 @@ const BackgammonGame = () => {
     }
   }, [roomPlayers.length]);
 
-  // Update status based on connection
+  // Update status based on connection - don't block on WebRTC in wallet browsers
   useEffect(() => {
     if (roomPlayers.length < 2) {
       setGameStatus("Waiting for opponent...");
-    } else if (connectionState === "connecting") {
+    } else if (connectionState === "connecting" && !inWalletBrowser) {
+      // Only show "Connecting" if NOT in wallet browser - realtime fallback handles sync
       setGameStatus("Connecting to opponent...");
-    } else if (connectionState === "connected" && !gameOver) {
-      // Show actual turn status (not gated by canPlay)
+    } else if ((connectionState === "connected" || inWalletBrowser) && !gameOver) {
+      // In wallet browsers, proceed even if still "connecting" - polling/realtime will sync
       setGameStatus(isActuallyMyTurn ? "Your turn - Roll the dice!" : "Opponent's turn");
     }
-  }, [roomPlayers.length, connectionState, isActuallyMyTurn, gameOver]);
+  }, [roomPlayers.length, connectionState, isActuallyMyTurn, gameOver, inWalletBrowser]);
 
   // Apply move with sound
   const applyMoveWithSound = useCallback((state: GameState, move: Move, player: Player): GameState => {
@@ -1655,8 +1657,8 @@ const BackgammonGame = () => {
                 {gameStatus}
               </div>
 
-              {/* Resign button */}
-              {!gameOver && isMyTurn && (
+              {/* Resign button - always available once game started */}
+              {!gameOver && roomPlayers.length >= 2 && (
                 <Button variant="destructive" size="sm" onClick={handleResign} disabled={isForfeiting}>
                   {isForfeiting ? "Settling..." : <><Flag className="w-4 h-4 mr-1" /> Resign</>}
                 </Button>
