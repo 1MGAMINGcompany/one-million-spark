@@ -226,6 +226,7 @@ const DominosGame = () => {
       toast({
         title: t('gameSession.gameRestored'),
         description: t('gameSession.sessionRecovered'),
+        duration: 3000, // 3 seconds, dismissible
       });
     }
   }, [getDominoById, roomPda, t]);
@@ -887,6 +888,7 @@ const DominosGame = () => {
   const {
     isConnected: peerConnected,
     connectionState,
+    inWalletBrowser,
     sendMove,
     sendResign,
     sendChat,

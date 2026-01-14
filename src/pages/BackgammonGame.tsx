@@ -207,6 +207,7 @@ const BackgammonGame = () => {
         toast({
           title: t('gameSession.gameRestored'),
           description: t('gameSession.sessionRecovered'),
+          duration: 3000, // 3 seconds, dismissible
         });
       }
     }
@@ -615,6 +616,11 @@ const BackgammonGame = () => {
     onMessage: handleWebRTCMessage,
     enabled: roomPlayers.length === 2,
   });
+  
+  // In wallet browsers, don't block on WebRTC - use effective connection state
+  const effectiveConnectionState = inWalletBrowser && connectionState === "connecting" 
+    ? "connected" 
+    : connectionState;
 
   // Update refs with WebRTC functions
   useEffect(() => {
