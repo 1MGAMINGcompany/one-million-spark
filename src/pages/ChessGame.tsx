@@ -249,6 +249,7 @@ const ChessGame = () => {
         toast({
           title: t('gameSession.gameRestored'),
           description: t('gameSession.sessionRecovered'),
+          duration: 3000, // 3 seconds, dismissible
         });
       }
     }
@@ -742,6 +743,7 @@ const ChessGame = () => {
   const {
     isConnected: peerConnected,
     connectionState,
+    inWalletBrowser,
     sendMove,
     sendResign,
     sendChat,
@@ -756,6 +758,11 @@ const ChessGame = () => {
     onMessage: handleWebRTCMessage,
     enabled: roomPlayers.length === 2,
   });
+  
+  // In wallet browsers, don't block on WebRTC - use effective connection state
+  const effectiveConnectionState = inWalletBrowser && connectionState === "connecting" 
+    ? "connected" 
+    : connectionState;
 
   // Update refs with WebRTC functions
   useEffect(() => {
@@ -834,15 +841,16 @@ const ChessGame = () => {
   useEffect(() => {
     if (roomPlayers.length < 2) {
       setGameStatus(t("gameMultiplayer.waitingForOpponent"));
-    } else if (connectionState === "connecting") {
+    } else if (effectiveConnectionState === "connecting" && !inWalletBrowser) {
+      // Only show "Connecting" if NOT in wallet browser - realtime/polling handles sync
       setGameStatus(t("gameMultiplayer.connectingToOpponent"));
-    } else if (connectionState === "connected") {
-      // Show actual turn status (not gated by canPlay)
+    } else if (effectiveConnectionState === "connected" || inWalletBrowser) {
+      // In wallet browsers, proceed even if still "connecting" - polling/realtime will sync
       setGameStatus(isActuallyMyTurn ? t("gameMultiplayer.yourTurn") : t("gameMultiplayer.opponentsTurn"));
-    } else if (connectionState === "disconnected") {
+    } else if (effectiveConnectionState === "disconnected") {
       setGameStatus(t("gameMultiplayer.connectionLost"));
     }
-  }, [roomPlayers.length, connectionState, isActuallyMyTurn, t]);
+  }, [roomPlayers.length, effectiveConnectionState, isActuallyMyTurn, inWalletBrowser, t]);
 
   const checkGameOver = useCallback((currentGame: Chess) => {
     if (currentGame.isCheckmate()) {
