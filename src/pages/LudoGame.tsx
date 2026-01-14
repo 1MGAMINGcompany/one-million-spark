@@ -610,6 +610,7 @@ const LudoGame = () => {
     sendRematchDecline,
     sendRematchReady,
     sendPlayerEliminated,
+    resubscribeRealtime,
   } = useWebRTCSync({
     roomId: roomId || "",
     players: roomPlayers,
@@ -874,7 +875,7 @@ const LudoGame = () => {
   }
 
   return (
-    <InAppBrowserRecovery roomPda={roomPda || ""}>
+    <InAppBrowserRecovery roomPda={roomPda || ""} onResubscribeRealtime={resubscribeRealtime}>
     <div className="min-h-screen bg-background flex flex-col">
       {/* RulesGate - Hard gate for ranked games */}
       <RulesGate

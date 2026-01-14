@@ -83,7 +83,8 @@ export function useWebRTCSync({
   // Supabase Realtime fallback - ALWAYS connected as backup
   const { 
     isConnected: realtimeConnected, 
-    sendMessage: sendRealtimeMessage 
+    sendMessage: sendRealtimeMessage,
+    resubscribe: realtimeResubscribe,
   } = useRealtimeGameSync({
     roomId: roomId || "",
     localAddress,
@@ -313,6 +314,12 @@ export function useWebRTCSync({
     connect();
   }, [connect]);
 
+  // Resubscribe realtime channel (for InAppBrowserRecovery)
+  const resubscribeRealtime = useCallback(async () => {
+    console.log("[WebRTCSync] Resubscribing realtime channel...");
+    await realtimeResubscribe();
+  }, [realtimeResubscribe]);
+
   return {
     isConnected: isConnected || realtimeConnected, // Connected if either works
     isPushEnabled: isPushEnabled || realtimeConnected,
@@ -331,6 +338,7 @@ export function useWebRTCSync({
     sendRematchReady,
     sendPlayerEliminated,
     reconnect,
+    resubscribeRealtime,
     peerAddress: remoteAddress,
   };
 }

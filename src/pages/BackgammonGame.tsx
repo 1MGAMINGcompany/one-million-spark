@@ -607,6 +607,7 @@ const BackgammonGame = () => {
     sendRematchAccept,
     sendRematchDecline,
     sendRematchReady,
+    resubscribeRealtime,
   } = useWebRTCSync({
     roomId: roomId || "",
     players: roomPlayers,
@@ -1166,7 +1167,7 @@ const BackgammonGame = () => {
   };
 
   return (
-    <InAppBrowserRecovery roomPda={roomPda || ""}>
+    <InAppBrowserRecovery roomPda={roomPda || ""} onResubscribeRealtime={resubscribeRealtime}>
     <div className="min-h-screen bg-background flex flex-col relative">
       {/* Gold Confetti Explosion on Win */}
       <GoldConfettiExplosion 
