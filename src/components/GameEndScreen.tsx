@@ -372,7 +372,7 @@ export function GameEndScreen({
       {/* Confetti explosion ONLY on confirmed payout (not optimistic) */}
       <GoldConfettiExplosion active={finalizeState === 'success' && isWinner} originX={50} originY={30} />
       
-      <Card className="w-full max-w-md my-auto bg-card border-primary/30 shadow-2xl max-h-[90vh] overflow-y-auto">
+      <Card className="w-[calc(100%-2rem)] max-w-[min(92vw,28rem)] my-auto bg-card border-primary/30 shadow-2xl max-h-[90vh] overflow-y-auto">
         <div className="p-6 space-y-6">
           {/* Trophy Icon - pending state for staked games awaiting payout */}
           <div className="flex justify-center">

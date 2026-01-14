@@ -103,7 +103,7 @@ export function AcceptRulesModal({
   return (
     <Dialog open={open} onOpenChange={() => {}}>
       <DialogContent 
-        className="sm:max-w-md max-h-[85vh] flex flex-col" 
+        className="w-[calc(100%-2rem)] max-w-[min(92vw,28rem)] max-h-[85vh] flex flex-col" 
         onPointerDownOutside={(e) => e.preventDefault()}
       >
         <DialogHeader>
