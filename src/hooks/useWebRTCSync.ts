@@ -4,6 +4,7 @@ import { useWallet } from "@/hooks/useWallet";
 import { useToast } from "@/hooks/use-toast";
 import { useSound } from "@/contexts/SoundContext";
 import { useRealtimeGameSync, RealtimeGameMessage } from "@/hooks/useRealtimeGameSync";
+import { shouldDisableWebRTC } from "@/lib/walletBrowserDetection";
 
 export interface GameMessage {
   type: "move" | "resign" | "draw_offer" | "draw_accept" | "draw_reject" | "sync_request" | "sync_response" | "heartbeat" | "chat" | "rematch_invite" | "rematch_accept" | "rematch_decline" | "rematch_ready" | "player_eliminated";
@@ -37,6 +38,18 @@ export function useWebRTCSync({
   const maxReconnectAttempts = 3; // Reduced since we have fallback
   const hasShownConnectedToast = useRef(false);
   const lastMessageTime = useRef<number>(Date.now());
+
+  // HARD SWITCH: Detect wallet in-app browser and disable WebRTC entirely
+  const webrtcDisabled = shouldDisableWebRTC();
+
+  // Log sync mode on mount
+  useEffect(() => {
+    if (webrtcDisabled) {
+      console.log("[WebRTCSync] 🔒 WebRTC DISABLED (wallet in-app browser) - using Realtime-only mode");
+    } else {
+      console.log("[WebRTCSync] Mode: WebRTC+Realtime fallback");
+    }
+  }, [webrtcDisabled]);
 
   // Store onMessage in a ref to avoid callback recreation issues
   const onMessageRef = useRef(onMessage);
@@ -94,6 +107,12 @@ export function useWebRTCSync({
 
   // Connect to peer (WebRTC)
   const connect = useCallback(async () => {
+    // HARD SWITCH: Skip WebRTC entirely in wallet browsers
+    if (webrtcDisabled) {
+      console.log("[WebRTCSync] Skipping WebRTC connection (wallet browser)");
+      return;
+    }
+
     if (!enabled || !localAddress || !remoteAddress || !roomId) {
       console.log("[WebRTCSync] Not ready to connect:", { enabled, localAddress, remoteAddress, roomId });
       return;
@@ -145,12 +164,19 @@ export function useWebRTCSync({
     } catch (e) {
       console.error("[WebRTCSync] WebRTC connection failed, using Realtime fallback");
     }
-  }, [enabled, localAddress, remoteAddress, roomId, isInitiator]); // Removed onMessage - using ref
+  }, [enabled, localAddress, remoteAddress, roomId, isInitiator, webrtcDisabled]);
 
   // Initialize connection
   useEffect(() => {
-    // Clear old signals on mount
+    // Clear old signals on mount (always safe)
     clearOldSignals();
+
+    // HARD SWITCH: Skip ALL WebRTC setup (no signaling, no timers) when disabled
+    // Especially critical for initiators (mobile creators) to prevent freeze
+    if (webrtcDisabled) {
+      console.log(`[WebRTCSync] 🔒 Realtime-only mode - skipping WebRTC setup entirely (isInitiator: ${isInitiator})`);
+      return; // NO cleanup needed - nothing was set up
+    }
 
     if (enabled && localAddress && remoteAddress) {
       console.log(`[WebRTCSync] Ready to connect - local: ${localAddress.slice(0, 8)}, remote: ${remoteAddress.slice(0, 8)}, initiator: ${isInitiator}`);
@@ -171,11 +197,12 @@ export function useWebRTCSync({
         }
       };
     }
-  }, [enabled, localAddress, remoteAddress, isInitiator, connect]);
+  }, [enabled, localAddress, remoteAddress, isInitiator, connect, webrtcDisabled]);
 
-  // Send heartbeat (only via WebRTC if connected)
+  // Send heartbeat (only via WebRTC if connected and not disabled)
   useEffect(() => {
-    if (!isConnected) return;
+    // Skip heartbeat in Realtime-only mode
+    if (!isConnected || webrtcDisabled) return;
 
     const interval = setInterval(() => {
       if (peerRef.current) {
@@ -184,7 +211,7 @@ export function useWebRTCSync({
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [isConnected]);
+  }, [isConnected, webrtcDisabled]);
 
   // Send a message - try WebRTC first, fallback to Realtime
   const sendMessage = useCallback((message: Omit<GameMessage, "timestamp">): boolean => {
