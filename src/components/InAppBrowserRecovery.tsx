@@ -153,8 +153,8 @@ export function InAppBrowserRecovery({ roomPda, children }: InAppBrowserRecovery
   // Show recovery overlay if in wallet browser and disconnected
   if (inWalletBrowser && !wallet.isConnected && !wallet.isConnecting) {
     return (
-      <div className="fixed inset-0 z-50 bg-background/95 backdrop-blur-sm flex items-center justify-center">
-        <div className="text-center space-y-6 p-8 max-w-sm">
+      <div className="fixed inset-0 z-50 bg-background/95 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="text-center space-y-6 p-6 w-[calc(100%-2rem)] max-w-[min(92vw,22rem)]">
           <div className="mx-auto w-20 h-20 rounded-full bg-yellow-500/10 flex items-center justify-center">
             <WifiOff className="h-10 w-10 text-yellow-500" />
           </div>
