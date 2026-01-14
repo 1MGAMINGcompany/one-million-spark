@@ -292,7 +292,11 @@ export default function CreateRoom() {
         // Mode is now stored in DB via createRoom → ensure_game_session
         // localStorage is NO LONGER the source of truth for mode
         // Keeping localStorage only for turnTimeSeconds as a display hint
-        const turnTimeSeconds = turnTime === "0" ? 300 : parseInt(turnTime) * 60;
+        // FIX: turnTime values are in MINUTES (5, 10, 15), convert properly
+        // "5" = 5 minutes = 300s, "10" = 10 minutes = 600s, etc.
+        // "0" = unlimited (stored as 0)
+        const turnTimeSeconds = turnTime === "0" ? 0 : parseInt(turnTime) * 60;
+        console.log("[TurnTimer] Creating room", { selectedValue: turnTime, turnTimeSeconds, gameMode });
         localStorage.setItem(`room_settings_${roomPdaStr}`, JSON.stringify({
           turnTimeSeconds: gameMode === 'ranked' ? turnTimeSeconds : 0,
           stakeLamports: solToLamports(entryFeeNum),
