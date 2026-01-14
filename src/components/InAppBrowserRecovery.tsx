@@ -1,5 +1,5 @@
 /**
- * InAppBrowserRecovery Component
+ * InAppBrowserRecovery Component (Phase 1)
  * 
  * Wraps game content to handle wallet disconnection in in-app browsers (Phantom, Solflare).
  * Provides:
