@@ -163,6 +163,21 @@ export function ResolveRoomModal({
 
       if (action === "forfeit") {
         const result = await forfeitGame(roomPda, roomData.gameType);
+        
+        // Handle VAULT_UNFUNDED error specifically
+        if (result.reason === "VAULT_UNFUNDED" || (typeof result.reason === 'string' && result.reason.includes?.("VAULT_UNFUNDED"))) {
+          toast({
+            title: t("resolveRoom.fundingIncomplete", "Funding Incomplete"),
+            description: t(
+              "resolveRoom.fundingIncompleteDesc",
+              "Stakes were not fully deposited. If you are the creator, try cancelling the room instead."
+            ),
+            variant: "destructive",
+          });
+          setLoading(false);
+          return; // Don't navigate - let user try cancel
+        }
+        
         if (result.ok) {
           toast({
             title: t("resolveRoom.forfeitSuccess", "Match Forfeited"),
