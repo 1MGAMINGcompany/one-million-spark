@@ -1023,7 +1023,7 @@ export function useSolanaRooms() {
   const forfeitGame = useCallback(async (
     roomPda: string,
     gameType?: string
-  ): Promise<{ ok: boolean; signature?: string; reason?: string }> => {
+  ): Promise<{ ok: boolean; signature?: string; reason?: string; error?: string }> => {
     if (!publicKey || !connected) {
       toast({
         title: "Wallet not connected",
@@ -1059,14 +1059,16 @@ export function useSolanaRooms() {
       }
 
       if (!data?.success) {
-        const errorMsg = data?.error || "Unknown error";
-        console.error("[forfeitGame] Forfeit failed:", errorMsg);
+        const errorCode = data?.error || "Unknown error";
+        console.error("[forfeitGame] Forfeit failed:", errorCode);
         toast({
           title: "Failed to forfeit",
-          description: errorMsg,
+          description: errorCode === "VAULT_UNFUNDED" 
+            ? "Game funding not complete. Stakes were not fully deposited."
+            : errorCode,
           variant: "destructive",
         });
-        return { ok: false, reason: errorMsg };
+        return { ok: false, reason: errorCode, error: errorCode };
       }
 
       console.log("[forfeitGame] Forfeit response:", data);

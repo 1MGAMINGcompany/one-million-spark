@@ -749,9 +749,12 @@ Deno.serve(async (req: Request) => {
 
       return json200({
         success: false,
-        error: "Vault underfunded",
+        error: "VAULT_UNFUNDED",
         action: "void_cleared",
         message: "Vault has insufficient funds for payout. Deposits may have gone to wrong address.",
+        vaultLamports,
+        expectedPotLamports: expectedPot,
+        shortfall: expectedPot - effectiveBalance,
         details: {
           vault: vaultPda.toBase58(),
           vaultLamports,
@@ -762,7 +765,6 @@ Deno.serve(async (req: Request) => {
         },
         roomPda,
         intendedWinner: winnerWallet,
-        vaultLamports,
         verifierLamports: verifierBalance,
       });
     }

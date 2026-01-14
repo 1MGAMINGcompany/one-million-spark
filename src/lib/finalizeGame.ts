@@ -202,6 +202,16 @@ async function finalizeViaEdgeFunction(
       };
     }
     
+    // Detect VAULT_UNFUNDED error code
+    if (data.error === "VAULT_UNFUNDED") {
+      console.error('[finalizeGame] Vault underfunded:', data);
+      return {
+        success: false,
+        error: "VAULT_UNFUNDED",
+        details: `Vault has ${(data.vaultLamports ?? 0) / 1e9} SOL but needs ${(data.expectedPotLamports ?? 0) / 1e9} SOL. Game funding not complete.`,
+      };
+    }
+    
     // Handle settlement failure from edge function
     if (data.status === 'needs_settlement' || !data.success) {
       return {
@@ -317,7 +327,14 @@ export async function finalizeGame(params: FinalizeGameParams): Promise<Finalize
       
       if (error) {
         result = { success: false, error: error.message };
-      } else if (data?.status === 'settled' || data?.status === 'already_resolved') {
+      } else if (data?.error === "VAULT_UNFUNDED") {
+        // Handle VAULT_UNFUNDED for draw settlement
+        result = {
+          success: false,
+          error: "VAULT_UNFUNDED",
+          details: `Vault has ${(data.vaultLamports ?? 0) / 1e9} SOL but needs ${(data.expectedPotLamports ?? 0) / 1e9} SOL.`,
+        };
+      } else if (data?.status === 'settled' || data?.status === 'already_resolved' || data?.ok) {
         result = { success: true, signature: data.signature };
       } else {
         result = { success: false, error: data?.message || 'Draw settlement failed' };

@@ -288,6 +288,20 @@ export function useForfeit({
             console.warn("[FinalizeForfeit] Confirmation timeout (may still succeed):", pollErr);
           }
         }
+      } else if (result.error === "VAULT_UNFUNDED") {
+        // Handle VAULT_UNFUNDED specifically - show clear message
+        console.warn("[useForfeit] Vault underfunded - game not fully funded");
+        toast({
+          title: t("forfeit.fundingIncomplete", "Game Funding Incomplete"),
+          description: t(
+            "forfeit.stakesNotDeposited",
+            "Stakes were not fully deposited. Room may need to be cancelled by creator."
+          ),
+          variant: "destructive",
+        });
+        // Still call forceExit - navigate away
+        forceExit();
+        return;
       } else {
         console.error("[FinalizeForfeit] failed:", result.error);
       }

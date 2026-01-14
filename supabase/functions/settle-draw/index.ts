@@ -271,31 +271,62 @@ Deno.serve(async (req: Request) => {
 
     console.log("[settle-draw] Fee recipient:", configData.feeRecipient.toBase58());
 
-    // Check vault balance
-    const vaultBalance = await connection.getBalance(vaultPda);
-    console.log("[settle-draw] Vault balance:", vaultBalance / LAMPORTS_PER_SOL, "SOL");
+    // Vault sanity check - same logic as settle-game/forfeit-game
+    const vaultLamports = await connection.getBalance(vaultPda);
+    const stakePerPlayer = Number(roomData.stakeAmount);
+    const expectedPot = stakePerPlayer * validPlayers.length;
+    const RENT_EXEMPT_MINIMUM = 890880; // ~0.00089 SOL rent-exempt minimum
+    const effectiveBalance = Math.max(0, vaultLamports - RENT_EXEMPT_MINIMUM);
 
-    if (vaultBalance === 0) {
-      // Vault is empty - might already be refunded
-      console.log("[settle-draw] Vault is empty, marking as already settled");
-      
-      // Mark session as finished
+    console.log("[settle-draw] 🏦 Vault sanity check:", {
+      vault: vaultPda.toBase58(),
+      vaultLamports,
+      stakePerPlayer,
+      playerCount: validPlayers.length,
+      expectedPot,
+      rentExempt: RENT_EXEMPT_MINIMUM,
+      effectiveBalance,
+      canRefund: effectiveBalance >= expectedPot,
+    });
+
+    // VAULT_UNFUNDED check - same pattern as forfeit-game/settle-game
+    if (effectiveBalance < expectedPot) {
+      console.error("[settle-draw] ❌ Vault underfunded - cannot settle:", {
+        vault: vaultPda.toBase58(),
+        vaultLamports,
+        expectedPot,
+        shortfall: expectedPot - effectiveBalance,
+      });
+
+      // Mark session as void (same as forfeit-game)
       await supabase
         .from("game_sessions")
-        .update({ 
-          status: "finished", 
-          updated_at: new Date().toISOString() 
+        .update({
+          status: "finished",
+          game_state: {
+            voidSettlement: true,
+            reason: "vault_underfunded",
+            vaultLamports,
+            expectedPot,
+            shortfall: expectedPot - effectiveBalance,
+            clearedAt: new Date().toISOString(),
+          },
+          updated_at: new Date().toISOString(),
         })
         .eq("room_pda", roomPda);
-      
+
       return new Response(
         JSON.stringify({
-          ok: true,
-          alreadySettled: true,
-          message: "Vault already empty - funds already refunded",
+          ok: false,
+          error: "VAULT_UNFUNDED",
+          action: "void_cleared",
+          message: "Vault has insufficient funds for refund. Stakes may not have been deposited.",
+          vaultLamports,
+          expectedPotLamports: expectedPot,
+          shortfall: expectedPot - effectiveBalance,
           roomPda,
         }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
