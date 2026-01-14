@@ -1,5 +1,5 @@
 /**
- * Session Refetch Utility
+ * Session Refetch Utility (Phase 1)
  * 
  * Centralizes game session and moves refetch logic for recovery scenarios.
  * Phase 1: Fetches data only, does NOT apply to game engines.
