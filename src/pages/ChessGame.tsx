@@ -35,6 +35,7 @@ import { WaitingForOpponentPanel } from "@/components/WaitingForOpponentPanel";
 import { RulesInfoPanel } from "@/components/RulesInfoPanel";
 import { DiceRollStart } from "@/components/DiceRollStart";
 import { RulesGate } from "@/components/RulesGate";
+import { InAppBrowserRecovery } from "@/components/InAppBrowserRecovery";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { PublicKey, Connection } from "@solana/web3.js";
@@ -981,6 +982,7 @@ const ChessGame = () => {
   }
 
   return (
+    <InAppBrowserRecovery roomPda={roomPda || ""}>
     <div className="min-h-screen bg-background relative overflow-hidden">
       {/* Background */}
       <div className="absolute inset-0 bg-gradient-to-b from-midnight-light via-background to-background" />
@@ -1284,6 +1286,7 @@ const ChessGame = () => {
         stakeSol={entryFeeSol}
       />
     </div>
+    </InAppBrowserRecovery>
   );
 };
 

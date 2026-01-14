@@ -32,6 +32,7 @@ import { RematchModal } from "@/components/RematchModal";
 import { RematchAcceptModal } from "@/components/RematchAcceptModal";
 import { RulesGate } from "@/components/RulesGate";
 import { RulesInfoPanel } from "@/components/RulesInfoPanel";
+import { InAppBrowserRecovery } from "@/components/InAppBrowserRecovery";
 import { toast } from "@/hooks/use-toast";
 import { PublicKey, Connection } from "@solana/web3.js";
 import { parseRoomAccount } from "@/lib/solana-program";
@@ -1116,6 +1117,7 @@ const CheckersGame = () => {
   }
 
   return (
+    <InAppBrowserRecovery roomPda={roomPda || ""}>
     <div className="min-h-screen bg-background relative overflow-hidden">
       {/* Background */}
       <div className="absolute inset-0 bg-gradient-to-b from-midnight-light via-background to-background" />
@@ -1349,6 +1351,7 @@ const CheckersGame = () => {
         stakeSol={entryFeeSol}
       />
     </div>
+    </InAppBrowserRecovery>
   );
 };
 

@@ -37,6 +37,7 @@ import { RematchModal } from "@/components/RematchModal";
 import { RematchAcceptModal } from "@/components/RematchAcceptModal";
 import { RulesGate } from "@/components/RulesGate";
 import { RulesInfoPanel } from "@/components/RulesInfoPanel";
+import { InAppBrowserRecovery } from "@/components/InAppBrowserRecovery";
 
 // Persisted ludo game state
 interface PersistedLudoState {
@@ -873,6 +874,7 @@ const LudoGame = () => {
   }
 
   return (
+    <InAppBrowserRecovery roomPda={roomPda || ""}>
     <div className="min-h-screen bg-background flex flex-col">
       {/* RulesGate - Hard gate for ranked games */}
       <RulesGate
@@ -1117,6 +1119,7 @@ const LudoGame = () => {
         isForfeiting={isForfeitLoading}
       />
     </div>
+    </InAppBrowserRecovery>
   );
 };
 
