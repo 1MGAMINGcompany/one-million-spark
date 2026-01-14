@@ -37,6 +37,7 @@ import { RematchModal } from "@/components/RematchModal";
 import { RematchAcceptModal } from "@/components/RematchAcceptModal";
 import { RulesGate } from "@/components/RulesGate";
 import { RulesInfoPanel } from "@/components/RulesInfoPanel";
+import { InAppBrowserRecovery } from "@/components/InAppBrowserRecovery";
 import { toast } from "@/hooks/use-toast";
 import { PublicKey, Connection } from "@solana/web3.js";
 import { parseRoomAccount } from "@/lib/solana-program";
@@ -1165,6 +1166,7 @@ const BackgammonGame = () => {
   };
 
   return (
+    <InAppBrowserRecovery roomPda={roomPda || ""}>
     <div className="min-h-screen bg-background flex flex-col relative">
       {/* Gold Confetti Explosion on Win */}
       <GoldConfettiExplosion 
@@ -1735,6 +1737,7 @@ const BackgammonGame = () => {
 
       {/* Accept Rules Modal and Waiting Panel - REMOVED: Now handled by Rules Gate above */}
     </div>
+    </InAppBrowserRecovery>
   );
 };
 

@@ -32,6 +32,7 @@ import { RematchModal } from "@/components/RematchModal";
 import { RematchAcceptModal } from "@/components/RematchAcceptModal";
 import { RulesGate } from "@/components/RulesGate";
 import { RulesInfoPanel } from "@/components/RulesInfoPanel";
+import { InAppBrowserRecovery } from "@/components/InAppBrowserRecovery";
 import { toast } from "@/hooks/use-toast";
 import { fetchRoomByPda, getConnection } from "@/lib/solana-program";
 import { seededShuffle } from "@/lib/seedUtils";
@@ -1260,6 +1261,7 @@ const DominosGame = () => {
   }
 
   return (
+    <InAppBrowserRecovery roomPda={roomPda || ""}>
     <div className="min-h-screen bg-background relative overflow-hidden">
       {/* Background */}
       <div className="absolute inset-0 bg-gradient-to-b from-midnight-light via-background to-background" />
@@ -1555,6 +1557,7 @@ const DominosGame = () => {
         isForfeiting={isForfeiting}
       />
     </div>
+    </InAppBrowserRecovery>
   );
 };
 
