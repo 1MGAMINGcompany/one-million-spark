@@ -20,6 +20,7 @@ import { PreviewDomainBanner, useSigningDisabled } from "@/components/PreviewDom
 import { JoinRulesModal } from "@/components/JoinRulesModal";
 import { validatePublicKey, isMobileDevice, hasInjectedSolanaWallet, getRoomPda } from "@/lib/solana-utils";
 import { supabase } from "@/integrations/supabase/client";
+import { isWalletInAppBrowser } from "@/lib/walletBrowserDetection";
 import { toast } from "sonner";
 
 // Presence feature disabled until program supports ping_room
@@ -65,6 +66,9 @@ export default function Room() {
   const [showMobileWalletRedirect, setShowMobileWalletRedirect] = useState(false);
   const [showJoinRulesModal, setShowJoinRulesModal] = useState(false);
   const [joinInProgress, setJoinInProgress] = useState(false);
+  
+  // Wallet in-app browsers (Phantom/Solflare) often miss WS updates
+  const inWalletBrowser = isWalletInAppBrowser();
 
   const [room, setRoom] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -320,6 +324,13 @@ export default function Room() {
       setLoading(false);
     }
   };
+  
+  // Safe wrapper so event listeners/intervals can call fetchRoom without unhandled rejections
+  const fetchRoomSafe = useCallback(() => {
+    fetchRoom().catch((e: any) => {
+      console.warn("[Room] fetchRoom failed", e);
+    });
+  }, [fetchRoom]);
 
   useEffect(() => {
     console.log("[Room] useEffect triggered, roomPda:", roomPdaParam);
@@ -425,6 +436,82 @@ export default function Room() {
     }, 1000);
     return () => clearInterval(interval);
   }, []);
+
+  // Wallet browsers: refetch on visibility/focus/online (they drop WS updates)
+  useEffect(() => {
+    if (!roomPdaParam) return;
+    if (!inWalletBrowser) return;
+
+    const refetch = () => {
+      console.log("[Room] visible/focus/online -> refetch room");
+      fetchRoomSafe();
+    };
+
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") refetch();
+    };
+
+    document.addEventListener("visibilitychange", handleVisibility);
+    window.addEventListener("focus", refetch);
+    window.addEventListener("online", refetch);
+
+    // Fetch once on mount (helps when coming back from wallet UI)
+    if (document.visibilityState === "visible") refetch();
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibility);
+      window.removeEventListener("focus", refetch);
+      window.removeEventListener("online", refetch);
+    };
+  }, [roomPdaParam, inWalletBrowser, fetchRoomSafe]);
+
+  // Wallet browsers: fast poll (2s) while room is still Open
+  useEffect(() => {
+    if (!roomPdaParam) return;
+    if (!inWalletBrowser) return;
+    if (!room) return;
+
+    // Only poll while room is Open (waiting for opponent)
+    if (!isOpenStatus(room.status)) return;
+
+    console.log("[Room] fast poll active (wallet browser) - checking every 2s");
+
+    const id = window.setInterval(() => {
+      fetchRoomSafe();
+    }, 2000);
+
+    return () => window.clearInterval(id);
+  }, [roomPdaParam, inWalletBrowser, room?.status, fetchRoomSafe]);
+
+  // Direct check: navigate if room is Started or full (handles missed transitions)
+  useEffect(() => {
+    if (!roomPdaParam) return;
+    if (!room) return;
+    if (hasNavigatedRef.current) return;
+
+    const playersCount = room.playerCount ?? 0;
+    const maxPlayersCount = room.maxPlayers ?? 2;
+
+    const isStarted = room.status === RoomStatus.Started;
+    const isFull = playersCount >= maxPlayersCount;
+
+    // Navigate if game is started OR room is full (both mean game should begin)
+    if (isStarted || isFull) {
+      console.log("[Room] room is started/full -> navigating to /play", {
+        status: room.status,
+        playersCount,
+        maxPlayers: maxPlayersCount,
+      });
+
+      hasNavigatedRef.current = true;
+
+      toast.success("Game is starting!", {
+        description: `${gameName} match is ready. Entering game...`,
+      });
+
+      navigate(`/play/${roomPdaParam}`, { replace: true });
+    }
+  }, [room, roomPdaParam, navigate, gameName]);
 
   // Presence/ping feature disabled - ping_room not in current on-chain program
   // When the program is updated to include ping_room, re-enable this feature
