@@ -265,6 +265,7 @@ const LudoGame = () => {
     roomPlayers,
     hasTwoRealPlayers,
     initialColor: "w", // Ludo doesn't use w/b, but we need a value
+    bothReady: rankedGate.bothReady,
   });
 
   // Find which player index the current wallet is

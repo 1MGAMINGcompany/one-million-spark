@@ -500,6 +500,7 @@ const DominosGame = () => {
     roomPlayers,
     hasTwoRealPlayers,
     initialColor: amIPlayer1 ? "w" : "b",
+    bothReady: rankedGate.bothReady,
   });
 
   // Update turn based on start roll result for ranked games

@@ -32,6 +32,8 @@ interface UseStartRollOptions {
   hasTwoRealPlayers: boolean;
   /** Initial color from on-chain order (fallback) */
   initialColor: "w" | "b";
+  /** Whether both players have accepted rules (for ranked games) - triggers polling */
+  bothReady?: boolean;
 }
 
 interface UseStartRollResult {
@@ -52,7 +54,7 @@ interface UseStartRollResult {
 }
 
 export function useStartRoll(options: UseStartRollOptions): UseStartRollResult {
-  const { roomPda, gameType, myWallet, isRanked, roomPlayers, hasTwoRealPlayers, initialColor } = options;
+  const { roomPda, gameType, myWallet, isRanked, roomPlayers, hasTwoRealPlayers, initialColor, bothReady } = options;
 
   const [isFinalized, setIsFinalized] = useState(false);
   const [showDiceRoll, setShowDiceRoll] = useState(false);
@@ -196,6 +198,49 @@ export function useStartRoll(options: UseStartRollOptions): UseStartRollResult {
 
     return () => clearInterval(pollInterval);
   }, [roomPda, isFinalized, showDiceRoll, myWallet]);
+
+  // NEW: Poll every 2s when bothReady but not finalized and not showing dice UI
+  // This catches the case where desktop is stuck in RulesGate while mobile proceeds
+  useEffect(() => {
+    if (!roomPda || !bothReady || isFinalized || showDiceRoll) return;
+
+    console.log("[useStartRoll] bothReady polling started");
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const { data: resp, error } = await supabase.functions.invoke("game-session-get", {
+          body: { roomPda },
+        });
+
+        if (error) {
+          console.log("[useStartRoll] bothReady poll error:", error);
+          return;
+        }
+
+        const session = resp?.session;
+        if (session?.start_roll_finalized && session.starting_player_wallet) {
+          const starter = session.starting_player_wallet;
+          const isStarter = starter.toLowerCase() === myWallet?.toLowerCase();
+          setMyColor(isStarter ? "w" : "b");
+          setStartingWallet(starter);
+          setRollResult(session.start_roll as unknown as StartRollResult);
+          setIsFinalized(true);
+          setShowDiceRoll(false);
+          console.log("[useStartRoll] bothReady poll found finalized roll. Starter:", starter);
+          clearInterval(pollInterval);
+        } else if (session && !showDiceRoll) {
+          // Session exists but roll not finalized - show dice UI
+          console.log("[useStartRoll] bothReady poll: showing dice roll UI");
+          setShowDiceRoll(true);
+          clearInterval(pollInterval);
+        }
+      } catch (err) {
+        console.log("[useStartRoll] bothReady poll exception:", err);
+      }
+    }, 2000);
+
+    return () => clearInterval(pollInterval);
+  }, [roomPda, bothReady, isFinalized, showDiceRoll, myWallet]);
 
   const handleRollComplete = useCallback((starter: string) => {
     const isStarter = starter.toLowerCase() === myWallet?.toLowerCase();

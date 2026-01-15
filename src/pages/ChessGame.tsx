@@ -381,6 +381,7 @@ const ChessGame = () => {
     roomPlayers,
     hasTwoRealPlayers,
     initialColor: roomPlayers[0]?.toLowerCase() === address?.toLowerCase() ? "w" : "b",
+    bothReady: rankedGate.bothReady,
   });
 
   // Update myColor based on start roll result
