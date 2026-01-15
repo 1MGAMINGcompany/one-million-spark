@@ -199,12 +199,13 @@ export function useStartRoll(options: UseStartRollOptions): UseStartRollResult {
     return () => clearInterval(pollInterval);
   }, [roomPda, isFinalized, showDiceRoll, myWallet]);
 
-  // NEW: Poll every 2s when bothReady but not finalized and not showing dice UI
+  // NEW: Poll every 2s when we have 2 players but not finalized and not showing dice UI
   // This catches the case where desktop is stuck in RulesGate while mobile proceeds
+  // FIX: Use hasTwoRealPlayers instead of bothReady - poll as soon as players connect
   useEffect(() => {
-    if (!roomPda || !bothReady || isFinalized || showDiceRoll) return;
+    if (!roomPda || !hasTwoRealPlayers || isFinalized || showDiceRoll) return;
 
-    console.log("[useStartRoll] bothReady polling started");
+    console.log("[useStartRoll] hasTwoRealPlayers polling started (independent of bothReady)");
 
     const pollInterval = setInterval(async () => {
       try {
@@ -213,7 +214,7 @@ export function useStartRoll(options: UseStartRollOptions): UseStartRollResult {
         });
 
         if (error) {
-          console.log("[useStartRoll] bothReady poll error:", error);
+          console.log("[useStartRoll] poll error:", error);
           return;
         }
 
@@ -226,21 +227,21 @@ export function useStartRoll(options: UseStartRollOptions): UseStartRollResult {
           setRollResult(session.start_roll as unknown as StartRollResult);
           setIsFinalized(true);
           setShowDiceRoll(false);
-          console.log("[useStartRoll] bothReady poll found finalized roll. Starter:", starter);
+          console.log("[useStartRoll] poll found finalized roll. Starter:", starter);
           clearInterval(pollInterval);
         } else if (session && !showDiceRoll) {
           // Session exists but roll not finalized - show dice UI
-          console.log("[useStartRoll] bothReady poll: showing dice roll UI");
+          console.log("[useStartRoll] poll: showing dice roll UI");
           setShowDiceRoll(true);
           clearInterval(pollInterval);
         }
       } catch (err) {
-        console.log("[useStartRoll] bothReady poll exception:", err);
+        console.log("[useStartRoll] poll exception:", err);
       }
     }, 2000);
 
     return () => clearInterval(pollInterval);
-  }, [roomPda, bothReady, isFinalized, showDiceRoll, myWallet]);
+  }, [roomPda, hasTwoRealPlayers, isFinalized, showDiceRoll, myWallet]);
 
   const handleRollComplete = useCallback((starter: string) => {
     const isStarter = starter.toLowerCase() === myWallet?.toLowerCase();

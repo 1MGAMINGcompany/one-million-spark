@@ -80,7 +80,9 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
   const opponentReady = opponentReadyFromAcceptances || opponentReadyFromFlags;
 
   // Prefer server-side bothAccepted (from polling) over client-side p1Ready && p2Ready
-  const bothReady = serverBothAccepted || (p1Ready && p2Ready);
+  // FIX: Also check if session is fully formed (both wallets present) for robust fallback
+  const sessionComplete = !!(p1Wallet && p2Wallet);
+  const bothReady = serverBothAccepted || (sessionComplete && p1Ready && p2Ready);
   // Show accept modal if ranked, loaded, and this player hasn't accepted yet
   // Also require that we've identified this player's role (isPlayer1 or isPlayer2)
   const isIdentified = isPlayer1 || isPlayer2;
