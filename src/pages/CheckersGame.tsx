@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
+import { getOpponentWallet } from "@/lib/walletUtils";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Gem, Star, Flag, Users, Wifi, WifiOff, Crown, RotateCcw, LogOut, Loader2 } from "lucide-react";
@@ -111,6 +112,7 @@ const CheckersGame = () => {
   const [currentPlayer, setCurrentPlayer] = useState<Player>("gold");
   const [validMoves, setValidMoves] = useState<Move[]>([]);
   const [gameOver, setGameOver] = useState<Player | "draw" | null>(null);
+  const [winnerWallet, setWinnerWallet] = useState<string | null>(null); // Direct wallet address of winner
   const [chainCapture, setChainCapture] = useState<Position | null>(null);
 
   const boardRef = useRef(board);
@@ -468,13 +470,17 @@ const CheckersGame = () => {
     }));
   }, [turnPlayers]);
 
-  // Winner address for GameEndScreen
+  // Winner address for GameEndScreen - prioritize winnerWallet (from resign/forfeit)
   const winnerAddress = useMemo(() => {
+    // Direct wallet address from resign/forfeit takes priority
+    if (winnerWallet) return winnerWallet;
+    
+    // Fallback for normal game endings
     if (!gameOver) return null;
     if (gameOver === "draw") return "draw";
     if (gameOver === myColor) return address;
-    return roomPlayers.find(p => p.toLowerCase() !== address?.toLowerCase()) || null;
-  }, [gameOver, myColor, address, roomPlayers]);
+    return getOpponentWallet(roomPlayers, address);
+  }, [winnerWallet, gameOver, myColor, address, roomPlayers]);
 
   // Auto-settlement hook - triggers settle-game edge function when game ends
   // Winner wallet is now determined server-side from game_sessions.game_state.gameOver
@@ -750,6 +756,8 @@ const CheckersGame = () => {
         setCurrentPlayer(moveData.player === "gold" ? "obsidian" : "gold");
       }
     } else if (message.type === "resign") {
+      // Opponent resigned - I WIN - store MY wallet as winner
+      setWinnerWallet(address || null);
       setGameOver(myColorRef.current);
       chatRef.current?.addSystemMessage(t("gameMultiplayer.opponentResigned"));
       play('checkers_win');
@@ -1015,7 +1023,9 @@ const CheckersGame = () => {
     // 1. Send WebRTC message immediately for instant opponent UX
     sendResign();
     
-    // 2. Update local UI optimistically
+    // 2. Update local UI optimistically - opponent wins, store their wallet
+    const opponentWalletAddr = getOpponentWallet(roomPlayers, address);
+    setWinnerWallet(opponentWalletAddr);
     setGameOver(myColor === "gold" ? "obsidian" : "gold");
     play('checkers_lose');
     
@@ -1030,7 +1040,7 @@ const CheckersGame = () => {
         variant: "destructive",
       });
     }
-  }, [sendResign, myColor, play, forfeit]);
+  }, [sendResign, myColor, play, forfeit, roomPlayers, address]);
 
   const isValidMoveTarget = (row: number, col: number) => {
     const actualRow = flipped ? BOARD_SIZE - 1 - row : row;

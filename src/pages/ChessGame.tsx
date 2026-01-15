@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
+import { getOpponentWallet } from "@/lib/walletUtils";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { Chess, Square, PieceSymbol, Color } from "chess.js";
 import { ChessBoardPremium } from "@/components/ChessBoardPremium";
@@ -123,6 +124,7 @@ const ChessGame = () => {
   const [moveHistory, setMoveHistory] = useState<string[]>([]);
   const [gameOver, setGameOver] = useState(false);
   const [animationsEnabled, setAnimationsEnabled] = useState(true);
+  const [winnerWallet, setWinnerWallet] = useState<string | null>(null); // Direct wallet address of winner
 
   // Room players - in production, this comes from on-chain room data
   const [roomPlayers, setRoomPlayers] = useState<string[]>([]);
@@ -543,13 +545,17 @@ const ChessGame = () => {
     }));
   }, [turnPlayers]);
 
-  // Winner address for end screen
+  // Winner address for end screen - prioritize winnerWallet (from resign/forfeit)
   const winnerAddress = useMemo(() => {
+    // Direct wallet address from resign/forfeit takes priority
+    if (winnerWallet) return winnerWallet;
+    
+    // Fallback for normal game endings
     if (!gameOver) return null;
     if (gameStatus.includes("draw") || gameStatus.includes("Stalemate")) return "draw";
     if (gameStatus.includes("win")) return address;
-    return roomPlayers.find(p => p !== address) || null;
-  }, [gameOver, gameStatus, address, roomPlayers]);
+    return getOpponentWallet(roomPlayers, address);
+  }, [winnerWallet, gameOver, gameStatus, address, roomPlayers]);
 
   // Players for GameEndScreen
   const gameEndPlayers = useMemo(() => {
@@ -701,6 +707,8 @@ const ChessGame = () => {
         console.error("[ChessGame] Error applying opponent move:", error);
       }
     } else if (message.type === "resign") {
+      // Opponent resigned - I WIN - store MY wallet as winner
+      setWinnerWallet(address || null);
       setGameStatus(t("gameMultiplayer.opponentResignedWin"));
       setGameOver(true);
       play('chess_win');
@@ -947,7 +955,9 @@ const ChessGame = () => {
     // 1. Send WebRTC message immediately for instant opponent UX
     sendResign();
     
-    // 2. Update local UI optimistically
+    // 2. Update local UI optimistically - opponent wins, store their wallet
+    const opponentWalletAddr = getOpponentWallet(roomPlayers, address);
+    setWinnerWallet(opponentWalletAddr);
     setGameStatus(t("gameMultiplayer.youResignedLose"));
     setGameOver(true);
     play('chess_lose');
@@ -963,7 +973,7 @@ const ChessGame = () => {
         variant: "destructive",
       });
     }
-  }, [sendResign, play, t, forfeit]);
+  }, [sendResign, play, t, forfeit, roomPlayers, address]);
 
 
   const formattedMoves = [];

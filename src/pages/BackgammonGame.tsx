@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
+import { getOpponentWallet, isSameWallet } from "@/lib/walletUtils";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, RotateCcw, RotateCw, Gem, Flag, Users, Wifi, WifiOff, RefreshCw, LogOut, Trophy } from "lucide-react";
@@ -113,6 +114,7 @@ const BackgammonGame = () => {
   const [gameOver, setGameOver] = useState(false);
   const [validMoves, setValidMoves] = useState<number[]>([]);
   const [gameResultInfo, setGameResultInfo] = useState<{ winner: Player | null; resultType: GameResultType | null; multiplier: number } | null>(null);
+  const [winnerWallet, setWinnerWallet] = useState<string | null>(null); // Direct wallet address of winner
 
   // Multiplayer state
   const [roomPlayers, setRoomPlayers] = useState<string[]>([]);
@@ -445,13 +447,16 @@ const BackgammonGame = () => {
     }));
   }, [turnPlayers]);
 
-  // Winner address for GameEndScreen
+  // Winner address for GameEndScreen - prioritize winnerWallet (from resign/forfeit)
   const winnerAddress = useMemo(() => {
+    // Direct wallet address from resign/forfeit takes priority
+    if (winnerWallet) return winnerWallet;
+    
+    // Fallback to role-based calculation for normal game endings
     if (!gameOver || !gameResultInfo?.winner) return null;
-    // "player" = my role, so if winner is player, winner is me
     if (gameResultInfo.winner === myRole) return address;
-    return roomPlayers.find(p => p.toLowerCase() !== address?.toLowerCase()) || null;
-  }, [gameOver, gameResultInfo, myRole, address, roomPlayers]);
+    return getOpponentWallet(roomPlayers, address);
+  }, [winnerWallet, gameOver, gameResultInfo, myRole, address, roomPlayers]);
 
   // Players for GameEndScreen
   const gameEndPlayers = useMemo(() => {
@@ -572,11 +577,12 @@ const BackgammonGame = () => {
         setGameStatus("Your turn - Roll the dice!");
       }
     } else if (message.type === "resign") {
-      // Opponent resigned - I WIN
+      // Opponent resigned - I WIN - store MY wallet as winner
       const forfeitingWallet = message.payload?.forfeitingWallet;
       console.log("[BackgammonGame] Received resign from:", forfeitingWallet?.slice(0, 8));
       
-      // Set game result - I win because opponent resigned
+      // Set winner wallet directly to MY address (I won because opponent resigned)
+      setWinnerWallet(address || null);
       setGameResultInfo({ winner: myRoleRef.current, resultType: "single", multiplier: 1 });
       setGameStatus("Opponent resigned - You win!");
       setGameOver(true);
@@ -936,7 +942,9 @@ const BackgammonGame = () => {
     // 1. Send WebRTC message immediately for instant opponent UX
     sendResign();
     
-    // 2. Update local UI optimistically
+    // 2. Update local UI optimistically - opponent wins, store their wallet
+    const opponentWalletAddr = getOpponentWallet(roomPlayers, address);
+    setWinnerWallet(opponentWalletAddr);
     const opponentRole = myRole === "player" ? "ai" : "player";
     setGameResultInfo({ winner: opponentRole, resultType: "single", multiplier: 1 });
     setGameStatus("You resigned - Opponent wins!");
@@ -954,7 +962,7 @@ const BackgammonGame = () => {
         variant: "destructive",
       });
     }
-  }, [sendResign, play, myRole, forfeit]);
+  }, [sendResign, play, myRole, forfeit, roomPlayers, address]);
 
   // Require wallet
   if (!walletConnected || !address) {
