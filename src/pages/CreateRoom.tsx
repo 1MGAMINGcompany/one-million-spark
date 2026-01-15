@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { PublicKey } from "@solana/web3.js";
+import { useWallet as useWalletAdapter } from "@solana/wallet-adapter-react";
+import bs58 from "bs58";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -38,6 +40,7 @@ import { requestNotificationPermission } from "@/lib/pushNotifications";
 import { AudioManager } from "@/lib/AudioManager";
 import { showBrowserNotification } from "@/lib/pushNotifications";
 import { parseRematchParams, lamportsToSol, RematchPayload, solToLamports } from "@/lib/rematchPayload";
+import { supabase } from "@/integrations/supabase/client";
 
 // Game type mapping from string to number
 const GAME_TYPE_MAP: Record<string, string> = {
@@ -58,6 +61,7 @@ export default function CreateRoom() {
   const [searchParams] = useSearchParams();
   const { t } = useTranslation();
   const { isConnected, address } = useWallet();
+  const { signMessage } = useWalletAdapter(); // For signing settings message
   const { toast } = useToast();
   const { play } = useSound();
   const { price, formatUsd, loading: priceLoading, refetch: refetchPrice } = useSolPrice();
@@ -289,18 +293,71 @@ export default function CreateRoom() {
         const roomPda = getRoomPda(creatorPubkey, roomId);
         const roomPdaStr = roomPda.toBase58();
         
-        // Mode is now stored in DB via createRoom → ensure_game_session
-        // localStorage is NO LONGER the source of truth for mode
-        // Keeping localStorage only for turnTimeSeconds as a display hint
-        // FIX: turnTime values are in MINUTES (5, 10, 15), convert properly
-        // "5" = 5 minutes = 300s, "10" = 10 minutes = 600s, etc.
-        // "0" = unlimited (stored as 0)
-        const turnTimeSeconds = turnTime === "0" ? 0 : parseInt(turnTime) * 60;
-        console.log("[TurnTimer] Creating room", { selectedValue: turnTime, turnTimeSeconds, gameMode });
+        // STEP 1 FIX: turnTime values are already in SECONDS (5, 10, 15, 0)
+        // Do NOT multiply by 60 - UI shows seconds, not minutes
+        const turnTimeSeconds = parseInt(turnTime, 10);
+        console.log("[TurnTimer] Creating room", { 
+          selectedValue: turnTime, 
+          turnTimeSeconds, 
+          gameMode,
+          storedSeconds: gameMode === 'ranked' ? turnTimeSeconds : 0,
+        });
+        
+        // localStorage is NO LONGER authoritative for mode - only a display hint
         localStorage.setItem(`room_settings_${roomPdaStr}`, JSON.stringify({
           turnTimeSeconds: gameMode === 'ranked' ? turnTimeSeconds : 0,
           stakeLamports: solToLamports(entryFeeNum),
         }));
+        
+        // Persist settings authoritatively in game_sessions via Edge Function
+        // With signature verification for production security
+        const authoritativeTurnTime = gameMode === 'ranked' ? turnTimeSeconds : 0;
+        
+        try {
+          const timestamp = Date.now();
+          const message = `1MGAMING:SET_SETTINGS\nroomPda=${roomPdaStr}\nturnTimeSeconds=${authoritativeTurnTime}\nmode=${gameMode}\nts=${timestamp}`;
+          
+          let signatureBase64 = "";
+          
+          // Check if signMessage is available (wallet adapter)
+          if (signMessage) {
+            try {
+              const messageBytes = new TextEncoder().encode(message);
+              const signatureBytes = await signMessage(messageBytes);
+              signatureBase64 = btoa(String.fromCharCode(...signatureBytes));
+              console.log("[TurnTimer] Signed settings message");
+            } catch (signErr) {
+              console.warn("[TurnTimer] Could not sign message, trying insecure mode:", signErr);
+            }
+          }
+          
+          const { error: settingsErr } = await supabase.functions.invoke(
+            "game-session-set-settings",
+            {
+              body: {
+                roomPda: roomPdaStr,
+                turnTimeSeconds: authoritativeTurnTime,
+                mode: gameMode,
+                creatorWallet: address,
+                timestamp,
+                signature: signatureBase64,
+              },
+            }
+          );
+
+          if (settingsErr) {
+            console.error("[TurnTimer] Failed to persist session settings:", settingsErr);
+            // Non-blocking - game can still proceed with defaults
+          } else {
+            console.log("[TurnTimer] ✅ Persisted session settings:", {
+              roomPda: roomPdaStr.slice(0, 8),
+              authoritativeTurnTime,
+              mode: gameMode,
+            });
+          }
+        } catch (e) {
+          console.error("[TurnTimer] Unexpected error persisting session settings:", e);
+        }
         
         // Add rematch_created flag if this was a rematch
         const queryParam = isRematch ? '?rematch_created=1' : '';

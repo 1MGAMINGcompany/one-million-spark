@@ -89,7 +89,16 @@ serve(async (req) => {
     }
   }
   const players = Array.from(byWallet.values()).map(p => ({ ...p, accepted: true }));
-  const bothAccepted = players.length >= 2; // for 2-player rooms
+  
+  // Get required players from session (default 2) - fixes hardcoded 2-player check
+  const requiredPlayers = session?.max_players ?? 2;
+  const bothAccepted = players.length >= requiredPlayers;
+
+  console.log("[game-session-get] Acceptances:", {
+    playersCount: players.length,
+    requiredPlayers,
+    bothAccepted,
+  });
 
   const acceptances = { players, bothAccepted };
 

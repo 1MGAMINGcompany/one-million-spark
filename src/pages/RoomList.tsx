@@ -24,7 +24,7 @@ import { WalletRequired } from "@/components/WalletRequired";
 import { useSolanaRooms } from "@/hooks/useSolanaRooms";
 import { SOLANA_ENABLED, getSolanaCluster, formatSol, getSolanaEndpoint } from "@/lib/solana-config";
 import { GameType, RoomStatus, PROGRAM_ID, isOpenStatus, RoomDisplay, isActiveStatus } from "@/lib/solana-program";
-import { getRoomMode } from "@/hooks/useGameSessionPersistence";
+// STEP 7: getRoomMode removed - use stake-based detection for room list
 import { isBlockingRoom } from "@/lib/solana-utils";
 // ActiveGameBanner removed - using GlobalActiveRoomBanner from App.tsx instead
 import { useToast } from "@/hooks/use-toast";
@@ -453,12 +453,10 @@ export default function RoomList() {
                       <span className="text-xs px-2 py-0.5 rounded-full bg-primary/20 text-primary">
                         #{room.roomId}
                       </span>
-                      {/* Mode Badge - GUARDRAIL C: stake-first priority */}
+                      {/* Mode Badge - STEP 7: Stake-only detection (no getRoomMode) */}
                       {(() => {
-                        // Priority: 1) stake > 0 = always ranked, 2) localStorage mode
-                        const hasStake = room.entryFeeSol > 0;
-                        const localMode = getRoomMode(room.pda);
-                        const isRanked = hasStake || localMode === 'ranked';
+                        // Stake > 0 is the only reliable indicator in room list
+                        const isRanked = room.entryFeeSol > 0;
                         return (
                           <span className={`text-xs px-2 py-0.5 rounded-full border flex items-center gap-1 ${
                             isRanked 
@@ -472,16 +470,13 @@ export default function RoomList() {
                       })()}
                     </div>
                     <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
-                      {/* Stake display - GUARDRAIL C: stake-first priority */}
+                      {/* Stake display - STEP 7: Stake-only detection */}
                       {(() => {
-                        const hasStake = room.entryFeeSol > 0;
-                        const localMode = getRoomMode(room.pda);
-                        const isRanked = hasStake || localMode === 'ranked';
-                        
+                        const isRanked = room.entryFeeSol > 0;
                         return (
                           <span className={`flex items-center gap-1 ${isRanked ? 'text-foreground font-medium' : ''}`}>
                             <Coins className="h-3.5 w-3.5" />
-                            {hasStake ? (
+                            {isRanked ? (
                               `${room.entryFeeSol} SOL`
                             ) : (
                               <span className="text-muted-foreground italic">—</span>

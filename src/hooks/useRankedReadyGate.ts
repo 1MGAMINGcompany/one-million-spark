@@ -50,16 +50,37 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
   const [isSettingReady, setIsSettingReady] = useState(false);
   // Server-side bothAccepted from game_acceptances (more reliable than realtime)
   const [serverBothAccepted, setServerBothAccepted] = useState(false);
+  // STEP 4: Track accepted wallets from game_acceptances table
+  const [acceptedWallets, setAcceptedWallets] = useState<Set<string>>(new Set());
 
-  // Determine if I'm player 1 or player 2
-  const isPlayer1 = myWallet && p1Wallet && myWallet.toLowerCase() === p1Wallet.toLowerCase();
-  const isPlayer2 = myWallet && p2Wallet && myWallet.toLowerCase() === p2Wallet.toLowerCase();
+  // Normalize wallet addresses (trim only - Solana base58 is case-sensitive!)
+  const normalizeWallet = (w?: string | null) =>
+    typeof w === "string" ? w.trim() : "";
 
-  const iAmReady = isPlayer1 ? p1Ready : isPlayer2 ? p2Ready : false;
-  const opponentReady = isPlayer1 ? p2Ready : isPlayer2 ? p1Ready : false;
+  // Determine if I'm player 1 or player 2 (use trim for comparison, NOT toLowerCase)
+  const myWalletNorm = normalizeWallet(myWallet);
+  const p1WalletNorm = normalizeWallet(p1Wallet);
+  const p2WalletNorm = normalizeWallet(p2Wallet);
+  
+  const isPlayer1 = myWalletNorm && p1WalletNorm && myWalletNorm === p1WalletNorm;
+  const isPlayer2 = myWalletNorm && p2WalletNorm && myWalletNorm === p2WalletNorm;
+
+  // STEP 4: Compute readiness from acceptances FIRST, fallback to p1_ready/p2_ready flags
+  const opponentWallet = isPlayer1 ? p2Wallet : isPlayer2 ? p1Wallet : null;
+  const opponentWalletNorm = normalizeWallet(opponentWallet);
+  
+  // Primary source: game_acceptances table via polling
+  const iAmReadyFromAcceptances = myWalletNorm ? acceptedWallets.has(myWalletNorm) : false;
+  // Fallback: p1_ready/p2_ready flags
+  const iAmReadyFromFlags = isPlayer1 ? p1Ready : isPlayer2 ? p2Ready : false;
+  const iAmReady = iAmReadyFromAcceptances || iAmReadyFromFlags;
+
+  const opponentReadyFromAcceptances = opponentWalletNorm ? acceptedWallets.has(opponentWalletNorm) : false;
+  const opponentReadyFromFlags = isPlayer1 ? p2Ready : isPlayer2 ? p1Ready : false;
+  const opponentReady = opponentReadyFromAcceptances || opponentReadyFromFlags;
+
   // Prefer server-side bothAccepted (from polling) over client-side p1Ready && p2Ready
   const bothReady = serverBothAccepted || (p1Ready && p2Ready);
-
   // Show accept modal if ranked, loaded, and this player hasn't accepted yet
   // Also require that we've identified this player's role (isPlayer1 or isPlayer2)
   const isIdentified = isPlayer1 || isPlayer2;
@@ -70,7 +91,7 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
     if (isRanked && hasLoaded) {
       console.log("[RankedReadyGate] State:", {
         roomPda: roomPda?.slice(0, 8),
-        myWallet: myWallet?.slice(0, 8),
+        myWallet: myWalletNorm?.slice(0, 8),
         isRanked,
         enabled,
         hasLoaded,
@@ -80,29 +101,33 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
         p1Ready,
         p2Ready,
         iAmReady,
+        iAmReadyFromAcceptances,
         opponentReady,
+        opponentReadyFromAcceptances,
         bothReady,
+        serverBothAccepted,
+        acceptedWallets: Array.from(acceptedWallets).map(w => w.slice(0, 8)),
         showAcceptModal,
       });
     }
-  }, [roomPda, myWallet, isRanked, enabled, hasLoaded, isPlayer1, isPlayer2, isIdentified, p1Ready, p2Ready, iAmReady, opponentReady, bothReady, showAcceptModal]);
+  }, [roomPda, myWalletNorm, isRanked, enabled, hasLoaded, isPlayer1, isPlayer2, isIdentified, p1Ready, p2Ready, iAmReady, iAmReadyFromAcceptances, opponentReady, opponentReadyFromAcceptances, bothReady, serverBothAccepted, acceptedWallets, showAcceptModal]);
 
   // Accept rules via Edge Function (no direct table access)
   const acceptRules = useCallback(async (): Promise<{ success: boolean; error?: string }> => {
-    if (!roomPda || !myWallet) {
+    if (!roomPda || !myWalletNorm) {
       return { success: false, error: "Missing room or wallet" };
     }
 
     setIsSettingReady(true);
     
     try {
-      console.log("[RankedReadyGate] Calling ranked-accept Edge Function...", { roomPda, myWallet });
+      console.log("[RankedReadyGate] Calling ranked-accept Edge Function...", { roomPda, myWallet: myWalletNorm });
       
       // Call Edge Function instead of direct table insert
       const { data, error } = await supabase.functions.invoke("ranked-accept", {
         body: {
           roomPda,
-          playerWallet: myWallet,
+          playerWallet: myWalletNorm,
           mode: "simple", // Simple acceptance (stake tx is implicit signature)
         },
       });
@@ -118,6 +143,12 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
       }
 
       console.log("[RankedReadyGate] ✅ Player marked as ready via Edge Function!");
+      
+      // STEP 4: Optimistic update - immediately add my wallet to acceptedWallets
+      if (myWalletNorm) {
+        setAcceptedWallets(prev => new Set([...prev, myWalletNorm]));
+      }
+      
       return { success: true };
     } catch (err: any) {
       console.error("[RankedReadyGate] Error:", err);
@@ -125,7 +156,7 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
     } finally {
       setIsSettingReady(false);
     }
-  }, [roomPda, myWallet]);
+  }, [roomPda, myWalletNorm]);
 
   // Load initial state and subscribe to changes
   useEffect(() => {
@@ -148,6 +179,16 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
         }
         // Note: Mode now comes from DB (single source of truth)
         // No localStorage sync needed - useRoomMode fetches directly from DB
+        
+        // STEP 4: Load acceptedWallets from game_acceptances
+        const wallets =
+          resp?.acceptances?.players
+            ?.map((p: any) =>
+              normalizeWallet(typeof p === "string" ? p : p?.wallet ?? p?.player_wallet)
+            )
+            .filter(Boolean) ?? [];
+        setAcceptedWallets(new Set(wallets));
+        setServerBothAccepted(resp?.acceptances?.bothAccepted ?? false);
         
         setHasLoaded(true);
       } else {
@@ -182,59 +223,70 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
     };
   }, [roomPda, enabled]);
 
-  // Polling fallback: when I'm ready but opponent isn't, poll for acceptances.bothAccepted
+  // STEP 4: Poll immediately for ranked games (not only when iAmReady)
+  // This ensures we detect opponent acceptance even before we accept
+  const pollForAcceptances = useCallback(async () => {
+    if (!roomPda) return;
+
+    try {
+      const { data: resp, error } = await supabase.functions.invoke("game-session-get", {
+        body: { roomPda },
+      });
+
+      if (error) {
+        console.warn("[RankedReadyGate] Poll error:", error);
+        return;
+      }
+
+      // Update acceptedWallets from response
+      const wallets =
+        resp?.acceptances?.players
+          ?.map((p: any) =>
+            normalizeWallet(typeof p === "string" ? p : p?.wallet ?? p?.player_wallet)
+          )
+          .filter(Boolean) ?? [];
+      setAcceptedWallets(new Set(wallets));
+      setServerBothAccepted(resp?.acceptances?.bothAccepted ?? false);
+
+      // Also update p1_ready/p2_ready from session as fallback
+      const session = resp?.session;
+      if (session) {
+        const newP1Ready = session.p1_ready ?? false;
+        const newP2Ready = session.p2_ready ?? false;
+        
+        console.log("[RankedReadyGate] Poll result:", { 
+          p1_ready: newP1Ready, 
+          p2_ready: newP2Ready,
+          acceptances: wallets.length,
+          bothAccepted: resp?.acceptances?.bothAccepted ?? false,
+        });
+        
+        if (newP1Ready !== p1Ready) setP1Ready(newP1Ready);
+        if (newP2Ready !== p2Ready) setP2Ready(newP2Ready);
+      }
+    } catch (err) {
+      console.warn("[RankedReadyGate] Poll exception:", err);
+    }
+  }, [roomPda, p1Ready, p2Ready]);
+
   useEffect(() => {
-    // Only poll if: ranked, enabled, has loaded, I'm ready, but not bothReady yet
-    if (!isRanked || !enabled || !roomPda || !hasLoaded || !iAmReady || bothReady) {
+    // STEP 4: Poll when ranked + enabled + not bothReady (do NOT wait for iAmReady)
+    if (!isRanked || !enabled || bothReady || !roomPda) {
       return;
     }
 
-    console.log('[RankedReadyGate] Starting polling for opponent acceptance...');
+    console.log("[RankedReadyGate] Starting polling for acceptances...");
 
-    const pollInterval = setInterval(async () => {
-      try {
-        const { data: resp, error } = await supabase.functions.invoke("game-session-get", {
-          body: { roomPda },
-        });
+    // Fire once immediately
+    pollForAcceptances();
 
-        if (error) {
-          console.warn('[RankedReadyGate] Poll error:', error);
-          return;
-        }
-
-        // Prefer acceptances.bothAccepted as truth (server-side deduplicated)
-        if (resp?.acceptances?.bothAccepted) {
-          console.log('[RankedReadyGate] Poll: bothAccepted=true from server, stopping poll');
-          setServerBothAccepted(true);
-          return; // Will trigger cleanup via bothReady change
-        }
-
-        // Also update p1_ready/p2_ready from session as fallback
-        const session = resp?.session;
-        if (session) {
-          const newP1Ready = session.p1_ready ?? false;
-          const newP2Ready = session.p2_ready ?? false;
-          
-          console.log('[RankedReadyGate] Poll result:', { 
-            p1_ready: newP1Ready, 
-            p2_ready: newP2Ready,
-            acceptances: resp?.acceptances?.players?.length ?? 0,
-            bothAccepted: resp?.acceptances?.bothAccepted ?? false
-          });
-          
-          if (newP1Ready !== p1Ready) setP1Ready(newP1Ready);
-          if (newP2Ready !== p2Ready) setP2Ready(newP2Ready);
-        }
-      } catch (err) {
-        console.warn('[RankedReadyGate] Poll exception:', err);
-      }
-    }, 2000); // Poll every 2 seconds
+    const pollInterval = setInterval(pollForAcceptances, 1500); // Poll every 1.5 seconds
 
     return () => {
-      console.log('[RankedReadyGate] Stopping poll');
+      console.log("[RankedReadyGate] Stopping poll");
       clearInterval(pollInterval);
     };
-  }, [isRanked, enabled, roomPda, hasLoaded, iAmReady, bothReady, p1Ready, p2Ready]);
+  }, [isRanked, enabled, bothReady, roomPda, pollForAcceptances]);
 
   // For casual games, return as if both are ready
   if (!isRanked) {
