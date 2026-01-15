@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
+import { getOpponentWallet } from "@/lib/walletUtils";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Gem, Flag, Users, Wifi, WifiOff, Download, RefreshCw, LogOut } from "lucide-react";
@@ -106,6 +107,7 @@ const DominosGame = () => {
   const [gameOver, setGameOver] = useState(false);
   const [selectedDomino, setSelectedDomino] = useState<number | null>(null);
   const [winner, setWinner] = useState<"me" | "opponent" | "draw" | null>(null);
+  const [winnerWallet, setWinnerWallet] = useState<string | null>(null); // Direct wallet address of winner
   const [gameInitialized, setGameInitialized] = useState(false);
 
   // Refs to hold current state for stable callbacks (prevents stale closures)
@@ -658,14 +660,18 @@ const DominosGame = () => {
     }));
   }, [turnPlayers]);
 
-  // Winner address for GameEndScreen
+  // Winner address for GameEndScreen - prioritize winnerWallet (from resign/forfeit)
   const winnerAddress = useMemo(() => {
+    // Direct wallet address from resign/forfeit takes priority
+    if (winnerWallet) return winnerWallet;
+    
+    // Fallback for normal game endings
     if (!gameOver) return null;
     if (winner === "draw") return "draw";
     if (winner === "me") return address;
-    if (winner === "opponent") return roomPlayers.find(p => p.toLowerCase() !== address?.toLowerCase()) || null;
+    if (winner === "opponent") return getOpponentWallet(roomPlayers, address);
     return null;
-  }, [gameOver, winner, address, roomPlayers]);
+  }, [winnerWallet, gameOver, winner, address, roomPlayers]);
 
   // Players for GameEndScreen
   const gameEndPlayers = useMemo(() => {
@@ -861,6 +867,8 @@ const DominosGame = () => {
         }
       }
     } else if (message.type === "resign") {
+      // Opponent resigned - I WIN - store MY wallet as winner
+      setWinnerWallet(address || null);
       setGameOver(true);
       setWinner("me");
       setGameStatus("Opponent resigned - You win!");
@@ -1192,7 +1200,9 @@ const DominosGame = () => {
     // 1. Send WebRTC message immediately for instant opponent UX
     sendResign();
     
-    // 2. Update local UI optimistically
+    // 2. Update local UI optimistically - opponent wins, store their wallet
+    const opponentWalletAddr = getOpponentWallet(roomPlayers, address);
+    setWinnerWallet(opponentWalletAddr);
     setGameOver(true);
     setWinner("opponent");
     setGameStatus("You resigned");
@@ -1209,7 +1219,7 @@ const DominosGame = () => {
         variant: "destructive",
       });
     }
-  }, [sendResign, play, forfeit]);
+  }, [sendResign, play, forfeit, roomPlayers, address]);
 
   const playerLegalMoves = useMemo(() => getLegalMoves(myHand), [getLegalMoves, myHand]);
 
