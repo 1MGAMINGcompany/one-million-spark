@@ -247,88 +247,123 @@ export default function Room() {
   const BPS = 10_000n;
   const winnerGetsFullLamports = (fullPotLamports * (BPS - FEE_BPS)) / BPS;
 
-  const fetchRoom = async () => {
-    if (!roomPdaParam) return;
-    
-    // Debug logging for room mode investigation
-    console.log("[RoomMode] Fetching room:", {
-      roomPda: roomPdaParam,
-      localStorageKeys: Object.keys(localStorage).filter(k => k.includes(roomPdaParam.slice(0, 8))),
-    });
-    
-    try {
-      setLoading(true);
-      setError(null);
+  const fetchRoom = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      if (!roomPdaParam) return;
 
-      const roomPda = new PublicKey(roomPdaParam);
-      
-      // Fetch directly by PDA using web3.js (no Anchor)
-      const accountInfo = await connection.getAccountInfo(roomPda);
-      
-      if (!accountInfo) {
-        console.log("[Room] Room not found - accountInfo is null");
-        setRoom(null);
+      const silent = opts?.silent === true;
+      const now = Date.now();
+
+      // Silent mode backoff (prevents hammering a failing / rate-limited RPC)
+      if (silent && now < silentBackoffUntilRef.current) {
         return;
       }
-      
-      // Parse using parseRoomAccount (no Anchor needed)
-      const data = Buffer.from(accountInfo.data);
-      const parsed = parseRoomAccount(data);
-      
-      
-      if (!parsed) {
-        console.log("[Room] Failed to parse room account");
-        setError("Failed to parse room data");
-        return;
-      }
-      
-      // Convert to room-like object with PublicKey objects for compatibility
-      const roomAccount = {
-        roomId: parsed.roomId,
-        creator: parsed.creator,
-        gameType: parsed.gameType,
-        maxPlayers: parsed.maxPlayers,
-        playerCount: parsed.playerCount,
-        status: parsed.status,
-        stakeLamports: parsed.entryFee,
-        players: parsed.players,
-        winner: parsed.winner,
-        lastCreatorPing: parsed.createdAt,
-        isPrivate: parsed.isPrivate,
-      };
-      
-      console.log("[RoomMode] Room loaded:", {
-        roomPda: roomPdaParam,
-        chainStatus: roomAccount.status,
-        playerCount: roomAccount.playerCount,
-        maxPlayers: roomAccount.maxPlayers,
-        dbMode: roomMode,
-        creator: roomAccount.creator?.toBase58()?.slice(0, 8),
-      });
 
-      setRoom(roomAccount);
+      // Prevent overlapping calls (focus + interval + render can overlap)
+      if (fetchInFlightRef.current) return;
+      fetchInFlightRef.current = true;
 
-      // Fetch vault balance
       try {
-        const [vaultPda] = getVaultPDA(roomPda);
-        setVaultPdaStr(vaultPda.toBase58());
-        const vaultBal = await connection.getBalance(vaultPda, "confirmed");
-        setVaultLamports(BigInt(vaultBal));
-      } catch (vaultErr) {
-        console.error("[Room] Failed to fetch vault balance:", vaultErr);
+        if (!silent) {
+          setLoading(true);
+          setError(null);
+        }
+
+        const roomPda = new PublicKey(roomPdaParam);
+
+        // Fetch directly by PDA using web3.js (no Anchor)
+        const accountInfo = await connection.getAccountInfo(roomPda);
+
+        if (!accountInfo) {
+          console.log("[Room] Room not found - accountInfo is null");
+          if (!silent) setRoom(null); // in silent mode, don't wipe UI
+          return;
+        }
+
+        // Parse using parseRoomAccount (no Anchor needed)
+        const data = Buffer.from(accountInfo.data);
+        const parsed = parseRoomAccount(data);
+
+        if (!parsed) {
+          console.log("[Room] Failed to parse room account");
+          if (!silent) setError("Failed to parse room data");
+          return;
+        }
+
+        // Convert to room-like object
+        const roomAccount = {
+          roomId: parsed.roomId,
+          creator: parsed.creator,
+          gameType: parsed.gameType,
+          maxPlayers: parsed.maxPlayers,
+          playerCount: parsed.playerCount,
+          status: parsed.status,
+          stakeLamports: parsed.entryFee,
+          players: parsed.players,
+          winner: parsed.winner,
+          lastCreatorPing: parsed.createdAt,
+          isPrivate: parsed.isPrivate,
+        };
+
+        setRoom(roomAccount);
+
+        /**
+         * Vault balance fetch is an extra RPC call.
+         * Don't do it every 2s in silent polling.
+         */
+        const shouldFetchVault =
+          !silent || now - lastVaultFetchMsRef.current > 15000;
+
+        if (shouldFetchVault) {
+          lastVaultFetchMsRef.current = now;
+
+          try {
+            const [vaultPda] = getVaultPDA(roomPda);
+            setVaultPdaStr(vaultPda.toBase58());
+
+            const vaultBal = await connection.getBalance(vaultPda, "confirmed");
+            setVaultLamports(BigInt(vaultBal));
+          } catch (vaultErr) {
+            console.error("[Room] Failed to fetch vault balance:", vaultErr);
+          }
+        }
+      } catch (e: any) {
+        const msg = (e?.message ?? "").toString();
+        const lower = msg.toLowerCase();
+
+        const is429 = lower.includes("429") || lower.includes("too many requests");
+        const isNetworkish =
+          lower.includes("failed to fetch") || lower.includes("cors");
+
+        if (silent) {
+          // Backoff only in silent mode (prevents UI flicker + request storms)
+          const backoffMs = is429 ? 15000 : isNetworkish ? 8000 : 5000;
+          silentBackoffUntilRef.current = Date.now() + backoffMs;
+
+          console.warn(
+            `[Room] Silent poll failed (${is429 ? "429" : "network"}). Backing off for ${backoffMs}ms.`
+          );
+        } else {
+          console.error("[Room] Failed to fetch room:", e);
+          setError(msg || "Failed to load room");
+        }
+      } finally {
+        if (!silent) setLoading(false);
+        fetchInFlightRef.current = false;
       }
-    } catch (e: any) {
-      console.error("[Room] Failed to fetch room:", e);
-      setError(e?.message ?? "Failed to load room");
-    } finally {
-      setLoading(false);
-    }
-  };
-  
-  // Safe wrapper so event listeners/intervals can call fetchRoom without unhandled rejections
+    },
+    [roomPdaParam, connection]
+  );
+
   const fetchRoomSafe = useCallback(() => {
     fetchRoom().catch((e: any) => {
       console.warn("[Room] fetchRoom failed", e);
+    });
+  }, [fetchRoom]);
+
+  const fetchRoomSilentSafe = useCallback(() => {
+    fetchRoom({ silent: true }).catch((e: any) => {
+      console.warn("[Room] fetchRoom(silent) failed", e);
     });
   }, [fetchRoom]);
 
@@ -402,6 +437,11 @@ export default function Room() {
   const prevStatusRef = useRef<number | null>(null);
   const hasNavigatedRef = useRef(false);
   
+  // Prevent overlapping RPC calls + reduce rate-limit storms
+  const fetchInFlightRef = useRef(false);
+  const silentBackoffUntilRef = useRef(0);
+  const lastVaultFetchMsRef = useRef(0);
+  
   useEffect(() => {
     if (!room || !roomPdaParam) {
       prevStatusRef.current = null;
@@ -443,8 +483,8 @@ export default function Room() {
     if (!inWalletBrowser) return;
 
     const refetch = () => {
-      console.log("[Room] visible/focus/online -> refetch room");
-      fetchRoomSafe();
+      console.log("[Room] visible/focus/online -> refetch room (silent)");
+      fetchRoomSilentSafe();
     };
 
     const handleVisibility = () => {
@@ -463,7 +503,7 @@ export default function Room() {
       window.removeEventListener("focus", refetch);
       window.removeEventListener("online", refetch);
     };
-  }, [roomPdaParam, inWalletBrowser, fetchRoomSafe]);
+  }, [roomPdaParam, inWalletBrowser, fetchRoomSilentSafe]);
 
   // Wallet browsers: fast poll (2s) while room is still Open
   useEffect(() => {
@@ -477,11 +517,11 @@ export default function Room() {
     console.log("[Room] fast poll active (wallet browser) - checking every 2s");
 
     const id = window.setInterval(() => {
-      fetchRoomSafe();
+      fetchRoomSilentSafe();
     }, 2000);
 
     return () => window.clearInterval(id);
-  }, [roomPdaParam, inWalletBrowser, room?.status, fetchRoomSafe]);
+  }, [roomPdaParam, inWalletBrowser, room?.status, fetchRoomSilentSafe]);
 
   // Direct check: navigate if room is Started or full (handles missed transitions)
   useEffect(() => {
