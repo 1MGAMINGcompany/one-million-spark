@@ -24,6 +24,7 @@ import { WaitingForOpponentPanel } from "@/components/WaitingForOpponentPanel";
 import { WalletMismatchPanel } from "@/components/WalletMismatchPanel";
 import { Button } from "@/components/ui/button";
 import { Loader2, Wallet, RefreshCw } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 import { useTranslation } from "react-i18next";
 
 interface RulesGateProps {
@@ -103,6 +104,34 @@ export function RulesGate({
     
     return () => clearTimeout(timeout);
   }, [isRanked, isDataLoaded, bothReady, startRollFinalized]);
+  
+  // Fallback polling when showing resync UI - directly check if roll is finalized
+  useEffect(() => {
+    if (!showResyncButton && !isResyncing) return;
+    if (!roomPda) return;
+    
+    console.log("[RulesGate] Starting fallback polling for start_roll_finalized");
+    
+    const poll = async () => {
+      try {
+        const { data } = await supabase.functions.invoke("game-session-get", {
+          body: { roomPda },
+        });
+        if (data?.session?.start_roll_finalized) {
+          console.log("[RulesGate] Fallback poll found finalized roll - reloading page");
+          // Force page reload to reset all state
+          window.location.reload();
+        }
+      } catch (err) {
+        console.log("[RulesGate] Fallback poll error:", err);
+      }
+    };
+    
+    const interval = setInterval(poll, 2000);
+    poll(); // Fire immediately
+    
+    return () => clearInterval(interval);
+  }, [showResyncButton, isResyncing, roomPda]);
   
   // Handle resync button click
   const handleResync = useCallback(() => {
