@@ -128,6 +128,13 @@ export function RulesGate({
     return <>{children}</>;
   }
 
+  // STEP 5: If dice roll is finalized, game has started - NEVER re-gate
+  // This prevents black screen when app backgrounds/foregrounds mid-game
+  if (startRollFinalized) {
+    console.log("[RulesGate] Game already started (startRollFinalized), bypassing gates");
+    return <>{children}</>;
+  }
+
   // Convert lamports to SOL for display (handle undefined)
   const stakeSol = stakeLamports !== undefined ? stakeLamports / 1_000_000_000 : 0;
 

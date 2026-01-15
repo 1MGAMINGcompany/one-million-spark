@@ -502,7 +502,8 @@ export function DiceRollStart({
           )}
         </div>
 
-        {/* Exit Buttons - Leave and Forfeit */}
+        {/* Exit Buttons - STEP 6: Only Leave button during dice roll phase */}
+        {/* Forfeit is intentionally disabled during pre-game phase - only available during active gameplay */}
         <div className="mt-6 pt-4 border-t border-border/50 flex gap-2 justify-center flex-wrap">
           {onLeave && (
             <Button
@@ -521,22 +522,9 @@ export function DiceRollStart({
             </Button>
           )}
           
-          {onForfeit && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onForfeit}
-              disabled={exitDisabled}
-              className="gap-1 text-destructive hover:text-destructive"
-            >
-              {isForfeiting ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Flag className="w-4 h-4" />
-              )}
-              {t("game.forfeit") || "Leave & Forfeit"}
-            </Button>
-          )}
+          {/* Forfeit intentionally disabled during dice-roll/start phase.
+              Forfeit should only be available during active gameplay when stakes are locked. */}
+          {void onForfeit}
         </div>
       </Card>
     </div>

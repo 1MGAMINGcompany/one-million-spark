@@ -35,3 +35,6 @@ verify_jwt = false
 
 [functions.game-sessions-list]
 verify_jwt = false
+
+[functions.game-session-set-settings]
+verify_jwt = false

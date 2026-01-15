@@ -3,27 +3,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { archiveRoom } from '@/lib/roomArchive';
 
 // NOTE: Room mode (casual/ranked) is now determined SOLELY from the database.
-// These legacy helpers are deprecated and should NOT be used for UI decisions.
-// They exist only for cleanup purposes during forfeit/leave.
-
-export interface RoomModeData {
-  mode: 'casual' | 'ranked';
-  turnTimeSeconds: number;
-  stakeLamports: number;
-}
-
-/** @deprecated Use useRoomMode hook instead - this reads localStorage which is not authoritative */
-export function getRoomModeData(roomPda: string): RoomModeData {
-  // Return default - DO NOT read localStorage for mode decisions
-  console.warn("[getRoomModeData] DEPRECATED: Use useRoomMode hook for authoritative mode");
-  return { mode: 'casual', turnTimeSeconds: 60, stakeLamports: 0 };
-}
-
-/** @deprecated Use useRoomMode hook instead */
-export function getRoomMode(roomPda: string): 'casual' | 'ranked' {
-  console.warn("[getRoomMode] DEPRECATED: Use useRoomMode hook for authoritative mode");
-  return 'casual';
-}
+// STEP 7: Deprecated getRoomMode and getRoomModeData functions have been REMOVED.
+// Use the useRoomMode hook for authoritative mode detection.
 
 interface GameSessionData {
   room_pda: string;
