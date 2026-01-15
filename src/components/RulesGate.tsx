@@ -27,6 +27,9 @@ import { Loader2, Wallet, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useTranslation } from "react-i18next";
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type ServerSession = any;
+
 interface RulesGateProps {
   /** Whether this is a ranked game */
   isRanked: boolean;
@@ -85,13 +88,107 @@ export function RulesGate({
 }: RulesGateProps) {
   const { t } = useTranslation();
   
+  // --- START: Server-truth polling state (prevents mobile/desktop deadlocks) ---
+  const [serverSession, setServerSession] = useState<ServerSession | null>(null);
+  const [serverStartRollFinalized, setServerStartRollFinalized] = useState(false);
+  const [serverBothReady, setServerBothReady] = useState(false);
+  const [serverPollErrors, setServerPollErrors] = useState(0);
+  const [showHardReload, setShowHardReload] = useState(false);
+  
+  const debugEnabled = useMemo(() => {
+    if (typeof window === "undefined") return false;
+    return new URLSearchParams(window.location.search).get("debug") === "1";
+  }, []);
+  
   // Resync button state - shows after 12s timeout when stuck waiting
   const [showResyncButton, setShowResyncButton] = useState(false);
   const [isResyncing, setIsResyncing] = useState(false);
-  
-  // 12-second timeout for showing resync button when stuck
+
+  // --- Poll server truth while ranked gates could block the game ---
+  // This breaks the deadlock: "RulesGate blocks children => useStartRoll never runs => never hydrates"
   useEffect(() => {
-    if (!isRanked || !isDataLoaded || !bothReady || startRollFinalized) {
+    if (!roomPda) return;
+    if (!isRanked) return;
+    // If either the prop OR our server snapshot says finalized, stop polling
+    if (startRollFinalized || serverStartRollFinalized) return;
+
+    let cancelled = false;
+
+    const poll = async () => {
+      try {
+        const { data, error } = await supabase.functions.invoke("game-session-get", {
+          body: { roomPda },
+        });
+
+        if (cancelled) return;
+
+        if (error) {
+          console.warn("[RulesGate] game-session-get error:", error);
+          setServerPollErrors((n) => n + 1);
+          return;
+        }
+
+        const s = data?.session;
+        if (!s) return;
+
+        setServerSession(s);
+
+        if (s.start_roll_finalized) {
+          console.log("[RulesGate] Server poll found start_roll_finalized=true");
+          setServerStartRollFinalized(true);
+        }
+
+        // Acceptances table can be empty — flags are still canonical for readiness
+        if (s.p1_ready && s.p2_ready) {
+          console.log("[RulesGate] Server poll found both players ready");
+          setServerBothReady(true);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          console.warn("[RulesGate] game-session-get exception:", e);
+          setServerPollErrors((n) => n + 1);
+        }
+      }
+    };
+
+    poll();
+    const id = setInterval(poll, 2000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [roomPda, isRanked, startRollFinalized, serverStartRollFinalized]);
+
+  // Compute effective values combining props and server-polled data
+  const effectiveStartRollFinalized =
+    !!startRollFinalized ||
+    serverStartRollFinalized ||
+    !!serverSession?.start_roll_finalized;
+
+  const effectiveBothReady =
+    !!bothReady ||
+    serverBothReady ||
+    (!!serverSession?.p1_ready && !!serverSession?.p2_ready);
+
+  // Hard escape hatch: never allow infinite waiting screens (15s timeout)
+  useEffect(() => {
+    if (!roomPda || !isRanked) return;
+
+    if (effectiveStartRollFinalized) {
+      setShowHardReload(false);
+      return;
+    }
+
+    setShowHardReload(false);
+    const t = setTimeout(() => setShowHardReload(true), 15000);
+    return () => clearTimeout(t);
+  }, [roomPda, isRanked, effectiveStartRollFinalized]);
+  // --- END: Server-truth polling ---
+  
+  // 12-second timeout for showing resync button when stuck (uses effective values)
+  useEffect(() => {
+    if (!isRanked || !isDataLoaded || !effectiveBothReady || effectiveStartRollFinalized) {
       setShowResyncButton(false);
       return;
     }
@@ -103,7 +200,7 @@ export function RulesGate({
     }, 12000);
     
     return () => clearTimeout(timeout);
-  }, [isRanked, isDataLoaded, bothReady, startRollFinalized]);
+  }, [isRanked, isDataLoaded, effectiveBothReady, effectiveStartRollFinalized]);
   
   // Fallback polling when showing resync UI - directly check if roll is finalized
   useEffect(() => {
@@ -119,7 +216,6 @@ export function RulesGate({
         });
         if (data?.session?.start_roll_finalized) {
           console.log("[RulesGate] Fallback poll found finalized roll - reloading page");
-          // Force page reload to reset all state
           window.location.reload();
         }
       } catch (err) {
@@ -138,8 +234,6 @@ export function RulesGate({
     console.log("[RulesGate] Manual resync triggered");
     setIsResyncing(true);
     setShowResyncButton(false);
-    // The parent's useStartRoll hook will continue polling
-    // Just provide UI feedback and hide button
     setTimeout(() => setIsResyncing(false), 2000);
   }, []);
 
@@ -169,28 +263,32 @@ export function RulesGate({
       myReady: iAmReady,
       opponentReady,
       bothReady,
+      effectiveBothReady,
       stakeLamports,
       turnTimeSeconds,
       startRollFinalized,
+      effectiveStartRollFinalized,
+      serverStartRollFinalized,
+      serverBothReady,
       isDataLoaded,
     };
     console.log("[RulesGate]", state);
     
     // CRITICAL: Log warning if ranked game attempts to render children without both ready
-    if (isRanked && !bothReady) {
+    if (isRanked && !effectiveBothReady) {
       console.warn("[RulesGate] BLOCKED: Ranked game children blocked - not both ready", state);
     }
-  }, [roomPda, isRanked, myWallet, myWalletInRoom, validPlayers.length, iAmReady, opponentReady, bothReady, stakeLamports, turnTimeSeconds, startRollFinalized, isDataLoaded]);
+  }, [roomPda, isRanked, myWallet, myWalletInRoom, validPlayers.length, iAmReady, opponentReady, bothReady, effectiveBothReady, stakeLamports, turnTimeSeconds, startRollFinalized, effectiveStartRollFinalized, serverStartRollFinalized, serverBothReady, isDataLoaded]);
 
   // For casual games, bypass the gate entirely
   if (!isRanked) {
     return <>{children}</>;
   }
 
-  // STEP 5: If dice roll is finalized, game has started - NEVER re-gate
+  // STEP 5: If dice roll is finalized (prop OR server-polled), game has started - NEVER re-gate
   // This prevents black screen when app backgrounds/foregrounds mid-game
-  if (startRollFinalized) {
-    console.log("[RulesGate] Game already started (startRollFinalized), bypassing gates");
+  if (effectiveStartRollFinalized) {
+    console.log("[RulesGate] Server says start roll finalized — bypassing gates");
     return <>{children}</>;
   }
 
@@ -270,7 +368,7 @@ export function RulesGate({
   }
 
   // 5. If I accepted but opponent hasn't → show WaitingForOpponentPanel
-  if (!bothReady) {
+  if (!effectiveBothReady) {
     return (
       <WaitingForOpponentPanel
         onLeave={onLeave}
@@ -281,8 +379,8 @@ export function RulesGate({
     );
   }
 
-  // 6. Both ready but start roll not finalized - show syncing state with optional resync
-  if (showResyncButton || isResyncing) {
+  // 6. Both ready but start roll not finalized - show syncing state with optional resync + hard reload
+  if (showResyncButton || isResyncing || showHardReload) {
     return (
       <div className="fixed inset-0 z-50 bg-background/95 backdrop-blur-sm flex items-center justify-center">
         <div className="text-center space-y-4">
@@ -300,6 +398,38 @@ export function RulesGate({
             <p className="text-xs text-muted-foreground">
               {t("common.pleaseWait", "Please wait...")}
             </p>
+          )}
+          
+          {/* Hard reload escape hatch after 15s */}
+          {showHardReload && (
+            <div className="pt-4 space-y-3">
+              <Button variant="outline" onClick={() => window.location.reload()}>
+                Reload (forced resync)
+              </Button>
+
+              {debugEnabled && (
+                <pre className="text-xs opacity-70 text-left max-w-[90vw] overflow-auto bg-muted/50 p-2 rounded">
+                  {JSON.stringify(
+                    {
+                      roomPda,
+                      bothReadyProp: bothReady,
+                      effectiveBothReady,
+                      startRollFinalizedProp: startRollFinalized,
+                      effectiveStartRollFinalized,
+                      serverPollErrors,
+                      serverSession: {
+                        p1_ready: serverSession?.p1_ready,
+                        p2_ready: serverSession?.p2_ready,
+                        start_roll_finalized: serverSession?.start_roll_finalized,
+                        starting_player_wallet: serverSession?.starting_player_wallet,
+                      },
+                    },
+                    null,
+                    2
+                  )}
+                </pre>
+              )}
+            </div>
           )}
         </div>
       </div>

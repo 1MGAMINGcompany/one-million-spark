@@ -199,49 +199,69 @@ export function useStartRoll(options: UseStartRollOptions): UseStartRollResult {
     return () => clearInterval(pollInterval);
   }, [roomPda, isFinalized, showDiceRoll, myWallet]);
 
-  // NEW: Poll every 2s when we have 2 players but not finalized and not showing dice UI
-  // This catches the case where desktop is stuck in RulesGate while mobile proceeds
-  // FIX: Use hasTwoRealPlayers instead of bothReady - poll as soon as players connect
+  // --- START: Baseline start-roll polling (runs even if realtime drops) ---
+  // This poll runs independently of hasTwoRealPlayers, bothReady, or showDiceRoll
+  // It ensures mobile can recover even if it missed every WebSocket event
+  // Only depends on: roomPda exists, not finalized, not showing dice UI
   useEffect(() => {
-    if (!roomPda || !hasTwoRealPlayers || isFinalized || showDiceRoll) return;
+    if (!roomPda) return;
+    if (isFinalized) return;
+    if (showDiceRoll) return;
 
-    console.log("[useStartRoll] hasTwoRealPlayers polling started (independent of bothReady)");
+    let cancelled = false;
 
-    const pollInterval = setInterval(async () => {
+    const poll = async () => {
       try {
-        const { data: resp, error } = await supabase.functions.invoke("game-session-get", {
+        const { data, error } = await supabase.functions.invoke("game-session-get", {
           body: { roomPda },
         });
 
+        if (cancelled) return;
+
         if (error) {
-          console.log("[useStartRoll] poll error:", error);
+          console.warn("[useStartRoll] pre-roll game-session-get error:", error);
           return;
         }
 
-        const session = resp?.session;
-        if (session?.start_roll_finalized && session.starting_player_wallet) {
-          const starter = session.starting_player_wallet;
-          const isStarter = starter.toLowerCase() === myWallet?.toLowerCase();
-          setMyColor(isStarter ? "w" : "b");
+        const s = data?.session;
+        if (!s) return;
+
+        // If opponent already finalized, hydrate immediately
+        if (s.start_roll_finalized && s.starting_player_wallet) {
+          const starter = String(s.starting_player_wallet || "").trim();
+          const me = String(myWallet || "").trim();
+
           setStartingWallet(starter);
-          setRollResult(session.start_roll as unknown as StartRollResult);
+          setMyColor(starter && me && starter.toLowerCase() === me.toLowerCase() ? "w" : "b");
+
+          if (s.start_roll) setRollResult(s.start_roll as unknown as StartRollResult);
+
           setIsFinalized(true);
           setShowDiceRoll(false);
-          console.log("[useStartRoll] poll found finalized roll. Starter:", starter);
-          clearInterval(pollInterval);
-        } else if (session && !showDiceRoll) {
-          // Session exists but roll not finalized - show dice UI
-          console.log("[useStartRoll] poll: showing dice roll UI");
-          setShowDiceRoll(true);
-          clearInterval(pollInterval);
-        }
-      } catch (err) {
-        console.log("[useStartRoll] poll exception:", err);
-      }
-    }, 2000);
 
-    return () => clearInterval(pollInterval);
-  }, [roomPda, hasTwoRealPlayers, isFinalized, showDiceRoll, myWallet]);
+          console.log("[useStartRoll] Found finalized start roll from server. starter=", starter);
+          return;
+        }
+
+        // If both players are ready server-side, force dice UI to appear
+        if (s.p1_ready && s.p2_ready) {
+          console.log("[useStartRoll] Server shows both ready, showing dice roll UI");
+          setShowDiceRoll(true);
+        }
+      } catch (e) {
+        if (!cancelled) console.warn("[useStartRoll] pre-roll poll exception:", e);
+      }
+    };
+
+    poll();
+    const id = setInterval(poll, 2000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [roomPda, isFinalized, showDiceRoll, myWallet]);
+  // --- END: Baseline start-roll polling ---
 
   const handleRollComplete = useCallback((starter: string) => {
     const isStarter = starter.toLowerCase() === myWallet?.toLowerCase();
