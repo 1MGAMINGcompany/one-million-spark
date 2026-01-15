@@ -313,6 +313,7 @@ const BackgammonGame = () => {
     roomPlayers,
     hasTwoRealPlayers,
     initialColor: myRole === "player" ? "w" : "b",
+    bothReady: rankedGate.bothReady,
   });
 
   // Update myRole based on start roll result for ranked games

@@ -310,6 +310,7 @@ const CheckersGame = () => {
     roomPlayers,
     hasTwoRealPlayers,
     initialColor: myColor === "gold" ? "w" : "b",
+    bothReady: rankedGate.bothReady,
   });
 
   // Update myColor based on start roll result for ranked games

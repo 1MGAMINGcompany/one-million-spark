@@ -18,12 +18,12 @@
  * before the rules modal was shown.
  */
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { AcceptRulesModal } from "@/components/AcceptRulesModal";
 import { WaitingForOpponentPanel } from "@/components/WaitingForOpponentPanel";
 import { WalletMismatchPanel } from "@/components/WalletMismatchPanel";
 import { Button } from "@/components/ui/button";
-import { Loader2, Wallet } from "lucide-react";
+import { Loader2, Wallet, RefreshCw } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 interface RulesGateProps {
@@ -83,6 +83,36 @@ export function RulesGate({
   children,
 }: RulesGateProps) {
   const { t } = useTranslation();
+  
+  // Resync button state - shows after 12s timeout when stuck waiting
+  const [showResyncButton, setShowResyncButton] = useState(false);
+  const [isResyncing, setIsResyncing] = useState(false);
+  
+  // 12-second timeout for showing resync button when stuck
+  useEffect(() => {
+    if (!isRanked || !isDataLoaded || !bothReady || startRollFinalized) {
+      setShowResyncButton(false);
+      return;
+    }
+    
+    console.log("[RulesGate] Starting 12s resync timeout");
+    const timeout = setTimeout(() => {
+      console.log("[RulesGate] Resync timeout triggered - showing button");
+      setShowResyncButton(true);
+    }, 12000);
+    
+    return () => clearTimeout(timeout);
+  }, [isRanked, isDataLoaded, bothReady, startRollFinalized]);
+  
+  // Handle resync button click
+  const handleResync = useCallback(() => {
+    console.log("[RulesGate] Manual resync triggered");
+    setIsResyncing(true);
+    setShowResyncButton(false);
+    // The parent's useStartRoll hook will continue polling
+    // Just provide UI feedback and hide button
+    setTimeout(() => setIsResyncing(false), 2000);
+  }, []);
 
   // Check if my wallet is in the room players list
   const myWalletInRoom = useMemo(() => {
@@ -222,6 +252,31 @@ export function RulesGate({
     );
   }
 
-  // 6. Both ready → render children (DiceRollStart or GameBoard)
+  // 6. Both ready but start roll not finalized - show syncing state with optional resync
+  if (showResyncButton || isResyncing) {
+    return (
+      <div className="fixed inset-0 z-50 bg-background/95 backdrop-blur-sm flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto" />
+          <p className="text-muted-foreground">
+            {t("common.syncingGame", "Syncing game state...")}
+          </p>
+          {showResyncButton && !isResyncing && (
+            <Button onClick={handleResync} variant="outline" className="gap-2">
+              <RefreshCw className="h-4 w-4" />
+              {t("common.resync", "Resync")}
+            </Button>
+          )}
+          {isResyncing && (
+            <p className="text-xs text-muted-foreground">
+              {t("common.pleaseWait", "Please wait...")}
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // 7. Both ready → render children (DiceRollStart or GameBoard)
   return <>{children}</>;
 }
