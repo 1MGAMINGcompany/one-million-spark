@@ -243,13 +243,32 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Supabase client
+    // Supabase client (admin for bypassing RLS)
     if (!supabase) {
       console.error("[forfeit-game] Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY", { requestId });
       return json200({
         success: false,
         error: "Server configuration error: Supabase service credentials missing",
       });
+    }
+
+    // Idempotency: Check if forfeit already processed (use service role client to bypass RLS)
+    const { data: existingSettlement } = await supabase
+      .from("settlement_logs")
+      .select("id, success, winner_wallet, forfeiting_wallet, signature, created_at")
+      .eq("room_pda", roomPda)
+      .eq("action", "forfeit")
+      .eq("success", true)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (existingSettlement) {
+      console.log("[forfeit-game] Already forfeited. Returning existing settlement:", existingSettlement.signature);
+      return new Response(
+        JSON.stringify({ ok: true, alreadySettled: true, settlement: existingSettlement }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     // Load verifier key - ONLY read VERIFIER_SECRET_KEY_V2 (no fallbacks)
@@ -329,8 +348,28 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Solana connection
-    const rpcUrl = Deno.env.get("VITE_SOLANA_RPC_URL") || "https://api.mainnet-beta.solana.com";
+    // Solana connection with RPC URL validation and auto-fix
+    const rpcUrlFromEnv =
+      Deno.env.get("SOLANA_RPC_URL") ??
+      Deno.env.get("VITE_SOLANA_RPC_URL") ??
+      "";
+
+    let rpcUrl = rpcUrlFromEnv.trim();
+
+    // Auto-fix the common "missing https://" mistake
+    if (rpcUrl && !rpcUrl.startsWith("http://") && !rpcUrl.startsWith("https://")) {
+      console.warn("[forfeit-game] RPC URL missing protocol, adding https://");
+      rpcUrl = `https://${rpcUrl}`;
+    }
+
+    // Fallback to public RPC if still invalid
+    if (!rpcUrl || (!rpcUrl.startsWith("http://") && !rpcUrl.startsWith("https://"))) {
+      console.warn("[forfeit-game] Invalid or missing RPC URL, using mainnet fallback");
+      rpcUrl = "https://api.mainnet-beta.solana.com";
+    }
+
+    console.log("[forfeit-game] Using RPC:", rpcUrl.slice(0, 60));
+
     const connection = new Connection(rpcUrl, "confirmed");
 
     // CRITICAL: Check verifier wallet has enough SOL for transaction fees
