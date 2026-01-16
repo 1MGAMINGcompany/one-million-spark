@@ -15,27 +15,21 @@ export const SOLANA_CLUSTER = "mainnet-beta" as const;
 export const SOLANA_ENABLED = true;
 
 // Read RPC from environment - NEVER use public shared endpoints
-const envRpcUrl = import.meta.env.VITE_SOLANA_RPC_URL;
+const raw = (import.meta.env.VITE_SOLANA_RPC_URL || "").trim();
 
-// Validate and normalize the RPC URL
-function getValidatedRpcUrl(): string {
-  if (!envRpcUrl) {
-    console.error("[Solana] VITE_SOLANA_RPC_URL not set - this will cause failures!");
-    // Return a known-bad URL that will fail fast instead of silent failures
-    return "https://MISSING-RPC-URL.invalid";
-  }
-  
-  let url = String(envRpcUrl).trim();
-  
-  // Auto-fix missing https://
-  if (url && !url.startsWith("http://") && !url.startsWith("https://")) {
-    url = `https://${url}`;
-  }
-  
-  return url;
+// Normalize URL (auto-add https:// if missing) or use fallback for debugging
+export const SOLANA_RPC_URL = raw.startsWith("http") 
+  ? raw 
+  : raw 
+    ? `https://${raw}` 
+    : "https://MISSING-RPC-URL.invalid";
+
+// Log RPC status at module load for debugging
+if (!raw) {
+  console.error("[Solana] VITE_SOLANA_RPC_URL not set - this will cause failures!");
+} else {
+  console.info("[Solana] RPC URL configured:", SOLANA_RPC_URL.slice(0, 50) + "...");
 }
-
-export const SOLANA_RPC_URL = getValidatedRpcUrl();
 
 // Get current RPC endpoint (Helius mainnet only)
 export function getSolanaEndpoint(): string {
