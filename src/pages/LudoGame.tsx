@@ -886,6 +886,7 @@ const LudoGame = () => {
   }
 
   return (
+    <GameErrorBoundary>
     <InAppBrowserRecovery roomPda={roomPda || ""} onResubscribeRealtime={resubscribeRealtime}>
     <div className="min-h-screen bg-background flex flex-col">
       {/* RulesGate - Hard gate for ranked games */}
