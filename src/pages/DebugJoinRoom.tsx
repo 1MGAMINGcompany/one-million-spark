@@ -8,9 +8,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Search, RefreshCw } from "lucide-react";
 import { PROGRAM_ID, RoomStatus, GAME_TYPE_NAMES, STATUS_NAMES, parseRoomAccount, roomToDisplay, getRoomPDA, getVaultPDA, fetchAllRooms, isOpenStatus } from "@/lib/solana-program";
-import { getSolanaEndpoint } from "@/lib/solana-config";
+import { SOLANA_RPC_URL } from "@/lib/solana-config";
 import { BUILD_VERSION } from "@/lib/buildVersion";
-const RPC_ENDPOINT = getSolanaEndpoint();
+
+// Use SOLANA_RPC_URL directly for debugging visibility
+const RPC_ENDPOINT = SOLANA_RPC_URL;
 
 export default function DebugJoinRoom() {
   const navigate = useNavigate();
@@ -127,7 +129,12 @@ export default function DebugJoinRoom() {
             <CardTitle className="text-sm">Connection Info</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 text-xs font-mono">
-            <p><strong>RPC:</strong> {RPC_ENDPOINT}</p>
+            <p>
+              <strong>RPC:</strong>{" "}
+              <span className={RPC_ENDPOINT.includes("MISSING") ? "text-red-400 font-bold" : "text-green-400"}>
+                {RPC_ENDPOINT}
+              </span>
+            </p>
             <p><strong>Program ID:</strong> {PROGRAM_ID.toBase58()}</p>
             <p><strong>Your Wallet:</strong> {publicKey?.toBase58() || "Not connected"}</p>
           </CardContent>
