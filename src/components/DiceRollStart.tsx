@@ -136,8 +136,8 @@ export function DiceRollStart({
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const fallbackUsedRef = useRef(false);
   
-  // Determine which player is "me" for display purposes
-  const isPlayer1 = myWallet.toLowerCase() === player1Wallet.toLowerCase();
+  // Determine which player is "me" for display purposes (use trim, not toLowerCase - Base58 is case-sensitive)
+  const isPlayer1 = myWallet.trim() === player1Wallet.trim();
   const myName = t("common.you") || "You";
   const opponentName = t("game.opponent") || "Opponent";
 

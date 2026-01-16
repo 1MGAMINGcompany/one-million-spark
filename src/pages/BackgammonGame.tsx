@@ -164,11 +164,12 @@ const BackgammonGame = () => {
               setEntryFeeSol(parsed.entryFee / 1_000_000_000);
             }
             
-            // Determine my role based on on-chain position
-            const myIndex = realPlayers.findIndex(p => p.toLowerCase() === address.toLowerCase());
+            // Determine my role based on on-chain position (only for fallback before dice roll)
+            // Note: For ranked games, start roll determines who plays first
+            const myIndex = realPlayers.findIndex(p => isSameWallet(p, address));
             const role = myIndex === 0 ? "player" : "ai"; // "player" = gold, "ai" = black
             setMyRole(role);
-            console.log("[BackgammonGame] On-chain players:", realPlayers, "My role:", role === "player" ? "gold" : "black", "Entry fee:", parsed.entryFee);
+            console.log("[BackgammonGame] On-chain players:", realPlayers, "Initial role:", role === "player" ? "gold" : "black", "Entry fee:", parsed.entryFee);
             return;
           }
         }
@@ -284,7 +285,7 @@ const BackgammonGame = () => {
   // Durable game sync - persists moves to DB for reliability
   const handleDurableMoveReceived = useCallback((move: GameMove) => {
     // Only apply moves from opponents (we already applied our own locally)
-    if (move.wallet.toLowerCase() !== address?.toLowerCase()) {
+    if (!isSameWallet(move.wallet, address)) {
       console.log("[BackgammonGame] Applying move from DB:", move.turn_number);
       const bgMove = move.move_data as BackgammonMoveMessage;
       if (bgMove && bgMove.gameState) {
@@ -321,7 +322,7 @@ const BackgammonGame = () => {
   // Update myRole based on start roll result for ranked games
   useEffect(() => {
     if (isRankedGame && startRoll.isFinalized && startRoll.startingWallet) {
-      const isStarter = startRoll.startingWallet.toLowerCase() === address?.toLowerCase();
+      const isStarter = isSameWallet(startRoll.startingWallet, address);
       setMyRole(isStarter ? "player" : "ai");
     }
   }, [isRankedGame, startRoll.isFinalized, startRoll.startingWallet, address]);
@@ -361,7 +362,7 @@ const BackgammonGame = () => {
   // Is current user the room creator? (first player in roomPlayers)
   const isCreator = useMemo(() => {
     if (!address || roomPlayers.length === 0) return false;
-    return roomPlayers[0]?.toLowerCase() === address.toLowerCase();
+    return isSameWallet(roomPlayers[0], address);
   }, [address, roomPlayers]);
 
   // Open leave modal - NEVER triggers wallet
@@ -375,7 +376,7 @@ const BackgammonGame = () => {
   // Opponent wallet for forfeit
   const opponentWallet = useMemo(() => {
     if (!address || roomPlayers.length < 2) return null;
-    return roomPlayers.find(p => p.toLowerCase() !== address.toLowerCase()) || null;
+    return roomPlayers.find(p => !isSameWallet(p, address)) || null;
   }, [address, roomPlayers]);
 
   // Block gameplay until start roll is finalized (for ranked games, also need rules accepted)
@@ -392,7 +393,7 @@ const BackgammonGame = () => {
   // Convert to TurnPlayer format for notifications
   const turnPlayers: TurnPlayer[] = useMemo(() => {
     return roomPlayers.map((playerAddress, index) => {
-      const isMe = playerAddress.toLowerCase() === address?.toLowerCase();
+      const isMe = isSameWallet(playerAddress, address);
       const color = index === 0 ? "gold" : "black";
       return {
         address: playerAddress,

@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
-import { getOpponentWallet } from "@/lib/walletUtils";
+import { getOpponentWallet, isSameWallet } from "@/lib/walletUtils";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Gem, Flag, Users, Wifi, WifiOff, Download, RefreshCw, LogOut } from "lucide-react";
@@ -351,7 +351,7 @@ const DominosGame = () => {
         
         // Determine if I'm player 1 based on on-chain order
         const myIndex = realPlayers.findIndex(p => 
-          p.toLowerCase() === address.toLowerCase()
+          isSameWallet(p, address)
         );
         
         if (myIndex === -1) {

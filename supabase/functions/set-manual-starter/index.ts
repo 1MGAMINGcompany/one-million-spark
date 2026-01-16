@@ -48,12 +48,12 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Verify caller is player1 or player2
-    const callerLower = callerWallet.toLowerCase();
-    const p1Lower = session.player1_wallet?.toLowerCase();
-    const p2Lower = session.player2_wallet?.toLowerCase();
+    // Verify caller is player1 or player2 (use trim, not toLowerCase - Base58 is case-sensitive)
+    const callerTrimmed = callerWallet.trim();
+    const p1Trimmed = session.player1_wallet?.trim();
+    const p2Trimmed = session.player2_wallet?.trim();
     
-    if (callerLower !== p1Lower && callerLower !== p2Lower) {
+    if (callerTrimmed !== p1Trimmed && callerTrimmed !== p2Trimmed) {
       console.warn("[set-manual-starter] Caller not a participant:", callerWallet);
       return new Response(
         JSON.stringify({ error: "Not a participant in this game" }), 
@@ -70,9 +70,9 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Validate starter is one of the players
-    const starterLower = starterWallet.toLowerCase();
-    if (starterLower !== p1Lower && starterLower !== p2Lower) {
+    // Validate starter is one of the players (use trim, not toLowerCase - Base58 is case-sensitive)
+    const starterTrimmed = starterWallet.trim();
+    if (starterTrimmed !== p1Trimmed && starterTrimmed !== p2Trimmed) {
       console.warn("[set-manual-starter] Invalid starter wallet:", starterWallet);
       return new Response(
         JSON.stringify({ error: "Invalid starter wallet - must be a player" }), 

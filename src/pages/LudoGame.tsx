@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
+import { isSameWallet } from "@/lib/walletUtils";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
@@ -236,7 +237,7 @@ const LudoGame = () => {
   // Durable game sync - persists moves to DB for reliability
   const handleDurableMoveReceived = useCallback((move: GameMove) => {
     // Only apply moves from opponents (we already applied our own locally)
-    if (move.wallet.toLowerCase() !== address?.toLowerCase()) {
+    if (!isSameWallet(move.wallet, address)) {
       console.log("[LudoGame] Applying move from DB:", move.turn_number);
       const ludoMove = move.move_data as LudoMove;
       if (ludoMove) {
@@ -271,13 +272,13 @@ const LudoGame = () => {
   // Find which player index the current wallet is
   const myPlayerIndex = useMemo(() => {
     if (!address || roomPlayers.length === 0) return -1;
-    return roomPlayers.findIndex(p => p.toLowerCase() === address.toLowerCase());
+    return roomPlayers.findIndex(p => isSameWallet(p, address));
   }, [address, roomPlayers]);
 
   // Update starting player based on start roll result for ranked games
   useEffect(() => {
     if (isRankedGame && startRoll.isFinalized && startRoll.startingWallet) {
-      const starterIndex = roomPlayers.findIndex(p => p.toLowerCase() === startRoll.startingWallet?.toLowerCase());
+      const starterIndex = roomPlayers.findIndex(p => isSameWallet(p, startRoll.startingWallet));
       if (starterIndex >= 0 && starterIndex !== currentPlayerIndex) {
         setCurrentPlayerIndex(starterIndex);
       }
@@ -318,7 +319,7 @@ const LudoGame = () => {
   // Is current user the room creator? (first player in roomPlayers)
   const isCreator = useMemo(() => {
     if (!address || roomPlayers.length === 0) return false;
-    return roomPlayers[0]?.toLowerCase() === address.toLowerCase();
+    return isSameWallet(roomPlayers[0], address);
   }, [address, roomPlayers]);
 
   // Open leave modal - NEVER triggers wallet

@@ -26,6 +26,7 @@ import { Button } from "@/components/ui/button";
 import { Loader2, Wallet, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useTranslation } from "react-i18next";
+import { isSameWallet } from "@/lib/walletUtils";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type ServerSession = any;
@@ -237,12 +238,10 @@ export function RulesGate({
     setTimeout(() => setIsResyncing(false), 2000);
   }, []);
 
-  // Check if my wallet is in the room players list
+  // Check if my wallet is in the room players list (use isSameWallet for correct Base58 comparison)
   const myWalletInRoom = useMemo(() => {
     if (!myWallet || !roomPlayers.length) return false;
-    return roomPlayers.some(
-      p => p.toLowerCase() === myWallet.toLowerCase()
-    );
+    return roomPlayers.some(p => isSameWallet(p, myWallet));
   }, [myWallet, roomPlayers]);
 
   // Filter valid players (exclude placeholders)

@@ -596,38 +596,45 @@ export default function Room() {
 
     setJoinInProgress(true);
 
-    // Get room details for joinRoom
-    const roomId = typeof room.roomId === 'object' ? room.roomId.toNumber() : room.roomId;
-    const roomCreator = room.creator?.toBase58?.();
-    
-    if (!roomCreator) {
-      toast.error("Invalid room data");
+    try {
+      // Get room details for joinRoom
+      const roomId = typeof room.roomId === 'object' ? room.roomId.toNumber() : room.roomId;
+      const roomCreator = room.creator?.toBase58?.();
+      
+      if (!roomCreator) {
+        toast.error("Invalid room data");
+        setJoinInProgress(false);
+        setShowJoinRulesModal(false);
+        return;
+      }
+
+      // Use withTxLock to prevent overlapping wallet prompts
+      const result = await withTxLock(async () => {
+        return await joinRoom(roomId, roomCreator);
+      });
+
+      if (result?.ok) {
+        // Navigate to canonical play route - game type determined from on-chain data
+        // NEVER use URL slug to determine game type
+        navigate(`/play/${roomPdaParam}`);
+      } else if (!result) {
+        // null means blocked by tx lock - toast already shown
+      } else if (result.reason === "PHANTOM_BLOCKED_OR_REJECTED") {
+        // Error toast already shown by useSolanaRooms
+      } else {
+        // Show generic error if no signature produced
+        if (!result.signature) {
+          toast.error("Wallet signature was not created. Please try again.");
+        }
+      }
+    } catch (e) {
+      console.error("[Room] Join transaction failed:", e);
+      toast.error("Join failed", {
+        description: "RPC or wallet error. Please retry.",
+      });
+    } finally {
       setJoinInProgress(false);
       setShowJoinRulesModal(false);
-      return;
-    }
-
-    // Use withTxLock to prevent overlapping wallet prompts
-    const result = await withTxLock(async () => {
-      return await joinRoom(roomId, roomCreator);
-    });
-
-    setJoinInProgress(false);
-    setShowJoinRulesModal(false);
-
-    if (result?.ok) {
-      // Navigate to canonical play route - game type determined from on-chain data
-      // NEVER use URL slug to determine game type
-      navigate(`/play/${roomPdaParam}`);
-    } else if (!result) {
-      // null means blocked by tx lock - toast already shown
-    } else if (result.reason === "PHANTOM_BLOCKED_OR_REJECTED") {
-      // Error toast already shown by useSolanaRooms
-    } else {
-      // Show generic error if no signature produced
-      if (!result.signature) {
-        toast.error("Wallet signature was not created. Please try again.");
-      }
     }
   };
 

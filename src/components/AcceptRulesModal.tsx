@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Shield, Clock, AlertTriangle, Coins, Loader2, Wallet } from "lucide-react";
+import { isSameWallet } from "@/lib/walletUtils";
 
 interface AcceptRulesModalProps {
   open: boolean;
@@ -40,9 +41,9 @@ export function AcceptRulesModal({
   roomPda,
   roomPlayers = [],
 }: AcceptRulesModalProps) {
-  // Validate wallet is in room (prevent accepting with wrong wallet)
+  // Validate wallet is in room (prevent accepting with wrong wallet) - use isSameWallet for Base58
   const walletInRoom = connectedWallet && roomPlayers.length > 0
-    ? roomPlayers.some(p => p.toLowerCase() === connectedWallet.toLowerCase())
+    ? roomPlayers.some(p => isSameWallet(p, connectedWallet))
     : true; // Allow if roomPlayers not passed
 
   // Disable accept if data not loaded OR wallet not in room

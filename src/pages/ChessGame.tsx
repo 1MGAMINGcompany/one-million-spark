@@ -1,5 +1,6 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
-import { getOpponentWallet } from "@/lib/walletUtils";
+import { getOpponentWallet, isSameWallet } from "@/lib/walletUtils";
+import { GameErrorBoundary } from "@/components/GameErrorBoundary";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { Chess, Square, PieceSymbol, Color } from "chess.js";
 import { ChessBoardPremium } from "@/components/ChessBoardPremium";
@@ -181,11 +182,9 @@ const ChessGame = () => {
               setEntryFeeSol(parsed.entryFee / 1_000_000_000);
             }
             
-            // Determine my color based on on-chain position (white = index 0, black = index 1)
-            const myIndex = realPlayers.findIndex(p => p.toLowerCase() === address.toLowerCase());
-            const color = myIndex === 0 ? "w" : "b";
-            setMyColor(color);
-            console.log("[ChessGame] On-chain players:", realPlayers, "My color:", color === "w" ? "white" : "black", "Entry fee:", parsed.entryFee);
+            // Note: myColor is set by start roll, NOT by on-chain position
+            // On-chain index only affects who is player1/player2, dice roll determines who is white
+            console.log("[ChessGame] On-chain players:", realPlayers, "Entry fee:", parsed.entryFee);
             return true; // Stop polling
           }
         }
@@ -215,7 +214,7 @@ const ChessGame = () => {
             if (!success && pollCount >= MAX_POLLS) {
               console.log("[ChessGame] Max polls reached, still waiting for opponent");
               setRoomPlayers([address, `waiting-${roomPda.slice(0, 8)}`]);
-              setMyColor("w");
+              // Note: myColor is set by start roll, not here
             }
           }
         }, 1000);
@@ -320,7 +319,7 @@ const ChessGame = () => {
   // Durable game sync - persists moves to DB for reliability
   const handleDurableMoveReceived = useCallback((move: GameMove) => {
     // Only apply moves from opponents (we already applied our own locally)
-    if (move.wallet.toLowerCase() !== address?.toLowerCase()) {
+    if (!isSameWallet(move.wallet, address)) {
       console.log("[ChessGame] Applying move from DB:", move.turn_number);
       const chessMove = move.move_data as ChessMove;
       if (chessMove && chessMove.from && chessMove.to) {
@@ -382,15 +381,17 @@ const ChessGame = () => {
     isRanked: isRankedGame,
     roomPlayers,
     hasTwoRealPlayers,
-    initialColor: roomPlayers[0]?.toLowerCase() === address?.toLowerCase() ? "w" : "b",
+    initialColor: isSameWallet(roomPlayers[0], address) ? "w" : "b",
     bothReady: rankedGate.bothReady,
   });
 
-  // Update myColor based on start roll result
+  // Update myColor based on start roll result - THIS IS THE ONLY PLACE THAT SETS COLOR
   useEffect(() => {
     if (startRoll.isFinalized && startRoll.startingWallet) {
-      const isStarter = startRoll.startingWallet.toLowerCase() === address?.toLowerCase();
-      setMyColor(isStarter ? "w" : "b");
+      const isStarter = isSameWallet(startRoll.startingWallet, address);
+      const newColor = isStarter ? "w" : "b";
+      setMyColor(newColor);
+      console.log("[ChessGame] Dice roll finalized. Starter:", startRoll.startingWallet, "My color:", newColor === "w" ? "white" : "black");
       
       toast({
         title: isStarter ? t("gameMultiplayer.youGoFirst") : t("gameMultiplayer.opponentGoesFirst"),
@@ -420,7 +421,7 @@ const ChessGame = () => {
   // Is current user the room creator? (first player in roomPlayers)
   const isCreator = useMemo(() => {
     if (!address || roomPlayers.length === 0) return false;
-    return roomPlayers[0]?.toLowerCase() === address.toLowerCase();
+    return isSameWallet(roomPlayers[0], address);
   }, [address, roomPlayers]);
 
   // NOTE: handleUILeave, handleCancelRoom, handleForfeitMatch are defined AFTER useForfeit hook
@@ -429,7 +430,7 @@ const ChessGame = () => {
   // Opponent wallet for forfeit
   const opponentWallet = useMemo(() => {
     if (!address || roomPlayers.length < 2) return null;
-    return roomPlayers.find(p => p.toLowerCase() !== address.toLowerCase()) || null;
+    return roomPlayers.find(p => !isSameWallet(p, address)) || null;
   }, [address, roomPlayers]);
 
   // useForfeit hook - will be set up after WebRTC is available
@@ -438,8 +439,11 @@ const ChessGame = () => {
   // Block gameplay until start roll is finalized (for ranked games, also need rules accepted)
   const canPlay = startRoll.isFinalized && (!isRankedGame || rankedGate.bothReady);
 
+  // Use startRoll.myColor as source of truth when finalized
+  const effectiveColor = startRoll.isFinalized ? startRoll.myColor : myColor;
+
   // Check if it's my turn
-  const isMyTurn = canPlay && game.turn() === myColor && !gameOver;
+  const isMyTurn = canPlay && game.turn() === effectiveColor && !gameOver;
 
   // Ref for forfeit function - will be set by useForfeit hook
   const forfeitFnRef = useRef<(() => Promise<void>) | null>(null);
@@ -474,7 +478,7 @@ const ChessGame = () => {
   // Convert to TurnPlayer format for notifications
   const turnPlayers: TurnPlayer[] = useMemo(() => {
     return roomPlayers.map((playerAddress, index) => {
-      const isMe = playerAddress.toLowerCase() === address?.toLowerCase();
+      const isMe = isSameWallet(playerAddress, address);
       const color = index === 0 ? "white" : "black";
       return {
         address: playerAddress,
@@ -1096,8 +1100,8 @@ const ChessGame = () => {
                         captureAnimations={animations}
                         onAnimationComplete={handleAnimationComplete}
                         animationsEnabled={animationsEnabled}
-                        flipped={myColor === "b"}
-                        playerColor={myColor}
+                        flipped={effectiveColor === "b"}
+                        playerColor={effectiveColor}
                       />
                     </div>
                   </div>
