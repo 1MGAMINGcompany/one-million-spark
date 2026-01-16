@@ -1145,27 +1145,26 @@ const CheckersGame = () => {
       {/* Background */}
       <div className="absolute inset-0 bg-gradient-to-b from-midnight-light via-background to-background" />
       
-      {/* RulesGate - Hard gate for ranked games */}
-      <RulesGate
-        isRanked={isRankedGame}
-        roomPda={roomPda}
-        myWallet={address}
-        roomPlayers={roomPlayers}
-        iAmReady={rankedGate.iAmReady}
-        opponentReady={rankedGate.opponentReady}
-        bothReady={rankedGate.bothReady}
-        isSettingReady={rankedGate.isSettingReady}
-        stakeLamports={stakeLamports}
-        turnTimeSeconds={effectiveTurnTime}
-        opponentWallet={opponentWallet || undefined}
-        onAcceptRules={handleAcceptRules}
-        onLeave={handleUILeave}
-        onOpenWalletSelector={() => {}}
-        isDataLoaded={isDataLoaded}
-        startRollFinalized={startRoll.isFinalized}
-      >
-        {/* Dice Roll Start - only rendered when RulesGate allows */}
-        {startRoll.showDiceRoll && roomPlayers.length >= 2 && address && (
+      {/* RulesGate + DiceRollStart - only when shouldShowDice */}
+      {roomPlayers.length >= 2 && address && !startRoll.isFinalized && (!isRankedGame || rankedGate.bothReady) && (
+        <RulesGate
+          isRanked={isRankedGame}
+          roomPda={roomPda}
+          myWallet={address}
+          roomPlayers={roomPlayers}
+          iAmReady={rankedGate.iAmReady}
+          opponentReady={rankedGate.opponentReady}
+          bothReady={rankedGate.bothReady}
+          isSettingReady={rankedGate.isSettingReady}
+          stakeLamports={stakeLamports}
+          turnTimeSeconds={effectiveTurnTime}
+          opponentWallet={opponentWallet || undefined}
+          onAcceptRules={handleAcceptRules}
+          onLeave={handleUILeave}
+          onOpenWalletSelector={() => {}}
+          isDataLoaded={isDataLoaded}
+          startRollFinalized={startRoll.isFinalized}
+        >
           <DiceRollStart
             roomPda={roomPda || ""}
             myWallet={address}
@@ -1177,8 +1176,8 @@ const CheckersGame = () => {
             isLeaving={isLeaving}
             isForfeiting={isForfeiting}
           />
-        )}
-      </RulesGate>
+        </RulesGate>
+      )}
       
       {/* Turn Banner */}
       <TurnBanner
