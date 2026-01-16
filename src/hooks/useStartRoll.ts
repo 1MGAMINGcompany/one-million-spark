@@ -13,6 +13,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { isSameWallet, isRealWallet } from "@/lib/walletUtils";
 
 interface StartRollResult {
   p1: { wallet: string; dice: number[]; total: number };
@@ -65,6 +66,15 @@ export function useStartRoll(options: UseStartRollOptions): UseStartRollResult {
   
   const sessionCreatedRef = useRef(false);
 
+  // Reset state when room changes (prevents stuck refs across rooms)
+  useEffect(() => {
+    sessionCreatedRef.current = false;
+    setIsFinalized(false);
+    setShowDiceRoll(false);
+    setStartingWallet(null);
+    setRollResult(null);
+  }, [roomPda]);
+
   // Update color from initial when it changes (before dice roll)
   useEffect(() => {
     if (!isFinalized) {
@@ -80,10 +90,8 @@ export function useStartRoll(options: UseStartRollOptions): UseStartRollResult {
     const player1 = roomPlayers[0];
     const player2 = roomPlayers[1];
     
-    // Validate both are real wallets
-    if (!player1 || !player2) return;
-    if (player1.startsWith("waiting-") || player1.startsWith("error-")) return;
-    if (player2.startsWith("waiting-") || player2.startsWith("error-")) return;
+    // ✅ Only create sessions with real wallets (excludes 111111..., waiting-, error-, ai-)
+    if (!isRealWallet(player1) || !isRealWallet(player2)) return;
 
     const createSession = async () => {
       setIsCreatingSession(true);
@@ -139,7 +147,7 @@ export function useStartRoll(options: UseStartRollOptions): UseStartRollResult {
         if (session?.start_roll_finalized && session.starting_player_wallet) {
           // Roll already finalized
           const starter = session.starting_player_wallet;
-          const isStarter = starter.toLowerCase() === myWallet?.toLowerCase();
+          const isStarter = isSameWallet(starter, myWallet);
           setMyColor(isStarter ? "w" : "b");
           setStartingWallet(starter);
           setRollResult(session.start_roll as unknown as StartRollResult);
@@ -182,7 +190,7 @@ export function useStartRoll(options: UseStartRollOptions): UseStartRollResult {
         const session = resp?.session;
         if (session?.start_roll_finalized && session.starting_player_wallet) {
           const starter = session.starting_player_wallet;
-          const isStarter = starter.toLowerCase() === myWallet?.toLowerCase();
+          const isStarter = isSameWallet(starter, myWallet);
           setMyColor(isStarter ? "w" : "b");
           setStartingWallet(starter);
           setRollResult(session.start_roll as unknown as StartRollResult);
@@ -229,10 +237,9 @@ export function useStartRoll(options: UseStartRollOptions): UseStartRollResult {
         // If opponent already finalized, hydrate immediately
         if (s.start_roll_finalized && s.starting_player_wallet) {
           const starter = String(s.starting_player_wallet || "").trim();
-          const me = String(myWallet || "").trim();
 
           setStartingWallet(starter);
-          setMyColor(starter && me && starter.toLowerCase() === me.toLowerCase() ? "w" : "b");
+          setMyColor(isSameWallet(starter, myWallet) ? "w" : "b");
 
           if (s.start_roll) setRollResult(s.start_roll as unknown as StartRollResult);
 
@@ -264,7 +271,7 @@ export function useStartRoll(options: UseStartRollOptions): UseStartRollResult {
   // --- END: Baseline start-roll polling ---
 
   const handleRollComplete = useCallback((starter: string) => {
-    const isStarter = starter.toLowerCase() === myWallet?.toLowerCase();
+    const isStarter = isSameWallet(starter, myWallet);
     setMyColor(isStarter ? "w" : "b");
     setStartingWallet(starter);
     setIsFinalized(true);

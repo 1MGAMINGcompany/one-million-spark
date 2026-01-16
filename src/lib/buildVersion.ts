@@ -5,7 +5,7 @@
  */
 
 // Increment this to force a rebuild when needed
-const MANUAL_BUMP = 2;
+const MANUAL_BUMP = 3;
 
 const buildDate = new Date();
 const pad = (n: number) => n.toString().padStart(2, '0');
