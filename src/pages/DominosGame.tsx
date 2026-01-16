@@ -1,5 +1,6 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
-import { getOpponentWallet, isSameWallet } from "@/lib/walletUtils";
+import { getOpponentWallet, isSameWallet, isRealWallet } from "@/lib/walletUtils";
+import { GameErrorBoundary } from "@/components/GameErrorBoundary";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Gem, Flag, Users, Wifi, WifiOff, Download, RefreshCw, LogOut } from "lucide-react";
@@ -488,10 +489,11 @@ const DominosGame = () => {
     onMoveReceived: handleDurableMoveReceived,
   });
 
-  // Check if we have 2 real player wallets
-  const hasTwoRealPlayers = roomPlayers.length >= 2 &&
-    !roomPlayers[1]?.startsWith("waiting-") &&
-    !roomPlayers[1]?.startsWith("error-");
+  // Check if we have 2 real player wallets (not placeholders including 111111...)
+  const hasTwoRealPlayers = 
+    roomPlayers.length >= 2 && 
+    isRealWallet(roomPlayers[0]) && 
+    isRealWallet(roomPlayers[1]);
 
   // Deterministic start roll for ALL games (casual + ranked)
   const startRoll = useStartRoll({
@@ -557,10 +559,10 @@ const DominosGame = () => {
 
   // NOTE: handleUILeave, handleCancelRoom, handleForfeitMatch are defined AFTER useForfeit hook
 
-  // Opponent wallet for forfeit
+  // Opponent wallet for forfeit - exclude placeholder wallets
   const opponentWallet = useMemo(() => {
     if (!address || roomPlayers.length < 2) return null;
-    return roomPlayers.find(p => p.toLowerCase() !== address.toLowerCase()) || null;
+    return roomPlayers.find(p => isRealWallet(p) && !isSameWallet(p, address)) || null;
   }, [address, roomPlayers]);
 
   // Block gameplay until start roll is finalized (for ranked games, also need rules accepted)
@@ -920,7 +922,7 @@ const DominosGame = () => {
     roomPda: roomPda || null,
     myWallet: address || null,
     opponentWallet,
-    stakeLamports: entryFeeSol * 1_000_000_000,
+    stakeLamports: stakeLamports ?? Math.floor(entryFeeSol * 1_000_000_000),
     gameType: "dominos",
     mode: isRankedGame ? 'ranked' : 'casual',
     // CRITICAL: Pass validation state for ranked games
@@ -1572,6 +1574,7 @@ const DominosGame = () => {
       />
     </div>
     </InAppBrowserRecovery>
+    </GameErrorBoundary>
   );
 };
 

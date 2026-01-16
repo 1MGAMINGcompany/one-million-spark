@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
-import { getOpponentWallet, isSameWallet } from "@/lib/walletUtils";
+import { getOpponentWallet, isSameWallet, isRealWallet, DEFAULT_SOLANA_PUBKEY } from "@/lib/walletUtils";
 import { GameErrorBoundary } from "@/components/GameErrorBoundary";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { Chess, Square, PieceSymbol, Color } from "chess.js";
@@ -170,10 +170,18 @@ const ChessGame = () => {
         
         if (accountInfo?.data) {
           const parsed = parseRoomAccount(accountInfo.data as Buffer);
-          if (parsed && parsed.players.length >= 2) {
-            // Real player order from on-chain: creator at index 0, joiner at index 1
-            const realPlayers = parsed.players.map(p => p.toBase58());
-            setRoomPlayers(realPlayers);
+          if (parsed) {
+            // Get raw player addresses from on-chain
+            const p1 = parsed.players?.[0]?.toBase58();
+            const p2 = parsed.players?.[1]?.toBase58();
+            
+            // Normalize: replace default pubkey (empty slot) with waiting- placeholder
+            const normalizedPlayers = [
+              p1,
+              p2 === DEFAULT_SOLANA_PUBKEY ? `waiting-${roomPda.slice(0, 8)}` : p2,
+            ].filter(Boolean) as string[];
+            
+            setRoomPlayers(normalizedPlayers);
             
             // Extract entry fee from on-chain (CRITICAL for correct modal display)
             // Guardrail A: Store canonical lamports directly from on-chain
@@ -184,8 +192,13 @@ const ChessGame = () => {
             
             // Note: myColor is set by start roll, NOT by on-chain position
             // On-chain index only affects who is player1/player2, dice roll determines who is white
-            console.log("[ChessGame] On-chain players:", realPlayers, "Entry fee:", parsed.entryFee);
-            return true; // Stop polling
+            console.log("[ChessGame] On-chain players:", normalizedPlayers, "Entry fee:", parsed.entryFee);
+            
+            // ✅ Only stop polling when room truly has 2 real players
+            if (parsed.playerCount >= 2 && p2 && p2 !== DEFAULT_SOLANA_PUBKEY) {
+              return true; // Stop polling
+            }
+            return false; // Continue polling
           }
         }
         
@@ -347,10 +360,11 @@ const ChessGame = () => {
     onMoveReceived: handleDurableMoveReceived,
   });
 
-  // Check if we have 2 real player wallets (not placeholders)
-  const hasTwoRealPlayers = roomPlayers.length >= 2 && 
-    !roomPlayers[1]?.startsWith('waiting-') && 
-    !roomPlayers[1]?.startsWith('error-');
+  // Check if we have 2 real player wallets (not placeholders including 111111...)
+  const hasTwoRealPlayers = 
+    roomPlayers.length >= 2 && 
+    isRealWallet(roomPlayers[0]) && 
+    isRealWallet(roomPlayers[1]);
 
   const rankedGate = useRankedReadyGate({
     roomPda,
@@ -427,10 +441,10 @@ const ChessGame = () => {
   // NOTE: handleUILeave, handleCancelRoom, handleForfeitMatch are defined AFTER useForfeit hook
   // See below after useForfeit is initialized
 
-  // Opponent wallet for forfeit
+  // Opponent wallet for forfeit - exclude placeholder wallets
   const opponentWallet = useMemo(() => {
     if (!address || roomPlayers.length < 2) return null;
-    return roomPlayers.find(p => !isSameWallet(p, address)) || null;
+    return roomPlayers.find(p => isRealWallet(p) && !isSameWallet(p, address)) || null;
   }, [address, roomPlayers]);
 
   // useForfeit hook - will be set up after WebRTC is available
@@ -790,7 +804,7 @@ const ChessGame = () => {
     roomPda: roomPda || null,
     myWallet: address || null,
     opponentWallet,
-    stakeLamports: entryFeeSol * 1_000_000_000,
+    stakeLamports: stakeLamports ?? Math.floor(entryFeeSol * 1_000_000_000),
     gameType: "chess",
     mode: isRankedGame ? 'ranked' : 'casual',
     // CRITICAL: Pass validation state for ranked games
@@ -1006,6 +1020,7 @@ const ChessGame = () => {
   }
 
   return (
+    <GameErrorBoundary>
     <InAppBrowserRecovery roomPda={roomPda || ""} onResubscribeRealtime={resubscribeRealtime}>
     <div className="min-h-screen bg-background relative overflow-hidden">
       {/* Background */}
@@ -1263,7 +1278,7 @@ const ChessGame = () => {
           isSettingReady={rankedGate.isSettingReady}
           stakeLamports={stakeLamports}
           turnTimeSeconds={effectiveTurnTime}
-          opponentWallet={roomPlayers.find(p => p.toLowerCase() !== address?.toLowerCase())}
+          opponentWallet={roomPlayers.find(p => isRealWallet(p) && !isSameWallet(p, address))}
           onAcceptRules={handleAcceptRules}
           onLeave={handleLeaveClick}
           isDataLoaded={isDataLoaded}
@@ -1311,6 +1326,7 @@ const ChessGame = () => {
       />
     </div>
     </InAppBrowserRecovery>
+    </GameErrorBoundary>
   );
 };
 

@@ -26,7 +26,7 @@ import { Button } from "@/components/ui/button";
 import { Loader2, Wallet, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useTranslation } from "react-i18next";
-import { isSameWallet } from "@/lib/walletUtils";
+import { isSameWallet, isPlaceholderWallet } from "@/lib/walletUtils";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type ServerSession = any;
@@ -101,9 +101,8 @@ export function RulesGate({
     return new URLSearchParams(window.location.search).get("debug") === "1";
   }, []);
   
-  // Resync button state - shows after 12s timeout when stuck waiting
-  const [showResyncButton, setShowResyncButton] = useState(false);
-  const [isResyncing, setIsResyncing] = useState(false);
+  // Note: showResyncButton/isResyncing/handleResync removed - the fullscreen syncing overlay
+  // was blocking DiceRollStart UI. Now we let children render immediately when effectiveBothReady.
 
   // --- Poll server truth while ranked gates could block the game ---
   // This breaks the deadlock: "RulesGate blocks children => useStartRoll never runs => never hydrates"
@@ -186,57 +185,6 @@ export function RulesGate({
     return () => clearTimeout(t);
   }, [roomPda, isRanked, effectiveStartRollFinalized]);
   // --- END: Server-truth polling ---
-  
-  // 12-second timeout for showing resync button when stuck (uses effective values)
-  useEffect(() => {
-    if (!isRanked || !isDataLoaded || !effectiveBothReady || effectiveStartRollFinalized) {
-      setShowResyncButton(false);
-      return;
-    }
-    
-    console.log("[RulesGate] Starting 12s resync timeout");
-    const timeout = setTimeout(() => {
-      console.log("[RulesGate] Resync timeout triggered - showing button");
-      setShowResyncButton(true);
-    }, 12000);
-    
-    return () => clearTimeout(timeout);
-  }, [isRanked, isDataLoaded, effectiveBothReady, effectiveStartRollFinalized]);
-  
-  // Fallback polling when showing resync UI - directly check if roll is finalized
-  useEffect(() => {
-    if (!showResyncButton && !isResyncing) return;
-    if (!roomPda) return;
-    
-    console.log("[RulesGate] Starting fallback polling for start_roll_finalized");
-    
-    const poll = async () => {
-      try {
-        const { data } = await supabase.functions.invoke("game-session-get", {
-          body: { roomPda },
-        });
-        if (data?.session?.start_roll_finalized) {
-          console.log("[RulesGate] Fallback poll found finalized roll - reloading page");
-          window.location.reload();
-        }
-      } catch (err) {
-        console.log("[RulesGate] Fallback poll error:", err);
-      }
-    };
-    
-    const interval = setInterval(poll, 2000);
-    poll(); // Fire immediately
-    
-    return () => clearInterval(interval);
-  }, [showResyncButton, isResyncing, roomPda]);
-  
-  // Handle resync button click
-  const handleResync = useCallback(() => {
-    console.log("[RulesGate] Manual resync triggered");
-    setIsResyncing(true);
-    setShowResyncButton(false);
-    setTimeout(() => setIsResyncing(false), 2000);
-  }, []);
 
   // Check if my wallet is in the room players list (use isSameWallet for correct Base58 comparison)
   const myWalletInRoom = useMemo(() => {
@@ -244,11 +192,9 @@ export function RulesGate({
     return roomPlayers.some(p => isSameWallet(p, myWallet));
   }, [myWallet, roomPlayers]);
 
-  // Filter valid players (exclude placeholders)
+  // Filter valid players (exclude all placeholders including default pubkey 111111...)
   const validPlayers = useMemo(() => {
-    return roomPlayers.filter(
-      p => !p.startsWith("waiting-") && !p.startsWith("error-") && !p.startsWith("ai-")
-    );
+    return roomPlayers.filter((p) => !isPlaceholderWallet(p));
   }, [roomPlayers]);
 
   // Debug logging for cross-device sync and invalid state detection
@@ -378,63 +324,8 @@ export function RulesGate({
     );
   }
 
-  // 6. Both ready but start roll not finalized - show syncing state with optional resync + hard reload
-  if (showResyncButton || isResyncing || showHardReload) {
-    return (
-      <div className="fixed inset-0 z-50 bg-background/95 backdrop-blur-sm flex items-center justify-center">
-        <div className="text-center space-y-4">
-          <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto" />
-          <p className="text-muted-foreground">
-            {t("common.syncingGame", "Syncing game state...")}
-          </p>
-          {showResyncButton && !isResyncing && (
-            <Button onClick={handleResync} variant="outline" className="gap-2">
-              <RefreshCw className="h-4 w-4" />
-              {t("common.resync", "Resync")}
-            </Button>
-          )}
-          {isResyncing && (
-            <p className="text-xs text-muted-foreground">
-              {t("common.pleaseWait", "Please wait...")}
-            </p>
-          )}
-          
-          {/* Hard reload escape hatch after 15s */}
-          {showHardReload && (
-            <div className="pt-4 space-y-3">
-              <Button variant="outline" onClick={() => window.location.reload()}>
-                Reload (forced resync)
-              </Button>
-
-              {debugEnabled && (
-                <pre className="text-xs opacity-70 text-left max-w-[90vw] overflow-auto bg-muted/50 p-2 rounded">
-                  {JSON.stringify(
-                    {
-                      roomPda,
-                      bothReadyProp: bothReady,
-                      effectiveBothReady,
-                      startRollFinalizedProp: startRollFinalized,
-                      effectiveStartRollFinalized,
-                      serverPollErrors,
-                      serverSession: {
-                        p1_ready: serverSession?.p1_ready,
-                        p2_ready: serverSession?.p2_ready,
-                        start_roll_finalized: serverSession?.start_roll_finalized,
-                        starting_player_wallet: serverSession?.starting_player_wallet,
-                      },
-                    },
-                    null,
-                    2
-                  )}
-                </pre>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  // 7. Both ready → render children (DiceRollStart or GameBoard)
+  // 6. Both ready → render children (DiceRollStart or GameBoard)
+  // NOTE: Removed the fullscreen "syncing" overlay that was blocking DiceRollStart.
+  // If the roll isn't finalized yet, DiceRollStart handles that UI - don't block it!
   return <>{children}</>;
 }

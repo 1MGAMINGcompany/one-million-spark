@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
-import { isSameWallet } from "@/lib/walletUtils";
+import { isSameWallet, isRealWallet } from "@/lib/walletUtils";
+import { GameErrorBoundary } from "@/components/GameErrorBoundary";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
@@ -252,10 +253,11 @@ const LudoGame = () => {
     onMoveReceived: handleDurableMoveReceived,
   });
 
-  // Check if we have 2 real player wallets
-  const hasTwoRealPlayers = roomPlayers.length >= 2 &&
-    !roomPlayers[1]?.startsWith("waiting-") &&
-    !roomPlayers[1]?.startsWith("error-");
+  // Check if we have 2 real player wallets (not placeholders including 111111...)
+  const hasTwoRealPlayers = 
+    roomPlayers.length >= 2 && 
+    isRealWallet(roomPlayers[0]) && 
+    isRealWallet(roomPlayers[1]);
 
   // Deterministic start roll for ALL games (casual + ranked)
   const startRoll = useStartRoll({
@@ -1130,6 +1132,7 @@ const LudoGame = () => {
       />
     </div>
     </InAppBrowserRecovery>
+    </GameErrorBoundary>
   );
 };
 
