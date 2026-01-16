@@ -1277,6 +1277,7 @@ const DominosGame = () => {
   }
 
   return (
+    <GameErrorBoundary>
     <InAppBrowserRecovery roomPda={roomPda || ""} onResubscribeRealtime={resubscribeRealtime}>
     <div className="min-h-screen bg-background relative overflow-hidden">
       {/* Background */}
