@@ -115,15 +115,16 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const otherPlayer = starting_player_wallet.toLowerCase() === player1_wallet.toLowerCase() 
+    // Note: Use trim() for wallet comparisons (Base58 is case-sensitive)
+    const otherPlayer = starting_player_wallet.trim() === player1_wallet.trim() 
       ? player2_wallet 
       : player1_wallet;
     
     const isOddTurn = turnNumber % 2 === 1;
     const expectedPlayer = isOddTurn ? starting_player_wallet : otherPlayer;
 
-    // Step 5: Validate wallet matches expected player
-    if (wallet.toLowerCase() !== expectedPlayer.toLowerCase()) {
+    // Step 5: Validate wallet matches expected player (use trim, not toLowerCase - Base58 is case-sensitive)
+    if (wallet.trim() !== expectedPlayer.trim()) {
       console.log("[submit-move] Not your turn:", { 
         wallet: wallet.slice(0, 8), 
         expected: expectedPlayer.slice(0, 8),

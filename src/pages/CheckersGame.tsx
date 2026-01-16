@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
-import { getOpponentWallet } from "@/lib/walletUtils";
+import { getOpponentWallet, isSameWallet } from "@/lib/walletUtils";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Gem, Star, Flag, Users, Wifi, WifiOff, Crown, RotateCcw, LogOut, Loader2 } from "lucide-react";
@@ -165,12 +165,13 @@ const CheckersGame = () => {
               setEntryFeeSol(parsed.entryFee / 1_000_000_000);
             }
             
-            // Determine my color based on on-chain position
-            const myIndex = realPlayers.findIndex(p => p.toLowerCase() === address.toLowerCase());
+            // Determine my color based on on-chain position (fallback before dice roll)
+            // Note: For ranked games, start roll determines who plays first
+            const myIndex = realPlayers.findIndex(p => isSameWallet(p, address));
             const color = myIndex === 0 ? "gold" : "obsidian";
             setMyColor(color);
             setFlipped(color === "obsidian"); // Flip board for obsidian player
-            console.log("[CheckersGame] On-chain players:", realPlayers, "My color:", color, "Entry fee:", parsed.entryFee);
+            console.log("[CheckersGame] On-chain players:", realPlayers, "Initial color:", color, "Entry fee:", parsed.entryFee);
             return;
           }
         }
@@ -282,7 +283,7 @@ const CheckersGame = () => {
   // Durable game sync - persists moves to DB for reliability
   const handleDurableMoveReceived = useCallback((move: GameMove) => {
     // Only apply moves from opponents (we already applied our own locally)
-    if (move.wallet.toLowerCase() !== address?.toLowerCase()) {
+    if (!isSameWallet(move.wallet, address)) {
       console.log("[CheckersGame] Applying move from DB:", move.turn_number);
       const checkersMove = move.move_data as CheckersMove;
       if (checkersMove && checkersMove.board) {
@@ -318,7 +319,7 @@ const CheckersGame = () => {
   // Update myColor based on start roll result for ranked games
   useEffect(() => {
     if (isRankedGame && startRoll.isFinalized && startRoll.startingWallet) {
-      const isStarter = startRoll.startingWallet.toLowerCase() === address?.toLowerCase();
+      const isStarter = isSameWallet(startRoll.startingWallet, address);
       setMyColor(isStarter ? "gold" : "obsidian");
       setFlipped(!isStarter); // Flip board for non-starter
     }
@@ -359,7 +360,7 @@ const CheckersGame = () => {
   // Is current user the room creator? (first player in roomPlayers)
   const isCreator = useMemo(() => {
     if (!address || roomPlayers.length === 0) return false;
-    return roomPlayers[0]?.toLowerCase() === address.toLowerCase();
+    return isSameWallet(roomPlayers[0], address);
   }, [address, roomPlayers]);
 
   // Open leave modal - NEVER triggers wallet
@@ -373,7 +374,7 @@ const CheckersGame = () => {
   // Opponent wallet for forfeit
   const opponentWallet = useMemo(() => {
     if (!address || roomPlayers.length < 2) return null;
-    return roomPlayers.find(p => p.toLowerCase() !== address.toLowerCase()) || null;
+    return roomPlayers.find(p => !isSameWallet(p, address)) || null;
   }, [address, roomPlayers]);
 
   // Block gameplay until start roll is finalized (for ranked games, also need rules accepted)
@@ -416,7 +417,7 @@ const CheckersGame = () => {
   // Turn notification players
   const turnPlayers: TurnPlayer[] = useMemo(() => {
     return roomPlayers.map((playerAddress, index) => {
-      const isMe = playerAddress.toLowerCase() === address?.toLowerCase();
+      const isMe = isSameWallet(playerAddress, address);
       const color = index === 0 ? "gold" : "obsidian";
       return {
         address: playerAddress,

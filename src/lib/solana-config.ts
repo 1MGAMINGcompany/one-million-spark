@@ -14,11 +14,28 @@ export const SOLANA_CLUSTER = "mainnet-beta" as const;
 // Feature flag - Solana is LIVE
 export const SOLANA_ENABLED = true;
 
-// Single Helius RPC endpoint - read from env or use default
-// IMPORTANT: Only use this Helius endpoint, no fallbacks to public RPCs
-export const SOLANA_RPC_URL = 
-  import.meta.env.VITE_SOLANA_RPC_URL || 
-  "https://barbey-suiowt-fast-mainnet.helius-rpc.com";
+// Read RPC from environment - NEVER use public shared endpoints
+const envRpcUrl = import.meta.env.VITE_SOLANA_RPC_URL;
+
+// Validate and normalize the RPC URL
+function getValidatedRpcUrl(): string {
+  if (!envRpcUrl) {
+    console.error("[Solana] VITE_SOLANA_RPC_URL not set - this will cause failures!");
+    // Return a known-bad URL that will fail fast instead of silent failures
+    return "https://MISSING-RPC-URL.invalid";
+  }
+  
+  let url = String(envRpcUrl).trim();
+  
+  // Auto-fix missing https://
+  if (url && !url.startsWith("http://") && !url.startsWith("https://")) {
+    url = `https://${url}`;
+  }
+  
+  return url;
+}
+
+export const SOLANA_RPC_URL = getValidatedRpcUrl();
 
 // Get current RPC endpoint (Helius mainnet only)
 export function getSolanaEndpoint(): string {
