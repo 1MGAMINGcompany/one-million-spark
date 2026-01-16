@@ -14,22 +14,9 @@ export const SOLANA_CLUSTER = "mainnet-beta" as const;
 // Feature flag - Solana is LIVE
 export const SOLANA_ENABLED = true;
 
-// Read RPC from environment - NEVER use public shared endpoints
-const raw = (import.meta.env.VITE_SOLANA_RPC_URL || "").trim();
-
-// Normalize URL (auto-add https:// if missing) or use fallback for debugging
-export const SOLANA_RPC_URL = raw.startsWith("http") 
-  ? raw 
-  : raw 
-    ? `https://${raw}` 
-    : "https://MISSING-RPC-URL.invalid";
-
-// Log RPC status at module load for debugging
-if (!raw) {
-  console.error("[Solana] VITE_SOLANA_RPC_URL not set - this will cause failures!");
-} else {
-  console.info("[Solana] RPC URL configured:", SOLANA_RPC_URL.slice(0, 50) + "...");
-}
+// Helius RPC URL - hardcoded and secured via Helius domain locking
+// Allowed domains: 1mgaming.com, one-million-spark.lovable.app, *.lovableproject.com
+export const SOLANA_RPC_URL = "https://mainnet.helius-rpc.com/?api-key=44221d00-cebb-4ef8-90c6-83dacbd9001e";
 
 // Get current RPC endpoint (Helius mainnet only)
 export function getSolanaEndpoint(): string {
