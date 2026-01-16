@@ -1195,27 +1195,26 @@ const BackgammonGame = () => {
         active={gameOver && gameStatus.includes("win")} 
       />
       
-      {/* RulesGate - Hard gate for ranked games */}
-      <RulesGate
-        isRanked={isRankedGame}
-        roomPda={roomPda}
-        myWallet={address}
-        roomPlayers={roomPlayers}
-        iAmReady={rankedGate.iAmReady}
-        opponentReady={rankedGate.opponentReady}
-        bothReady={rankedGate.bothReady}
-        isSettingReady={rankedGate.isSettingReady}
-        stakeLamports={stakeLamports}
-        turnTimeSeconds={effectiveTurnTime}
-        opponentWallet={opponentWallet || undefined}
-        onAcceptRules={handleAcceptRules}
-        onLeave={handleUILeave}
-        onOpenWalletSelector={() => {}}
-        isDataLoaded={isDataLoaded}
-        startRollFinalized={startRoll.isFinalized}
-      >
-        {/* Dice Roll Start - only rendered when RulesGate allows */}
-        {startRoll.showDiceRoll && roomPlayers.length >= 2 && address && (
+      {/* RulesGate + DiceRollStart - only when shouldShowDice */}
+      {roomPlayers.length >= 2 && address && !startRoll.isFinalized && (!isRankedGame || rankedGate.bothReady) && (
+        <RulesGate
+          isRanked={isRankedGame}
+          roomPda={roomPda}
+          myWallet={address}
+          roomPlayers={roomPlayers}
+          iAmReady={rankedGate.iAmReady}
+          opponentReady={rankedGate.opponentReady}
+          bothReady={rankedGate.bothReady}
+          isSettingReady={rankedGate.isSettingReady}
+          stakeLamports={stakeLamports}
+          turnTimeSeconds={effectiveTurnTime}
+          opponentWallet={opponentWallet || undefined}
+          onAcceptRules={handleAcceptRules}
+          onLeave={handleUILeave}
+          onOpenWalletSelector={() => {}}
+          isDataLoaded={isDataLoaded}
+          startRollFinalized={startRoll.isFinalized}
+        >
           <DiceRollStart
             roomPda={roomPda || ""}
             myWallet={address}
@@ -1227,18 +1226,8 @@ const BackgammonGame = () => {
             isLeaving={isLeaving}
             isForfeiting={isForfeiting}
           />
-        )}
-        
-        {/* Loading fallback when RulesGate passed but dice roll not ready */}
-        {!startRoll.showDiceRoll && !startRoll.isFinalized && rankedGate.bothReady && (
-          <div className="fixed inset-0 z-50 bg-background/95 backdrop-blur-sm flex items-center justify-center">
-            <div className="text-center space-y-4">
-              <RefreshCw className="h-12 w-12 animate-spin text-primary mx-auto" />
-              <p className="text-muted-foreground">{t('game.preparingDiceRoll', 'Preparing dice roll...')}</p>
-            </div>
-          </div>
-        )}
-      </RulesGate>
+        </RulesGate>
+      )}
       
       <TurnBanner
         gameName="Backgammon"

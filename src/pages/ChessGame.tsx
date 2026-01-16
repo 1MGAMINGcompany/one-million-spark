@@ -1265,8 +1265,8 @@ const ChessGame = () => {
       />
 
       {/* RulesGate - Hard gate for ranked games */}
-      {/* This handles: loading state, wallet-not-connected, wallet-mismatch, AcceptRulesModal, WaitingForOpponent */}
-      {startRoll.showDiceRoll && roomPlayers.length >= 2 && address && (
+      {/* Render when match is ready: 2 players, wallet connected, not finalized, and (casual OR bothReady) */}
+      {roomPlayers.length >= 2 && address && !startRoll.isFinalized && (!isRankedGame || rankedGate.bothReady) && (
         <RulesGate
           isRanked={isRankedGame}
           roomPda={roomPda}
@@ -1284,7 +1284,7 @@ const ChessGame = () => {
           isDataLoaded={isDataLoaded}
           startRollFinalized={startRoll.isFinalized}
         >
-          {/* DiceRollStart - Only renders when RulesGate allows */}
+          {/* DiceRollStart - rendered based on shouldShowDice, not showDiceRoll */}
           <DiceRollStart
             roomPda={roomPda || ""}
             myWallet={address}

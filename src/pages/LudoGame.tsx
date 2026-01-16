@@ -889,27 +889,26 @@ const LudoGame = () => {
     <GameErrorBoundary>
     <InAppBrowserRecovery roomPda={roomPda || ""} onResubscribeRealtime={resubscribeRealtime}>
     <div className="min-h-screen bg-background flex flex-col">
-      {/* RulesGate - Hard gate for ranked games */}
-      <RulesGate
-        isRanked={isRankedGame}
-        roomPda={roomPda}
-        myWallet={address}
-        roomPlayers={roomPlayers}
-        iAmReady={rankedGate.iAmReady}
-        opponentReady={rankedGate.opponentReady}
-        bothReady={rankedGate.bothReady}
-        isSettingReady={rankedGate.isSettingReady}
-        stakeLamports={stakeLamports}
-        turnTimeSeconds={effectiveTurnTime}
-        opponentWallet={roomPlayers.find(p => p.toLowerCase() !== address?.toLowerCase())}
-        onAcceptRules={handleAcceptRules}
-        onLeave={handleUILeave}
-        onOpenWalletSelector={() => {}}
-        isDataLoaded={isDataLoaded}
-        startRollFinalized={startRoll.isFinalized}
-      >
-        {/* Dice Roll Start - only rendered when RulesGate allows */}
-        {startRoll.showDiceRoll && roomPlayers.length >= 2 && address && (
+      {/* RulesGate + DiceRollStart - only when shouldShowDice */}
+      {roomPlayers.length >= 2 && address && !startRoll.isFinalized && (!isRankedGame || rankedGate.bothReady) && (
+        <RulesGate
+          isRanked={isRankedGame}
+          roomPda={roomPda}
+          myWallet={address}
+          roomPlayers={roomPlayers}
+          iAmReady={rankedGate.iAmReady}
+          opponentReady={rankedGate.opponentReady}
+          bothReady={rankedGate.bothReady}
+          isSettingReady={rankedGate.isSettingReady}
+          stakeLamports={stakeLamports}
+          turnTimeSeconds={effectiveTurnTime}
+          opponentWallet={roomPlayers.find(p => !isSameWallet(p, address))}
+          onAcceptRules={handleAcceptRules}
+          onLeave={handleUILeave}
+          onOpenWalletSelector={() => {}}
+          isDataLoaded={isDataLoaded}
+          startRollFinalized={startRoll.isFinalized}
+        >
           <DiceRollStart
             roomPda={roomPda || ""}
             myWallet={address}
@@ -920,8 +919,8 @@ const LudoGame = () => {
             isLeaving={false}
             isForfeiting={false}
           />
-        )}
-      </RulesGate>
+        </RulesGate>
+      )}
       
       {/* Turn Banner (fallback for no permission) */}
       <TurnBanner
