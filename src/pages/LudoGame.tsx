@@ -887,7 +887,7 @@ const LudoGame = () => {
 
   return (
     <GameErrorBoundary>
-    <InAppBrowserRecovery roomPda={roomPda || ""} onResubscribeRealtime={resubscribeRealtime}>
+    <InAppBrowserRecovery roomPda={roomPda || ""} onResubscribeRealtime={resubscribeRealtime} bypassOverlay={startRoll.showDiceRoll || startRoll.isFinalized}>
     <div className="min-h-screen bg-background flex flex-col">
       {/* RulesGate + DiceRollStart - only when shouldShowDice */}
       {roomPlayers.length >= 2 && address && !startRoll.isFinalized && (!isRankedGame || rankedGate.bothReady) && (
