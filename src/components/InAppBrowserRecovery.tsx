@@ -24,11 +24,25 @@ interface InAppBrowserRecoveryProps {
   bypassOverlay?: boolean;
 }
 
-export function InAppBrowserRecovery({ roomPda, children, onResubscribeRealtime, bypassOverlay }: InAppBrowserRecoveryProps) {
+export function InAppBrowserRecovery({ roomPda, children, onResubscribeRealtime, bypassOverlay = false }: InAppBrowserRecoveryProps) {
   const wallet = useWallet();
   const [isReconnecting, setIsReconnecting] = useState(false);
   const [didReconnect, setDidReconnect] = useState(false);
   const [didRefetch, setDidRefetch] = useState(false);
+  
+  // LATCH: once bypassOverlay is ever true, keep it true for this component's lifetime
+  // This prevents wallet blips from re-enabling the blocking overlay during gameplay
+  const [bypassLatched, setBypassLatched] = useState(false);
+  
+  useEffect(() => {
+    if (bypassOverlay && !bypassLatched) {
+      console.log("[InAppRecovery] bypassOverlay latched - overlays disabled for this session");
+      setBypassLatched(true);
+    }
+  }, [bypassOverlay, bypassLatched]);
+  
+  // Use effectiveBypass instead of bypassOverlay for overlay conditions
+  const effectiveBypass = bypassOverlay || bypassLatched;
   
   // Track if we're in a wallet in-app browser
   const inWalletBrowser = isWalletInAppBrowser();
@@ -189,7 +203,7 @@ export function InAppBrowserRecovery({ roomPda, children, onResubscribeRealtime,
 
   // Show recovery overlay if in wallet browser and disconnected
   // BUT NOT if bypassed during active gameplay
-  if (!bypassOverlay && inWalletBrowser && !wallet.isConnected && !wallet.isConnecting) {
+  if (!effectiveBypass && inWalletBrowser && !wallet.isConnected && !wallet.isConnecting) {
     return (
       <div className="fixed inset-0 z-50 bg-background/95 backdrop-blur-sm flex items-center justify-center p-4">
         <div className="text-center space-y-6 p-6 w-[calc(100%-2rem)] max-w-[min(92vw,22rem)]">
@@ -231,7 +245,7 @@ export function InAppBrowserRecovery({ roomPda, children, onResubscribeRealtime,
   }
 
   // Show connecting state if reconnecting (but not if bypassed)
-  if (!bypassOverlay && wallet.isConnecting) {
+  if (!effectiveBypass && wallet.isConnecting) {
     return (
       <div className="fixed inset-0 z-50 bg-background/95 backdrop-blur-sm flex items-center justify-center">
         <div className="text-center space-y-4 p-8">
