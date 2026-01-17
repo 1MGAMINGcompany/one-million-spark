@@ -125,21 +125,29 @@ export default function DebugHUD() {
     <div
       style={{
         position: "fixed",
+        right: 8,
         bottom: 8,
-        left: 8,
-        zIndex: 99999,
-        background: "rgba(0,0,0,0.9)",
-        color: "#0f0",
-        fontSize: 10,
-        fontFamily: "monospace",
-        padding: 8,
-        borderRadius: 6,
-        maxWidth: 320,
-        maxHeight: "50vh",
-        overflow: "auto",
-        pointerEvents: "auto",
+        zIndex: 2147483647,
+        width: 360,
+        maxWidth: "92vw",
+        pointerEvents: "none",
+        fontSize: 12,
+        fontFamily:
+          "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
       }}
     >
+      <div
+        style={{
+          pointerEvents: "auto",
+          background: "rgba(0,0,0,0.75)",
+          color: "white",
+          border: "1px solid rgba(255,255,255,0.2)",
+          borderRadius: 12,
+          padding: 10,
+          maxHeight: "50vh",
+          overflow: "auto",
+        }}
+      >
       <div style={{ marginBottom: 6 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <strong style={{ color: "#ff0" }}>Debug HUD</strong>
@@ -171,6 +179,7 @@ export default function DebugHUD() {
         <pre style={{ margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-all", fontSize: 9 }}>
           {JSON.stringify(logs.slice(-12), null, 2)}
         </pre>
+        </div>
       </div>
     </div>
   );
