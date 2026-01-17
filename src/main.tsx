@@ -16,6 +16,28 @@ import "./i18n";
 import { BUILD_VERSION, BUILD_TIMESTAMP } from "./lib/buildVersion";
 console.log(`[1MGAMING] App started | Build: ${BUILD_VERSION} | ${BUILD_TIMESTAMP}`);
 
+// Debug instrumentation: capture global errors
+import { dbg, isDebugEnabled } from "./lib/debugLog";
+
+if (typeof window !== "undefined") {
+  window.addEventListener("error", (e) => {
+    if (!isDebugEnabled()) return;
+    dbg("window.error", {
+      message: e.message,
+      filename: e.filename,
+      lineno: e.lineno,
+      colno: e.colno,
+    });
+  });
+
+  window.addEventListener("unhandledrejection", (e) => {
+    if (!isDebugEnabled()) return;
+    dbg("unhandledrejection", {
+      reason: String(e.reason),
+    });
+  });
+}
+
 createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <App />
