@@ -1278,7 +1278,7 @@ const DominosGame = () => {
 
   return (
     <GameErrorBoundary>
-    <InAppBrowserRecovery roomPda={roomPda || ""} onResubscribeRealtime={resubscribeRealtime} bypassOverlay={startRoll.showDiceRoll || startRoll.isFinalized}>
+    <InAppBrowserRecovery roomPda={roomPda || ""} onResubscribeRealtime={resubscribeRealtime} bypassOverlay={true}>
     <div className="min-h-screen bg-background relative overflow-hidden">
       {/* Background */}
       <div className="absolute inset-0 bg-gradient-to-b from-midnight-light via-background to-background" />
