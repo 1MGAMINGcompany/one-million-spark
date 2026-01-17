@@ -31,7 +31,9 @@ function sanitize(data: any) {
 export function isDebugEnabled(): boolean {
   if (typeof window === "undefined") return false;
   const qs = new URLSearchParams(window.location.search);
-  return qs.get("debug") === "1" || localStorage.getItem("__debug") === "1";
+  const enabled = qs.get("debug") === "1" || localStorage.getItem("__debug") === "1";
+  if (enabled) localStorage.setItem("__debug", "1"); // sticky once enabled
+  return enabled;
 }
 
 export function dbg(tag: string, data?: any) {
