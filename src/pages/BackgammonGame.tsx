@@ -1188,7 +1188,7 @@ const BackgammonGame = () => {
 
   return (
     <GameErrorBoundary>
-    <InAppBrowserRecovery roomPda={roomPda || ""} onResubscribeRealtime={resubscribeRealtime}>
+    <InAppBrowserRecovery roomPda={roomPda || ""} onResubscribeRealtime={resubscribeRealtime} bypassOverlay={startRoll.showDiceRoll || startRoll.isFinalized}>
     <div className="min-h-screen bg-background flex flex-col relative">
       {/* Gold Confetti Explosion on Win */}
       <GoldConfettiExplosion 

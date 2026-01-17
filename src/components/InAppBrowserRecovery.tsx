@@ -20,9 +20,11 @@ interface InAppBrowserRecoveryProps {
   children: React.ReactNode;
   /** Called before refetching session/moves to re-subscribe realtime channels */
   onResubscribeRealtime?: () => Promise<void> | void;
+  /** If true, suppress disconnection overlays during active gameplay */
+  bypassOverlay?: boolean;
 }
 
-export function InAppBrowserRecovery({ roomPda, children, onResubscribeRealtime }: InAppBrowserRecoveryProps) {
+export function InAppBrowserRecovery({ roomPda, children, onResubscribeRealtime, bypassOverlay }: InAppBrowserRecoveryProps) {
   const wallet = useWallet();
   const [isReconnecting, setIsReconnecting] = useState(false);
   const [didReconnect, setDidReconnect] = useState(false);
@@ -186,7 +188,8 @@ export function InAppBrowserRecovery({ roomPda, children, onResubscribeRealtime 
   }, [inWalletBrowser, wallet]);
 
   // Show recovery overlay if in wallet browser and disconnected
-  if (inWalletBrowser && !wallet.isConnected && !wallet.isConnecting) {
+  // BUT NOT if bypassed during active gameplay
+  if (!bypassOverlay && inWalletBrowser && !wallet.isConnected && !wallet.isConnecting) {
     return (
       <div className="fixed inset-0 z-50 bg-background/95 backdrop-blur-sm flex items-center justify-center p-4">
         <div className="text-center space-y-6 p-6 w-[calc(100%-2rem)] max-w-[min(92vw,22rem)]">
@@ -227,8 +230,8 @@ export function InAppBrowserRecovery({ roomPda, children, onResubscribeRealtime 
     );
   }
 
-  // Show connecting state if reconnecting
-  if (wallet.isConnecting) {
+  // Show connecting state if reconnecting (but not if bypassed)
+  if (!bypassOverlay && wallet.isConnecting) {
     return (
       <div className="fixed inset-0 z-50 bg-background/95 backdrop-blur-sm flex items-center justify-center">
         <div className="text-center space-y-4 p-8">
