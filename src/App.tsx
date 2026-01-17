@@ -37,6 +37,7 @@ import PlayerProfile from "./pages/PlayerProfile";
 import Leaderboard from "./pages/Leaderboard";
 import AgeConfirmation from "./components/AgeConfirmation";
 import DebugJoinRoom from "./pages/DebugJoinRoom";
+import DebugHUD from "./components/DebugHUD";
 
 // DEV-ONLY: Import to auto-run config check on app load
 import "./lib/devConfigCheck";
@@ -88,6 +89,7 @@ const App = () => (
                   </Routes>
                 </main>
                 <Footer />
+                <DebugHUD />
               </div>
               </BrowserRouter>
             </TooltipProvider>

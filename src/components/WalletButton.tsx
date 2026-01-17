@@ -637,7 +637,7 @@ export function WalletButton() {
             {t("wallet.connect")}
           </Button>
         </DialogTrigger>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent data-overlay="WalletButton.dialog" className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>{t("wallet.connectWallet")}</DialogTitle>
           </DialogHeader>

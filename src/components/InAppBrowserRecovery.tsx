@@ -205,7 +205,7 @@ export function InAppBrowserRecovery({ roomPda, children, onResubscribeRealtime,
   // BUT NOT if bypassed during active gameplay
   if (!effectiveBypass && inWalletBrowser && !wallet.isConnected && !wallet.isConnecting) {
     return (
-      <div className="fixed inset-0 z-50 bg-background/95 backdrop-blur-sm flex items-center justify-center p-4">
+      <div data-overlay="InAppRecovery.disconnected" className="fixed inset-0 z-50 bg-background/95 backdrop-blur-sm flex items-center justify-center p-4">
         <div className="text-center space-y-6 p-6 w-[calc(100%-2rem)] max-w-[min(92vw,22rem)]">
           <div className="mx-auto w-20 h-20 rounded-full bg-yellow-500/10 flex items-center justify-center">
             <WifiOff className="h-10 w-10 text-yellow-500" />
@@ -247,7 +247,7 @@ export function InAppBrowserRecovery({ roomPda, children, onResubscribeRealtime,
   // Show connecting state if reconnecting (but not if bypassed)
   if (!effectiveBypass && wallet.isConnecting) {
     return (
-      <div className="fixed inset-0 z-50 bg-background/95 backdrop-blur-sm flex items-center justify-center">
+      <div data-overlay="InAppRecovery.connecting" className="fixed inset-0 z-50 bg-background/95 backdrop-blur-sm flex items-center justify-center">
         <div className="text-center space-y-4 p-8">
           <RefreshCw className="h-12 w-12 animate-spin text-primary mx-auto" />
           <p className="text-muted-foreground">Connecting wallet...</p>

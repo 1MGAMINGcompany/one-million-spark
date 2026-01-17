@@ -245,7 +245,7 @@ export function RulesGate({
   // 1. If data not loaded → show blocking loading state
   if (!isDataLoaded) {
     return (
-      <div className="fixed inset-0 z-50 bg-background/95 backdrop-blur-sm flex items-center justify-center">
+      <div data-overlay="RulesGate.loading" className="fixed inset-0 z-50 bg-background/95 backdrop-blur-sm flex items-center justify-center">
         <div className="text-center space-y-4">
           <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto" />
           <p className="text-muted-foreground">
@@ -259,7 +259,7 @@ export function RulesGate({
   // 2. If no wallet connected → show blocking "Connect wallet" panel
   if (!myWallet) {
     return (
-      <div className="fixed inset-0 z-50 bg-background/95 backdrop-blur-sm flex items-center justify-center p-4">
+      <div data-overlay="RulesGate.connectWallet" className="fixed inset-0 z-50 bg-background/95 backdrop-blur-sm flex items-center justify-center p-4">
         <div className="max-w-md w-full bg-card border rounded-xl p-8 text-center space-y-4">
           <Wallet className="h-12 w-12 text-primary mx-auto" />
           <h2 className="text-xl font-semibold">
