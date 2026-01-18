@@ -1,185 +1,157 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
-import { useWallet as useSolanaWallet } from "@solana/wallet-adapter-react";
-import { useWallet as useAppWallet } from "@/hooks/useWallet";
-import { dbg, getDbg, clearDbg, isDebugEnabled } from "@/lib/debugLog";
+import { getDbg, clearDbg, isDebugEnabled } from "@/lib/debugLog";
 
-function summarizeEl(el: Element | null) {
-  if (!el) return null;
-
-  const anyEl = el as any;
-  const className =
-    typeof anyEl.className === "string" ? anyEl.className : undefined;
-
-  return {
-    tag: el.tagName,
-    id: (el as HTMLElement).id || undefined,
-    className: className?.slice(0, 100), // Truncate long classnames
-    role: el.getAttribute("role") || undefined,
-    ariaModal: el.getAttribute("aria-modal") || undefined,
-    dataState: el.getAttribute("data-state") || undefined,
-    dataOverlay: el.getAttribute("data-overlay") || undefined,
-    radixPortal: !!el.closest("[data-radix-portal]"),
-  };
-}
+type Pos = { x: number; y: number };
+const POS_KEY = "__debughud_pos_v2";
+const MIN_KEY = "__debughud_min_v2";
 
 export default function DebugHUD() {
   const enabled = isDebugEnabled();
   const location = useLocation();
 
-  const sol = useSolanaWallet();
-  const app = useAppWallet();
-
   const [tick, setTick] = useState(0);
-  const [topEl, setTopEl] = useState<ReturnType<typeof summarizeEl>>(null);
-  const [openRadixCount, setOpenRadixCount] = useState(0);
-
   const logs = useMemo(() => getDbg(), [tick]);
 
-  // Log route changes
+  const [minimized, setMinimized] = useState(() => {
+    try {
+      return localStorage.getItem(MIN_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+
+  const [pos, setPos] = useState<Pos>(() => {
+    try {
+      const raw = localStorage.getItem(POS_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch {}
+    return { x: 8, y: 8 }; // top-left by default (won't block your main buttons)
+  });
+
+  const dragging = useRef(false);
+  const offset = useRef({ x: 0, y: 0 });
+
+  const persist = (p: Pos) => {
+    try { localStorage.setItem(POS_KEY, JSON.stringify(p)); } catch {}
+  };
+
+  const persistMin = (m: boolean) => {
+    try { localStorage.setItem(MIN_KEY, m ? "1" : "0"); } catch {}
+  };
+
   useEffect(() => {
     if (!enabled) return;
 
-    dbg("route", {
-      path: location.pathname,
-      search: location.search,
-      hash: location.hash,
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.pathname, location.search, location.hash, enabled]);
+    const onMove = (e: PointerEvent) => {
+      if (!dragging.current) return;
+      const next = { x: Math.max(0, e.clientX - offset.current.x), y: Math.max(0, e.clientY - offset.current.y) };
+      setPos(next);
+    };
 
-  // Log wallet adapter state changes
-  useEffect(() => {
-    if (!enabled) return;
+    const onUp = () => {
+      if (!dragging.current) return;
+      dragging.current = false;
+      persist(pos);
+    };
 
-    dbg("wallet.adapter", {
-      connected: sol.connected,
-      connecting: sol.connecting,
-      disconnecting: sol.disconnecting,
-      publicKey: sol.publicKey?.toBase58?.() ?? null,
-      adapter: sol.wallet?.adapter?.name ?? null,
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    enabled,
-    sol.connected,
-    sol.connecting,
-    sol.disconnecting,
-    sol.publicKey?.toBase58?.(),
-    sol.wallet?.adapter?.name,
-  ]);
-
-  // Log app wallet state changes
-  useEffect(() => {
-    if (!enabled) return;
-    dbg("wallet.app", {
-      connected: app?.isConnected ?? null,
-      address: app?.address ?? null,
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, app?.isConnected, app?.address]);
-
-  // Heartbeat + top-element inspector
-  useEffect(() => {
-    if (!enabled) return;
-
-    const id = window.setInterval(() => {
-      setTick((t) => t + 1);
-
-      const el = document.elementFromPoint(
-        window.innerWidth / 2,
-        window.innerHeight / 2
-      );
-      const summary = summarizeEl(el);
-
-      // count open radix portals
-      const openCount = document.querySelectorAll(
-        '[data-radix-portal] [data-state="open"]'
-      ).length;
-
-      setOpenRadixCount(openCount);
-
-      // only log when it changes to avoid spam
-      const key = JSON.stringify(summary);
-      const prevKey = JSON.stringify(topEl);
-      if (key !== prevKey) {
-        setTopEl(summary);
-        dbg("topElement.center", summary);
-        dbg("radix.openCount", { openCount });
-      }
-    }, 500);
-
-    return () => window.clearInterval(id);
-  }, [enabled, topEl]);
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+  }, [enabled, pos]);
 
   if (!enabled) return null;
 
   const copyLogs = async () => {
     const payload = JSON.stringify(getDbg(), null, 2);
     await navigator.clipboard.writeText(payload);
-    dbg("hud.copyLogs", { bytes: payload.length });
     alert("Copied debug logs to clipboard");
   };
 
+  const onDragStart = (e: React.PointerEvent) => {
+    dragging.current = true;
+    offset.current = { x: e.clientX - pos.x, y: e.clientY - pos.y };
+    // ensures dragging works reliably on mobile
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  };
+
+  const toggleMin = () => {
+    const next = !minimized;
+    setMinimized(next);
+    persistMin(next);
+  };
+
   return (
+    // Outer wrapper does NOT block the app
     <div
       style={{
         position: "fixed",
-        right: 8,
-        bottom: 8,
+        left: pos.x,
+        top: pos.y,
         zIndex: 2147483647,
-        width: 360,
-        maxWidth: "92vw",
-        pointerEvents: "none",
-        fontSize: 12,
-        fontFamily:
-          "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+        pointerEvents: "none", // KEY: let clicks pass through
+        fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+        fontSize: 11,
       }}
     >
+      {/* Inner panel is clickable */}
       <div
         style={{
-          pointerEvents: "auto",
-          background: "rgba(0,0,0,0.75)",
-          color: "white",
-          border: "1px solid rgba(255,255,255,0.2)",
-          borderRadius: 12,
-          padding: 10,
-          maxHeight: "50vh",
-          overflow: "auto",
+          pointerEvents: "auto", // clickable
+          background: "rgba(0,0,0,0.85)",
+          color: "#fff",
+          border: "1px solid rgba(255,255,255,0.25)",
+          borderRadius: 10,
+          width: minimized ? 140 : 320,
+          maxWidth: "90vw",
+          overflow: "hidden",
         }}
       >
-      <div style={{ marginBottom: 6 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <strong style={{ color: "#ff0" }}>Debug HUD</strong>
-          <span style={{ color: "#888" }}>Route: {location.pathname}</span>
+        {/* Drag bar (works on touch) */}
+        <div
+          onPointerDown={onDragStart}
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            padding: "6px 10px",
+            background: "rgba(255,255,0,0.15)",
+            cursor: "grab",
+            touchAction: "none", // needed for mobile drag
+          }}
+        >
+          <span style={{ fontWeight: 600, color: "#ff0" }}>HUD • {location.pathname}</span>
+          <button onClick={toggleMin} style={{ padding: "2px 8px", fontSize: 10 }}>
+            {minimized ? "Open" : "Min"}
+          </button>
         </div>
-        <div style={{ color: "#888" }}>Radix open: {openRadixCount}</div>
-        <div style={{ marginTop: 4, display: "flex", gap: 4 }}>
-          <button onClick={copyLogs} style={{ padding: "4px 8px", fontSize: 10 }}>
-            Copy logs
-          </button>
-          <button onClick={() => window.location.reload()} style={{ padding: "4px 8px", fontSize: 10 }}>
-            Reload
-          </button>
-          <button onClick={() => { clearDbg(); setTick((t) => t + 1); }} style={{ padding: "4px 8px", fontSize: 10 }}>
-            Clear
-          </button>
-        </div>
-      </div>
 
-      <div style={{ borderTop: "1px solid #333", paddingTop: 6, marginTop: 6 }}>
-        <div style={{ color: "#ff0", marginBottom: 4 }}>Top element (center)</div>
-        <pre style={{ margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-all", color: "#0ff" }}>
-          {JSON.stringify(topEl, null, 2)}
-        </pre>
-      </div>
+        {minimized ? (
+          <div style={{ display: "flex", gap: 4, padding: 6 }}>
+            <button onClick={copyLogs} style={{ padding: "6px 8px", flex: 1 }}>Copy</button>
+            <button onClick={() => { clearDbg(); setTick((t) => t + 1); }} style={{ padding: "6px 8px", flex: 1 }}>Clear</button>
+          </div>
+        ) : (
+          <>
+            <div style={{ display: "flex", gap: 4, padding: "6px 10px" }}>
+              <button onClick={copyLogs} style={{ padding: "6px 8px", flex: 1 }}>Copy logs</button>
+              <button onClick={() => window.location.reload()} style={{ padding: "6px 8px", flex: 1 }}>Reload</button>
+              <button onClick={() => { clearDbg(); setTick((t) => t + 1); }} style={{ padding: "6px 8px", flex: 1 }}>Clear</button>
+            </div>
 
-      <div style={{ borderTop: "1px solid #333", paddingTop: 6, marginTop: 6 }}>
-        <div style={{ color: "#ff0", marginBottom: 4 }}>Last logs</div>
-        <pre style={{ margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-all", fontSize: 9 }}>
-          {JSON.stringify(logs.slice(-12), null, 2)}
-        </pre>
-        </div>
+            <div style={{ padding: "4px 10px", borderTop: "1px solid #333" }}>
+              <div style={{ color: "#888", marginBottom: 2 }}>Tip: Drag from the top bar.</div>
+              <div style={{ color: "#0ff" }}>Route: {location.pathname}</div>
+            </div>
+
+            <pre style={{ margin: 0, padding: 10, maxHeight: 180, overflow: "auto", whiteSpace: "pre-wrap", wordBreak: "break-all", fontSize: 9, borderTop: "1px solid #333" }}>
+              {JSON.stringify(logs.slice(-12), null, 2)}
+            </pre>
+          </>
+        )}
       </div>
     </div>
   );
