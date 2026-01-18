@@ -36,13 +36,27 @@ export function isDebugEnabled(): boolean {
   return enabled;
 }
 
+function loadStored(): DebugEvent[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as DebugEvent[]) : [];
+  } catch {
+    return [];
+  }
+}
+
 export function dbg(tag: string, data?: any) {
   if (!isDebugEnabled()) return;
 
   const evt: DebugEvent = { t: Date.now(), tag, data: sanitize(data) };
 
   const w = window as any;
-  w.__DBG = w.__DBG || [];
+
+  // IMPORTANT: On first log in a fresh page session, LOAD existing logs
+  if (!w.__DBG) {
+    w.__DBG = loadStored();
+  }
+
   const arr: DebugEvent[] = w.__DBG;
 
   arr.push(evt);
@@ -50,11 +64,8 @@ export function dbg(tag: string, data?: any) {
 
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(arr));
-  } catch {
-    // ignore storage failures
-  }
+  } catch {}
 
-  // Keep console logging too
   try {
     // eslint-disable-next-line no-console
     console.log(`[DBG] ${tag}`, evt.data ?? "");
