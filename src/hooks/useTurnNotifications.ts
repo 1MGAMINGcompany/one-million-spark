@@ -3,6 +3,12 @@ import { showBrowserNotification, requestNotificationPermission } from "@/lib/pu
 import { useSound } from "@/contexts/SoundContext";
 import { toast } from "@/hooks/use-toast";
 
+// Safe helper: wallet webviews may not define Notification
+function getNotificationAPI(): any | null {
+  if (typeof window === "undefined") return null;
+  return (window as any).Notification ?? null;
+}
+
 export type PlayerStatus = "active" | "finished" | "disconnected";
 
 export interface TurnPlayer {
@@ -52,11 +58,10 @@ export function useTurnNotifications({
   const lastActiveTurnRef = useRef<string | null>(null);
   const hasNotifiedRef = useRef<Set<string>>(new Set());
 
-  // Check notification permission on mount
+  // Check notification permission on mount (safe for wallet webviews)
   useEffect(() => {
-    if ("Notification" in window) {
-      setHasPermission(Notification.permission === "granted");
-    }
+    const N = getNotificationAPI();
+    setHasPermission(!!N && N.permission === "granted");
   }, []);
 
   // Persist notifications enabled preference
