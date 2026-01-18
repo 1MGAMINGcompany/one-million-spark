@@ -5,7 +5,7 @@
 export const PUSH_ENV = "prod";
 
 // Notification types
-export type GameNotificationType = 
+export type GameNotificationType =
   | "opponent_joined"
   | "your_turn"
   | "opponent_moved"
@@ -22,9 +22,7 @@ interface GameNotification {
 }
 
 // Stub: Initialize Push user for notifications
-export async function initPushNotifications(
-  address: string
-): Promise<any> {
+export async function initPushNotifications(address: string): Promise<any> {
   console.warn("[PushNotifications] Push Protocol not yet available for Solana");
   return null;
 }
@@ -48,26 +46,34 @@ export async function startNotificationListener(
   return () => {};
 }
 
+// --------------------------------------------------------------------
+// SAFE Browser Notification Helpers (wallet webviews may not define Notification)
+// --------------------------------------------------------------------
+
+function getNotificationAPI(): any | null {
+  if (typeof window === "undefined") return null;
+  return (window as any).Notification ?? null;
+}
+
 // Request browser notification permission (still works without Push Protocol)
 export async function requestNotificationPermission(): Promise<boolean> {
   try {
-    if (!("Notification" in window)) {
-      console.warn("[PushNotifications] Browser doesn't support notifications");
+    const N = getNotificationAPI();
+    if (!N) {
+      console.warn("[PushNotifications] Notification API not available in this browser");
       return false;
     }
 
-    if (Notification.permission === "granted") {
-      return true;
-    }
+    if (N.permission === "granted") return true;
 
-    if (Notification.permission === "denied") {
+    if (N.permission === "denied") {
       console.warn("[PushNotifications] Notifications were previously denied");
       return false;
     }
 
     // Request permission with timeout to prevent hanging on mobile
-    const permissionPromise = Notification.requestPermission();
-    const timeoutPromise = new Promise<NotificationPermission>((_, reject) => 
+    const permissionPromise: Promise<NotificationPermission> = N.requestPermission();
+    const timeoutPromise = new Promise<NotificationPermission>((_, reject) =>
       setTimeout(() => reject(new Error("Permission request timeout")), 10000)
     );
 
@@ -84,14 +90,24 @@ export function showBrowserNotification(
   title: string,
   body: string,
   options?: NotificationOptions
-): void {
-  if (Notification.permission === "granted") {
-    new Notification(title, {
+): boolean {
+  try {
+    const N = getNotificationAPI();
+    if (!N) return false;
+    if (N.permission !== "granted") return false;
+
+    // Some wallet webviews throw even when N exists — wrap in try/catch.
+    new N(title, {
       body,
       icon: "/favicon.ico",
       badge: "/favicon.ico",
       tag: "1m-gaming",
       ...options,
     });
+
+    return true;
+  } catch (err) {
+    console.warn("[PushNotifications] showBrowserNotification failed:", err);
+    return false;
   }
 }
