@@ -8,6 +8,7 @@ import {
 } from "@solana/web3.js";
 import bs58 from "bs58";
 import { getSolanaEndpoint } from "./solana-config";
+import { solanaRpcRead, decodeAccountDataBase64 } from "./solanaReadProxy";
 
 // ============================================
 // CONFIGURATION - MAINNET PRODUCTION
@@ -696,38 +697,44 @@ export async function buildCancelAbandonedRoomTx(
 /**
  * Fetch all rooms from the program
  */
-export async function fetchAllRooms(connection: Connection): Promise<RoomDisplay[]> {
+export async function fetchAllRooms(_connection: Connection): Promise<RoomDisplay[]> {
   // Room account discriminator from IDL: [156, 199, 67, 27, 222, 23, 185, 94]
   const discriminator = Buffer.from([156, 199, 67, 27, 222, 23, 185, 94]);
   
-  console.log("[fetchAllRooms] Starting fetch:", {
-    rpc: connection.rpcEndpoint,
-    programId: PROGRAM_ID.toBase58(),
-    discriminator: bs58.encode(discriminator),
-  });
+  console.log("[fetchAllRooms] Using solana-rpc-read proxy for getProgramAccounts");
   
-  // Let errors propagate to caller - don't swallow them
-  const accounts = await connection.getProgramAccounts(PROGRAM_ID, {
-    filters: [
-      {
-        memcmp: {
-          offset: 0,
-          bytes: bs58.encode(discriminator),
+  // Use proxy instead of direct connection
+  const result = await solanaRpcRead("getProgramAccounts", [
+    PROGRAM_ID.toBase58(),
+    {
+      encoding: "base64",
+      filters: [
+        {
+          memcmp: {
+            offset: 0,
+            bytes: bs58.encode(discriminator),
+          },
         },
-      },
-    ],
-  });
+      ],
+    },
+  ]) as Array<{ pubkey: string; account: { data: string[]; lamports: number; owner: string } }>;
   
-  console.log(`[fetchAllRooms] getProgramAccounts returned ${accounts.length} account(s)`);
+  console.log(`[fetchAllRooms] Proxy returned ${(result || []).length} account(s)`);
   
   const rooms: RoomDisplay[] = [];
-  for (const { pubkey, account } of accounts) {
-    const parsed = parseRoomAccount(account.data as Buffer);
+  for (const item of result || []) {
+    const data = decodeAccountDataBase64(item.account);
+    if (!data) {
+      console.warn(`[fetchAllRooms] Failed to decode base64 for: ${item.pubkey}`);
+      continue;
+    }
+    const parsed = parseRoomAccount(data);
     if (parsed) {
+      const pubkey = new PublicKey(item.pubkey);
       console.log(`[fetchAllRooms] Parsed room #${parsed.roomId}: status=${parsed.status}, players=${parsed.playerCount}/${parsed.maxPlayers}, pda=${pubkey.toBase58()}`);
       rooms.push(roomToDisplay(parsed, pubkey));
     } else {
-      console.warn(`[fetchAllRooms] Failed to parse account: ${pubkey.toBase58()}`);
+      console.warn(`[fetchAllRooms] Failed to parse account: ${item.pubkey}`);
     }
   }
   
@@ -745,36 +752,44 @@ export async function fetchAllRooms(connection: Connection): Promise<RoomDisplay
  * - Offset 16: 32-byte creator pubkey
  */
 export async function fetchRoomsByCreator(
-  connection: Connection,
+  _connection: Connection,
   creator: PublicKey
 ): Promise<RoomDisplay[]> {
   try {
     const discriminator = Buffer.from([156, 199, 67, 27, 222, 23, 185, 94]);
     
-    const accounts = await connection.getProgramAccounts(PROGRAM_ID, {
-      filters: [
-        // Filter by discriminator at offset 0
-        {
-          memcmp: {
-            offset: 0,
-            bytes: bs58.encode(discriminator),
+    console.log("[fetchRoomsByCreator] Using solana-rpc-read proxy for getProgramAccounts");
+    
+    const result = await solanaRpcRead("getProgramAccounts", [
+      PROGRAM_ID.toBase58(),
+      {
+        encoding: "base64",
+        filters: [
+          // Filter by discriminator at offset 0
+          {
+            memcmp: {
+              offset: 0,
+              bytes: bs58.encode(discriminator),
+            },
           },
-        },
-        // Filter by creator pubkey at offset 16 (8-byte discriminator + 8-byte room_id)
-        {
-          memcmp: {
-            offset: 16,
-            bytes: creator.toBase58(),
+          // Filter by creator pubkey at offset 16 (8-byte discriminator + 8-byte room_id)
+          {
+            memcmp: {
+              offset: 16,
+              bytes: creator.toBase58(),
+            },
           },
-        },
-      ],
-    });
+        ],
+      },
+    ]) as Array<{ pubkey: string; account: { data: string[]; lamports: number; owner: string } }>;
     
     const rooms: RoomDisplay[] = [];
-    for (const { pubkey, account } of accounts) {
-      const parsed = parseRoomAccount(account.data as Buffer);
+    for (const item of result || []) {
+      const data = decodeAccountDataBase64(item.account);
+      if (!data) continue;
+      const parsed = parseRoomAccount(data);
       if (parsed) {
-        rooms.push(roomToDisplay(parsed, pubkey));
+        rooms.push(roomToDisplay(parsed, new PublicKey(item.pubkey)));
       }
     }
     
@@ -820,7 +835,7 @@ export async function fetchNextRoomIdForCreator(
  * @returns { roomId, roomPda, vaultPda } - The chosen room ID and its derived PDAs (guaranteed to not exist on-chain)
  */
 export async function findCollisionFreeRoomId(
-  connection: Connection,
+  _connection: Connection,
   creator: PublicKey,
   maxTries: number = 20
 ): Promise<{ roomId: number; roomPda: PublicKey; vaultPda: PublicKey }> {
@@ -835,14 +850,16 @@ export async function findCollisionFreeRoomId(
     const [vaultPda] = getVaultPDA(roomPda);
     
     try {
-      // Check BOTH room and vault PDAs in parallel - critical for orphan vault detection
-      const [roomInfo, vaultInfo] = await Promise.all([
-        connection.getAccountInfo(roomPda),
-        connection.getAccountInfo(vaultPda),
-      ]);
+      // Check BOTH room and vault PDAs in parallel using proxy
+      console.log("[findCollisionFreeRoomId] Using solana-rpc-read proxy for getAccountInfo");
       
-      const roomExists = roomInfo !== null;
-      const vaultExists = vaultInfo !== null;
+      const [roomResult, vaultResult] = await Promise.all([
+        solanaRpcRead("getAccountInfo", [roomPda.toBase58(), { encoding: "base64" }]),
+        solanaRpcRead("getAccountInfo", [vaultPda.toBase58(), { encoding: "base64" }]),
+      ]) as [{ value: unknown } | null, { value: unknown } | null];
+      
+      const roomExists = roomResult?.value !== null && roomResult?.value !== undefined;
+      const vaultExists = vaultResult?.value !== null && vaultResult?.value !== undefined;
       
       console.log(`[findCollisionFreeRoomId] Checking roomId=${candidateId}:
   roomPda: ${roomPda.toBase58()} (exists: ${roomExists})
@@ -880,18 +897,30 @@ export async function findCollisionFreeRoomId(
  * @deprecated Use fetchNextRoomIdForCreator instead
  * Fetch next room ID from global state
  */
-export async function fetchNextRoomId(connection: Connection): Promise<number> {
+export async function fetchNextRoomId(_connection: Connection): Promise<number> {
   try {
     const [globalStatePda] = getGlobalStatePDA();
-    const accountInfo = await connection.getAccountInfo(globalStatePda);
     
-    if (!accountInfo) {
+    console.log("[fetchNextRoomId] Using solana-rpc-read proxy for getAccountInfo");
+    
+    const result = await solanaRpcRead("getAccountInfo", [
+      globalStatePda.toBase58(),
+      { encoding: "base64" },
+    ]) as { value: { data: string[] } | null };
+    
+    if (!result?.value) {
       console.log("Global state not initialized, defaulting to 1");
       return 1;
     }
     
+    const data = decodeAccountDataBase64(result.value);
+    if (!data) {
+      console.log("Failed to decode global state, defaulting to 1");
+      return 1;
+    }
+    
     // Skip 8-byte discriminator, read next_room_id: u64
-    const nextRoomId = Number((accountInfo.data as Buffer).readBigUInt64LE(8));
+    const nextRoomId = Number(data.readBigUInt64LE(8));
     return nextRoomId;
   } catch (err) {
     console.error("Failed to fetch next room ID:", err);
@@ -922,14 +951,23 @@ export async function fetchOpenPublicRooms(connection: Connection): Promise<Room
  * Note: This function now requires knowing the creator to derive the PDA
  * For fetching rooms without knowing the creator, use fetchAllRooms and filter
  */
-export async function fetchRoomById(connection: Connection, creator: PublicKey, roomId: number): Promise<RoomDisplay | null> {
+export async function fetchRoomById(_connection: Connection, creator: PublicKey, roomId: number): Promise<RoomDisplay | null> {
   try {
     const [roomPda] = getRoomPDA(creator, roomId);
-    const accountInfo = await connection.getAccountInfo(roomPda);
     
-    if (!accountInfo) return null;
+    console.log("[fetchRoomById] Using solana-rpc-read proxy for getAccountInfo");
     
-    const parsed = parseRoomAccount(accountInfo.data as Buffer);
+    const result = await solanaRpcRead("getAccountInfo", [
+      roomPda.toBase58(),
+      { encoding: "base64" },
+    ]) as { value: { data: string[] } | null };
+    
+    if (!result?.value) return null;
+    
+    const data = decodeAccountDataBase64(result.value);
+    if (!data) return null;
+    
+    const parsed = parseRoomAccount(data);
     if (!parsed) return null;
     
     return roomToDisplay(parsed, roomPda);
@@ -943,17 +981,29 @@ export async function fetchRoomById(connection: Connection, creator: PublicKey, 
  * Fetch a room by its PDA directly (base58 string)
  * Useful when you have the roomPda from the URL but don't know creator/roomId
  */
-export async function fetchRoomByPda(connection: Connection, pdaBase58: string): Promise<RoomDisplay | null> {
+export async function fetchRoomByPda(_connection: Connection, pdaBase58: string): Promise<RoomDisplay | null> {
   try {
     const roomPda = new PublicKey(pdaBase58);
-    const accountInfo = await connection.getAccountInfo(roomPda);
     
-    if (!accountInfo) {
+    console.log("[fetchRoomByPda] Using solana-rpc-read proxy for getAccountInfo");
+    
+    const result = await solanaRpcRead("getAccountInfo", [
+      pdaBase58,
+      { encoding: "base64" },
+    ]) as { value: { data: string[] } | null };
+    
+    if (!result?.value) {
       console.log(`[fetchRoomByPda] No account found for PDA: ${pdaBase58}`);
       return null;
     }
     
-    const parsed = parseRoomAccount(accountInfo.data as Buffer);
+    const data = decodeAccountDataBase64(result.value);
+    if (!data) {
+      console.log(`[fetchRoomByPda] Failed to decode account data`);
+      return null;
+    }
+    
+    const parsed = parseRoomAccount(data);
     if (!parsed) {
       console.log(`[fetchRoomByPda] Failed to parse account data`);
       return null;

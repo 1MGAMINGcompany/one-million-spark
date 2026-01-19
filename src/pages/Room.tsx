@@ -4,6 +4,7 @@ import { PublicKey, LAMPORTS_PER_SOL, VersionedTransaction, TransactionMessage }
 
 import { useConnection, useWallet as useSolanaWallet } from "@solana/wallet-adapter-react";
 import { parseRoomAccount, getVaultPDA, RoomStatus, statusToName, isOpenStatus, buildCloseRoomIx, PROGRAM_ID } from "@/lib/solana-program";
+import { solanaRpcRead, decodeAccountDataBase64 } from "@/lib/solanaReadProxy";
 import { useWallet } from "@/hooks/useWallet";
 import { useSolanaRooms } from "@/hooks/useSolanaRooms";
 import { useTxLock } from "@/contexts/TxLockContext";
@@ -271,17 +272,28 @@ export default function Room() {
 
         const roomPda = new PublicKey(roomPdaParam);
 
-        // Fetch directly by PDA using web3.js (no Anchor)
-        const accountInfo = await connection.getAccountInfo(roomPda);
+        // Use proxy for getAccountInfo instead of direct connection
+        console.log("[Room] Using solana-rpc-read proxy for getAccountInfo");
+        const accountResult = await solanaRpcRead("getAccountInfo", [
+          roomPdaParam,
+          { encoding: "base64", commitment: "confirmed" },
+        ]) as { value: { data: string[]; lamports: number } | null };
 
-        if (!accountInfo) {
+        if (!accountResult?.value) {
           console.log("[Room] Room not found - accountInfo is null");
           if (!silent) setRoom(null); // in silent mode, don't wipe UI
           return;
         }
 
+        // Decode base64 data from proxy response
+        const data = decodeAccountDataBase64(accountResult.value);
+        if (!data) {
+          console.log("[Room] Failed to decode account data");
+          if (!silent) setError("Failed to decode room data");
+          return;
+        }
+
         // Parse using parseRoomAccount (no Anchor needed)
-        const data = Buffer.from(accountInfo.data);
         const parsed = parseRoomAccount(data);
 
         if (!parsed) {
@@ -321,8 +333,14 @@ export default function Room() {
             const [vaultPda] = getVaultPDA(roomPda);
             setVaultPdaStr(vaultPda.toBase58());
 
-            const vaultBal = await connection.getBalance(vaultPda, "confirmed");
-            setVaultLamports(BigInt(vaultBal));
+            // Use proxy for getBalance instead of direct connection
+            console.log("[Room] Using solana-rpc-read proxy for getBalance");
+            const balanceResult = await solanaRpcRead("getBalance", [
+              vaultPda.toBase58(),
+              { commitment: "confirmed" },
+            ]) as { value: number };
+            
+            setVaultLamports(BigInt(balanceResult?.value ?? 0));
           } catch (vaultErr) {
             console.error("[Room] Failed to fetch vault balance:", vaultErr);
           }
@@ -352,7 +370,7 @@ export default function Room() {
         fetchInFlightRef.current = false;
       }
     },
-    [roomPdaParam, connection]
+    [roomPdaParam]
   );
 
   const fetchRoomSafe = useCallback(() => {
@@ -370,7 +388,7 @@ export default function Room() {
   useEffect(() => {
     console.log("[Room] useEffect triggered, roomPda:", roomPdaParam);
     fetchRoom();
-  }, [roomPdaParam, connection, wallet]);
+  }, [roomPdaParam, fetchRoom]);
 
   // Real-time subscription to room changes
   useEffect(() => {
@@ -406,11 +424,14 @@ export default function Room() {
                 };
                 setRoom(roomAccount);
 
-                // Refresh vault balance
+                // Refresh vault balance using proxy
                 try {
                   const [vaultPda] = getVaultPDA(roomPda);
-                  const vaultBal = await connection.getBalance(vaultPda, "confirmed");
-                  setVaultLamports(BigInt(vaultBal));
+                  const balanceResult = await solanaRpcRead("getBalance", [
+                    vaultPda.toBase58(),
+                    { commitment: "confirmed" },
+                  ]) as { value: number };
+                  setVaultLamports(BigInt(balanceResult?.value ?? 0));
                 } catch (vaultErr) {
                   console.error("[Room] Failed to refresh vault balance:", vaultErr);
                 }

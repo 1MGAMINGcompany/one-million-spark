@@ -41,3 +41,6 @@ verify_jwt = false
 
 [functions.client-error]
 verify_jwt = false
+
+[functions.solana-rpc-read]
+verify_jwt = false
