@@ -14,7 +14,7 @@ import {
   AlertTriangle,
   Coins,
   Clock,
-  Bug,
+  
   Trophy,
   Gamepad,
   Settings2
@@ -42,7 +42,7 @@ export default function RoomList() {
   const { toast } = useToast();
   const { isConnected, address } = useWallet();
   const { rooms, loading, error, fetchRooms, activeRoom, blockingRoom: hookBlockingRoom, findMyActiveGameSessions } = useSolanaRooms();
-  const [showDebug, setShowDebug] = useState(false);
+  
   const [lastFetch, setLastFetch] = useState<string | null>(null);
   const [myActiveSessions, setMyActiveSessions] = useState<Array<{
     roomPda: string;
@@ -226,14 +226,6 @@ export default function RoomList() {
         </div>
         <div className="flex gap-2">
           <Button 
-            variant="ghost" 
-            size="icon"
-            onClick={() => setShowDebug(!showDebug)}
-            title="Toggle debug info"
-          >
-            <Bug className="h-4 w-4" />
-          </Button>
-          <Button 
             variant="outline" 
             size="icon"
             onClick={() => {
@@ -324,30 +316,6 @@ export default function RoomList() {
                 </div>
               </div>
             ))}
-          </CardContent>
-        </Card>
-      )}
-      {/* Debug Panel */}
-      {showDebug && (
-        <Card className="mb-6 border-primary/50 bg-primary/5">
-          <CardContent className="p-4 text-xs font-mono space-y-1">
-            <p><strong>Build:</strong> {BUILD_VERSION}</p>
-            <p><strong>RPC:</strong> {rpcEndpoint}</p>
-            <p><strong>Program ID:</strong> {PROGRAM_ID.toBase58()}</p>
-            <p><strong>SOLANA_ENABLED:</strong> {String(SOLANA_ENABLED)}</p>
-            <p><strong>Last Fetch:</strong> {lastFetch || "Never"}</p>
-            <p><strong>Rooms Found:</strong> {rooms.length}</p>
-            <p><strong>Loading:</strong> {String(loading)}</p>
-            <p><strong>Error:</strong> {error || "None"}</p>
-            <p><strong>Active Room:</strong> {activeRoom ? `#${activeRoom.roomId} (${activeRoom.statusName})` : "None"}</p>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="mt-2"
-              onClick={() => navigate("/debug/join")}
-            >
-              Open Debug Tool
-            </Button>
           </CardContent>
         </Card>
       )}

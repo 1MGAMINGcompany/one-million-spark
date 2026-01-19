@@ -2,7 +2,7 @@
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { SolanaProvider } from "./components/SolanaProvider";
 import { LoadingProvider } from "./contexts/LoadingContext";
 import { AudioProvider } from "./contexts/AudioContext";
@@ -87,7 +87,7 @@ const App = () => (
                       <Route path="/terms-of-service" element={<TermsOfService />} />
                       <Route path="/player/:wallet" element={<PlayerProfile />} />
                       <Route path="/leaderboard/:game" element={<Leaderboard />} />
-                      <Route path="/debug/join" element={<DebugJoinRoom />} />
+                      <Route path="/debug/join" element={isDebugEnabled() ? <DebugJoinRoom /> : <Navigate to="/" replace />} />
                       <Route path="*" element={<NotFound />} />
                     </Routes>
                   </main>
