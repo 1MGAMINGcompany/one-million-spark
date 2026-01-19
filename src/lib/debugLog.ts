@@ -89,3 +89,32 @@ export function clearDbg() {
   } catch {}
   (window as any).__DBG = [];
 }
+
+// Auto-capture global errors (runs once on import)
+// Guarded to prevent double-registration in hot reload
+if (typeof window !== "undefined" && !(window as any).__DBG_ERR_HOOKS__) {
+  (window as any).__DBG_ERR_HOOKS__ = true;
+
+  try {
+    window.addEventListener("error", (e) => {
+      try {
+        dbg("window.error", {
+          message: e.message,
+          filename: e.filename,
+          lineno: e.lineno,
+          colno: e.colno,
+        });
+      } catch {}
+    });
+  } catch {}
+
+  try {
+    window.addEventListener("unhandledrejection", (e) => {
+      try {
+        dbg("unhandledrejection", {
+          reason: e.reason?.message || String(e.reason),
+        });
+      } catch {}
+    });
+  } catch {}
+}
