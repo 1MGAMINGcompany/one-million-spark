@@ -712,7 +712,10 @@
     "autoForfeit": "स्वत: हार",
     "missedThreeTurns": "आपने लगातार 3 बारी खो दी",
     "opponentSkipped": "प्रतिद्वंद्वी ने बारी छोड़ी",
-    "yourTurnNow": "प्रतिद्वंद्वी का समय समाप्त - अब आपकी बारी है"
+    "yourTurnNow": "प्रतिद्वंद्वी का समय समाप्त - अब आपकी बारी है",
+    "playerEliminated": "खिलाड़ी बाहर",
+    "youWereEliminated": "आप खेल से बाहर हो गए",
+    "opponentEliminated": "{{player}} बाहर हो गया"
   },
   "pwa": {
     "addToHomeScreen": "होम स्क्रीन पर जोड़ें",

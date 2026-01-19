@@ -693,7 +693,10 @@
     "autoForfeit": "Auto Forfeit",
     "missedThreeTurns": "You missed 3 turns in a row",
     "opponentSkipped": "Opponent Skipped",
-    "yourTurnNow": "Their turn timed out - it's your turn now"
+    "yourTurnNow": "Their turn timed out - it's your turn now",
+    "playerEliminated": "Player Eliminated",
+    "youWereEliminated": "You were eliminated from the game",
+    "opponentEliminated": "{{player}} has been eliminated"
   },
   "pwa": {
     "installApp": "Install App for Notifications",

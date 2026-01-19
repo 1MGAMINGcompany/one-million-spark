@@ -717,7 +717,10 @@
     "autoForfeit": "自動棄権",
     "missedThreeTurns": "3ターン連続でスキップしました",
     "opponentSkipped": "対戦相手がスキップ",
-    "yourTurnNow": "相手の時間切れ - あなたのターンです"
+    "yourTurnNow": "相手の時間切れ - あなたのターンです",
+    "playerEliminated": "プレイヤー脱落",
+    "youWereEliminated": "ゲームから脱落しました",
+    "opponentEliminated": "{{player}}が脱落しました"
   },
   "pwa": {
     "addToHomeScreen": "ホーム画面に追加",

@@ -581,7 +581,10 @@
     "autoForfeit": "Automatische Aufgabe",
     "missedThreeTurns": "Sie haben 3 Züge hintereinander verpasst",
     "opponentSkipped": "Gegner übersprungen",
-    "yourTurnNow": "Zeit des Gegners abgelaufen - Sie sind am Zug"
+    "yourTurnNow": "Zeit des Gegners abgelaufen - Sie sind am Zug",
+    "playerEliminated": "Spieler Ausgeschieden",
+    "youWereEliminated": "Sie wurden aus dem Spiel ausgeschieden",
+    "opponentEliminated": "{{player}} wurde ausgeschieden"
   },
   "pwa": {
     "installApp": "App für Benachrichtigungen Installieren",

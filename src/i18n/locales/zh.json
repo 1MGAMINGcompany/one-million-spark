@@ -699,7 +699,10 @@
     "autoForfeit": "自动弃权",
     "missedThreeTurns": "您连续错过了3个回合",
     "opponentSkipped": "对手跳过",
-    "yourTurnNow": "对手超时 - 轮到您了"
+    "yourTurnNow": "对手超时 - 轮到您了",
+    "playerEliminated": "玩家淘汰",
+    "youWereEliminated": "您已被淘汰出局",
+    "opponentEliminated": "{{player}}已被淘汰"
   },
   "pwa": {
     "addToHomeScreen": "添加到主屏幕",

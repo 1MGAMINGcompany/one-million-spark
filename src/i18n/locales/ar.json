@@ -699,7 +699,10 @@
     "autoForfeit": "انسحاب تلقائي",
     "missedThreeTurns": "فاتتك 3 أدوار متتالية",
     "opponentSkipped": "تخطى الخصم دوره",
-    "yourTurnNow": "انتهى وقت دور الخصم - الآن دورك"
+    "yourTurnNow": "انتهى وقت دور الخصم - الآن دورك",
+    "playerEliminated": "تم إقصاء اللاعب",
+    "youWereEliminated": "تم إقصاؤك من اللعبة",
+    "opponentEliminated": "تم إقصاء {{player}}"
   },
   "pwa": {
     "addToHomeScreen": "إضافة إلى الشاشة الرئيسية",
