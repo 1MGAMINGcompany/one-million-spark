@@ -6,7 +6,10 @@
  * - players[1] => joiner => black/obsidian (seat 1)
  * 
  * This prevents "both white" issues when wallet is temporarily disconnected.
+ * 
+ * IMPORTANT: Solana Base58 addresses are case-sensitive - use isSameWallet for comparisons
  */
+import { isSameWallet } from "./walletUtils";
 
 export interface SeatInfo {
   seatIndex: number;
@@ -48,9 +51,9 @@ export function getSeat(
     return invalidSeat;
   }
 
-  const walletLower = walletPubkey.toLowerCase();
+  // Use isSameWallet for proper Base58 comparison (no toLowerCase)
   const seatIndex = roomPlayers.findIndex(
-    (p) => p.toLowerCase() === walletLower
+    (p) => isSameWallet(p, walletPubkey)
   );
 
   if (seatIndex === -1) {

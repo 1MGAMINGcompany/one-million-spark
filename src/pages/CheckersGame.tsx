@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
-import { getOpponentWallet, isSameWallet, isRealWallet } from "@/lib/walletUtils";
+import { getOpponentWallet, isSameWallet, isRealWallet, normalizeWallet } from "@/lib/walletUtils";
+import { incMissed, resetMissed, clearRoom } from "@/lib/missedTurns";
 import { GameErrorBoundary } from "@/components/GameErrorBoundary";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -287,13 +288,45 @@ const CheckersGame = () => {
     // Only apply moves from opponents (we already applied our own locally)
     if (!isSameWallet(move.wallet, address)) {
       console.log("[CheckersGame] Applying move from DB:", move.turn_number);
-      const checkersMove = move.move_data as CheckersMove;
+      const moveData = move.move_data as any;
+      
+      // Handle turn_timeout events
+      if (moveData?.action === "turn_timeout") {
+        // Clear any turn override since we're processing a timeout
+        setTurnOverrideWallet(moveData.nextTurnWallet || null);
+        
+        if (moveData.missedCount >= 3) {
+          // Opponent forfeited by missing 3 turns
+          setGameOver(myColor);
+          setWinnerWallet(address || null);
+          play('checkers_win');
+          toast({
+            title: t('gameSession.opponentForfeited'),
+            description: t('gameSession.youWin'),
+          });
+          return;
+        }
+        // Skip event - I get another turn
+        toast({ 
+          title: t('gameSession.opponentSkipped'),
+          description: t('gameSession.yourTurnNow'),
+        });
+        return;
+      }
+      
+      // Normal move - apply and clear override
+      const checkersMove = moveData as CheckersMove;
       if (checkersMove && checkersMove.board) {
         setBoard(checkersMove.board);
         setCurrentPlayer(checkersMove.player === "gold" ? "obsidian" : "gold");
+        setTurnOverrideWallet(null); // Clear override on real move
+        // Reset missed turns for the mover
+        if (move.wallet && roomPda) {
+          resetMissed(roomPda, move.wallet);
+        }
       }
     }
-  }, [address]);
+  }, [address, myColor, roomPda, play, t]);
 
   const { submitMove: persistMove, moves: dbMoves, isLoading: isSyncLoading } = useDurableGameSync({
     roomPda: roomPda || "",
@@ -383,8 +416,17 @@ const CheckersGame = () => {
   // Block gameplay until start roll is finalized (for ranked games, also need rules accepted)
   const canPlay = startRoll.isFinalized && (!isRankedGame || rankedGate.bothReady);
   
+  // Turn override for skip functionality (when opponent times out, we get another turn)
+  const [turnOverrideWallet, setTurnOverrideWallet] = useState<string | null>(null);
+  
   // Check if it's actually my turn (based on game state, not canPlay gate)
-  const isActuallyMyTurn = currentPlayer === myColor && !gameOver;
+  const isActuallyMyTurnRaw = currentPlayer === myColor && !gameOver;
+  
+  // Override takes priority if set
+  const isMyTurnOverride = turnOverrideWallet 
+    ? isSameWallet(turnOverrideWallet, address) 
+    : null;
+  const isActuallyMyTurn = isMyTurnOverride ?? isActuallyMyTurnRaw;
   
   // isMyTurn includes canPlay gate - used for board disable
   const isMyTurn = canPlay && isActuallyMyTurn;
@@ -392,20 +434,59 @@ const CheckersGame = () => {
   // Ref for forfeit function - will be set by useForfeit hook
   const forfeitFnRef = useRef<(() => Promise<void>) | null>(null);
 
-  // Turn timer for ranked games - auto-forfeit on timeout
-  const handleTimeExpired = useCallback(() => {
-    if (!gameOver) {
+  // Turn timer for ranked games - skip on timeout, 3 strikes = forfeit
+  const handleTurnTimeout = useCallback(() => {
+    if (gameOver || !address || !roomPda || !isActuallyMyTurn) return;
+    
+    const opponentWalletAddr = getOpponentWallet(roomPlayers, address);
+    const newMissedCount = incMissed(roomPda, address);
+    
+    if (newMissedCount >= 3) {
+      // 3 STRIKES = AUTO FORFEIT
       toast({
-        title: t('gameSession.timeExpired'),
-        description: t('gameSession.forfeitedMatch'),
+        title: t('gameSession.autoForfeit'),
+        description: t('gameSession.missedThreeTurns'),
         variant: "destructive",
       });
-      // Trigger forfeit via finalizeGame (single authoritative payout)
+      
+      // Persist minimal turn_timeout event
+      if (isRankedGame && opponentWalletAddr) {
+        persistMove({
+          action: "turn_timeout",
+          timedOutWallet: address,
+          nextTurnWallet: opponentWalletAddr,
+          missedCount: newMissedCount,
+        } as any, address);
+      }
+      
+      // Trigger forfeit
       forfeitFnRef.current?.();
       setGameOver(myColor === "gold" ? "obsidian" : "gold");
+      setWinnerWallet(opponentWalletAddr);
       play('checkers_lose');
+      
+    } else {
+      // SKIP to opponent
+      toast({
+        title: t('gameSession.turnSkipped'),
+        description: `${newMissedCount}/3 ${t('gameSession.missedTurns')}`,
+        variant: "destructive",
+      });
+      
+      // Persist minimal turn_timeout event
+      if (isRankedGame && opponentWalletAddr) {
+        persistMove({
+          action: "turn_timeout",
+          timedOutWallet: address,
+          nextTurnWallet: opponentWalletAddr,
+          missedCount: newMissedCount,
+        } as any, address);
+      }
+      
+      // Grant opponent another turn via override
+      setTurnOverrideWallet(opponentWalletAddr);
     }
-  }, [gameOver, myColor, play, t]);
+  }, [gameOver, address, roomPda, isActuallyMyTurn, roomPlayers, myColor, isRankedGame, persistMove, play, t]);
 
   // effectiveTurnTime already defined above in isDataLoaded block
   
@@ -413,7 +494,7 @@ const CheckersGame = () => {
     turnTimeSeconds: effectiveTurnTime,
     enabled: isRankedGame && canPlay && !gameOver,
     isMyTurn,
-    onTimeExpired: handleTimeExpired,
+    onTimeExpired: handleTurnTimeout,
     roomId: roomPda,
   });
 
