@@ -1,5 +1,6 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { getOpponentWallet, isSameWallet, isRealWallet } from "@/lib/walletUtils";
+import { incMissed, resetMissed, clearRoom } from "@/lib/missedTurns";
 import { GameErrorBoundary } from "@/components/GameErrorBoundary";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -58,7 +59,11 @@ interface DominoMove {
   opponentHandCount: number;
   boneyard: Domino[];
   isPlayerTurn: boolean;
-  action: "play" | "draw" | "pass";
+  action: "play" | "draw" | "pass" | "turn_timeout";
+  // Turn timeout fields (minimal payload - no game state)
+  nextTurnWallet?: string;
+  timedOutWallet?: string;
+  missedCount?: number;
 }
 
 // Full game state for sync and persistence
@@ -286,7 +291,7 @@ const DominosGame = () => {
   const saveGameState = useCallback(() => {
     if (!gameInitialized || !roomPlayers.length) return;
     
-    const currentTurnWallet = isMyTurn ? address : roomPlayers.find(p => p.toLowerCase() !== address?.toLowerCase());
+    const currentTurnWallet = isMyTurn ? address : roomPlayers.find(p => !isSameWallet(p, address));
     const persisted = createPersistedState();
     
     saveSession(
@@ -472,17 +477,43 @@ const DominosGame = () => {
   // Durable game sync - persists moves to DB for reliability
   const handleDurableMoveReceived = useCallback((move: GameMove) => {
     // Only apply moves from opponents (we already applied our own locally)
-    if (move.wallet.toLowerCase() !== address?.toLowerCase()) {
+    if (!isSameWallet(move.wallet, address)) {
       console.log("[DominosGame] Applying move from DB:", move.turn_number);
       const dominoMove = move.move_data as DominoMove;
-      if (dominoMove && dominoMove.chain) {
+      
+      // Handle turn_timeout - opponent timed out, I get the turn
+      if (dominoMove.action === "turn_timeout") {
+        console.log("[DominosGame] Received turn_timeout from opponent. Missed:", dominoMove.missedCount);
+        
+        // Check if game should end (3 strikes - opponent loses)
+        if (dominoMove.missedCount && dominoMove.missedCount >= 3) {
+          setGameOver(true);
+          setWinner("me");
+          setWinnerWallet(address || null);
+          setGameStatus(t('game.youWin') + " - opponent timed out");
+          play('domino/win');
+          return;
+        }
+        
+        // Skip: I get the turn
+        setIsMyTurn(true);
+        setGameStatus(t('game.yourTurn'));
+        toast({
+          title: t('gameSession.opponentSkipped'),
+          description: t('gameSession.yourTurnNow'),
+        });
+        return;
+      }
+      
+      // Normal moves - apply state and set my turn
+      if (dominoMove && dominoMove.chain && (dominoMove.action === "play" || dominoMove.action === "draw" || dominoMove.action === "pass")) {
         setChain(dominoMove.chain);
         setOpponentHandCount(dominoMove.playerHand?.length || opponentHandCount);
         if (dominoMove.boneyard) setBoneyard(dominoMove.boneyard);
         setIsMyTurn(true);
       }
     }
-  }, [address, opponentHandCount]);
+  }, [address, opponentHandCount, play, t]);
 
   const { submitMove: persistMove, moves: dbMoves, isLoading: isSyncLoading } = useDurableGameSync({
     roomPda: roomPda || "",
@@ -511,7 +542,7 @@ const DominosGame = () => {
   // Update turn based on start roll result for ranked games
   useEffect(() => {
     if (isRankedGame && startRoll.isFinalized && startRoll.startingWallet && gameInitialized) {
-      const isStarter = startRoll.startingWallet.toLowerCase() === address?.toLowerCase();
+      const isStarter = isSameWallet(startRoll.startingWallet, address);
       setIsMyTurn(isStarter);
       setGameStatus(isStarter ? t('game.yourTurn') : t('game.opponentsTurn'));
     }
@@ -547,9 +578,10 @@ const DominosGame = () => {
   }, [gameOver, roomPlayers.length, rankedGate.iAmReady, rankedGate.opponentReady, rankedGate.bothReady, startRoll.isFinalized]);
 
   // Is current user the room creator? (first player in roomPlayers)
+  // Is current user the room creator? (first player in roomPlayers)
   const isCreator = useMemo(() => {
     if (!address || roomPlayers.length === 0) return false;
-    return roomPlayers[0]?.toLowerCase() === address.toLowerCase();
+    return isSameWallet(roomPlayers[0], address);
   }, [address, roomPlayers]);
 
   // Open leave modal - NEVER triggers wallet
@@ -579,22 +611,64 @@ const DominosGame = () => {
   // Ref for forfeit function - will be set by useForfeit hook
   const forfeitFnRef = useRef<(() => Promise<void>) | null>(null);
 
-  // Turn timer for ranked games - auto-forfeit on timeout
-  const handleTimeExpired = useCallback(() => {
-    if (!gameOver) {
+  // Turn timer for ranked games - skip on timeout + 3 strikes = auto-forfeit
+  const handleTurnTimeout = useCallback(() => {
+    if (!isActuallyMyTurn || gameOver || !address || !roomPda) return;
+    
+    const opponentWalletAddr = getOpponentWallet(roomPlayers, address);
+    const newMissedCount = incMissed(roomPda, address);
+    
+    console.log(`[DominosGame] Turn timeout. Wallet ${address?.slice(0,8)} missed ${newMissedCount}/3`);
+    
+    if (newMissedCount >= 3) {
+      // 3 STRIKES = AUTO FORFEIT
       toast({
-        title: t('gameSession.timeExpired'),
-        description: t('gameSession.forfeitedMatch'),
+        title: t('gameSession.autoForfeit'),
+        description: t('gameSession.missedThreeTurns'),
         variant: "destructive",
       });
-      // Trigger forfeit via finalizeGame (single authoritative payout)
+      
+      // Persist MINIMAL timeout event BEFORE forfeit
+      if (isRankedGame && opponentWalletAddr) {
+        persistMove({
+          action: "turn_timeout",
+          timedOutWallet: address,
+          nextTurnWallet: opponentWalletAddr,
+          missedCount: newMissedCount,
+        } as unknown as DominoMove, address);
+      }
+      
       forfeitFnRef.current?.();
       setGameOver(true);
       setWinner("opponent");
-      setGameStatus(t('game.youLose') + " - timeout");
-      play('domino_lose');
+      setWinnerWallet(opponentWalletAddr);
+      setGameStatus(t('game.youLose') + " - 3 missed turns");
+      play('domino/lose');
+      
+    } else {
+      // SKIP to opponent (not forfeit)
+      toast({
+        title: t('gameSession.turnSkipped'),
+        description: `${newMissedCount}/3 ${t('gameSession.missedTurns')}`,
+        variant: "destructive",
+      });
+      
+      // Persist MINIMAL turn_timeout to DB
+      if (isRankedGame && opponentWalletAddr) {
+        persistMove({
+          action: "turn_timeout",
+          timedOutWallet: address,
+          nextTurnWallet: opponentWalletAddr,
+          missedCount: newMissedCount,
+        } as unknown as DominoMove, address);
+      }
+      
+      // Skip turn using existing state
+      setIsMyTurn(false);
+      setSelectedDomino(null);
+      setGameStatus(t('game.opponentsTurn'));
     }
-  }, [gameOver, play, t]);
+  }, [isActuallyMyTurn, gameOver, address, roomPda, roomPlayers, isRankedGame, persistMove, play, t]);
 
   // Use turn time from ranked gate (fetched from DB/localStorage)
   const effectiveTurnTime = rankedGate.turnTimeSeconds || DEFAULT_RANKED_TURN_TIME;
@@ -603,14 +677,14 @@ const DominosGame = () => {
     turnTimeSeconds: effectiveTurnTime,
     enabled: isRankedGame && canPlayRanked && !gameOver,
     isMyTurn: effectiveIsMyTurn,
-    onTimeExpired: handleTimeExpired,
+    onTimeExpired: handleTurnTimeout,
     roomId: roomPda,
   });
 
   // Turn notification players
   const turnPlayers: TurnPlayer[] = useMemo(() => {
     return roomPlayers.map((playerAddress, index) => {
-      const isMe = playerAddress.toLowerCase() === address?.toLowerCase();
+      const isMe = isSameWallet(playerAddress, address);
       return {
         address: playerAddress,
         name: isMe ? "You" : `Player ${index + 1}`,
@@ -1039,6 +1113,11 @@ const DominosGame = () => {
     setChain(newChain);
     setMyHand(newHand);
     
+    // Reset missed turns on successful move
+    if (address && roomPda) {
+      resetMissed(roomPda, address);
+    }
+    
     // Send move to opponent
     const moveData: DominoMove = {
       domino,
@@ -1069,7 +1148,7 @@ const DominosGame = () => {
       setIsMyTurn(false);
       setGameStatus("Opponent's turn");
     }
-  }, [chain, myHand, boneyard, opponentHandCount, getChainEnds, play, sendMove, recordPlayerMove, address]);
+  }, [chain, myHand, boneyard, opponentHandCount, getChainEnds, play, sendMove, recordPlayerMove, address, roomPda, isRankedGame, persistMove]);
 
   // Handle player play - halfClicked indicates which pip section was touched
   const handlePlayerPlay = useCallback((domino: Domino, halfClicked?: TileHalfClicked) => {
@@ -1133,6 +1212,11 @@ const DominosGame = () => {
     setBoneyard(newBoneyard);
     play('domino/draw');
     
+    // Reset missed turns on successful move
+    if (address && roomPda) {
+      resetMissed(roomPda, address);
+    }
+    
     // Track the drawn tile for this player
     if (amIPlayer1) {
       setPlayer1DrawnIds(prev => [...prev, drawn.id]);
@@ -1157,7 +1241,7 @@ const DominosGame = () => {
       title: t('toast.drewTile'),
       description: t('toast.checkIfCanPlay'),
     });
-  }, [isMyTurn, gameOver, boneyard, myHand, chain, opponentHandCount, play, sendMove, amIPlayer1, t]);
+  }, [isMyTurn, gameOver, boneyard, myHand, chain, opponentHandCount, play, sendMove, amIPlayer1, t, address, roomPda]);
 
   // Handle pass
   const handlePass = useCallback(() => {
@@ -1182,6 +1266,11 @@ const DominosGame = () => {
       return;
     }
     
+    // Reset missed turns on successful move (pass counts as a valid move)
+    if (address && roomPda) {
+      resetMissed(roomPda, address);
+    }
+    
     // Send pass action
     const moveData: DominoMove = {
       domino: { id: -1, left: 0, right: 0 },
@@ -1197,7 +1286,7 @@ const DominosGame = () => {
     
     setIsMyTurn(false);
     setGameStatus("Opponent's turn");
-  }, [isMyTurn, gameOver, myHand, boneyard, chain, opponentHandCount, getLegalMoves, sendMove]);
+  }, [isMyTurn, gameOver, myHand, boneyard, chain, opponentHandCount, getLegalMoves, sendMove, address, roomPda, t]);
 
   const handleResign = useCallback(async () => {
     // 1. Send WebRTC message immediately for instant opponent UX
