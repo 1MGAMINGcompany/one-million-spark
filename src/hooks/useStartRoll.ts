@@ -145,6 +145,12 @@ export function useStartRoll(options: UseStartRollOptions): UseStartRollResult {
 
         const session = resp?.session;
         if (session?.start_roll_finalized && session.starting_player_wallet) {
+          // CRITICAL: If session is finished, this is stale data - show dice UI for new game
+          if (session.status === 'finished') {
+            console.log("[useStartRoll] Session finished - ignoring stale finalized data");
+            setShowDiceRoll(true);
+            return;
+          }
           // Roll already finalized
           const starter = session.starting_player_wallet;
           const isStarter = isSameWallet(starter, myWallet);
@@ -189,6 +195,9 @@ export function useStartRoll(options: UseStartRollOptions): UseStartRollResult {
 
         const session = resp?.session;
         if (session?.start_roll_finalized && session.starting_player_wallet) {
+          // Skip if session is finished (stale data)
+          if (session.status === 'finished') return;
+          
           const starter = session.starting_player_wallet;
           const isStarter = isSameWallet(starter, myWallet);
           setMyColor(isStarter ? "w" : "b");
@@ -236,6 +245,13 @@ export function useStartRoll(options: UseStartRollOptions): UseStartRollResult {
 
         // If opponent already finalized, hydrate immediately
         if (s.start_roll_finalized && s.starting_player_wallet) {
+          // CRITICAL: If session is finished, this is stale data - show dice UI
+          if (s.status === 'finished') {
+            console.log("[useStartRoll] Session finished - showing dice roll for new game");
+            setShowDiceRoll(true);
+            return;
+          }
+          
           const starter = String(s.starting_player_wallet || "").trim();
 
           setStartingWallet(starter);

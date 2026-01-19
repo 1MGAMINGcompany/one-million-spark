@@ -533,7 +533,9 @@
     "invite": "招待",
     "settings": "設定",
     "language": "言語",
-    "sec": "秒"
+    "sec": "秒",
+    "you": "あなた",
+    "ai": "AI"
   },
   "footer": {
     "company": "1 MILLION GAMING co",
