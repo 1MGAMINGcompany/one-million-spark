@@ -1,5 +1,6 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { getOpponentWallet, isSameWallet, isRealWallet } from "@/lib/walletUtils";
+import { incMissed, resetMissed, getMissed, clearRoom } from "@/lib/missedTurns";
 import { GameErrorBoundary } from "@/components/GameErrorBoundary";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -153,9 +154,6 @@ const BackgammonGame = () => {
   useEffect(() => { myRoleRef.current = myRole; }, [myRole]);
   useEffect(() => { currentTurnWalletRef.current = currentTurnWallet; }, [currentTurnWallet]);
   
-  // Track missed turns per wallet for 3-strike rule
-  const missedTurnsRef = useRef<Record<string, number>>({});
-  
   // Ref for forfeit function (set after useForfeit hook)
   const forfeitFnRef = useRef<(() => Promise<void>) | null>(null);
 
@@ -227,10 +225,7 @@ const BackgammonGame = () => {
         setCurrentTurnWallet(restoredTurnWallet);
       }
       
-      // Restore missed turns if persisted
-      if (persisted.missedTurns) {
-        missedTurnsRef.current = persisted.missedTurns;
-      }
+      // Missed turns are now handled via shared utility - no need to restore from persisted state
       
       // CRITICAL: Clear stale dice on restore if it's my turn
       // Dice from previous turn can bleed into the restored state
@@ -359,9 +354,11 @@ const BackgammonGame = () => {
         // Opponent timed out - I get the turn
         console.log("[BackgammonGame] Received turn_timeout from opponent. Missed:", bgMove.missedCount);
         
-        // Update missed turns tracking
-        if (bgMove.timedOutWallet) {
-          missedTurnsRef.current[bgMove.timedOutWallet] = bgMove.missedCount || 0;
+        // Update missed turns tracking using shared utility
+        if (bgMove.timedOutWallet && roomPda) {
+          // We don't need to store this locally - the utility handles it
+          // Just log for debugging
+          console.log(`[BackgammonGame] Opponent ${bgMove.timedOutWallet.slice(0,8)} has ${bgMove.missedCount} missed turns`);
         }
         
         // Check if game should end (3 strikes - opponent loses)
@@ -507,17 +504,21 @@ const BackgammonGame = () => {
   
   // Handle turn timeout - SKIP to opponent (NOT immediate forfeit)
   const handleTurnTimeout = useCallback(() => {
-    if (!isActuallyMyTurn || gameOver || !address) {
+    if (!isActuallyMyTurn || gameOver || !address || !roomPda) {
       console.log("[BackgammonGame] Ignoring timeout - not my turn or game over");
+      return;
+    }
+    
+    // Mid-turn guard: Don't skip if player has rolled dice but not finished moving
+    if (dice.length > 0 && remainingMoves.length > 0) {
+      console.log("[BackgammonGame] Ignoring timeout - mid-turn with dice");
       return;
     }
     
     const opponentWalletAddr = getOpponentWallet(roomPlayersRef.current, address);
     
-    // Increment missed turns
-    const currentMissed = missedTurnsRef.current[address] || 0;
-    const newMissedCount = currentMissed + 1;
-    missedTurnsRef.current[address] = newMissedCount;
+    // Use shared utility for missed turns tracking
+    const newMissedCount = incMissed(roomPda, address);
     
     console.log(`[BackgammonGame] Turn timeout. Wallet ${address?.slice(0,8)} missed ${newMissedCount}/3`);
     
@@ -529,14 +530,14 @@ const BackgammonGame = () => {
         variant: "destructive",
       });
       
-      // Persist timeout event BEFORE forfeit
+      // Persist MINIMAL timeout event BEFORE forfeit
       if (isRankedGame && opponentWalletAddr) {
         persistMove({
           type: "turn_timeout",
           timedOutWallet: address,
           nextTurnWallet: opponentWalletAddr,
           missedCount: newMissedCount,
-          gameState,
+          gameState, // Still include gameState for backgammon as it's needed
           dice: [],
           remainingMoves: [],
         } as BackgammonMoveMessage, address);
@@ -558,14 +559,14 @@ const BackgammonGame = () => {
         variant: "destructive",
       });
       
-      // Persist turn_timeout to DB
+      // Persist MINIMAL turn_timeout to DB
       if (isRankedGame && opponentWalletAddr) {
         persistMove({
           type: "turn_timeout",
           timedOutWallet: address,
           nextTurnWallet: opponentWalletAddr,
           missedCount: newMissedCount,
-          gameState,
+          gameState, // Still include gameState for backgammon
           dice: [],
           remainingMoves: [],
         } as BackgammonMoveMessage, address);
@@ -581,7 +582,7 @@ const BackgammonGame = () => {
       setValidMoves([]);
       setGameStatus("Opponent's turn");
     }
-  }, [isActuallyMyTurn, gameOver, address, myRole, gameState, isRankedGame, persistMove, play, t]);
+  }, [isActuallyMyTurn, gameOver, address, roomPda, dice, remainingMoves, myRole, gameState, isRankedGame, persistMove, play, t]);
   
   // Turn timer for ranked games
   const turnTimer = useTurnTimer({
@@ -787,9 +788,7 @@ const BackgammonGame = () => {
       } else if (moveMsg.type === "turn_timeout") {
         // Opponent timed out via WebRTC - handle same as durable event
         console.log("[BackgammonGame] WebRTC turn_timeout. Missed:", moveMsg.missedCount);
-        if (moveMsg.timedOutWallet) {
-          missedTurnsRef.current[moveMsg.timedOutWallet] = moveMsg.missedCount || 0;
-        }
+        // Missed turns tracking is handled via shared utility
         if (moveMsg.missedCount && moveMsg.missedCount >= 3) {
           setGameOver(true);
           setWinnerWallet(address);
@@ -1059,9 +1058,9 @@ const BackgammonGame = () => {
     setValidMoves([]);
     setGameStatus("Opponent's turn");
     
-    // Reset missed turns on successful turn completion
-    if (address) {
-      missedTurnsRef.current[address] = 0;
+    // Reset missed turns on successful turn completion using shared utility
+    if (address && roomPda) {
+      resetMissed(roomPda, address);
     }
   }, [gameState, sendMove, isRankedGame, address, persistMove]);
 
