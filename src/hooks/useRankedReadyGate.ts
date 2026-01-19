@@ -82,8 +82,10 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
 
   // Prefer server-side bothAccepted (from polling) over client-side p1Ready && p2Ready
   // FIX: Also check if session is fully formed (both wallets present) for robust fallback
+  // FIX: If start_roll_finalized is true, game has already started = both were ready
   const sessionComplete = !!(p1Wallet && p2Wallet);
-  const bothReady = serverBothAccepted || (sessionComplete && p1Ready && p2Ready);
+  const [startRollFinalized, setStartRollFinalized] = useState(false);
+  const bothReady = serverBothAccepted || (sessionComplete && p1Ready && p2Ready) || startRollFinalized;
   // Show accept modal if ranked, loaded, and this player hasn't accepted yet
   // Also require that we've identified this player's role (isPlayer1 or isPlayer2)
   const isIdentified = isPlayer1 || isPlayer2;
@@ -201,6 +203,10 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
         setP2Wallet(session.player2_wallet);
         if (session.turn_time_seconds) {
           setTurnTimeSeconds(session.turn_time_seconds);
+        }
+        // FIX: If start_roll_finalized is true, game has already started = both were ready
+        if (session.start_roll_finalized) {
+          setStartRollFinalized(true);
         }
         // Note: Mode now comes from DB (single source of truth)
         // No localStorage sync needed - useRoomMode fetches directly from DB

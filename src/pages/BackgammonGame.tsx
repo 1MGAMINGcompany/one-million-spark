@@ -483,8 +483,9 @@ const BackgammonGame = () => {
     return roomPlayers.find(p => isRealWallet(p) && !isSameWallet(p, address)) || null;
   }, [address, roomPlayers]);
 
-  // Block gameplay until start roll is finalized (for ranked games, also need rules accepted)
-  const canPlay = startRoll.isFinalized && (!isRankedGame || rankedGate.bothReady);
+  // Block gameplay until start roll is finalized
+  // Once start roll is finalized, game has started - don't gate on bothReady (fixes desync)
+  const canPlay = startRoll.isFinalized;
   
   // WALLET-AUTHORITATIVE turn determination
   const isMyTurnAuthoritative = !!address && !!currentTurnWallet && isSameWallet(currentTurnWallet, address);
@@ -585,9 +586,10 @@ const BackgammonGame = () => {
   }, [isActuallyMyTurn, gameOver, address, roomPda, dice, remainingMoves, myRole, gameState, isRankedGame, persistMove, play, t]);
   
   // Turn timer for ranked games
+  // FIX: Use startRoll.isFinalized as fallback for timer enable (don't depend on bothReady)
   const turnTimer = useTurnTimer({
     turnTimeSeconds: effectiveTurnTime,
-    enabled: isRankedGame && canPlay && !gameOver,
+    enabled: isRankedGame && (canPlay || startRoll.isFinalized) && !gameOver,
     isMyTurn: effectiveIsMyTurn,
     onTimeExpired: handleTurnTimeout,
     roomId: roomPda,
@@ -1839,8 +1841,8 @@ const BackgammonGame = () => {
                   )}
                 </div>
 
-                {/* Resign button - mobile */}
-                {!gameOver && isMyTurn && (
+                {/* Resign button - mobile - show when game is active (not just on your turn) */}
+                {!gameOver && canPlay && (
                   <Button variant="destructive" size="sm" className="w-full" onClick={handleResign} disabled={isForfeiting}>
                     {isForfeiting ? "Settling..." : <><Flag className="w-4 h-4 mr-1" /> Resign</>}
                   </Button>
