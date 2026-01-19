@@ -38,6 +38,7 @@ import { InAppBrowserRecovery } from "@/components/InAppBrowserRecovery";
 import { toast } from "@/hooks/use-toast";
 import { fetchRoomByPda, getConnection } from "@/lib/solana-program";
 import { seededShuffle } from "@/lib/seedUtils";
+import { dbg, isDebugEnabled } from "@/lib/debugLog";
 
 interface Domino {
   id: number;
@@ -1284,7 +1285,28 @@ const DominosGame = () => {
       <div className="absolute inset-0 bg-gradient-to-b from-midnight-light via-background to-background" />
       
       {/* RulesGate + DiceRollStart - only when shouldShowDice */}
-      {roomPlayers.length >= 2 && address && !startRoll.isFinalized && (!isRankedGame || rankedGate.bothReady) && (
+      {(() => {
+        const shouldShowDice =
+          roomPlayers.length >= 2 &&
+          !!address &&
+          !startRoll.isFinalized &&
+          (!isRankedGame || rankedGate.bothReady);
+
+        if (isDebugEnabled()) {
+          dbg("dice.gate", {
+            game: "dominos",
+            roomPda,
+            roomPlayersLen: roomPlayers.length,
+            hasAddress: !!address,
+            isRankedGame,
+            bothReady: rankedGate.bothReady,
+            isFinalized: startRoll.isFinalized,
+            showDiceRoll: startRoll.showDiceRoll,
+            shouldShowDice,
+          });
+        }
+
+        return shouldShowDice ? (
         <RulesGate
           isRanked={isRankedGame}
           roomPda={roomPda}
@@ -1315,7 +1337,8 @@ const DominosGame = () => {
             isForfeiting={isForfeiting}
           />
         </RulesGate>
-      )}
+        ) : null;
+      })()}
       
       {/* Turn Banner */}
       <TurnBanner

@@ -40,6 +40,7 @@ import { RematchAcceptModal } from "@/components/RematchAcceptModal";
 import { RulesGate } from "@/components/RulesGate";
 import { RulesInfoPanel } from "@/components/RulesInfoPanel";
 import { InAppBrowserRecovery } from "@/components/InAppBrowserRecovery";
+import { dbg, isDebugEnabled } from "@/lib/debugLog";
 
 // Persisted ludo game state
 interface PersistedLudoState {
@@ -890,7 +891,28 @@ const LudoGame = () => {
     <InAppBrowserRecovery roomPda={roomPda || ""} onResubscribeRealtime={resubscribeRealtime} bypassOverlay={true}>
     <div className="min-h-screen bg-background flex flex-col">
       {/* RulesGate + DiceRollStart - only when shouldShowDice */}
-      {roomPlayers.length >= 2 && address && !startRoll.isFinalized && (!isRankedGame || rankedGate.bothReady) && (
+      {(() => {
+        const shouldShowDice =
+          roomPlayers.length >= 2 &&
+          !!address &&
+          !startRoll.isFinalized &&
+          (!isRankedGame || rankedGate.bothReady);
+
+        if (isDebugEnabled()) {
+          dbg("dice.gate", {
+            game: "ludo",
+            roomPda,
+            roomPlayersLen: roomPlayers.length,
+            hasAddress: !!address,
+            isRankedGame,
+            bothReady: rankedGate.bothReady,
+            isFinalized: startRoll.isFinalized,
+            showDiceRoll: startRoll.showDiceRoll,
+            shouldShowDice,
+          });
+        }
+
+        return shouldShowDice ? (
         <RulesGate
           isRanked={isRankedGame}
           roomPda={roomPda}
@@ -920,7 +942,8 @@ const LudoGame = () => {
             isForfeiting={false}
           />
         </RulesGate>
-      )}
+        ) : null;
+      })()}
       
       {/* Turn Banner (fallback for no permission) */}
       <TurnBanner
