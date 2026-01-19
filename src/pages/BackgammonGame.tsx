@@ -1190,7 +1190,7 @@ const BackgammonGame = () => {
   return (
     <GameErrorBoundary>
     <InAppBrowserRecovery roomPda={roomPda || ""} onResubscribeRealtime={resubscribeRealtime} bypassOverlay={true}>
-    <div className="min-h-screen bg-background flex flex-col relative">
+    <div className="min-h-screen bg-background flex flex-col relative overflow-x-hidden">
       {/* Gold Confetti Explosion on Win */}
       <GoldConfettiExplosion 
         active={gameOver && gameStatus.includes("win")} 
@@ -1317,13 +1317,12 @@ const BackgammonGame = () => {
 
       {/* Game Area */}
       <div className={cn(
-        "flex-1 flex items-center justify-center",
-        isMobile ? "p-2" : "p-4"
+        "flex-1 flex flex-col overflow-hidden min-h-0",
+        isMobile ? "px-2 pt-1 pb-2" : "px-4 py-4"
       )}>
-        <div className="max-w-4xl w-full">
-          {/* Mobile Layout - Viewport-fit container to prevent zoom */}
-          {isMobile ? (
-            <div className="flex-1 flex flex-col px-1 pt-1 pb-2 overflow-hidden min-h-0 w-full max-w-[100vw]">
+        {/* Mobile Layout - Viewport-fit container to prevent zoom */}
+        {isMobile ? (
+          <div className="flex-1 flex flex-col overflow-hidden min-h-0 w-full">
               {/* Score Row */}
               <div className="flex justify-between items-center px-2 py-1 shrink-0">
                 <div className="flex items-center gap-2">
@@ -1350,7 +1349,7 @@ const BackgammonGame = () => {
               </div>
 
               {/* Board Container - Aspect-ratio scaling to 100vw, max-height to fit viewport */}
-              <div className="relative w-full flex-1 min-h-0" style={{ maxHeight: 'calc(100vh - 200px)', aspectRatio: '4/3' }}>
+              <div className="relative w-full flex-1 min-h-0" style={{ maxHeight: '55vh' }}>
                 {/* Subtle glow */}
                 <div className="absolute -inset-1 bg-primary/10 rounded-xl blur-lg opacity-30" />
                 
@@ -1535,8 +1534,9 @@ const BackgammonGame = () => {
                 )}
               </div>
             </div>
-          ) : (
-            /* Desktop Layout - Premium version matching AI */
+        ) : (
+          /* Desktop Layout - Premium version matching AI */
+          <div className="max-w-4xl mx-auto w-full">
             <div className="relative">
               {/* Outer glow */}
               <div className="absolute -inset-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 rounded-2xl blur-xl opacity-50" />
@@ -1658,45 +1658,45 @@ const BackgammonGame = () => {
                 </div>
               </div>
             </div>
-          )}
+          </div>
+        )}
 
-          {/* Controls - Desktop only */}
-          {!isMobile && (
-            <div className="mt-4 flex flex-wrap gap-3 items-center justify-center">
-              {isMyTurn && dice.length === 0 && !gameOver && (
-                <Button variant="gold" size="lg" className="min-w-[140px] shadow-[0_0_30px_-8px_hsl(45_93%_54%_/_0.5)]" onClick={rollDice}>
-                  🎲 Roll Dice
-                </Button>
-              )}
-              
-              {/* Dice display when rolled */}
-              {dice.length > 0 && (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  Moves left: {remainingMoves.length > 0 ? remainingMoves.join(", ") : "None"}
-                </div>
-              )}
-              
-              {/* Status */}
-              <div className={cn(
-                "px-4 py-2 rounded-lg border text-sm font-medium",
-                gameOver 
-                  ? gameStatus.includes("win") 
-                    ? "bg-green-500/10 border-green-500/30 text-green-400"
-                    : "bg-red-500/10 border-red-500/30 text-red-400"
-                  : "bg-primary/10 border-primary/30 text-primary"
-              )}>
-                {gameStatus}
+        {/* Controls - Desktop only */}
+        {!isMobile && (
+          <div className="mt-4 flex flex-wrap gap-3 items-center justify-center max-w-4xl mx-auto">
+            {isMyTurn && dice.length === 0 && !gameOver && (
+              <Button variant="gold" size="lg" className="min-w-[140px] shadow-[0_0_30px_-8px_hsl(45_93%_54%_/_0.5)]" onClick={rollDice}>
+                🎲 Roll Dice
+              </Button>
+            )}
+            
+            {/* Dice display when rolled */}
+            {dice.length > 0 && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                Moves left: {remainingMoves.length > 0 ? remainingMoves.join(", ") : "None"}
               </div>
-
-              {/* Resign button - always available once game started */}
-              {!gameOver && roomPlayers.length >= 2 && (
-                <Button variant="destructive" size="sm" onClick={handleResign} disabled={isForfeiting}>
-                  {isForfeiting ? "Settling..." : <><Flag className="w-4 h-4 mr-1" /> Resign</>}
-                </Button>
-              )}
+            )}
+            
+            {/* Status */}
+            <div className={cn(
+              "px-4 py-2 rounded-lg border text-sm font-medium",
+              gameOver 
+                ? gameStatus.includes("win") 
+                  ? "bg-green-500/10 border-green-500/30 text-green-400"
+                  : "bg-red-500/10 border-red-500/30 text-red-400"
+                : "bg-primary/10 border-primary/30 text-primary"
+            )}>
+              {gameStatus}
             </div>
-          )}
-        </div>
+
+            {/* Resign button - always available once game started */}
+            {!gameOver && roomPlayers.length >= 2 && (
+              <Button variant="destructive" size="sm" onClick={handleResign} disabled={isForfeiting}>
+                {isForfeiting ? "Settling..." : <><Flag className="w-4 h-4 mr-1" /> Resign</>}
+              </Button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Game End Screen */}
