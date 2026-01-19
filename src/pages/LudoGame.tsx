@@ -42,6 +42,9 @@ import { RulesGate } from "@/components/RulesGate";
 import { RulesInfoPanel } from "@/components/RulesInfoPanel";
 import { InAppBrowserRecovery } from "@/components/InAppBrowserRecovery";
 import { dbg, isDebugEnabled } from "@/lib/debugLog";
+import { PublicKey, Connection } from "@solana/web3.js";
+import { parseRoomAccount } from "@/lib/solana-program";
+import { getSolanaEndpoint } from "@/lib/solana-config";
 
 // Persisted ludo game state
 interface PersistedLudoState {
@@ -95,18 +98,59 @@ const LudoGame = () => {
   const roomPlayersRef = useRef<string[]>([]);
   useEffect(() => { roomPlayersRef.current = roomPlayers; }, [roomPlayers]);
   
+  // Fetch real player order from on-chain room account for multiplayer games
   useEffect(() => {
-    if (address) {
-      // Simulate room with 4 players - real implementation would fetch from contract
-      const simulatedPlayers = [
-        address, // Gold - human player
-        `ai-ruby-${roomId}`,
-        `ai-emerald-${roomId}`,
-        `ai-sapphire-${roomId}`,
-      ];
-      setRoomPlayers(simulatedPlayers);
+    if (!address || !roomPda) {
+      // No room PDA = AI mode, use simulated players
+      if (address && !roomPda) {
+        const simulatedPlayers = [
+          address, // Gold - human player
+          `ai-ruby-${roomId}`,
+          `ai-emerald-${roomId}`,
+          `ai-sapphire-${roomId}`,
+        ];
+        setRoomPlayers(simulatedPlayers);
+      }
+      return;
     }
-  }, [address, roomId]);
+
+    const fetchRoomPlayers = async () => {
+      try {
+        const connection = new Connection(getSolanaEndpoint(), "confirmed");
+        const pdaKey = new PublicKey(roomPda);
+        const accountInfo = await connection.getAccountInfo(pdaKey);
+        
+        if (accountInfo?.data) {
+          const parsed = parseRoomAccount(accountInfo.data as Buffer);
+          if (parsed && parsed.players.length >= 2) {
+            // Real player order from on-chain: creator at index 0, joiner at index 1
+            // For Ludo, we support 2-4 players but start with 2
+            const realPlayers = parsed.players.map(p => p.toBase58());
+            setRoomPlayers(realPlayers);
+            
+            // Extract entry fee from on-chain (CRITICAL - Guardrail A: canonical stake)
+            if (parsed.entryFee !== undefined) {
+              setStakeLamports(parsed.entryFee);
+              setEntryFeeSol(parsed.entryFee / 1_000_000_000);
+            }
+            
+            console.log("[LudoGame] On-chain players:", realPlayers, "Entry fee:", parsed.entryFee);
+            return;
+          }
+        }
+        
+        // Fallback if on-chain data not available yet (room still forming)
+        console.log("[LudoGame] Room not ready, using placeholder");
+        setRoomPlayers([address, `waiting-${roomPda.slice(0, 8)}`]);
+      } catch (err) {
+        console.error("[LudoGame] Failed to fetch room players:", err);
+        // Fallback on error
+        setRoomPlayers([address, `error-${roomPda.slice(0, 8)}`]);
+      }
+    };
+
+    fetchRoomPlayers();
+  }, [address, roomPda, roomId]);
 
   // Wrapper for play function that respects sfxEnabled
   const playSfx = useCallback((sound: string) => {
