@@ -20,6 +20,7 @@
     "yourTurn": "Your Turn",
     "myTurn": "MY TURN",
     "opponentsTurn": "Opponent's Turn",
+    "opponent": "Opponent",
     "playerGame": "{{count}}-player game",
     "waitingForPlayer": "Waiting for {{player}}",
     "victory": "Victory!",

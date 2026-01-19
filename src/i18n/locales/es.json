@@ -24,6 +24,7 @@
     "yourTurn": "Tu Turno",
     "myTurn": "MI TURNO",
     "opponentsTurn": "Turno del Oponente",
+    "opponent": "Oponente",
     "playerGame": "Partida de {{count}} jugadores",
     "waitingForPlayer": "Esperando a {{player}}",
     "remaining": "restante",
