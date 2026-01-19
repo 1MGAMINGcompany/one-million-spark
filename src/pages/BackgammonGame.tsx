@@ -3,7 +3,7 @@ import { getOpponentWallet, isSameWallet, isRealWallet } from "@/lib/walletUtils
 import { GameErrorBoundary } from "@/components/GameErrorBoundary";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, RotateCcw, RotateCw, Gem, Flag, Users, Wifi, WifiOff, RefreshCw, LogOut, Trophy } from "lucide-react";
+import { ArrowLeft, RotateCcw, RotateCw, Gem, Flag, Users, Wifi, WifiOff, RefreshCw, LogOut, Trophy, Clock } from "lucide-react";
 import { SoundToggle } from "@/components/SoundToggle";
 import { ForfeitConfirmDialog } from "@/components/ForfeitConfirmDialog";
 import { LeaveMatchModal, MatchState } from "@/components/LeaveMatchModal";
@@ -74,11 +74,15 @@ interface PersistedBackgammonState {
 
 // Multiplayer move message
 interface BackgammonMoveMessage {
-  type: "dice_roll" | "move" | "turn_end";
+  type: "dice_roll" | "move" | "turn_end" | "turn_timeout";
   dice?: number[];
   move?: Move;
   gameState: GameState;
   remainingMoves: number[];
+  // Wallet-authoritative turn fields
+  nextTurnWallet?: string;
+  timedOutWallet?: string;
+  missedCount?: number;
 }
 
 // Format result type for display
@@ -118,6 +122,9 @@ const BackgammonGame = () => {
   const [validMoves, setValidMoves] = useState<number[]>([]);
   const [gameResultInfo, setGameResultInfo] = useState<{ winner: Player | null; resultType: GameResultType | null; multiplier: number } | null>(null);
   const [winnerWallet, setWinnerWallet] = useState<string | null>(null); // Direct wallet address of winner
+  
+  // Wallet-authoritative turn state - SINGLE SOURCE OF TRUTH
+  const [currentTurnWallet, setCurrentTurnWallet] = useState<string | null>(null);
 
   // Multiplayer state
   const [roomPlayers, setRoomPlayers] = useState<string[]>([]);
@@ -140,9 +147,17 @@ const BackgammonGame = () => {
   const roomPlayersRef = useRef<string[]>([]);
   const currentPlayerRef = useRef<"player" | "ai">("player");
   const myRoleRef = useRef<"player" | "ai">("player");
+  const currentTurnWalletRef = useRef<string | null>(null);
   useEffect(() => { roomPlayersRef.current = roomPlayers; }, [roomPlayers]);
   useEffect(() => { currentPlayerRef.current = currentPlayer; }, [currentPlayer]);
   useEffect(() => { myRoleRef.current = myRole; }, [myRole]);
+  useEffect(() => { currentTurnWalletRef.current = currentTurnWallet; }, [currentTurnWallet]);
+  
+  // Track missed turns per wallet for 3-strike rule
+  const missedTurnsRef = useRef<Record<string, number>>({});
+  
+  // Ref for forfeit function (set after useForfeit hook)
+  const forfeitFnRef = useRef<(() => Promise<void>) | null>(null);
 
   // Fetch real player order from on-chain room account
   useEffect(() => {
@@ -196,7 +211,7 @@ const BackgammonGame = () => {
   const restoredToastShownRef = useRef(false);
 
   const handleBackgammonStateRestored = useCallback((state: Record<string, any>, showToast = true) => {
-    const persisted = state as PersistedBackgammonState;
+    const persisted = state as PersistedBackgammonState & { current_turn_wallet?: string; currentTurnWallet?: string; missedTurns?: Record<string, number> };
     console.log('[BackgammonGame] Restoring state from database:', persisted);
     
     if (persisted.gameState) {
@@ -204,6 +219,18 @@ const BackgammonGame = () => {
       setCurrentPlayer(persisted.currentPlayer);
       setGameOver(persisted.gameOver || false);
       setGameStatus(persisted.gameStatus || t('game.yourTurn'));
+      
+      // CRITICAL: Restore wallet-authoritative turn state from DB (use correct field name)
+      const restoredTurnWallet = persisted.current_turn_wallet || persisted.currentTurnWallet;
+      if (restoredTurnWallet) {
+        console.log("[BackgammonGame] Restoring currentTurnWallet:", restoredTurnWallet.slice(0, 8));
+        setCurrentTurnWallet(restoredTurnWallet);
+      }
+      
+      // Restore missed turns if persisted
+      if (persisted.missedTurns) {
+        missedTurnsRef.current = persisted.missedTurns;
+      }
       
       // CRITICAL: Clear stale dice on restore if it's my turn
       // Dice from previous turn can bleed into the restored state
@@ -313,13 +340,55 @@ const BackgammonGame = () => {
           : bgMove.dice;
         setRemainingMoves(bgMove.remainingMoves || moves);
         setGameStatus("Opponent rolled dice");
+        
       } else if (bgMove.type === "turn_end") {
-        // Opponent ended their turn - switch to my turn, clear dice
-        console.log("[BackgammonGame] Received turn_end from opponent");
-        setCurrentPlayer(prev => prev === "player" ? "ai" : "player");
+        // Opponent ended their turn - WALLET-AUTHORITATIVE: use nextTurnWallet
+        console.log("[BackgammonGame] Received turn_end from opponent. nextTurnWallet:", bgMove.nextTurnWallet?.slice(0, 8));
+        const opponentWallet = getOpponentWallet(roomPlayersRef.current, address);
+        const nextWallet = bgMove.nextTurnWallet || address; // Fallback to me (I get the turn)
+        if (nextWallet) {
+          setCurrentTurnWallet(nextWallet);
+          const nextRole = isSameWallet(nextWallet, roomPlayersRef.current[0]) ? "player" : "ai";
+          setCurrentPlayer(nextRole);
+        }
         setDice([]);
         setRemainingMoves([]);
         setGameStatus("Your turn - Roll the dice!");
+        
+      } else if (bgMove.type === "turn_timeout") {
+        // Opponent timed out - I get the turn
+        console.log("[BackgammonGame] Received turn_timeout from opponent. Missed:", bgMove.missedCount);
+        
+        // Update missed turns tracking
+        if (bgMove.timedOutWallet) {
+          missedTurnsRef.current[bgMove.timedOutWallet] = bgMove.missedCount || 0;
+        }
+        
+        // Check if game should end (3 strikes - opponent loses)
+        if (bgMove.missedCount && bgMove.missedCount >= 3) {
+          setGameOver(true);
+          setWinnerWallet(address); // I win because opponent timed out 3 times
+          setGameResultInfo({ winner: myRoleRef.current, resultType: "single", multiplier: 1 });
+          setGameStatus(t('game.youWin') + " - opponent timed out");
+          play('chess_win');
+          return;
+        }
+        
+        // WALLET-AUTHORITATIVE: Use nextTurnWallet (fallback to me)
+        const nextWallet = bgMove.nextTurnWallet || address;
+        if (nextWallet) {
+          setCurrentTurnWallet(nextWallet);
+          const nextRole = isSameWallet(nextWallet, roomPlayersRef.current[0]) ? "player" : "ai";
+          setCurrentPlayer(nextRole);
+        }
+        setDice([]);
+        setRemainingMoves([]);
+        setGameStatus("Your turn - Roll the dice!");
+        toast({
+          title: t('gameSession.opponentSkipped'),
+          description: t('gameSession.yourTurnNow'),
+        });
+        
       } else if (bgMove && bgMove.gameState) {
         // Normal move - apply game state
         setGameState(bgMove.gameState);
@@ -327,7 +396,7 @@ const BackgammonGame = () => {
         if (bgMove.dice) setDice(bgMove.dice);
       }
     }
-  }, [address]);
+  }, [address, play, t]);
 
   const { submitMove: persistMove, moves: dbMoves, isLoading: isSyncLoading } = useDurableGameSync({
     roomPda: roomPda || "",
@@ -353,13 +422,17 @@ const BackgammonGame = () => {
     bothReady: rankedGate.bothReady,
   });
 
-  // Update myRole based on start roll result for ranked games
+  // Update myRole and currentTurnWallet based on start roll result
   useEffect(() => {
-    if (isRankedGame && startRoll.isFinalized && startRoll.startingWallet) {
+    if (startRoll.isFinalized && startRoll.startingWallet) {
+      console.log("[BackgammonGame] Start roll finalized. Starting wallet:", startRoll.startingWallet.slice(0, 8));
+      setCurrentTurnWallet(startRoll.startingWallet);
+      
       const isStarter = isSameWallet(startRoll.startingWallet, address);
       setMyRole(isStarter ? "player" : "ai");
+      setCurrentPlayer(isStarter ? "player" : "ai");
     }
-  }, [isRankedGame, startRoll.isFinalized, startRoll.startingWallet, address]);
+  }, [startRoll.isFinalized, startRoll.startingWallet, address]);
 
   const handleAcceptRules = async () => {
     const result = await rankedGate.acceptRules();
@@ -415,7 +488,12 @@ const BackgammonGame = () => {
 
   // Block gameplay until start roll is finalized (for ranked games, also need rules accepted)
   const canPlay = startRoll.isFinalized && (!isRankedGame || rankedGate.bothReady);
-  const isMyTurnRaw = currentPlayer === myRole;
+  
+  // WALLET-AUTHORITATIVE turn determination
+  const isMyTurnAuthoritative = !!address && !!currentTurnWallet && isSameWallet(currentTurnWallet, address);
+  
+  // Fallback to role-based for backward compatibility during transition
+  const isMyTurnRaw = currentTurnWallet ? isMyTurnAuthoritative : currentPlayer === myRole;
   
   // Check if it's actually my turn (based on game state, not canPlay gate)
   const isActuallyMyTurn = isMyTurnRaw && !gameOver;
@@ -423,6 +501,96 @@ const BackgammonGame = () => {
   // isMyTurn includes canPlay gate - used for board disable
   const isMyTurn = canPlay && isActuallyMyTurn;
   const isFlipped = myRole === "ai"; // Black player sees flipped board
+  
+  // Timer-specific turn check (for ranked games)
+  const effectiveIsMyTurn = canPlay && isActuallyMyTurn;
+  
+  // Handle turn timeout - SKIP to opponent (NOT immediate forfeit)
+  const handleTurnTimeout = useCallback(() => {
+    if (!isActuallyMyTurn || gameOver || !address) {
+      console.log("[BackgammonGame] Ignoring timeout - not my turn or game over");
+      return;
+    }
+    
+    const opponentWalletAddr = getOpponentWallet(roomPlayersRef.current, address);
+    
+    // Increment missed turns
+    const currentMissed = missedTurnsRef.current[address] || 0;
+    const newMissedCount = currentMissed + 1;
+    missedTurnsRef.current[address] = newMissedCount;
+    
+    console.log(`[BackgammonGame] Turn timeout. Wallet ${address?.slice(0,8)} missed ${newMissedCount}/3`);
+    
+    if (newMissedCount >= 3) {
+      // 3 STRIKES = AUTO FORFEIT
+      toast({
+        title: t('gameSession.autoForfeit'),
+        description: t('gameSession.missedThreeTurns'),
+        variant: "destructive",
+      });
+      
+      // Persist timeout event BEFORE forfeit
+      if (isRankedGame && opponentWalletAddr) {
+        persistMove({
+          type: "turn_timeout",
+          timedOutWallet: address,
+          nextTurnWallet: opponentWalletAddr,
+          missedCount: newMissedCount,
+          gameState,
+          dice: [],
+          remainingMoves: [],
+        } as BackgammonMoveMessage, address);
+      }
+      
+      forfeitFnRef.current?.();
+      setGameOver(true);
+      setWinnerWallet(opponentWalletAddr);
+      const opponentRole = myRole === "player" ? "ai" : "player";
+      setGameResultInfo({ winner: opponentRole, resultType: "single", multiplier: 1 });
+      setGameStatus(t('game.youLose') + " - 3 missed turns");
+      play('chess_lose');
+      
+    } else {
+      // SKIP to opponent (not forfeit)
+      toast({
+        title: t('gameSession.turnSkipped'),
+        description: `${newMissedCount}/3 ${t('gameSession.missedTurns')}`,
+        variant: "destructive",
+      });
+      
+      // Persist turn_timeout to DB
+      if (isRankedGame && opponentWalletAddr) {
+        persistMove({
+          type: "turn_timeout",
+          timedOutWallet: address,
+          nextTurnWallet: opponentWalletAddr,
+          missedCount: newMissedCount,
+          gameState,
+          dice: [],
+          remainingMoves: [],
+        } as BackgammonMoveMessage, address);
+      }
+      
+      // WALLET-AUTHORITATIVE: Set opponent as next turn
+      setCurrentTurnWallet(opponentWalletAddr);
+      const nextRole = isSameWallet(opponentWalletAddr, roomPlayersRef.current[0]) ? "player" : "ai";
+      setCurrentPlayer(nextRole);
+      setDice([]);
+      setRemainingMoves([]);
+      setSelectedPoint(null);
+      setValidMoves([]);
+      setGameStatus("Opponent's turn");
+    }
+  }, [isActuallyMyTurn, gameOver, address, myRole, gameState, isRankedGame, persistMove, play, t]);
+  
+  // Turn timer for ranked games
+  const turnTimer = useTurnTimer({
+    turnTimeSeconds: effectiveTurnTime,
+    enabled: isRankedGame && canPlay && !gameOver,
+    isMyTurn: effectiveIsMyTurn,
+    onTimeExpired: handleTurnTimeout,
+    roomId: roomPda,
+  });
 
   // Convert to TurnPlayer format for notifications
   const turnPlayers: TurnPlayer[] = useMemo(() => {
@@ -605,11 +773,44 @@ const BackgammonGame = () => {
           play(winner === myRoleRef.current ? 'chess_win' : 'chess_lose');
         }
       } else if (moveMsg.type === "turn_end") {
-        setCurrentPlayer(prev => prev === "player" ? "ai" : "player");
+        // WALLET-AUTHORITATIVE: Use nextTurnWallet from message
+        const nextWallet = moveMsg.nextTurnWallet || address;
+        if (nextWallet) {
+          setCurrentTurnWallet(nextWallet);
+          const nextRole = isSameWallet(nextWallet, roomPlayersRef.current[0]) ? "player" : "ai";
+          setCurrentPlayer(nextRole);
+        }
         setDice([]);
         setRemainingMoves([]);
         // Use current state to determine message
         setGameStatus("Your turn - Roll the dice!");
+      } else if (moveMsg.type === "turn_timeout") {
+        // Opponent timed out via WebRTC - handle same as durable event
+        console.log("[BackgammonGame] WebRTC turn_timeout. Missed:", moveMsg.missedCount);
+        if (moveMsg.timedOutWallet) {
+          missedTurnsRef.current[moveMsg.timedOutWallet] = moveMsg.missedCount || 0;
+        }
+        if (moveMsg.missedCount && moveMsg.missedCount >= 3) {
+          setGameOver(true);
+          setWinnerWallet(address);
+          setGameResultInfo({ winner: myRoleRef.current, resultType: "single", multiplier: 1 });
+          setGameStatus(t('game.youWin') + " - opponent timed out");
+          play('chess_win');
+          return;
+        }
+        const nextWallet = moveMsg.nextTurnWallet || address;
+        if (nextWallet) {
+          setCurrentTurnWallet(nextWallet);
+          const nextRole = isSameWallet(nextWallet, roomPlayersRef.current[0]) ? "player" : "ai";
+          setCurrentPlayer(nextRole);
+        }
+        setDice([]);
+        setRemainingMoves([]);
+        setGameStatus("Your turn - Roll the dice!");
+        toast({
+          title: t('gameSession.opponentSkipped'),
+          description: t('gameSession.yourTurnNow'),
+        });
       }
     } else if (message.type === "resign") {
       // Opponent resigned - I WIN - store MY wallet as winner
@@ -686,6 +887,11 @@ const BackgammonGame = () => {
     onCleanupWebRTC: () => console.log("[BackgammonGame] Cleaning up WebRTC"),
     onCleanupSupabase: () => console.log("[BackgammonGame] Cleaning up Supabase"),
   });
+  
+  // Connect forfeit function to ref for timeout handler
+  useEffect(() => {
+    forfeitFnRef.current = forfeit;
+  }, [forfeit]);
 
   // ========== Leave/Forfeit handlers (defined after useForfeit) ==========
   
@@ -820,31 +1026,43 @@ const BackgammonGame = () => {
 
   // End turn
   const endTurn = useCallback(() => {
-    // Send via WebRTC (fast path)
+    const opponentWalletAddr = getOpponentWallet(roomPlayersRef.current, address);
+    
+    // Send via WebRTC (fast path) - include nextTurnWallet
     const moveMsg: BackgammonMoveMessage = {
       type: "turn_end",
       gameState,
       remainingMoves: [],
+      nextTurnWallet: opponentWalletAddr || undefined,
     };
     sendMove(moveMsg);
     
     // CRITICAL: Persist turn_end to DB for cross-device sync (durable path)
-    // Explicitly set dice: [] so opponent's client knows dice are cleared
+    // Include nextTurnWallet for wallet-authoritative sync
     if (isRankedGame && address) {
       persistMove({ 
         type: "turn_end", 
         gameState, 
         remainingMoves: [], 
-        dice: [] 
+        dice: [],
+        nextTurnWallet: opponentWalletAddr || undefined,
       } as BackgammonMoveMessage & { dice: number[] }, address);
     }
     
-    setCurrentPlayer(prev => prev === "player" ? "ai" : "player");
+    // WALLET-AUTHORITATIVE: Set opponent as next turn (NOT toggle)
+    setCurrentTurnWallet(opponentWalletAddr);
+    const nextRole = isSameWallet(opponentWalletAddr, roomPlayersRef.current[0]) ? "player" : "ai";
+    setCurrentPlayer(nextRole);
     setDice([]);
     setRemainingMoves([]);
     setSelectedPoint(null);
     setValidMoves([]);
     setGameStatus("Opponent's turn");
+    
+    // Reset missed turns on successful turn completion
+    if (address) {
+      missedTurnsRef.current[address] = 0;
+    }
   }, [gameState, sendMove, isRankedGame, address, persistMove]);
 
   // Handle point click
@@ -1388,9 +1606,11 @@ const BackgammonGame = () => {
           <div className="max-w-6xl mx-auto">
             <TurnStatusHeader
               isMyTurn={isActuallyMyTurn}
-              activePlayer={turnPlayers[currentPlayer === "player" ? 0 : 1]}
+              activePlayer={turnPlayers[isSameWallet(currentTurnWallet, roomPlayers[0]) ? 0 : 1]}
               players={turnPlayers}
               myAddress={address}
+              remainingTime={isRankedGame ? turnTimer.remainingTime : undefined}
+              showTimer={isRankedGame && canPlay}
             />
           </div>
         </div>
@@ -1532,13 +1752,26 @@ const BackgammonGame = () => {
                       : "bg-primary/5 border-primary/20"
                   )}
                 >
-                  {/* Turn Indicator */}
+                  {/* Turn Indicator + Timer */}
                   {!gameOver && (
                     <div className="flex items-center justify-center gap-2 mb-0.5">
                       {isMyTurn ? (
                         <span className="text-[10px] font-medium text-primary">YOUR TURN</span>
                       ) : (
                         <span className="text-[10px] font-medium text-slate-400">OPPONENT'S TURN</span>
+                      )}
+                      {isRankedGame && canPlay && (
+                        <div className={cn(
+                          "flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono",
+                          turnTimer.isCriticalTime 
+                            ? "bg-destructive/30 text-destructive animate-pulse"
+                            : turnTimer.isLowTime 
+                            ? "bg-yellow-500/30 text-yellow-400"
+                            : "bg-muted/50 text-muted-foreground"
+                        )}>
+                          <Clock className="w-2.5 h-2.5" />
+                          <span>{Math.floor(turnTimer.remainingTime / 60)}:{(turnTimer.remainingTime % 60).toString().padStart(2, '0')}</span>
+                        </div>
                       )}
                     </div>
                   )}
