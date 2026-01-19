@@ -79,13 +79,25 @@ export function useSolanaNetwork() {
       const errorMsg = err instanceof Error ? err.message : "Failed to fetch genesis hash";
       console.error("[Network] Error fetching genesis hash:", errorMsg);
       
-      setNetworkInfo(prev => ({
-        ...prev,
-        loading: false,
-        error: errorMsg,
-      }));
+      // Fallback: If genesis hash fetch fails but RPC URL contains "mainnet", assume mainnet
+      // This handles wallet in-app browsers where RPC calls may fail due to CORS/restrictions
+      const rpcUrl = connection.rpcEndpoint.toLowerCase();
+      const likelyMainnet = rpcUrl.includes("mainnet");
       
-      return null;
+      setNetworkInfo({
+        rpcEndpoint: connection.rpcEndpoint,
+        genesisHash: null,
+        cluster: likelyMainnet ? "mainnet-beta" : "unknown",
+        isMainnet: likelyMainnet,
+        loading: false,
+        error: likelyMainnet ? null : errorMsg, // Don't show error if we can infer mainnet
+      });
+      
+      if (likelyMainnet) {
+        console.info(`[Network] Genesis fetch failed, inferring mainnet from RPC URL: ${connection.rpcEndpoint}`);
+      }
+      
+      return likelyMainnet ? { genesisHash: null, cluster: "mainnet-beta" as const, isMainnet: true } : null;
     }
   }, [connection]);
   
