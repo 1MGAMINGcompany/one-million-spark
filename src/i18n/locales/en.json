@@ -687,7 +687,13 @@
     "failedToAccept": "Failed to accept",
     "tryAgain": "Please try again",
     "timeExpired": "Time expired!",
-    "forfeitedMatch": "You ran out of time and forfeited the match."
+    "forfeitedMatch": "You ran out of time and forfeited the match.",
+    "turnSkipped": "Turn Skipped",
+    "missedTurns": "missed turns",
+    "autoForfeit": "Auto Forfeit",
+    "missedThreeTurns": "You missed 3 turns in a row",
+    "opponentSkipped": "Opponent Skipped",
+    "yourTurnNow": "Their turn timed out - it's your turn now"
   },
   "pwa": {
     "installApp": "Install App for Notifications",
