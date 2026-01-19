@@ -1284,13 +1284,13 @@ const DominosGame = () => {
       {/* Background */}
       <div className="absolute inset-0 bg-gradient-to-b from-midnight-light via-background to-background" />
       
-      {/* RulesGate + DiceRollStart - only when shouldShowDice */}
+      {/* RulesGate + DiceRollStart - RulesGate handles accept modal internally */}
       {(() => {
-        const shouldShowDice =
+        // Don't require bothReady here - let RulesGate handle showing the accept modal
+        const shouldShowRulesGate =
           roomPlayers.length >= 2 &&
           !!address &&
-          !startRoll.isFinalized &&
-          (!isRankedGame || rankedGate.bothReady);
+          !startRoll.isFinalized;
 
         if (isDebugEnabled()) {
           dbg("dice.gate", {
@@ -1302,11 +1302,11 @@ const DominosGame = () => {
             bothReady: rankedGate.bothReady,
             isFinalized: startRoll.isFinalized,
             showDiceRoll: startRoll.showDiceRoll,
-            shouldShowDice,
+            shouldShowRulesGate,
           });
         }
 
-        return shouldShowDice ? (
+        return shouldShowRulesGate ? (
         <RulesGate
           isRanked={isRankedGame}
           roomPda={roomPda}
