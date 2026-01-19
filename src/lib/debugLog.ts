@@ -1,7 +1,8 @@
 // src/lib/debugLog.ts
 /**
- * Debug logging utility with persistent ring buffer.
- * Enabled via ?debug=1 in URL or localStorage.__debug=1
+ * Debug logging utility with ring buffer.
+ * Enabled ONLY via ?debug=1 in URL (non-sticky).
+ * Safe for production.
  */
 
 export type DebugEvent = {
@@ -12,8 +13,29 @@ export type DebugEvent = {
 
 const STORAGE_KEY = "__1mg_debug_logs_v1";
 const MAX = 400;
+const MAX_ENTRY_BYTES = 2048;
 
-function replacer(_k: string, v: any) {
+// Keys that should NEVER be logged
+const SENSITIVE_KEYS = [
+  "privatekey",
+  "secretkey",
+  "mnemonic",
+  "seed",
+  "password",
+  "token",
+  "apikey",
+  "authorization",
+  "auth",
+  "bearer",
+];
+
+function isSensitiveKey(key: string) {
+  const k = key.toLowerCase();
+  return SENSITIVE_KEYS.some((s) => k.includes(s));
+}
+
+function replacer(k: string, v: any) {
+  if (isSensitiveKey(k)) return "[REDACTED]";
   if (typeof v === "bigint") return v.toString();
   if (v?.toBase58 && typeof v.toBase58 === "function") return v.toBase58();
   if (v instanceof Error) return { message: v.message, stack: v.stack };
@@ -22,7 +44,11 @@ function replacer(_k: string, v: any) {
 
 function sanitize(data: any) {
   try {
-    return JSON.parse(JSON.stringify(data, replacer));
+    const json = JSON.stringify(data, replacer);
+    if (json.length > MAX_ENTRY_BYTES) {
+      return json.slice(0, MAX_ENTRY_BYTES) + "...[truncated]";
+    }
+    return JSON.parse(json);
   } catch {
     return String(data);
   }
@@ -31,9 +57,7 @@ function sanitize(data: any) {
 export function isDebugEnabled(): boolean {
   if (typeof window === "undefined") return false;
   const qs = new URLSearchParams(window.location.search);
-  const enabled = qs.get("debug") === "1" || localStorage.getItem("__debug") === "1";
-  if (enabled) localStorage.setItem("__debug", "1"); // sticky once enabled
-  return enabled;
+  return qs.get("debug") === "1";
 }
 
 function loadStored(): DebugEvent[] {
@@ -46,21 +70,26 @@ function loadStored(): DebugEvent[] {
 }
 
 export function dbg(tag: string, data?: any) {
-  if (!isDebugEnabled()) return;
+  const IS_DEV = import.meta.env.DEV;
+  if (!IS_DEV && !isDebugEnabled()) return;
 
-  const evt: DebugEvent = { t: Date.now(), tag, data: sanitize(data) };
+  const evt: DebugEvent = {
+    t: Date.now(),
+    tag,
+    data: sanitize(data),
+  };
 
   const w = window as any;
-
-  // IMPORTANT: On first log in a fresh page session, LOAD existing logs
   if (!w.__DBG) {
     w.__DBG = loadStored();
   }
 
   const arr: DebugEvent[] = w.__DBG;
-
   arr.push(evt);
-  if (arr.length > MAX) arr.splice(0, arr.length - MAX);
+
+  if (arr.length > MAX) {
+    arr.splice(0, arr.length - MAX);
+  }
 
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(arr));
