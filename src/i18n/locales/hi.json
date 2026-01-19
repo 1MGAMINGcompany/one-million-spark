@@ -24,6 +24,7 @@
     "yourTurn": "आपकी बारी",
     "myTurn": "मेरी बारी",
     "opponentsTurn": "प्रतिद्वंद्वी की बारी",
+    "opponent": "प्रतिद्वंद्वी",
     "playerGame": "{{count}}-खिलाड़ी खेल",
     "waitingForPlayer": "{{player}} का इंतजार",
     "remaining": "शेष",

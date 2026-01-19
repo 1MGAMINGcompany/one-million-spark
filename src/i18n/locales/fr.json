@@ -24,6 +24,7 @@
     "yourTurn": "Votre Tour",
     "myTurn": "MON TOUR",
     "opponentsTurn": "Tour de l'Adversaire",
+    "opponent": "Adversaire",
     "playerGame": "Partie à {{count}} joueurs",
     "waitingForPlayer": "En attente de {{player}}",
     "remaining": "restant",

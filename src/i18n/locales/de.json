@@ -24,6 +24,7 @@
     "yourTurn": "Ihr Zug",
     "myTurn": "MEIN ZUG",
     "opponentsTurn": "Zug des Gegners",
+    "opponent": "Gegner",
     "playerGame": "{{count}}-Spieler Spiel",
     "waitingForPlayer": "Warten auf {{player}}",
     "remaining": "verbleibend",
