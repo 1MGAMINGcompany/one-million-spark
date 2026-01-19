@@ -21,27 +21,30 @@ export function computeCommitment(secret: `0x${string}`): `0x${string}` {
 /**
  * Store secret in localStorage
  * Key format: seedSecret:${roomId}:${walletAddress}
+ * NOTE: Use trim only - Solana Base58 addresses are case-sensitive
  */
 export function storeSecret(roomId: string, walletAddress: string, secret: `0x${string}`): void {
-  const key = `seedSecret:${roomId}:${walletAddress.toLowerCase()}`;
+  const key = `seedSecret:${roomId}:${walletAddress.trim()}`;
   localStorage.setItem(key, secret);
 }
 
 /**
  * Retrieve secret from localStorage
  * Returns null if not found
+ * NOTE: Use trim only - Solana Base58 addresses are case-sensitive
  */
 export function getStoredSecret(roomId: string, walletAddress: string): `0x${string}` | null {
-  const key = `seedSecret:${roomId}:${walletAddress.toLowerCase()}`;
+  const key = `seedSecret:${roomId}:${walletAddress.trim()}`;
   const secret = localStorage.getItem(key);
   return secret ? (secret as `0x${string}`) : null;
 }
 
 /**
  * Remove secret from localStorage after successful reveal
+ * NOTE: Use trim only - Solana Base58 addresses are case-sensitive
  */
 export function clearStoredSecret(roomId: string, walletAddress: string): void {
-  const key = `seedSecret:${roomId}:${walletAddress.toLowerCase()}`;
+  const key = `seedSecret:${roomId}:${walletAddress.trim()}`;
   localStorage.removeItem(key);
 }
 

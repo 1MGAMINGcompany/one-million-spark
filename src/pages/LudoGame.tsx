@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
-import { isSameWallet, isRealWallet } from "@/lib/walletUtils";
+import { isSameWallet, isRealWallet, getOpponentWallet } from "@/lib/walletUtils";
+import { incMissed, resetMissed, clearRoom } from "@/lib/missedTurns";
 import { GameErrorBoundary } from "@/components/GameErrorBoundary";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -241,12 +242,42 @@ const LudoGame = () => {
     // Only apply moves from opponents (we already applied our own locally)
     if (!isSameWallet(move.wallet, address)) {
       console.log("[LudoGame] Applying move from DB:", move.turn_number);
-      const ludoMove = move.move_data as LudoMove;
+      const ludoMove = move.move_data as any;
+      
+      // Handle turn_timeout events
+      if (ludoMove?.action === "turn_timeout") {
+        if (ludoMove.missedCount >= 3) {
+          // Opponent forfeited by missing 3 turns - I win if 2-player
+          const remainingPlayers = roomPlayers.filter(p => 
+            isRealWallet(p) && !isSameWallet(p, ludoMove.timedOutWallet)
+          );
+          if (remainingPlayers.length === 1 && isSameWallet(remainingPlayers[0], address)) {
+            // I win!
+            toast({
+              title: t('gameSession.opponentForfeited'),
+              description: t('gameSession.youWin'),
+            });
+          }
+          return;
+        }
+        // Skip event - advance turn
+        toast({ 
+          title: t('gameSession.opponentSkipped'),
+          description: t('gameSession.yourTurnNow'),
+        });
+        return;
+      }
+      
+      // Normal move
       if (ludoMove) {
-        applyExternalMove(ludoMove);
+        applyExternalMove(ludoMove as LudoMove);
+        // Reset missed turns for the mover
+        if (move.wallet && roomPda) {
+          resetMissed(roomPda, move.wallet);
+        }
       }
     }
-  }, [address, applyExternalMove]);
+  }, [address, applyExternalMove, roomPlayers, roomPda, t]);
 
   const { submitMove: persistMove, moves: dbMoves, isLoading: isSyncLoading } = useDurableGameSync({
     roomPda: roomPda || "",
@@ -409,19 +440,63 @@ const LudoGame = () => {
     await handleConfirmForfeit();
   }, [handleConfirmForfeit]);
 
-  // Turn timer for ranked games - auto-forfeit on timeout
-  const handleTimeExpired = useCallback(() => {
-    if (!gameOver) {
+  // Turn timer for ranked games - skip on timeout, 3 strikes = forfeit
+  const handleTurnTimeout = useCallback(() => {
+    if (gameOver || !address || !roomPda || !isActuallyMyTurn) return;
+    
+    const newMissedCount = incMissed(roomPda, address);
+    
+    if (newMissedCount >= 3) {
+      // 3 STRIKES = AUTO FORFEIT
       toast({
-        title: t('gameSession.timeExpired'),
-        description: t('gameSession.forfeitedMatch'),
+        title: t('gameSession.autoForfeit'),
+        description: t('gameSession.missedThreeTurns'),
         variant: "destructive",
       });
-      // Trigger forfeit via the forfeit handler
+      
+      // Persist minimal turn_timeout event
+      if (isRankedGame) {
+        // Find next active player wallet
+        const nextWallet = roomPlayers.find((p, idx) => 
+          isRealWallet(p) && !isSameWallet(p, address) && !eliminatedPlayers.has(idx)
+        ) || null;
+        persistMove({
+          action: "turn_timeout",
+          timedOutWallet: address,
+          nextTurnWallet: nextWallet,
+          missedCount: newMissedCount,
+        }, address);
+      }
+      
+      // Trigger forfeit
       forfeitFnRef.current?.();
       play('ludo_dice');
+      
+    } else {
+      // SKIP to next player
+      toast({
+        title: t('gameSession.turnSkipped'),
+        description: `${newMissedCount}/3 ${t('gameSession.missedTurns')}`,
+        variant: "destructive",
+      });
+      
+      // Persist minimal turn_timeout event
+      if (isRankedGame) {
+        const nextPlayerIndex = (currentPlayerIndex + 1) % roomPlayers.length;
+        const nextWallet = roomPlayers[nextPlayerIndex] || null;
+        persistMove({
+          action: "turn_timeout",
+          timedOutWallet: address,
+          nextTurnWallet: nextWallet,
+          missedCount: newMissedCount,
+        }, address);
+      }
+      
+      // Advance to next player (pass 1 since we're skipping, not rolling 6)
+      advanceTurn(1);
+      play('ludo_dice');
     }
-  }, [gameOver, play, t]);
+  }, [gameOver, address, roomPda, isActuallyMyTurn, roomPlayers, eliminatedPlayers, currentPlayerIndex, isRankedGame, persistMove, advanceTurn, play, t]);
 
   // Use turn time from ranked gate (fetched from DB/localStorage)
   const effectiveTurnTime = rankedGate.turnTimeSeconds || DEFAULT_RANKED_TURN_TIME;
@@ -430,7 +505,7 @@ const LudoGame = () => {
     turnTimeSeconds: effectiveTurnTime,
     enabled: isRankedGame && canPlay && !gameOver,
     isMyTurn: isMyTurnLocal,
-    onTimeExpired: handleTimeExpired,
+    onTimeExpired: handleTurnTimeout,
     roomId: roomPda,
   });
 
@@ -438,7 +513,7 @@ const LudoGame = () => {
   const turnPlayers: TurnPlayer[] = useMemo(() => {
     return players.map((player, index) => {
       const walletAddress = roomPlayers[index] || `player-${index}`;
-      const isHuman = walletAddress.toLowerCase() === address?.toLowerCase();
+      const isHuman = isSameWallet(walletAddress, address);
       
       return {
         address: walletAddress,

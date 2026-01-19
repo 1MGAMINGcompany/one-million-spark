@@ -72,8 +72,8 @@ export function useRealtimeGameSync({
           processedIds.current = new Set(ids.slice(-250));
         }
         
-        // Ignore our own messages
-        if (payload.sender?.toLowerCase() === localAddressRef.current.toLowerCase()) {
+        // Ignore our own messages (use trim, not toLowerCase - Base58 is case-sensitive)
+        if (payload.sender?.trim() === localAddressRef.current.trim()) {
           console.log(`[RealtimeGameSync] Ignoring own message: ${payload.type}`);
           return;
         }
@@ -120,7 +120,8 @@ export function useRealtimeGameSync({
               const msgId = `${payload.type}-${payload.sender}-${payload.timestamp}`;
               if (processedIds.current.has(msgId)) return;
               processedIds.current.add(msgId);
-              if (payload.sender?.toLowerCase() === localAddressRef.current.toLowerCase()) return;
+              // Use trim, not toLowerCase - Base58 is case-sensitive
+              if (payload.sender?.trim() === localAddressRef.current.trim()) return;
               lastMessageTime.current = Date.now();
               reconnectAttempts.current = 0;
               onMessageRef.current(payload as RealtimeGameMessage);
@@ -209,7 +210,8 @@ export function useRealtimeGameSync({
         const msgId = `${payload.type}-${payload.sender}-${payload.timestamp}`;
         if (processedIds.current.has(msgId)) return;
         processedIds.current.add(msgId);
-        if (payload.sender?.toLowerCase() === localAddressRef.current.toLowerCase()) return;
+        // Use trim, not toLowerCase - Base58 is case-sensitive
+        if (payload.sender?.trim() === localAddressRef.current.trim()) return;
         lastMessageTime.current = Date.now();
         reconnectAttempts.current = 0;
         onMessageRef.current(payload as RealtimeGameMessage);

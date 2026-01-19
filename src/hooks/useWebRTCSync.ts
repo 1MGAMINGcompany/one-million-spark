@@ -59,12 +59,13 @@ export function useWebRTCSync({
   }, [onMessage]);
 
   // Determine if we're the initiator (based on address sorting)
-  const localAddress = address?.toLowerCase() || "";
+  // Use trim only - Base58 is case-sensitive, but we still need deterministic ordering
+  const localAddress = address?.trim() || "";
   const remoteAddress = players
-    .map((p) => p.toLowerCase())
+    .map((p) => p.trim())
     .find((p) => p !== localAddress);
   
-  // The player with the "lower" address initiates
+  // The player with the "lower" address initiates (lexicographic comparison of Base58)
   const isInitiator = localAddress && remoteAddress 
     ? localAddress < remoteAddress 
     : false;

@@ -1,5 +1,6 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { getOpponentWallet, isSameWallet, isRealWallet, DEFAULT_SOLANA_PUBKEY } from "@/lib/walletUtils";
+import { incMissed, resetMissed, clearRoom } from "@/lib/missedTurns";
 import { GameErrorBoundary } from "@/components/GameErrorBoundary";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { Chess, Square, PieceSymbol, Color } from "chess.js";
@@ -335,7 +336,35 @@ const ChessGame = () => {
     // Only apply moves from opponents (we already applied our own locally)
     if (!isSameWallet(move.wallet, address)) {
       console.log("[ChessGame] Applying move from DB:", move.turn_number);
-      const chessMove = move.move_data as ChessMove;
+      const moveData = move.move_data as any;
+      
+      // Handle turn_timeout events
+      if (moveData?.action === "turn_timeout") {
+        // Clear any turn override since we're processing a timeout
+        setTurnOverrideWallet(moveData.nextTurnWallet || null);
+        
+        if (moveData.missedCount >= 3) {
+          // Opponent forfeited by missing 3 turns
+          setGameOver(true);
+          setWinnerWallet(address || null);
+          setGameStatus(t('gameSession.opponentForfeited'));
+          play('chess_win');
+          toast({
+            title: t('gameSession.opponentForfeited'),
+            description: t('gameSession.youWin'),
+          });
+          return;
+        }
+        // Skip event - I get another turn
+        toast({ 
+          title: t('gameSession.opponentSkipped'),
+          description: t('gameSession.yourTurnNow'),
+        });
+        return;
+      }
+      
+      // Normal move - apply and clear override
+      const chessMove = moveData as ChessMove;
       if (chessMove && chessMove.from && chessMove.to) {
         const gameCopy = new Chess(gameRef.current.fen());
         try {
@@ -347,13 +376,18 @@ const ChessGame = () => {
           if (result) {
             setGame(new Chess(gameCopy.fen()));
             setMoveHistory(gameCopy.history());
+            setTurnOverrideWallet(null); // Clear override on real move
+            // Reset missed turns for the mover
+            if (move.wallet && roomPda) {
+              resetMissed(roomPda, move.wallet);
+            }
           }
         } catch (e) {
           console.error("[ChessGame] Failed to apply DB move:", e);
         }
       }
     }
-  }, [address]);
+  }, [address, roomPda, play, t]);
 
   const { submitMove: persistMove, moves: dbMoves, isLoading: isSyncLoading } = useDurableGameSync({
     roomPda: roomPda || "",
@@ -456,28 +490,79 @@ const ChessGame = () => {
 
   // Use startRoll.myColor as source of truth when finalized
   const effectiveColor = startRoll.isFinalized ? startRoll.myColor : myColor;
+  
+  // Turn override for skip functionality (when opponent times out, we get another turn)
+  const [turnOverrideWallet, setTurnOverrideWallet] = useState<string | null>(null);
 
-  // Check if it's my turn
-  const isMyTurn = canPlay && game.turn() === effectiveColor && !gameOver;
+  // Check if it's my turn from engine
+  const isMyTurnFromEngine = game.turn() === effectiveColor && !gameOver;
+  
+  // Override takes priority if set
+  const isMyTurnOverride = turnOverrideWallet 
+    ? isSameWallet(turnOverrideWallet, address) 
+    : null;
+  const isActuallyMyTurn = isMyTurnOverride ?? isMyTurnFromEngine;
+  
+  // isMyTurn includes canPlay gate - used for board disable
+  const isMyTurn = canPlay && isActuallyMyTurn;
 
   // Ref for forfeit function - will be set by useForfeit hook
   const forfeitFnRef = useRef<(() => Promise<void>) | null>(null);
 
-  // Turn timer for ranked games - auto-forfeit on timeout
-  const handleTimeExpired = useCallback(() => {
-    if (!gameOver) {
+  // Turn timer for ranked games - skip on timeout, 3 strikes = forfeit
+  const handleTurnTimeout = useCallback(() => {
+    if (gameOver || !address || !roomPda || !isActuallyMyTurn) return;
+    
+    const opponentWalletAddr = getOpponentWallet(roomPlayers, address);
+    const newMissedCount = incMissed(roomPda, address);
+    
+    if (newMissedCount >= 3) {
+      // 3 STRIKES = AUTO FORFEIT
       toast({
-        title: t('gameSession.timeExpired'),
-        description: t('gameSession.forfeitedMatch'),
+        title: t('gameSession.autoForfeit'),
+        description: t('gameSession.missedThreeTurns'),
         variant: "destructive",
       });
-      // Trigger forfeit via finalizeGame (single authoritative payout)
+      
+      // Persist minimal turn_timeout event
+      if (isRankedGame && opponentWalletAddr) {
+        persistMove({
+          action: "turn_timeout",
+          timedOutWallet: address,
+          nextTurnWallet: opponentWalletAddr,
+          missedCount: newMissedCount,
+        } as any, address);
+      }
+      
+      // Trigger forfeit
       forfeitFnRef.current?.();
       setGameOver(true);
-      setGameStatus(myColor === 'w' ? t('game.black') + " wins by timeout" : t('game.white') + " wins by timeout");
+      setWinnerWallet(opponentWalletAddr);
+      setGameStatus(myColor === 'w' ? t('game.black') + " wins" : t('game.white') + " wins");
       play('chess_lose');
+      
+    } else {
+      // SKIP to opponent
+      toast({
+        title: t('gameSession.turnSkipped'),
+        description: `${newMissedCount}/3 ${t('gameSession.missedTurns')}`,
+        variant: "destructive",
+      });
+      
+      // Persist minimal turn_timeout event
+      if (isRankedGame && opponentWalletAddr) {
+        persistMove({
+          action: "turn_timeout",
+          timedOutWallet: address,
+          nextTurnWallet: opponentWalletAddr,
+          missedCount: newMissedCount,
+        } as any, address);
+      }
+      
+      // Grant opponent another turn via override
+      setTurnOverrideWallet(opponentWalletAddr);
     }
-  }, [gameOver, myColor, play, t]);
+  }, [gameOver, address, roomPda, isActuallyMyTurn, roomPlayers, myColor, isRankedGame, persistMove, play, t]);
 
   // Use turn time from ranked gate (fetched from DB/localStorage)
   const effectiveTurnTime = rankedGate.turnTimeSeconds || DEFAULT_RANKED_TURN_TIME;
@@ -486,7 +571,7 @@ const ChessGame = () => {
     turnTimeSeconds: effectiveTurnTime,
     enabled: isRankedGame && canPlay && !gameOver,
     isMyTurn,
-    onTimeExpired: handleTimeExpired,
+    onTimeExpired: handleTurnTimeout,
     roomId: roomPda,
   });
 
@@ -863,8 +948,7 @@ const ChessGame = () => {
     setShowLeaveModal(true);
   }, []);
 
-  // Check if it's actually my turn (based on game state, not canPlay gate)
-  const isActuallyMyTurn = game.turn() === myColor && !gameOver;
+  // isActuallyMyTurn already computed above with turn override support
 
   useEffect(() => {
     if (roomPlayers.length < 2) {

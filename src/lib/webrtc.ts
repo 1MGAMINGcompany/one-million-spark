@@ -64,12 +64,14 @@ export class WebRTCPeer {
     _options: WebRTCPeerOptions = {}
   ) {
     this.roomId = roomId;
-    this.localAddress = localAddress.toLowerCase();
+    // Use trim only - Base58 is case-sensitive
+    this.localAddress = localAddress.trim();
     this.callbacks = callbacks;
   }
 
   async connect(remoteAddress: string, isInitiator: boolean): Promise<void> {
-    this.remoteAddress = remoteAddress.toLowerCase();
+    // Use trim only - Base58 is case-sensitive
+    this.remoteAddress = remoteAddress.trim();
     this.isInitiator = isInitiator;
 
     console.log(`[WebRTC] Connecting as ${isInitiator ? "INITIATOR" : "RESPONDER"}`);
@@ -200,8 +202,8 @@ export class WebRTCPeer {
     }
     this.processedSignals.add(signalId);
 
-    // Verify it's from our expected peer
-    if (signal.from.toLowerCase() !== this.remoteAddress) {
+    // Verify it's from our expected peer (use trim, not toLowerCase - Base58 is case-sensitive)
+    if (signal.from.trim() !== this.remoteAddress) {
       console.log(`[WebRTC] Ignoring signal from unknown peer: ${signal.from.slice(0, 8)}...`);
       return;
     }
