@@ -1,10 +1,10 @@
 import { WalletAdapterNetwork } from "@solana/wallet-adapter-base";
 
 // ============================================================
-// SOLANA NETWORK CONFIGURATION - MAINNET-BETA ONLY (HELIUS RPC)
+// SOLANA NETWORK CONFIGURATION - MAINNET-BETA ONLY
 // ============================================================
-// This app ONLY uses mainnet-beta with Helius RPC.
-// No devnet, no testnet, no localhost, no public endpoints.
+// READ operations: Use solana-rpc-read edge function proxy (API key server-side)
+// TX operations: Use direct RPC (wallet adapter requires it for signing)
 // ============================================================
 
 // FORCE mainnet-beta - never change this
@@ -14,8 +14,10 @@ export const SOLANA_CLUSTER = "mainnet-beta" as const;
 // Feature flag - Solana is LIVE
 export const SOLANA_ENABLED = true;
 
-// Helius RPC URL - hardcoded and secured via Helius domain locking
-// Allowed domains: 1mgaming.com, one-million-spark.lovable.app, *.lovableproject.com
+// Helius RPC URL - ONLY used for client-side transaction sending
+// READ operations now use solana-rpc-read edge function proxy
+// This URL remains for wallet adapter which requires direct connection for signing
+// Helius domain-locking provides secondary protection
 export const SOLANA_RPC_URL = "https://mainnet.helius-rpc.com/?api-key=44221d00-cebb-4ef8-90c6-83dacbd9001e";
 
 // Get current RPC endpoint (Helius mainnet only)
