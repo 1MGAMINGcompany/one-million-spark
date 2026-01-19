@@ -1265,14 +1265,13 @@ const ChessGame = () => {
         onDecline={handleDeclineRematch}
       />
 
-      {/* RulesGate - Hard gate for ranked games */}
-      {/* Render when match is ready: 2 players, wallet connected, not finalized, and (casual OR bothReady) */}
+      {/* RulesGate + DiceRollStart - RulesGate handles accept modal internally */}
       {(() => {
-        const shouldShowDice =
+        // Don't require bothReady here - let RulesGate handle showing the accept modal
+        const shouldShowRulesGate =
           roomPlayers.length >= 2 &&
           !!address &&
-          !startRoll.isFinalized &&
-          (!isRankedGame || rankedGate.bothReady);
+          !startRoll.isFinalized;
 
         if (isDebugEnabled()) {
           dbg("dice.gate", {
@@ -1284,11 +1283,11 @@ const ChessGame = () => {
             bothReady: rankedGate.bothReady,
             isFinalized: startRoll.isFinalized,
             showDiceRoll: startRoll.showDiceRoll,
-            shouldShowDice,
+            shouldShowRulesGate,
           });
         }
 
-        return shouldShowDice ? (
+        return shouldShowRulesGate ? (
         <RulesGate
           isRanked={isRankedGame}
           roomPda={roomPda}
