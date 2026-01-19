@@ -706,7 +706,13 @@
     "failedToAccept": "स्वीकार करने में विफल",
     "tryAgain": "कृपया पुनः प्रयास करें",
     "timeExpired": "समय समाप्त!",
-    "forfeitedMatch": "आपका समय समाप्त हो गया और आपने मैच खो दिया।"
+    "forfeitedMatch": "आपका समय समाप्त हो गया और आपने मैच खो दिया।",
+    "turnSkipped": "बारी छोड़ी गई",
+    "missedTurns": "छूटी बारियां",
+    "autoForfeit": "स्वत: हार",
+    "missedThreeTurns": "आपने लगातार 3 बारी खो दी",
+    "opponentSkipped": "प्रतिद्वंद्वी ने बारी छोड़ी",
+    "yourTurnNow": "प्रतिद्वंद्वी का समय समाप्त - अब आपकी बारी है"
   },
   "pwa": {
     "addToHomeScreen": "होम स्क्रीन पर जोड़ें",
