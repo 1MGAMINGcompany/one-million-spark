@@ -581,7 +581,10 @@
     "autoForfeit": "Abandono Automático",
     "missedThreeTurns": "Você perdeu 3 turnos seguidos",
     "opponentSkipped": "Oponente Pulou",
-    "yourTurnNow": "O tempo do oponente expirou - é sua vez"
+    "yourTurnNow": "O tempo do oponente expirou - é sua vez",
+    "playerEliminated": "Jogador Eliminado",
+    "youWereEliminated": "Você foi eliminado do jogo",
+    "opponentEliminated": "{{player}} foi eliminado"
   },
   "pwa": {
     "installApp": "Instalar App para Notificações",

@@ -699,7 +699,10 @@
     "autoForfeit": "Abbandono Automatico",
     "missedThreeTurns": "Hai perso 3 turni consecutivi",
     "opponentSkipped": "L'avversario ha saltato",
-    "yourTurnNow": "Il tempo dell'avversario è scaduto - tocca a te"
+    "yourTurnNow": "Il tempo dell'avversario è scaduto - tocca a te",
+    "playerEliminated": "Giocatore Eliminato",
+    "youWereEliminated": "Sei stato eliminato dalla partita",
+    "opponentEliminated": "{{player}} è stato eliminato"
   },
   "pwa": {
     "addToHomeScreen": "Aggiungi alla Schermata Home",
