@@ -44,6 +44,7 @@ import { PublicKey, Connection } from "@solana/web3.js";
 import { parseRoomAccount } from "@/lib/solana-program";
 import { getSolanaEndpoint } from "@/lib/solana-config";
 import { useTxLock } from "@/contexts/TxLockContext";
+import { dbg, isDebugEnabled } from "@/lib/debugLog";
 
 // Persisted chess game state
 interface PersistedChessState {
@@ -1266,7 +1267,28 @@ const ChessGame = () => {
 
       {/* RulesGate - Hard gate for ranked games */}
       {/* Render when match is ready: 2 players, wallet connected, not finalized, and (casual OR bothReady) */}
-      {roomPlayers.length >= 2 && address && !startRoll.isFinalized && (!isRankedGame || rankedGate.bothReady) && (
+      {(() => {
+        const shouldShowDice =
+          roomPlayers.length >= 2 &&
+          !!address &&
+          !startRoll.isFinalized &&
+          (!isRankedGame || rankedGate.bothReady);
+
+        if (isDebugEnabled()) {
+          dbg("dice.gate", {
+            game: "chess",
+            roomPda,
+            roomPlayersLen: roomPlayers.length,
+            hasAddress: !!address,
+            isRankedGame,
+            bothReady: rankedGate.bothReady,
+            isFinalized: startRoll.isFinalized,
+            showDiceRoll: startRoll.showDiceRoll,
+            shouldShowDice,
+          });
+        }
+
+        return shouldShowDice ? (
         <RulesGate
           isRanked={isRankedGame}
           roomPda={roomPda}
@@ -1297,7 +1319,8 @@ const ChessGame = () => {
             isForfeiting={isForfeiting}
           />
         </RulesGate>
-      )}
+        ) : null;
+      })()}
 
       {/* Leave Match Modal - Safe UI with explicit on-chain action separation */}
       <LeaveMatchModal

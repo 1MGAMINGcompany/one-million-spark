@@ -44,6 +44,7 @@ import { toast } from "@/hooks/use-toast";
 import { PublicKey, Connection } from "@solana/web3.js";
 import { parseRoomAccount } from "@/lib/solana-program";
 import { getSolanaEndpoint } from "@/lib/solana-config";
+import { dbg, isDebugEnabled } from "@/lib/debugLog";
 import {
   type Player,
   type GameState,
@@ -1196,7 +1197,28 @@ const BackgammonGame = () => {
       />
       
       {/* RulesGate + DiceRollStart - only when shouldShowDice */}
-      {roomPlayers.length >= 2 && address && !startRoll.isFinalized && (!isRankedGame || rankedGate.bothReady) && (
+      {(() => {
+        const shouldShowDice =
+          roomPlayers.length >= 2 &&
+          !!address &&
+          !startRoll.isFinalized &&
+          (!isRankedGame || rankedGate.bothReady);
+
+        if (isDebugEnabled()) {
+          dbg("dice.gate", {
+            game: "backgammon",
+            roomPda,
+            roomPlayersLen: roomPlayers.length,
+            hasAddress: !!address,
+            isRankedGame,
+            bothReady: rankedGate.bothReady,
+            isFinalized: startRoll.isFinalized,
+            showDiceRoll: startRoll.showDiceRoll,
+            shouldShowDice,
+          });
+        }
+
+        return shouldShowDice ? (
         <RulesGate
           isRanked={isRankedGame}
           roomPda={roomPda}
@@ -1227,7 +1249,8 @@ const BackgammonGame = () => {
             isForfeiting={isForfeiting}
           />
         </RulesGate>
-      )}
+        ) : null;
+      })()}
       
       <TurnBanner
         gameName="Backgammon"
