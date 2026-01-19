@@ -7,6 +7,7 @@
  */
 
 import { useState, useEffect, useCallback } from "react";
+import { dbg, isDebugEnabled } from "@/lib/debugLog";
 import { supabase } from "@/integrations/supabase/client";
 
 interface UseRankedReadyGateOptions {
@@ -87,6 +88,28 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
   // Also require that we've identified this player's role (isPlayer1 or isPlayer2)
   const isIdentified = isPlayer1 || isPlayer2;
   const showAcceptModal = enabled && isRanked && hasLoaded && !iAmReady && isIdentified;
+
+  // Debug logging for ranked gate - traces exactly why bothReady/showAcceptModal are what they are
+  if (isDebugEnabled() && isRanked && hasLoaded) {
+    dbg("ranked.gate", {
+      roomPda: roomPda?.slice(0, 8),
+      myWallet: myWalletNorm?.slice(0, 8),
+      p1Wallet: p1WalletNorm?.slice(0, 8),
+      p2Wallet: p2WalletNorm?.slice(0, 8),
+      isPlayer1,
+      isPlayer2,
+      isIdentified,
+      p1Ready,
+      p2Ready,
+      iAmReady,
+      opponentReady,
+      serverBothAccepted,
+      sessionComplete,
+      bothReady,
+      showAcceptModal,
+      acceptedWallets: Array.from(acceptedWallets).map(w => w.slice(0, 8)),
+    });
+  }
   
   // Debug logging for ranked gate state - consistent format for cross-device debugging
   useEffect(() => {
