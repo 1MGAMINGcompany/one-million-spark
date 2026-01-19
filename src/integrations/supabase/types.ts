@@ -14,6 +14,45 @@ export type Database = {
   }
   public: {
     Tables: {
+      client_errors: {
+        Row: {
+          build_version: string | null
+          created_at: string | null
+          debug_events: Json | null
+          error_message: string | null
+          error_stack: string | null
+          id: string
+          route: string | null
+          user_agent: string | null
+          wallet_address: string | null
+          wallet_browser: string | null
+        }
+        Insert: {
+          build_version?: string | null
+          created_at?: string | null
+          debug_events?: Json | null
+          error_message?: string | null
+          error_stack?: string | null
+          id?: string
+          route?: string | null
+          user_agent?: string | null
+          wallet_address?: string | null
+          wallet_browser?: string | null
+        }
+        Update: {
+          build_version?: string | null
+          created_at?: string | null
+          debug_events?: Json | null
+          error_message?: string | null
+          error_stack?: string | null
+          id?: string
+          route?: string | null
+          user_agent?: string | null
+          wallet_address?: string | null
+          wallet_browser?: string | null
+        }
+        Relationships: []
+      }
       finalize_receipts: {
         Row: {
           created_at: string
