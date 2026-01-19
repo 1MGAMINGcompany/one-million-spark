@@ -201,11 +201,23 @@ const BackgammonGame = () => {
     
     if (persisted.gameState) {
       setGameState(persisted.gameState);
-      setDice(persisted.dice || []);
-      setRemainingMoves(persisted.remainingMoves || []);
       setCurrentPlayer(persisted.currentPlayer);
       setGameOver(persisted.gameOver || false);
       setGameStatus(persisted.gameStatus || t('game.yourTurn'));
+      
+      // CRITICAL: Clear stale dice on restore if it's my turn
+      // Dice from previous turn can bleed into the restored state
+      const restoredPlayer = persisted.currentPlayer;
+      const isRestoredToMyTurn = restoredPlayer === myRoleRef.current;
+      
+      if (isRestoredToMyTurn && persisted.dice?.length > 0) {
+        console.log("[BackgammonGame] Clearing stale dice on session restore - it's my turn but dice exist");
+        setDice([]);
+        setRemainingMoves([]);
+      } else {
+        setDice(persisted.dice || []);
+        setRemainingMoves(persisted.remainingMoves || []);
+      }
       
       // Only show toast once per session load
       if (showToast && !restoredToastShownRef.current) {
@@ -289,9 +301,27 @@ const BackgammonGame = () => {
   const handleDurableMoveReceived = useCallback((move: GameMove) => {
     // Only apply moves from opponents (we already applied our own locally)
     if (!isSameWallet(move.wallet, address)) {
-      console.log("[BackgammonGame] Applying move from DB:", move.turn_number);
+      console.log("[BackgammonGame] Applying move from DB:", move.turn_number, move.move_data);
       const bgMove = move.move_data as BackgammonMoveMessage;
-      if (bgMove && bgMove.gameState) {
+      
+      if (bgMove.type === "dice_roll" && bgMove.dice) {
+        // Opponent rolled dice - set dice and remainingMoves
+        console.log("[BackgammonGame] Received dice_roll from opponent:", bgMove.dice);
+        setDice(bgMove.dice);
+        const moves = bgMove.dice[0] === bgMove.dice[1] 
+          ? [bgMove.dice[0], bgMove.dice[0], bgMove.dice[0], bgMove.dice[0]]
+          : bgMove.dice;
+        setRemainingMoves(bgMove.remainingMoves || moves);
+        setGameStatus("Opponent rolled dice");
+      } else if (bgMove.type === "turn_end") {
+        // Opponent ended their turn - switch to my turn, clear dice
+        console.log("[BackgammonGame] Received turn_end from opponent");
+        setCurrentPlayer(prev => prev === "player" ? "ai" : "player");
+        setDice([]);
+        setRemainingMoves([]);
+        setGameStatus("Your turn - Roll the dice!");
+      } else if (bgMove && bgMove.gameState) {
+        // Normal move - apply game state
         setGameState(bgMove.gameState);
         if (bgMove.remainingMoves) setRemainingMoves(bgMove.remainingMoves);
         if (bgMove.dice) setDice(bgMove.dice);
@@ -753,7 +783,7 @@ const BackgammonGame = () => {
     setDice(newDice);
     setRemainingMoves(moves);
     
-    // Send to opponent
+    // Send to opponent via WebRTC (fast path)
     const moveMsg: BackgammonMoveMessage = {
       type: "dice_roll",
       dice: newDice,
@@ -761,6 +791,11 @@ const BackgammonGame = () => {
       remainingMoves: moves,
     };
     sendMove(moveMsg);
+    
+    // CRITICAL: Persist dice_roll to DB for cross-device sync (durable path)
+    if (isRankedGame && address) {
+      persistMove(moveMsg, address);
+    }
     
     // Check if moves available
     const barCount = myRole === "player" ? gameState.bar.player : gameState.bar.ai;
@@ -781,10 +816,11 @@ const BackgammonGame = () => {
       }
       setGameStatus("Select a checker to move");
     }
-  }, [isMyTurn, dice, gameOver, gameState, myRole, play, sendMove]);
+  }, [isMyTurn, dice, gameOver, gameState, myRole, play, sendMove, isRankedGame, address, persistMove]);
 
   // End turn
   const endTurn = useCallback(() => {
+    // Send via WebRTC (fast path)
     const moveMsg: BackgammonMoveMessage = {
       type: "turn_end",
       gameState,
@@ -792,13 +828,24 @@ const BackgammonGame = () => {
     };
     sendMove(moveMsg);
     
+    // CRITICAL: Persist turn_end to DB for cross-device sync (durable path)
+    // Explicitly set dice: [] so opponent's client knows dice are cleared
+    if (isRankedGame && address) {
+      persistMove({ 
+        type: "turn_end", 
+        gameState, 
+        remainingMoves: [], 
+        dice: [] 
+      } as BackgammonMoveMessage & { dice: number[] }, address);
+    }
+    
     setCurrentPlayer(prev => prev === "player" ? "ai" : "player");
     setDice([]);
     setRemainingMoves([]);
     setSelectedPoint(null);
     setValidMoves([]);
     setGameStatus("Opponent's turn");
-  }, [gameState, sendMove]);
+  }, [gameState, sendMove, isRankedGame, address, persistMove]);
 
   // Handle point click
   const handlePointClick = useCallback((pointIndex: number) => {
@@ -1383,7 +1430,7 @@ const BackgammonGame = () => {
               </div>
 
               {/* Board Container - Aspect-ratio scaling to 100vw, max-height to fit viewport */}
-              <div className="relative w-full flex-1 min-h-0" style={{ maxHeight: '55vh' }}>
+              <div className="relative w-full flex-1 min-h-0" style={{ maxHeight: '60vh' }}>
                 {/* Subtle glow */}
                 <div className="absolute -inset-1 bg-primary/10 rounded-xl blur-lg opacity-30" />
                 
