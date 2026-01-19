@@ -693,7 +693,13 @@
     "failedToAccept": "فشل القبول",
     "tryAgain": "حاول مرة أخرى",
     "timeExpired": "انتهى الوقت!",
-    "forfeitedMatch": "نفد وقتك وخسرت المباراة."
+    "forfeitedMatch": "نفد وقتك وخسرت المباراة.",
+    "turnSkipped": "تم تخطي الدور",
+    "missedTurns": "أدوار فائتة",
+    "autoForfeit": "انسحاب تلقائي",
+    "missedThreeTurns": "فاتتك 3 أدوار متتالية",
+    "opponentSkipped": "تخطى الخصم دوره",
+    "yourTurnNow": "انتهى وقت دور الخصم - الآن دورك"
   },
   "pwa": {
     "addToHomeScreen": "إضافة إلى الشاشة الرئيسية",

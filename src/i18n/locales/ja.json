@@ -711,7 +711,13 @@
     "failedToAccept": "承認に失敗しました",
     "tryAgain": "もう一度お試しください",
     "timeExpired": "時間切れ！",
-    "forfeitedMatch": "時間切れでマッチを棄権しました。"
+    "forfeitedMatch": "時間切れでマッチを棄権しました。",
+    "turnSkipped": "ターンスキップ",
+    "missedTurns": "ミスしたターン",
+    "autoForfeit": "自動棄権",
+    "missedThreeTurns": "3ターン連続でスキップしました",
+    "opponentSkipped": "対戦相手がスキップ",
+    "yourTurnNow": "相手の時間切れ - あなたのターンです"
   },
   "pwa": {
     "addToHomeScreen": "ホーム画面に追加",

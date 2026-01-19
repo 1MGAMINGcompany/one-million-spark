@@ -693,7 +693,13 @@
     "failedToAccept": "Accettazione fallita",
     "tryAgain": "Per favore riprova",
     "timeExpired": "Tempo scaduto!",
-    "forfeitedMatch": "Hai esaurito il tempo e hai perso la partita."
+    "forfeitedMatch": "Hai esaurito il tempo e hai perso la partita.",
+    "turnSkipped": "Turno Saltato",
+    "missedTurns": "turni persi",
+    "autoForfeit": "Abbandono Automatico",
+    "missedThreeTurns": "Hai perso 3 turni consecutivi",
+    "opponentSkipped": "L'avversario ha saltato",
+    "yourTurnNow": "Il tempo dell'avversario è scaduto - tocca a te"
   },
   "pwa": {
     "addToHomeScreen": "Aggiungi alla Schermata Home",

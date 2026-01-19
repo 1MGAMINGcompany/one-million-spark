@@ -693,7 +693,13 @@
     "failedToAccept": "接受失败",
     "tryAgain": "请重试",
     "timeExpired": "时间到！",
-    "forfeitedMatch": "您的时间用完了，比赛弃权。"
+    "forfeitedMatch": "您的时间用完了，比赛弃权。",
+    "turnSkipped": "回合跳过",
+    "missedTurns": "错过回合",
+    "autoForfeit": "自动弃权",
+    "missedThreeTurns": "您连续错过了3个回合",
+    "opponentSkipped": "对手跳过",
+    "yourTurnNow": "对手超时 - 轮到您了"
   },
   "pwa": {
     "addToHomeScreen": "添加到主屏幕",

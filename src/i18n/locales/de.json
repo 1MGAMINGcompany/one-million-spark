@@ -575,7 +575,13 @@
     "failedToAccept": "Akzeptieren fehlgeschlagen",
     "tryAgain": "Bitte versuchen Sie es erneut",
     "timeExpired": "Zeit abgelaufen!",
-    "forfeitedMatch": "Ihre Zeit ist abgelaufen und Sie haben die Partie verloren."
+    "forfeitedMatch": "Ihre Zeit ist abgelaufen und Sie haben die Partie verloren.",
+    "turnSkipped": "Zug übersprungen",
+    "missedTurns": "verpasste Züge",
+    "autoForfeit": "Automatische Aufgabe",
+    "missedThreeTurns": "Sie haben 3 Züge hintereinander verpasst",
+    "opponentSkipped": "Gegner übersprungen",
+    "yourTurnNow": "Zeit des Gegners abgelaufen - Sie sind am Zug"
   },
   "pwa": {
     "installApp": "App für Benachrichtigungen Installieren",

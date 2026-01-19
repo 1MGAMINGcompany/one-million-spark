@@ -703,7 +703,13 @@
     "failedToAccept": "Error al aceptar",
     "tryAgain": "Por favor intenta de nuevo",
     "timeExpired": "¡Tiempo expirado!",
-    "forfeitedMatch": "Se te acabó el tiempo y perdiste la partida."
+    "forfeitedMatch": "Se te acabó el tiempo y perdiste la partida.",
+    "turnSkipped": "Turno Saltado",
+    "missedTurns": "turnos perdidos",
+    "autoForfeit": "Abandono Automático",
+    "missedThreeTurns": "Perdiste 3 turnos seguidos",
+    "opponentSkipped": "Oponente Saltó",
+    "yourTurnNow": "El tiempo del oponente expiró - es tu turno"
   },
   "pwa": {
     "installApp": "Instalar App para Notificaciones",
