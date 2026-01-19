@@ -16,6 +16,12 @@ interface NavItem {
   icon: LucideIcon;
 }
 
+// Safe helper: wallet webviews may not define Notification
+function getNotificationAPI(): any | null {
+  if (typeof window === "undefined") return null;
+  return (window as any).Notification ?? null;
+}
+
 const Navbar = () => {
   const location = useLocation();
   const [isOpen, setIsOpen] = useState(false);
@@ -24,10 +30,13 @@ const Navbar = () => {
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const { connected, publicKey } = useWallet();
 
-  // Check notification permission on mount
+  // Check notification permission on mount (safe for wallet webviews)
   useEffect(() => {
-    if ("Notification" in window) {
-      setNotificationsEnabled(Notification.permission === "granted");
+    try {
+      const N = getNotificationAPI();
+      setNotificationsEnabled(!!N && N.permission === "granted");
+    } catch {
+      setNotificationsEnabled(false);
     }
   }, []);
 
