@@ -88,7 +88,13 @@ export function useGameSessionPersistence({
     isSavingRef.current = true;
 
     try {
-      console.log('[GameSession] Saving session state via secure RPC...');
+      // DEBUG: Log what we're about to send to help diagnose mode issues
+      console.log('[GameSession] Saving session state via secure RPC...', {
+        roomPda,
+        p_mode: mode,
+        p_status: status,
+        p_current_turn_wallet: currentTurnWallet,
+      });
       
       // Use the secure RPC function instead of direct upsert
       const { error } = await supabase.rpc('upsert_game_session', {
