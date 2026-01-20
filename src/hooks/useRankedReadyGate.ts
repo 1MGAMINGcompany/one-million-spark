@@ -36,6 +36,8 @@ interface UseRankedReadyGateResult {
   turnTimeSeconds: number;
   /** Whether gate data has loaded (use to block modal rendering with defaults) */
   isDataLoaded: boolean;
+  /** Force refetch for cross-device sync */
+  refetch: () => Promise<void>;
 }
 
 export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRankedReadyGateResult {
@@ -185,12 +187,12 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
     }
   }, [roomPda, myWalletNorm]);
 
-  // Load initial state and subscribe to changes
-  useEffect(() => {
-    if (!roomPda || !enabled) return;
-
-    const loadState = async () => {
-      // Use Edge Function instead of direct table access (RLS locked)
+  // Refetch function for cross-device sync (extracted for reuse)
+  const refetch = useCallback(async () => {
+    if (!roomPda) return;
+    
+    console.log("[RankedReadyGate] Force refetch triggered");
+    try {
       const { data: resp, error } = await supabase.functions.invoke("game-session-get", {
         body: { roomPda },
       });
@@ -204,14 +206,10 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
         if (session.turn_time_seconds) {
           setTurnTimeSeconds(session.turn_time_seconds);
         }
-        // FIX: If start_roll_finalized is true, game has already started = both were ready
         if (session.start_roll_finalized) {
           setStartRollFinalized(true);
         }
-        // Note: Mode now comes from DB (single source of truth)
-        // No localStorage sync needed - useRoomMode fetches directly from DB
         
-        // STEP 4: Load acceptedWallets from game_acceptances
         const wallets =
           resp?.acceptances?.players
             ?.map((p: any) =>
@@ -220,15 +218,18 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
             .filter(Boolean) ?? [];
         setAcceptedWallets(new Set(wallets));
         setServerBothAccepted(resp?.acceptances?.bothAccepted ?? false);
-        
-        setHasLoaded(true);
-      } else {
-        // Still mark as loaded even if no data found
         setHasLoaded(true);
       }
-    };
+    } catch (err) {
+      console.error("[RankedReadyGate] Refetch error:", err);
+    }
+  }, [roomPda]);
 
-    loadState();
+  // Load initial state and subscribe to changes
+  useEffect(() => {
+    if (!roomPda || !enabled) return;
+
+    refetch();
 
     // Subscribe to realtime updates
     const channel = supabase
@@ -252,7 +253,8 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [roomPda, enabled]);
+  }, [roomPda, enabled, refetch]);
+
 
   // STEP 4: Poll immediately for ranked games (not only when iAmReady)
   // This ensures we detect opponent acceptance even before we accept
@@ -331,6 +333,7 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
       stakeLamports: 0,
       turnTimeSeconds: 0,
       isDataLoaded: true,
+      refetch: async () => {},
     };
   }
 
@@ -344,5 +347,6 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
     stakeLamports,
     turnTimeSeconds,
     isDataLoaded: hasLoaded,
+    refetch,
   };
 }

@@ -52,6 +52,8 @@ interface UseStartRollResult {
   handleRollComplete: (startingWallet: string) => void;
   /** Whether session is being created */
   isCreatingSession: boolean;
+  /** Force refetch for cross-device sync */
+  forceRefetch: () => Promise<void>;
 }
 
 export function useStartRoll(options: UseStartRollOptions): UseStartRollResult {
@@ -295,6 +297,43 @@ export function useStartRoll(options: UseStartRollOptions): UseStartRollResult {
     console.log("[useStartRoll] Roll complete. Starter:", starter, "My color:", isStarter ? "white" : "black");
   }, [myWallet]);
 
+  // Force refetch for cross-device sync (e.g., on visibility change)
+  const forceRefetch = useCallback(async () => {
+    if (!roomPda) return;
+    
+    console.log("[useStartRoll] Force refetch triggered");
+    try {
+      const { data: resp, error } = await supabase.functions.invoke("game-session-get", {
+        body: { roomPda },
+      });
+      
+      if (error) {
+        console.error("[useStartRoll] Force refetch error:", error);
+        return;
+      }
+
+      const session = resp?.session;
+      if (session?.start_roll_finalized && session.starting_player_wallet) {
+        if (session.status === 'finished') {
+          console.log("[useStartRoll] Force refetch: session finished, showing dice UI");
+          setShowDiceRoll(true);
+          return;
+        }
+        
+        const starter = session.starting_player_wallet;
+        const isStarter = isSameWallet(starter, myWallet);
+        setMyColor(isStarter ? "w" : "b");
+        setStartingWallet(starter);
+        setRollResult(session.start_roll as unknown as StartRollResult);
+        setIsFinalized(true);
+        setShowDiceRoll(false);
+        console.log("[useStartRoll] Force refetch found finalized roll. Starter:", starter);
+      }
+    } catch (err) {
+      console.error("[useStartRoll] Force refetch failed:", err);
+    }
+  }, [roomPda, myWallet]);
+
   return {
     isFinalized,
     showDiceRoll,
@@ -303,5 +342,6 @@ export function useStartRoll(options: UseStartRollOptions): UseStartRollResult {
     rollResult,
     handleRollComplete,
     isCreatingSession,
+    forceRefetch,
   };
 }
