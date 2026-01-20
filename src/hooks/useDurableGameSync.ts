@@ -50,6 +50,10 @@ export function useDurableGameSync({
   const loadedRef = useRef(false);
   const resyncToastIdRef = useRef<string | number | null>(null);
   const lastResyncTimeRef = useRef<number>(0);
+  
+  // CHANNEL_ERROR retry backoff refs
+  const lastChannelErrorRetryRef = useRef<number>(0);
+  const channelErrorRetryCountRef = useRef<number>(0);
 
   // Load existing moves from DB on mount
   const loadMoves = useCallback(async (): Promise<GameMove[]> => {
@@ -305,20 +309,48 @@ export function useDurableGameSync({
           dbg("durable.subscribed", { roomPda: roomPda.slice(0, 8) });
         }
         
-        // PART F: Handle channel error - log but DO NOT auto-reconnect (observing only)
+        // Handle channel error with exponential backoff to prevent retry spam
         if (status === 'CHANNEL_ERROR') {
           console.error("[DurableSync] CHANNEL_ERROR detected:", {
             roomPda: roomPda.slice(0, 8),
             error: error?.message || "unknown",
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
+            retryCount: channelErrorRetryCountRef.current,
           });
-          dbg("durable.channel_error", { roomPda: roomPda.slice(0, 8), error: error?.message });
-          // Still refetch to recover state
-          toast("Reconnecting...", {
-            description: "Lost connection, fetching latest state",
-            duration: 2000,
+          dbg("durable.channel_error", { 
+            roomPda: roomPda.slice(0, 8), 
+            error: error?.message,
+            retryCount: channelErrorRetryCountRef.current,
           });
-          loadMoves();
+          
+          // Throttle: Only retry with exponential backoff (5s, 10s, 20s, max 30s)
+          const now = Date.now();
+          const timeSinceLastRetry = now - lastChannelErrorRetryRef.current;
+          const minRetryInterval = Math.min(
+            5000 * Math.pow(2, channelErrorRetryCountRef.current), 
+            30000
+          );
+          
+          if (timeSinceLastRetry > minRetryInterval) {
+            lastChannelErrorRetryRef.current = now;
+            channelErrorRetryCountRef.current += 1;
+            
+            toast("Reconnecting...", {
+              description: `Lost connection, retrying (attempt ${channelErrorRetryCountRef.current})`,
+              duration: 2000,
+            });
+            
+            loadMoves().then(() => {
+              // Reset retry count on successful load
+              channelErrorRetryCountRef.current = 0;
+            });
+          } else {
+            console.log("[DurableSync] Throttling CHANNEL_ERROR retry:", {
+              timeSinceLastRetry,
+              minRetryInterval,
+              nextRetryIn: minRetryInterval - timeSinceLastRetry,
+            });
+          }
         }
       });
 

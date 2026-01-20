@@ -695,7 +695,7 @@ const BackgammonGame = () => {
 
   // Handle turn timeout - SKIP to opponent (NOT immediate forfeit)
   // FIX: Ensure nextTurnWallet is computed from session wallets, NEVER same as timedOutWallet
-  const handleTurnTimeout = useCallback(() => {
+  const handleTurnTimeout = useCallback(async () => {
     // === MANDATORY DIAGNOSTIC LOGGING ===
     console.log("[handleTurnTimeout] ENTRY - all state:", {
       timeoutFiredRef: timeoutFiredRef.current,
@@ -784,9 +784,10 @@ const BackgammonGame = () => {
         variant: "destructive",
       });
       
-      // PART B: Submit explicit auto_forfeit move type (server marks game as finished)
+      // FIX: Await persistMove BEFORE any local state changes
+      // This prevents the race condition where the game is marked finished before the RPC completes
       if (isRankedGame) {
-        persistMove({
+        const result = await persistMove({
           type: "auto_forfeit",
           timedOutWallet,
           winnerWallet: nextTurnWallet,
@@ -796,9 +797,11 @@ const BackgammonGame = () => {
           dice: [],
           remainingMoves: [],
         } as BackgammonMoveMessage, address);
+        
+        console.log("[handleTurnTimeout] auto_forfeit persistMove result:", result);
       }
       
-      // Then trigger on-chain forfeit
+      // THEN update local state (after RPC completes)
       forfeitFnRef.current?.();
       setGameOver(true);
       setWinnerWallet(nextTurnWallet);
@@ -838,6 +841,7 @@ const BackgammonGame = () => {
       setValidMoves([]);
       setGameStatus("Opponent's turn");
     }
+  // Note: This callback is now async to properly await persistMove for auto_forfeit
   }, [isActuallyMyTurn, gameOver, address, roomPda, dice, remainingMoves, myRole, gameState, isRankedGame, persistMove, play, t]);
   
   // Turn timer for ranked games
