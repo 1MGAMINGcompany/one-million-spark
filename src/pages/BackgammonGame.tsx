@@ -402,9 +402,22 @@ const BackgammonGame = () => {
     }
   }, [address, play, t, roomPda]);
 
-  // FIX: Use rankedGate.bothReady as the gate - more reliable than on-chain roomPlayers fetch
-  // When both players accept rules in ranked, we KNOW we have 2 valid wallets
-  const durableEnabled = isRankedGame && rankedGate.bothReady;
+  // Deterministic start roll for ALL games (casual + ranked) - MUST be before durableEnabled
+  const startRoll = useStartRoll({
+    roomPda,
+    gameType: "backgammon",
+    myWallet: address,
+    isRanked: isRankedGame,
+    roomPlayers,
+    hasTwoRealPlayers,
+    initialColor: myRole === "player" ? "w" : "b",
+    bothReady: rankedGate.bothReady,
+  });
+
+  // PART B FIX: Enable durable sync if EITHER:
+  // 1. rankedGate.bothReady is true (both accepted via game_acceptances)
+  // 2. startRoll.isFinalized is true (game already started, so both WERE ready)
+  const durableEnabled = isRankedGame && (rankedGate.bothReady || startRoll.isFinalized);
   
   const { submitMove: durablePersistMove, moves: dbMoves, isLoading: isSyncLoading } = useDurableGameSync({
     roomPda: roomPda || "",
@@ -421,6 +434,7 @@ const BackgammonGame = () => {
       durableEnabled,
       isRankedGame,
       bothReady: rankedGate.bothReady,
+      startRollFinalized: startRoll.isFinalized,
       hasTwoRealPlayers,
       roomPlayers: roomPlayers.map(w => w?.slice(0, 8)),
     });
@@ -429,24 +443,13 @@ const BackgammonGame = () => {
       console.warn("[BackgammonGame] SKIPPING persistMove - durable sync disabled", {
         isRankedGame,
         bothReady: rankedGate.bothReady,
+        startRollFinalized: startRoll.isFinalized,
       });
       return false;
     }
     
     return durablePersistMove(moveData, wallet);
-  }, [durablePersistMove, durableEnabled, isRankedGame, rankedGate.bothReady, hasTwoRealPlayers, roomPlayers]);
-
-  // Deterministic start roll for ALL games (casual + ranked)
-  const startRoll = useStartRoll({
-    roomPda,
-    gameType: "backgammon",
-    myWallet: address,
-    isRanked: isRankedGame,
-    roomPlayers,
-    hasTwoRealPlayers,
-    initialColor: myRole === "player" ? "w" : "b",
-    bothReady: rankedGate.bothReady,
-  });
+  }, [durablePersistMove, durableEnabled, isRankedGame, rankedGate.bothReady, startRoll.isFinalized, hasTwoRealPlayers, roomPlayers]);
 
   // Cross-device visibility sync - force refetch when tab becomes visible
   useEffect(() => {
@@ -461,6 +464,28 @@ const BackgammonGame = () => {
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [roomPda, startRoll.forceRefetch, rankedGate.refetch]);
+
+  // PART D: Debug logging for durable sync state
+  useEffect(() => {
+    console.log("[BackgammonGame] Sync State Debug:", {
+      roomPda: roomPda?.slice(0, 8),
+      roomMode,
+      isRankedGame,
+      modeLoaded,
+      "rankedGate.bothReady": rankedGate.bothReady,
+      "rankedGate.iAmReady": rankedGate.iAmReady,
+      "rankedGate.opponentReady": rankedGate.opponentReady,
+      "rankedGate.isDataLoaded": rankedGate.isDataLoaded,
+      "startRoll.isFinalized": startRoll.isFinalized,
+      durableEnabled,
+      hasTwoRealPlayers,
+      roomPlayers: roomPlayers.map(w => w?.slice(0, 8)),
+    });
+  }, [
+    roomPda, roomMode, isRankedGame, modeLoaded,
+    rankedGate.bothReady, rankedGate.iAmReady, rankedGate.opponentReady, rankedGate.isDataLoaded,
+    startRoll.isFinalized, durableEnabled, hasTwoRealPlayers, roomPlayers
+  ]);
 
   // Polling fallback for currentTurnWallet sync (in case WebRTC fails)
   useEffect(() => {
