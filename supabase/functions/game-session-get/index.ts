@@ -90,13 +90,25 @@ serve(async (req) => {
   }
   const players = Array.from(byWallet.values()).map(p => ({ ...p, accepted: true }));
   
-  // Get required players from session (default 2) - fixes hardcoded 2-player check
+  // Get required players from session (default 2)
   const requiredPlayers = session?.max_players ?? 2;
-  const bothAccepted = players.length >= requiredPlayers;
+
+  // PART C FIX: Multiple ways to determine if both players accepted:
+  // 1. Count from game_acceptances table
+  const fromAcceptances = players.length >= requiredPlayers;
+  // 2. Check p1_ready/p2_ready flags (set by record_acceptance RPC)
+  const fromSessionFlags = Boolean(session?.p1_ready && session?.p2_ready);
+  // 3. If start_roll_finalized is true, both players MUST have been ready
+  const fromStartRoll = session?.start_roll_finalized === true;
+
+  const bothAccepted = fromAcceptances || fromSessionFlags || fromStartRoll;
 
   console.log("[game-session-get] Acceptances:", {
     playersCount: players.length,
     requiredPlayers,
+    fromAcceptances,
+    fromSessionFlags,
+    fromStartRoll,
     bothAccepted,
   });
 
