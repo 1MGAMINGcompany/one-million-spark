@@ -113,6 +113,13 @@ export function useDurableGameSync({
     });
 
     try {
+      console.log("[DurableSync] Invoking submit-move edge function:", {
+        roomPda: roomPda.slice(0, 8),
+        wallet: wallet.slice(0, 8),
+        moveType: moveData.type,
+        clientMoveId: clientMoveId.slice(0, 8),
+      });
+      
       const { data, error } = await supabase.functions.invoke("submit-move", {
         body: {
           roomPda,
@@ -125,8 +132,15 @@ export function useDurableGameSync({
       });
 
       if (error) {
-        console.error("[DurableSync] Edge function error:", error);
-        dbg("durable.submit.invoke_error", { error: error.message });
+        console.error("[DurableSync] Edge function ERROR:", error);
+        console.error("[DurableSync] Error name:", error.name);
+        console.error("[DurableSync] Error message:", error.message);
+        console.error("[DurableSync] Full error:", JSON.stringify(error, null, 2));
+        dbg("durable.submit.invoke_error", { 
+          error: error.message, 
+          name: error.name,
+          roomPda: roomPda.slice(0, 8) 
+        });
         throw error;
       }
 
@@ -271,12 +285,35 @@ export function useDurableGameSync({
           }
         }
       )
-      .subscribe((status) => {
-        dbg("durable.subscription_status", { status });
+      .subscribe((status, error) => {
+        console.log("[DurableSync] Subscription status:", status);
+        dbg("durable.subscription_status", { status, error: error?.message });
         
-        // PART F: Handle channel error with reconnect and refetch
+        if (error) {
+          console.error("[DurableSync] Subscription ERROR object:", error);
+          console.error("[DurableSync] Error message:", error.message);
+          console.error("[DurableSync] Full error JSON:", JSON.stringify(error, null, 2));
+          dbg("durable.subscription_error", { 
+            message: error.message,
+            status,
+            roomPda: roomPda.slice(0, 8)
+          });
+        }
+        
+        if (status === 'SUBSCRIBED') {
+          console.log("[DurableSync] Successfully subscribed to room:", roomPda.slice(0, 8));
+          dbg("durable.subscribed", { roomPda: roomPda.slice(0, 8) });
+        }
+        
+        // PART F: Handle channel error - log but DO NOT auto-reconnect (observing only)
         if (status === 'CHANNEL_ERROR') {
-          console.warn("[DurableSync] Channel error - attempting refetch");
+          console.error("[DurableSync] CHANNEL_ERROR detected:", {
+            roomPda: roomPda.slice(0, 8),
+            error: error?.message || "unknown",
+            timestamp: new Date().toISOString()
+          });
+          dbg("durable.channel_error", { roomPda: roomPda.slice(0, 8), error: error?.message });
+          // Still refetch to recover state
           toast("Reconnecting...", {
             description: "Lost connection, fetching latest state",
             duration: 2000,

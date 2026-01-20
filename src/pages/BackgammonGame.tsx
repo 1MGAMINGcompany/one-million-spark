@@ -166,6 +166,20 @@ const BackgammonGame = () => {
   // Ref for forfeit function (set after useForfeit hook)
   const forfeitFnRef = useRef<(() => Promise<void>) | null>(null);
 
+  // === EDGE FUNCTION HEALTH PROBE (DIAGNOSTIC ONLY) ===
+  useEffect(() => {
+    import("@/lib/edgeFunctionHealth").then(({ checkEdgeFunctionHealth }) => {
+      checkEdgeFunctionHealth().then((result) => {
+        (window as any).__EDGE_HEALTH__ = result;
+        if (!result.ok) {
+          console.error("[BackgammonGame] Edge functions NOT reachable:", result.error);
+        } else {
+          console.log("[BackgammonGame] Edge functions OK:", result.elapsedMs, "ms");
+        }
+      });
+    });
+  }, []);
+
   // Fetch real player order from on-chain room account
   useEffect(() => {
     if (!address || !roomPda) return;
@@ -438,7 +452,7 @@ const BackgammonGame = () => {
   // VERBOSE wrapper for persistMove - ALWAYS logs to diagnose "0 invocations" issues
   const persistMove = useCallback(async (moveData: BackgammonMoveMessage, wallet: string) => {
     // ALWAYS log this to catch sync issues
-    console.log("[BackgammonGame] persistMove check:", {
+    console.log("[persistMove] CHECK:", {
       type: moveData.type,
       wallet: wallet?.slice(0, 8),
       durableEnabled,
@@ -448,9 +462,23 @@ const BackgammonGame = () => {
       hasTwoRealPlayers,
       roomPlayers: roomPlayers.map(w => w?.slice(0, 8)),
     });
+    dbg("persist.check", {
+      type: moveData.type,
+      durableEnabled,
+      isRankedGame,
+      bothReady: rankedGate.bothReady,
+      startRollFinalized: startRoll.isFinalized,
+    });
     
     if (!durableEnabled) {
-      console.warn("[BackgammonGame] SKIPPING persistMove - durable sync disabled", {
+      console.warn("[persistMove] SKIPPED - durable sync disabled", {
+        durableEnabled,
+        isRankedGame,
+        bothReady: rankedGate.bothReady,
+        startRollFinalized: startRoll.isFinalized,
+      });
+      dbg("persist.skip", {
+        durableEnabled,
         isRankedGame,
         bothReady: rankedGate.bothReady,
         startRollFinalized: startRoll.isFinalized,
@@ -458,8 +486,21 @@ const BackgammonGame = () => {
       return false;
     }
     
-    return durablePersistMove(moveData, wallet);
-  }, [durablePersistMove, durableEnabled, isRankedGame, rankedGate.bothReady, startRoll.isFinalized, hasTwoRealPlayers, roomPlayers]);
+    // Log WHEN we ARE sending
+    console.log("[persistMove] SENDING:", {
+      moveType: moveData.type,
+      roomPda: roomPda?.slice(0, 8),
+      wallet: wallet?.slice(0, 8),
+    });
+    dbg("persist.send", { type: moveData.type });
+    
+    const result = await durablePersistMove(moveData, wallet);
+    
+    console.log("[persistMove] RESULT:", { success: result, type: moveData.type });
+    dbg("persist.result", { success: result, type: moveData.type });
+    
+    return result;
+  }, [durablePersistMove, durableEnabled, isRankedGame, rankedGate.bothReady, startRoll.isFinalized, hasTwoRealPlayers, roomPlayers, roomPda]);
 
   // Cross-device visibility sync - force refetch when tab becomes visible
   useEffect(() => {
@@ -655,20 +696,55 @@ const BackgammonGame = () => {
   // Handle turn timeout - SKIP to opponent (NOT immediate forfeit)
   // FIX: Ensure nextTurnWallet is computed from session wallets, NEVER same as timedOutWallet
   const handleTurnTimeout = useCallback(() => {
+    // === MANDATORY DIAGNOSTIC LOGGING ===
+    console.log("[handleTurnTimeout] ENTRY - all state:", {
+      timeoutFiredRef: timeoutFiredRef.current,
+      isActuallyMyTurn,
+      gameOver,
+      address: address?.slice(0, 8),
+      roomPda: roomPda?.slice(0, 8),
+      diceLen: dice.length,
+      remainingMovesLen: remainingMoves.length,
+      durableEnabled,
+      isRankedGame,
+      bothReady: rankedGate.bothReady,
+      startRollFinalized: startRoll.isFinalized,
+      currentTurnWallet: currentTurnWallet?.slice(0, 8),
+      hasTwoRealPlayers,
+      roomPlayers: roomPlayers.map(w => w?.slice(0, 8)),
+    });
+    dbg("timeout.entry", {
+      isActuallyMyTurn,
+      gameOver,
+      durableEnabled,
+      isRankedGame,
+      diceLen: dice.length,
+      remainingMovesLen: remainingMoves.length,
+    });
+    // === END DIAGNOSTIC ===
+    
     // PART A: Prevent double-fire with debounce
     if (timeoutFiredRef.current) {
-      console.log("[BackgammonGame] Ignoring duplicate timeout trigger");
+      console.log("[handleTurnTimeout] Ignoring duplicate timeout trigger");
       return;
     }
     
     if (!isActuallyMyTurn || gameOver || !address || !roomPda) {
-      console.log("[BackgammonGame] Ignoring timeout - not my turn or game over");
+      console.log("[handleTurnTimeout] Ignoring timeout - not my turn or game over", {
+        isActuallyMyTurn,
+        gameOver,
+        hasAddress: !!address,
+        hasRoomPda: !!roomPda,
+      });
       return;
     }
     
     // Mid-turn guard: Don't skip if player has rolled dice but not finished moving
     if (dice.length > 0 && remainingMoves.length > 0) {
-      console.log("[BackgammonGame] Ignoring timeout - mid-turn with dice");
+      console.log("[handleTurnTimeout] Ignoring timeout - mid-turn with dice", {
+        diceLen: dice.length,
+        remainingMovesLen: remainingMoves.length,
+      });
       return;
     }
     
