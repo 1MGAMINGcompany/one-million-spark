@@ -184,6 +184,24 @@ Deno.serve(async (req: Request) => {
 
     console.log("[submit-move] Move saved successfully");
 
+    // Update current_turn_wallet on turn_end/turn_timeout for cross-device sync
+    if (
+      (moveData.type === "turn_end" || moveData.type === "turn_timeout") &&
+      moveData.nextTurnWallet
+    ) {
+      const { error: updateError } = await supabase
+        .from("game_sessions")
+        .update({ current_turn_wallet: moveData.nextTurnWallet })
+        .eq("room_pda", roomPda);
+
+      if (updateError) {
+        console.error("[submit-move] Failed to update current_turn_wallet:", updateError);
+        // Non-fatal: move is saved, turn wallet update is best-effort
+      } else {
+        console.log("[submit-move] Updated current_turn_wallet to:", moveData.nextTurnWallet.slice(0, 8));
+      }
+    }
+
     return new Response(
       JSON.stringify({ success: true, moveHash, turnNumber }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
