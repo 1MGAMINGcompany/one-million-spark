@@ -402,26 +402,39 @@ const BackgammonGame = () => {
     }
   }, [address, play, t, roomPda]);
 
-  // FIX: Use hasTwoRealPlayers instead of roomPlayers.length >= 2
+  // FIX: Use rankedGate.bothReady as the gate - more reliable than on-chain roomPlayers fetch
+  // When both players accept rules in ranked, we KNOW we have 2 valid wallets
+  const durableEnabled = isRankedGame && rankedGate.bothReady;
+  
   const { submitMove: durablePersistMove, moves: dbMoves, isLoading: isSyncLoading } = useDurableGameSync({
     roomPda: roomPda || "",
-    enabled: isRankedGame && hasTwoRealPlayers,
+    enabled: durableEnabled,
     onMoveReceived: handleDurableMoveReceived,
   });
 
-  // Debug wrapper for persistMove - logs all calls
+  // VERBOSE wrapper for persistMove - ALWAYS logs to diagnose "0 invocations" issues
   const persistMove = useCallback(async (moveData: BackgammonMoveMessage, wallet: string) => {
-    if (isDebugEnabled()) {
-      console.log("[BackgammonGame] persistMove called:", {
-        type: moveData.type,
-        wallet: wallet?.slice(0, 8),
-        enabled: isRankedGame && hasTwoRealPlayers,
-        roomPlayers: roomPlayers.map(w => w?.slice(0, 8)),
-        hasTwoRealPlayers,
+    // ALWAYS log this to catch sync issues
+    console.log("[BackgammonGame] persistMove check:", {
+      type: moveData.type,
+      wallet: wallet?.slice(0, 8),
+      durableEnabled,
+      isRankedGame,
+      bothReady: rankedGate.bothReady,
+      hasTwoRealPlayers,
+      roomPlayers: roomPlayers.map(w => w?.slice(0, 8)),
+    });
+    
+    if (!durableEnabled) {
+      console.warn("[BackgammonGame] SKIPPING persistMove - durable sync disabled", {
+        isRankedGame,
+        bothReady: rankedGate.bothReady,
       });
+      return false;
     }
+    
     return durablePersistMove(moveData, wallet);
-  }, [durablePersistMove, isRankedGame, hasTwoRealPlayers, roomPlayers]);
+  }, [durablePersistMove, durableEnabled, isRankedGame, rankedGate.bothReady, hasTwoRealPlayers, roomPlayers]);
 
   // Deterministic start roll for ALL games (casual + ranked)
   const startRoll = useStartRoll({
