@@ -116,33 +116,57 @@ function computeOutcomeFromLastMove(args: {
   lastMove: any | null;
   p1Wallet: string | null;
   p2Wallet: string | null;
+  myWallet?: string | null; // Fallback when players aren't ready
 }): MatchOutcome {
-  const { lastMove, p1Wallet, p2Wallet } = args;
-  if (!lastMove || !p1Wallet || !p2Wallet) {
+  const { lastMove, p1Wallet, p2Wallet, myWallet } = args;
+
+  if (!lastMove) {
     return { winnerWallet: null, loserWallet: null, reason: "unknown" };
   }
 
-  const type = lastMove?.move_data?.type || lastMove?.type;
+  const type = lastMove?.move_data?.type || lastMove?.type || "unknown";
   const actor = (lastMove?.wallet || "").trim();
 
-  // Check for explicit winnerWallet in move payload first
+  // Extract explicit wallets from various possible locations
   const explicitWinner =
     (lastMove?.move_data?.winnerWallet || lastMove?.winnerWallet || null)?.trim?.() || null;
+  const timedOutWallet =
+    (lastMove?.move_data?.timedOutWallet || lastMove?.timedOutWallet || null)?.trim?.() || null;
+  const forfeitingWallet =
+    (lastMove?.move_data?.forfeitingWallet || lastMove?.forfeitingWallet || null)?.trim?.() || null;
 
+  const loserFromMove = forfeitingWallet || timedOutWallet || actor || null;
+  const havePlayers = !!(p1Wallet && p2Wallet);
+
+  // 1) EXPLICIT WINNER: Always trust if provided (even without player list)
   if (explicitWinner) {
-    const winnerWallet = explicitWinner;
-    const loserWallet = isSameWallet(winnerWallet, p1Wallet) ? p2Wallet : p1Wallet;
-    return { winnerWallet, loserWallet, reason: "winner_explicit" };
+    let loserWallet: string | null = null;
+    
+    if (type === "auto_forfeit" || type === "resign" || type === "forfeit" || type === "turn_timeout") {
+      loserWallet = loserFromMove;
+    } else if (havePlayers) {
+      loserWallet = isSameWallet(explicitWinner, p1Wallet!) ? p2Wallet! : p1Wallet!;
+    }
+    
+    return { winnerWallet: explicitWinner, loserWallet, reason: "winner_explicit" };
   }
 
-  // AUTO_FORFEIT, RESIGN, FORFEIT: actor is the LOSER (they timed out / resigned)
+  // 2) FORFEIT-STYLE: Actor/timedOut is loser, derive winner if possible
   if (type === "auto_forfeit" || type === "resign" || type === "forfeit") {
-    const loserWallet = actor;
-    const winnerWallet = isSameWallet(loserWallet, p1Wallet) ? p2Wallet : p1Wallet;
+    const loserWallet = loserFromMove;
+    let winnerWallet: string | null = null;
+    
+    if (havePlayers && loserWallet) {
+      winnerWallet = isSameWallet(loserWallet, p1Wallet!) ? p2Wallet! : p1Wallet!;
+    } else if (myWallet && loserWallet && !isSameWallet(loserWallet, myWallet)) {
+      // Fallback: If opponent forfeited and we don't have players yet, I'm the winner
+      winnerWallet = myWallet;
+    }
+    
     return { winnerWallet, loserWallet, reason: type };
   }
 
-  return { winnerWallet: null, loserWallet: null, reason: type || "unknown" };
+  return { winnerWallet: null, loserWallet: null, reason: type };
 }
 
 const BackgammonGame = () => {
@@ -1181,9 +1205,16 @@ const BackgammonGame = () => {
         // Location 3: Use explicit outcome derivation for 3 strikes via WebRTC
         if (moveMsg.missedCount && moveMsg.missedCount >= 3) {
           const outcome = computeOutcomeFromLastMove({
-            lastMove: { wallet: message.payload?.timedOutWallet || message.sender, type: "auto_forfeit" },
+            lastMove: { 
+              wallet: message.payload?.timedOutWallet || message.sender, 
+              type: "auto_forfeit",
+              winnerWallet: message.payload?.winnerWallet, // Pass explicit winner
+              timedOutWallet: message.payload?.timedOutWallet,
+              move_data: message.payload, // Include full payload for fallback
+            },
             p1Wallet: roomPlayersRef.current[0],
             p2Wallet: roomPlayersRef.current[1],
+            myWallet: address, // Fallback when players not ready
           });
           
           console.log("[BackgammonGame] WebRTC turn_timeout 3 strikes outcome:", {
@@ -1191,7 +1222,21 @@ const BackgammonGame = () => {
             winner: outcome.winnerWallet?.slice(0, 8),
             loser: outcome.loserWallet?.slice(0, 8),
             myWallet: address?.slice(0, 8),
+            roomPlayersLen: roomPlayersRef.current.length,
+            payloadWinner: message.payload?.winnerWallet?.slice(0, 8),
           });
+          
+          // Safety guard: Don't show wrong result if winner couldn't be determined
+          if (!outcome.winnerWallet) {
+            console.warn("[BackgammonGame] winnerWallet null after outcome computation - deferring to polling", {
+              type: "turn_timeout",
+              payload: message.payload,
+              roomPlayersLen: roomPlayersRef.current.length,
+            });
+            setGameOver(true);
+            setGameStatus(t('game.matchEnded') || "Match ended - determining result...");
+            return; // Let polling fallback determine correct winner
+          }
           
           setGameOver(true);
           setWinnerWallet(outcome.winnerWallet);
@@ -1221,9 +1266,15 @@ const BackgammonGame = () => {
       // Location 4: Use explicit outcome derivation for resign via WebRTC
       const forfeitingWallet = message.payload?.forfeitingWallet;
       const outcome = computeOutcomeFromLastMove({
-        lastMove: { wallet: forfeitingWallet, type: "resign" },
+        lastMove: { 
+          wallet: forfeitingWallet, 
+          type: "resign",
+          forfeitingWallet: forfeitingWallet,
+          move_data: message.payload,
+        },
         p1Wallet: roomPlayersRef.current[0],
         p2Wallet: roomPlayersRef.current[1],
+        myWallet: address, // Fallback when players not ready
       });
       
       console.log("[BackgammonGame] resign outcome:", {
@@ -1231,7 +1282,20 @@ const BackgammonGame = () => {
         winner: outcome.winnerWallet?.slice(0, 8),
         loser: outcome.loserWallet?.slice(0, 8),
         myWallet: address?.slice(0, 8),
+        roomPlayersLen: roomPlayersRef.current.length,
       });
+      
+      // Safety guard: Don't show wrong result if winner couldn't be determined
+      if (!outcome.winnerWallet) {
+        console.warn("[BackgammonGame] winnerWallet null after resign computation - deferring to polling", {
+          type: "resign",
+          payload: message.payload,
+          roomPlayersLen: roomPlayersRef.current.length,
+        });
+        setGameOver(true);
+        setGameStatus(t('game.matchEnded') || "Match ended - determining result...");
+        return; // Let polling fallback determine correct winner
+      }
       
       setWinnerWallet(outcome.winnerWallet);
       const didIWin = outcome.winnerWallet && isSameWallet(outcome.winnerWallet, address);
