@@ -76,7 +76,7 @@ interface PersistedBackgammonState {
 
 // Multiplayer move message
 interface BackgammonMoveMessage {
-  type: "dice_roll" | "move" | "turn_end" | "turn_timeout";
+  type: "dice_roll" | "move" | "turn_end" | "turn_timeout" | "auto_forfeit";
   dice?: number[];
   move?: Move;
   gameState: GameState;
@@ -85,6 +85,9 @@ interface BackgammonMoveMessage {
   nextTurnWallet?: string;
   timedOutWallet?: string;
   missedCount?: number;
+  // Auto-forfeit fields
+  winnerWallet?: string;
+  reason?: string;
 }
 
 // Format result type for display
@@ -124,6 +127,11 @@ const BackgammonGame = () => {
   const [validMoves, setValidMoves] = useState<number[]>([]);
   const [gameResultInfo, setGameResultInfo] = useState<{ winner: Player | null; resultType: GameResultType | null; multiplier: number } | null>(null);
   const [winnerWallet, setWinnerWallet] = useState<string | null>(null); // Direct wallet address of winner
+  
+  // Timeout debounce - prevent double-fire
+  const timeoutFiredRef = useRef(false);
+  // Track turn_started_at for debounce reset
+  const [turnStartedAt, setTurnStartedAt] = useState<string | null>(null);
   
   // Wallet-authoritative turn state - SINGLE SOURCE OF TRUTH
   const [currentTurnWallet, setCurrentTurnWallet] = useState<string | null>(null);
@@ -361,13 +369,6 @@ const BackgammonGame = () => {
         // Opponent timed out - I get the turn
         console.log("[BackgammonGame] Received turn_timeout from opponent. Missed:", bgMove.missedCount);
         
-        // Update missed turns tracking using shared utility
-        if (bgMove.timedOutWallet && roomPda) {
-          // We don't need to store this locally - the utility handles it
-          // Just log for debugging
-          console.log(`[BackgammonGame] Opponent ${bgMove.timedOutWallet.slice(0,8)} has ${bgMove.missedCount} missed turns`);
-        }
-        
         // Check if game should end (3 strikes - opponent loses)
         if (bgMove.missedCount && bgMove.missedCount >= 3) {
           setGameOver(true);
@@ -392,6 +393,15 @@ const BackgammonGame = () => {
           title: t('gameSession.opponentSkipped'),
           description: t('gameSession.yourTurnNow'),
         });
+        
+      } else if (bgMove.type === "auto_forfeit") {
+        // Opponent auto-forfeited (3 strikes)
+        console.log("[BackgammonGame] Received auto_forfeit from opponent");
+        setGameOver(true);
+        setWinnerWallet(address); // I win
+        setGameResultInfo({ winner: myRoleRef.current, resultType: "single", multiplier: 1 });
+        setGameStatus(t('game.youWin') + " - opponent forfeited");
+        play('chess_win');
         
       } else if (bgMove && bgMove.gameState) {
         // Normal move - apply game state
@@ -488,8 +498,9 @@ const BackgammonGame = () => {
   ]);
 
   // Polling fallback for currentTurnWallet sync (in case WebRTC fails)
+  // PART F: Also detects finished games to show result modal
   useEffect(() => {
-    if (!roomPda || !isRankedGame || gameOver || !startRoll.isFinalized) return;
+    if (!roomPda || !isRankedGame || !startRoll.isFinalized) return;
 
     const pollTurnWallet = async () => {
       try {
@@ -502,7 +513,32 @@ const BackgammonGame = () => {
           return;
         }
 
+        // PART F: Detect finished game even if we missed websocket event
+        const dbStatus = data?.session?.status;
+        const dbWinner = data?.session?.winner_wallet;
+        if (dbStatus === 'finished' && !gameOver) {
+          console.log("[BackgammonGame] Polling detected game finished. Winner:", dbWinner?.slice(0, 8));
+          setGameOver(true);
+          if (dbWinner) {
+            setWinnerWallet(dbWinner);
+            const iWon = isSameWallet(dbWinner, address);
+            setGameResultInfo({ 
+              winner: iWon ? myRole : (myRole === "player" ? "ai" : "player"), 
+              resultType: "single", 
+              multiplier: 1 
+            });
+            setGameStatus(iWon ? t('game.youWin') : t('game.youLose'));
+            play(iWon ? 'chess_win' : 'chess_lose');
+          }
+          return;
+        }
+
+        // Skip turn sync if game is over
+        if (gameOver) return;
+
         const dbTurnWallet = data?.session?.current_turn_wallet;
+        const dbTurnStartedAt = data?.session?.turn_started_at;
+        
         if (dbTurnWallet && dbTurnWallet !== currentTurnWallet) {
           console.log("[BackgammonGame] Polling detected turn change:", {
             from: currentTurnWallet?.slice(0, 8),
@@ -513,6 +549,11 @@ const BackgammonGame = () => {
           setDice([]);
           setRemainingMoves([]);
         }
+        
+        // Also track turn_started_at for debounce reset
+        if (dbTurnStartedAt && dbTurnStartedAt !== turnStartedAt) {
+          setTurnStartedAt(dbTurnStartedAt);
+        }
       } catch (err) {
         console.error("[BackgammonGame] Polling error:", err);
       }
@@ -520,7 +561,7 @@ const BackgammonGame = () => {
 
     const interval = setInterval(pollTurnWallet, 5000);
     return () => clearInterval(interval);
-  }, [roomPda, isRankedGame, gameOver, startRoll.isFinalized, currentTurnWallet]);
+  }, [roomPda, isRankedGame, gameOver, startRoll.isFinalized, currentTurnWallet, turnStartedAt, address, myRole, play, t]);
 
   // Update myRole and currentTurnWallet based on start roll result
   useEffect(() => {
@@ -606,9 +647,20 @@ const BackgammonGame = () => {
   // Timer-specific turn check (for ranked games)
   const effectiveIsMyTurn = canPlay && isActuallyMyTurn;
   
+  // PART A: Reset timeout debounce on AUTHORITATIVE turn change
+  useEffect(() => {
+    timeoutFiredRef.current = false;
+  }, [currentTurnWallet, turnStartedAt]);
+
   // Handle turn timeout - SKIP to opponent (NOT immediate forfeit)
   // FIX: Ensure nextTurnWallet is computed from session wallets, NEVER same as timedOutWallet
   const handleTurnTimeout = useCallback(() => {
+    // PART A: Prevent double-fire with debounce
+    if (timeoutFiredRef.current) {
+      console.log("[BackgammonGame] Ignoring duplicate timeout trigger");
+      return;
+    }
+    
     if (!isActuallyMyTurn || gameOver || !address || !roomPda) {
       console.log("[BackgammonGame] Ignoring timeout - not my turn or game over");
       return;
@@ -619,6 +671,9 @@ const BackgammonGame = () => {
       console.log("[BackgammonGame] Ignoring timeout - mid-turn with dice");
       return;
     }
+    
+    // Set debounce flag BEFORE any async operations
+    timeoutFiredRef.current = true;
     
     // FIX: Compute wallets from roomPlayers (session data), not local state
     const timedOutWallet = currentTurnWalletRef.current || address;
@@ -636,6 +691,7 @@ const BackgammonGame = () => {
         p1: p1?.slice(0, 8),
         p2: p2?.slice(0, 8),
       });
+      timeoutFiredRef.current = false; // Reset on error
       return;
     }
     
@@ -645,26 +701,28 @@ const BackgammonGame = () => {
     console.log(`[BackgammonGame] Turn timeout. timedOut=${timedOutWallet?.slice(0,8)} nextTurn=${nextTurnWallet?.slice(0,8)} missed=${newMissedCount}/3`);
     
     if (newMissedCount >= 3) {
-      // 3 STRIKES = AUTO FORFEIT
+      // 3 STRIKES = AUTO FORFEIT - Submit explicit auto_forfeit move type
       toast({
         title: t('gameSession.autoForfeit'),
         description: t('gameSession.missedThreeTurns'),
         variant: "destructive",
       });
       
-      // Persist MINIMAL timeout event BEFORE forfeit
+      // PART B: Submit explicit auto_forfeit move type (server marks game as finished)
       if (isRankedGame) {
         persistMove({
-          type: "turn_timeout",
+          type: "auto_forfeit",
           timedOutWallet,
-          nextTurnWallet,
+          winnerWallet: nextTurnWallet,
           missedCount: newMissedCount,
+          reason: "three_missed_turns",
           gameState,
           dice: [],
           remainingMoves: [],
         } as BackgammonMoveMessage, address);
       }
       
+      // Then trigger on-chain forfeit
       forfeitFnRef.current?.();
       setGameOver(true);
       setWinnerWallet(nextTurnWallet);
@@ -1123,6 +1181,10 @@ const BackgammonGame = () => {
     // CRITICAL: Persist dice_roll to DB for cross-device sync (durable path)
     if (isRankedGame && address) {
       persistMove(moveMsg, address);
+      // PART C: Reset missed turns on successful dice roll (consecutive rule)
+      if (roomPda) {
+        resetMissed(roomPda, address);
+      }
     }
     
     // Check if moves available
@@ -1144,7 +1206,7 @@ const BackgammonGame = () => {
       }
       setGameStatus("Select a checker to move");
     }
-  }, [isMyTurn, dice, gameOver, gameState, myRole, play, sendMove, isRankedGame, address, persistMove]);
+  }, [isMyTurn, dice, gameOver, gameState, myRole, play, sendMove, isRankedGame, address, persistMove, roomPda]);
 
   // End turn
   const endTurn = useCallback(() => {
@@ -1578,7 +1640,7 @@ const BackgammonGame = () => {
   return (
     <GameErrorBoundary>
     <InAppBrowserRecovery roomPda={roomPda || ""} onResubscribeRealtime={resubscribeRealtime} bypassOverlay={true}>
-    <div className="h-screen bg-background flex flex-col relative overflow-hidden">
+    <div className="game-viewport bg-background flex flex-col relative overflow-hidden">
       {/* Gold Confetti Explosion on Win */}
       <GoldConfettiExplosion 
         active={gameOver && gameStatus.includes("win")} 
