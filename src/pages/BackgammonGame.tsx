@@ -607,6 +607,7 @@ const BackgammonGame = () => {
   const effectiveIsMyTurn = canPlay && isActuallyMyTurn;
   
   // Handle turn timeout - SKIP to opponent (NOT immediate forfeit)
+  // FIX: Ensure nextTurnWallet is computed from session wallets, NEVER same as timedOutWallet
   const handleTurnTimeout = useCallback(() => {
     if (!isActuallyMyTurn || gameOver || !address || !roomPda) {
       console.log("[BackgammonGame] Ignoring timeout - not my turn or game over");
@@ -619,12 +620,29 @@ const BackgammonGame = () => {
       return;
     }
     
-    const opponentWalletAddr = getOpponentWallet(roomPlayersRef.current, address);
+    // FIX: Compute wallets from roomPlayers (session data), not local state
+    const timedOutWallet = currentTurnWalletRef.current || address;
+    const p1 = roomPlayersRef.current[0];
+    const p2 = roomPlayersRef.current[1];
+    
+    // Compute opponent wallet - MUST be different from timedOutWallet
+    const nextTurnWallet = isSameWallet(timedOutWallet, p1) ? p2 : p1;
+    
+    // CRITICAL VALIDATION: nextTurnWallet must never equal timedOutWallet
+    if (!nextTurnWallet || isSameWallet(nextTurnWallet, timedOutWallet)) {
+      console.error("[BackgammonGame] INVALID timeout - nextTurnWallet equals timedOutWallet or is null!", {
+        timedOutWallet: timedOutWallet?.slice(0, 8),
+        nextTurnWallet: nextTurnWallet?.slice(0, 8),
+        p1: p1?.slice(0, 8),
+        p2: p2?.slice(0, 8),
+      });
+      return;
+    }
     
     // Use shared utility for missed turns tracking
     const newMissedCount = incMissed(roomPda, address);
     
-    console.log(`[BackgammonGame] Turn timeout. Wallet ${address?.slice(0,8)} missed ${newMissedCount}/3`);
+    console.log(`[BackgammonGame] Turn timeout. timedOut=${timedOutWallet?.slice(0,8)} nextTurn=${nextTurnWallet?.slice(0,8)} missed=${newMissedCount}/3`);
     
     if (newMissedCount >= 3) {
       // 3 STRIKES = AUTO FORFEIT
@@ -635,13 +653,13 @@ const BackgammonGame = () => {
       });
       
       // Persist MINIMAL timeout event BEFORE forfeit
-      if (isRankedGame && opponentWalletAddr) {
+      if (isRankedGame) {
         persistMove({
           type: "turn_timeout",
-          timedOutWallet: address,
-          nextTurnWallet: opponentWalletAddr,
+          timedOutWallet,
+          nextTurnWallet,
           missedCount: newMissedCount,
-          gameState, // Still include gameState for backgammon as it's needed
+          gameState,
           dice: [],
           remainingMoves: [],
         } as BackgammonMoveMessage, address);
@@ -649,7 +667,7 @@ const BackgammonGame = () => {
       
       forfeitFnRef.current?.();
       setGameOver(true);
-      setWinnerWallet(opponentWalletAddr);
+      setWinnerWallet(nextTurnWallet);
       const opponentRole = myRole === "player" ? "ai" : "player";
       setGameResultInfo({ winner: opponentRole, resultType: "single", multiplier: 1 });
       setGameStatus(t('game.youLose') + " - 3 missed turns");
@@ -664,21 +682,21 @@ const BackgammonGame = () => {
       });
       
       // Persist MINIMAL turn_timeout to DB
-      if (isRankedGame && opponentWalletAddr) {
+      if (isRankedGame) {
         persistMove({
           type: "turn_timeout",
-          timedOutWallet: address,
-          nextTurnWallet: opponentWalletAddr,
+          timedOutWallet,
+          nextTurnWallet,
           missedCount: newMissedCount,
-          gameState, // Still include gameState for backgammon
+          gameState,
           dice: [],
           remainingMoves: [],
         } as BackgammonMoveMessage, address);
       }
       
       // WALLET-AUTHORITATIVE: Set opponent as next turn
-      setCurrentTurnWallet(opponentWalletAddr);
-      const nextRole = isSameWallet(opponentWalletAddr, roomPlayersRef.current[0]) ? "player" : "ai";
+      setCurrentTurnWallet(nextTurnWallet);
+      const nextRole = isSameWallet(nextTurnWallet, roomPlayersRef.current[0]) ? "player" : "ai";
       setCurrentPlayer(nextRole);
       setDice([]);
       setRemainingMoves([]);
@@ -1509,10 +1527,10 @@ const BackgammonGame = () => {
           )}
         </svg>
         
-        {/* Checker stack */}
+        {/* Checker stack - 52px minimum tap target for mobile accessibility */}
         <div 
           className={cn(
-            "absolute flex items-center justify-center cursor-pointer min-w-[48px] min-h-[48px] transition-all active:scale-95",
+            "absolute flex items-center justify-center cursor-pointer min-w-[52px] min-h-[52px] transition-all active:scale-95",
             isLeftSide ? "left-[50px]" : "right-[50px]"
           )}
           onClick={(e) => {
@@ -1560,7 +1578,7 @@ const BackgammonGame = () => {
   return (
     <GameErrorBoundary>
     <InAppBrowserRecovery roomPda={roomPda || ""} onResubscribeRealtime={resubscribeRealtime} bypassOverlay={true}>
-    <div className="min-h-screen bg-background flex flex-col relative overflow-x-hidden">
+    <div className="h-screen bg-background flex flex-col relative overflow-hidden">
       {/* Gold Confetti Explosion on Win */}
       <GoldConfettiExplosion 
         active={gameOver && gameStatus.includes("win")} 
@@ -1660,7 +1678,7 @@ const BackgammonGame = () => {
           </div>
         </header>
       ) : (
-        <div className="border-b border-primary/20 px-4 py-3">
+        <div className="border-b border-primary/20 px-4 py-2">
           <div className="max-w-6xl mx-auto flex items-center justify-between">
             <div className="flex items-center gap-4">
               <Button asChild variant="ghost" size="sm" className="text-muted-foreground hover:text-primary">
@@ -1706,7 +1724,7 @@ const BackgammonGame = () => {
 
       {/* Turn Status - Desktop only (mobile uses bottom status bar) */}
       {!isMobile && (
-        <div className="px-4 py-2">
+        <div className="px-4 py-1">
           <div className="max-w-6xl mx-auto">
             <TurnStatusHeader
               isMyTurn={isActuallyMyTurn}
@@ -1723,7 +1741,7 @@ const BackgammonGame = () => {
       {/* Game Area */}
       <div className={cn(
         "flex-1 flex flex-col overflow-hidden min-h-0",
-        isMobile ? "px-2 pt-1 pb-2" : "px-4 py-4"
+        isMobile ? "px-2 pt-1 pb-2" : "px-4 py-2"
       )}>
         {/* Mobile Layout - Viewport-fit container to prevent zoom */}
         {isMobile ? (
@@ -1754,7 +1772,7 @@ const BackgammonGame = () => {
               </div>
 
               {/* Board Container - Aspect-ratio scaling to 100vw, max-height to fit viewport */}
-              <div className="relative w-full flex-1 min-h-0" style={{ maxHeight: '60vh' }}>
+              <div className="relative w-full flex-1 min-h-0 backgammon-mp-board" style={{ maxHeight: '68vh' }}>
                 {/* Subtle glow */}
                 <div className="absolute -inset-1 bg-primary/10 rounded-xl blur-lg opacity-30" />
                 
