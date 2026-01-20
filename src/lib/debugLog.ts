@@ -56,8 +56,23 @@ function sanitize(data: any) {
 
 export function isDebugEnabled(): boolean {
   if (typeof window === "undefined") return false;
+  
+  // Check URL first
   const qs = new URLSearchParams(window.location.search);
-  return qs.get("debug") === "1";
+  if (qs.get("debug") === "1") {
+    // Persist to sessionStorage so it survives navigation
+    try {
+      sessionStorage.setItem("__debug_enabled", "1");
+    } catch {}
+    return true;
+  }
+  
+  // Fallback to sessionStorage (persists across navigation within tab)
+  try {
+    return sessionStorage.getItem("__debug_enabled") === "1";
+  } catch {
+    return false;
+  }
 }
 
 function loadStored(): DebugEvent[] {

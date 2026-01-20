@@ -1714,7 +1714,7 @@ const BackgammonGame = () => {
               players={turnPlayers}
               myAddress={address}
               remainingTime={isRankedGame ? turnTimer.remainingTime : undefined}
-              showTimer={isRankedGame && canPlay}
+              showTimer={isRankedGame && startRoll.isFinalized && !gameOver}
             />
           </div>
         </div>

@@ -112,6 +112,7 @@ export type Database = {
       }
       game_moves: {
         Row: {
+          client_move_id: string | null
           created_at: string
           move_data: Json
           move_hash: string
@@ -121,6 +122,7 @@ export type Database = {
           wallet: string
         }
         Insert: {
+          client_move_id?: string | null
           created_at?: string
           move_data: Json
           move_hash: string
@@ -130,6 +132,7 @@ export type Database = {
           wallet: string
         }
         Update: {
+          client_move_id?: string | null
           created_at?: string
           move_data?: Json
           move_hash?: string
