@@ -159,6 +159,7 @@ export type Database = {
           start_roll_seed: string | null
           starting_player_wallet: string | null
           status: string
+          turn_started_at: string | null
           turn_time_seconds: number
           updated_at: string
         }
@@ -180,6 +181,7 @@ export type Database = {
           start_roll_seed?: string | null
           starting_player_wallet?: string | null
           status?: string
+          turn_started_at?: string | null
           turn_time_seconds?: number
           updated_at?: string
         }
@@ -201,6 +203,7 @@ export type Database = {
           start_roll_seed?: string | null
           starting_player_wallet?: string | null
           status?: string
+          turn_started_at?: string | null
           turn_time_seconds?: number
           updated_at?: string
         }

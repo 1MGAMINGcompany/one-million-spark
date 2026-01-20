@@ -7,12 +7,13 @@ const corsHeaders = {
 };
 
 /**
- * Server-Authoritative Move Submission
+ * Server-Authoritative Move Submission (Wallet-Authoritative Turn Model)
  * 
  * This edge function validates:
  * 1. Turn number matches expected (last_turn + 1)
- * 2. Wallet is the expected player for this turn
- * 3. Insert with UNIQUE constraint catches any race conditions
+ * 2. Wallet is a room participant (player1 or player2)
+ * 3. Turn ownership ONLY for turn_end/turn_timeout/auto_forfeit moves
+ * 4. Insert with UNIQUE constraint catches any race conditions
  * 
  * Always returns HTTP 200 with { success: true/false, error?: string }
  */
@@ -88,10 +89,10 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Step 4: Fetch game session to validate whose turn it is
+    // Step 4: Fetch game session to validate participation and turn ownership
     const { data: session, error: sessionError } = await supabase
       .from("game_sessions")
-      .select("starting_player_wallet, player1_wallet, player2_wallet")
+      .select("starting_player_wallet, player1_wallet, player2_wallet, current_turn_wallet")
       .eq("room_pda", roomPda)
       .single();
 
@@ -103,44 +104,58 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Determine expected player for this turn
-    // Odd turns (1, 3, 5...) = starter, Even turns (2, 4, 6...) = other player
-    const { starting_player_wallet, player1_wallet, player2_wallet } = session;
-    
-    if (!starting_player_wallet || !player1_wallet || !player2_wallet) {
-      console.error("[submit-move] Session incomplete:", { starting_player_wallet, player1_wallet, player2_wallet });
+    const { player1_wallet, player2_wallet, current_turn_wallet, starting_player_wallet } = session;
+
+    if (!player1_wallet || !player2_wallet) {
+      console.error("[submit-move] Session incomplete:", { player1_wallet, player2_wallet });
       return new Response(
         JSON.stringify({ success: false, error: "session_incomplete" }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Note: Use trim() for wallet comparisons (Base58 is case-sensitive)
-    const otherPlayer = starting_player_wallet.trim() === player1_wallet.trim() 
-      ? player2_wallet 
-      : player1_wallet;
-    
-    const isOddTurn = turnNumber % 2 === 1;
-    const expectedPlayer = isOddTurn ? starting_player_wallet : otherPlayer;
+    // SECURITY: Validate submitting wallet is actually a room participant
+    const walletTrimmed = wallet.trim();
+    const isParticipant = 
+      walletTrimmed === player1_wallet?.trim() || 
+      walletTrimmed === player2_wallet?.trim();
 
-    // Step 5: Validate wallet matches expected player (use trim, not toLowerCase - Base58 is case-sensitive)
-    if (wallet.trim() !== expectedPlayer.trim()) {
-      console.log("[submit-move] Not your turn:", { 
-        wallet: wallet.slice(0, 8), 
-        expected: expectedPlayer.slice(0, 8),
-        turn: turnNumber 
+    if (!isParticipant) {
+      console.log("[submit-move] Wallet not a participant:", { 
+        wallet: wallet.slice(0, 8),
+        p1: player1_wallet?.slice(0, 8),
+        p2: player2_wallet?.slice(0, 8)
       });
       return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: "not_your_turn",
-          expectedPlayer: expectedPlayer.slice(0, 8) + "..."
-        }),
+        JSON.stringify({ success: false, error: "not_a_participant" }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Step 6: Compute move hash
+    // WALLET-AUTHORITATIVE: Only validate turn ownership for turn-ending moves
+    // dice_roll and move events within a turn don't need ownership validation
+    const moveType = moveData.type;
+    if (moveType === "turn_end" || moveType === "turn_timeout" || moveType === "auto_forfeit") {
+      const expectedPlayer = current_turn_wallet || starting_player_wallet;
+      
+      if (expectedPlayer && walletTrimmed !== expectedPlayer.trim()) {
+        console.log("[submit-move] Not your turn for turn-ending move:", { 
+          wallet: wallet.slice(0, 8), 
+          expected: expectedPlayer.slice(0, 8),
+          moveType 
+        });
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: "not_your_turn",
+            expectedPlayer: expectedPlayer.slice(0, 8) + "..."
+          }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+
+    // Step 5: Compute move hash
     const encoder = new TextEncoder();
     const data = encoder.encode(JSON.stringify({ roomPda, turnNumber, wallet, moveData, prevHash: lastHash }));
     const hashBuffer = await crypto.subtle.digest("SHA-256", data);
@@ -152,10 +167,11 @@ Deno.serve(async (req: Request) => {
       roomPda: roomPda.slice(0, 8), 
       turnNumber, 
       wallet: wallet.slice(0, 8),
+      moveType,
       moveHash: moveHash.slice(0, 8)
     });
 
-    // Step 7: Insert move (UNIQUE constraint will catch any race condition)
+    // Step 6: Insert move (UNIQUE constraint will catch any race condition)
     const { error: insertError } = await supabase.from("game_moves").insert({
       room_pda: roomPda,
       turn_number: turnNumber,
@@ -184,21 +200,24 @@ Deno.serve(async (req: Request) => {
 
     console.log("[submit-move] Move saved successfully");
 
-    // Update current_turn_wallet on turn_end/turn_timeout for cross-device sync
+    // Step 7: Update current_turn_wallet AND turn_started_at on turn changes
     if (
-      (moveData.type === "turn_end" || moveData.type === "turn_timeout") &&
+      (moveType === "turn_end" || moveType === "turn_timeout" || moveType === "auto_forfeit") &&
       moveData.nextTurnWallet
     ) {
       const { error: updateError } = await supabase
         .from("game_sessions")
-        .update({ current_turn_wallet: moveData.nextTurnWallet })
+        .update({ 
+          current_turn_wallet: moveData.nextTurnWallet,
+          turn_started_at: new Date().toISOString(),
+        })
         .eq("room_pda", roomPda);
 
       if (updateError) {
-        console.error("[submit-move] Failed to update current_turn_wallet:", updateError);
-        // Non-fatal: move is saved, turn wallet update is best-effort
+        console.error("[submit-move] Failed to update turn state:", updateError);
+        // Non-fatal: move is saved, turn state update is best-effort
       } else {
-        console.log("[submit-move] Updated current_turn_wallet to:", moveData.nextTurnWallet.slice(0, 8));
+        console.log("[submit-move] Updated turn state - wallet:", moveData.nextTurnWallet.slice(0, 8), "turn_started_at: now");
       }
     }
 

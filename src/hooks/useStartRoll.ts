@@ -288,14 +288,35 @@ export function useStartRoll(options: UseStartRollOptions): UseStartRollResult {
   }, [roomPda, isFinalized, showDiceRoll, myWallet]);
   // --- END: Baseline start-roll polling ---
 
-  const handleRollComplete = useCallback((starter: string) => {
+  const handleRollComplete = useCallback(async (starter: string) => {
     const isStarter = isSameWallet(starter, myWallet);
     setMyColor(isStarter ? "w" : "b");
     setStartingWallet(starter);
     setIsFinalized(true);
     setShowDiceRoll(false);
     console.log("[useStartRoll] Roll complete. Starter:", starter, "My color:", isStarter ? "white" : "black");
-  }, [myWallet]);
+    
+    // Set current_turn_wallet AND turn_started_at in DB for server-side validation
+    if (roomPda && starter) {
+      try {
+        const { error } = await supabase
+          .from("game_sessions")
+          .update({ 
+            current_turn_wallet: starter,
+            turn_started_at: new Date().toISOString(),
+          })
+          .eq("room_pda", roomPda);
+          
+        if (error) {
+          console.warn("[useStartRoll] Failed to set initial turn state:", error);
+        } else {
+          console.log("[useStartRoll] Set initial turn state - wallet:", starter.slice(0, 8), "turn_started_at: now");
+        }
+      } catch (err) {
+        console.warn("[useStartRoll] Exception setting turn state:", err);
+      }
+    }
+  }, [myWallet, roomPda]);
 
   // Force refetch for cross-device sync (e.g., on visibility change)
   const forceRefetch = useCallback(async () => {
