@@ -307,27 +307,28 @@ export function useStartRoll(options: UseStartRollOptions): UseStartRollResult {
     setShowDiceRoll(false);
     console.log("[useStartRoll] Roll complete. Starter:", starter, "My color:", isStarter ? "white" : "black");
     
-    // Set current_turn_wallet AND turn_started_at in DB for server-side validation
+    // Use atomic RPC to set current_turn_wallet + turn_started_at
+    // This prevents race conditions if both clients try to finalize
     if (roomPda && starter) {
       try {
-        const { error } = await supabase
-          .from("game_sessions")
-          .update({ 
-            current_turn_wallet: starter,
-            turn_started_at: new Date().toISOString(),
-          })
-          .eq("room_pda", roomPda);
-          
+        const { data, error } = await supabase.rpc("finalize_start_roll", {
+          p_room_pda: roomPda,
+          p_starting_wallet: starter,
+          p_start_roll: rollResult ? JSON.parse(JSON.stringify(rollResult)) : null,
+        });
+        
         if (error) {
-          console.warn("[useStartRoll] Failed to set initial turn state:", error);
+          console.warn("[useStartRoll] Failed to finalize start roll:", error);
+        } else if (data) {
+          console.log("[useStartRoll] Start roll finalized atomically - starter:", starter.slice(0, 8));
         } else {
-          console.log("[useStartRoll] Set initial turn state - wallet:", starter.slice(0, 8), "turn_started_at: now");
+          console.log("[useStartRoll] Start roll already finalized by opponent");
         }
       } catch (err) {
-        console.warn("[useStartRoll] Exception setting turn state:", err);
+        console.warn("[useStartRoll] Exception finalizing start roll:", err);
       }
     }
-  }, [myWallet, roomPda]);
+  }, [myWallet, roomPda, rollResult]);
 
   // Force refetch for cross-device sync (e.g., on visibility change)
   const forceRefetch = useCallback(async () => {

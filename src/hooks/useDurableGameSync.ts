@@ -172,7 +172,8 @@ export function useDurableGameSync({
             return false;
             
           case "turn_already_taken":
-            console.warn("[DurableSync] Turn already taken (race condition)");
+          case "move_conflict":
+            console.warn("[DurableSync] Move conflict (race condition)");
             dbg("durable.submit.race_lost", {});
             await loadMoves();
             return false;
@@ -180,6 +181,33 @@ export function useDurableGameSync({
           case "timeout_too_early":
             console.warn("[DurableSync] Timeout submitted too early");
             dbg("durable.submit.timeout_early", {});
+            return false;
+            
+          case "missing_client_move_id":
+            // This should never happen if client code is correct
+            console.error("[DurableSync] Missing clientMoveId for ranked game - this is a bug!");
+            dbg("durable.submit.missing_client_id", { wallet: wallet.slice(0, 8) });
+            toast.error("Move failed", {
+              description: "Missing move ID. Please refresh the page.",
+              duration: 5000,
+            });
+            return false;
+            
+          case "no_turn_authority":
+            console.warn("[DurableSync] No turn authority set - waiting for start roll");
+            dbg("durable.submit.no_authority", {});
+            return false;
+            
+          case "session_not_found":
+            console.warn("[DurableSync] Session not found");
+            dbg("durable.submit.no_session", {});
+            toast.error("Game session not found", { duration: 3000 });
+            return false;
+            
+          case "not_a_participant":
+            console.warn("[DurableSync] Wallet not a participant");
+            dbg("durable.submit.not_participant", { wallet: wallet.slice(0, 8) });
+            toast.error("You are not a participant in this game", { duration: 3000 });
             return false;
             
           case "hash_mismatch":
