@@ -555,6 +555,14 @@ export type Database = {
         }
         Returns: undefined
       }
+      finalize_start_roll: {
+        Args: {
+          p_room_pda: string
+          p_start_roll?: Json
+          p_starting_wallet: string
+        }
+        Returns: boolean
+      }
       finish_game_session: {
         Args: { p_caller_wallet?: string; p_room_pda: string }
         Returns: undefined
@@ -609,6 +617,15 @@ export type Database = {
           p_wallet: string
         }
         Returns: string
+      }
+      submit_game_move: {
+        Args: {
+          p_client_move_id?: string
+          p_move_data: Json
+          p_room_pda: string
+          p_wallet: string
+        }
+        Returns: Json
       }
       submit_move: {
         Args: {
