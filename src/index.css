@@ -393,6 +393,25 @@
   padding-top: max(0.5rem, env(safe-area-inset-top));
 }
 
+/* PART D: Game viewport - dynamic height with dvh + fallback */
+.game-viewport {
+  min-height: 100vh; /* Fallback */
+  min-height: 100dvh;
+  height: 100vh;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Fallback for browsers without dvh support - uses visualViewport script */
+@supports not (height: 100dvh) {
+  .game-viewport {
+    height: var(--vvh, 100vh);
+    min-height: var(--vvh, 100vh);
+  }
+}
+
 /* Mobile game container - ensures board fits within viewport */
 .mobile-game-container {
   max-width: 100vw;

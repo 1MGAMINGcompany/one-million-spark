@@ -1,8 +1,9 @@
 // App Root
+import { useEffect } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { SolanaProvider } from "./components/SolanaProvider";
 import { LoadingProvider } from "./contexts/LoadingContext";
 import { AudioProvider } from "./contexts/AudioContext";
@@ -44,6 +45,71 @@ import { isDebugEnabled } from "@/lib/debugLog";
 // DEV-ONLY: Import to auto-run config check on app load
 import "./lib/devConfigCheck";
 
+// PART D: visualViewport fallback for mobile browsers
+function useVisualViewportHeight() {
+  useEffect(() => {
+    function setVVH() {
+      const h = window.visualViewport?.height || window.innerHeight;
+      document.documentElement.style.setProperty('--vvh', `${h}px`);
+    }
+    window.visualViewport?.addEventListener('resize', setVVH);
+    window.addEventListener('resize', setVVH);
+    setVVH();
+    return () => {
+      window.visualViewport?.removeEventListener('resize', setVVH);
+      window.removeEventListener('resize', setVVH);
+    };
+  }, []);
+}
+
+// PART E: App content with conditional footer
+const AppContent = () => {
+  const location = useLocation();
+  useVisualViewportHeight();
+  
+  // Hide footer on game/play routes to maximize vertical space
+  const hideFooter = location.pathname.startsWith('/play/') || 
+                     location.pathname.startsWith('/room/');
+
+  return (
+    <div className="flex flex-col min-h-screen">
+      <Navbar />
+      <GlobalActiveRoomBanner />
+      <main className="pt-16 relative flex-1">
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/add-funds" element={<AddFunds />} />
+          <Route path="/create-room" element={<CreateRoom />} />
+          <Route path="/room-list" element={<RoomList />} />
+          {/* Canonical routes: PDA is the ONLY source of truth */}
+          <Route path="/room/:roomPda" element={<RoomRouter />} />
+          {/* Canonical play route - game type from on-chain data ONLY */}
+          <Route path="/play/:roomPda" element={<PlayRoom />} />
+          <Route path="/join" element={<JoinRoom />} />
+          {/* Legacy routes redirect to canonical /room/:pda - slug is IGNORED */}
+          <Route path="/game/:slug/:roomPda" element={<GameRedirect />} />
+          <Route path="/play-ai" element={<PlayAILobby />} />
+          <Route path="/play-ai/chess" element={<ChessAI />} />
+          <Route path="/play-ai/dominos" element={<DominosAI />} />
+          <Route path="/play-ai/backgammon" element={<BackgammonAI />} />
+          <Route path="/play-ai/checkers" element={<CheckersAI />} />
+          <Route path="/play-ai/ludo" element={<LudoAI />} />
+          <Route path="/game-rules" element={<GameRules />} />
+          <Route path="/support" element={<Support />} />
+          <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+          <Route path="/terms-of-service" element={<TermsOfService />} />
+          <Route path="/player/:wallet" element={<PlayerProfile />} />
+          <Route path="/leaderboard/:game" element={<Leaderboard />} />
+          <Route path="/debug/join" element={isDebugEnabled() ? <DebugJoinRoom /> : <Navigate to="/" replace />} />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </main>
+      {!hideFooter && <Footer />}
+      {isDebugEnabled() && <DebugHUD />}
+    </div>
+  );
+};
+
 const App = () => (
   <AppErrorBoundary>
     <SolanaProvider>
@@ -58,42 +124,8 @@ const App = () => (
                 <GoldenParticles />
                 <AgeConfirmation />
                 <BrowserRouter>
-                <GlobalBackgroundMusic />
-                <div className="flex flex-col min-h-screen">
-                  <Navbar />
-                  <GlobalActiveRoomBanner />
-                  <main className="pt-16 relative flex-1">
-                    <Routes>
-                      <Route path="/" element={<Home />} />
-                      <Route path="/add-funds" element={<AddFunds />} />
-                      <Route path="/create-room" element={<CreateRoom />} />
-                      <Route path="/room-list" element={<RoomList />} />
-                      {/* Canonical routes: PDA is the ONLY source of truth */}
-                      <Route path="/room/:roomPda" element={<RoomRouter />} />
-                      {/* Canonical play route - game type from on-chain data ONLY */}
-                      <Route path="/play/:roomPda" element={<PlayRoom />} />
-                      <Route path="/join" element={<JoinRoom />} />
-                      {/* Legacy routes redirect to canonical /room/:pda - slug is IGNORED */}
-                      <Route path="/game/:slug/:roomPda" element={<GameRedirect />} />
-                      <Route path="/play-ai" element={<PlayAILobby />} />
-                      <Route path="/play-ai/chess" element={<ChessAI />} />
-                      <Route path="/play-ai/dominos" element={<DominosAI />} />
-                      <Route path="/play-ai/backgammon" element={<BackgammonAI />} />
-                      <Route path="/play-ai/checkers" element={<CheckersAI />} />
-                      <Route path="/play-ai/ludo" element={<LudoAI />} />
-                      <Route path="/game-rules" element={<GameRules />} />
-                      <Route path="/support" element={<Support />} />
-                      <Route path="/privacy-policy" element={<PrivacyPolicy />} />
-                      <Route path="/terms-of-service" element={<TermsOfService />} />
-                      <Route path="/player/:wallet" element={<PlayerProfile />} />
-                      <Route path="/leaderboard/:game" element={<Leaderboard />} />
-                      <Route path="/debug/join" element={isDebugEnabled() ? <DebugJoinRoom /> : <Navigate to="/" replace />} />
-                      <Route path="*" element={<NotFound />} />
-                    </Routes>
-                  </main>
-                  <Footer />
-                  {isDebugEnabled() && <DebugHUD />}
-                </div>
+                  <GlobalBackgroundMusic />
+                  <AppContent />
                 </BrowserRouter>
               </TooltipProvider>
             </SoundProvider>

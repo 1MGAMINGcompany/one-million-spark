@@ -273,6 +273,16 @@ export function useDurableGameSync({
       )
       .subscribe((status) => {
         dbg("durable.subscription_status", { status });
+        
+        // PART F: Handle channel error with reconnect and refetch
+        if (status === 'CHANNEL_ERROR') {
+          console.warn("[DurableSync] Channel error - attempting refetch");
+          toast("Reconnecting...", {
+            description: "Lost connection, fetching latest state",
+            duration: 2000,
+          });
+          loadMoves();
+        }
       });
 
     return () => {
