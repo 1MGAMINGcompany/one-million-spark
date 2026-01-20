@@ -47,6 +47,7 @@ import { PublicKey, Connection } from "@solana/web3.js";
 import { parseRoomAccount } from "@/lib/solana-program";
 import { getSolanaEndpoint } from "@/lib/solana-config";
 import { dbg, isDebugEnabled } from "@/lib/debugLog";
+import { supabase } from "@/integrations/supabase/client";
 import {
   type Player,
   type GameState,
@@ -319,6 +320,13 @@ const BackgammonGame = () => {
     enabled: roomPlayers.length >= 2 && modeLoaded,
   });
 
+  // Check if we have 2 real player wallets (not placeholders including 111111...)
+  // CRITICAL: Must be defined BEFORE useDurableGameSync to use as enabled condition
+  const hasTwoRealPlayers = 
+    roomPlayers.length >= 2 && 
+    isRealWallet(roomPlayers[0]) && 
+    isRealWallet(roomPlayers[1]);
+
   // Durable game sync - persists moves to DB for reliability
   const handleDurableMoveReceived = useCallback((move: GameMove) => {
     // Only apply moves from opponents (we already applied our own locally)
@@ -339,7 +347,6 @@ const BackgammonGame = () => {
       } else if (bgMove.type === "turn_end") {
         // Opponent ended their turn - WALLET-AUTHORITATIVE: use nextTurnWallet
         console.log("[BackgammonGame] Received turn_end from opponent. nextTurnWallet:", bgMove.nextTurnWallet?.slice(0, 8));
-        const opponentWallet = getOpponentWallet(roomPlayersRef.current, address);
         const nextWallet = bgMove.nextTurnWallet || address; // Fallback to me (I get the turn)
         if (nextWallet) {
           setCurrentTurnWallet(nextWallet);
@@ -393,19 +400,28 @@ const BackgammonGame = () => {
         if (bgMove.dice) setDice(bgMove.dice);
       }
     }
-  }, [address, play, t]);
+  }, [address, play, t, roomPda]);
 
-  const { submitMove: persistMove, moves: dbMoves, isLoading: isSyncLoading } = useDurableGameSync({
+  // FIX: Use hasTwoRealPlayers instead of roomPlayers.length >= 2
+  const { submitMove: durablePersistMove, moves: dbMoves, isLoading: isSyncLoading } = useDurableGameSync({
     roomPda: roomPda || "",
-    enabled: isRankedGame && roomPlayers.length >= 2,
+    enabled: isRankedGame && hasTwoRealPlayers,
     onMoveReceived: handleDurableMoveReceived,
   });
 
-  // Check if we have 2 real player wallets (not placeholders including 111111...)
-  const hasTwoRealPlayers = 
-    roomPlayers.length >= 2 && 
-    isRealWallet(roomPlayers[0]) && 
-    isRealWallet(roomPlayers[1]);
+  // Debug wrapper for persistMove - logs all calls
+  const persistMove = useCallback(async (moveData: BackgammonMoveMessage, wallet: string) => {
+    if (isDebugEnabled()) {
+      console.log("[BackgammonGame] persistMove called:", {
+        type: moveData.type,
+        wallet: wallet?.slice(0, 8),
+        enabled: isRankedGame && hasTwoRealPlayers,
+        roomPlayers: roomPlayers.map(w => w?.slice(0, 8)),
+        hasTwoRealPlayers,
+      });
+    }
+    return durablePersistMove(moveData, wallet);
+  }, [durablePersistMove, isRankedGame, hasTwoRealPlayers, roomPlayers]);
 
   // Deterministic start roll for ALL games (casual + ranked)
   const startRoll = useStartRoll({
@@ -432,6 +448,41 @@ const BackgammonGame = () => {
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [roomPda, startRoll.forceRefetch, rankedGate.refetch]);
+
+  // Polling fallback for currentTurnWallet sync (in case WebRTC fails)
+  useEffect(() => {
+    if (!roomPda || !isRankedGame || gameOver || !startRoll.isFinalized) return;
+
+    const pollTurnWallet = async () => {
+      try {
+        const { data, error } = await supabase.functions.invoke("game-session-get", {
+          body: { roomPda },
+        });
+
+        if (error) {
+          console.warn("[BackgammonGame] Poll error:", error);
+          return;
+        }
+
+        const dbTurnWallet = data?.session?.current_turn_wallet;
+        if (dbTurnWallet && dbTurnWallet !== currentTurnWallet) {
+          console.log("[BackgammonGame] Polling detected turn change:", {
+            from: currentTurnWallet?.slice(0, 8),
+            to: dbTurnWallet.slice(0, 8),
+          });
+          setCurrentTurnWallet(dbTurnWallet);
+          // Clear stale dice/moves to ensure clean turn start
+          setDice([]);
+          setRemainingMoves([]);
+        }
+      } catch (err) {
+        console.error("[BackgammonGame] Polling error:", err);
+      }
+    };
+
+    const interval = setInterval(pollTurnWallet, 5000);
+    return () => clearInterval(interval);
+  }, [roomPda, isRankedGame, gameOver, startRoll.isFinalized, currentTurnWallet]);
 
   // Update myRole and currentTurnWallet based on start roll result
   useEffect(() => {
@@ -1775,17 +1826,24 @@ const BackgammonGame = () => {
                       ) : (
                         <span className="text-[10px] font-medium text-slate-400">OPPONENT'S TURN</span>
                       )}
-                      {isRankedGame && (canPlay || startRoll.isFinalized) && (
+                      {isRankedGame && startRoll.isFinalized && !gameOver && (
                         <div className={cn(
                           "flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono",
-                          turnTimer.isCriticalTime 
-                            ? "bg-destructive/30 text-destructive animate-pulse"
-                            : turnTimer.isLowTime 
-                            ? "bg-yellow-500/30 text-yellow-400"
-                            : "bg-muted/50 text-muted-foreground"
+                          effectiveIsMyTurn 
+                            ? turnTimer.isCriticalTime 
+                              ? "bg-destructive/30 text-destructive animate-pulse"
+                              : turnTimer.isLowTime 
+                              ? "bg-yellow-500/30 text-yellow-400"
+                              : "bg-muted/50 text-muted-foreground"
+                            : "bg-muted/30 text-muted-foreground/70"
                         )}>
                           <Clock className="w-2.5 h-2.5" />
-                          <span>{Math.floor(turnTimer.remainingTime / 60)}:{(turnTimer.remainingTime % 60).toString().padStart(2, '0')}</span>
+                          <span>
+                            {effectiveIsMyTurn 
+                              ? `${Math.floor(turnTimer.remainingTime / 60)}:${(turnTimer.remainingTime % 60).toString().padStart(2, '0')}`
+                              : "--:--"
+                            }
+                          </span>
                         </div>
                       )}
                     </div>
