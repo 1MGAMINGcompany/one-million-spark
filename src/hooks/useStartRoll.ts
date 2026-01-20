@@ -100,6 +100,17 @@ export function useStartRoll(options: UseStartRollOptions): UseStartRollResult {
       sessionCreatedRef.current = true;
       
       try {
+        // PART 2 FIX: Check if session already exists to avoid overwriting mode
+        const { data: existingData } = await supabase.functions.invoke("game-session-get", {
+          body: { roomPda },
+        });
+        
+        if (existingData?.session?.room_pda) {
+          console.log("[useStartRoll] Session already exists, skipping ensure_game_session");
+          setIsCreatingSession(false);
+          return;
+        }
+        
         console.log("[useStartRoll] Creating game session for both players", { roomPda, player1, player2 });
         
         const { error } = await supabase.rpc("ensure_game_session", {
