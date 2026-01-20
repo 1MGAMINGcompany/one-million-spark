@@ -103,6 +103,48 @@ const formatResultType = (resultType: GameResultType | null): { label: string; m
   }
 };
 
+// === CENTRALIZED WINNER/LOSER DERIVATION ===
+// For auto_forfeit, resign, forfeit: actor (move.wallet) is the LOSER
+// This helper must be used EVERYWHERE that determines match outcome
+type MatchOutcome = {
+  winnerWallet: string | null;
+  loserWallet: string | null;
+  reason: string;
+};
+
+function computeOutcomeFromLastMove(args: {
+  lastMove: any | null;
+  p1Wallet: string | null;
+  p2Wallet: string | null;
+}): MatchOutcome {
+  const { lastMove, p1Wallet, p2Wallet } = args;
+  if (!lastMove || !p1Wallet || !p2Wallet) {
+    return { winnerWallet: null, loserWallet: null, reason: "unknown" };
+  }
+
+  const type = lastMove?.move_data?.type || lastMove?.type;
+  const actor = (lastMove?.wallet || "").trim();
+
+  // Check for explicit winnerWallet in move payload first
+  const explicitWinner =
+    (lastMove?.move_data?.winnerWallet || lastMove?.winnerWallet || null)?.trim?.() || null;
+
+  if (explicitWinner) {
+    const winnerWallet = explicitWinner;
+    const loserWallet = isSameWallet(winnerWallet, p1Wallet) ? p2Wallet : p1Wallet;
+    return { winnerWallet, loserWallet, reason: "winner_explicit" };
+  }
+
+  // AUTO_FORFEIT, RESIGN, FORFEIT: actor is the LOSER (they timed out / resigned)
+  if (type === "auto_forfeit" || type === "resign" || type === "forfeit") {
+    const loserWallet = actor;
+    const winnerWallet = isSameWallet(loserWallet, p1Wallet) ? p2Wallet : p1Wallet;
+    return { winnerWallet, loserWallet, reason: type };
+  }
+
+  return { winnerWallet: null, loserWallet: null, reason: type || "unknown" };
+}
+
 const BackgammonGame = () => {
   const { roomPda } = useParams<{ roomPda: string }>();
   const roomId = roomPda; // Alias for backward compatibility with hooks/display
@@ -385,11 +427,28 @@ const BackgammonGame = () => {
         
         // Check if game should end (3 strikes - opponent loses)
         if (bgMove.missedCount && bgMove.missedCount >= 3) {
+          // Location 2: Use explicit outcome derivation - actor (move.wallet) is LOSER
+          const outcome = computeOutcomeFromLastMove({
+            lastMove: { wallet: move.wallet, type: "auto_forfeit" },
+            p1Wallet: roomPlayersRef.current[0],
+            p2Wallet: roomPlayersRef.current[1],
+          });
+          
+          console.log("[BackgammonGame] turn_timeout 3 strikes outcome:", {
+            timedOut: move.wallet?.slice(0, 8),
+            winner: outcome.winnerWallet?.slice(0, 8),
+            loser: outcome.loserWallet?.slice(0, 8),
+            myWallet: address?.slice(0, 8),
+          });
+          
           setGameOver(true);
-          setWinnerWallet(address); // I win because opponent timed out 3 times
-          setGameResultInfo({ winner: myRoleRef.current, resultType: "single", multiplier: 1 });
-          setGameStatus(t('game.youWin') + " - opponent timed out");
-          play('chess_win');
+          setWinnerWallet(outcome.winnerWallet);
+          
+          const didIWin = outcome.winnerWallet && isSameWallet(outcome.winnerWallet, address);
+          const winnerRole = didIWin ? myRoleRef.current : (myRoleRef.current === "player" ? "ai" : "player");
+          setGameResultInfo({ winner: winnerRole, resultType: "single", multiplier: 1 });
+          setGameStatus(didIWin ? t('game.youWin') + " - opponent timed out" : t('game.youLose') + " - you timed out");
+          play(didIWin ? 'chess_win' : 'chess_lose');
           return;
         }
         
@@ -409,13 +468,28 @@ const BackgammonGame = () => {
         });
         
       } else if (bgMove.type === "auto_forfeit") {
-        // Opponent auto-forfeited (3 strikes)
-        console.log("[BackgammonGame] Received auto_forfeit from opponent");
+        // Location 1: Use explicit outcome derivation - actor (move.wallet) is LOSER
+        const outcome = computeOutcomeFromLastMove({
+          lastMove: { wallet: move.wallet, type: bgMove.type, ...bgMove },
+          p1Wallet: roomPlayersRef.current[0],
+          p2Wallet: roomPlayersRef.current[1],
+        });
+        
+        console.log("[BackgammonGame] auto_forfeit outcome:", {
+          actor: move.wallet?.slice(0, 8),
+          winner: outcome.winnerWallet?.slice(0, 8),
+          loser: outcome.loserWallet?.slice(0, 8),
+          myWallet: address?.slice(0, 8),
+        });
+        
         setGameOver(true);
-        setWinnerWallet(address); // I win
-        setGameResultInfo({ winner: myRoleRef.current, resultType: "single", multiplier: 1 });
-        setGameStatus(t('game.youWin') + " - opponent forfeited");
-        play('chess_win');
+        setWinnerWallet(outcome.winnerWallet);
+        
+        const didIWin = outcome.winnerWallet && isSameWallet(outcome.winnerWallet, address);
+        const winnerRole = didIWin ? myRoleRef.current : (myRoleRef.current === "player" ? "ai" : "player");
+        setGameResultInfo({ winner: winnerRole, resultType: "single", multiplier: 1 });
+        setGameStatus(didIWin ? t('game.youWin') + " - opponent forfeited" : t('game.youLose') + " - you forfeited");
+        play(didIWin ? 'chess_win' : 'chess_lose');
         
       } else if (bgMove && bgMove.gameState) {
         // Normal move - apply game state
@@ -554,10 +628,37 @@ const BackgammonGame = () => {
           return;
         }
 
-        // PART F: Detect finished game even if we missed websocket event
+        // Location 7: PART F - Detect finished game even if we missed websocket event
         const dbStatus = data?.session?.status;
-        const dbWinner = data?.session?.winner_wallet;
+        let dbWinner = data?.session?.winner_wallet;
         if (dbStatus === 'finished' && !gameOver) {
+          // If no winner_wallet in session, compute from last move
+          if (!dbWinner) {
+            try {
+              const { data: movesData } = await supabase.functions.invoke("get-moves", {
+                body: { roomPda, limit: 1, orderDesc: true },
+              });
+              const lastMove = movesData?.moves?.[0];
+              if (lastMove) {
+                const outcome = computeOutcomeFromLastMove({
+                  lastMove,
+                  p1Wallet: roomPlayersRef.current[0],
+                  p2Wallet: roomPlayersRef.current[1],
+                });
+                dbWinner = outcome.winnerWallet;
+                console.log("[BackgammonGame] Polling computed winner from last move:", {
+                  lastMoveType: lastMove?.move_data?.type,
+                  actor: lastMove?.wallet?.slice(0, 8),
+                  winner: outcome.winnerWallet?.slice(0, 8),
+                  loser: outcome.loserWallet?.slice(0, 8),
+                  reason: outcome.reason,
+                });
+              }
+            } catch (err) {
+              console.warn("[BackgammonGame] Failed to fetch last move for winner computation:", err);
+            }
+          }
+          
           console.log("[BackgammonGame] Polling detected game finished. Winner:", dbWinner?.slice(0, 8));
           setGameOver(true);
           if (dbWinner) {
@@ -615,6 +716,26 @@ const BackgammonGame = () => {
       setCurrentPlayer(isStarter ? "player" : "ai");
     }
   }, [startRoll.isFinalized, startRoll.startingWallet, address]);
+
+  // === MATCH COMPLETE DEBUG LOG ===
+  // Logs final outcome when game ends for verification on both devices
+  useEffect(() => {
+    if (gameOver && winnerWallet && roomPlayers.length >= 2) {
+      const p1 = roomPlayers[0];
+      const p2 = roomPlayers[1];
+      const loserWallet = isSameWallet(winnerWallet, p1) ? p2 : p1;
+      const didIWin = isSameWallet(winnerWallet, address);
+
+      console.log("[MatchComplete] Final outcome:", {
+        myWallet: address?.slice(0, 8),
+        p1: p1?.slice(0, 8),
+        p2: p2?.slice(0, 8),
+        winner: winnerWallet?.slice(0, 8),
+        loser: loserWallet?.slice(0, 8),
+        didIWin,
+      });
+    }
+  }, [gameOver, winnerWallet, address, roomPlayers]);
 
   const handleAcceptRules = async () => {
     const result = await rankedGate.acceptRules();
@@ -801,7 +922,14 @@ const BackgammonGame = () => {
         console.log("[handleTurnTimeout] auto_forfeit persistMove result:", result);
       }
       
-      // THEN update local state (after RPC completes)
+      // Location 6: THEN update local state (after RPC completes)
+      // Debug log for settlement verification
+      console.log("[handleTurnTimeout] auto_forfeit settlement:", {
+        winnerWallet: nextTurnWallet?.slice(0, 8),
+        loserWallet: address?.slice(0, 8),
+        reason: "auto_forfeit",
+      });
+      
       forfeitFnRef.current?.();
       setGameOver(true);
       setWinnerWallet(nextTurnWallet);
@@ -1050,12 +1178,29 @@ const BackgammonGame = () => {
         // Opponent timed out via WebRTC - handle same as durable event
         console.log("[BackgammonGame] WebRTC turn_timeout. Missed:", moveMsg.missedCount);
         // Missed turns tracking is handled via shared utility
+        // Location 3: Use explicit outcome derivation for 3 strikes via WebRTC
         if (moveMsg.missedCount && moveMsg.missedCount >= 3) {
+          const outcome = computeOutcomeFromLastMove({
+            lastMove: { wallet: message.payload?.timedOutWallet || message.sender, type: "auto_forfeit" },
+            p1Wallet: roomPlayersRef.current[0],
+            p2Wallet: roomPlayersRef.current[1],
+          });
+          
+          console.log("[BackgammonGame] WebRTC turn_timeout 3 strikes outcome:", {
+            timedOut: (message.payload?.timedOutWallet || message.sender)?.slice(0, 8),
+            winner: outcome.winnerWallet?.slice(0, 8),
+            loser: outcome.loserWallet?.slice(0, 8),
+            myWallet: address?.slice(0, 8),
+          });
+          
           setGameOver(true);
-          setWinnerWallet(address);
-          setGameResultInfo({ winner: myRoleRef.current, resultType: "single", multiplier: 1 });
-          setGameStatus(t('game.youWin') + " - opponent timed out");
-          play('chess_win');
+          setWinnerWallet(outcome.winnerWallet);
+          
+          const didIWin = outcome.winnerWallet && isSameWallet(outcome.winnerWallet, address);
+          const winnerRole = didIWin ? myRoleRef.current : (myRoleRef.current === "player" ? "ai" : "player");
+          setGameResultInfo({ winner: winnerRole, resultType: "single", multiplier: 1 });
+          setGameStatus(didIWin ? t('game.youWin') + " - opponent timed out" : t('game.youLose') + " - you timed out");
+          play(didIWin ? 'chess_win' : 'chess_lose');
           return;
         }
         const nextWallet = moveMsg.nextTurnWallet || address;
@@ -1073,18 +1218,30 @@ const BackgammonGame = () => {
         });
       }
     } else if (message.type === "resign") {
-      // Opponent resigned - I WIN - store MY wallet as winner
+      // Location 4: Use explicit outcome derivation for resign via WebRTC
       const forfeitingWallet = message.payload?.forfeitingWallet;
-      console.log("[BackgammonGame] Received resign from:", forfeitingWallet?.slice(0, 8));
+      const outcome = computeOutcomeFromLastMove({
+        lastMove: { wallet: forfeitingWallet, type: "resign" },
+        p1Wallet: roomPlayersRef.current[0],
+        p2Wallet: roomPlayersRef.current[1],
+      });
       
-      // Set winner wallet directly to MY address (I won because opponent resigned)
-      setWinnerWallet(address || null);
-      setGameResultInfo({ winner: myRoleRef.current, resultType: "single", multiplier: 1 });
-      setGameStatus("Opponent resigned - You win!");
+      console.log("[BackgammonGame] resign outcome:", {
+        forfeiting: forfeitingWallet?.slice(0, 8),
+        winner: outcome.winnerWallet?.slice(0, 8),
+        loser: outcome.loserWallet?.slice(0, 8),
+        myWallet: address?.slice(0, 8),
+      });
+      
+      setWinnerWallet(outcome.winnerWallet);
+      const didIWin = outcome.winnerWallet && isSameWallet(outcome.winnerWallet, address);
+      const winnerRole = didIWin ? myRoleRef.current : (myRoleRef.current === "player" ? "ai" : "player");
+      setGameResultInfo({ winner: winnerRole, resultType: "single", multiplier: 1 });
+      setGameStatus(didIWin ? "Opponent resigned - You win!" : "You resigned - Opponent wins!");
       setGameOver(true);
-      chatRef.current?.addSystemMessage("Opponent resigned");
-      play('chess_win');
-      toast({ title: t('toast.victory'), description: t('toast.opponentResigned') });
+      chatRef.current?.addSystemMessage(didIWin ? "Opponent resigned" : "You resigned");
+      play(didIWin ? 'chess_win' : 'chess_lose');
+      toast({ title: didIWin ? t('toast.victory') : t('toast.defeat'), description: didIWin ? t('toast.opponentResigned') : "You resigned" });
     } else if (message.type === "rematch_invite" && message.payload) {
       setRematchInviteData(message.payload);
       setShowAcceptModal(true);
@@ -1478,6 +1635,14 @@ const BackgammonGame = () => {
     
     // 2. Update local UI optimistically - opponent wins, store their wallet
     const opponentWalletAddr = getOpponentWallet(roomPlayers, address);
+    
+    // Location 5: Debug log for settlement verification (already correct logic)
+    console.log("[handleResign] Settlement params:", {
+      winnerWallet: opponentWalletAddr?.slice(0, 8),
+      loserWallet: address?.slice(0, 8),
+      reason: "resign",
+    });
+    
     setWinnerWallet(opponentWalletAddr);
     const opponentRole = myRole === "player" ? "ai" : "player";
     setGameResultInfo({ winner: opponentRole, resultType: "single", multiplier: 1 });
