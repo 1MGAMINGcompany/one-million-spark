@@ -419,6 +419,20 @@ const BackgammonGame = () => {
     bothReady: rankedGate.bothReady,
   });
 
+  // Cross-device visibility sync - force refetch when tab becomes visible
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && roomPda) {
+        console.log('[BackgammonGame] Tab visible - forcing sync');
+        startRoll.forceRefetch?.();
+        rankedGate.refetch?.();
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [roomPda, startRoll.forceRefetch, rankedGate.refetch]);
+
   // Update myRole and currentTurnWallet based on start roll result
   useEffect(() => {
     if (startRoll.isFinalized && startRoll.startingWallet) {
@@ -1761,7 +1775,7 @@ const BackgammonGame = () => {
                       ) : (
                         <span className="text-[10px] font-medium text-slate-400">OPPONENT'S TURN</span>
                       )}
-                      {isRankedGame && canPlay && (
+                      {isRankedGame && (canPlay || startRoll.isFinalized) && (
                         <div className={cn(
                           "flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono",
                           turnTimer.isCriticalTime 
