@@ -7,13 +7,13 @@ const corsHeaders = {
 };
 
 /**
- * Server-Authoritative Move Submission (Wallet-Authoritative Turn Model)
+ * Server-Authoritative Move Submission v2 (Server-Sequenced + Idempotent)
  * 
- * This edge function validates:
- * 1. Turn number matches expected (last_turn + 1)
- * 2. Wallet is a room participant (player1 or player2)
- * 3. Turn ownership ONLY for turn_end/turn_timeout/auto_forfeit moves
- * 4. Insert with UNIQUE constraint catches any race conditions
+ * Key changes from v1:
+ * 1. Server assigns turn_number (max + 1), client's is just a hint
+ * 2. Idempotency via client_move_id column - retries are safe
+ * 3. Validates turn ownership for ALL move types (not just turn_end)
+ * 4. Returns server-assigned turn number in response
  * 
  * Always returns HTTP 200 with { success: true/false, error?: string }
  */
@@ -28,18 +28,46 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const { roomPda, turnNumber, wallet, moveData, prevHash } = await req.json();
+    const { roomPda, wallet, moveData, clientMoveId } = await req.json();
 
-    // Validate required fields
-    if (!roomPda || turnNumber === undefined || !wallet || !moveData) {
-      console.error("[submit-move] Missing required fields:", { roomPda: !!roomPda, turnNumber, wallet: !!wallet, moveData: !!moveData });
+    // Validate required fields (turnNumber no longer required - server assigns)
+    if (!roomPda || !wallet || !moveData) {
+      console.error("[submit-move] Missing required fields:", { roomPda: !!roomPda, wallet: !!wallet, moveData: !!moveData });
       return new Response(
         JSON.stringify({ success: false, error: "missing_fields" }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Step 1: Fetch latest move for this room to determine expected turn
+    // Step 1: IDEMPOTENCY CHECK - If clientMoveId already exists, return existing move
+    if (clientMoveId) {
+      const { data: existing, error: idempotencyError } = await supabase
+        .from("game_moves")
+        .select("turn_number, move_hash")
+        .eq("room_pda", roomPda)
+        .eq("client_move_id", clientMoveId)
+        .maybeSingle();
+
+      if (idempotencyError) {
+        console.error("[submit-move] Idempotency check failed:", idempotencyError);
+      } else if (existing) {
+        console.log("[submit-move] Idempotent hit - returning existing move:", {
+          clientMoveId: clientMoveId.slice(0, 8),
+          turn: existing.turn_number
+        });
+        return new Response(
+          JSON.stringify({ 
+            success: true, 
+            moveHash: existing.move_hash, 
+            turnNumber: existing.turn_number,
+            idempotent: true 
+          }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+
+    // Step 2: Fetch latest move for this room to determine next turn
     const { data: latestMoves, error: fetchError } = await supabase
       .from("game_moves")
       .select("turn_number, move_hash")
@@ -57,42 +85,14 @@ Deno.serve(async (req: Request) => {
 
     const lastTurn = latestMoves && latestMoves.length > 0 ? latestMoves[0].turn_number : 0;
     const lastHash = latestMoves && latestMoves.length > 0 ? latestMoves[0].move_hash : "genesis";
-    const expectedTurn = lastTurn + 1;
+    
+    // SERVER ASSIGNS TURN NUMBER (not client)
+    const assignedTurn = lastTurn + 1;
 
-    // Step 2: Validate turn number
-    if (turnNumber !== expectedTurn) {
-      console.log("[submit-move] Turn mismatch:", { received: turnNumber, expected: expectedTurn });
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: "turn_mismatch", 
-          expected: expectedTurn,
-          received: turnNumber,
-          lastHash 
-        }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // Step 3: Validate prevHash matches
-    const expectedPrevHash = prevHash || "genesis";
-    if (expectedPrevHash !== lastHash) {
-      console.log("[submit-move] Hash mismatch:", { received: expectedPrevHash, expected: lastHash });
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: "hash_mismatch",
-          expected: lastHash,
-          received: expectedPrevHash
-        }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // Step 4: Fetch game session to validate participation and turn ownership
+    // Step 3: Fetch game session to validate participation and turn ownership
     const { data: session, error: sessionError } = await supabase
       .from("game_sessions")
-      .select("starting_player_wallet, player1_wallet, player2_wallet, current_turn_wallet")
+      .select("starting_player_wallet, player1_wallet, player2_wallet, current_turn_wallet, turn_started_at, turn_time_seconds")
       .eq("room_pda", roomPda)
       .single();
 
@@ -104,7 +104,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const { player1_wallet, player2_wallet, current_turn_wallet, starting_player_wallet } = session;
+    const { player1_wallet, player2_wallet, current_turn_wallet, starting_player_wallet, turn_started_at, turn_time_seconds } = session;
 
     if (!player1_wallet || !player2_wallet) {
       console.error("[submit-move] Session incomplete:", { player1_wallet, player2_wallet });
@@ -132,32 +132,48 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // WALLET-AUTHORITATIVE: Only validate turn ownership for turn-ending moves
-    // dice_roll and move events within a turn don't need ownership validation
+    // WALLET-AUTHORITATIVE: Validate turn ownership for ALL move types
+    // This prevents out-of-turn submissions (race conditions)
+    const expectedPlayer = current_turn_wallet || starting_player_wallet;
     const moveType = moveData.type;
-    if (moveType === "turn_end" || moveType === "turn_timeout" || moveType === "auto_forfeit") {
-      const expectedPlayer = current_turn_wallet || starting_player_wallet;
+    
+    if (expectedPlayer && walletTrimmed !== expectedPlayer.trim()) {
+      console.log("[submit-move] Not your turn:", { 
+        wallet: wallet.slice(0, 8), 
+        expected: expectedPlayer.slice(0, 8),
+        moveType 
+      });
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: "not_your_turn",
+          expectedPlayer: expectedPlayer.slice(0, 8) + "..."
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // For timeout moves, validate that turn has actually expired (anti-cheat)
+    if (moveType === "turn_timeout" && turn_started_at && turn_time_seconds) {
+      const turnStart = new Date(turn_started_at).getTime();
+      const now = Date.now();
+      const turnDurationMs = (turn_time_seconds + 2) * 1000; // 2s grace period
       
-      if (expectedPlayer && walletTrimmed !== expectedPlayer.trim()) {
-        console.log("[submit-move] Not your turn for turn-ending move:", { 
-          wallet: wallet.slice(0, 8), 
-          expected: expectedPlayer.slice(0, 8),
-          moveType 
+      if (now - turnStart < turnDurationMs) {
+        console.log("[submit-move] Timeout submitted too early:", {
+          elapsed: Math.floor((now - turnStart) / 1000),
+          required: turn_time_seconds
         });
         return new Response(
-          JSON.stringify({ 
-            success: false, 
-            error: "not_your_turn",
-            expectedPlayer: expectedPlayer.slice(0, 8) + "..."
-          }),
+          JSON.stringify({ success: false, error: "timeout_too_early" }),
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
     }
 
-    // Step 5: Compute move hash
+    // Step 4: Compute move hash (using server-assigned turn)
     const encoder = new TextEncoder();
-    const data = encoder.encode(JSON.stringify({ roomPda, turnNumber, wallet, moveData, prevHash: lastHash }));
+    const data = encoder.encode(JSON.stringify({ roomPda, turnNumber: assignedTurn, wallet, moveData, prevHash: lastHash }));
     const hashBuffer = await crypto.subtle.digest("SHA-256", data);
     const moveHash = Array.from(new Uint8Array(hashBuffer))
       .map(b => b.toString(16).padStart(2, "0"))
@@ -165,26 +181,51 @@ Deno.serve(async (req: Request) => {
 
     console.log("[submit-move] Inserting move:", { 
       roomPda: roomPda.slice(0, 8), 
-      turnNumber, 
+      assignedTurn, 
       wallet: wallet.slice(0, 8),
       moveType,
+      clientMoveId: clientMoveId?.slice(0, 8),
       moveHash: moveHash.slice(0, 8)
     });
 
-    // Step 6: Insert move (UNIQUE constraint will catch any race condition)
+    // Step 5: Insert move with client_move_id for idempotency
     const { error: insertError } = await supabase.from("game_moves").insert({
       room_pda: roomPda,
-      turn_number: turnNumber,
+      turn_number: assignedTurn,
       wallet,
       move_data: moveData,
       prev_hash: lastHash,
       move_hash: moveHash,
+      client_move_id: clientMoveId || null,
     });
 
     if (insertError) {
-      // Check if it's a duplicate key error (race condition - another client won)
+      // Check if it's a duplicate key error on client_move_id (idempotent retry)
+      if (insertError.code === "23505" && clientMoveId) {
+        console.log("[submit-move] Idempotent conflict - fetching existing move");
+        const { data: existingMove } = await supabase
+          .from("game_moves")
+          .select("turn_number, move_hash")
+          .eq("room_pda", roomPda)
+          .eq("client_move_id", clientMoveId)
+          .single();
+          
+        if (existingMove) {
+          return new Response(
+            JSON.stringify({ 
+              success: true, 
+              moveHash: existingMove.move_hash, 
+              turnNumber: existingMove.turn_number,
+              idempotent: true 
+            }),
+            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+      }
+      
+      // Check if it's a duplicate turn_number (race condition - another move won)
       if (insertError.code === "23505") {
-        console.log("[submit-move] Race condition - move already exists for turn", turnNumber);
+        console.log("[submit-move] Race condition - turn already taken:", assignedTurn);
         return new Response(
           JSON.stringify({ success: false, error: "turn_already_taken" }),
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -198,9 +239,9 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    console.log("[submit-move] Move saved successfully");
+    console.log("[submit-move] Move saved successfully - turn:", assignedTurn);
 
-    // Step 7: Update current_turn_wallet AND turn_started_at on turn changes
+    // Step 6: Update current_turn_wallet AND turn_started_at on turn changes
     if (
       (moveType === "turn_end" || moveType === "turn_timeout" || moveType === "auto_forfeit") &&
       moveData.nextTurnWallet
@@ -222,7 +263,7 @@ Deno.serve(async (req: Request) => {
     }
 
     return new Response(
-      JSON.stringify({ success: true, moveHash, turnNumber }),
+      JSON.stringify({ success: true, moveHash, turnNumber: assignedTurn }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {

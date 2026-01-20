@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { dbg } from "@/lib/debugLog";
 
 export interface GameMove {
   room_pda: string;
@@ -10,6 +11,7 @@ export interface GameMove {
   prev_hash: string;
   move_hash: string;
   created_at: string;
+  client_move_id?: string;
 }
 
 interface SubmitMoveResponse {
@@ -21,6 +23,7 @@ interface SubmitMoveResponse {
   received?: number;
   lastHash?: string;
   expectedPlayer?: string;
+  idempotent?: boolean;
 }
 
 interface UseDurableGameSyncOptions {
@@ -53,7 +56,7 @@ export function useDurableGameSync({
     if (!roomPda) return [];
 
     try {
-      console.log("[DurableSync] Loading moves for room:", roomPda.slice(0, 8));
+      dbg("durable.load.start", { room: roomPda.slice(0, 8) });
       
       const { data, error } = await supabase.functions.invoke("get-moves", {
         body: { roomPda },
@@ -61,13 +64,14 @@ export function useDurableGameSync({
 
       if (error) {
         console.error("[DurableSync] Edge function error:", error);
+        dbg("durable.load.error", { error: error.message });
         throw error;
       }
 
       const result = data as { success: boolean; moves?: GameMove[]; error?: string };
 
       if (result.success && result.moves) {
-        console.log("[DurableSync] Loaded moves from DB:", result.moves.length);
+        dbg("durable.load.ok", { count: result.moves.length });
         setMoves(result.moves);
         if (result.moves.length > 0) {
           const lastMove = result.moves[result.moves.length - 1];
@@ -85,59 +89,71 @@ export function useDurableGameSync({
         return result.moves;
       } else {
         console.warn("[DurableSync] No moves returned:", result.error);
+        dbg("durable.load.empty", { error: result.error });
       }
     } catch (err) {
       console.error("[DurableSync] Failed to load moves:", err);
+      dbg("durable.load.fail", { error: String(err) });
     }
     
     return [];
   }, [roomPda, onMovesLoaded]);
 
-  // Submit a move to DB - server validates turn and player
+  // Submit a move to DB - server validates turn and assigns sequence
   const submitMove = useCallback(async (moveData: any, wallet: string): Promise<boolean> => {
     if (!roomPda) return false;
 
-    // Use local turn as hint, but server is authoritative
-    const turnNumber = lastTurnRef.current + 1;
+    // Generate unique client ID for idempotency (retries are safe)
+    const clientMoveId = crypto.randomUUID();
+    
+    dbg("durable.submit", { 
+      clientMoveId: clientMoveId.slice(0, 8), 
+      type: moveData.type,
+      wallet: wallet.slice(0, 8)
+    });
 
     try {
-      console.log("[DurableSync] Submitting move:", { turn: turnNumber, wallet: wallet.slice(0, 8) });
-      
       const { data, error } = await supabase.functions.invoke("submit-move", {
         body: {
           roomPda,
-          turnNumber,
           wallet,
           moveData,
-          prevHash: lastHash,
+          clientMoveId,
+          // NO turnNumber - server assigns
+          // NO prevHash - server computes chain
         },
       });
 
       if (error) {
         console.error("[DurableSync] Edge function error:", error);
+        dbg("durable.submit.invoke_error", { error: error.message });
         throw error;
       }
 
       const result = data as SubmitMoveResponse;
 
       if (result.success && result.moveHash) {
-        console.log("[DurableSync] Move saved:", { turn: result.turnNumber, hash: result.moveHash.slice(0, 8) });
+        dbg("durable.submit.ok", { 
+          serverTurn: result.turnNumber, 
+          hash: result.moveHash.slice(0, 8),
+          idempotent: result.idempotent 
+        });
         setLastHash(result.moveHash);
-        lastTurnRef.current = result.turnNumber || turnNumber;
+        lastTurnRef.current = result.turnNumber || lastTurnRef.current + 1;
         return true;
       } else {
         // Handle specific server errors with NON-BLOCKING feedback
         const now = Date.now();
         const RESYNC_COOLDOWN = 3000; // Don't spam toasts within 3 seconds
         
+        dbg("durable.submit.fail", { error: result.error, expected: result.expected });
+        
         switch (result.error) {
           case "turn_mismatch":
             console.warn("[DurableSync] Turn mismatch - resyncing. Expected:", result.expected);
             onTurnMismatch?.(result.expected || 0);
-            // Reload moves to get back in sync
             await loadMoves();
             
-            // Show non-blocking toast with cooldown
             if (now - lastResyncTimeRef.current > RESYNC_COOLDOWN) {
               lastResyncTimeRef.current = now;
               resyncToastIdRef.current = toast("Resyncing...", {
@@ -149,21 +165,27 @@ export function useDurableGameSync({
             
           case "not_your_turn":
             console.warn("[DurableSync] Not your turn");
+            dbg("durable.submit.not_your_turn", { wallet: wallet.slice(0, 8) });
             onNotYourTurn?.();
-            // Don't show toast - this is expected when opponent's move hasn't arrived yet
+            // Force resync to get latest turn state
+            await loadMoves();
             return false;
             
           case "turn_already_taken":
             console.warn("[DurableSync] Turn already taken (race condition)");
-            // Reload moves to get the winning move
+            dbg("durable.submit.race_lost", {});
             await loadMoves();
+            return false;
+            
+          case "timeout_too_early":
+            console.warn("[DurableSync] Timeout submitted too early");
+            dbg("durable.submit.timeout_early", {});
             return false;
             
           case "hash_mismatch":
             console.warn("[DurableSync] Hash mismatch - resyncing");
             await loadMoves();
             
-            // Show non-blocking toast with cooldown
             if (now - lastResyncTimeRef.current > RESYNC_COOLDOWN) {
               lastResyncTimeRef.current = now;
               resyncToastIdRef.current = toast("Resyncing...", {
@@ -179,20 +201,20 @@ export function useDurableGameSync({
       }
     } catch (err: any) {
       console.error("[DurableSync] Failed to save move:", err);
-      // Only show error for unexpected failures, not sync issues
+      dbg("durable.submit.exception", { error: err.message });
       toast.error("Move failed", {
         description: "Could not submit move to server",
         duration: 3000,
       });
       return false;
     }
-  }, [roomPda, lastHash, loadMoves, onTurnMismatch, onNotYourTurn]);
+  }, [roomPda, loadMoves, onTurnMismatch, onNotYourTurn]);
 
   // Subscribe to realtime updates on game_moves
   useEffect(() => {
     if (!enabled || !roomPda) return;
 
-    console.log("[DurableSync] Subscribing to game_moves for room:", roomPda.slice(0, 8));
+    dbg("durable.subscribe", { room: roomPda.slice(0, 8) });
 
     const channel = supabase
       .channel(`game_moves_${roomPda}`)
@@ -206,9 +228,10 @@ export function useDurableGameSync({
         },
         (payload) => {
           const newMove = payload.new as GameMove;
-          console.log("[DurableSync] Received move via Realtime:", {
-            turn: newMove.turn_number,
+          dbg("durable.realtime", { 
+            turn: newMove.turn_number, 
             wallet: newMove.wallet.slice(0, 8),
+            type: newMove.move_data?.type
           });
 
           // Only process if this is a new move we haven't seen
@@ -221,11 +244,11 @@ export function useDurableGameSync({
         }
       )
       .subscribe((status) => {
-        console.log("[DurableSync] Subscription status:", status);
+        dbg("durable.subscription_status", { status });
       });
 
     return () => {
-      console.log("[DurableSync] Unsubscribing from game_moves");
+      dbg("durable.unsubscribe", { room: roomPda.slice(0, 8) });
       supabase.removeChannel(channel);
     };
   }, [enabled, roomPda, onMoveReceived]);
