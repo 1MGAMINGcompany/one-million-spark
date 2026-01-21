@@ -1272,12 +1272,10 @@ const BackgammonGame = () => {
         // Check for winner
         const winner = checkWinner(moveMsg.gameState);
         if (winner) {
-          const result = getGameResult(moveMsg.gameState);
-          setGameResultInfo(result);
           chatRef.current?.addSystemMessage("Match ended");
           // For bear-off wins, derive wallet from role
           const winnerWalletHint = winner === "player" ? roomPlayersRef.current[0] : roomPlayersRef.current[1];
-          // Use neutral resolving state - DB Outcome Resolver will finalize
+          // Use neutral resolving state - DB Outcome Resolver will finalize (sets gameResultInfo)
           enterOutcomeResolving(winnerWalletHint);
         }
       } else if (moveMsg.type === "turn_end") {
@@ -1656,9 +1654,7 @@ const BackgammonGame = () => {
         // Check winner or end turn
         const winner = checkWinner(newState);
         if (winner) {
-          const result = getGameResult(newState);
-          setGameResultInfo(result);
-          // Use neutral resolving state - DB Outcome Resolver will finalize
+          // Use neutral resolving state - DB Outcome Resolver will finalize (sets gameResultInfo)
           enterOutcomeResolving(address); // I'm the winner since I made the winning move
         } else if (newRemaining.length === 0) {
           endTurn();
@@ -1725,9 +1721,7 @@ const BackgammonGame = () => {
           // Check winner
           const winner = checkWinner(newState);
           if (winner) {
-            const result = getGameResult(newState);
-            setGameResultInfo(result);
-            // Use neutral resolving state - DB Outcome Resolver will finalize
+            // Use neutral resolving state - DB Outcome Resolver will finalize (sets gameResultInfo)
             enterOutcomeResolving(address); // I'm the winner since I made the winning move
           } else if (newRemaining.length === 0) {
             endTurn();
@@ -1999,10 +1993,13 @@ const BackgammonGame = () => {
   return (
     <GameErrorBoundary>
     <InAppBrowserRecovery roomPda={roomPda || ""} onResubscribeRealtime={resubscribeRealtime} bypassOverlay={true}>
-    <div className="game-viewport bg-background flex flex-col relative overflow-hidden">
-      {/* Gold Confetti Explosion on Win */}
+    <div className={cn(
+      "game-viewport bg-background flex flex-col relative",
+      isMobile ? "overflow-hidden" : "overflow-y-auto"
+    )}>
+      {/* Gold Confetti Explosion on Win - only after outcome resolved */}
       <GoldConfettiExplosion 
-        active={gameOver && gameStatus.includes("win")} 
+        active={gameOver && !outcomeResolving && gameStatus.toLowerCase().includes("win")} 
       />
       
       {/* RulesGate + DiceRollStart - RulesGate handles accept modal internally */}
