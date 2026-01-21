@@ -201,6 +201,8 @@ const BackgammonGame = () => {
   const outcomeLockedRef = useRef(false);
   // Outcome finalized - prevent double audio/status (only set once per room)
   const outcomeFinalizedRef = useRef(false);
+  // Winner hint - stored by game-ending handlers, used as fallback by DB resolver
+  const winnerHintRef = useRef<string | null>(null);
   // Track turn_started_at for debounce reset
   const [turnStartedAt, setTurnStartedAt] = useState<string | null>(null);
   
@@ -241,14 +243,16 @@ const BackgammonGame = () => {
   useEffect(() => {
     outcomeLockedRef.current = false;
     outcomeFinalizedRef.current = false;
+    winnerHintRef.current = null;
     setOutcomeResolving(false);
   }, [roomPda]);
 
   // Helper to enter resolving state - DOES NOT set final win/lose or play audio
+  // Stores hint in ref for DB Resolver to use as fallback, never sets winnerWallet directly
   const enterOutcomeResolving = useCallback((winnerHint?: string | null) => {
     setGameOver(true);
     setOutcomeResolving(true);
-    if (winnerHint) setWinnerWallet(winnerHint);
+    if (winnerHint) winnerHintRef.current = winnerHint;
     setGameStatus(t('game.matchEnded') || 'Match ended — resolving result…');
   }, [t]);
 
@@ -301,22 +305,28 @@ const BackgammonGame = () => {
     (async () => {
       console.log("[Outcome] Resolving final outcome from DB", {
         roomPda: roomPda?.slice(0, 8),
-        currentWinnerWallet: winnerWallet?.slice?.(0, 8),
+        winnerHint: winnerHintRef.current?.slice?.(0, 8),
         myWallet: address?.slice?.(0, 8),
       });
 
-      const dbWinner = await resolveWinnerFromDb();
+      let finalWinner = await resolveWinnerFromDb();
       
-      if (dbWinner) {
-        console.log("[Outcome] DB winner resolved:", dbWinner.slice(0, 8));
+      // If DB couldn't determine winner, use the hint as fallback
+      if (!finalWinner && winnerHintRef.current) {
+        console.log("[Outcome] Using winnerHint as fallback:", winnerHintRef.current.slice(0, 8));
+        finalWinner = winnerHintRef.current;
+      }
+      
+      if (finalWinner) {
+        console.log("[Outcome] Final winner resolved:", finalWinner.slice(0, 8));
         
         // Guard against double-finalization - only set final UI once
         if (!outcomeFinalizedRef.current) {
           outcomeFinalizedRef.current = true;
           setOutcomeResolving(false);
-          setWinnerWallet(dbWinner);
+          setWinnerWallet(finalWinner);
           
-          const didIWin = address && isSameWallet(dbWinner, address);
+          const didIWin = address && isSameWallet(finalWinner, address);
           setGameStatus(didIWin ? t('game.youWin') || "You Win!" : t('game.youLose') || "You Lose");
           setGameResultInfo({
             winner: didIWin ? myRoleRef.current : (myRoleRef.current === "player" ? "ai" : "player"),
@@ -329,7 +339,7 @@ const BackgammonGame = () => {
       }
 
       // If DB couldn't determine winner, keep resolving state - don't force a loss
-      console.warn("[Outcome] Could not resolve winner from DB. Keeping UI neutral.");
+      console.warn("[Outcome] Could not resolve winner. Keeping UI neutral.");
       setGameStatus(t('game.matchEnded') || "Match ended - verifying result...");
     })();
   }, [gameOver, roomPda, address, t, play]);
@@ -2151,8 +2161,8 @@ const BackgammonGame = () => {
 
       {/* Game Area */}
       <div className={cn(
-        "flex-1 flex flex-col overflow-hidden min-h-0",
-        isMobile ? "px-2 pt-1 pb-2" : "px-4 py-2"
+        "flex-1 flex flex-col min-h-0",
+        isMobile ? "overflow-hidden px-2 pt-1 pb-2" : "overflow-auto px-4 py-2"
       )}>
         {/* Mobile Layout - Viewport-fit container to prevent zoom */}
         {isMobile ? (
@@ -2517,7 +2527,7 @@ const BackgammonGame = () => {
 
         {/* Controls - Desktop only */}
         {!isMobile && (
-          <div className="mt-4 flex flex-wrap gap-3 items-center justify-center max-w-4xl mx-auto">
+          <div className="mt-4 flex flex-wrap gap-3 items-center justify-center max-w-4xl mx-auto shrink-0">
             {isMyTurn && dice.length === 0 && !gameOver && (
               <Button variant="gold" size="lg" className="min-w-[140px] shadow-[0_0_30px_-8px_hsl(45_93%_54%_/_0.5)]" onClick={rollDice}>
                 🎲 Roll Dice
