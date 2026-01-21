@@ -1994,7 +1994,8 @@ const BackgammonGame = () => {
     <GameErrorBoundary>
     <InAppBrowserRecovery roomPda={roomPda || ""} onResubscribeRealtime={resubscribeRealtime} bypassOverlay={true}>
     <div className={cn(
-      "game-viewport bg-background flex flex-col relative min-h-[100dvh] max-h-[100dvh] overflow-hidden",
+      "game-viewport bg-background flex flex-col relative",
+      isMobile ? "min-h-[100dvh] max-h-[100dvh] overflow-hidden" : "min-h-screen",
       "pb-[env(safe-area-inset-bottom)]"
     )}>
       {/* Gold Confetti Explosion on Win - only after outcome resolved */}
@@ -2158,8 +2159,8 @@ const BackgammonGame = () => {
 
       {/* Game Area */}
       <div className={cn(
-        "flex-1 flex flex-col min-h-0 overflow-hidden",
-        isMobile ? "px-2 pt-1 pb-2" : "px-4 py-2"
+        "flex flex-col min-h-0",
+        isMobile ? "flex-1 overflow-hidden px-2 pt-1 pb-2" : "overflow-visible px-4 py-2"
       )}>
         {/* Mobile Layout - Viewport-fit container to prevent zoom */}
         {isMobile ? (
@@ -2397,7 +2398,7 @@ const BackgammonGame = () => {
             </div>
         ) : (
           /* Desktop Layout - Premium version matching AI */
-          <div className="max-w-4xl mx-auto w-full flex flex-col min-h-0 overflow-hidden">
+          <div className="max-w-4xl mx-auto w-full">
             <div className="relative">
               {/* Outer glow */}
               <div className="absolute -inset-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 rounded-2xl blur-xl opacity-50" />
