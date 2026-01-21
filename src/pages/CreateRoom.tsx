@@ -61,7 +61,7 @@ export default function CreateRoom() {
   const [searchParams] = useSearchParams();
   const { t } = useTranslation();
   const { isConnected, address } = useWallet();
-  const { signMessage } = useWalletAdapter(); // For signing settings message
+  // signMessage removed - no second signature needed after room creation (prevents Phantom "Request blocked" warning)
   const { toast } = useToast();
   const { play } = useSound();
   const { price, formatUsd, loading: priceLoading, refetch: refetchPrice } = useSolPrice();
@@ -314,23 +314,8 @@ export default function CreateRoom() {
         const authoritativeTurnTime = gameMode === 'ranked' ? turnTimeSeconds : 0;
         
         try {
-          const timestamp = Date.now();
-          const message = `1MGAMING:SET_SETTINGS\nroomPda=${roomPdaStr}\nturnTimeSeconds=${authoritativeTurnTime}\nmode=${gameMode}\nts=${timestamp}`;
-          
-          let signatureBase64 = "";
-          
-          // Check if signMessage is available (wallet adapter)
-          if (signMessage) {
-            try {
-              const messageBytes = new TextEncoder().encode(message);
-              const signatureBytes = await signMessage(messageBytes);
-              signatureBase64 = btoa(String.fromCharCode(...signatureBytes));
-              console.log("[TurnTimer] Signed settings message");
-            } catch (signErr) {
-              console.warn("[TurnTimer] Could not sign message, trying insecure mode:", signErr);
-            }
-          }
-          
+          // Persist settings without requiring a second signature
+          // Security: Edge function validates creatorWallet matches room creator in DB
           const { error: settingsErr } = await supabase.functions.invoke(
             "game-session-set-settings",
             {
@@ -339,8 +324,6 @@ export default function CreateRoom() {
                 turnTimeSeconds: authoritativeTurnTime,
                 mode: gameMode,
                 creatorWallet: address,
-                timestamp,
-                signature: signatureBase64,
               },
             }
           );
