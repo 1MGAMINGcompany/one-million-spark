@@ -70,26 +70,35 @@ export default function RoomList() {
   const targetCluster = getSolanaCluster();
   const rpcEndpoint = getSolanaEndpoint();
 
-  // Initial fetch of rooms (for all users)
+  // Auto-refresh cadence:
+  // - Burst: every 2s for 30s (helps rooms appear quickly after creates)
+  // - Steady: every 10s after that (reduces load)
   useEffect(() => {
     if (!SOLANA_ENABLED) {
       console.log("[RoomList] SOLANA_ENABLED is false, skipping fetch");
       return;
     }
-    
-    console.log("[RoomList] Initial fetch");
-    setLastFetch(new Date().toISOString());
-    fetchRooms();
-    
-    // Refresh room list every 30 seconds
-    const interval = setInterval(() => {
-      console.log("[RoomList] Auto-refresh room list");
+
+    let burstCount = 0;
+    let timer: ReturnType<typeof setTimeout>;
+
+    const tick = () => {
+      console.log(`[RoomList] Auto-refresh (burst=${burstCount < 15})`);
       setLastFetch(new Date().toISOString());
       fetchRooms();
-    }, 30000);
-    
-    return () => clearInterval(interval);
-  }, [fetchRooms]);
+
+      burstCount += 1;
+
+      // 2s * 15 = 30 seconds burst, then 10s steady
+      const nextDelayMs = burstCount < 15 ? 2000 : 10000;
+      timer = setTimeout(tick, nextDelayMs);
+    };
+
+    tick();
+
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Fetch user's active game sessions from Supabase
   useEffect(() => {
