@@ -453,9 +453,16 @@ const BackgammonGame = () => {
         if (bgMove.missedCount && bgMove.missedCount >= 3) {
           // Location 2: Use explicit outcome derivation - actor (move.wallet) is LOSER
           const outcome = computeOutcomeFromLastMove({
-            lastMove: { wallet: move.wallet, type: "auto_forfeit" },
+            lastMove: {
+              wallet: move.wallet,
+              type: "auto_forfeit",
+              ...bgMove,
+              timedOutWallet: (bgMove as any)?.timedOutWallet || move.wallet,
+              move_data: bgMove,
+            },
             p1Wallet: roomPlayersRef.current[0],
             p2Wallet: roomPlayersRef.current[1],
+            myWallet: address,
           });
           
           console.log("[BackgammonGame] turn_timeout 3 strikes outcome:", {
@@ -464,6 +471,19 @@ const BackgammonGame = () => {
             loser: outcome.loserWallet?.slice(0, 8),
             myWallet: address?.slice(0, 8),
           });
+          
+          // Safety guard: Don't show wrong result if winner couldn't be determined
+          if (!outcome.winnerWallet) {
+            console.warn("[BackgammonGame] Durable turn_timeout>=3: winnerWallet null - deferring to polling", {
+              roomPlayersLen: roomPlayersRef.current.length,
+              bgMove,
+              moveWallet: move.wallet,
+              myWallet: address,
+            });
+            setGameOver(true);
+            setGameStatus("Match ended - determining result...");
+            return;
+          }
           
           setGameOver(true);
           setWinnerWallet(outcome.winnerWallet);
@@ -494,9 +514,10 @@ const BackgammonGame = () => {
       } else if (bgMove.type === "auto_forfeit") {
         // Location 1: Use explicit outcome derivation - actor (move.wallet) is LOSER
         const outcome = computeOutcomeFromLastMove({
-          lastMove: { wallet: move.wallet, type: bgMove.type, ...bgMove },
+          lastMove: { wallet: move.wallet, type: bgMove.type, ...bgMove, move_data: bgMove },
           p1Wallet: roomPlayersRef.current[0],
           p2Wallet: roomPlayersRef.current[1],
+          myWallet: address,
         });
         
         console.log("[BackgammonGame] auto_forfeit outcome:", {
@@ -505,6 +526,19 @@ const BackgammonGame = () => {
           loser: outcome.loserWallet?.slice(0, 8),
           myWallet: address?.slice(0, 8),
         });
+        
+        // Safety guard: Don't show wrong result if winner couldn't be determined
+        if (!outcome.winnerWallet) {
+          console.warn("[BackgammonGame] Durable auto_forfeit: winnerWallet null - deferring to polling", {
+            roomPlayersLen: roomPlayersRef.current.length,
+            bgMove,
+            moveWallet: move.wallet,
+            myWallet: address,
+          });
+          setGameOver(true);
+          setGameStatus("Match ended - determining result...");
+          return;
+        }
         
         setGameOver(true);
         setWinnerWallet(outcome.winnerWallet);
