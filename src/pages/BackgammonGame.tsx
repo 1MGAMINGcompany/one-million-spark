@@ -196,6 +196,8 @@ const BackgammonGame = () => {
   
   // Timeout debounce - prevent double-fire
   const timeoutFiredRef = useRef(false);
+  // Outcome lock - prevent double-processing of game result
+  const outcomeLockedRef = useRef(false);
   // Track turn_started_at for debounce reset
   const [turnStartedAt, setTurnStartedAt] = useState<string | null>(null);
   
@@ -231,6 +233,86 @@ const BackgammonGame = () => {
   
   // Ref for forfeit function (set after useForfeit hook)
   const forfeitFnRef = useRef<(() => Promise<void>) | null>(null);
+
+  // Reset outcome lock when room changes (for rematch support)
+  useEffect(() => {
+    outcomeLockedRef.current = false;
+  }, [roomPda]);
+
+  // === FINAL OUTCOME RESOLVER - DB IS SINGLE SOURCE OF TRUTH ===
+  // Helper to fetch winner from DB moves
+  async function resolveWinnerFromDb(): Promise<string | null> {
+    if (!roomPda) return null;
+
+    const { data, error } = await supabase.functions.invoke("get-moves", {
+      body: { roomPda }
+    });
+
+    if (error) {
+      console.error("[Outcome] resolveWinnerFromDb error", error);
+      return null;
+    }
+
+    // get-moves returns moves sorted by turn_number ASC, so last move is at end
+    const moves = data?.moves || [];
+    const lastMove = moves.length > 0 ? moves[moves.length - 1] : null;
+    
+    if (!lastMove) return null;
+
+    const winner =
+      (lastMove?.move_data?.winnerWallet || lastMove?.winnerWallet || "")?.trim() || null;
+
+    // If winnerWallet exists in DB, trust it
+    if (winner) return winner;
+
+    // Fallback: if forfeiting-style and winnerWallet missing, compute from actor + players
+    const type = lastMove?.move_data?.type || lastMove?.type;
+    const actor = (lastMove?.wallet || "").trim();
+    const p1 = roomPlayersRef.current?.[0] || null;
+    const p2 = roomPlayersRef.current?.[1] || null;
+
+    if ((type === "auto_forfeit" || type === "resign" || type === "forfeit") && actor && p1 && p2) {
+      return isSameWallet(actor, p1) ? p2 : p1;
+    }
+
+    return null;
+  }
+
+  // Final Outcome Resolver useEffect - runs when gameOver becomes true
+  useEffect(() => {
+    if (!gameOver) return;
+    if (outcomeLockedRef.current) return;
+    outcomeLockedRef.current = true;
+
+    (async () => {
+      console.log("[Outcome] Resolving final outcome from DB", {
+        roomPda: roomPda?.slice(0, 8),
+        currentWinnerWallet: winnerWallet?.slice?.(0, 8),
+        myWallet: address?.slice?.(0, 8),
+      });
+
+      const dbWinner = await resolveWinnerFromDb();
+      
+      if (dbWinner) {
+        console.log("[Outcome] DB winner resolved:", dbWinner.slice(0, 8));
+        setWinnerWallet(dbWinner);
+        
+        const didIWin = address && isSameWallet(dbWinner, address);
+        setGameStatus(didIWin ? t('game.youWin') || "You Win!" : t('game.youLose') || "You Lose");
+        setGameResultInfo({
+          winner: didIWin ? myRoleRef.current : (myRoleRef.current === "player" ? "ai" : "player"),
+          resultType: "single",
+          multiplier: 1,
+        });
+        play(didIWin ? "chess_win" : "chess_lose");
+        return;
+      }
+
+      // If DB couldn't determine winner, don't force a loss - show neutral text
+      console.warn("[Outcome] Could not resolve winner from DB. Keeping UI neutral.");
+      setGameStatus(t('game.matchEnded') || "Match ended - verifying result...");
+    })();
+  }, [gameOver, roomPda, address, t, play]);
 
   // === EDGE FUNCTION HEALTH PROBE (DIAGNOSTIC ONLY) ===
   useEffect(() => {
