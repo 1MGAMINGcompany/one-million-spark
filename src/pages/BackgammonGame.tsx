@@ -193,11 +193,14 @@ const BackgammonGame = () => {
   const [validMoves, setValidMoves] = useState<number[]>([]);
   const [gameResultInfo, setGameResultInfo] = useState<{ winner: Player | null; resultType: GameResultType | null; multiplier: number } | null>(null);
   const [winnerWallet, setWinnerWallet] = useState<string | null>(null); // Direct wallet address of winner
+  const [outcomeResolving, setOutcomeResolving] = useState(false); // Neutral "resolving..." state
   
   // Timeout debounce - prevent double-fire
   const timeoutFiredRef = useRef(false);
   // Outcome lock - prevent double-processing of game result
   const outcomeLockedRef = useRef(false);
+  // Outcome finalized - prevent double audio/status (only set once per room)
+  const outcomeFinalizedRef = useRef(false);
   // Track turn_started_at for debounce reset
   const [turnStartedAt, setTurnStartedAt] = useState<string | null>(null);
   
@@ -234,10 +237,20 @@ const BackgammonGame = () => {
   // Ref for forfeit function (set after useForfeit hook)
   const forfeitFnRef = useRef<(() => Promise<void>) | null>(null);
 
-  // Reset outcome lock when room changes (for rematch support)
+  // Reset outcome locks when room changes (for rematch support)
   useEffect(() => {
     outcomeLockedRef.current = false;
+    outcomeFinalizedRef.current = false;
+    setOutcomeResolving(false);
   }, [roomPda]);
+
+  // Helper to enter resolving state - DOES NOT set final win/lose or play audio
+  const enterOutcomeResolving = useCallback((winnerHint?: string | null) => {
+    setGameOver(true);
+    setOutcomeResolving(true);
+    if (winnerHint) setWinnerWallet(winnerHint);
+    setGameStatus(t('game.matchEnded') || 'Match ended — resolving result…');
+  }, [t]);
 
   // === FINAL OUTCOME RESOLVER - DB IS SINGLE SOURCE OF TRUTH ===
   // Helper to fetch winner from DB moves
@@ -279,6 +292,7 @@ const BackgammonGame = () => {
   }
 
   // Final Outcome Resolver useEffect - runs when gameOver becomes true
+  // This is the ONLY place that sets final Win/Lose status and plays audio
   useEffect(() => {
     if (!gameOver) return;
     if (outcomeLockedRef.current) return;
@@ -295,20 +309,26 @@ const BackgammonGame = () => {
       
       if (dbWinner) {
         console.log("[Outcome] DB winner resolved:", dbWinner.slice(0, 8));
-        setWinnerWallet(dbWinner);
         
-        const didIWin = address && isSameWallet(dbWinner, address);
-        setGameStatus(didIWin ? t('game.youWin') || "You Win!" : t('game.youLose') || "You Lose");
-        setGameResultInfo({
-          winner: didIWin ? myRoleRef.current : (myRoleRef.current === "player" ? "ai" : "player"),
-          resultType: "single",
-          multiplier: 1,
-        });
-        play(didIWin ? "chess_win" : "chess_lose");
+        // Guard against double-finalization - only set final UI once
+        if (!outcomeFinalizedRef.current) {
+          outcomeFinalizedRef.current = true;
+          setOutcomeResolving(false);
+          setWinnerWallet(dbWinner);
+          
+          const didIWin = address && isSameWallet(dbWinner, address);
+          setGameStatus(didIWin ? t('game.youWin') || "You Win!" : t('game.youLose') || "You Lose");
+          setGameResultInfo({
+            winner: didIWin ? myRoleRef.current : (myRoleRef.current === "player" ? "ai" : "player"),
+            resultType: "single",
+            multiplier: 1,
+          });
+          play(didIWin ? "chess_win" : "chess_lose");
+        }
         return;
       }
 
-      // If DB couldn't determine winner, don't force a loss - show neutral text
+      // If DB couldn't determine winner, keep resolving state - don't force a loss
       console.warn("[Outcome] Could not resolve winner from DB. Keeping UI neutral.");
       setGameStatus(t('game.matchEnded') || "Match ended - verifying result...");
     })();
@@ -554,27 +574,8 @@ const BackgammonGame = () => {
             myWallet: address?.slice(0, 8),
           });
           
-          // Safety guard: Don't show wrong result if winner couldn't be determined
-          if (!outcome.winnerWallet) {
-            console.warn("[BackgammonGame] Durable turn_timeout>=3: winnerWallet null - deferring to polling", {
-              roomPlayersLen: roomPlayersRef.current.length,
-              bgMove,
-              moveWallet: move.wallet,
-              myWallet: address,
-            });
-            setGameOver(true);
-            setGameStatus("Match ended - determining result...");
-            return;
-          }
-          
-          setGameOver(true);
-          setWinnerWallet(outcome.winnerWallet);
-          
-          const didIWin = outcome.winnerWallet && isSameWallet(outcome.winnerWallet, address);
-          const winnerRole = didIWin ? myRoleRef.current : (myRoleRef.current === "player" ? "ai" : "player");
-          setGameResultInfo({ winner: winnerRole, resultType: "single", multiplier: 1 });
-          setGameStatus(didIWin ? t('game.youWin') + " - opponent timed out" : t('game.youLose') + " - you timed out");
-          play(didIWin ? 'chess_win' : 'chess_lose');
+          // Use neutral resolving state - DB Outcome Resolver will finalize
+          enterOutcomeResolving(outcome.winnerWallet);
           return;
         }
         
@@ -609,27 +610,8 @@ const BackgammonGame = () => {
           myWallet: address?.slice(0, 8),
         });
         
-        // Safety guard: Don't show wrong result if winner couldn't be determined
-        if (!outcome.winnerWallet) {
-          console.warn("[BackgammonGame] Durable auto_forfeit: winnerWallet null - deferring to polling", {
-            roomPlayersLen: roomPlayersRef.current.length,
-            bgMove,
-            moveWallet: move.wallet,
-            myWallet: address,
-          });
-          setGameOver(true);
-          setGameStatus("Match ended - determining result...");
-          return;
-        }
-        
-        setGameOver(true);
-        setWinnerWallet(outcome.winnerWallet);
-        
-        const didIWin = outcome.winnerWallet && isSameWallet(outcome.winnerWallet, address);
-        const winnerRole = didIWin ? myRoleRef.current : (myRoleRef.current === "player" ? "ai" : "player");
-        setGameResultInfo({ winner: winnerRole, resultType: "single", multiplier: 1 });
-        setGameStatus(didIWin ? t('game.youWin') + " - opponent forfeited" : t('game.youLose') + " - you forfeited");
-        play(didIWin ? 'chess_win' : 'chess_lose');
+        // Use neutral resolving state - DB Outcome Resolver will finalize
+        enterOutcomeResolving(outcome.winnerWallet);
         
       } else if (bgMove && bgMove.gameState) {
         // Normal move - apply game state
@@ -638,7 +620,7 @@ const BackgammonGame = () => {
         if (bgMove.dice) setDice(bgMove.dice);
       }
     }
-  }, [address, play, t, roomPda]);
+  }, [address, play, t, roomPda, enterOutcomeResolving]);
 
   // Deterministic start roll for ALL games (casual + ranked) - MUST be before durableEnabled
   const startRoll = useStartRoll({
@@ -800,18 +782,8 @@ const BackgammonGame = () => {
           }
           
           console.log("[BackgammonGame] Polling detected game finished. Winner:", dbWinner?.slice(0, 8));
-          setGameOver(true);
-          if (dbWinner) {
-            setWinnerWallet(dbWinner);
-            const iWon = isSameWallet(dbWinner, address);
-            setGameResultInfo({ 
-              winner: iWon ? myRole : (myRole === "player" ? "ai" : "player"), 
-              resultType: "single", 
-              multiplier: 1 
-            });
-            setGameStatus(iWon ? t('game.youWin') : t('game.youLose'));
-            play(iWon ? 'chess_win' : 'chess_lose');
-          }
+          // Use neutral resolving state - DB Outcome Resolver will finalize
+          enterOutcomeResolving(dbWinner);
           return;
         }
 
@@ -1071,12 +1043,8 @@ const BackgammonGame = () => {
       });
       
       forfeitFnRef.current?.();
-      setGameOver(true);
-      setWinnerWallet(nextTurnWallet);
-      const opponentRole = myRole === "player" ? "ai" : "player";
-      setGameResultInfo({ winner: opponentRole, resultType: "single", multiplier: 1 });
-      setGameStatus(t('game.youLose') + " - 3 missed turns");
-      play('chess_lose');
+      // Use neutral resolving state - DB Outcome Resolver will finalize
+      enterOutcomeResolving(nextTurnWallet);
       
     } else {
       // SKIP to opponent (not forfeit)
@@ -1110,7 +1078,7 @@ const BackgammonGame = () => {
       setGameStatus("Opponent's turn");
     }
   // Note: This callback is now async to properly await persistMove for auto_forfeit
-  }, [isActuallyMyTurn, gameOver, address, roomPda, dice, remainingMoves, myRole, gameState, isRankedGame, persistMove, play, t]);
+  }, [isActuallyMyTurn, gameOver, address, roomPda, dice, remainingMoves, myRole, gameState, isRankedGame, persistMove, play, t, enterOutcomeResolving]);
   
   // Turn timer for ranked games
   // FIX: Use startRoll.isFinalized as fallback for timer enable (don't depend on bothReady)
@@ -1296,11 +1264,11 @@ const BackgammonGame = () => {
         if (winner) {
           const result = getGameResult(moveMsg.gameState);
           setGameResultInfo(result);
-          const resultDisplay = formatResultType(result.resultType);
-          setGameStatus(winner === myRoleRef.current ? `You win! ${resultDisplay.label}` : `You lose! ${resultDisplay.label}`);
-          setGameOver(true);
-          chatRef.current?.addSystemMessage(winner === myRoleRef.current ? "You win!" : "Opponent wins!");
-          play(winner === myRoleRef.current ? 'chess_win' : 'chess_lose');
+          chatRef.current?.addSystemMessage("Match ended");
+          // For bear-off wins, derive wallet from role
+          const winnerWalletHint = winner === "player" ? roomPlayersRef.current[0] : roomPlayersRef.current[1];
+          // Use neutral resolving state - DB Outcome Resolver will finalize
+          enterOutcomeResolving(winnerWalletHint);
         }
       } else if (moveMsg.type === "turn_end") {
         // WALLET-AUTHORITATIVE: Use nextTurnWallet from message
@@ -1342,26 +1310,8 @@ const BackgammonGame = () => {
             payloadWinner: message.payload?.winnerWallet?.slice(0, 8),
           });
           
-          // Safety guard: Don't show wrong result if winner couldn't be determined
-          if (!outcome.winnerWallet) {
-            console.warn("[BackgammonGame] winnerWallet null after outcome computation - deferring to polling", {
-              type: "turn_timeout",
-              payload: message.payload,
-              roomPlayersLen: roomPlayersRef.current.length,
-            });
-            setGameOver(true);
-            setGameStatus(t('game.matchEnded') || "Match ended - determining result...");
-            return; // Let polling fallback determine correct winner
-          }
-          
-          setGameOver(true);
-          setWinnerWallet(outcome.winnerWallet);
-          
-          const didIWin = outcome.winnerWallet && isSameWallet(outcome.winnerWallet, address);
-          const winnerRole = didIWin ? myRoleRef.current : (myRoleRef.current === "player" ? "ai" : "player");
-          setGameResultInfo({ winner: winnerRole, resultType: "single", multiplier: 1 });
-          setGameStatus(didIWin ? t('game.youWin') + " - opponent timed out" : t('game.youLose') + " - you timed out");
-          play(didIWin ? 'chess_win' : 'chess_lose');
+          // Use neutral resolving state - DB Outcome Resolver will finalize
+          enterOutcomeResolving(outcome.winnerWallet);
           return;
         }
         const nextWallet = moveMsg.nextTurnWallet || address;
@@ -1401,27 +1351,9 @@ const BackgammonGame = () => {
         roomPlayersLen: roomPlayersRef.current.length,
       });
       
-      // Safety guard: Don't show wrong result if winner couldn't be determined
-      if (!outcome.winnerWallet) {
-        console.warn("[BackgammonGame] winnerWallet null after resign computation - deferring to polling", {
-          type: "resign",
-          payload: message.payload,
-          roomPlayersLen: roomPlayersRef.current.length,
-        });
-        setGameOver(true);
-        setGameStatus(t('game.matchEnded') || "Match ended - determining result...");
-        return; // Let polling fallback determine correct winner
-      }
-      
-      setWinnerWallet(outcome.winnerWallet);
-      const didIWin = outcome.winnerWallet && isSameWallet(outcome.winnerWallet, address);
-      const winnerRole = didIWin ? myRoleRef.current : (myRoleRef.current === "player" ? "ai" : "player");
-      setGameResultInfo({ winner: winnerRole, resultType: "single", multiplier: 1 });
-      setGameStatus(didIWin ? "Opponent resigned - You win!" : "You resigned - Opponent wins!");
-      setGameOver(true);
-      chatRef.current?.addSystemMessage(didIWin ? "Opponent resigned" : "You resigned");
-      play(didIWin ? 'chess_win' : 'chess_lose');
-      toast({ title: didIWin ? t('toast.victory') : t('toast.defeat'), description: didIWin ? t('toast.opponentResigned') : "You resigned" });
+      chatRef.current?.addSystemMessage("Match ended");
+      // Use neutral resolving state - DB Outcome Resolver will finalize
+      enterOutcomeResolving(outcome.winnerWallet);
     } else if (message.type === "rematch_invite" && message.payload) {
       setRematchInviteData(message.payload);
       setShowAcceptModal(true);
@@ -1435,7 +1367,7 @@ const BackgammonGame = () => {
       toast({ title: t('toast.rematchReady'), description: t('toast.startingNewGame') });
       navigate(`/game/backgammon/${message.payload.roomId}`);
     }
-  }, [play, rematch, navigate]); // Stable deps - uses refs
+  }, [play, rematch, navigate, enterOutcomeResolving]); // Stable deps - uses refs
 
   // WebRTC sync
   const {
@@ -1716,10 +1648,8 @@ const BackgammonGame = () => {
         if (winner) {
           const result = getGameResult(newState);
           setGameResultInfo(result);
-          const resultDisplay = formatResultType(result.resultType);
-          setGameStatus(`You win! ${resultDisplay.label}`);
-          setGameOver(true);
-          play('chess_win');
+          // Use neutral resolving state - DB Outcome Resolver will finalize
+          enterOutcomeResolving(address); // I'm the winner since I made the winning move
         } else if (newRemaining.length === 0) {
           endTurn();
         } else {
@@ -1787,10 +1717,8 @@ const BackgammonGame = () => {
           if (winner) {
             const result = getGameResult(newState);
             setGameResultInfo(result);
-            const resultDisplay = formatResultType(result.resultType);
-            setGameStatus(`You win! ${resultDisplay.label}`);
-            setGameOver(true);
-            play('chess_win');
+            // Use neutral resolving state - DB Outcome Resolver will finalize
+            enterOutcomeResolving(address); // I'm the winner since I made the winning move
           } else if (newRemaining.length === 0) {
             endTurn();
           } else {
@@ -1807,7 +1735,7 @@ const BackgammonGame = () => {
       setSelectedPoint(null);
       setValidMoves([]);
     }
-  }, [isMyTurn, remainingMoves, gameOver, myRole, gameState, selectedPoint, validMoves, applyMoveWithSound, sendMove, recordPlayerMove, address, endTurn, play]);
+  }, [isMyTurn, remainingMoves, gameOver, myRole, gameState, selectedPoint, validMoves, applyMoveWithSound, sendMove, recordPlayerMove, address, endTurn, play, isRankedGame, persistMove, enterOutcomeResolving]);
 
   const handleResign = useCallback(async () => {
     // 1. Send WebRTC message immediately for instant opponent UX
@@ -1823,12 +1751,8 @@ const BackgammonGame = () => {
       reason: "resign",
     });
     
-    setWinnerWallet(opponentWalletAddr);
-    const opponentRole = myRole === "player" ? "ai" : "player";
-    setGameResultInfo({ winner: opponentRole, resultType: "single", multiplier: 1 });
-    setGameStatus("You resigned - Opponent wins!");
-    setGameOver(true);
-    play('chess_lose');
+    // Use neutral resolving state - DB Outcome Resolver will finalize
+    enterOutcomeResolving(opponentWalletAddr);
     
     // 3. CRITICAL: Trigger on-chain settlement via edge function
     try {
@@ -1841,7 +1765,7 @@ const BackgammonGame = () => {
         variant: "destructive",
       });
     }
-  }, [sendResign, play, myRole, forfeit, roomPlayers, address]);
+  }, [sendResign, forfeit, roomPlayers, address, enterOutcomeResolving]);
 
   // Require wallet
   if (!walletConnected || !address) {
