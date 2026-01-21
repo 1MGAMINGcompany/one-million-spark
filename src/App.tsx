@@ -75,7 +75,7 @@ const AppContent = () => {
     <div className="flex flex-col min-h-screen">
       <Navbar />
       <GlobalActiveRoomBanner />
-      <main className="pt-16 relative flex-1">
+      <main className="pt-16 relative flex-1 min-h-[calc(100dvh-4rem)]">
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/add-funds" element={<AddFunds />} />

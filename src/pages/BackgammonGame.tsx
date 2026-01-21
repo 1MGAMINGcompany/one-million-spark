@@ -1994,8 +1994,8 @@ const BackgammonGame = () => {
     <GameErrorBoundary>
     <InAppBrowserRecovery roomPda={roomPda || ""} onResubscribeRealtime={resubscribeRealtime} bypassOverlay={true}>
     <div className={cn(
-      "game-viewport bg-background flex flex-col relative",
-      isMobile ? "overflow-hidden" : "overflow-y-auto"
+      "game-viewport bg-background flex flex-col relative min-h-[100dvh] max-h-[100dvh] overflow-hidden",
+      "pb-[env(safe-area-inset-bottom)]"
     )}>
       {/* Gold Confetti Explosion on Win - only after outcome resolved */}
       <GoldConfettiExplosion 
@@ -2158,8 +2158,8 @@ const BackgammonGame = () => {
 
       {/* Game Area */}
       <div className={cn(
-        "flex-1 flex flex-col min-h-0",
-        isMobile ? "overflow-hidden px-2 pt-1 pb-2" : "overflow-auto px-4 py-2"
+        "flex-1 flex flex-col min-h-0 overflow-hidden",
+        isMobile ? "px-2 pt-1 pb-2" : "px-4 py-2"
       )}>
         {/* Mobile Layout - Viewport-fit container to prevent zoom */}
         {isMobile ? (
@@ -2190,7 +2190,7 @@ const BackgammonGame = () => {
               </div>
 
               {/* Board Container - Aspect-ratio scaling to 100vw, max-height to fit viewport */}
-              <div className="relative w-full flex-1 min-h-0 backgammon-mp-board" style={{ maxHeight: '68vh' }}>
+              <div className="relative w-full flex-1 min-h-0 overflow-hidden backgammon-mp-board">
                 {/* Subtle glow */}
                 <div className="absolute -inset-1 bg-primary/10 rounded-xl blur-lg opacity-30" />
                 
@@ -2397,7 +2397,7 @@ const BackgammonGame = () => {
             </div>
         ) : (
           /* Desktop Layout - Premium version matching AI */
-          <div className="max-w-4xl mx-auto w-full">
+          <div className="max-w-4xl mx-auto w-full flex flex-col min-h-0 overflow-hidden">
             <div className="relative">
               {/* Outer glow */}
               <div className="absolute -inset-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 rounded-2xl blur-xl opacity-50" />
@@ -2524,7 +2524,7 @@ const BackgammonGame = () => {
 
         {/* Controls - Desktop only */}
         {!isMobile && (
-          <div className="mt-4 flex flex-wrap gap-3 items-center justify-center max-w-4xl mx-auto shrink-0">
+          <div className="pt-3 flex flex-wrap gap-3 items-center justify-center max-w-4xl mx-auto shrink-0">
             {isMyTurn && dice.length === 0 && !gameOver && (
               <Button variant="gold" size="lg" className="min-w-[140px] shadow-[0_0_30px_-8px_hsl(45_93%_54%_/_0.5)]" onClick={rollDice}>
                 🎲 Roll Dice
