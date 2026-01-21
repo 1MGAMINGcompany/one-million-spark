@@ -70,28 +70,20 @@ export default function RoomList() {
   const targetCluster = getSolanaCluster();
   const rpcEndpoint = getSolanaEndpoint();
 
-  // Auto-refresh cadence:
-  // - Burst: every 2s for 30s (helps rooms appear quickly after creates)
-  // - Steady: every 10s after that (reduces load)
+  // Poll room list every 5 seconds
   useEffect(() => {
     if (!SOLANA_ENABLED) {
       console.log("[RoomList] SOLANA_ENABLED is false, skipping fetch");
       return;
     }
 
-    let burstCount = 0;
     let timer: ReturnType<typeof setTimeout>;
 
     const tick = () => {
-      console.log(`[RoomList] Auto-refresh (burst=${burstCount < 15})`);
+      console.log("[RoomList] Auto-refresh room list (5s interval)");
       setLastFetch(new Date().toISOString());
       fetchRooms();
-
-      burstCount += 1;
-
-      // 2s * 15 = 30 seconds burst, then 10s steady
-      const nextDelayMs = burstCount < 15 ? 2000 : 10000;
-      timer = setTimeout(tick, nextDelayMs);
+      timer = setTimeout(tick, 5000);
     };
 
     tick();
