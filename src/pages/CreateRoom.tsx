@@ -61,7 +61,7 @@ export default function CreateRoom() {
   const [searchParams] = useSearchParams();
   const { t } = useTranslation();
   const { isConnected, address } = useWallet();
-  // signMessage removed - no second signature needed after room creation (prevents Phantom "Request blocked" warning)
+  const { signMessage } = useWalletAdapter(); // For signing settings message
   const { toast } = useToast();
   const { play } = useSound();
   const { price, formatUsd, loading: priceLoading, refetch: refetchPrice } = useSolPrice();
@@ -314,9 +314,35 @@ export default function CreateRoom() {
         const authoritativeTurnTime = gameMode === 'ranked' ? turnTimeSeconds : 0;
         
         try {
-          // Persist settings without requiring a second signature
-          // Security: Edge function validates creatorWallet matches room creator in DB
-          const { error: settingsErr } = await supabase.functions.invoke(
+          const timestamp = Date.now();
+
+          // IMPORTANT: Must match edge function message format exactly (newline-separated)
+          const message =
+            `1MGAMING:SET_SETTINGS\n` +
+            `roomPda=${roomPdaStr}\n` +
+            `turnTimeSeconds=${authoritativeTurnTime}\n` +
+            `mode=${gameMode}\n` +
+            `ts=${timestamp}`;
+
+          // Convert Uint8Array -> base64
+          const toBase64 = (bytes: Uint8Array) =>
+            btoa(String.fromCharCode(...Array.from(bytes)));
+
+          let signature: string | undefined;
+
+          if (!signMessage) {
+            toast({
+              title: "Settings Error",
+              description: "Wallet does not support message signing. Turn timer may default to 60s.",
+              variant: "destructive",
+            });
+          } else {
+            const msgBytes = new TextEncoder().encode(message);
+            const sigBytes = await signMessage(msgBytes);
+            signature = toBase64(sigBytes);
+          }
+
+          const { data, error: settingsErr } = await supabase.functions.invoke(
             "game-session-set-settings",
             {
               body: {
@@ -324,13 +350,27 @@ export default function CreateRoom() {
                 turnTimeSeconds: authoritativeTurnTime,
                 mode: gameMode,
                 creatorWallet: address,
+                timestamp,
+                signature,
+                message, // optional debugging field
               },
             }
           );
 
           if (settingsErr) {
             console.error("[TurnTimer] Failed to persist session settings:", settingsErr);
-            // Non-blocking - game can still proceed with defaults
+            toast({
+              title: "Settings Error",
+              description: "Failed to save game settings. Turn timer may default to 60s.",
+              variant: "destructive",
+            });
+          } else if (data?.ok === false) {
+            console.error("[TurnTimer] Edge function rejected:", data?.error);
+            toast({
+              title: "Settings Error",
+              description: `Failed to save settings: ${data?.error ?? "Unknown error"}`,
+              variant: "destructive",
+            });
           } else {
             console.log("[TurnTimer] ✅ Persisted session settings:", {
               roomPda: roomPdaStr.slice(0, 8),
@@ -340,6 +380,11 @@ export default function CreateRoom() {
           }
         } catch (e) {
           console.error("[TurnTimer] Unexpected error persisting session settings:", e);
+          toast({
+            title: "Settings Error",
+            description: "Unexpected error saving settings. Turn timer may default to 60s.",
+            variant: "destructive",
+          });
         }
         
         // Add rematch_created flag if this was a rematch
