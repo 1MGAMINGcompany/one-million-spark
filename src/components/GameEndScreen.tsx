@@ -188,7 +188,8 @@ export function GameEndScreen({
   const [customStakeSol, setCustomStakeSol] = useState<string>('');
   const [showCustomInput, setShowCustomInput] = useState(false);
   
-  const isWinner = winner === myAddress;
+  const isPending = winner == null || winner === DEFAULT_PUBKEY;
+  const isWinner = !isPending && winner === myAddress;
   const isDraw = winner === 'draw';
   
   // Check on-chain room status on mount and compute payout info
@@ -333,6 +334,7 @@ export function GameEndScreen({
   const isPayoutConfirmed = finalizeState === 'success' || isAlreadySettled;
   
   const getResultText = () => {
+    if (isPending) return 'Resolving outcome...';
     if (isDraw) return 'Draw';
     if (isWinner) {
       // For staked games, show pending until payout confirmed
@@ -463,7 +465,7 @@ export function GameEndScreen({
               playerA={myAddress}
               playerB={players.find(p => p.address !== myAddress)?.address || ''}
               gameType={gameType}
-              isLoser={winner !== myAddress && winner !== 'draw'}
+              isLoser={!!winner && winner !== DEFAULT_PUBKEY && winner !== myAddress && winner !== 'draw'}
             />
           )}
 
