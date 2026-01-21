@@ -2402,8 +2402,8 @@ const BackgammonGame = () => {
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 md:gap-6 h-full min-h-0">
               {/* Board Column - 3 columns */}
               <div className="lg:col-span-3 flex flex-col min-h-0 overflow-hidden">
-                <div className="flex-1 min-h-0 overflow-hidden flex items-center justify-center">
-                  <div className="w-full h-full max-h-full aspect-[2/1] relative">
+                <div className="flex-1 min-h-0 overflow-hidden flex items-center justify-center p-2">
+                  <div className="w-full max-w-[min(100%,calc((100dvh-18rem)*2))] aspect-[2/1] relative">
                   {/* Outer glow */}
                   <div className="absolute -inset-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 rounded-2xl blur-xl opacity-50" />
                   
