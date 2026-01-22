@@ -117,7 +117,7 @@ export function useTurnTimer(options: UseTurnTimerOptions): UseTurnTimerResult {
     return () => {
       clearTimerInterval();
     };
-  }, [enabled, isPaused, isMyTurn, onTimeExpired, roomId, clearTimerInterval]);
+  }, [enabled, isPaused, isMyTurn, onTimeExpired, roomId, clearTimerInterval, turnTimeSeconds]);
 
   // Cleanup on unmount
   useEffect(() => {

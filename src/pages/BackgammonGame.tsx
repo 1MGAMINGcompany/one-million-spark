@@ -880,7 +880,7 @@ const BackgammonGame = () => {
   }, [roomPda, roomPlayers.length, stakeLamports, rankedGate.turnTimeSeconds, isRankedGame, rankedGate.isDataLoaded]);
 
   // Use canonical stake for turn time
-  const effectiveTurnTime = rankedGate.turnTimeSeconds || DEFAULT_RANKED_TURN_TIME;
+  const effectiveTurnTime = isDataLoaded ? (rankedGate.turnTimeSeconds || DEFAULT_RANKED_TURN_TIME) : 0;
 
   // Determine match state for LeaveMatchModal
   const matchState: MatchState = useMemo(() => {
@@ -2158,7 +2158,7 @@ const BackgammonGame = () => {
 
       {/* Game Area */}
       <div className={cn(
-        "flex-1 flex flex-col min-h-0 overflow-hidden lg:overflow-visible lg:overflow-visible",
+        "flex-1 flex flex-col min-h-0 overflow-hidden lg:overflow-y-auto lg:pb-24",
         isMobile ? "px-2 pt-1 pb-2" : "px-2 md:px-4 py-4"
       )}>
         {/* Mobile Layout - Viewport-fit container to prevent zoom */}
