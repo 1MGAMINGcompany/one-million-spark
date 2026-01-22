@@ -2192,7 +2192,7 @@ const BackgammonGame = () => {
               {/* Board Container - Aspect-ratio scaling to 100vw, max-height to fit viewport */}
               <div className="relative w-full flex-1 min-h-0 backgammon-mp-board" style={{ maxHeight: '55vh' }}>
                 {/* Subtle glow */}
-                <div className="absolute -inset-1 bg-primary/10 rounded-xl blur-lg opacity-30" />
+                <div className="absolute -inset-1 bg-primary/10 rounded-xl blur-lg opacity-30 pointer-events-none" />
                 
                 {/* Gold frame */}
                 <div className="relative h-full p-[3px] rounded-lg bg-gradient-to-br from-primary/40 via-primary/20 to-primary/40">
@@ -2397,9 +2397,9 @@ const BackgammonGame = () => {
               {/* Board Column - 3 columns */}
               <div className="lg:col-span-3 flex flex-col min-h-0 ">
                 <div className="flex-1 min-h-0  flex items-center justify-center p-2">
-                  <div className="w-full max-w-[min(100%,calc((100dvh-18rem)*2))] aspect-[2/1] relative">
+                  <div className="w-full max-w-[min(100%,calc((100dvh-18rem)*2))] aspect-[2/1] relative z-0">
                   {/* Outer glow */}
-                  <div className="absolute -inset-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 rounded-2xl blur-xl opacity-50" />
+                  <div className="absolute -inset-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 rounded-2xl blur-xl opacity-50 pointer-events-none" />
                   
                   {/* Gold frame */}
                   <div className="relative h-full p-1 rounded-xl bg-gradient-to-br from-primary/40 via-primary/20 to-primary/40 shadow-[0_0_40px_-10px_hsl(45_93%_54%_/_0.4)]">
