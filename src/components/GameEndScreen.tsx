@@ -529,6 +529,7 @@ export function GameEndScreen({
                       )}
                     </div>
                     {txSignature && (
+                      <div className="flex items-center justify-center gap-2">
                       <a
                         href={`https://explorer.solana.com/tx/${txSignature}`}
                         target="_blank"
@@ -546,6 +547,7 @@ export function GameEndScreen({
                       >
                         Copy
                       </Button>
+                      </div>
                     )}
                     {/* Trust note */}
                     <p className="text-[10px] text-muted-foreground text-center pt-1 border-t border-emerald-500/20">
