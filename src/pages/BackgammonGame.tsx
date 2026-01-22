@@ -938,7 +938,7 @@ const BackgammonGame = () => {
 
   // Handle turn timeout - SKIP to opponent (NOT immediate forfeit)
   // FIX: Ensure nextTurnWallet is computed from session wallets, NEVER same as timedOutWallet
-  const handleTurnTimeout = useCallback(async () => {
+  const handleTurnTimeout = useCallback(async (timedOutWalletArg?: string | null) => {
     // === MANDATORY DIAGNOSTIC LOGGING ===
     console.log("[handleTurnTimeout] ENTRY - all state:", {
       timeoutFiredRef: timeoutFiredRef.current,
@@ -972,30 +972,28 @@ const BackgammonGame = () => {
       return;
     }
     
-    if (!isActuallyMyTurn || gameOver || !address || !roomPda) {
-      console.log("[handleTurnTimeout] Ignoring timeout - not my turn or game over", {
-        isActuallyMyTurn,
-        gameOver,
-        hasAddress: !!address,
-        hasRoomPda: !!roomPda,
-      });
-      return;
-    }
+      // Watchdog: allow either player to enforce timeout for the ACTIVE turn wallet
+      if (gameOver || !roomPda) return;
+
+      const guardTimedOutWallet = (timedOutWalletArg || currentTurnWalletRef.current || null);
+      const activeWallet = currentTurnWalletRef.current || null;
+      if (!guardTimedOutWallet || !activeWallet || !isSameWallet(guardTimedOutWallet, activeWallet)) {
+        console.log("[handleTurnTimeout] Ignoring timeout - not active turn wallet", {
+          timedOutWallet: guardTimedOutWallet?.slice?.(0, 8),
+          activeWallet: activeWallet?.slice?.(0, 8),
+        });
+        return;
+      }
+
+      // If I'm not a real wallet participant, don't enforce (prevents weird edge cases)
+      if (!address) return;
     
-    // Mid-turn guard: Don't skip if player has rolled dice but not finished moving
-    if (dice.length > 0 && remainingMoves.length > 0) {
-      console.log("[handleTurnTimeout] Ignoring timeout - mid-turn with dice", {
-        diceLen: dice.length,
-        remainingMovesLen: remainingMoves.length,
-      });
-      return;
-    }
     
     // Set debounce flag BEFORE any async operations
     timeoutFiredRef.current = true;
     
     // FIX: Compute wallets from roomPlayers (session data), not local state
-    const timedOutWallet = currentTurnWalletRef.current || address;
+    const timedOutWallet = timedOutWalletArg || currentTurnWalletRef.current || address;
     const p1 = roomPlayersRef.current[0];
     const p2 = roomPlayersRef.current[1];
     
@@ -1015,7 +1013,7 @@ const BackgammonGame = () => {
     }
     
     // Use shared utility for missed turns tracking
-    const newMissedCount = incMissed(roomPda, address);
+    const newMissedCount = incMissed(roomPda, timedOutWallet);
     
     console.log(`[BackgammonGame] Turn timeout. timedOut=${timedOutWallet?.slice(0,8)} nextTurn=${nextTurnWallet?.slice(0,8)} missed=${newMissedCount}/3`);
     
@@ -1096,6 +1094,7 @@ const BackgammonGame = () => {
     turnTimeSeconds: effectiveTurnTime,
     enabled: isRankedGame && (canPlay || startRoll.isFinalized) && !gameOver,
     isMyTurn: effectiveIsMyTurn,
+  activeTurnWallet: activeTurnAddress,
     onTimeExpired: handleTurnTimeout,
     roomId: roomPda,
   });

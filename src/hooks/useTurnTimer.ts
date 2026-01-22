@@ -13,8 +13,10 @@ interface UseTurnTimerOptions {
   enabled: boolean;
   /** Whether it's currently this player's turn */
   isMyTurn: boolean;
+  /** Wallet whose turn is currently active (for watchdog enforcement) */
+  activeTurnWallet?: string | null;
   /** Callback when time expires on my turn (auto-forfeit) */
-  onTimeExpired?: () => void;
+  onTimeExpired?: (timedOutWallet?: string | null) => void;
   /** Room ID for logging */
   roomId?: string;
 }
@@ -37,7 +39,7 @@ interface UseTurnTimerResult {
 }
 
 export function useTurnTimer(options: UseTurnTimerOptions): UseTurnTimerResult {
-  const { turnTimeSeconds, enabled, isMyTurn, onTimeExpired, roomId } = options;
+  const { turnTimeSeconds, enabled, isMyTurn, activeTurnWallet, onTimeExpired, roomId } = options;
   
   const [remainingTime, setRemainingTime] = useState(turnTimeSeconds);
   const [isPaused, setIsPaused] = useState(false);
@@ -73,16 +75,16 @@ export function useTurnTimer(options: UseTurnTimerOptions): UseTurnTimerResult {
     console.log(`[useTurnTimer] Timer resumed at ${remainingTime}s`);
   }, [remainingTime]);
 
-  // Reset timer when turn changes (isMyTurn changes)
+  // Reset timer when ACTIVE TURN changes (watchdog-safe)
   useEffect(() => {
     if (enabled) {
       resetTimer();
     }
-  }, [isMyTurn, enabled, resetTimer]);
+  }, [enabled, activeTurnWallet, turnTimeSeconds, resetTimer]);
 
   // Main timer countdown effect
   useEffect(() => {
-    if (!enabled || isPaused || !isMyTurn) {
+    if (!enabled || isPaused || turnTimeSeconds <= 0) {
       clearTimerInterval();
       return;
     }

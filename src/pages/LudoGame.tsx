@@ -485,10 +485,14 @@ const LudoGame = () => {
   }, [handleConfirmForfeit]);
 
   // Turn timer for ranked games - skip on timeout, 3 strikes = forfeit
-  const handleTurnTimeout = useCallback(() => {
-    if (gameOver || !address || !roomPda || !isActuallyMyTurn) return;
+  const handleTurnTimeout = useCallback((timedOutWalletArg?: string | null) => {
+    if (gameOver || !address || !roomPda) return;
+
+      const timedOutWallet = (timedOutWalletArg || activeTurnAddress || null);
+      if (!timedOutWallet || !activeTurnAddress || !isSameWallet(timedOutWallet, activeTurnAddress)) return;
+      const iTimedOut = isSameWallet(timedOutWallet, address);
     
-    const newMissedCount = incMissed(roomPda, address);
+    const newMissedCount = incMissed(roomPda, timedOutWallet);
     
     if (newMissedCount >= 3) {
       // 3 STRIKES = AUTO FORFEIT
@@ -506,15 +510,20 @@ const LudoGame = () => {
         ) || null;
         persistMove({
           action: "turn_timeout",
-          timedOutWallet: address,
+          timedOutWallet: timedOutWallet,
           nextTurnWallet: nextWallet,
           missedCount: newMissedCount,
         }, address);
       }
       
-      // Trigger forfeit
-      forfeitFnRef.current?.();
-      play('ludo_dice');
+        if (iTimedOut) {
+          // I missed 3 turns -> I forfeit
+          forfeitFnRef.current?.();
+          play('ludo_dice');
+        } else {
+          // Opponent missed 3 turns -> game continues (handled via persisted move)
+          play('ludo_dice');
+        }
       
     } else {
       // SKIP to next player
@@ -530,7 +539,7 @@ const LudoGame = () => {
         const nextWallet = roomPlayers[nextPlayerIndex] || null;
         persistMove({
           action: "turn_timeout",
-          timedOutWallet: address,
+          timedOutWallet: timedOutWallet,
           nextTurnWallet: nextWallet,
           missedCount: newMissedCount,
         }, address);
@@ -549,6 +558,7 @@ const LudoGame = () => {
     turnTimeSeconds: effectiveTurnTime,
     enabled: isRankedGame && canPlay && !gameOver,
     isMyTurn: isMyTurnLocal,
+  activeTurnWallet: activeTurnAddress,
     onTimeExpired: handleTurnTimeout,
     roomId: roomPda,
   });

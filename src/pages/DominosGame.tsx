@@ -607,77 +607,99 @@ const DominosGame = () => {
   // Effective isMyTurn considering ranked gate - used for board disable
   const effectiveIsMyTurn = canPlayRanked && isActuallyMyTurn;
 
+    const activeTurnWallet = (effectiveIsMyTurn ? address : getOpponentWallet(roomPlayers, address)) || null;
+
   // Ref for resign/forfeit function to avoid circular deps with turn timer
   // Ref for forfeit function - will be set by useForfeit hook
   const forfeitFnRef = useRef<(() => Promise<void>) | null>(null);
 
-  // Turn timer for ranked games - skip on timeout + 3 strikes = auto-forfeit
-  const handleTurnTimeout = useCallback(() => {
-    if (!isActuallyMyTurn || gameOver || !address || !roomPda) return;
-    
-    const opponentWalletAddr = getOpponentWallet(roomPlayers, address);
-    const newMissedCount = incMissed(roomPda, address);
-    
-    console.log(`[DominosGame] Turn timeout. Wallet ${address?.slice(0,8)} missed ${newMissedCount}/3`);
-    
-    if (newMissedCount >= 3) {
-      // 3 STRIKES = AUTO FORFEIT
-      toast({
-        title: t('gameSession.autoForfeit'),
-        description: t('gameSession.missedThreeTurns'),
-        variant: "destructive",
-      });
-      
-      // Persist MINIMAL timeout event BEFORE forfeit
-      if (isRankedGame && opponentWalletAddr) {
-        persistMove({
-          action: "turn_timeout",
-          timedOutWallet: address,
-          nextTurnWallet: opponentWalletAddr,
-          missedCount: newMissedCount,
-        } as unknown as DominoMove, address);
+    // Turn timer for ranked games - watchdog-safe enforcement
+    const handleTurnTimeout = useCallback((timedOutWalletArg?: string | null) => {
+      if (gameOver || !address || !roomPda) return;
+
+      const timedOutWallet = (timedOutWalletArg || activeTurnWallet || null);
+      if (!timedOutWallet || !activeTurnWallet || !isSameWallet(timedOutWallet, activeTurnWallet)) return;
+
+      const opponentWalletAddr = getOpponentWallet(roomPlayers, timedOutWallet);
+      const newMissedCount = incMissed(roomPda, timedOutWallet);
+      const iTimedOut = isSameWallet(timedOutWallet, address);
+
+      console.log(`[DominosGame] Turn timeout. timedOut=${timedOutWallet?.slice(0,8)} missed=${newMissedCount}/3`);
+
+      if (newMissedCount >= 3) {
+        toast({
+          title: t('gameSession.autoForfeit'),
+          description: t('gameSession.missedThreeTurns'),
+          variant: 'destructive',
+        });
+
+        // Persist MINIMAL timeout event
+        if (isRankedGame && opponentWalletAddr) {
+          persistMove({
+            action: 'turn_timeout',
+            timedOutWallet,
+            nextTurnWallet: opponentWalletAddr,
+            missedCount: newMissedCount,
+          } as unknown as DominoMove, address);
+        }
+
+        if (iTimedOut) {
+          // I missed 3 turns -> I lose
+          forfeitFnRef.current?.();
+          setGameOver(true);
+          setWinner('opponent');
+          setWinnerWallet(opponentWalletAddr);
+          setGameStatus(t('game.youLose') + ' - 3 missed turns');
+          play('domino/lose');
+        } else {
+          // Opponent missed 3 turns -> I win
+          setGameOver(true);
+          setWinner('you');
+          setWinnerWallet(address);
+          setGameStatus((t('game.youWin') || 'You win') + ' - opponent missed 3 turns');
+          play('domino/win');
+        }
+      } else {
+        toast({
+          title: t('gameSession.turnSkipped'),
+          description: `${newMissedCount}/3 ${t('gameSession.missedTurns')}`,
+          variant: 'destructive',
+        });
+
+        // Persist MINIMAL turn_timeout to DB
+        if (isRankedGame && opponentWalletAddr) {
+          persistMove({
+            action: 'turn_timeout',
+            timedOutWallet,
+            nextTurnWallet: opponentWalletAddr,
+            missedCount: newMissedCount,
+          } as unknown as DominoMove, address);
+        }
+
+        if (iTimedOut) {
+          // I timed out -> opponent gets turn
+          setIsMyTurn(false);
+          setSelectedDomino(null);
+          setGameStatus(t('game.opponentsTurn'));
+        } else {
+          // Opponent timed out -> I get the turn
+          setIsMyTurn(true);
+          setSelectedDomino(null);
+          setGameStatus((t('game.yourTurn') || 'Your turn'));
+        }
       }
-      
-      forfeitFnRef.current?.();
-      setGameOver(true);
-      setWinner("opponent");
-      setWinnerWallet(opponentWalletAddr);
-      setGameStatus(t('game.youLose') + " - 3 missed turns");
-      play('domino/lose');
-      
-    } else {
-      // SKIP to opponent (not forfeit)
-      toast({
-        title: t('gameSession.turnSkipped'),
-        description: `${newMissedCount}/3 ${t('gameSession.missedTurns')}`,
-        variant: "destructive",
-      });
-      
-      // Persist MINIMAL turn_timeout to DB
-      if (isRankedGame && opponentWalletAddr) {
-        persistMove({
-          action: "turn_timeout",
-          timedOutWallet: address,
-          nextTurnWallet: opponentWalletAddr,
-          missedCount: newMissedCount,
-        } as unknown as DominoMove, address);
-      }
-      
-      // Skip turn using existing state
-      setIsMyTurn(false);
-      setSelectedDomino(null);
-      setGameStatus(t('game.opponentsTurn'));
-    }
-  }, [isActuallyMyTurn, gameOver, address, roomPda, roomPlayers, isRankedGame, persistMove, play, t]);
+    }, [activeTurnWallet, gameOver, address, roomPda, roomPlayers, isRankedGame, persistMove, play, t]);
 
   // Use turn time from ranked gate (fetched from DB/localStorage)
   const effectiveTurnTime = rankedGate.turnTimeSeconds || DEFAULT_RANKED_TURN_TIME;
+
   
   const turnTimer = useTurnTimer({
     turnTimeSeconds: effectiveTurnTime,
     enabled: isRankedGame && canPlayRanked && !gameOver,
     isMyTurn: effectiveIsMyTurn,
-    onTimeExpired: handleTurnTimeout,
+      activeTurnWallet,
+      onTimeExpired: handleTurnTimeout,
     roomId: roomPda,
   });
 

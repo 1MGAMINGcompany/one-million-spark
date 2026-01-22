@@ -510,11 +510,15 @@ const ChessGame = () => {
   const forfeitFnRef = useRef<(() => Promise<void>) | null>(null);
 
   // Turn timer for ranked games - skip on timeout, 3 strikes = forfeit
-  const handleTurnTimeout = useCallback(() => {
-    if (gameOver || !address || !roomPda || !isActuallyMyTurn) return;
+  const handleTurnTimeout = useCallback((timedOutWalletArg?: string | null) => {
+    if (gameOver || !address || !roomPda) return;
+
+      const timedOutWallet = (timedOutWalletArg || activeTurnAddress || null);
+      if (!timedOutWallet || !activeTurnAddress || !isSameWallet(timedOutWallet, activeTurnAddress)) return;
+      const iTimedOut = isSameWallet(timedOutWallet, address);
     
-    const opponentWalletAddr = getOpponentWallet(roomPlayers, address);
-    const newMissedCount = incMissed(roomPda, address);
+    const opponentWalletAddr = getOpponentWallet(roomPlayers, timedOutWallet);
+    const newMissedCount = incMissed(roomPda, timedOutWallet);
     
     if (newMissedCount >= 3) {
       // 3 STRIKES = AUTO FORFEIT
@@ -528,18 +532,26 @@ const ChessGame = () => {
       if (isRankedGame && opponentWalletAddr) {
         persistMove({
           action: "turn_timeout",
-          timedOutWallet: address,
+          timedOutWallet: timedOutWallet,
           nextTurnWallet: opponentWalletAddr,
           missedCount: newMissedCount,
         } as any, address);
       }
       
-      // Trigger forfeit
-      forfeitFnRef.current?.();
-      setGameOver(true);
-      setWinnerWallet(opponentWalletAddr);
-      setGameStatus(myColor === 'w' ? t('game.black') + " wins" : t('game.white') + " wins");
-      play('chess_lose');
+        if (iTimedOut) {
+          // I missed 3 turns -> I lose
+          forfeitFnRef.current?.();
+          setGameOver(true);
+          setWinnerWallet(opponentWalletAddr);
+          setGameStatus(myColor === 'w' ? t('game.black') + " wins" : t('game.white') + " wins");
+          play('chess_lose');
+        } else {
+          // Opponent missed 3 turns -> I win
+          setGameOver(true);
+          setWinnerWallet(address);
+          setGameStatus(myColor === 'w' ? t('game.white') + " wins" : t('game.black') + " wins");
+          play('chess_win');
+        }
       
     } else {
       // SKIP to opponent
@@ -553,14 +565,17 @@ const ChessGame = () => {
       if (isRankedGame && opponentWalletAddr) {
         persistMove({
           action: "turn_timeout",
-          timedOutWallet: address,
+          timedOutWallet: timedOutWallet,
           nextTurnWallet: opponentWalletAddr,
           missedCount: newMissedCount,
         } as any, address);
       }
       
-      // Grant opponent another turn via override
-      setTurnOverrideWallet(opponentWalletAddr);
+        if (iTimedOut) {
+          setTurnOverrideWallet(opponentWalletAddr);
+        } else {
+          setTurnOverrideWallet(null);
+        }
     }
   }, [gameOver, address, roomPda, isActuallyMyTurn, roomPlayers, myColor, isRankedGame, persistMove, play, t]);
 
@@ -570,8 +585,9 @@ const ChessGame = () => {
   const turnTimer = useTurnTimer({
     turnTimeSeconds: effectiveTurnTime,
     enabled: isRankedGame && canPlay && !gameOver,
-    isMyTurn,
-    onTimeExpired: handleTurnTimeout,
+      isMyTurn,
+      activeTurnWallet: activeTurnAddress,
+      onTimeExpired: handleTurnTimeout,
     roomId: roomPda,
   });
 
@@ -1059,7 +1075,7 @@ const ChessGame = () => {
     sendResign();
     
     // 2. Update local UI optimistically - opponent wins, store their wallet
-    const opponentWalletAddr = getOpponentWallet(roomPlayers, address);
+    const opponentWalletAddr = getOpponentWallet(roomPlayers, timedOutWallet);
     setWinnerWallet(opponentWalletAddr);
     setGameStatus(t("gameMultiplayer.youResignedLose"));
     setGameOver(true);
