@@ -2397,13 +2397,13 @@ const BackgammonGame = () => {
               {/* Board Column - 3 columns */}
               <div className="lg:col-span-3 flex flex-col min-h-0 ">
                 <div className="flex-1 min-h-0  flex items-center justify-center p-2">
-                  <div className="w-full max-w-full aspect-[2/1] relative z-0">
+                  <div className="w-full max-w-full relative z-0">
                   {/* Outer glow */}
                   <div className="absolute -inset-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 rounded-2xl blur-xl opacity-50 pointer-events-none" />
                   
                   {/* Gold frame */}
-                  <div className="relative h-full p-1 rounded-xl bg-gradient-to-br from-primary/40 via-primary/20 to-primary/40 shadow-[0_0_40px_-10px_hsl(45_93%_54%_/_0.4)]">
-                    <div className="h-full bg-gradient-to-b from-midnight-light via-background to-midnight-light rounded-lg p-2 md:p-4 overflow-hidden lg:overflow-visible flex flex-col">
+                  <div className="relative p-1 rounded-xl bg-gradient-to-br from-primary/40 via-primary/20 to-primary/40 shadow-[0_0_40px_-10px_hsl(45_93%_54%_/_0.4)]">
+                    <div className="bg-gradient-to-b from-midnight-light via-background to-midnight-light rounded-lg p-2 md:p-4 overflow-hidden lg:overflow-visible flex flex-col">
                           
                       {/* Opponent Bear Off / Bar + Direction Indicators */}
                       <div className="flex justify-between items-center mb-3 px-2 shrink-0">
@@ -2432,7 +2432,7 @@ const BackgammonGame = () => {
                       </div>
 
                       {/* Board points area - flex-1 to scale */}
-                      <div className="flex-1 min-h-0 flex flex-col justify-center">
+                      <div className="flex flex-col">
                         {/* Top points (13-24 or flipped) */}
                         <div className="flex justify-center gap-0.5 mb-1">
                           <div className="flex gap-0.5">
