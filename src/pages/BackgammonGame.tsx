@@ -2525,35 +2525,32 @@ const BackgammonGame = () => {
                           </div>
                         ) : <div />}
                         
-                        {/* Bear Off Zone - clickable when valid (AI desktop style) */}
-                          <div
-                            className={cn(
-                              "flex items-center gap-2 rounded-lg px-3 py-2 transition-all",
-                              validMoves.includes(-2)
-                                ? "cursor-pointer bg-primary/20 border-2 border-primary animate-pulse hover:bg-primary/30 shadow-[0_0_20px_hsl(45_93%_54%_/_0.4)]"
-                                : canBearOff(gameState, myRole)
-                                  ? "border border-primary/30 bg-primary/5 cursor-pointer"
-                                  : "border border-primary/10 opacity-50"
-                            )}
-                            onClick={() => validMoves.includes(-2) && handlePointClick(-2)}
-                          >
-                            <span className={cn(
-                              "text-xs font-medium",
-                              validMoves.includes(-2) ? "text-primary" : "text-muted-foreground"
-                            )}>
-                              Bear Off:
-                            </span>
-                            <span className={cn(
-                              "font-bold",
-                              validMoves.includes(-2) ? "text-primary text-lg" : "text-primary"
-                            )}>
-                              {myRole === "player" ? gameState.bearOff.player : gameState.bearOff.ai}
-                            </span>
-                            <span className="text-xs text-muted-foreground">/15</span>
-                            {validMoves.includes(-2) && (
-                              <Trophy className="w-4 h-4 text-primary ml-1" />
-                            )}
-                          </div>
+                        {/* Bear Off Zone - Always visible, clickable when valid */}
+                        <div 
+                          className={cn(
+                            "flex items-center gap-2 rounded-lg px-3 py-2 transition-all",
+                            validMoves.includes(-2) 
+                              ? "cursor-pointer bg-primary/20 border-2 border-primary animate-pulse hover:bg-primary/30 shadow-[0_0_20px_hsl(45_93%_54%_/_0.4)]" 
+                              : canBearOff(gameState, myRole) 
+                                ? "border border-primary/30 bg-primary/5 cursor-pointer" 
+                                : "border border-primary/10 opacity-50"
+                          )}
+                          onClick={() => validMoves.includes(-2) && handlePointClick(-2)}
+                        >
+                          <Trophy className={cn("w-4 h-4", validMoves.includes(-2) ? "text-primary" : "text-primary/40")} />
+                          <span className={cn(
+                            "text-xs font-medium",
+                            validMoves.includes(-2) ? "text-primary" : canBearOff(gameState, myRole) ? "text-muted-foreground" : "text-muted-foreground/50"
+                          )}>
+                            {canBearOff(gameState, myRole) ? "Bear Off:" : "Bear Off (locked)"}
+                          </span>
+                          <span className={cn(
+                            "font-bold",
+                            validMoves.includes(-2) ? "text-primary text-lg" : canBearOff(gameState, myRole) ? "text-primary" : "text-muted-foreground/50"
+                          )}>
+                            {myRole === "player" ? gameState.bearOff.player : gameState.bearOff.ai}
+                          </span>
+                      </div>
                     </div>
                   </div>
                           <span className="text-xs text-muted-foreground">/15</span>
