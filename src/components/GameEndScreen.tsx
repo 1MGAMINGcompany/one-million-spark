@@ -281,6 +281,7 @@ export function GameEndScreen({
       if (result.success) {
         setFinalizeState('success');
         setTxSignature(result.signature || null);
+        console.log('[SettlementSig]', result.signature);
         play('chess_win');
         
         if (result.alreadySettled) {
@@ -537,6 +538,14 @@ export function GameEndScreen({
                         <ExternalLink size={12} />
                         View transaction on Solana Explorer
                       </a>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="ml-2"
+                        onClick={() => txSignature && navigator.clipboard.writeText(txSignature)}
+                      >
+                        Copy
+                      </Button>
                     )}
                     {/* Trust note */}
                     <p className="text-[10px] text-muted-foreground text-center pt-1 border-t border-emerald-500/20">
