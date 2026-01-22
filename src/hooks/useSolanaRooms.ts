@@ -15,6 +15,22 @@ import { normalizeSignature, isBlockingRoom } from "@/lib/solana-utils";
 import { isRoomArchived, archiveRoom } from "@/lib/roomArchive";
 import { supabase } from "@/integrations/supabase/client";
 import { computeRulesHash, createRulesFromRoom } from "@/lib/gameAcceptance";
+
+function toNum(v: any, fallback = 0): number {
+  if (v == null) return fallback;
+  if (typeof v === "number") return Number.isFinite(v) ? v : fallback;
+  if (typeof v === "bigint") return Number(v);
+  if (typeof v === "string") {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : fallback;
+  }
+  if (v && typeof v.toNumber === "function") {
+    try { return v.toNumber(); } catch { return fallback; }
+  }
+  return fallback;
+}
+
+
 import {
   RoomDisplay,
   GameType,
@@ -475,7 +491,8 @@ export function useSolanaRooms() {
                   maxPlayers,
                   stakeLamports,
                   feeBps: 250,
-                  turnTimeSeconds: (parsed as any)?.turnTimeSec ?? (roomAccount as any)?.turnTimeSec ?? 0,
+                  turnTimeSec: toNum((parsed as any)?.turnTimeSec ?? (parsed as any)?.turnTimeSeconds ?? (roomAccount as any)?.turnTimeSec ?? (roomAccount as any)?.turnTimeSeconds, 0),
+                  turnTimeSeconds: toNum((parsed as any)?.turnTimeSec ?? (parsed as any)?.turnTimeSeconds ?? (roomAccount as any)?.turnTimeSec ?? (roomAccount as any)?.turnTimeSeconds, 0),
                   forfeitPolicy: "timeout",
                   version: 1,
                 },
@@ -801,7 +818,8 @@ export function useSolanaRooms() {
                     maxPlayers: joinedRoom.maxPlayers,
                     stakeLamports,
                     feeBps: 250,
-                    turnTimeSeconds: (parsed as any)?.turnTimeSec ?? (roomAccount as any)?.turnTimeSec ?? 0,
+                    turnTimeSec: toNum((parsed as any)?.turnTimeSec ?? (parsed as any)?.turnTimeSeconds ?? (roomAccount as any)?.turnTimeSec ?? (roomAccount as any)?.turnTimeSeconds, 0),
+                  turnTimeSeconds: toNum((parsed as any)?.turnTimeSec ?? (parsed as any)?.turnTimeSeconds ?? (roomAccount as any)?.turnTimeSec ?? (roomAccount as any)?.turnTimeSeconds, 0),
                     forfeitPolicy: "timeout",
                     version: 1,
                   },
