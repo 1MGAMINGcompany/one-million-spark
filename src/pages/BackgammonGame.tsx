@@ -2158,7 +2158,7 @@ const BackgammonGame = () => {
 
       {/* Game Area */}
       <div className={cn(
-        "flex-1 flex flex-col min-h-0 overflow-hidden",
+        "flex-1 flex flex-col min-h-0 overflow-hidden lg:overflow-visible",
         isMobile ? "px-2 pt-1 pb-2" : "px-2 md:px-4 py-4"
       )}>
         {/* Mobile Layout - Viewport-fit container to prevent zoom */}
@@ -2403,7 +2403,7 @@ const BackgammonGame = () => {
                   
                   {/* Gold frame */}
                   <div className="relative h-full p-1 rounded-xl bg-gradient-to-br from-primary/40 via-primary/20 to-primary/40 shadow-[0_0_40px_-10px_hsl(45_93%_54%_/_0.4)]">
-                    <div className="h-full bg-gradient-to-b from-midnight-light via-background to-midnight-light rounded-lg p-2 md:p-4 overflow-hidden flex flex-col">
+                    <div className="h-full bg-gradient-to-b from-midnight-light via-background to-midnight-light rounded-lg p-2 md:p-4 overflow-hidden lg:overflow-visible flex flex-col">
                           
                       {/* Opponent Bear Off / Bar + Direction Indicators */}
                       <div className="flex justify-between items-center mb-3 px-2 shrink-0">
