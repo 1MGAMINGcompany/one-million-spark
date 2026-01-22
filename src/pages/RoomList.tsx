@@ -243,18 +243,6 @@ export default function RoomList() {
     return `${seconds}s`;
   };
 
-  const getRoomTurnTimeSeconds = (room: any): number => {
-    const v =
-      room?.turnTimeSeconds ??
-      room?.turn_time_seconds ??
-      room?.settings?.turn_time_seconds ??
-      room?.session?.turn_time_seconds ??
-      null;
-
-    const isRanked = !!(room?.isRanked || room?.ranked);
-    if (typeof v === "number") return v;
-    return isRanked ? 60 : 0;
-  };
     return names[gameType] || "Unknown";
   };
 
