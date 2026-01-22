@@ -2549,11 +2549,6 @@ const BackgammonGame = () => {
                             )}>
                               {myRole === "player" ? gameState.bearOff.player : gameState.bearOff.ai}
                             </span>
-                            <span className="text-xs text-muted-foreground">/15</span>
-                            {validMoves.includes(-2) && (
-                              <Trophy className="w-4 h-4 text-primary ml-1" />
-                            )}
-                          </div>
                     </div>
                   </div>
                           <span className="text-xs text-muted-foreground">/15</span>
