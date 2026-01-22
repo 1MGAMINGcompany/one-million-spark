@@ -48,17 +48,54 @@ function formatTurnTime(seconds: number | null | undefined): string {
 }
 
 function getRoomTurnTimeSeconds(room: any): number {
-  const v =
-    room?.turnTimeSeconds ??
-    room?.turn_time_seconds ??
-    room?.settings?.turn_time_seconds ??
-    room?.session?.turn_time_seconds ??
-    null;
+  const candidates = [
+    // normalized fields
+    room?.turnTimeSeconds,
+    room?.turnTimeSec,
 
-  const isRanked = !!(room?.isRanked || room?.ranked || (room?.entryFeeSol ?? 0) > 0);
-  if (typeof v === "number") return v;
-  return isRanked ? 60 : 0;
+    // common alternates
+    room?.turn_time_seconds,
+    room?.timePerTurn,
+    room?.time_per_turn,
+    room?.turnTime,
+    room?.turn_time,
+
+    // nested shapes
+    room?.account?.turnTimeSeconds,
+    room?.account?.turnTimeSec,
+    room?.account?.turn_time_seconds,
+
+    room?.raw?.turnTimeSeconds,
+    room?.raw?.turnTimeSec,
+    room?.raw?.turn_time_seconds,
+
+    room?.data?.turnTimeSeconds,
+    room?.data?.turnTimeSec,
+    room?.data?.turn_time_seconds,
+  ];
+
+  const toSeconds = (raw: any): number | undefined => {
+    if (raw == null) return undefined;
+    if (typeof raw === "number") return Number.isFinite(raw) ? raw : undefined;
+    if (typeof raw === "bigint") return Number(raw);
+    if (typeof raw === "string") {
+      const n = Number(raw);
+      return Number.isFinite(n) ? n : undefined;
+    }
+    if (raw && typeof raw.toNumber === "function") {
+      try { return raw.toNumber(); } catch { return undefined; }
+    }
+    return undefined;
+  };
+
+  for (const raw of candidates) {
+    const v = toSeconds(raw);
+    if (typeof v === "number" && Number.isFinite(v) && v > 0) return v;
+  }
+
+  return 60;
 }
+
 
 export default function RoomList() {
   const navigate = useNavigate();
