@@ -174,6 +174,7 @@ const BackgammonGame = () => {
   const roomId = roomPda; // Alias for backward compatibility with hooks/display
   const navigate = useNavigate();
   const { t } = useTranslation();
+  const isMobile = useIsMobile();
 
   // Desktop-only: scale the board to fit viewport (no scrolling). Mobile untouched.
   const desktopFitOuterRef = useRef<HTMLDivElement | null>(null);
@@ -209,7 +210,6 @@ const BackgammonGame = () => {
       window.removeEventListener("resize", measure);
     };
   }, [isMobile]);
-  const isMobile = useIsMobile();
   const { play } = useSound();
   const { isConnected: walletConnected, address } = useWallet();
 
