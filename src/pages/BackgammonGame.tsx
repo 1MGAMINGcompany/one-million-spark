@@ -2391,14 +2391,14 @@ const BackgammonGame = () => {
               </div>
             </div>
         ) : (
-            /* Desktop Layout - Match Backgammon AI desktop layout */
-            <div className="max-w-6xl mx-auto px-2 md:px-4 py-4 md:py-6">
-              <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 md:gap-6">
-                {/* Board Area */}
-                <div className="lg:col-span-3 space-y-3 md:space-y-4">
-                  {/* Board Container with gold frame */}
-                  <div className="relative">
-                    {/* Outer glow */}
+          /* Desktop Layout - Grid structure matching AI layout */
+          <div className="max-w-6xl mx-auto px-2 md:px-4 py-4 md:py-6">
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 md:gap-6">
+              {/* Board Column - 3 columns */}
+              <div className="lg:col-span-3 flex flex-col min-h-0 ">
+                <div className="flex-1 min-h-0  flex items-center justify-center p-2">
+                  <div className="w-full max-w-full aspect-[2/1] relative z-0">
+                  {/* Outer glow */}
                   <div className="absolute -inset-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 rounded-2xl blur-xl opacity-50 pointer-events-none" />
                   
                   {/* Gold frame */}
@@ -2520,6 +2520,8 @@ const BackgammonGame = () => {
                       </div>
                     </div>
                   </div>
+                  </div>
+                </div>
 
                 {/* Controls row - inside board column, shrink-0 */}
                 <div className="shrink-0 pt-3 flex flex-wrap gap-3 items-center justify-center">
