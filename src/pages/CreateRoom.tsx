@@ -602,6 +602,8 @@ export default function CreateRoom() {
                 <SelectItem value="5">{t("createRoom.seconds", { count: 5 })}</SelectItem>
                 <SelectItem value="10">{t("createRoom.seconds", { count: 10 })}</SelectItem>
                 <SelectItem value="15">{t("createRoom.seconds", { count: 15 })}</SelectItem>
+                  <SelectItem value="30">{t("createRoom.seconds", { count: 30 })}</SelectItem>
+                  <SelectItem value="60">{t("createRoom.seconds", { count: 60 })}</SelectItem>
                 <SelectItem value="0">{t("createRoom.unlimited")}</SelectItem>
               </SelectContent>
             </Select>
