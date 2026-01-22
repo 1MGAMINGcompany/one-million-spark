@@ -45,6 +45,7 @@ export function useTurnTimer(options: UseTurnTimerOptions): UseTurnTimerResult {
   const [isPaused, setIsPaused] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const hasExpiredRef = useRef(false);
+  const lastTurnKeyRef = useRef<string>("");
 
   // Clear interval helper
   const clearTimerInterval = useCallback(() => {
@@ -75,11 +76,15 @@ export function useTurnTimer(options: UseTurnTimerOptions): UseTurnTimerResult {
     console.log(`[useTurnTimer] Timer resumed at ${remainingTime}s`);
   }, [remainingTime]);
 
-  // Reset timer when ACTIVE TURN changes (watchdog-safe)
+  // Reset timer only when ACTIVE TURN truly changes (prevents reset-loops on desktop)
   useEffect(() => {
-    if (enabled) {
-      resetTimer();
-    }
+    if (!enabled) return;
+
+    const key = `${activeTurnWallet || "none"}:${turnTimeSeconds}`;
+    if (key === lastTurnKeyRef.current) return;
+
+    lastTurnKeyRef.current = key;
+    resetTimer();
   }, [enabled, activeTurnWallet, turnTimeSeconds, resetTimer]);
 
   // Main timer countdown effect
