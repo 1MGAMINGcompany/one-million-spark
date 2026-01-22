@@ -2428,9 +2428,9 @@ const BackgammonGame = () => {
         ) : (
           /* Desktop Layout - Grid structure matching AI layout */
           <div className="max-w-6xl mx-auto px-2 md:px-4 py-4 md:py-6">
-            <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 md:gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 md:gap-6 min-h-0">
               {/* Board Column - 3 columns */}
-              <div className="lg:col-span-3 flex flex-col min-h-0 ">
+              <div className="lg:col-span-3 flex flex-col min-h-0 overflow-hidden">
                 <div className="flex-1 min-h-0  flex items-center justify-center p-2">
                   <div className="w-full max-w-full h-full relative z-0">
                   <div ref={desktopFitOuterRef} className="flex items-center justify-center w-full h-full">
