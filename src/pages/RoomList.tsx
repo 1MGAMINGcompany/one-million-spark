@@ -478,6 +478,10 @@ export default function RoomList() {
                         <Users className="h-3.5 w-3.5" />
                         {room.playerCount}/{room.maxPlayers}
                       </span>
+                        <span className="flex items-center gap-1">
+                          <Clock className="h-3.5 w-3.5" />
+                          Turn: {formatTurnTime(getRoomTurnTimeSeconds({ ...room, ranked: room.entryFeeSol > 0 }))}
+                        </span>
                       <span className="hidden sm:flex items-center gap-1 truncate">
                         <Clock className="h-3.5 w-3.5" />
                         {room.creator.slice(0, 4)}...{room.creator.slice(-4)}
