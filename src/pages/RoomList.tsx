@@ -212,6 +212,25 @@ export default function RoomList() {
       [GameType.Checkers]: "Checkers",
       [GameType.Ludo]: "Ludo",
     };
+
+  const formatTurnTime = (seconds: number | null | undefined) => {
+    if (seconds === 0) return "∞";
+    if (!seconds) return "60s";
+    return `${seconds}s`;
+  };
+
+  const getRoomTurnTimeSeconds = (room: any): number => {
+    const v =
+      room?.turnTimeSeconds ??
+      room?.turn_time_seconds ??
+      room?.settings?.turn_time_seconds ??
+      room?.session?.turn_time_seconds ??
+      null;
+
+    const isRanked = !!(room?.isRanked || room?.ranked);
+    if (typeof v === "number") return v;
+    return isRanked ? 60 : 0;
+  };
     return names[gameType] || "Unknown";
   };
 
@@ -292,6 +311,8 @@ export default function RoomList() {
                       {room.creator === address ? t("roomList.youAreCreator") : t("roomList.youJoined")}
                       {" • "}
                       {room.playerCount}/{room.maxPlayers} players
+                        {" • "}
+                        Turn: {formatTurnTime(getRoomTurnTimeSeconds(room))}
                       {room.entryFeeSol > 0 && ` • ${room.entryFeeSol} SOL`}
                     </p>
                   </div>
