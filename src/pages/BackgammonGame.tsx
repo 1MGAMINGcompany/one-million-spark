@@ -174,6 +174,41 @@ const BackgammonGame = () => {
   const roomId = roomPda; // Alias for backward compatibility with hooks/display
   const navigate = useNavigate();
   const { t } = useTranslation();
+
+  // Desktop-only: scale the board to fit viewport (no scrolling). Mobile untouched.
+  const desktopFitOuterRef = useRef<HTMLDivElement | null>(null);
+  const desktopFitInnerRef = useRef<HTMLDivElement | null>(null);
+  const [desktopFit, setDesktopFit] = useState({ scale: 1, w: 0, h: 0 });
+
+  useEffect(() => {
+    if (isMobile) return;
+
+    const outer = desktopFitOuterRef.current;
+    const inner = desktopFitInnerRef.current;
+    if (!outer || !inner) return;
+
+    const measure = () => {
+      const iw = inner.offsetWidth;
+      const ih = inner.offsetHeight;
+      const ow = outer.clientWidth;
+      const oh = outer.clientHeight;
+
+      if (!iw || !ih || !ow || !oh) return;
+
+      const scale = Math.min(ow / iw, oh / ih, 1);
+      setDesktopFit({ scale, w: iw * scale, h: ih * scale });
+    };
+
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(outer);
+    window.addEventListener("resize", measure);
+
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [isMobile]);
   const isMobile = useIsMobile();
   const { play } = useSound();
   const { isConnected: walletConnected, address } = useWallet();
@@ -2141,7 +2176,7 @@ const BackgammonGame = () => {
       )}
 
       {/* Turn Status - Desktop only (mobile uses bottom status bar) */}
-      {!isMobile && (
+      {false && (
         <div className="px-4 py-1">
           <div className="max-w-6xl mx-auto">
             <TurnStatusHeader
@@ -2158,7 +2193,7 @@ const BackgammonGame = () => {
 
       {/* Game Area */}
       <div className={cn(
-        "flex-1 flex flex-col min-h-0 overflow-hidden lg:overflow-y-auto lg:pb-24",
+        "flex-1 flex flex-col min-h-0 overflow-hidden lg:overflow-hidden",
         isMobile ? "px-2 pt-1 pb-2" : "px-2 md:px-4 py-4"
       )}>
         {/* Mobile Layout - Viewport-fit container to prevent zoom */}
@@ -2398,6 +2433,9 @@ const BackgammonGame = () => {
               <div className="lg:col-span-3 flex flex-col min-h-0 ">
                 <div className="flex-1 min-h-0  flex items-center justify-center p-2">
                   <div className="w-full max-w-full relative z-0">
+                  <div ref={desktopFitOuterRef} className="flex items-center justify-center w-full" style={{ height: 'calc(100dvh - 18rem)' }}>
+                    <div style={{ width: desktopFit.w, height: desktopFit.h }}>
+                      <div ref={desktopFitInnerRef} style={{ transform: `scale(${desktopFit.scale})`, transformOrigin: 'top left' }}>
                   {/* Outer glow */}
                   <div className="absolute -inset-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 rounded-2xl blur-xl opacity-50 pointer-events-none" />
                   
@@ -2512,6 +2550,9 @@ const BackgammonGame = () => {
                           )}>
                             {myRole === "player" ? gameState.bearOff.player : gameState.bearOff.ai}
                           </span>
+                      </div>
+                    </div>
+                  </div>
                           <span className="text-xs text-muted-foreground">/15</span>
                           {validMoves.includes(-2) && (
                             <Trophy className="w-4 h-4 text-primary ml-1" />
