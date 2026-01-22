@@ -558,7 +558,7 @@ const LudoGame = () => {
     turnTimeSeconds: effectiveTurnTime,
     enabled: isRankedGame && canPlay && !gameOver,
     isMyTurn: isMyTurnLocal,
-  activeTurnWallet: activeTurnAddress,
+  activeTurnWallet: roomPlayers[currentPlayerIndex] || null,
     onTimeExpired: handleTurnTimeout,
     roomId: roomPda,
   });

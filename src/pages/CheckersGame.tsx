@@ -506,7 +506,7 @@ const CheckersGame = () => {
     turnTimeSeconds: effectiveTurnTime,
     enabled: isRankedGame && canPlay && !gameOver,
       isMyTurn,
-      activeTurnWallet: activeTurnAddress,
+      activeTurnWallet: (currentPlayer === 'gold' ? roomPlayers[0] : roomPlayers[1]) || null,
       onTimeExpired: handleTurnTimeout,
     roomId: roomPda,
   });

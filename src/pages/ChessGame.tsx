@@ -586,7 +586,7 @@ const ChessGame = () => {
     turnTimeSeconds: effectiveTurnTime,
     enabled: isRankedGame && canPlay && !gameOver,
       isMyTurn,
-      activeTurnWallet: activeTurnAddress,
+      activeTurnWallet: (game.turn() === 'w' ? roomPlayers[0] : roomPlayers[1]) || null,
       onTimeExpired: handleTurnTimeout,
     roomId: roomPda,
   });

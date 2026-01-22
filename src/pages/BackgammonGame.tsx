@@ -1094,7 +1094,7 @@ const BackgammonGame = () => {
     turnTimeSeconds: effectiveTurnTime,
     enabled: isRankedGame && (canPlay || startRoll.isFinalized) && !gameOver,
     isMyTurn: effectiveIsMyTurn,
-  activeTurnWallet: activeTurnAddress,
+  activeTurnWallet: currentTurnWallet || null,
     onTimeExpired: handleTurnTimeout,
     roomId: roomPda,
   });
