@@ -37,6 +37,29 @@ import { UnresolvedRoomModal } from "@/components/UnresolvedRoomModal";
 import { BUILD_VERSION } from "@/lib/buildVersion";
 import { formatTurnTimeShort } from "@/lib/turnTimes";
 
+
+// -----------------------------
+// Turn time helpers (top-level)
+// -----------------------------
+function formatTurnTime(seconds: number | null | undefined): string {
+  if (seconds === 0) return "∞";
+  if (!seconds) return "60s";
+  return `${seconds}s`;
+}
+
+function getRoomTurnTimeSeconds(room: any): number {
+  const v =
+    room?.turnTimeSeconds ??
+    room?.turn_time_seconds ??
+    room?.settings?.turn_time_seconds ??
+    room?.session?.turn_time_seconds ??
+    null;
+
+  const isRanked = !!(room?.isRanked || room?.ranked || (room?.entryFeeSol ?? 0) > 0);
+  if (typeof v === "number") return v;
+  return isRanked ? 60 : 0;
+}
+
 export default function RoomList() {
   const navigate = useNavigate();
   const { t } = useTranslation();
@@ -313,7 +336,7 @@ export default function RoomList() {
                       {" • "}
                       {room.playerCount}/{room.maxPlayers} players
                         {" • "}
-                        Turn: {formatTurnTimeShort(getRoomTurnTimeSeconds(room))}
+                        Turn: {formatTurnTime(getRoomTurnTimeSeconds(room))}
                       {room.entryFeeSol > 0 && ` • ${room.entryFeeSol} SOL`}
                     </p>
                   </div>
@@ -481,7 +504,7 @@ export default function RoomList() {
                       </span>
                         <span className="flex items-center gap-1">
                           <Clock className="h-3.5 w-3.5" />
-                          Turn: {formatTurnTimeShort(getRoomTurnTimeSeconds({ ...room, ranked: room.entryFeeSol > 0 }))}
+                          Turn: {formatTurnTime(getRoomTurnTimeSeconds({ ...room, ranked: room.entryFeeSol > 0 }))}
                         </span>
                       <span className="hidden sm:flex items-center gap-1 truncate">
                         <Clock className="h-3.5 w-3.5" />
