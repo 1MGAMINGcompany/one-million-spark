@@ -35,6 +35,7 @@ import { ResolveRoomModal } from "@/components/ResolveRoomModal";
 import { UnresolvedRoomModal } from "@/components/UnresolvedRoomModal";
 
 import { BUILD_VERSION } from "@/lib/buildVersion";
+import { formatTurnTimeShort } from "@/lib/turnTimes";
 
 export default function RoomList() {
   const navigate = useNavigate();
@@ -312,7 +313,7 @@ export default function RoomList() {
                       {" • "}
                       {room.playerCount}/{room.maxPlayers} players
                         {" • "}
-                        Turn: {formatTurnTime(getRoomTurnTimeSeconds(room))}
+                        Turn: {formatTurnTimeShort(getRoomTurnTimeSeconds(room))}
                       {room.entryFeeSol > 0 && ` • ${room.entryFeeSol} SOL`}
                     </p>
                   </div>
@@ -480,7 +481,7 @@ export default function RoomList() {
                       </span>
                         <span className="flex items-center gap-1">
                           <Clock className="h-3.5 w-3.5" />
-                          Turn: {formatTurnTime(getRoomTurnTimeSeconds({ ...room, ranked: room.entryFeeSol > 0 }))}
+                          Turn: {formatTurnTimeShort(getRoomTurnTimeSeconds({ ...room, ranked: room.entryFeeSol > 0 }))}
                         </span>
                       <span className="hidden sm:flex items-center gap-1 truncate">
                         <Clock className="h-3.5 w-3.5" />
