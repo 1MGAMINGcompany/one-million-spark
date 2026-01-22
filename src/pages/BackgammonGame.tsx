@@ -2426,216 +2426,261 @@ const BackgammonGame = () => {
               </div>
             </div>
         ) : (
-          /* Desktop Layout - Grid structure matching AI layout */
-          <div className="max-w-6xl mx-auto px-2 md:px-4 py-4 md:py-6">
-            <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 md:gap-6 min-h-0">
-              {/* Board Column - 3 columns */}
-              <div className="lg:col-span-3 flex flex-col min-h-0 overflow-hidden">
-                <div className="flex-1 min-h-0  flex items-center justify-center p-2">
-                  <div className="w-full max-w-full h-full relative z-0">
-                  <div ref={desktopFitOuterRef} className="flex items-center justify-center w-full h-full">
-                    <div style={{ width: desktopFit.w, height: desktopFit.h }}>
-                      <div ref={desktopFitInnerRef} style={{ transform: `scale(${desktopFit.scale})`, transformOrigin: 'top left' }}>
-                  {/* Outer glow */}
-                  <div className="absolute -inset-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 rounded-2xl blur-xl opacity-50 pointer-events-none" />
-                  
-                  {/* Gold frame */}
-                  <div className="relative p-1 rounded-xl bg-gradient-to-br from-primary/40 via-primary/20 to-primary/40 shadow-[0_0_40px_-10px_hsl(45_93%_54%_/_0.4)]">
-                    <div className="bg-gradient-to-b from-midnight-light via-background to-midnight-light rounded-lg p-2 md:p-4 overflow-hidden lg:overflow-visible flex flex-col">
-                          
-                      {/* Opponent Bear Off / Bar + Direction Indicators */}
-                      <div className="flex justify-between items-center mb-3 px-2 shrink-0">
-                        <div className="text-xs text-muted-foreground flex items-center gap-2">
-                          Opp. Bear Off: <span className="text-primary font-bold">{myRole === "player" ? gameState.bearOff.ai : gameState.bearOff.player}</span>
-                        </div>
-                        {/* Direction indicators */}
-                        <div className="flex items-center gap-3">
-                          <div className="flex items-center gap-1.5 px-2 py-1 rounded-full border border-primary/40 bg-primary/5">
-                            <div className="w-3 h-3 rounded-full bg-gradient-to-br from-primary to-amber-600 border border-amber-500/50" />
-                            <RotateCcw className="w-3.5 h-3.5 text-primary" strokeWidth={2.5} />
-                            <span className="text-[10px] font-medium text-primary">CCW</span>
-                          </div>
-                          <div className="flex items-center gap-1.5 px-2 py-1 rounded-full border border-slate-500/40 bg-slate-800/30">
-                            <div className="w-3 h-3 rounded-full bg-gradient-to-br from-slate-600 to-slate-900 border border-slate-500/50" />
-                            <RotateCw className="w-3.5 h-3.5 text-slate-400" strokeWidth={2.5} />
-                            <span className="text-[10px] font-medium text-slate-400">CW</span>
-                          </div>
-                        </div>
-                        {(myRole === "player" ? gameState.bar.ai : gameState.bar.player) > 0 && (
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs text-muted-foreground">Opp. Bar:</span>
-                            <CheckerStack count={myRole === "player" ? gameState.bar.ai : gameState.bar.player} variant="obsidian" isTop={true} />
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Board points area - flex-1 to scale */}
-                      <div className="flex flex-col">
-                        {/* Top points (13-24 or flipped) */}
-                        <div className="flex justify-center gap-0.5 mb-1">
-                          <div className="flex gap-0.5">
-                            {[12, 13, 14, 15, 16, 17].map(i => renderPoint(isFlipped ? 23 - i : i, true))}
-                          </div>
-                          <div className="w-6 md:w-8 bg-gradient-to-b from-primary/20 to-primary/10 rounded border border-primary/20" />
-                          <div className="flex gap-0.5">
-                            {[18, 19, 20, 21, 22, 23].map(i => renderPoint(isFlipped ? 23 - i : i, true))}
-                          </div>
-                        </div>
-
-                        {/* Middle bar with dice */}
-                        <div className="h-16 bg-gradient-to-r from-midnight-light via-background to-midnight-light my-2 rounded-lg border border-primary/20 flex items-center justify-center gap-1 shrink-0">
-                          {dice.length > 0 && (
-                            <div className="flex gap-4 items-center">
-                              <Dice3D value={dice[0]} variant={isMyTurn ? "ivory" : "obsidian"} />
-                              <Dice3D value={dice[1]} variant={isMyTurn ? "ivory" : "obsidian"} />
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Bottom points (1-12 or flipped) */}
-                        <div className="flex justify-center gap-0.5 mt-1">
-                          <div className="flex gap-0.5">
-                            {[11, 10, 9, 8, 7, 6].map(i => renderPoint(isFlipped ? 23 - i : i, false))}
-                          </div>
-                          <div className="w-6 md:w-8 bg-gradient-to-t from-primary/20 to-primary/10 rounded border border-primary/20" />
-                          <div className="flex gap-0.5">
-                            {[5, 4, 3, 2, 1, 0].map(i => renderPoint(isFlipped ? 23 - i : i, false))}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Player Bar / Bear Off Zone */}
-                      <div className="flex justify-between items-center mt-3 px-2 shrink-0">
-                        {(myRole === "player" ? gameState.bar.player : gameState.bar.ai) > 0 ? (
-                          <div 
-                            className={cn(
-                              "flex items-center gap-2 cursor-pointer transition-all rounded-lg p-1",
-                              selectedPoint === -1 && "ring-2 ring-primary bg-primary/10"
-                            )}
-                            onClick={() => handlePointClick(-1)}
+          /* Desktop Layout - CLEAN (AI-style): board left, actions right */
+            <div className="max-w-6xl mx-auto px-2 md:px-4 py-4 md:py-6">
+              <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 md:gap-6 min-h-0">
+                {/* Board Column - left (AI-style) */}
+                <div className="lg:col-span-3 flex flex-col min-h-0 overflow-hidden">
+                  <div className="flex-1 min-h-0 flex items-center justify-center p-2">
+                    <div className="w-full max-w-full h-full relative z-0">
+                      <div ref={desktopFitOuterRef} className="flex items-center justify-center w-full h-full">
+                        <div style={{ width: desktopFit.w, height: desktopFit.h }}>
+                          <div
+                            ref={desktopFitInnerRef}
+                            style={{ transform: `scale(${desktopFit.scale})`, transformOrigin: "top left" }}
                           >
-                            <span className="text-xs text-muted-foreground">Your Bar:</span>
-                            <CheckerStack 
-                              count={myRole === "player" ? gameState.bar.player : gameState.bar.ai} 
-                              variant="gold" 
-                              isSelected={selectedPoint === -1}
-                              onClick={() => handlePointClick(-1)}
-                              isTop={false} 
-                            />
+                            <div className="relative">
+                              {/* Outer glow */}
+                              <div className="absolute -inset-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 rounded-2xl blur-xl opacity-50 pointer-events-none" />
+
+                              {/* Gold frame */}
+                              <div className="relative p-1 rounded-xl bg-gradient-to-br from-primary/40 via-primary/20 to-primary/40 shadow-[0_0_40px_-10px_hsl(45_93%_54%_/_0.4)]">
+                                <div className="bg-gradient-to-b from-midnight-light via-background to-midnight-light rounded-lg p-2 md:p-4 overflow-hidden lg:overflow-visible flex flex-col">
+                                  {/* Opponent Bear Off / Bar + Direction Indicators */}
+                                  <div className="flex justify-between items-center mb-3 px-2 shrink-0">
+                                    <div className="text-xs text-muted-foreground flex items-center gap-2">
+                                      Opp. Bear Off:{" "}
+                                      <span className="text-primary font-bold">
+                                        {myRole === "player" ? gameState.bearOff.ai : gameState.bearOff.player}
+                                      </span>
+                                    </div>
+
+                                    {/* Direction indicators */}
+                                    <div className="flex items-center gap-3">
+                                      <div className="flex items-center gap-1.5 px-2 py-1 rounded-full border border-primary/40 bg-primary/5">
+                                        <div className="w-3 h-3 rounded-full bg-gradient-to-br from-primary to-amber-600 border border-amber-500/50" />
+                                        <RotateCcw className="w-3.5 h-3.5 text-primary" strokeWidth={2.5} />
+                                        <span className="text-[10px] font-medium text-primary">CCW</span>
+                                      </div>
+                                      <div className="flex items-center gap-1.5 px-2 py-1 rounded-full border border-slate-500/40 bg-slate-800/30">
+                                        <div className="w-3 h-3 rounded-full bg-gradient-to-br from-slate-600 to-slate-900 border border-slate-500/50" />
+                                        <RotateCw className="w-3.5 h-3.5 text-slate-400" strokeWidth={2.5} />
+                                        <span className="text-[10px] font-medium text-slate-400">CW</span>
+                                      </div>
+                                    </div>
+
+                                    {(myRole === "player" ? gameState.bar.ai : gameState.bar.player) > 0 && (
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-xs text-muted-foreground">Opp. Bar:</span>
+                                        <CheckerStack
+                                          count={myRole === "player" ? gameState.bar.ai : gameState.bar.player}
+                                          variant="obsidian"
+                                          isTop={true}
+                                        />
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  {/* Board points area */}
+                                  <div className="flex flex-col">
+                                    {/* Top points */}
+                                    <div className="flex justify-center gap-0.5 mb-1">
+                                      <div className="flex gap-0.5">
+                                        {[12, 13, 14, 15, 16, 17].map((i) => renderPoint(isFlipped ? 23 - i : i, true))}
+                                      </div>
+                                      <div className="w-6 md:w-8 bg-gradient-to-b from-primary/20 to-primary/10 rounded border border-primary/20" />
+                                      <div className="flex gap-0.5">
+                                        {[18, 19, 20, 21, 22, 23].map((i) => renderPoint(isFlipped ? 23 - i : i, true))}
+                                      </div>
+                                    </div>
+
+                                    {/* Middle bar with dice */}
+                                    <div className="h-16 bg-gradient-to-r from-midnight-light via-background to-midnight-light my-2 rounded-lg border border-primary/20 flex items-center justify-center gap-1 shrink-0">
+                                      {dice.length > 0 && (
+                                        <div className="flex gap-4 items-center">
+                                          <Dice3D value={dice[0]} variant={isMyTurn ? "ivory" : "obsidian"} />
+                                          <Dice3D value={dice[1]} variant={isMyTurn ? "ivory" : "obsidian"} />
+                                        </div>
+                                      )}
+                                    </div>
+
+                                    {/* Bottom points */}
+                                    <div className="flex justify-center gap-0.5 mt-1">
+                                      <div className="flex gap-0.5">
+                                        {[11, 10, 9, 8, 7, 6].map((i) => renderPoint(isFlipped ? 23 - i : i, false))}
+                                      </div>
+                                      <div className="w-6 md:w-8 bg-gradient-to-t from-primary/20 to-primary/10 rounded border border-primary/20" />
+                                      <div className="flex gap-0.5">
+                                        {[5, 4, 3, 2, 1, 0].map((i) => renderPoint(isFlipped ? 23 - i : i, false))}
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Player Bar / Bear Off Zone */}
+                                  <div className="flex justify-between items-center mt-3 px-2 shrink-0">
+                                    {(myRole === "player" ? gameState.bar.player : gameState.bar.ai) > 0 ? (
+                                      <div
+                                        className={cn(
+                                          "flex items-center gap-2 cursor-pointer transition-all rounded-lg p-1",
+                                          selectedPoint === -1 && "ring-2 ring-primary bg-primary/10"
+                                        )}
+                                        onClick={() => handlePointClick(-1)}
+                                      >
+                                        <span className="text-xs text-muted-foreground">Your Bar:</span>
+                                        <CheckerStack
+                                          count={myRole === "player" ? gameState.bar.player : gameState.bar.ai}
+                                          variant="gold"
+                                          isSelected={selectedPoint === -1}
+                                          onClick={() => handlePointClick(-1)}
+                                          isTop={false}
+                                        />
+                                      </div>
+                                    ) : (
+                                      <div />
+                                    )}
+
+                                    {/* Bear Off Zone */}
+                                    <div
+                                      className={cn(
+                                        "flex items-center gap-2 rounded-lg px-3 py-2 transition-all",
+                                        validMoves.includes(-2)
+                                          ? "cursor-pointer bg-primary/20 border-2 border-primary animate-pulse hover:bg-primary/30 shadow-[0_0_20px_hsl(45_93%_54%_/_0.4)]"
+                                          : canBearOff(gameState, myRole)
+                                          ? "border border-primary/30 bg-primary/5 cursor-pointer"
+                                          : "border border-primary/10 opacity-50"
+                                      )}
+                                      onClick={() => validMoves.includes(-2) && handlePointClick(-2)}
+                                    >
+                                      <Trophy
+                                        className={cn("w-4 h-4", validMoves.includes(-2) ? "text-primary" : "text-primary/40")}
+                                      />
+                                      <span
+                                        className={cn(
+                                          "text-xs font-medium",
+                                          validMoves.includes(-2)
+                                            ? "text-primary"
+                                            : canBearOff(gameState, myRole)
+                                            ? "text-muted-foreground"
+                                            : "text-muted-foreground/50"
+                                        )}
+                                      >
+                                        {canBearOff(gameState, myRole) ? "Bear Off:" : "Bear Off (locked)"}
+                                      </span>
+                                      <span
+                                        className={cn(
+                                          "font-bold",
+                                          validMoves.includes(-2)
+                                            ? "text-primary text-lg"
+                                            : canBearOff(gameState, myRole)
+                                            ? "text-primary"
+                                            : "text-muted-foreground/50"
+                                        )}
+                                      >
+                                        {myRole === "player" ? gameState.bearOff.player : gameState.bearOff.ai}
+                                      </span>
+                                      <span className="text-xs text-muted-foreground">/15</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
                           </div>
-                        ) : <div />}
-                        
-                        {/* Bear Off Zone - Always visible, clickable when valid */}
-                        <div 
-                          className={cn(
-                            "flex items-center gap-2 rounded-lg px-3 py-2 transition-all",
-                            validMoves.includes(-2) 
-                              ? "cursor-pointer bg-primary/20 border-2 border-primary animate-pulse hover:bg-primary/30 shadow-[0_0_20px_hsl(45_93%_54%_/_0.4)]" 
-                              : canBearOff(gameState, myRole) 
-                                ? "border border-primary/30 bg-primary/5 cursor-pointer" 
-                                : "border border-primary/10 opacity-50"
-                          )}
-                          onClick={() => validMoves.includes(-2) && handlePointClick(-2)}
-                        >
-                          <Trophy className={cn("w-4 h-4", validMoves.includes(-2) ? "text-primary" : "text-primary/40")} />
-                          <span className={cn(
-                            "text-xs font-medium",
-                            validMoves.includes(-2) ? "text-primary" : canBearOff(gameState, myRole) ? "text-muted-foreground" : "text-muted-foreground/50"
-                          )}>
-                            {canBearOff(gameState, myRole) ? "Bear Off:" : "Bear Off (locked)"}
-                          </span>
-                          <span className={cn(
-                            "font-bold",
-                            validMoves.includes(-2) ? "text-primary text-lg" : canBearOff(gameState, myRole) ? "text-primary" : "text-muted-foreground/50"
-                          )}>
-                            {myRole === "player" ? gameState.bearOff.player : gameState.bearOff.ai}
-                          </span>
-                      </div>
-                    </div>
-                  </div>
-                          <span className="text-xs text-muted-foreground">/15</span>
-                          {validMoves.includes(-2) && (
-                            <Trophy className="w-4 h-4 text-primary ml-1" />
-                          )}
                         </div>
                       </div>
                     </div>
                   </div>
-                  </div>
                 </div>
 
-                {/* Controls row - inside board column, shrink-0 */}
-                <div className="shrink-0 pt-3 flex flex-wrap gap-3 items-center justify-center">
-                  {isMyTurn && dice.length === 0 && !gameOver && (
-                    <Button variant="gold" size="lg" className="min-w-[140px] shadow-[0_0_30px_-8px_hsl(45_93%_54%_/_0.5)]" onClick={rollDice}>
-                      🎲 Roll Dice
+                {/* Sidebar Column - right (actions/status) */}
+                <div className="hidden lg:flex lg:col-span-1 flex-col min-h-0 overflow-hidden space-y-4">
+                  {/* Primary Actions */}
+                  <div className="rounded-xl border border-primary/20 bg-card/50 p-4 space-y-3">
+                    <h3 className="text-sm font-medium text-muted-foreground">Actions</h3>
+
+                    {isMyTurn && dice.length === 0 && !gameOver && (
+                      <Button
+                        variant="gold"
+                        size="lg"
+                        className="w-full shadow-[0_0_30px_-8px_hsl(45_93%_54%_/_0.5)]"
+                        onClick={rollDice}
+                      >
+                        🎲 Roll Dice
+                      </Button>
+                    )}
+
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="w-full"
+                      onClick={() => validMoves.includes(-2) && handlePointClick(-2)}
+                      disabled={!validMoves.includes(-2) || gameOver}
+                    >
+                      <Trophy className="w-4 h-4 mr-2" />
+                      Bear Off
                     </Button>
-                  )}
-                  
-                  {/* Resign button - always available once game started */}
-                  {!gameOver && roomPlayers.length >= 2 && (
-                    <Button variant="destructive" size="sm" onClick={handleResign} disabled={isForfeiting}>
-                      {isForfeiting ? "Settling..." : <><Flag className="w-4 h-4 mr-1" /> Resign</>}
-                    </Button>
-                  )}
-                </div>
-              </div>
 
-              {/* Sidebar Column - 1 column */}
-              <div className="hidden lg:flex lg:col-span-1 flex-col min-h-0 overflow-hidden space-y-4">
-                {/* Game Status Card */}
-                <div className="rounded-xl border border-primary/20 bg-card/50 p-4">
-                  <h3 className="text-sm font-medium text-muted-foreground mb-2">Game Status</h3>
-                  <p className={cn(
-                    "font-display text-lg font-bold",
-                    gameOver 
-                      ? gameStatus.includes("win") ? "text-green-400" : "text-red-400"
-                      : "text-primary"
-                  )}>
-                    {gameStatus}
-                  </p>
-                  {remainingMoves.length > 0 && isMyTurn && (
-                    <p className="text-sm text-muted-foreground mt-2">
-                      Remaining: {remainingMoves.join(", ")}
-                    </p>
-                  )}
-                </div>
-
-                {/* Turn Timer if ranked */}
-                {isRankedGame && startRoll.isFinalized && !gameOver && (
-                  <div className="rounded-xl border border-primary/20 bg-card/50 p-4">
-                    <h3 className="text-sm font-medium text-muted-foreground mb-2">Turn Timer</h3>
-                    <p className={cn(
-                      "font-display text-2xl font-bold",
-                      turnTimer.isCriticalTime 
-                        ? "text-destructive animate-pulse"
-                        : turnTimer.isLowTime 
-                        ? "text-yellow-400"
-                        : "text-primary"
-                    )}>
-                      {Math.floor(turnTimer.remainingTime / 60)}:{(turnTimer.remainingTime % 60).toString().padStart(2, '0')}
-                    </p>
-                  </div>
-                )}
-
-                {/* Dice display when rolled */}
-                {dice.length > 0 && (
-                  <div className="rounded-xl border border-primary/20 bg-card/50 p-4">
-                    <h3 className="text-sm font-medium text-muted-foreground mb-2">Dice Rolled</h3>
-                    <div className="flex gap-3 justify-center">
-                      <Dice3D value={dice[0]} variant={isMyTurn ? "ivory" : "obsidian"} size="sm" />
-                      <Dice3D value={dice[1]} variant={isMyTurn ? "ivory" : "obsidian"} size="sm" />
-                    </div>
-                    {remainingMoves.length > 0 && (
-                      <p className="text-sm text-muted-foreground mt-2 text-center">
-                        Moves: {remainingMoves.join(", ")}
-                      </p>
+                    {!gameOver && roomPlayers.length >= 2 && (
+                      <Button variant="destructive" size="sm" className="w-full" onClick={handleResign} disabled={isForfeiting}>
+                        {isForfeiting ? "Settling..." : (
+                          <>
+                            <Flag className="w-4 h-4 mr-1" /> Resign
+                          </>
+                        )}
+                      </Button>
                     )}
                   </div>
-                )}
+
+                  {/* Game Status */}
+                  <div className="rounded-xl border border-primary/20 bg-card/50 p-4">
+                    <h3 className="text-sm font-medium text-muted-foreground mb-2">Game Status</h3>
+                    <p
+                      className={cn(
+                        "font-display text-lg font-bold",
+                        gameOver ? (gameStatus.includes("win") ? "text-green-400" : "text-red-400") : "text-primary"
+                      )}
+                    >
+                      {gameStatus}
+                    </p>
+                    {remainingMoves.length > 0 && isMyTurn && (
+                      <p className="text-sm text-muted-foreground mt-2">Remaining: {remainingMoves.join(", ")}</p>
+                    )}
+                  </div>
+
+                  {/* Turn Timer (ranked) */}
+                  {isRankedGame && startRoll.isFinalized && !gameOver && (
+                    <div className="rounded-xl border border-primary/20 bg-card/50 p-4">
+                      <h3 className="text-sm font-medium text-muted-foreground mb-2">Turn Timer</h3>
+                      <p
+                        className={cn(
+                          "font-display text-2xl font-bold",
+                          turnTimer.isCriticalTime
+                            ? "text-destructive animate-pulse"
+                            : turnTimer.isLowTime
+                            ? "text-yellow-400"
+                            : "text-primary"
+                        )}
+                      >
+                        {Math.floor(turnTimer.remainingTime / 60)}:{(turnTimer.remainingTime % 60).toString().padStart(2, "0")}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Dice Display */}
+                  {dice.length > 0 && (
+                    <div className="rounded-xl border border-primary/20 bg-card/50 p-4">
+                      <h3 className="text-sm font-medium text-muted-foreground mb-2">Dice Rolled</h3>
+                      <div className="flex gap-3 justify-center">
+                        <Dice3D value={dice[0]} variant={isMyTurn ? "ivory" : "obsidian"} size="sm" />
+                        <Dice3D value={dice[1]} variant={isMyTurn ? "ivory" : "obsidian"} size="sm" />
+                      </div>
+                      {remainingMoves.length > 0 && (
+                        <p className="text-sm text-muted-foreground mt-2 text-center">Moves: {remainingMoves.join(", ")}</p>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
         )}
       </div>
 
