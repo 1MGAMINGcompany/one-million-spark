@@ -2190,7 +2190,7 @@ const BackgammonGame = () => {
               </div>
 
               {/* Board Container - Aspect-ratio scaling to 100vw, max-height to fit viewport */}
-              <div className="relative w-full flex-1 min-h-0 overflow-hidden backgammon-mp-board">
+              <div className="relative w-full flex-1 min-h-0 backgammon-mp-board" style={{ maxHeight: '55vh' }}>
                 {/* Subtle glow */}
                 <div className="absolute -inset-1 bg-primary/10 rounded-xl blur-lg opacity-30" />
                 
@@ -2264,6 +2264,34 @@ const BackgammonGame = () => {
                   </div>
                 </div>
               </div>
+
+                {/* Bear Off Button - show only when unlocked (mirrors AI) */}
+                {canBearOff(gameState, myRole) && (
+                  <div
+                    className={cn(
+                      "w-full py-2 mt-2 rounded-lg flex items-center justify-center gap-2 transition-all shrink-0",
+                      validMoves.includes(-2)
+                        ? "bg-primary/20 border-2 border-primary animate-pulse cursor-pointer shadow-[0_0_20px_hsl(45_93%_54%_/_0.4)]"
+                        : "border border-primary/30 bg-primary/5 cursor-pointer"
+                    )}
+                    onClick={() => {
+                      if (validMoves.includes(-2)) handlePointClick(-2);
+                    }}
+                  >
+                    <Trophy className={cn("w-4 h-4", validMoves.includes(-2) ? "text-primary" : "text-primary/50")} />
+                    <span className={cn(
+                      "font-bold",
+                      validMoves.includes(-2) ? "text-primary" : "text-muted-foreground"
+                    )}>
+                      {validMoves.includes(-2)
+                        ? "Tap to Bear Off"
+                        : `Bear Off: ${myRole === "player" ? gameState.bearOff.player : gameState.bearOff.ai}/15`}
+                    </span>
+                    {validMoves.includes(-2) && (
+                      <span className="text-xs text-primary/70">({myRole === "player" ? gameState.bearOff.player : gameState.bearOff.ai}/15)</span>
+                    )}
+                  </div>
+                )}
 
               {/* Controls Area - Fixed height section below board */}
               <div className="shrink-0 mt-2 space-y-2" style={{ minHeight: '80px' }}>
@@ -2354,39 +2382,6 @@ const BackgammonGame = () => {
                   )}
                 </div>
 
-                {/* Bear Off Zone - Mobile - Always visible, disabled when not allowed */}
-                <div 
-                  className={cn(
-                    "w-full py-2 rounded-lg flex items-center justify-center gap-2 transition-all",
-                    validMoves.includes(-2) 
-                      ? "bg-primary/20 border-2 border-primary animate-pulse cursor-pointer shadow-[0_0_20px_hsl(45_93%_54%_/_0.4)]" 
-                      : canBearOff(gameState, myRole)
-                        ? "border border-primary/30 bg-primary/5 cursor-pointer"
-                        : "border border-primary/10 bg-muted/5 opacity-50"
-                  )}
-                  onClick={() => {
-                    if (validMoves.includes(-2)) handlePointClick(-2);
-                  }}
-                >
-                  <Trophy className={cn("w-4 h-4", validMoves.includes(-2) ? "text-primary" : "text-primary/50")} />
-                  <span className={cn(
-                    "font-bold",
-                    validMoves.includes(-2) ? "text-primary" : canBearOff(gameState, myRole) ? "text-muted-foreground" : "text-muted-foreground/50"
-                  )}>
-                    {validMoves.includes(-2) 
-                      ? "Tap to Bear Off" 
-                      : canBearOff(gameState, myRole)
-                        ? `Bear Off: ${myRole === "player" ? gameState.bearOff.player : gameState.bearOff.ai}/15`
-                        : "Bear Off (locked)"}
-                  </span>
-                  {validMoves.includes(-2) && (
-                    <span className="text-xs text-primary/70">({myRole === "player" ? gameState.bearOff.player : gameState.bearOff.ai}/15)</span>
-                  )}
-                  {!canBearOff(gameState, myRole) && (
-                    <span className="text-[10px] text-muted-foreground/50">Move all to home first</span>
-                  )}
-                </div>
-
                 {/* Resign button - mobile - show when game is active (not just on your turn) */}
                 {!gameOver && canPlay && (
                   <Button variant="destructive" size="sm" className="w-full" onClick={handleResign} disabled={isForfeiting}>
@@ -2397,11 +2392,11 @@ const BackgammonGame = () => {
             </div>
         ) : (
           /* Desktop Layout - Grid structure matching AI layout */
-          <div className="max-w-6xl mx-auto w-full flex-1 min-h-0 overflow-hidden">
+          <div className="max-w-6xl mx-auto w-full flex-1 min-h-0 ">
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 md:gap-6 h-full min-h-0">
               {/* Board Column - 3 columns */}
-              <div className="lg:col-span-3 flex flex-col min-h-0 overflow-hidden">
-                <div className="flex-1 min-h-0 overflow-hidden flex items-center justify-center p-2">
+              <div className="lg:col-span-3 flex flex-col min-h-0 ">
+                <div className="flex-1 min-h-0  flex items-center justify-center p-2">
                   <div className="w-full max-w-[min(100%,calc((100dvh-18rem)*2))] aspect-[2/1] relative">
                   {/* Outer glow */}
                   <div className="absolute -inset-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 rounded-2xl blur-xl opacity-50" />
