@@ -2431,7 +2431,7 @@ const BackgammonGame = () => {
             </div>
         ) : (
           /* Desktop Layout - CLEAN (AI-style): board left, actions right */
-            <div className="max-w-6xl mx-auto px-2 md:px-4 py-4 md:py-6">
+            <div className="max-w-6xl mx-auto px-2 md:px-4 py-4 md:py-6 pb-28">
               <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 md:gap-6 min-h-0">
                 {/* Board Column - left (AI-style) */}
                 <div className="lg:col-span-3 flex flex-col min-h-0 overflow-hidden">
