@@ -2431,7 +2431,7 @@ const BackgammonGame = () => {
               <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 md:gap-6 min-h-0">
                 {/* Board Column - left (AI-style) */}
                 <div className="lg:col-span-3 flex flex-col min-h-0 overflow-hidden">
-                  <div className="flex-1 min-h-0 flex items-center justify-center p-2">
+                  <div className="flex-1 min-h-0 flex items-start justify-center p-2">
                     <div className="w-full max-w-full h-full relative z-0">
                       <div ref={desktopFitOuterRef} className="flex items-center justify-center w-full h-full">
                         <div style={{ width: desktopFit.w, height: desktopFit.h }}>
