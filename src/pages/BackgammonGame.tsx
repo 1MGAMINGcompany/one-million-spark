@@ -2433,8 +2433,17 @@ const BackgammonGame = () => {
                 <div className="lg:col-span-3 flex flex-col min-h-0 overflow-hidden">
                   <div className="flex-1 min-h-0 flex items-start justify-center p-2 lg:h-[calc(100vh-220px)]">
                     <div className="w-full max-w-full h-full relative z-0">
-                      <div ref={desktopFitOuterRef} className="flex items-center justify-center w-full h-full">
-                        <div style={{ width: desktopFit.w, height: desktopFit.h }}>
+                      <div ref={desktopFitOuterRef} className="flex items-start justify-center w-full h-full">
+                        <div
+                          style={
+                            desktopFit.w && desktopFit.h
+                              ? {
+                                  width: Math.round(desktopFit.w * desktopFit.scale),
+                                  height: Math.round(desktopFit.h * desktopFit.scale),
+                                }
+                              : undefined
+                          }
+                        >
                           <div
                             ref={desktopFitInnerRef}
                             style={{ transform: `scale(${desktopFit.scale})`, transformOrigin: "top left" }}
