@@ -201,7 +201,7 @@ const BackgammonGame = () => {
       const safeOh = Math.max(0, oh - reservedBottom);
 
       const rect = outer.getBoundingClientRect(); const SAFE_BOTTOM = 180; const availH = Math.max(0, window.innerHeight - rect.top - SAFE_BOTTOM); const scale = Math.min(ow/iw, availH/ih, 1) * 0.98; // DESKTOP: viewport fit scaling
-      setDesktopFit({ scale, w: iw, h: ih });
+      setDesktopFit({ scale: 1, w: iw, h: ih });
     };
 
     measure();
@@ -2432,7 +2432,7 @@ const BackgammonGame = () => {
         ) : (
           /* Desktop Layout - CLEAN (AI-style): board left, actions right */
             <div className="max-w-6xl mx-auto px-2 md:px-4 py-4 md:py-6">
-              <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 md:gap-6 min-h-0">
+              <div className="grid grid-cols-1 lg:grid-cols-4 lg:pb-32 gap-4 md:gap-6 min-h-0">
                 {/* Board Column - left (AI-style) */}
                 <div className="lg:col-span-3 flex flex-col min-h-0 overflow-hidden">
                   <div className="flex-1 min-h-0 flex items-start justify-center p-2 lg:pb-24 lg:h-[calc(100vh-220px)]">
@@ -2612,6 +2612,18 @@ const BackgammonGame = () => {
 
                     {isMyTurn && dice.length === 0 && !gameOver && (
                       <Button
+                        variant="gold"
+                        size="lg"
+                        className="w-full shadow-[0_0_30px_-8px_hsl(45_93%_54%_/_0.5)]"
+                        onClick={rollDice}
+                      >
+                        🎲 Roll Dice
+                      </Button>
+                    )}
+                    {/* ALWAYS_SHOW_ROLL_DICE */}
+                    {!(isMyTurn && dice.length === 0 && !gameOver) && (
+                      <Button
+                        disabled
                         variant="gold"
                         size="lg"
                         className="w-full shadow-[0_0_30px_-8px_hsl(45_93%_54%_/_0.5)]"
