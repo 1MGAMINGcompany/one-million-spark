@@ -197,7 +197,7 @@ const BackgammonGame = () => {
       if (!iw || !ih || !ow || !oh) return;
 
       const scale = Math.min(ow / iw, oh / ih, 1);
-      setDesktopFit({ scale, w: iw * scale, h: ih * scale });
+      setDesktopFit({ scale, w: iw, h: ih });
     };
 
     measure();
