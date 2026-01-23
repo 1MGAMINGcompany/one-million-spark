@@ -196,7 +196,11 @@ const BackgammonGame = () => {
 
       if (!iw || !ih || !ow || !oh) return;
 
-      const scale = Math.min(ow / iw, oh / ih, 1);
+      const reservedBottom = window.innerWidth >= 1024 ? 110 : 0; // px: Match Rules + Chat overlay
+
+      const safeOh = Math.max(0, oh - reservedBottom);
+
+      const scale = Math.min(ow / iw, safeOh / ih, 1);
       setDesktopFit({ scale, w: iw, h: ih });
     };
 
