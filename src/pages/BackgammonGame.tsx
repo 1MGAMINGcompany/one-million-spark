@@ -200,7 +200,7 @@ const BackgammonGame = () => {
 
       const safeOh = Math.max(0, oh - reservedBottom);
 
-      const scale = Math.min(ow / iw, safeOh / ih, 1);
+      const scale = 1; // DESKTOP: disable scaling, render board at natural size
       setDesktopFit({ scale, w: iw, h: ih });
     };
 
