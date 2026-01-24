@@ -1816,6 +1816,7 @@ const BackgammonGame = () => {
             "transition-all duration-200",
             isTop ? "" : "rotate-180",
             isValidTarget && "drop-shadow-[0_0_25px_hsl(45_93%_70%)] drop-shadow-[0_0_50px_hsl(45_93%_60%)]"
+            <div className="hidden lg:block" aria-hidden="true" style={{ height: 220 }} />
           )}
         >
           <defs>
