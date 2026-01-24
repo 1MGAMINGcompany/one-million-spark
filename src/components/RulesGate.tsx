@@ -138,11 +138,18 @@ export function RulesGate({
           setServerStartRollFinalized(true);
         }
 
-        // Acceptances table can be empty — flags are still canonical for readiness
-        if (s.p1_ready && s.p2_ready) {
-          console.log("[RulesGate] Server poll found both players ready");
-          setServerBothReady(true);
-        }
+          // Ready state can come from either:
+          // - session flags (p1_ready/p2_ready)
+          // - acceptances table (edge function computes acceptances.bothAccepted)
+          // We treat acceptances as a safe fallback to prevent UI deadlocks when flags fail to update.
+          const acceptancesBothAccepted = Boolean(data?.acceptances?.bothAccepted);
+          if (acceptancesBothAccepted) {
+            console.log("[RulesGate] Server poll found acceptances.bothAccepted=true");
+            setServerBothReady(true);
+          } else if (s.p1_ready && s.p2_ready) {
+            console.log("[RulesGate] Server poll found both players ready");
+            setServerBothReady(true);
+          }
       } catch (e) {
         if (!cancelled) {
           console.warn("[RulesGate] game-session-get exception:", e);
