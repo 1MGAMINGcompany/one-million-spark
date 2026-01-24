@@ -2046,6 +2046,7 @@ const BackgammonGame = () => {
           startRollFinalized={startRoll.isFinalized}
         >
           <DiceRollStart
+            isRankedGame={isRankedGame}
             roomPda={roomPda || ""}
             myWallet={address}
             player1Wallet={roomPlayers[0]}

@@ -131,7 +131,7 @@ export function DiceRollStart({
   const [showFallback, setShowFallback] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
   const [isPickingStarter, setIsPickingStarter] = useState(false);
-    const [rankedBlocked, setRankedBlocked] = useState(false);
+    const [rankedBlocked, setRankedBlocked] = useState(isRankedGame);
   
   // Timeout ref for 15s fallback
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -201,13 +201,26 @@ export function DiceRollStart({
 
 
 
+        // If ranked session not created yet (session is null), keep dice hidden until server is ready.
+
+
+        if (isRankedGame && !session) {
+
+
+          setRankedBlocked(true);
+
+
+          return;
+
+
+        }
         // If this is a ranked session, do NOT show DiceRollStart UI until both players are ready.
 
 
         // This prevents the Dice UI from appearing at the same time as the Ranked Match Rules modal.
 
 
-        const isRankedSession =
+        const isRankedSession = isRankedGame ||
 
 
           session?.mode === "ranked" ||

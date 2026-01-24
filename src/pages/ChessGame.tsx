@@ -1407,6 +1407,7 @@ const ChessGame = () => {
         >
           {/* DiceRollStart - rendered based on shouldShowDice, not showDiceRoll */}
           <DiceRollStart
+            isRankedGame={isRankedGame}
             roomPda={roomPda || ""}
             myWallet={address}
             player1Wallet={roomPlayers[0]}
