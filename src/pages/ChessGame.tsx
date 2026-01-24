@@ -1406,6 +1406,7 @@ const ChessGame = () => {
           startRollFinalized={startRoll.isFinalized}
         >
           {/* DiceRollStart - rendered based on shouldShowDice, not showDiceRoll */}
+          {(!isRankedGame || bothReady) && (
           <DiceRollStart
             isRankedGame={isRankedGame}
             roomPda={roomPda || ""}
@@ -1418,6 +1419,7 @@ const ChessGame = () => {
             isLeaving={isLeaving}
             isForfeiting={isForfeiting}
           />
+          )}
         </RulesGate>
         ) : null;
       })()}

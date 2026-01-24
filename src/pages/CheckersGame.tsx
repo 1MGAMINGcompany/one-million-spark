@@ -1281,6 +1281,7 @@ const CheckersGame = () => {
           isDataLoaded={isDataLoaded}
           startRollFinalized={startRoll.isFinalized}
         >
+          {(!isRankedGame || bothReady) && (
           <DiceRollStart
             isRankedGame={isRankedGame}
             roomPda={roomPda || ""}
@@ -1293,6 +1294,7 @@ const CheckersGame = () => {
             isLeaving={isLeaving}
             isForfeiting={isForfeiting}
           />
+          )}
         </RulesGate>
         ) : null;
       })()}

@@ -1436,6 +1436,7 @@ const DominosGame = () => {
           isDataLoaded={isDataLoaded}
           startRollFinalized={startRoll.isFinalized}
         >
+          {(!isRankedGame || bothReady) && (
           <DiceRollStart
             isRankedGame={isRankedGame}
             roomPda={roomPda || ""}
@@ -1448,6 +1449,7 @@ const DominosGame = () => {
             isLeaving={isLeaving}
             isForfeiting={isForfeiting}
           />
+          )}
         </RulesGate>
         ) : null;
       })()}

@@ -2045,6 +2045,7 @@ const BackgammonGame = () => {
           isDataLoaded={isDataLoaded}
           startRollFinalized={startRoll.isFinalized}
         >
+          {(!isRankedGame || bothReady) && (
           <DiceRollStart
             isRankedGame={isRankedGame}
             roomPda={roomPda || ""}
@@ -2057,6 +2058,7 @@ const BackgammonGame = () => {
             isLeaving={isLeaving}
             isForfeiting={isForfeiting}
           />
+          )}
         </RulesGate>
         ) : null;
       })()}
