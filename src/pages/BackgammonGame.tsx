@@ -2394,14 +2394,9 @@ const BackgammonGame = () => {
             </div>
         ) : (
           /* Desktop Layout - CLEAN (AI-style): board left, actions right */
-            <div className="max-w-6xl mx-auto px-2 md:px-4 py-4 md:py-6 pb-28">
-              <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 md:gap-6 min-h-0">
-                {/* Board Column - left (AI-style) */}
-                <div className="lg:col-span-3 space-y-3 md:space-y-4">
-                  <div className="flex items-start justify-center w-full h-full">
-                        <div>
-                          <div
-                          >
+              <div className="max-w-6xl mx-auto px-2 md:px-4 py-4 md:py-6">
+                <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_360px] gap-4 md:gap-6 items-start">
+                  <div className="min-w-0 flex items-start justify-center">
                             <div className="relative">
                               {/* Outer glow */}
                               <div className="absolute -inset-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 rounded-2xl blur-xl opacity-50 pointer-events-none" />
@@ -2547,9 +2542,7 @@ const BackgammonGame = () => {
                                 </div>
                               </div>
                             </div>
-                          </div>
-                        </div>
-                      </div>
+                  </div>
 
 {/* Sidebar Column - right (actions/status) */}
                 <div className="lg:col-span-1 flex flex-col min-h-0 space-y-4">
@@ -2639,9 +2632,8 @@ const BackgammonGame = () => {
                     </div>
                   )}
                 </div>
+                </div>
               </div>
-            </div>
-            </div>
         )}
       </div>
 
