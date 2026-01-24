@@ -131,6 +131,7 @@ export function DiceRollStart({
   const [showFallback, setShowFallback] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
   const [isPickingStarter, setIsPickingStarter] = useState(false);
+    const [rankedBlocked, setRankedBlocked] = useState(false);
   
   // Timeout ref for 15s fallback
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -140,6 +141,11 @@ export function DiceRollStart({
   const isPlayer1 = myWallet.trim() === player1Wallet.trim();
   const myName = t("common.you") || "You";
   const opponentName = t("game.opponent") || "Opponent";
+
+    // Ranked safety: hide dice UI until both players are ready (prevents overlap with RulesGate modal)
+    if (rankedBlocked && phase !== "result") {
+      return null;
+    }
 
   /**
    * Compute deterministic starter from roomPda
@@ -192,6 +198,54 @@ export function DiceRollStart({
         }
 
         const session = resp?.session;
+
+
+
+        // If this is a ranked session, do NOT show DiceRollStart UI until both players are ready.
+
+
+        // This prevents the Dice UI from appearing at the same time as the Ranked Match Rules modal.
+
+
+        const isRankedSession =
+
+
+          session?.mode === "ranked" ||
+
+
+          session?.is_ranked === true ||
+
+
+          session?.isRanked === true ||
+
+
+          session?.ranked === true;
+
+
+
+        const readyFromFlags = Boolean(session?.p1_ready && session?.p2_ready);
+
+
+        const readyFromAcceptances = Boolean(resp?.acceptances?.bothAccepted);
+
+
+        const readyFromStartRoll = Boolean(session?.start_roll_finalized);
+
+
+
+        if (isRankedSession && !(readyFromFlags || readyFromAcceptances || readyFromStartRoll)) {
+
+
+          setRankedBlocked(true);
+
+
+        } else {
+
+
+          setRankedBlocked(false);
+
+
+        }
         if (session?.start_roll_finalized && session.start_roll && session.starting_player_wallet) {
           // Roll already exists - display it
           const rollData = session.start_roll as unknown as StartRollResult;
@@ -216,6 +270,114 @@ export function DiceRollStart({
     checkExistingRoll();
   }, [roomPda, isPlayer1]);
 
+
+
+
+    // While rankedBlocked, poll the server until both players are ready, then allow dice UI to appear.
+
+
+    useEffect(() => {
+
+
+      if (!rankedBlocked) return;
+
+
+
+      let cancelled = false;
+
+
+      const poll = async () => {
+
+
+        try {
+
+
+          const { data: resp, error } = await supabase.functions.invoke("game-session-get", {
+
+
+            body: { roomPda },
+
+
+          });
+
+
+          if (cancelled) return;
+
+
+          if (error) return;
+
+
+
+          const session = resp?.session;
+
+
+          const isRankedSession =
+
+
+            session?.mode === "ranked" ||
+
+
+            session?.is_ranked === true ||
+
+
+            session?.isRanked === true ||
+
+
+            session?.ranked === true;
+
+
+
+          const readyFromFlags = Boolean(session?.p1_ready && session?.p2_ready);
+
+
+          const readyFromAcceptances = Boolean(resp?.acceptances?.bothAccepted);
+
+
+          const readyFromStartRoll = Boolean(session?.start_roll_finalized);
+
+
+
+          if (!isRankedSession || readyFromFlags || readyFromAcceptances || readyFromStartRoll) {
+
+
+            setRankedBlocked(false);
+
+
+          }
+
+
+        } catch {
+
+
+          // ignore transient failures
+
+
+        }
+
+
+      };
+
+
+
+      poll();
+
+
+      const id = setInterval(poll, 2000);
+
+
+      return () => {
+
+
+        cancelled = true;
+
+
+        clearInterval(id);
+
+
+      };
+
+
+    }, [rankedBlocked, roomPda]);
   // Rolling animation effect
   useEffect(() => {
     if (phase !== "rolling") return;
