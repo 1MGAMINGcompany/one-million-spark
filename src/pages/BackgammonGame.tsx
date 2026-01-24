@@ -2160,8 +2160,8 @@ const BackgammonGame = () => {
 
       {/* Game Area */}
       <div className={cn(
-        "flex-1 flex flex-col min-h-0 overflow-hidden lg:overflow-hidden",
-        isMobile ? "px-2 pt-1 pb-2" : "px-2 md:px-4 py-4"
+        "flex flex-col",
+        isMobile ? "flex-1 min-h-0 overflow-hidden px-2 pt-1 pb-2" : "px-2 md:px-4 py-4"
       )}>
         {/* Mobile Layout - Viewport-fit container to prevent zoom */}
         {isMobile ? (
@@ -2552,7 +2552,7 @@ const BackgammonGame = () => {
                       </div>
 
 {/* Sidebar Column - right (actions/status) */}
-                <div className="hidden lg:flex lg:col-span-1 flex-col min-h-0 overflow-hidden space-y-4">
+                <div className="lg:col-span-1 flex flex-col space-y-4 mt-4 lg:mt-0">
                   {/* Primary Actions */}
                   <div className="rounded-xl border border-primary/20 bg-card/50 p-4 space-y-3">
                     <h3 className="text-sm font-medium text-muted-foreground">Actions</h3>
