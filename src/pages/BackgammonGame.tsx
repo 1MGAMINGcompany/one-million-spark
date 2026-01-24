@@ -200,7 +200,7 @@ const BackgammonGame = () => {
 
       const safeOh = Math.max(0, oh - reservedBottom);
 
-      const rect = outer.getBoundingClientRect(); const SAFE_BOTTOM = 110; const availH = Math.max(0, window.innerHeight - rect.top - SAFE_BOTTOM); const scale = Math.min(ow/iw, availH/ih, 1); // DESKTOP: viewport fit scaling
+      const rect = outer.getBoundingClientRect(); const SAFE_BOTTOM = 180; const availH = Math.max(0, window.innerHeight - rect.top - SAFE_BOTTOM); const scale = Math.min(ow/iw, availH/ih, 1) * 0.98; // DESKTOP: viewport fit scaling
       setDesktopFit({ scale, w: iw, h: ih });
     };
 
