@@ -146,21 +146,25 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
     if (!roomPda || !myWalletNorm) {
       return { success: false, error: "Missing room or wallet" };
     }
+      // Guard: only hard-block acceptance when BOTH wallets are known in session and my wallet still isn't a player.
+      // This prevents the deadlock where player2_wallet is still NULL for a moment (join race),
+      // while still protecting against accepting with the wrong wallet.
+      const p1 = (p1Wallet ?? "").trim();
+      const p2 = (p2Wallet ?? "").trim();
+      const bothWalletsKnown = Boolean(p1 && p2);
 
-      // Guard: do NOT allow ranked-accept until this wallet is actually part of the session.
-      // Prevents: acceptance recorded but set_player_ready fails with "wallet not in game" (player2_wallet still NULL).
-      if (!isIdentified || !(isPlayer1 || isPlayer2)) {
-        console.warn("[RankedReadyGate] Blocked acceptRules: wallet not yet joined/identified in session", {
+      if (bothWalletsKnown && (!isIdentified || !(isPlayer1 || isPlayer2))) {
+        console.warn("[RankedReadyGate] Blocked acceptRules: wallet not identified as a room player", {
           roomPda,
           myWallet: myWalletNorm,
+          p1Wallet: p1,
+          p2Wallet: p2,
           isIdentified,
           isPlayer1,
           isPlayer2,
         });
-        return { success: false, error: "Still joining. Please wait 2–5 seconds and try again." };
+        return { success: false, error: "Wrong wallet for this room (or still syncing). Switch wallet or refresh." };
       }
-
-
     setIsSettingReady(true);
     
     try {
