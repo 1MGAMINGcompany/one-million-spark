@@ -2397,10 +2397,8 @@ const BackgammonGame = () => {
             <div className="max-w-6xl mx-auto px-2 md:px-4 py-4 md:py-6 pb-28">
               <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 md:gap-6 min-h-0">
                 {/* Board Column - left (AI-style) */}
-                <div className="lg:col-span-3 flex flex-col min-h-0 overflow-hidden">
-                  <div className="flex-1 min-h-0 flex items-start justify-center p-2 lg:pb-24 lg:h-[calc(100vh-220px)]">
-                    <div className="w-full max-w-full h-full relative z-0">
-                      <div className="flex items-start justify-center w-full h-full">
+                <div className="lg:col-span-3 space-y-3 md:space-y-4">
+                  <div className="flex items-start justify-center w-full h-full">
                         <div>
                           <div
                           >
@@ -2552,11 +2550,8 @@ const BackgammonGame = () => {
                           </div>
                         </div>
                       </div>
-                    </div>
-                  </div>
-                </div>
 
-                {/* Sidebar Column - right (actions/status) */}
+{/* Sidebar Column - right (actions/status) */}
                 <div className="hidden lg:flex lg:col-span-1 flex-col min-h-0 overflow-hidden space-y-4">
                   {/* Primary Actions */}
                   <div className="rounded-xl border border-primary/20 bg-card/50 p-4 space-y-3">
