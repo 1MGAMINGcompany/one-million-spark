@@ -2189,6 +2189,7 @@ const BackgammonGame = () => {
                   <span className="text-primary font-bold text-sm">{myRole === "player" ? gameState.bearOff.player : gameState.bearOff.ai}</span>
                   <span className="text-[10px] text-muted-foreground/60">/15</span>
                 </div>
+                <div className="hidden lg:block" aria-hidden="true" style={{ height: 140 }} />
               </div>
 
               {/* Board Container - Aspect-ratio scaling to 100vw, max-height to fit viewport */}
