@@ -147,6 +147,20 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
       return { success: false, error: "Missing room or wallet" };
     }
 
+      // Guard: do NOT allow ranked-accept until this wallet is actually part of the session.
+      // Prevents: acceptance recorded but set_player_ready fails with "wallet not in game" (player2_wallet still NULL).
+      if (!isIdentified || !(isPlayer1 || isPlayer2)) {
+        console.warn("[RankedReadyGate] Blocked acceptRules: wallet not yet joined/identified in session", {
+          roomPda,
+          myWallet: myWalletNorm,
+          isIdentified,
+          isPlayer1,
+          isPlayer2,
+        });
+        return { success: false, error: "Still joining. Please wait 2–5 seconds and try again." };
+      }
+
+
     setIsSettingReady(true);
     
     try {
