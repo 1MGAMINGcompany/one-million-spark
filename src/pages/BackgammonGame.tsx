@@ -2641,6 +2641,7 @@ const BackgammonGame = () => {
                 </div>
               </div>
             </div>
+            </div>
         )}
       </div>
 
