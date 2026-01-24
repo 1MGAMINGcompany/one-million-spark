@@ -177,43 +177,6 @@ const BackgammonGame = () => {
   const isMobile = useIsMobile();
 
   // Desktop-only: scale the board to fit viewport (no scrolling). Mobile untouched.
-  const desktopFitOuterRef = useRef<HTMLDivElement | null>(null);
-  const desktopFitInnerRef = useRef<HTMLDivElement | null>(null);
-  const [desktopFit, setDesktopFit] = useState({ scale: 1, w: 0, h: 0 });
-
-  useEffect(() => {
-    if (isMobile) return;
-
-    const outer = desktopFitOuterRef.current;
-    const inner = desktopFitInnerRef.current;
-    if (!outer || !inner) return;
-
-    const measure = () => {
-      const iw = inner.offsetWidth;
-      const ih = inner.offsetHeight;
-      const ow = outer.clientWidth;
-      const oh = outer.clientHeight;
-
-      if (!iw || !ih || !ow || !oh) return;
-
-      const reservedBottom = window.innerWidth >= 1024 ? 110 : 0; // px: Match Rules + Chat overlay
-
-      const safeOh = Math.max(0, oh - reservedBottom);
-
-      const rect = outer.getBoundingClientRect(); const SAFE_BOTTOM = 180; const availH = Math.max(0, window.innerHeight - rect.top - SAFE_BOTTOM); const scale = Math.min(ow/iw, availH/ih, 1) * 0.98; // DESKTOP: viewport fit scaling
-      setDesktopFit({ scale, w: iw, h: ih });
-    };
-
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(outer);
-    window.addEventListener("resize", measure);
-
-    return () => {
-      ro.disconnect();
-      window.removeEventListener("resize", measure);
-    };
-  }, [isMobile]);
   const { play } = useSound();
   const { isConnected: walletConnected, address } = useWallet();
 
@@ -2437,20 +2400,9 @@ const BackgammonGame = () => {
                 <div className="lg:col-span-3 flex flex-col min-h-0 overflow-hidden">
                   <div className="flex-1 min-h-0 flex items-start justify-center p-2 lg:pb-24 lg:h-[calc(100vh-220px)]">
                     <div className="w-full max-w-full h-full relative z-0">
-                      <div ref={desktopFitOuterRef} className="flex items-start justify-center w-full h-full">
-                        <div
-                          style={
-                            desktopFit.w && desktopFit.h
-                              ? {
-                                  width: Math.round(desktopFit.w * desktopFit.scale),
-                                  height: Math.round(desktopFit.h * desktopFit.scale),
-                                }
-                              : undefined
-                          }
-                        >
+                      <div className="flex items-start justify-center w-full h-full">
+                        <div>
                           <div
-                            ref={desktopFitInnerRef}
-                            style={{ transform: `scale(${desktopFit.scale})`, transformOrigin: "top left" }}
                           >
                             <div className="relative">
                               {/* Outer glow */}
