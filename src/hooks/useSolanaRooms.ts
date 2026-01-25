@@ -15,6 +15,7 @@ import { normalizeSignature, isBlockingRoom } from "@/lib/solana-utils";
 import { isRoomArchived, archiveRoom } from "@/lib/roomArchive";
 import { supabase } from "@/integrations/supabase/client";
 import { computeRulesHash, createRulesFromRoom } from "@/lib/gameAcceptance";
+import bs58 from "bs58";
 
 function toNum(v: any, fallback = 0): number {
   if (v == null) return fallback;
@@ -1079,13 +1080,33 @@ export function useSolanaRooms() {
       // Import supabase client dynamically to avoid circular dependency
       const { supabase } = await import("@/integrations/supabase/client");
       
-      const { data, error } = await supabase.functions.invoke('forfeit-game', {
-        body: {
-          roomPda,
-          forfeitingWallet: publicKey.toBase58(),
-          gameType,
-        },
-      });
+      // NEW: signed authorization for forfeit-game
+        const forfeitingWallet = publicKey.toBase58();
+        const nonce = (globalThis.crypto?.randomUUID?.() ?? String(Math.random()).slice(2)) as string;
+        const timestamp = Date.now();
+        const message = `1MG_FORFEIT_V1|${roomPda}|${forfeitingWallet}|${nonce}|${timestamp}`;
+
+        const provider: any = (globalThis as any).solana;
+        if (!provider?.signMessage) {
+          throw new Error("Wallet does not support message signing (signMessage missing)");
+        }
+
+        const msgBytes = new TextEncoder().encode(message);
+        const signed = await provider.signMessage(msgBytes, "utf8");
+        const sigBytes = (signed?.signature ?? signed) as Uint8Array;
+        const signature = bs58.encode(sigBytes);
+
+        const { data, error } = await supabase.functions.invoke('forfeit-game', {
+          body: {
+            roomPda,
+            forfeitingWallet,
+            mode: "signed",
+            nonce,
+            timestamp,
+            signature,
+            gameType,
+          },
+        });
 
       if (error) {
         console.error("[forfeitGame] Edge function error:", error);
