@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import * as ed from "npm:@noble/ed25519@2.0.0";
 import {
   Connection,
   PublicKey,
@@ -13,6 +14,30 @@ const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
+
+// Maximum age for signed requests (5 minutes)
+const MAX_TIMESTAMP_AGE_MS = 5 * 60 * 1000;
+
+// Verify ed25519 signature from Solana wallet
+async function verifyForfeitSignature(args: {
+  roomPda: string;
+  forfeitingWallet: string;
+  nonce: string;
+  timestamp: number;
+  signature: string; // base58
+}): Promise<boolean> {
+  try {
+    const { roomPda, forfeitingWallet, nonce, timestamp, signature } = args;
+    const message = `1MG_FORFEIT_V1|${roomPda}|${forfeitingWallet}|${nonce}|${timestamp}`;
+    const messageBytes = new TextEncoder().encode(message);
+    const signatureBytes = bs58.decode(signature);
+    const publicKeyBytes = bs58.decode(forfeitingWallet);
+    return await ed.verifyAsync(signatureBytes, messageBytes, publicKeyBytes);
+  } catch (e) {
+    console.error("[forfeit-game] Signature verification error:", e);
+    return false;
+  }
+}
 
 function json200(body: Record<string, unknown>) {
   return new Response(JSON.stringify(body), {
@@ -30,6 +55,13 @@ const PROGRAM_ID = new PublicKey("4nkWS2ZYPqQrRSYbXD6XW6U6VenmBiZV2TkutY3vSPHu")
 interface ForfeitRequest {
   roomPda: string;
   forfeitingWallet: string; // loser / forfeiter
+
+  // NEW: signed authorization (required)
+  mode: "signed";
+  nonce: string;
+  timestamp: number;   // ms since epoch
+  signature: string;   // base58 ed25519 signature of message
+
   gameType?: string;
   winnerWallet?: string; // OPTIONAL: explicit winner for "win" settlement reuse
 }
@@ -218,6 +250,48 @@ Deno.serve(async (req: Request) => {
 
     const roomPda = body?.roomPda;
     const forfeitingWallet = body?.forfeitingWallet;
+
+    // --- AUTH: Require signed request (prevents anyone from forfeiting as someone else) ---
+    const mode = (body as any)?.mode;
+    const nonce = (body as any)?.nonce;
+    const timestamp = (body as any)?.timestamp;
+    const signature = (body as any)?.signature;
+
+    if (!roomPda || !forfeitingWallet) {
+      console.error("[forfeit-game] Missing required fields:", { roomPda, forfeitingWallet });
+      return json200({ success: false, error: "Missing roomPda or forfeitingWallet" });
+    }
+
+    if (mode !== "signed" || !nonce || typeof nonce !== "string" || typeof timestamp !== "number" || !signature) {
+      return json200({
+        success: false,
+        error: "Unauthorized: signed request required",
+        required: ["mode:'signed'", "nonce", "timestamp", "signature"],
+      });
+    }
+
+    const now = Date.now();
+    const age = now - timestamp;
+
+    if (age > MAX_TIMESTAMP_AGE_MS || age < -60000) {
+      return json200({
+        success: false,
+        error: "Unauthorized: timestamp invalid/expired",
+        ageMs: age,
+      });
+    }
+
+    const okSig = await verifyForfeitSignature({
+      roomPda,
+      forfeitingWallet,
+      nonce,
+      timestamp,
+      signature,
+    });
+
+    if (!okSig) {
+      return json200({ success: false, error: "Unauthorized: invalid signature" });
+    }
     const gameType = body?.gameType;
     const winnerWalletOverride = body?.winnerWallet;
 
