@@ -1436,7 +1436,7 @@ const DominosGame = () => {
           isDataLoaded={isDataLoaded}
           startRollFinalized={startRoll.isFinalized}
         >
-          {(!isRankedGame || bothReady) && (
+          {(!isRankedGame || rankedGate.bothReady) && (
           <DiceRollStart
             isRankedGame={isRankedGame}
             roomPda={roomPda || ""}

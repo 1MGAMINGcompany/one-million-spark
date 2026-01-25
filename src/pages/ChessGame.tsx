@@ -1406,7 +1406,7 @@ const ChessGame = () => {
           startRollFinalized={startRoll.isFinalized}
         >
           {/* DiceRollStart - rendered based on shouldShowDice, not showDiceRoll */}
-          {(!isRankedGame || bothReady) && (
+          {(!isRankedGame || rankedGate.bothReady) && (
           <DiceRollStart
             isRankedGame={isRankedGame}
             roomPda={roomPda || ""}
