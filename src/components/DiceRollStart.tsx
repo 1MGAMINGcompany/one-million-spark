@@ -8,6 +8,7 @@ import { useTranslation } from "react-i18next";
 import { AudioManager } from "@/lib/AudioManager";
 
 interface DiceRollStartProps {
+  bothReady?: boolean;
   roomPda: string;
   myWallet: string;
   player1Wallet: string;
@@ -131,6 +132,12 @@ export function DiceRollStart({
   const [showFallback, setShowFallback] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
   const [isPickingStarter, setIsPickingStarter] = useState(false);
+
+  // HARD GATE: In ranked games, do not show Dice UI until both players accepted rules.
+  if (isRankedGame && !bothReady) {
+    return null;
+  }
+
     const [rankedBlocked, setRankedBlocked] = useState(isRankedGame);
   
   // Timeout ref for 15s fallback
