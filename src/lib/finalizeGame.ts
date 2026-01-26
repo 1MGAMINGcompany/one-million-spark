@@ -18,7 +18,6 @@
 import { Connection, PublicKey, VersionedTransaction } from "@solana/web3.js";
 import { supabase } from "@/integrations/supabase/client";
 import { finalizeRoom, FinalizeRoomResult } from "@/lib/finalize-room";
-import bs58 from "bs58";
 
 export interface FinalizeGameParams {
   /** Room PDA string */
@@ -171,32 +170,13 @@ async function finalizeViaEdgeFunction(
   });
   
   try {
-    // NEW: signed authorization for forfeit-game
-      const nonce = (globalThis.crypto?.randomUUID?.() ?? String(Math.random()).slice(2)) as string;
-      const timestamp = Date.now();
-      const message = `1MG_FORFEIT_V1|${roomPda}|${loserWallet}|${nonce}|${timestamp}`;
-
-      const provider: any = (globalThis as any).solana;
-      if (!provider?.signMessage) {
-        throw new Error("Wallet does not support message signing (signMessage missing)");
-      }
-
-      const msgBytes = new TextEncoder().encode(message);
-      const signed = await provider.signMessage(msgBytes, "utf8");
-      const sigBytes = (signed?.signature ?? signed) as Uint8Array;
-      const signature = bs58.encode(sigBytes);
-
-      const { data, error } = await supabase.functions.invoke('forfeit-game', {
-        body: {
-          roomPda,
-          forfeitingWallet: loserWallet,
-          mode: "signed",
-          nonce,
-          timestamp,
-          signature,
-          gameType,
-        },
-      });
+    const { data, error } = await supabase.functions.invoke('forfeit-game', {
+      body: {
+        roomPda,
+        forfeitingWallet: loserWallet,
+        gameType,
+      },
+    });
     
     if (error) {
       console.error('[finalizeGame] Edge function error:', error);
