@@ -8,6 +8,7 @@ import { useTranslation } from "react-i18next";
 import { AudioManager } from "@/lib/AudioManager";
 
 interface DiceRollStartProps {
+  isRankedGame?: boolean;
   bothReady?: boolean;
   roomPda: string;
   myWallet: string;
@@ -112,8 +113,10 @@ const Die3D = ({
   );
 };
 
-export function DiceRollStart({ 
-  roomPda,
+export function DiceRollStart({
+    isRankedGame = false,
+    bothReady = false,
+    roomPda,
   myWallet,
   player1Wallet,
   player2Wallet,
@@ -132,14 +135,7 @@ export function DiceRollStart({
   const [showFallback, setShowFallback] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
   const [isPickingStarter, setIsPickingStarter] = useState(false);
-
-  // HARD GATE: In ranked games, do not show Dice UI until both players accepted rules.
-  if (isRankedGame && !bothReady) {
-    return null;
-  }
-
     const [rankedBlocked, setRankedBlocked] = useState(isRankedGame);
-  
   // Timeout ref for 15s fallback
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const fallbackUsedRef = useRef(false);
@@ -148,12 +144,6 @@ export function DiceRollStart({
   const isPlayer1 = myWallet.trim() === player1Wallet.trim();
   const myName = t("common.you") || "You";
   const opponentName = t("game.opponent") || "Opponent";
-
-    // Ranked safety: hide dice UI until both players are ready (prevents overlap with RulesGate modal)
-    if (rankedBlocked && phase !== "result") {
-      return null;
-    }
-
   /**
    * Compute deterministic starter from roomPda
    * Both clients will compute the same result
@@ -530,6 +520,11 @@ export function DiceRollStart({
   const exitDisabled = isLeaving || isForfeiting || isRetrying || isPickingStarter;
 
   // STEP 3 FIX: Use a contained Card instead of fixed inset-0 overlay
+    // Final UI gate (safe: after state is declared)
+    const hideDiceUI = (isRankedGame && !bothReady) || (rankedBlocked && phase !== "result");
+    if (hideDiceUI) return null;
+
+
   return (
     <div className="w-full min-h-[60vh] flex items-center justify-center p-4">
       <Card className="relative w-full max-w-lg p-6 md:p-8 border-primary/30 bg-card/95 shadow-[0_0_60px_-10px_hsl(45_93%_54%_/_0.3)]">
