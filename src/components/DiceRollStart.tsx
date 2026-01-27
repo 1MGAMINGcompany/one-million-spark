@@ -1,12 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Dice5, Loader2, LogOut, Flag, RefreshCw, Wand2 } from "lucide-react";
+import { Dice5, Loader2, LogOut, Flag, RefreshCw, Wand2, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useTranslation } from "react-i18next";
 import { AudioManager } from "@/lib/AudioManager";
-
 interface DiceRollStartProps {
   roomPda: string;
   myWallet: string;
@@ -131,6 +130,9 @@ export function DiceRollStart({
   const [showFallback, setShowFallback] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
   const [isPickingStarter, setIsPickingStarter] = useState(false);
+  const [isSyncingOpponent, setIsSyncingOpponent] = useState(false);
+  const syncRetryCountRef = useRef(0);
+  const MAX_SYNC_RETRIES = 10;
   
   // Timeout ref for 15s fallback
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -262,10 +264,39 @@ export function DiceRollStart({
 
       if (rpcError) {
         console.error("[DiceRollStart] RPC error:", rpcError);
-        setError(rpcError.message || "Failed to compute roll");
+        
+        // Handle "waiting for player2" gracefully - auto-retry
+        const errorMsg = rpcError.message || "";
+        if (errorMsg.includes("waiting for player2")) {
+          console.log("[DiceRollStart] Player 2 not synced yet - showing sync UI and auto-retrying...");
+          setError(null);
+          setIsSyncingOpponent(true);
+          setPhase("waiting");
+          
+          // Auto-retry if we haven't exceeded max retries
+          if (syncRetryCountRef.current < MAX_SYNC_RETRIES) {
+            syncRetryCountRef.current += 1;
+            console.log(`[DiceRollStart] Auto-retry ${syncRetryCountRef.current}/${MAX_SYNC_RETRIES}...`);
+            setTimeout(() => {
+              handleRoll();
+            }, 2000);
+          } else {
+            // Max retries exceeded - show error
+            setIsSyncingOpponent(false);
+            setError("Opponent sync timed out. Please refresh the page.");
+          }
+          return;
+        }
+        
+        // Other errors - show as-is
+        setError(errorMsg || "Failed to compute roll");
         setPhase("waiting");
         return;
       }
+      
+      // Success - reset sync state
+      syncRetryCountRef.current = 0;
+      setIsSyncingOpponent(false);
 
       // Type assertion for the RPC response
       const rpcResult = data as unknown as { starting_player_wallet: string; start_roll: StartRollResult } | null;
@@ -404,8 +435,17 @@ export function DiceRollStart({
           </div>
         </div>
 
+        {/* Syncing Opponent Message */}
+        {isSyncingOpponent && (
+          <div className="text-center mb-6 py-3 px-4 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center gap-2">
+            <Users className="w-4 h-4" />
+            <Loader2 className="w-4 h-4 animate-spin" />
+            <span>{t("diceRoll.syncingOpponent", "Syncing with opponent... Please wait.")}</span>
+          </div>
+        )}
+
         {/* Error Message */}
-        {error && (
+        {error && !isSyncingOpponent && (
           <div className="text-center mb-6 py-3 px-4 rounded-lg bg-destructive/20 text-destructive">
             {error}
           </div>

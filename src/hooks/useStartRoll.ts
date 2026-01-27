@@ -173,8 +173,17 @@ export function useStartRoll(options: UseStartRollOptions): UseStartRollResult {
           setIsFinalized(true);
           console.log("[useStartRoll] Start roll already finalized. Starter:", starter);
         } else if (session) {
-          // Session exists but not finalized - show dice roll
-          console.log("[useStartRoll] Session exists, showing dice roll UI");
+          // Session exists but not finalized - check if player2 is synced
+          if (!session.player2_wallet) {
+            console.log("[useStartRoll] Session exists but player2 not synced yet, waiting...");
+            // Don't show dice roll yet - poll until player2 is synced
+            setTimeout(() => {
+              // Re-trigger the effect after a delay
+              setShowDiceRoll(true); // Show anyway after delay to allow auto-retry
+            }, 1500);
+            return;
+          }
+          console.log("[useStartRoll] Session exists with both players, showing dice roll UI");
           setShowDiceRoll(true);
         } else {
           // Session doesn't exist yet - wait for it to be created

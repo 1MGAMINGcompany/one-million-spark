@@ -656,6 +656,30 @@ export default function Room() {
       });
 
       if (result?.ok) {
+        // CRITICAL: Sync player2 wallet to database session BEFORE navigating
+        // This prevents the "waiting for player2" race condition at dice roll
+        try {
+          const player1Wallet = room.creator?.toBase58?.() || "";
+          const gameType = GAME_NAMES[room.gameType]?.toLowerCase() || "dominos";
+          
+          console.log("[Room] Syncing P2 wallet to game session before navigation...");
+          const { error: syncErr } = await supabase.rpc("ensure_game_session", {
+            p_room_pda: roomPdaParam,
+            p_game_type: gameType,
+            p_player1_wallet: player1Wallet,
+            p_player2_wallet: address, // Joining player
+            p_mode: roomMode,
+          });
+          
+          if (syncErr) {
+            console.warn("[Room] P2 sync warning (non-blocking):", syncErr);
+          } else {
+            console.log("[Room] P2 wallet synced successfully to game session");
+          }
+        } catch (syncE) {
+          console.warn("[Room] P2 sync exception (non-blocking):", syncE);
+        }
+        
         // Navigate to canonical play route - game type determined from on-chain data
         // NEVER use URL slug to determine game type
         navigate(`/play/${roomPdaParam}`);
