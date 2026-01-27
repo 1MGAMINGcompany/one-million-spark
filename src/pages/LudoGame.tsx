@@ -738,7 +738,7 @@ const LudoGame = () => {
       toast({ title: t('toast.rematchReady'), description: t('toast.startingNewGame') });
       navigate(`/game/ludo/${message.payload.roomId}`);
     }
-  }, [applyExternalMove, eliminatePlayer, turnPlayers, PLAYER_COLORS, rematch, navigate, t]); // Stable deps - uses refs
+  }, [applyExternalMove, eliminatePlayer, turnPlayers, rematch, navigate, t]); // Stable deps - uses refs, PLAYER_COLORS is module const
 
   // WebRTC sync
   const {
