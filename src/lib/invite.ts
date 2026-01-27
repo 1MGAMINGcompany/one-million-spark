@@ -1,5 +1,7 @@
 // Solana-based invite links with rich room info
 
+import { isWalletInAppBrowser } from "@/lib/walletBrowserDetection";
+
 export interface RoomInviteInfo {
   roomPda: string;
   gameName?: string;
@@ -60,42 +62,75 @@ export function buildInviteMessage(info: RoomInviteInfo): string {
   return lines.join('\n');
 }
 
-export function shareInvite(link: string, gameName?: string, info?: RoomInviteInfo) {
+/**
+ * Safely open an external URL. Wallet in-app browsers (Phantom/Solflare)
+ * often fail with window.open(), so we use location.href as fallback.
+ * Returns true if navigation was attempted successfully.
+ */
+function safeExternalOpen(url: string): boolean {
+  try {
+    const inWalletBrowser = isWalletInAppBrowser();
+    
+    if (inWalletBrowser) {
+      // In wallet browsers, use location.href for external links
+      // This navigates the current page instead of trying to open a new tab
+      console.log("[invite] Wallet browser detected - using location.href for:", url.slice(0, 50));
+      window.location.href = url;
+      return true;
+    }
+    
+    // Regular browser - try window.open first
+    const popup = window.open(url, "_blank", "noopener,noreferrer");
+    if (!popup) {
+      // Popup blocked - fallback to location.href
+      console.log("[invite] Popup blocked - falling back to location.href");
+      window.location.href = url;
+    }
+    return true;
+  } catch (e) {
+    console.error("[invite] Failed to open URL:", e);
+    return false;
+  }
+}
+
+export function shareInvite(link: string, gameName?: string, info?: RoomInviteInfo): Promise<boolean> {
   const title = gameName ? `Join my ${gameName} game!` : "Game Invite";
   const text = info ? buildInviteMessage(info) : undefined;
   
   if (navigator.share) {
-    return navigator.share({ title, text: text || title, url: link });
+    return navigator.share({ title, text: text || title, url: link })
+      .then(() => true)
+      .catch(() => false);
   }
-  return navigator.clipboard.writeText(link);
+  return navigator.clipboard.writeText(link).then(() => true).catch(() => false);
 }
 
-export function whatsappInvite(link: string, gameName?: string, info?: RoomInviteInfo) {
+export function whatsappInvite(link: string, gameName?: string, info?: RoomInviteInfo): boolean {
   const message = info ? buildInviteMessage(info) : (
     gameName 
       ? `🎮 Join my ${gameName} game on 1M Gaming: ${link}`
       : `🎮 Join my game room: ${link}`
   );
   const text = encodeURIComponent(message);
-  window.open(`https://wa.me/?text=${text}`, "_blank");
+  return safeExternalOpen(`https://wa.me/?text=${text}`);
 }
 
-export function smsInvite(link: string, gameName?: string, info?: RoomInviteInfo) {
+export function smsInvite(link: string, gameName?: string, info?: RoomInviteInfo): boolean {
   const message = info ? buildInviteMessage(info) : (
     gameName 
       ? `🎮 Join my ${gameName} game on 1M Gaming: ${link}`
       : `🎮 Join my private game room: ${link}`
   );
   // sms: protocol works on mobile devices
-  window.open(`sms:?body=${encodeURIComponent(message)}`, "_blank");
+  return safeExternalOpen(`sms:?body=${encodeURIComponent(message)}`);
 }
 
-export function facebookInvite(link: string) {
+export function facebookInvite(link: string): boolean {
   const url = encodeURIComponent(link);
-  window.open(`https://www.facebook.com/sharer/sharer.php?u=${url}`, "_blank");
+  return safeExternalOpen(`https://www.facebook.com/sharer/sharer.php?u=${url}`);
 }
 
-export function emailInvite(link: string, gameName?: string, info?: RoomInviteInfo) {
+export function emailInvite(link: string, gameName?: string, info?: RoomInviteInfo): boolean {
   const subject = encodeURIComponent(
     gameName ? `Join my ${gameName} game on 1M Gaming` : "Game room invite"
   );
@@ -109,9 +144,39 @@ export function emailInvite(link: string, gameName?: string, info?: RoomInviteIn
   }
   
   const body = encodeURIComponent(bodyText);
-  window.open(`mailto:?subject=${subject}&body=${body}`);
+  return safeExternalOpen(`mailto:?subject=${subject}&body=${body}`);
+}
+
+export function twitterInvite(link: string, gameName?: string, info?: RoomInviteInfo): boolean {
+  let text: string;
+  if (info && info.stakeSol && info.stakeSol > 0) {
+    text = `🎮 Play ${gameName || 'games'} for ${info.stakeSol.toFixed(4)} SOL on @1MGaming! Winner takes ${info.winnerPayout?.toFixed(4) || '?'} SOL 🏆`;
+  } else {
+    text = gameName 
+      ? `🎮 Join my ${gameName} game on @1MGaming!` 
+      : `🎮 Join my game on @1MGaming!`;
+  }
+  const encodedText = encodeURIComponent(text);
+  const encodedUrl = encodeURIComponent(link);
+  return safeExternalOpen(`https://twitter.com/intent/tweet?text=${encodedText}&url=${encodedUrl}`);
+}
+
+export function telegramInvite(link: string, gameName?: string, info?: RoomInviteInfo): boolean {
+  const message = info ? buildInviteMessage(info) : (
+    gameName 
+      ? `🎮 Join my ${gameName} game on 1M Gaming!`
+      : `🎮 Join my game room!`
+  );
+  const encodedText = encodeURIComponent(message);
+  const encodedUrl = encodeURIComponent(link);
+  return safeExternalOpen(`https://t.me/share/url?url=${encodedUrl}&text=${encodedText}`);
 }
 
 export function copyInviteLink(link: string): Promise<void> {
   return navigator.clipboard.writeText(link);
+}
+
+export function copyInviteMessage(info: RoomInviteInfo): Promise<void> {
+  const message = buildInviteMessage(info);
+  return navigator.clipboard.writeText(message);
 }
