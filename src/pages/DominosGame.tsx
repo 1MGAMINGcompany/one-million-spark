@@ -248,7 +248,7 @@ const DominosGame = () => {
 
   // Room mode hook - fetches from DB for Player 2 who doesn't have localStorage data
   // Must be called before any effects that use roomMode
-  const { mode: roomMode, isRanked: isRankedGame, isLoaded: modeLoaded } = useRoomMode(roomPda);
+  const { mode: roomMode, isRanked: isRankedGame, isPrivate, turnTimeSeconds: roomTurnTime, isLoaded: modeLoaded } = useRoomMode(roomPda);
 
   // Game session persistence hook
   const { loadSession, saveSession, finishSession } = useGameSessionPersistence({
@@ -630,7 +630,7 @@ const DominosGame = () => {
       });
       
       // Persist auto_forfeit event (changed from turn_timeout)
-      if (isRankedGame && opponentWalletAddr) {
+      if ((isRankedGame || isPrivate) && opponentWalletAddr) {
         persistMove({
           action: "auto_forfeit",
           timedOutWallet: address,
@@ -658,7 +658,7 @@ const DominosGame = () => {
       });
       
       // Persist MINIMAL turn_timeout to DB
-      if (isRankedGame && opponentWalletAddr) {
+      if ((isRankedGame || isPrivate) && opponentWalletAddr) {
         persistMove({
           action: "turn_timeout",
           timedOutWallet: address,
@@ -674,12 +674,17 @@ const DominosGame = () => {
     }
   }, [isActuallyMyTurn, gameOver, address, roomPda, roomPlayers, isRankedGame, persistMove, play, t]);
 
-  // Use turn time from ranked gate (fetched from DB/localStorage)
-  const effectiveTurnTime = rankedGate.turnTimeSeconds || DEFAULT_RANKED_TURN_TIME;
+  // Use turn time from room mode (DB source of truth) or fallback to ranked gate
+  const effectiveTurnTime = roomTurnTime || rankedGate.turnTimeSeconds || DEFAULT_RANKED_TURN_TIME;
+  
+  // Timer should show when turn time is configured and game has started
+  const gameStarted = startRoll.isFinalized && roomPlayers.length >= 2;
+  const shouldShowTimer = effectiveTurnTime > 0 && gameStarted && !gameOver;
   
   const turnTimer = useTurnTimer({
     turnTimeSeconds: effectiveTurnTime,
-    enabled: isRankedGame && canPlayRanked && !gameOver,
+    // Timer counts down only on my turn, enabled for ranked/private with turn time
+    enabled: shouldShowTimer && isActuallyMyTurn,
     isMyTurn: effectiveIsMyTurn,
     onTimeExpired: handleTurnTimeout,
     roomId: roomPda,
@@ -701,7 +706,7 @@ const DominosGame = () => {
       });
       
       // Persist auto_forfeit move
-      if (isRankedGame) {
+      if (isRankedGame || isPrivate) {
         persistMove({
           action: "turn_timeout",
           timedOutWallet: opponentWalletAddr,
@@ -723,7 +728,7 @@ const DominosGame = () => {
       });
       
       // Persist turn_timeout move
-      if (isRankedGame) {
+      if (isRankedGame || isPrivate) {
         persistMove({
           action: "turn_timeout",
           timedOutWallet: opponentWalletAddr,
@@ -748,7 +753,8 @@ const DominosGame = () => {
 
   const opponentTimeout = useOpponentTimeoutDetection({
     roomPda: roomPda || "",
-    enabled: isRankedGame && canPlayRanked && !gameOver && startRoll.isFinalized,
+    // Enable for ranked/private when it's NOT my turn
+    enabled: shouldShowTimer && !isActuallyMyTurn && startRoll.isFinalized,
     isMyTurn: effectiveIsMyTurn,
     turnTimeSeconds: effectiveTurnTime,
     myWallet: address,
@@ -1561,8 +1567,8 @@ const DominosGame = () => {
               activePlayer={turnPlayers[isMyTurn ? (amIPlayer1 ? 0 : 1) : (amIPlayer1 ? 1 : 0)]}
               players={turnPlayers}
               myAddress={address}
-              remainingTime={isRankedGame ? turnTimer.remainingTime : undefined}
-              showTimer={isRankedGame && canPlayRanked}
+              remainingTime={shouldShowTimer ? turnTimer.remainingTime : undefined}
+              showTimer={shouldShowTimer}
             />
           </div>
         </div>

@@ -224,7 +224,7 @@ const LudoGame = () => {
 
   // Room mode hook - fetches from DB for Player 2 who doesn't have localStorage data
   // Must be called before any effects that use roomMode
-  const { mode: roomMode, isRanked: isRankedGame, isLoaded: modeLoaded } = useRoomMode(roomPda);
+  const { mode: roomMode, isRanked: isRankedGame, isPrivate, turnTimeSeconds: roomTurnTime, isLoaded: modeLoaded } = useRoomMode(roomPda);
 
   const { loadSession: loadLudoSession, saveSession: saveLudoSession, finishSession: finishLudoSession } = useGameSessionPersistence({
     roomPda: roomPda,
@@ -499,7 +499,7 @@ const LudoGame = () => {
       });
       
       // Persist minimal turn_timeout event
-      if (isRankedGame) {
+      if (isRankedGame || isPrivate) {
         // Find next active player wallet
         const nextWallet = roomPlayers.find((p, idx) => 
           isRealWallet(p) && !isSameWallet(p, address) && !eliminatedPlayers.has(idx)
@@ -525,7 +525,7 @@ const LudoGame = () => {
       });
       
       // Persist minimal turn_timeout event
-      if (isRankedGame) {
+      if (isRankedGame || isPrivate) {
         const nextPlayerIndex = (currentPlayerIndex + 1) % roomPlayers.length;
         const nextWallet = roomPlayers[nextPlayerIndex] || null;
         persistMove({
@@ -542,12 +542,17 @@ const LudoGame = () => {
     }
   }, [gameOver, address, roomPda, isActuallyMyTurn, roomPlayers, eliminatedPlayers, currentPlayerIndex, isRankedGame, persistMove, advanceTurn, play, t]);
 
-  // Use turn time from ranked gate (fetched from DB/localStorage)
-  const effectiveTurnTime = rankedGate.turnTimeSeconds || DEFAULT_RANKED_TURN_TIME;
+  // Use turn time from room mode (DB source of truth) or fallback to ranked gate
+  const effectiveTurnTime = roomTurnTime || rankedGate.turnTimeSeconds || DEFAULT_RANKED_TURN_TIME;
+  
+  // Timer should show when turn time is configured and game has started
+  const gameStarted = startRoll.isFinalized && roomPlayers.length >= 2;
+  const shouldShowTimer = effectiveTurnTime > 0 && gameStarted && !gameOver;
   
   const turnTimer = useTurnTimer({
     turnTimeSeconds: effectiveTurnTime,
-    enabled: isRankedGame && canPlay && !gameOver,
+    // Timer counts down only on my turn, enabled for ranked/private with turn time
+    enabled: shouldShowTimer && isActuallyMyTurn,
     isMyTurn: isMyTurnLocal,
     onTimeExpired: handleTurnTimeout,
     roomId: roomPda,
@@ -1175,8 +1180,8 @@ const LudoGame = () => {
             activePlayer={turnPlayers[currentPlayerIndex]}
             players={turnPlayers}
             myAddress={address}
-            remainingTime={isRankedGame ? turnTimer.remainingTime : undefined}
-            showTimer={isRankedGame && canPlay}
+            remainingTime={shouldShowTimer ? turnTimer.remainingTime : undefined}
+            showTimer={shouldShowTimer}
           />
         </div>
       </div>

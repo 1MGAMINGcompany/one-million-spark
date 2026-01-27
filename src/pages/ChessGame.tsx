@@ -279,7 +279,7 @@ const ChessGame = () => {
 
   // Room mode hook - fetches from DB for Player 2 who doesn't have localStorage data
   // Must be called before any effects that use roomMode
-  const { mode: roomMode, isRanked: isRankedGame, isLoaded: modeLoaded } = useRoomMode(roomPda);
+  const { mode: roomMode, isRanked: isRankedGame, isPrivate, turnTimeSeconds: roomTurnTime, isLoaded: modeLoaded } = useRoomMode(roomPda);
 
   const { loadSession: loadChessSession, saveSession: saveChessSession, finishSession: finishChessSession } = useGameSessionPersistence({
     roomPda: roomPda,
@@ -545,7 +545,7 @@ const ChessGame = () => {
       });
       
       // Persist auto_forfeit event (changed from turn_timeout)
-      if (isRankedGame && opponentWalletAddr) {
+      if ((isRankedGame || isPrivate) && opponentWalletAddr) {
         persistMove({
           action: "auto_forfeit",
           timedOutWallet: timedOutWallet,
@@ -581,7 +581,7 @@ const ChessGame = () => {
       });
       
       // Persist minimal turn_timeout event
-      if (isRankedGame && opponentWalletAddr) {
+      if ((isRankedGame || isPrivate) && opponentWalletAddr) {
         persistMove({
           action: "turn_timeout",
           timedOutWallet: timedOutWallet,
@@ -601,13 +601,18 @@ const ChessGame = () => {
     }
   }, [gameOver, address, roomPda, isActuallyMyTurn, roomPlayers, myColor, isRankedGame, persistMove, play, t]);
 
-  // Use turn time from ranked gate (fetched from DB/localStorage)
-  const effectiveTurnTime = rankedGate.turnTimeSeconds || DEFAULT_RANKED_TURN_TIME;
+  // Use turn time from room mode (DB source of truth) or fallback to ranked gate
+  const effectiveTurnTime = roomTurnTime || rankedGate.turnTimeSeconds || DEFAULT_RANKED_TURN_TIME;
+  
+  // Timer should show when turn time is configured and game has started
+  const gameStarted = startRoll.isFinalized && roomPlayers.length >= 2;
+  const shouldShowTimer = effectiveTurnTime > 0 && gameStarted && !gameOver;
   
   const turnTimer = useTurnTimer({
     turnTimeSeconds: effectiveTurnTime,
-    enabled: isRankedGame && canPlay && !gameOver,
-    isMyTurn,
+    // Timer counts down only on my turn, enabled for ranked/private with turn time
+    enabled: shouldShowTimer && isActuallyMyTurn,
+    isMyTurn: isActuallyMyTurn,
     onTimeExpired: handleTurnTimeout,
     roomId: roomPda,
   });
@@ -652,8 +657,9 @@ const ChessGame = () => {
 
   const opponentTimeout = useOpponentTimeoutDetection({
     roomPda: roomPda || "",
-    enabled: isRankedGame && canPlay && !gameOver && startRoll.isFinalized,
-    isMyTurn,
+    // Enable for ranked/private when it's NOT my turn
+    enabled: shouldShowTimer && !isActuallyMyTurn && startRoll.isFinalized,
+    isMyTurn: isActuallyMyTurn,
     turnTimeSeconds: effectiveTurnTime,
     myWallet: address,
     onOpponentTimeout: handleOpponentTimeoutDetected,
@@ -1241,8 +1247,8 @@ const ChessGame = () => {
               activePlayer={turnPlayers[game.turn() === "w" ? 0 : 1]}
               players={turnPlayers}
               myAddress={address}
-              remainingTime={isRankedGame ? turnTimer.remainingTime : undefined}
-              showTimer={isRankedGame && canPlay}
+              remainingTime={shouldShowTimer ? turnTimer.remainingTime : undefined}
+              showTimer={shouldShowTimer}
             />
           </div>
         </div>
