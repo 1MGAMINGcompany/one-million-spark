@@ -1,168 +1,167 @@
 
-# Fix Private Room Issues: Turn Time, Share Dialog, and Room List Filtering
+# Fix Private Room Creation: Upsert Session & Share Button
 
-## Issues Identified
+## Problem Summary
 
-Based on the session replay and code analysis, there are **three distinct bugs** affecting private rooms:
+When creating a private room, the `game-session-set-settings` edge function fails with `session_not_found` (404) because the `game_sessions` row doesn't exist yet. This causes:
+1. Private rooms appearing in the public room list (mode never saved)
+2. Mode badge showing "Casual" instead of "Private"
+3. No share dialog opening for the creator
 
-### Bug 1: Turn Time Shows as 0 for Private Rooms
-**Root Cause:** In `CreateRoom.tsx` line 318, the turn time is only preserved for ranked mode:
+## Root Cause
+
+The edge function at line 200-202 returns 404 when no session exists:
 ```typescript
-const authoritativeTurnTime = gameMode === 'ranked' ? turnTimeSeconds : 0;
+if (!session) {
+  return json(404, { ok: false, error: "session_not_found" });
+}
 ```
-This means both `casual` AND `private` modes send `turnTimeSeconds: 0` to the edge function, ignoring the user's selection.
 
-**Evidence:** The screenshot shows `turnTimeSeconds=0` in the signed message, even though the user selected 10 seconds.
-
-### Bug 2: Share Dialog Not Opening for Private Rooms  
-**Root Cause:** The share dialog auto-open logic in `Room.tsx` (lines 215-222) depends on:
-1. `isPrivateCreated` query param being present
-2. `roomModeLoaded` being true 
-3. `roomMode === 'private'`
-
-However, the `roomMode` fetch (lines 169-212) retries up to 5 times with 800ms delays. If the edge function call to save settings **fails** (as shown in screenshot: "Settings Error: Failed to save game settings"), the game_sessions row may not have `mode='private'` yet, causing `roomMode` to default to `'casual'` after retries. This breaks the condition `roomMode === 'private'`.
-
-### Bug 3: Private Rooms Appearing in Room List
-**Root Cause:** In `RoomList.tsx` line 460, the filtering logic is:
-```typescript
-.filter((room) => activeSessionsMap.get(room.pda)?.mode !== 'private')
-```
-This relies on the `activeSessionsMap` which is populated from the `game-sessions-list` edge function. If:
-- The game session wasn't created properly (settings save failed), OR
-- The session exists but mode wasn't set to 'private', OR  
-- The room was just created and hasn't been indexed yet
-
-...then `activeSessionsMap.get(room.pda)` returns `undefined`, and `undefined?.mode !== 'private'` evaluates to `true`, so the room is NOT filtered out.
+But the session is created later during gameplay via `upsert_game_session` - by then it's too late.
 
 ---
 
 ## Technical Solution
 
-### Fix 1: Allow Turn Time for Private Mode
-**File:** `src/pages/CreateRoom.tsx`
+### 1. Edge Function: Upsert Logic (CREATE if not exists)
 
-Change line 318 from:
-```typescript
-const authoritativeTurnTime = gameMode === 'ranked' ? turnTimeSeconds : 0;
-```
-To:
-```typescript
-const authoritativeTurnTime = (gameMode === 'ranked' || gameMode === 'private') ? turnTimeSeconds : 0;
-```
+**File:** `supabase/functions/game-session-set-settings/index.ts`
 
-This ensures private rooms can have enforced turn timers just like ranked rooms.
-
-Also update the localStorage line 311-313 to match:
-```typescript
-localStorage.setItem(`room_settings_${roomPdaStr}`, JSON.stringify({
-  turnTimeSeconds: (gameMode === 'ranked' || gameMode === 'private') ? turnTimeSeconds : 0,
-  stakeLamports: solToLamports(entryFeeNum),
-}));
-```
-
-### Fix 2: Open Share Dialog Immediately After Private Room Creation
-**File:** `src/pages/Room.tsx`
-
-The current logic waits for `roomModeLoaded && roomMode === 'private'` which can fail if the settings edge function failed.
-
-Change the approach: trust the `?private_created=1` query param as the source of truth for showing the dialog immediately, rather than waiting for DB confirmation.
-
-Modify lines 214-222:
-```typescript
-// Auto-open share dialog for private rooms when created
-useEffect(() => {
-  // Trust the query param - if private_created=1, show dialog immediately
-  // Don't wait for DB mode confirmation which may fail/delay
-  if (isPrivateCreated) {
-    setShowShareDialog(true);
-    // Clear the query param
-    searchParams.delete('private_created');
-    setSearchParams(searchParams, { replace: true });
-  }
-}, [isPrivateCreated, searchParams, setSearchParams]);
-```
-
-This ensures the share dialog opens even if the settings edge function had issues.
-
-### Fix 3: Robust Private Room Filtering in Room List
-**File:** `src/pages/RoomList.tsx`
-
-The current filtering only checks the DB-sourced `activeSessionsMap`. We need a fallback mechanism.
-
-Option A (Recommended): Filter on-chain rooms using a combination of DB mode AND any indication the room might be private.
-
-Modify lines 459-461:
-```typescript
-{rooms
-  .filter((room) => {
-    const sessionData = activeSessionsMap.get(room.pda);
-    // If we have session data, check mode
-    if (sessionData?.mode === 'private') return false;
-    // If no session data yet, still show room (can't know if private)
-    // The room will be filtered once session syncs
-    return true;
-  })
-  .map((room) => (
-```
-
-However, this doesn't fully solve the race condition. A more robust fix is to:
-1. Ensure the edge function call in CreateRoom succeeds before navigating
-2. Show a brief loading state while settings are being saved
-3. Only navigate after settings are confirmed saved
-
-Option B (Defensive): Make CreateRoom wait for edge function success before navigation for private rooms specifically.
-
-**File:** `src/pages/CreateRoom.tsx`
-
-After the edge function call (around line 363-394), add logic to:
-- If mode is 'private' and settings save failed, show an error and do NOT navigate
-- Only navigate to room page if settings were successfully saved
+Replace the 404 return (lines 200-202) with INSERT logic:
 
 ```typescript
-if (settingsErr || data?.ok === false) {
-  console.error("[TurnTimer] Settings save failed");
-  // For private rooms, this is critical - don't navigate
-  if (gameMode === 'private') {
-    toast({
-      title: "Failed to Create Private Room",
-      description: "Could not save room settings. Please try again.",
-      variant: "destructive",
+if (!session) {
+  // Session doesn't exist yet - CREATE it with the settings
+  console.log("[game-session-set-settings] No session found, creating new one");
+  
+  const gameTypeFromPayload = payload?.gameType || null;
+  
+  const { error: insertErr } = await supabase
+    .from("game_sessions")
+    .insert({
+      room_pda: roomPda,
+      player1_wallet: creatorWallet,
+      player2_wallet: null,
+      game_type: gameTypeFromPayload || "unknown",
+      game_state: {},
+      status: "waiting",
+      mode: mode,
+      turn_time_seconds: turnTimeSeconds,
+      max_players: maxPlayers,
+      p1_ready: false,
+      p2_ready: false,
     });
-    // Cancel the room on-chain since we can't configure it
-    // Or at minimum, don't navigate
-    return; // Early return - don't navigate
+
+  if (insertErr) {
+    // Check if conflict (room created by another process)
+    if (insertErr.code === "23505") {
+      // Unique constraint violation - session was created concurrently
+      // Fall through to UPDATE logic
+      console.log("[game-session-set-settings] Conflict detected, falling back to update");
+    } else {
+      console.error("[game-session-set-settings] insert error", insertErr);
+      return json(500, { ok: false, error: "insert_failed" });
+    }
+  } else {
+    console.log("[game-session-set-settings] ✅ Session created:", { 
+      roomPda: roomPda.slice(0, 8), 
+      mode, 
+      turnTimeSeconds, 
+      maxPlayers 
+    });
+    return json(200, { ok: true });
   }
-  // For ranked/casual, show warning but continue
-  toast({
-    title: "Settings Error",
-    description: "Failed to save game settings. Turn timer may default to 60s.",
-    variant: "destructive",
-  });
+  
+  // If we got here due to conflict, re-fetch and continue to UPDATE
+  const { data: conflictSession } = await supabase
+    .from("game_sessions")
+    .select("room_pda, status, start_roll_finalized, player1_wallet")
+    .eq("room_pda", roomPda)
+    .maybeSingle();
+    
+  if (!conflictSession) {
+    return json(500, { ok: false, error: "session_race_condition" });
+  }
+  
+  // Use the fetched session for subsequent validation
+  session = conflictSession;
 }
 ```
 
-Move the navigation call (lines 396-398) inside an else block or after confirming success.
+Also add `gameType` extraction from payload at line ~121:
+```typescript
+const gameTypeFromPayload = payload?.gameType; // "Chess", "Dominos", etc.
+```
 
----
+### 2. CreateRoom.tsx: Pass gameType to Edge Function
 
-## Implementation Sequence
+**File:** `src/pages/CreateRoom.tsx`
 
-1. **Fix Turn Time Calculation** (CreateRoom.tsx)
-   - Update `authoritativeTurnTime` to include private mode
-   - Update localStorage write to match
+Add a `GAME_TYPE_NAMES` mapping and include `gameType` in the edge function body.
 
-2. **Improve Share Dialog Trigger** (Room.tsx)  
-   - Remove dependency on `roomModeLoaded && roomMode === 'private'`
-   - Trigger immediately on `isPrivateCreated` query param
+Near the top, add:
+```typescript
+const GAME_TYPE_NAMES: Record<number, string> = {
+  1: "Chess",
+  2: "Dominos", 
+  3: "Backgammon",
+  4: "Checkers",
+  5: "Ludo",
+};
+```
 
-3. **Make Private Room Creation Atomic** (CreateRoom.tsx)
-   - For private mode, require successful settings save before navigation
-   - Show clear error if settings can't be saved
-   - Prevents zombie private rooms that appear in public list
+In the edge function call body (around line 354-363), add `gameType`:
+```typescript
+body: {
+  roomPda: roomPdaStr,
+  turnTimeSeconds: authoritativeTurnTime,
+  mode: gameMode,
+  maxPlayers: effectiveMaxPlayers,
+  gameType: GAME_TYPE_NAMES[parseInt(gameType)] || "unknown", // ADD THIS
+  creatorWallet: address,
+  timestamp,
+  signature,
+  message,
+},
+```
 
-4. **Add Defensive Filtering** (RoomList.tsx)
-   - Ensure filtering handles edge cases gracefully
-   - Log when rooms can't be properly categorized
+### 3. Room.tsx: Add Visible Share Button for Private Rooms
+
+**File:** `src/pages/Room.tsx`
+
+Add a "Share Invite Link" button visible to the creator when the room is private and still open. This goes in the action buttons section (around line 1095-1179).
+
+After the "Waiting for opponent to join..." message (line 1158), add:
+```tsx
+{/* Share button for private rooms - visible to creator */}
+{isOpenStatus(status) && isCreator && roomMode === 'private' && roomModeLoaded && (
+  <Button
+    onClick={() => setShowShareDialog(true)}
+    size="lg"
+    variant="outline"
+    className="gap-2 border-violet-500/30 text-violet-400 hover:bg-violet-500/10"
+  >
+    <Share2 className="h-4 w-4" />
+    Share Invite Link
+  </Button>
+)}
+```
+
+Also update the ShareInviteDialog props to include all the rich metadata (around line 1280-1290):
+```tsx
+<ShareInviteDialog
+  open={showShareDialog}
+  onOpenChange={setShowShareDialog}
+  roomId={roomPdaParam || ""}
+  gameName={gameName}
+  stakeSol={Number(stakeLamports) / 1e9}
+  winnerPayout={Number(winnerGetsFullLamports) / 1e9}
+  turnTimeSeconds={turnTimeSeconds}
+  maxPlayers={maxPlayers}
+  playerCount={playerCount}
+  mode={roomMode}
+/>
+```
 
 ---
 
@@ -170,20 +169,22 @@ Move the navigation call (lines 396-398) inside an else block or after confirmin
 
 | File | Changes |
 |------|---------|
-| `src/pages/CreateRoom.tsx` | Fix turn time for private mode; require settings success before navigation for private rooms |
-| `src/pages/Room.tsx` | Trust query param for share dialog instead of waiting for DB confirmation |
-| `src/pages/RoomList.tsx` | Optional: Add defensive logging for unclassified rooms |
+| `supabase/functions/game-session-set-settings/index.ts` | Add upsert logic: INSERT if session not found, fallback to UPDATE on conflict |
+| `src/pages/CreateRoom.tsx` | Add `GAME_TYPE_NAMES` map; pass `gameType` in edge function body |
+| `src/pages/Room.tsx` | Add visible "Share Invite Link" button for private room creators; pass rich metadata to ShareInviteDialog |
 
 ---
 
-## Expected Outcomes
+## Expected Results
 
-After implementing these fixes:
+After implementation:
+1. **Private rooms saved immediately** - Session created with `mode='private'` before navigation
+2. **Private rooms stay hidden** - Filtering works because mode exists in DB
+3. **Share dialog opens** - Both auto-open AND manual button available
+4. **Rich share info** - Recipients see game type, stake, winnings, turn time, players, creator
 
-1. **Turn time displays correctly** - Private rooms will show the selected turn time (e.g., 10 seconds) in the rules signing message
+---
 
-2. **Share dialog opens immediately** - After creating a private room, the ShareInviteDialog will open without waiting for DB sync
+## Deployment Notes
 
-3. **Private rooms stay hidden** - If settings save fails, the room creation will fail cleanly rather than creating a half-configured room that leaks into the public list
-
-4. **Better error handling** - Users will see clear feedback if private room creation fails, rather than being left with a broken room
+After implementing, the edge function will need to be deployed. The Share button and CreateRoom changes are frontend-only.
