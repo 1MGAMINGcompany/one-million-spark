@@ -110,6 +110,57 @@ export type Database = {
         }
         Relationships: []
       }
+      game_invites: {
+        Row: {
+          created_at: string | null
+          expires_at: string | null
+          game_name: string | null
+          game_type: string
+          id: string
+          max_players: number | null
+          mode: string | null
+          recipient_wallet: string
+          room_pda: string
+          sender_wallet: string
+          stake_sol: number | null
+          status: string | null
+          turn_time_seconds: number | null
+          winner_payout: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          expires_at?: string | null
+          game_name?: string | null
+          game_type: string
+          id?: string
+          max_players?: number | null
+          mode?: string | null
+          recipient_wallet: string
+          room_pda: string
+          sender_wallet: string
+          stake_sol?: number | null
+          status?: string | null
+          turn_time_seconds?: number | null
+          winner_payout?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          expires_at?: string | null
+          game_name?: string | null
+          game_type?: string
+          id?: string
+          max_players?: number | null
+          mode?: string | null
+          recipient_wallet?: string
+          room_pda?: string
+          sender_wallet?: string
+          stake_sol?: number | null
+          status?: string | null
+          turn_time_seconds?: number | null
+          winner_payout?: number | null
+        }
+        Relationships: []
+      }
       game_moves: {
         Row: {
           client_move_id: string | null

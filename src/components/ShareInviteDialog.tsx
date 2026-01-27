@@ -10,8 +10,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { useSound } from "@/contexts/SoundContext";
+import { useWallet } from "@/hooks/useWallet";
+import { SendToWalletInput } from "@/components/SendToWalletInput";
 import {
   buildInviteLink,
   shareInvite,
@@ -53,6 +56,7 @@ export function ShareInviteDialog({
   const { toast } = useToast();
   const { play } = useSound();
   const { t } = useTranslation();
+  const { address } = useWallet();
 
   const inviteLink = buildInviteLink({ roomId });
   
@@ -279,6 +283,16 @@ export function ShareInviteDialog({
               {t("shareInvite.email", "Email")}
             </Button>
           </div>
+
+          {/* Send to Wallet Section */}
+          <Separator className="my-2" />
+          
+          {address && (
+            <SendToWalletInput 
+              senderWallet={address} 
+              roomInfo={roomInfo} 
+            />
+          )}
 
           <p className="text-xs text-muted-foreground text-center">
             {t("game.room")} #{roomId.slice(0, 8)}... • {t("shareInvite.walletNeeded")}

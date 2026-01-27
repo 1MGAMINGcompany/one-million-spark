@@ -305,9 +305,17 @@ export function useWebRTCSync({
     return sendMessage({ type: "rematch_ready", payload: { roomId }, sender: localAddress });
   }, [sendMessage, localAddress]);
 
-  // Send player elimination (for Ludo)
-  const sendPlayerEliminated = useCallback((playerIndex: number): boolean => {
-    return sendMessage({ type: "player_eliminated", payload: { playerIndex }, sender: localAddress });
+  // Send player elimination (for Ludo) - broadcasts to all players
+  const sendPlayerEliminated = useCallback((playerIndex: number, reason?: string): boolean => {
+    return sendMessage({ 
+      type: "player_eliminated", 
+      payload: { 
+        playerIndex, 
+        eliminatedBy: localAddress,
+        reason: reason || "timeout",
+      }, 
+      sender: localAddress 
+    });
   }, [sendMessage, localAddress]);
 
   // Manual reconnect

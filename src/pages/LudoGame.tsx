@@ -700,15 +700,31 @@ const LudoGame = () => {
       applyExternalMove(move);
       recordPlayerMoveRef.current(roomPlayersRef.current[move.playerIndex] || "", `Moved to position ${move.endPosition}`);
     } else if (message.type === "player_eliminated" && message.payload) {
-      // Handle remote player elimination
-      const { playerIndex } = message.payload;
-      console.log(`[LudoGame] Player ${playerIndex} eliminated via WebRTC`);
+      // Handle remote player elimination broadcast
+      const { playerIndex, eliminatedBy, reason } = message.payload;
+      
+      // Special case: -1 means game over by last player remaining
+      if (playerIndex === -1) {
+        console.log("[LudoGame] Game over signal received via WebRTC");
+        return; // The winner detection useEffect will handle this
+      }
+      
+      console.log(`[LudoGame] Player ${playerIndex} eliminated via WebRTC (by: ${eliminatedBy}, reason: ${reason})`);
+      
+      // Don't re-eliminate if already eliminated (check via ref for freshness)
       eliminatePlayer(playerIndex);
+      
+      const playerName = turnPlayers[playerIndex]?.name || `Player ${playerIndex + 1}`;
+      const playerColor = PLAYER_COLORS[playerIndex];
+      
       toast({ 
         title: t('forfeit.playerEliminated'), 
-        description: t('forfeit.playerLeft', { player: turnPlayers[playerIndex]?.name || `Player ${playerIndex + 1}` }),
+        description: t('forfeit.playerLeft', { player: playerName }),
         variant: "destructive" 
       });
+      
+      // Add system chat message via ref
+      chatRef.current?.addSystemMessage?.(`${playerColor.toUpperCase()} player has been eliminated (${reason || 'timeout'})`);
     } else if (message.type === "rematch_invite" && message.payload) {
       setRematchInviteData(message.payload);
       setShowAcceptModal(true);
@@ -722,7 +738,7 @@ const LudoGame = () => {
       toast({ title: t('toast.rematchReady'), description: t('toast.startingNewGame') });
       navigate(`/game/ludo/${message.payload.roomId}`);
     }
-  }, [applyExternalMove, eliminatePlayer, turnPlayers, rematch, navigate, t]); // Stable deps - uses refs
+  }, [applyExternalMove, eliminatePlayer, turnPlayers, PLAYER_COLORS, rematch, navigate, t]); // Stable deps - uses refs
 
   // WebRTC sync
   const {

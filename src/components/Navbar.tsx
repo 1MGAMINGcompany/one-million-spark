@@ -6,6 +6,7 @@ import { Home, Wallet, PlusCircle, LayoutList, Menu, X, Coins, Volume2, VolumeX,
 import { WalletButton } from "./WalletButton";
 import BrandLogo from "./BrandLogo";
 import LanguageSelector from "./LanguageSelector";
+import { GameInvitesDropdown } from "./GameInvitesDropdown";
 import { useSound } from "@/contexts/SoundContext";
 import { requestNotificationPermission } from "@/lib/pushNotifications";
 import type { LucideIcon } from "lucide-react";
@@ -143,6 +144,11 @@ const Navbar = () => {
             >
               {notificationsEnabled ? <Bell size={20} /> : <BellOff size={20} />}
             </button>
+            
+            {/* Game Invites Dropdown */}
+            {connected && publicKey && (
+              <GameInvitesDropdown walletAddress={publicKey.toBase58()} />
+            )}
             
             <WalletButton />
           </div>
