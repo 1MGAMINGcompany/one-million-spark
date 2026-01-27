@@ -15,6 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useSound } from "@/contexts/SoundContext";
 import { useWallet } from "@/hooks/useWallet";
 import { SendToWalletInput } from "@/components/SendToWalletInput";
+import { QRCodeSVG } from "qrcode.react";
 import {
   buildInviteLink,
   shareInvite,
@@ -73,6 +74,10 @@ export function ShareInviteDialog({
   const { play } = useSound();
   const { t } = useTranslation();
   const { address } = useWallet();
+  
+  // Detect mobile for UX prioritization
+  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  const hasNativeShare = typeof navigator !== 'undefined' && !!navigator.share;
 
   const inviteLink = buildInviteLink({ roomId });
   
@@ -305,9 +310,23 @@ export function ShareInviteDialog({
             </Button>
           </div>
 
-          {/* Share Buttons - First Row */}
+          {/* Share Buttons */}
+          {/* Mobile: Native share as primary action */}
+          {isMobile && hasNativeShare && (
+            <Button
+              variant="default"
+              onClick={handleNativeShare}
+              className="w-full gap-2 mb-3"
+            >
+              <Share2 className="h-4 w-4" />
+              {t("shareInvite.shareInvite", "Share invite")}
+            </Button>
+          )}
+
+          {/* Share Buttons Grid */}
           <div className="grid grid-cols-2 gap-3">
-            {"share" in navigator && (
+            {/* Desktop: Show native share in grid */}
+            {!isMobile && hasNativeShare && (
               <Button
                 variant="outline"
                 onClick={handleNativeShare}
@@ -372,6 +391,21 @@ export function ShareInviteDialog({
               {t("shareInvite.email", "Email")}
             </Button>
           </div>
+
+          {/* QR Code for Desktop -> Mobile sharing */}
+          {!isMobile && (
+            <>
+              <Separator className="my-2" />
+              <div className="flex flex-col items-center py-3">
+                <p className="text-xs text-muted-foreground mb-3">
+                  {t("shareInvite.scanToJoin", "Scan with phone to join")}
+                </p>
+                <div className="bg-white p-3 rounded-lg">
+                  <QRCodeSVG value={inviteLink} size={120} />
+                </div>
+              </div>
+            </>
+          )}
 
           {/* Send to Wallet Section */}
           <Separator className="my-2" />
