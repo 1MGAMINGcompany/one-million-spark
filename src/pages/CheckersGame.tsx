@@ -20,6 +20,7 @@ import { useGameSessionPersistence } from "@/hooks/useGameSessionPersistence";
 import { useRoomMode } from "@/hooks/useRoomMode";
 import { useRankedReadyGate } from "@/hooks/useRankedReadyGate";
 import { useTurnTimer, DEFAULT_RANKED_TURN_TIME } from "@/hooks/useTurnTimer";
+import { useOpponentTimeoutDetection } from "@/hooks/useOpponentTimeoutDetection";
 import { useStartRoll } from "@/hooks/useStartRoll";
 import { useTxLock } from "@/contexts/TxLockContext";
 import { useDurableGameSync, GameMove } from "@/hooks/useDurableGameSync";
@@ -505,9 +506,8 @@ const CheckersGame = () => {
   const turnTimer = useTurnTimer({
     turnTimeSeconds: effectiveTurnTime,
     enabled: isRankedGame && canPlay && !gameOver,
-      isMyTurn,
-      activeTurnWallet: (currentPlayer === 'gold' ? roomPlayers[0] : roomPlayers[1]) || null,
-      onTimeExpired: handleTurnTimeout,
+    isMyTurn,
+    onTimeExpired: handleTurnTimeout,
     roomId: roomPda,
   });
 
@@ -530,6 +530,33 @@ const CheckersGame = () => {
     const turnIndex = currentPlayer === "gold" ? 0 : 1;
     return turnPlayers[turnIndex]?.address || null;
   }, [currentPlayer, turnPlayers]);
+
+  // Opponent timeout detection - polls DB to detect if opponent has timed out
+  const handleOpponentTimeoutDetected = useCallback((missedCount: number) => {
+    // When opponent times out, call handleTurnTimeout with their wallet
+    const opponentWalletAddr = getOpponentWallet(roomPlayers, address);
+    if (opponentWalletAddr) {
+      handleTurnTimeout(opponentWalletAddr);
+    }
+  }, [roomPlayers, address, handleTurnTimeout]);
+
+  const handleOpponentAutoForfeit = useCallback(() => {
+    // Opponent missed 3 turns - they auto-forfeit, we win
+    const opponentWalletAddr = getOpponentWallet(roomPlayers, address);
+    if (opponentWalletAddr) {
+      handleTurnTimeout(opponentWalletAddr);
+    }
+  }, [roomPlayers, address, handleTurnTimeout]);
+
+  const opponentTimeout = useOpponentTimeoutDetection({
+    roomPda: roomPda || "",
+    enabled: isRankedGame && canPlay && !gameOver && startRoll.isFinalized,
+    isMyTurn,
+    turnTimeSeconds: effectiveTurnTime,
+    myWallet: address,
+    onOpponentTimeout: handleOpponentTimeoutDetected,
+    onAutoForfeit: handleOpponentAutoForfeit,
+  });
 
   const {
     isMyTurn: isMyTurnNotification,
@@ -1282,19 +1309,17 @@ const CheckersGame = () => {
           startRollFinalized={startRoll.isFinalized}
         >
           {(!isRankedGame || rankedGate.bothReady) && (
-          <DiceRollStart
-            isRankedGame={isRankedGame}
-              bothReady={rankedGate.bothReady}
-            roomPda={roomPda || ""}
-            myWallet={address}
-            player1Wallet={roomPlayers[0]}
-            player2Wallet={roomPlayers[1]}
-            onComplete={startRoll.handleRollComplete}
-            onLeave={leave}
-            onForfeit={forfeit}
-            isLeaving={isLeaving}
-            isForfeiting={isForfeiting}
-          />
+            <DiceRollStart
+              roomPda={roomPda || ""}
+              myWallet={address}
+              player1Wallet={roomPlayers[0]}
+              player2Wallet={roomPlayers[1]}
+              onComplete={startRoll.handleRollComplete}
+              onLeave={leave}
+              onForfeit={forfeit}
+              isLeaving={isLeaving}
+              isForfeiting={isForfeiting}
+            />
           )}
         </RulesGate>
         ) : null;

@@ -24,6 +24,7 @@ import { useRoomMode } from "@/hooks/useRoomMode";
 import { useRankedReadyGate } from "@/hooks/useRankedReadyGate";
 import { useStartRoll } from "@/hooks/useStartRoll";
 import { useTurnTimer, DEFAULT_RANKED_TURN_TIME } from "@/hooks/useTurnTimer";
+import { useOpponentTimeoutDetection } from "@/hooks/useOpponentTimeoutDetection";
 import { useDurableGameSync, GameMove } from "@/hooks/useDurableGameSync";
 import TurnStatusHeader from "@/components/TurnStatusHeader";
 import TurnHistoryDrawer from "@/components/TurnHistoryDrawer";
@@ -585,9 +586,8 @@ const ChessGame = () => {
   const turnTimer = useTurnTimer({
     turnTimeSeconds: effectiveTurnTime,
     enabled: isRankedGame && canPlay && !gameOver,
-      isMyTurn,
-      activeTurnWallet: (game.turn() === 'w' ? roomPlayers[0] : roomPlayers[1]) || null,
-      onTimeExpired: handleTurnTimeout,
+    isMyTurn,
+    onTimeExpired: handleTurnTimeout,
     roomId: roomPda,
   });
 
@@ -611,6 +611,33 @@ const ChessGame = () => {
     const turnIndex = game.turn() === "w" ? 0 : 1;
     return turnPlayers[turnIndex]?.address || null;
   }, [game, turnPlayers]);
+
+  // Opponent timeout detection - polls DB to detect if opponent has timed out
+  const handleOpponentTimeoutDetected = useCallback((missedCount: number) => {
+    // When opponent times out, call handleTurnTimeout with their wallet
+    const opponentWallet = getOpponentWallet(roomPlayers, address);
+    if (opponentWallet) {
+      handleTurnTimeout(opponentWallet);
+    }
+  }, [roomPlayers, address, handleTurnTimeout]);
+
+  const handleOpponentAutoForfeit = useCallback(() => {
+    // Opponent missed 3 turns - they auto-forfeit, we win
+    const opponentWallet = getOpponentWallet(roomPlayers, address);
+    if (opponentWallet) {
+      handleTurnTimeout(opponentWallet);
+    }
+  }, [roomPlayers, address, handleTurnTimeout]);
+
+  const opponentTimeout = useOpponentTimeoutDetection({
+    roomPda: roomPda || "",
+    enabled: isRankedGame && canPlay && !gameOver && startRoll.isFinalized,
+    isMyTurn,
+    turnTimeSeconds: effectiveTurnTime,
+    myWallet: address,
+    onOpponentTimeout: handleOpponentTimeoutDetected,
+    onAutoForfeit: handleOpponentAutoForfeit,
+  });
 
   // Turn notification system
   const {
@@ -1407,19 +1434,17 @@ const ChessGame = () => {
         >
           {/* DiceRollStart - rendered based on shouldShowDice, not showDiceRoll */}
           {(!isRankedGame || rankedGate.bothReady) && (
-          <DiceRollStart
-            isRankedGame={isRankedGame}
-              bothReady={rankedGate.bothReady}
-            roomPda={roomPda || ""}
-            myWallet={address}
-            player1Wallet={roomPlayers[0]}
-            player2Wallet={roomPlayers[1]}
-            onComplete={startRoll.handleRollComplete}
-            onLeave={handleLeaveClick}
-            onForfeit={handleForfeitMatch}
-            isLeaving={isLeaving}
-            isForfeiting={isForfeiting}
-          />
+            <DiceRollStart
+              roomPda={roomPda || ""}
+              myWallet={address}
+              player1Wallet={roomPlayers[0]}
+              player2Wallet={roomPlayers[1]}
+              onComplete={startRoll.handleRollComplete}
+              onLeave={handleLeaveClick}
+              onForfeit={handleForfeitMatch}
+              isLeaving={isLeaving}
+              isForfeiting={isForfeiting}
+            />
           )}
         </RulesGate>
         ) : null;
