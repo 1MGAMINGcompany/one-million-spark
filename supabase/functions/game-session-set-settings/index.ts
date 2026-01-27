@@ -118,6 +118,7 @@ serve(async (req) => {
     const creatorWallet = payload?.creatorWallet;
     const timestamp = payload?.timestamp;
     const signature = payload?.signature;
+    const maxPlayersRaw = payload?.maxPlayers; // Ludo: 2, 3, or 4 players
 
     // Validate required fields
     if (!roomPda || typeof roomPda !== "string") {
@@ -225,11 +226,17 @@ serve(async (req) => {
     }
 
     // Update settings
+    // Parse max_players if provided (for Ludo: 2, 3, or 4)
+    const maxPlayers = typeof maxPlayersRaw === "number" && maxPlayersRaw >= 2 && maxPlayersRaw <= 4
+      ? maxPlayersRaw
+      : 2; // Default to 2 for non-Ludo games
+    
     const { error: updateErr } = await supabase
       .from("game_sessions")
       .update({
         turn_time_seconds: turnTimeSeconds,
         mode,
+        max_players: maxPlayers,
       })
       .eq("room_pda", roomPda);
 
@@ -238,7 +245,7 @@ serve(async (req) => {
       return json(500, { ok: false, error: "update_failed" });
     }
 
-    console.log("[game-session-set-settings] ✅ Settings updated:", { roomPda: roomPda.slice(0, 8), turnTimeSeconds, mode });
+    console.log("[game-session-set-settings] ✅ Settings updated:", { roomPda: roomPda.slice(0, 8), turnTimeSeconds, mode, maxPlayers });
     return json(200, { ok: true });
   } catch (e) {
     console.error("[game-session-set-settings] unexpected error", e);

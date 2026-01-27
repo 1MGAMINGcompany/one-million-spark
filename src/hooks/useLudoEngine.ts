@@ -103,6 +103,20 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
 
   // ============ ACTIONS ============
 
+  // Get next active player index (skips eliminated players)
+  const getNextActivePlayerIndex = useCallback((current: number, totalPlayers: number, eliminated: Set<number>): number => {
+    let next = (current + 1) % totalPlayers;
+    let attempts = 0;
+    
+    // Skip eliminated players
+    while (eliminated.has(next) && attempts < totalPlayers) {
+      next = (next + 1) % totalPlayers;
+      attempts++;
+    }
+    
+    return next;
+  }, []);
+
   // Roll the dice - with optional callback for backwards compatibility
   const rollDice = useCallback((onRollComplete?: (dice: number, movable: number[]) => void) => {
     if (phase !== 'WAITING_FOR_ROLL') {
@@ -138,12 +152,12 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
             console.log(`[LUDO] Three sixes! Turn forfeited.`);
             onToast?.("Three Sixes!", "Turn forfeited - three 6s in a row!");
             setConsecutiveSixes(0);
-            setDiceValue(null);
-            setMovableTokens([]);
-            setCurrentPlayerIndex(prev => (prev + 1) % 4);
-            setTurnSignal(prev => prev + 1);
-            setPhase('WAITING_FOR_ROLL');
-            onRollComplete?.(finalValue, []);
+          setDiceValue(null);
+          setMovableTokens([]);
+          setCurrentPlayerIndex(prev => getNextActivePlayerIndex(prev, players.length, eliminatedPlayers));
+          setTurnSignal(prev => prev + 1);
+          setPhase('WAITING_FOR_ROLL');
+          onRollComplete?.(finalValue, []);
             return;
           }
         } else {
@@ -168,7 +182,7 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
               setPhase('WAITING_FOR_ROLL');
             } else {
               setConsecutiveSixes(0);
-              setCurrentPlayerIndex(prev => (prev + 1) % 4);
+              setCurrentPlayerIndex(prev => getNextActivePlayerIndex(prev, players.length, eliminatedPlayers));
               setTurnSignal(prev => prev + 1);
               setPhase('WAITING_FOR_ROLL');
             }
@@ -178,7 +192,7 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
         }
       }
     }, 80);
-  }, [phase, players, currentPlayerIndex, consecutiveSixes, getMovableTokens, onSoundPlay, onToast]);
+  }, [phase, players, currentPlayerIndex, consecutiveSixes, getMovableTokens, onSoundPlay, onToast, getNextActivePlayerIndex, eliminatedPlayers]);
 
   // Select a token to move
   const selectToken = useCallback((tokenIndex: number) => {
@@ -353,19 +367,27 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
         setPhase('WAITING_FOR_ROLL');
       } else {
         setConsecutiveSixes(0);
-        setCurrentPlayerIndex(prev => (prev + 1) % 4);
+        // Use getNextActivePlayerIndex to skip eliminated players
+        const nextIndex = (playerIndex + 1) % players.length;
+        let actualNext = nextIndex;
+        let attempts = 0;
+        while (eliminatedPlayers.has(actualNext) && attempts < players.length) {
+          actualNext = (actualNext + 1) % players.length;
+          attempts++;
+        }
+        setCurrentPlayerIndex(actualNext);
         setTurnSignal(prev => prev + 1);
         setPhase('WAITING_FOR_ROLL');
       }
     }, 200);
-  }, [checkWinner, onSoundPlay, onToast, winner, players]);
+  }, [checkWinner, onSoundPlay, onToast, winner, players, eliminatedPlayers, getNextActivePlayerIndex]);
 
   // Advance turn - backwards compatible
   const advanceTurn = useCallback((diceRolled: number): boolean => {
     const isBonusTurn = diceRolled === 6;
     
     if (!isBonusTurn) {
-      setCurrentPlayerIndex(prev => (prev + 1) % 4);
+      setCurrentPlayerIndex(prev => getNextActivePlayerIndex(prev, players.length, eliminatedPlayers));
     }
     
     setDiceValue(null);
@@ -375,7 +397,7 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
     setPhase('WAITING_FOR_ROLL');
     
     return isBonusTurn;
-  }, [consecutiveSixes]);
+  }, [consecutiveSixes, getNextActivePlayerIndex, players.length, eliminatedPlayers]);
 
   // Apply external move - backwards compatible stub
   const applyExternalMove = useCallback((move: LudoMove): boolean => {

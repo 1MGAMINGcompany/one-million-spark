@@ -758,6 +758,47 @@ const LudoGame = () => {
     sendPlayerEliminatedRef.current = sendPlayerEliminated;
   }, [sendRematchInvite, sendRematchAccept, sendRematchDecline, sendRematchReady, sendPlayerEliminated]);
 
+  // Check for winner when only 1 player remains after eliminations
+  useEffect(() => {
+    if (gameOver || roomPlayers.length < 2) return;
+    
+    // Count active (non-eliminated) players
+    const activePlayers = roomPlayers.filter((_, idx) => 
+      !eliminatedPlayers.has(idx)
+    );
+    
+    if (activePlayers.length === 1 && eliminatedPlayers.size > 0) {
+      // Only 1 player remains - they win!
+      const winnerIndex = roomPlayers.findIndex((_, idx) => !eliminatedPlayers.has(idx));
+      const winnerWallet = roomPlayers[winnerIndex];
+      const winnerColor = PLAYER_COLORS[winnerIndex];
+      
+      console.log("[LudoGame] Only 1 player remains - declaring winner:", winnerWallet?.slice(0, 8), winnerColor);
+      
+      // Notify via WebRTC that we have a winner
+      sendPlayerEliminated(-1); // Special signal: -1 means game over by elimination
+      
+      // Persist to DB if ranked
+      if (isRankedGame && winnerWallet) {
+        persistMove({
+          action: "game_over",
+          winnerWallet,
+          winnerColor,
+          reason: "elimination",
+        }, address || "");
+      }
+      
+      // Play win sound for winner
+      if (isSameWallet(winnerWallet, address)) {
+        play('ludo_win');
+        toast({ title: t('game.youWin'), description: t('game.allOpponentsEliminated') });
+      } else {
+        play('ludo_dice');
+        toast({ title: t('game.gameOver'), description: t('game.opponentWins', { player: winnerColor }) });
+      }
+    }
+  }, [eliminatedPlayers, roomPlayers, gameOver, isRankedGame, persistMove, address, play, t, sendPlayerEliminated]);
+
   // Handle chat message sending via WebRTC
   const handleChatSend = useCallback((msg: ChatMessage) => {
     sendChat(JSON.stringify(msg));

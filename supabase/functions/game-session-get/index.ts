@@ -37,7 +37,7 @@ serve(async (req) => {
     // Fetch game session
     const { data: session, error: sessionError } = await supabase
       .from('game_sessions')
-      .select('*')
+      .select('*, max_players, eliminated_players')
       .eq('room_pda', roomPda)
       .maybeSingle()
 
