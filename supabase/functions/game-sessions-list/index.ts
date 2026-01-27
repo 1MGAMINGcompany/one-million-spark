@@ -33,7 +33,7 @@ serve(async (req) => {
     if (type === 'active') {
       const { data, error } = await supabase
         .from('game_sessions')
-        .select('room_pda, game_type, status, player1_wallet, player2_wallet, current_turn_wallet, created_at, updated_at, mode, turn_time_seconds')
+        .select('room_pda, game_type, status, player1_wallet, player2_wallet, current_turn_wallet, created_at, updated_at, mode, turn_time_seconds, turn_started_at')
         .eq('status', 'active')
         .order('updated_at', { ascending: false })
 
@@ -65,7 +65,7 @@ serve(async (req) => {
 
       const { data, error } = await supabase
         .from('game_sessions')
-        .select('room_pda, game_type, status, player1_wallet, player2_wallet, current_turn_wallet, created_at, updated_at, mode, turn_time_seconds')
+        .select('room_pda, game_type, status, player1_wallet, player2_wallet, current_turn_wallet, created_at, updated_at, mode, turn_time_seconds, turn_started_at')
         .eq('status', 'active')
         .or(`player1_wallet.eq.${wallet},player2_wallet.eq.${wallet}`)
         .order('updated_at', { ascending: false })

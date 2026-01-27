@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 // PublicKey import removed - we use room.pda directly as the unique identifier
@@ -14,7 +14,7 @@ import {
   AlertTriangle,
   Coins,
   Clock,
-  
+  Timer,
   Trophy,
   Gamepad,
   Settings2
@@ -33,8 +33,16 @@ import { showBrowserNotification } from "@/lib/pushNotifications";
 // getRoomPda import removed - we use activeRoom.pda directly
 import { ResolveRoomModal } from "@/components/ResolveRoomModal";
 import { UnresolvedRoomModal } from "@/components/UnresolvedRoomModal";
+import { supabase } from "@/integrations/supabase/client";
 
 import { BUILD_VERSION } from "@/lib/buildVersion";
+
+// Active session data for turn time display
+interface ActiveSessionData {
+  turnStartedAt: string | null;
+  turnTimeSeconds: number;
+  currentTurnWallet: string | null;
+}
 
 export default function RoomList() {
   const navigate = useNavigate();
@@ -50,6 +58,9 @@ export default function RoomList() {
     status: string;
     isPlayer1: boolean;
   }>>([]);
+  
+  // Active sessions map for turn time display
+  const [activeSessionsMap, setActiveSessionsMap] = useState<Map<string, ActiveSessionData>>(new Map());
   
   // On-chain active rooms (filtered from all rooms)
   const [myOnChainRooms, setMyOnChainRooms] = useState<RoomDisplay[]>([]);
@@ -110,6 +121,40 @@ export default function RoomList() {
     const interval = setInterval(fetchMySessions, 10000);
     return () => clearInterval(interval);
   }, [isConnected, address, findMyActiveGameSessions]);
+
+  // Fetch active sessions with turn time data for display
+  useEffect(() => {
+    const fetchActiveSessions = async () => {
+      try {
+        const { data, error } = await supabase.functions.invoke("game-sessions-list", {
+          body: { type: "active" },
+        });
+        
+        if (error) {
+          console.warn("[RoomList] Failed to fetch active sessions:", error);
+          return;
+        }
+        
+        if (data?.rows) {
+          const map = new Map<string, ActiveSessionData>();
+          for (const row of data.rows) {
+            map.set(row.room_pda, {
+              turnStartedAt: row.turn_started_at,
+              turnTimeSeconds: row.turn_time_seconds || 60,
+              currentTurnWallet: row.current_turn_wallet,
+            });
+          }
+          setActiveSessionsMap(map);
+        }
+      } catch (err) {
+        console.warn("[RoomList] Error fetching active sessions:", err);
+      }
+    };
+    
+    fetchActiveSessions();
+    const interval = setInterval(fetchActiveSessions, 5000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Filter on-chain rooms where this wallet is a player and room is active
   useEffect(() => {
@@ -213,6 +258,15 @@ export default function RoomList() {
       [GameType.Ludo]: "Ludo",
     };
     return names[gameType] || "Unknown";
+  };
+
+  // Helper to format turn time display
+  const formatTurnTime = (seconds: number): string => {
+    if (seconds >= 60) {
+      const mins = Math.floor(seconds / 60);
+      return `${mins}m`;
+    }
+    return `${seconds}s`;
   };
 
   return (
@@ -457,6 +511,20 @@ export default function RoomList() {
                         <Users className="h-3.5 w-3.5" />
                         {room.playerCount}/{room.maxPlayers}
                       </span>
+                      {/* Turn time display for ranked games with active sessions */}
+                      {(() => {
+                        const session = activeSessionsMap.get(room.pda);
+                        const isRanked = room.entryFeeSol > 0;
+                        if (isRanked && session) {
+                          return (
+                            <span className="flex items-center gap-1 text-amber-400">
+                              <Timer className="h-3.5 w-3.5" />
+                              {formatTurnTime(session.turnTimeSeconds)} turn
+                            </span>
+                          );
+                        }
+                        return null;
+                      })()}
                       <span className="hidden sm:flex items-center gap-1 truncate">
                         <Clock className="h-3.5 w-3.5" />
                         {room.creator.slice(0, 4)}...{room.creator.slice(-4)}
