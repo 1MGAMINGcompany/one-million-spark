@@ -31,10 +31,11 @@ serve(async (req) => {
     console.log('[game-sessions-list] Request type:', type)
 
     if (type === 'active') {
+      // Include both 'active' and 'waiting' sessions to show turn time for rooms before game starts
       const { data, error } = await supabase
         .from('game_sessions')
         .select('room_pda, game_type, status, player1_wallet, player2_wallet, current_turn_wallet, created_at, updated_at, mode, turn_time_seconds, turn_started_at')
-        .eq('status', 'active')
+        .in('status', ['active', 'waiting'])
         .order('updated_at', { ascending: false })
 
       if (error) {
@@ -45,7 +46,7 @@ serve(async (req) => {
         })
       }
       
-      console.log('[game-sessions-list] ✅ Found', data?.length || 0, 'active sessions')
+      console.log('[game-sessions-list] ✅ Found', data?.length || 0, 'active/waiting sessions')
       return new Response(JSON.stringify({ ok: true, rows: data }), { 
         status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }

@@ -511,15 +511,17 @@ export default function RoomList() {
                         <Users className="h-3.5 w-3.5" />
                         {room.playerCount}/{room.maxPlayers}
                       </span>
-                      {/* Turn time display for ranked games with active sessions */}
+                      {/* Turn time display for ranked games - show for all ranked rooms */}
                       {(() => {
-                        const session = activeSessionsMap.get(room.pda);
                         const isRanked = room.entryFeeSol > 0;
-                        if (isRanked && session) {
+                        if (isRanked) {
+                          // Get from session if available, otherwise show default ranked time
+                          const session = activeSessionsMap.get(room.pda);
+                          const turnTime = session?.turnTimeSeconds || 60; // Default 60s for ranked
                           return (
                             <span className="flex items-center gap-1 text-amber-400">
                               <Timer className="h-3.5 w-3.5" />
-                              {formatTurnTime(session.turnTimeSeconds)} turn
+                              {formatTurnTime(turnTime)} turn
                             </span>
                           );
                         }

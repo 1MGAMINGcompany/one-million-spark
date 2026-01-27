@@ -544,30 +544,33 @@ const ChessGame = () => {
         variant: "destructive",
       });
       
-      // Persist minimal turn_timeout event
+      // Persist auto_forfeit event (changed from turn_timeout)
       if (isRankedGame && opponentWalletAddr) {
         persistMove({
-          action: "turn_timeout",
+          action: "auto_forfeit",
           timedOutWallet: timedOutWallet,
-          nextTurnWallet: opponentWalletAddr,
+          winnerWallet: iTimedOut ? opponentWalletAddr : address,
           missedCount: newMissedCount,
         } as any, address);
       }
       
-        if (iTimedOut) {
-          // I missed 3 turns -> I lose
-          forfeitFnRef.current?.();
-          setGameOver(true);
-          setWinnerWallet(opponentWalletAddr);
-          setGameStatus(myColor === 'w' ? t('game.black') + " wins" : t('game.white') + " wins");
-          play('chess_lose');
-        } else {
-          // Opponent missed 3 turns -> I win
-          setGameOver(true);
-          setWinnerWallet(address);
-          setGameStatus(myColor === 'w' ? t('game.white') + " wins" : t('game.black') + " wins");
-          play('chess_win');
-        }
+      if (iTimedOut) {
+        // I missed 3 turns -> I lose
+        // FIX: Notify opponent via WebRTC BEFORE navigating away
+        sendResignRef.current?.();
+        
+        forfeitFnRef.current?.();
+        setGameOver(true);
+        setWinnerWallet(opponentWalletAddr);
+        setGameStatus(myColor === 'w' ? t('game.black') + " wins" : t('game.white') + " wins");
+        play('chess_lose');
+      } else {
+        // Opponent missed 3 turns -> I win
+        setGameOver(true);
+        setWinnerWallet(address);
+        setGameStatus(myColor === 'w' ? t('game.white') + " wins" : t('game.black') + " wins");
+        play('chess_win');
+      }
       
     } else {
       // SKIP to opponent
@@ -751,6 +754,8 @@ const ChessGame = () => {
   const sendRematchAcceptRef = useRef<((roomId: string) => boolean) | null>(null);
   const sendRematchDeclineRef = useRef<((roomId: string) => boolean) | null>(null);
   const sendRematchReadyRef = useRef<((roomId: string) => boolean) | null>(null);
+  // Ref for sendResign to allow calling from handleTurnTimeout (defined before useWebRTCSync)
+  const sendResignRef = useRef<(() => boolean) | null>(null);
 
   const handleAcceptRematch = async (rematchRoomId: string) => {
     const result = await rematch.acceptRematch(rematchRoomId);
@@ -944,7 +949,8 @@ const ChessGame = () => {
     sendRematchAcceptRef.current = sendRematchAccept;
     sendRematchDeclineRef.current = sendRematchDecline;
     sendRematchReadyRef.current = sendRematchReady;
-  }, [sendRematchInvite, sendRematchAccept, sendRematchDecline, sendRematchReady]);
+    sendResignRef.current = sendResign;
+  }, [sendRematchInvite, sendRematchAccept, sendRematchDecline, sendRematchReady, sendResign]);
 
   // useForfeit hook - centralized forfeit/leave logic with guaranteed cleanup
   const { forfeit, leave, isForfeiting, isLeaving, forfeitRef } = useForfeit({
