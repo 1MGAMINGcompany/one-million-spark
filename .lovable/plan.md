@@ -1,133 +1,133 @@
 
 
-## Database Migration: Fix Ranked Multiplayer Deadlock
+## Fix Plan: Turn Timer Enforcement for Ranked Multiplayer Games
 
-### Problem
-Ranked multiplayer games deadlock at "waiting for player 2" because `player2_wallet` is never set when the second player accepts rules via `set_player_ready` RPC.
+### Problem Summary
+When the turn timer expires for a player in a ranked multiplayer game:
+1. The game gets stuck - the turn doesn't switch to the opponent
+2. No `turn_timeout` moves are being recorded in the database
+3. The waiting player has no way to know their opponent timed out
+4. After 3 missed turns, auto-forfeit should trigger but doesn't
 
-### Solution
-Update the `set_player_ready` PostgreSQL RPC to atomically populate `player2_wallet` when:
-- The slot is currently NULL
-- The accepting wallet is not player1
-- This mirrors the behavior in `record_acceptance` RPC
+### Build Errors (Must Fix First)
+Two TypeScript errors are blocking the build:
 
-### SQL Migration
-
-```sql
-CREATE OR REPLACE FUNCTION public.set_player_ready(
-  p_room_pda text,
-  p_wallet text
-) RETURNS void
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-DECLARE
-  v_p1 text;
-  v_p2 text;
-BEGIN
-  SELECT player1_wallet, player2_wallet
-    INTO v_p1, v_p2
-  FROM public.game_sessions
-  WHERE room_pda = p_room_pda;
-
-  IF NOT FOUND THEN
-    RAISE EXCEPTION 'game session not found';
-  END IF;
-
-  -- Player 1 ready
-  IF p_wallet = v_p1 THEN
-    UPDATE public.game_sessions
-    SET p1_ready = true,
-        updated_at = now()
-    WHERE room_pda = p_room_pda;
-    RETURN;
-  END IF;
-
-  -- Player 2 ready (normal case)
-  IF v_p2 IS NOT NULL AND p_wallet = v_p2 THEN
-    UPDATE public.game_sessions
-    SET p2_ready = true,
-        updated_at = now()
-    WHERE room_pda = p_room_pda;
-    RETURN;
-  END IF;
-
-  -- NEW: If p2 slot is empty, claim it atomically
-  IF v_p2 IS NULL AND p_wallet <> v_p1 THEN
-    UPDATE public.game_sessions
-    SET player2_wallet = p_wallet,
-        p2_ready = true,
-        updated_at = now()
-    WHERE room_pda = p_room_pda
-      AND player2_wallet IS NULL;
-
-    IF FOUND THEN
-      RETURN;
-    END IF;
-
-    -- Handle race: if another process filled p2 concurrently
-    SELECT player2_wallet INTO v_p2
-    FROM public.game_sessions
-    WHERE room_pda = p_room_pda;
-
-    IF v_p2 IS NOT NULL AND p_wallet = v_p2 THEN
-      UPDATE public.game_sessions
-      SET p2_ready = true,
-          updated_at = now()
-      WHERE room_pda = p_room_pda;
-      RETURN;
-    END IF;
-  END IF;
-
-  RAISE EXCEPTION 'wallet not in game';
-END;
-$$;
+**Error 1:** `useTurnTimer` hook is being called with `activeTurnWallet` which doesn't exist:
+```typescript
+// Current (broken):
+useTurnTimer({
+  ...
+  activeTurnWallet: (game.turn() === 'w' ? roomPlayers[0] : roomPlayers[1]) || null,
+})
 ```
 
-### Key Changes from Current RPC
+**Error 2:** `DiceRollStart` component is receiving props that don't exist in its interface:
+```typescript
+// Current (broken):
+<DiceRollStart
+  isRankedGame={isRankedGame}  // Not in props
+  bothReady={rankedGate.bothReady}  // Not in props
+  ...
+/>
+```
 
-| Current Behavior | New Behavior |
-|------------------|--------------|
-| Only matches existing p1/p2 wallets | Also handles empty p2 slot |
-| Fails if p2_wallet is NULL | Atomically claims p2 slot |
-| No race condition handling | Re-checks if concurrent process filled slot |
+### Root Cause Analysis
+The turn timer system has a fundamental design issue:
+1. `useTurnTimer` only fires `onTimeExpired` when `isMyTurn === true`
+2. When Player A's timer expires on Player A's device, Player A handles it
+3. But if Player A goes offline or has a stale tab, Player B has no way to know
+4. The database `turn_started_at` + `turn_time_seconds` should be the source of truth
 
-### Race Condition Handling
-The new code handles the edge case where two processes try to claim p2 simultaneously:
-1. First UPDATE uses `WHERE player2_wallet IS NULL` for atomicity
-2. If UPDATE doesn't find a row (another process won), re-fetch and check if we're now p2
-3. If so, just set p2_ready = true
+### Solution Overview
+
+#### Phase 1: Fix Build Errors
+1. Remove `activeTurnWallet` from `useTurnTimer` calls (it's not in the interface)
+2. Remove `isRankedGame` and `bothReady` from `DiceRollStart` (they're not in the interface)
+
+#### Phase 2: Implement Opponent Timeout Detection
+Add a polling mechanism that checks if the opponent has timed out based on database state:
+- Poll `game_sessions.turn_started_at` + `turn_time_seconds`
+- If `now() > turn_started_at + turn_time_seconds` AND it's opponent's turn:
+  - Increment their missed turn counter
+  - Submit `turn_timeout` move to switch turns
+  - Show toast notification "Opponent missed their turn (1/3)"
+  - If 3 missed turns, trigger auto-forfeit
+
+#### Phase 3: Add WebRTC/Realtime Timeout Notification
+When a player times out on their device:
+- Broadcast `turn_timeout` message via WebRTC/Realtime
+- Receiving player updates their local state and shows notification
+
+---
+
+## Technical Implementation
+
+### File Changes Required
+
+#### 1. src/hooks/useTurnTimer.ts
+**No changes needed** - interface is correct, the game files are passing extra props
+
+#### 2. src/pages/ChessGame.tsx
+- Remove `activeTurnWallet` from `useTurnTimer` call (line 589)
+- Remove `isRankedGame` and `bothReady` from `DiceRollStart` (lines 1411-1412)
+- Add opponent timeout detection via polling
+
+#### 3. src/pages/CheckersGame.tsx
+- Remove `activeTurnWallet` from `useTurnTimer` call (line 509)
+- Remove `isRankedGame` and `bothReady` from `DiceRollStart` (lines 1286-1287)
+- Add opponent timeout detection via polling
+
+#### 4. New Hook: src/hooks/useOpponentTimeoutDetection.ts
+Create a hook that:
+- Polls `game_sessions` every 2-3 seconds when it's opponent's turn
+- Checks if `now() > turn_started_at + turn_time_seconds`
+- If expired, calls `handleOpponentTimeout` callback
+
+```typescript
+interface UseOpponentTimeoutOptions {
+  roomPda: string;
+  enabled: boolean;
+  isMyTurn: boolean;
+  turnTimeSeconds: number;
+  onOpponentTimeout: () => void;
+}
+```
 
 ### Expected Flow After Fix
 
 ```text
-Player 2 accepts rules
+Game in progress, it's Player A's turn
     ↓
-ranked-accept calls set_player_ready(room, p2_wallet)
+Player A's 10-second timer expires
     ↓
-RPC checks: p2_wallet = NULL? YES
+EITHER:
+  - Player A's device fires onTimeExpired → submits turn_timeout → switches turn
+  OR
+  - Player B's device detects via polling → submits turn_timeout → switches turn
     ↓
-Atomically sets: player2_wallet = p_wallet, p2_ready = true
+Database updated: current_turn_wallet = Player B
     ↓
-compute_start_roll sees both players → SUCCESS
+If 3 misses: auto_forfeit triggered
     ↓
-Game starts with dice roll
+Player B sees toast: "Opponent missed their turn (1/3)"
 ```
 
+### Database RPC Enhancement (Optional)
+The existing `submit_game_move` RPC already supports `turn_timeout` moves. We may want to add a dedicated `record_turn_timeout` RPC that:
+- Validates the timeout is legitimate (turn_started_at + turn_time_seconds < now())
+- Atomically increments missed turn counter
+- Updates current_turn_wallet
+- Prevents double-submission
+
 ### What This Fixes
-- Chess, Backgammon, Checkers, Dominos ranked multiplayer
-- "Waiting for player 2" deadlock
-- compute_start_roll failures
-- Turn timer not starting
+1. ✅ Turn switches when timer expires
+2. ✅ 3 consecutive misses triggers auto-forfeit
+3. ✅ Waiting player gets notified when opponent misses turn
+4. ✅ Works even if one player goes offline
 
-### Explicitly NOT Changed
-- Ludo (uses different 2-4 player logic)
-- Auto-forfeit logic
-- Payout/escrow logic
-- Dice roll logic
-- Any frontend files
-
-### Frontend Changes Required
-None - existing flow will work once RPC is updated.
+### What Stays the Same
+- Forfeit payout logic (unchanged)
+- Dice roll logic (unchanged)
+- Ludo (uses different multi-player system)
+- Start roll mechanism (unchanged)
 
