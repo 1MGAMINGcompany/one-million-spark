@@ -1,205 +1,168 @@
 
+# Fix Private Room Issues: Turn Time, Share Dialog, and Room List Filtering
 
-# Multiplayer Ludo: 2-4 Player Support with Turn Skip and Multi-Forfeit Logic
+## Issues Identified
 
-## Overview
+Based on the session replay and code analysis, there are **three distinct bugs** affecting private rooms:
 
-This plan implements full multiplayer Ludo support for 2, 3, or 4 players with special handling for:
-1. Player count selection during room creation
-2. Turn skipping when players miss their turn
-3. Multi-player forfeit scenarios (game continues with remaining players)
-4. Winner payout and creator rent refund
-
----
-
-## Current State Analysis
-
-### What Already Works
-- On-chain program supports 2, 3, or 4 players via `max_players` field
-- Ludo engine (`src/lib/ludo/engine.ts`) already uses `players.length` for turn rotation
-- 4 player colors defined: gold, ruby, sapphire, emerald
-- Turn timer and missed turn tracking exists via `useTurnTimer` and `missedTurns.ts`
-- Basic player elimination tracking via `eliminatedPlayers` Set in `useLudoEngine`
-
-### What Needs Implementation
-1. **CreateRoom.tsx**: Add player count dropdown when Ludo is selected
-2. **Room.tsx**: Display player count and wait for correct number of players
-3. **LudoGame.tsx**: Handle 2-4 player dynamics, eliminated player skip, multi-forfeit
-4. **Database**: Store and track player count, eliminated players, partial forfeits
-5. **Settlement**: Handle winner payout with multiple forfeit scenarios
-
----
-
-## Technical Implementation
-
-### Part 1: Room Creation with Player Count Selection
-
-**File: `src/pages/CreateRoom.tsx`**
-
-Add a conditional dropdown that appears only when Ludo (GameType 5) is selected:
-
+### Bug 1: Turn Time Shows as 0 for Private Rooms
+**Root Cause:** In `CreateRoom.tsx` line 318, the turn time is only preserved for ranked mode:
 ```typescript
-// State for Ludo player count
-const [ludoPlayerCount, setLudoPlayerCount] = useState<string>("4");
+const authoritativeTurnTime = gameMode === 'ranked' ? turnTimeSeconds : 0;
+```
+This means both `casual` AND `private` modes send `turnTimeSeconds: 0` to the edge function, ignoring the user's selection.
 
-// Compute effective max players
-const effectiveMaxPlayers = gameType === "5" ? ludoPlayerCount : "2";
+**Evidence:** The screenshot shows `turnTimeSeconds=0` in the signed message, even though the user selected 10 seconds.
+
+### Bug 2: Share Dialog Not Opening for Private Rooms  
+**Root Cause:** The share dialog auto-open logic in `Room.tsx` (lines 215-222) depends on:
+1. `isPrivateCreated` query param being present
+2. `roomModeLoaded` being true 
+3. `roomMode === 'private'`
+
+However, the `roomMode` fetch (lines 169-212) retries up to 5 times with 800ms delays. If the edge function call to save settings **fails** (as shown in screenshot: "Settings Error: Failed to save game settings"), the game_sessions row may not have `mode='private'` yet, causing `roomMode` to default to `'casual'` after retries. This breaks the condition `roomMode === 'private'`.
+
+### Bug 3: Private Rooms Appearing in Room List
+**Root Cause:** In `RoomList.tsx` line 460, the filtering logic is:
+```typescript
+.filter((room) => activeSessionsMap.get(room.pda)?.mode !== 'private')
+```
+This relies on the `activeSessionsMap` which is populated from the `game-sessions-list` edge function. If:
+- The game session wasn't created properly (settings save failed), OR
+- The session exists but mode wasn't set to 'private', OR  
+- The room was just created and hasn't been indexed yet
+
+...then `activeSessionsMap.get(room.pda)` returns `undefined`, and `undefined?.mode !== 'private'` evaluates to `true`, so the room is NOT filtered out.
+
+---
+
+## Technical Solution
+
+### Fix 1: Allow Turn Time for Private Mode
+**File:** `src/pages/CreateRoom.tsx`
+
+Change line 318 from:
+```typescript
+const authoritativeTurnTime = gameMode === 'ranked' ? turnTimeSeconds : 0;
+```
+To:
+```typescript
+const authoritativeTurnTime = (gameMode === 'ranked' || gameMode === 'private') ? turnTimeSeconds : 0;
 ```
 
-UI Changes:
-- When `gameType === "5"` (Ludo), show a new Select dropdown:
-  - Label: "Number of Players"
-  - Options: 2 Players, 3 Players, 4 Players
-  - Default: 4 Players
-- Pass `effectiveMaxPlayers` to `createRoom()` instead of hardcoded "2"
+This ensures private rooms can have enforced turn timers just like ranked rooms.
 
-### Part 2: Room Lobby Waiting for N Players
-
-**File: `src/pages/Room.tsx`**
-
-Current behavior waits for 2 players. Need to:
-- Fetch `maxPlayers` from on-chain room data
-- Display "Waiting for X/Y players" instead of hardcoded 2
-- Only navigate to game when `playerCount === maxPlayers`
-
-Changes:
-- Add `maxPlayers` state from `parseRoomAccount`
-- Update UI to show `{playerCount}/{maxPlayers} players`
-- Gate join logic on `playerCount < maxPlayers`
-- Auto-start when `playerCount === maxPlayers`
-
-### Part 3: LudoGame.tsx Multi-Player Logic
-
-**File: `src/pages/LudoGame.tsx`**
-
-Major changes needed:
-
-#### A. Player Initialization from On-Chain Data
-Currently initializes 4 AI players and replaces with real wallets. Need to:
-- Read `maxPlayers` from on-chain room
-- Initialize only that many players
-- Mark human players based on `players[]` array from chain
-
+Also update the localStorage line 311-313 to match:
 ```typescript
-// Instead of always 4 players
-const playerCount = roomData.maxPlayers; // 2, 3, or 4
-const onChainPlayers = roomData.players.map(p => p.toBase58());
-
-// Create players array based on actual count
-const gamePlayers = PLAYER_COLORS.slice(0, playerCount).map((color, idx) => ({
-  color,
-  wallet: onChainPlayers[idx] || null,
-  isAI: false, // All are real players in multiplayer
-  eliminated: false,
+localStorage.setItem(`room_settings_${roomPdaStr}`, JSON.stringify({
+  turnTimeSeconds: (gameMode === 'ranked' || gameMode === 'private') ? turnTimeSeconds : 0,
+  stakeLamports: solToLamports(entryFeeNum),
 }));
 ```
 
-#### B. Turn Advancement Skips Eliminated Players
-When advancing turns, skip players who have been eliminated:
+### Fix 2: Open Share Dialog Immediately After Private Room Creation
+**File:** `src/pages/Room.tsx`
 
+The current logic waits for `roomModeLoaded && roomMode === 'private'` which can fail if the settings edge function failed.
+
+Change the approach: trust the `?private_created=1` query param as the source of truth for showing the dialog immediately, rather than waiting for DB confirmation.
+
+Modify lines 214-222:
 ```typescript
-function getNextActivePlayerIndex(current: number, players: Player[], eliminated: Set<number>): number {
-  let next = (current + 1) % players.length;
-  let attempts = 0;
-  
-  while (eliminated.has(next) && attempts < players.length) {
-    next = (next + 1) % players.length;
-    attempts++;
+// Auto-open share dialog for private rooms when created
+useEffect(() => {
+  // Trust the query param - if private_created=1, show dialog immediately
+  // Don't wait for DB mode confirmation which may fail/delay
+  if (isPrivateCreated) {
+    setShowShareDialog(true);
+    // Clear the query param
+    searchParams.delete('private_created');
+    setSearchParams(searchParams, { replace: true });
   }
-  
-  return next;
+}, [isPrivateCreated, searchParams, setSearchParams]);
+```
+
+This ensures the share dialog opens even if the settings edge function had issues.
+
+### Fix 3: Robust Private Room Filtering in Room List
+**File:** `src/pages/RoomList.tsx`
+
+The current filtering only checks the DB-sourced `activeSessionsMap`. We need a fallback mechanism.
+
+Option A (Recommended): Filter on-chain rooms using a combination of DB mode AND any indication the room might be private.
+
+Modify lines 459-461:
+```typescript
+{rooms
+  .filter((room) => {
+    const sessionData = activeSessionsMap.get(room.pda);
+    // If we have session data, check mode
+    if (sessionData?.mode === 'private') return false;
+    // If no session data yet, still show room (can't know if private)
+    // The room will be filtered once session syncs
+    return true;
+  })
+  .map((room) => (
+```
+
+However, this doesn't fully solve the race condition. A more robust fix is to:
+1. Ensure the edge function call in CreateRoom succeeds before navigating
+2. Show a brief loading state while settings are being saved
+3. Only navigate after settings are confirmed saved
+
+Option B (Defensive): Make CreateRoom wait for edge function success before navigation for private rooms specifically.
+
+**File:** `src/pages/CreateRoom.tsx`
+
+After the edge function call (around line 363-394), add logic to:
+- If mode is 'private' and settings save failed, show an error and do NOT navigate
+- Only navigate to room page if settings were successfully saved
+
+```typescript
+if (settingsErr || data?.ok === false) {
+  console.error("[TurnTimer] Settings save failed");
+  // For private rooms, this is critical - don't navigate
+  if (gameMode === 'private') {
+    toast({
+      title: "Failed to Create Private Room",
+      description: "Could not save room settings. Please try again.",
+      variant: "destructive",
+    });
+    // Cancel the room on-chain since we can't configure it
+    // Or at minimum, don't navigate
+    return; // Early return - don't navigate
+  }
+  // For ranked/casual, show warning but continue
+  toast({
+    title: "Settings Error",
+    description: "Failed to save game settings. Turn timer may default to 60s.",
+    variant: "destructive",
+  });
 }
 ```
 
-#### C. Missed Turn Handling (Per Original Specification)
-- 1st miss: Skip to next player, show "1/3 missed turns"
-- 2nd miss: Skip to next player, show "2/3 missed turns"
-- 3rd miss: **Forfeit** - player is kicked out, game continues
+Move the navigation call (lines 396-398) inside an else block or after confirming success.
 
-On 3rd miss:
-```typescript
-// Mark player as eliminated
-setEliminatedPlayers(prev => new Set([...prev, playerIndex]));
+---
 
-// Broadcast elimination to other players
-sendPlayerEliminated(playerIndex);
+## Implementation Sequence
 
-// Check if only 1 player remains
-const remainingPlayers = players.filter((_, idx) => !eliminatedPlayers.has(idx));
-if (remainingPlayers.length === 1) {
-  // Game over - this player wins
-  declareWinner(remainingPlayers[0].color);
-}
-```
+1. **Fix Turn Time Calculation** (CreateRoom.tsx)
+   - Update `authoritativeTurnTime` to include private mode
+   - Update localStorage write to match
 
-#### D. Winner Determination Logic
-The last remaining player wins. Handle cases:
-- 2 players: When 1 forfeits, other wins immediately
-- 3 players: When 2 forfeit, remaining 1 wins
-- 4 players: When 3 forfeit, remaining 1 wins
-- Normal win: First player to get all 4 tokens home wins
+2. **Improve Share Dialog Trigger** (Room.tsx)  
+   - Remove dependency on `roomModeLoaded && roomMode === 'private'`
+   - Trigger immediately on `isPrivateCreated` query param
 
-### Part 4: Database Schema Updates
+3. **Make Private Room Creation Atomic** (CreateRoom.tsx)
+   - For private mode, require successful settings save before navigation
+   - Show clear error if settings can't be saved
+   - Prevents zombie private rooms that appear in public list
 
-**New Fields in `game_sessions`**
-
-Need to track:
-- `max_players`: Number of players expected (2, 3, or 4)
-- `eliminated_players`: Array of wallet addresses who forfeited
-- `active_players`: Count of still-active players
-
-Edge Function Updates:
-- `game-session-set-settings`: Store `max_players` from creation
-- `game-session-get`: Return `max_players` and `eliminated_players`
-- `settle-game`: Handle partial forfeits (only deduct from pot, don't end game)
-
-### Part 5: Partial Forfeit Settlement Logic
-
-**File: `supabase/functions/settle-game/index.ts`**
-
-Current logic settles entire pot to winner. For Ludo multi-player:
-
-When a player forfeits mid-game (before winner determined):
-1. Their stake remains in vault (no immediate payout)
-2. Mark them as eliminated in `game_sessions`
-3. Game continues with remaining players
-
-When final winner is determined:
-1. Calculate total pot: `stake × initial_player_count`
-2. Deduct 5% platform fee
-3. Pay 95% to winner
-4. Refund room rent to creator (always)
-
-```typescript
-// Ludo settlement with forfeits
-if (gameType === 5 && eliminatedPlayers.length > 0) {
-  // Pot = all stakes including forfeited players
-  const totalPot = stakeLamports * initialPlayerCount;
-  const platformFee = totalPot * 0.05;
-  const winnerPayout = totalPot - platformFee;
-  
-  // Creator always gets rent refund (room account closure)
-}
-```
-
-### Part 6: WebRTC Message Types for Ludo
-
-**File: `src/hooks/useWebRTCSync.ts`**
-
-Add new message types for Ludo multiplayer:
-
-```typescript
-type LudoMessage = 
-  | { type: 'player_eliminated'; playerIndex: number; wallet: string }
-  | { type: 'turn_skip'; playerIndex: number; missedCount: number }
-  | { type: 'ludo_move'; move: LudoMove }
-  | { type: 'game_over'; winnerWallet: string; winnerColor: string }
-```
-
-Handler updates in `LudoGame.tsx`:
-- On `player_eliminated`: Add to local eliminated set, skip their turns
-- On `turn_skip`: Update local turn state
-- On `game_over`: Show winner screen, trigger settlement
+4. **Add Defensive Filtering** (RoomList.tsx)
+   - Ensure filtering handles edge cases gracefully
+   - Log when rooms can't be properly categorized
 
 ---
 
@@ -207,65 +170,20 @@ Handler updates in `LudoGame.tsx`:
 
 | File | Changes |
 |------|---------|
-| `src/pages/CreateRoom.tsx` | Add Ludo player count dropdown |
-| `src/pages/Room.tsx` | Wait for N players, show X/Y progress |
-| `src/pages/LudoGame.tsx` | Multi-player initialization, elimination logic, winner determination |
-| `src/hooks/useLudoEngine.ts` | Add elimination tracking, skip eliminated in advanceTurn |
-| `src/lib/ludo/engine.ts` | Update advanceTurn to accept eliminated set |
-| `src/lib/missedTurns.ts` | No changes needed (already tracks per-wallet) |
-| `supabase/functions/settle-game/index.ts` | Handle Ludo multi-forfeit settlement |
-| `supabase/functions/game-session-set-settings/index.ts` | Store max_players |
-| `supabase/functions/game-session-get/index.ts` | Return max_players and eliminated_players |
+| `src/pages/CreateRoom.tsx` | Fix turn time for private mode; require settings success before navigation for private rooms |
+| `src/pages/Room.tsx` | Trust query param for share dialog instead of waiting for DB confirmation |
+| `src/pages/RoomList.tsx` | Optional: Add defensive logging for unclassified rooms |
 
 ---
 
-## Database Migration
+## Expected Outcomes
 
-Add to `game_sessions` table:
-```sql
-ALTER TABLE game_sessions 
-ADD COLUMN IF NOT EXISTS max_players INTEGER DEFAULT 2,
-ADD COLUMN IF NOT EXISTS eliminated_players TEXT[] DEFAULT '{}';
-```
+After implementing these fixes:
 
----
+1. **Turn time displays correctly** - Private rooms will show the selected turn time (e.g., 10 seconds) in the rules signing message
 
-## Expected Behavior Flow
+2. **Share dialog opens immediately** - After creating a private room, the ShareInviteDialog will open without waiting for DB sync
 
-### 4-Player Ludo Game
+3. **Private rooms stay hidden** - If settings save fails, the room creation will fail cleanly rather than creating a half-configured room that leaks into the public list
 
-1. **Room Creation**: Creator selects Ludo → dropdown appears → selects "4 Players" → creates room
-2. **Waiting**: Room lobby shows "1/4 players" → players join one by one
-3. **Game Start**: When 4 players joined, all accept rules, start roll determines order
-4. **Normal Play**: Turn rotates Gold → Ruby → Sapphire → Emerald → Gold...
-5. **Turn Timeout**: If player misses turn timer:
-   - 1st miss: Toast "1/3 missed", skip to next
-   - 2nd miss: Toast "2/3 missed", skip to next
-   - 3rd miss: Toast "Eliminated!", player kicked, game continues
-6. **Mid-Game Forfeit**: If Emerald forfeits after 3 misses:
-   - Turn order becomes Gold → Ruby → Sapphire → Gold...
-   - Emerald's stake stays in pot
-7. **Winner**: First player to get all 4 tokens home OR last remaining player
-8. **Settlement**: Winner gets (4 × stake - 5% fee), creator gets rent refund
-
-### Edge Cases Handled
-- 2 players left, one forfeits → other wins immediately
-- All but one player forfeits → remaining player wins
-- Player disconnects → timeout handler triggers skips/forfeit
-- Creator forfeits → rent still refunded to creator, game continues if 2+ remain
-
----
-
-## Testing Checklist
-
-1. Create Ludo room with 2, 3, and 4 players (verify on-chain)
-2. Verify room lobby waits for correct player count
-3. Test turn skip on 1st and 2nd timeout
-4. Test auto-forfeit on 3rd timeout
-5. Verify eliminated player is skipped in turn rotation
-6. Test winner when only 1 player remains
-7. Test normal win (all 4 tokens home)
-8. Verify settlement pays correct amounts
-9. Verify creator gets rent refund after forfeit
-10. Test WebRTC sync of elimination across devices
-
+4. **Better error handling** - Users will see clear feedback if private room creation fails, rather than being left with a broken room
