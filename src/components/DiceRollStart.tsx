@@ -134,8 +134,7 @@ export function DiceRollStart({
   const [error, setError] = useState<string | null>(null);
   const [showFallback, setShowFallback] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
-  const [isPickingStarter, setIsPickingStarter] = useState(false);
-    const [rankedBlocked, setRankedBlocked] = useState(isRankedGame);
+  const [isPickingStarter, setIsPickingStarter] = useState(false);  const [rankedBlocked, setRankedBlocked] = useState(false);
   // Timeout ref for 15s fallback
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const fallbackUsedRef = useRef(false);
@@ -144,6 +143,18 @@ export function DiceRollStart({
   const isPlayer1 = myWallet.trim() === player1Wallet.trim();
   const myName = t("common.you") || "You";
   const opponentName = t("game.opponent") || "Opponent";
+
+  // Ranked: never show DiceRollStart while rules are not fully accepted.
+  // This prevents the rules modal and dice UI from stacking and blocking input.
+  useEffect(() => {
+    if (isRankedGame && !bothReady) setRankedBlocked(true);
+    if (!isRankedGame || bothReady) setRankedBlocked(false);
+  }, [isRankedGame, bothReady]);
+
+  if (rankedBlocked && phase !== "result") {
+    return null;
+  }
+
   /**
    * Compute deterministic starter from roomPda
    * Both clients will compute the same result
