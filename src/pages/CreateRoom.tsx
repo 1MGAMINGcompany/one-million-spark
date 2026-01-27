@@ -51,6 +51,15 @@ const GAME_TYPE_MAP: Record<string, string> = {
   ludo: "5",
 };
 
+// Game type number to name mapping (for edge function)
+const GAME_TYPE_NAMES: Record<number, string> = {
+  1: "Chess",
+  2: "Dominos",
+  3: "Backgammon",
+  4: "Checkers",
+  5: "Ludo",
+};
+
 // Target minimum fee in USD
 const MIN_FEE_USD = 0.50;
 // Fallback minimum if price unavailable
@@ -356,6 +365,7 @@ export default function CreateRoom() {
                 turnTimeSeconds: authoritativeTurnTime,
                 mode: gameMode,
                 maxPlayers: effectiveMaxPlayers, // For Ludo: 2, 3, or 4 players
+                gameType: GAME_TYPE_NAMES[parseInt(gameType)] || "unknown", // Pass game name for session creation
                 creatorWallet: address,
                 timestamp,
                 signature,
