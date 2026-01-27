@@ -629,15 +629,18 @@ const DominosGame = () => {
         variant: "destructive",
       });
       
-      // Persist MINIMAL timeout event BEFORE forfeit
+      // Persist auto_forfeit event (changed from turn_timeout)
       if (isRankedGame && opponentWalletAddr) {
         persistMove({
-          action: "turn_timeout",
+          action: "auto_forfeit",
           timedOutWallet: address,
-          nextTurnWallet: opponentWalletAddr,
+          winnerWallet: opponentWalletAddr,
           missedCount: newMissedCount,
         } as unknown as DominoMove, address);
       }
+      
+      // FIX: Notify opponent via WebRTC BEFORE navigating away
+      sendResignRef.current?.();
       
       forfeitFnRef.current?.();
       setGameOver(true);
@@ -851,6 +854,8 @@ const DominosGame = () => {
   const sendRematchAcceptRef = useRef<((roomId: string) => boolean) | null>(null);
   const sendRematchDeclineRef = useRef<((roomId: string) => boolean) | null>(null);
   const sendRematchReadyRef = useRef<((roomId: string) => boolean) | null>(null);
+  // Ref for sendResign to allow calling from handleTurnTimeout (defined before useWebRTCSync)
+  const sendResignRef = useRef<(() => boolean) | null>(null);
 
   const handleAcceptRematch = async (rematchRoomId: string) => {
     const result = await rematch.acceptRematch(rematchRoomId);
@@ -1129,7 +1134,8 @@ const DominosGame = () => {
     sendRematchAcceptRef.current = sendRematchAccept;
     sendRematchDeclineRef.current = sendRematchDecline;
     sendRematchReadyRef.current = sendRematchReady;
-  }, [sendRematchInvite, sendRematchAccept, sendRematchDecline, sendRematchReady]);
+    sendResignRef.current = sendResign;
+  }, [sendRematchInvite, sendRematchAccept, sendRematchDecline, sendRematchReady, sendResign]);
 
   // Handle chat message sending via WebRTC
   const handleChatSend = useCallback((msg: ChatMessage) => {

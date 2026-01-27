@@ -1053,6 +1053,9 @@ const BackgammonGame = () => {
         reason: "auto_forfeit",
       });
       
+      // FIX: Notify opponent via WebRTC BEFORE navigating away
+      sendResignRef.current?.();
+      
       forfeitFnRef.current?.();
       // Use neutral resolving state - DB Outcome Resolver will finalize
       enterOutcomeResolving(nextTurnWallet);
@@ -1279,6 +1282,8 @@ const BackgammonGame = () => {
   const sendRematchAcceptRef = useRef<((roomId: string) => boolean) | null>(null);
   const sendRematchDeclineRef = useRef<((roomId: string) => boolean) | null>(null);
   const sendRematchReadyRef = useRef<((roomId: string) => boolean) | null>(null);
+  // Ref for sendResign to allow calling from handleTurnTimeout (defined before useWebRTCSync)
+  const sendResignRef = useRef<(() => boolean) | null>(null);
 
   const handleAcceptRematch = async (rematchRoomId: string) => {
     const result = await rematch.acceptRematch(rematchRoomId);
@@ -1489,7 +1494,8 @@ const BackgammonGame = () => {
     sendRematchAcceptRef.current = sendRematchAccept;
     sendRematchDeclineRef.current = sendRematchDecline;
     sendRematchReadyRef.current = sendRematchReady;
-  }, [sendRematchInvite, sendRematchAccept, sendRematchDecline, sendRematchReady]);
+    sendResignRef.current = sendResign;
+  }, [sendRematchInvite, sendRematchAccept, sendRematchDecline, sendRematchReady, sendResign]);
 
   // useForfeit hook - centralized forfeit/leave logic
   const { forfeit, leave, isForfeiting, isLeaving, forfeitRef } = useForfeit({
