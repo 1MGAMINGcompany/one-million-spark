@@ -30,8 +30,8 @@ export interface FinalizeGameParams {
   gameType: string;
   /** Stake in lamports */
   stakeLamports: number;
-  /** Game mode (casual/ranked) */
-  mode: 'casual' | 'ranked';
+  /** Game mode (casual/ranked/private) */
+  mode: 'casual' | 'ranked' | 'private';
   /** Array of player wallets */
   players: string[];
   /** How the game ended */
