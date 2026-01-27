@@ -116,7 +116,8 @@ export function useOpponentTimeoutDetection(
       const graceExpiryTime = expiryTime + (GRACE_PERIOD_SECONDS * 1000);
 
       // Check if we already processed this specific turn start
-      const turnStartKey = `${turn_started_at}`;
+      // FIX: Include current_turn_wallet in key to prevent duplicate processing after turn switches
+      const turnStartKey = `${turn_started_at}|${current_turn_wallet}`;
       if (lastProcessedTurnStartRef.current === turnStartKey) {
         return; // Already processed this timeout
       }

@@ -436,14 +436,29 @@ const CheckersGame = () => {
   const forfeitFnRef = useRef<(() => Promise<void>) | null>(null);
 
   // Turn timer for ranked games - skip on timeout, 3 strikes = forfeit
+  // FIX: Allow processing when opponent times out (detected by useOpponentTimeoutDetection)
   const handleTurnTimeout = useCallback((timedOutWalletArg?: string | null) => {
     if (gameOver || !address || !roomPda) return;
 
-      const timedOutWallet = (timedOutWalletArg || activeTurnAddress || null);
-      if (!timedOutWallet || !activeTurnAddress || !isSameWallet(timedOutWallet, activeTurnAddress)) return;
-      const iTimedOut = isSameWallet(timedOutWallet, address);
+    // Get the wallet that timed out - either passed in or current turn holder
+    const timedOutWallet = timedOutWalletArg || activeTurnAddress || null;
+    if (!timedOutWallet) return;
     
+    const iTimedOut = isSameWallet(timedOutWallet, address);
     const opponentWalletAddr = getOpponentWallet(roomPlayers, address);
+    
+    // VALIDATION: Only process if timedOutWallet matches either me or opponent
+    // This prevents stale closure issues while still allowing opponent timeout detection
+    const isValidTimeout = iTimedOut || (opponentWalletAddr && isSameWallet(timedOutWallet, opponentWalletAddr));
+    if (!isValidTimeout) {
+      console.log("[CheckersGame] Ignoring timeout - wallet doesn't match player or opponent", {
+        timedOutWallet: timedOutWallet?.slice(0, 8),
+        myWallet: address?.slice(0, 8),
+        opponentWallet: opponentWalletAddr?.slice(0, 8),
+      });
+      return;
+    }
+    
     const newMissedCount = incMissed(roomPda, timedOutWallet);
     
     if (newMissedCount >= 3) {
@@ -493,11 +508,14 @@ const CheckersGame = () => {
         } as any, address);
       }
       
-        if (iTimedOut) {
-          setTurnOverrideWallet(opponentWalletAddr);
-        } else {
-          setTurnOverrideWallet(null);
-        }
+      // FIX: Set turnOverrideWallet based on who timed out
+      // If I timed out, opponent gets turn. If opponent timed out, I get turn.
+      if (iTimedOut) {
+        setTurnOverrideWallet(opponentWalletAddr);
+      } else {
+        // Opponent timed out - I get the turn
+        setTurnOverrideWallet(address);
+      }
     }
   }, [gameOver, address, roomPda, isActuallyMyTurn, roomPlayers, myColor, isRankedGame, persistMove, play, t]);
 
