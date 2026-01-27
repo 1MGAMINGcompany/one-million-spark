@@ -510,15 +510,11 @@ const ChessGame = () => {
   const forfeitFnRef = useRef<(() => Promise<void>) | null>(null);
 
   // Turn timer for ranked games - skip on timeout, 3 strikes = forfeit
-  const handleTurnTimeout = useCallback((timedOutWalletArg?: string | null) => {
-    if (gameOver || !address || !roomPda) return;
-
-      const timedOutWallet = (timedOutWalletArg || activeTurnAddress || null);
-      if (!timedOutWallet || !activeTurnAddress || !isSameWallet(timedOutWallet, activeTurnAddress)) return;
-      const iTimedOut = isSameWallet(timedOutWallet, address);
+  const handleTurnTimeout = useCallback(() => {
+    if (gameOver || !address || !roomPda || !isActuallyMyTurn) return;
     
-    const opponentWalletAddr = getOpponentWallet(roomPlayers, timedOutWallet);
-    const newMissedCount = incMissed(roomPda, timedOutWallet);
+    const opponentWalletAddr = getOpponentWallet(roomPlayers, address);
+    const newMissedCount = incMissed(roomPda, address);
     
     if (newMissedCount >= 3) {
       // 3 STRIKES = AUTO FORFEIT
@@ -532,26 +528,18 @@ const ChessGame = () => {
       if (isRankedGame && opponentWalletAddr) {
         persistMove({
           action: "turn_timeout",
-          timedOutWallet: timedOutWallet,
+          timedOutWallet: address,
           nextTurnWallet: opponentWalletAddr,
           missedCount: newMissedCount,
         } as any, address);
       }
       
-        if (iTimedOut) {
-          // I missed 3 turns -> I lose
-          forfeitFnRef.current?.();
-          setGameOver(true);
-          setWinnerWallet(opponentWalletAddr);
-          setGameStatus(myColor === 'w' ? t('game.black') + " wins" : t('game.white') + " wins");
-          play('chess_lose');
-        } else {
-          // Opponent missed 3 turns -> I win
-          setGameOver(true);
-          setWinnerWallet(address);
-          setGameStatus(myColor === 'w' ? t('game.white') + " wins" : t('game.black') + " wins");
-          play('chess_win');
-        }
+      // Trigger forfeit
+      forfeitFnRef.current?.();
+      setGameOver(true);
+      setWinnerWallet(opponentWalletAddr);
+      setGameStatus(myColor === 'w' ? t('game.black') + " wins" : t('game.white') + " wins");
+      play('chess_lose');
       
     } else {
       // SKIP to opponent
@@ -565,17 +553,14 @@ const ChessGame = () => {
       if (isRankedGame && opponentWalletAddr) {
         persistMove({
           action: "turn_timeout",
-          timedOutWallet: timedOutWallet,
+          timedOutWallet: address,
           nextTurnWallet: opponentWalletAddr,
           missedCount: newMissedCount,
         } as any, address);
       }
       
-        if (iTimedOut) {
-          setTurnOverrideWallet(opponentWalletAddr);
-        } else {
-          setTurnOverrideWallet(null);
-        }
+      // Grant opponent another turn via override
+      setTurnOverrideWallet(opponentWalletAddr);
     }
   }, [gameOver, address, roomPda, isActuallyMyTurn, roomPlayers, myColor, isRankedGame, persistMove, play, t]);
 
@@ -585,9 +570,8 @@ const ChessGame = () => {
   const turnTimer = useTurnTimer({
     turnTimeSeconds: effectiveTurnTime,
     enabled: isRankedGame && canPlay && !gameOver,
-      isMyTurn,
-      activeTurnWallet: (game.turn() === 'w' ? roomPlayers[0] : roomPlayers[1]) || null,
-      onTimeExpired: handleTurnTimeout,
+    isMyTurn,
+    onTimeExpired: handleTurnTimeout,
     roomId: roomPda,
   });
 
@@ -1075,7 +1059,7 @@ const ChessGame = () => {
     sendResign();
     
     // 2. Update local UI optimistically - opponent wins, store their wallet
-    const opponentWalletAddr = getOpponentWallet(roomPlayers, timedOutWallet);
+    const opponentWalletAddr = getOpponentWallet(roomPlayers, address);
     setWinnerWallet(opponentWalletAddr);
     setGameStatus(t("gameMultiplayer.youResignedLose"));
     setGameOver(true);
@@ -1406,10 +1390,7 @@ const ChessGame = () => {
           startRollFinalized={startRoll.isFinalized}
         >
           {/* DiceRollStart - rendered based on shouldShowDice, not showDiceRoll */}
-          {(!isRankedGame || rankedGate.bothReady) && (
           <DiceRollStart
-            isRankedGame={isRankedGame}
-              bothReady={rankedGate.bothReady}
             roomPda={roomPda || ""}
             myWallet={address}
             player1Wallet={roomPlayers[0]}
@@ -1420,7 +1401,6 @@ const ChessGame = () => {
             isLeaving={isLeaving}
             isForfeiting={isForfeiting}
           />
-          )}
         </RulesGate>
         ) : null;
       })()}

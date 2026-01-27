@@ -8,8 +8,6 @@ import { useTranslation } from "react-i18next";
 import { AudioManager } from "@/lib/AudioManager";
 
 interface DiceRollStartProps {
-  isRankedGame?: boolean;
-  bothReady?: boolean;
   roomPda: string;
   myWallet: string;
   player1Wallet: string;
@@ -113,10 +111,8 @@ const Die3D = ({
   );
 };
 
-export function DiceRollStart({
-    isRankedGame = false,
-    bothReady = false,
-    roomPda,
+export function DiceRollStart({ 
+  roomPda,
   myWallet,
   player1Wallet,
   player2Wallet,
@@ -134,7 +130,8 @@ export function DiceRollStart({
   const [error, setError] = useState<string | null>(null);
   const [showFallback, setShowFallback] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
-  const [isPickingStarter, setIsPickingStarter] = useState(false);  const [rankedBlocked, setRankedBlocked] = useState(false);
+  const [isPickingStarter, setIsPickingStarter] = useState(false);
+  
   // Timeout ref for 15s fallback
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const fallbackUsedRef = useRef(false);
@@ -143,17 +140,6 @@ export function DiceRollStart({
   const isPlayer1 = myWallet.trim() === player1Wallet.trim();
   const myName = t("common.you") || "You";
   const opponentName = t("game.opponent") || "Opponent";
-
-  // Ranked: never show DiceRollStart while rules are not fully accepted.
-  // This prevents the rules modal and dice UI from stacking and blocking input.
-  useEffect(() => {
-    if (isRankedGame && !bothReady) setRankedBlocked(true);
-    if (!isRankedGame || bothReady) setRankedBlocked(false);
-  }, [isRankedGame, bothReady]);
-
-  // NOTE: Never early-return here (hooks order safety).
-  // Instead, keep component mounted and hide UI when ranked gate blocks.
-  const uiHiddenByRankedGate = rankedBlocked && phase !== "result";
 
   /**
    * Compute deterministic starter from roomPda
@@ -206,67 +192,6 @@ export function DiceRollStart({
         }
 
         const session = resp?.session;
-
-
-
-        // If ranked session not created yet (session is null), keep dice hidden until server is ready.
-
-
-        if (isRankedGame && !session) {
-
-
-          setRankedBlocked(true);
-
-
-          return;
-
-
-        }
-        // If this is a ranked session, do NOT show DiceRollStart UI until both players are ready.
-
-
-        // This prevents the Dice UI from appearing at the same time as the Ranked Match Rules modal.
-
-
-        const isRankedSession = isRankedGame ||
-
-
-          session?.mode === "ranked" ||
-
-
-          session?.is_ranked === true ||
-
-
-          session?.isRanked === true ||
-
-
-          session?.ranked === true;
-
-
-
-        const readyFromFlags = Boolean(session?.p1_ready && session?.p2_ready);
-
-
-        const readyFromAcceptances = Boolean(resp?.acceptances?.bothAccepted);
-
-
-        const readyFromStartRoll = Boolean(session?.start_roll_finalized);
-
-
-
-        if (isRankedSession && !(readyFromFlags || readyFromAcceptances || readyFromStartRoll)) {
-
-
-          setRankedBlocked(true);
-
-
-        } else {
-
-
-          setRankedBlocked(false);
-
-
-        }
         if (session?.start_roll_finalized && session.start_roll && session.starting_player_wallet) {
           // Roll already exists - display it
           const rollData = session.start_roll as unknown as StartRollResult;
@@ -291,114 +216,6 @@ export function DiceRollStart({
     checkExistingRoll();
   }, [roomPda, isPlayer1]);
 
-
-
-
-    // While rankedBlocked, poll the server until both players are ready, then allow dice UI to appear.
-
-
-    useEffect(() => {
-
-
-      if (!rankedBlocked) return;
-
-
-
-      let cancelled = false;
-
-
-      const poll = async () => {
-
-
-        try {
-
-
-          const { data: resp, error } = await supabase.functions.invoke("game-session-get", {
-
-
-            body: { roomPda },
-
-
-          });
-
-
-          if (cancelled) return;
-
-
-          if (error) return;
-
-
-
-          const session = resp?.session;
-
-
-          const isRankedSession =
-
-
-            session?.mode === "ranked" ||
-
-
-            session?.is_ranked === true ||
-
-
-            session?.isRanked === true ||
-
-
-            session?.ranked === true;
-
-
-
-          const readyFromFlags = Boolean(session?.p1_ready && session?.p2_ready);
-
-
-          const readyFromAcceptances = Boolean(resp?.acceptances?.bothAccepted);
-
-
-          const readyFromStartRoll = Boolean(session?.start_roll_finalized);
-
-
-
-          if (!isRankedSession || readyFromFlags || readyFromAcceptances || readyFromStartRoll) {
-
-
-            setRankedBlocked(false);
-
-
-          }
-
-
-        } catch {
-
-
-          // ignore transient failures
-
-
-        }
-
-
-      };
-
-
-
-      poll();
-
-
-      const id = setInterval(poll, 2000);
-
-
-      return () => {
-
-
-        cancelled = true;
-
-
-        clearInterval(id);
-
-
-      };
-
-
-    }, [rankedBlocked, roomPda]);
   // Rolling animation effect
   useEffect(() => {
     if (phase !== "rolling") return;
@@ -531,11 +348,6 @@ export function DiceRollStart({
   const exitDisabled = isLeaving || isForfeiting || isRetrying || isPickingStarter;
 
   // STEP 3 FIX: Use a contained Card instead of fixed inset-0 overlay
-    // Final UI gate (safe: after state is declared)
-    const hideDiceUI = (isRankedGame && !bothReady) || (rankedBlocked && phase !== "result");
-    if (hideDiceUI) return null;
-
-
   return (
     <div className="w-full min-h-[60vh] flex items-center justify-center p-4">
       <Card className="relative w-full max-w-lg p-6 md:p-8 border-primary/30 bg-card/95 shadow-[0_0_60px_-10px_hsl(45_93%_54%_/_0.3)]">

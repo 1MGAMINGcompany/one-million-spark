@@ -35,67 +35,6 @@ import { ResolveRoomModal } from "@/components/ResolveRoomModal";
 import { UnresolvedRoomModal } from "@/components/UnresolvedRoomModal";
 
 import { BUILD_VERSION } from "@/lib/buildVersion";
-import { formatTurnTimeShort } from "@/lib/turnTimes";
-
-
-// -----------------------------
-// Turn time helpers (top-level)
-// -----------------------------
-function formatTurnTime(seconds: number | null | undefined): string {
-  if (seconds === 0) return "∞";
-  if (!seconds) return "60s";
-  return `${seconds}s`;
-}
-
-function getRoomTurnTimeSeconds(room: any): number {
-  const candidates = [
-    // normalized fields
-    room?.turnTimeSeconds,
-    room?.turnTimeSec,
-
-    // common alternates
-    room?.turn_time_seconds,
-    room?.timePerTurn,
-    room?.time_per_turn,
-    room?.turnTime,
-    room?.turn_time,
-
-    // nested shapes
-    room?.account?.turnTimeSeconds,
-    room?.account?.turnTimeSec,
-    room?.account?.turn_time_seconds,
-
-    room?.raw?.turnTimeSeconds,
-    room?.raw?.turnTimeSec,
-    room?.raw?.turn_time_seconds,
-
-    room?.data?.turnTimeSeconds,
-    room?.data?.turnTimeSec,
-    room?.data?.turn_time_seconds,
-  ];
-
-  const toSeconds = (raw: any): number | undefined => {
-    if (raw == null) return undefined;
-    if (typeof raw === "number") return Number.isFinite(raw) ? raw : undefined;
-    if (typeof raw === "bigint") return Number(raw);
-    if (typeof raw === "string") {
-      const n = Number(raw);
-      return Number.isFinite(n) ? n : undefined;
-    }
-    if (raw && typeof raw.toNumber === "function") {
-      try { return raw.toNumber(); } catch { return undefined; }
-    }
-    return undefined;
-  };
-
-  for (const raw of candidates) {
-    const v = toSeconds(raw);
-    if (typeof v === "number" && Number.isFinite(v) && v > 0) return v;
-  }
-
-  return 60;
-}
-
 
 export default function RoomList() {
   const navigate = useNavigate();
@@ -273,13 +212,6 @@ export default function RoomList() {
       [GameType.Checkers]: "Checkers",
       [GameType.Ludo]: "Ludo",
     };
-
-  const formatTurnTime = (seconds: number | null | undefined) => {
-    if (seconds === 0) return "∞";
-    if (!seconds) return "60s";
-    return `${seconds}s`;
-  };
-
     return names[gameType] || "Unknown";
   };
 
@@ -360,8 +292,6 @@ export default function RoomList() {
                       {room.creator === address ? t("roomList.youAreCreator") : t("roomList.youJoined")}
                       {" • "}
                       {room.playerCount}/{room.maxPlayers} players
-                        {" • "}
-                        Turn: {formatTurnTime(getRoomTurnTimeSeconds(room))}
                       {room.entryFeeSol > 0 && ` • ${room.entryFeeSol} SOL`}
                     </p>
                   </div>
@@ -527,10 +457,6 @@ export default function RoomList() {
                         <Users className="h-3.5 w-3.5" />
                         {room.playerCount}/{room.maxPlayers}
                       </span>
-                        <span className="flex items-center gap-1">
-                          <Clock className="h-3.5 w-3.5" />
-                          Turn: {formatTurnTime(getRoomTurnTimeSeconds({ ...room, ranked: room.entryFeeSol > 0 }))}
-                        </span>
                       <span className="hidden sm:flex items-center gap-1 truncate">
                         <Clock className="h-3.5 w-3.5" />
                         {room.creator.slice(0, 4)}...{room.creator.slice(-4)}

@@ -230,11 +230,12 @@ export function useRematch(gameType: string, previousPlayers: string[]) {
 
 // Time options for turn timer
 export const TIME_OPTIONS = [
-  { value: 5, label: '5s' },
-  { value: 10, label: '10s' },
   { value: 15, label: '15s' },
   { value: 30, label: '30s' },
-  { value: 60, label: '60s' },
+  { value: 60, label: '1m' },
+  { value: 120, label: '2m' },
+  { value: 300, label: '5m' },
+  { value: 600, label: '10m' },
   { value: 0, label: 'Unlimited' },
 ];
 

@@ -6,7 +6,6 @@ import bs58 from "npm:bs58@5.0.0";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
 // Maximum age for acceptance timestamp (5 minutes)

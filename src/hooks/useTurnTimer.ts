@@ -13,10 +13,8 @@ interface UseTurnTimerOptions {
   enabled: boolean;
   /** Whether it's currently this player's turn */
   isMyTurn: boolean;
-  /** Wallet whose turn is currently active (for watchdog enforcement) */
-  activeTurnWallet?: string | null;
   /** Callback when time expires on my turn (auto-forfeit) */
-  onTimeExpired?: (timedOutWallet?: string | null) => void;
+  onTimeExpired?: () => void;
   /** Room ID for logging */
   roomId?: string;
 }
@@ -39,13 +37,12 @@ interface UseTurnTimerResult {
 }
 
 export function useTurnTimer(options: UseTurnTimerOptions): UseTurnTimerResult {
-  const { turnTimeSeconds, enabled, isMyTurn, activeTurnWallet, onTimeExpired, roomId } = options;
+  const { turnTimeSeconds, enabled, isMyTurn, onTimeExpired, roomId } = options;
   
   const [remainingTime, setRemainingTime] = useState(turnTimeSeconds);
   const [isPaused, setIsPaused] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const hasExpiredRef = useRef(false);
-  const lastTurnKeyRef = useRef<string>("");
 
   // Clear interval helper
   const clearTimerInterval = useCallback(() => {
@@ -76,20 +73,16 @@ export function useTurnTimer(options: UseTurnTimerOptions): UseTurnTimerResult {
     console.log(`[useTurnTimer] Timer resumed at ${remainingTime}s`);
   }, [remainingTime]);
 
-  // Reset timer only when ACTIVE TURN truly changes (prevents reset-loops on desktop)
+  // Reset timer when turn changes (isMyTurn changes)
   useEffect(() => {
-    if (!enabled) return;
-
-    const key = `${activeTurnWallet || "none"}:${turnTimeSeconds}`;
-    if (key === lastTurnKeyRef.current) return;
-
-    lastTurnKeyRef.current = key;
-    resetTimer();
-  }, [enabled, activeTurnWallet, turnTimeSeconds, resetTimer]);
+    if (enabled) {
+      resetTimer();
+    }
+  }, [isMyTurn, enabled, resetTimer]);
 
   // Main timer countdown effect
   useEffect(() => {
-    if (!enabled || isPaused || turnTimeSeconds <= 0) {
+    if (!enabled || isPaused || !isMyTurn) {
       clearTimerInterval();
       return;
     }
@@ -122,7 +115,7 @@ export function useTurnTimer(options: UseTurnTimerOptions): UseTurnTimerResult {
     return () => {
       clearTimerInterval();
     };
-  }, [enabled, isPaused, isMyTurn, onTimeExpired, roomId, clearTimerInterval, turnTimeSeconds]);
+  }, [enabled, isPaused, isMyTurn, onTimeExpired, roomId, clearTimerInterval]);
 
   // Cleanup on unmount
   useEffect(() => {

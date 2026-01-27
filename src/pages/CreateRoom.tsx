@@ -92,7 +92,6 @@ export default function CreateRoom() {
   const prevStatusRef = useRef<number | null>(null);
   const hasNavigatedRef = useRef(false);
   const rematchAppliedRef = useRef(false);
-  const creatingRef = useRef(false);
   
   // Pre-fill form from rematch params (once)
   useEffect(() => {
@@ -195,13 +194,6 @@ export default function CreateRoom() {
   }, [navigate]);
 
   const handleCreateRoom = async () => {
-    // HARD GUARD: prevent double-create (mobile wallet browsers can trigger twice)
-    if (creatingRef.current) {
-      console.warn("[CreateRoom] Duplicate create blocked");
-      return;
-    }
-    creatingRef.current = true;
-    try {
     // Check if we're on a preview domain
     if (signingDisabled) {
       toast({
@@ -403,9 +395,6 @@ export default function CreateRoom() {
         // Fallback to room list if PDA computation fails
         navigate("/room-list");
       }
-    }
-    } finally {
-      creatingRef.current = false;
     }
   };
 
@@ -613,8 +602,6 @@ export default function CreateRoom() {
                 <SelectItem value="5">{t("createRoom.seconds", { count: 5 })}</SelectItem>
                 <SelectItem value="10">{t("createRoom.seconds", { count: 10 })}</SelectItem>
                 <SelectItem value="15">{t("createRoom.seconds", { count: 15 })}</SelectItem>
-                  <SelectItem value="30">{t("createRoom.seconds", { count: 30 })}</SelectItem>
-                  <SelectItem value="60">{t("createRoom.seconds", { count: 60 })}</SelectItem>
                 <SelectItem value="0">{t("createRoom.unlimited")}</SelectItem>
               </SelectContent>
             </Select>
