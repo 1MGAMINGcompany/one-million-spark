@@ -21,6 +21,7 @@ import { useGameSessionPersistence } from "@/hooks/useGameSessionPersistence";
 import { useRoomMode } from "@/hooks/useRoomMode";
 import { useRankedReadyGate } from "@/hooks/useRankedReadyGate";
 import { useTurnTimer, DEFAULT_RANKED_TURN_TIME } from "@/hooks/useTurnTimer";
+import { useOpponentTimeoutDetection } from "@/hooks/useOpponentTimeoutDetection";
 import { useStartRoll } from "@/hooks/useStartRoll";
 import { useTxLock } from "@/contexts/TxLockContext";
 import { useDurableGameSync, GameMove } from "@/hooks/useDurableGameSync";
@@ -679,6 +680,77 @@ const DominosGame = () => {
     isMyTurn: effectiveIsMyTurn,
     onTimeExpired: handleTurnTimeout,
     roomId: roomPda,
+  });
+
+  // Opponent timeout detection - polls DB to detect if opponent has timed out
+  const handleOpponentTimeoutDetected = useCallback((missedCount: number) => {
+    // When opponent times out, we need to handle it on our side
+    const opponentWalletAddr = getOpponentWallet(roomPlayers, address);
+    if (!opponentWalletAddr || !roomPda) return;
+    
+    console.log(`[DominosGame] Opponent timeout detected! Missed: ${missedCount}/3`);
+    
+    if (missedCount >= 3) {
+      // Opponent missed 3 turns - they auto-forfeit, we win
+      toast({
+        title: t('gameSession.opponentForfeited'),
+        description: t('gameSession.youWin'),
+      });
+      
+      // Persist auto_forfeit move
+      if (isRankedGame) {
+        persistMove({
+          action: "turn_timeout",
+          timedOutWallet: opponentWalletAddr,
+          nextTurnWallet: address,
+          missedCount,
+        } as unknown as DominoMove, address);
+      }
+      
+      setGameOver(true);
+      setWinner("me");
+      setWinnerWallet(address || null);
+      setGameStatus(t('game.youWin') + " - opponent timed out");
+      play('domino/win');
+    } else {
+      // Opponent skipped - we get the turn
+      toast({
+        title: t('gameSession.opponentSkipped'),
+        description: t('gameSession.yourTurnNow'),
+      });
+      
+      // Persist turn_timeout move
+      if (isRankedGame) {
+        persistMove({
+          action: "turn_timeout",
+          timedOutWallet: opponentWalletAddr,
+          nextTurnWallet: address,
+          missedCount,
+        } as unknown as DominoMove, address);
+      }
+      
+      // Set turn to us
+      setIsMyTurn(true);
+      setSelectedDomino(null);
+      setGameStatus(t('game.yourTurn'));
+    }
+  }, [roomPlayers, address, roomPda, isRankedGame, persistMove, t, play]);
+
+  const handleOpponentAutoForfeit = useCallback(() => {
+    const opponentWalletAddr = getOpponentWallet(roomPlayers, address);
+    if (opponentWalletAddr) {
+      handleOpponentTimeoutDetected(3);
+    }
+  }, [roomPlayers, address, handleOpponentTimeoutDetected]);
+
+  const opponentTimeout = useOpponentTimeoutDetection({
+    roomPda: roomPda || "",
+    enabled: isRankedGame && canPlayRanked && !gameOver && startRoll.isFinalized,
+    isMyTurn: effectiveIsMyTurn,
+    turnTimeSeconds: effectiveTurnTime,
+    myWallet: address,
+    onOpponentTimeout: handleOpponentTimeoutDetected,
+    onAutoForfeit: handleOpponentAutoForfeit,
   });
 
   // Turn notification players

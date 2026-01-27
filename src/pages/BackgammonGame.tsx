@@ -27,6 +27,7 @@ import { useGameSessionPersistence } from "@/hooks/useGameSessionPersistence";
 import { useRoomMode } from "@/hooks/useRoomMode";
 import { useRankedReadyGate } from "@/hooks/useRankedReadyGate";
 import { useTurnTimer, DEFAULT_RANKED_TURN_TIME } from "@/hooks/useTurnTimer";
+import { useOpponentTimeoutDetection } from "@/hooks/useOpponentTimeoutDetection";
 import { useStartRoll } from "@/hooks/useStartRoll";
 import { useTxLock } from "@/contexts/TxLockContext";
 import { useDurableGameSync, GameMove } from "@/hooks/useDurableGameSync";
@@ -1098,6 +1099,86 @@ const BackgammonGame = () => {
     isMyTurn: effectiveIsMyTurn,
     onTimeExpired: handleTurnTimeout,
     roomId: roomPda,
+  });
+
+  // Opponent timeout detection - polls DB to detect if opponent has timed out
+  const handleOpponentTimeoutDetected = useCallback((missedCount: number) => {
+    // When opponent times out, we need to handle it on our side
+    const opponentWalletAddr = getOpponentWallet(roomPlayers, address);
+    if (!opponentWalletAddr || !roomPda) return;
+    
+    console.log(`[BackgammonGame] Opponent timeout detected! Missed: ${missedCount}/3`);
+    
+    if (missedCount >= 3) {
+      // Opponent missed 3 turns - they auto-forfeit, we win
+      toast({
+        title: t('gameSession.opponentForfeited'),
+        description: t('gameSession.youWin'),
+      });
+      
+      // Persist auto_forfeit move
+      if (isRankedGame) {
+        persistMove({
+          type: "auto_forfeit",
+          timedOutWallet: opponentWalletAddr,
+          winnerWallet: address,
+          missedCount,
+          reason: "three_missed_turns",
+          gameState,
+          dice: [],
+          remainingMoves: [],
+        } as BackgammonMoveMessage, address);
+      }
+      
+      // Enter outcome resolving with us as winner
+      enterOutcomeResolving(address || null);
+    } else {
+      // Opponent skipped - we get the turn
+      toast({
+        title: t('gameSession.opponentSkipped'),
+        description: t('gameSession.yourTurnNow'),
+      });
+      
+      // Persist turn_timeout move
+      if (isRankedGame) {
+        persistMove({
+          type: "turn_timeout",
+          timedOutWallet: opponentWalletAddr,
+          nextTurnWallet: address,
+          missedCount,
+          gameState,
+          dice: [],
+          remainingMoves: [],
+        } as BackgammonMoveMessage, address);
+      }
+      
+      // Set turn to us
+      setCurrentTurnWallet(address || null);
+      const myRoleValue = isSameWallet(address, roomPlayers[0]) ? "player" : "ai";
+      setCurrentPlayer(myRoleValue);
+      setDice([]);
+      setRemainingMoves([]);
+      setSelectedPoint(null);
+      setValidMoves([]);
+      setGameStatus(t('game.yourTurn') || "Your turn");
+    }
+  }, [roomPlayers, address, roomPda, isRankedGame, persistMove, gameState, t, enterOutcomeResolving]);
+
+  const handleOpponentAutoForfeit = useCallback(() => {
+    const opponentWalletAddr = getOpponentWallet(roomPlayers, address);
+    if (opponentWalletAddr) {
+      handleOpponentTimeoutDetected(3);
+    }
+  }, [roomPlayers, address, handleOpponentTimeoutDetected]);
+
+  const opponentTimeout = useOpponentTimeoutDetection({
+    roomPda: roomPda || "",
+    enabled: isRankedGame && canPlay && !gameOver && startRoll.isFinalized,
+    isMyTurn: effectiveIsMyTurn,
+    turnTimeSeconds: effectiveTurnTime,
+    myWallet: address,
+    onOpponentTimeout: handleOpponentTimeoutDetected,
+    onAutoForfeit: handleOpponentAutoForfeit,
   });
 
   // Convert to TurnPlayer format for notifications
