@@ -1,269 +1,271 @@
 
-## Fix Plan: Forfeit Notification and Turn Time Display
 
-### Problem Summary
+# Multiplayer Ludo: 2-4 Player Support with Turn Skip and Multi-Forfeit Logic
 
-Two issues were identified from testing:
+## Overview
 
-1. **Forfeit doesn't notify opponent**: When a player forfeits (manually or via auto-forfeit), the opponent's screen stays on the game board instead of showing "YOU WIN"
-2. **Turn time not visible in Room List**: The configured turn time (e.g., "10s turn") is not displayed in the room list before joining
-
----
-
-## Root Cause Analysis
-
-### Issue 1: Forfeit Notification Bug
-
-**Current behavior:**
-- Player A clicks "Forfeit" → Edge function settles on-chain → Player A navigates away in 1 second
-- Player B sees nothing because no WebRTC/Realtime message was sent
-
-**Missing step:**
-The `handleTurnTimeout` function (3-strike auto-forfeit) and manual forfeit both call `forfeit()` but **never call `sendResign()`** to notify the opponent via WebRTC.
-
-Compare to manual resign which works correctly:
-```typescript
-// handleResign - WORKS because it sends WebRTC first
-sendResign();           // ← Notifies opponent
-await forfeit();        // ← Settles on-chain
-```
-
-```typescript
-// handleTurnTimeout - BROKEN because it skips WebRTC
-forfeitFnRef.current?.();  // ← Settles on-chain (navigates away)
-// MISSING: sendResign() or any opponent notification
-```
-
-### Issue 2: Turn Time Display Bug
-
-**Current behavior:**
-- Turn time is only shown for rooms that have an active session in `game_sessions` table
-- New rooms (before any player joins and game starts) don't have a session yet
-- Waiting rooms show "1/2" but no turn time
-
-**The real issue:**
-For ranked games, the turn time should be displayed from the **on-chain room data** or a **configuration source**, not from the game session (which only exists after the game starts).
-
-However, looking at the database, the rooms in question have `turn_time_seconds: 60` but the user created a room with 10s turn time. This means:
-- The `turn_time_seconds` is only set when the game session is created at game start
-- Before that, there's no turn time data available
-- Additionally, the room list fetches from `game_sessions` but filters by `status: 'active'`, which excludes waiting rooms
+This plan implements full multiplayer Ludo support for 2, 3, or 4 players with special handling for:
+1. Player count selection during room creation
+2. Turn skipping when players miss their turn
+3. Multi-player forfeit scenarios (game continues with remaining players)
+4. Winner payout and creator rent refund
 
 ---
 
-## Technical Solution
+## Current State Analysis
 
-### Part 1: Fix Forfeit/Auto-Forfeit Opponent Notification
+### What Already Works
+- On-chain program supports 2, 3, or 4 players via `max_players` field
+- Ludo engine (`src/lib/ludo/engine.ts`) already uses `players.length` for turn rotation
+- 4 player colors defined: gold, ruby, sapphire, emerald
+- Turn timer and missed turn tracking exists via `useTurnTimer` and `missedTurns.ts`
+- Basic player elimination tracking via `eliminatedPlayers` Set in `useLudoEngine`
 
-**Files to modify:**
-- `src/pages/ChessGame.tsx`
-- `src/pages/CheckersGame.tsx`  
-- `src/pages/BackgammonGame.tsx`
-- `src/pages/DominosGame.tsx`
+### What Needs Implementation
+1. **CreateRoom.tsx**: Add player count dropdown when Ludo is selected
+2. **Room.tsx**: Display player count and wait for correct number of players
+3. **LudoGame.tsx**: Handle 2-4 player dynamics, eliminated player skip, multi-forfeit
+4. **Database**: Store and track player count, eliminated players, partial forfeits
+5. **Settlement**: Handle winner payout with multiple forfeit scenarios
 
-**Change 1: Update `handleTurnTimeout` to send WebRTC message on 3rd strike**
+---
 
-In the 3-strike forfeit block, add `sendResign()` before calling the forfeit function:
+## Technical Implementation
+
+### Part 1: Room Creation with Player Count Selection
+
+**File: `src/pages/CreateRoom.tsx`**
+
+Add a conditional dropdown that appears only when Ludo (GameType 5) is selected:
 
 ```typescript
-if (newMissedCount >= 3) {
-  // 3 STRIKES = AUTO FORFEIT
-  toast({
-    title: t('gameSession.autoForfeit'),
-    description: t('gameSession.missedThreeTurns'),
-    variant: "destructive",
-  });
+// State for Ludo player count
+const [ludoPlayerCount, setLudoPlayerCount] = useState<string>("4");
+
+// Compute effective max players
+const effectiveMaxPlayers = gameType === "5" ? ludoPlayerCount : "2";
+```
+
+UI Changes:
+- When `gameType === "5"` (Ludo), show a new Select dropdown:
+  - Label: "Number of Players"
+  - Options: 2 Players, 3 Players, 4 Players
+  - Default: 4 Players
+- Pass `effectiveMaxPlayers` to `createRoom()` instead of hardcoded "2"
+
+### Part 2: Room Lobby Waiting for N Players
+
+**File: `src/pages/Room.tsx`**
+
+Current behavior waits for 2 players. Need to:
+- Fetch `maxPlayers` from on-chain room data
+- Display "Waiting for X/Y players" instead of hardcoded 2
+- Only navigate to game when `playerCount === maxPlayers`
+
+Changes:
+- Add `maxPlayers` state from `parseRoomAccount`
+- Update UI to show `{playerCount}/{maxPlayers} players`
+- Gate join logic on `playerCount < maxPlayers`
+- Auto-start when `playerCount === maxPlayers`
+
+### Part 3: LudoGame.tsx Multi-Player Logic
+
+**File: `src/pages/LudoGame.tsx`**
+
+Major changes needed:
+
+#### A. Player Initialization from On-Chain Data
+Currently initializes 4 AI players and replaces with real wallets. Need to:
+- Read `maxPlayers` from on-chain room
+- Initialize only that many players
+- Mark human players based on `players[]` array from chain
+
+```typescript
+// Instead of always 4 players
+const playerCount = roomData.maxPlayers; // 2, 3, or 4
+const onChainPlayers = roomData.players.map(p => p.toBase58());
+
+// Create players array based on actual count
+const gamePlayers = PLAYER_COLORS.slice(0, playerCount).map((color, idx) => ({
+  color,
+  wallet: onChainPlayers[idx] || null,
+  isAI: false, // All are real players in multiplayer
+  eliminated: false,
+}));
+```
+
+#### B. Turn Advancement Skips Eliminated Players
+When advancing turns, skip players who have been eliminated:
+
+```typescript
+function getNextActivePlayerIndex(current: number, players: Player[], eliminated: Set<number>): number {
+  let next = (current + 1) % players.length;
+  let attempts = 0;
   
-  if (iTimedOut) {
-    // I missed 3 turns -> I lose
-    // CRITICAL FIX: Notify opponent BEFORE navigating away
-    sendResign();  // ← ADD THIS LINE
-    
-    forfeitFnRef.current?.();
-    setGameOver(true);
-    setWinnerWallet(opponentWalletAddr);
-    // ...
+  while (eliminated.has(next) && attempts < players.length) {
+    next = (next + 1) % players.length;
+    attempts++;
   }
+  
+  return next;
 }
 ```
 
-**Change 2: Add `sendResign` to useCallback dependencies**
+#### C. Missed Turn Handling (Per Original Specification)
+- 1st miss: Skip to next player, show "1/3 missed turns"
+- 2nd miss: Skip to next player, show "2/3 missed turns"
+- 3rd miss: **Forfeit** - player is kicked out, game continues
 
-Ensure `sendResign` is available in the `handleTurnTimeout` callback by adding it to the dependency list and passing it through.
-
-**Change 3: Add a database poll fallback for opponent detection**
-
-When the game ends via forfeit/auto-forfeit, the opponent should detect this even without WebRTC. Add polling in the game components that checks `game_sessions.status` and reacts to `status: 'finished'`.
-
-### Part 2: Fix Turn Time Display in Room List
-
-**Approach A: Show turn time from room creation data (Preferred)**
-
-Store turn time in the room creation flow and display it before the game starts.
-
-**Files to modify:**
-- `src/pages/RoomList.tsx`
-- `src/pages/Room.tsx` (the room details page shown in screenshot 2)
-
-**Change 1: Update Room.tsx to show turn time**
-
-The room details page already has access to stake information. Add turn time display:
-
+On 3rd miss:
 ```typescript
-// In Room.tsx - add turn time display for ranked games
-{isRanked && (
-  <div className="flex items-center gap-2 text-amber-400">
-    <Timer className="h-4 w-4" />
-    <span>Turn Time: {formatTurnTime(turnTimeSeconds || 60)}</span>
-  </div>
-)}
-```
+// Mark player as eliminated
+setEliminatedPlayers(prev => new Set([...prev, playerIndex]));
 
-**Change 2: Store turn time on room creation**
+// Broadcast elimination to other players
+sendPlayerEliminated(playerIndex);
 
-When creating a ranked room, store the turn time setting in the game session or a separate metadata table so it's available in the room list.
-
-**Change 3: Fetch turn time for waiting rooms**
-
-Update `game-sessions-list` to also return data for `status: 'waiting'` rooms (not just active), so turn time is visible before the game starts.
-
----
-
-## Implementation Details
-
-### handleTurnTimeout Fix (ChessGame.tsx example)
-
-Location: Lines 539-571
-
-Add `sendResign` call before forfeit execution:
-
-```typescript
-if (newMissedCount >= 3) {
-  // 3 STRIKES = AUTO FORFEIT
-  toast({
-    title: t('gameSession.autoForfeit'),
-    description: t('gameSession.missedThreeTurns'),
-    variant: "destructive",
-  });
-  
-  // Persist minimal turn_timeout event
-  if (isRankedGame && opponentWalletAddr) {
-    persistMove({
-      action: "auto_forfeit",  // Change from turn_timeout to auto_forfeit
-      timedOutWallet: timedOutWallet,
-      winnerWallet: iTimedOut ? opponentWalletAddr : address,
-      missedCount: newMissedCount,
-    } as any, address);
-  }
-  
-  if (iTimedOut) {
-    // I missed 3 turns -> I lose
-    // FIX: Notify opponent via WebRTC BEFORE navigating away
-    sendResign();  // ← NEW LINE
-    
-    forfeitFnRef.current?.();
-    setGameOver(true);
-    setWinnerWallet(opponentWalletAddr);
-    setGameStatus(myColor === 'w' ? t('game.black') + " wins" : t('game.white') + " wins");
-    play('chess_lose');
-  } else {
-    // Opponent missed 3 turns -> I win
-    // No WebRTC needed - I detected it, I update my own UI
-    setGameOver(true);
-    setWinnerWallet(address);
-    setGameStatus(myColor === 'w' ? t('game.white') + " wins" : t('game.black') + " wins");
-    play('chess_win');
-  }
+// Check if only 1 player remains
+const remainingPlayers = players.filter((_, idx) => !eliminatedPlayers.has(idx));
+if (remainingPlayers.length === 1) {
+  // Game over - this player wins
+  declareWinner(remainingPlayers[0].color);
 }
 ```
 
-### Database Polling Fallback
+#### D. Winner Determination Logic
+The last remaining player wins. Handle cases:
+- 2 players: When 1 forfeits, other wins immediately
+- 3 players: When 2 forfeit, remaining 1 wins
+- 4 players: When 3 forfeit, remaining 1 wins
+- Normal win: First player to get all 4 tokens home wins
 
-Add a useEffect that polls the game session status every 5 seconds:
+### Part 4: Database Schema Updates
+
+**New Fields in `game_sessions`**
+
+Need to track:
+- `max_players`: Number of players expected (2, 3, or 4)
+- `eliminated_players`: Array of wallet addresses who forfeited
+- `active_players`: Count of still-active players
+
+Edge Function Updates:
+- `game-session-set-settings`: Store `max_players` from creation
+- `game-session-get`: Return `max_players` and `eliminated_players`
+- `settle-game`: Handle partial forfeits (only deduct from pot, don't end game)
+
+### Part 5: Partial Forfeit Settlement Logic
+
+**File: `supabase/functions/settle-game/index.ts`**
+
+Current logic settles entire pot to winner. For Ludo multi-player:
+
+When a player forfeits mid-game (before winner determined):
+1. Their stake remains in vault (no immediate payout)
+2. Mark them as eliminated in `game_sessions`
+3. Game continues with remaining players
+
+When final winner is determined:
+1. Calculate total pot: `stake × initial_player_count`
+2. Deduct 5% platform fee
+3. Pay 95% to winner
+4. Refund room rent to creator (always)
 
 ```typescript
-// Poll database for game end detection (fallback for WebRTC failures)
-useEffect(() => {
-  if (!roomPda || gameOver || !canPlay) return;
+// Ludo settlement with forfeits
+if (gameType === 5 && eliminatedPlayers.length > 0) {
+  // Pot = all stakes including forfeited players
+  const totalPot = stakeLamports * initialPlayerCount;
+  const platformFee = totalPot * 0.05;
+  const winnerPayout = totalPot - platformFee;
   
-  const pollGameEnd = async () => {
-    const { data } = await supabase.functions.invoke("game-session-get", {
-      body: { roomPda },
-    });
-    
-    if (data?.session?.status === 'finished' && !gameOver) {
-      // Game ended - determine winner from last move
-      const lastMove = data.lastMove;
-      if (lastMove?.move_data?.winnerWallet) {
-        const isWinner = isSameWallet(lastMove.move_data.winnerWallet, address);
-        setWinnerWallet(lastMove.move_data.winnerWallet);
-        setGameOver(true);
-        setGameStatus(isWinner ? "You Win!" : "You Lose");
-        play(isWinner ? 'chess_win' : 'chess_lose');
-      }
-    }
-  };
-  
-  const interval = setInterval(pollGameEnd, 5000);
-  return () => clearInterval(interval);
-}, [roomPda, gameOver, canPlay, address]);
+  // Creator always gets rent refund (room account closure)
+}
 ```
 
-### Room List Turn Time Fix
+### Part 6: WebRTC Message Types for Ludo
 
-**Option 1: Show for all ranked rooms**
+**File: `src/hooks/useWebRTCSync.ts`**
 
-Update the room list to display the default ranked turn time (from CreateRoom settings) even before game starts:
+Add new message types for Ludo multiplayer:
 
 ```typescript
-// In RoomList.tsx - show turn time for ALL ranked rooms
-{(() => {
-  const isRanked = room.entryFeeSol > 0;
-  if (isRanked) {
-    // Try to get from session first, otherwise show default
-    const session = activeSessionsMap.get(room.pda);
-    const turnTime = session?.turnTimeSeconds || 60; // Default for ranked
-    return (
-      <span className="flex items-center gap-1 text-amber-400">
-        <Timer className="h-3.5 w-3.5" />
-        {formatTurnTime(turnTime)} turn
-      </span>
-    );
-  }
-  return null;
-})()}
+type LudoMessage = 
+  | { type: 'player_eliminated'; playerIndex: number; wallet: string }
+  | { type: 'turn_skip'; playerIndex: number; missedCount: number }
+  | { type: 'ludo_move'; move: LudoMove }
+  | { type: 'game_over'; winnerWallet: string; winnerColor: string }
 ```
 
-**Option 2: Store turn time on-chain or in room metadata**
-
-This requires modifying the room creation flow to persist turn time settings, which is a larger change.
+Handler updates in `LudoGame.tsx`:
+- On `player_eliminated`: Add to local eliminated set, skip their turns
+- On `turn_skip`: Update local turn state
+- On `game_over`: Show winner screen, trigger settlement
 
 ---
 
-## Files Changed Summary
+## Files to Modify
 
 | File | Changes |
 |------|---------|
-| `src/pages/ChessGame.tsx` | Add `sendResign()` to auto-forfeit, add DB poll fallback |
-| `src/pages/CheckersGame.tsx` | Same changes |
-| `src/pages/BackgammonGame.tsx` | Same changes |
-| `src/pages/DominosGame.tsx` | Same changes |
-| `src/pages/RoomList.tsx` | Show turn time for all ranked rooms (default if no session) |
-| `src/pages/Room.tsx` | Display turn time in room details page |
+| `src/pages/CreateRoom.tsx` | Add Ludo player count dropdown |
+| `src/pages/Room.tsx` | Wait for N players, show X/Y progress |
+| `src/pages/LudoGame.tsx` | Multi-player initialization, elimination logic, winner determination |
+| `src/hooks/useLudoEngine.ts` | Add elimination tracking, skip eliminated in advanceTurn |
+| `src/lib/ludo/engine.ts` | Update advanceTurn to accept eliminated set |
+| `src/lib/missedTurns.ts` | No changes needed (already tracks per-wallet) |
+| `supabase/functions/settle-game/index.ts` | Handle Ludo multi-forfeit settlement |
+| `supabase/functions/game-session-set-settings/index.ts` | Store max_players |
+| `supabase/functions/game-session-get/index.ts` | Return max_players and eliminated_players |
 
 ---
 
-## Expected Results After Fix
+## Database Migration
 
-1. When Player A forfeits (manual or auto):
-   - Player A sees "You Lose" and navigates away
-   - Player B immediately sees "YOU WIN" via WebRTC message
-   - If WebRTC fails, Player B sees "YOU WIN" within 5 seconds via DB poll
+Add to `game_sessions` table:
+```sql
+ALTER TABLE game_sessions 
+ADD COLUMN IF NOT EXISTS max_players INTEGER DEFAULT 2,
+ADD COLUMN IF NOT EXISTS eliminated_players TEXT[] DEFAULT '{}';
+```
 
-2. Room List display:
-   - All ranked rooms show turn time (e.g., "⏱️ 1m turn" or "⏱️ 10s turn")
-   - Turn time visible even for waiting rooms (1/2 players)
+---
 
-3. Room Details page (Room.tsx):
-   - Shows turn time setting for ranked games
-   - Players know the game pace before joining
+## Expected Behavior Flow
+
+### 4-Player Ludo Game
+
+1. **Room Creation**: Creator selects Ludo → dropdown appears → selects "4 Players" → creates room
+2. **Waiting**: Room lobby shows "1/4 players" → players join one by one
+3. **Game Start**: When 4 players joined, all accept rules, start roll determines order
+4. **Normal Play**: Turn rotates Gold → Ruby → Sapphire → Emerald → Gold...
+5. **Turn Timeout**: If player misses turn timer:
+   - 1st miss: Toast "1/3 missed", skip to next
+   - 2nd miss: Toast "2/3 missed", skip to next
+   - 3rd miss: Toast "Eliminated!", player kicked, game continues
+6. **Mid-Game Forfeit**: If Emerald forfeits after 3 misses:
+   - Turn order becomes Gold → Ruby → Sapphire → Gold...
+   - Emerald's stake stays in pot
+7. **Winner**: First player to get all 4 tokens home OR last remaining player
+8. **Settlement**: Winner gets (4 × stake - 5% fee), creator gets rent refund
+
+### Edge Cases Handled
+- 2 players left, one forfeits → other wins immediately
+- All but one player forfeits → remaining player wins
+- Player disconnects → timeout handler triggers skips/forfeit
+- Creator forfeits → rent still refunded to creator, game continues if 2+ remain
+
+---
+
+## Testing Checklist
+
+1. Create Ludo room with 2, 3, and 4 players (verify on-chain)
+2. Verify room lobby waits for correct player count
+3. Test turn skip on 1st and 2nd timeout
+4. Test auto-forfeit on 3rd timeout
+5. Verify eliminated player is skipped in turn rotation
+6. Test winner when only 1 player remains
+7. Test normal win (all 4 tokens home)
+8. Verify settlement pays correct amounts
+9. Verify creator gets rent refund after forfeit
+10. Test WebRTC sync of elimination across devices
+
