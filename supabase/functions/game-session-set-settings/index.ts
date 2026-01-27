@@ -32,7 +32,7 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-type Mode = "casual" | "ranked";
+type Mode = "casual" | "ranked" | "private";
 
 function json(status: number, body: unknown) {
   return new Response(JSON.stringify(body), {
@@ -130,7 +130,7 @@ serve(async (req) => {
       return json(400, { ok: false, error: "turnTimeSeconds_invalid" });
     }
 
-    if (mode !== "casual" && mode !== "ranked") {
+    if (mode !== "casual" && mode !== "ranked" && mode !== "private") {
       return json(400, { ok: false, error: "mode_invalid" });
     }
 

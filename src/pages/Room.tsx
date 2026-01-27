@@ -19,6 +19,7 @@ import { TxDebugPanel } from "@/components/TxDebugPanel";
 import { MobileWalletRedirect } from "@/components/MobileWalletRedirect";
 import { PreviewDomainBanner, useSigningDisabled } from "@/components/PreviewDomainBanner";
 import { JoinRulesModal } from "@/components/JoinRulesModal";
+import { ShareInviteDialog } from "@/components/ShareInviteDialog";
 import { validatePublicKey, isMobileDevice, hasInjectedSolanaWallet, getRoomPda } from "@/lib/solana-utils";
 import { supabase } from "@/integrations/supabase/client";
 import { isWalletInAppBrowser } from "@/lib/walletBrowserDetection";
@@ -81,12 +82,19 @@ export default function Room() {
   const [linkCopied, setLinkCopied] = useState(false);
   
   // Room mode from DB (single source of truth - NOT localStorage)
-  const [roomMode, setRoomMode] = useState<'casual' | 'ranked'>('casual');
+  const [roomMode, setRoomMode] = useState<'casual' | 'ranked' | 'private'>('casual');
   const [roomModeLoaded, setRoomModeLoaded] = useState(false);
   
   // Check if this is a rematch room (either just created or from rematch param)
   const isRematchCreated = searchParams.get('rematch_created') === '1';
+  const isPrivateCreated = searchParams.get('private_created') === '1';
   const isRematch = searchParams.get('rematch') === '1' || isRematchCreated;
+  
+  // Share dialog for private rooms
+  const [showShareDialog, setShowShareDialog] = useState(false);
+  
+  // Turn time from session (for share dialog)
+  const [turnTimeSeconds, setTurnTimeSeconds] = useState(0);
   
   // Generate room link
   const roomLink = `${window.location.origin}/room/${roomPdaParam}`;
@@ -180,7 +188,8 @@ export default function Room() {
         
         const session = resp?.session;
         if (session?.mode) {
-          setRoomMode(session.mode as 'casual' | 'ranked');
+          setRoomMode(session.mode as 'casual' | 'ranked' | 'private');
+          setTurnTimeSeconds(session.turn_time_seconds || 0);
           console.log("[RoomMode] DB mode:", session.mode);
           setRoomModeLoaded(true);
         } else if (modeFetchAttempts < MAX_MODE_RETRIES) {
@@ -201,6 +210,16 @@ export default function Room() {
     
     fetchRoomMode();
   }, [roomPdaParam, modeFetchAttempts]);
+
+  // Auto-open share dialog for private rooms when created
+  useEffect(() => {
+    if (isPrivateCreated && roomModeLoaded && roomMode === 'private') {
+      setShowShareDialog(true);
+      // Clear the query param
+      searchParams.delete('private_created');
+      setSearchParams(searchParams, { replace: true });
+    }
+  }, [isPrivateCreated, roomModeLoaded, roomMode, searchParams, setSearchParams]);
 
   const status = room?.status ?? 0;
   const statusName = statusToName(status);
@@ -970,9 +989,11 @@ export default function Room() {
                   <span className={`px-3 py-1 rounded-full text-sm font-medium border ${
                     roomMode === 'ranked' 
                       ? 'bg-red-500/20 text-red-400 border-red-500/30' 
-                      : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                      : roomMode === 'private'
+                        ? 'bg-violet-500/20 text-violet-400 border-violet-500/30'
+                        : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
                   }`}>
-                    {roomMode === 'ranked' ? '🔴 Ranked' : '🟢 Casual'}
+                    {roomMode === 'ranked' ? '🔴 Ranked' : roomMode === 'private' ? '🟣 Private' : '🟢 Casual'}
                   </span>
                 )}
                 {isPlayer && (
@@ -1245,6 +1266,20 @@ export default function Room() {
       />
 
       {/* Cancel Room Confirmation Modal - Disabled until program supports cancel_room */}
+      
+      {/* Share Invite Dialog for Private Rooms */}
+      <ShareInviteDialog
+        open={showShareDialog}
+        onOpenChange={setShowShareDialog}
+        roomId={roomPdaParam || ""}
+        gameName={gameName}
+        stakeSol={Number(stakeLamports) / LAMPORTS_PER_SOL}
+        winnerPayout={Number(winnerGetsFullLamports) / LAMPORTS_PER_SOL}
+        turnTimeSeconds={turnTimeSeconds}
+        maxPlayers={maxPlayers}
+        playerCount={playerCount}
+        mode={roomMode}
+      />
       
       {/* Transaction Debug Panel - shown on tx failure */}
       <TxDebugPanel debugInfo={txDebugInfo} onClose={clearTxDebug} />

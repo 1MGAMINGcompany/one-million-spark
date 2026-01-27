@@ -34,7 +34,7 @@ serve(async (req) => {
       // Include both 'active' and 'waiting' sessions to show turn time for rooms before game starts
       const { data, error } = await supabase
         .from('game_sessions')
-        .select('room_pda, game_type, status, player1_wallet, player2_wallet, current_turn_wallet, created_at, updated_at, mode, turn_time_seconds, turn_started_at')
+        .select('room_pda, game_type, status, player1_wallet, player2_wallet, current_turn_wallet, created_at, updated_at, mode, turn_time_seconds, turn_started_at, max_players')
         .in('status', ['active', 'waiting'])
         .order('updated_at', { ascending: false })
 
