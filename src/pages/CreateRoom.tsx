@@ -80,6 +80,7 @@ export default function CreateRoom() {
   const [gameType, setGameType] = useState<string>("1"); // Chess
   const [entryFee, setEntryFee] = useState<string>("0"); // Default to 0 for casual
   const [maxPlayers, setMaxPlayers] = useState<string>("2");
+  const [ludoPlayerCount, setLudoPlayerCount] = useState<string>("4"); // Ludo-specific: 2, 3, or 4 players
   const [turnTime, setTurnTime] = useState<string>("10");
   const [gameMode, setGameMode] = useState<'casual' | 'ranked'>('casual');
   const [checkingActiveRoom, setCheckingActiveRoom] = useState(true);
@@ -276,10 +277,13 @@ export default function CreateRoom() {
     
     // Pass mode to createRoom - this is the AUTHORITATIVE source of truth
     // Mode is written to DB immediately, not localStorage
+    // For Ludo, use ludoPlayerCount; for other games, use maxPlayers (default 2)
+    const effectiveMaxPlayers = gameType === "5" ? parseInt(ludoPlayerCount) : parseInt(maxPlayers);
+    
     const roomId = await createRoom(
       parseInt(gameType) as GameType,
       entryFeeNum,
-      parseInt(maxPlayers),
+      effectiveMaxPlayers,
       gameMode // Pass mode directly to createRoom
     );
 
@@ -349,6 +353,7 @@ export default function CreateRoom() {
                 roomPda: roomPdaStr,
                 turnTimeSeconds: authoritativeTurnTime,
                 mode: gameMode,
+                maxPlayers: effectiveMaxPlayers, // For Ludo: 2, 3, or 4 players
                 creatorWallet: address,
                 timestamp,
                 signature,
@@ -376,6 +381,7 @@ export default function CreateRoom() {
               roomPda: roomPdaStr.slice(0, 8),
               authoritativeTurnTime,
               mode: gameMode,
+              maxPlayers: effectiveMaxPlayers,
             });
           }
         } catch (e) {
@@ -555,7 +561,27 @@ export default function CreateRoom() {
             </Select>
           </div>
 
-          {/* Entry Fee - Styled based on mode */}
+          {/* Ludo Player Count - Only shown when Ludo is selected */}
+          {gameType === "5" && (
+            <div className="space-y-1.5">
+              <Label className="text-sm">{t("createRoom.numberOfPlayers", "Number of Players")}</Label>
+              <Select value={ludoPlayerCount} onValueChange={setLudoPlayerCount}>
+                <SelectTrigger className="h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="2">2 {t("createRoom.players", "Players")}</SelectItem>
+                  <SelectItem value="3">3 {t("createRoom.players", "Players")}</SelectItem>
+                  <SelectItem value="4">4 {t("createRoom.players", "Players")}</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {t("createRoom.ludoPlayersDesc", "Choose how many players will compete in this Ludo game")}
+              </p>
+            </div>
+          )}
+
+
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
               <Label className="text-sm">{t("createRoom.entryFeeSol")}</Label>
@@ -670,7 +696,7 @@ export default function CreateRoom() {
                 </TooltipProvider>
               </span>
               <span className="font-semibold text-primary">
-                {(entryFeeNum * parseInt(maxPlayers)).toFixed(3)} SOL
+                {(entryFeeNum * (gameType === "5" ? parseInt(ludoPlayerCount) : parseInt(maxPlayers))).toFixed(3)} SOL
               </span>
             </div>
             <div className="flex justify-between text-xs text-muted-foreground">

@@ -147,8 +147,10 @@ export type Database = {
         Row: {
           created_at: string
           current_turn_wallet: string | null
+          eliminated_players: string[] | null
           game_state: Json
           game_type: string
+          max_players: number | null
           mode: string
           p1_acceptance_tx: string | null
           p1_ready: boolean
@@ -169,8 +171,10 @@ export type Database = {
         Insert: {
           created_at?: string
           current_turn_wallet?: string | null
+          eliminated_players?: string[] | null
           game_state?: Json
           game_type: string
+          max_players?: number | null
           mode?: string
           p1_acceptance_tx?: string | null
           p1_ready?: boolean
@@ -191,8 +195,10 @@ export type Database = {
         Update: {
           created_at?: string
           current_turn_wallet?: string | null
+          eliminated_players?: string[] | null
           game_state?: Json
           game_type?: string
+          max_players?: number | null
           mode?: string
           p1_acceptance_tx?: string | null
           p1_ready?: boolean
