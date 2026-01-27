@@ -119,6 +119,7 @@ serve(async (req) => {
     const timestamp = payload?.timestamp;
     const signature = payload?.signature;
     const maxPlayersRaw = payload?.maxPlayers; // Ludo: 2, 3, or 4 players
+    const gameTypeFromPayload = payload?.gameType; // "Chess", "Dominos", etc.
 
     // Validate required fields
     if (!roomPda || typeof roomPda !== "string") {
@@ -186,7 +187,7 @@ serve(async (req) => {
     });
 
     // Fetch session and verify creator
-    const { data: session, error: sessionErr } = await supabase
+    let { data: session, error: sessionErr } = await supabase
       .from("game_sessions")
       .select("room_pda, status, start_roll_finalized, player1_wallet")
       .eq("room_pda", roomPda)
@@ -197,8 +198,65 @@ serve(async (req) => {
       return json(500, { ok: false, error: "session_fetch_failed" });
     }
 
+    // Parse max_players if provided (for Ludo: 2, 3, or 4)
+    const maxPlayers = typeof maxPlayersRaw === "number" && maxPlayersRaw >= 2 && maxPlayersRaw <= 4
+      ? maxPlayersRaw
+      : 2; // Default to 2 for non-Ludo games
+
     if (!session) {
-      return json(404, { ok: false, error: "session_not_found" });
+      // Session doesn't exist yet - CREATE it with the settings
+      console.log("[game-session-set-settings] No session found, creating new one");
+      
+      const { error: insertErr } = await supabase
+        .from("game_sessions")
+        .insert({
+          room_pda: roomPda,
+          player1_wallet: creatorWallet,
+          player2_wallet: null,
+          game_type: gameTypeFromPayload || "unknown",
+          game_state: {},
+          status: "waiting",
+          mode: mode,
+          turn_time_seconds: turnTimeSeconds,
+          max_players: maxPlayers,
+          p1_ready: false,
+          p2_ready: false,
+        });
+
+      if (insertErr) {
+        // Check if conflict (room created by another process)
+        if (insertErr.code === "23505") {
+          // Unique constraint violation - session was created concurrently
+          // Fall through to UPDATE logic
+          console.log("[game-session-set-settings] Conflict detected, falling back to update");
+        } else {
+          console.error("[game-session-set-settings] insert error", insertErr);
+          return json(500, { ok: false, error: "insert_failed" });
+        }
+      } else {
+        console.log("[game-session-set-settings] ✅ Session created:", { 
+          roomPda: roomPda.slice(0, 8), 
+          mode, 
+          turnTimeSeconds, 
+          maxPlayers,
+          gameType: gameTypeFromPayload || "unknown",
+        });
+        return json(200, { ok: true });
+      }
+      
+      // If we got here due to conflict, re-fetch and continue to UPDATE
+      const { data: conflictSession } = await supabase
+        .from("game_sessions")
+        .select("room_pda, status, start_roll_finalized, player1_wallet")
+        .eq("room_pda", roomPda)
+        .maybeSingle();
+        
+      if (!conflictSession) {
+        return json(500, { ok: false, error: "session_race_condition" });
+      }
+      
+      // Use the fetched session for subsequent validation
+      session = conflictSession;
     }
 
     // Verify caller is the room creator (player1_wallet)
@@ -225,12 +283,7 @@ serve(async (req) => {
       return json(409, { ok: false, error: "game_already_started" });
     }
 
-    // Update settings
-    // Parse max_players if provided (for Ludo: 2, 3, or 4)
-    const maxPlayers = typeof maxPlayersRaw === "number" && maxPlayersRaw >= 2 && maxPlayersRaw <= 4
-      ? maxPlayersRaw
-      : 2; // Default to 2 for non-Ludo games
-    
+    // Update settings (session already exists)
     const { error: updateErr } = await supabase
       .from("game_sessions")
       .update({

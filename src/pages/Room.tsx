@@ -1157,6 +1157,19 @@ export default function Room() {
                 </div>
               )}
 
+              {/* Share button for private rooms - visible to creator */}
+              {isOpenStatus(status) && isCreator && roomMode === 'private' && roomModeLoaded && (
+                <Button
+                  onClick={() => setShowShareDialog(true)}
+                  size="lg"
+                  variant="outline"
+                  className="gap-2 border-violet-500/30 text-violet-400 hover:bg-violet-500/10"
+                >
+                  <Share2 className="h-4 w-4" />
+                  Share Invite Link
+                </Button>
+              )}
+
               {/* Room full message (for non-players) */}
               {status === RoomStatus.Started && !isPlayer && (
                 <div className="flex items-center gap-2 px-4 py-2 bg-amber-500/10 border border-amber-500/30 rounded-lg">
