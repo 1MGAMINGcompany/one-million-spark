@@ -1,190 +1,100 @@
 
-# Fix Private Room Creation: Upsert Session & Share Button
+# Fix Private Room Mode: Database Constraint & Complete Implementation
 
-## Problem Summary
+## Root Cause Analysis
 
-When creating a private room, the `game-session-set-settings` edge function fails with `session_not_found` (404) because the `game_sessions` row doesn't exist yet. This causes:
-1. Private rooms appearing in the public room list (mode never saved)
-2. Mode badge showing "Casual" instead of "Private"
-3. No share dialog opening for the creator
+The edge function logs reveal the critical issue:
 
-## Root Cause
-
-The edge function at line 200-202 returns 404 when no session exists:
-```typescript
-if (!session) {
-  return json(404, { ok: false, error: "session_not_found" });
+```
+ERROR [game-session-set-settings] insert error {
+  code: "23514",
+  message: 'new row for relation "game_sessions" violates check constraint "game_sessions_mode_check"'
 }
 ```
 
-But the session is created later during gameplay via `upsert_game_session` - by then it's too late.
+**The database has a CHECK constraint that only allows `'casual'` and `'ranked'`** - NOT `'private'`. When the edge function tries to INSERT a new session with `mode='private'`, it fails silently, causing:
+
+1. Private room appearing in public room list (mode never saved → defaults to showing)
+2. Mode badge showing "Ranked" instead of "Private" (0.004 SOL stake = ranked detection)
+3. Share dialog not opening (roomMode stays 'casual', button condition fails)
+4. Turn time showing 1m instead of 10s (session not created → no turn_time_seconds)
 
 ---
 
 ## Technical Solution
 
-### 1. Edge Function: Upsert Logic (CREATE if not exists)
+### Fix 1: Update Database Constraint (Migration)
 
-**File:** `supabase/functions/game-session-set-settings/index.ts`
+**Action:** Add a database migration to modify the CHECK constraint to include 'private':
 
-Replace the 404 return (lines 200-202) with INSERT logic:
+```sql
+-- Drop the old constraint
+ALTER TABLE game_sessions DROP CONSTRAINT game_sessions_mode_check;
 
-```typescript
-if (!session) {
-  // Session doesn't exist yet - CREATE it with the settings
-  console.log("[game-session-set-settings] No session found, creating new one");
-  
-  const gameTypeFromPayload = payload?.gameType || null;
-  
-  const { error: insertErr } = await supabase
-    .from("game_sessions")
-    .insert({
-      room_pda: roomPda,
-      player1_wallet: creatorWallet,
-      player2_wallet: null,
-      game_type: gameTypeFromPayload || "unknown",
-      game_state: {},
-      status: "waiting",
-      mode: mode,
-      turn_time_seconds: turnTimeSeconds,
-      max_players: maxPlayers,
-      p1_ready: false,
-      p2_ready: false,
-    });
-
-  if (insertErr) {
-    // Check if conflict (room created by another process)
-    if (insertErr.code === "23505") {
-      // Unique constraint violation - session was created concurrently
-      // Fall through to UPDATE logic
-      console.log("[game-session-set-settings] Conflict detected, falling back to update");
-    } else {
-      console.error("[game-session-set-settings] insert error", insertErr);
-      return json(500, { ok: false, error: "insert_failed" });
-    }
-  } else {
-    console.log("[game-session-set-settings] ✅ Session created:", { 
-      roomPda: roomPda.slice(0, 8), 
-      mode, 
-      turnTimeSeconds, 
-      maxPlayers 
-    });
-    return json(200, { ok: true });
-  }
-  
-  // If we got here due to conflict, re-fetch and continue to UPDATE
-  const { data: conflictSession } = await supabase
-    .from("game_sessions")
-    .select("room_pda, status, start_roll_finalized, player1_wallet")
-    .eq("room_pda", roomPda)
-    .maybeSingle();
-    
-  if (!conflictSession) {
-    return json(500, { ok: false, error: "session_race_condition" });
-  }
-  
-  // Use the fetched session for subsequent validation
-  session = conflictSession;
-}
+-- Add new constraint that includes 'private'
+ALTER TABLE game_sessions ADD CONSTRAINT game_sessions_mode_check 
+  CHECK (mode = ANY (ARRAY['casual'::text, 'ranked'::text, 'private'::text]));
 ```
 
-Also add `gameType` extraction from payload at line ~121:
-```typescript
-const gameTypeFromPayload = payload?.gameType; // "Chess", "Dominos", etc.
+### Fix 2: Update `upsert_game_session` RPC (Database Function)
+
+The `upsert_game_session` function at line 5 of the DB functions also has hardcoded mode validation:
+```sql
+IF p_mode NOT IN ('casual', 'ranked') THEN
+  RAISE EXCEPTION 'Invalid mode';
+END IF;
 ```
 
-### 2. CreateRoom.tsx: Pass gameType to Edge Function
-
-**File:** `src/pages/CreateRoom.tsx`
-
-Add a `GAME_TYPE_NAMES` mapping and include `gameType` in the edge function body.
-
-Near the top, add:
-```typescript
-const GAME_TYPE_NAMES: Record<number, string> = {
-  1: "Chess",
-  2: "Dominos", 
-  3: "Backgammon",
-  4: "Checkers",
-  5: "Ludo",
-};
+This needs to be updated to include 'private':
+```sql
+IF p_mode NOT IN ('casual', 'ranked', 'private') THEN
+  RAISE EXCEPTION 'Invalid mode';
+END IF;
 ```
 
-In the edge function call body (around line 354-363), add `gameType`:
-```typescript
-body: {
-  roomPda: roomPdaStr,
-  turnTimeSeconds: authoritativeTurnTime,
-  mode: gameMode,
-  maxPlayers: effectiveMaxPlayers,
-  gameType: GAME_TYPE_NAMES[parseInt(gameType)] || "unknown", // ADD THIS
-  creatorWallet: address,
-  timestamp,
-  signature,
-  message,
-},
+### Fix 3: Update `ensure_game_session` RPC (Database Function)
+
+Similarly, the `ensure_game_session` function has:
+```sql
+IF p_mode NOT IN ('casual', 'ranked') THEN
+  RAISE EXCEPTION 'Invalid mode';
+END IF;
 ```
 
-### 3. Room.tsx: Add Visible Share Button for Private Rooms
-
-**File:** `src/pages/Room.tsx`
-
-Add a "Share Invite Link" button visible to the creator when the room is private and still open. This goes in the action buttons section (around line 1095-1179).
-
-After the "Waiting for opponent to join..." message (line 1158), add:
-```tsx
-{/* Share button for private rooms - visible to creator */}
-{isOpenStatus(status) && isCreator && roomMode === 'private' && roomModeLoaded && (
-  <Button
-    onClick={() => setShowShareDialog(true)}
-    size="lg"
-    variant="outline"
-    className="gap-2 border-violet-500/30 text-violet-400 hover:bg-violet-500/10"
-  >
-    <Share2 className="h-4 w-4" />
-    Share Invite Link
-  </Button>
-)}
-```
-
-Also update the ShareInviteDialog props to include all the rich metadata (around line 1280-1290):
-```tsx
-<ShareInviteDialog
-  open={showShareDialog}
-  onOpenChange={setShowShareDialog}
-  roomId={roomPdaParam || ""}
-  gameName={gameName}
-  stakeSol={Number(stakeLamports) / 1e9}
-  winnerPayout={Number(winnerGetsFullLamports) / 1e9}
-  turnTimeSeconds={turnTimeSeconds}
-  maxPlayers={maxPlayers}
-  playerCount={playerCount}
-  mode={roomMode}
-/>
+Update to:
+```sql
+IF p_mode NOT IN ('casual', 'ranked', 'private') THEN
+  RAISE EXCEPTION 'Invalid mode';
+END IF;
 ```
 
 ---
 
-## Files to Modify
+## Implementation Summary
 
-| File | Changes |
-|------|---------|
-| `supabase/functions/game-session-set-settings/index.ts` | Add upsert logic: INSERT if session not found, fallback to UPDATE on conflict |
-| `src/pages/CreateRoom.tsx` | Add `GAME_TYPE_NAMES` map; pass `gameType` in edge function body |
-| `src/pages/Room.tsx` | Add visible "Share Invite Link" button for private room creators; pass rich metadata to ShareInviteDialog |
-
----
-
-## Expected Results
-
-After implementation:
-1. **Private rooms saved immediately** - Session created with `mode='private'` before navigation
-2. **Private rooms stay hidden** - Filtering works because mode exists in DB
-3. **Share dialog opens** - Both auto-open AND manual button available
-4. **Rich share info** - Recipients see game type, stake, winnings, turn time, players, creator
+| Component | Change |
+|-----------|--------|
+| Database Migration | Drop and recreate `game_sessions_mode_check` constraint to include 'private' |
+| `upsert_game_session` RPC | Add 'private' to mode validation |
+| `ensure_game_session` RPC | Add 'private' to mode validation |
 
 ---
 
-## Deployment Notes
+## Expected Results After Fix
 
-After implementing, the edge function will need to be deployed. The Share button and CreateRoom changes are frontend-only.
+1. **Private rooms saved correctly** - INSERT succeeds with `mode='private'`
+2. **Private rooms hidden** - `activeSessionsMap.get(room.pda)?.mode === 'private'` filters them out
+3. **Share dialog opens** - `roomMode === 'private'` condition passes
+4. **Turn time displays correctly** - Session row exists with `turn_time_seconds = 10`
+5. **Mode badge shows "Private"** - DB returns `mode='private'` to Room.tsx
+
+---
+
+## Verification Steps
+
+After migration:
+1. Create a private Chess room with 10s turn time and 0.004 SOL stake
+2. Verify: Room does NOT appear in public room list on other devices
+3. Verify: Share dialog auto-opens on creator's device
+4. Verify: "Share Invite Link" button visible on room page
+5. Verify: Turn time shows 10s in Share dialog
