@@ -345,7 +345,7 @@ export function useSolanaRooms() {
     gameType: GameType,
     entryFeeSol: number,
     maxPlayers: number,
-    mode: 'casual' | 'ranked' = 'casual'
+    mode: 'casual' | 'ranked' | 'private' = 'casual'
   ): Promise<number | null> => {
     if (!publicKey || !connected) {
       toast({

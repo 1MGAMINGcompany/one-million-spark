@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Copy, Share2, Mail, MessageCircle, Facebook, Check, X } from "lucide-react";
+import { Copy, Share2, Mail, MessageCircle, Facebook, Check, Smartphone, Users, Coins, Timer, Trophy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -18,7 +18,9 @@ import {
   whatsappInvite,
   facebookInvite,
   emailInvite,
+  smsInvite,
   copyInviteLink,
+  type RoomInviteInfo,
 } from "@/lib/invite";
 
 interface ShareInviteDialogProps {
@@ -26,6 +28,13 @@ interface ShareInviteDialogProps {
   onOpenChange: (open: boolean) => void;
   roomId: string;
   gameName?: string;
+  // Rich room info for enhanced sharing
+  stakeSol?: number;
+  winnerPayout?: number;
+  turnTimeSeconds?: number;
+  maxPlayers?: number;
+  playerCount?: number;
+  mode?: 'casual' | 'ranked' | 'private';
 }
 
 export function ShareInviteDialog({
@@ -33,6 +42,12 @@ export function ShareInviteDialog({
   onOpenChange,
   roomId,
   gameName,
+  stakeSol = 0,
+  winnerPayout = 0,
+  turnTimeSeconds = 0,
+  maxPlayers = 2,
+  playerCount = 1,
+  mode = 'casual',
 }: ShareInviteDialogProps) {
   const [copied, setCopied] = useState(false);
   const { toast } = useToast();
@@ -40,6 +55,18 @@ export function ShareInviteDialog({
   const { t } = useTranslation();
 
   const inviteLink = buildInviteLink({ roomId });
+  
+  // Build room info for rich sharing
+  const roomInfo: RoomInviteInfo = {
+    roomPda: roomId,
+    gameName,
+    stakeSol,
+    winnerPayout,
+    turnTimeSeconds,
+    maxPlayers,
+    playerCount,
+    mode,
+  };
 
   const handleCopy = async () => {
     try {
@@ -62,7 +89,7 @@ export function ShareInviteDialog({
 
   const handleNativeShare = async () => {
     try {
-      await shareInvite(inviteLink, gameName);
+      await shareInvite(inviteLink, gameName, roomInfo);
       play("ui/click");
     } catch {
       handleCopy();
@@ -71,7 +98,12 @@ export function ShareInviteDialog({
 
   const handleWhatsApp = () => {
     play("ui/click");
-    whatsappInvite(inviteLink, gameName);
+    whatsappInvite(inviteLink, gameName, roomInfo);
+  };
+
+  const handleSMS = () => {
+    play("ui/click");
+    smsInvite(inviteLink, gameName, roomInfo);
   };
 
   const handleFacebook = () => {
@@ -81,22 +113,102 @@ export function ShareInviteDialog({
 
   const handleEmail = () => {
     play("ui/click");
-    emailInvite(inviteLink, gameName);
+    emailInvite(inviteLink, gameName, roomInfo);
+  };
+
+  // Format turn time for display
+  const formatTurnTime = (seconds: number): string => {
+    if (seconds <= 0) return t("createRoom.unlimited", "Unlimited");
+    if (seconds >= 60) return `${Math.floor(seconds / 60)}m`;
+    return `${seconds}s`;
+  };
+
+  // Mode badge styling
+  const getModeStyles = () => {
+    switch (mode) {
+      case 'ranked':
+        return 'bg-red-500/20 text-red-400 border-red-500/30';
+      case 'private':
+        return 'bg-violet-500/20 text-violet-400 border-violet-500/30';
+      default:
+        return 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30';
+    }
+  };
+
+  const getModeEmoji = () => {
+    switch (mode) {
+      case 'ranked': return '🔴';
+      case 'private': return '🟣';
+      default: return '🟢';
+    }
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md border-primary/30 bg-background">
         <DialogHeader>
-          <DialogTitle className="text-primary font-cinzel">
+          <DialogTitle className="text-primary font-cinzel flex items-center gap-2">
+            {mode === 'private' && <span>🔒</span>}
             {t("shareInvite.invitePlayers")}
           </DialogTitle>
           <DialogDescription>
-            {t("shareInvite.sharePrivateRoom")}
+            {mode === 'private' 
+              ? t("shareInvite.sharePrivateRoomDesc", "Share this link with friends to invite them to your private game!")
+              : t("shareInvite.sharePrivateRoom")}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
+          {/* Room Info Card */}
+          <div className="rounded-lg border bg-card p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="font-semibold text-lg">{gameName || 'Game'}</span>
+              <span className={`text-xs px-2 py-1 rounded-full border ${getModeStyles()}`}>
+                {getModeEmoji()} {mode.charAt(0).toUpperCase() + mode.slice(1)}
+              </span>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-2 text-sm">
+              {/* Stake */}
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Coins className="h-4 w-4" />
+                <span>Stake:</span>
+                <span className="text-foreground font-medium">
+                  {stakeSol > 0 ? `${stakeSol.toFixed(4)} SOL` : 'Free'}
+                </span>
+              </div>
+              
+              {/* Winner Gets */}
+              {winnerPayout > 0 && (
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Trophy className="h-4 w-4 text-amber-500" />
+                  <span>Win:</span>
+                  <span className="text-emerald-400 font-medium">
+                    {winnerPayout.toFixed(4)} SOL
+                  </span>
+                </div>
+              )}
+              
+              {/* Players */}
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Users className="h-4 w-4" />
+                <span>Players:</span>
+                <span className="text-foreground font-medium">
+                  {playerCount}/{maxPlayers}
+                </span>
+              </div>
+              
+              {/* Turn Time */}
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Timer className="h-4 w-4" />
+                <span>Turn:</span>
+                <span className="text-foreground font-medium">
+                  {formatTurnTime(turnTimeSeconds)}
+                </span>
+              </div>
+            </div>
+          </div>
+
           {/* Copy Link Input */}
           <div className="flex items-center gap-2">
             <Input
@@ -142,6 +254,15 @@ export function ShareInviteDialog({
 
             <Button
               variant="outline"
+              onClick={handleSMS}
+              className="border-blue-400/50 hover:bg-blue-400/10 text-blue-400 gap-2"
+            >
+              <Smartphone className="h-4 w-4" />
+              SMS
+            </Button>
+
+            <Button
+              variant="outline"
               onClick={handleFacebook}
               className="border-blue-500/50 hover:bg-blue-500/10 text-blue-500 gap-2"
             >
@@ -152,15 +273,15 @@ export function ShareInviteDialog({
             <Button
               variant="outline"
               onClick={handleEmail}
-              className="border-primary/30 hover:bg-primary/10 gap-2"
+              className="border-primary/30 hover:bg-primary/10 gap-2 col-span-2"
             >
               <Mail className="h-4 w-4" />
-              Email
+              {t("shareInvite.email", "Email")}
             </Button>
           </div>
 
           <p className="text-xs text-muted-foreground text-center">
-            {t("game.room")} #{roomId} • {t("shareInvite.walletNeeded")}
+            {t("game.room")} #{roomId.slice(0, 8)}... • {t("shareInvite.walletNeeded")}
           </p>
         </div>
       </DialogContent>

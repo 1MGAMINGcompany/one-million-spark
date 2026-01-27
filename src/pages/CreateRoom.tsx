@@ -82,7 +82,7 @@ export default function CreateRoom() {
   const [maxPlayers, setMaxPlayers] = useState<string>("2");
   const [ludoPlayerCount, setLudoPlayerCount] = useState<string>("4"); // Ludo-specific: 2, 3, or 4 players
   const [turnTime, setTurnTime] = useState<string>("10");
-  const [gameMode, setGameMode] = useState<'casual' | 'ranked'>('casual');
+  const [gameMode, setGameMode] = useState<'casual' | 'ranked' | 'private'>('casual');
   const [checkingActiveRoom, setCheckingActiveRoom] = useState(true);
   const [refreshingBalance, setRefreshingBalance] = useState(false);
   const [showMobileWalletRedirect, setShowMobileWalletRedirect] = useState(false);
@@ -393,8 +393,8 @@ export default function CreateRoom() {
           });
         }
         
-        // Add rematch_created flag if this was a rematch
-        const queryParam = isRematch ? '?rematch_created=1' : '';
+        // Add rematch_created or private_created flag
+        const queryParam = isRematch ? '?rematch_created=1' : gameMode === 'private' ? '?private_created=1' : '';
         navigate(`/room/${roomPdaStr}${queryParam}`);
       } catch (e) {
         console.error("[CreateRoom] Failed to compute room PDA:", e);
@@ -633,10 +633,10 @@ export default function CreateRoom() {
             </Select>
           </div>
 
-          {/* Game Mode Toggle (Casual vs Ranked) */}
+          {/* Game Mode Toggle (Casual vs Ranked vs Private) */}
           <div className="space-y-1.5">
             <Label className="text-sm">{t("createRoom.roomType") || "Game Mode"}</Label>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               <Button
                 type="button"
                 variant={gameMode === 'casual' ? 'default' : 'outline'}
@@ -668,11 +668,27 @@ export default function CreateRoom() {
                 <span className="mr-1.5">🔴</span> {t("createRoom.gameModeRanked")}
                 <span className="ml-1 opacity-70 text-xs">🏆</span>
               </Button>
+              <Button
+                type="button"
+                variant={gameMode === 'private' ? 'default' : 'outline'}
+                size="sm"
+                className={`h-10 ${gameMode === 'private' ? 'bg-violet-600 hover:bg-violet-700' : ''}`}
+                onClick={() => {
+                  setGameMode('private');
+                  // Default stake to 0 for private
+                  if (!isRematch) setEntryFee("0");
+                }}
+              >
+                <span className="mr-1.5">🟣</span> {t("createRoom.gameModePrivate", "Private")}
+                <span className="ml-1 opacity-70 text-xs">🔒</span>
+              </Button>
             </div>
             <p className="text-xs text-muted-foreground">
               {gameMode === 'ranked' 
                 ? t("createRoom.rankedDesc")
-                : t("createRoom.casualDesc")}
+                : gameMode === 'private'
+                  ? t("createRoom.privateDesc", "Invite-only room hidden from public list. Share link with friends!")
+                  : t("createRoom.casualDesc")}
             </p>
           </div>
 

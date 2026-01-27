@@ -42,6 +42,7 @@ interface ActiveSessionData {
   turnStartedAt: string | null;
   turnTimeSeconds: number;
   currentTurnWallet: string | null;
+  mode?: string;
 }
 
 export default function RoomList() {
@@ -142,6 +143,7 @@ export default function RoomList() {
               turnStartedAt: row.turn_started_at,
               turnTimeSeconds: row.turn_time_seconds || 60,
               currentTurnWallet: row.current_turn_wallet,
+              mode: row.mode,
             });
           }
           setActiveSessionsMap(map);
@@ -454,7 +456,9 @@ export default function RoomList() {
       {/* Room List */}
       {!loading && !error && rooms.length > 0 && (
         <div className="grid gap-4">
-          {rooms.map((room) => (
+          {rooms
+            .filter((room) => activeSessionsMap.get(room.pda)?.mode !== 'private')
+            .map((room) => (
             <Card 
               key={room.pda} 
               className="border-border/50 bg-card/80 backdrop-blur hover:bg-card/90 transition-colors cursor-pointer"
