@@ -435,11 +435,15 @@ const CheckersGame = () => {
   const forfeitFnRef = useRef<(() => Promise<void>) | null>(null);
 
   // Turn timer for ranked games - skip on timeout, 3 strikes = forfeit
-  const handleTurnTimeout = useCallback(() => {
-    if (gameOver || !address || !roomPda || !isActuallyMyTurn) return;
+  const handleTurnTimeout = useCallback((timedOutWalletArg?: string | null) => {
+    if (gameOver || !address || !roomPda) return;
+
+      const timedOutWallet = (timedOutWalletArg || activeTurnAddress || null);
+      if (!timedOutWallet || !activeTurnAddress || !isSameWallet(timedOutWallet, activeTurnAddress)) return;
+      const iTimedOut = isSameWallet(timedOutWallet, address);
     
     const opponentWalletAddr = getOpponentWallet(roomPlayers, address);
-    const newMissedCount = incMissed(roomPda, address);
+    const newMissedCount = incMissed(roomPda, timedOutWallet);
     
     if (newMissedCount >= 3) {
       // 3 STRIKES = AUTO FORFEIT
@@ -453,17 +457,22 @@ const CheckersGame = () => {
       if (isRankedGame && opponentWalletAddr) {
         persistMove({
           action: "turn_timeout",
-          timedOutWallet: address,
+          timedOutWallet: timedOutWallet,
           nextTurnWallet: opponentWalletAddr,
           missedCount: newMissedCount,
         } as any, address);
       }
       
-      // Trigger forfeit
-      forfeitFnRef.current?.();
-      setGameOver(myColor === "gold" ? "obsidian" : "gold");
-      setWinnerWallet(opponentWalletAddr);
-      play('checkers_lose');
+        if (iTimedOut) {
+          forfeitFnRef.current?.();
+          setGameOver(myColor === "gold" ? "obsidian" : "gold");
+          setWinnerWallet(opponentWalletAddr);
+          play('checkers_lose');
+        } else {
+          setGameOver(myColor);
+          setWinnerWallet(address);
+          play('checkers_win');
+        }
       
     } else {
       // SKIP to opponent
@@ -477,14 +486,17 @@ const CheckersGame = () => {
       if (isRankedGame && opponentWalletAddr) {
         persistMove({
           action: "turn_timeout",
-          timedOutWallet: address,
+          timedOutWallet: timedOutWallet,
           nextTurnWallet: opponentWalletAddr,
           missedCount: newMissedCount,
         } as any, address);
       }
       
-      // Grant opponent another turn via override
-      setTurnOverrideWallet(opponentWalletAddr);
+        if (iTimedOut) {
+          setTurnOverrideWallet(opponentWalletAddr);
+        } else {
+          setTurnOverrideWallet(null);
+        }
     }
   }, [gameOver, address, roomPda, isActuallyMyTurn, roomPlayers, myColor, isRankedGame, persistMove, play, t]);
 
@@ -493,8 +505,9 @@ const CheckersGame = () => {
   const turnTimer = useTurnTimer({
     turnTimeSeconds: effectiveTurnTime,
     enabled: isRankedGame && canPlay && !gameOver,
-    isMyTurn,
-    onTimeExpired: handleTurnTimeout,
+      isMyTurn,
+      activeTurnWallet: (currentPlayer === 'gold' ? roomPlayers[0] : roomPlayers[1]) || null,
+      onTimeExpired: handleTurnTimeout,
     roomId: roomPda,
   });
 
@@ -1268,7 +1281,10 @@ const CheckersGame = () => {
           isDataLoaded={isDataLoaded}
           startRollFinalized={startRoll.isFinalized}
         >
+          {(!isRankedGame || rankedGate.bothReady) && (
           <DiceRollStart
+            isRankedGame={isRankedGame}
+              bothReady={rankedGate.bothReady}
             roomPda={roomPda || ""}
             myWallet={address}
             player1Wallet={roomPlayers[0]}
@@ -1279,6 +1295,7 @@ const CheckersGame = () => {
             isLeaving={isLeaving}
             isForfeiting={isForfeiting}
           />
+          )}
         </RulesGate>
         ) : null;
       })()}
