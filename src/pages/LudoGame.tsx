@@ -1062,6 +1062,7 @@ const LudoGame = () => {
         >
           <DiceRollStart
             isRankedGame={isRankedGame}
+              bothReady={rankedGate.bothReady}
             roomPda={roomPda || ""}
             myWallet={address}
             player1Wallet={roomPlayers[0]}
