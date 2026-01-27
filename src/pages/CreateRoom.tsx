@@ -308,14 +308,16 @@ export default function CreateRoom() {
         });
         
         // localStorage is NO LONGER authoritative for mode - only a display hint
+        // FIX: Private rooms also have turn times (not just ranked)
+        const authoritativeTurnTime = (gameMode === 'ranked' || gameMode === 'private') ? turnTimeSeconds : 0;
+        
         localStorage.setItem(`room_settings_${roomPdaStr}`, JSON.stringify({
-          turnTimeSeconds: gameMode === 'ranked' ? turnTimeSeconds : 0,
+          turnTimeSeconds: authoritativeTurnTime,
           stakeLamports: solToLamports(entryFeeNum),
         }));
         
         // Persist settings authoritatively in game_sessions via Edge Function
         // With signature verification for production security
-        const authoritativeTurnTime = gameMode === 'ranked' ? turnTimeSeconds : 0;
         
         try {
           const timestamp = Date.now();
@@ -362,18 +364,25 @@ export default function CreateRoom() {
             }
           );
 
-          if (settingsErr) {
-            console.error("[TurnTimer] Failed to persist session settings:", settingsErr);
+          if (settingsErr || data?.ok === false) {
+            const errorMsg = data?.error ?? settingsErr?.message ?? "Unknown error";
+            console.error("[TurnTimer] Settings save failed:", errorMsg);
+            
+            // FIX: For private rooms, settings save is CRITICAL - don't navigate
+            if (gameMode === 'private') {
+              toast({
+                title: t("createRoom.privateRoomFailed"),
+                description: t("createRoom.privateRoomFailedDesc"),
+                variant: "destructive",
+              });
+              // Return early - don't create a zombie private room
+              return;
+            }
+            
+            // For ranked/casual, show warning but continue
             toast({
               title: "Settings Error",
               description: "Failed to save game settings. Turn timer may default to 60s.",
-              variant: "destructive",
-            });
-          } else if (data?.ok === false) {
-            console.error("[TurnTimer] Edge function rejected:", data?.error);
-            toast({
-              title: "Settings Error",
-              description: `Failed to save settings: ${data?.error ?? "Unknown error"}`,
               variant: "destructive",
             });
           } else {
@@ -386,6 +395,17 @@ export default function CreateRoom() {
           }
         } catch (e) {
           console.error("[TurnTimer] Unexpected error persisting session settings:", e);
+          
+          // FIX: For private rooms, any error is critical - don't navigate
+          if (gameMode === 'private') {
+            toast({
+              title: t("createRoom.privateRoomFailed"),
+              description: t("createRoom.privateRoomFailedDesc"),
+              variant: "destructive",
+            });
+            return;
+          }
+          
           toast({
             title: "Settings Error",
             description: "Unexpected error saving settings. Turn timer may default to 60s.",

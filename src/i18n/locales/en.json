@@ -427,7 +427,9 @@
     "creatingRematchRoom": "Creating Rematch Room…",
     "createRematchRoom": "Create Rematch Room",
     "rpcStatus": "RPC Status",
-    "genesis": "Genesis"
+    "genesis": "Genesis",
+    "privateRoomFailed": "Failed to Create Private Room",
+    "privateRoomFailedDesc": "Could not save room settings. Please try again."
   },
   "roomList": {
     "title": "Public Game Rooms",

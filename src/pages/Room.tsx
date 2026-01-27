@@ -212,14 +212,16 @@ export default function Room() {
   }, [roomPdaParam, modeFetchAttempts]);
 
   // Auto-open share dialog for private rooms when created
+  // FIX: Trust the query param immediately - don't wait for DB confirmation
+  // This ensures the dialog opens even if the edge function had delays
   useEffect(() => {
-    if (isPrivateCreated && roomModeLoaded && roomMode === 'private') {
+    if (isPrivateCreated) {
       setShowShareDialog(true);
       // Clear the query param
       searchParams.delete('private_created');
       setSearchParams(searchParams, { replace: true });
     }
-  }, [isPrivateCreated, roomModeLoaded, roomMode, searchParams, setSearchParams]);
+  }, [isPrivateCreated, searchParams, setSearchParams]);
 
   const status = room?.status ?? 0;
   const statusName = statusToName(status);
