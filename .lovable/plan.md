@@ -1,133 +1,198 @@
 
 
-## Fix Plan: Turn Timer Enforcement for Ranked Multiplayer Games
+## Fix Plan: Turn Timer Enforcement and Room List Turn Time Display
 
 ### Problem Summary
-When the turn timer expires for a player in a ranked multiplayer game:
-1. The game gets stuck - the turn doesn't switch to the opponent
-2. No `turn_timeout` moves are being recorded in the database
-3. The waiting player has no way to know their opponent timed out
-4. After 3 missed turns, auto-forfeit should trigger but doesn't
 
-### Build Errors (Must Fix First)
-Two TypeScript errors are blocking the build:
+Two related issues are preventing ranked multiplayer games from functioning correctly:
 
-**Error 1:** `useTurnTimer` hook is being called with `activeTurnWallet` which doesn't exist:
-```typescript
-// Current (broken):
-useTurnTimer({
-  ...
-  activeTurnWallet: (game.turn() === 'w' ? roomPlayers[0] : roomPlayers[1]) || null,
-})
-```
+**Issue 1: Game gets stuck when turn timer expires**
+- The database correctly records `turn_timeout` moves and updates `current_turn_wallet`
+- But the waiting player (Player B) cannot play after opponent (Player A) times out
+- Root cause: The `handleTurnTimeout` function has validation logic that silently returns early when called from opponent timeout detection
 
-**Error 2:** `DiceRollStart` component is receiving props that don't exist in its interface:
-```typescript
-// Current (broken):
-<DiceRollStart
-  isRankedGame={isRankedGame}  // Not in props
-  bothReady={rankedGate.bothReady}  // Not in props
-  ...
-/>
-```
-
-### Root Cause Analysis
-The turn timer system has a fundamental design issue:
-1. `useTurnTimer` only fires `onTimeExpired` when `isMyTurn === true`
-2. When Player A's timer expires on Player A's device, Player A handles it
-3. But if Player A goes offline or has a stale tab, Player B has no way to know
-4. The database `turn_started_at` + `turn_time_seconds` should be the source of truth
-
-### Solution Overview
-
-#### Phase 1: Fix Build Errors
-1. Remove `activeTurnWallet` from `useTurnTimer` calls (it's not in the interface)
-2. Remove `isRankedGame` and `bothReady` from `DiceRollStart` (they're not in the interface)
-
-#### Phase 2: Implement Opponent Timeout Detection
-Add a polling mechanism that checks if the opponent has timed out based on database state:
-- Poll `game_sessions.turn_started_at` + `turn_time_seconds`
-- If `now() > turn_started_at + turn_time_seconds` AND it's opponent's turn:
-  - Increment their missed turn counter
-  - Submit `turn_timeout` move to switch turns
-  - Show toast notification "Opponent missed their turn (1/3)"
-  - If 3 missed turns, trigger auto-forfeit
-
-#### Phase 3: Add WebRTC/Realtime Timeout Notification
-When a player times out on their device:
-- Broadcast `turn_timeout` message via WebRTC/Realtime
-- Receiving player updates their local state and shows notification
+**Issue 2: Room List doesn't show turn time**
+- The room list page should display the turn time for active games
+- Data is available in `game_sessions.turn_time_seconds` but not displayed
 
 ---
 
-## Technical Implementation
+## Technical Analysis
 
-### File Changes Required
+### Issue 1: Turn Timeout Logic Bug
 
-#### 1. src/hooks/useTurnTimer.ts
-**No changes needed** - interface is correct, the game files are passing extra props
-
-#### 2. src/pages/ChessGame.tsx
-- Remove `activeTurnWallet` from `useTurnTimer` call (line 589)
-- Remove `isRankedGame` and `bothReady` from `DiceRollStart` (lines 1411-1412)
-- Add opponent timeout detection via polling
-
-#### 3. src/pages/CheckersGame.tsx
-- Remove `activeTurnWallet` from `useTurnTimer` call (line 509)
-- Remove `isRankedGame` and `bothReady` from `DiceRollStart` (lines 1286-1287)
-- Add opponent timeout detection via polling
-
-#### 4. New Hook: src/hooks/useOpponentTimeoutDetection.ts
-Create a hook that:
-- Polls `game_sessions` every 2-3 seconds when it's opponent's turn
-- Checks if `now() > turn_started_at + turn_time_seconds`
-- If expired, calls `handleOpponentTimeout` callback
+In `ChessGame.tsx`, the `handleTurnTimeout` function (line 514-518) has this check:
 
 ```typescript
-interface UseOpponentTimeoutOptions {
-  roomPda: string;
-  enabled: boolean;
-  isMyTurn: boolean;
+const timedOutWallet = (timedOutWalletArg || activeTurnAddress || null);
+if (!timedOutWallet || !activeTurnAddress || !isSameWallet(timedOutWallet, activeTurnAddress)) return;
+```
+
+When `useOpponentTimeoutDetection` detects the opponent has timed out, it calls:
+```typescript
+handleOpponentTimeoutDetected(missedCount) 
+  → handleTurnTimeout(opponentWallet)  // passes opponent's wallet
+```
+
+But `handleTurnTimeout` then compares `opponentWallet` to `activeTurnAddress`. If they don't match exactly (due to stale closures or case sensitivity), the function returns early without:
+1. Setting `turnOverrideWallet` 
+2. Persisting the `turn_timeout` move
+3. Updating any UI state
+
+### Issue 2: Room List Missing Turn Time
+
+The `game-sessions-list` Edge Function already returns `turn_time_seconds` in its response. The `RoomList.tsx` component needs to:
+1. Fetch active game session data
+2. Display remaining turn time based on `turn_started_at + turn_time_seconds`
+
+---
+
+## Solution
+
+### Part 1: Fix Turn Timeout Handler Logic
+
+**File: `src/pages/ChessGame.tsx`**
+
+Modify the `handleTurnTimeout` function to properly handle opponent timeouts detected by `useOpponentTimeoutDetection`. The key change is to allow processing when the timed-out wallet matches the opponent AND it's the opponent's turn.
+
+1. Remove the validation check that prevents opponent timeout processing
+2. Add explicit handling for "I'm waiting and opponent timed out" case
+3. Ensure `turnOverrideWallet` is set to my wallet when opponent times out
+
+**File: `src/pages/CheckersGame.tsx`, `src/pages/BackgammonGame.tsx`, `src/pages/DominosGame.tsx`**
+
+Apply the same fix pattern to all game pages.
+
+### Part 2: Improve Opponent Timeout Detection Hook
+
+**File: `src/hooks/useOpponentTimeoutDetection.ts`**
+
+1. After detecting timeout and calling the callback, actively set a flag that the parent component can use to immediately unlock the board
+2. Track `lastProcessedTurnStartRef` using both `turn_started_at` AND `current_turn_wallet` to prevent duplicate processing after turn switches
+
+### Part 3: Add Turn Time Display to Room List
+
+**File: `src/pages/RoomList.tsx`**
+
+1. Add a mapping from room PDA to active game session data (turn_started_at, turn_time_seconds)
+2. Fetch this data from `game-sessions-list` with `type: 'active'` 
+3. Display a countdown timer for rooms with active games showing remaining turn time
+
+**UI Change:**
+```
+Current:
+┌─────────────────────────────────────────────────────┐
+│ Chess  #1769...  🔴 Ranked 🏆                       │
+│ 💰 0.0041 SOL  👥 1/2  🕐 AtLG...BjF4        [Join] │
+└─────────────────────────────────────────────────────┘
+
+After Fix:
+┌─────────────────────────────────────────────────────┐
+│ Chess  #1769...  🔴 Ranked 🏆                       │
+│ 💰 0.0041 SOL  👥 1/2  ⏱️ 10s turn  🕐 AtLG...     [Join] │
+└─────────────────────────────────────────────────────┘
+```
+
+For rooms with an active session showing current turn time countdown.
+
+---
+
+## Implementation Steps
+
+### Step 1: Fix handleTurnTimeout in ChessGame.tsx
+
+```typescript
+// Current problematic code:
+const handleTurnTimeout = useCallback((timedOutWalletArg?: string | null) => {
+  if (gameOver || !address || !roomPda) return;
+  const timedOutWallet = (timedOutWalletArg || activeTurnAddress || null);
+  if (!timedOutWallet || !activeTurnAddress || !isSameWallet(timedOutWallet, activeTurnAddress)) return;
+  // ...
+}, [...]);
+
+// Fixed code:
+const handleTurnTimeout = useCallback((timedOutWalletArg?: string | null) => {
+  if (gameOver || !address || !roomPda) return;
+  
+  // Get the wallet that timed out
+  const timedOutWallet = timedOutWalletArg || activeTurnAddress || null;
+  if (!timedOutWallet) return;
+  
+  const iTimedOut = isSameWallet(timedOutWallet, address);
+  const opponentWalletAddr = getOpponentWallet(roomPlayers, address);
+  
+  // If it's not my turn locally but we're processing a timeout, 
+  // the opponent must have timed out - allow processing
+  // (This handles useOpponentTimeoutDetection callbacks)
+  
+  // ... rest of logic ...
+}, [...]);
+```
+
+### Step 2: Apply Same Fix to CheckersGame, BackgammonGame, DominosGame
+
+### Step 3: Update RoomList.tsx
+
+Add turn time display with countdown for active ranked games:
+
+```typescript
+// Add state for active sessions with turn data
+const [activeSessionsMap, setActiveSessionsMap] = useState<Map<string, {
+  turnStartedAt: string;
   turnTimeSeconds: number;
-  onOpponentTimeout: () => void;
-}
+  currentTurnWallet: string;
+}>>(new Map());
+
+// Fetch active sessions with turn time data
+useEffect(() => {
+  const fetchActiveSessions = async () => {
+    const { data } = await supabase.functions.invoke("game-sessions-list", {
+      body: { type: "active" },
+    });
+    if (data?.rows) {
+      const map = new Map();
+      for (const row of data.rows) {
+        map.set(row.room_pda, {
+          turnStartedAt: row.turn_started_at,
+          turnTimeSeconds: row.turn_time_seconds,
+          currentTurnWallet: row.current_turn_wallet,
+        });
+      }
+      setActiveSessionsMap(map);
+    }
+  };
+  fetchActiveSessions();
+  const interval = setInterval(fetchActiveSessions, 5000);
+  return () => clearInterval(interval);
+}, []);
+
+// In room card display, add turn time countdown
+{activeSessionsMap.has(room.pda) && (
+  <TurnTimeDisplay 
+    turnStartedAt={activeSessionsMap.get(room.pda)!.turnStartedAt}
+    turnTimeSeconds={activeSessionsMap.get(room.pda)!.turnTimeSeconds}
+  />
+)}
 ```
 
-### Expected Flow After Fix
+---
 
-```text
-Game in progress, it's Player A's turn
-    ↓
-Player A's 10-second timer expires
-    ↓
-EITHER:
-  - Player A's device fires onTimeExpired → submits turn_timeout → switches turn
-  OR
-  - Player B's device detects via polling → submits turn_timeout → switches turn
-    ↓
-Database updated: current_turn_wallet = Player B
-    ↓
-If 3 misses: auto_forfeit triggered
-    ↓
-Player B sees toast: "Opponent missed their turn (1/3)"
-```
+## Files to Modify
 
-### Database RPC Enhancement (Optional)
-The existing `submit_game_move` RPC already supports `turn_timeout` moves. We may want to add a dedicated `record_turn_timeout` RPC that:
-- Validates the timeout is legitimate (turn_started_at + turn_time_seconds < now())
-- Atomically increments missed turn counter
-- Updates current_turn_wallet
-- Prevents double-submission
+| File | Change |
+|------|--------|
+| `src/pages/ChessGame.tsx` | Fix `handleTurnTimeout` validation logic |
+| `src/pages/CheckersGame.tsx` | Apply same fix |
+| `src/pages/BackgammonGame.tsx` | Apply same fix |
+| `src/pages/DominosGame.tsx` | Apply same fix |
+| `src/pages/RoomList.tsx` | Add turn time display component |
+| `src/hooks/useOpponentTimeoutDetection.ts` | Improve turn switch detection key |
 
-### What This Fixes
-1. ✅ Turn switches when timer expires
-2. ✅ 3 consecutive misses triggers auto-forfeit
-3. ✅ Waiting player gets notified when opponent misses turn
-4. ✅ Works even if one player goes offline
+---
 
-### What Stays the Same
-- Forfeit payout logic (unchanged)
-- Dice roll logic (unchanged)
-- Ludo (uses different multi-player system)
-- Start roll mechanism (unchanged)
+## Expected Outcome
+
+1. **Turn timer works correctly**: When Player A's timer expires, Player B can immediately play regardless of who detected the timeout
+2. **Room list shows turn time**: Active ranked games display their configured turn time (e.g., "10s turn") so players know the game's pace before joining
+3. **No more stuck games**: The 3-strike forfeit rule works end-to-end
 
