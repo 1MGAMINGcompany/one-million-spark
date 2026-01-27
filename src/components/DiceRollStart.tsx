@@ -151,9 +151,9 @@ export function DiceRollStart({
     if (!isRankedGame || bothReady) setRankedBlocked(false);
   }, [isRankedGame, bothReady]);
 
-  if (rankedBlocked && phase !== "result") {
-    return null;
-  }
+  // NOTE: Never early-return here (hooks order safety).
+  // Instead, keep component mounted and hide UI when ranked gate blocks.
+  const uiHiddenByRankedGate = rankedBlocked && phase !== "result";
 
   /**
    * Compute deterministic starter from roomPda
