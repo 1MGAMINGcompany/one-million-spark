@@ -11,6 +11,7 @@ import { fetchBalance as fetchBalanceRpc, is403Error } from "@/lib/solana-rpc";
 import { NetworkProofBadge } from "./NetworkProofBadge";
 import { MobileWalletFallback } from "./MobileWalletFallback";
 import { WalletNotDetectedModal } from "./WalletNotDetectedModal";
+import { usePendingRoute } from "@/hooks/usePendingRoute";
 
 // Import local wallet icons
 import phantomIcon from "@/assets/wallets/phantom.svg";
@@ -172,12 +173,17 @@ export function WalletButton() {
     }
   }, [connected, publicKey, connection]);
 
-  // Fetch balance when connected
+  // Pending route for auto-navigation after connect
+  const { autoNavigateIfPending } = usePendingRoute();
+
+  // Fetch balance and auto-navigate when connected
   useEffect(() => {
     if (connected && publicKey) {
       fetchBalance();
+      // Check for pending room destination
+      autoNavigateIfPending(true);
     }
-  }, [connected, publicKey, fetchBalance]);
+  }, [connected, publicKey, fetchBalance, autoNavigateIfPending]);
 
   // Handle MWA timeout - show fallback panel (MOBILE ONLY)
   const handleMWATimeout = useCallback(() => {

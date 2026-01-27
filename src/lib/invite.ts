@@ -57,6 +57,7 @@ export function buildInviteMessage(info: RoomInviteInfo): string {
   }
   
   lines.push('');
+  lines.push('📱 On mobile? Open this link inside your wallet app!');
   lines.push(`👉 ${buildInviteLink({ roomId: info.roomPda })}`);
   
   return lines.join('\n');

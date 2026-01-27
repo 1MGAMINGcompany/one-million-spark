@@ -20,9 +20,11 @@ import { MobileWalletRedirect } from "@/components/MobileWalletRedirect";
 import { PreviewDomainBanner, useSigningDisabled } from "@/components/PreviewDomainBanner";
 import { JoinRulesModal } from "@/components/JoinRulesModal";
 import { ShareInviteDialog } from "@/components/ShareInviteDialog";
+import { OpenInWalletPanel } from "@/components/OpenInWalletPanel";
 import { validatePublicKey, isMobileDevice, hasInjectedSolanaWallet, getRoomPda } from "@/lib/solana-utils";
 import { supabase } from "@/integrations/supabase/client";
 import { isWalletInAppBrowser } from "@/lib/walletBrowserDetection";
+import { usePendingRoute } from "@/hooks/usePendingRoute";
 import { toast } from "sonner";
 
 // Presence feature disabled until program supports ping_room
@@ -69,8 +71,18 @@ export default function Room() {
   const [showJoinRulesModal, setShowJoinRulesModal] = useState(false);
   const [joinInProgress, setJoinInProgress] = useState(false);
   
+  // Open-in-wallet panel state (for mobile users in Chrome/Safari)
+  const [dismissedWalletPanel, setDismissedWalletPanel] = useState(false);
+  
+  // Pending route persistence
+  const { setPendingRoom } = usePendingRoute();
+  
   // Wallet in-app browsers (Phantom/Solflare) often miss WS updates
   const inWalletBrowser = isWalletInAppBrowser();
+  
+  // Detect if we should show Open-in-Wallet panel
+  const isRegularMobileBrowser = isMobileDevice() && !inWalletBrowser && !isConnected;
+  const shouldShowWalletPanel = isRegularMobileBrowser && !dismissedWalletPanel;
 
   const [room, setRoom] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -101,6 +113,13 @@ export default function Room() {
   
   // Check if native share is available
   const canNativeShare = typeof navigator !== 'undefined' && !!navigator.share;
+  
+  // Save pending room for post-connect navigation
+  useEffect(() => {
+    if (!isConnected && roomPdaParam) {
+      setPendingRoom(roomPdaParam);
+    }
+  }, [isConnected, roomPdaParam, setPendingRoom]);
   
   // Dismiss rematch banner
   const dismissRematchBanner = () => {
@@ -890,6 +909,14 @@ export default function Room() {
 
   return (
     <div className="container max-w-2xl py-8 px-4">
+      {/* Open-in-Wallet panel for mobile users in Chrome/Safari */}
+      {shouldShowWalletPanel && (
+        <OpenInWalletPanel
+          currentUrl={window.location.href}
+          onDismiss={() => setDismissedWalletPanel(true)}
+        />
+      )}
+      
       <Button variant="ghost" size="sm" className="mb-4" onClick={() => navigate("/room-list")}>
         <ArrowLeft className="mr-2 h-4 w-4" /> Back to Rooms
       </Button>

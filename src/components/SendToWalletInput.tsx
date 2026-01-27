@@ -49,7 +49,7 @@ export function SendToWalletInput({ senderWallet, roomInfo }: SendToWalletInputP
     <div className="space-y-2">
       <Label className="text-sm font-medium flex items-center gap-2">
         <User className="h-4 w-4" />
-        {t("shareInvite.sendToWallet", "Send to Wallet Address")}
+        {t("shareInvite.restrictToWallet", "Restrict to wallet (optional)")}
       </Label>
       
       <div className="flex gap-2">
@@ -83,7 +83,7 @@ export function SendToWalletInput({ senderWallet, roomInfo }: SendToWalletInputP
       </div>
       
       <p className="text-xs text-muted-foreground">
-        {t("shareInvite.walletHint", "They'll get a notification when they connect their wallet.")}
+        {t("shareInvite.restrictHint", "Only this wallet can join. Share the link to deliver the invite.")}
       </p>
     </div>
   );
