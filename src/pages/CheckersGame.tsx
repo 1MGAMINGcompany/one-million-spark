@@ -279,10 +279,13 @@ const CheckersGame = () => {
     }
   }, [gameOver, roomPlayers.length, finishCheckersSession]);
 
+  // Private rooms require same ready gate as ranked (prevents premature timeouts)
+  const requiresReadyGate = isRankedGame || isPrivate;
+
   const rankedGate = useRankedReadyGate({
     roomPda,
     myWallet: address,
-    isRanked: isRankedGame,
+    isRanked: requiresReadyGate,
     enabled: roomPlayers.length >= 2 && modeLoaded,
   });
 
