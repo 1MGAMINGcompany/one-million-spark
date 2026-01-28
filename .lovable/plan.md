@@ -1,57 +1,130 @@
 
-# Turn Timer Visibility Fix - COMPLETED
+# Fix Game Freeze After 5 Moves - Turn Timer Bugs
 
-## Summary
+## Root Cause Analysis
 
-Turn timer now shows for **both ranked and private games** when `turnTimeSeconds > 0`. The timer is visible to both players at all times (not gated by `canPlay`), and the 3-strikes forfeit logic works in private mode.
+After investigating the database logs and code, I found **two critical bugs** causing the game freeze:
 
-## Changes Made
+### Bug 1: Move Persistence Not Enabled for Private Mode
 
-### Files Modified
-- `src/pages/ChessGame.tsx`
-- `src/pages/CheckersGame.tsx`
-- `src/pages/BackgammonGame.tsx`
-- `src/pages/DominosGame.tsx`
-- `src/pages/LudoGame.tsx`
-
-### Key Logic Changes
-
-1. **Extracted `isPrivate` and `turnTimeSeconds` from `useRoomMode`**:
+All 5 game files have `useDurableGameSync` only enabled for ranked mode:
 ```typescript
-const { mode: roomMode, isRanked: isRankedGame, isPrivate, turnTimeSeconds: roomTurnTime, isLoaded: modeLoaded } = useRoomMode(roomPda);
+enabled: isRankedGame && roomPlayers.length >= 2
 ```
 
-2. **New timer visibility logic**:
-```typescript
-// Use turn time from room mode (DB source of truth) or fallback to ranked gate
-const effectiveTurnTime = roomTurnTime || rankedGate.turnTimeSeconds || DEFAULT_RANKED_TURN_TIME;
+But the timer fix now enables timers for private mode. Without move persistence:
+- Turn changes aren't recorded in the database
+- `turn_started_at` stays stale
+- Opponent timeout detection sees old timestamps and fires incorrectly
+- Both players get out of sync
 
-// Timer should show when turn time is configured and game has started
-const gameStarted = startRoll.isFinalized && roomPlayers.length >= 2;
-const shouldShowTimer = effectiveTurnTime > 0 && gameStarted && !gameOver;
+### Bug 2: Wrong `nextTurnWallet` in Timeout Handler
+
+Looking at the database moves:
+```
+Turn 1: timedOutWallet = AtLG... (player 2), nextTurnWallet = AtLG... (player 2!)
+Turn 2: timedOutWallet = Fbk1... (player 1), nextTurnWallet = AtLG... (player 2)
 ```
 
-3. **Updated `useTurnTimer`** - enabled when `shouldShowTimer && isActuallyMyTurn`
+The code always sets `nextTurnWallet: opponentWalletAddr` regardless of who timed out:
+```typescript
+nextTurnWallet: opponentWalletAddr,  // ALWAYS opponent - WRONG!
+```
 
-4. **Updated `useOpponentTimeoutDetection`** - enabled when `shouldShowTimer && !isActuallyMyTurn`
+**Correct logic:**
+- If **I** time out → nextTurnWallet = opponent (I skip)
+- If **opponent** times out → nextTurnWallet = ME (I get turn)
 
-5. **Updated `TurnStatusHeader`** - `showTimer={shouldShowTimer}` (not gated by `canPlay`)
+---
 
-6. **Updated persist logic** - timeout events now persist for `(isRankedGame || isPrivate)`
+## Fix Implementation
 
-## Behavior Changes
+### Part 1: Enable Move Persistence for Private Mode
 
-| Scenario | Before | After |
-|----------|--------|-------|
-| Private room (10s turn time) | No timer visible | Timer visible to both players |
-| Ranked game, opponent's turn | Timer hidden | Timer visible (showing opponent's countdown) |
-| Casual game (0s turn time) | No timer | No timer (correct) |
-| 3 missed turns in private | Forfeit not triggered | Forfeit triggered correctly |
+Update `useDurableGameSync` enabled condition in all 5 game files:
 
-## Acceptance Tests
+```typescript
+// Before:
+enabled: isRankedGame && roomPlayers.length >= 2
 
-1. ✅ **Private room (10s)**: Timer visible on both devices
-2. ✅ **Timer visible during opponent's turn**: Both players see countdown
-3. ✅ **Ranked mode unchanged**: Same behavior as before
-4. ✅ **Casual mode unchanged**: No timer when `turnTimeSeconds = 0`
-5. ✅ **3 missed turns = forfeit**: Works in private mode
+// After:
+enabled: (isRankedGame || isPrivate) && roomPlayers.length >= 2
+```
+
+**Files to update:**
+- `src/pages/ChessGame.tsx` (line 395)
+- `src/pages/CheckersGame.tsx` (line 334)
+- `src/pages/DominosGame.tsx` (line 521)
+- `src/pages/LudoGame.tsx` (line 328)
+- `src/pages/BackgammonGame.tsx` (line 651 - update `durableEnabled`)
+
+### Part 2: Fix `nextTurnWallet` Logic in Timeout Handlers
+
+In all timeout handlers, fix the `nextTurnWallet` to be dynamic based on who timed out:
+
+```typescript
+// Before:
+nextTurnWallet: opponentWalletAddr,
+
+// After:
+nextTurnWallet: iTimedOut ? opponentWalletAddr : address,
+```
+
+**Logic:**
+- `iTimedOut = true` → I timed out → opponent gets turn
+- `iTimedOut = false` → opponent timed out → I get turn
+
+**Files to update:**
+- `src/pages/ChessGame.tsx` (line 588)
+- `src/pages/CheckersGame.tsx` (line 509)
+- `src/pages/DominosGame.tsx` (line 665)
+- `src/pages/BackgammonGame.tsx` (lines 1669, 1681 if applicable)
+- `src/pages/LudoGame.tsx` (if has similar pattern)
+
+---
+
+## Technical Details
+
+### Database Evidence
+
+Current session state shows the issue:
+```
+room_pda: 8aWmbrp8...
+current_turn_wallet: AtLGmLU3... (player 2)
+turn_started_at: 2026-01-28 00:13:29
+turn_time_seconds: 10
+```
+
+The moves show timeout events firing every ~10 seconds with wrong `nextTurnWallet`:
+```
+Turn 1: timedOutWallet=AtLG, nextTurnWallet=AtLG (WRONG - should be Fbk1)
+Turn 2: timedOutWallet=Fbk1, nextTurnWallet=AtLG (correct, Fbk1 timed out)
+```
+
+### Why Game Freezes
+
+1. Timer fires for player 1 → timeout recorded with wrong `nextTurnWallet`
+2. Database says player 2's turn, but timer logic says player 1's turn
+3. Both players see different states
+4. After a few turns, game appears frozen because turns don't match
+
+---
+
+## Files Summary
+
+| File | Changes |
+|------|---------|
+| `src/pages/ChessGame.tsx` | Enable DurableSync for private + fix nextTurnWallet |
+| `src/pages/CheckersGame.tsx` | Enable DurableSync for private + fix nextTurnWallet |
+| `src/pages/BackgammonGame.tsx` | Enable DurableSync for private + fix nextTurnWallet |
+| `src/pages/DominosGame.tsx` | Enable DurableSync for private + fix nextTurnWallet |
+| `src/pages/LudoGame.tsx` | Enable DurableSync for private + fix nextTurnWallet |
+
+---
+
+## Expected Results After Fix
+
+1. Private games with turn time will properly persist moves to database
+2. When timeout occurs, correct player gets the turn
+3. Both players stay in sync via database polling
+4. 3-strike forfeit logic works correctly
