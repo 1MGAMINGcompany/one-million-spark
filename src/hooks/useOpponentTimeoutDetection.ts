@@ -24,6 +24,8 @@ interface UseOpponentTimeoutOptions {
   onOpponentTimeout: (missedCount: number) => void;
   /** Callback when auto-forfeit should trigger (3 misses) */
   onAutoForfeit?: () => void;
+  /** Whether both players have accepted and are ready (REQUIRED for timeout detection) */
+  bothReady?: boolean;
 }
 
 interface UseOpponentTimeoutResult {
@@ -50,6 +52,7 @@ export function useOpponentTimeoutDetection(
     myWallet,
     onOpponentTimeout,
     onAutoForfeit,
+    bothReady = true, // Default to true for backward compatibility
   } = options;
 
   const [opponentMissedCount, setOpponentMissedCount] = useState(0);
@@ -68,7 +71,8 @@ export function useOpponentTimeoutDetection(
 
   // Check for opponent timeout
   const checkOpponentTimeout = useCallback(async () => {
-    if (!enabled || !roomPda || isMyTurn || processingTimeoutRef.current) {
+    // Gate on bothReady - don't check timeouts until game is ready
+    if (!enabled || !roomPda || isMyTurn || processingTimeoutRef.current || !bothReady) {
       return;
     }
 
@@ -170,6 +174,7 @@ export function useOpponentTimeoutDetection(
     opponentMissedCount,
     onOpponentTimeout,
     onAutoForfeit,
+    bothReady,
   ]);
 
   // Polling effect
@@ -180,8 +185,8 @@ export function useOpponentTimeoutDetection(
       intervalRef.current = null;
     }
 
-    // Only poll when it's opponent's turn and enabled
-    if (!enabled || isMyTurn || !roomPda) {
+    // Only poll when it's opponent's turn, enabled, and bothReady
+    if (!enabled || isMyTurn || !roomPda || !bothReady) {
       return;
     }
 
@@ -197,7 +202,7 @@ export function useOpponentTimeoutDetection(
         intervalRef.current = null;
       }
     };
-  }, [enabled, isMyTurn, roomPda, checkOpponentTimeout]);
+  }, [enabled, isMyTurn, roomPda, checkOpponentTimeout, bothReady]);
 
   // Reset processing ref when turn changes
   useEffect(() => {

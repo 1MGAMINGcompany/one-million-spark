@@ -76,11 +76,18 @@ export function buildInviteMessage(info: RoomInviteInfo, includeLink: boolean = 
 function safeExternalOpen(url: string): boolean {
   try {
     const inWalletBrowser = isWalletInAppBrowser();
+    const isHttpsUrl = url.startsWith('https://') || url.startsWith('http://');
+    
+    // Wallet browsers cannot open custom URL schemes (sms:, mailto:)
+    // Return false to trigger fallback (copy link + toast)
+    if (inWalletBrowser && !isHttpsUrl) {
+      console.log("[invite] Wallet browser cannot open custom scheme:", url.slice(0, 30));
+      return false;
+    }
     
     if (inWalletBrowser) {
-      // In wallet browsers, use location.href for external links
-      // This navigates the current page instead of trying to open a new tab
-      console.log("[invite] Wallet browser detected - using location.href for:", url.slice(0, 50));
+      // In wallet browsers, use location.href for HTTPS links
+      console.log("[invite] Wallet browser - using location.href for:", url.slice(0, 50));
       window.location.href = url;
       return true;
     }
