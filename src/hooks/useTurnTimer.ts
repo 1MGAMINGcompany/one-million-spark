@@ -73,9 +73,9 @@ export function useTurnTimer(options: UseTurnTimerOptions): UseTurnTimerResult {
     console.log(`[useTurnTimer] Timer resumed at ${remainingTime}s`);
   }, [remainingTime]);
 
-  // Reset timer when turn changes (isMyTurn changes)
+  // Reset timer only when it becomes MY turn (not opponent's)
   useEffect(() => {
-    if (enabled) {
+    if (enabled && isMyTurn) {
       resetTimer();
     }
   }, [isMyTurn, enabled, resetTimer]);
