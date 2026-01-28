@@ -324,9 +324,9 @@ Deno.serve(async (req: Request) => {
         }
 
         // Game is stale - verifier force-settles
-        const verifierSecretKey = Deno.env.get("VERIFIER_SECRET_KEY");
+        const verifierSecretKey = Deno.env.get("VERIFIER_SECRET_KEY_V2") || Deno.env.get("VERIFIER_SECRET_KEY");
         if (!verifierSecretKey) {
-          console.error("[recover-funds] VERIFIER_SECRET_KEY not configured");
+          console.error("[recover-funds] VERIFIER_SECRET_KEY_V2 not configured");
           await logRecoveryAttempt(supabase, roomPda, callerWallet, "force_settle", "verifier_key_missing");
           return new Response(
             JSON.stringify({ status: "error", message: "Server configuration error" }),
