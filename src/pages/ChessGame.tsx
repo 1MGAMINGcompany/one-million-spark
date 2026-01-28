@@ -515,6 +515,11 @@ const ChessGame = () => {
   // Turn timer for ranked games - skip on timeout, 3 strikes = forfeit
   // FIX: Allow processing when opponent times out (detected by useOpponentTimeoutDetection)
   const handleTurnTimeout = useCallback((timedOutWalletArg?: string | null) => {
+    // Gate on bothReady - NEVER process timeout before game is ready
+    if (!rankedGate.bothReady) {
+      console.log("[handleTurnTimeout] Blocked - game not ready");
+      return;
+    }
     if (gameOver || !address || !roomPda) return;
 
     // Get the wallet that timed out - either passed in or current turn holder
