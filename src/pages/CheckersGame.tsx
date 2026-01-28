@@ -331,7 +331,7 @@ const CheckersGame = () => {
 
   const { submitMove: persistMove, moves: dbMoves, isLoading: isSyncLoading } = useDurableGameSync({
     roomPda: roomPda || "",
-    enabled: isRankedGame && roomPlayers.length >= 2,
+    enabled: (isRankedGame || isPrivate) && roomPlayers.length >= 2,
     onMoveReceived: handleDurableMoveReceived,
   });
 
@@ -506,7 +506,8 @@ const CheckersGame = () => {
         persistMove({
           action: "turn_timeout",
           timedOutWallet: timedOutWallet,
-          nextTurnWallet: opponentWalletAddr,
+          // FIX: nextTurnWallet depends on WHO timed out
+          nextTurnWallet: iTimedOut ? opponentWalletAddr : address,
           missedCount: newMissedCount,
         } as any, address);
       }

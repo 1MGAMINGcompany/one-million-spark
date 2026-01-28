@@ -325,7 +325,7 @@ const LudoGame = () => {
 
   const { submitMove: persistMove, moves: dbMoves, isLoading: isSyncLoading } = useDurableGameSync({
     roomPda: roomPda || "",
-    enabled: isRankedGame && roomPlayers.length >= 2,
+    enabled: (isRankedGame || isPrivate) && roomPlayers.length >= 2,
     onMoveReceived: handleDurableMoveReceived,
   });
 
