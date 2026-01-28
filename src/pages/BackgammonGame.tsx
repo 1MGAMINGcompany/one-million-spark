@@ -2411,7 +2411,7 @@ const BackgammonGame = () => {
                       ) : (
                         <span className="text-[10px] font-medium text-slate-400">OPPONENT'S TURN</span>
                       )}
-                      {isRankedGame && startRoll.isFinalized && !gameOver && (
+                      {shouldShowTimer && rankedGate.bothReady && (
                         <div className={cn(
                           "flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono",
                           effectiveIsMyTurn 
@@ -2676,8 +2676,8 @@ const BackgammonGame = () => {
                   )}
                 </div>
 
-                {/* Turn Timer if ranked */}
-                {isRankedGame && startRoll.isFinalized && !gameOver && (
+                {/* Turn Timer for ranked/private */}
+                {shouldShowTimer && rankedGate.bothReady && (
                   <div className="rounded-xl border border-primary/20 bg-card/50 p-4">
                     <h3 className="text-sm font-medium text-muted-foreground mb-2">Turn Timer</h3>
                     <p className={cn(

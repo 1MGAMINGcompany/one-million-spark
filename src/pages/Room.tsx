@@ -10,7 +10,7 @@ import { useSolanaRooms } from "@/hooks/useSolanaRooms";
 import { useTxLock } from "@/contexts/TxLockContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Construction, ArrowLeft, Loader2, Users, Coins, AlertTriangle, CheckCircle, Share2, Copy, ExternalLink, Wallet } from "lucide-react";
+import { Construction, ArrowLeft, Loader2, Users, Coins, AlertTriangle, CheckCircle, Share2, Copy, ExternalLink, Wallet, Clock } from "lucide-react";
 import { RecoverFundsButton } from "@/components/RecoverFundsButton";
 import { WalletGateModal } from "@/components/WalletGateModal";
 import { RivalryWidget } from "@/components/RivalryWidget";
@@ -1100,6 +1100,14 @@ export default function Room() {
                   </div>
                 </div>
                 <p className="text-xs text-muted-foreground">5% platform fee deducted from winnings</p>
+                {/* Turn Time - for ranked/private modes */}
+                {turnTimeSeconds > 0 && (
+                  <div className="flex items-center gap-2 mt-2 pt-2 border-t border-primary/10">
+                    <Clock className="h-4 w-4 text-primary" />
+                    <span className="text-sm text-muted-foreground">Time per turn:</span>
+                    <span className="text-sm font-semibold text-primary">{turnTimeSeconds} seconds</span>
+                  </div>
+                )}
               </div>
 
               {/* Players List */}
