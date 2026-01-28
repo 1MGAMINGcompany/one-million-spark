@@ -28,6 +28,7 @@ import {
   copyInviteLink,
   type RoomInviteInfo,
 } from "@/lib/invite";
+import { isWalletInAppBrowser } from "@/lib/walletBrowserDetection";
 
 // Twitter/X icon (not in lucide)
 const TwitterIcon = () => (
@@ -130,8 +131,10 @@ export function ShareInviteDialog({
     if (!success) {
       handleCopy();
       toast({
-        title: t("shareInvite.openFailed", "Couldn't open WhatsApp"),
-        description: t("shareInvite.linkCopiedInstead", "Link copied to clipboard instead"),
+        title: "Link copied!",
+        description: isWalletInAppBrowser() 
+          ? "Paste it into WhatsApp / Messages."
+          : t("shareInvite.linkCopiedInstead", "Link copied to clipboard instead"),
       });
     }
   };
@@ -142,8 +145,10 @@ export function ShareInviteDialog({
     if (!success) {
       handleCopy();
       toast({
-        title: t("shareInvite.openFailed", "Couldn't open Messages"),
-        description: t("shareInvite.linkCopiedInstead", "Link copied to clipboard instead"),
+        title: "Link copied!",
+        description: isWalletInAppBrowser() 
+          ? "Paste it into Messages / SMS app."
+          : t("shareInvite.linkCopiedInstead", "Link copied to clipboard instead"),
       });
     }
   };
@@ -166,8 +171,10 @@ export function ShareInviteDialog({
     if (!success) {
       handleCopy();
       toast({
-        title: t("shareInvite.openFailed", "Couldn't open Email"),
-        description: t("shareInvite.linkCopiedInstead", "Link copied to clipboard instead"),
+        title: "Link copied!",
+        description: isWalletInAppBrowser() 
+          ? "Paste it into your email app."
+          : t("shareInvite.linkCopiedInstead", "Link copied to clipboard instead"),
       });
     }
   };

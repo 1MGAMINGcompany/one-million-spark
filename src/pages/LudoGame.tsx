@@ -18,6 +18,7 @@ import { useGameSessionPersistence } from "@/hooks/useGameSessionPersistence";
 import { useRoomMode } from "@/hooks/useRoomMode";
 import { useRankedReadyGate } from "@/hooks/useRankedReadyGate";
 import { useTurnTimer, DEFAULT_RANKED_TURN_TIME } from "@/hooks/useTurnTimer";
+import { useOpponentTimeoutDetection } from "@/hooks/useOpponentTimeoutDetection";
 import { useStartRoll } from "@/hooks/useStartRoll";
 import { useTxLock } from "@/contexts/TxLockContext";
 import { useDurableGameSync, GameMove } from "@/hooks/useDurableGameSync";
@@ -486,7 +487,8 @@ const LudoGame = () => {
 
   // Turn timer for ranked games - skip on timeout, 3 strikes = forfeit
   const handleTurnTimeout = useCallback(() => {
-    if (gameOver || !address || !roomPda || !isActuallyMyTurn) return;
+    // Gate on bothReady - don't process timeouts until game is ready
+    if (gameOver || !address || !roomPda || !isActuallyMyTurn || !rankedGate.bothReady) return;
     
     const newMissedCount = incMissed(roomPda, address);
     
@@ -540,7 +542,7 @@ const LudoGame = () => {
       advanceTurn(1);
       play('ludo_dice');
     }
-  }, [gameOver, address, roomPda, isActuallyMyTurn, roomPlayers, eliminatedPlayers, currentPlayerIndex, isRankedGame, persistMove, advanceTurn, play, t]);
+  }, [gameOver, address, roomPda, isActuallyMyTurn, rankedGate.bothReady, roomPlayers, eliminatedPlayers, currentPlayerIndex, isRankedGame, isPrivate, persistMove, advanceTurn, play, t]);
 
   // Use turn time from room mode (DB source of truth) or fallback to ranked gate
   const effectiveTurnTime = roomTurnTime || rankedGate.turnTimeSeconds || DEFAULT_RANKED_TURN_TIME;
@@ -553,12 +555,54 @@ const LudoGame = () => {
     turnTimeSeconds: effectiveTurnTime,
     // Timer counts down only on my turn, enabled for ranked/private with turn time
     enabled: shouldShowTimer && isActuallyMyTurn,
-    isMyTurn: isMyTurnLocal,
+    isMyTurn: isActuallyMyTurn, // FIX: was isMyTurnLocal, must match enabled condition
     onTimeExpired: handleTurnTimeout,
     roomId: roomPda,
   });
 
-  // Convert Ludo players to TurnPlayer format for notifications
+  // Opponent timeout detection for Ludo (2/3/4 player support)
+  const handleOpponentTimeoutDetected = useCallback((missedCount: number) => {
+    const timedOutWallet = roomPlayers[currentPlayerIndex];
+    if (timedOutWallet && !isSameWallet(timedOutWallet, address)) {
+      const newMissedCount = incMissed(roomPda || "", timedOutWallet);
+      
+      if (newMissedCount >= 3) {
+        // Eliminate player
+        eliminatePlayer(currentPlayerIndex);
+        toast({
+          title: t('gameSession.opponentForfeited'),
+          description: `Player ${currentPlayerIndex + 1} was eliminated`,
+        });
+      } else {
+        // Skip their turn
+        advanceTurn(1);
+        toast({
+          title: "Opponent missed turn",
+          description: `${newMissedCount}/3 missed turns`,
+        });
+      }
+    }
+  }, [roomPlayers, currentPlayerIndex, address, roomPda, eliminatePlayer, advanceTurn, t]);
+
+  const handleOpponentAutoForfeit = useCallback(() => {
+    const opponentWallet = roomPlayers[currentPlayerIndex];
+    if (opponentWallet) {
+      handleOpponentTimeoutDetected(3);
+    }
+  }, [roomPlayers, currentPlayerIndex, handleOpponentTimeoutDetected]);
+
+  const opponentTimeout = useOpponentTimeoutDetection({
+    roomPda: roomPda || "",
+    // Enable for ranked/private when it's NOT my turn AND both players ready
+    enabled: shouldShowTimer && !isActuallyMyTurn && startRoll.isFinalized && rankedGate.bothReady,
+    isMyTurn: isActuallyMyTurn,
+    turnTimeSeconds: effectiveTurnTime,
+    myWallet: address,
+    onOpponentTimeout: handleOpponentTimeoutDetected,
+    onAutoForfeit: handleOpponentAutoForfeit,
+    bothReady: rankedGate.bothReady,
+  });
+
   const turnPlayers: TurnPlayer[] = useMemo(() => {
     return players.map((player, index) => {
       const walletAddress = roomPlayers[index] || `player-${index}`;

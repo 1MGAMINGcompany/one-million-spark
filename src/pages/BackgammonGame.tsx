@@ -1182,13 +1182,14 @@ const BackgammonGame = () => {
 
   const opponentTimeout = useOpponentTimeoutDetection({
     roomPda: roomPda || "",
-    // Enable for ranked/private when it's NOT my turn
-    enabled: shouldShowTimer && !isActuallyMyTurn && startRoll.isFinalized,
+    // Enable for ranked/private when it's NOT my turn AND both players ready
+    enabled: shouldShowTimer && !isActuallyMyTurn && startRoll.isFinalized && rankedGate.bothReady,
     isMyTurn: effectiveIsMyTurn,
     turnTimeSeconds: effectiveTurnTime,
     myWallet: address,
     onOpponentTimeout: handleOpponentTimeoutDetected,
     onAutoForfeit: handleOpponentAutoForfeit,
+    bothReady: rankedGate.bothReady,
   });
 
   // Convert to TurnPlayer format for notifications

@@ -438,7 +438,8 @@ const CheckersGame = () => {
   // Turn timer for ranked games - skip on timeout, 3 strikes = forfeit
   // FIX: Allow processing when opponent times out (detected by useOpponentTimeoutDetection)
   const handleTurnTimeout = useCallback((timedOutWalletArg?: string | null) => {
-    if (gameOver || !address || !roomPda) return;
+    // Gate on bothReady - don't process timeouts until game is ready
+    if (gameOver || !address || !roomPda || !rankedGate.bothReady) return;
 
     // Get the wallet that timed out - either passed in or current turn holder
     const timedOutWallet = timedOutWalletArg || activeTurnAddress || null;
@@ -521,7 +522,7 @@ const CheckersGame = () => {
         setTurnOverrideWallet(address);
       }
     }
-  }, [gameOver, address, roomPda, isActuallyMyTurn, roomPlayers, myColor, isRankedGame, persistMove, play, t]);
+  }, [gameOver, address, roomPda, rankedGate.bothReady, isActuallyMyTurn, roomPlayers, myColor, isRankedGame, isPrivate, persistMove, play, t]);
 
   // Timer should show when turn time is configured and game has started
   const gameStarted = startRoll.isFinalized && roomPlayers.length >= 2;
@@ -575,13 +576,14 @@ const CheckersGame = () => {
 
   const opponentTimeout = useOpponentTimeoutDetection({
     roomPda: roomPda || "",
-    // Enable for ranked/private when it's NOT my turn
-    enabled: shouldShowTimer && !isActuallyMyTurn && startRoll.isFinalized,
+    // Enable for ranked/private when it's NOT my turn AND both players ready
+    enabled: shouldShowTimer && !isActuallyMyTurn && startRoll.isFinalized && rankedGate.bothReady,
     isMyTurn: isActuallyMyTurn,
     turnTimeSeconds: effectiveTurnTime,
     myWallet: address,
     onOpponentTimeout: handleOpponentTimeoutDetected,
     onAutoForfeit: handleOpponentAutoForfeit,
+    bothReady: rankedGate.bothReady,
   });
 
   const {
