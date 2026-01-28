@@ -648,7 +648,8 @@ const BackgammonGame = () => {
   // PART B FIX: Enable durable sync if EITHER:
   // 1. rankedGate.bothReady is true (both accepted via game_acceptances)
   // 2. startRoll.isFinalized is true (game already started, so both WERE ready)
-  const durableEnabled = isRankedGame && (rankedGate.bothReady || startRoll.isFinalized);
+  // Now also enabled for private mode with turn timers
+  const durableEnabled = (isRankedGame || isPrivate) && (rankedGate.bothReady || startRoll.isFinalized);
   
   const { submitMove: durablePersistMove, moves: dbMoves, isLoading: isSyncLoading } = useDurableGameSync({
     roomPda: roomPda || "",
@@ -1147,10 +1148,11 @@ const BackgammonGame = () => {
       });
       
       // Persist turn_timeout move
-      if (isRankedGame) {
+      if (isRankedGame || isPrivate) {
         persistMove({
           type: "turn_timeout",
           timedOutWallet: opponentWalletAddr,
+          // FIX: Opponent timed out, so turn goes to ME
           nextTurnWallet: address,
           missedCount,
           gameState,
