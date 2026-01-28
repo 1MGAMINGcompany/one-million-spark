@@ -26,6 +26,8 @@ interface UseOpponentTimeoutOptions {
   onAutoForfeit?: () => void;
   /** Whether both players have accepted and are ready (REQUIRED for timeout detection) */
   bothReady?: boolean;
+  /** Callback when turn_started_at changes (for display timer sync) */
+  onTurnStartedAtChange?: (turnStartedAt: string | null) => void;
 }
 
 interface UseOpponentTimeoutResult {
@@ -35,6 +37,8 @@ interface UseOpponentTimeoutResult {
   isChecking: boolean;
   /** Reset missed count (call when opponent makes a valid move) */
   resetMissedCount: () => void;
+  /** Current turn_started_at value from DB */
+  turnStartedAt: string | null;
 }
 
 const POLL_INTERVAL_MS = 2500; // Poll every 2.5 seconds
@@ -53,10 +57,12 @@ export function useOpponentTimeoutDetection(
     onOpponentTimeout,
     onAutoForfeit,
     bothReady = true, // Default to true for backward compatibility
+    onTurnStartedAtChange,
   } = options;
 
   const [opponentMissedCount, setOpponentMissedCount] = useState(0);
   const [isChecking, setIsChecking] = useState(false);
+  const [turnStartedAt, setTurnStartedAt] = useState<string | null>(null);
   
   // Refs to prevent stale closures and duplicate processing
   const lastProcessedTurnStartRef = useRef<string | null>(null);
@@ -96,6 +102,12 @@ export function useOpponentTimeoutDetection(
         turn_time_seconds,
         status,
       } = session;
+
+      // Always update turnStartedAt when we get it from DB (for display timer sync)
+      if (turn_started_at && turn_started_at !== turnStartedAt) {
+        setTurnStartedAt(turn_started_at);
+        onTurnStartedAtChange?.(turn_started_at);
+      }
 
       // Skip if game is finished or it's my turn
       if (status === "finished") {
@@ -215,5 +227,6 @@ export function useOpponentTimeoutDetection(
     opponentMissedCount,
     isChecking,
     resetMissedCount,
+    turnStartedAt,
   };
 }

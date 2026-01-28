@@ -21,6 +21,7 @@ import { useGameSessionPersistence } from "@/hooks/useGameSessionPersistence";
 import { useRoomMode } from "@/hooks/useRoomMode";
 import { useRankedReadyGate } from "@/hooks/useRankedReadyGate";
 import { useTurnTimer, DEFAULT_RANKED_TURN_TIME } from "@/hooks/useTurnTimer";
+import { useTurnCountdownDisplay } from "@/hooks/useTurnCountdownDisplay";
 import { useOpponentTimeoutDetection } from "@/hooks/useOpponentTimeoutDetection";
 import { useStartRoll } from "@/hooks/useStartRoll";
 import { useTxLock } from "@/contexts/TxLockContext";
@@ -116,6 +117,7 @@ const DominosGame = () => {
   const [selectedDomino, setSelectedDomino] = useState<number | null>(null);
   const [winner, setWinner] = useState<"me" | "opponent" | "draw" | null>(null);
   const [winnerWallet, setWinnerWallet] = useState<string | null>(null); // Direct wallet address of winner
+  const [turnStartedAt, setTurnStartedAt] = useState<string | null>(null); // For display timer
   const [gameInitialized, setGameInitialized] = useState(false);
 
   // Refs to hold current state for stable callbacks (prevents stale closures)
@@ -682,11 +684,18 @@ const DominosGame = () => {
   const gameStarted = startRoll.isFinalized && roomPlayers.length >= 2;
   const shouldShowTimer = effectiveTurnTime > 0 && gameStarted && !gameOver;
   
+  // Display timer - shows ACTIVE player's remaining time on BOTH devices
+  const displayTimer = useTurnCountdownDisplay({
+    turnStartedAt,
+    turnTimeSeconds: effectiveTurnTime,
+    enabled: shouldShowTimer && rankedGate.bothReady,
+  });
+  
+  // Enforcement timer - ONLY runs on active player's device
   const turnTimer = useTurnTimer({
     turnTimeSeconds: effectiveTurnTime,
-    // Timer counts down only on my turn, enabled for ranked/private with turn time
-    enabled: shouldShowTimer && isActuallyMyTurn,
-    isMyTurn: isActuallyMyTurn, // MUST match enabled condition to prevent both devices counting down
+    enabled: shouldShowTimer && isActuallyMyTurn && rankedGate.bothReady,
+    isMyTurn: isActuallyMyTurn,
     onTimeExpired: handleTurnTimeout,
     roomId: roomPda,
   });
@@ -754,7 +763,6 @@ const DominosGame = () => {
 
   const opponentTimeout = useOpponentTimeoutDetection({
     roomPda: roomPda || "",
-    // Enable for ranked/private when it's NOT my turn AND both players ready
     enabled: shouldShowTimer && !isActuallyMyTurn && startRoll.isFinalized && rankedGate.bothReady,
     isMyTurn: effectiveIsMyTurn,
     turnTimeSeconds: effectiveTurnTime,
@@ -762,7 +770,15 @@ const DominosGame = () => {
     onOpponentTimeout: handleOpponentTimeoutDetected,
     onAutoForfeit: handleOpponentAutoForfeit,
     bothReady: rankedGate.bothReady,
+    onTurnStartedAtChange: setTurnStartedAt,
   });
+
+  // Sync turnStartedAt from opponentTimeout polling
+  useEffect(() => {
+    if (opponentTimeout.turnStartedAt && opponentTimeout.turnStartedAt !== turnStartedAt) {
+      setTurnStartedAt(opponentTimeout.turnStartedAt);
+    }
+  }, [opponentTimeout.turnStartedAt, turnStartedAt]);
 
   // Turn notification players
   const turnPlayers: TurnPlayer[] = useMemo(() => {
@@ -1569,8 +1585,8 @@ const DominosGame = () => {
               activePlayer={turnPlayers[isMyTurn ? (amIPlayer1 ? 0 : 1) : (amIPlayer1 ? 1 : 0)]}
               players={turnPlayers}
               myAddress={address}
-              remainingTime={shouldShowTimer ? turnTimer.remainingTime : undefined}
-              showTimer={shouldShowTimer}
+              remainingTime={displayTimer.displayRemainingTime ?? undefined}
+              showTimer={displayTimer.displayRemainingTime != null}
             />
           </div>
         </div>

@@ -20,6 +20,7 @@ import { useGameSessionPersistence } from "@/hooks/useGameSessionPersistence";
 import { useRoomMode } from "@/hooks/useRoomMode";
 import { useRankedReadyGate } from "@/hooks/useRankedReadyGate";
 import { useTurnTimer, DEFAULT_RANKED_TURN_TIME } from "@/hooks/useTurnTimer";
+import { useTurnCountdownDisplay } from "@/hooks/useTurnCountdownDisplay";
 import { useOpponentTimeoutDetection } from "@/hooks/useOpponentTimeoutDetection";
 import { useStartRoll } from "@/hooks/useStartRoll";
 import { useTxLock } from "@/contexts/TxLockContext";
@@ -117,6 +118,7 @@ const CheckersGame = () => {
   const [validMoves, setValidMoves] = useState<Move[]>([]);
   const [gameOver, setGameOver] = useState<Player | "draw" | null>(null);
   const [winnerWallet, setWinnerWallet] = useState<string | null>(null); // Direct wallet address of winner
+  const [turnStartedAt, setTurnStartedAt] = useState<string | null>(null); // For display timer
   const [chainCapture, setChainCapture] = useState<Position | null>(null);
 
   const boardRef = useRef(board);
@@ -528,10 +530,17 @@ const CheckersGame = () => {
   const gameStarted = startRoll.isFinalized && roomPlayers.length >= 2;
   const shouldShowTimer = effectiveTurnTime > 0 && gameStarted && !gameOver;
   
+  // Display timer - shows ACTIVE player's remaining time on BOTH devices
+  const displayTimer = useTurnCountdownDisplay({
+    turnStartedAt,
+    turnTimeSeconds: effectiveTurnTime,
+    enabled: shouldShowTimer && rankedGate.bothReady,
+  });
+  
+  // Enforcement timer - ONLY runs on active player's device
   const turnTimer = useTurnTimer({
     turnTimeSeconds: effectiveTurnTime,
-    // Timer counts down only on my turn, enabled for ranked/private with turn time
-    enabled: shouldShowTimer && isActuallyMyTurn,
+    enabled: shouldShowTimer && isActuallyMyTurn && rankedGate.bothReady,
     isMyTurn: isActuallyMyTurn,
     onTimeExpired: handleTurnTimeout,
     roomId: roomPda,
@@ -576,7 +585,6 @@ const CheckersGame = () => {
 
   const opponentTimeout = useOpponentTimeoutDetection({
     roomPda: roomPda || "",
-    // Enable for ranked/private when it's NOT my turn AND both players ready
     enabled: shouldShowTimer && !isActuallyMyTurn && startRoll.isFinalized && rankedGate.bothReady,
     isMyTurn: isActuallyMyTurn,
     turnTimeSeconds: effectiveTurnTime,
@@ -584,7 +592,15 @@ const CheckersGame = () => {
     onOpponentTimeout: handleOpponentTimeoutDetected,
     onAutoForfeit: handleOpponentAutoForfeit,
     bothReady: rankedGate.bothReady,
+    onTurnStartedAtChange: setTurnStartedAt,
   });
+
+  // Sync turnStartedAt from opponentTimeout polling
+  useEffect(() => {
+    if (opponentTimeout.turnStartedAt && opponentTimeout.turnStartedAt !== turnStartedAt) {
+      setTurnStartedAt(opponentTimeout.turnStartedAt);
+    }
+  }, [opponentTimeout.turnStartedAt, turnStartedAt]);
 
   const {
     isMyTurn: isMyTurnNotification,
@@ -1412,8 +1428,8 @@ const CheckersGame = () => {
               activePlayer={turnPlayers[currentPlayer === "gold" ? 0 : 1]}
               players={turnPlayers}
               myAddress={address}
-              remainingTime={shouldShowTimer ? turnTimer.remainingTime : undefined}
-              showTimer={shouldShowTimer}
+              remainingTime={displayTimer.displayRemainingTime ?? undefined}
+              showTimer={displayTimer.displayRemainingTime != null}
             />
           </div>
         </div>
