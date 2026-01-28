@@ -70,7 +70,7 @@ export default function CreateRoom() {
   const [searchParams] = useSearchParams();
   const { t } = useTranslation();
   const { isConnected, address } = useWallet();
-  const { signMessage } = useWalletAdapter(); // For signing settings message
+  // Wallet adapter used for connection status (signMessage removed - no longer needed)
   const { toast } = useToast();
   const { play } = useSound();
   const { price, formatUsd, loading: priceLoading, refetch: refetchPrice } = useSolPrice();
@@ -329,34 +329,7 @@ export default function CreateRoom() {
         // With signature verification for production security
         
         try {
-          const timestamp = Date.now();
-
-          // IMPORTANT: Must match edge function message format exactly (newline-separated)
-          const message =
-            `1MGAMING:SET_SETTINGS\n` +
-            `roomPda=${roomPdaStr}\n` +
-            `turnTimeSeconds=${authoritativeTurnTime}\n` +
-            `mode=${gameMode}\n` +
-            `ts=${timestamp}`;
-
-          // Convert Uint8Array -> base64
-          const toBase64 = (bytes: Uint8Array) =>
-            btoa(String.fromCharCode(...Array.from(bytes)));
-
-          let signature: string | undefined;
-
-          if (!signMessage) {
-            toast({
-              title: "Settings Error",
-              description: "Wallet does not support message signing. Turn timer may default to 60s.",
-              variant: "destructive",
-            });
-          } else {
-            const msgBytes = new TextEncoder().encode(message);
-            const sigBytes = await signMessage(msgBytes);
-            signature = toBase64(sigBytes);
-          }
-
+          // Security: on-chain tx proves creator identity, edge function validates DB ownership
           const { data, error: settingsErr } = await supabase.functions.invoke(
             "game-session-set-settings",
             {
@@ -364,12 +337,9 @@ export default function CreateRoom() {
                 roomPda: roomPdaStr,
                 turnTimeSeconds: authoritativeTurnTime,
                 mode: gameMode,
-                maxPlayers: effectiveMaxPlayers, // For Ludo: 2, 3, or 4 players
-                gameType: GAME_TYPE_NAMES[parseInt(gameType)] || "unknown", // Pass game name for session creation
+                maxPlayers: effectiveMaxPlayers,
+                gameType: GAME_TYPE_NAMES[parseInt(gameType)] || "unknown",
                 creatorWallet: address,
-                timestamp,
-                signature,
-                message, // optional debugging field
               },
             }
           );
