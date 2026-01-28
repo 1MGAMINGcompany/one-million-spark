@@ -1,146 +1,133 @@
 
-# Fix Private Room Multiplayer Readiness + Prevent Premature Timeouts
+# Fix Turn Timer Display + Room Join Page Turn Time + Desktop Backgammon Layout
 
-## Problem Summary
+## Summary of Issues
 
-Private rooms incorrectly bypass the `useRankedReadyGate` check because `isRankedGame` is `false` when `mode === 'private'`. The hook returns `bothReady: true` for non-ranked games, so turn timers and `useOpponentTimeoutDetection` start running even though the database shows `p2_ready=false`. This causes:
+Based on the user's test and the uploaded screenshots, there are **3 distinct issues**:
 
-- "Turn Skipped 1/3 missed turns" notifications while UI says "Waiting..."
-- Opponent cannot move because board is blocked
-- Game freezes or ends incorrectly
+### Issue 1: Turn Timer Not Visible on Desktop (Private Rooms)
+**Root Cause**: The timer UI is gated on `isRankedGame && startRoll.isFinalized && !gameOver`, but for private rooms `isRankedGame` is `false`.
 
-## Root Cause Analysis
+**Evidence from code**:
+- Line 2414: `{isRankedGame && startRoll.isFinalized && !gameOver && (...timer display...)}`  
+- Line 2680: `{isRankedGame && startRoll.isFinalized && !gameOver && (...timer card...)}`
 
-```text
-useRoomMode hook:
-  mode = 'private'
-  isRanked = (mode === 'ranked') → FALSE
-  isPrivate = (mode === 'private') → TRUE
+**Fix**: Change to use `shouldShowTimer` (which already correctly includes `effectiveTurnTime > 0` check) or `(isRankedGame || isPrivate)`.
 
-useRankedReadyGate hook (line 326-338):
-  if (!isRanked) {
-    return { bothReady: true, ... }  // BYPASS - returns instantly
-  }
-  
-Result: Private rooms get bothReady: true immediately, bypassing DB checks!
+---
+
+### Issue 2: Join Room Popup Missing Turn Time
+**Root Cause**: The `Room.tsx` page displays stake information but does **NOT** show the turn time selected by the room creator.
+
+**Evidence from code**:
+- `turnTimeSeconds` is fetched and stored in state (line 211)
+- The Stake Information card (lines 1080-1103) shows Entry Fee, Pot, Winner Gets, but no turn time
+
+**Fix**: Add a new row in the Room info UI that displays the turn time (e.g., "10 sec/turn" or "No time limit" for casual).
+
+---
+
+### Issue 3: Backgammon Desktop Board Layout Issue
+**From the screenshot**: The board appears to have awkward spacing/positioning with the sidebar showing "Game Status: Opponent's turn" but no timer visible. The user says "mobile is perfect, don't touch it."
+
+**Observations**:
+- The main board layout structure looks correct (3-column grid with 1-column sidebar)
+- The issue is that the desktop sidebar shows "Game Status" but the Turn Timer card (line 2679-2694) is hidden because `isRankedGame` is false
+- The layout itself appears functional; the "weirdness" may be the missing timer + context mismatch
+
+**Fix**: Showing the timer (Issue 1 fix) should resolve the perceived layout problem. If additional layout tweaks are needed after testing, they can be addressed separately.
+
+---
+
+## Technical Changes
+
+### Change 1: BackgammonGame.tsx - Fix Timer Visibility for Private Rooms
+
+**File**: `src/pages/BackgammonGame.tsx`
+
+Update both timer display locations to use `shouldShowTimer` instead of `isRankedGame`:
+
+```typescript
+// Line 2414 (mobile inline timer) - BEFORE:
+{isRankedGame && startRoll.isFinalized && !gameOver && (
+
+// Line 2414 - AFTER:
+{shouldShowTimer && rankedGate.bothReady && (
 ```
 
-## Solution
+```typescript
+// Line 2680 (desktop sidebar timer card) - BEFORE:
+{isRankedGame && startRoll.isFinalized && !gameOver && (
 
-Pass `isRanked: isRankedGame || isPrivate` to `useRankedReadyGate` in all 5 game files, so private rooms use the same readiness checks as ranked games.
+// Line 2680 - AFTER:
+{shouldShowTimer && rankedGate.bothReady && (
+```
+
+**Why `shouldShowTimer && rankedGate.bothReady`?**
+- `shouldShowTimer = effectiveTurnTime > 0 && gameStarted && !gameOver` (already defined at line 1109)
+- Adding `rankedGate.bothReady` ensures timer only shows when both players are truly ready
+- This works for BOTH ranked AND private rooms because `effectiveTurnTime` is set from DB
+
+---
+
+### Change 2: Room.tsx - Display Turn Time in Room Details
+
+**File**: `src/pages/Room.tsx`
+
+Add turn time display to the Stake Information section (around line 1080-1103):
+
+```typescript
+// After "Stake Information" section, add Turn Time display
+{/* Turn Time - for ranked/private modes */}
+{turnTimeSeconds > 0 && (
+  <div className="flex items-center gap-2 mt-2 pt-2 border-t border-primary/10">
+    <Clock className="h-4 w-4 text-primary" />
+    <span className="text-sm text-muted-foreground">Time per turn:</span>
+    <span className="text-sm font-semibold text-primary">{turnTimeSeconds} seconds</span>
+  </div>
+)}
+```
+
+Also need to import `Clock` from lucide-react.
 
 ---
 
 ## Files to Change
 
-### 1. ChessGame.tsx (line ~407-412)
-
-Current:
-```typescript
-const rankedGate = useRankedReadyGate({
-  roomPda,
-  myWallet: address,
-  isRanked: isRankedGame,  // FALSE for private rooms
-  enabled: hasTwoRealPlayers && modeLoaded,
-});
-```
-
-Change to:
-```typescript
-// Private rooms require same ready gate as ranked
-const requiresReadyGate = isRankedGame || isPrivate;
-
-const rankedGate = useRankedReadyGate({
-  roomPda,
-  myWallet: address,
-  isRanked: requiresReadyGate,  // TRUE for ranked AND private
-  enabled: hasTwoRealPlayers && modeLoaded,
-});
-```
-
-### 2. CheckersGame.tsx (line ~282-287)
-
-Same pattern change.
-
-### 3. BackgammonGame.tsx (line ~518-523)
-
-Same pattern change.
-
-### 4. DominosGame.tsx (line ~473-478)
-
-Same pattern change.
-
-### 5. LudoGame.tsx (line ~280-285)
-
-Same pattern change.
+| File | Change |
+|------|--------|
+| `src/pages/BackgammonGame.tsx` | Line 2414: Change `isRankedGame && startRoll.isFinalized && !gameOver` → `shouldShowTimer && rankedGate.bothReady` |
+| `src/pages/BackgammonGame.tsx` | Line 2680: Same change |
+| `src/pages/Room.tsx` | Add turn time display in stake info section + import Clock icon |
 
 ---
 
-## Verification That Gates Are Already Correct
-
-I verified that the timer hooks and timeout handlers are already gated on `rankedGate.bothReady`:
-
-| File | useTurnTimer.enabled | useOpponentTimeoutDetection.enabled | handleTurnTimeout |
-|------|---------------------|-------------------------------------|-------------------|
-| ChessGame | `shouldShowTimer && isActuallyMyTurn && rankedGate.bothReady` | `shouldShowTimer && !isActuallyMyTurn && startRoll.isFinalized && rankedGate.bothReady` | `if (!rankedGate.bothReady) return` |
-| CheckersGame | Same pattern | Same pattern | Same pattern |
-| BackgammonGame | Same pattern | Same pattern | Same pattern |
-| DominosGame | Same pattern | Same pattern | Same pattern |
-| LudoGame | Same pattern | Same pattern | Same pattern |
-
-All hooks/callbacks already check `rankedGate.bothReady`, but the problem is that `bothReady` is always `true` for private rooms because the hook bypasses the real check.
-
----
-
-## Backend Validation (Already Implemented)
-
-The `submit_game_move` RPC function already includes GAME READY GATE validation:
-
-```sql
--- GAME READY GATE: Reject moves/timeouts unless both players ready (for ranked/private)
-IF v_session.mode IN ('ranked', 'private') THEN
-  -- Reject if both players not ready
-  IF NOT (
-    (v_session.p1_ready = true AND v_session.p2_ready = true) OR
-    v_session.start_roll_finalized = true
-  ) THEN
-    RETURN jsonb_build_object('success', false, 'error', 'game_not_ready');
-  END IF;
-END IF;
-```
-
-This serves as a server-side safety net even if client-side bugs slip through.
-
----
-
-## Why This Fix Is Safe
+## Why This Won't Break Anything
 
 | Concern | Answer |
 |---------|--------|
-| Will casual games break? | No - `isRankedGame` and `isPrivate` are both `false` for casual, so `requiresReadyGate = false` → bypass applies correctly |
-| Will ranked games break? | No - `isRankedGame = true` → `requiresReadyGate = true` → same behavior as before |
-| Will private games work? | Yes - `isPrivate = true` → `requiresReadyGate = true` → proper readiness checks applied |
+| Will casual games show timer? | No - casual games have `effectiveTurnTime = 0`, so `shouldShowTimer` is false |
+| Will ranked games still work? | Yes - `shouldShowTimer` includes the same conditions plus turn time check |
+| Will private games show timer? | Yes - private games have turn time set, so `shouldShowTimer` will be true |
+| Will timer show before game ready? | No - we add `rankedGate.bothReady` to prevent premature display |
 
 ---
 
-## Expected Behavior After Fix
+## Verification After Implementation
 
-1. Create private chess room → `p1_ready = true`
-2. Player 2 joins via invite link → `set_player_ready` or `record_acceptance` sets `p2_ready = true`
-3. `useRankedReadyGate` polls and sees `p1_ready && p2_ready = true`
-4. `bothReady` becomes true
-5. Timer display and enforcement hooks are enabled
-6. Game proceeds normally with visible, synchronized timers
+1. **Create a private Backgammon room** with 10 sec turn time
+2. **Before opponent joins**: Verify timer is NOT shown (game not ready)
+3. **After opponent joins**: Verify timer IS visible on desktop sidebar
+4. **Check Room.tsx join page**: Verify turn time shows "10 seconds" in the room details
+5. **Verify casual room**: Timer should NOT show (turn time = 0)
+6. **Verify mobile**: Timer should show in mobile inline display when appropriate
 
 ---
 
-## Testing Checklist
+## Desktop Backgammon Layout Context
 
-| Scenario | Expected |
-|----------|----------|
-| Create private room | Timer NOT shown, no timeouts until opponent joins/accepts |
-| Opponent joins private room | Both devices see synchronized countdown after acceptance |
-| Make a move | Timer resets, both see new countdown |
-| One player times out | Only ONE "Turn Skipped" event, turn switches correctly |
-| Create casual room | No timer, bothReady = true immediately (bypass applies correctly) |
-| Create ranked room | Same behavior as before (no regression) |
+Looking at the screenshot, the user may also be referring to the overall board proportions. The current grid layout is:
+- 3 columns for board
+- 1 column for sidebar
+
+The board uses `max-w-[min(100%,calc((100dvh-18rem)*2))] aspect-[2/1]` which maintains proper aspect ratio. If after fixing the timer the layout still appears "weird", we can investigate further, but the primary visual issue appears to be the missing timer card making the sidebar look incomplete.
