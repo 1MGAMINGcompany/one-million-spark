@@ -24,6 +24,7 @@ import { useRoomMode } from "@/hooks/useRoomMode";
 import { useRankedReadyGate } from "@/hooks/useRankedReadyGate";
 import { useStartRoll } from "@/hooks/useStartRoll";
 import { useTurnTimer, DEFAULT_RANKED_TURN_TIME } from "@/hooks/useTurnTimer";
+import { useTurnCountdownDisplay } from "@/hooks/useTurnCountdownDisplay";
 import { useOpponentTimeoutDetection } from "@/hooks/useOpponentTimeoutDetection";
 import { useDurableGameSync, GameMove } from "@/hooks/useDurableGameSync";
 import TurnStatusHeader from "@/components/TurnStatusHeader";
@@ -129,6 +130,7 @@ const ChessGame = () => {
   const [gameOver, setGameOver] = useState(false);
   const [animationsEnabled, setAnimationsEnabled] = useState(true);
   const [winnerWallet, setWinnerWallet] = useState<string | null>(null); // Direct wallet address of winner
+  const [turnStartedAt, setTurnStartedAt] = useState<string | null>(null); // For display timer
 
   // Room players - in production, this comes from on-chain room data
   const [roomPlayers, setRoomPlayers] = useState<string[]>([]);
@@ -609,10 +611,17 @@ const ChessGame = () => {
   const gameStarted = startRoll.isFinalized && roomPlayers.length >= 2;
   const shouldShowTimer = effectiveTurnTime > 0 && gameStarted && !gameOver;
   
+  // Display timer - shows ACTIVE player's remaining time on BOTH devices
+  const displayTimer = useTurnCountdownDisplay({
+    turnStartedAt,
+    turnTimeSeconds: effectiveTurnTime,
+    enabled: shouldShowTimer && rankedGate.bothReady,
+  });
+  
+  // Enforcement timer - ONLY runs on active player's device
   const turnTimer = useTurnTimer({
     turnTimeSeconds: effectiveTurnTime,
-    // Timer counts down only on my turn, enabled for ranked/private with turn time
-    enabled: shouldShowTimer && isActuallyMyTurn,
+    enabled: shouldShowTimer && isActuallyMyTurn && rankedGate.bothReady,
     isMyTurn: isActuallyMyTurn,
     onTimeExpired: handleTurnTimeout,
     roomId: roomPda,
@@ -666,7 +675,35 @@ const ChessGame = () => {
     onOpponentTimeout: handleOpponentTimeoutDetected,
     onAutoForfeit: handleOpponentAutoForfeit,
     bothReady: rankedGate.bothReady,
+    onTurnStartedAtChange: setTurnStartedAt,
   });
+
+  // Sync turnStartedAt from opponentTimeout polling (for display timer)
+  useEffect(() => {
+    if (opponentTimeout.turnStartedAt && opponentTimeout.turnStartedAt !== turnStartedAt) {
+      setTurnStartedAt(opponentTimeout.turnStartedAt);
+    }
+  }, [opponentTimeout.turnStartedAt, turnStartedAt]);
+
+  // Fetch initial turn_started_at when game starts (for my turn display)
+  useEffect(() => {
+    if (!startRoll.isFinalized || !roomPda || turnStartedAt) return;
+    
+    const fetchInitialTurnStartedAt = async () => {
+      try {
+        const { data } = await supabase.functions.invoke("game-session-get", {
+          body: { roomPda },
+        });
+        if (data?.session?.turn_started_at) {
+          setTurnStartedAt(data.session.turn_started_at);
+        }
+      } catch (err) {
+        console.error("[ChessGame] Failed to fetch initial turn_started_at:", err);
+      }
+    };
+    
+    fetchInitialTurnStartedAt();
+  }, [startRoll.isFinalized, roomPda, turnStartedAt]);
 
   // Turn notification system
   const {
@@ -1249,8 +1286,8 @@ const ChessGame = () => {
               activePlayer={turnPlayers[game.turn() === "w" ? 0 : 1]}
               players={turnPlayers}
               myAddress={address}
-              remainingTime={shouldShowTimer ? turnTimer.remainingTime : undefined}
-              showTimer={shouldShowTimer}
+              remainingTime={displayTimer.displayRemainingTime ?? undefined}
+              showTimer={displayTimer.displayRemainingTime != null}
             />
           </div>
         </div>

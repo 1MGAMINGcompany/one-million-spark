@@ -18,6 +18,7 @@ import { useGameSessionPersistence } from "@/hooks/useGameSessionPersistence";
 import { useRoomMode } from "@/hooks/useRoomMode";
 import { useRankedReadyGate } from "@/hooks/useRankedReadyGate";
 import { useTurnTimer, DEFAULT_RANKED_TURN_TIME } from "@/hooks/useTurnTimer";
+import { useTurnCountdownDisplay } from "@/hooks/useTurnCountdownDisplay";
 import { useOpponentTimeoutDetection } from "@/hooks/useOpponentTimeoutDetection";
 import { useStartRoll } from "@/hooks/useStartRoll";
 import { useTxLock } from "@/contexts/TxLockContext";
@@ -75,6 +76,7 @@ const LudoGame = () => {
   const [roomPlayers, setRoomPlayers] = useState<string[]>([]);
   const [entryFeeSol, setEntryFeeSol] = useState(0);
   const [stakeLamports, setStakeLamports] = useState<number | undefined>(undefined);
+  const [turnStartedAt, setTurnStartedAt] = useState<string | null>(null); // For display timer
   
   // Leave/Forfeit dialog states
   const [showForfeitDialog, setShowForfeitDialog] = useState(false);
@@ -551,11 +553,18 @@ const LudoGame = () => {
   const gameStarted = startRoll.isFinalized && roomPlayers.length >= 2;
   const shouldShowTimer = effectiveTurnTime > 0 && gameStarted && !gameOver;
   
+  // Display timer - shows ACTIVE player's remaining time on BOTH devices
+  const displayTimer = useTurnCountdownDisplay({
+    turnStartedAt,
+    turnTimeSeconds: effectiveTurnTime,
+    enabled: shouldShowTimer && rankedGate.bothReady,
+  });
+  
+  // Enforcement timer - ONLY runs on active player's device
   const turnTimer = useTurnTimer({
     turnTimeSeconds: effectiveTurnTime,
-    // Timer counts down only on my turn, enabled for ranked/private with turn time
-    enabled: shouldShowTimer && isActuallyMyTurn,
-    isMyTurn: isActuallyMyTurn, // FIX: was isMyTurnLocal, must match enabled condition
+    enabled: shouldShowTimer && isActuallyMyTurn && rankedGate.bothReady,
+    isMyTurn: isActuallyMyTurn,
     onTimeExpired: handleTurnTimeout,
     roomId: roomPda,
   });
@@ -593,7 +602,6 @@ const LudoGame = () => {
 
   const opponentTimeout = useOpponentTimeoutDetection({
     roomPda: roomPda || "",
-    // Enable for ranked/private when it's NOT my turn AND both players ready
     enabled: shouldShowTimer && !isActuallyMyTurn && startRoll.isFinalized && rankedGate.bothReady,
     isMyTurn: isActuallyMyTurn,
     turnTimeSeconds: effectiveTurnTime,
@@ -601,7 +609,15 @@ const LudoGame = () => {
     onOpponentTimeout: handleOpponentTimeoutDetected,
     onAutoForfeit: handleOpponentAutoForfeit,
     bothReady: rankedGate.bothReady,
+    onTurnStartedAtChange: setTurnStartedAt,
   });
+
+  // Sync turnStartedAt from opponentTimeout polling
+  useEffect(() => {
+    if (opponentTimeout.turnStartedAt && opponentTimeout.turnStartedAt !== turnStartedAt) {
+      setTurnStartedAt(opponentTimeout.turnStartedAt);
+    }
+  }, [opponentTimeout.turnStartedAt, turnStartedAt]);
 
   const turnPlayers: TurnPlayer[] = useMemo(() => {
     return players.map((player, index) => {
@@ -1224,8 +1240,8 @@ const LudoGame = () => {
             activePlayer={turnPlayers[currentPlayerIndex]}
             players={turnPlayers}
             myAddress={address}
-            remainingTime={shouldShowTimer ? turnTimer.remainingTime : undefined}
-            showTimer={shouldShowTimer}
+            remainingTime={displayTimer.displayRemainingTime ?? undefined}
+            showTimer={displayTimer.displayRemainingTime != null}
           />
         </div>
       </div>
