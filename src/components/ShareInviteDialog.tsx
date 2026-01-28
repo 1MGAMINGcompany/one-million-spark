@@ -26,6 +26,7 @@ import {
   twitterInvite,
   telegramInvite,
   copyInviteLink,
+  copyInviteMessage,
   type RoomInviteInfo,
 } from "@/lib/invite";
 import { isWalletInAppBrowser } from "@/lib/walletBrowserDetection";
@@ -76,9 +77,13 @@ export function ShareInviteDialog({
   const { t } = useTranslation();
   const { address } = useWallet();
   
-  // Detect mobile for UX prioritization
+  // Detect mobile and wallet browser for UX prioritization
   const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
   const hasNativeShare = typeof navigator !== 'undefined' && !!navigator.share;
+  const inWalletBrowser = isWalletInAppBrowser();
+
+  // Debug logging for share environment
+  console.log("[share] env", { isMobile, inWalletBrowser, hasNativeShare });
 
   const inviteLink = buildInviteLink({ roomId });
   
@@ -100,8 +105,10 @@ export function ShareInviteDialog({
       setCopied(true);
       play("ui/click");
       toast({
-        title: t("common.linkCopied"),
-        description: t("common.linkCopiedDesc"),
+        title: inWalletBrowser ? "Link copied!" : t("common.linkCopied"),
+        description: inWalletBrowser
+          ? "Paste into WhatsApp, Telegram, or any messaging app"
+          : t("common.linkCopiedDesc"),
       });
       setTimeout(() => setCopied(false), 2000);
     } catch {
@@ -113,14 +120,35 @@ export function ShareInviteDialog({
     }
   };
 
+  const handleCopyMessage = async () => {
+    try {
+      await copyInviteMessage(roomInfo);
+      play("ui/click");
+      toast({
+        title: "Message copied!",
+        description: "Paste it into WhatsApp, Telegram, or any messaging app.",
+      });
+    } catch {
+      toast({
+        title: "Failed to copy",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleNativeShare = async () => {
     try {
       play("ui/click");
+      console.log("[share] using navigator.share");
       const success = await shareInvite(inviteLink, gameName, roomInfo);
-      if (!success) {
+      if (success) {
+        console.log("[share] native share success");
+      } else {
+        console.log("[share] fallback copy");
         handleCopy();
       }
     } catch {
+      console.log("[share] fallback copy (error)");
       handleCopy();
     }
   };
@@ -317,87 +345,136 @@ export function ShareInviteDialog({
             </Button>
           </div>
 
-          {/* Share Buttons */}
-          {/* Mobile: Native share as primary action */}
-          {isMobile && hasNativeShare && (
-            <Button
-              variant="default"
-              onClick={handleNativeShare}
-              className="w-full gap-2 mb-3"
-            >
-              <Share2 className="h-4 w-4" />
-              {t("shareInvite.shareInvite", "Share invite")}
-            </Button>
-          )}
-
-          {/* Share Buttons Grid */}
-          <div className="grid grid-cols-2 gap-3">
-            {/* Desktop: Show native share in grid */}
-            {!isMobile && hasNativeShare && (
+          {/* Share Buttons - Wallet browser simplified UI vs full grid */}
+          {inWalletBrowser ? (
+            /* Wallet Browser: Simplified Share + Copy UI */
+            <div className="space-y-3">
+              {/* Primary: Native Share (if available) */}
+              {hasNativeShare && (
+                <Button
+                  variant="default"
+                  onClick={handleNativeShare}
+                  className="w-full gap-2"
+                >
+                  <Share2 className="h-4 w-4" />
+                  Share invite
+                </Button>
+              )}
+              
+              {/* Secondary: Copy Link */}
               <Button
                 variant="outline"
-                onClick={handleNativeShare}
-                className="border-primary/30 hover:bg-primary/10 gap-2"
+                onClick={handleCopy}
+                className="w-full gap-2 border-primary/30"
               >
-                <Share2 className="h-4 w-4" />
-                {t("shareInvite.share")}
+                {copied ? (
+                  <Check className="h-4 w-4 text-green-500" />
+                ) : (
+                  <Copy className="h-4 w-4" />
+                )}
+                Copy link
               </Button>
-            )}
+              
+              {/* Tertiary: Copy Message */}
+              <Button
+                variant="ghost"
+                onClick={handleCopyMessage}
+                className="w-full gap-2 text-muted-foreground"
+              >
+                <MessageCircle className="h-4 w-4" />
+                Copy invite message
+              </Button>
+              
+              {/* Helpful tip */}
+              <p className="text-xs text-muted-foreground text-center">
+                💡 Tap "Share invite" to send via WhatsApp, Telegram, or any app
+              </p>
+            </div>
+          ) : (
+            /* Desktop / Regular Mobile: Full share buttons grid */
+            <>
+              {/* Mobile: Native share as primary action */}
+              {isMobile && hasNativeShare && (
+                <Button
+                  variant="default"
+                  onClick={handleNativeShare}
+                  className="w-full gap-2 mb-3"
+                >
+                  <Share2 className="h-4 w-4" />
+                  {t("shareInvite.shareInvite", "Share invite")}
+                </Button>
+              )}
 
-            <Button
-              variant="outline"
-              onClick={handleWhatsApp}
-              className="border-green-500/50 hover:bg-green-500/10 text-green-500 gap-2"
-            >
-              <MessageCircle className="h-4 w-4" />
-              WhatsApp
-            </Button>
+              {/* Share Buttons Grid */}
+              <div className="grid grid-cols-2 gap-3">
+                {/* Desktop: Show native share in grid */}
+                {!isMobile && hasNativeShare && (
+                  <Button
+                    variant="outline"
+                    onClick={handleNativeShare}
+                    className="border-primary/30 hover:bg-primary/10 gap-2"
+                  >
+                    <Share2 className="h-4 w-4" />
+                    {t("shareInvite.share")}
+                  </Button>
+                )}
 
-            <Button
-              variant="outline"
-              onClick={handleSMS}
-              className="border-blue-400/50 hover:bg-blue-400/10 text-blue-400 gap-2"
-            >
-              <Smartphone className="h-4 w-4" />
-              SMS
-            </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleWhatsApp}
+                  className="border-green-500/50 hover:bg-green-500/10 text-green-500 gap-2"
+                >
+                  <MessageCircle className="h-4 w-4" />
+                  WhatsApp
+                </Button>
 
-            <Button
-              variant="outline"
-              onClick={handleTelegram}
-              className="border-sky-400/50 hover:bg-sky-400/10 text-sky-400 gap-2"
-            >
-              <TelegramIcon />
-              Telegram
-            </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleSMS}
+                  className="border-blue-400/50 hover:bg-blue-400/10 text-blue-400 gap-2"
+                >
+                  <Smartphone className="h-4 w-4" />
+                  SMS
+                </Button>
 
-            <Button
-              variant="outline"
-              onClick={handleTwitter}
-              className="border-slate-400/50 hover:bg-slate-400/10 text-slate-300 gap-2"
-            >
-              <TwitterIcon />
-              X / Twitter
-            </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleTelegram}
+                  className="border-sky-400/50 hover:bg-sky-400/10 text-sky-400 gap-2"
+                >
+                  <TelegramIcon />
+                  Telegram
+                </Button>
 
-            <Button
-              variant="outline"
-              onClick={handleFacebook}
-              className="border-blue-500/50 hover:bg-blue-500/10 text-blue-500 gap-2"
-            >
-              <Facebook className="h-4 w-4" />
-              Facebook
-            </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleTwitter}
+                  className="border-slate-400/50 hover:bg-slate-400/10 text-slate-300 gap-2"
+                >
+                  <TwitterIcon />
+                  X / Twitter
+                </Button>
 
-            <Button
-              variant="outline"
-              onClick={handleEmail}
-              className="border-primary/30 hover:bg-primary/10 gap-2 col-span-2"
-            >
-              <Mail className="h-4 w-4" />
-              {t("shareInvite.email", "Email")}
-            </Button>
-          </div>
+                <Button
+                  variant="outline"
+                  onClick={handleFacebook}
+                  className="border-blue-500/50 hover:bg-blue-500/10 text-blue-500 gap-2"
+                >
+                  <Facebook className="h-4 w-4" />
+                  Facebook
+                </Button>
+
+                <Button
+                  variant="outline"
+                  onClick={handleEmail}
+                  className="border-primary/30 hover:bg-primary/10 gap-2 col-span-2"
+                >
+                  <Mail className="h-4 w-4" />
+                  {t("shareInvite.email", "Email")}
+                </Button>
+              </div>
+            </>
+          )}
 
           {/* QR Code for Desktop -> Mobile sharing */}
           {!isMobile && (
