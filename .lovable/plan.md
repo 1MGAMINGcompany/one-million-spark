@@ -1,107 +1,152 @@
 
 
-# Remove Second Signature (Fix Phantom Warning)
+# Fix Mobile Share for Private Room Invites in Wallet Browsers
 
 ## Problem
-When creating a private room, Phantom shows a "Request blocked - This dApp could be malicious" warning. This happens because a `signMessage()` call fires AFTER the initial SOL transaction succeeds, and Phantom flags it as suspicious.
+When sharing private room invites from wallet in-app browsers (Phantom/Solflare/Backpack), clicking WhatsApp navigates to `https://wa.me/...` via `window.location.href`, which leaves the app context. SMS/Email fail with `ERR_UNKNOWN_URL_SCHEME`.
 
-## Solution
-Remove the message signature requirement entirely. Security is maintained through:
-1. On-chain SOL transaction already proves creator identity
-2. Edge function validates `creatorWallet === player1_wallet` from database
-
----
-
-## Changes
-
-### File 1: `src/pages/CreateRoom.tsx`
-
-**Remove the signMessage logic (lines 331-358):**
-
-| Line | Change |
-|------|--------|
-| 73 | Remove `signMessage` from useWalletAdapter import |
-| 331-358 | Remove timestamp, message, signature generation |
-| 360-375 | Simplify edge function call (remove timestamp, signature, message params) |
-
-**Before:**
+## Root Cause
+The current `safeExternalOpen()` logic (lines 88-92 in invite.ts):
 ```typescript
-const { signMessage } = useWalletAdapter();
-// ...
-const timestamp = Date.now();
-const message = `1MGAMING:SET_SETTINGS\n...`;
-const sigBytes = await signMessage(msgBytes);  // ← SECOND WALLET PROMPT
-signature = toBase64(sigBytes);
-```
-
-**After:**
-```typescript
-// No signMessage needed - on-chain tx proves identity
-const { data, error } = await supabase.functions.invoke(
-  "game-session-set-settings",
-  {
-    body: {
-      roomPda: roomPdaStr,
-      turnTimeSeconds: authoritativeTurnTime,
-      mode: gameMode,
-      maxPlayers: effectiveMaxPlayers,
-      gameType: GAME_TYPE_NAMES[parseInt(gameType)] || "unknown",
-      creatorWallet: address,
-      // No timestamp, signature, or message
-    },
-  }
-);
-```
-
----
-
-### File 2: `supabase/functions/game-session-set-settings/index.ts`
-
-**Remove signature verification logic:**
-
-| Lines | Change |
-|-------|--------|
-| 1-5 | Remove `@noble/ed25519` import |
-| 47-68 | Remove `decodeBase58` function |
-| 70-77 | Remove `decodeBase64` function |
-| 79-95 | Remove `verifySignature` function |
-| 97-102 | Remove `isDevEnvironment` function |
-| 119-120 | Remove timestamp/signature extraction from payload |
-| 138-175 | Remove `requiresSignature` block |
-
-**Keep database ownership validation:**
-
-For existing sessions, verify `creatorWallet === player1_wallet`:
-```typescript
-// Verify caller is room creator (DB ownership check)
-if (session && session.player1_wallet && creatorWallet) {
-  if (session.player1_wallet.trim() !== creatorWallet.trim()) {
-    return json(403, { ok: false, error: "not_room_creator" });
-  }
+if (inWalletBrowser) {
+  window.location.href = url;  // ← Navigates AWAY from app
+  return true;
 }
 ```
 
-For new sessions, the caller becomes `player1_wallet` automatically (expected behavior).
+This navigates away to wa.me, facebook.com, etc., breaking the in-app experience.
+
+## Solution
+**UI-level control in ShareInviteDialog.tsx** - Don't render or call external share handlers when in wallet browser. Leave `safeExternalOpen` unchanged (it may be reused later for other flows).
 
 ---
 
-## Security Analysis
+## File Changes
 
-| Check | Before | After |
-|-------|--------|-------|
-| On-chain tx proof | Yes | Yes |
-| Message signature | Yes | No (removed) |
-| DB ownership check | Yes | Yes |
-| **Overall** | Secure | Secure |
+### `src/components/ShareInviteDialog.tsx`
 
-The on-chain SOL transaction is the real proof of identity - the message signature was redundant and caused UX issues.
+**Add wallet browser detection and logging:**
+```typescript
+import { isWalletInAppBrowser } from "@/lib/walletBrowserDetection";
+import { copyInviteMessage } from "@/lib/invite";
+
+// Inside component
+const inWalletBrowser = isWalletInAppBrowser();
+
+// Log environment for debugging
+console.log("[share] env", { isMobile, inWalletBrowser, hasNativeShare });
+```
+
+**Add "Copy message" handler:**
+```typescript
+const handleCopyMessage = async () => {
+  try {
+    await copyInviteMessage(roomInfo);
+    play("ui/click");
+    toast({
+      title: "Message copied!",
+      description: "Paste it into WhatsApp, Telegram, or any messaging app.",
+    });
+  } catch {
+    toast({
+      title: "Failed to copy",
+      variant: "destructive",
+    });
+  }
+};
+```
+
+**Update native share handler with logging:**
+```typescript
+const handleNativeShare = async () => {
+  try {
+    play("ui/click");
+    console.log("[share] using navigator.share");
+    const success = await shareInvite(inviteLink, gameName, roomInfo);
+    if (success) {
+      console.log("[share] native share success");
+    } else {
+      console.log("[share] fallback copy");
+      handleCopy();
+    }
+  } catch {
+    console.log("[share] fallback copy (error)");
+    handleCopy();
+  }
+};
+```
+
+**Update copy handler toast for wallet browsers:**
+```typescript
+toast({
+  title: inWalletBrowser ? "Link copied!" : t("common.linkCopied"),
+  description: inWalletBrowser
+    ? "Paste into WhatsApp, Telegram, or any messaging app"
+    : t("common.linkCopiedDesc"),
+});
+```
+
+**Conditional UI rendering (replace share buttons grid):**
+
+When `inWalletBrowser` is true, show simplified UI:
+```text
+┌─────────────────────────────────────┐
+│  [Share invite] (full width)       │  ← navigator.share
+│  [Copy link]    (full width)       │  ← clipboard
+│  [Copy invite message] (ghost)     │  ← clipboard
+├─────────────────────────────────────┤
+│  💡 Tap "Share invite" to send     │
+│     via WhatsApp, Telegram...      │
+└─────────────────────────────────────┘
+```
+
+When `inWalletBrowser` is false (desktop/regular mobile), show existing UI:
+```text
+┌─────────────────────────────────────┐
+│  [Share invite] (if mobile)        │
+├─────────────────────────────────────┤
+│  [WhatsApp]  [SMS]                 │
+│  [Telegram]  [Twitter]             │
+│  [Facebook]  [Email]               │
+├─────────────────────────────────────┤
+│  [QR Code] (desktop only)          │
+│  [Send to Wallet Input]            │
+└─────────────────────────────────────┘
+```
 
 ---
 
-## Result
+## Why This Approach is Safe
 
-- Single wallet prompt (SOL transaction only)
-- No "Request blocked" warning from Phantom
-- Security maintained via on-chain tx + database ownership check
-- Same UX as before the signature was added
+| Concern | Answer |
+|---------|--------|
+| Will it break desktop? | No - `inWalletBrowser` is only true in Phantom/Solflare/Backpack mobile webviews |
+| Will it break regular mobile browsers? | No - Safari/Chrome mobile don't set `isWalletInAppBrowser()` to true |
+| Does it modify safeExternalOpen? | No - left unchanged for future use |
+| What about wa.me being HTTPS? | Irrelevant - we don't call `handleWhatsApp()` at all in wallet browsers |
+
+---
+
+## Testing Checklist
+
+| Scenario | Expected Result |
+|----------|-----------------|
+| Android Phantom browser | "Share invite" opens share sheet OR "Copy link" works. No navigation away |
+| Android Solflare browser | Same as above |
+| iOS Phantom browser | Same as above |
+| Desktop Chrome | WhatsApp/Email/SMS buttons work as before (grid layout) |
+| Mobile Safari (non-wallet) | Share sheet and grid buttons work |
+| Mobile Chrome (non-wallet) | Share sheet and grid buttons work |
+
+---
+
+## Technical Summary
+
+1. **No changes to `invite.ts`** - `safeExternalOpen` stays as-is
+2. **UI-level gating** in `ShareInviteDialog.tsx`:
+   - Detect wallet browser with existing `isWalletInAppBrowser()`
+   - Show simplified Share + Copy UI when true
+   - Show full button grid when false (desktop/regular mobile)
+3. **Console logs** for debugging: `[share] env`, `[share] using navigator.share`, `[share] fallback copy`
+4. **Wallet-specific toast messages** for better UX
 
