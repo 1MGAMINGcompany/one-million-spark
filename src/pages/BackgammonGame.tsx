@@ -942,6 +942,11 @@ const BackgammonGame = () => {
   // Handle turn timeout - SKIP to opponent (NOT immediate forfeit)
   // FIX: Ensure nextTurnWallet is computed from session wallets, NEVER same as timedOutWallet
   const handleTurnTimeout = useCallback(async () => {
+    // Gate on bothReady - NEVER process timeout before game is ready
+    if (!rankedGate.bothReady) {
+      console.log("[handleTurnTimeout] Blocked - game not ready");
+      return;
+    }
     // === MANDATORY DIAGNOSTIC LOGGING ===
     console.log("[handleTurnTimeout] ENTRY - all state:", {
       timeoutFiredRef: timeoutFiredRef.current,

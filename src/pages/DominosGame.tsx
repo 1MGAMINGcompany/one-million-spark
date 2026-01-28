@@ -616,6 +616,11 @@ const DominosGame = () => {
 
   // Turn timer for ranked games - skip on timeout + 3 strikes = auto-forfeit
   const handleTurnTimeout = useCallback(() => {
+    // Gate on bothReady - NEVER process timeout before game is ready
+    if (!rankedGate.bothReady) {
+      console.log("[handleTurnTimeout] Blocked - game not ready");
+      return;
+    }
     if (!isActuallyMyTurn || gameOver || !address || !roomPda) return;
     
     const opponentWalletAddr = getOpponentWallet(roomPlayers, address);

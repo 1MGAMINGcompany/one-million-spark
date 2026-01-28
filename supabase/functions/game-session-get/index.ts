@@ -101,7 +101,8 @@ serve(async (req) => {
   // 3. If start_roll_finalized is true, both players MUST have been ready
   const fromStartRoll = session?.start_roll_finalized === true;
 
-  const bothAccepted = fromAcceptances || fromSessionFlags || fromStartRoll;
+  // FIX: Remove fromStartRoll - it's a RESULT of being ready, not a CAUSE
+  const bothAccepted = fromAcceptances || fromSessionFlags;
 
   console.log("[game-session-get] Acceptances:", {
     playersCount: players.length,

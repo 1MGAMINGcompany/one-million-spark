@@ -87,7 +87,8 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
   // FIX: If start_roll_finalized is true, game has already started = both were ready
   const sessionComplete = !!(p1Wallet && p2Wallet);
   const [startRollFinalized, setStartRollFinalized] = useState(false);
-  const bothReady = serverBothAccepted || (sessionComplete && p1Ready && p2Ready) || startRollFinalized;
+  // FIX: Remove startRollFinalized - it's a RESULT of being ready, not a CAUSE
+  const bothReady = serverBothAccepted || (sessionComplete && p1Ready && p2Ready);
   // Show accept modal if ranked, loaded, and this player hasn't accepted yet
   // Also require that we've identified this player's role (isPlayer1 or isPlayer2)
   const isIdentified = isPlayer1 || isPlayer2;
