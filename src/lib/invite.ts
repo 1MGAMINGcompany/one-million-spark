@@ -23,7 +23,8 @@ export function buildInviteLink(params: {
 }
 
 // Build rich invite message with room details
-export function buildInviteMessage(info: RoomInviteInfo): string {
+// Set includeLink=false for native share (url passed separately)
+export function buildInviteMessage(info: RoomInviteInfo, includeLink: boolean = true): string {
   const lines: string[] = [];
   
   lines.push(`🎮 Join my ${info.gameName || 'game'} on 1M Gaming!`);
@@ -56,9 +57,13 @@ export function buildInviteMessage(info: RoomInviteInfo): string {
     lines.push(`${modeEmoji} ${modeName} mode`);
   }
   
-  lines.push('');
-  lines.push('📱 On mobile? Open this link inside your wallet app!');
-  lines.push(`👉 ${buildInviteLink({ roomId: info.roomPda })}`);
+  // Only include embedded URL for copy/paste scenarios (WhatsApp URL builder, SMS, etc.)
+  // Native share should use the url parameter instead to avoid preview domain issues
+  if (includeLink) {
+    lines.push('');
+    lines.push('📱 On mobile? Open this link inside your wallet app!');
+    lines.push(`👉 ${buildInviteLink({ roomId: info.roomPda })}`);
+  }
   
   return lines.join('\n');
 }
@@ -96,7 +101,10 @@ function safeExternalOpen(url: string): boolean {
 
 export function shareInvite(link: string, gameName?: string, info?: RoomInviteInfo): Promise<boolean> {
   const title = gameName ? `Join my ${gameName} game!` : "Game Invite";
-  const text = info ? buildInviteMessage(info) : undefined;
+  
+  // For native share, do NOT embed URL in text - use url parameter only
+  // This prevents mobile apps from using preview domain URLs from the text body
+  const text = info ? buildInviteMessage(info, false) : undefined;
   
   if (navigator.share) {
     return navigator.share({ title, text: text || title, url: link })

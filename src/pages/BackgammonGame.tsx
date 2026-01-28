@@ -1104,7 +1104,7 @@ const BackgammonGame = () => {
     turnTimeSeconds: effectiveTurnTime,
     // Timer counts down only on my turn, enabled for ranked/private with turn time
     enabled: shouldShowTimer && isActuallyMyTurn,
-    isMyTurn: effectiveIsMyTurn,
+    isMyTurn: isActuallyMyTurn, // MUST match enabled condition to prevent both devices counting down
     onTimeExpired: handleTurnTimeout,
     roomId: roomPda,
   });
