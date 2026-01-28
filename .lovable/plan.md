@@ -1,120 +1,199 @@
 
-# Fix Room Creation Error & Recover Funds Edge Function
 
-## Issues Identified
+# Fix Turn Timer Running on Both Devices + Mobile Share Links
 
-### Issue 1: Room Creation - "No blocking/active room detected in state"
+## Problem 1: Turn Timer Freeze - CRITICAL BUG CONFIRMED
 
-**What the user sees**: Red toast error "Action not available - No blocking/active room detected in state" when trying to create a room from mobile wallet browser.
+### Evidence from Database
+The latest chess game (`9o6wsiQ...`) shows both players submitting timeout moves:
 
-**Root Cause**: The transaction simulation (`simulateTransaction`) is failing before the wallet popup appears. When simulation fails with `TX_SIMULATION_FAILED`, the code checks for blocking rooms and if none exist, shows this confusing fallback message.
+| Turn | Wallet Submitting | timedOutWallet | Action |
+|------|-------------------|----------------|--------|
+| 1 | Fbk1... (OPPONENT) | AtLG... | turn_timeout |
+| 2 | Fbk1... (OPPONENT) | AtLG... | turn_timeout |
+| 3 | AtLG... (PLAYER) | AtLG... | turn_timeout |
 
-**Why simulation might fail on mobile**:
-1. RPC connection issues (mobile networks can be unstable)
-2. The simulation response may not be parsed correctly
-3. Account data fetch may fail silently
+**Both devices fired timeout logic.** The opponent (Fbk1) is submitting timeouts for AtLG's turn, which is incorrect.
 
-**Fix Strategy**:
-1. Improve error handling to show actual simulation error instead of generic "No blocking/active room" message
-2. Add simulation logs to the error toast for debugging
-3. Add retry logic for RPC failures
+### Root Cause Analysis
 
-### Issue 2: Recover Funds - "Edge Function returned a non-2xx status code"
+**Issue 1: Mismatch between `enabled` and `isMyTurn` in game files**
 
-**What the user sees**: Yellow banner "Edge Function returned a non-2xx status code" when clicking "Recover Funds" button.
-
-**Root Cause**: The `recover-funds` edge function uses the old `VERIFIER_SECRET_KEY` but this key doesn't match the on-chain config verifier anymore:
-- On-chain expected: `HrQiwW3WZXdDC8c7wbsuBAw2nP1EVtzZyokp7xPJ6Wjx`
-- Current secret produces: `CGBrEHnsdcvigyibF5WNwdcYsP2qyFEJeEC5GvgsTgGD`
-
-**Edge Function Logs**:
+In `BackgammonGame.tsx` (line 1106-1107) and `DominosGame.tsx` (line 688-689):
+```typescript
+useTurnTimer({
+  enabled: shouldShowTimer && isActuallyMyTurn,  // ← uses isActuallyMyTurn
+  isMyTurn: effectiveIsMyTurn,                   // ← uses DIFFERENT variable!
+})
 ```
-[recover-funds] Verifier mismatch! {
-  expected: "HrQiwW3WZXdDC8c7wbsuBAw2nP1EVtzZyokp7xPJ6Wjx",
-  actual: "CGBrEHnsdcvigyibF5WNwdcYsP2qyFEJeEC5GvgsTgGD"
+
+When these variables differ, the hook's internal logic gets confused.
+
+**Issue 2: The `useTurnTimer` hook resets on ANY turn change**
+
+Line 77-81 of `useTurnTimer.ts`:
+```typescript
+useEffect(() => {
+  if (enabled) {
+    resetTimer();  // ← Resets even if NOT my turn!
+  }
+}, [isMyTurn, enabled, resetTimer]);
+```
+
+The reset fires when `isMyTurn` changes AND `enabled` is true. But `enabled` can be true when `isMyTurn` is false (if the mismatch exists).
+
+**Issue 3: Missing debounce protection in opponent timeout detection**
+
+The opponent timeout detection hook can fire even when the database already shows a timeout was submitted, causing duplicate moves.
+
+### Fix Strategy
+
+1. **Ensure `enabled` and `isMyTurn` use the EXACT SAME variable** in all 5 game files
+2. **Fix the hook's reset logic** - only reset when it becomes MY turn
+3. **ChessGame.tsx already uses `isActuallyMyTurn` for both** - correct pattern
+
+### Files to Modify
+
+| File | Line | Current | Fixed |
+|------|------|---------|-------|
+| `src/pages/BackgammonGame.tsx` | ~1107 | `isMyTurn: effectiveIsMyTurn` | `isMyTurn: isActuallyMyTurn` |
+| `src/pages/DominosGame.tsx` | ~689 | `isMyTurn: effectiveIsMyTurn` | `isMyTurn: isActuallyMyTurn` |
+| `src/hooks/useTurnTimer.ts` | 77-81 | Reset when `enabled` | Reset only when `enabled && isMyTurn` |
+
+### Code Changes
+
+**useTurnTimer.ts (line 77-81):**
+```typescript
+// BEFORE:
+useEffect(() => {
+  if (enabled) {
+    resetTimer();
+  }
+}, [isMyTurn, enabled, resetTimer]);
+
+// AFTER:
+useEffect(() => {
+  // Only reset when it becomes MY turn (not opponent's)
+  if (enabled && isMyTurn) {
+    resetTimer();
+  }
+}, [isMyTurn, enabled, resetTimer]);
+```
+
+**BackgammonGame.tsx (line ~1107):**
+```typescript
+// BEFORE:
+isMyTurn: effectiveIsMyTurn,
+
+// AFTER:
+isMyTurn: isActuallyMyTurn,
+```
+
+**DominosGame.tsx (line ~689):**
+```typescript
+// BEFORE:
+isMyTurn: effectiveIsMyTurn,
+
+// AFTER:
+isMyTurn: isActuallyMyTurn,
+```
+
+---
+
+## Problem 2: Mobile Share Links Fail
+
+### Root Cause
+
+The `shareInvite` function in `src/lib/invite.ts` (lines 97-107) passes BOTH:
+1. A `text` parameter containing the full invite message WITH embedded URL (line 61)
+2. A `url` parameter with the canonical link
+
+The embedded URL in `text` includes the preview domain:
+```
+👉 https://id-preview--xxx.lovable.app/room/ABC...
+```
+
+Mobile share targets (WhatsApp, SMS) often prioritize the `text` body and use the embedded preview URL instead of the canonical `url` parameter.
+
+### Fix Strategy
+
+Remove the embedded URL from the `text` when using native share. The canonical link should ONLY be passed via the `url` parameter.
+
+### Code Changes
+
+**invite.ts - buildInviteMessage function:**
+Add a parameter to control whether to include the URL:
+```typescript
+export function buildInviteMessage(info: RoomInviteInfo, includeLink: boolean = true): string {
+  // ... existing lines ...
+  
+  if (includeLink) {
+    lines.push('📱 On mobile? Open this link inside your wallet app!');
+    lines.push(`👉 ${buildInviteLink({ roomId: info.roomPda })}`);
+  }
+  
+  return lines.join('\n');
 }
 ```
 
-**Fix Strategy**: Update `recover-funds` edge function to use `VERIFIER_SECRET_KEY_V2` instead of `VERIFIER_SECRET_KEY`, matching the pattern used by other edge functions (`settle-game`, `forfeit-game`, `sweep-orphan-vault`, `settle-draw`).
-
----
-
-## Implementation Plan
-
-### Part 1: Fix recover-funds Edge Function
-
-**File: `supabase/functions/recover-funds/index.ts`**
-
-Change line 327 from:
+**invite.ts - shareInvite function:**
 ```typescript
-const verifierSecretKey = Deno.env.get("VERIFIER_SECRET_KEY");
-```
-
-To:
-```typescript
-const verifierSecretKey = Deno.env.get("VERIFIER_SECRET_KEY_V2") || Deno.env.get("VERIFIER_SECRET_KEY");
-```
-
-Also update error messages to reference V2:
-```typescript
-console.error("[recover-funds] VERIFIER_SECRET_KEY_V2 not configured");
-```
-
-### Part 2: Improve Room Creation Error Messages
-
-**File: `src/hooks/useSolanaRooms.ts`**
-
-Update the `TX_SIMULATION_FAILED` error handling (lines 607-648) to:
-
-1. Show actual simulation logs in the error message when no blocking room exists
-2. Detect RPC/network errors and show appropriate message
-3. Add retry logic for transient RPC failures
-
-Current confusing behavior:
-```typescript
-const blockingInfo = blockingRoom 
-  ? `Room ${blockingRoom.pda.slice(0, 12)}...`
-  : activeRoom
-    ? `Active room ${activeRoom.pda.slice(0, 12)}...`
-    : 'No blocking/active room detected in state';  // ← Confusing fallback
-
-toast({
-  title: "Action not available",
-  description: `${blockingInfo}...`,  // ← Shows confusing message
-  variant: "destructive",
-});
-```
-
-Improved behavior:
-```typescript
-if (!blockingRoom && !activeRoom) {
-  // No blocking room - simulation failed for another reason
-  // Show the actual simulation error, not a confusing "no room" message
-  toast({
-    title: "Transaction failed",
-    description: "Unable to create room. Please check your connection and try again.",
-    variant: "destructive",
-  });
-} else {
-  // Blocking room exists - show resolution option
-  // ... existing logic
+export function shareInvite(link: string, gameName?: string, info?: RoomInviteInfo): Promise<boolean> {
+  const title = gameName ? `Join my ${gameName} game!` : "Game Invite";
+  
+  // For native share, do NOT embed URL in text - use url parameter only
+  const text = info ? buildInviteMessage(info, false) : undefined;
+  
+  if (navigator.share) {
+    return navigator.share({ title, text: text || title, url: link })
+      .then(() => true)
+      .catch(() => false);
+  }
+  return navigator.clipboard.writeText(link).then(() => true).catch(() => false);
 }
 ```
 
----
-
-## Files to Modify
-
-| File | Changes |
-|------|---------|
-| `supabase/functions/recover-funds/index.ts` | Use `VERIFIER_SECRET_KEY_V2` instead of `VERIFIER_SECRET_KEY` |
-| `src/hooks/useSolanaRooms.ts` | Improve `TX_SIMULATION_FAILED` error message when no blocking room exists |
+The other share functions (whatsappInvite, smsInvite, etc.) still use `buildInviteMessage(info)` which includes the link - this is correct because they construct their own share URLs.
 
 ---
 
-## Testing Checklist
+## Summary of All Changes
 
-1. **Recover Funds**: Click "Recover Funds" on stuck rooms → should either succeed or show meaningful error
-2. **Room Creation (Mobile)**: Create room from wallet browser → should work or show meaningful error message
-3. **Room Creation (Desktop)**: Create room → should work as before
-4. **Existing Settlement**: Verify settle-game still works (already uses V2)
+| File | Change |
+|------|--------|
+| `src/hooks/useTurnTimer.ts` | Reset timer only when `enabled && isMyTurn` |
+| `src/pages/BackgammonGame.tsx` | `isMyTurn: isActuallyMyTurn` (match enabled) |
+| `src/pages/DominosGame.tsx` | `isMyTurn: isActuallyMyTurn` (match enabled) |
+| `src/lib/invite.ts` | Don't embed URL in native share text |
+
+---
+
+## Expected Results
+
+### Turn Timer
+- Only active player's device runs countdown
+- Opponent sees static timer display
+- No duplicate timeout submissions
+- 3 missed turns → clean auto-forfeit (single authority)
+
+### Mobile Share
+- Native share opens links correctly
+- No "webpage not available" errors
+- Copy Link still works as fallback
+
+---
+
+## Acceptance Tests
+
+1. **Turn Timer (2 devices)**
+   - Start private chess game with 10s timer
+   - Verify only active player's timer counts down
+   - Let timer expire → turn switches cleanly
+   - 3 misses → auto-forfeit, opponent wins
+
+2. **Mobile Share**
+   - Create private room on mobile
+   - Share via WhatsApp/SMS native share
+   - Link opens without "webpage not available"
+   - Recipient can join the game
+
