@@ -641,6 +641,16 @@ export function useSolanaRooms() {
         // Get room to link to
         const roomToNavigate = blockingRoom?.pda || activeRoom?.pda;
         
+        // If no blocking room exists, show a more helpful error message
+        if (!blockingRoom && !activeRoom) {
+          toast({
+            title: "Transaction failed",
+            description: "Unable to create room. Please check your connection and try again.",
+            variant: "destructive",
+          });
+          return null;
+        }
+        
         toast({
           title: "Action not available",
           description: `${blockingInfo}${roomToNavigate ? ` — Click to view room` : ''}`,
