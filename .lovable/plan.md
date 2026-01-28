@@ -1,152 +1,226 @@
 
 
-# Fix Mobile Share for Private Room Invites in Wallet Browsers
+# Fix Turn Timer Display + Enforcement (No Polling, No Double Timeouts)
 
-## Problem
-When sharing private room invites from wallet in-app browsers (Phantom/Solflare/Backpack), clicking WhatsApp navigates to `https://wa.me/...` via `window.location.href`, which leaves the app context. SMS/Email fail with `ERR_UNKNOWN_URL_SCHEME`.
+## Problem Summary
+
+The turn timer currently has two major issues:
+
+1. **Display Problem**: When it's NOT my turn, the timer UI freezes at the last value instead of showing the opponent's active countdown. Both players should see the SAME countdown value.
+
+2. **Enforcement Problem**: The `useTurnTimer` hook and timeout detection could potentially run simultaneously on both devices, causing confusion or double timeouts.
 
 ## Root Cause
-The current `safeExternalOpen()` logic (lines 88-92 in invite.ts):
-```typescript
-if (inWalletBrowser) {
-  window.location.href = url;  // ← Navigates AWAY from app
-  return true;
-}
-```
 
-This navigates away to wa.me, facebook.com, etc., breaking the in-app experience.
+- `useTurnTimer` only ticks when `isMyTurn === true` — this is correct for **enforcement**
+- But there's no separate **display timer** that calculates remaining time from `turn_started_at` timestamp
+- The UI passes `turnTimer.remainingTime` directly, which freezes when not your turn
 
-## Solution
-**UI-level control in ShareInviteDialog.tsx** - Don't render or call external share handlers when in wallet browser. Leave `safeExternalOpen` unchanged (it may be reused later for other flows).
+## Solution Overview
+
+1. **Create `useTurnCountdownDisplay` hook** — display-only timer based on DB timestamp
+2. **Keep `useTurnTimer` for enforcement** — only runs on active player's device
+3. **Update all 5 game files** to use display timer for UI, enforcement timer for callbacks
+4. **Add proper gating** — `bothReady` and `gameStarted` checks everywhere
 
 ---
 
 ## File Changes
 
-### `src/components/ShareInviteDialog.tsx`
+### Part 1: New Hook — `src/hooks/useTurnCountdownDisplay.ts`
 
-**Add wallet browser detection and logging:**
+Creates a **display-only** countdown timer that calculates remaining time from server truth (`turn_started_at` + `turn_time_seconds`). This hook:
+
+- Ticks locally every 1 second for smooth UI
+- Recomputes immediately when `turnStartedAt` changes (turn switch)
+- Does NOT poll the database — uses values passed from existing polling/realtime
+- Returns `null` when disabled or missing data
+
 ```typescript
-import { isWalletInAppBrowser } from "@/lib/walletBrowserDetection";
-import { copyInviteMessage } from "@/lib/invite";
+interface UseTurnCountdownDisplayOptions {
+  /** ISO timestamp when current turn started (from DB) */
+  turnStartedAt: string | null | undefined;
+  /** Turn time limit in seconds */
+  turnTimeSeconds: number;
+  /** Whether display is enabled */
+  enabled: boolean;
+}
 
-// Inside component
-const inWalletBrowser = isWalletInAppBrowser();
-
-// Log environment for debugging
-console.log("[share] env", { isMobile, inWalletBrowser, hasNativeShare });
+interface UseTurnCountdownDisplayResult {
+  /** Remaining time for current turn, or null if not active */
+  displayRemainingTime: number | null;
+  /** Low time warning (<=30s) */
+  isLowTime: boolean;
+  /** Critical time (<=10s) */
+  isCriticalTime: boolean;
+}
 ```
 
-**Add "Copy message" handler:**
+**Logic**:
+1. If `!enabled || !turnStartedAt || turnTimeSeconds <= 0` → return `null`
+2. Compute: `remaining = max(0, turnTimeSeconds - floor((Date.now() - turnStartedAtMs) / 1000))`
+3. Use `setInterval(1000)` to update every second
+4. Clear and recompute when `turnStartedAt` changes
+
+### Part 2: Update Game Files
+
+Update all 5 game files to:
+- Add `turn_started_at` tracking from DB polling/session
+- Use `useTurnCountdownDisplay` for UI display
+- Keep `useTurnTimer` strictly for enforcement (with proper gates)
+
+#### Files to Update:
+- `src/pages/ChessGame.tsx`
+- `src/pages/CheckersGame.tsx`
+- `src/pages/BackgammonGame.tsx` (already has `turnStartedAt` state)
+- `src/pages/DominosGame.tsx`
+- `src/pages/LudoGame.tsx`
+
+#### Changes per file:
+
+**1. Add `turnStartedAt` state** (ChessGame, CheckersGame, DominosGame, LudoGame need this):
 ```typescript
-const handleCopyMessage = async () => {
-  try {
-    await copyInviteMessage(roomInfo);
-    play("ui/click");
-    toast({
-      title: "Message copied!",
-      description: "Paste it into WhatsApp, Telegram, or any messaging app.",
-    });
-  } catch {
-    toast({
-      title: "Failed to copy",
-      variant: "destructive",
-    });
-  }
-};
+const [turnStartedAt, setTurnStartedAt] = useState<string | null>(null);
 ```
 
-**Update native share handler with logging:**
+**2. Update polling to track `turn_started_at`** (where not already done):
 ```typescript
-const handleNativeShare = async () => {
-  try {
-    play("ui/click");
-    console.log("[share] using navigator.share");
-    const success = await shareInvite(inviteLink, gameName, roomInfo);
-    if (success) {
-      console.log("[share] native share success");
-    } else {
-      console.log("[share] fallback copy");
-      handleCopy();
-    }
-  } catch {
-    console.log("[share] fallback copy (error)");
-    handleCopy();
-  }
-};
+// In existing DB poll:
+const dbTurnStartedAt = data?.session?.turn_started_at;
+if (dbTurnStartedAt && dbTurnStartedAt !== turnStartedAt) {
+  setTurnStartedAt(dbTurnStartedAt);
+}
 ```
 
-**Update copy handler toast for wallet browsers:**
+**3. Add display timer hook**:
 ```typescript
-toast({
-  title: inWalletBrowser ? "Link copied!" : t("common.linkCopied"),
-  description: inWalletBrowser
-    ? "Paste into WhatsApp, Telegram, or any messaging app"
-    : t("common.linkCopiedDesc"),
+import { useTurnCountdownDisplay } from "@/hooks/useTurnCountdownDisplay";
+
+// Define gameStarted consistently
+const gameStarted = startRoll.isFinalized && roomPlayers.length >= requiredPlayers;
+
+// Display timer - shows ACTIVE player's remaining time on BOTH devices
+const displayTimer = useTurnCountdownDisplay({
+  turnStartedAt,
+  turnTimeSeconds: effectiveTurnTime,
+  enabled: shouldShowTimer && rankedGate.bothReady && gameStarted && !gameOver,
 });
 ```
 
-**Conditional UI rendering (replace share buttons grid):**
-
-When `inWalletBrowser` is true, show simplified UI:
-```text
-┌─────────────────────────────────────┐
-│  [Share invite] (full width)       │  ← navigator.share
-│  [Copy link]    (full width)       │  ← clipboard
-│  [Copy invite message] (ghost)     │  ← clipboard
-├─────────────────────────────────────┤
-│  💡 Tap "Share invite" to send     │
-│     via WhatsApp, Telegram...      │
-└─────────────────────────────────────┘
+**4. Update enforcement timer gates**:
+```typescript
+// Enforcement timer - ONLY runs on active player's device
+const turnTimer = useTurnTimer({
+  turnTimeSeconds: effectiveTurnTime,
+  enabled: shouldShowTimer && isActuallyMyTurn && rankedGate.bothReady && gameStarted && !gameOver,
+  isMyTurn: isActuallyMyTurn,
+  onTimeExpired: handleTurnTimeout,
+  roomId: roomPda,
+});
 ```
 
-When `inWalletBrowser` is false (desktop/regular mobile), show existing UI:
+**5. Update TurnStatusHeader to use display timer**:
+```typescript
+<TurnStatusHeader
+  isMyTurn={isActuallyMyTurn}
+  activePlayer={...}
+  players={turnPlayers}
+  myAddress={address}
+  remainingTime={displayTimer.displayRemainingTime ?? undefined}
+  showTimer={displayTimer.displayRemainingTime != null}
+/>
+```
+
+**6. Add `bothReady` guard to `handleTurnTimeout`**:
+```typescript
+const handleTurnTimeout = useCallback(() => {
+  // Gate on bothReady - NEVER process timeout before game is ready
+  if (!rankedGate.bothReady || !gameStarted) {
+    console.log("[handleTurnTimeout] Blocked - game not ready");
+    return;
+  }
+  if (gameOver || !address || !roomPda || !isActuallyMyTurn) return;
+  // ... rest of timeout logic
+}, [gameOver, address, roomPda, isActuallyMyTurn, rankedGate.bothReady, gameStarted, ...]);
+```
+
+### Part 3: Ludo Multi-Player Considerations
+
+For Ludo (2, 3, or 4 players):
+- Timer shows the **current active player's** remaining time regardless of player count
+- `isActuallyMyTurn = myPlayerIndex >= 0 && myPlayerIndex === currentPlayerIndex && !gameOver`
+- `requiredPlayers` comes from `session.max_players` (2, 3, or 4)
+- Same display hook works — just needs accurate `turnStartedAt` from DB
+
+---
+
+## Technical Flow Diagram
+
 ```text
-┌─────────────────────────────────────┐
-│  [Share invite] (if mobile)        │
-├─────────────────────────────────────┤
-│  [WhatsApp]  [SMS]                 │
-│  [Telegram]  [Twitter]             │
-│  [Facebook]  [Email]               │
-├─────────────────────────────────────┤
-│  [QR Code] (desktop only)          │
-│  [Send to Wallet Input]            │
-└─────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                        SERVER (Database)                        │
+│  turn_started_at: "2026-01-28T20:50:00Z"                       │
+│  turn_time_seconds: 60                                          │
+│  current_turn_wallet: "ABC..."                                  │
+└──────────────────────────┬──────────────────────────────────────┘
+                           │
+          ┌────────────────┴────────────────┐
+          │                                 │
+          ▼                                 ▼
+┌─────────────────────┐           ┌─────────────────────┐
+│   PLAYER A (ABC)    │           │   PLAYER B (XYZ)    │
+│   isMyTurn = TRUE   │           │   isMyTurn = FALSE  │
+│                     │           │                     │
+│ useTurnTimer:       │           │ useTurnTimer:       │
+│   enabled = TRUE    │           │   enabled = FALSE   │
+│   → TICKS + ENFORCE │           │   → PAUSED          │
+│                     │           │                     │
+│ useTurnCountdown:   │           │ useTurnCountdown:   │
+│   enabled = TRUE    │           │   enabled = TRUE    │
+│   → DISPLAY: 45s    │           │   → DISPLAY: 45s    │
+│                     │           │                     │
+│ BOTH SEE: 0:45      │           │ BOTH SEE: 0:45      │
+└─────────────────────┘           └─────────────────────┘
 ```
 
 ---
 
-## Why This Approach is Safe
+## `gameStarted` Definition by Game Type
 
-| Concern | Answer |
-|---------|--------|
-| Will it break desktop? | No - `inWalletBrowser` is only true in Phantom/Solflare/Backpack mobile webviews |
-| Will it break regular mobile browsers? | No - Safari/Chrome mobile don't set `isWalletInAppBrowser()` to true |
-| Does it modify safeExternalOpen? | No - left unchanged for future use |
-| What about wa.me being HTTPS? | Irrelevant - we don't call `handleWhatsApp()` at all in wallet browsers |
+| Game | gameStarted condition |
+|------|----------------------|
+| Chess | `startRoll.isFinalized && roomPlayers.length >= 2` |
+| Checkers | `startRoll.isFinalized && roomPlayers.length >= 2` |
+| Backgammon | `startRoll.isFinalized && roomPlayers.length >= 2` |
+| Dominos | `startRoll.isFinalized && roomPlayers.length >= 2` |
+| Ludo | `startRoll.isFinalized && roomPlayers.length >= requiredPlayers` |
+
+For Ludo, `requiredPlayers = session.max_players` (2, 3, or 4).
 
 ---
 
 ## Testing Checklist
 
-| Scenario | Expected Result |
-|----------|-----------------|
-| Android Phantom browser | "Share invite" opens share sheet OR "Copy link" works. No navigation away |
-| Android Solflare browser | Same as above |
-| iOS Phantom browser | Same as above |
-| Desktop Chrome | WhatsApp/Email/SMS buttons work as before (grid layout) |
-| Mobile Safari (non-wallet) | Share sheet and grid buttons work |
-| Mobile Chrome (non-wallet) | Share sheet and grid buttons work |
+| Scenario | Expected Behavior |
+|----------|-------------------|
+| White's turn (Chess) | BOTH devices show same countdown decreasing |
+| White makes move | Timer resets, BOTH devices show Black's countdown |
+| Opponent times out | Only ONE timeout event in DB per missed turn |
+| Timer before both ready | No timer visible, no timeout callbacks |
+| Ludo 4-player | Timer shows active player's time, switches on turn change |
+| Game over | Timer hidden, no callbacks fire |
 
 ---
 
-## Technical Summary
+## Summary of Changes
 
-1. **No changes to `invite.ts`** - `safeExternalOpen` stays as-is
-2. **UI-level gating** in `ShareInviteDialog.tsx`:
-   - Detect wallet browser with existing `isWalletInAppBrowser()`
-   - Show simplified Share + Copy UI when true
-   - Show full button grid when false (desktop/regular mobile)
-3. **Console logs** for debugging: `[share] env`, `[share] using navigator.share`, `[share] fallback copy`
-4. **Wallet-specific toast messages** for better UX
+| File | Change |
+|------|--------|
+| `src/hooks/useTurnCountdownDisplay.ts` | **NEW** — display-only timer from DB timestamp |
+| `src/hooks/useTurnTimer.ts` | **UNCHANGED** — enforcement only |
+| `src/pages/ChessGame.tsx` | Add `turnStartedAt` state, display timer, gate enforcement |
+| `src/pages/CheckersGame.tsx` | Add `turnStartedAt` state, display timer, gate enforcement |
+| `src/pages/BackgammonGame.tsx` | Use existing `turnStartedAt`, add display timer, gate enforcement |
+| `src/pages/DominosGame.tsx` | Add `turnStartedAt` state, display timer, gate enforcement |
+| `src/pages/LudoGame.tsx` | Add `turnStartedAt` state, display timer, gate enforcement, multi-player support |
 
