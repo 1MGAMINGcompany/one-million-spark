@@ -188,18 +188,18 @@ export function RematchModal({
                   <Coins size={16} className="text-primary" />
                   {t('rematch.stakeAmount')}
                 </label>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                   {STAKE_OPTIONS.map((amount) => (
                     <Button
                       key={amount}
                       variant={state.settings.stakeAmount === amount && !customStake ? 'default' : 'outline'}
                       size="sm"
                       onClick={() => handleStakeSelect(amount)}
-                      className={state.settings.stakeAmount === amount && !customStake ? 'bg-primary' : ''}
+                      className={`h-auto py-2 flex-col gap-0.5 ${state.settings.stakeAmount === amount && !customStake ? 'bg-primary' : ''}`}
                     >
-                      {amount} SOL
+                      <span className="font-semibold">{amount} SOL</span>
                       {solPrice && (
-                        <span className="text-xs opacity-70 ml-1">
+                        <span className="text-[10px] opacity-70">
                           {formatUsd(amount)}
                         </span>
                       )}
@@ -226,14 +226,14 @@ export function RematchModal({
                   <Clock size={16} className="text-primary" />
                   {t('rematch.timePerTurn')}
                 </label>
-                <div className="grid grid-cols-4 gap-2">
+                <div className="grid grid-cols-4 sm:grid-cols-7 gap-1.5 sm:gap-2">
                   {TIME_OPTIONS.map((option) => (
                     <Button
                       key={option.value}
                       variant={state.settings.timePerTurn === option.value ? 'default' : 'outline'}
                       size="sm"
                       onClick={() => updateSettings({ timePerTurn: option.value })}
-                      className={state.settings.timePerTurn === option.value ? 'bg-primary' : ''}
+                      className={`px-2 text-xs sm:text-sm ${state.settings.timePerTurn === option.value ? 'bg-primary' : ''}`}
                     >
                       {option.label}
                     </Button>
