@@ -1,133 +1,134 @@
 
-# Fix Turn Timer Display + Room Join Page Turn Time + Desktop Backgammon Layout
 
-## Summary of Issues
+# Fix Backgammon Timer Display + Desktop Layout
 
-Based on the user's test and the uploaded screenshots, there are **3 distinct issues**:
-
-### Issue 1: Turn Timer Not Visible on Desktop (Private Rooms)
-**Root Cause**: The timer UI is gated on `isRankedGame && startRoll.isFinalized && !gameOver`, but for private rooms `isRankedGame` is `false`.
-
-**Evidence from code**:
-- Line 2414: `{isRankedGame && startRoll.isFinalized && !gameOver && (...timer display...)}`  
-- Line 2680: `{isRankedGame && startRoll.isFinalized && !gameOver && (...timer card...)}`
-
-**Fix**: Change to use `shouldShowTimer` (which already correctly includes `effectiveTurnTime > 0` check) or `(isRankedGame || isPrivate)`.
+## Two Changes (Highest Value, Lowest Risk)
 
 ---
 
-### Issue 2: Join Room Popup Missing Turn Time
-**Root Cause**: The `Room.tsx` page displays stake information but does **NOT** show the turn time selected by the room creator.
+### Change 1: Fix Timer Display on Desktop Sidebar (Issue 4)
 
-**Evidence from code**:
-- `turnTimeSeconds` is fetched and stored in state (line 211)
-- The Stake Information card (lines 1080-1103) shows Entry Fee, Pot, Winner Gets, but no turn time
+**Problem**: Desktop sidebar timer uses `turnTimer.remainingTime` which only works when `isMyTurn === true`. On opponent's turn, it shows "0:00" because the enforcement timer isn't active.
 
-**Fix**: Add a new row in the Room info UI that displays the turn time (e.g., "10 sec/turn" or "No time limit" for casual).
+**Evidence from code (lines 2683-2692)**:
+```typescript
+<p className={cn(
+  "font-display text-2xl font-bold",
+  turnTimer.isCriticalTime   // ❌ Only accurate for active player
+    ? "text-destructive animate-pulse"
+    : turnTimer.isLowTime    // ❌ Only accurate for active player  
+    ? "text-yellow-400"
+    : "text-primary"
+)}>
+  {Math.floor(turnTimer.remainingTime / 60)}:{(turnTimer.remainingTime % 60).toString().padStart(2, '0')}
+  // ❌ turnTimer.remainingTime = 0 when not my turn
+</p>
+```
 
----
-
-### Issue 3: Backgammon Desktop Board Layout Issue
-**From the screenshot**: The board appears to have awkward spacing/positioning with the sidebar showing "Game Status: Opponent's turn" but no timer visible. The user says "mobile is perfect, don't touch it."
-
-**Observations**:
-- The main board layout structure looks correct (3-column grid with 1-column sidebar)
-- The issue is that the desktop sidebar shows "Game Status" but the Turn Timer card (line 2679-2694) is hidden because `isRankedGame` is false
-- The layout itself appears functional; the "weirdness" may be the missing timer + context mismatch
-
-**Fix**: Showing the timer (Issue 1 fix) should resolve the perceived layout problem. If additional layout tweaks are needed after testing, they can be addressed separately.
-
----
-
-## Technical Changes
-
-### Change 1: BackgammonGame.tsx - Fix Timer Visibility for Private Rooms
+**Fix**: Use `displayTimer` (from `useTurnCountdownDisplay`) which calculates from server `turn_started_at` and shows correctly on BOTH devices.
 
 **File**: `src/pages/BackgammonGame.tsx`
 
-Update both timer display locations to use `shouldShowTimer` instead of `isRankedGame`:
-
+**Lines 2683-2692 - Change to**:
 ```typescript
-// Line 2414 (mobile inline timer) - BEFORE:
-{isRankedGame && startRoll.isFinalized && !gameOver && (
-
-// Line 2414 - AFTER:
-{shouldShowTimer && rankedGate.bothReady && (
+<p className={cn(
+  "font-display text-2xl font-bold",
+  displayTimer.isCriticalTime 
+    ? "text-destructive animate-pulse"
+    : displayTimer.isLowTime 
+    ? "text-yellow-400"
+    : "text-primary"
+)}>
+  {displayTimer.displayRemainingTime !== null 
+    ? `${Math.floor(displayTimer.displayRemainingTime / 60)}:${(displayTimer.displayRemainingTime % 60).toString().padStart(2, '0')}`
+    : "--:--"}
+</p>
 ```
-
-```typescript
-// Line 2680 (desktop sidebar timer card) - BEFORE:
-{isRankedGame && startRoll.isFinalized && !gameOver && (
-
-// Line 2680 - AFTER:
-{shouldShowTimer && rankedGate.bothReady && (
-```
-
-**Why `shouldShowTimer && rankedGate.bothReady`?**
-- `shouldShowTimer = effectiveTurnTime > 0 && gameStarted && !gameOver` (already defined at line 1109)
-- Adding `rankedGate.bothReady` ensures timer only shows when both players are truly ready
-- This works for BOTH ranked AND private rooms because `effectiveTurnTime` is set from DB
 
 ---
 
-### Change 2: Room.tsx - Display Turn Time in Room Details
+### Change 2: Simplify Desktop Layout to Match AI Version (Issue 3)
 
-**File**: `src/pages/Room.tsx`
+**Problem**: Multiplayer desktop layout uses complex flex/height constraints that cause visual "weirdness":
 
-Add turn time display to the Stake Information section (around line 1080-1103):
-
+**Current (lines 2510-2516)**:
 ```typescript
-// After "Stake Information" section, add Turn Time display
-{/* Turn Time - for ranked/private modes */}
-{turnTimeSeconds > 0 && (
-  <div className="flex items-center gap-2 mt-2 pt-2 border-t border-primary/10">
-    <Clock className="h-4 w-4 text-primary" />
-    <span className="text-sm text-muted-foreground">Time per turn:</span>
-    <span className="text-sm font-semibold text-primary">{turnTimeSeconds} seconds</span>
-  </div>
-)}
+<div className="max-w-6xl mx-auto w-full flex-1 min-h-0 overflow-hidden">
+  <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 md:gap-6 h-full min-h-0">
+    <div className="lg:col-span-3 flex flex-col min-h-0 overflow-hidden">
+      <div className="flex-1 min-h-0 overflow-hidden flex items-center justify-center p-2">
+        <div className="w-full max-w-[min(100%,calc((100dvh-18rem)*2))] aspect-[2/1] relative">
 ```
 
-Also need to import `Clock` from lucide-react.
+**AI Version (perfect) - lines 1088-1093**:
+```typescript
+<div className="max-w-6xl mx-auto px-2 md:px-4 py-4 md:py-6">
+  <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 md:gap-6">
+    <div className="lg:col-span-3 space-y-3 md:space-y-4">
+      <div className="relative">
+```
+
+**Key differences**:
+| AI Version | Multiplayer Version |
+|------------|-------------------|
+| Simple padding `px-2 md:px-4 py-4 md:py-6` | Complex `flex-1 min-h-0 overflow-hidden` |
+| Simple grid without height constraints | Grid with `h-full min-h-0` |
+| `space-y-3 md:space-y-4` for board column | `flex flex-col min-h-0 overflow-hidden` |
+| Simple `relative` board wrapper | Complex viewport math `max-w-[min(100%,calc((100dvh-18rem)*2))]` |
+
+**Fix**: Replace the outer container structure to match AI version.
+
+**File**: `src/pages/BackgammonGame.tsx`
+
+**Lines 2510-2516 - Change to**:
+```typescript
+<div className="max-w-6xl mx-auto px-2 md:px-4 py-4 md:py-6">
+  <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 md:gap-6">
+    {/* Board Column - 3 columns */}
+    <div className="lg:col-span-3 space-y-3 md:space-y-4">
+      {/* Board Container with gold frame */}
+      <div className="relative">
+```
+
+Also need to remove the closing `</div>` for the removed wrapper at line 2640.
+
+**Lines 2639-2640 - Change from**:
+```typescript
+                  </div>
+                </div>
+```
+**To**:
+```typescript
+                  </div>
+```
 
 ---
 
-## Files to Change
+## Files to Change Summary
 
-| File | Change |
-|------|--------|
-| `src/pages/BackgammonGame.tsx` | Line 2414: Change `isRankedGame && startRoll.isFinalized && !gameOver` → `shouldShowTimer && rankedGate.bothReady` |
-| `src/pages/BackgammonGame.tsx` | Line 2680: Same change |
-| `src/pages/Room.tsx` | Add turn time display in stake info section + import Clock icon |
+| File | Line(s) | Change |
+|------|---------|--------|
+| `src/pages/BackgammonGame.tsx` | 2510-2516 | Simplify outer containers to match AI version |
+| `src/pages/BackgammonGame.tsx` | 2639-2640 | Remove extra closing div from old wrapper |
+| `src/pages/BackgammonGame.tsx` | 2683-2692 | Use `displayTimer` instead of `turnTimer` for sidebar |
 
 ---
 
 ## Why This Won't Break Anything
 
-| Concern | Answer |
-|---------|--------|
-| Will casual games show timer? | No - casual games have `effectiveTurnTime = 0`, so `shouldShowTimer` is false |
-| Will ranked games still work? | Yes - `shouldShowTimer` includes the same conditions plus turn time check |
-| Will private games show timer? | Yes - private games have turn time set, so `shouldShowTimer` will be true |
-| Will timer show before game ready? | No - we add `rankedGate.bothReady` to prevent premature display |
+| Concern | Safety Check |
+|---------|--------------|
+| Mobile layout change? | No - mobile uses separate `isMobile` branch (lines 1998-2508) |
+| AI version change? | No - only touching BackgammonGame.tsx |
+| Timer still shows for active player? | Yes - displayTimer works for both players |
+| Timer enforcement affected? | No - turnTimer still used for enforcement, just not display |
+| Board aspect ratio? | Preserved - board still has `aspect-[2/1]` on the inner container |
 
 ---
 
-## Verification After Implementation
+## Expected Result
 
-1. **Create a private Backgammon room** with 10 sec turn time
-2. **Before opponent joins**: Verify timer is NOT shown (game not ready)
-3. **After opponent joins**: Verify timer IS visible on desktop sidebar
-4. **Check Room.tsx join page**: Verify turn time shows "10 seconds" in the room details
-5. **Verify casual room**: Timer should NOT show (turn time = 0)
-6. **Verify mobile**: Timer should show in mobile inline display when appropriate
+1. **Timer shows correct countdown** (10, 9, 8...) on BOTH players' screens
+2. **Desktop layout matches AI version** - simpler, cleaner proportions
+3. **Mobile unchanged** - separate rendering path not touched
 
----
-
-## Desktop Backgammon Layout Context
-
-Looking at the screenshot, the user may also be referring to the overall board proportions. The current grid layout is:
-- 3 columns for board
-- 1 column for sidebar
-
-The board uses `max-w-[min(100%,calc((100dvh-18rem)*2))] aspect-[2/1]` which maintains proper aspect ratio. If after fixing the timer the layout still appears "weird", we can investigate further, but the primary visual issue appears to be the missing timer card making the sidebar look incomplete.
