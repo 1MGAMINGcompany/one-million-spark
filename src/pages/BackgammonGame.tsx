@@ -2508,12 +2508,12 @@ const BackgammonGame = () => {
             </div>
         ) : (
           /* Desktop Layout - Grid structure matching AI layout */
-          <div className="max-w-6xl mx-auto w-full flex-1 min-h-0 overflow-hidden">
-            <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 md:gap-6 h-full min-h-0">
+          <div className="max-w-6xl mx-auto px-2 md:px-4 py-4 md:py-6">
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 md:gap-6">
               {/* Board Column - 3 columns */}
-              <div className="lg:col-span-3 flex flex-col min-h-0 overflow-hidden">
-                <div className="flex-1 min-h-0 overflow-hidden flex items-center justify-center p-2">
-                  <div className="w-full max-w-[min(100%,calc((100dvh-18rem)*2))] aspect-[2/1] relative">
+              <div className="lg:col-span-3 space-y-3 md:space-y-4">
+                {/* Board Container with gold frame */}
+                <div className="relative aspect-[2/1]">
                   {/* Outer glow */}
                   <div className="absolute -inset-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 rounded-2xl blur-xl opacity-50" />
                   
@@ -2636,7 +2636,6 @@ const BackgammonGame = () => {
                       </div>
                     </div>
                   </div>
-                  </div>
                 </div>
 
                 {/* Controls row - inside board column, shrink-0 */}
@@ -2682,13 +2681,15 @@ const BackgammonGame = () => {
                     <h3 className="text-sm font-medium text-muted-foreground mb-2">Turn Timer</h3>
                     <p className={cn(
                       "font-display text-2xl font-bold",
-                      turnTimer.isCriticalTime 
+                      displayTimer.isCriticalTime 
                         ? "text-destructive animate-pulse"
-                        : turnTimer.isLowTime 
+                        : displayTimer.isLowTime 
                         ? "text-yellow-400"
                         : "text-primary"
                     )}>
-                      {Math.floor(turnTimer.remainingTime / 60)}:{(turnTimer.remainingTime % 60).toString().padStart(2, '0')}
+                      {displayTimer.displayRemainingTime !== null 
+                        ? `${Math.floor(displayTimer.displayRemainingTime / 60)}:${(displayTimer.displayRemainingTime % 60).toString().padStart(2, '0')}`
+                        : "--:--"}
                     </p>
                   </div>
                 )}
