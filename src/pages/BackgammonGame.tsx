@@ -2414,18 +2414,16 @@ const BackgammonGame = () => {
                       {shouldShowTimer && rankedGate.bothReady && (
                         <div className={cn(
                           "flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono",
-                          effectiveIsMyTurn 
-                            ? turnTimer.isCriticalTime 
-                              ? "bg-destructive/30 text-destructive animate-pulse"
-                              : turnTimer.isLowTime 
-                              ? "bg-yellow-500/30 text-yellow-400"
-                              : "bg-muted/50 text-muted-foreground"
-                            : "bg-muted/30 text-muted-foreground/70"
+                          displayTimer.isCriticalTime 
+                            ? "bg-destructive/30 text-destructive animate-pulse"
+                            : displayTimer.isLowTime 
+                            ? "bg-yellow-500/30 text-yellow-400"
+                            : "bg-muted/50 text-muted-foreground"
                         )}>
                           <Clock className="w-2.5 h-2.5" />
                           <span>
-                            {effectiveIsMyTurn 
-                              ? `${Math.floor(turnTimer.remainingTime / 60)}:${(turnTimer.remainingTime % 60).toString().padStart(2, '0')}`
+                            {displayTimer.displayRemainingTime !== null 
+                              ? `${Math.floor(displayTimer.displayRemainingTime / 60)}:${(displayTimer.displayRemainingTime % 60).toString().padStart(2, '0')}`
                               : "--:--"
                             }
                           </span>
