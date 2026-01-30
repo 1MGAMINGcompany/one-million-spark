@@ -2126,8 +2126,8 @@ const BackgammonGame = () => {
     <GameErrorBoundary>
     <InAppBrowserRecovery roomPda={roomPda || ""} onResubscribeRealtime={resubscribeRealtime} bypassOverlay={true}>
     <div className={cn(
-      "game-viewport bg-background flex flex-col relative overflow-hidden",
-      "min-h-[calc(100dvh-4rem)] max-h-[calc(100dvh-4rem)]",
+      "game-viewport bg-background flex flex-col relative",
+      isMobile ? "min-h-[calc(100dvh-4rem)] max-h-[calc(100dvh-4rem)] overflow-hidden" : "min-h-[calc(100dvh-4rem)]",
       "pb-[env(safe-area-inset-bottom)]"
     )}>
       {/* Gold Confetti Explosion on Win - only after outcome resolved */}
@@ -2433,7 +2433,7 @@ const BackgammonGame = () => {
                       ) : (
                         <span className="text-[10px] font-medium text-slate-400">OPPONENT'S TURN</span>
                       )}
-                      {shouldShowTimer && readyGateOk && (
+                      {shouldShowTimer && (
                         <div className={cn(
                           "flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono",
                           displayTimer.isCriticalTime 
@@ -2696,7 +2696,7 @@ const BackgammonGame = () => {
                 </div>
 
                 {/* Turn Timer for ranked/private */}
-                {shouldShowTimer && readyGateOk && (
+                {shouldShowTimer && (
                   <div className="rounded-xl border border-primary/20 bg-card/50 p-4">
                     <h3 className="text-sm font-medium text-muted-foreground mb-2">Turn Timer</h3>
                     <p className={cn(
