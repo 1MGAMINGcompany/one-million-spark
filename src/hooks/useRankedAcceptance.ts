@@ -149,6 +149,8 @@ export function useRankedAcceptance(
 
       // Store session token in localStorage for persistence
       localStorage.setItem(`session_token_${roomPda}`, token);
+      // Store latest token globally for cross-room invite auth
+      localStorage.setItem("session_token_latest", token);
 
       console.log("[RankedAcceptance] Acceptance complete!");
       return { success: true };
