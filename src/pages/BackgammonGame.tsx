@@ -463,7 +463,7 @@ const BackgammonGame = () => {
 
   // Room mode hook - fetches from DB for Player 2 who doesn't have localStorage data
   // Must be called before any effects that use roomMode
-  const { mode: roomMode, isRanked: isRankedGame, isPrivate, turnTimeSeconds: roomTurnTime, isLoaded: modeLoaded } = useRoomMode(roomPda);
+  const { mode: roomMode, isRanked: roomModeIsRanked, isPrivate, turnTimeSeconds: roomTurnTime, isLoaded: modeLoaded } = useRoomMode(roomPda);
 
   const { loadSession: loadBackgammonSession, saveSession: saveBackgammonSession, finishSession: finishBackgammonSession } = useGameSessionPersistence({
     roomPda: roomPda,
@@ -517,6 +517,8 @@ const BackgammonGame = () => {
 
   // Private rooms require same ready gate as ranked (prevents premature timeouts)
   const requiresReadyGate = isRankedGame || isPrivate;
+  const requiresStartRoll = isRankedGame || isPrivate;  // ranked OR private
+
 
   const rankedGate = useRankedReadyGate({
     roomPda,
@@ -642,7 +644,7 @@ const BackgammonGame = () => {
     roomPda,
     gameType: "backgammon",
     myWallet: address,
-    isRanked: isRankedGame,
+    isRanked: requiresStartRoll,
     roomPlayers,
     hasTwoRealPlayers,
     initialColor: myRole === "player" ? "w" : "b",
@@ -2380,7 +2382,7 @@ const BackgammonGame = () => {
               <div className="shrink-0 mt-2 space-y-2" style={{ minHeight: '80px' }}>
                 {/* Roll Button */}
                 <div style={{ minHeight: '52px' }}>
-                  {isMyTurn && dice.length === 0 && !gameOver ? (
+                  {uiIsMyTurn && dice.length === 0 && !gameOver ? (
                     <Button 
                       variant="gold" 
                       size="lg" 
@@ -2406,7 +2408,7 @@ const BackgammonGame = () => {
                   {/* Turn Indicator + Timer */}
                   {!gameOver && (
                     <div className="flex items-center justify-center gap-2 mb-0.5">
-                      {isMyTurn ? (
+                      {uiIsMyTurn ? (
                         <span className="text-[10px] font-medium text-primary">YOUR TURN</span>
                       ) : (
                         <span className="text-[10px] font-medium text-slate-400">OPPONENT'S TURN</span>
@@ -2456,7 +2458,7 @@ const BackgammonGame = () => {
                       </span>
                     </div>
                   )}
-                  {remainingMoves.length > 0 && isMyTurn && (
+                  {remainingMoves.length > 0 && uiIsMyTurn && (
                     <p className="text-[10px] text-muted-foreground mt-0.5 text-center">
                       Moves left: {remainingMoves.join(", ")}
                     </p>
@@ -2638,7 +2640,7 @@ const BackgammonGame = () => {
 
                 {/* Controls row - inside board column, shrink-0 */}
                 <div className="shrink-0 pt-3 flex flex-wrap gap-3 items-center justify-center">
-                  {isMyTurn && dice.length === 0 && !gameOver && (
+                  {uiIsMyTurn && dice.length === 0 && !gameOver && (
                     <Button variant="gold" size="lg" className="min-w-[140px] shadow-[0_0_30px_-8px_hsl(45_93%_54%_/_0.5)]" onClick={rollDice}>
                       🎲 Roll Dice
                     </Button>
@@ -2666,7 +2668,7 @@ const BackgammonGame = () => {
                   )}>
                     {gameStatus}
                   </p>
-                  {remainingMoves.length > 0 && isMyTurn && (
+                  {remainingMoves.length > 0 && uiIsMyTurn && (
                     <p className="text-sm text-muted-foreground mt-2">
                       Remaining: {remainingMoves.join(", ")}
                     </p>
