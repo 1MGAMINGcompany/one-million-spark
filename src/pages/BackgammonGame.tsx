@@ -1127,13 +1127,13 @@ const BackgammonGame = () => {
   const displayTimer = useTurnCountdownDisplay({
     turnStartedAt,
     turnTimeSeconds: effectiveTurnTime,
-    enabled: shouldShowTimer && rankedGate.bothReady,
+    enabled: shouldShowTimer && readyToPlay,
   });
   
   // Enforcement timer - ONLY runs on active player's device
   const turnTimer = useTurnTimer({
     turnTimeSeconds: effectiveTurnTime,
-    enabled: shouldShowTimer && isActuallyMyTurn && rankedGate.bothReady,
+    enabled: shouldShowTimer && isActuallyMyTurn && readyToPlay,
     isMyTurn: isActuallyMyTurn,
     onTimeExpired: handleTurnTimeout,
     roomId: roomPda,
@@ -1611,7 +1611,7 @@ const BackgammonGame = () => {
   // Update status based on connection - don't block on WebRTC in wallet browsers
   useEffect(() => {
     if (roomPlayers.length < 2) {
-      setGameStatus("Waiting for opponent...");
+      if (!readyToPlay) setGameStatus("Waiting for opponent...");
     } else if (connectionState === "connecting" && !inWalletBrowser) {
       // Only show "Connecting" if NOT in wallet browser - realtime fallback handles sync
       setGameStatus("Connecting to opponent...");
