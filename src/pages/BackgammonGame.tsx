@@ -527,7 +527,7 @@ const BackgammonGame = () => {
     roomPda,
     myWallet: address,
     isRanked: requiresReadyGate,
-    enabled: roomPlayers.length >= 2 && modeLoaded,
+    enabled: requiresReadyGate && roomPlayers.length >= 2 && modeLoaded,
   });
 
   // Gate for ranked/private readiness.
