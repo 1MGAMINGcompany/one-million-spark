@@ -530,6 +530,10 @@ const BackgammonGame = () => {
     enabled: roomPlayers.length >= 2 && modeLoaded,
   });
 
+  // Gate for ranked/private readiness.
+  // Use rankedGate only for ranked/private games; never block non-ranked due to hydration flips.
+  const readyGateOk = !requiresReadyGate || rankedGate.bothReady;
+
   // Check if we have 2 real player wallets (not placeholders including 111111...)
   // CRITICAL: Must be defined BEFORE useDurableGameSync to use as enabled condition
   const hasTwoRealPlayers = 
@@ -940,7 +944,6 @@ const BackgammonGame = () => {
 
   // Use rankedGate only for ranked games.
   // Non-ranked games must not be blocked by rankedGate hydration flips.
-  const readyGateOk = !isRankedGame || rankedGate.bothReady;
 
   // === UNIFIED TURN SOURCE OF TRUTH ===
   const readyToPlay =
