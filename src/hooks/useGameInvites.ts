@@ -26,30 +26,61 @@ interface UseGameInvitesOptions {
   enabled?: boolean;
 }
 
+// Get session token from localStorage (global or room-scoped fallback)
+function getSessionToken(): string | null {
+  // Try global token first
+  const latest = localStorage.getItem("session_token_latest");
+  if (latest) return latest;
+
+  // Fallback: find any room-scoped token
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key?.startsWith("session_token_") && key !== "session_token_latest") {
+      const token = localStorage.getItem(key);
+      if (token) return token;
+    }
+  }
+  return null;
+}
+
+// Auth headers helper for edge function calls
+function getAuthHeaders(token: string): Record<string, string> {
+  return { Authorization: `Bearer ${token}` };
+}
+
 export function useGameInvites({ walletAddress, enabled = true }: UseGameInvitesOptions) {
   const [invites, setInvites] = useState<GameInvite[]>([]);
   const [loading, setLoading] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [hasToken, setHasToken] = useState(true);
   const { toast } = useToast();
   const { play } = useSound();
 
-  // Fetch pending invites for the wallet
+  // Fetch pending invites via edge function
   const fetchInvites = useCallback(async () => {
     if (!walletAddress || !enabled) return;
 
+    const token = getSessionToken();
+    if (!token) {
+      console.log("[GameInvites] No session token, skipping fetch");
+      setHasToken(false);
+      setInvites([]);
+      setUnreadCount(0);
+      return;
+    }
+    setHasToken(true);
+
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from("game_invites")
-        .select("*")
-        .eq("recipient_wallet", walletAddress)
-        .eq("status", "pending")
-        .gt("expires_at", new Date().toISOString())
-        .order("created_at", { ascending: false });
+      const { data, error } = await supabase.functions.invoke("list-invites", {
+        body: { status: "pending", direction: "incoming" },
+        headers: getAuthHeaders(token),
+      });
 
       if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || "Failed to fetch invites");
 
-      const typedData = (data || []) as GameInvite[];
+      const typedData = (data.invites || []) as GameInvite[];
       setInvites(typedData);
       setUnreadCount(typedData.length);
     } catch (err) {
@@ -59,13 +90,18 @@ export function useGameInvites({ walletAddress, enabled = true }: UseGameInvites
     }
   }, [walletAddress, enabled]);
 
-  // Send an invite to a wallet address
+  // Send an invite to a wallet address via edge function
   const sendInvite = useCallback(async (
     recipientWallet: string,
     roomInfo: RoomInviteInfo
   ): Promise<boolean> => {
-    if (!walletAddress) {
-      toast({ title: "Connect wallet", description: "Please connect your wallet first", variant: "destructive" });
+    const token = getSessionToken();
+    if (!token) {
+      toast({ 
+        title: "Session required", 
+        description: "Create or join a game first to send invites", 
+        variant: "destructive" 
+      });
       return false;
     }
 
@@ -76,29 +112,29 @@ export function useGameInvites({ walletAddress, enabled = true }: UseGameInvites
       return false;
     }
 
-    if (trimmedRecipient === walletAddress) {
+    if (walletAddress && trimmedRecipient === walletAddress) {
       toast({ title: "Can't invite yourself", description: "Enter a different wallet address", variant: "destructive" });
       return false;
     }
 
     try {
-      const { error } = await supabase
-        .from("game_invites")
-        .insert({
-          room_pda: roomInfo.roomPda,
-          sender_wallet: walletAddress,
-          recipient_wallet: trimmedRecipient,
-          game_type: roomInfo.gameName || "unknown",
-          game_name: roomInfo.gameName,
-          stake_sol: roomInfo.stakeSol || 0,
-          winner_payout: roomInfo.winnerPayout || 0,
-          turn_time_seconds: roomInfo.turnTimeSeconds || 60,
-          max_players: roomInfo.maxPlayers || 2,
+      const { data, error } = await supabase.functions.invoke("send-invite", {
+        body: {
+          recipientWallet: trimmedRecipient,
+          roomPda: roomInfo.roomPda,
+          gameType: roomInfo.gameName || "unknown",
+          gameName: roomInfo.gameName,
+          stakeSol: roomInfo.stakeSol || 0,
+          winnerPayout: roomInfo.winnerPayout || 0,
+          turnTimeSeconds: roomInfo.turnTimeSeconds || 60,
+          maxPlayers: roomInfo.maxPlayers || 2,
           mode: roomInfo.mode || "private",
-          status: "pending",
-        });
+        },
+        headers: getAuthHeaders(token),
+      });
 
       if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || "Failed to send invite");
 
       play("ui/notify");
       toast({ 
@@ -106,99 +142,93 @@ export function useGameInvites({ walletAddress, enabled = true }: UseGameInvites
         description: `${trimmedRecipient.slice(0, 6)}...${trimmedRecipient.slice(-4)} will see it when they connect.`
       });
       return true;
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("[GameInvites] Failed to send invite:", err);
-      toast({ title: "Failed to send", description: err.message || "Please try again", variant: "destructive" });
+      const message = err instanceof Error ? err.message : "Please try again";
+      toast({ title: "Failed to send", description: message, variant: "destructive" });
       return false;
     }
   }, [walletAddress, toast, play]);
 
-  // Mark invite as viewed
+  // Mark invite as viewed (update local state only - no DB call needed)
   const markAsViewed = useCallback(async (inviteId: string) => {
-    try {
-      await supabase
-        .from("game_invites")
-        .update({ status: "viewed" })
-        .eq("id", inviteId);
-    } catch (err) {
-      console.error("[GameInvites] Failed to mark as viewed:", err);
-    }
+    // Local state update only - the invite is already fetched
+    console.log("[GameInvites] Marking invite as viewed:", inviteId);
   }, []);
 
-  // Mark invite as accepted
+  // Accept invite via edge function
   const acceptInvite = useCallback(async (inviteId: string) => {
+    const token = getSessionToken();
+    if (!token) {
+      toast({ title: "Session required", variant: "destructive" });
+      return;
+    }
+
     try {
-      await supabase
-        .from("game_invites")
-        .update({ status: "accepted" })
-        .eq("id", inviteId);
-      
+      const { data, error } = await supabase.functions.invoke("respond-invite", {
+        body: { inviteId, action: "accept" },
+        headers: getAuthHeaders(token),
+      });
+
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || "Failed to accept invite");
+
       // Remove from local list
       setInvites(prev => prev.filter(i => i.id !== inviteId));
       setUnreadCount(prev => Math.max(0, prev - 1));
     } catch (err) {
       console.error("[GameInvites] Failed to accept invite:", err);
     }
-  }, []);
+  }, [toast]);
 
-  // Dismiss/delete invite
+  // Dismiss/delete invite via edge function
   const dismissInvite = useCallback(async (inviteId: string) => {
+    const token = getSessionToken();
+    if (!token) {
+      toast({ title: "Session required", variant: "destructive" });
+      return;
+    }
+
     try {
-      await supabase
-        .from("game_invites")
-        .delete()
-        .eq("id", inviteId);
-      
+      const { data, error } = await supabase.functions.invoke("respond-invite", {
+        body: { inviteId, action: "dismiss" },
+        headers: getAuthHeaders(token),
+      });
+
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || "Failed to dismiss invite");
+
       setInvites(prev => prev.filter(i => i.id !== inviteId));
       setUnreadCount(prev => Math.max(0, prev - 1));
     } catch (err) {
       console.error("[GameInvites] Failed to dismiss invite:", err);
     }
-  }, []);
+  }, [toast]);
 
   // Initial fetch
   useEffect(() => {
     fetchInvites();
   }, [fetchInvites]);
 
-  // Subscribe to new invites in real-time
+  // Polling fallback (30s when visible) - replaces realtime subscription
   useEffect(() => {
     if (!walletAddress || !enabled) return;
 
-    const channel = supabase
-      .channel(`invites-${walletAddress}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "game_invites",
-          filter: `recipient_wallet=eq.${walletAddress}`,
-        },
-        (payload) => {
-          console.log("[GameInvites] New invite received:", payload);
-          const newInvite = payload.new as GameInvite;
-          setInvites(prev => [newInvite, ...prev]);
-          setUnreadCount(prev => prev + 1);
-          
-          play("ui/notify");
-          toast({
-            title: "🎮 New Game Invite!",
-            description: `${newInvite.sender_wallet.slice(0, 6)}... invited you to play ${newInvite.game_name || newInvite.game_type}`,
-          });
-        }
-      )
-      .subscribe();
+    const interval = setInterval(() => {
+      // Only poll when page is visible
+      if (document.visibilityState === 'visible') {
+        fetchInvites();
+      }
+    }, 30000);
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [walletAddress, enabled, toast, play]);
+    return () => clearInterval(interval);
+  }, [walletAddress, enabled, fetchInvites]);
 
   return {
     invites,
     loading,
     unreadCount,
+    hasToken,
     sendInvite,
     markAsViewed,
     acceptInvite,

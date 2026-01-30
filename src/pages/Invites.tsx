@@ -20,6 +20,7 @@ export default function Invites() {
   const { 
     invites, 
     loading, 
+    hasToken,
     acceptInvite, 
     dismissInvite,
     refetch 
@@ -88,6 +89,30 @@ export default function Invites() {
               {t("invites.connectDesc", "Your game invites will appear here once you connect your Solana wallet.")}
             </p>
             <WalletButton />
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+  
+  // No session token state - user needs to play first
+  if (!hasToken) {
+    return (
+      <div className="container max-w-md py-8 px-4 min-h-[60vh] flex flex-col items-center justify-center">
+        <Card className="w-full border-primary/30 bg-card/80 backdrop-blur">
+          <CardContent className="flex flex-col items-center py-12 px-6 text-center">
+            <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center mb-6">
+              <Gamepad2 className="h-8 w-8 text-primary" />
+            </div>
+            <h2 className="text-xl font-semibold mb-2">
+              {t("invites.playFirst", "Play your first game to unlock invites")}
+            </h2>
+            <p className="text-muted-foreground text-sm mb-6">
+              {t("invites.playFirstDesc", "Create or join a room to activate your invite inbox.")}
+            </p>
+            <Button onClick={() => navigate("/")}>
+              {t("invites.browseGames", "Browse Games")}
+            </Button>
           </CardContent>
         </Card>
       </div>
