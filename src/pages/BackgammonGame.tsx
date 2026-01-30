@@ -651,14 +651,14 @@ const BackgammonGame = () => {
     roomPlayers,
     hasTwoRealPlayers,
     initialColor: myRole === "player" ? "w" : "b",
-    bothReady: rankedGate.bothReady,
+    bothReady: readyGateOk,
   });
 
   // PART B FIX: Enable durable sync if EITHER:
-  // 1. rankedGate.bothReady is true (both accepted via game_acceptances)
+  // 1. readyGateOk is true (both accepted via game_acceptances)
   // 2. startRoll.isFinalized is true (game already started, so both WERE ready)
   // Now also enabled for private mode with turn timers
-  const durableEnabled = (isRankedGame || isPrivate) && (rankedGate.bothReady || startRoll.isFinalized);
+  const durableEnabled = (isRankedGame || isPrivate) && (readyGateOk || startRoll.isFinalized);
   
   const { submitMove: durablePersistMove, moves: dbMoves, isLoading: isSyncLoading } = useDurableGameSync({
     roomPda: roomPda || "",
@@ -674,7 +674,7 @@ const BackgammonGame = () => {
       wallet: wallet?.slice(0, 8),
       durableEnabled,
       isRankedGame,
-      bothReady: rankedGate.bothReady,
+      bothReady: readyGateOk,
       startRollFinalized: startRoll.isFinalized,
       hasTwoRealPlayers,
       roomPlayers: roomPlayers.map(w => w?.slice(0, 8)),
@@ -683,7 +683,7 @@ const BackgammonGame = () => {
       type: moveData.type,
       durableEnabled,
       isRankedGame,
-      bothReady: rankedGate.bothReady,
+      bothReady: readyGateOk,
       startRollFinalized: startRoll.isFinalized,
     });
     
@@ -691,13 +691,13 @@ const BackgammonGame = () => {
       console.warn("[persistMove] SKIPPED - durable sync disabled", {
         durableEnabled,
         isRankedGame,
-        bothReady: rankedGate.bothReady,
+        bothReady: readyGateOk,
         startRollFinalized: startRoll.isFinalized,
       });
       dbg("persist.skip", {
         durableEnabled,
         isRankedGame,
-        bothReady: rankedGate.bothReady,
+        bothReady: readyGateOk,
         startRollFinalized: startRoll.isFinalized,
       });
       return false;
@@ -717,7 +717,7 @@ const BackgammonGame = () => {
     dbg("persist.result", { success: result, type: moveData.type });
     
     return result;
-  }, [durablePersistMove, durableEnabled, isRankedGame, rankedGate.bothReady, startRoll.isFinalized, hasTwoRealPlayers, roomPlayers, roomPda]);
+  }, [durablePersistMove, durableEnabled, isRankedGame, readyGateOk, startRoll.isFinalized, hasTwoRealPlayers, roomPlayers, roomPda]);
 
   // Cross-device visibility sync - force refetch when tab becomes visible
   useEffect(() => {
@@ -740,7 +740,7 @@ const BackgammonGame = () => {
       roomMode,
       isRankedGame,
       modeLoaded,
-      "rankedGate.bothReady": rankedGate.bothReady,
+      "readyGateOk": readyGateOk,
       "rankedGate.iAmReady": rankedGate.iAmReady,
       "rankedGate.opponentReady": rankedGate.opponentReady,
       "rankedGate.isDataLoaded": rankedGate.isDataLoaded,
@@ -751,7 +751,7 @@ const BackgammonGame = () => {
     });
   }, [
     roomPda, roomMode, isRankedGame, modeLoaded,
-    rankedGate.bothReady, rankedGate.iAmReady, rankedGate.opponentReady, rankedGate.isDataLoaded,
+    readyGateOk, rankedGate.iAmReady, rankedGate.opponentReady, rankedGate.isDataLoaded,
     startRoll.isFinalized, durableEnabled, hasTwoRealPlayers, roomPlayers
   ]);
 
@@ -898,9 +898,9 @@ const BackgammonGame = () => {
     if (gameOver) return "game_over";
     if (roomPlayers.length < 2) return "waiting_for_opponent";
     if (!rankedGate.iAmReady || !rankedGate.opponentReady) return "rules_pending";
-    if (rankedGate.bothReady && startRoll.isFinalized) return "match_active";
+    if (readyGateOk && startRoll.isFinalized) return "match_active";
     return "opponent_joined";
-  }, [gameOver, roomPlayers.length, rankedGate.iAmReady, rankedGate.opponentReady, rankedGate.bothReady, startRoll.isFinalized]);
+  }, [gameOver, roomPlayers.length, rankedGate.iAmReady, rankedGate.opponentReady, readyGateOk, startRoll.isFinalized]);
 
   // Is current user the room creator? (first player in roomPlayers)
   const isCreator = useMemo(() => {
@@ -938,10 +938,14 @@ const BackgammonGame = () => {
   // isMyTurn includes canPlay gate - used for board disable
   const isMyTurn = canPlay && isActuallyMyTurn;
 
+  // Use rankedGate only for ranked games.
+  // Non-ranked games must not be blocked by rankedGate hydration flips.
+  const readyGateOk = !isRankedGame || rankedGate.bothReady;
+
   // === UNIFIED TURN SOURCE OF TRUTH ===
   const readyToPlay =
     hasTwoRealPlayers &&
-    (!requiresReadyGate || rankedGate.bothReady) &&
+    (!requiresReadyGate || readyGateOk) &&
     startRoll.isFinalized &&
     !gameOver;
 
@@ -961,7 +965,7 @@ const BackgammonGame = () => {
   // FIX: Ensure nextTurnWallet is computed from session wallets, NEVER same as timedOutWallet
   const handleTurnTimeout = useCallback(async () => {
     // Gate on bothReady - NEVER process timeout before game is ready
-    if (!rankedGate.bothReady) {
+    if (!readyGateOk) {
       console.log("[handleTurnTimeout] Blocked - game not ready");
       return;
     }
@@ -976,7 +980,7 @@ const BackgammonGame = () => {
       remainingMovesLen: remainingMoves.length,
       durableEnabled,
       isRankedGame,
-      bothReady: rankedGate.bothReady,
+      bothReady: readyGateOk,
       startRollFinalized: startRoll.isFinalized,
       currentTurnWallet: currentTurnWallet?.slice(0, 8),
       hasTwoRealPlayers,
@@ -1212,13 +1216,13 @@ const BackgammonGame = () => {
 
   const opponentTimeout = useOpponentTimeoutDetection({
     roomPda: roomPda || "",
-    enabled: shouldShowTimer && !isActuallyMyTurn && startRoll.isFinalized && rankedGate.bothReady,
+    enabled: shouldShowTimer && !isActuallyMyTurn && startRoll.isFinalized && readyGateOk,
     isMyTurn: effectiveIsMyTurn,
     turnTimeSeconds: effectiveTurnTime,
     myWallet: address,
     onOpponentTimeout: handleOpponentTimeoutDetected,
     onAutoForfeit: handleOpponentAutoForfeit,
-    bothReady: rankedGate.bothReady,
+    bothReady: readyGateOk,
     onTurnStartedAtChange: setTurnStartedAt,
   });
 
@@ -1544,7 +1548,7 @@ const BackgammonGame = () => {
     gameType: "backgammon",
     mode: isRankedGame ? 'ranked' : 'casual',
     // CRITICAL: Pass validation state for ranked games
-    bothRulesAccepted: rankedGate.bothReady,
+    bothRulesAccepted: readyGateOk,
     gameStarted: startRoll.isFinalized,
     onCleanupWebRTC: () => console.log("[BackgammonGame] Cleaning up WebRTC"),
     onCleanupSupabase: () => console.log("[BackgammonGame] Cleaning up Supabase"),
@@ -2143,7 +2147,7 @@ const BackgammonGame = () => {
             roomPlayersLen: roomPlayers.length,
             hasAddress: !!address,
             isRankedGame,
-            bothReady: rankedGate.bothReady,
+            bothReady: readyGateOk,
             isFinalized: startRoll.isFinalized,
             showDiceRoll: startRoll.showDiceRoll,
             shouldShowRulesGate,
@@ -2158,7 +2162,7 @@ const BackgammonGame = () => {
           roomPlayers={roomPlayers}
           iAmReady={rankedGate.iAmReady}
           opponentReady={rankedGate.opponentReady}
-          bothReady={rankedGate.bothReady}
+          bothReady={readyGateOk}
           isSettingReady={rankedGate.isSettingReady}
           stakeLamports={stakeLamports}
           turnTimeSeconds={effectiveTurnTime}
@@ -2426,7 +2430,7 @@ const BackgammonGame = () => {
                       ) : (
                         <span className="text-[10px] font-medium text-slate-400">OPPONENT'S TURN</span>
                       )}
-                      {shouldShowTimer && rankedGate.bothReady && (
+                      {shouldShowTimer && readyGateOk && (
                         <div className={cn(
                           "flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono",
                           displayTimer.isCriticalTime 
@@ -2689,7 +2693,7 @@ const BackgammonGame = () => {
                 </div>
 
                 {/* Turn Timer for ranked/private */}
-                {shouldShowTimer && rankedGate.bothReady && (
+                {shouldShowTimer && readyGateOk && (
                   <div className="rounded-xl border border-primary/20 bg-card/50 p-4">
                     <h3 className="text-sm font-medium text-muted-foreground mb-2">Turn Timer</h3>
                     <p className={cn(
