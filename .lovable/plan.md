@@ -1,133 +1,79 @@
 
 
-# Harden Token Extraction with UUID Validation + Nested JSON Support
+# Fix Desktop Multiplayer Backgammon Layout Only
 
-## Overview
+## Scope
 
-Upgrade `getSessionToken()` in `useGameInvites.ts` to be production-safe by:
-1. Validating tokens are actual UUIDs (not random long strings)
-2. Supporting nested JSON structures for future-proofing
+**What will be changed:**
+- Desktop layout in `src/pages/BackgammonGame.tsx` (multiplayer version)
 
-## Current Code (lines 29-44)
+**What will NOT be touched:**
+- Mobile layout in BackgammonGame.tsx (lines ~2200-2450)
+- BackgammonAI.tsx (Play vs AI version) - completely untouched
+- Any other game files
 
-```typescript
-function getSessionToken(): string | null {
-  const latest = localStorage.getItem("session_token_latest");
-  if (latest) return latest;  // ⚠️ No validation - could return any string
+## Differences Found
 
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
-    if (key?.startsWith("session_token_") && key !== "session_token_latest") {
-      const token = localStorage.getItem(key);
-      if (token) return token;  // ⚠️ No validation
-    }
-  }
-  return null;
-}
+| Element | AI Version (correct) | Multiplayer Desktop (current) |
+|---------|---------------------|------------------------------|
+| Line 2514 | `<div className="relative">` | `<div className="relative aspect-[2/1]">` |
+| Line 2519 | `<div className="relative p-1 ...">` | `<div className="relative h-full p-1 ...">` |
+| Line 2520 | No `h-full`, no `flex flex-col` | Has `h-full` and `flex flex-col` |
+| Line 2549 | Direct board content, no wrapper | `flex-1 min-h-0 flex flex-col justify-center` |
+
+## Changes
+
+### File: `src/pages/BackgammonGame.tsx`
+
+#### Change 1: Line 2514 - Remove aspect ratio
+```jsx
+// Before
+<div className="relative aspect-[2/1]">
+
+// After
+<div className="relative">
 ```
 
-**Problems:**
-- Returns any string without validation
-- Doesn't check `1mg_session_*` keys (JSON storage)
-- No UUID format verification
+#### Change 2: Line 2519 - Remove h-full from gold frame
+```jsx
+// Before
+<div className="relative h-full p-1 rounded-xl ...">
 
-## Solution
-
-Replace lines 29-44 with three functions:
-
-### 1. UUID Validator
-```typescript
-function isUuidLike(s: string): boolean {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s);
-}
+// After
+<div className="relative p-1 rounded-xl ...">
 ```
 
-### 2. Token Extractor (handles raw + JSON)
-```typescript
-function extractTokenFromStoredValue(value: string | null): string | null {
-  if (!value) return null;
+#### Change 3: Line 2520 - Simplify inner container
+```jsx
+// Before
+<div className="h-full bg-gradient-to-b ... flex flex-col">
 
-  // Case A: raw UUID stored directly
-  const trimmed = value.trim();
-  if (!trimmed.startsWith("{") && isUuidLike(trimmed)) {
-    return trimmed;
-  }
-
-  // Case B: JSON stored session object
-  try {
-    const obj = JSON.parse(value);
-
-    // Check all known patterns including nested structures
-    const candidates: unknown[] = [
-      obj?.session_token,
-      obj?.sessionToken,
-      obj?.token,
-      obj?.access_token,
-      obj?.session?.token,
-      obj?.session?.session_token,
-      obj?.data?.token,
-      obj?.data?.session_token,
-    ];
-
-    for (const c of candidates) {
-      if (typeof c === "string" && isUuidLike(c)) return c;
-    }
-  } catch {
-    // not JSON
-  }
-
-  return null;
-}
+// After
+<div className="bg-gradient-to-b from-midnight-light via-background to-midnight-light rounded-lg p-2 md:p-4 overflow-hidden">
 ```
 
-### 3. Updated Token Discovery
-```typescript
-function getSessionToken(): string | null {
-  // 1) Prefer global latest
-  const latest = extractTokenFromStoredValue(localStorage.getItem("session_token_latest"));
-  if (latest) return latest;
+#### Change 4: Line 2549 - Simplify points wrapper
+```jsx
+// Before
+<div className="flex-1 min-h-0 flex flex-col justify-center">
 
-  // 2) Scan all keys for known patterns
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
-    if (!key) continue;
-
-    // Raw token patterns (session_token_<roomPda>)
-    if (key.startsWith("session_token_") && key !== "session_token_latest") {
-      const t = extractTokenFromStoredValue(localStorage.getItem(key));
-      if (t) return t;
-    }
-
-    // JSON session patterns (1mg_session_<roomPda>)
-    if (key.startsWith("1mg_session_")) {
-      const t = extractTokenFromStoredValue(localStorage.getItem(key));
-      if (t) return t;
-    }
-  }
-
-  return null;
-}
+// After
+<div>
 ```
 
-## File Changes
+## Technical Details
 
-| File | Lines | Change |
-|------|-------|--------|
-| `src/hooks/useGameInvites.ts` | 29-44 | Replace with 3 hardened functions |
+These changes align the desktop multiplayer board structure with the AI version:
+- Removes forced `aspect-[2/1]` that constrains natural board sizing
+- Removes `h-full` constraints that interfere with content-based height
+- Removes `flex-col` structure that changes how child elements are laid out
+- The board will now size based on its content like the AI version does
 
-## Security Benefits
+## Verification
 
-| Issue | Before | After |
-|-------|--------|-------|
-| Random long string returned as token | Possible | Blocked (UUID regex) |
-| JSON-wrapped tokens missed | Yes | Handled |
-| Nested JSON structures | Not supported | Supported |
-| `1mg_session_*` keys | Ignored | Scanned |
-
-## Risk Assessment
-
-- **Self-contained**: Only touches `useGameInvites.ts`
-- **No backend changes**: Edge functions unchanged
-- **No new wallet prompts**: Auth flow unchanged
-- **Backward compatible**: Works with all existing token storage patterns
+After implementation, test on desktop:
+1. Board proportions match AI version
+2. Triangles and checkers are correctly sized
+3. Dice display properly in center bar
+4. Turn timer still displays correctly in ranked/private modes
 
