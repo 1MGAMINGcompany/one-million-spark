@@ -465,6 +465,9 @@ const BackgammonGame = () => {
   // Must be called before any effects that use roomMode
   const { mode: roomMode, isRanked: roomModeIsRanked, isPrivate, turnTimeSeconds: roomTurnTime, isLoaded: modeLoaded } = useRoomMode(roomPda);
 
+  // Backward-compat alias used throughout this file
+  const isRankedGame = roomModeIsRanked;
+
   const { loadSession: loadBackgammonSession, saveSession: saveBackgammonSession, finishSession: finishBackgammonSession } = useGameSessionPersistence({
     roomPda: roomPda,
     gameType: 'backgammon',
@@ -934,6 +937,16 @@ const BackgammonGame = () => {
   
   // isMyTurn includes canPlay gate - used for board disable
   const isMyTurn = canPlay && isActuallyMyTurn;
+
+  // === UNIFIED TURN SOURCE OF TRUTH ===
+  const readyToPlay =
+    hasTwoRealPlayers &&
+    (!requiresReadyGate || rankedGate.bothReady) &&
+    startRoll.isFinalized &&
+    !gameOver;
+
+  // Unified turn indicator for ALL UI elements
+  const uiIsMyTurn = readyToPlay && isActuallyMyTurn;
   const isFlipped = myRole === "ai"; // Black player sees flipped board
   
   // Timer-specific turn check (for ranked games)
