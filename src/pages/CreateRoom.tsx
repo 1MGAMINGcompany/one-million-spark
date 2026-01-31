@@ -288,6 +288,73 @@ export default function CreateRoom() {
     // Mode is written to DB immediately, not localStorage
     // For Ludo, use ludoPlayerCount; for other games, use maxPlayers (default 2)
     const effectiveMaxPlayers = gameType === "5" ? parseInt(ludoPlayerCount) : parseInt(maxPlayers);
+
+    // ✅ CASUAL (FREE) = OFF-CHAIN ONLY (Supabase game_sessions)
+    // Do NOT touch Solana program for casual rooms.
+    if (gameMode === "casual") {
+      if (!address) {
+        toast({
+          title: "Wallet not connected",
+          description: "Please connect your wallet first",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const roomKey = crypto.randomUUID();
+
+      const { error: upsertErr } = await supabase.rpc("upsert_game_session", {
+        p_room_pda: roomKey,
+        p_game_type: (parseInt(gameType) as GameType).toString(),
+        p_game_state: {},
+        p_current_turn_wallet: address,
+        p_player1_wallet: address,
+        p_player2_wallet: "",
+        p_status: "active",
+        p_mode: "casual",
+        p_caller_wallet: address,
+      });
+
+      if (upsertErr) {
+        console.error("[CreateRoom] Casual upsert_game_session failed:", upsertErr);
+        toast({
+          title: "Failed to create casual room",
+          description: upsertErr.message || "Unknown error",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Persist settings (non-fatal if it fails for casual)
+      try {
+        await supabase.functions.invoke("game-session-set-settings", {
+          body: {
+            roomPda: roomKey,
+            turnTimeSeconds: 0,
+            mode: "casual",
+            maxPlayers: effectiveMaxPlayers,
+            gameType: GAME_TYPE_NAMES[parseInt(gameType)] || "unknown",
+            creatorWallet: address,
+          },
+        });
+      } catch (e) {
+        console.warn("[CreateRoom] Casual settings save threw:", e);
+      }
+
+      navigate(`/room/${roomKey}?casual_created=1`);
+      return;
+    }
+
+    // ✅ RANKED/PRIVATE (ON-CHAIN) must have stake > 0 (program enforces this)
+    if ((gameMode === "ranked" || gameMode === "private") && entryFeeNum <= 0) {
+      toast({
+        title: "Invalid stake",
+        description: "Stake must be > 0 for ranked/private rooms.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     
     const roomId = await createRoom(
       parseInt(gameType) as GameType,
