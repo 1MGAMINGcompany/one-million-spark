@@ -497,7 +497,7 @@ export default function Room() {
       }
     })();
 
-    return () => {
+return () => {
       if (subId !== null) {
         connection.removeAccountChangeListener(subId);
       }

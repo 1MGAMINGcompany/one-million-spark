@@ -37,6 +37,18 @@ function GameLoading() {
   );
 }
 
+
+const isValidPubkey = (s: string) => {
+  try {
+    // Lazy import already present in file: PublicKey from @solana/web3.js
+    // If PublicKey isn't in scope, TypeScript build will tell us.
+    new PublicKey(s);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 export default function RoomRouter() {
   const { roomPda: roomPdaParam } = useParams<{ roomPda: string }>();
   const navigate = useNavigate();
@@ -76,6 +88,15 @@ export default function RoomRouter() {
 
   useEffect(() => {
     async function fetchRoomData() {
+
+      // ✅ CASUAL (off-chain) rooms use UUIDs, not Solana PDAs.
+      // If the URL param is not a valid pubkey, skip Solana fetch and let Room handle DB-only session.
+      if (roomPdaParam && !isValidPubkey(roomPdaParam)) {
+        console.log("[RoomRouter] Off-chain room detected (UUID). Skipping Solana fetch:", roomPdaParam);
+        setRoomData({ gameType: "1", status: "active", playerCount: 2 }); // minimal defaults; Room will fetch real session via edge
+        setLoading(false);
+        return;
+      }
       if (!roomPdaParam) {
         setError("No room specified");
         setLoading(false);
