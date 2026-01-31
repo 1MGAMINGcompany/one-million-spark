@@ -2297,7 +2297,7 @@ const BackgammonGame = () => {
       )}>
         {/* Mobile Layout - Viewport-fit container to prevent zoom */}
         {isMobile ? (
-          <div className="flex-1 flex flex-col overflow-hidden min-h-0 w-full">
+          <div className={cn("flex-1 flex flex-col min-h-0 w-full", isMobile ? "overflow-hidden" : "")}>
               {/* Score Row */}
               <div className="flex justify-between items-center px-2 py-1 shrink-0">
                 <div className="flex items-center gap-2">
@@ -2803,7 +2803,7 @@ const BackgammonGame = () => {
       <RulesInfoPanel 
         stakeSol={rankedGate.stakeLamports / 1_000_000_000} 
         isRanked={isRankedGame}
-        turnTimeSeconds={rankedGate.turnTimeSeconds || 60}
+        turnTimeSeconds={effectiveTurnTime}
       />
 
       {/* Accept Rules Modal and Waiting Panel - REMOVED: Now handled by Rules Gate above */}
