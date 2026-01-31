@@ -2291,8 +2291,9 @@ const BackgammonGame = () => {
 
       {/* Game Area */}
       <div className={cn(
-        "flex-1 flex flex-col min-h-0 overflow-hidden",
-        isMobile ? "px-2 pt-1 pb-2" : "px-2 md:px-4 py-4"
+        isMobile
+          ? "flex-1 flex flex-col min-h-0 overflow-hidden px-2 pt-1 pb-2"
+          : "px-2 md:px-4 py-4"
       )}>
         {/* Mobile Layout - Viewport-fit container to prevent zoom */}
         {isMobile ? (
@@ -2323,7 +2324,7 @@ const BackgammonGame = () => {
               </div>
 
               {/* Board Container - Aspect-ratio scaling to 100vw, max-height to fit viewport */}
-              <div className="relative w-full flex-1 min-h-0 overflow-hidden backgammon-mp-board">
+              <div className={cn("relative w-full flex-1 backgammon-mp-board", isMobile ? "min-h-0 overflow-hidden" : "")}>
                 {/* Subtle glow */}
                 <div className="absolute -inset-1 bg-primary/10 rounded-xl blur-lg opacity-30" />
                 
