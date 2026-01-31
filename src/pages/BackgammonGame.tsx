@@ -889,13 +889,14 @@ const BackgammonGame = () => {
       !!roomPda &&
       roomPlayers.length > 0 &&
       stakeLamports !== undefined &&
-      (rankedGate.turnTimeSeconds > 0 || !isRankedGame) &&
+      (!requiresReadyGate || roomTurnTime !== null) &&
       rankedGate.isDataLoaded
     );
-  }, [roomPda, roomPlayers.length, stakeLamports, rankedGate.turnTimeSeconds, isRankedGame, rankedGate.isDataLoaded]);
+  }, [roomPda, roomPlayers.length, stakeLamports, requiresReadyGate, roomTurnTime, rankedGate.isDataLoaded]);
 
-  // Use turn time from room mode (DB source of truth) or fallback to ranked gate
-  const effectiveTurnTime = roomTurnTime || rankedGate.turnTimeSeconds || DEFAULT_RANKED_TURN_TIME;
+  // Turn time is DB-authoritative (useRoomMode). Never take turn time from rankedGate.
+  // If DB has not loaded yet, keep timers disabled until modeLoaded.
+  const effectiveTurnTime = (roomTurnTime ?? DEFAULT_RANKED_TURN_TIME);
 
   // Determine match state for LeaveMatchModal
   const matchState: MatchState = useMemo(() => {
@@ -1128,7 +1129,7 @@ const BackgammonGame = () => {
   
   // Timer should show when turn time is configured and game has started
   const gameStarted = startRoll.isFinalized && roomPlayers.length >= 2;
-  const shouldShowTimer = effectiveTurnTime > 0 && gameStarted && !gameOver;
+  const shouldShowTimer = modeLoaded && effectiveTurnTime > 0 && gameStarted && !gameOver;
   
   // Display timer - shows ACTIVE player's remaining time on BOTH devices
   const displayTimer = useTurnCountdownDisplay({

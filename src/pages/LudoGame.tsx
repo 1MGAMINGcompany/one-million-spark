@@ -125,6 +125,7 @@ const LudoGame = () => {
         
         if (accountInfo?.data) {
           const parsed = parseRoomAccount(accountInfo.data as Buffer);
+            console.log('[LudoGame] Parsed room account keys:', Object.keys(parsed || {}), 'parsed=', parsed);
           if (parsed && parsed.players.length >= 2) {
             // Real player order from on-chain: creator at index 0, joiner at index 1
             // For Ludo, we support 2-4 players but start with 2

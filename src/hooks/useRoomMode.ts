@@ -12,7 +12,7 @@ interface UseRoomModeResult {
   mode: 'casual' | 'ranked' | 'private';
   isRanked: boolean;
   isPrivate: boolean;
-  turnTimeSeconds: number;
+  turnTimeSeconds: number | null;
   isLoaded: boolean;
 }
 
@@ -21,7 +21,7 @@ const RETRY_DELAY_MS = 800;
 
 export function useRoomMode(roomPda: string | undefined): UseRoomModeResult {
   const [mode, setMode] = useState<'casual' | 'ranked' | 'private'>('casual');
-  const [turnTimeSeconds, setTurnTimeSeconds] = useState(60);
+  const [turnTimeSeconds, setTurnTimeSeconds] = useState<number | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
   const [fetchAttempts, setFetchAttempts] = useState(0);
 
@@ -60,7 +60,7 @@ export function useRoomMode(roomPda: string | undefined): UseRoomModeResult {
         }
 
         const dbMode = (session.mode as 'casual' | 'ranked' | 'private') || 'casual';
-        const dbTurnTime = session.turn_time_seconds || 60;
+        const dbTurnTime = (session.turn_time_seconds ?? null);
 
         console.log("[useRoomMode] DB mode fetched:", { dbMode, dbTurnTime });
 
