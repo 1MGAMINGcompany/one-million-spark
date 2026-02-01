@@ -334,6 +334,8 @@ const LudoGame = () => {
           title: t('gameSession.opponentSkipped'),
           description: t('gameSession.yourTurnNow'),
         });
+        // Skip event - advance turn on all clients so state stays in sync
+        advanceTurn(1);
         return;
       }
       
@@ -611,6 +613,8 @@ const LudoGame = () => {
       if (newMissedCount >= 3) {
         // Eliminate player
         eliminatePlayer(currentPlayerIndex);
+        // IMPORTANT: jump off eliminated seat to avoid stalling on an eliminated turn
+        advanceTurn(1);
         toast({
           title: t('gameSession.opponentForfeited'),
           description: `Player ${currentPlayerIndex + 1} was eliminated`,
