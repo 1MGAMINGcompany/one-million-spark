@@ -321,7 +321,7 @@ const DominosGame = () => {
         return;
       }
       
-      console.log(`[DominosGame] Fetching on-chain room data for PDA: ${roomPda}`);
+    console.log(`[DominosGame] Fetching on-chain room data for PDA: ${roomPda}`);
       
       try {
         const connection = getConnection();
@@ -407,7 +407,7 @@ const DominosGame = () => {
     if (!roomPda || roomPlayers.length < 2 || gameInitialized) return;
     
     const initGame = async () => {
-      console.log(`[DominosGame] Checking for saved session...`);
+    console.log(`[DominosGame] Checking for saved session...`);
       
       // Try to load existing session first
       const savedState = await loadSession();
@@ -419,7 +419,7 @@ const DominosGame = () => {
         return;
       }
       
-      console.log(`[DominosGame] No saved session, initializing new game with seed: ${roomPda}`);
+    console.log(`[DominosGame] No saved session, initializing new game with seed: ${roomPda}`);
       
       // Use roomPda as seed - BOTH devices get identical shuffle
       const allDominos = seededShuffle(generateDominoSet(), roomPda);
@@ -429,7 +429,7 @@ const DominosGame = () => {
       const player2Hand = allDominos.slice(7, 14);
       const initialBoneyard = allDominos.slice(14);
       
-      console.log("[DominosGame] Deterministic game init:", {
+    console.log("[DominosGame] Deterministic game init:", {
         amIPlayer1,
         myHandIds: (amIPlayer1 ? player1Hand : player2Hand).map(d => d.id),
         boneyardSize: initialBoneyard.length,
@@ -484,7 +484,7 @@ const DominosGame = () => {
   const handleDurableMoveReceived = useCallback((move: GameMove) => {
     // Only apply moves from opponents (we already applied our own locally)
     if (!isSameWallet(move.wallet, address)) {
-      console.log("[DominosGame] Applying move from DB:", move.turn_number);
+    console.log("[DominosGame] Applying move from DB:", move.turn_number);
       const dominoMove = move.move_data as DominoMove;
       
       // Handle turn_timeout - opponent timed out, I get the turn
@@ -621,7 +621,7 @@ const DominosGame = () => {
   const handleTurnTimeout = useCallback(() => {
     // Gate on bothReady - NEVER process timeout before game is ready
     if (!rankedGate.bothReady) {
-      console.log("[handleTurnTimeout] Blocked - game not ready");
+    console.log("[handleTurnTimeout] Blocked - game not ready");
       return;
     }
     if (!isActuallyMyTurn || gameOver || !address || !roomPda) return;
@@ -716,30 +716,28 @@ const DominosGame = () => {
     if (!opponentWalletAddr || !roomPda) return;
     
     console.log(`[DominosGame] Opponent timeout detected! Missed: ${missedCount}/3`);
-    
+
     if (missedCount >= 3) {
-      // Opponent missed 3 turns - they auto-forfeit, we win
-      toast({
-        title: t('gameSession.opponentForfeited'),
-        description: t('gameSession.youWin'),
-      });
-      
-      // Persist auto_forfeit move
-      if (isRankedGame || isPrivate) {
-        persistMove({
-          action: "turn_timeout",
-          timedOutWallet: opponentWalletAddr,
-          nextTurnWallet: address,
-          missedCount,
-        } as unknown as DominoMove, address);
+        // Opponent missed 3 turns - resolve via server-verified timeout mode.
+        // Server will forfeit the current_turn_wallet only if the turn is actually expired.
+        const token =
+          localStorage.getItem(`session_token_${roomPda}`) ||
+          localStorage.getItem("session_token_latest") ||
+          "";
+
+        supabase.functions
+          .invoke("forfeit-game", {
+            body: { roomPda, gameType: "dominos", mode: "timeout" },
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+          })
+          .catch((err) => {
+            console.error("[DominosGame] Opponent auto-forfeit failed:", err);
+          });
+
+        // UI will update from settlement/durable sync.
+        return;
       }
-      
-      setGameOver(true);
-      setWinner("me");
-      setWinnerWallet(address || null);
-      setGameStatus(t('game.youWin') + " - opponent timed out");
-      play('domino/win');
-    } else {
+
       // Opponent skipped - we get the turn
       toast({
         title: t('gameSession.opponentSkipped'),
@@ -985,13 +983,13 @@ const DominosGame = () => {
     
     // Handle sync request - send our game state to peer
     if (message.type === "sync_request") {
-      console.log("[DominosGame] Peer requested sync");
+    console.log("[DominosGame] Peer requested sync");
       return;
     }
     
     // Handle sync response - update our state from peer
     if (message.type === "sync_response" && message.payload) {
-      console.log("[DominosGame] Received sync response");
+    console.log("[DominosGame] Received sync response");
       const state = message.payload as GameState;
       setChain(state.chain);
       setOpponentHandCount(state.opponentHandCount);
@@ -1156,7 +1154,7 @@ const DominosGame = () => {
   // Request sync when we connect as player 2 (late joiner)
   useEffect(() => {
     if (peerConnected && !amIPlayer1 && chain.length === 0 && gameInitialized) {
-      console.log("[DominosGame] Player 2 connected - requesting state sync");
+    console.log("[DominosGame] Player 2 connected - requesting state sync");
       requestSync();
     }
   }, [peerConnected, amIPlayer1, chain.length, gameInitialized, requestSync]);
