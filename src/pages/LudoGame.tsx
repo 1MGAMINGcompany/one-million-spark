@@ -1268,6 +1268,19 @@ const LudoGame = () => {
               <RotateCcw size={16} />
               <span className="hidden sm:inline ml-1">Reset</span>
             </Button>
+              
+              {/* Desktop Forfeit (participants only) */}
+              {isParticipant && !gameOver && (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="hidden md:inline-flex"
+                  onClick={() => setShowForfeitDialog(true)}
+                  disabled={!canPlay || isForfeitLoading}
+                >
+                  {t("game.forfeit") || "Forfeit"}
+                </Button>
+              )}
           </div>
         </div>
       </div>
