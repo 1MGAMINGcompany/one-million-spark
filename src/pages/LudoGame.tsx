@@ -917,6 +917,20 @@ const LudoGame = () => {
     }
   }, [eliminatedPlayers, roomPlayers, gameOver, isRankedGame, persistMove, address, play, t, sendPlayerEliminated]);
 
+
+  // Auto-exit if this client is eliminated (prevents re-enter/stuck in room after forfeit/3-miss)
+  const autoExitEliminatedRef = useRef(false);
+  useEffect(() => {
+    if (autoExitEliminatedRef.current) return;
+    if (gameOver) return;
+    if (myPlayerIndex < 0) return;
+    if (!eliminatedPlayers.has(myPlayerIndex)) return;
+
+    autoExitEliminatedRef.current = true;
+    toast({ title: t('forfeit.eliminated'), description: t('forfeit.gameContinues') });
+    navigate('/room-list');
+  }, [gameOver, myPlayerIndex, eliminatedPlayers, navigate, t]);
+
   // Handle chat message sending via WebRTC
   const handleChatSend = useCallback((msg: ChatMessage) => {
     sendChat(JSON.stringify(msg));
