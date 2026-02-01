@@ -605,21 +605,34 @@ const LudoGame = () => {
   });
 
   // Opponent timeout detection for Ludo (2/3/4 player support)
-  const handleOpponentTimeoutDetected = useCallback((missedCount: number) => {
-    const timedOutWallet = roomPlayers[currentPlayerIndex];
-    if (timedOutWallet && !isSameWallet(timedOutWallet, address)) {
-      const newMissedCount = incMissed(roomPda || "", timedOutWallet);
-      
-      if (newMissedCount >= 3) {
-        // Eliminate player
-        eliminatePlayer(currentPlayerIndex);
-        // IMPORTANT: jump off eliminated seat to avoid stalling on an eliminated turn
-        advanceTurn(1);
-        toast({
-          title: t('gameSession.opponentForfeited'),
-          description: `Player ${currentPlayerIndex + 1} was eliminated`,
-        });
-      } else {
+    const handleOpponentTimeoutDetected = useCallback((missedCount: number) => {
+      const timedOutWallet = roomPlayers[currentPlayerIndex];
+      if (timedOutWallet && !isSameWallet(timedOutWallet, address)) {
+        const newMissedCount = incMissed(roomPda || "", timedOutWallet);
+
+        if (newMissedCount >= 3) {
+          // Opponent missed 3 turns - resolve via server-verified timeout mode.
+          // For Ludo 3/4 players this is elimination only; UI must not assume “I win”.
+          if (!roomPda) return;
+
+          const token =
+            localStorage.getItem(`session_token_${roomPda}`) ||
+            localStorage.getItem("session_token_latest") ||
+            "";
+
+          supabase.functions
+            .invoke("forfeit-game", {
+              body: { roomPda, gameType: "ludo", mode: "timeout" },
+              headers: token ? { Authorization: `Bearer ${token}` } : {},
+            })
+            .catch((err) => {
+              console.error("[LudoGame] Opponent auto-forfeit failed:", err);
+            });
+
+          // UI will update from settlement/durable sync.
+          return;
+        }
+
         // Skip their turn
         advanceTurn(1);
         toast({
@@ -627,8 +640,8 @@ const LudoGame = () => {
           description: `${newMissedCount}/3 missed turns`,
         });
       }
-    }
-  }, [roomPlayers, currentPlayerIndex, address, roomPda, eliminatePlayer, advanceTurn, t]);
+    }, [roomPlayers, currentPlayerIndex, address, roomPda, advanceTurn, t]);
+
 
   const handleOpponentAutoForfeit = useCallback(() => {
     const opponentWallet = roomPlayers[currentPlayerIndex];
