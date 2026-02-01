@@ -148,7 +148,7 @@ const LudoGame = () => {
         
         // Fallback if on-chain data not available yet (room still forming)
         console.log("[LudoGame] Room not ready, using placeholder");
-        setRoomPlayers([address, `waiting-${roomPda.slice(0, 8)}`]);
+        setRoomPlayers([address]);
       } catch (err) {
         console.error("[LudoGame] Failed to fetch room players:", err);
         // Fallback on error
@@ -1495,7 +1495,7 @@ const LudoGame = () => {
         roomPda={roomPda || ""}
         isCreator={isCreator}
         stakeSol={entryFeeSol}
-        playerCount={roomPlayers.filter(p => !p.startsWith('ai-')).length}
+        playerCount={humanPlayers.length}
         onUILeave={handleUILeave}
         onCancelRoom={handleCancelRoom}
         onForfeitMatch={handleForfeitMatch}
