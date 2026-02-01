@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import * as ed from "npm:@noble/ed25519@2.0.0";
 import bs58 from "npm:bs58@5.0.0";
+import { Connection, PublicKey } from "npm:@solana/web3.js@1.95.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -30,6 +31,75 @@ interface SignedAcceptancePayload {
 }
 
 type AcceptancePayload = SimpleAcceptancePayload | SignedAcceptancePayload;
+
+// ─────────────────────────────────────────────────────────────
+// Parse room account from on-chain data
+// ─────────────────────────────────────────────────────────────
+interface ParsedRoom {
+  roomId: bigint;
+  creator: PublicKey;
+  gameType: number;
+  maxPlayers: number;
+  playerCount: number;
+  status: number;
+  stakeLamports: bigint;
+  winner: PublicKey;
+  players: PublicKey[];
+}
+
+function parseRoomAccount(data: Uint8Array): ParsedRoom | null {
+  try {
+    const view = new DataView(data.buffer, data.byteOffset);
+    let offset = 8; // Skip discriminator
+
+    const roomId = view.getBigUint64(offset, true);
+    offset += 8;
+
+    const creator = new PublicKey(data.slice(offset, offset + 32));
+    offset += 32;
+
+    const gameType = data[offset];
+    offset += 1;
+
+    const maxPlayers = data[offset];
+    offset += 1;
+
+    const playerCount = data[offset];
+    offset += 1;
+
+    const status = data[offset];
+    offset += 1;
+
+    const stakeLamports = view.getBigUint64(offset, true);
+    offset += 8;
+
+    const winner = new PublicKey(data.slice(offset, offset + 32));
+    offset += 32;
+
+    const players: PublicKey[] = [];
+    for (let i = 0; i < playerCount && i < 4; i++) {
+      const start = offset + i * 32;
+      const end = start + 32;
+      const playerKey = new PublicKey(data.slice(start, end));
+      if (!playerKey.equals(PublicKey.default)) players.push(playerKey);
+    }
+
+    return {
+      roomId,
+      creator,
+      gameType,
+      maxPlayers,
+      playerCount,
+      status,
+      stakeLamports,
+      winner,
+      players,
+    };
+  } catch (e) {
+    console.error("[ranked-accept] Failed to parse room account:", e);
+    return null;
+  }
+}
 
 /**
  * Verify Ed25519 signature from Solana wallet
@@ -149,10 +219,10 @@ Deno.serve(async (req: Request) => {
       sessionToken = token;
       signatureForRecord = signature;
 
-      // Record acceptance with cryptographic signature
+      // Record acceptance with cryptographic signature (handles UNIQUE constraint)
       const { error: acceptanceError } = await supabase
         .from("game_acceptances")
-        .insert({
+        .upsert({
           room_pda: body.roomPda,
           player_wallet: body.playerWallet,
           rules_hash: rulesHash,
@@ -161,7 +231,7 @@ Deno.serve(async (req: Request) => {
           signature: signatureForRecord,
           session_token: sessionToken,
           session_expires_at: new Date(now + 4 * 60 * 60 * 1000).toISOString(),
-        });
+        }, { onConflict: 'room_pda,player_wallet' });
 
       if (acceptanceError) {
         console.error("[ranked-accept] Failed to record acceptance:", acceptanceError);
@@ -177,10 +247,10 @@ Deno.serve(async (req: Request) => {
       sessionToken = crypto.randomUUID();
       signatureForRecord = "implicit_stake_acceptance";
 
-      // Record acceptance
+      // Record acceptance (handles UNIQUE constraint)
       const { error: acceptanceError } = await supabase
         .from("game_acceptances")
-        .insert({
+        .upsert({
           room_pda: body.roomPda,
           player_wallet: body.playerWallet,
           nonce,
@@ -189,13 +259,51 @@ Deno.serve(async (req: Request) => {
           rules_hash: "stake_verified",
           session_token: sessionToken,
           session_expires_at: new Date(now + 4 * 60 * 60 * 1000).toISOString(),
-        });
+        }, { onConflict: 'room_pda,player_wallet' });
 
       if (acceptanceError) {
         console.error("[ranked-accept] Failed to record acceptance:", acceptanceError);
         // Continue anyway - ready flag is more important
       } else {
         console.log("[ranked-accept] ✅ Simple acceptance recorded");
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // SYNC PARTICIPANTS FROM ON-CHAIN BEFORE MARKING READY
+    // ─────────────────────────────────────────────────────────────
+    const rpcUrl = Deno.env.get("SOLANA_RPC_URL");
+    if (rpcUrl) {
+      try {
+        console.log("[ranked-accept] Syncing participants from on-chain...");
+        const connection = new Connection(rpcUrl);
+        const roomPubkey = new PublicKey(body.roomPda);
+        const accountInfo = await connection.getAccountInfo(roomPubkey);
+        
+        if (accountInfo?.data) {
+          const roomData = parseRoomAccount(new Uint8Array(accountInfo.data));
+          
+          if (roomData) {
+            const participants = roomData.players.map(p => p.toBase58());
+            
+            const { error: updateError } = await supabase
+              .from('game_sessions')
+              .update({
+                participants,
+                max_players: roomData.maxPlayers,
+                updated_at: new Date().toISOString(),
+              })
+              .eq('room_pda', body.roomPda);
+              
+            if (updateError) {
+              console.warn("[ranked-accept] Failed to update participants:", updateError);
+            } else {
+              console.log("[ranked-accept] ✅ Synced participants:", participants.length);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("[ranked-accept] On-chain sync failed:", err);
       }
     }
 

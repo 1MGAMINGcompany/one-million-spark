@@ -93,27 +93,42 @@ serve(async (req) => {
   // Get required players from session (default 2)
   const requiredPlayers = session?.max_players ?? 2;
 
-  // PART C FIX: Multiple ways to determine if both players accepted:
-  // 1. Count from game_acceptances table
-  const fromAcceptances = players.length >= requiredPlayers;
-  // 2. Check p1_ready/p2_ready flags (set by record_acceptance RPC)
-  const fromSessionFlags = Boolean(session?.p1_ready && session?.p2_ready);
-  // 3. If start_roll_finalized is true, both players MUST have been ready
-  const fromStartRoll = session?.start_roll_finalized === true;
+  // Get participants array from session (for N-player)
+  const participants: string[] = session?.participants || [];
 
-  // FIX: Remove fromStartRoll - it's a RESULT of being ready, not a CAUSE
-  const bothAccepted = fromAcceptances || fromSessionFlags;
+  // Create set of accepted wallets for membership check
+  const acceptedWallets = new Set(players.map(p => p.wallet));
+
+  // N-PLAYER FIX: ALL participants must have accepted (participants ⊆ accepted_wallets)
+  // No p1/p2 shortcuts, no start_roll_finalized bypass
+  const allParticipantsAccepted = participants.length > 0 && 
+    participants.every(p => acceptedWallets.has(p));
+
+  // Fallback for 2-player (backward compat)
+  const fromAcceptances = players.length >= requiredPlayers;
+  const fromSessionFlags = Boolean(session?.p1_ready && session?.p2_ready);
+
+  // bothAccepted: prefer strict participant check, fallback to legacy
+  const bothAccepted = participants.length > 0 
+    ? allParticipantsAccepted 
+    : (fromAcceptances || fromSessionFlags);
 
   console.log("[game-session-get] Acceptances:", {
     playersCount: players.length,
     requiredPlayers,
+    participantsCount: participants.length,
+    allParticipantsAccepted,
     fromAcceptances,
     fromSessionFlags,
-    fromStartRoll,
     bothAccepted,
   });
 
-  const acceptances = { players, bothAccepted };
+  const acceptances = { 
+    players, 
+    bothAccepted,
+    acceptedCount: acceptedWallets.size,
+    requiredCount: participants.length || requiredPlayers,
+  };
 
   console.log('[game-session-get] ✅ Session found:', !!session, 'Receipt:', !!receipt, 'Match:', !!match, 'Acceptances:', players.length)
     
