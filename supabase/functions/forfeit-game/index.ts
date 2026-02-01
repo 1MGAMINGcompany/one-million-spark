@@ -8,6 +8,7 @@ import {
   TransactionInstruction,
 } from "npm:@solana/web3.js@1.95.0";
 import bs58 from "npm:bs58@5.0.0";
+import { requireSession } from "../_shared/requireSession.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -217,7 +218,6 @@ Deno.serve(async (req: Request) => {
     const body = (await req.json().catch(() => null)) as ForfeitRequest | null;
 
     const roomPda = body?.roomPda;
-    const forfeitingWallet = body?.forfeitingWallet;
     const gameType = body?.gameType;
     const winnerWalletOverride = body?.winnerWallet;
 
@@ -225,22 +225,10 @@ Deno.serve(async (req: Request) => {
     const requestId = crypto.randomUUID();
     const ts = new Date().toISOString();
 
-    // PER-REQUEST DEBUG: Log immediately after parsing body
-    console.log("[forfeit-game] PER_REQUEST_START", {
-      requestId,
-      ts,
-      roomPda,
-      forfeitingWallet,
-      gameType,
-      winnerWalletOverride,
-    });
-
-    if (!roomPda || !forfeitingWallet) {
-      console.error("[forfeit-game] Missing required fields:", { requestId, roomPda, forfeitingWallet });
-      return json200({
-        success: false,
-        error: "Missing roomPda or forfeitingWallet",
-      });
+    // 🔒 SECURITY: roomPda is required
+    if (!roomPda) {
+      console.error("[forfeit-game] Missing required field:", { requestId, roomPda });
+      return json200({ success: false, error: "Missing roomPda", requestId });
     }
 
     // Supabase client (admin for bypassing RLS)
@@ -249,10 +237,33 @@ Deno.serve(async (req: Request) => {
       return json200({
         success: false,
         error: "Server configuration error: Supabase service credentials missing",
+        requestId,
       });
     }
 
-    // Idempotency: Check if forfeit already processed (use service role client to bypass RLS)
+    // 🔒 SECURITY: Require session token and derive caller wallet from DB
+    const sessionRes = await requireSession(supabase, req);
+    if (!sessionRes.ok) {
+      console.error("[forfeit-game] Unauthorized:", { requestId, reason: sessionRes.error });
+      return json200({ success: false, error: "Unauthorized", details: sessionRes.error, requestId });
+    }
+
+    const callerWallet = sessionRes.session.wallet;
+
+    // IMPORTANT: Do NOT trust forfeitingWallet from request body.
+    // Manual forfeit = caller forfeits themselves (1-tap UX, no signatures).
+    const forfeitingWallet = callerWallet;
+
+    // PER-REQUEST DEBUG: Log immediately after deriving forfeiter
+    console.log("[forfeit-game] PER_REQUEST_START", {
+      requestId,
+      ts,
+      roomPda,
+      forfeitingWallet,
+      gameType,
+      winnerWalletOverride,
+    });
+      // Idempotency: Check if forfeit already processed (use service role client to bypass RLS)
     const { data: existingSettlement } = await supabase
       .from("settlement_logs")
       .select("id, success, winner_wallet, forfeiting_wallet, signature, created_at")
