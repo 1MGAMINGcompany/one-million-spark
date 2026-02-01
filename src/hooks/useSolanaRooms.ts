@@ -1071,13 +1071,18 @@ export function useSolanaRooms() {
       // Import supabase client dynamically to avoid circular dependency
       const { supabase } = await import("@/integrations/supabase/client");
       
-      const { data, error } = await supabase.functions.invoke('forfeit-game', {
-        body: {
-          roomPda,
-          forfeitingWallet: publicKey.toBase58(),
-          gameType,
-        },
-      });
+        const token =
+          localStorage.getItem(`session_token_${roomPda}`) ||
+          localStorage.getItem("session_token_latest") ||
+          "";
+
+        const { data, error } = await supabase.functions.invoke("forfeit-game", {
+          body: {
+            roomPda,
+            gameType,
+          },
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
 
       if (error) {
         console.error("[forfeitGame] Edge function error:", error);
