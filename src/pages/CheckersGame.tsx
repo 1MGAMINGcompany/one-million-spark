@@ -572,20 +572,43 @@ const CheckersGame = () => {
 
   // Opponent timeout detection - polls DB to detect if opponent has timed out
   const handleOpponentTimeoutDetected = useCallback((missedCount: number) => {
-    // When opponent times out, call handleTurnTimeout with their wallet
-    const opponentWalletAddr = getOpponentWallet(roomPlayers, address);
-    if (opponentWalletAddr) {
-      handleTurnTimeout(opponentWalletAddr);
-    }
-  }, [roomPlayers, address, handleTurnTimeout]);
+      // Opponent timed out (grace exceeded). Resolve via server-verified timeout mode.
+      // Server will forfeit the current_turn_wallet only if the turn is actually expired.
+      if (!roomPda) return;
+
+      const token =
+        localStorage.getItem(`session_token_${roomPda}`) ||
+        localStorage.getItem("session_token_latest") ||
+        "";
+
+      supabase.functions
+        .invoke("forfeit-game", {
+          body: { roomPda, gameType: "checkers", mode: "timeout" },
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        })
+        .catch((err) => {
+          console.error("[CheckersGame] Opponent timeout forfeit failed:", err);
+        });
+    }, [roomPda]);
 
   const handleOpponentAutoForfeit = useCallback(() => {
-    // Opponent missed 3 turns - they auto-forfeit, we win
-    const opponentWalletAddr = getOpponentWallet(roomPlayers, address);
-    if (opponentWalletAddr) {
-      handleTurnTimeout(opponentWalletAddr);
-    }
-  }, [roomPlayers, address, handleTurnTimeout]);
+      // Opponent missed MAX_MISSES_BEFORE_FORFEIT - resolve via server-verified timeout mode.
+      if (!roomPda) return;
+
+      const token =
+        localStorage.getItem(`session_token_${roomPda}`) ||
+        localStorage.getItem("session_token_latest") ||
+        "";
+
+      supabase.functions
+        .invoke("forfeit-game", {
+          body: { roomPda, gameType: "checkers", mode: "timeout" },
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        })
+        .catch((err) => {
+          console.error("[CheckersGame] Opponent auto-forfeit failed:", err);
+        });
+    }, [roomPda]);
 
   const opponentTimeout = useOpponentTimeoutDetection({
     roomPda: roomPda || "",
