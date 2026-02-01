@@ -258,3 +258,196 @@ Deno.serve(async (req: Request) => {
 
     // IMPORTANT: Do NOT trust forfeitingWallet from request body.
     // Manual forfeit = caller forfeits themselves (1-tap UX, no signatures).
+
+    let forfeitingWallet = callerWallet;
+
+    // PER-REQUEST DEBUG
+    console.log("[forfeit-game] PER_REQUEST_START", {
+      requestId,
+      ts,
+      roomPda,
+      forfeitingWallet,
+      gameType,
+      winnerWalletOverride,
+    });
+
+    // Idempotency: already settled?
+    const { data: existingSettlement } = await supabase
+      .from("settlement_logs")
+      .select("id, success, signature")
+      .eq("room_pda", roomPda)
+      .eq("action", "forfeit")
+      .eq("success", true)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (existingSettlement) {
+      return json200({
+        success: true,
+        alreadySettled: true,
+        signature: existingSettlement.signature,
+      });
+    }
+
+    // Load verifier key
+    const skRaw = Deno.env.get("VERIFIER_SECRET_KEY_V2") ?? "";
+    if (!skRaw.trim()) {
+      return json200({
+        success: false,
+        error: "VERIFIER_SECRET_KEY_V2 not configured",
+        requestId,
+      });
+    }
+
+    const { keypair: verifierKeypair } = loadVerifierKeypair(skRaw);
+
+    const rpcUrl =
+      (Deno.env.get("SOLANA_RPC_URL") ||
+        Deno.env.get("VITE_SOLANA_RPC_URL") ||
+        "https://api.mainnet-beta.solana.com").replace(/^([^h])/, "https://$1");
+
+    const connection = new Connection(rpcUrl, "confirmed");
+
+    // Fetch room
+    const roomPdaKey = new PublicKey(roomPda);
+    const accountInfo = await connection.getAccountInfo(roomPdaKey);
+
+    if (!accountInfo) {
+      return json200({ success: false, error: "Room not found on-chain" });
+    }
+
+    const roomData = parseRoomAccount(accountInfo.data);
+    if (!roomData) {
+      return json200({ success: false, error: "Failed to parse room account" });
+    }
+
+    const playersOnChain = roomData.players.map((p) => p.toBase58());
+
+    // Caller must be participant
+    if (!playersOnChain.includes(callerWallet)) {
+      return json200({
+        success: false,
+        error: "Unauthorized: not a participant",
+        requestId,
+      });
+    }
+
+    // TIMEOUT MODE — server decides forfeiter
+    if (mode === "timeout") {
+      const { data: sessionRow } = await supabase
+        .from("game_sessions")
+        .select("current_turn_wallet, turn_started_at, turn_time_seconds, status_int")
+        .eq("room_pda", roomPda)
+        .maybeSingle();
+
+      if (!sessionRow) {
+        return json200({
+          success: false,
+          error: "Timeout mode: game session not found",
+          requestId,
+        });
+      }
+
+      const startedMs = Date.parse(sessionRow.turn_started_at);
+      const turnSeconds = Number(sessionRow.turn_time_seconds || 60);
+      const expired = Date.now() > startedMs + turnSeconds * 1000;
+
+      if (!expired) {
+        return json200({
+          success: false,
+          error: "Timeout not yet expired",
+          requestId,
+        });
+      }
+
+      forfeitingWallet = sessionRow.current_turn_wallet;
+    }
+
+    // Determine winner
+    let winnerPubkey: PublicKey;
+    if (winnerWalletOverride) {
+      winnerPubkey = new PublicKey(winnerWalletOverride);
+    } else {
+      const loserIndex = playersOnChain.indexOf(forfeitingWallet);
+      const winnerIndex = loserIndex === 0 ? 1 : 0;
+      winnerPubkey = roomData.players[winnerIndex];
+    }
+
+    const submitResultDiscriminator = new Uint8Array([240, 42, 89, 180, 10, 239, 9, 214]);
+
+    const [configPda] = PublicKey.findProgramAddressSync(
+      [new TextEncoder().encode("config")],
+      PROGRAM_ID
+    );
+
+    const configInfo = await connection.getAccountInfo(configPda);
+    if (!configInfo) {
+      return json200({ success: false, error: "Config account missing" });
+    }
+
+    const configData = parseConfigAccount(configInfo.data);
+    if (!configData) {
+      return json200({ success: false, error: "Config parse failed" });
+    }
+
+    const [vaultPda] = PublicKey.findProgramAddressSync(
+      [new TextEncoder().encode("vault"), roomPdaKey.toBuffer()],
+      PROGRAM_ID
+    );
+
+    const ixData = new Uint8Array(8 + 32);
+    ixData.set(submitResultDiscriminator, 0);
+    ixData.set(winnerPubkey.toBytes(), 8);
+
+    const ix = new TransactionInstruction({
+      programId: PROGRAM_ID,
+      keys: [
+        { pubkey: verifierKeypair.publicKey, isSigner: true, isWritable: false },
+        { pubkey: configPda, isSigner: false, isWritable: false },
+        { pubkey: roomPdaKey, isSigner: false, isWritable: true },
+        { pubkey: vaultPda, isSigner: false, isWritable: true },
+        { pubkey: winnerPubkey, isSigner: false, isWritable: true },
+        { pubkey: configData.feeRecipient, isSigner: false, isWritable: true },
+        { pubkey: roomData.creator, isSigner: false, isWritable: true },
+      ],
+      data: ixData,
+    });
+
+    const { blockhash } = await connection.getLatestBlockhash("confirmed");
+    const tx = new Transaction({
+      feePayer: verifierKeypair.publicKey,
+      recentBlockhash: blockhash,
+    }).add(ix);
+
+    tx.sign(verifierKeypair);
+
+    const signature = await connection.sendRawTransaction(tx.serialize());
+    await connection.confirmTransaction(signature, "confirmed");
+
+    await logSettlement(supabase, {
+      room_pda: roomPda,
+      action: "forfeit",
+      success: true,
+      signature,
+      winner_wallet: winnerPubkey.toBase58(),
+      forfeiting_wallet: forfeitingWallet,
+    });
+
+    return json200({
+      success: true,
+      action: "forfeit",
+      signature,
+      winnerWallet: winnerPubkey.toBase58(),
+      forfeitingWallet,
+    });
+
+  } catch (error) {
+    console.error("[forfeit-game] Unexpected error:", error);
+    return json200({
+      success: false,
+      error: "Unexpected server error",
+      details: String((error as Error)?.message ?? error),
+    });
+  }
+});
