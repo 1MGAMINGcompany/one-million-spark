@@ -74,6 +74,7 @@ const LudoGame = () => {
   // Room players (in production, this comes from on-chain room data)
   // For testing, we simulate 4 players with the current wallet as gold
   const [roomPlayers, setRoomPlayers] = useState<string[]>([]);
+  const [maxPlayers, setMaxPlayers] = useState<number>(2); // from on-chain room.max_players
   const [entryFeeSol, setEntryFeeSol] = useState(0);
   const [stakeLamports, setStakeLamports] = useState<number | undefined>(undefined);
   const [turnStartedAt, setTurnStartedAt] = useState<string | null>(null); // For display timer
@@ -130,6 +131,8 @@ const LudoGame = () => {
             // Real player order from on-chain: creator at index 0, joiner at index 1
             // For Ludo, we support 2-4 players but start with 2
             const realPlayers = parsed.players.map(p => p.toBase58());
+              // Authoritative max players from on-chain room account
+              if (parsed.maxPlayers) setMaxPlayers(parsed.maxPlayers);
             setRoomPlayers(realPlayers);
             
             // Extract entry fee from on-chain (CRITICAL - Guardrail A: canonical stake)
@@ -279,6 +282,21 @@ const LudoGame = () => {
   }, [gameOver, roomPlayers.length, finishLudoSession]);
 
   // Private rooms require same ready gate as ranked (prevents premature timeouts)
+  // Canonical participants (human wallets) from on-chain players list
+  const humanPlayers = useMemo(() => roomPlayers.filter(p => isRealWallet(p)), [roomPlayers]);
+
+  // Only wallets in the on-chain player list are allowed to participate
+  const isParticipant = useMemo(() => {
+    if (!address) return false;
+    return humanPlayers.some(p => isSameWallet(p, address));
+  }, [humanPlayers, address]);
+
+  const requiredHumans = maxPlayers; // ranked ludo requires maxPlayers humans (2/3/4)
+
+  // Ludo 3/4-player: bypass 2p DB start-roll system. Creator (players[0]) starts.
+  const isNPlayerLudo = maxPlayers > 2;
+  const creatorStarterWallet = roomPlayers.length > 0 ? roomPlayers[0] : null;
+
   const requiresReadyGate = isRankedGame || isPrivate;
 
   const rankedGate = useRankedReadyGate({
@@ -286,8 +304,8 @@ const LudoGame = () => {
     myWallet: address,
     isRanked: requiresReadyGate,
     enabled: roomPlayers.length >= 2 && modeLoaded,
+    participants: humanPlayers,
   });
-
   // Durable game sync - persists moves to DB for reliability
   const handleDurableMoveReceived = useCallback((move: GameMove) => {
     // Only apply moves from opponents (we already applied our own locally)
@@ -349,10 +367,24 @@ const LudoGame = () => {
     myWallet: address,
     isRanked: isRankedGame,
     roomPlayers,
-    hasTwoRealPlayers,
+    hasTwoRealPlayers: !isNPlayerLudo && hasTwoRealPlayers,
     initialColor: "w", // Ludo doesn't use w/b, but we need a value
     bothReady: rankedGate.bothReady,
   });
+
+  // N-player Ludo bypass: creator starts, and we never show the 2p DiceRollStart UI.
+  // Gate this behind rules acceptance for ranked/private (requiresReadyGate) to avoid flicker.
+  const nPlayerStartReady = !requiresReadyGate || rankedGate.bothReady;
+
+  const effectiveStartRoll = isNPlayerLudo
+    ? {
+        isFinalized: !!creatorStarterWallet && nPlayerStartReady,
+        showDiceRoll: false,
+        startingWallet: creatorStarterWallet,
+        handleRollComplete: (_starter: string) => {},
+      }
+    : startRoll;
+
 
   // Find which player index the current wallet is
   const myPlayerIndex = useMemo(() => {
@@ -362,13 +394,13 @@ const LudoGame = () => {
 
   // Update starting player based on start roll result for ranked games
   useEffect(() => {
-    if (isRankedGame && startRoll.isFinalized && startRoll.startingWallet) {
-      const starterIndex = roomPlayers.findIndex(p => isSameWallet(p, startRoll.startingWallet));
+    if (isRankedGame && effectiveStartRoll.isFinalized && effectiveStartRoll.startingWallet) {
+      const starterIndex = roomPlayers.findIndex(p => isSameWallet(p, effectiveStartRoll.startingWallet));
       if (starterIndex >= 0 && starterIndex !== currentPlayerIndex) {
         setCurrentPlayerIndex(starterIndex);
       }
     }
-  }, [isRankedGame, startRoll.isFinalized, startRoll.startingWallet, roomPlayers, currentPlayerIndex, setCurrentPlayerIndex]);
+  }, [isRankedGame, effectiveStartRoll.isFinalized, effectiveStartRoll.startingWallet, roomPlayers, currentPlayerIndex, setCurrentPlayerIndex]);
 
   const handleAcceptRules = async () => {
     const result = await rankedGate.acceptRules();
@@ -385,21 +417,17 @@ const LudoGame = () => {
       !!roomPda &&
       roomPlayers.length > 0 &&
       stakeLamports !== undefined &&
-      (rankedGate.turnTimeSeconds > 0 || !isRankedGame) &&
+      (!requiresReadyGate || roomTurnTime !== null) &&
       rankedGate.isDataLoaded
     );
-  }, [roomPda, roomPlayers.length, stakeLamports, rankedGate.turnTimeSeconds, isRankedGame, rankedGate.isDataLoaded]);
-
-  // Determine match state for LeaveMatchModal
-  const humanPlayers = useMemo(() => roomPlayers.filter(p => !p.startsWith('ai-')), [roomPlayers]);
-  
+  }, [roomPda, roomPlayers.length, stakeLamports, requiresReadyGate, roomTurnTime, rankedGate.isDataLoaded]);
   const matchState: MatchState = useMemo(() => {
     if (gameOver) return "game_over";
     if (humanPlayers.length < 2) return "waiting_for_opponent";
     if (!rankedGate.iAmReady || !rankedGate.opponentReady) return "rules_pending";
-    if (rankedGate.bothReady && startRoll.isFinalized) return "match_active";
+    if (rankedGate.bothReady && effectiveStartRoll.isFinalized) return "match_active";
     return "opponent_joined";
-  }, [gameOver, humanPlayers.length, rankedGate.iAmReady, rankedGate.opponentReady, rankedGate.bothReady, startRoll.isFinalized]);
+  }, [gameOver, humanPlayers.length, rankedGate.iAmReady, rankedGate.opponentReady, rankedGate.bothReady, effectiveStartRoll.isFinalized]);
 
   // Is current user the room creator? (first player in roomPlayers)
   const isCreator = useMemo(() => {
@@ -443,7 +471,7 @@ const LudoGame = () => {
   }, [roomPda, myPlayerIndex, eliminatePlayer, forfeitGame, navigate, t]);
 
   // Block gameplay until start roll is finalized (for ranked games, also need rules accepted)
-  const canPlay = startRoll.isFinalized && (!isRankedGame || rankedGate.bothReady);
+  const canPlay = isParticipant && effectiveStartRoll.isFinalized && (!isRankedGame || rankedGate.bothReady);
 
   // Check if it's actually my turn (based on game state, not canPlay gate)
   const isActuallyMyTurn = myPlayerIndex >= 0 && myPlayerIndex === currentPlayerIndex && !gameOver;
@@ -550,12 +578,13 @@ const LudoGame = () => {
     }
   }, [gameOver, address, roomPda, isActuallyMyTurn, rankedGate.bothReady, roomPlayers, eliminatedPlayers, currentPlayerIndex, isRankedGame, isPrivate, persistMove, advanceTurn, play, t]);
 
-  // Use turn time from room mode (DB source of truth) or fallback to ranked gate
-  const effectiveTurnTime = roomTurnTime || rankedGate.turnTimeSeconds || DEFAULT_RANKED_TURN_TIME;
+  // Turn time is DB-authoritative (useRoomMode). Never take turn time from rankedGate.
+  // If DB has not loaded yet, keep timers disabled until modeLoaded.
+  const effectiveTurnTime = (roomTurnTime ?? DEFAULT_RANKED_TURN_TIME);
   
   // Timer should show when turn time is configured and game has started
-  const gameStarted = startRoll.isFinalized && roomPlayers.length >= 2;
-  const shouldShowTimer = effectiveTurnTime > 0 && gameStarted && !gameOver;
+  const gameStarted = effectiveStartRoll.isFinalized && humanPlayers.length >= requiredHumans;
+  const shouldShowTimer = modeLoaded && effectiveTurnTime > 0 && gameStarted && !gameOver;
   
   // Display timer - shows ACTIVE player's remaining time on BOTH devices
   const displayTimer = useTurnCountdownDisplay({
@@ -606,7 +635,7 @@ const LudoGame = () => {
 
   const opponentTimeout = useOpponentTimeoutDetection({
     roomPda: roomPda || "",
-    enabled: shouldShowTimer && !isActuallyMyTurn && startRoll.isFinalized && rankedGate.bothReady,
+    enabled: shouldShowTimer && !isActuallyMyTurn && effectiveStartRoll.isFinalized && rankedGate.bothReady,
     isMyTurn: isActuallyMyTurn,
     turnTimeSeconds: effectiveTurnTime,
     myWallet: address,
@@ -1141,7 +1170,7 @@ const LudoGame = () => {
         const shouldShowRulesGate =
           roomPlayers.length >= 2 &&
           !!address &&
-          !startRoll.isFinalized;
+          !effectiveStartRoll.isFinalized;
 
         if (isDebugEnabled()) {
           dbg("dice.gate", {
@@ -1151,8 +1180,8 @@ const LudoGame = () => {
             hasAddress: !!address,
             isRankedGame,
             bothReady: rankedGate.bothReady,
-            isFinalized: startRoll.isFinalized,
-            showDiceRoll: startRoll.showDiceRoll,
+            isFinalized: effectiveStartRoll.isFinalized,
+            showDiceRoll: effectiveStartRoll.showDiceRoll,
             shouldShowRulesGate,
           });
         }
@@ -1174,18 +1203,21 @@ const LudoGame = () => {
           onLeave={handleUILeave}
           onOpenWalletSelector={() => {}}
           isDataLoaded={isDataLoaded}
-          startRollFinalized={startRoll.isFinalized}
+          startRollFinalized={effectiveStartRoll.isFinalized}
         >
+          {!isNPlayerLudo && (
           <DiceRollStart
-            roomPda={roomPda || ""}
-            myWallet={address}
-            player1Wallet={roomPlayers[0]}
-            player2Wallet={roomPlayers[1]}
-            onComplete={startRoll.handleRollComplete}
-            onLeave={handleLeaveFromDice}
-            isLeaving={false}
-            isForfeiting={false}
-          />
+                      roomPda={roomPda || ""}
+                      myWallet={address}
+                      player1Wallet={roomPlayers[0]}
+                      player2Wallet={roomPlayers[1]}
+                      onComplete={effectiveStartRoll.handleRollComplete}
+                      onLeave={handleLeaveFromDice}
+                      isLeaving={false}
+                      isForfeiting={false}
+                    />
+        )}
+
         </RulesGate>
         ) : null;
       })()}
@@ -1194,7 +1226,7 @@ const LudoGame = () => {
       <TurnBanner
         gameName="Ludo"
         roomId={roomId || "unknown"}
-        isVisible={!hasPermission && isActuallyMyTurn && !gameOver && !startRoll.showDiceRoll}
+        isVisible={!hasPermission && isActuallyMyTurn && !gameOver && !effectiveStartRoll.showDiceRoll}
       />
 
       {/* Header */}

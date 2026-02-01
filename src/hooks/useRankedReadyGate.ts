@@ -15,6 +15,8 @@ interface UseRankedReadyGateOptions {
   myWallet: string | undefined;
   isRanked: boolean;
   enabled?: boolean;
+  /** Optional: for N-player games (e.g. Ludo), provide canonical participant wallets */
+  participants?: string[];
 }
 
 interface UseRankedReadyGateResult {
@@ -41,7 +43,7 @@ interface UseRankedReadyGateResult {
 }
 
 export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRankedReadyGateResult {
-  const { roomPda, myWallet, isRanked, enabled = true } = options;
+  const { roomPda, myWallet, isRanked, enabled = true, participants } = options;
   
   const [p1Ready, setP1Ready] = useState(false);
   const [p2Ready, setP2Ready] = useState(false);
@@ -64,6 +66,12 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
   const myWalletNorm = normalizeWallet(myWallet);
   const p1WalletNorm = normalizeWallet(p1Wallet);
   const p2WalletNorm = normalizeWallet(p2Wallet);
+
+
+  // Optional N-player participants (canonical wallets) - normalized for comparison
+  const participantsNorm = (participants ?? []).map(w => normalizeWallet(w)).filter(Boolean);
+  const hasParticipants = participantsNorm.length > 0;
+  const isParticipant = hasParticipants ? participantsNorm.includes(myWalletNorm) : false;
   
   const isPlayer1 = myWalletNorm && p1WalletNorm && myWalletNorm === p1WalletNorm;
   const isPlayer2 = myWalletNorm && p2WalletNorm && myWalletNorm === p2WalletNorm;
@@ -88,10 +96,12 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
   const sessionComplete = !!(p1Wallet && p2Wallet);
   const [startRollFinalized, setStartRollFinalized] = useState(false);
   // FIX: Remove startRollFinalized - it's a RESULT of being ready, not a CAUSE
-  const bothReady = serverBothAccepted || (sessionComplete && p1Ready && p2Ready);
+  const bothReady = hasParticipants
+    ? participantsNorm.every(w => acceptedWallets.has(w))
+    : (serverBothAccepted || (sessionComplete && p1Ready && p2Ready));
   // Show accept modal if ranked, loaded, and this player hasn't accepted yet
   // Also require that we've identified this player's role (isPlayer1 or isPlayer2)
-  const isIdentified = isPlayer1 || isPlayer2;
+  const isIdentified = hasParticipants ? isParticipant : (isPlayer1 || isPlayer2);
   const showAcceptModal = enabled && isRanked && hasLoaded && !iAmReady && isIdentified;
 
   // Debug logging for ranked gate - traces exactly why bothReady/showAcceptModal are what they are
