@@ -30,9 +30,15 @@ const PROGRAM_ID = new PublicKey("4nkWS2ZYPqQrRSYbXD6XW6U6VenmBiZV2TkutY3vSPHu")
 
 interface ForfeitRequest {
   roomPda: string;
-  forfeitingWallet: string; // loser / forfeiter
+
+  // NOTE: Do not trust any wallet from request body.
+  // Manual mode uses caller wallet from session token.
+  // Timeout mode uses server-derived current_turn_wallet after DB expiry check.
+  forfeitingWallet?: string;
+
   gameType?: string;
   winnerWallet?: string; // OPTIONAL: explicit winner for "win" settlement reuse
+  mode?: "manual" | "timeout";
 }
 
 // Room account layout from IDL:
@@ -220,7 +226,7 @@ Deno.serve(async (req: Request) => {
     const roomPda = body?.roomPda;
     const gameType = body?.gameType;
     const winnerWalletOverride = body?.winnerWallet;
-
+      const mode = body?.mode === "timeout" ? "timeout" : "manual";
     // Generate unique requestId for this request
     const requestId = crypto.randomUUID();
     const ts = new Date().toISOString();
@@ -252,8 +258,7 @@ Deno.serve(async (req: Request) => {
 
     // IMPORTANT: Do NOT trust forfeitingWallet from request body.
     // Manual forfeit = caller forfeits themselves (1-tap UX, no signatures).
-    const forfeitingWallet = callerWallet;
-
+    let forfeitingWallet = callerWallet;
     // PER-REQUEST DEBUG: Log immediately after deriving forfeiter
     console.log("[forfeit-game] PER_REQUEST_START", {
       requestId,
@@ -465,6 +470,81 @@ Deno.serve(async (req: Request) => {
       creator: roomData.creator.toBase58(),
     });
     console.log("[forfeit-game] Players on-chain:", playersOnChain);
+
+    // 🔒 SECURITY: Caller must be a participant in the room
+    if (!playersOnChain.includes(callerWallet)) {
+      await logSettlement(supabase, {
+        room_pda: roomPda,
+        action: "forfeit",
+        success: false,
+        forfeiting_wallet: callerWallet,
+        error_message: "Caller not a participant in this room",
+      });
+      return json200({ success: false, error: "Unauthorized: not a participant", requestId });
+    }
+
+    // ⏱️ TIMEOUT MODE: opponent/server can trigger timeout ONLY if server verifies expiry
+    if (mode === "timeout") {
+      const { data: sessionRow, error: sessionErr } = await supabase
+        .from("game_sessions")
+        .select("current_turn_wallet, turn_started_at, turn_time_seconds, status_int")
+        .eq("room_pda", roomPda)
+        .maybeSingle();
+
+      if (sessionErr || !sessionRow) {
+        await logSettlement(supabase, {
+          room_pda: roomPda,
+          action: "forfeit",
+          success: false,
+          forfeiting_wallet: callerWallet,
+          error_message: `Timeout mode: failed to load game session: ${sessionErr?.message ?? "not found"}`,
+        });
+        return json200({ success: false, error: "Timeout mode: game session not found", requestId });
+      }
+
+      // Optional: require active session status if present
+      if (sessionRow.status_int !== null && sessionRow.status_int !== undefined && Number(sessionRow.status_int) !== 2) {
+        return json200({ success: false, error: "Timeout mode: game not active", requestId });
+      }
+
+      const currentTurnWallet = String(sessionRow.current_turn_wallet ?? "").trim();
+      const turnStartedAtIso = sessionRow.turn_started_at;
+      const rawTurnSeconds = sessionRow.turn_time_seconds;
+      const turnSeconds = (typeof rawTurnSeconds === "number" && rawTurnSeconds > 0) ? rawTurnSeconds : 60;
+
+      if (!currentTurnWallet || !turnStartedAtIso) {
+        return json200({ success: false, error: "Timeout mode: missing turn state", requestId });
+      }
+
+      const startedMs = Date.parse(turnStartedAtIso);
+      if (!Number.isFinite(startedMs) || startedMs <= 0) {
+        return json200({ success: false, error: "Timeout mode: invalid turn_started_at", requestId });
+      }
+
+      const nowMs = Date.now();
+      const deadlineMs = startedMs + turnSeconds * 1000;
+
+      if (nowMs < deadlineMs) {
+        return json200({
+          success: false,
+          error: "Timeout mode: turn not expired",
+          requestId,
+          now: new Date(nowMs).toISOString(),
+          deadline: new Date(deadlineMs).toISOString(),
+        });
+      }
+
+      // Server-derived forfeiter = current turn wallet (never trust client)
+      forfeitingWallet = currentTurnWallet;
+      console.log("[forfeit-game] ⏱️ Timeout verified. Forfeiting current turn wallet:", {
+        requestId,
+        callerWallet,
+        forfeitingWallet,
+        turnStartedAtIso,
+        turnTimeSeconds: turnSeconds,
+      });
+    }
+
 
     // FIX B: Sync on-chain players to game_sessions (prevent player2_wallet corruption)
     if (playersOnChain.length >= 1) {
