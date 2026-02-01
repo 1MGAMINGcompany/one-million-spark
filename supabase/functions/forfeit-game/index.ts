@@ -767,6 +767,7 @@ Deno.serve(async (req: Request) => {
         .from("game_sessions")
         .update({
           status: "finished",
+          status_int: 3,
           game_state: {
             ...existingState,
             playersOnChain: playersOnChain,
@@ -1082,6 +1083,7 @@ Deno.serve(async (req: Request) => {
         .from("game_sessions")
         .update({
           status: "finished",
+          status_int: 3,
           game_state: {
             ...existingState,
             playersOnChain: playersOnChain,
