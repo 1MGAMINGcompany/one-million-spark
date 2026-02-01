@@ -112,6 +112,7 @@ serve(async (req) => {
           game_type: gameTypeFromPayload || "unknown",
           game_state: {},
           status: "waiting",
+          status_int: 1,
           mode: mode,
           turn_time_seconds: turnTimeSeconds,
           max_players: maxPlayers,

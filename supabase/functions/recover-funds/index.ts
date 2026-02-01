@@ -457,7 +457,7 @@ Deno.serve(async (req: Request) => {
           // Update game session status
           await supabase
             .from("game_sessions")
-            .update({ status: "finished", updated_at: new Date().toISOString() })
+            .update({ status: "finished", status_int: 3, updated_at: new Date().toISOString() })
             .eq("room_pda", roomPda);
 
           await logRecoveryAttempt(supabase, roomPda, callerWallet, "force_settle", "success", signature);

@@ -14,6 +14,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { isSameWallet, isRealWallet } from "@/lib/walletUtils";
+import { isGameFinished } from "@/lib/gameStatus";
 
 interface StartRollResult {
   p1: { wallet: string; dice: number[]; total: number };
@@ -159,7 +160,7 @@ export function useStartRoll(options: UseStartRollOptions): UseStartRollResult {
         const session = resp?.session;
         if (session?.start_roll_finalized && session.starting_player_wallet) {
           // CRITICAL: If session is finished, this is stale data - show dice UI for new game
-          if (session.status === 'finished') {
+          if (isGameFinished(session.status_int)) {
             console.log("[useStartRoll] Session finished - ignoring stale finalized data");
             setShowDiceRoll(true);
             return;
@@ -218,7 +219,7 @@ export function useStartRoll(options: UseStartRollOptions): UseStartRollResult {
         const session = resp?.session;
         if (session?.start_roll_finalized && session.starting_player_wallet) {
           // Skip if session is finished (stale data)
-          if (session.status === 'finished') return;
+          if (isGameFinished(session.status_int)) return;
           
           const starter = session.starting_player_wallet;
           const isStarter = isSameWallet(starter, myWallet);
@@ -268,7 +269,7 @@ export function useStartRoll(options: UseStartRollOptions): UseStartRollResult {
         // If opponent already finalized, hydrate immediately
         if (s.start_roll_finalized && s.starting_player_wallet) {
           // CRITICAL: If session is finished, this is stale data - show dice UI
-          if (s.status === 'finished') {
+          if (isGameFinished(s.status_int)) {
             console.log("[useStartRoll] Session finished - showing dice roll for new game");
             setShowDiceRoll(true);
             return;
@@ -356,7 +357,7 @@ export function useStartRoll(options: UseStartRollOptions): UseStartRollResult {
 
       const session = resp?.session;
       if (session?.start_roll_finalized && session.starting_player_wallet) {
-        if (session.status === 'finished') {
+        if (isGameFinished(session.status_int)) {
           console.log("[useStartRoll] Force refetch: session finished, showing dice UI");
           setShowDiceRoll(true);
           return;
