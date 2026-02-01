@@ -899,7 +899,7 @@ const LudoGame = () => {
       // Persist to DB if ranked
       if (isRankedGame && winnerWallet) {
         persistMove({
-          action: "game_over",
+          type: "game_over",
           winnerWallet,
           winnerColor,
           reason: "elimination",
