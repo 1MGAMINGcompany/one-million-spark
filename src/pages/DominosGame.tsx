@@ -710,14 +710,14 @@ const DominosGame = () => {
   });
 
   // Opponent timeout detection - polls DB to detect if opponent has timed out
-  const handleOpponentTimeoutDetected = useCallback((missedCount: number) => {
-    // When opponent times out, we need to handle it on our side
-    const opponentWalletAddr = getOpponentWallet(roomPlayers, address);
-    if (!opponentWalletAddr || !roomPda) return;
-    
-    console.log(`[DominosGame] Opponent timeout detected! Missed: ${missedCount}/3`);
+    const handleOpponentTimeoutDetected = useCallback((missedCount: number) => {
+      // When opponent times out, we need to handle it on our side
+      const opponentWalletAddr = getOpponentWallet(roomPlayers, address);
+      if (!opponentWalletAddr || !roomPda) return;
 
-    if (missedCount >= 3) {
+      console.log(`[DominosGame] Opponent timeout detected! Missed: ${missedCount}/3`);
+
+      if (missedCount >= 3) {
         // Opponent missed 3 turns - resolve via server-verified timeout mode.
         // Server will forfeit the current_turn_wallet only if the turn is actually expired.
         const token =
@@ -743,7 +743,7 @@ const DominosGame = () => {
         title: t('gameSession.opponentSkipped'),
         description: t('gameSession.yourTurnNow'),
       });
-      
+
       // Persist turn_timeout move
       if (isRankedGame || isPrivate) {
         persistMove({
@@ -753,13 +753,12 @@ const DominosGame = () => {
           missedCount,
         } as unknown as DominoMove, address);
       }
-      
+
       // Set turn to us
       setIsMyTurn(true);
       setSelectedDomino(null);
       setGameStatus(t('game.yourTurn'));
-    }
-  }, [roomPlayers, address, roomPda, isRankedGame, persistMove, t, play]);
+    }, [roomPlayers, address, roomPda, isRankedGame, persistMove, t, play]);
 
   const handleOpponentAutoForfeit = useCallback(() => {
     const opponentWalletAddr = getOpponentWallet(roomPlayers, address);

@@ -1156,28 +1156,24 @@ const BackgammonGame = () => {
     console.log(`[BackgammonGame] Opponent timeout detected! Missed: ${missedCount}/3`);
     
     if (missedCount >= 3) {
-      // Opponent missed 3 turns - they auto-forfeit, we win
-      toast({
-        title: t('gameSession.opponentForfeited'),
-        description: t('gameSession.youWin'),
-      });
-      
-      // Persist auto_forfeit move
-      if (isRankedGame) {
-        persistMove({
-          type: "auto_forfeit",
-          timedOutWallet: opponentWalletAddr,
-          winnerWallet: address,
-          missedCount,
-          reason: "three_missed_turns",
-          gameState,
-          dice: [],
-          remainingMoves: [],
-        } as BackgammonMoveMessage, address);
-      }
-      
-      // Enter outcome resolving with us as winner
-      enterOutcomeResolving(address || null);
+      // Opponent missed 3 turns - resolve via server-verified timeout mode.
+      // Server will forfeit the current_turn_wallet only if the turn is actually expired.
+      const token =
+        localStorage.getItem(`session_token_${roomPda}`) ||
+        localStorage.getItem("session_token_latest") ||
+        "";
+
+      supabase.functions
+        .invoke("forfeit-game", {
+          body: { roomPda, gameType: "backgammon", mode: "timeout" },
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        })
+        .catch((err) => {
+          console.error("[BackgammonGame] Opponent auto-forfeit failed:", err);
+        });
+
+      // UI will update from settlement/durable sync.
+      return;
     } else {
       // Opponent skipped - we get the turn
       toast({
