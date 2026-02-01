@@ -170,12 +170,17 @@ async function finalizeViaEdgeFunction(
   });
   
   try {
+    const token =
+      localStorage.getItem(`session_token_${roomPda}`) ||
+      localStorage.getItem("session_token_latest") ||
+      "";
+
     const { data, error } = await supabase.functions.invoke('forfeit-game', {
       body: {
         roomPda,
-        forfeitingWallet: loserWallet,
         gameType,
       },
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
     
     if (error) {
