@@ -94,7 +94,7 @@ const LudoGame = () => {
   // For DiceRollStart leave (no payout, just cleanup)
   const handleLeaveFromDice = useCallback(() => {
     // Clear any local state and navigate
-    navigate("/room-list");
+    navigate("/room-list", { replace: true });
     toast({ title: t("forfeit.leftRoom"), description: t("forfeit.returnedToLobby") });
   }, [navigate, t]);
   
