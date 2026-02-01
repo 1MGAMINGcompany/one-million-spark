@@ -1,44 +1,31 @@
 
-# Add Static Build Identifier to Footer
 
-## Overview
-Add a static build identifier showing the branch and commit hash (`prelaunch-audit 8bacd62`) to the existing footer, displayed in a low-contrast style for debugging purposes.
+## Backgammon Desktop Overflow Fix - Change 1
 
-## Current State
-- Footer exists at `src/components/Footer.tsx`
-- Already displays a dynamic `BUILD_VERSION` (line 71-73) in low-contrast styling
-- Uses `text-[10px] text-muted-foreground/40 font-mono` for the version text
-
-## Implementation
-
-### File: `src/components/Footer.tsx`
-
-**Change:** Update the build version display (lines 71-73) to show the static branch/commit identifier instead of or alongside the dynamic version.
-
-**Before:**
+### Current Code (Lines 2129-2133)
 ```tsx
-<p className="text-[10px] text-muted-foreground/40 mt-2 font-mono">
-  {BUILD_VERSION}
-</p>
+<div className={cn(
+  "game-viewport bg-background flex flex-col relative",
+  isMobile ? "min-h-[calc(100dvh-4rem)] max-h-[calc(100dvh-4rem)] overflow-hidden" : "min-h-[calc(100dvh-4rem)]",
+  "pb-[env(safe-area-inset-bottom)]"
+)}>
 ```
 
-**After:**
+### Updated Code
 ```tsx
-<p className="text-[10px] text-muted-foreground/40 mt-2 font-mono">
-  Build: prelaunch-audit 8bacd62
-</p>
+<div className={cn(
+  "game-viewport bg-background flex flex-col relative lg:overflow-visible",
+  isMobile ? "min-h-[calc(100dvh-4rem)] max-h-[calc(100dvh-4rem)] overflow-hidden" : "min-h-[calc(100dvh-4rem)] lg:max-h-none",
+  "pb-[env(safe-area-inset-bottom)]"
+)}>
 ```
 
-## Technical Notes
-- The styling (`text-[10px] text-muted-foreground/40`) provides appropriately low contrast
-- `font-mono` ensures the commit hash displays cleanly
-- No additional imports or dependencies required
-- The `BUILD_VERSION` import can be removed from line 10 since it won't be used
+### Changes Made
+1. **Line 2130**: Added `lg:overflow-visible` to the base class list
+2. **Line 2131**: Added `lg:max-h-none` to the desktop branch (after `min-h-[calc(100dvh-4rem)]`)
 
-## Alternative Approach
-If you want to keep both the dynamic version and the static identifier:
-```tsx
-<p className="text-[10px] text-muted-foreground/40 mt-2 font-mono">
-  Build: prelaunch-audit 8bacd62 | {BUILD_VERSION}
-</p>
-```
+### What This Does
+- On desktop (`lg:` breakpoint), overrides the `overflow: hidden` from `.game-viewport` CSS
+- On desktop, removes max-height constraint allowing natural content flow
+- Mobile branch remains **completely unchanged** - still has strict viewport locking
+
