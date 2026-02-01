@@ -93,7 +93,7 @@ export default function RoomRouter() {
       // If the URL param is not a valid pubkey, skip Solana fetch and let Room handle DB-only session.
       if (roomPdaParam && !isValidPubkey(roomPdaParam)) {
         console.log("[RoomRouter] Off-chain room detected (UUID). Skipping Solana fetch:", roomPdaParam);
-        setRoomData({ gameType: "1", status: "active", playerCount: 2 }); // minimal defaults; Room will fetch real session via edge
+        setRoomData({ gameType: 1, status: 1, playerCount: 2 }); // minimal defaults; Room will fetch real session via edge
         setLoading(false);
         return;
       }
