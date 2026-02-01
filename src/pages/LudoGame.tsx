@@ -1163,7 +1163,7 @@ const LudoGame = () => {
   return (
     <GameErrorBoundary>
     <InAppBrowserRecovery roomPda={roomPda || ""} onResubscribeRealtime={resubscribeRealtime} bypassOverlay={true}>
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="min-h-screen bg-background flex flex-col pb-20 md:pb-0">
       {/* RulesGate + DiceRollStart - RulesGate handles accept modal internally */}
       {(() => {
         // Don't require bothReady here - let RulesGate handle showing the accept modal
@@ -1298,7 +1298,7 @@ const LudoGame = () => {
         </div>
 
         {/* Dice Controls - Bottom Left */}
-        <div className="absolute bottom-4 left-4 flex flex-col items-center gap-2 bg-card/90 backdrop-blur-sm rounded-lg p-3 border border-primary/30 shadow-lg">
+        <div className="absolute bottom-4 left-4 hidden md:flex flex-col items-center gap-2 bg-card/90 backdrop-blur-sm rounded-lg p-3 border border-primary/30 shadow-lg">
           <TurnIndicator
             currentPlayer={currentPlayer.color}
             isAI={currentPlayerIndex !== myPlayerIndex}
@@ -1343,6 +1343,47 @@ const LudoGame = () => {
       </div>
 
       {/* Game End Screen */}
+
+        {/* Mobile Action Bar (Ludo only) */}
+        <div className="fixed bottom-0 left-0 right-0 z-40 md:hidden border-t border-primary/20 bg-background/95 backdrop-blur">
+          <div className="max-w-4xl mx-auto px-3 py-2 flex items-center justify-between gap-2">
+            {/* Left: Turn + Dice */}
+            <div className="flex items-center gap-3">
+              <TurnIndicator
+                currentPlayer={currentPlayer.color}
+                isAI={currentPlayerIndex !== myPlayerIndex}
+                isGameOver={!!gameOver}
+                winner={gameOver}
+              />
+              <EgyptianDice
+                value={diceValue}
+                isRolling={isRolling}
+                onRoll={handleRollDice}
+                disabled={isRolling || diceValue !== null || !!gameOver || isAnimating || currentPlayerIndex !== myPlayerIndex}
+                showRollButton={currentPlayerIndex === myPlayerIndex && !gameOver && diceValue === null && !isAnimating}
+              />
+            </div>
+
+            {/* Right: Actions */}
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={() => setShowLeaveModal(true)}>
+                {t("game.leave") || "Leave"}
+              </Button>
+
+              {isParticipant && !gameOver && (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => setShowForfeitDialog(true)}
+                  disabled={!canPlay || isForfeitLoading}
+                >
+                  {t("game.forfeit") || "Forfeit"}
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+
       {gameOver && (
         <GameEndScreen
           gameType="Ludo"
