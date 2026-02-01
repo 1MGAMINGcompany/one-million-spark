@@ -130,7 +130,7 @@ export function ResolveRoomModal({
         clearRoomData();
         onResolved();
         onClose();
-        navigate("/room-list");
+        navigate("/room-list", { replace: true });
         return;
       }
 
@@ -148,7 +148,7 @@ export function ResolveRoomModal({
           await fetchRooms();
           onResolved();
           onClose();
-          navigate("/room-list");
+          navigate("/room-list", { replace: true });
         } else {
           toast({
             title: t("resolveRoom.cancelFailed", "Cancel Failed"),
@@ -190,7 +190,7 @@ export function ResolveRoomModal({
           await fetchRooms();
           onResolved();
           onClose();
-          navigate("/room-list");
+          navigate("/room-list", { replace: true });
         } else {
           toast({
             title: t("resolveRoom.forfeitFailed", "Forfeit Failed"),

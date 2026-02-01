@@ -49,6 +49,13 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
   const [captureEvent, setCaptureEvent] = useState<LudoCaptureEvent | null>(null);
   const [gameId, setGameId] = useState(0); // Increments on reset
   const [eliminatedPlayers, setEliminatedPlayers] = useState<Set<number>>(new Set());
+
+  // Keep a ref in sync to avoid stale-closure bugs (eliminate + advance in same tick)
+  const eliminatedPlayersRef = useRef<Set<number>>(new Set());
+  useEffect(() => {
+    eliminatedPlayersRef.current = eliminatedPlayers;
+  }, [eliminatedPlayers]);
+
   const [turnSignal, setTurnSignal] = useState(0); // For backwards compatibility
 
   // Animation refs
@@ -154,7 +161,7 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
             setConsecutiveSixes(0);
           setDiceValue(null);
           setMovableTokens([]);
-          setCurrentPlayerIndex(prev => getNextActivePlayerIndex(prev, players.length, eliminatedPlayers));
+          setCurrentPlayerIndex(prev => getNextActivePlayerIndex(prev, players.length, eliminatedPlayersRef.current));
           setTurnSignal(prev => prev + 1);
           setPhase('WAITING_FOR_ROLL');
           onRollComplete?.(finalValue, []);
@@ -182,7 +189,7 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
               setPhase('WAITING_FOR_ROLL');
             } else {
               setConsecutiveSixes(0);
-              setCurrentPlayerIndex(prev => getNextActivePlayerIndex(prev, players.length, eliminatedPlayers));
+              setCurrentPlayerIndex(prev => getNextActivePlayerIndex(prev, players.length, eliminatedPlayersRef.current));
               setTurnSignal(prev => prev + 1);
               setPhase('WAITING_FOR_ROLL');
             }
@@ -371,7 +378,7 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
         const nextIndex = (playerIndex + 1) % players.length;
         let actualNext = nextIndex;
         let attempts = 0;
-        while (eliminatedPlayers.has(actualNext) && attempts < players.length) {
+        while (eliminatedPlayersRef.current.has(actualNext) && attempts < players.length) {
           actualNext = (actualNext + 1) % players.length;
           attempts++;
         }
@@ -387,7 +394,7 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
     const isBonusTurn = diceRolled === 6;
     
     if (!isBonusTurn) {
-      setCurrentPlayerIndex(prev => getNextActivePlayerIndex(prev, players.length, eliminatedPlayers));
+      setCurrentPlayerIndex(prev => getNextActivePlayerIndex(prev, players.length, eliminatedPlayersRef.current));
     }
     
     setDiceValue(null);

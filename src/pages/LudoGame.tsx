@@ -74,6 +74,7 @@ const LudoGame = () => {
   // Room players (in production, this comes from on-chain room data)
   // For testing, we simulate 4 players with the current wallet as gold
   const [roomPlayers, setRoomPlayers] = useState<string[]>([]);
+  const [maxPlayers, setMaxPlayers] = useState<number>(2); // from on-chain room.max_players
   const [entryFeeSol, setEntryFeeSol] = useState(0);
   const [stakeLamports, setStakeLamports] = useState<number | undefined>(undefined);
   const [turnStartedAt, setTurnStartedAt] = useState<string | null>(null); // For display timer
@@ -93,7 +94,7 @@ const LudoGame = () => {
   // For DiceRollStart leave (no payout, just cleanup)
   const handleLeaveFromDice = useCallback(() => {
     // Clear any local state and navigate
-    navigate("/room-list");
+    navigate("/room-list", { replace: true });
     toast({ title: t("forfeit.leftRoom"), description: t("forfeit.returnedToLobby") });
   }, [navigate, t]);
   
@@ -125,10 +126,13 @@ const LudoGame = () => {
         
         if (accountInfo?.data) {
           const parsed = parseRoomAccount(accountInfo.data as Buffer);
+            console.log('[LudoGame] Parsed room account keys:', Object.keys(parsed || {}), 'parsed=', parsed);
           if (parsed && parsed.players.length >= 2) {
             // Real player order from on-chain: creator at index 0, joiner at index 1
             // For Ludo, we support 2-4 players but start with 2
             const realPlayers = parsed.players.map(p => p.toBase58());
+              // Authoritative max players from on-chain room account
+              if (parsed.maxPlayers) setMaxPlayers(parsed.maxPlayers);
             setRoomPlayers(realPlayers);
             
             // Extract entry fee from on-chain (CRITICAL - Guardrail A: canonical stake)
@@ -144,7 +148,7 @@ const LudoGame = () => {
         
         // Fallback if on-chain data not available yet (room still forming)
         console.log("[LudoGame] Room not ready, using placeholder");
-        setRoomPlayers([address, `waiting-${roomPda.slice(0, 8)}`]);
+        setRoomPlayers([address]);
       } catch (err) {
         console.error("[LudoGame] Failed to fetch room players:", err);
         // Fallback on error
@@ -278,6 +282,21 @@ const LudoGame = () => {
   }, [gameOver, roomPlayers.length, finishLudoSession]);
 
   // Private rooms require same ready gate as ranked (prevents premature timeouts)
+  // Canonical participants (human wallets) from on-chain players list
+  const humanPlayers = useMemo(() => roomPlayers.filter(p => isRealWallet(p)), [roomPlayers]);
+
+  // Only wallets in the on-chain player list are allowed to participate
+  const isParticipant = useMemo(() => {
+    if (!address) return false;
+    return humanPlayers.some(p => isSameWallet(p, address));
+  }, [humanPlayers, address]);
+
+  const requiredHumans = maxPlayers; // ranked ludo requires maxPlayers humans (2/3/4)
+
+  // Ludo 3/4-player: bypass 2p DB start-roll system. Creator (players[0]) starts.
+  const isNPlayerLudo = maxPlayers > 2;
+  const creatorStarterWallet = roomPlayers.length > 0 ? roomPlayers[0] : null;
+
   const requiresReadyGate = isRankedGame || isPrivate;
 
   const rankedGate = useRankedReadyGate({
@@ -285,8 +304,8 @@ const LudoGame = () => {
     myWallet: address,
     isRanked: requiresReadyGate,
     enabled: roomPlayers.length >= 2 && modeLoaded,
+    participants: humanPlayers,
   });
-
   // Durable game sync - persists moves to DB for reliability
   const handleDurableMoveReceived = useCallback((move: GameMove) => {
     // Only apply moves from opponents (we already applied our own locally)
@@ -315,6 +334,8 @@ const LudoGame = () => {
           title: t('gameSession.opponentSkipped'),
           description: t('gameSession.yourTurnNow'),
         });
+        // Skip event - advance turn on all clients so state stays in sync
+        advanceTurn(1);
         return;
       }
       
@@ -348,10 +369,24 @@ const LudoGame = () => {
     myWallet: address,
     isRanked: isRankedGame,
     roomPlayers,
-    hasTwoRealPlayers,
+    hasTwoRealPlayers: !isNPlayerLudo && hasTwoRealPlayers,
     initialColor: "w", // Ludo doesn't use w/b, but we need a value
     bothReady: rankedGate.bothReady,
   });
+
+  // N-player Ludo bypass: creator starts, and we never show the 2p DiceRollStart UI.
+  // Gate this behind rules acceptance for ranked/private (requiresReadyGate) to avoid flicker.
+  const nPlayerStartReady = !requiresReadyGate || rankedGate.bothReady;
+
+  const effectiveStartRoll = isNPlayerLudo
+    ? {
+        isFinalized: !!creatorStarterWallet && nPlayerStartReady,
+        showDiceRoll: false,
+        startingWallet: creatorStarterWallet,
+        handleRollComplete: (_starter: string) => {},
+      }
+    : startRoll;
+
 
   // Find which player index the current wallet is
   const myPlayerIndex = useMemo(() => {
@@ -361,13 +396,13 @@ const LudoGame = () => {
 
   // Update starting player based on start roll result for ranked games
   useEffect(() => {
-    if (isRankedGame && startRoll.isFinalized && startRoll.startingWallet) {
-      const starterIndex = roomPlayers.findIndex(p => isSameWallet(p, startRoll.startingWallet));
+    if (isRankedGame && effectiveStartRoll.isFinalized && effectiveStartRoll.startingWallet) {
+      const starterIndex = roomPlayers.findIndex(p => isSameWallet(p, effectiveStartRoll.startingWallet));
       if (starterIndex >= 0 && starterIndex !== currentPlayerIndex) {
         setCurrentPlayerIndex(starterIndex);
       }
     }
-  }, [isRankedGame, startRoll.isFinalized, startRoll.startingWallet, roomPlayers, currentPlayerIndex, setCurrentPlayerIndex]);
+  }, [isRankedGame, effectiveStartRoll.isFinalized, effectiveStartRoll.startingWallet, roomPlayers, currentPlayerIndex, setCurrentPlayerIndex]);
 
   const handleAcceptRules = async () => {
     const result = await rankedGate.acceptRules();
@@ -384,21 +419,17 @@ const LudoGame = () => {
       !!roomPda &&
       roomPlayers.length > 0 &&
       stakeLamports !== undefined &&
-      (rankedGate.turnTimeSeconds > 0 || !isRankedGame) &&
+      (!requiresReadyGate || roomTurnTime !== null) &&
       rankedGate.isDataLoaded
     );
-  }, [roomPda, roomPlayers.length, stakeLamports, rankedGate.turnTimeSeconds, isRankedGame, rankedGate.isDataLoaded]);
-
-  // Determine match state for LeaveMatchModal
-  const humanPlayers = useMemo(() => roomPlayers.filter(p => !p.startsWith('ai-')), [roomPlayers]);
-  
+  }, [roomPda, roomPlayers.length, stakeLamports, requiresReadyGate, roomTurnTime, rankedGate.isDataLoaded]);
   const matchState: MatchState = useMemo(() => {
     if (gameOver) return "game_over";
     if (humanPlayers.length < 2) return "waiting_for_opponent";
     if (!rankedGate.iAmReady || !rankedGate.opponentReady) return "rules_pending";
-    if (rankedGate.bothReady && startRoll.isFinalized) return "match_active";
+    if (rankedGate.bothReady && effectiveStartRoll.isFinalized) return "match_active";
     return "opponent_joined";
-  }, [gameOver, humanPlayers.length, rankedGate.iAmReady, rankedGate.opponentReady, rankedGate.bothReady, startRoll.isFinalized]);
+  }, [gameOver, humanPlayers.length, rankedGate.iAmReady, rankedGate.opponentReady, rankedGate.bothReady, effectiveStartRoll.isFinalized]);
 
   // Is current user the room creator? (first player in roomPlayers)
   const isCreator = useMemo(() => {
@@ -442,7 +473,7 @@ const LudoGame = () => {
   }, [roomPda, myPlayerIndex, eliminatePlayer, forfeitGame, navigate, t]);
 
   // Block gameplay until start roll is finalized (for ranked games, also need rules accepted)
-  const canPlay = startRoll.isFinalized && (!isRankedGame || rankedGate.bothReady);
+  const canPlay = isParticipant && effectiveStartRoll.isFinalized && (!isRankedGame || rankedGate.bothReady);
 
   // Check if it's actually my turn (based on game state, not canPlay gate)
   const isActuallyMyTurn = myPlayerIndex >= 0 && myPlayerIndex === currentPlayerIndex && !gameOver;
@@ -549,12 +580,13 @@ const LudoGame = () => {
     }
   }, [gameOver, address, roomPda, isActuallyMyTurn, rankedGate.bothReady, roomPlayers, eliminatedPlayers, currentPlayerIndex, isRankedGame, isPrivate, persistMove, advanceTurn, play, t]);
 
-  // Use turn time from room mode (DB source of truth) or fallback to ranked gate
-  const effectiveTurnTime = roomTurnTime || rankedGate.turnTimeSeconds || DEFAULT_RANKED_TURN_TIME;
+  // Turn time is DB-authoritative (useRoomMode). Never take turn time from rankedGate.
+  // If DB has not loaded yet, keep timers disabled until modeLoaded.
+  const effectiveTurnTime = (roomTurnTime ?? DEFAULT_RANKED_TURN_TIME);
   
   // Timer should show when turn time is configured and game has started
-  const gameStarted = startRoll.isFinalized && roomPlayers.length >= 2;
-  const shouldShowTimer = effectiveTurnTime > 0 && gameStarted && !gameOver;
+  const gameStarted = effectiveStartRoll.isFinalized && humanPlayers.length >= requiredHumans;
+  const shouldShowTimer = modeLoaded && effectiveTurnTime > 0 && gameStarted && !gameOver;
   
   // Display timer - shows ACTIVE player's remaining time on BOTH devices
   const displayTimer = useTurnCountdownDisplay({
@@ -581,6 +613,8 @@ const LudoGame = () => {
       if (newMissedCount >= 3) {
         // Eliminate player
         eliminatePlayer(currentPlayerIndex);
+        // IMPORTANT: jump off eliminated seat to avoid stalling on an eliminated turn
+        advanceTurn(1);
         toast({
           title: t('gameSession.opponentForfeited'),
           description: `Player ${currentPlayerIndex + 1} was eliminated`,
@@ -605,7 +639,7 @@ const LudoGame = () => {
 
   const opponentTimeout = useOpponentTimeoutDetection({
     roomPda: roomPda || "",
-    enabled: shouldShowTimer && !isActuallyMyTurn && startRoll.isFinalized && rankedGate.bothReady,
+    enabled: shouldShowTimer && !isActuallyMyTurn && effectiveStartRoll.isFinalized && rankedGate.bothReady,
     isMyTurn: isActuallyMyTurn,
     turnTimeSeconds: effectiveTurnTime,
     myWallet: address,
@@ -883,6 +917,20 @@ const LudoGame = () => {
     }
   }, [eliminatedPlayers, roomPlayers, gameOver, isRankedGame, persistMove, address, play, t, sendPlayerEliminated]);
 
+
+  // Auto-exit if this client is eliminated (prevents re-enter/stuck in room after forfeit/3-miss)
+  const autoExitEliminatedRef = useRef(false);
+  useEffect(() => {
+    if (autoExitEliminatedRef.current) return;
+    if (gameOver) return;
+    if (myPlayerIndex < 0) return;
+    if (!eliminatedPlayers.has(myPlayerIndex)) return;
+
+    autoExitEliminatedRef.current = true;
+    toast({ title: t('forfeit.eliminated'), description: t('forfeit.gameContinues') });
+    navigate('/room-list');
+  }, [gameOver, myPlayerIndex, eliminatedPlayers, navigate, t]);
+
   // Handle chat message sending via WebRTC
   const handleChatSend = useCallback((msg: ChatMessage) => {
     sendChat(JSON.stringify(msg));
@@ -1133,14 +1181,14 @@ const LudoGame = () => {
   return (
     <GameErrorBoundary>
     <InAppBrowserRecovery roomPda={roomPda || ""} onResubscribeRealtime={resubscribeRealtime} bypassOverlay={true}>
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="min-h-screen bg-background flex flex-col pb-20 md:pb-0">
       {/* RulesGate + DiceRollStart - RulesGate handles accept modal internally */}
       {(() => {
         // Don't require bothReady here - let RulesGate handle showing the accept modal
         const shouldShowRulesGate =
           roomPlayers.length >= 2 &&
           !!address &&
-          !startRoll.isFinalized;
+          !effectiveStartRoll.isFinalized;
 
         if (isDebugEnabled()) {
           dbg("dice.gate", {
@@ -1150,8 +1198,8 @@ const LudoGame = () => {
             hasAddress: !!address,
             isRankedGame,
             bothReady: rankedGate.bothReady,
-            isFinalized: startRoll.isFinalized,
-            showDiceRoll: startRoll.showDiceRoll,
+            isFinalized: effectiveStartRoll.isFinalized,
+            showDiceRoll: effectiveStartRoll.showDiceRoll,
             shouldShowRulesGate,
           });
         }
@@ -1173,18 +1221,21 @@ const LudoGame = () => {
           onLeave={handleUILeave}
           onOpenWalletSelector={() => {}}
           isDataLoaded={isDataLoaded}
-          startRollFinalized={startRoll.isFinalized}
+          startRollFinalized={effectiveStartRoll.isFinalized}
         >
+          {!isNPlayerLudo && (
           <DiceRollStart
-            roomPda={roomPda || ""}
-            myWallet={address}
-            player1Wallet={roomPlayers[0]}
-            player2Wallet={roomPlayers[1]}
-            onComplete={startRoll.handleRollComplete}
-            onLeave={handleLeaveFromDice}
-            isLeaving={false}
-            isForfeiting={false}
-          />
+                      roomPda={roomPda || ""}
+                      myWallet={address}
+                      player1Wallet={roomPlayers[0]}
+                      player2Wallet={roomPlayers[1]}
+                      onComplete={effectiveStartRoll.handleRollComplete}
+                      onLeave={handleLeaveFromDice}
+                      isLeaving={false}
+                      isForfeiting={false}
+                    />
+        )}
+
         </RulesGate>
         ) : null;
       })()}
@@ -1193,7 +1244,7 @@ const LudoGame = () => {
       <TurnBanner
         gameName="Ludo"
         roomId={roomId || "unknown"}
-        isVisible={!hasPermission && isActuallyMyTurn && !gameOver && !startRoll.showDiceRoll}
+        isVisible={!hasPermission && isActuallyMyTurn && !gameOver && !effectiveStartRoll.showDiceRoll}
       />
 
       {/* Header */}
@@ -1231,6 +1282,19 @@ const LudoGame = () => {
               <RotateCcw size={16} />
               <span className="hidden sm:inline ml-1">Reset</span>
             </Button>
+              
+              {/* Desktop Forfeit (participants only) */}
+              {isParticipant && !gameOver && (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="hidden md:inline-flex"
+                  onClick={() => setShowForfeitDialog(true)}
+                  disabled={!canPlay || isForfeitLoading}
+                >
+                  {t("game.forfeit") || "Forfeit"}
+                </Button>
+              )}
           </div>
         </div>
       </div>
@@ -1265,7 +1329,7 @@ const LudoGame = () => {
         </div>
 
         {/* Dice Controls - Bottom Left */}
-        <div className="absolute bottom-4 left-4 flex flex-col items-center gap-2 bg-card/90 backdrop-blur-sm rounded-lg p-3 border border-primary/30 shadow-lg">
+        <div className="absolute bottom-4 left-4 hidden md:flex flex-col items-center gap-2 bg-card/90 backdrop-blur-sm rounded-lg p-3 border border-primary/30 shadow-lg">
           <TurnIndicator
             currentPlayer={currentPlayer.color}
             isAI={currentPlayerIndex !== myPlayerIndex}
@@ -1310,6 +1374,47 @@ const LudoGame = () => {
       </div>
 
       {/* Game End Screen */}
+
+        {/* Mobile Action Bar (Ludo only) */}
+        <div className="fixed bottom-0 left-0 right-0 z-40 md:hidden border-t border-primary/20 bg-background/95 backdrop-blur">
+          <div className="max-w-4xl mx-auto px-3 py-2 flex items-center justify-between gap-2">
+            {/* Left: Turn + Dice */}
+            <div className="flex items-center gap-3">
+              <TurnIndicator
+                currentPlayer={currentPlayer.color}
+                isAI={currentPlayerIndex !== myPlayerIndex}
+                isGameOver={!!gameOver}
+                winner={gameOver}
+              />
+              <EgyptianDice
+                value={diceValue}
+                isRolling={isRolling}
+                onRoll={handleRollDice}
+                disabled={isRolling || diceValue !== null || !!gameOver || isAnimating || currentPlayerIndex !== myPlayerIndex}
+                showRollButton={currentPlayerIndex === myPlayerIndex && !gameOver && diceValue === null && !isAnimating}
+              />
+            </div>
+
+            {/* Right: Actions */}
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={() => setShowLeaveModal(true)}>
+                {t("game.leave") || "Leave"}
+              </Button>
+
+              {isParticipant && !gameOver && (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => setShowForfeitDialog(true)}
+                  disabled={!canPlay || isForfeitLoading}
+                >
+                  {t("game.forfeit") || "Forfeit"}
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+
       {gameOver && (
         <GameEndScreen
           gameType="Ludo"
@@ -1390,7 +1495,7 @@ const LudoGame = () => {
         roomPda={roomPda || ""}
         isCreator={isCreator}
         stakeSol={entryFeeSol}
-        playerCount={roomPlayers.filter(p => !p.startsWith('ai-')).length}
+        playerCount={humanPlayers.length}
         onUILeave={handleUILeave}
         onCancelRoom={handleCancelRoom}
         onForfeitMatch={handleForfeitMatch}

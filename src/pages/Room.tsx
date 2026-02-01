@@ -57,6 +57,16 @@ function formatSol(lamports: bigint | number | string, maxDecimals = 4): string 
     .replace(/\.0+$/, "");
 }
 
+
+const isValidPubkey = (s: string) => {
+  try {
+    new PublicKey(s);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 export default function Room() {
   const { roomPda: roomPdaParam } = useParams<{ roomPda: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -310,7 +320,7 @@ export default function Room() {
           setError(null);
         }
 
-        const roomPda = new PublicKey(roomPdaParam);
+        const roomPda = isValidPubkey(roomPdaParam) ? new PublicKey(roomPdaParam) : null;
 
         // Use proxy for getAccountInfo instead of direct connection
         console.log("[Room] Using solana-rpc-read proxy for getAccountInfo");
@@ -438,7 +448,7 @@ export default function Room() {
 
     (async () => {
       try {
-        const roomPda = new PublicKey(roomPdaParam);
+        const roomPda = isValidPubkey(roomPdaParam) ? new PublicKey(roomPdaParam) : null;
 
         subId = connection.onAccountChange(
           roomPda,
@@ -448,7 +458,7 @@ export default function Room() {
               const data = Buffer.from(accountInfo.data);
               const parsed = parseRoomAccount(data);
               if (parsed) {
-              const roomPda = new PublicKey(roomPdaParam);
+              const roomPda = isValidPubkey(roomPdaParam) ? new PublicKey(roomPdaParam) : null;
                 const roomAccount = {
                   roomId: parsed.roomId,
                   creator: parsed.creator,
@@ -487,7 +497,7 @@ export default function Room() {
       }
     })();
 
-    return () => {
+return () => {
       if (subId !== null) {
         connection.removeAccountChangeListener(subId);
       }
