@@ -26,6 +26,7 @@ import { useSound } from "@/contexts/SoundContext";
 import { useSolPrice } from "@/hooks/useSolPrice";
 import { useSolanaRooms } from "@/hooks/useSolanaRooms";
 import { useSolanaNetwork } from "@/hooks/useSolanaNetwork";
+import { useRoomSettings } from "@/hooks/useRoomSettings";
 import { Wallet, Loader2, AlertCircle, RefreshCw, RefreshCcw, Info } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { GameType, RoomStatus, isOpenStatus, type RoomDisplay } from "@/lib/solana-program";
@@ -36,6 +37,7 @@ import { PreviewDomainBanner, useSigningDisabled } from "@/components/PreviewDom
 import { getRoomPda, isMobileDevice, hasInjectedSolanaWallet, isBlockingRoom } from "@/lib/solana-utils";
 import { ActiveGameBanner } from "@/components/ActiveGameBanner";
 import { UnresolvedRoomModal } from "@/components/UnresolvedRoomModal";
+import { SettingsFailedModal } from "@/components/SettingsFailedModal";
 import { requestNotificationPermission } from "@/lib/pushNotifications";
 import { AudioManager } from "@/lib/AudioManager";
 import { showBrowserNotification } from "@/lib/pushNotifications";
@@ -75,13 +77,14 @@ export default function CreateRoom() {
   const { toast } = useToast();
   const { play } = useSound();
   const { price, formatUsd, loading: priceLoading, refetch: refetchPrice } = useSolPrice();
-  const { createRoom, txPending, activeRoom, blockingRoom: hookBlockingRoom, cancelRoom, fetchRooms, txDebugInfo, clearTxDebug, fetchUserActiveRoom } = useSolanaRooms();
-  const { 
+  const { createRoom, txPending, activeRoom, blockingRoom: hookBlockingRoom, cancelRoom, cancelRoomByPda, fetchRooms, txDebugInfo, clearTxDebug, fetchUserActiveRoom } = useSolanaRooms();
+  const {
     balanceInfo, 
     fetchBalance, 
     networkInfo, 
     checkNetworkMismatch 
   } = useSolanaNetwork();
+  const { saveSettings: saveRoomSettings, isSaving: isSavingSettings } = useRoomSettings();
 
   // Parse rematch params from URL
   const rematchData = parseRematchParams(searchParams);
@@ -98,6 +101,10 @@ export default function CreateRoom() {
   const [showMobileWalletRedirect, setShowMobileWalletRedirect] = useState(false);
   const [showUnresolvedModal, setShowUnresolvedModal] = useState(false);
   const [modalBlockingRoom, setModalBlockingRoom] = useState<RoomDisplay | null>(null);
+  
+  // Settings failure modal state
+  const [showSettingsFailedModal, setShowSettingsFailedModal] = useState(false);
+  const [failedRoomPda, setFailedRoomPda] = useState<string | null>(null);
   
   // Track previous status and navigation state
   const prevStatusRef = useRef<number | null>(null);
@@ -203,6 +210,57 @@ export default function CreateRoom() {
     setShowUnresolvedModal(false);
     navigate(`/room/${roomPda}`);
   }, [navigate]);
+
+  // Handler for auto-cancel when settings fail
+  const handleSettingsFailedCancel = useCallback(async () => {
+    if (!failedRoomPda) {
+      console.error("[CreateRoom] No failed room PDA to cancel");
+      return;
+    }
+
+    console.log("[CreateRoom] Auto-canceling room due to settings failure:", failedRoomPda.slice(0, 8));
+
+    try {
+      // Use cancelRoomByPda which takes a PDA string
+      const result = await cancelRoomByPda(failedRoomPda);
+      
+      if (result.ok) {
+        toast({
+          title: t("createRoom.roomCanceled", "Room Canceled"),
+          description: t("createRoom.roomCanceledDesc", "Your stake has been refunded. Please try creating a new room."),
+        });
+        
+        // Clear the failed room state
+        setFailedRoomPda(null);
+        
+        // Refresh room state
+        await fetchUserActiveRoom();
+      } else {
+        throw new Error(result.reason || "Cancel room failed");
+      }
+    } catch (err: unknown) {
+      console.error("[CreateRoom] Auto-cancel failed:", err);
+      throw err; // Let the modal handle the error display
+    }
+  }, [failedRoomPda, cancelRoomByPda, toast, t, fetchUserActiveRoom]);
+
+  // Handler to proceed anyway despite settings failure
+  const handleProceedAnyway = useCallback(() => {
+    if (!failedRoomPda) return;
+    
+    console.warn("[CreateRoom] User chose to proceed despite settings failure");
+    toast({
+      title: "Warning",
+      description: "Room created but settings may not be saved. Timer may default to 60s.",
+      variant: "default",
+    });
+    
+    // Navigate to the room
+    const queryParam = gameMode === 'private' ? '?private_created=1' : '';
+    navigate(`/room/${failedRoomPda}${queryParam}`);
+    
+    setFailedRoomPda(null);
+  }, [failedRoomPda, gameMode, navigate, toast]);
 
   const handleCreateRoom = async () => {
     // Check if we're on a preview domain
@@ -396,73 +454,48 @@ export default function CreateRoom() {
           stakeLamports: solToLamports(entryFeeNum),
         }));
         
-        // Persist settings authoritatively in game_sessions via Edge Function
-        // With signature verification for production security
+        // ═══════════════════════════════════════════════════════════════════════
+        // CRITICAL: Wait for session token before calling set-settings
+        // The createRoom flow in useSolanaRooms stores the session token AFTER
+        // record_acceptance succeeds. We wait briefly and retry if needed.
+        // ═══════════════════════════════════════════════════════════════════════
         
-        try {
-          // 🔒 Security: Session token derives creator identity
-          const sessionToken = getSessionToken(roomPdaStr);
-          const { data, error: settingsErr } = await supabase.functions.invoke(
-            "game-session-set-settings",
-            {
-              body: {
-                roomPda: roomPdaStr,
-                turnTimeSeconds: authoritativeTurnTime,
-                mode: gameMode,
-                maxPlayers: effectiveMaxPlayers,
-                gameType: GAME_TYPE_NAMES[parseInt(gameType)] || "unknown",
-                // creatorWallet removed - derived from session on server
-              },
-              headers: sessionToken ? getAuthHeaders(sessionToken) : undefined,
-            }
-          );
+        // Wait a moment for session token to be stored (record_acceptance is async)
+        await new Promise(resolve => setTimeout(resolve, 300));
+        
+        // Use the new useRoomSettings hook with retry logic
+        const settingsResult = await saveRoomSettings({
+          roomPda: roomPdaStr,
+          turnTimeSeconds: authoritativeTurnTime,
+          mode: gameMode,
+          maxPlayers: effectiveMaxPlayers,
+          gameType: GAME_TYPE_NAMES[parseInt(gameType)] || "unknown",
+        });
 
-          if (settingsErr || data?.ok === false) {
-            const errorMsg = data?.error ?? settingsErr?.message ?? "Unknown error";
-            console.error("[TurnTimer] Settings save failed:", errorMsg);
-            
-            // FIX: For private rooms, settings save is CRITICAL - don't navigate
-            if (gameMode === 'private') {
-              toast({
-                title: t("createRoom.privateRoomFailed"),
-                description: t("createRoom.privateRoomFailedDesc"),
-                variant: "destructive",
-              });
-              // Return early - don't create a zombie private room
-              return;
-            }
-            
-            // For ranked/casual, show warning but continue
-            toast({
-              title: "Settings Error",
-              description: "Failed to save game settings. Turn timer may default to 60s.",
-              variant: "destructive",
-            });
-          } else {
-            console.log("[TurnTimer] ✅ Persisted session settings:", {
-              roomPda: roomPdaStr.slice(0, 8),
-              authoritativeTurnTime,
-              mode: gameMode,
-              maxPlayers: effectiveMaxPlayers,
-            });
-          }
-        } catch (e) {
-          console.error("[TurnTimer] Unexpected error persisting session settings:", e);
+        if (!settingsResult.success) {
+          console.error("[CreateRoom] Settings save failed after retries:", settingsResult.error);
           
-          // FIX: For private rooms, any error is critical - don't navigate
-          if (gameMode === 'private') {
-            toast({
-              title: t("createRoom.privateRoomFailed"),
-              description: t("createRoom.privateRoomFailedDesc"),
-              variant: "destructive",
-            });
+          // For ranked/private rooms, settings failure is CRITICAL
+          // Show modal to offer auto-cancel to protect user's stake
+          if (gameMode === 'ranked' || gameMode === 'private') {
+            setFailedRoomPda(roomPdaStr);
+            setShowSettingsFailedModal(true);
+            // Don't navigate - let user decide via modal
             return;
           }
           
+          // For casual games, just show warning and continue
           toast({
-            title: "Settings Error",
-            description: "Unexpected error saving settings. Turn timer may default to 60s.",
-            variant: "destructive",
+            title: "Settings Warning",
+            description: "Settings may not be saved. Default timer will be used.",
+            variant: "default",
+          });
+        } else {
+          console.log("[TurnTimer] ✅ Settings saved successfully:", {
+            roomPda: roomPdaStr.slice(0, 8),
+            authoritativeTurnTime,
+            mode: gameMode,
+            maxPlayers: effectiveMaxPlayers,
           });
         }
         
@@ -901,6 +934,16 @@ export default function CreateRoom() {
         onClose={() => setShowUnresolvedModal(false)}
         room={modalBlockingRoom}
         onResolve={handleResolveBlockingRoom}
+      />
+      
+      {/* Settings Failed Modal - shows when game settings fail to save */}
+      <SettingsFailedModal
+        open={showSettingsFailedModal}
+        onOpenChange={setShowSettingsFailedModal}
+        roomPda={failedRoomPda || ""}
+        onCancelRoom={handleSettingsFailedCancel}
+        onProceedAnyway={handleProceedAnyway}
+        showProceedOption={gameMode === 'casual'}
       />
     </div>
   );

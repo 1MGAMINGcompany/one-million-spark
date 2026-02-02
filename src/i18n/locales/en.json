@@ -430,7 +430,15 @@
     "rpcStatus": "RPC Status",
     "genesis": "Genesis",
     "privateRoomFailed": "Failed to Create Private Room",
-    "privateRoomFailedDesc": "Could not save room settings. Please try again."
+    "privateRoomFailedDesc": "Could not save room settings. Please try again.",
+    "settingsFailedTitle": "Room Settings Failed",
+    "settingsFailedDesc": "Room settings failed to save. The turn timer may default to an incorrect value, which could affect gameplay fairness.",
+    "settingsFailedProtection": "To protect your stake, we recommend canceling this room and trying again.",
+    "roomCanceled": "Room Canceled",
+    "roomCanceledDesc": "Your stake has been refunded. Please try creating a new room.",
+    "proceedAnyway": "Proceed Anyway",
+    "cancelAndRefund": "Cancel Room & Refund",
+    "canceling": "Canceling..."
   },
   "roomList": {
     "title": "Public Game Rooms",
