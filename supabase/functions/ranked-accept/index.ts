@@ -312,6 +312,9 @@ Deno.serve(async (req: Request) => {
 
     // ─────────────────────────────────────────────────────────────
     // SYNC PARTICIPANTS FROM ON-CHAIN BEFORE MARKING READY
+    // This is the AUTHORITATIVE sync step that populates:
+    // - game_sessions.participants[] (array of all players)
+    // - game_sessions.player2_wallet (for 2-player games)
     // ─────────────────────────────────────────────────────────────
     const rpcUrl = Deno.env.get("SOLANA_RPC_URL");
     if (rpcUrl) {
@@ -326,20 +329,36 @@ Deno.serve(async (req: Request) => {
           
           if (roomData) {
             const participants = roomData.players.map(p => p.toBase58());
+            console.log("[ranked-accept] On-chain players:", participants);
+            
+            // Build update object - always set participants[]
+            const updateObj: Record<string, unknown> = {
+              participants,
+              max_players: roomData.maxPlayers,
+              updated_at: new Date().toISOString(),
+            };
+            
+            // CRITICAL: For 2-player games, ensure player2_wallet is set
+            // This fixes the bug where player2_wallet remains NULL after join
+            if (roomData.maxPlayers <= 2 && participants.length >= 2) {
+              // Player 2 is any participant that is NOT the creator (player 1)
+              const creator = roomData.creator.toBase58();
+              const player2 = participants.find(p => p !== creator);
+              if (player2) {
+                updateObj.player2_wallet = player2;
+                console.log("[ranked-accept] ✅ Setting player2_wallet:", player2.slice(0, 8));
+              }
+            }
             
             const { error: updateError } = await supabase
               .from('game_sessions')
-              .update({
-                participants,
-                max_players: roomData.maxPlayers,
-                updated_at: new Date().toISOString(),
-              })
+              .update(updateObj)
               .eq('room_pda', body.roomPda);
               
             if (updateError) {
               console.warn("[ranked-accept] Failed to update participants:", updateError);
             } else {
-              console.log("[ranked-accept] ✅ Synced participants:", participants.length);
+              console.log("[ranked-accept] ✅ Synced participants:", participants.length, "player2:", updateObj.player2_wallet ? "set" : "unchanged");
             }
           }
         }
