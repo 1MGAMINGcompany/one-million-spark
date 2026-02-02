@@ -1,101 +1,87 @@
 
 
-## Fix requireSession.ts Schema Mismatch
+## Fix: Add `player_sessions` Upsert in Simple Acceptance Flow
 
-### Problem Identified
-The `requireSession.ts` shared function queries columns that don't exist in the `player_sessions` table:
+### Problem Summary
+When Player 2 joins a ranked game via simple acceptance mode (stake tx), a `game_acceptances` row is created but **no `player_sessions` row is created**. This causes `forfeit-game` to fail with "Session not found" when Player 2 tries to trigger a timeout forfeit.
 
-| Current Code | Actual Table Schema |
-|-------------|---------------------|
-| `player_wallet` | `wallet` |
-| `session_expires_at` | Does not exist |
+| Table | Player 1 (creator) | Player 2 (joiner) |
+|-------|-------------------|-------------------|
+| `game_acceptances` | ✅ Has row | ✅ Has row |
+| `player_sessions` | ✅ Has row (via `start_session` RPC) | ❌ **Missing** |
 
-This causes "Session lookup error" when `forfeit-game` edge function validates the caller.
+### Solution
+Add a `player_sessions` upsert in the simple acceptance flow, matching what the signed flow achieves via the `start_session` RPC.
 
-### Changes Required
+### File to Modify
+`supabase/functions/ranked-accept/index.ts`
 
-**File:** `supabase/functions/_shared/requireSession.ts`
+### Change Location
+After line **269** (after the successful `game_acceptances` upsert log in simple mode), add the `player_sessions` upsert.
 
-1. **Remove `expiresAt` from SessionInfo type** (Line 7)
-   - The `player_sessions` table doesn't have expiry tracking
-   - Uses `revoked` flag instead
-
-2. **Fix SELECT query** (Line 33)
-   - Change from: `.select("player_wallet, session_expires_at, revoked")`
-   - Change to: `.select("wallet, revoked")`
-
-3. **Remove expiry check** (Lines 24, 40-42)
-   - Delete `const nowIso = new Date().toISOString();`
-   - Delete the `session_expires_at` validation block
-
-4. **Fix wallet extraction** (Line 44)
-   - Change from: `data.player_wallet`
-   - Change to: `data.wallet`
-
-5. **Simplify return** (Line 47)
-   - Change from: `{ token, wallet, expiresAt: data.session_expires_at }`
-   - Change to: `{ token, wallet }`
-
-### Updated Code
+### Code to Add (Lines 269-282, insert after line 269)
 
 ```typescript
-// supabase/functions/_shared/requireSession.ts
-import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
+      // NEW: Also create player_sessions row (critical for forfeit-game)
+      // This ensures the joiner (Player 2) can call server-verified timeout forfeit.
+      const { error: sessionError } = await supabase
+        .from("player_sessions")
+        .upsert(
+          {
+            session_token: sessionToken,
+            room_pda: body.roomPda,
+            wallet: body.playerWallet,
+            rules_hash: "stake_verified",
+            last_turn: 0,
+            last_hash: "genesis",
+            revoked: false,
+          },
+          { onConflict: "room_pda,wallet" }
+        );
 
-export type SessionInfo = {
-  token: string;
-  wallet: string;
-};
-
-export async function requireSession(
-  supabase: SupabaseClient,
-  req: Request
-): Promise<{ ok: true; session: SessionInfo } | { ok: false; error: string }> {
-  const auth =
-    req.headers.get("authorization") ||
-    req.headers.get("Authorization") ||
-    "";
-
-  if (!auth.toLowerCase().startsWith("bearer ")) {
-    return { ok: false, error: "Missing Authorization: Bearer <session_token>" };
-  }
-
-  const token = auth.slice(7).trim();
-  if (!token || token.length < 24) {
-    return { ok: false, error: "Invalid session token format" };
-  }
-
-  // player_sessions schema (actual):
-  // session_token, room_pda, wallet, revoked, rules_hash, last_turn, last_hash, last_move_at, desync_count, created_at
-  const { data, error } = await supabase
-    .from("player_sessions")
-    .select("wallet, revoked")
-    .eq("session_token", token)
-    .maybeSingle();
-
-  if (error) return { ok: false, error: `Session lookup error: ${error.message}` };
-  if (!data) return { ok: false, error: "Session not found" };
-  if (data.revoked) return { ok: false, error: "Session revoked" };
-
-  const wallet = String((data as any).wallet || "").trim();
-  if (!wallet) return { ok: false, error: "Session missing wallet" };
-
-  return { ok: true, session: { token, wallet } };
-}
+      if (sessionError) {
+        console.error("[ranked-accept] Failed to create player_session:", sessionError);
+      } else {
+        console.log("[ranked-accept] ✅ player_sessions row created for simple mode");
+      }
 ```
 
-### Post-Fix Verification
+### Schema Verification
+The `player_sessions` table columns (from provided schema):
+- `session_token` ✅
+- `room_pda` ✅
+- `wallet` ✅
+- `revoked` ✅
+- `rules_hash` ✅
+- `last_turn` ✅ (default: 0)
+- `last_hash` ✅ (nullable)
+- `last_move_at` (nullable, not needed)
+- `desync_count` (default: 0, not needed)
+- `created_at` (auto-generated)
 
-After saving, confirm:
-- Query uses `.select("wallet, revoked")` 
-- No references to `player_wallet` or `session_expires_at`
-- Returns `{ ok: true, session: { token, wallet } }`
+All fields in the upsert exist in the actual schema.
 
-### Testing
+### Why This Works
 
-After deployment, repeat the timeout test:
-1. Start a ranked Backgammon game
-2. Let turn timer expire 3 times
-3. Verify `forfeit-game` edge function succeeds
-4. Confirm on-chain settlement completes
+1. **Matches existing pattern**: The `start_session` RPC (used by signed mode) creates `player_sessions` rows with the same structure
+2. **Idempotent**: Using `onConflict: "room_pda,wallet"` prevents duplicates if called twice
+3. **Both players covered**: Creator gets session via signed flow, joiner gets session via simple flow
+4. **No schema changes needed**: Uses existing `player_sessions` table structure exactly
+
+### Post-Implementation Verification
+
+After deployment, run this query to confirm both players have sessions:
+```sql
+SELECT wallet, session_token, revoked, created_at 
+FROM player_sessions 
+WHERE room_pda = '<ROOM_PDA>' 
+ORDER BY created_at DESC;
+```
+Expected: 2 rows (one per player)
+
+### Testing Checklist
+- [ ] Both players have `player_sessions` rows after accepting
+- [ ] Timeout forfeit works for Player 2 (joiner)
+- [ ] `forfeit-game` returns success instead of "Session not found"
+- [ ] On-chain settlement completes
 
