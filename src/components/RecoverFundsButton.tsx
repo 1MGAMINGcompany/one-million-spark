@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, Loader2, RefreshCw } from "lucide-react";
+import { AlertTriangle, Loader2, RefreshCw, LogIn } from "lucide-react";
 import { useWallet, useConnection } from "@solana/wallet-adapter-react";
 import { Transaction } from "@solana/web3.js";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import bs58 from "bs58";
+import { useNavigate } from "react-router-dom";
 import { getSessionToken, getAuthHeaders } from "@/lib/sessionToken";
 import {
   AlertDialog,
@@ -44,13 +45,17 @@ interface RecoveryResult {
   hoursRemaining?: number;
 }
 
+const RECOVERY_TIMEOUT_MS = 10_000;
+
 export function RecoverFundsButton({ roomPda, onRecovered, className }: RecoverFundsButtonProps) {
   const { publicKey, signTransaction } = useWallet();
   const { connection } = useConnection();
+  const navigate = useNavigate();
   const [status, setStatus] = useState<RecoveryStatus>("idle");
   const [result, setResult] = useState<RecoveryResult | null>(null);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [pendingTx, setPendingTx] = useState<string | null>(null);
+  const [showRejoinCTA, setShowRejoinCTA] = useState(false);
 
   const checkRecovery = async () => {
     if (!publicKey) {
@@ -60,28 +65,42 @@ export function RecoverFundsButton({ roomPda, onRecovered, className }: RecoverF
 
     setStatus("checking");
     setResult(null);
+    setShowRejoinCTA(false);
 
     try {
       // Get session token for authorization
       const sessionToken = getSessionToken(roomPda);
       if (!sessionToken) {
         toast.error("Session expired. Please rejoin the room.");
-        setStatus("error");
+        setShowRejoinCTA(true);
+        setStatus("not_authorized");
         return;
       }
 
-      const { data, error } = await supabase.functions.invoke("recover-funds", {
-        body: { roomPda }, // callerWallet removed - derived from session
-        headers: getAuthHeaders(sessionToken),
+      // Create timeout promise
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error("TIMEOUT")), RECOVERY_TIMEOUT_MS);
       });
 
+      // Race between API call and timeout
+      const response = await Promise.race([
+        supabase.functions.invoke("recover-funds", {
+          body: { roomPda },
+          headers: getAuthHeaders(sessionToken),
+        }),
+        timeoutPromise,
+      ]);
+
+      const { data, error } = response as { data: RecoveryResult | null; error: Error | null };
+
       if (error) throw error;
+      if (!data) throw new Error("Empty response from server");
 
       setResult(data);
 
       switch (data.status) {
         case "can_cancel":
-          setPendingTx(data.unsignedTx);
+          setPendingTx(data.unsignedTx || null);
           setShowConfirmDialog(true);
           setStatus("can_cancel");
           break;
@@ -89,18 +108,22 @@ export function RecoverFundsButton({ roomPda, onRecovered, className }: RecoverF
           toast.success("Game force-settled! Funds returned to creator.");
           setStatus("idle");
           onRecovered?.();
+          // Navigate to room list after successful force settle
+          navigate("/room-list");
           break;
         case "already_resolved":
           toast.info(data.message);
           setStatus("already_resolved");
           break;
         case "game_active":
-          toast.info(`Game still active. ${data.hoursRemaining?.toFixed(1)}h until recovery available.`);
+          const hoursRemaining = data.hoursRemaining ?? 0;
+          toast.info(`Game still active. ${hoursRemaining.toFixed(1)}h until recovery available.`);
           setStatus("game_active");
           break;
         case "not_authorized":
         case "no_action":
           toast.warning(data.message);
+          setShowRejoinCTA(true);
           setStatus("not_authorized");
           break;
         case "not_found":
@@ -113,7 +136,16 @@ export function RecoverFundsButton({ roomPda, onRecovered, className }: RecoverF
       }
     } catch (e: any) {
       console.error("Recovery check failed:", e);
-      toast.error(e.message || "Failed to check recovery status");
+      if (e.message === "TIMEOUT") {
+        toast.error("Recover funds timed out — try again or cancel room.");
+      } else if (e.message?.includes("401") || e.message?.includes("403") || e.message?.includes("Unauthorized")) {
+        toast.error("Session expired. Please rejoin the room.");
+        setShowRejoinCTA(true);
+        setStatus("not_authorized");
+        return;
+      } else {
+        toast.error(e.message || "Failed to check recovery status");
+      }
       setStatus("error");
     }
   };
@@ -158,29 +190,46 @@ export function RecoverFundsButton({ roomPda, onRecovered, className }: RecoverF
     return (parseInt(lamports) / 1_000_000_000).toFixed(4);
   };
 
+  const handleRejoinRoom = () => {
+    navigate(`/room/${roomPda}`);
+  };
+
   const isLoading = status === "checking" || status === "force_settling";
 
   return (
     <>
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={checkRecovery}
-        disabled={isLoading || !publicKey}
-        className={className}
-      >
-        {isLoading ? (
-          <>
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            {status === "checking" ? "Checking..." : "Processing..."}
-          </>
-        ) : (
-          <>
-            <RefreshCw className="mr-2 h-4 w-4" />
-            Recover Funds
-          </>
+      <div className="flex items-center gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={checkRecovery}
+          disabled={isLoading || !publicKey}
+          className={className}
+        >
+          {isLoading ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              {status === "checking" ? "Checking..." : "Processing..."}
+            </>
+          ) : (
+            <>
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Recover Funds
+            </>
+          )}
+        </Button>
+        
+        {showRejoinCTA && (
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={handleRejoinRoom}
+          >
+            <LogIn className="mr-2 h-4 w-4" />
+            Rejoin Room
+          </Button>
         )}
-      </Button>
+      </div>
 
       <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
         <AlertDialogContent>
