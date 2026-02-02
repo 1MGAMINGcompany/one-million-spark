@@ -11,7 +11,7 @@
 
 import { useCallback, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { getAuthHeaders } from "@/lib/sessionToken";
+import { getSessionToken, getAuthHeaders } from "@/lib/sessionToken";
 
 export interface RoomSettingsPayload {
   roomPda: string;
@@ -35,37 +35,6 @@ async function delay(ms: number): Promise<void> {
 }
 
 /**
- * Extract session token from localStorage value (handles raw strings and JSON objects)
- */
-function extractTokenFromStoredValue(value: string | null): string | null {
-  if (!value) return null;
-
-  // Raw UUID token
-  if (/^[a-f0-9-]{32,}$/i.test(value)) {
-    return value;
-  }
-
-  // Try JSON extraction
-  try {
-    const parsed = JSON.parse(value);
-    const candidates = [
-      parsed?.sessionToken,
-      parsed?.session_token,
-      parsed?.token,
-    ];
-    for (const c of candidates) {
-      if (typeof c === "string" && /^[a-f0-9-]{32,}$/i.test(c)) {
-        return c;
-      }
-    }
-  } catch {
-    // not JSON
-  }
-
-  return null;
-}
-
-/**
  * Hook for reliably saving room settings to the database.
  * 
  * CRITICAL: Only call after:
@@ -85,11 +54,8 @@ export function useRoomSettings(): UseRoomSettingsResult {
     setIsSaving(true);
     setLastError(null);
 
-    // 🔒 Get per-room session token ONLY - never use global/latest fallback
-    // Check room-specific key directly to avoid getSessionToken's fallback logic
-    const roomSpecificKey = `session_token_${roomPda}`;
-    const rawToken = localStorage.getItem(roomSpecificKey);
-    const sessionToken = extractTokenFromStoredValue(rawToken);
+    // 🔒 Use shared getSessionToken helper - it handles room-specific lookup
+    const sessionToken = getSessionToken(roomPda);
     
     if (!sessionToken) {
       const errorMsg = `No session token for room ${roomPda.slice(0, 8)}. Cannot save settings.`;

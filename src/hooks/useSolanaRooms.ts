@@ -518,11 +518,27 @@ export function useSolanaRooms() {
           console.log("[CreateRoom] Recorded acceptance with tx signature and mode:", mode);
           
           // Store session token from record_acceptance for future auth
-          const resultObj = typeof acceptResult === 'object' && acceptResult !== null ? acceptResult as Record<string, unknown> : null;
-          const sessionTokenFromRpc = resultObj?.session_token as string | undefined;
+          // CRITICAL: Handle BOTH object response AND JSON string response (Supabase may return either)
+          let sessionTokenFromRpc: string | undefined;
+          
+          if (typeof acceptResult === 'object' && acceptResult !== null) {
+            // Direct object response
+            sessionTokenFromRpc = (acceptResult as Record<string, unknown>).session_token as string | undefined;
+          } else if (typeof acceptResult === 'string') {
+            // JSON string response - parse it
+            try {
+              const parsed = JSON.parse(acceptResult);
+              sessionTokenFromRpc = parsed?.session_token;
+            } catch {
+              console.warn("[CreateRoom] Failed to parse acceptResult as JSON:", acceptResult);
+            }
+          }
+          
           if (sessionTokenFromRpc) {
             storeSessionToken(roomPdaStr, sessionTokenFromRpc);
-            console.log("[CreateRoom] Session token stored for room:", roomPdaStr.slice(0, 8));
+            console.log(`[CreateRoom] stored session token for room ${roomPdaStr.slice(0, 8)}…`);
+          } else {
+            console.warn("[CreateRoom] No session_token in record_acceptance response:", acceptResult);
           }
           
           // PART A FIX: For ranked games, ALSO insert into game_acceptances table
