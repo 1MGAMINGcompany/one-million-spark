@@ -65,6 +65,13 @@ export function RecoverFundsButton({ roomPda, onRecovered, className }: RecoverF
       return;
     }
 
+    // Defensive check: Solana PDAs are 32-44 base58 characters
+    if (!roomPda || roomPda.length < 32) {
+      console.error("[RecoverFunds] Invalid roomPda:", roomPda);
+      toast.error("Invalid room ID — cannot recover. Please refresh and try again.");
+      return;
+    }
+
     setStatus("checking");
     setResult(null);
     setShowRejoinCTA(false);
