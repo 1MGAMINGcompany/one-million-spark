@@ -1152,6 +1152,7 @@ const BackgammonGame = () => {
     isMyTurn: isActuallyMyTurn,
     onTimeExpired: handleTurnTimeout,
     roomId: roomPda,
+    turnStartedAt,
   });
 
   // Opponent timeout detection - polls DB to detect if opponent has timed out
