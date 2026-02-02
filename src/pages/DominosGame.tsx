@@ -481,6 +481,9 @@ const DominosGame = () => {
     enabled: roomPlayers.length >= 2 && modeLoaded,
   });
 
+  // Gate for ranked/private readiness
+  const readyGateOk = !requiresReadyGate || rankedGate.bothReady;
+
   // Durable game sync - persists moves to DB for reliability
   const handleDurableMoveReceived = useCallback((move: GameMove) => {
     // Only apply moves from opponents (we already applied our own locally)
@@ -545,6 +548,13 @@ const DominosGame = () => {
     initialColor: amIPlayer1 ? "w" : "b",
     bothReady: rankedGate.bothReady,
   });
+
+  // === UNIFIED TURN SOURCE OF TRUTH ===
+  const readyToPlay =
+    hasTwoRealPlayers &&
+    readyGateOk &&
+    startRoll.isFinalized &&
+    !gameOver;
 
   // Update turn based on start roll result for ranked games
   useEffect(() => {
@@ -698,16 +708,17 @@ const DominosGame = () => {
   const displayTimer = useTurnCountdownDisplay({
     turnStartedAt,
     turnTimeSeconds: effectiveTurnTime,
-    enabled: shouldShowTimer && rankedGate.bothReady,
+    enabled: shouldShowTimer && readyToPlay,
   });
   
   // Enforcement timer - ONLY runs on active player's device
   const turnTimer = useTurnTimer({
     turnTimeSeconds: effectiveTurnTime,
-    enabled: shouldShowTimer && isActuallyMyTurn && rankedGate.bothReady,
+    enabled: shouldShowTimer && isActuallyMyTurn && readyToPlay,
     isMyTurn: isActuallyMyTurn,
     onTimeExpired: handleTurnTimeout,
     roomId: roomPda,
+    turnStartedAt, // DB-authoritative mode
   });
 
   // Opponent timeout detection - polls DB to detect if opponent has timed out
@@ -773,13 +784,13 @@ const DominosGame = () => {
 
   const opponentTimeout = useOpponentTimeoutDetection({
     roomPda: roomPda || "",
-    enabled: shouldShowTimer && !isActuallyMyTurn && startRoll.isFinalized && rankedGate.bothReady,
+    enabled: shouldShowTimer && !isActuallyMyTurn && startRoll.isFinalized && readyToPlay,
     isMyTurn: effectiveIsMyTurn,
     turnTimeSeconds: effectiveTurnTime,
     myWallet: address,
     onOpponentTimeout: handleOpponentTimeoutDetected,
     onAutoForfeit: handleOpponentAutoForfeit,
-    bothReady: rankedGate.bothReady,
+    bothReady: readyToPlay,
     onTurnStartedAtChange: setTurnStartedAt,
   });
 
