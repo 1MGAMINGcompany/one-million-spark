@@ -69,6 +69,12 @@ export default function RoomList() {
   // Resolve modal state
   const [resolveModalOpen, setResolveModalOpen] = useState(false);
   const [selectedRoomForResolve, setSelectedRoomForResolve] = useState<RoomDisplay | null>(null);
+  const [resolveDbState, setResolveDbState] = useState<{
+    statusInt: number;
+    participantsCount: number;
+    startRollFinalized: boolean;
+  } | null>(null);
+  const [resolveFetching, setResolveFetching] = useState(false);
   
   // Unresolved room modal state (for smart blocking)
   const [showUnresolvedModal, setShowUnresolvedModal] = useState(false);
@@ -356,13 +362,64 @@ export default function RoomList() {
                   <Button 
                     size="sm" 
                     variant="outline"
-                    onClick={() => {
+                    disabled={resolveFetching}
+                    onClick={async () => {
+                      // Fetch DB state to determine cancel vs forfeit
+                      setResolveFetching(true);
                       setSelectedRoomForResolve(room);
-                      setResolveModalOpen(true);
+                      try {
+                        const { data, error } = await supabase.functions.invoke("game-session-get", {
+                          body: { roomPda: room.pda },
+                        });
+                        if (error) {
+                          console.warn("[RoomList] game-session-get error:", error);
+                          // Fallback to on-chain state
+                          setResolveDbState({
+                            statusInt: room.status === RoomStatus.Started ? 2 : 1,
+                            participantsCount: room.playerCount,
+                            startRollFinalized: false,
+                          });
+                        } else if (data?.session) {
+                          const session = data.session;
+                          const participants = session.participants || [];
+                          const participantsCount = participants.length > 0 
+                            ? participants.length 
+                            : [session.player1_wallet, session.player2_wallet].filter(Boolean).length;
+                          setResolveDbState({
+                            statusInt: session.status_int ?? 1,
+                            participantsCount,
+                            startRollFinalized: session.start_roll_finalized ?? false,
+                          });
+                          console.log("[RoomList] DB state for resolve:", {
+                            statusInt: session.status_int,
+                            participantsCount,
+                            startRollFinalized: session.start_roll_finalized,
+                          });
+                        } else {
+                          // No session in DB - use on-chain fallback
+                          setResolveDbState({
+                            statusInt: 1,
+                            participantsCount: room.playerCount,
+                            startRollFinalized: false,
+                          });
+                        }
+                      } catch (err) {
+                        console.error("[RoomList] Failed to fetch DB state:", err);
+                        setResolveDbState({
+                          statusInt: room.status === RoomStatus.Started ? 2 : 1,
+                          participantsCount: room.playerCount,
+                          startRollFinalized: false,
+                        });
+                      } finally {
+                        setResolveFetching(false);
+                        setResolveModalOpen(true);
+                      }
                     }}
                   >
                     <Settings2 className="h-4 w-4 mr-1" />
-                    {t("roomList.resolve", "Resolve")}
+                    {resolveFetching && selectedRoomForResolve?.pda === room.pda 
+                      ? t("common.loading", "Loading...") 
+                      : t("roomList.resolve", "Resolve")}
                   </Button>
                   <Button 
                     size="sm" 
@@ -580,6 +637,7 @@ export default function RoomList() {
           onClose={() => {
             setResolveModalOpen(false);
             setSelectedRoomForResolve(null);
+            setResolveDbState(null);
           }}
           roomPda={selectedRoomForResolve.pda}
           roomData={{
@@ -595,6 +653,9 @@ export default function RoomList() {
             fetchRooms();
             setMyOnChainRooms([]);
           }}
+          dbStatusInt={resolveDbState?.statusInt}
+          dbParticipantsCount={resolveDbState?.participantsCount}
+          dbStartRollFinalized={resolveDbState?.startRollFinalized}
         />
       )}
 
