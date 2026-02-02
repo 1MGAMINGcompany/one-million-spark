@@ -64,10 +64,11 @@ serve(async (req) => {
 
       console.log('[game-sessions-list] Fetching recoverable for wallet:', wallet.slice(0, 8))
 
+      // Include 'active' and 'waiting' sessions - waiting rooms may have stuck funds too
       const { data, error } = await supabase
         .from('game_sessions')
-        .select('room_pda, game_type, status, player1_wallet, player2_wallet, current_turn_wallet, created_at, updated_at, mode, turn_time_seconds, turn_started_at')
-        .eq('status', 'active')
+        .select('room_pda, game_type, status, status_int, player1_wallet, player2_wallet, current_turn_wallet, created_at, updated_at, mode, turn_time_seconds, turn_started_at')
+        .in('status', ['active', 'waiting'])
         .or(`player1_wallet.eq.${wallet},player2_wallet.eq.${wallet}`)
         .order('updated_at', { ascending: false })
 
@@ -79,8 +80,23 @@ serve(async (req) => {
         })
       }
       
-      console.log('[game-sessions-list] ✅ Found', data?.length || 0, 'recoverable sessions')
-      return new Response(JSON.stringify({ ok: true, rows: data }), { 
+      // Filter out invalid room_pda values (UUIDs, short strings, etc.)
+      // Valid Solana PDAs are base58 strings, 32-44 chars, no dashes
+      const base58Regex = /^[1-9A-HJ-NP-Za-km-z]+$/
+      const validRows = (data || []).filter(row => {
+        const pda = row.room_pda
+        if (!pda || pda.length < 32 || pda.length > 44) return false
+        if (pda.includes('-')) return false // UUIDs have dashes
+        return base58Regex.test(pda)
+      })
+      
+      // Debug: Log count and first room_pda prefix for verification
+      const totalCount = data?.length || 0
+      const validCount = validRows.length
+      const firstPda = validCount > 0 ? validRows[0].room_pda?.slice(0, 8) : 'none'
+      console.log(`[game-sessions-list] ✅ Found ${totalCount} total, ${validCount} valid recoverable sessions, first PDA prefix: ${firstPda}`)
+      
+      return new Response(JSON.stringify({ ok: true, rows: validRows }), { 
         status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       })
