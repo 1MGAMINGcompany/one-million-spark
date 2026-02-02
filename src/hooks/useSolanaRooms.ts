@@ -1096,7 +1096,17 @@ export function useSolanaRooms() {
         }
 
         // Use the standard cancelRoom with the fetched roomId
-        return await cancelRoom(room.roomId);
+        const result = await cancelRoom(room.roomId);
+        
+        // On success, immediately clear room from local state for responsive UX
+        if (result.ok) {
+          console.log("[cancelRoomByPda] Success - clearing room from state:", roomPda.slice(0, 8));
+          archiveRoom(roomPda);
+          setActiveRooms(prev => prev.filter(r => r.pda !== roomPda));
+          setActiveRoom(prev => (prev?.pda === roomPda ? null : prev));
+        }
+        
+        return result;
       } catch (err: any) {
         console.error("[cancelRoomByPda] Error:", err);
         return { ok: false, reason: err?.message || "ERROR" };
