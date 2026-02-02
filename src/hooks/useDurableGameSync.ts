@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { dbg } from "@/lib/debugLog";
+import { getSessionToken, getAuthHeaders } from "@/lib/sessionToken";
 
 export interface GameMove {
   room_pda: string;
@@ -104,8 +105,21 @@ export function useDurableGameSync({
   }, [roomPda, onMovesLoaded]);
 
   // Submit a move to DB - server validates turn and assigns sequence
+  // 🔒 Identity is derived from session token on server - wallet param is for local logging only
   const submitMove = useCallback(async (moveData: any, wallet: string): Promise<boolean> => {
     if (!roomPda) return false;
+
+    // 🔒 SECURITY: Get session token - required for authenticated submission
+    const sessionToken = getSessionToken(roomPda);
+    if (!sessionToken) {
+      console.error("[DurableSync] No session token found for room:", roomPda.slice(0, 8));
+      dbg("durable.submit.no_session_token", { room: roomPda.slice(0, 8) });
+      toast.error("Session expired", {
+        description: "Please re-ready to continue playing",
+        duration: 5000,
+      });
+      return false;
+    }
 
     // Generate unique client ID for idempotency (retries are safe)
     const clientMoveId = crypto.randomUUID();
@@ -119,20 +133,23 @@ export function useDurableGameSync({
     try {
       console.log("[DurableSync] Invoking submit-move edge function:", {
         roomPda: roomPda.slice(0, 8),
-        wallet: wallet.slice(0, 8),
+        wallet: wallet.slice(0, 8), // Local logging only - server derives from session
         moveType: moveData.type,
         clientMoveId: clientMoveId.slice(0, 8),
       });
       
+      // 🔒 Body schema: { roomPda, moveData, clientMoveId } - NO wallet
+      // Wallet identity is derived from Authorization header on server
       const { data, error } = await supabase.functions.invoke("submit-move", {
         body: {
           roomPda,
-          wallet,
           moveData,
           clientMoveId,
+          // NO wallet - server derives from session token
           // NO turnNumber - server assigns
           // NO prevHash - server computes chain
         },
+        headers: getAuthHeaders(sessionToken),
       });
 
       if (error) {
@@ -226,6 +243,15 @@ export function useDurableGameSync({
             console.warn("[DurableSync] Wallet not a participant");
             dbg("durable.submit.not_participant", { wallet: wallet.slice(0, 8) });
             toast.error("You are not a participant in this game", { duration: 3000 });
+            return false;
+            
+          case "unauthorized":
+            console.warn("[DurableSync] Session token invalid or expired");
+            dbg("durable.submit.unauthorized", { wallet: wallet.slice(0, 8) });
+            toast.error("Session expired", {
+              description: "Please re-ready to continue playing",
+              duration: 5000,
+            });
             return false;
             
           case "hash_mismatch":
