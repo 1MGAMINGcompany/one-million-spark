@@ -99,3 +99,26 @@ export function storeSessionToken(roomPda: string, token: string): void {
   localStorage.setItem(`session_token_${roomPda}`, token);
   localStorage.setItem("session_token_latest", token);
 }
+
+/**
+ * Clear all session tokens from localStorage.
+ * Removes keys starting with "session_token_" and "1mg_session_".
+ * 
+ * @returns Number of keys removed
+ */
+export function clearAllSessionTokens(): number {
+  const keysToRemove: string[] = [];
+  
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (!key) continue;
+    
+    if (key.startsWith("session_token_") || key.startsWith("1mg_session_")) {
+      keysToRemove.push(key);
+    }
+  }
+  
+  keysToRemove.forEach(key => localStorage.removeItem(key));
+  
+  return keysToRemove.length;
+}
