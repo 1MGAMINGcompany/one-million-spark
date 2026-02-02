@@ -1,387 +1,122 @@
 
+# Fix Plan: Session Token Overwriting Bug in ranked-accept
 
-# Clear Session Button with Unverified Token Refinement
+## Problem Summary
 
-## Overview
+When creating a ranked room, the session token is being **overwritten** during the `ranked-accept` call, causing subsequent API calls to fail with "Session not found".
 
-Add a "Clear Session" button to the connected wallet UI that:
-1. Scans all `session_token_<roomPda>` keys deterministically
-2. If a key exists but token is empty: removes it and continues (self-healing)
-3. Only returns `unverified` if empty token found twice OR no other rooms to check
-4. Calls `game-session-get` with proper Authorization header
-5. Shows confirmation dialog with room-specific messaging
-6. Provides a "Go to Room List" button for `unverified` state
+## Root Cause Analysis
 
----
+The room creation flow has a critical sequencing bug:
 
-## Files Changed
+```text
+1. record_acceptance RPC → Creates token in player_sessions (e.g., "62df498d...")
+2. storeSessionToken() → Stores token in localStorage
+3. ranked-accept called with that token in Authorization header → ✅ requireSession passes
+4. ranked-accept simple mode (lines 265-266) → Generates NEW token: crypto.randomUUID()
+5. ranked-accept upsert (lines 291-310) → OVERWRITES player_sessions row with NEW token
+6. game-session-set-settings called with ORIGINAL token from localStorage
+7. DB lookup fails → "Session not found" ❌
+```
 
-| File | Lines | Description |
-|------|-------|-------------|
-| `src/lib/sessionToken.ts` | 103-125 (new) | Add `clearAllSessionTokens()` export |
-| `src/components/WalletButton.tsx` | 1-15 (imports) | Add Trash2, useNavigate, AlertDialog, supabase imports |
-| `src/components/WalletButton.tsx` | ~122-130 (new state) | Add state for dialog, loading, roomPda, reason |
-| `src/components/WalletButton.tsx` | ~135-220 (new handlers) | Add `checkActiveGameState()` with refined logic |
-| `src/components/WalletButton.tsx` | ~871 (button row) | Add Trash button after LogOut button |
-| `src/components/WalletButton.tsx` | ~894 (before closing) | Add AlertDialog with 3-button footer |
+The `ranked-accept` function generates a fresh UUID token for "simple" acceptance mode and upserts it to `player_sessions`, overwriting the original token that the frontend already stored.
 
----
+## Solution
+
+Modify `ranked-accept` to **reuse the existing session token** from the Authorization header in simple mode, instead of generating a new one.
+
+## Files to Change
+
+| File | Change |
+|------|--------|
+| `supabase/functions/ranked-accept/index.ts` | Use existing session token instead of generating new one for simple mode |
 
 ## Implementation Details
 
-### 1. Add `clearAllSessionTokens()` to `src/lib/sessionToken.ts`
+### Change in `ranked-accept/index.ts` (Lines 258-311)
 
-Add after line 101:
-
+**Current code (problematic):**
 ```typescript
-/**
- * Clear all session tokens from localStorage.
- * Removes keys starting with "session_token_" and "1mg_session_".
- * 
- * @returns Number of keys removed
- */
-export function clearAllSessionTokens(): number {
-  const keysToRemove: string[] = [];
+} else {
+  // SIMPLE ACCEPTANCE FLOW
+  console.log("[ranked-accept] Simple acceptance mode for:", playerWallet.slice(0, 8));
+
+  // Generate session token and record
+  const nonce = crypto.randomUUID();
+  sessionToken = crypto.randomUUID();  // ❌ NEW TOKEN - overwrites DB
+  signatureForRecord = "implicit_stake_acceptance";
   
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
-    if (!key) continue;
-    
-    if (key.startsWith("session_token_") || key.startsWith("1mg_session_")) {
-      keysToRemove.push(key);
-    }
-  }
-  
-  keysToRemove.forEach(key => localStorage.removeItem(key));
-  
-  return keysToRemove.length;
+  // ... upsert to game_acceptances and player_sessions with new token
 }
 ```
 
----
-
-### 2. Update `src/components/WalletButton.tsx`
-
-#### 2a. Add Imports (lines 1-15)
-
-Update line 8 to add `Trash2`:
+**Fixed code:**
 ```typescript
-import { Wallet, LogOut, RefreshCw, Copy, Check, AlertCircle, Loader2, ExternalLink, User, Trash2 } from "lucide-react";
-```
+} else {
+  // SIMPLE ACCEPTANCE FLOW
+  console.log("[ranked-accept] Simple acceptance mode for:", playerWallet.slice(0, 8));
 
-Add new imports after line 14:
-```typescript
-import { useNavigate } from "react-router-dom";
-import { clearAllSessionTokens } from "@/lib/sessionToken";
-import { supabase } from "@/integrations/supabase/client";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-```
-
-#### 2b. Add State (inside component, after line 121)
-
-```typescript
-// State for clear session confirmation dialog
-const [showClearConfirm, setShowClearConfirm] = useState(false);
-const [clearSessionLoading, setClearSessionLoading] = useState(false);
-const [dangerousRoomPda, setDangerousRoomPda] = useState<string | null>(null);
-const [dangerousReason, setDangerousReason] = useState<'active' | 'unverified' | null>(null);
-
-const navigate = useNavigate();
-```
-
-#### 2c. Add `checkActiveGameState()` with Refined Logic
-
-```typescript
-/**
- * Check if user is in a dangerous active game.
- * DOES NOT short-circuit on missing global token.
- * Scans all session_token_<roomPda> keys deterministically.
- * 
- * Refined behavior for empty tokens:
- * - If empty token found: remove the key and continue scanning
- * - Only return 'unverified' if empty found twice OR no other rooms remain
- */
-const checkActiveGameState = async (): Promise<{
-  isDangerous: boolean;
-  roomPda?: string;
-  reason?: 'active' | 'unverified';
-}> => {
-  // Collect all roomPdas from localStorage keys
-  const roomPdas: string[] = [];
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
-    if (!key) continue;
-    
-    // Only process session_token_<roomPda> keys (not session_token_latest)
-    if (key.startsWith("session_token_") && key !== "session_token_latest") {
-      const roomPda = key.replace("session_token_", "");
-      if (roomPda && roomPda.length >= 32) {
-        roomPdas.push(roomPda);
-      }
-    }
-  }
+  // CRITICAL FIX: Reuse the existing session token from the Authorization header
+  // This prevents overwriting the token that the frontend already stored
+  sessionToken = sessionResult.session.token;  // ✅ REUSE existing token
+  const nonce = crypto.randomUUID();
+  signatureForRecord = "implicit_stake_acceptance";
   
-  // If no room tokens found, safe to clear
-  if (roomPdas.length === 0) {
-    return { isDangerous: false };
-  }
+  // Record acceptance in game_acceptances (for dice roll seeding)
+  const { error: acceptanceError } = await supabase
+    .from("game_acceptances")
+    .upsert({
+      room_pda: body.roomPda,
+      player_wallet: playerWallet,
+      nonce,
+      timestamp_ms: now,
+      signature: signatureForRecord,
+      rules_hash: "stake_verified",
+      session_token: sessionToken,  // Use existing token
+      session_expires_at: new Date(now + 4 * 60 * 60 * 1000).toISOString(),
+    }, { onConflict: 'room_pda,player_wallet' });
+
+  // ... rest stays the same, but player_sessions upsert should NOT change session_token
   
-  let emptyTokenCount = 0;
-  let lastEmptyRoomPda: string | null = null;
-  let validRoomsChecked = 0;
-  
-  // Check each room
-  for (const roomPda of roomPdas) {
-    const key = `session_token_${roomPda}`;
-    const token = localStorage.getItem(key) || "";
-    
-    // If token is empty/missing for this key:
-    // 1. Remove the orphan key (self-healing)
-    // 2. Track how many empties we've seen
-    if (!token) {
-      localStorage.removeItem(key);
-      emptyTokenCount++;
-      lastEmptyRoomPda = roomPda;
-      console.warn("[ClearSession] Removed empty token key:", roomPda.slice(0, 8));
-      continue; // Continue to check other rooms
-    }
-    
-    validRoomsChecked++;
-    
-    try {
-      // Call game-session-get WITH Authorization header
-      const { data, error } = await supabase.functions.invoke("game-session-get", {
-        body: { roomPda },
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      
-      if (error || !data?.ok || !data?.session) continue;
-      
-      const session = data.session;
-      const statusInt = session.status_int ?? 1;
-      const participantsCount = session.participants?.length ?? 
-        (session.player1_wallet && session.player2_wallet ? 2 : session.player1_wallet ? 1 : 0);
-      const startRollFinalized = session.start_roll_finalized ?? false;
-      
-      // DANGEROUS: status_int === 2 AND participantsCount >= 2 AND start_roll_finalized === true
-      const isDangerous = statusInt === 2 && participantsCount >= 2 && startRollFinalized;
-      
-      if (isDangerous) {
-        return { isDangerous: true, roomPda, reason: 'active' };
-      }
-    } catch (e) {
-      console.warn("[ClearSession] Failed to check room:", roomPda.slice(0, 8), e);
-      // On error, continue checking other rooms
-    }
-  }
-  
-  // After scanning all rooms:
-  // Return 'unverified' if:
-  // 1. Empty token found twice in a row (persistent problem), OR
-  // 2. We found empty tokens AND checked no valid rooms (no other rooms to verify)
-  if (emptyTokenCount >= 2 || (emptyTokenCount > 0 && validRoomsChecked === 0)) {
-    return { 
-      isDangerous: true, 
-      roomPda: lastEmptyRoomPda || roomPdas[0], 
-      reason: 'unverified' 
-    };
-  }
-  
-  return { isDangerous: false };
-};
+  // Update player_sessions WITHOUT overwriting session_token (only update metadata)
+  const { error: sessionError } = await supabase
+    .from("player_sessions")
+    .update({
+      rules_hash: "stake_verified",
+      last_turn: 0,
+      last_hash: "genesis",
+      revoked: false,
+    })
+    .eq("room_pda", body.roomPda)
+    .eq("wallet", playerWallet);
+}
 ```
 
-#### 2d. Add Handler Functions
+The key changes are:
+1. Use `sessionResult.session.token` instead of `crypto.randomUUID()` for the session token
+2. Change the `player_sessions` upsert to an `update` that doesn't touch `session_token`
 
-```typescript
-// Execute the clear
-const executeClearSession = () => {
-  const count = clearAllSessionTokens();
-  toast.success(`Session cleared (${count} tokens removed)`);
-  navigate("/room-list");
-};
+## Why This Fix Works
 
-// Handle clear session button click
-const handleClearSession = async () => {
-  setClearSessionLoading(true);
-  setDangerousRoomPda(null);
-  setDangerousReason(null);
-  
-  try {
-    const { isDangerous, roomPda, reason } = await checkActiveGameState();
-    
-    if (isDangerous && roomPda) {
-      // Show confirmation dialog with room info
-      setDangerousRoomPda(roomPda);
-      setDangerousReason(reason || 'active');
-      setShowClearConfirm(true);
-    } else {
-      // Clear immediately
-      executeClearSession();
-    }
-  } catch (e) {
-    console.error("[ClearSession] Check failed:", e);
-    // On error, allow clear anyway (don't block user)
-    executeClearSession();
-  } finally {
-    setClearSessionLoading(false);
-  }
-};
+1. `record_acceptance` creates the authoritative session token and stores it in `player_sessions`
+2. Frontend stores this token in localStorage
+3. `ranked-accept` receives this token via Authorization header
+4. Instead of generating a new token, it reuses the one from the header
+5. The `player_sessions` update only modifies metadata, not the token
+6. `game-session-set-settings` uses the same token → DB lookup succeeds
 
-// Confirmed clear (from dialog)
-const handleClearConfirmed = () => {
-  setShowClearConfirm(false);
-  setDangerousRoomPda(null);
-  setDangerousReason(null);
-  executeClearSession();
-};
+## Testing Steps
 
-// Go to room list (no clearing) - for unverified state
-const handleGoToRoomList = () => {
-  setShowClearConfirm(false);
-  setDangerousRoomPda(null);
-  setDangerousReason(null);
-  navigate("/room-list");
-};
-```
-
-#### 2e. Add Trash Button (after line 871, inside button row)
-
-Insert after the LogOut button:
-
-```tsx
-<Button
-  onClick={handleClearSession}
-  variant="ghost"
-  size="icon"
-  className="h-8 w-8 text-muted-foreground hover:text-foreground"
-  title="Clear session tokens"
-  disabled={clearSessionLoading}
->
-  {clearSessionLoading ? (
-    <Loader2 size={14} className="animate-spin" />
-  ) : (
-    <Trash2 size={14} />
-  )}
-</Button>
-```
-
-#### 2f. Add AlertDialog (after NetworkProofBadge, line ~893)
-
-```tsx
-{/* Clear Session Confirmation Dialog */}
-<AlertDialog open={showClearConfirm} onOpenChange={setShowClearConfirm}>
-  <AlertDialogContent className="max-w-[90vw] sm:max-w-md">
-    <AlertDialogHeader>
-      <AlertDialogTitle className="text-amber-500">
-        Clear session while in a live match?
-      </AlertDialogTitle>
-      <AlertDialogDescription>
-        {dangerousReason === 'unverified' ? (
-          <>
-            We couldn't verify this match state. Clearing session may disconnect you and lead to timeout.
-            {dangerousRoomPda && (
-              <span className="block mt-2 font-mono text-xs text-amber-400">
-                Room: {dangerousRoomPda.slice(0, 8)}...
-              </span>
-            )}
-          </>
-        ) : (
-          <>
-            Clearing your session disconnects you. If you don't return, you may time out and lose your stake.
-            {dangerousRoomPda && (
-              <span className="block mt-2 font-mono text-xs">
-                You are currently in room: {dangerousRoomPda.slice(0, 8)}...
-              </span>
-            )}
-          </>
-        )}
-      </AlertDialogDescription>
-    </AlertDialogHeader>
-    <AlertDialogFooter className="flex-col sm:flex-row gap-2">
-      <AlertDialogCancel>Cancel</AlertDialogCancel>
-      {dangerousReason === 'unverified' && (
-        <Button 
-          variant="outline" 
-          onClick={handleGoToRoomList}
-        >
-          Go to Room List
-        </Button>
-      )}
-      <AlertDialogAction 
-        onClick={handleClearConfirmed}
-        className="bg-amber-600 hover:bg-amber-700"
-      >
-        Clear anyway
-      </AlertDialogAction>
-    </AlertDialogFooter>
-  </AlertDialogContent>
-</AlertDialog>
-```
-
----
-
-## Refined Empty Token Logic
-
-```text
-For each session_token_<roomPda> key:
-  |
-  +-- Token is empty/missing?
-  |     |
-  |     +-- YES:
-  |     |     1. Remove the orphan key (localStorage.removeItem)
-  |     |     2. Increment emptyTokenCount
-  |     |     3. Store roomPda as lastEmptyRoomPda
-  |     |     4. CONTINUE to next room (don't return yet)
-  |     |
-  |     +-- NO (token exists):
-  |           1. Call game-session-get with Authorization
-  |           2. If active match found -> return { isDangerous: true, reason: 'active' }
-  |           3. Otherwise continue
-  |
-  +-- After all rooms checked:
-        |
-        +-- emptyTokenCount >= 2?
-        |     -> return { isDangerous: true, reason: 'unverified' }
-        |
-        +-- emptyTokenCount > 0 AND validRoomsChecked === 0?
-        |     -> return { isDangerous: true, reason: 'unverified' }
-        |
-        +-- Otherwise:
-              -> return { isDangerous: false }
-```
-
----
-
-## AlertDialog Footer (3 Buttons for Unverified)
-
-| Reason | Buttons |
-|--------|---------|
-| `active` | Cancel, Clear anyway |
-| `unverified` | Cancel, Go to Room List, Clear anyway |
-
-The "Go to Room List" button:
-- Only appears when `dangerousReason === 'unverified'`
-- Navigates to `/room-list` without clearing any tokens
-- Allows user to verify their match state manually
-
----
+After implementation:
+1. Create a ranked chess room with 15 second turn timer
+2. Verify console shows `[CreateRoom] stored session token for room...`
+3. Verify NO "Room Settings Failed" modal appears
+4. Check edge function logs - `game-session-set-settings` should succeed
+5. Verify `turn_time_seconds` in database is 15 (not default 60)
 
 ## Technical Notes
 
-1. **Self-healing**: Empty token keys are removed during scan (reduces future false positives)
-2. **Threshold**: Only warns about unverified state if 2+ empty keys OR no valid rooms exist
-3. **Authorization**: All `game-session-get` calls include Bearer token header
-4. **No short-circuit**: Scans ALL room keys before deciding safe/dangerous
-5. **Three actions for unverified**: Cancel / Go to Room List / Clear anyway
-6. **No layout changes**: Only adds a small 8x8 trash icon button
-
+The `sessionResult.session.token` is available because `requireSession` already validated and returned the token from the Authorization header. This is secure because:
+- The token was already validated against `player_sessions` in `requireSession`
+- We're not trusting any client-provided value - just reusing what was already authenticated
+- The wallet is still derived from the session, not from the request body
