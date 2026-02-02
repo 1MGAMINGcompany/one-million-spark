@@ -262,7 +262,7 @@ Deno.serve(async (req: Request) => {
     // 🔒 SECURITY (B): Fetch game_sessions EARLY and validate caller is participant
     const { data: sessionRow, error: sessionError } = await supabase
       .from("game_sessions")
-      .select("player1_wallet, player2_wallet, participants, current_turn_wallet, turn_started_at, turn_time_seconds, status_int")
+      .select("player1_wallet, player2_wallet, participants, current_turn_wallet, turn_started_at, turn_time_seconds, status_int, status")
       .eq("room_pda", roomPda)
       .maybeSingle();
 
@@ -292,6 +292,18 @@ Deno.serve(async (req: Request) => {
     // - Timeout mode: derived from DB current_turn_wallet after expiry check
     let forfeitingWallet: string;
 
+    // 🔒 SECURITY (D): Dedupe guard - don't settle a finished room twice
+    // Check BEFORE any settlement logic
+    if (sessionRow.status_int === 3 || sessionRow.status === "finished") {
+      console.log("[forfeit-game] Room already finished, returning noop", { requestId, roomPda, status_int: sessionRow.status_int });
+      return json200({ 
+        success: true, 
+        action: "noop_already_finished",
+        message: "Room already settled",
+        requestId 
+      });
+    }
+
     if (mode === "timeout") {
       // 🔒 SECURITY (C): Timeout mode - validate turn is expired and current_turn_wallet exists
       if (!sessionRow.current_turn_wallet) {
@@ -308,6 +320,17 @@ Deno.serve(async (req: Request) => {
       }
 
       forfeitingWallet = sessionRow.current_turn_wallet;
+
+      // 🔒 SECURITY (E): Anti-grief - timed-out player cannot trigger their own timeout
+      // Only the opponent (non-forfeiting participant) can trigger timeout settlement
+      if (callerWallet === forfeitingWallet) {
+        console.error("[forfeit-game] Forbidden: timed-out player cannot trigger own timeout", { 
+          requestId, 
+          callerWallet, 
+          forfeitingWallet 
+        });
+        return json200({ success: false, error: "Forbidden", requestId });
+      }
     } else {
       // Manual mode: caller forfeits themselves (1-tap UX)
       forfeitingWallet = callerWallet;
