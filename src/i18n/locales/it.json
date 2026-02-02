@@ -6,6 +6,7 @@
     "exit": "Esci"
   },
   "game": {
+    "player": "Giocatore",
     "finishGame": "Termina Partita",
     "finishGameDesc": "Come creatore della stanza, puoi terminare la partita e pagare il vincitore.",
     "selectWinner": "Seleziona Vincitore",

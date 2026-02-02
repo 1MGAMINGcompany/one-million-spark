@@ -6,6 +6,7 @@
     "exit": "退出"
   },
   "game": {
+    "player": "プレイヤー",
     "finishGame": "ゲーム終了",
     "finishGameDesc": "ルーム作成者として、ゲームを終了し勝者に支払いができます。",
     "selectWinner": "勝者を選択",

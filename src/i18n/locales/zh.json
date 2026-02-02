@@ -6,6 +6,7 @@
     "exit": "退出"
   },
   "game": {
+    "player": "玩家",
     "finishGame": "结束游戏",
     "finishGameDesc": "作为房间创建者，您可以结束游戏并支付奖金给获胜者。",
     "selectWinner": "选择获胜者",
