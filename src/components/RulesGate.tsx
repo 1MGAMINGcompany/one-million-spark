@@ -102,6 +102,9 @@ export function RulesGate({
   const [serverPollErrors, setServerPollErrors] = useState(0);
   const [showHardReload, setShowHardReload] = useState(false);
   
+  // Timeout fallback for justJoined spinner - prevents infinite lock
+  const [joinConfirmTimedOut, setJoinConfirmTimedOut] = useState(false);
+  
   const debugEnabled = useMemo(() => {
     if (typeof window === "undefined") return false;
     return new URLSearchParams(window.location.search).get("debug") === "1";
@@ -191,6 +194,23 @@ export function RulesGate({
     return () => clearTimeout(t);
   }, [roomPda, isRanked, effectiveStartRollFinalized]);
   // --- END: Server-truth polling ---
+
+  // --- Timeout fallback for justJoined spinner ---
+  // If auto-acceptance takes too long (10s), fall back to AcceptRulesModal
+  useEffect(() => {
+    // Only run timer when justJoined is true AND we're not yet ready
+    if (!justJoined || iAmReady) {
+      setJoinConfirmTimedOut(false);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      console.warn("[RulesGate] justJoined spinner timed out after 10s, falling back to AcceptRulesModal");
+      setJoinConfirmTimedOut(true);
+    }, 10000);
+
+    return () => clearTimeout(timer);
+  }, [justJoined, iAmReady]);
 
   // Check if my wallet is in the room players list (use isSameWallet for correct Base58 comparison)
   const myWalletInRoom = useMemo(() => {
@@ -301,10 +321,10 @@ export function RulesGate({
 
   // 4. If I haven't accepted → show AcceptRulesModal (blocking)
   //    EXCEPTION: If justJoined is true, user confirmed via JoinRulesModal and auto-accept is in flight.
-  //    Show waiting state briefly until polling confirms acceptance.
+  //    Show waiting state briefly until polling confirms acceptance (max 10s before fallback).
   if (!iAmReady) {
-    // If just joined, skip modal - show temporary waiting state while auto-accept propagates
-    if (justJoined) {
+    // If just joined AND not timed out, show temporary waiting state while auto-accept propagates
+    if (justJoined && !joinConfirmTimedOut) {
       return (
         <div data-overlay="RulesGate.justJoined" className="fixed inset-0 z-50 bg-background/95 backdrop-blur-sm flex items-center justify-center">
           <div className="text-center space-y-4">
@@ -317,7 +337,7 @@ export function RulesGate({
       );
     }
     
-    // Recovery case: User refreshed mid-flow and hasn't accepted yet
+    // Recovery case: User refreshed mid-flow, OR justJoined timed out
     // Show AcceptRulesModal to let them complete acceptance
     return (
       <AcceptRulesModal
