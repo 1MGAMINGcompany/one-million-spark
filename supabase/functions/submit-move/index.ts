@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { Connection, PublicKey } from "npm:@solana/web3.js@1.95.0";
+import { requireSession } from "../_shared/requireSession.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -79,6 +80,9 @@ function parseRoomAccount(data: Uint8Array): ParsedRoom | null {
 /**
  * Thin wrapper around submit_game_move RPC
  * 
+ * 🔒 SECURITY: Caller identity is derived from session token ONLY.
+ * The request body wallet field is IGNORED.
+ * 
  * All validation and atomic operations happen in Postgres:
  * - Row locking (FOR UPDATE) prevents race conditions
  * - Turn ownership validation (ranked games)
@@ -97,10 +101,24 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const { roomPda, wallet, moveData, clientMoveId } = await req.json();
+    // 🔒 SECURITY: Require session token - derive caller identity from session only
+    const sessionResult = await requireSession(supabase, req);
+    if (!sessionResult.ok) {
+      console.warn("[submit-move] Unauthorized:", sessionResult.error);
+      return new Response(
+        JSON.stringify({ success: false, error: "unauthorized", details: sessionResult.error }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
-    // Basic field validation
-    if (!roomPda || !wallet || !moveData) {
+    // callerWallet is ALWAYS derived from session - ignore any body.wallet
+    const callerWallet = sessionResult.session.wallet;
+
+    // Body schema: { roomPda, moveData, clientMoveId } - wallet is NOT read
+    const { roomPda, moveData, clientMoveId } = await req.json();
+
+    // Basic field validation (wallet removed - derived from session)
+    if (!roomPda || !moveData) {
       console.error("[submit-move] Missing required fields");
       return new Response(
         JSON.stringify({ success: false, error: "missing_fields" }),
@@ -108,18 +126,19 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Log snapshot for debugging
+    // Log snapshot for debugging (callerWallet from session)
     console.log("[submit-move] Calling RPC:", {
       roomPda: roomPda.slice(0, 8),
-      wallet: wallet.slice(0, 8),
+      callerWallet: callerWallet.slice(0, 8),
       moveType: moveData.type,
       clientMoveId: clientMoveId?.slice(0, 8) || "null",
     });
 
     // Call atomic RPC - all validation + locking happens in Postgres
+    // 🔒 p_wallet is derived from session token, NOT from request body
     const { data: result, error } = await supabase.rpc("submit_game_move", {
       p_room_pda: roomPda,
-      p_wallet: wallet,
+      p_wallet: callerWallet,
       p_move_data: moveData,
       p_client_move_id: clientMoveId || null,
     });
@@ -136,7 +155,7 @@ Deno.serve(async (req: Request) => {
     // FALLBACK: If not_a_participant, sync from on-chain and retry
     // ─────────────────────────────────────────────────────────────
     if (result?.error === 'not_a_participant') {
-      console.log("[submit-move] Attempting on-chain participant sync...");
+      console.log("[submit-move] Attempting on-chain participant sync for:", callerWallet.slice(0, 8));
       const rpcUrl = Deno.env.get("SOLANA_RPC_URL");
       
       if (rpcUrl) {
@@ -148,7 +167,8 @@ Deno.serve(async (req: Request) => {
           if (accountInfo?.data) {
             const roomData = parseRoomAccount(new Uint8Array(accountInfo.data));
             
-            if (roomData && roomData.players.some(p => p.toBase58() === wallet)) {
+            // 🔒 Check if callerWallet (from session) is on-chain
+            if (roomData && roomData.players.some(p => p.toBase58() === callerWallet)) {
               const participants = roomData.players.map(p => p.toBase58());
               
               // Sync participants to DB
@@ -166,10 +186,10 @@ Deno.serve(async (req: Request) => {
               } else {
                 console.log("[submit-move] ✅ Synced participants, retrying...");
                 
-                // Retry the RPC call
+                // Retry the RPC call with session-derived wallet
                 const { data: retryResult, error: retryError } = await supabase.rpc("submit_game_move", {
                   p_room_pda: roomPda,
-                  p_wallet: wallet,
+                  p_wallet: callerWallet,
                   p_move_data: moveData,
                   p_client_move_id: clientMoveId || null,
                 });
