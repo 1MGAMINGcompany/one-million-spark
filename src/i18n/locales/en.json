@@ -904,7 +904,10 @@
   },
   "common": {
     "processing": "Processing...",
-    "error": "Error"
+    "error": "Error",
+    "rejoinRoom": "Rejoin Room",
+    "pleaseWait": "Please wait...",
+    "loading": "Loading..."
   },
   "unresolvedRoom": {
     "title": "Finish Your Active Game",
@@ -921,6 +924,10 @@
     "title_ranked": "Ranked Match Rules",
     "title_private": "Private Match Rules",
     "title_default": "Match Rules",
-    "review_conditions": "Review the match conditions before starting."
+    "review_conditions": "Review the match conditions before starting.",
+    "imReady": "I'm Ready"
+  },
+  "wallet": {
+    "wrongWallet": "Wrong wallet connected"
   }
 }

@@ -634,7 +634,9 @@
     "bannerDismissedDesc": "Phòng này đã được ẩn khỏi banner.",
     "cannotSendMessage": "Không thể gửi tin nhắn",
     "walletCopied": "Đã sao chép địa chỉ ví",
-    "processing": "Đang xử lý..."
+    "processing": "Đang xử lý...",
+    "rejoinRoom": "Tham Gia Lại Phòng",
+    "pleaseWait": "Vui lòng chờ..."
   },
   "rematch": {
     "title": "Đấu Lại",
@@ -964,6 +966,10 @@
     "title_ranked": "Luật Trận Xếp Hạng",
     "title_private": "Luật Trận Riêng Tư",
     "title_default": "Luật Trận Đấu",
-    "review_conditions": "Xem lại điều kiện trận đấu trước khi bắt đầu."
+    "review_conditions": "Xem lại điều kiện trận đấu trước khi bắt đầu.",
+    "imReady": "Tôi Sẵn Sàng"
+  },
+  "wallet": {
+    "wrongWallet": "Ví kết nối sai"
   }
 }

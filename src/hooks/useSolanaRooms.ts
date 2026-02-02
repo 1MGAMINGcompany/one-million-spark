@@ -809,7 +809,7 @@ export function useSolanaRooms() {
             // Check if 404 (function not found) - fallback to edge function
             if (rpcError.message?.includes("404") || rpcError.code === "PGRST116") {
               console.log("[JoinRoom] Trying verify-acceptance edge function fallback...");
-              const { error: fnError } = await supabase.functions.invoke("verify-acceptance", {
+              const { data: fnData, error: fnError } = await supabase.functions.invoke("verify-acceptance", {
                 body: {
                   acceptance: {
                     roomPda: joinedRoom.pda,
@@ -842,6 +842,12 @@ export function useSolanaRooms() {
                 });
               } else {
                 console.log("[JoinRoom] Recorded acceptance via edge function fallback");
+                // CRITICAL: Store session token from fallback response
+                const fallbackToken = fnData?.sessionToken as string | undefined;
+                if (fallbackToken) {
+                  storeSessionToken(joinedRoom.pda, fallbackToken);
+                  console.log("[JoinRoom] Session token stored from fallback for room:", joinedRoom.pda.slice(0, 8));
+                }
               }
             } else {
               toast({
