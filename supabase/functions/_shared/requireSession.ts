@@ -4,14 +4,17 @@ import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 export type SessionInfo = {
   token: string;
   wallet: string;
-  expiresAt: string;
 };
 
 export async function requireSession(
   supabase: SupabaseClient,
   req: Request
 ): Promise<{ ok: true; session: SessionInfo } | { ok: false; error: string }> {
-  const auth = req.headers.get("authorization") || req.headers.get("Authorization") || "";
+  const auth =
+    req.headers.get("authorization") ||
+    req.headers.get("Authorization") ||
+    "";
+
   if (!auth.toLowerCase().startsWith("bearer ")) {
     return { ok: false, error: "Missing Authorization: Bearer <session_token>" };
   }
@@ -21,28 +24,20 @@ export async function requireSession(
     return { ok: false, error: "Invalid session token format" };
   }
 
-  const nowIso = new Date().toISOString();
-
-  // player_sessions schema used elsewhere:
-  // - session_token
-  // - player_wallet
-  // - session_expires_at
-  // - revoked
+  // player_sessions schema (actual):
+  // session_token, room_pda, wallet, revoked, rules_hash, last_turn, last_hash, last_move_at, desync_count, created_at
   const { data, error } = await supabase
     .from("player_sessions")
-    .select("player_wallet, session_expires_at, revoked")
+    .select("wallet, revoked")
     .eq("session_token", token)
     .maybeSingle();
 
   if (error) return { ok: false, error: `Session lookup error: ${error.message}` };
   if (!data) return { ok: false, error: "Session not found" };
   if (data.revoked) return { ok: false, error: "Session revoked" };
-  if (!data.session_expires_at || data.session_expires_at <= nowIso) {
-    return { ok: false, error: "Session expired" };
-  }
 
-  const wallet = String(data.player_wallet || "").trim();
+  const wallet = String((data as any).wallet || "").trim();
   if (!wallet) return { ok: false, error: "Session missing wallet" };
 
-  return { ok: true, session: { token, wallet, expiresAt: data.session_expires_at } };
+  return { ok: true, session: { token, wallet } };
 }
