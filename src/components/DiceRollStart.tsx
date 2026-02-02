@@ -140,8 +140,8 @@ export function DiceRollStart({
   
   // Determine which player is "me" for display purposes (use trim, not toLowerCase - Base58 is case-sensitive)
   const isPlayer1 = myWallet.trim() === player1Wallet.trim();
-  const myName = t("common.you") || "You";
-  const opponentName = t("game.opponent") || "Opponent";
+  const myName = t("common.you", "You");
+  const opponentName = t("game.opponent", "Opponent");
 
   /**
    * Compute deterministic starter from roomPda
