@@ -783,124 +783,112 @@ export function useSolanaRooms() {
         description: `Successfully joined room #${roomId}`,
       });
       
-      // Record acceptance using tx signature as proof (joiner is player 2)
+      // ═══════════════════════════════════════════════════════════════════════
+      // CRITICAL: Sync participants + get session token IMMEDIATELY after join tx
+      // This is the AUTHORITATIVE DB sync step for the joiner.
+      // ═══════════════════════════════════════════════════════════════════════
       try {
-        // Fetch the room to get PDA and stake info
+        // 1) Fetch the room PDA from on-chain (just confirmed)
         const joinedRoom = await fetchUserActiveRoom();
-        if (joinedRoom?.pda) {
-          const stakeLamports = Math.floor(joinedRoom.entryFeeSol * LAMPORTS_PER_SOL);
+        if (!joinedRoom?.pda) {
+          console.warn("[JoinRoom] ⚠️ Could not fetch joined room after tx confirmation");
+          return { ok: true, signature }; // Still success, but no session token
+        }
+
+        console.log("[JoinRoom] 🔄 Syncing participants via ranked-accept...", {
+          roomPda: joinedRoom.pda.slice(0, 8),
+          joiner: publicKey.toBase58().slice(0, 8),
+        });
+
+        // 2) First, ensure game_session exists with joiner as player2
+        //    record_acceptance sets player2_wallet but NOT participants[]
+        const stakeLamports = Math.floor(joinedRoom.entryFeeSol * LAMPORTS_PER_SOL);
+        
+        // Fetch mode from DB 
+        const { data: sessionResp } = await supabase.functions.invoke("game-session-get", {
+          body: { roomPda: joinedRoom.pda },
+        });
+        const mode = (sessionResp?.session?.mode as 'casual' | 'ranked' | 'private') || 'casual';
+        console.log("[JoinRoom] DB mode:", mode);
+
+        // 3) Call record_acceptance first to get a session token
+        const rules = createRulesFromRoom(
+          joinedRoom.pda,
+          joinedRoom.gameType,
+          joinedRoom.maxPlayers,
+          stakeLamports,
+          mode
+        );
+        const rulesHash = await computeRulesHash(rules);
+
+        const { data: acceptResult, error: rpcError } = await supabase.rpc("record_acceptance", {
+          p_room_pda: joinedRoom.pda,
+          p_wallet: publicKey.toBase58(),
+          p_tx_signature: signature,
+          p_rules_hash: rulesHash,
+          p_stake_lamports: stakeLamports,
+          p_is_creator: false,
+        });
+
+        let sessionToken: string | null = null;
+
+        if (rpcError) {
+          console.warn("[JoinRoom] record_acceptance RPC failed:", rpcError.message);
+        } else {
+          const resultObj = typeof acceptResult === 'object' && acceptResult !== null 
+            ? acceptResult as Record<string, unknown> 
+            : null;
+          sessionToken = (resultObj?.session_token as string) || null;
           
-          // Fetch mode from DB via Edge Function (RLS locked)
-          const { data: resp, error: modeError } = await supabase.functions.invoke("game-session-get", {
-            body: { roomPda: joinedRoom.pda },
-          });
-          if (modeError) {
-            console.warn("[JoinRoom] Edge function error:", modeError);
-          }
-          const mode = (resp?.session?.mode as 'casual' | 'ranked') || 'casual';
-          console.log("[JoinRoom] Fetched mode from DB:", mode);
-          
-          const rules = createRulesFromRoom(
-            joinedRoom.pda,
-            joinedRoom.gameType,
-            joinedRoom.maxPlayers,
-            stakeLamports,
-            mode // Use DB mode, NOT stake-derived
-          );
-          const rulesHash = await computeRulesHash(rules);
-          
-          const { data: acceptResult, error: rpcError } = await supabase.rpc("record_acceptance", {
-            p_room_pda: joinedRoom.pda,
-            p_wallet: publicKey.toBase58(),
-            p_tx_signature: signature,
-            p_rules_hash: rulesHash,
-            p_stake_lamports: stakeLamports,
-            p_is_creator: false,
-          });
-          
-          if (rpcError) {
-            console.warn("[JoinRoom] RPC record_acceptance failed:", rpcError);
-            // Check if 404 (function not found) - fallback to edge function
-            if (rpcError.message?.includes("404") || rpcError.code === "PGRST116") {
-              console.log("[JoinRoom] Trying verify-acceptance edge function fallback...");
-              const { data: fnData, error: fnError } = await supabase.functions.invoke("verify-acceptance", {
-                body: {
-                  acceptance: {
-                    roomPda: joinedRoom.pda,
-                    playerWallet: publicKey.toBase58(),
-                    rulesHash,
-                    nonce: crypto.randomUUID(),
-                    timestamp: Date.now(),
-                    signature,
-                  },
-                  rules: {
-                    roomPda: joinedRoom.pda,
-                    gameType: joinedRoom.gameType,
-                    mode,
-                    maxPlayers: joinedRoom.maxPlayers,
-                    stakeLamports,
-                    feeBps: 250,
-                    turnTimeSeconds: 60,
-                    forfeitPolicy: "timeout",
-                    version: 1,
-                  },
-                },
-              });
-              
-              if (fnError) {
-                console.error("[JoinRoom] Both RPC and edge function failed:", fnError);
-                toast({
-                  title: "Acceptance Recording Failed",
-                  description: "Game will proceed but ranked features may not work",
-                  variant: "destructive",
-                });
-              } else {
-                console.log("[JoinRoom] Recorded acceptance via edge function fallback");
-                // CRITICAL: Store session token from fallback response
-                const fallbackToken = fnData?.sessionToken as string | undefined;
-                if (fallbackToken) {
-                  storeSessionToken(joinedRoom.pda, fallbackToken);
-                  console.log("[JoinRoom] Session token stored from fallback for room:", joinedRoom.pda.slice(0, 8));
-                }
-              }
-            } else {
-              toast({
-                title: "Acceptance Recording Failed",
-                description: rpcError.message || "Unknown error",
-                variant: "destructive",
-              });
-            }
-          } else {
-            // 🔍 DEBUG LOG: record_acceptance succeeded
-            console.log("[JoinRoom] ✅ record_acceptance SUCCESS:", {
-              mode,
-              roomPda: joinedRoom.pda.slice(0, 8),
-              wallet: publicKey.toBase58().slice(0, 8),
-              resultKeys: acceptResult ? Object.keys(acceptResult as object) : [],
-            });
-            
-            // Store session token from record_acceptance for future auth
-            const resultObj = typeof acceptResult === 'object' && acceptResult !== null ? acceptResult as Record<string, unknown> : null;
-            const sessionTokenFromRpc = resultObj?.session_token as string | undefined;
-            if (sessionTokenFromRpc) {
-              // 🔍 DEBUG LOG: storeSessionToken called
-              console.log("[JoinRoom] ✅ storeSessionToken CALLED:", {
-                roomPda: joinedRoom.pda.slice(0, 8),
-                tokenPrefix: sessionTokenFromRpc.slice(0, 8) + "...",
-              });
-              storeSessionToken(joinedRoom.pda, sessionTokenFromRpc);
-              console.log("[JoinRoom] ✅ Session token STORED for room:", joinedRoom.pda.slice(0, 8));
-            } else {
-              console.warn("[JoinRoom] ⚠️ No session_token in record_acceptance response");
-            }
+          if (sessionToken) {
+            storeSessionToken(joinedRoom.pda, sessionToken);
+            console.log("[JoinRoom] ✅ Session token stored from record_acceptance:", sessionToken.slice(0, 8));
           }
         }
-      } catch (acceptErr: any) {
-        console.error("[JoinRoom] Failed to record acceptance:", acceptErr);
+
+        // 4) CRITICAL: Call ranked-accept to sync on-chain participants to DB
+        //    This is the step that populates game_sessions.participants[]
+        //    and ensures player2_wallet is set correctly.
+        if (sessionToken) {
+          console.log("[JoinRoom] 🔄 Calling ranked-accept to sync participants...");
+          
+          const { data: rankedData, error: rankedError } = await supabase.functions.invoke("ranked-accept", {
+            body: {
+              roomPda: joinedRoom.pda,
+              mode: "simple", // Simple mode - session token provides identity
+            },
+            headers: {
+              Authorization: `Bearer ${sessionToken}`,
+            },
+          });
+
+          if (rankedError) {
+            console.error("[JoinRoom] ranked-accept failed:", rankedError);
+          } else if (rankedData?.success) {
+            console.log("[JoinRoom] ✅ ranked-accept SUCCESS - participants synced:", {
+              sessionToken: rankedData.sessionToken?.slice(0, 8),
+            });
+            
+            // Update session token if ranked-accept returned a new one
+            if (rankedData.sessionToken) {
+              storeSessionToken(joinedRoom.pda, rankedData.sessionToken);
+              console.log("[JoinRoom] ✅ Session token updated from ranked-accept");
+            }
+          } else {
+            console.warn("[JoinRoom] ranked-accept returned:", rankedData);
+          }
+        } else {
+          // No session token from record_acceptance - try ranked-accept directly
+          // This will fail auth check, but we log for debugging
+          console.warn("[JoinRoom] ⚠️ No session token - cannot call ranked-accept");
+        }
+
+      } catch (syncErr: any) {
+        console.error("[JoinRoom] Failed to sync participants:", syncErr);
         toast({
-          title: "Acceptance Error",
-          description: acceptErr?.message || "Could not record game acceptance",
-          variant: "destructive",
+          title: "Sync Warning",
+          description: "Joined room but sync incomplete. Game should still work.",
+          variant: "default",
         });
       }
       
