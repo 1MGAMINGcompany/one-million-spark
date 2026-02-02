@@ -457,11 +457,28 @@ export default function CreateRoom() {
         // ═══════════════════════════════════════════════════════════════════════
         // CRITICAL: Wait for session token before calling set-settings
         // The createRoom flow in useSolanaRooms stores the session token AFTER
-        // record_acceptance succeeds. We wait briefly and retry if needed.
+        // record_acceptance succeeds. Poll up to 1s to ensure it's available.
         // ═══════════════════════════════════════════════════════════════════════
         
-        // Wait a moment for session token to be stored (record_acceptance is async)
-        await new Promise(resolve => setTimeout(resolve, 300));
+        // Poll for session token availability (5 attempts × 200ms = 1 second max)
+        let tokenAvailable = false;
+        for (let attempt = 0; attempt < 5 && !tokenAvailable; attempt++) {
+          await new Promise(resolve => setTimeout(resolve, 200));
+          tokenAvailable = !!getSessionToken(roomPdaStr);
+          if (!tokenAvailable) {
+            console.log(`[CreateRoom] Token poll attempt ${attempt + 1}/5 - not found yet`);
+          }
+        }
+        
+        if (!tokenAvailable) {
+          console.warn(`[CreateRoom] Session token missing for room ${roomPdaStr.slice(0, 8)} after 1s polling`);
+          // For ranked/private, this is critical - show modal
+          if (gameMode === 'ranked' || gameMode === 'private') {
+            setFailedRoomPda(roomPdaStr);
+            setShowSettingsFailedModal(true);
+            return;
+          }
+        }
         
         // Use the new useRoomSettings hook with retry logic
         const settingsResult = await saveRoomSettings({
