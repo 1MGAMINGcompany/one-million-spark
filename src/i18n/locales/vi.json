@@ -909,7 +909,13 @@
     "roomCancelled": "Đã Hủy Phòng",
     "stakeRefunded": "Cược của bạn đã được hoàn lại",
     "playerEliminated": "Người Chơi Bị Loại",
-    "playerLeft": "{{player}} đã rời game"
+    "playerLeft": "{{player}} đã rời game",
+    "roomNotStarted": "Đang Chờ Đối Thủ",
+    "useCancelInstead": "Chưa có đối thủ tham gia. Hủy phòng để nhận lại tiền cược.",
+    "waitingForOpponent": "Đang Chờ Đối Thủ",
+    "cancelRoomDescription": "Chưa có đối thủ tham gia. Hủy phòng để nhận lại toàn bộ tiền cược.",
+    "refundAmount": "Bạn sẽ nhận lại {{stake}} SOL",
+    "cancelRoom": "Hủy Phòng & Hoàn Tiền"
   },
   "unresolvedRoom": {
     "title": "Hoàn Thành Game Đang Chơi",
