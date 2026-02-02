@@ -267,6 +267,29 @@ Deno.serve(async (req: Request) => {
       } else {
         console.log("[ranked-accept] ✅ Simple acceptance recorded");
       }
+
+      // NEW: Also create player_sessions row (critical for forfeit-game)
+      // This ensures the joiner (Player 2) can call server-verified timeout forfeit.
+      const { error: sessionError } = await supabase
+        .from("player_sessions")
+        .upsert(
+          {
+            session_token: sessionToken,
+            room_pda: body.roomPda,
+            wallet: body.playerWallet,
+            rules_hash: "stake_verified",
+            last_turn: 0,
+            last_hash: "genesis",
+            revoked: false,
+          },
+          { onConflict: "room_pda,wallet" }
+        );
+
+      if (sessionError) {
+        console.error("[ranked-accept] Failed to create player_session:", sessionError);
+      } else {
+        console.log("[ranked-accept] ✅ player_sessions row created for simple mode");
+      }
     }
 
     // ─────────────────────────────────────────────────────────────
