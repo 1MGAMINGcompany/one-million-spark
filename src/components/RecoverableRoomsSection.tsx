@@ -28,6 +28,17 @@ function shortenPda(pda: string): string {
   return `${pda.slice(0, 6)}…${pda.slice(-4)}`;
 }
 
+/**
+ * Validate that a string looks like a valid Solana PDA (base58, 32-44 chars)
+ * Base58 alphabet excludes: 0, O, I, l
+ */
+function isValidSolanaPda(pda: string): boolean {
+  if (!pda || pda.length < 32 || pda.length > 44) return false;
+  // Base58 character set (no 0, O, I, l)
+  const base58Regex = /^[1-9A-HJ-NP-Za-km-z]+$/;
+  return base58Regex.test(pda);
+}
+
 function formatTimeAgo(dateString: string): string {
   const date = new Date(dateString);
   const now = new Date();
@@ -122,10 +133,11 @@ export function RecoverableRoomsSection({ wallet }: RecoverableRoomsSectionProps
         {rooms.map((room) => {
           const isCreator = room.player1_wallet === wallet;
           const hasOpponent = !!room.player2_wallet;
+          const validPda = isValidSolanaPda(room.room_pda);
           
           return (
             <div
-              key={room.room_pda}
+              key={room.room_pda || crypto.randomUUID()}
               className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-muted/30 rounded-lg border border-border/50"
             >
               <div className="flex-1 min-w-0">
@@ -145,11 +157,18 @@ export function RecoverableRoomsSection({ wallet }: RecoverableRoomsSectionProps
                     <span className="text-amber-400 ml-2">(awaiting opponent)</span>
                   )}
                 </p>
+                {!validPda && (
+                  <p className="text-xs text-destructive mt-1">
+                    ⚠️ Invalid room data — cannot recover
+                  </p>
+                )}
               </div>
-              <RecoverFundsButton
-                roomPda={room.room_pda}
-                onRecovered={handleRecovered}
-              />
+              {validPda && (
+                <RecoverFundsButton
+                  roomPda={room.room_pda}
+                  onRecovered={handleRecovered}
+                />
+              )}
             </div>
           );
         })}
