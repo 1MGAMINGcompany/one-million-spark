@@ -468,7 +468,9 @@
     "invitePlayers": "Invite Players",
     "sharePrivateRoom": "Share this private room with friends and family.",
     "share": "Share",
-    "walletNeeded": "Players will need to connect their wallet to join"
+    "walletNeeded": "Players will need to connect their wallet to join",
+    "scanToJoin": "Scan with phone to join",
+    "showQrToFriend": "Show this QR to a friend"
   },
   "gameBanner": {
     "gameReady": "Game Ready — Opponent Joined!",

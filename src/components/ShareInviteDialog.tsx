@@ -476,20 +476,18 @@ export function ShareInviteDialog({
             </>
           )}
 
-          {/* QR Code for Desktop -> Mobile sharing */}
-          {!isMobile && (
-            <>
-              <Separator className="my-2" />
-              <div className="flex flex-col items-center py-3">
-                <p className="text-xs text-muted-foreground mb-3">
-                  {t("shareInvite.scanToJoin", "Scan with phone to join")}
-                </p>
-                <div className="bg-white p-3 rounded-lg">
-                  <QRCodeSVG value={inviteLink} size={120} />
-                </div>
-              </div>
-            </>
-          )}
+          {/* QR Code - shown on both desktop and mobile */}
+          <Separator className="my-2" />
+          <div className="flex flex-col items-center py-3">
+            <p className="text-xs text-muted-foreground mb-3">
+              {isMobile 
+                ? t("shareInvite.showQrToFriend", "Show this QR to a friend")
+                : t("shareInvite.scanToJoin", "Scan with phone to join")}
+            </p>
+            <div className="bg-white p-3 rounded-lg">
+              <QRCodeSVG value={inviteLink} size={isMobile ? 100 : 120} />
+            </div>
+          </div>
 
           {/* Send to Wallet Section */}
           <Separator className="my-2" />
