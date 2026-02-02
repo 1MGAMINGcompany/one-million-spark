@@ -37,6 +37,8 @@ export interface UseForfeitOptions {
   onCleanupWebRTC?: () => void;
   onCleanupSupabase?: () => void;
   onCleanupLocalState?: () => void;
+  /** CRITICAL: Callback to clear room from useSolanaRooms state - prevents stuck banners */
+  onClearRoomFromState?: (roomPda: string) => void;
   /** Callback when room is not started (WAITING) and should be cancelled instead */
   onRoomNotStarted?: () => void;
 }
@@ -77,6 +79,7 @@ export function useForfeit({
   onCleanupWebRTC,
   onCleanupSupabase,
   onCleanupLocalState,
+  onClearRoomFromState,
   onRoomNotStarted,
 }: UseForfeitOptions): UseForfeitReturn {
   const navigate = useNavigate();
@@ -167,11 +170,21 @@ export function useForfeit({
       console.warn("[useForfeit] Local state cleanup error:", e);
     }
     
+    // 6. CRITICAL: Clear room from useSolanaRooms state to remove stuck banners
+    if (roomPda) {
+      try {
+        onClearRoomFromState?.(roomPda);
+        console.log("[useForfeit] Cleared room from global state:", roomPda.slice(0, 8));
+      } catch (e) {
+        console.warn("[useForfeit] Failed to clear room from state:", e);
+      }
+    }
+    
     console.log("[useForfeit] forceExit complete, navigating to /room-list");
     
-    // 6. Navigate with replace (no back button to stuck state)
+    // 7. Navigate with replace (no back button to stuck state)
     navigate("/room-list", { replace: true });
-  }, [roomPda, navigate, onCleanupWebRTC, onCleanupSupabase, onCleanupLocalState]);
+  }, [roomPda, navigate, onCleanupWebRTC, onCleanupSupabase, onCleanupLocalState, onClearRoomFromState]);
 
   /**
    * forfeit() - On-chain payout to opponent via finalize_room

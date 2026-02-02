@@ -148,7 +148,7 @@ const ChessGame = () => {
   const [isCancellingRoom, setIsCancellingRoom] = useState(false);
   
   // Solana rooms hook for forfeit/cancel
-  const { cancelRoomByPda } = useSolanaRooms();
+  const { cancelRoomByPda, clearRoomFromState } = useSolanaRooms();
   
   // WebRTC refs for cleanup
   const webrtcCleanupRef = useRef<(() => void) | null>(null);
@@ -1039,6 +1039,8 @@ const ChessGame = () => {
       // Supabase channels are cleaned up by the hook
       console.log("[ChessGame] Cleaning up Supabase via useForfeit");
     },
+    // CRITICAL: Clear room from global state to prevent stuck banners
+    onClearRoomFromState: clearRoomFromState,
   });
   
   // Connect forfeit ref for timeout handler
