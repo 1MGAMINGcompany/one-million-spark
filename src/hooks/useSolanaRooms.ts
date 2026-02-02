@@ -74,6 +74,10 @@ export function useSolanaRooms() {
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const isFetchingActiveRoomRef = useRef(false);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // CRITICAL: Prevent duplicate wallet tx prompts (React StrictMode/dev double-render safe)
+  const createRoomInFlightRef = useRef(false);
+  const joinRoomInFlightRef = useRef(false);
 
   // Memoized blocking room: first unresolved room from activeRooms, fallback to activeRoom
   const blockingRoom = useMemo(() => {
@@ -348,6 +352,12 @@ export function useSolanaRooms() {
     maxPlayers: number,
     mode: 'casual' | 'ranked' | 'private' = 'casual'
   ): Promise<number | null> => {
+    // CRITICAL: Prevent duplicate wallet prompts (React StrictMode safe)
+    if (createRoomInFlightRef.current) {
+      console.warn("[TXLOCK] blocked duplicate create - transaction already in flight");
+      return null;
+    }
+    
     if (!publicKey || !connected) {
       toast({
         title: "Wallet not connected",
@@ -368,6 +378,10 @@ export function useSolanaRooms() {
       return null;
     }
 
+    // Set guard BEFORE any async wallet interaction
+    createRoomInFlightRef.current = true;
+    console.log("[TXLOCK] createRoom guard SET");
+    
     setTxPending(true);
     setTxDebugInfo(null);
     
@@ -710,12 +724,20 @@ export function useSolanaRooms() {
       });
       return null;
     } finally {
+      createRoomInFlightRef.current = false;
+      console.log("[TXLOCK] createRoom guard CLEARED");
       setTxPending(false);
     }
   }, [publicKey, connected, connection, sendVersionedTx, toast, fetchRooms, fetchUserActiveRoom]);
 
   // Join room - returns structured TxResult
   const joinRoom = useCallback(async (roomId: number, roomCreator: string): Promise<{ ok: boolean; signature?: string; reason?: string }> => {
+    // CRITICAL: Prevent duplicate wallet prompts (React StrictMode safe)
+    if (joinRoomInFlightRef.current) {
+      console.warn("[TXLOCK] blocked duplicate join - transaction already in flight");
+      return { ok: false, reason: "TX_IN_FLIGHT" };
+    }
+    
     if (!publicKey || !connected) {
       toast({
         title: "Wallet not connected",
@@ -736,6 +758,10 @@ export function useSolanaRooms() {
       return { ok: false, reason: "ACTIVE_ROOM_EXISTS" };
     }
 
+    // Set guard BEFORE any async wallet interaction
+    joinRoomInFlightRef.current = true;
+    console.log("[TXLOCK] joinRoom guard SET");
+    
     setTxPending(true);
     setTxDebugInfo(null);
     
@@ -959,6 +985,8 @@ export function useSolanaRooms() {
       });
       return { ok: false, reason: "ERROR" };
     } finally {
+      joinRoomInFlightRef.current = false;
+      console.log("[TXLOCK] joinRoom guard CLEARED");
       setTxPending(false);
     }
   }, [publicKey, connected, connection, sendVersionedTx, toast, fetchRooms, fetchUserActiveRoom, hasAdapterSendTx, adapterName]);
