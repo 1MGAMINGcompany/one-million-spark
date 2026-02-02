@@ -41,6 +41,7 @@ import { AudioManager } from "@/lib/AudioManager";
 import { showBrowserNotification } from "@/lib/pushNotifications";
 import { parseRematchParams, lamportsToSol, RematchPayload, solToLamports } from "@/lib/rematchPayload";
 import { supabase } from "@/integrations/supabase/client";
+import { getSessionToken, getAuthHeaders } from "@/lib/sessionToken";
 
 // Game type mapping from string to number
 const GAME_TYPE_MAP: Record<string, string> = {
@@ -326,6 +327,8 @@ export default function CreateRoom() {
       }
 
       // Persist settings (non-fatal if it fails for casual)
+      // 🔒 Session token required for auth - try to get one but don't block casual flow
+      const sessionToken = getSessionToken(roomKey);
       try {
         await supabase.functions.invoke("game-session-set-settings", {
           body: {
@@ -334,8 +337,9 @@ export default function CreateRoom() {
             mode: "casual",
             maxPlayers: effectiveMaxPlayers,
             gameType: GAME_TYPE_NAMES[parseInt(gameType)] || "unknown",
-            creatorWallet: address,
+            // creatorWallet removed - derived from session on server
           },
+          headers: sessionToken ? getAuthHeaders(sessionToken) : undefined,
         });
       } catch (e) {
         console.warn("[CreateRoom] Casual settings save threw:", e);
@@ -396,7 +400,8 @@ export default function CreateRoom() {
         // With signature verification for production security
         
         try {
-          // Security: on-chain tx proves creator identity, edge function validates DB ownership
+          // 🔒 Security: Session token derives creator identity
+          const sessionToken = getSessionToken(roomPdaStr);
           const { data, error: settingsErr } = await supabase.functions.invoke(
             "game-session-set-settings",
             {
@@ -406,8 +411,9 @@ export default function CreateRoom() {
                 mode: gameMode,
                 maxPlayers: effectiveMaxPlayers,
                 gameType: GAME_TYPE_NAMES[parseInt(gameType)] || "unknown",
-                creatorWallet: address,
+                // creatorWallet removed - derived from session on server
               },
+              headers: sessionToken ? getAuthHeaders(sessionToken) : undefined,
             }
           );
 

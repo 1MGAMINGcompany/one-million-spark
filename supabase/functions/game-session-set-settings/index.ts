@@ -1,22 +1,22 @@
 /**
  * Edge Function: game-session-set-settings
  * 
- * Security via database ownership check - only the room creator can set settings.
- * On-chain SOL transaction proves identity, this function validates creatorWallet === player1_wallet.
+ * 🔒 SECURITY: Caller identity is derived from session token ONLY.
+ * Only the room creator (player1_wallet or participants[0]) can update settings.
  * 
- * Request body:
+ * Request body (creatorWallet IGNORED - derived from session):
  * {
  *   roomPda: string,
  *   turnTimeSeconds: number,
  *   mode: "casual" | "ranked" | "private",
- *   creatorWallet: string,
  *   maxPlayers?: number,
  *   gameType?: string,
  * }
  */
 
-import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from "npm:@supabase/supabase-js@2";
+import { requireSession } from "../_shared/requireSession.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -34,7 +34,7 @@ function json(status: number, body: unknown) {
   });
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -44,11 +44,33 @@ serve(async (req) => {
   }
 
   try {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+    if (!supabaseUrl || !serviceRoleKey) {
+      console.error("[game-session-set-settings] Missing env vars");
+      return json(500, { ok: false, error: "server_misconfigured" });
+    }
+
+    const supabase = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { persistSession: false },
+    });
+
+    // 🔒 SECURITY: Require session token - derive caller identity from session only
+    const sessionResult = await requireSession(supabase, req);
+    if (!sessionResult.ok) {
+      console.warn("[game-session-set-settings] Unauthorized:", sessionResult.error);
+      return json(401, { ok: false, error: "unauthorized", details: sessionResult.error });
+    }
+
+    // callerWallet is ALWAYS derived from session - ignore any body.creatorWallet
+    const callerWallet = sessionResult.session.wallet;
+
     const payload = await req.json().catch(() => null);
     const roomPda = payload?.roomPda;
     const turnTimeSecondsRaw = payload?.turnTimeSeconds;
     const mode = payload?.mode as Mode;
-    const creatorWallet = payload?.creatorWallet;
+    // creatorWallet from body is IGNORED - callerWallet from session is authoritative
     const maxPlayersRaw = payload?.maxPlayers;
     const gameTypeFromPayload = payload?.gameType;
 
@@ -66,26 +88,10 @@ serve(async (req) => {
       return json(400, { ok: false, error: "mode_invalid" });
     }
 
-    if (!creatorWallet || typeof creatorWallet !== "string") {
-      return json(400, { ok: false, error: "creatorWallet_required" });
-    }
-
-    const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-
-    if (!supabaseUrl || !serviceRoleKey) {
-      console.error("[game-session-set-settings] Missing env vars");
-      return json(500, { ok: false, error: "server_misconfigured" });
-    }
-
-    const supabase = createClient(supabaseUrl, serviceRoleKey, {
-      auth: { persistSession: false },
-    });
-
-    // Fetch session to verify ownership
+    // Fetch session to verify ownership (include participants for fallback)
     let { data: session, error: sessionErr } = await supabase
       .from("game_sessions")
-      .select("room_pda, status, start_roll_finalized, player1_wallet")
+      .select("room_pda, status, start_roll_finalized, player1_wallet, participants")
       .eq("room_pda", roomPda)
       .maybeSingle();
 
@@ -101,13 +107,14 @@ serve(async (req) => {
 
     if (!session) {
       // Session doesn't exist yet - CREATE it with the settings
-      console.log("[game-session-set-settings] No session found, creating new one");
+      // 🔒 callerWallet becomes player1_wallet (room creator)
+      console.log("[game-session-set-settings] No session found, creating new one for:", callerWallet.slice(0, 8));
       
       const { error: insertErr } = await supabase
         .from("game_sessions")
         .insert({
           room_pda: roomPda,
-          player1_wallet: creatorWallet,
+          player1_wallet: callerWallet,
           player2_wallet: null,
           game_type: gameTypeFromPayload || "unknown",
           game_state: {},
@@ -118,6 +125,7 @@ serve(async (req) => {
           max_players: maxPlayers,
           p1_ready: false,
           p2_ready: false,
+          participants: [callerWallet],
         });
 
       if (insertErr) {
@@ -135,6 +143,7 @@ serve(async (req) => {
           turnTimeSeconds, 
           maxPlayers,
           gameType: gameTypeFromPayload || "unknown",
+          creator: callerWallet.slice(0, 8),
         });
         return json(200, { ok: true });
       }
@@ -142,7 +151,7 @@ serve(async (req) => {
       // If we got here due to conflict, re-fetch and continue to UPDATE
       const { data: conflictSession } = await supabase
         .from("game_sessions")
-        .select("room_pda, status, start_roll_finalized, player1_wallet")
+        .select("room_pda, status, start_roll_finalized, player1_wallet, participants")
         .eq("room_pda", roomPda)
         .maybeSingle();
         
@@ -153,18 +162,25 @@ serve(async (req) => {
       session = conflictSession;
     }
 
-    // Verify caller is the room creator (player1_wallet) - DB ownership check
-    if (session.player1_wallet) {
-      const sessionCreator = session.player1_wallet.trim();
-      const requestCreator = creatorWallet.trim();
-      
-      if (sessionCreator !== requestCreator) {
-        console.warn("[game-session-set-settings] Creator mismatch:", {
-          sessionCreator: sessionCreator.slice(0, 8),
-          requestCreator: requestCreator.slice(0, 8),
-        });
-        return json(403, { ok: false, error: "not_room_creator" });
-      }
+    // 🔒 SECURITY: Verify caller is room creator
+    // Check player1_wallet first, fallback to participants[0]
+    const callerTrimmed = callerWallet.trim();
+    const p1Wallet = session.player1_wallet?.trim();
+    const firstParticipant = Array.isArray(session.participants) && session.participants.length > 0
+      ? session.participants[0]?.trim()
+      : null;
+
+    const isCreator = 
+      (p1Wallet && callerTrimmed === p1Wallet) ||
+      (!p1Wallet && firstParticipant && callerTrimmed === firstParticipant);
+
+    if (!isCreator) {
+      console.warn("[game-session-set-settings] Forbidden - not room creator:", {
+        callerWallet: callerTrimmed.slice(0, 8),
+        player1_wallet: p1Wallet?.slice(0, 8) || "null",
+        firstParticipant: firstParticipant?.slice(0, 8) || "null",
+      });
+      return json(403, { ok: false, error: "forbidden" });
     }
 
     // Guard: do not allow changing settings after game has started
