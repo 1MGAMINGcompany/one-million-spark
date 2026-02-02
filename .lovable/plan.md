@@ -1,212 +1,387 @@
 
 
-## Fix: Turn Timer Doesn't Start Immediately After Dice Roll
+# Clear Session Button with Unverified Token Refinement
 
-### Problem Summary
-When the start roll finalizes and it's **my turn first**, the turn timer doesn't appear immediately because:
-1. The polling interval is 5 seconds (too slow for UX)
-2. `useOpponentTimeoutDetection` only polls when it's NOT my turn
-3. Chess has a fix for this; Backgammon/Checkers/Dominos/Ludo do not
+## Overview
 
-### Step A: Verify Edge Function Returns Required Fields
+Add a "Clear Session" button to the connected wallet UI that:
+1. Scans all `session_token_<roomPda>` keys deterministically
+2. If a key exists but token is empty: removes it and continues (self-healing)
+3. Only returns `unverified` if empty token found twice OR no other rooms to check
+4. Calls `game-session-get` with proper Authorization header
+5. Shows confirmation dialog with room-specific messaging
+6. Provides a "Go to Room List" button for `unverified` state
 
-**File**: `supabase/functions/game-session-get/index.ts`
+---
 
-**Current Query** (line 38-42):
+## Files Changed
+
+| File | Lines | Description |
+|------|-------|-------------|
+| `src/lib/sessionToken.ts` | 103-125 (new) | Add `clearAllSessionTokens()` export |
+| `src/components/WalletButton.tsx` | 1-15 (imports) | Add Trash2, useNavigate, AlertDialog, supabase imports |
+| `src/components/WalletButton.tsx` | ~122-130 (new state) | Add state for dialog, loading, roomPda, reason |
+| `src/components/WalletButton.tsx` | ~135-220 (new handlers) | Add `checkActiveGameState()` with refined logic |
+| `src/components/WalletButton.tsx` | ~871 (button row) | Add Trash button after LogOut button |
+| `src/components/WalletButton.tsx` | ~894 (before closing) | Add AlertDialog with 3-button footer |
+
+---
+
+## Implementation Details
+
+### 1. Add `clearAllSessionTokens()` to `src/lib/sessionToken.ts`
+
+Add after line 101:
+
 ```typescript
-const { data: session, error: sessionError } = await supabase
-  .from('game_sessions')
-  .select('*, max_players, eliminated_players')
-  .eq('room_pda', roomPda)
-  .maybeSingle()
-```
-
-**Returned JSON Structure** (lines 136-142):
-```json
-{
-  "ok": true,
-  "session": {
-    "turn_started_at": "2026-02-02T02:56:51Z",
-    "turn_time_seconds": 60,
-    "current_turn_wallet": "At...",
-    // ...all other game_sessions columns
-  },
-  "receipt": null,
-  "match": null,
-  "acceptances": { ... }
+/**
+ * Clear all session tokens from localStorage.
+ * Removes keys starting with "session_token_" and "1mg_session_".
+ * 
+ * @returns Number of keys removed
+ */
+export function clearAllSessionTokens(): number {
+  const keysToRemove: string[] = [];
+  
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (!key) continue;
+    
+    if (key.startsWith("session_token_") || key.startsWith("1mg_session_")) {
+      keysToRemove.push(key);
+    }
+  }
+  
+  keysToRemove.forEach(key => localStorage.removeItem(key));
+  
+  return keysToRemove.length;
 }
 ```
 
-**Status**: All required fields (`turn_started_at`, `turn_time_seconds`, `current_turn_wallet`) are included because the query uses `*` (select all columns). **No changes needed to edge function.**
-
 ---
 
-### Step B: Add `fetchInitialTurnStartedAt` Effect to 4 Games
+### 2. Update `src/components/WalletButton.tsx`
 
-**Reference Implementation** (`src/pages/ChessGame.tsx` lines 696-714):
+#### 2a. Add Imports (lines 1-15)
+
+Update line 8 to add `Trash2`:
 ```typescript
-// Fetch initial turn_started_at when game starts (for my turn display)
-useEffect(() => {
-  if (!startRoll.isFinalized || !roomPda || turnStartedAt) return;
-  
-  const fetchInitialTurnStartedAt = async () => {
-    try {
-      const { data } = await supabase.functions.invoke("game-session-get", {
-        body: { roomPda },
-      });
-      if (data?.session?.turn_started_at) {
-        setTurnStartedAt(data.session.turn_started_at);
+import { Wallet, LogOut, RefreshCw, Copy, Check, AlertCircle, Loader2, ExternalLink, User, Trash2 } from "lucide-react";
+```
+
+Add new imports after line 14:
+```typescript
+import { useNavigate } from "react-router-dom";
+import { clearAllSessionTokens } from "@/lib/sessionToken";
+import { supabase } from "@/integrations/supabase/client";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+```
+
+#### 2b. Add State (inside component, after line 121)
+
+```typescript
+// State for clear session confirmation dialog
+const [showClearConfirm, setShowClearConfirm] = useState(false);
+const [clearSessionLoading, setClearSessionLoading] = useState(false);
+const [dangerousRoomPda, setDangerousRoomPda] = useState<string | null>(null);
+const [dangerousReason, setDangerousReason] = useState<'active' | 'unverified' | null>(null);
+
+const navigate = useNavigate();
+```
+
+#### 2c. Add `checkActiveGameState()` with Refined Logic
+
+```typescript
+/**
+ * Check if user is in a dangerous active game.
+ * DOES NOT short-circuit on missing global token.
+ * Scans all session_token_<roomPda> keys deterministically.
+ * 
+ * Refined behavior for empty tokens:
+ * - If empty token found: remove the key and continue scanning
+ * - Only return 'unverified' if empty found twice OR no other rooms remain
+ */
+const checkActiveGameState = async (): Promise<{
+  isDangerous: boolean;
+  roomPda?: string;
+  reason?: 'active' | 'unverified';
+}> => {
+  // Collect all roomPdas from localStorage keys
+  const roomPdas: string[] = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (!key) continue;
+    
+    // Only process session_token_<roomPda> keys (not session_token_latest)
+    if (key.startsWith("session_token_") && key !== "session_token_latest") {
+      const roomPda = key.replace("session_token_", "");
+      if (roomPda && roomPda.length >= 32) {
+        roomPdas.push(roomPda);
       }
-    } catch (err) {
-      console.error("[ChessGame] Failed to fetch initial turn_started_at:", err);
     }
-  };
+  }
   
-  fetchInitialTurnStartedAt();
-}, [startRoll.isFinalized, roomPda, turnStartedAt]);
+  // If no room tokens found, safe to clear
+  if (roomPdas.length === 0) {
+    return { isDangerous: false };
+  }
+  
+  let emptyTokenCount = 0;
+  let lastEmptyRoomPda: string | null = null;
+  let validRoomsChecked = 0;
+  
+  // Check each room
+  for (const roomPda of roomPdas) {
+    const key = `session_token_${roomPda}`;
+    const token = localStorage.getItem(key) || "";
+    
+    // If token is empty/missing for this key:
+    // 1. Remove the orphan key (self-healing)
+    // 2. Track how many empties we've seen
+    if (!token) {
+      localStorage.removeItem(key);
+      emptyTokenCount++;
+      lastEmptyRoomPda = roomPda;
+      console.warn("[ClearSession] Removed empty token key:", roomPda.slice(0, 8));
+      continue; // Continue to check other rooms
+    }
+    
+    validRoomsChecked++;
+    
+    try {
+      // Call game-session-get WITH Authorization header
+      const { data, error } = await supabase.functions.invoke("game-session-get", {
+        body: { roomPda },
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      
+      if (error || !data?.ok || !data?.session) continue;
+      
+      const session = data.session;
+      const statusInt = session.status_int ?? 1;
+      const participantsCount = session.participants?.length ?? 
+        (session.player1_wallet && session.player2_wallet ? 2 : session.player1_wallet ? 1 : 0);
+      const startRollFinalized = session.start_roll_finalized ?? false;
+      
+      // DANGEROUS: status_int === 2 AND participantsCount >= 2 AND start_roll_finalized === true
+      const isDangerous = statusInt === 2 && participantsCount >= 2 && startRollFinalized;
+      
+      if (isDangerous) {
+        return { isDangerous: true, roomPda, reason: 'active' };
+      }
+    } catch (e) {
+      console.warn("[ClearSession] Failed to check room:", roomPda.slice(0, 8), e);
+      // On error, continue checking other rooms
+    }
+  }
+  
+  // After scanning all rooms:
+  // Return 'unverified' if:
+  // 1. Empty token found twice in a row (persistent problem), OR
+  // 2. We found empty tokens AND checked no valid rooms (no other rooms to verify)
+  if (emptyTokenCount >= 2 || (emptyTokenCount > 0 && validRoomsChecked === 0)) {
+    return { 
+      isDangerous: true, 
+      roomPda: lastEmptyRoomPda || roomPdas[0], 
+      reason: 'unverified' 
+    };
+  }
+  
+  return { isDangerous: false };
+};
+```
+
+#### 2d. Add Handler Functions
+
+```typescript
+// Execute the clear
+const executeClearSession = () => {
+  const count = clearAllSessionTokens();
+  toast.success(`Session cleared (${count} tokens removed)`);
+  navigate("/room-list");
+};
+
+// Handle clear session button click
+const handleClearSession = async () => {
+  setClearSessionLoading(true);
+  setDangerousRoomPda(null);
+  setDangerousReason(null);
+  
+  try {
+    const { isDangerous, roomPda, reason } = await checkActiveGameState();
+    
+    if (isDangerous && roomPda) {
+      // Show confirmation dialog with room info
+      setDangerousRoomPda(roomPda);
+      setDangerousReason(reason || 'active');
+      setShowClearConfirm(true);
+    } else {
+      // Clear immediately
+      executeClearSession();
+    }
+  } catch (e) {
+    console.error("[ClearSession] Check failed:", e);
+    // On error, allow clear anyway (don't block user)
+    executeClearSession();
+  } finally {
+    setClearSessionLoading(false);
+  }
+};
+
+// Confirmed clear (from dialog)
+const handleClearConfirmed = () => {
+  setShowClearConfirm(false);
+  setDangerousRoomPda(null);
+  setDangerousReason(null);
+  executeClearSession();
+};
+
+// Go to room list (no clearing) - for unverified state
+const handleGoToRoomList = () => {
+  setShowClearConfirm(false);
+  setDangerousRoomPda(null);
+  setDangerousReason(null);
+  navigate("/room-list");
+};
+```
+
+#### 2e. Add Trash Button (after line 871, inside button row)
+
+Insert after the LogOut button:
+
+```tsx
+<Button
+  onClick={handleClearSession}
+  variant="ghost"
+  size="icon"
+  className="h-8 w-8 text-muted-foreground hover:text-foreground"
+  title="Clear session tokens"
+  disabled={clearSessionLoading}
+>
+  {clearSessionLoading ? (
+    <Loader2 size={14} className="animate-spin" />
+  ) : (
+    <Trash2 size={14} />
+  )}
+</Button>
+```
+
+#### 2f. Add AlertDialog (after NetworkProofBadge, line ~893)
+
+```tsx
+{/* Clear Session Confirmation Dialog */}
+<AlertDialog open={showClearConfirm} onOpenChange={setShowClearConfirm}>
+  <AlertDialogContent className="max-w-[90vw] sm:max-w-md">
+    <AlertDialogHeader>
+      <AlertDialogTitle className="text-amber-500">
+        Clear session while in a live match?
+      </AlertDialogTitle>
+      <AlertDialogDescription>
+        {dangerousReason === 'unverified' ? (
+          <>
+            We couldn't verify this match state. Clearing session may disconnect you and lead to timeout.
+            {dangerousRoomPda && (
+              <span className="block mt-2 font-mono text-xs text-amber-400">
+                Room: {dangerousRoomPda.slice(0, 8)}...
+              </span>
+            )}
+          </>
+        ) : (
+          <>
+            Clearing your session disconnects you. If you don't return, you may time out and lose your stake.
+            {dangerousRoomPda && (
+              <span className="block mt-2 font-mono text-xs">
+                You are currently in room: {dangerousRoomPda.slice(0, 8)}...
+              </span>
+            )}
+          </>
+        )}
+      </AlertDialogDescription>
+    </AlertDialogHeader>
+    <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+      <AlertDialogCancel>Cancel</AlertDialogCancel>
+      {dangerousReason === 'unverified' && (
+        <Button 
+          variant="outline" 
+          onClick={handleGoToRoomList}
+        >
+          Go to Room List
+        </Button>
+      )}
+      <AlertDialogAction 
+        onClick={handleClearConfirmed}
+        className="bg-amber-600 hover:bg-amber-700"
+      >
+        Clear anyway
+      </AlertDialogAction>
+    </AlertDialogFooter>
+  </AlertDialogContent>
+</AlertDialog>
 ```
 
 ---
 
-#### File 1: `src/pages/BackgammonGame.tsx`
+## Refined Empty Token Logic
 
-**Context**: BackgammonGame doesn't have a separate sync effect like other games - it uses `onTurnStartedAtChange` callback in `useOpponentTimeoutDetection`. The effect should be inserted after line 855 (after the "Update myRole and currentTurnWallet" effect).
-
-**Insert after line 855**:
-```typescript
-// Fetch initial turn_started_at when game starts (for my turn display)
-useEffect(() => {
-  if (!startRoll.isFinalized || !roomPda || turnStartedAt) return;
-  
-  const fetchInitialTurnStartedAt = async () => {
-    try {
-      const { data } = await supabase.functions.invoke("game-session-get", {
-        body: { roomPda },
-      });
-      if (data?.session?.turn_started_at) {
-        setTurnStartedAt(data.session.turn_started_at);
-      }
-    } catch (err) {
-      console.error("[BackgammonGame] Failed to fetch initial turn_started_at:", err);
-    }
-  };
-  
-  fetchInitialTurnStartedAt();
-}, [startRoll.isFinalized, roomPda, turnStartedAt]);
+```text
+For each session_token_<roomPda> key:
+  |
+  +-- Token is empty/missing?
+  |     |
+  |     +-- YES:
+  |     |     1. Remove the orphan key (localStorage.removeItem)
+  |     |     2. Increment emptyTokenCount
+  |     |     3. Store roomPda as lastEmptyRoomPda
+  |     |     4. CONTINUE to next room (don't return yet)
+  |     |
+  |     +-- NO (token exists):
+  |           1. Call game-session-get with Authorization
+  |           2. If active match found -> return { isDangerous: true, reason: 'active' }
+  |           3. Otherwise continue
+  |
+  +-- After all rooms checked:
+        |
+        +-- emptyTokenCount >= 2?
+        |     -> return { isDangerous: true, reason: 'unverified' }
+        |
+        +-- emptyTokenCount > 0 AND validRoomsChecked === 0?
+        |     -> return { isDangerous: true, reason: 'unverified' }
+        |
+        +-- Otherwise:
+              -> return { isDangerous: false }
 ```
 
 ---
 
-#### File 2: `src/pages/CheckersGame.tsx`
+## AlertDialog Footer (3 Buttons for Unverified)
 
-**Context**: Has sync effect at lines 602-607. Insert the new effect after line 607.
+| Reason | Buttons |
+|--------|---------|
+| `active` | Cancel, Clear anyway |
+| `unverified` | Cancel, Go to Room List, Clear anyway |
 
-**Insert after line 607**:
-```typescript
-// Fetch initial turn_started_at when game starts (for my turn display)
-useEffect(() => {
-  if (!startRoll.isFinalized || !roomPda || turnStartedAt) return;
-  
-  const fetchInitialTurnStartedAt = async () => {
-    try {
-      const { data } = await supabase.functions.invoke("game-session-get", {
-        body: { roomPda },
-      });
-      if (data?.session?.turn_started_at) {
-        setTurnStartedAt(data.session.turn_started_at);
-      }
-    } catch (err) {
-      console.error("[CheckersGame] Failed to fetch initial turn_started_at:", err);
-    }
-  };
-  
-  fetchInitialTurnStartedAt();
-}, [startRoll.isFinalized, roomPda, turnStartedAt]);
-```
+The "Go to Room List" button:
+- Only appears when `dangerousReason === 'unverified'`
+- Navigates to `/room-list` without clearing any tokens
+- Allows user to verify their match state manually
 
 ---
 
-#### File 3: `src/pages/DominosGame.tsx`
+## Technical Notes
 
-**Context**: Has sync effect at lines 785-790. Insert the new effect after line 790.
-
-**Insert after line 790**:
-```typescript
-// Fetch initial turn_started_at when game starts (for my turn display)
-useEffect(() => {
-  if (!startRoll.isFinalized || !roomPda || turnStartedAt) return;
-  
-  const fetchInitialTurnStartedAt = async () => {
-    try {
-      const { data } = await supabase.functions.invoke("game-session-get", {
-        body: { roomPda },
-      });
-      if (data?.session?.turn_started_at) {
-        setTurnStartedAt(data.session.turn_started_at);
-      }
-    } catch (err) {
-      console.error("[DominosGame] Failed to fetch initial turn_started_at:", err);
-    }
-  };
-  
-  fetchInitialTurnStartedAt();
-}, [startRoll.isFinalized, roomPda, turnStartedAt]);
-```
-
----
-
-#### File 4: `src/pages/LudoGame.tsx`
-
-**Context**: Has sync effect at lines 652-657. Ludo uses `effectiveStartRoll.isFinalized` throughout (line 381-396), so must use that instead of `startRoll.isFinalized`.
-
-**Insert after line 657**:
-```typescript
-// Fetch initial turn_started_at when game starts (for my turn display)
-useEffect(() => {
-  if (!effectiveStartRoll.isFinalized || !roomPda || turnStartedAt) return;
-  
-  const fetchInitialTurnStartedAt = async () => {
-    try {
-      const { data } = await supabase.functions.invoke("game-session-get", {
-        body: { roomPda },
-      });
-      if (data?.session?.turn_started_at) {
-        setTurnStartedAt(data.session.turn_started_at);
-      }
-    } catch (err) {
-      console.error("[LudoGame] Failed to fetch initial turn_started_at:", err);
-    }
-  };
-  
-  fetchInitialTurnStartedAt();
-}, [effectiveStartRoll.isFinalized, roomPda, turnStartedAt]);
-```
-
----
-
-### Summary of Changes
-
-| File | Insertion Point | Uses |
-|------|----------------|------|
-| `BackgammonGame.tsx` | After line 855 | `startRoll.isFinalized` |
-| `CheckersGame.tsx` | After line 607 | `startRoll.isFinalized` |
-| `DominosGame.tsx` | After line 790 | `startRoll.isFinalized` |
-| `LudoGame.tsx` | After line 657 | `effectiveStartRoll.isFinalized` |
-
-### Why This Works
-
-1. When `startRoll.isFinalized` becomes `true`, the effect triggers **immediately** (not waiting for 5s poll)
-2. Fetches `turn_started_at` from database (set by `finalize_start_roll` RPC at the moment of dice roll)
-3. `setTurnStartedAt` populates state
-4. `useTurnCountdownDisplay` receives valid `turnStartedAt` and starts countdown
-5. Timer visible on both devices within ~100ms of start roll completion
-
-### Step C: Verification Checklist
-
-After implementation:
-- [ ] Build completes without errors
-- [ ] Timer appears immediately on starting player's device after dice roll
-- [ ] Timer appears immediately on opponent's device when it becomes their turn
-- [ ] Timeout at 0 triggers turn skip (1st/2nd miss) or forfeit (3rd miss)
-- [ ] Works for: Ranked Backgammon, Private Backgammon, Checkers, Dominos, Ludo
+1. **Self-healing**: Empty token keys are removed during scan (reduces future false positives)
+2. **Threshold**: Only warns about unverified state if 2+ empty keys OR no valid rooms exist
+3. **Authorization**: All `game-session-get` calls include Bearer token header
+4. **No short-circuit**: Scans ALL room keys before deciding safe/dangerous
+5. **Three actions for unverified**: Cancel / Go to Room List / Clear anyway
+6. **No layout changes**: Only adds a small 8x8 trash icon button
 
