@@ -2804,6 +2804,8 @@ const BackgammonGame = () => {
         isCreator={isCreator}
         stakeSol={entryFeeSol}
         playerCount={roomPlayers.length}
+        dbStatusInt={rankedGate.dbStatusInt}
+        dbParticipantsCount={rankedGate.dbParticipantsCount}
         onUILeave={handleUILeave}
         onCancelRoom={handleCancelRoom}
         onForfeitMatch={handleForfeitMatch}
