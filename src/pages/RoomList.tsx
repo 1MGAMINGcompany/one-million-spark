@@ -344,13 +344,13 @@ export default function RoomList() {
             {myOnChainRooms.map((room) => (
               <div 
                 key={room.pda}
-                className="flex items-center justify-between p-3 bg-background/50 rounded-lg border border-border/50"
+                className="flex flex-col md:flex-row md:items-center gap-3 p-3 bg-background/50 rounded-lg border border-border/50 w-full overflow-hidden"
               >
-                <div className="flex items-center gap-3">
-                  <span className="text-xl">{getGameIcon(room.gameType)}</span>
-                  <div>
-                    <p className="font-medium">{room.gameTypeName}</p>
-                    <p className="text-xs text-muted-foreground">
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  <span className="text-xl shrink-0">{getGameIcon(room.gameType)}</span>
+                  <div className="min-w-0">
+                    <p className="font-medium truncate">{room.gameTypeName}</p>
+                    <p className="text-xs text-muted-foreground truncate">
                       {room.creator === address ? t("roomList.youAreCreator") : t("roomList.youJoined")}
                       {" • "}
                       {room.playerCount}/{room.maxPlayers} players
@@ -358,10 +358,11 @@ export default function RoomList() {
                     </p>
                   </div>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 w-full md:w-auto shrink-0">
                   <Button 
                     size="sm" 
                     variant="outline"
+                    className="flex-1 md:flex-none"
                     disabled={resolveFetching}
                     onClick={async () => {
                       // Fetch DB state to determine cancel vs forfeit
@@ -423,6 +424,7 @@ export default function RoomList() {
                   </Button>
                   <Button 
                     size="sm" 
+                    className="flex-1 md:flex-none"
                     onClick={() => navigate(`/play/${room.pda}`)}
                   >
                     {t("roomList.rejoin")}
@@ -522,83 +524,87 @@ export default function RoomList() {
               onClick={() => navigate(`/room/${room.pda}`)}
             >
               <CardContent className="p-4">
-                <div className="flex items-center gap-4">
-                  {/* Game Icon */}
-                  <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center text-2xl">
-                    {getGameIcon(room.gameType)}
-                  </div>
-
-                  {/* Room Info */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-semibold truncate">
-                        {getGameName(room.gameType)}
-                      </h3>
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-primary/20 text-primary">
-                        #{room.roomId}
-                      </span>
-                      {/* Mode Badge - STEP 7: Stake-only detection (no getRoomMode) */}
-                      {(() => {
-                        // Stake > 0 is the only reliable indicator in room list
-                        const isRanked = room.entryFeeSol > 0;
-                        return (
-                          <span className={`text-xs px-2 py-0.5 rounded-full border flex items-center gap-1 ${
-                            isRanked 
-                              ? 'bg-red-500/20 text-red-400 border-red-500/30' 
-                              : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
-                          }`}>
-                            {isRanked ? '🔴' : '🟢'} {isRanked ? t("createRoom.gameModeRanked") : t("createRoom.gameModeCasual")}
-                            <span className="opacity-70">{isRanked ? '🏆' : '🎮'}</span>
-                          </span>
-                        );
-                      })()}
+                <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-4 w-full overflow-hidden">
+                  {/* Top row: Icon + Info */}
+                  <div className="flex items-center gap-3 md:gap-4 flex-1 min-w-0">
+                    {/* Game Icon */}
+                    <div className="h-10 w-10 md:h-12 md:w-12 shrink-0 rounded-lg bg-primary/10 flex items-center justify-center text-xl md:text-2xl">
+                      {getGameIcon(room.gameType)}
                     </div>
-                    <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
-                      {/* Stake display - STEP 7: Stake-only detection */}
-                      {(() => {
-                        const isRanked = room.entryFeeSol > 0;
-                        return (
-                          <span className={`flex items-center gap-1 ${isRanked ? 'text-foreground font-medium' : ''}`}>
-                            <Coins className="h-3.5 w-3.5" />
-                            {isRanked ? (
-                              `${room.entryFeeSol} SOL`
-                            ) : (
-                              <span className="text-muted-foreground italic">—</span>
-                            )}
-                          </span>
-                        );
-                      })()}
-                      <span className="flex items-center gap-1">
-                        <Users className="h-3.5 w-3.5" />
-                        {room.playerCount}/{room.maxPlayers}
-                      </span>
-                      {/* Turn time display for ranked games - show for all ranked rooms */}
-                      {(() => {
-                        const isRanked = room.entryFeeSol > 0;
-                        if (isRanked) {
-                          // Get from session if available, otherwise show default ranked time
-                          const session = activeSessionsMap.get(room.pda);
-                          const turnTime = session?.turnTimeSeconds || 60; // Default 60s for ranked
+
+                    {/* Room Info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center gap-1.5 md:gap-2">
+                        <h3 className="font-semibold truncate">
+                          {getGameName(room.gameType)}
+                        </h3>
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-primary/20 text-primary">
+                          #{room.roomId}
+                        </span>
+                        {/* Mode Badge - STEP 7: Stake-only detection (no getRoomMode) */}
+                        {(() => {
+                          // Stake > 0 is the only reliable indicator in room list
+                          const isRanked = room.entryFeeSol > 0;
                           return (
-                            <span className="flex items-center gap-1 text-amber-400">
-                              <Timer className="h-3.5 w-3.5" />
-                              {formatTurnTime(turnTime)} turn
+                            <span className={`text-xs px-2 py-0.5 rounded-full border flex items-center gap-1 ${
+                              isRanked 
+                                ? 'bg-red-500/20 text-red-400 border-red-500/30' 
+                                : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                            }`}>
+                              {isRanked ? '🔴' : '🟢'} {isRanked ? t("createRoom.gameModeRanked") : t("createRoom.gameModeCasual")}
+                              <span className="opacity-70">{isRanked ? '🏆' : '🎮'}</span>
                             </span>
                           );
-                        }
-                        return null;
-                      })()}
-                      <span className="hidden sm:flex items-center gap-1 truncate">
-                        <Clock className="h-3.5 w-3.5" />
-                        {room.creator.slice(0, 4)}...{room.creator.slice(-4)}
-                      </span>
+                        })()}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground mt-1">
+                        {/* Stake display - STEP 7: Stake-only detection */}
+                        {(() => {
+                          const isRanked = room.entryFeeSol > 0;
+                          return (
+                            <span className={`flex items-center gap-1 ${isRanked ? 'text-foreground font-medium' : ''}`}>
+                              <Coins className="h-3.5 w-3.5" />
+                              {isRanked ? (
+                                `${room.entryFeeSol} SOL`
+                              ) : (
+                                <span className="text-muted-foreground italic">—</span>
+                              )}
+                            </span>
+                          );
+                        })()}
+                        <span className="flex items-center gap-1">
+                          <Users className="h-3.5 w-3.5" />
+                          {room.playerCount}/{room.maxPlayers}
+                        </span>
+                        {/* Turn time display for ranked games - show for all ranked rooms */}
+                        {(() => {
+                          const isRanked = room.entryFeeSol > 0;
+                          if (isRanked) {
+                            // Get from session if available, otherwise show default ranked time
+                            const session = activeSessionsMap.get(room.pda);
+                            const turnTime = session?.turnTimeSeconds || 60; // Default 60s for ranked
+                            return (
+                              <span className="flex items-center gap-1 text-amber-400">
+                                <Timer className="h-3.5 w-3.5" />
+                                {formatTurnTime(turnTime)} turn
+                              </span>
+                            );
+                          }
+                          return null;
+                        })()}
+                        <span className="hidden sm:flex items-center gap-1 truncate">
+                          <Clock className="h-3.5 w-3.5" />
+                          {room.creator.slice(0, 4)}...{room.creator.slice(-4)}
+                        </span>
+                      </div>
                     </div>
                   </div>
 
-                  {/* Join Button */}
+                  {/* Join Button - full width on mobile */}
                   <Button 
                     variant="default" 
                     size="sm"
+                    className="w-full md:w-auto shrink-0"
                     title={hookBlockingRoom ? t("roomList.resolveFirst") : undefined}
                     onClick={(e) => {
                       e.stopPropagation();
