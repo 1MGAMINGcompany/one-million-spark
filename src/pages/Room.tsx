@@ -721,18 +721,30 @@ return () => {
           autoAcceptRanRef.current = true; // Set BEFORE async call to prevent race
           try {
             console.log("[Room] Auto-accepting rules after join (mode:", roomMode, ")");
+            
+            // Get session token for authorization (may exist from creator or previous session)
+            const sessionToken =
+              localStorage.getItem(`session_token_${roomPdaParam}`) ||
+              localStorage.getItem("session_token_latest") ||
+              "";
+            
             const { data: acceptData, error: acceptErr } = await supabase.functions.invoke("ranked-accept", {
               body: {
                 roomPda: roomPdaParam,
-                playerWallet: address,
                 mode: "simple", // Simple acceptance (stake tx is implicit signature)
               },
+              headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : undefined,
             });
             
             if (acceptErr) {
               console.warn("[Room] Auto-accept warning (non-blocking):", acceptErr);
             } else if (acceptData?.success) {
               console.log("[Room] ✅ Rules auto-accepted after join");
+              // Store the new session token if returned
+              if (acceptData.sessionToken) {
+                localStorage.setItem(`session_token_${roomPdaParam}`, acceptData.sessionToken);
+                localStorage.setItem("session_token_latest", acceptData.sessionToken);
+              }
             } else {
               console.warn("[Room] Auto-accept failed:", acceptData?.error);
             }

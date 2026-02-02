@@ -3,6 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import * as ed from "npm:@noble/ed25519@2.0.0";
 import bs58 from "npm:bs58@5.0.0";
 import { Connection, PublicKey } from "npm:@solana/web3.js@1.95.0";
+import { requireSession } from "../_shared/requireSession.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -14,8 +15,8 @@ const MAX_TIMESTAMP_AGE_MS = 5 * 60 * 1000;
 
 interface SimpleAcceptancePayload {
   roomPda: string;
-  playerWallet: string;
   mode: "simple"; // Simple acceptance (stake tx is implicit signature)
+  // playerWallet removed - derived from session OR on-chain
 }
 
 interface SignedAcceptancePayload {
@@ -135,16 +136,10 @@ Deno.serve(async (req: Request) => {
 
     const body = await req.json() as AcceptancePayload;
 
-    console.log("[ranked-accept] Received request:", {
-      roomPda: body.roomPda?.slice(0, 8),
-      playerWallet: body.playerWallet?.slice(0, 8),
-      mode: body.mode,
-    });
-
-    // Validate required fields
-    if (!body.roomPda || !body.playerWallet) {
+    // Validate roomPda (required for all modes)
+    if (!body.roomPda) {
       return new Response(
-        JSON.stringify({ success: false, error: "Missing roomPda or playerWallet" }),
+        JSON.stringify({ success: false, error: "Missing roomPda" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -152,10 +147,24 @@ Deno.serve(async (req: Request) => {
     const now = Date.now();
     let sessionToken: string;
     let signatureForRecord: string;
+    let playerWallet: string;
 
     if (body.mode === "signed") {
-      // Full cryptographic acceptance flow
-      const { rulesHash, nonce, timestamp, signature, stakeLamports, turnTimeSeconds } = body;
+      // Full cryptographic acceptance flow - playerWallet required in body
+      if (!body.playerWallet) {
+        return new Response(
+          JSON.stringify({ success: false, error: "Missing playerWallet for signed mode" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      playerWallet = body.playerWallet;
+      
+      const { rulesHash, nonce, timestamp, signature } = body;
+
+      console.log("[ranked-accept] Signed mode request:", {
+        roomPda: body.roomPda?.slice(0, 8),
+        playerWallet: playerWallet?.slice(0, 8),
+      });
 
       // Validate timestamp is recent (prevent replay with old timestamps)
       const timestampAge = now - timestamp;
@@ -177,8 +186,8 @@ Deno.serve(async (req: Request) => {
       }
 
       // Reconstruct the signed message and verify
-      const message = `1MG_ACCEPT_V1|${body.roomPda}|${body.playerWallet}|${rulesHash}|${nonce}|${timestamp}`;
-      const isValid = await verifySignature(message, signature, body.playerWallet);
+      const message = `1MG_ACCEPT_V1|${body.roomPda}|${playerWallet}|${rulesHash}|${nonce}|${timestamp}`;
+      const isValid = await verifySignature(message, signature, playerWallet);
 
       if (!isValid) {
         console.error("[ranked-accept] Invalid signature");
@@ -193,7 +202,7 @@ Deno.serve(async (req: Request) => {
       // Call start_session RPC with verified signature
       const { data: token, error: sessionError } = await supabase.rpc("start_session", {
         p_room_pda: body.roomPda,
-        p_wallet: body.playerWallet,
+        p_wallet: playerWallet,
         p_rules_hash: rulesHash,
         p_nonce: nonce,
         p_signature: signature,
@@ -224,7 +233,7 @@ Deno.serve(async (req: Request) => {
         .from("game_acceptances")
         .upsert({
           room_pda: body.roomPda,
-          player_wallet: body.playerWallet,
+          player_wallet: playerWallet,
           rules_hash: rulesHash,
           nonce: nonce,
           timestamp_ms: timestamp,
@@ -239,8 +248,61 @@ Deno.serve(async (req: Request) => {
       }
 
     } else {
-      // Simple acceptance flow (stake tx is implicit signature)
+      // ─────────────────────────────────────────────────────────────
+      // SIMPLE ACCEPTANCE FLOW
+      // Derive wallet from: 1) session token, or 2) on-chain participants
+      // ─────────────────────────────────────────────────────────────
       console.log("[ranked-accept] Simple acceptance mode");
+
+      // Try to get wallet from session token (preferred - zero trust)
+      const sessionResult = await requireSession(supabase, req);
+      
+      if (sessionResult.ok) {
+        playerWallet = sessionResult.session.wallet;
+        console.log("[ranked-accept] Wallet derived from session:", playerWallet.slice(0, 8));
+      } else {
+        // Fallback: Look up the joiner from on-chain room data
+        // This handles the case where joiner doesn't have a session yet
+        const rpcUrl = Deno.env.get("SOLANA_RPC_URL");
+        if (!rpcUrl) {
+          return new Response(
+            JSON.stringify({ success: false, error: "No session token and RPC unavailable" }),
+            { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        try {
+          const connection = new Connection(rpcUrl);
+          const roomPubkey = new PublicKey(body.roomPda);
+          const accountInfo = await connection.getAccountInfo(roomPubkey);
+          
+          if (!accountInfo?.data) {
+            return new Response(
+              JSON.stringify({ success: false, error: "Room not found on-chain" }),
+              { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          }
+
+          const roomData = parseRoomAccount(new Uint8Array(accountInfo.data));
+          if (!roomData || roomData.players.length < 2) {
+            return new Response(
+              JSON.stringify({ success: false, error: "Room has insufficient players" }),
+              { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          }
+
+          // Get the most recent joiner (player 2 for 2-player games)
+          // For N-player, we'd need a different approach
+          playerWallet = roomData.players[roomData.players.length - 1].toBase58();
+          console.log("[ranked-accept] Wallet derived from on-chain (joiner):", playerWallet.slice(0, 8));
+        } catch (err) {
+          console.error("[ranked-accept] On-chain lookup failed:", err);
+          return new Response(
+            JSON.stringify({ success: false, error: "Failed to determine wallet" }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+      }
 
       // Generate session token and record
       const nonce = crypto.randomUUID();
@@ -252,7 +314,7 @@ Deno.serve(async (req: Request) => {
         .from("game_acceptances")
         .upsert({
           room_pda: body.roomPda,
-          player_wallet: body.playerWallet,
+          player_wallet: playerWallet,
           nonce,
           timestamp_ms: now,
           signature: signatureForRecord,
@@ -268,7 +330,7 @@ Deno.serve(async (req: Request) => {
         console.log("[ranked-accept] ✅ Simple acceptance recorded");
       }
 
-      // NEW: Also create player_sessions row (critical for forfeit-game)
+      // Also create player_sessions row (critical for forfeit-game)
       // This ensures the joiner (Player 2) can call server-verified timeout forfeit.
       const { error: sessionError } = await supabase
         .from("player_sessions")
@@ -276,7 +338,7 @@ Deno.serve(async (req: Request) => {
           {
             session_token: sessionToken,
             room_pda: body.roomPda,
-            wallet: body.playerWallet,
+            wallet: playerWallet,
             rules_hash: "stake_verified",
             last_turn: 0,
             last_hash: "genesis",
@@ -334,7 +396,7 @@ Deno.serve(async (req: Request) => {
     console.log("[ranked-accept] Marking player ready...");
     const { error: readyError } = await supabase.rpc("set_player_ready", {
       p_room_pda: body.roomPda,
-      p_wallet: body.playerWallet,
+      p_wallet: playerWallet,
     });
 
     if (readyError) {
@@ -347,7 +409,7 @@ Deno.serve(async (req: Request) => {
 
     const expiresAt = new Date(now + 4 * 60 * 60 * 1000).toISOString();
 
-    console.log("[ranked-accept] ✅ Acceptance complete for", body.playerWallet.slice(0, 8));
+    console.log("[ranked-accept] ✅ Acceptance complete for", playerWallet.slice(0, 8));
 
     return new Response(
       JSON.stringify({
