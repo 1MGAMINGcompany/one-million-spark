@@ -64,6 +64,11 @@ interface RulesGateProps {
   isDataLoaded: boolean;
   /** Whether start roll is finalized */
   startRollFinalized: boolean;
+  /** 
+   * If true, user just confirmed rules via JoinRulesModal and auto-acceptance is in flight.
+   * Skip showing AcceptRulesModal - wait for polling to confirm acceptance.
+   */
+  justJoined?: boolean;
   /** Children (DiceRollStart/GameBoard) - only rendered when both ready */
   children: React.ReactNode;
 }
@@ -85,6 +90,7 @@ export function RulesGate({
   onOpenWalletSelector,
   isDataLoaded,
   startRollFinalized,
+  justJoined = false,
   children,
 }: RulesGateProps) {
   const { t } = useTranslation();
@@ -294,7 +300,25 @@ export function RulesGate({
   }
 
   // 4. If I haven't accepted → show AcceptRulesModal (blocking)
+  //    EXCEPTION: If justJoined is true, user confirmed via JoinRulesModal and auto-accept is in flight.
+  //    Show waiting state briefly until polling confirms acceptance.
   if (!iAmReady) {
+    // If just joined, skip modal - show temporary waiting state while auto-accept propagates
+    if (justJoined) {
+      return (
+        <div data-overlay="RulesGate.justJoined" className="fixed inset-0 z-50 bg-background/95 backdrop-blur-sm flex items-center justify-center">
+          <div className="text-center space-y-4">
+            <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto" />
+            <p className="text-muted-foreground">
+              {t("common.confirmingEntry", "Confirming entry...")}
+            </p>
+          </div>
+        </div>
+      );
+    }
+    
+    // Recovery case: User refreshed mid-flow and hasn't accepted yet
+    // Show AcceptRulesModal to let them complete acceptance
     return (
       <AcceptRulesModal
         open={true}

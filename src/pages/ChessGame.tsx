@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { getOpponentWallet, isSameWallet, isRealWallet, DEFAULT_SOLANA_PUBKEY } from "@/lib/walletUtils";
 import { incMissed, resetMissed, clearRoom } from "@/lib/missedTurns";
 import { GameErrorBoundary } from "@/components/GameErrorBoundary";
-import { useParams, Link, useNavigate } from "react-router-dom";
+import { useParams, Link, useNavigate, useLocation } from "react-router-dom";
 import { Chess, Square, PieceSymbol, Color } from "chess.js";
 import { ChessBoardPremium } from "@/components/ChessBoardPremium";
 import { useCaptureAnimations } from "@/components/CaptureAnimationLayer";
@@ -120,9 +120,13 @@ const ChessGame = () => {
   const { roomPda } = useParams<{ roomPda: string }>();
   const roomId = roomPda; // Alias for backward compatibility with hooks/display
   const navigate = useNavigate();
+  const location = useLocation();
   const { t } = useTranslation();
   const { play } = useSound();
   const { isConnected: walletConnected, address } = useWallet();
+  
+  // Check if user just joined via JoinRulesModal (skip AcceptRulesModal)
+  const justJoined = !!(location.state as { justJoined?: boolean })?.justJoined;
 
   const [game, setGame] = useState(new Chess());
   const [gameStatus, setGameStatus] = useState<string>(t("gameMultiplayer.waitingForOpponent"));
@@ -1519,6 +1523,7 @@ const ChessGame = () => {
           onLeave={handleLeaveClick}
           isDataLoaded={isDataLoaded}
           startRollFinalized={startRoll.isFinalized}
+          justJoined={justJoined}
         >
           {/* DiceRollStart - rendered based on shouldShowDice, not showDiceRoll */}
           {(!isRankedGame || rankedGate.bothReady) && (

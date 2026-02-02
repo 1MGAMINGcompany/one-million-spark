@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { getOpponentWallet, isSameWallet, isRealWallet, normalizeWallet } from "@/lib/walletUtils";
 import { incMissed, resetMissed, clearRoom } from "@/lib/missedTurns";
 import { GameErrorBoundary } from "@/components/GameErrorBoundary";
-import { useParams, Link, useNavigate } from "react-router-dom";
+import { useParams, Link, useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Gem, Star, Flag, Users, Wifi, WifiOff, Crown, RotateCcw, LogOut, Loader2 } from "lucide-react";
 import { ForfeitConfirmDialog } from "@/components/ForfeitConfirmDialog";
@@ -109,9 +109,13 @@ const CheckersGame = () => {
   const { roomPda } = useParams<{ roomPda: string }>();
   const roomId = roomPda; // Alias for backward compatibility with hooks/display
   const navigate = useNavigate();
+  const location = useLocation();
   const { t } = useTranslation();
   const { play } = useSound();
   const { isConnected: walletConnected, address } = useWallet();
+  
+  // Check if user just joined via JoinRulesModal (skip AcceptRulesModal)
+  const justJoined = !!(location.state as { justJoined?: boolean })?.justJoined;
 
   const [board, setBoard] = useState<(Piece | null)[][]>(initializeBoard);
   const [selectedPiece, setSelectedPiece] = useState<Position | null>(null);
@@ -1390,6 +1394,7 @@ const CheckersGame = () => {
           onOpenWalletSelector={() => {}}
           isDataLoaded={isDataLoaded}
           startRollFinalized={startRoll.isFinalized}
+          justJoined={justJoined}
         >
           {(!isRankedGame || rankedGate.bothReady) && (
             <DiceRollStart
