@@ -902,7 +902,13 @@
     "roomCancelled": "Room Cancelled",
     "stakeRefunded": "Your stake has been refunded",
     "playerEliminated": "Player Eliminated",
-    "playerLeft": "{{player}} has left the game"
+    "playerLeft": "{{player}} has left the game",
+    "roomNotStarted": "Waiting for Opponent",
+    "useCancelInstead": "No opponent has joined yet. Cancel the room to get your stake refunded.",
+    "waitingForOpponent": "Waiting for Opponent",
+    "cancelRoomDescription": "No opponent has joined yet. Cancel the room to get your full stake refunded.",
+    "refundAmount": "You will receive {{stake}} SOL back",
+    "cancelRoom": "Cancel Room & Refund"
   },
   "common": {
     "processing": "Processing...",

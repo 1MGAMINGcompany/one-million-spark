@@ -37,6 +37,8 @@ export interface UseForfeitOptions {
   onCleanupWebRTC?: () => void;
   onCleanupSupabase?: () => void;
   onCleanupLocalState?: () => void;
+  /** Callback when room is not started (WAITING) and should be cancelled instead */
+  onRoomNotStarted?: () => void;
 }
 
 export interface UseForfeitReturn {
@@ -46,6 +48,8 @@ export interface UseForfeitReturn {
   isLeaving: boolean;
   /** Ref for timeout handlers - call forfeitRef.current() to trigger forfeit */
   forfeitRef: React.MutableRefObject<(() => Promise<void>) | null>;
+  /** True when last forfeit attempt returned ROOM_NOT_STARTED */
+  roomNotStarted: boolean;
 }
 
 // Generic room storage keys that should always be cleared
@@ -73,6 +77,7 @@ export function useForfeit({
   onCleanupWebRTC,
   onCleanupSupabase,
   onCleanupLocalState,
+  onRoomNotStarted,
 }: UseForfeitOptions): UseForfeitReturn {
   const navigate = useNavigate();
   const { t } = useTranslation();
@@ -80,6 +85,7 @@ export function useForfeit({
   
   const [isForfeiting, setIsForfeiting] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
+  const [roomNotStarted, setRoomNotStarted] = useState(false);
   
   // Idempotent exit tracking
   const exitedRef = useRef(false);
@@ -302,6 +308,27 @@ export function useForfeit({
         // Still call forceExit - navigate away
         forceExit();
         return;
+      } else if (result.error === "ROOM_NOT_STARTED") {
+        // Room is WAITING with only 1 player - cannot forfeit, show cancel option
+        console.warn("[useForfeit] Room not started - use cancel instead");
+        setRoomNotStarted(true);
+        toast({
+          title: t("forfeit.roomNotStarted", "Waiting for Opponent"),
+          description: t(
+            "forfeit.useCancelInstead",
+            "No opponent has joined yet. Cancel the room to get your stake refunded."
+          ),
+        });
+        // Call callback if provided
+        onRoomNotStarted?.();
+        // Clear the timeout but DON'T forceExit - let user see the cancel option
+        if (forceExitTimeoutRef.current) {
+          clearTimeout(forceExitTimeoutRef.current);
+          forceExitTimeoutRef.current = null;
+        }
+        setIsForfeiting(false);
+        executingRef.current = false;
+        return;
       } else {
         console.error("[FinalizeForfeit] failed:", result.error);
       }
@@ -418,5 +445,6 @@ export function useForfeit({
     isForfeiting,
     isLeaving,
     forfeitRef,
+    roomNotStarted,
   };
 }

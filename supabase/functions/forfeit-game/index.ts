@@ -304,6 +304,23 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    // 🛡️ ROOM_NOT_STARTED guard - cannot forfeit a WAITING room with only 1 player
+    // Room must be ACTIVE (status_int === 2) or have 2+ participants to settle
+    if (sessionRow.status_int === 1 && dbParticipants.length <= 1) {
+      console.log("[forfeit-game] Room not started yet (WAITING with 1 player)", { 
+        requestId, 
+        roomPda, 
+        status_int: sessionRow.status_int,
+        participantCount: dbParticipants.length 
+      });
+      return json200({ 
+        success: false, 
+        error: "ROOM_NOT_STARTED",
+        message: "Waiting for opponent — you can cancel the room instead.",
+        requestId 
+      });
+    }
+
     if (mode === "timeout") {
       // 🔒 SECURITY (C): Timeout mode - validate turn is expired and current_turn_wallet exists
       if (!sessionRow.current_turn_wallet) {
