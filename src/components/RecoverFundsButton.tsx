@@ -6,6 +6,7 @@ import { Transaction } from "@solana/web3.js";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import bs58 from "bs58";
+import { getSessionToken, getAuthHeaders } from "@/lib/sessionToken";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -61,11 +62,17 @@ export function RecoverFundsButton({ roomPda, onRecovered, className }: RecoverF
     setResult(null);
 
     try {
+      // Get session token for authorization
+      const sessionToken = getSessionToken(roomPda);
+      if (!sessionToken) {
+        toast.error("Session expired. Please rejoin the room.");
+        setStatus("error");
+        return;
+      }
+
       const { data, error } = await supabase.functions.invoke("recover-funds", {
-        body: {
-          roomPda,
-          callerWallet: publicKey.toBase58(),
-        },
+        body: { roomPda }, // callerWallet removed - derived from session
+        headers: getAuthHeaders(sessionToken),
       });
 
       if (error) throw error;
