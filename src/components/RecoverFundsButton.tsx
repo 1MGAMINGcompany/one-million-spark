@@ -246,7 +246,8 @@ export function RecoverFundsButton({ roomPda, onRecovered, className }: RecoverF
   };
 
   const handleRejoinRoom = () => {
-    navigate(`/room/${roomPda}`);
+    // Navigate to the play route using full Solana PDA
+    navigate(`/play/${roomPda}`);
   };
 
   const isLoading = status === "checking" || status === "force_settling";
