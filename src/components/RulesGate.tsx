@@ -40,6 +40,8 @@ type ServerSession = any;
 interface RulesGateProps {
   /** Whether this is a ranked game */
   isRanked: boolean;
+  /** Room mode for display text */
+  mode?: 'casual' | 'ranked' | 'private';
   /** Room PDA for logging/display */
   roomPda?: string;
   /** Current wallet address */
@@ -81,6 +83,7 @@ interface RulesGateProps {
 
 export function RulesGate({
   isRanked,
+  mode = isRanked ? 'ranked' : 'casual',
   roomPda,
   myWallet,
   roomPlayers,
@@ -348,7 +351,7 @@ export function RulesGate({
             {t("wallet.connectToContinue", "Connect Wallet to Continue")}
           </h2>
           <p className="text-muted-foreground text-sm">
-            {t("wallet.needWalletForRanked", "You need to connect your wallet to participate in this ranked match.")}
+            {t("wallet.needWalletForMatch", "You need to connect your wallet to participate in this {{mode}} match.", { mode: mode === "private" ? "private" : mode === "ranked" ? "ranked" : "" }).replace("this  match", "this match")}
           </p>
           {onOpenWalletSelector && (
             <Button onClick={onOpenWalletSelector} className="w-full">
