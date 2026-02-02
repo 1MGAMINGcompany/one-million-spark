@@ -916,5 +916,11 @@
   "creatorDeposit": {
     "title": "Creator Deposit (Refundable)",
     "desc": "Creating a room requires a small temporary Solana storage deposit. You get this back when the game ends — win, lose, forfeit, or cancel."
+  },
+  "rules": {
+    "title_ranked": "Ranked Match Rules",
+    "title_private": "Private Match Rules",
+    "title_default": "Match Rules",
+    "review_conditions": "Review the match conditions before starting."
   }
 }

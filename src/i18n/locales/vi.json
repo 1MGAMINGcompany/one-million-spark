@@ -959,5 +959,11 @@
     "description": "Phiên game trước đó đã được tìm thấy. Tiếp tục chơi?",
     "continue": "Tiếp Tục Game",
     "startFresh": "Bắt Đầu Mới"
+  },
+  "rules": {
+    "title_ranked": "Luật Trận Xếp Hạng",
+    "title_private": "Luật Trận Riêng Tư",
+    "title_default": "Luật Trận Đấu",
+    "review_conditions": "Xem lại điều kiện trận đấu trước khi bắt đầu."
   }
 }

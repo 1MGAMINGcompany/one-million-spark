@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Dialog,
   DialogContent,
@@ -26,6 +27,8 @@ interface AcceptRulesModalProps {
   roomPda?: string;
   /** Room players for wallet validation */
   roomPlayers?: string[];
+  /** Room mode for title display */
+  mode?: "casual" | "ranked" | "private";
 }
 
 export function AcceptRulesModal({
@@ -40,7 +43,9 @@ export function AcceptRulesModal({
   connectedWallet,
   roomPda,
   roomPlayers = [],
+  mode,
 }: AcceptRulesModalProps) {
+  const { t } = useTranslation();
   // Validate wallet is in room (prevent accepting with wrong wallet) - use isSameWallet for Base58
   const walletInRoom = connectedWallet && roomPlayers.length > 0
     ? roomPlayers.some(p => isSameWallet(p, connectedWallet))
@@ -110,10 +115,14 @@ export function AcceptRulesModal({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-xl">
             <Shield className="h-5 w-5 text-primary" />
-            Ranked Match Rules
+            {mode === "private"
+              ? t("rules.title_private", "Private Match Rules")
+              : mode === "ranked"
+                ? t("rules.title_ranked", "Ranked Match Rules")
+                : t("rules.title_default", "Match Rules")}
           </DialogTitle>
           <DialogDescription>
-            Review the match conditions before starting.
+            {t("rules.review_conditions", "Review the match conditions before starting.")}
           </DialogDescription>
         </DialogHeader>
 
