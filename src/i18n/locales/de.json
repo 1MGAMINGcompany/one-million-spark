@@ -6,6 +6,7 @@
     "exit": "Verlassen"
   },
   "game": {
+    "player": "Spieler",
     "finishGame": "Spiel Beenden",
     "finishGameDesc": "Als Raumersteller können Sie das Spiel beenden und den Gewinner auszahlen.",
     "selectWinner": "Gewinner Auswählen",
