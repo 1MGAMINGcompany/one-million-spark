@@ -5,11 +5,13 @@
  * - Retry logic (max 2 attempts, 500ms backoff)
  * - Proper sequencing (only after session token is available)
  * - Auto-cancel room on persistent failure to protect user stake
+ * 
+ * 🔒 CRITICAL: Uses per-room session token ONLY - never falls back to global/latest
  */
 
 import { useCallback, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { getSessionToken, getAuthHeaders } from "@/lib/sessionToken";
+import { getAuthHeaders } from "@/lib/sessionToken";
 
 export interface RoomSettingsPayload {
   roomPda: string;
@@ -33,6 +35,37 @@ async function delay(ms: number): Promise<void> {
 }
 
 /**
+ * Extract session token from localStorage value (handles raw strings and JSON objects)
+ */
+function extractTokenFromStoredValue(value: string | null): string | null {
+  if (!value) return null;
+
+  // Raw UUID token
+  if (/^[a-f0-9-]{32,}$/i.test(value)) {
+    return value;
+  }
+
+  // Try JSON extraction
+  try {
+    const parsed = JSON.parse(value);
+    const candidates = [
+      parsed?.sessionToken,
+      parsed?.session_token,
+      parsed?.token,
+    ];
+    for (const c of candidates) {
+      if (typeof c === "string" && /^[a-f0-9-]{32,}$/i.test(c)) {
+        return c;
+      }
+    }
+  } catch {
+    // not JSON
+  }
+
+  return null;
+}
+
+/**
  * Hook for reliably saving room settings to the database.
  * 
  * CRITICAL: Only call after:
@@ -52,16 +85,22 @@ export function useRoomSettings(): UseRoomSettingsResult {
     setIsSaving(true);
     setLastError(null);
 
-    // 🔒 Get session token - this is required for authorization
-    const sessionToken = getSessionToken(roomPda);
+    // 🔒 Get per-room session token ONLY - never use global/latest fallback
+    // Check room-specific key directly to avoid getSessionToken's fallback logic
+    const roomSpecificKey = `session_token_${roomPda}`;
+    const rawToken = localStorage.getItem(roomSpecificKey);
+    const sessionToken = extractTokenFromStoredValue(rawToken);
     
     if (!sessionToken) {
-      const errorMsg = "Session token not found. Cannot save settings securely.";
+      const errorMsg = `No session token for room ${roomPda.slice(0, 8)}. Cannot save settings.`;
       console.error("[useRoomSettings]", errorMsg);
       setLastError(errorMsg);
       setIsSaving(false);
       return { success: false, error: errorMsg };
     }
+
+    // Debug log before invoke
+    console.log(`[roomSettings] using token for room ${roomPda.slice(0, 8)}… token=${sessionToken.slice(0, 8)}…`);
 
     let lastErrorMessage = "";
     
