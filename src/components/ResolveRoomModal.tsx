@@ -30,6 +30,12 @@ interface ResolveRoomModalProps {
   walletAddress: string;
   onResolved: () => void;
   winnerWallet?: string | null;
+  /** DB authoritative status_int (1=waiting, 2=active, 3=finished) */
+  dbStatusInt?: number;
+  /** DB authoritative participants count */
+  dbParticipantsCount?: number;
+  /** DB authoritative start_roll_finalized flag */
+  dbStartRollFinalized?: boolean;
 }
 
 type ResolveAction = "cancel" | "forfeit" | "return" | "claim";
@@ -42,6 +48,9 @@ export function ResolveRoomModal({
   walletAddress,
   onResolved,
   winnerWallet,
+  dbStatusInt,
+  dbParticipantsCount,
+  dbStartRollFinalized,
 }: ResolveRoomModalProps) {
   const navigate = useNavigate();
   const { t } = useTranslation();
@@ -49,16 +58,26 @@ export function ResolveRoomModal({
   const { cancelRoomByPda, forfeitGame, fetchRooms } = useSolanaRooms();
   const [loading, setLoading] = useState(false);
 
-  // Decision tree based ONLY on on-chain state
+  // Use DB state as authoritative source, fallback to on-chain data
+  const effectiveStatusInt = dbStatusInt ?? (roomData.status === RoomStatus.Started ? 2 : roomData.status === RoomStatus.Finished ? 3 : 1);
+  const effectiveParticipantsCount = dbParticipantsCount ?? roomData.playerCount;
+  const effectiveStartRollFinalized = dbStartRollFinalized ?? false;
+
+  // Decision tree based on DB truth (preferred) or on-chain fallback
   const isCreator = roomData.creator === walletAddress;
-  const playerCount = roomData.playerCount;
-  const isFinished = roomData.status === RoomStatus.Finished;
+  const isFinished = effectiveStatusInt === 3 || roomData.status === RoomStatus.Finished;
   const isCancelled = roomData.status === RoomStatus.Cancelled;
+  
+  // CANCEL condition: status_int === 1 OR participantsCount <= 1 OR start_roll_finalized === false
+  const isNotStarted = effectiveStatusInt === 1 || effectiveParticipantsCount <= 1 || !effectiveStartRollFinalized;
+  
+  // FORFEIT condition: status_int === 2 AND participantsCount >= 2 AND start_roll_finalized === true
+  const isFullyActive = effectiveStatusInt === 2 && effectiveParticipantsCount >= 2 && effectiveStartRollFinalized;
 
   // Check if this is a recoverable unsettled room where connected wallet is winner
   const isRecoverableUnsettled =
     roomData.status === RoomStatus.Started && // Started (2)
-    playerCount >= 2 &&
+    effectiveParticipantsCount >= 2 &&
     !isFinished &&
     !isCancelled;
 
@@ -93,17 +112,28 @@ export function ResolveRoomModal({
     );
     buttonText = t("resolveRoom.claimPayout", "Claim Payout");
     buttonVariant = "default";
-  } else if (playerCount === 1 && isCreator) {
+  } else if (isNotStarted && isCreator) {
+    // CANCEL: status_int === 1 OR participantsCount <= 1 OR start_roll_finalized === false
     action = "cancel";
     title = t("resolveRoom.cancelRoom", "Cancel Room (Refund)");
     description = t(
       "resolveRoom.cancelRoomDesc",
-      "No opponent has joined yet. Cancel the room to get your full stake refunded."
+      "The game has not fully started yet. Cancel the room to get your full stake refunded."
     );
     buttonText = t("resolveRoom.cancelAndRefund", "Cancel & Get Refund");
     buttonVariant = "default";
-  } else if (playerCount >= 2) {
-    // IMPORTANT: NO "game started", "ready pressed", or vault balance checks!
+  } else if (isFullyActive) {
+    // FORFEIT: status_int === 2 AND participantsCount >= 2 AND start_roll_finalized === true
+    action = "forfeit";
+    title = t("resolveRoom.forfeitMatch", "Forfeit Match");
+    description = t(
+      "resolveRoom.forfeitMatchDesc",
+      "The match is active. Forfeiting will pay out the opponent (95%) and platform fee (5%). This action cannot be undone."
+    );
+    buttonText = t("resolveRoom.forfeitAndPayout", "Forfeit (Opponent Wins)");
+    buttonVariant = "destructive";
+  } else if (effectiveParticipantsCount >= 2) {
+    // Edge case: 2+ players but not fully active - still allow forfeit as fallback
     action = "forfeit";
     title = t("resolveRoom.forfeitMatch", "Forfeit Match");
     description = t(
@@ -250,7 +280,7 @@ export function ResolveRoomModal({
           </div>
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Players:</span>
-            <span>{playerCount}</span>
+            <span>{effectiveParticipantsCount}</span>
           </div>
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Status:</span>
@@ -259,7 +289,7 @@ export function ResolveRoomModal({
                 ? "Finished"
                 : isCancelled
                 ? "Cancelled"
-                : playerCount >= 2
+                : isFullyActive
                 ? "In Progress"
                 : "Waiting"}
             </span>
