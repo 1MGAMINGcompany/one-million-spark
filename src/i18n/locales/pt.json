@@ -25,6 +25,7 @@
     "myTurn": "MINHA VEZ",
     "opponentsTurn": "Vez do Oponente",
     "opponent": "Oponente",
+    "player": "Jogador",
     "playerGame": "Jogo de {{count}} jogadores",
     "waitingForPlayer": "Aguardando {{player}}",
     "remaining": "restante",
@@ -742,5 +743,38 @@
     "forfeit": "Desistência",
     "timeoutForfeit": "Tempo esgotado = desistência automática",
     "rulesAcceptedNote": "Ambos os jogadores aceitaram estas regras antes do início da partida. Os pagamentos são executados on-chain."
+  },
+  "diceRoll": {
+    "rollToStart": "Rolar para Começar",
+    "highestGoesFirst": "Maior total começa",
+    "syncingOpponent": "Sincronizando com oponente... Aguarde.",
+    "takingTooLong": "Rolagem demorando muito. Escolha uma opção:",
+    "retrySync": "Tentar Novamente",
+    "pickStarterAuto": "Escolher Inicial (Auto)",
+    "rolledHigher": "rolou mais alto! Você começa!",
+    "theyGoFirst": "rolou mais alto! Eles começam!",
+    "resolvedAfter": "Resolvido após",
+    "tieBreaker": "desempate",
+    "bothReady": "Ambos prontos. Role para decidir quem começa!",
+    "rollDice": "Rolar Dado",
+    "computing": "Calculando...",
+    "rolling": "Rolando...",
+    "continueToGame": "Continuar para o Jogo"
+  },
+  "clearSession": {
+    "title": "Limpar sessão durante uma partida ativa?",
+    "descriptionActive": "Limpar sua sessão desconecta você. Se não voltar, pode perder por tempo e sua aposta.",
+    "descriptionUnverified": "Não conseguimos verificar o estado da partida. Limpar a sessão pode desconectá-lo.",
+    "roomLabel": "Sala:",
+    "inRoom": "Você está atualmente na sala:",
+    "cancel": "Cancelar",
+    "goToRoomList": "Ir para Lista de Salas",
+    "clearAnyway": "Limpar mesmo assim",
+    "cleared": "Sessão limpa",
+    "tokensRemoved": "tokens removidos"
+  },
+  "common": {
+    "loadingMatchDetails": "Carregando detalhes da partida...",
+    "confirmingEntry": "Confirmando entrada..."
   }
 }

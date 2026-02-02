@@ -25,6 +25,7 @@
     "myTurn": "MON TOUR",
     "opponentsTurn": "Tour de l'Adversaire",
     "opponent": "Adversaire",
+    "player": "Joueur",
     "playerGame": "Partie à {{count}} joueurs",
     "waitingForPlayer": "En attente de {{player}}",
     "remaining": "restant",
@@ -742,5 +743,38 @@
     "forfeit": "Forfait",
     "timeoutForfeit": "Temps écoulé = forfait automatique",
     "rulesAcceptedNote": "Les deux joueurs ont accepté ces règles avant le début du match. Les paiements sont exécutés sur la blockchain."
+  },
+  "diceRoll": {
+    "rollToStart": "Lancer pour Commencer",
+    "highestGoesFirst": "Le plus haut total commence",
+    "syncingOpponent": "Synchronisation avec l'adversaire... Veuillez patienter.",
+    "takingTooLong": "Le lancer prend trop de temps. Choisissez une option:",
+    "retrySync": "Réessayer",
+    "pickStarterAuto": "Choisir le Premier (Auto)",
+    "rolledHigher": "a lancé plus haut! Vous commencez!",
+    "theyGoFirst": "a lancé plus haut! Ils commencent!",
+    "resolvedAfter": "Résolu après",
+    "tieBreaker": "départage",
+    "bothReady": "Les deux joueurs sont prêts. Lancez pour décider qui commence!",
+    "rollDice": "Lancer les Dés",
+    "computing": "Calcul...",
+    "rolling": "Lancement...",
+    "continueToGame": "Continuer vers le Jeu"
+  },
+  "clearSession": {
+    "title": "Effacer la session pendant une partie active?",
+    "descriptionActive": "Effacer votre session vous déconnecte. Si vous ne revenez pas, vous pouvez perdre par timeout.",
+    "descriptionUnverified": "Nous n'avons pas pu vérifier l'état du match. Effacer la session peut vous déconnecter.",
+    "roomLabel": "Salle:",
+    "inRoom": "Vous êtes actuellement dans la salle:",
+    "cancel": "Annuler",
+    "goToRoomList": "Aller à la Liste des Salles",
+    "clearAnyway": "Effacer quand même",
+    "cleared": "Session effacée",
+    "tokensRemoved": "tokens supprimés"
+  },
+  "common": {
+    "loadingMatchDetails": "Chargement des détails du match...",
+    "confirmingEntry": "Confirmation de l'entrée..."
   }
 }

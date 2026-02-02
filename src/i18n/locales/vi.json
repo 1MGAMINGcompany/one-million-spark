@@ -21,6 +21,7 @@
     "myTurn": "LƯỢT TÔI",
     "opponentsTurn": "Lượt Đối Thủ",
     "opponent": "Đối Thủ",
+    "player": "Người Chơi",
     "playerGame": "Trận {{count}} người",
     "waitingForPlayer": "Đang chờ {{player}}",
     "victory": "Chiến Thắng!",
@@ -979,5 +980,38 @@
   },
   "wallet": {
     "wrongWallet": "Ví kết nối sai"
+  },
+  "diceRoll": {
+    "rollToStart": "Tung Xúc Xắc Bắt Đầu",
+    "highestGoesFirst": "Điểm cao nhất đi trước",
+    "syncingOpponent": "Đang đồng bộ với đối thủ... Vui lòng chờ.",
+    "takingTooLong": "Tung xúc xắc quá lâu. Chọn một tùy chọn:",
+    "retrySync": "Thử Lại",
+    "pickStarterAuto": "Chọn Người Bắt Đầu (Tự Động)",
+    "rolledHigher": "tung cao hơn! Bạn đi trước.",
+    "theyGoFirst": "tung cao hơn! Họ đi trước.",
+    "resolvedAfter": "Giải quyết sau",
+    "tieBreaker": "lượt hòa",
+    "bothReady": "Cả hai sẵn sàng. Tung để quyết định ai đi trước!",
+    "rollDice": "Tung Xúc Xắc",
+    "computing": "Đang tính...",
+    "rolling": "Đang tung...",
+    "continueToGame": "Tiếp Tục Vào Game"
+  },
+  "clearSession": {
+    "title": "Xóa phiên khi đang trong trận?",
+    "descriptionActive": "Xóa phiên sẽ ngắt kết nối. Nếu không quay lại, bạn có thể thua vì hết giờ.",
+    "descriptionUnverified": "Không thể xác minh trạng thái trận. Xóa phiên có thể gây ngắt kết nối.",
+    "roomLabel": "Phòng:",
+    "inRoom": "Bạn đang ở trong phòng:",
+    "cancel": "Hủy",
+    "goToRoomList": "Đến Danh Sách Phòng",
+    "clearAnyway": "Vẫn Xóa",
+    "cleared": "Đã xóa phiên",
+    "tokensRemoved": "token đã xóa"
+  },
+  "common": {
+    "loadingMatchDetails": "Đang tải chi tiết trận...",
+    "confirmingEntry": "Đang xác nhận vào trận..."
   }
 }

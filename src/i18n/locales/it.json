@@ -719,5 +719,38 @@
     "forfeit": "Abbandono",
     "timeoutForfeit": "Tempo scaduto = abbandono automatico",
     "rulesAcceptedNote": "Entrambi i giocatori hanno accettato queste regole prima dell'inizio della partita. I pagamenti vengono eseguiti on-chain."
+  },
+  "diceRoll": {
+    "rollToStart": "Tira per Iniziare",
+    "highestGoesFirst": "Il totale più alto inizia",
+    "syncingOpponent": "Sincronizzazione con l'avversario... Attendere.",
+    "takingTooLong": "Il lancio sta richiedendo troppo tempo. Scegli un'opzione:",
+    "retrySync": "Riprova",
+    "pickStarterAuto": "Scegli Iniziatore (Auto)",
+    "rolledHigher": "ha tirato più alto! Inizi tu!",
+    "theyGoFirst": "ha tirato più alto! Iniziano loro!",
+    "resolvedAfter": "Risolto dopo",
+    "tieBreaker": "spareggio",
+    "bothReady": "Entrambi pronti. Tira per decidere chi inizia!",
+    "rollDice": "Tira i Dadi",
+    "computing": "Calcolo...",
+    "rolling": "Lancio...",
+    "continueToGame": "Continua al Gioco"
+  },
+  "clearSession": {
+    "title": "Cancellare la sessione durante una partita attiva?",
+    "descriptionActive": "Cancellare la sessione ti disconnette. Se non torni, potresti perdere per timeout.",
+    "descriptionUnverified": "Non siamo riusciti a verificare lo stato della partita. Cancellare la sessione potrebbe disconnetterti.",
+    "roomLabel": "Stanza:",
+    "inRoom": "Sei attualmente nella stanza:",
+    "cancel": "Annulla",
+    "goToRoomList": "Vai alla Lista Stanze",
+    "clearAnyway": "Cancella comunque",
+    "cleared": "Sessione cancellata",
+    "tokensRemoved": "token rimossi"
+  },
+  "common": {
+    "loadingMatchDetails": "Caricamento dettagli partita...",
+    "confirmingEntry": "Conferma ingresso..."
   }
 }

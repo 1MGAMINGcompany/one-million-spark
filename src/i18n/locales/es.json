@@ -25,6 +25,7 @@
     "myTurn": "MI TURNO",
     "opponentsTurn": "Turno del Oponente",
     "opponent": "Oponente",
+    "player": "Jugador",
     "playerGame": "Partida de {{count}} jugadores",
     "waitingForPlayer": "Esperando a {{player}}",
     "remaining": "restante",
@@ -869,5 +870,38 @@
     "forfeit": "Abandono",
     "timeoutForfeit": "Tiempo agotado = abandono automático",
     "rulesAcceptedNote": "Ambos jugadores aceptaron estas reglas antes del inicio del partido. Los pagos se ejecutan en la cadena."
+  },
+  "diceRoll": {
+    "rollToStart": "Tirar para Empezar",
+    "highestGoesFirst": "El mayor total va primero",
+    "syncingOpponent": "Sincronizando con oponente... Por favor espera.",
+    "takingTooLong": "El dado tarda mucho. Elige una opción:",
+    "retrySync": "Reintentar",
+    "pickStarterAuto": "Elegir Inicial (Auto)",
+    "rolledHigher": "sacó más alto. ¡Tú empiezas!",
+    "theyGoFirst": "sacó más alto. ¡Ellos empiezan!",
+    "resolvedAfter": "Resuelto después de",
+    "tieBreaker": "desempate",
+    "bothReady": "Ambos listos. ¡Tira para decidir quién empieza!",
+    "rollDice": "Tirar Dado",
+    "computing": "Calculando...",
+    "rolling": "Tirando...",
+    "continueToGame": "Continuar al Juego"
+  },
+  "clearSession": {
+    "title": "¿Borrar sesión durante una partida activa?",
+    "descriptionActive": "Borrar tu sesión te desconecta. Si no vuelves, puedes perder por tiempo y tu apuesta.",
+    "descriptionUnverified": "No pudimos verificar el estado del partido. Borrar la sesión puede desconectarte y causar timeout.",
+    "roomLabel": "Sala:",
+    "inRoom": "Estás actualmente en la sala:",
+    "cancel": "Cancelar",
+    "goToRoomList": "Ir a Lista de Salas",
+    "clearAnyway": "Borrar de todos modos",
+    "cleared": "Sesión borrada",
+    "tokensRemoved": "tokens eliminados"
+  },
+  "common": {
+    "loadingMatchDetails": "Cargando detalles del partido...",
+    "confirmingEntry": "Confirmando entrada..."
   }
 }
