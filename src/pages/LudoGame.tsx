@@ -307,6 +307,9 @@ const LudoGame = () => {
     enabled: roomPlayers.length >= 2 && modeLoaded,
     participants: humanPlayers,
   });
+
+  // Gate for ranked/private readiness
+  const readyGateOk = !requiresReadyGate || rankedGate.bothReady;
   // Durable game sync - persists moves to DB for reliability
   const handleDurableMoveReceived = useCallback((move: GameMove) => {
     // Only apply moves from opponents (we already applied our own locally)
@@ -589,20 +592,28 @@ const LudoGame = () => {
   const gameStarted = effectiveStartRoll.isFinalized && humanPlayers.length >= requiredHumans;
   const shouldShowTimer = modeLoaded && effectiveTurnTime > 0 && gameStarted && !gameOver;
   
+  // === UNIFIED TURN SOURCE OF TRUTH ===
+  const readyToPlay =
+    hasTwoRealPlayers &&
+    readyGateOk &&
+    effectiveStartRoll.isFinalized &&
+    !gameOver;
+
   // Display timer - shows ACTIVE player's remaining time on BOTH devices
   const displayTimer = useTurnCountdownDisplay({
     turnStartedAt,
     turnTimeSeconds: effectiveTurnTime,
-    enabled: shouldShowTimer && rankedGate.bothReady,
+    enabled: shouldShowTimer && readyToPlay,
   });
   
   // Enforcement timer - ONLY runs on active player's device
   const turnTimer = useTurnTimer({
     turnTimeSeconds: effectiveTurnTime,
-    enabled: shouldShowTimer && isActuallyMyTurn && rankedGate.bothReady,
+    enabled: shouldShowTimer && isActuallyMyTurn && readyToPlay,
     isMyTurn: isActuallyMyTurn,
     onTimeExpired: handleTurnTimeout,
     roomId: roomPda,
+    turnStartedAt, // DB-authoritative mode
   });
 
   // Opponent timeout detection for Ludo (2/3/4 player support)
@@ -640,13 +651,13 @@ const LudoGame = () => {
 
   const opponentTimeout = useOpponentTimeoutDetection({
     roomPda: roomPda || "",
-    enabled: shouldShowTimer && !isActuallyMyTurn && effectiveStartRoll.isFinalized && rankedGate.bothReady,
+    enabled: shouldShowTimer && !isActuallyMyTurn && effectiveStartRoll.isFinalized && readyToPlay,
     isMyTurn: isActuallyMyTurn,
     turnTimeSeconds: effectiveTurnTime,
     myWallet: address,
     onOpponentTimeout: handleOpponentTimeoutDetected,
     onAutoForfeit: handleOpponentAutoForfeit,
-    bothReady: rankedGate.bothReady,
+    bothReady: readyToPlay,
     onTurnStartedAtChange: setTurnStartedAt,
   });
 

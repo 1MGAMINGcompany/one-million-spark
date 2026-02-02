@@ -414,6 +414,9 @@ const ChessGame = () => {
     enabled: hasTwoRealPlayers && modeLoaded,
   });
 
+  // Gate for ranked/private readiness
+  const readyGateOk = !requiresReadyGate || rankedGate.bothReady;
+
   // TxLock for preventing Phantom "Request blocked" popups
   const { isTxInFlight, withTxLock } = useTxLock();
 
@@ -439,6 +442,13 @@ const ChessGame = () => {
     initialColor: isSameWallet(roomPlayers[0], address) ? "w" : "b",
     bothReady: rankedGate.bothReady,
   });
+
+  // === UNIFIED TURN SOURCE OF TRUTH ===
+  const readyToPlay =
+    hasTwoRealPlayers &&
+    readyGateOk &&
+    startRoll.isFinalized &&
+    !gameOver;
 
   // Update myColor based on start roll result - THIS IS THE ONLY PLACE THAT SETS COLOR
   useEffect(() => {
@@ -623,16 +633,17 @@ const ChessGame = () => {
   const displayTimer = useTurnCountdownDisplay({
     turnStartedAt,
     turnTimeSeconds: effectiveTurnTime,
-    enabled: shouldShowTimer && rankedGate.bothReady,
+    enabled: shouldShowTimer && readyToPlay,
   });
   
   // Enforcement timer - ONLY runs on active player's device
   const turnTimer = useTurnTimer({
     turnTimeSeconds: effectiveTurnTime,
-    enabled: shouldShowTimer && isActuallyMyTurn && rankedGate.bothReady,
+    enabled: shouldShowTimer && isActuallyMyTurn && readyToPlay,
     isMyTurn: isActuallyMyTurn,
     onTimeExpired: handleTurnTimeout,
     roomId: roomPda,
+    turnStartedAt, // DB-authoritative mode
   });
 
   // Convert to TurnPlayer format for notifications
@@ -675,14 +686,14 @@ const ChessGame = () => {
 
   const opponentTimeout = useOpponentTimeoutDetection({
     roomPda: roomPda || "",
-    // Enable for ranked/private when it's NOT my turn AND both players ready
-    enabled: shouldShowTimer && !isActuallyMyTurn && startRoll.isFinalized && rankedGate.bothReady,
+    // Enable for ranked/private when it's NOT my turn AND game is ready
+    enabled: shouldShowTimer && !isActuallyMyTurn && startRoll.isFinalized && readyToPlay,
     isMyTurn: isActuallyMyTurn,
     turnTimeSeconds: effectiveTurnTime,
     myWallet: address,
     onOpponentTimeout: handleOpponentTimeoutDetected,
     onAutoForfeit: handleOpponentAutoForfeit,
-    bothReady: rankedGate.bothReady,
+    bothReady: readyToPlay,
     onTurnStartedAtChange: setTurnStartedAt,
   });
 
