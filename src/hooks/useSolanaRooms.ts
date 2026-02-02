@@ -753,6 +753,14 @@ export function useSolanaRooms() {
       // Send as VersionedTransaction
       const { signature, blockhash, lastValidBlockHeight } = await sendVersionedTx([ix]);
       
+      // 🔍 DEBUG LOG: Join tx sent
+      console.log("[JoinRoom] ✅ Join tx sent:", {
+        signature: signature.slice(0, 16) + "...",
+        roomId,
+        roomCreator: roomCreator.slice(0, 8),
+        joiner: publicKey.toBase58().slice(0, 8),
+      });
+      
       toast({
         title: "Transaction sent",
         description: "Waiting for confirmation...",
@@ -763,6 +771,12 @@ export function useSolanaRooms() {
         blockhash,
         lastValidBlockHeight,
       }, 'confirmed');
+      
+      // 🔍 DEBUG LOG: Join tx confirmed
+      console.log("[JoinRoom] ✅ Join tx CONFIRMED:", {
+        signature: signature.slice(0, 16) + "...",
+        roomId,
+      });
       
       toast({
         title: "Joined room!",
@@ -857,14 +871,27 @@ export function useSolanaRooms() {
               });
             }
           } else {
-            console.log("[JoinRoom] Recorded acceptance with tx signature and mode:", mode);
+            // 🔍 DEBUG LOG: record_acceptance succeeded
+            console.log("[JoinRoom] ✅ record_acceptance SUCCESS:", {
+              mode,
+              roomPda: joinedRoom.pda.slice(0, 8),
+              wallet: publicKey.toBase58().slice(0, 8),
+              resultKeys: acceptResult ? Object.keys(acceptResult as object) : [],
+            });
             
             // Store session token from record_acceptance for future auth
             const resultObj = typeof acceptResult === 'object' && acceptResult !== null ? acceptResult as Record<string, unknown> : null;
             const sessionTokenFromRpc = resultObj?.session_token as string | undefined;
             if (sessionTokenFromRpc) {
+              // 🔍 DEBUG LOG: storeSessionToken called
+              console.log("[JoinRoom] ✅ storeSessionToken CALLED:", {
+                roomPda: joinedRoom.pda.slice(0, 8),
+                tokenPrefix: sessionTokenFromRpc.slice(0, 8) + "...",
+              });
               storeSessionToken(joinedRoom.pda, sessionTokenFromRpc);
-              console.log("[JoinRoom] Session token stored for room:", joinedRoom.pda.slice(0, 8));
+              console.log("[JoinRoom] ✅ Session token STORED for room:", joinedRoom.pda.slice(0, 8));
+            } else {
+              console.warn("[JoinRoom] ⚠️ No session_token in record_acceptance response");
             }
           }
         }

@@ -24,11 +24,15 @@ import { AcceptRulesModal } from "@/components/AcceptRulesModal";
 import { WaitingForOpponentPanel } from "@/components/WaitingForOpponentPanel";
 import { WalletMismatchPanel } from "@/components/WalletMismatchPanel";
 import { Button } from "@/components/ui/button";
-import { Loader2, Wallet, RefreshCw } from "lucide-react";
+import { Loader2, Wallet, RefreshCw, Bug } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useTranslation } from "react-i18next";
 import { isSameWallet, isPlaceholderWallet } from "@/lib/walletUtils";
 import { getSessionToken } from "@/lib/sessionToken";
+
+// Check if running in dev mode
+const isDev = import.meta.env.DEV || 
+  (typeof window !== "undefined" && window.location.search.includes("debug=1"));
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type ServerSession = any;
@@ -109,6 +113,43 @@ export function RulesGate({
   const handleRejoinRoom = useCallback(() => {
     navigate("/rooms");
   }, [navigate]);
+
+  // 🔍 DEBUG: Copy debug info handler (dev only)
+  const [debugLoading, setDebugLoading] = useState(false);
+  const handleCopyDebugInfo = useCallback(async () => {
+    if (!roomPda) return;
+    setDebugLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("game-session-get", {
+        body: { roomPda },
+      });
+      
+      const debugPayload = {
+        ...(data?.debug || {}),
+        localState: {
+          myWallet: myWallet?.slice(0, 8),
+          iAmReady,
+          opponentReady,
+          bothReady,
+          startRollFinalized,
+          isDataLoaded,
+          hasSessionToken,
+          justJoined,
+        },
+        error: error?.message || null,
+      };
+      
+      const jsonStr = JSON.stringify(debugPayload, null, 2);
+      await navigator.clipboard.writeText(jsonStr);
+      console.log("[RulesGate] Debug info copied:", debugPayload);
+      alert("Debug info copied to clipboard! Check console for details.");
+    } catch (err) {
+      console.error("[RulesGate] Failed to fetch debug info:", err);
+      alert("Failed to fetch debug info. Check console.");
+    } finally {
+      setDebugLoading(false);
+    }
+  }, [roomPda, myWallet, iAmReady, opponentReady, bothReady, startRollFinalized, isDataLoaded, hasSessionToken, justJoined]);
   
   // --- START: Server-truth polling state (prevents mobile/desktop deadlocks) ---
   const [serverSession, setServerSession] = useState<ServerSession | null>(null);
@@ -388,5 +429,23 @@ export function RulesGate({
   // 6. Both ready → render children (DiceRollStart or GameBoard)
   // NOTE: Removed the fullscreen "syncing" overlay that was blocking DiceRollStart.
   // If the roll isn't finalized yet, DiceRollStart handles that UI - don't block it!
-  return <>{children}</>;
+  return (
+    <>
+      {children}
+      {/* 🔍 DEBUG: Hidden debug button (dev only) */}
+      {isDev && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={handleCopyDebugInfo}
+          disabled={debugLoading}
+          className="fixed bottom-2 left-2 z-50 opacity-30 hover:opacity-100 text-xs"
+          title="Copy Debug Info (Dev Only)"
+        >
+          <Bug className="h-3 w-3 mr-1" />
+          {debugLoading ? "..." : "Debug"}
+        </Button>
+      )}
+    </>
+  );
 }

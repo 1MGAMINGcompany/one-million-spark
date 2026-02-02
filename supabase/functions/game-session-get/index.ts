@@ -60,6 +60,26 @@ serve(async (req) => {
       console.warn('[game-session-get] Receipt query error (non-fatal):', receiptError)
     }
 
+    // 🔍 DEBUG: Count player_sessions rows for this room
+    const { count: playerSessionsCount, error: psCountError } = await supabase
+      .from('player_sessions')
+      .select('*', { count: 'exact', head: true })
+      .eq('room_pda', roomPda)
+
+    if (psCountError) {
+      console.warn('[game-session-get] player_sessions count error (non-fatal):', psCountError)
+    }
+
+    // 🔍 DEBUG: Count game_acceptances rows for this room
+    const { count: acceptancesCount, error: accCountError } = await supabase
+      .from('game_acceptances')
+      .select('*', { count: 'exact', head: true })
+      .eq('room_pda', roomPda)
+
+    if (accCountError) {
+      console.warn('[game-session-get] game_acceptances count error (non-fatal):', accCountError)
+    }
+
   // Fetch match info - optional field
   const { data: match, error: matchError } = await supabase
     .from('matches')
@@ -131,14 +151,34 @@ serve(async (req) => {
   };
 
   console.log('[game-session-get] ✅ Session found:', !!session, 'Receipt:', !!receipt, 'Match:', !!match, 'Acceptances:', players.length)
+
+  // 🔍 DEBUG: Build debug info object
+  const debugInfo = {
+    roomPda,
+    status_int: session?.status_int ?? null,
+    status: session?.status ?? null,
+    player1_wallet: session?.player1_wallet?.slice(0, 8) ?? null,
+    player2_wallet: session?.player2_wallet?.slice(0, 8) ?? null,
+    participants: session?.participants ?? [],
+    participantsCount: session?.participants?.length ?? 0,
+    mode: session?.mode ?? null,
+    max_players: session?.max_players ?? null,
+    p1_ready: session?.p1_ready ?? false,
+    p2_ready: session?.p2_ready ?? false,
+    start_roll_finalized: session?.start_roll_finalized ?? false,
+    player_sessions_count: playerSessionsCount ?? 0,
+    game_acceptances_count: acceptancesCount ?? 0,
+    timestamp: new Date().toISOString(),
+  }
     
-  // Return backward-compatible response: { ok, session } plus optional receipt/match/acceptances
+  // Return backward-compatible response: { ok, session } plus optional receipt/match/acceptances + debug
   return new Response(JSON.stringify({ 
     ok: true, 
     session, 
     receipt: receipt || null,
     match: match || null,
     acceptances,
+    debug: debugInfo,
   }), { 
     status: 200, 
     headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
