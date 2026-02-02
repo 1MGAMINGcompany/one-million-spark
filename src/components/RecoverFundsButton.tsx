@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import bs58 from "bs58";
 import { useNavigate } from "react-router-dom";
 import { getSessionToken, getAuthHeaders } from "@/lib/sessionToken";
+import { useSolanaRooms } from "@/hooks/useSolanaRooms";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -51,6 +52,7 @@ export function RecoverFundsButton({ roomPda, onRecovered, className }: RecoverF
   const { publicKey, signTransaction } = useWallet();
   const { connection } = useConnection();
   const navigate = useNavigate();
+  const { clearRoomFromState, fetchUserActiveRoom } = useSolanaRooms();
   const [status, setStatus] = useState<RecoveryStatus>("idle");
   const [result, setResult] = useState<RecoveryResult | null>(null);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
@@ -106,6 +108,10 @@ export function RecoverFundsButton({ roomPda, onRecovered, className }: RecoverF
           break;
         case "force_settled":
           toast.success("Game force-settled! Funds returned to creator.");
+          // Clear room from local state immediately (banners disappear)
+          clearRoomFromState(roomPda);
+          // Trigger refresh fetch for any remaining rooms
+          fetchUserActiveRoom();
           setStatus("idle");
           onRecovered?.();
           // Navigate to room list after successful force settle
@@ -176,9 +182,15 @@ export function RecoverFundsButton({ roomPda, onRecovered, className }: RecoverF
       }, "confirmed");
 
       toast.success("Room cancelled! Funds returned to your wallet.");
+      // Clear room from local state immediately (banners disappear)
+      clearRoomFromState(roomPda);
+      // Trigger refresh fetch for any remaining rooms
+      fetchUserActiveRoom();
       setStatus("idle");
       setPendingTx(null);
       onRecovered?.();
+      // Navigate to room list after successful cancel
+      navigate("/room-list");
     } catch (e: any) {
       console.error("Cancel transaction failed:", e);
       toast.error(e.message || "Failed to cancel room");
