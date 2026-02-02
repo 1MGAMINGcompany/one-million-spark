@@ -1054,45 +1054,32 @@ const BackgammonGame = () => {
     console.log(`[BackgammonGame] Turn timeout. timedOut=${timedOutWallet?.slice(0,8)} nextTurn=${nextTurnWallet?.slice(0,8)} missed=${newMissedCount}/3`);
     
     if (newMissedCount >= 3) {
-      // 3 STRIKES = AUTO FORFEIT - Submit explicit auto_forfeit move type
+      // 3 STRIKES = AUTO FORFEIT - Use server-verified timeout mode.
+      // Server determines forfeiter from current_turn_wallet and verifies expiry.
       toast({
         title: t('gameSession.autoForfeit'),
         description: t('gameSession.missedThreeTurns'),
         variant: "destructive",
       });
-      
-      // FIX: Await persistMove BEFORE any local state changes
-      // This prevents the race condition where the game is marked finished before the RPC completes
-      if (isRankedGame) {
-        const result = await persistMove({
-          type: "auto_forfeit",
-          timedOutWallet,
-          winnerWallet: nextTurnWallet,
-          missedCount: newMissedCount,
-          reason: "three_missed_turns",
-          gameState,
-          dice: [],
-          remainingMoves: [],
-        } as BackgammonMoveMessage, address);
-        
-        console.log("[handleTurnTimeout] auto_forfeit persistMove result:", result);
-      }
-      
-      // Location 6: THEN update local state (after RPC completes)
-      // Debug log for settlement verification
-      console.log("[handleTurnTimeout] auto_forfeit settlement:", {
-        winnerWallet: nextTurnWallet?.slice(0, 8),
-        loserWallet: address?.slice(0, 8),
-        reason: "auto_forfeit",
-      });
-      
-      // FIX: Notify opponent via WebRTC BEFORE navigating away
-      sendResignRef.current?.();
-      
-      forfeitFnRef.current?.();
-      // Use neutral resolving state - DB Outcome Resolver will finalize
-      enterOutcomeResolving(nextTurnWallet);
-      
+
+      if (!roomPda) return;
+
+      const token =
+        localStorage.getItem(`session_token_${roomPda}`) ||
+        localStorage.getItem("session_token_latest") ||
+        "";
+
+      supabase.functions
+        .invoke("forfeit-game", {
+          body: { roomPda, gameType: "backgammon", mode: "timeout" },
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        })
+        .catch((err) => {
+          console.error("[BackgammonGame] Self timeout forfeit failed:", err);
+        });
+
+      // UI will update from settlement/durable sync.
+      return;
     } else {
       // SKIP to opponent (not forfeit)
       toast({
@@ -1156,28 +1143,26 @@ const BackgammonGame = () => {
     console.log(`[BackgammonGame] Opponent timeout detected! Missed: ${missedCount}/3`);
     
     if (missedCount >= 3) {
-      // Opponent missed 3 turns - they auto-forfeit, we win
-      toast({
-        title: t('gameSession.opponentForfeited'),
-        description: t('gameSession.youWin'),
-      });
-      
-      // Persist auto_forfeit move
-      if (isRankedGame) {
-        persistMove({
-          type: "auto_forfeit",
-          timedOutWallet: opponentWalletAddr,
-          winnerWallet: address,
-          missedCount,
-          reason: "three_missed_turns",
-          gameState,
-          dice: [],
-          remainingMoves: [],
-        } as BackgammonMoveMessage, address);
-      }
-      
-      // Enter outcome resolving with us as winner
-      enterOutcomeResolving(address || null);
+      // Opponent missed 3 turns - resolve via server-verified timeout mode.
+      // Server determines forfeiter from current_turn_wallet and verifies expiry.
+      if (!roomPda) return;
+
+      const token =
+        localStorage.getItem(`session_token_${roomPda}`) ||
+        localStorage.getItem("session_token_latest") ||
+        "";
+
+      supabase.functions
+        .invoke("forfeit-game", {
+          body: { roomPda, gameType: "backgammon", mode: "timeout" },
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        })
+        .catch((err) => {
+          console.error("[BackgammonGame] Opponent auto-forfeit failed:", err);
+        });
+
+      // UI will update from settlement/durable sync.
+      return;
     } else {
       // Opponent skipped - we get the turn
       toast({
@@ -2404,7 +2389,7 @@ const BackgammonGame = () => {
               <div className="shrink-0 mt-2 space-y-2" style={{ minHeight: '80px' }}>
                 {/* Roll Button */}
                 <div style={{ minHeight: '52px' }}>
-                  {uiIsMyTurn && dice.length === 0 && !gameOver ? (
+                  {readyToPlay && isMyTurnAuthoritative && dice.length === 0 && !gameOver ? (
                     <Button 
                       variant="gold" 
                       size="lg" 
@@ -2662,7 +2647,7 @@ const BackgammonGame = () => {
 
                 {/* Controls row - inside board column, shrink-0 */}
                 <div className="shrink-0 pt-3 flex flex-wrap gap-3 items-center justify-center">
-                  {uiIsMyTurn && dice.length === 0 && !gameOver && (
+                  {readyToPlay && isMyTurnAuthoritative && dice.length === 0 && !gameOver && (
                     <Button variant="gold" size="lg" className="min-w-[140px] shadow-[0_0_30px_-8px_hsl(45_93%_54%_/_0.5)]" onClick={rollDice}>
                       🎲 Roll Dice
                     </Button>
