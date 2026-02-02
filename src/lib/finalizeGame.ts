@@ -325,7 +325,6 @@ export async function finalizeGame(params: FinalizeGameParams): Promise<Finalize
       const { data, error } = await supabase.functions.invoke('settle-draw', {
         body: {
           roomPda,
-          callerWallet: winnerWallet, // Either player can trigger
           gameType,
         },
       });
