@@ -513,6 +513,9 @@ return () => {
   const silentBackoffUntilRef = useRef(0);
   const lastVaultFetchMsRef = useRef(0);
   
+  // Guard: ensure ranked/private auto-accept runs exactly once per join
+  const autoAcceptRanRef = useRef(false);
+  
   useEffect(() => {
     if (!room || !roomPdaParam) {
       prevStatusRef.current = null;
@@ -712,8 +715,10 @@ return () => {
         // AUTO-ACCEPT: For ranked/private games, call ranked-accept automatically
         // This collapses the dual-modal flow: JoinRulesModal confirmation = rules acceptance
         // The user confirmed rules in JoinRulesModal, so we record acceptance now
+        // GUARD: Ensure this runs exactly once per join success
         const requiresAcceptance = roomMode === 'ranked' || roomMode === 'private';
-        if (requiresAcceptance && address) {
+        if (requiresAcceptance && address && !autoAcceptRanRef.current) {
+          autoAcceptRanRef.current = true; // Set BEFORE async call to prevent race
           try {
             console.log("[Room] Auto-accepting rules after join (mode:", roomMode, ")");
             const { data: acceptData, error: acceptErr } = await supabase.functions.invoke("ranked-accept", {
