@@ -70,10 +70,10 @@ export function RecoverFundsButton({ roomPda, onRecovered, className }: RecoverF
     setShowRejoinCTA(false);
 
     try {
-      // Get session token for authorization
+      // Get session token for authorization - prefer room-specific token
       const sessionToken = getSessionToken(roomPda);
       if (!sessionToken) {
-        toast.error("Session expired. Please rejoin the room.");
+        toast.error("Missing session token for this room. Click Rejoin to restore session.");
         setShowRejoinCTA(true);
         setStatus("not_authorized");
         return;
@@ -93,10 +93,45 @@ export function RecoverFundsButton({ roomPda, onRecovered, className }: RecoverF
         timeoutPromise,
       ]);
 
-      const { data, error } = response as { data: RecoveryResult | null; error: Error | null };
+      const { data, error } = response as { data: RecoveryResult | null; error: { message?: string; context?: { status?: number } } | null };
 
-      if (error) throw error;
-      if (!data) throw new Error("Empty response from server");
+      // Handle non-2xx responses - extract actual error message from response
+      if (error) {
+        console.error("[RecoverFunds] Edge function error:", error);
+        
+        // Try to extract status code and message
+        const statusCode = error.context?.status;
+        const errorMessage = error.message || "Unknown error";
+        
+        // Check for auth-related errors
+        if (statusCode === 401 || statusCode === 403 || errorMessage.includes("Unauthorized") || errorMessage.includes("Session")) {
+          toast.error("Session expired or invalid. Click Rejoin to restore session.");
+          setShowRejoinCTA(true);
+          setStatus("not_authorized");
+          return;
+        }
+        
+        // Check for not found
+        if (statusCode === 404) {
+          toast.error("Room not found on-chain. It may have been closed already.");
+          setStatus("error");
+          return;
+        }
+        
+        // Display specific error with status code
+        const displayMsg = statusCode 
+          ? `Error ${statusCode}: ${errorMessage}`
+          : errorMessage;
+        toast.error(displayMsg);
+        setStatus("error");
+        return;
+      }
+      
+      if (!data) {
+        toast.error("Empty response from server");
+        setStatus("error");
+        return;
+      }
 
       setResult(data);
 
@@ -128,7 +163,7 @@ export function RecoverFundsButton({ roomPda, onRecovered, className }: RecoverF
           break;
         case "not_authorized":
         case "no_action":
-          toast.warning(data.message);
+          toast.warning(data.message || "Not authorized to recover this room.");
           setShowRejoinCTA(true);
           setStatus("not_authorized");
           break;
@@ -136,20 +171,21 @@ export function RecoverFundsButton({ roomPda, onRecovered, className }: RecoverF
           toast.error("Room not found on-chain");
           setStatus("error");
           break;
+        case "error":
+          // Server returned an error status in the JSON body
+          toast.error(data.message || "Server error during recovery check.");
+          setStatus("error");
+          break;
         default:
           toast.error(data.message || "Unknown recovery status");
           setStatus("error");
       }
     } catch (e: any) {
-      console.error("Recovery check failed:", e);
+      console.error("[RecoverFunds] Recovery check failed:", e);
       if (e.message === "TIMEOUT") {
-        toast.error("Recover funds timed out — try again or cancel room.");
-      } else if (e.message?.includes("401") || e.message?.includes("403") || e.message?.includes("Unauthorized")) {
-        toast.error("Session expired. Please rejoin the room.");
-        setShowRejoinCTA(true);
-        setStatus("not_authorized");
-        return;
+        toast.error("Recover funds timed out — try again.");
       } else {
+        // Fallback for unexpected errors
         toast.error(e.message || "Failed to check recovery status");
       }
       setStatus("error");
