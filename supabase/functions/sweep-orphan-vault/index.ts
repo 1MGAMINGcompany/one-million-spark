@@ -5,32 +5,33 @@ import bs58 from "npm:bs58@5.0.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-admin-token",
 };
 
 // Mainnet production Program ID - MUST match solana-program.ts
 const PROGRAM_ID = new PublicKey("4nkWS2ZYPqQrRSYbXD6XW6U6VenmBiZV2TkutY3vSPHu");
 
+/**
+ * 🔒 ADMIN-ONLY ENDPOINT
+ * 
+ * Request body (creatorWallet IGNORED - derived from DB):
+ * {
+ *   roomPda: string,  // Room PDA to sweep
+ *   roomId?: number,  // Optional room ID for on-chain instruction (if known)
+ * }
+ * 
+ * Requires header: X-ADMIN-TOKEN matching ADMIN_TOKEN env var
+ */
 interface SweepRequest {
-  creatorWallet: string;
-  roomId: number;
+  roomPda: string;
+  roomId?: number;  // Optional - needed for on-chain instruction
+  // Legacy field - IGNORED
+  creatorWallet?: string;
 }
 
 // Helper to convert string to Uint8Array for seeds
 function textToBytes(text: string): Uint8Array {
   return new TextEncoder().encode(text);
-}
-
-// Derive room PDA from (creator, room_id)
-function getRoomPDA(creator: PublicKey, roomId: number): [PublicKey, number] {
-  const roomIdBuffer = new Uint8Array(8);
-  const view = new DataView(roomIdBuffer.buffer);
-  view.setBigUint64(0, BigInt(roomId), true); // little-endian
-  
-  return PublicKey.findProgramAddressSync(
-    [textToBytes("room"), creator.toBuffer(), roomIdBuffer],
-    PROGRAM_ID
-  );
 }
 
 // Derive vault PDA from room PDA
@@ -91,36 +92,108 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const { creatorWallet, roomId }: SweepRequest = await req.json();
+    // 🔒 ADMIN-ONLY: Require X-ADMIN-TOKEN header
+    const adminToken = req.headers.get("x-admin-token") || req.headers.get("X-ADMIN-TOKEN");
+    const expectedToken = Deno.env.get("ADMIN_TOKEN");
 
-    if (!creatorWallet || roomId === undefined || roomId === null) {
+    if (!expectedToken) {
+      console.error("[sweep-orphan-vault] ADMIN_TOKEN not configured");
       return new Response(
-        JSON.stringify({ error: "Missing creatorWallet or roomId" }),
+        JSON.stringify({ error: "Server configuration error" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (!adminToken || adminToken !== expectedToken) {
+      console.warn("[sweep-orphan-vault] Unauthorized - invalid or missing admin token");
+      return new Response(
+        JSON.stringify({ error: "Unauthorized" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Body schema: { roomPda, roomId? } - creatorWallet is IGNORED
+    const body: SweepRequest = await req.json();
+    const roomPdaStr = body.roomPda;
+    const roomId = body.roomId; // Optional - needed for on-chain instruction
+
+    if (!roomPdaStr || typeof roomPdaStr !== "string") {
+      return new Response(
+        JSON.stringify({ error: "Missing roomPda" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    console.log(`[sweep-orphan-vault] Sweep request for creator=${creatorWallet}, roomId=${roomId}`);
+    if (roomId === undefined || roomId === null) {
+      return new Response(
+        JSON.stringify({ error: "Missing roomId - required for on-chain instruction" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    console.log(`[sweep-orphan-vault] Admin sweep request for roomPda=${roomPdaStr.slice(0, 12)}..., roomId=${roomId}`);
 
     // Initialize clients
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const rpcUrl = Deno.env.get("VITE_SOLANA_RPC_URL") || "https://api.mainnet-beta.solana.com";
+    const rpcUrl = Deno.env.get("SOLANA_RPC_URL") || Deno.env.get("VITE_SOLANA_RPC_URL") || "https://api.mainnet-beta.solana.com";
     const connection = new Connection(rpcUrl, "confirmed");
+
+    // Parse room PDA
+    let roomPda: PublicKey;
+    try {
+      roomPda = new PublicKey(roomPdaStr);
+    } catch (e) {
+      return new Response(
+        JSON.stringify({ error: "Invalid roomPda format" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // 🔒 Derive creator wallet from game_sessions DB row (NOT from request body)
+    const { data: sessionData, error: sessionErr } = await supabase
+      .from("game_sessions")
+      .select("player1_wallet, participants")
+      .eq("room_pda", roomPdaStr)
+      .maybeSingle();
+
+    if (sessionErr) {
+      console.error("[sweep-orphan-vault] DB fetch error:", sessionErr);
+      return new Response(
+        JSON.stringify({ error: "Database error" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Derive creator: player1_wallet or first participant
+    let creatorWallet: string | null = null;
+    if (sessionData?.player1_wallet) {
+      creatorWallet = sessionData.player1_wallet;
+    } else if (Array.isArray(sessionData?.participants) && sessionData.participants.length > 0) {
+      creatorWallet = sessionData.participants[0];
+    }
+
+    if (!creatorWallet) {
+      console.warn("[sweep-orphan-vault] No creator found in DB for room:", roomPdaStr.slice(0, 12));
+      return new Response(
+        JSON.stringify({ error: "Room not found in database or missing creator" }),
+        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     const creatorPubkey = new PublicKey(creatorWallet);
 
     // Derive PDAs
-    const [roomPda] = getRoomPDA(creatorPubkey, roomId);
     const [vaultPda] = getVaultPDA(roomPda);
     const [configPda] = getConfigPDA();
 
     console.log(`[sweep-orphan-vault] Derived PDAs:
   roomPda: ${roomPda.toBase58()}
   vaultPda: ${vaultPda.toBase58()}
-  configPda: ${configPda.toBase58()}`);
+  configPda: ${configPda.toBase58()}
+  creatorWallet (from DB): ${creatorWallet.slice(0, 12)}...`);
 
     // Check if room exists (should NOT exist for orphan vault)
     const roomInfo = await connection.getAccountInfo(roomPda);
