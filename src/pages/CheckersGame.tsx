@@ -145,7 +145,7 @@ const CheckersGame = () => {
   const { isTxInFlight, withTxLock } = useTxLock();
   
   // Solana rooms hook for forfeit/cancel
-  const { cancelRoomByPda } = useSolanaRooms();
+  const { cancelRoomByPda, clearRoomFromState } = useSolanaRooms();
   
   // Refs for stable callback access
   const roomPlayersRef = useRef<string[]>([]);
@@ -1038,6 +1038,8 @@ const CheckersGame = () => {
     gameStarted: startRoll.isFinalized,
     onCleanupWebRTC: () => console.log("[CheckersGame] Cleaning up WebRTC"),
     onCleanupSupabase: () => console.log("[CheckersGame] Cleaning up Supabase"),
+    // CRITICAL: Clear room from global state to prevent stuck banners
+    onClearRoomFromState: clearRoomFromState,
   });
   
   // Connect forfeit ref for timeout handler

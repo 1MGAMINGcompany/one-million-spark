@@ -230,7 +230,7 @@ const BackgammonGame = () => {
   const { isTxInFlight, withTxLock } = useTxLock();
   
   // Solana rooms hook for forfeit/cancel
-  const { cancelRoomByPda } = useSolanaRooms();
+  const { cancelRoomByPda, clearRoomFromState } = useSolanaRooms();
 
   // Refs for stable callback access
   const roomPlayersRef = useRef<string[]>([]);
@@ -1566,6 +1566,8 @@ const BackgammonGame = () => {
     gameStarted: startRoll.isFinalized,
     onCleanupWebRTC: () => console.log("[BackgammonGame] Cleaning up WebRTC"),
     onCleanupSupabase: () => console.log("[BackgammonGame] Cleaning up Supabase"),
+    // CRITICAL: Clear room from global state to prevent stuck banners
+    onClearRoomFromState: clearRoomFromState,
   });
   
   // Connect forfeit function to ref for timeout handler

@@ -154,7 +154,7 @@ const DominosGame = () => {
   const { isTxInFlight, withTxLock } = useTxLock();
   
   // Solana rooms hook for forfeit/cancel
-  const { cancelRoomByPda } = useSolanaRooms();
+  const { cancelRoomByPda, clearRoomFromState } = useSolanaRooms();
 
   // Keep multiplayer refs in sync
   useEffect(() => { amIPlayer1Ref.current = amIPlayer1; }, [amIPlayer1]);
@@ -1151,6 +1151,8 @@ const DominosGame = () => {
     gameStarted: startRoll.isFinalized,
     onCleanupWebRTC: () => console.log("[DominosGame] Cleaning up WebRTC"),
     onCleanupSupabase: () => console.log("[DominosGame] Cleaning up Supabase"),
+    // CRITICAL: Clear room from global state to prevent stuck banners
+    onClearRoomFromState: clearRoomFromState,
   });
   
   // Connect forfeit ref for timeout handler
