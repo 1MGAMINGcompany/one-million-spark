@@ -317,6 +317,11 @@ Deno.serve(async (req: Request) => {
     // - game_sessions.player2_wallet (for 2-player games)
     // ─────────────────────────────────────────────────────────────
     const rpcUrl = Deno.env.get("SOLANA_RPC_URL");
+    let onChainParticipants: string[] = [];
+    let onChainCreator: string | null = null;
+    let onChainMaxPlayers = 2;
+    let onChainGameType = 0;
+    
     if (rpcUrl) {
       try {
         console.log("[ranked-accept] Syncing participants from on-chain...");
@@ -328,42 +333,112 @@ Deno.serve(async (req: Request) => {
           const roomData = parseRoomAccount(new Uint8Array(accountInfo.data));
           
           if (roomData) {
-            const participants = roomData.players.map(p => p.toBase58());
-            console.log("[ranked-accept] On-chain players:", participants);
-            
-            // Build update object - always set participants[]
-            const updateObj: Record<string, unknown> = {
-              participants,
-              max_players: roomData.maxPlayers,
-              updated_at: new Date().toISOString(),
-            };
-            
-            // CRITICAL: For 2-player games, ensure player2_wallet is set
-            // This fixes the bug where player2_wallet remains NULL after join
-            if (roomData.maxPlayers <= 2 && participants.length >= 2) {
-              // Player 2 is any participant that is NOT the creator (player 1)
-              const creator = roomData.creator.toBase58();
-              const player2 = participants.find(p => p !== creator);
-              if (player2) {
-                updateObj.player2_wallet = player2;
-                console.log("[ranked-accept] ✅ Setting player2_wallet:", player2.slice(0, 8));
-              }
-            }
-            
-            const { error: updateError } = await supabase
-              .from('game_sessions')
-              .update(updateObj)
-              .eq('room_pda', body.roomPda);
-              
-            if (updateError) {
-              console.warn("[ranked-accept] Failed to update participants:", updateError);
-            } else {
-              console.log("[ranked-accept] ✅ Synced participants:", participants.length, "player2:", updateObj.player2_wallet ? "set" : "unchanged");
-            }
+            onChainParticipants = roomData.players.map(p => p.toBase58());
+            onChainCreator = roomData.creator.toBase58();
+            onChainMaxPlayers = roomData.maxPlayers;
+            onChainGameType = roomData.gameType;
+            console.log("[ranked-accept] On-chain players:", onChainParticipants);
           }
         }
       } catch (err) {
-        console.warn("[ranked-accept] On-chain sync failed:", err);
+        console.warn("[ranked-accept] On-chain fetch failed:", err);
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // ENSURE game_sessions ROW EXISTS BEFORE set_player_ready
+    // ─────────────────────────────────────────────────────────────
+    const { data: existingSession } = await supabase
+      .from("game_sessions")
+      .select("room_pda, player1_wallet, player2_wallet, participants")
+      .eq("room_pda", body.roomPda)
+      .maybeSingle();
+
+    if (!existingSession) {
+      // Session doesn't exist - CREATE it with on-chain data
+      // player1_wallet = creator from on-chain (or fallback to first participant)
+      const player1 = onChainCreator || onChainParticipants[0] || playerWallet;
+      const player2 = onChainMaxPlayers <= 2 && onChainParticipants.length >= 2
+        ? onChainParticipants.find(p => p !== player1) || null
+        : null;
+      const participants = onChainParticipants.length > 0 ? onChainParticipants : [player1];
+      
+      // Map gameType number to string (best effort)
+      const gameTypeMap: Record<number, string> = { 0: "chess", 1: "checkers", 2: "backgammon", 3: "dominos", 4: "ludo" };
+      const gameTypeStr = gameTypeMap[onChainGameType] || "chess";
+      
+      // Mode from request body is acceptable since this is just a hint
+      const mode = (body as any).gameMode || "ranked";
+      
+      console.log("[ranked-accept] Creating game_sessions row:", {
+        roomPda: body.roomPda.slice(0, 8),
+        player1: player1.slice(0, 8),
+        player2: player2?.slice(0, 8) || "null",
+        participants: participants.length,
+        mode,
+        gameType: gameTypeStr,
+      });
+      
+      const { error: insertErr } = await supabase
+        .from("game_sessions")
+        .insert({
+          room_pda: body.roomPda,
+          player1_wallet: player1,
+          player2_wallet: player2,
+          participants,
+          max_players: onChainMaxPlayers,
+          game_type: gameTypeStr,
+          game_state: {},
+          status: "waiting",
+          status_int: 1,
+          mode,
+          p1_ready: false,
+          p2_ready: false,
+        });
+      
+      if (insertErr) {
+        // Check for conflict (race condition - another process created it)
+        if (insertErr.code === "23505") {
+          console.log("[ranked-accept] game_sessions conflict - row exists, proceeding");
+        } else {
+          console.error("[ranked-accept] Failed to create game_sessions:", insertErr);
+          return new Response(
+            JSON.stringify({ success: false, error: "Failed to initialize game session" }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+      } else {
+        console.log("[ranked-accept] ✅ Created game_sessions row");
+      }
+    } else {
+      // Session exists - UPDATE with on-chain participants
+      if (onChainParticipants.length > 0) {
+        const updateObj: Record<string, unknown> = {
+          participants: onChainParticipants,
+          max_players: onChainMaxPlayers,
+          updated_at: new Date().toISOString(),
+        };
+        
+        // CRITICAL: For 2-player games, ensure player2_wallet is set
+        if (onChainMaxPlayers <= 2 && onChainParticipants.length >= 2) {
+          const creator = existingSession.player1_wallet || onChainCreator;
+          const player2 = onChainParticipants.find(p => p !== creator);
+          if (player2 && !existingSession.player2_wallet) {
+            updateObj.player2_wallet = player2;
+            console.log("[ranked-accept] ✅ Setting player2_wallet:", player2.slice(0, 8));
+          }
+        }
+        
+        const { error: updateError } = await supabase
+          .from("game_sessions")
+          .update(updateObj)
+          .eq("room_pda", body.roomPda);
+          
+        if (updateError) {
+          console.warn("[ranked-accept] Failed to update participants:", updateError);
+        } else {
+          console.log("[ranked-accept] ✅ Synced participants:", onChainParticipants.length);
+        }
       }
     }
 
