@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import { getOpponentWallet, isSameWallet, isRealWallet } from "@/lib/walletUtils";
 import { incMissed, resetMissed, clearRoom } from "@/lib/missedTurns";
 import { GameErrorBoundary } from "@/components/GameErrorBoundary";
@@ -788,6 +789,26 @@ const DominosGame = () => {
       setTurnStartedAt(opponentTimeout.turnStartedAt);
     }
   }, [opponentTimeout.turnStartedAt, turnStartedAt]);
+
+  // Fetch initial turn_started_at when game starts (for my turn display)
+  useEffect(() => {
+    if (!startRoll.isFinalized || !roomPda || turnStartedAt) return;
+    
+    const fetchInitialTurnStartedAt = async () => {
+      try {
+        const { data } = await supabase.functions.invoke("game-session-get", {
+          body: { roomPda },
+        });
+        if (data?.session?.turn_started_at) {
+          setTurnStartedAt(data.session.turn_started_at);
+        }
+      } catch (err) {
+        console.error("[DominosGame] Failed to fetch initial turn_started_at:", err);
+      }
+    };
+    
+    fetchInitialTurnStartedAt();
+  }, [startRoll.isFinalized, roomPda, turnStartedAt]);
 
   // Turn notification players
   const turnPlayers: TurnPlayer[] = useMemo(() => {

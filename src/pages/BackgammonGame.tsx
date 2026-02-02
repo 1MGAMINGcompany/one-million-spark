@@ -854,6 +854,26 @@ const BackgammonGame = () => {
     }
   }, [startRoll.isFinalized, startRoll.startingWallet, address]);
 
+  // Fetch initial turn_started_at when game starts (for my turn display)
+  useEffect(() => {
+    if (!startRoll.isFinalized || !roomPda || turnStartedAt) return;
+    
+    const fetchInitialTurnStartedAt = async () => {
+      try {
+        const { data } = await supabase.functions.invoke("game-session-get", {
+          body: { roomPda },
+        });
+        if (data?.session?.turn_started_at) {
+          setTurnStartedAt(data.session.turn_started_at);
+        }
+      } catch (err) {
+        console.error("[BackgammonGame] Failed to fetch initial turn_started_at:", err);
+      }
+    };
+    
+    fetchInitialTurnStartedAt();
+  }, [startRoll.isFinalized, roomPda, turnStartedAt]);
+
   // === MATCH COMPLETE DEBUG LOG ===
   // Logs final outcome when game ends for verification on both devices
   useEffect(() => {
