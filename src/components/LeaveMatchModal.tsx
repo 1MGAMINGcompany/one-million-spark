@@ -72,8 +72,14 @@ interface LeaveMatchModalProps {
   /** Stake in SOL (for forfeit warning) */
   stakeSol: number;
   
-  /** On-chain player count - CRITICAL: cancel_room only works when playerCount === 1 */
+  /** @deprecated Use dbParticipantsCount instead. On-chain player count - NOT AUTHORITATIVE for forfeit/cancel */
   playerCount?: number;
+  
+  /** DB status_int (1=waiting, 2=active, 3=finished) - AUTHORITATIVE */
+  dbStatusInt?: number;
+  
+  /** DB participants count - AUTHORITATIVE for cancel/forfeit eligibility */
+  dbParticipantsCount?: number;
   
   /** Callbacks for actions */
   onUILeave: () => void;           // UI-only: cleanup + navigate (NO wallet)
@@ -93,6 +99,8 @@ export function LeaveMatchModal({
   isCreator,
   stakeSol,
   playerCount,
+  dbStatusInt,
+  dbParticipantsCount,
   onUILeave,
   onCancelRoom,
   onForfeitMatch,
@@ -198,33 +206,53 @@ export function LeaveMatchModal({
     }
   };
 
-  // Determine which actions are available based on match state
-  // CRITICAL: cancel_room only works when player_count === 1
-  // Only show "Cancel Room (Refund)" when playerCount === 1 AND waiting_for_opponent
-  const canCancel = isCreator && 
-    matchState === "waiting_for_opponent" && 
-    (playerCount === undefined || playerCount === 1);
+  // Determine which actions are available based on AUTHORITATIVE DB state
+  // Use dbStatusInt and dbParticipantsCount as truth, fallback to legacy props
+  const effectiveStatusInt = dbStatusInt ?? (matchState === "waiting_for_opponent" ? 1 : matchState === "game_over" ? 3 : 2);
+  const effectiveParticipants = dbParticipantsCount ?? playerCount ?? 0;
   
-  // Show "refund not available" message when opponent joined but game not started (can't cancel on-chain)
+  // CRITICAL FIX: Use DB state for all cancel/forfeit logic
+  // status_int: 1=waiting, 2=active, 3=finished
+  const isWaiting = effectiveStatusInt === 1;
+  const isFinished = effectiveStatusInt === 3;
+  const hasNoOpponent = effectiveParticipants <= 1;
+  
+  // Cancel Room: only when WAITING (1) AND only 1 participant AND creator
+  const canCancel = isCreator && isWaiting && hasNoOpponent;
+  
+  // Show "refund not available" message when opponent joined but game not started
+  // (can't cancel on-chain when 2+ players, but forfeit isn't available yet either)
   const showRefundUnavailable = isCreator && 
-    (matchState === "opponent_joined" || matchState === "rules_pending") && 
-    playerCount !== undefined && playerCount >= 2;
+    isWaiting && 
+    !hasNoOpponent;
   
-  // CRITICAL: When playerCount >= 2, ALWAYS show forfeit option if stake > 0
-  // This ensures funds are NEVER locked - either cancel (1 player) or forfeit (2+ players)
+  // CRITICAL FIX: HIDE forfeit when WAITING (status_int=1) OR only 1 participant
+  // Forfeit requires status_int >= 2 AND 2+ participants
   const canForfeit = (
-    (matchState === "match_active" || matchState === "opponent_joined" || matchState === "rules_pending") && 
+    !isWaiting && 
+    !isFinished &&
+    !hasNoOpponent &&
     stakeSol > 0 && 
-    onForfeitMatch !== undefined &&
-    playerCount !== undefined && 
-    playerCount >= 2
+    onForfeitMatch !== undefined
   );
   
-  const canSimplyLeave = matchState === "game_over" || matchState === "waiting_for_opponent";
-  const showCopyLink = matchState === "waiting_for_opponent";
+  const canSimplyLeave = isFinished || (isWaiting && hasNoOpponent);
+  const showCopyLink = isWaiting && hasNoOpponent;
   
   // Log match state for debugging invalid state transitions
-  console.log("[LeaveMatchModal]", { matchState, playerCount, canCancel, canForfeit, stakeSol, isTxInFlight });
+  console.log("[LeaveMatchModal]", { 
+    matchState, 
+    dbStatusInt, 
+    dbParticipantsCount,
+    effectiveStatusInt,
+    effectiveParticipants,
+    isWaiting,
+    hasNoOpponent,
+    canCancel, 
+    canForfeit, 
+    stakeSol, 
+    isTxInFlight 
+  });
 
   // Determine warning message based on state
   const getWarningMessage = () => {

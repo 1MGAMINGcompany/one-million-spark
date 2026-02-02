@@ -1533,6 +1533,8 @@ const LudoGame = () => {
         isCreator={isCreator}
         stakeSol={entryFeeSol}
         playerCount={humanPlayers.length}
+        dbStatusInt={rankedGate.dbStatusInt}
+        dbParticipantsCount={rankedGate.dbParticipantsCount}
         onUILeave={handleUILeave}
         onCancelRoom={handleCancelRoom}
         onForfeitMatch={handleForfeitMatch}
