@@ -385,7 +385,7 @@ export function WalletButton() {
   // Execute the clear
   const executeClearSession = () => {
     const count = clearAllSessionTokens();
-    toast.success(`Session cleared (${count} tokens removed)`);
+    toast.success(t("clearSession.cleared", "Session cleared") + ` (${count} ${t("clearSession.tokensRemoved", "tokens removed").replace("{{count}}", String(count))})`);
     navigate("/room-list");
   };
 
@@ -1081,24 +1081,24 @@ export function WalletButton() {
         <AlertDialogContent className="max-w-[90vw] sm:max-w-md">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-amber-500">
-              Clear session while in a live match?
+              {t("clearSession.title", "Clear session while in a live match?")}
             </AlertDialogTitle>
             <AlertDialogDescription>
               {dangerousReason === 'unverified' ? (
                 <>
-                  We couldn't verify this match state. Clearing session may disconnect you and lead to timeout.
+                  {t("clearSession.descriptionUnverified", "We couldn't verify this match state. Clearing session may disconnect you and lead to timeout.")}
                   {dangerousRoomPda && (
                     <span className="block mt-2 font-mono text-xs text-amber-400">
-                      Room: {dangerousRoomPda.slice(0, 8)}...
+                      {t("clearSession.roomLabel", "Room:")} {dangerousRoomPda.slice(0, 8)}...
                     </span>
                   )}
                 </>
               ) : (
                 <>
-                  Clearing your session disconnects you. If you don't return, you may time out and lose your stake.
+                  {t("clearSession.descriptionActive", "Clearing your session disconnects you. If you don't return, you may time out and lose your stake.")}
                   {dangerousRoomPda && (
                     <span className="block mt-2 font-mono text-xs">
-                      You are currently in room: {dangerousRoomPda.slice(0, 8)}...
+                      {t("clearSession.inRoom", "You are currently in room:")} {dangerousRoomPda.slice(0, 8)}...
                     </span>
                   )}
                 </>
@@ -1106,20 +1106,20 @@ export function WalletButton() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="flex-col sm:flex-row gap-2">
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t("clearSession.cancel", "Cancel")}</AlertDialogCancel>
             {dangerousReason === 'unverified' && (
               <Button 
                 variant="outline" 
                 onClick={handleGoToRoomList}
               >
-                Go to Room List
+                {t("clearSession.goToRoomList", "Go to Room List")}
               </Button>
             )}
             <AlertDialogAction 
               onClick={handleClearConfirmed}
               className="bg-amber-600 hover:bg-amber-700"
             >
-              Clear anyway
+              {t("clearSession.clearAnyway", "Clear anyway")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

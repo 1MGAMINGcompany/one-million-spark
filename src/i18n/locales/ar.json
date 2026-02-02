@@ -719,5 +719,38 @@
     "forfeit": "الانسحاب",
     "timeoutForfeit": "انتهاء الوقت = انسحاب تلقائي",
     "rulesAcceptedNote": "قبل كلا اللاعبين هذه القواعد قبل بدء المباراة. يتم تنفيذ المدفوعات على السلسلة."
+  },
+  "diceRoll": {
+    "rollToStart": "ارمي للبدء",
+    "highestGoesFirst": "الأعلى يبدأ أولاً",
+    "syncingOpponent": "جاري المزامنة مع الخصم... يرجى الانتظار.",
+    "takingTooLong": "رمي النرد يستغرق وقتاً طويلاً. اختر خياراً:",
+    "retrySync": "إعادة المحاولة",
+    "pickStarterAuto": "اختيار البادئ (تلقائي)",
+    "rolledHigher": "رمى أعلى! أنت تبدأ!",
+    "theyGoFirst": "رمى أعلى! هم يبدأون!",
+    "resolvedAfter": "تم الحل بعد",
+    "tieBreaker": "فاصل التعادل",
+    "bothReady": "كلاهما جاهز. ارمي لتقرير من يبدأ!",
+    "rollDice": "رمي النرد",
+    "computing": "جاري الحساب...",
+    "rolling": "جاري الرمي...",
+    "continueToGame": "متابعة للعبة"
+  },
+  "clearSession": {
+    "title": "مسح الجلسة أثناء مباراة نشطة؟",
+    "descriptionActive": "مسح جلستك يفصلك. إذا لم تعد، قد تخسر بسبب انتهاء الوقت.",
+    "descriptionUnverified": "لم نتمكن من التحقق من حالة المباراة. قد يؤدي مسح الجلسة إلى انقطاع الاتصال.",
+    "roomLabel": "الغرفة:",
+    "inRoom": "أنت حالياً في الغرفة:",
+    "cancel": "إلغاء",
+    "goToRoomList": "الذهاب لقائمة الغرف",
+    "clearAnyway": "مسح على أي حال",
+    "cleared": "تم مسح الجلسة",
+    "tokensRemoved": "رموز تمت إزالتها"
+  },
+  "common": {
+    "loadingMatchDetails": "جاري تحميل تفاصيل المباراة...",
+    "confirmingEntry": "جاري تأكيد الدخول..."
   }
 }

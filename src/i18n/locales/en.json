@@ -21,6 +21,7 @@
     "myTurn": "MY TURN",
     "opponentsTurn": "Opponent's Turn",
     "opponent": "Opponent",
+    "player": "Player",
     "playerGame": "{{count}}-player game",
     "waitingForPlayer": "Waiting for {{player}}",
     "victory": "Victory!",
@@ -915,7 +916,10 @@
     "error": "Error",
     "rejoinRoom": "Rejoin Room",
     "pleaseWait": "Please wait...",
-    "loading": "Loading..."
+    "loading": "Loading...",
+    "loadingMatchDetails": "Loading match details...",
+    "confirmingEntry": "Confirming entry...",
+    "copyFailed": "Failed to copy"
   },
   "unresolvedRoom": {
     "title": "Finish Your Active Game",
@@ -937,5 +941,34 @@
   },
   "wallet": {
     "wrongWallet": "Wrong wallet connected"
+  },
+  "diceRoll": {
+    "rollToStart": "Roll to Start",
+    "highestGoesFirst": "Highest total goes first",
+    "syncingOpponent": "Syncing with opponent... Please wait.",
+    "takingTooLong": "Dice roll taking too long. Choose an option:",
+    "retrySync": "Retry Sync",
+    "pickStarterAuto": "Pick Starter (Auto)",
+    "rolledHigher": "rolled higher! You go first.",
+    "theyGoFirst": "rolled higher! They go first.",
+    "resolvedAfter": "Resolved after",
+    "tieBreaker": "tie-breaker",
+    "bothReady": "Both players ready. Roll to decide who goes first!",
+    "rollDice": "Roll Dice",
+    "computing": "Computing...",
+    "rolling": "Rolling...",
+    "continueToGame": "Continue to Game"
+  },
+  "clearSession": {
+    "title": "Clear session while in a live match?",
+    "descriptionActive": "Clearing your session disconnects you. If you don't return, you may time out and lose your stake.",
+    "descriptionUnverified": "We couldn't verify this match state. Clearing session may disconnect you and lead to timeout.",
+    "roomLabel": "Room:",
+    "inRoom": "You are currently in room:",
+    "cancel": "Cancel",
+    "goToRoomList": "Go to Room List",
+    "clearAnyway": "Clear anyway",
+    "cleared": "Session cleared",
+    "tokensRemoved": "tokens removed"
   }
 }
