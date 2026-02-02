@@ -1,87 +1,212 @@
 
 
-## Fix: Add `player_sessions` Upsert in Simple Acceptance Flow
+## Fix: Turn Timer Doesn't Start Immediately After Dice Roll
 
 ### Problem Summary
-When Player 2 joins a ranked game via simple acceptance mode (stake tx), a `game_acceptances` row is created but **no `player_sessions` row is created**. This causes `forfeit-game` to fail with "Session not found" when Player 2 tries to trigger a timeout forfeit.
+When the start roll finalizes and it's **my turn first**, the turn timer doesn't appear immediately because:
+1. The polling interval is 5 seconds (too slow for UX)
+2. `useOpponentTimeoutDetection` only polls when it's NOT my turn
+3. Chess has a fix for this; Backgammon/Checkers/Dominos/Ludo do not
 
-| Table | Player 1 (creator) | Player 2 (joiner) |
-|-------|-------------------|-------------------|
-| `game_acceptances` | ✅ Has row | ✅ Has row |
-| `player_sessions` | ✅ Has row (via `start_session` RPC) | ❌ **Missing** |
+### Step A: Verify Edge Function Returns Required Fields
 
-### Solution
-Add a `player_sessions` upsert in the simple acceptance flow, matching what the signed flow achieves via the `start_session` RPC.
+**File**: `supabase/functions/game-session-get/index.ts`
 
-### File to Modify
-`supabase/functions/ranked-accept/index.ts`
-
-### Change Location
-After line **269** (after the successful `game_acceptances` upsert log in simple mode), add the `player_sessions` upsert.
-
-### Code to Add (Lines 269-282, insert after line 269)
-
+**Current Query** (line 38-42):
 ```typescript
-      // NEW: Also create player_sessions row (critical for forfeit-game)
-      // This ensures the joiner (Player 2) can call server-verified timeout forfeit.
-      const { error: sessionError } = await supabase
-        .from("player_sessions")
-        .upsert(
-          {
-            session_token: sessionToken,
-            room_pda: body.roomPda,
-            wallet: body.playerWallet,
-            rules_hash: "stake_verified",
-            last_turn: 0,
-            last_hash: "genesis",
-            revoked: false,
-          },
-          { onConflict: "room_pda,wallet" }
-        );
-
-      if (sessionError) {
-        console.error("[ranked-accept] Failed to create player_session:", sessionError);
-      } else {
-        console.log("[ranked-accept] ✅ player_sessions row created for simple mode");
-      }
+const { data: session, error: sessionError } = await supabase
+  .from('game_sessions')
+  .select('*, max_players, eliminated_players')
+  .eq('room_pda', roomPda)
+  .maybeSingle()
 ```
 
-### Schema Verification
-The `player_sessions` table columns (from provided schema):
-- `session_token` ✅
-- `room_pda` ✅
-- `wallet` ✅
-- `revoked` ✅
-- `rules_hash` ✅
-- `last_turn` ✅ (default: 0)
-- `last_hash` ✅ (nullable)
-- `last_move_at` (nullable, not needed)
-- `desync_count` (default: 0, not needed)
-- `created_at` (auto-generated)
+**Returned JSON Structure** (lines 136-142):
+```json
+{
+  "ok": true,
+  "session": {
+    "turn_started_at": "2026-02-02T02:56:51Z",
+    "turn_time_seconds": 60,
+    "current_turn_wallet": "At...",
+    // ...all other game_sessions columns
+  },
+  "receipt": null,
+  "match": null,
+  "acceptances": { ... }
+}
+```
 
-All fields in the upsert exist in the actual schema.
+**Status**: All required fields (`turn_started_at`, `turn_time_seconds`, `current_turn_wallet`) are included because the query uses `*` (select all columns). **No changes needed to edge function.**
+
+---
+
+### Step B: Add `fetchInitialTurnStartedAt` Effect to 4 Games
+
+**Reference Implementation** (`src/pages/ChessGame.tsx` lines 696-714):
+```typescript
+// Fetch initial turn_started_at when game starts (for my turn display)
+useEffect(() => {
+  if (!startRoll.isFinalized || !roomPda || turnStartedAt) return;
+  
+  const fetchInitialTurnStartedAt = async () => {
+    try {
+      const { data } = await supabase.functions.invoke("game-session-get", {
+        body: { roomPda },
+      });
+      if (data?.session?.turn_started_at) {
+        setTurnStartedAt(data.session.turn_started_at);
+      }
+    } catch (err) {
+      console.error("[ChessGame] Failed to fetch initial turn_started_at:", err);
+    }
+  };
+  
+  fetchInitialTurnStartedAt();
+}, [startRoll.isFinalized, roomPda, turnStartedAt]);
+```
+
+---
+
+#### File 1: `src/pages/BackgammonGame.tsx`
+
+**Context**: BackgammonGame doesn't have a separate sync effect like other games - it uses `onTurnStartedAtChange` callback in `useOpponentTimeoutDetection`. The effect should be inserted after line 855 (after the "Update myRole and currentTurnWallet" effect).
+
+**Insert after line 855**:
+```typescript
+// Fetch initial turn_started_at when game starts (for my turn display)
+useEffect(() => {
+  if (!startRoll.isFinalized || !roomPda || turnStartedAt) return;
+  
+  const fetchInitialTurnStartedAt = async () => {
+    try {
+      const { data } = await supabase.functions.invoke("game-session-get", {
+        body: { roomPda },
+      });
+      if (data?.session?.turn_started_at) {
+        setTurnStartedAt(data.session.turn_started_at);
+      }
+    } catch (err) {
+      console.error("[BackgammonGame] Failed to fetch initial turn_started_at:", err);
+    }
+  };
+  
+  fetchInitialTurnStartedAt();
+}, [startRoll.isFinalized, roomPda, turnStartedAt]);
+```
+
+---
+
+#### File 2: `src/pages/CheckersGame.tsx`
+
+**Context**: Has sync effect at lines 602-607. Insert the new effect after line 607.
+
+**Insert after line 607**:
+```typescript
+// Fetch initial turn_started_at when game starts (for my turn display)
+useEffect(() => {
+  if (!startRoll.isFinalized || !roomPda || turnStartedAt) return;
+  
+  const fetchInitialTurnStartedAt = async () => {
+    try {
+      const { data } = await supabase.functions.invoke("game-session-get", {
+        body: { roomPda },
+      });
+      if (data?.session?.turn_started_at) {
+        setTurnStartedAt(data.session.turn_started_at);
+      }
+    } catch (err) {
+      console.error("[CheckersGame] Failed to fetch initial turn_started_at:", err);
+    }
+  };
+  
+  fetchInitialTurnStartedAt();
+}, [startRoll.isFinalized, roomPda, turnStartedAt]);
+```
+
+---
+
+#### File 3: `src/pages/DominosGame.tsx`
+
+**Context**: Has sync effect at lines 785-790. Insert the new effect after line 790.
+
+**Insert after line 790**:
+```typescript
+// Fetch initial turn_started_at when game starts (for my turn display)
+useEffect(() => {
+  if (!startRoll.isFinalized || !roomPda || turnStartedAt) return;
+  
+  const fetchInitialTurnStartedAt = async () => {
+    try {
+      const { data } = await supabase.functions.invoke("game-session-get", {
+        body: { roomPda },
+      });
+      if (data?.session?.turn_started_at) {
+        setTurnStartedAt(data.session.turn_started_at);
+      }
+    } catch (err) {
+      console.error("[DominosGame] Failed to fetch initial turn_started_at:", err);
+    }
+  };
+  
+  fetchInitialTurnStartedAt();
+}, [startRoll.isFinalized, roomPda, turnStartedAt]);
+```
+
+---
+
+#### File 4: `src/pages/LudoGame.tsx`
+
+**Context**: Has sync effect at lines 652-657. Ludo uses `effectiveStartRoll.isFinalized` throughout (line 381-396), so must use that instead of `startRoll.isFinalized`.
+
+**Insert after line 657**:
+```typescript
+// Fetch initial turn_started_at when game starts (for my turn display)
+useEffect(() => {
+  if (!effectiveStartRoll.isFinalized || !roomPda || turnStartedAt) return;
+  
+  const fetchInitialTurnStartedAt = async () => {
+    try {
+      const { data } = await supabase.functions.invoke("game-session-get", {
+        body: { roomPda },
+      });
+      if (data?.session?.turn_started_at) {
+        setTurnStartedAt(data.session.turn_started_at);
+      }
+    } catch (err) {
+      console.error("[LudoGame] Failed to fetch initial turn_started_at:", err);
+    }
+  };
+  
+  fetchInitialTurnStartedAt();
+}, [effectiveStartRoll.isFinalized, roomPda, turnStartedAt]);
+```
+
+---
+
+### Summary of Changes
+
+| File | Insertion Point | Uses |
+|------|----------------|------|
+| `BackgammonGame.tsx` | After line 855 | `startRoll.isFinalized` |
+| `CheckersGame.tsx` | After line 607 | `startRoll.isFinalized` |
+| `DominosGame.tsx` | After line 790 | `startRoll.isFinalized` |
+| `LudoGame.tsx` | After line 657 | `effectiveStartRoll.isFinalized` |
 
 ### Why This Works
 
-1. **Matches existing pattern**: The `start_session` RPC (used by signed mode) creates `player_sessions` rows with the same structure
-2. **Idempotent**: Using `onConflict: "room_pda,wallet"` prevents duplicates if called twice
-3. **Both players covered**: Creator gets session via signed flow, joiner gets session via simple flow
-4. **No schema changes needed**: Uses existing `player_sessions` table structure exactly
+1. When `startRoll.isFinalized` becomes `true`, the effect triggers **immediately** (not waiting for 5s poll)
+2. Fetches `turn_started_at` from database (set by `finalize_start_roll` RPC at the moment of dice roll)
+3. `setTurnStartedAt` populates state
+4. `useTurnCountdownDisplay` receives valid `turnStartedAt` and starts countdown
+5. Timer visible on both devices within ~100ms of start roll completion
 
-### Post-Implementation Verification
+### Step C: Verification Checklist
 
-After deployment, run this query to confirm both players have sessions:
-```sql
-SELECT wallet, session_token, revoked, created_at 
-FROM player_sessions 
-WHERE room_pda = '<ROOM_PDA>' 
-ORDER BY created_at DESC;
-```
-Expected: 2 rows (one per player)
-
-### Testing Checklist
-- [ ] Both players have `player_sessions` rows after accepting
-- [ ] Timeout forfeit works for Player 2 (joiner)
-- [ ] `forfeit-game` returns success instead of "Session not found"
-- [ ] On-chain settlement completes
+After implementation:
+- [ ] Build completes without errors
+- [ ] Timer appears immediately on starting player's device after dice roll
+- [ ] Timer appears immediately on opponent's device when it becomes their turn
+- [ ] Timeout at 0 triggers turn skip (1st/2nd miss) or forfeit (3rd miss)
+- [ ] Works for: Ranked Backgammon, Private Backgammon, Checkers, Dominos, Ludo
 
