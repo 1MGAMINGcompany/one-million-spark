@@ -25,6 +25,7 @@ import { validatePublicKey, isMobileDevice, hasInjectedSolanaWallet, getRoomPda 
 import { supabase } from "@/integrations/supabase/client";
 import { isWalletInAppBrowser } from "@/lib/walletBrowserDetection";
 import { usePendingRoute } from "@/hooks/usePendingRoute";
+import { getSessionToken, getAuthHeaders, storeSessionToken } from "@/lib/sessionToken";
 import { toast } from "sonner";
 
 // Presence feature disabled until program supports ping_room
@@ -722,31 +723,30 @@ return () => {
           try {
             console.log("[Room] Auto-accepting rules after join (mode:", roomMode, ")");
             
-            // Get session token for authorization (may exist from creator or previous session)
-            const sessionToken =
-              localStorage.getItem(`session_token_${roomPdaParam}`) ||
-              localStorage.getItem("session_token_latest") ||
-              "";
-            
-            const { data: acceptData, error: acceptErr } = await supabase.functions.invoke("ranked-accept", {
-              body: {
-                roomPda: roomPdaParam,
-                mode: "simple", // Simple acceptance (stake tx is implicit signature)
-              },
-              headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : undefined,
-            });
-            
-            if (acceptErr) {
-              console.warn("[Room] Auto-accept warning (non-blocking):", acceptErr);
-            } else if (acceptData?.success) {
-              console.log("[Room] ✅ Rules auto-accepted after join");
-              // Store the new session token if returned
-              if (acceptData.sessionToken) {
-                localStorage.setItem(`session_token_${roomPdaParam}`, acceptData.sessionToken);
-                localStorage.setItem("session_token_latest", acceptData.sessionToken);
-              }
+            // Get session token for authorization (required - no fallback)
+            const sessionToken = getSessionToken(roomPdaParam);
+            if (!sessionToken) {
+              console.warn("[Room] No session token for auto-accept (skipping)");
             } else {
-              console.warn("[Room] Auto-accept failed:", acceptData?.error);
+              const { data: acceptData, error: acceptErr } = await supabase.functions.invoke("ranked-accept", {
+                body: {
+                  roomPda: roomPdaParam,
+                  mode: "simple", // Simple acceptance (stake tx is implicit signature)
+                },
+                headers: getAuthHeaders(sessionToken),
+              });
+              
+              if (acceptErr) {
+                console.warn("[Room] Auto-accept warning (non-blocking):", acceptErr);
+              } else if (acceptData?.success) {
+                console.log("[Room] ✅ Rules auto-accepted after join");
+                // Store the new session token if returned
+                if (acceptData.sessionToken) {
+                  storeSessionToken(roomPdaParam, acceptData.sessionToken);
+                }
+              } else {
+                console.warn("[Room] Auto-accept failed:", acceptData?.error);
+              }
             }
           } catch (acceptE) {
             console.warn("[Room] Auto-accept exception (non-blocking):", acceptE);
