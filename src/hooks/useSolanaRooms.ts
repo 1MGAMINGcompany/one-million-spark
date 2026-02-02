@@ -15,6 +15,7 @@ import { normalizeSignature, isBlockingRoom } from "@/lib/solana-utils";
 import { isRoomArchived, archiveRoom } from "@/lib/roomArchive";
 import { supabase } from "@/integrations/supabase/client";
 import { computeRulesHash, createRulesFromRoom } from "@/lib/gameAcceptance";
+import { getSessionToken, getAuthHeaders, storeSessionToken } from "@/lib/sessionToken";
 import {
   RoomDisplay,
   GameType,
@@ -444,7 +445,7 @@ export function useSolanaRooms() {
         );
         const rulesHash = await computeRulesHash(rules);
         
-        const { error: rpcError } = await supabase.rpc("record_acceptance", {
+        const { data: acceptResult, error: rpcError } = await supabase.rpc("record_acceptance", {
           p_room_pda: roomPdaStr,
           p_wallet: publicKey.toBase58(),
           p_tx_signature: signature,
@@ -502,24 +503,38 @@ export function useSolanaRooms() {
         } else {
           console.log("[CreateRoom] Recorded acceptance with tx signature and mode:", mode);
           
+          // Store session token from record_acceptance for future auth
+          const resultObj = typeof acceptResult === 'object' && acceptResult !== null ? acceptResult as Record<string, unknown> : null;
+          const sessionTokenFromRpc = resultObj?.session_token as string | undefined;
+          if (sessionTokenFromRpc) {
+            storeSessionToken(roomPdaStr, sessionTokenFromRpc);
+            console.log("[CreateRoom] Session token stored for room:", roomPdaStr.slice(0, 8));
+          }
+          
           // PART A FIX: For ranked games, ALSO insert into game_acceptances table
           // record_acceptance only sets p1_ready flag, but rankedGate needs game_acceptances rows
           if (mode === 'ranked') {
-            try {
-              const { error: rankedAcceptError } = await supabase.functions.invoke("ranked-accept", {
-                body: {
-                  roomPda: roomPdaStr,
-                  playerWallet: publicKey.toBase58(),
-                },
-              });
-              
-              if (rankedAcceptError) {
-                console.warn("[CreateRoom] ranked-accept for creator failed:", rankedAcceptError);
-              } else {
-                console.log("[CreateRoom] ✅ Creator acceptance recorded in game_acceptances for ranked game");
+            const sessionToken = getSessionToken(roomPdaStr);
+            if (!sessionToken) {
+              console.warn("[CreateRoom] No session token for ranked-accept (skipping)");
+            } else {
+              try {
+                const { error: rankedAcceptError } = await supabase.functions.invoke("ranked-accept", {
+                  body: {
+                    roomPda: roomPdaStr,
+                    mode: "simple",
+                  },
+                  headers: getAuthHeaders(sessionToken),
+                });
+                
+                if (rankedAcceptError) {
+                  console.warn("[CreateRoom] ranked-accept for creator failed:", rankedAcceptError);
+                } else {
+                  console.log("[CreateRoom] ✅ Creator acceptance recorded in game_acceptances for ranked game");
+                }
+              } catch (rankedErr) {
+                console.warn("[CreateRoom] ranked-accept call failed:", rankedErr);
               }
-            } catch (rankedErr) {
-              console.warn("[CreateRoom] ranked-accept call failed:", rankedErr);
             }
           }
         }
@@ -780,7 +795,7 @@ export function useSolanaRooms() {
           );
           const rulesHash = await computeRulesHash(rules);
           
-          const { error: rpcError } = await supabase.rpc("record_acceptance", {
+          const { data: acceptResult, error: rpcError } = await supabase.rpc("record_acceptance", {
             p_room_pda: joinedRoom.pda,
             p_wallet: publicKey.toBase58(),
             p_tx_signature: signature,
@@ -837,6 +852,14 @@ export function useSolanaRooms() {
             }
           } else {
             console.log("[JoinRoom] Recorded acceptance with tx signature and mode:", mode);
+            
+            // Store session token from record_acceptance for future auth
+            const resultObj = typeof acceptResult === 'object' && acceptResult !== null ? acceptResult as Record<string, unknown> : null;
+            const sessionTokenFromRpc = resultObj?.session_token as string | undefined;
+            if (sessionTokenFromRpc) {
+              storeSessionToken(joinedRoom.pda, sessionTokenFromRpc);
+              console.log("[JoinRoom] Session token stored for room:", joinedRoom.pda.slice(0, 8));
+            }
           }
         }
       } catch (acceptErr: any) {

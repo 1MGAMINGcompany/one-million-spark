@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useSound } from "@/contexts/SoundContext";
 import { RoomInviteInfo } from "@/lib/invite";
+import { getSessionToken, getAuthHeaders } from "@/lib/sessionToken";
 
 export interface GameInvite {
   id: string;
@@ -24,79 +25,6 @@ export interface GameInvite {
 interface UseGameInvitesOptions {
   walletAddress?: string;
   enabled?: boolean;
-}
-
-// UUID format validator
-function isUuidLike(s: string): boolean {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s);
-}
-
-// Extract token from stored value (handles raw string or JSON object)
-function extractTokenFromStoredValue(value: string | null): string | null {
-  if (!value) return null;
-
-  // Case A: raw UUID stored directly
-  const trimmed = value.trim();
-  if (!trimmed.startsWith("{") && isUuidLike(trimmed)) {
-    return trimmed;
-  }
-
-  // Case B: JSON stored session object
-  try {
-    const obj = JSON.parse(value);
-
-    // Check all known patterns including nested structures
-    const candidates: unknown[] = [
-      obj?.session_token,
-      obj?.sessionToken,
-      obj?.token,
-      obj?.access_token,
-      obj?.session?.token,
-      obj?.session?.session_token,
-      obj?.data?.token,
-      obj?.data?.session_token,
-    ];
-
-    for (const c of candidates) {
-      if (typeof c === "string" && isUuidLike(c)) return c;
-    }
-  } catch {
-    // not JSON
-  }
-
-  return null;
-}
-
-// Get session token from localStorage (global or room-scoped fallback)
-function getSessionToken(): string | null {
-  // 1) Prefer global latest
-  const latest = extractTokenFromStoredValue(localStorage.getItem("session_token_latest"));
-  if (latest) return latest;
-
-  // 2) Scan all keys for known patterns
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
-    if (!key) continue;
-
-    // Raw token patterns (session_token_<roomPda>)
-    if (key.startsWith("session_token_") && key !== "session_token_latest") {
-      const t = extractTokenFromStoredValue(localStorage.getItem(key));
-      if (t) return t;
-    }
-
-    // JSON session patterns (1mg_session_<roomPda>)
-    if (key.startsWith("1mg_session_")) {
-      const t = extractTokenFromStoredValue(localStorage.getItem(key));
-      if (t) return t;
-    }
-  }
-
-  return null;
-}
-
-// Auth headers helper for edge function calls
-function getAuthHeaders(token: string): Record<string, string> {
-  return { Authorization: `Bearer ${token}` };
 }
 
 export function useGameInvites({ walletAddress, enabled = true }: UseGameInvitesOptions) {

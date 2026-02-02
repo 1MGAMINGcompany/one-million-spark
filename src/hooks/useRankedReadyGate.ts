@@ -9,6 +9,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { dbg, isDebugEnabled } from "@/lib/debugLog";
 import { supabase } from "@/integrations/supabase/client";
+import { getSessionToken, getAuthHeaders, storeSessionToken } from "@/lib/sessionToken";
 
 interface UseRankedReadyGateOptions {
   roomPda: string | undefined;
@@ -158,18 +159,25 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
       return { success: false, error: "Missing room or wallet" };
     }
 
+    // Get session token for authorization (required - no fallback)
+    const sessionToken = getSessionToken(roomPda);
+    if (!sessionToken) {
+      console.error("[RankedReadyGate] No session token available");
+      return { success: false, error: "Session token required - please rejoin the room" };
+    }
+
     setIsSettingReady(true);
     
     try {
       console.log("[RankedReadyGate] Calling ranked-accept Edge Function...", { roomPda, myWallet: myWalletNorm });
       
-      // Call Edge Function instead of direct table insert
+      // Call Edge Function with Authorization header (no wallet in body)
       const { data, error } = await supabase.functions.invoke("ranked-accept", {
         body: {
           roomPda,
-          playerWallet: myWalletNorm,
           mode: "simple", // Simple acceptance (stake tx is implicit signature)
         },
+        headers: getAuthHeaders(sessionToken),
       });
 
       if (error) {
@@ -183,6 +191,11 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
       }
 
       console.log("[RankedReadyGate] ✅ Player marked as ready via Edge Function!");
+      
+      // Store the new session token if returned
+      if (data.sessionToken) {
+        storeSessionToken(roomPda, data.sessionToken);
+      }
       
       // STEP 4: Optimistic update - immediately add my wallet to acceptedWallets
       if (myWalletNorm) {
