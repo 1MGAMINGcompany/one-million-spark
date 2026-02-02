@@ -261,12 +261,15 @@ Deno.serve(async (req: Request) => {
       // ─────────────────────────────────────────────────────────────
       console.log("[ranked-accept] Simple acceptance mode for:", playerWallet.slice(0, 8));
 
-      // Generate session token and record
+      // CRITICAL FIX: Reuse the existing session token from the Authorization header
+      // This prevents overwriting the token that the frontend already stored in localStorage
+      sessionToken = sessionResult.session.token;
       const nonce = crypto.randomUUID();
-      sessionToken = crypto.randomUUID();
       signatureForRecord = "implicit_stake_acceptance";
 
-      // Record acceptance (handles UNIQUE constraint)
+      console.log("[ranked-accept] Reusing existing session token:", sessionToken.slice(0, 8));
+
+      // Record acceptance in game_acceptances (for dice roll seeding)
       const { error: acceptanceError } = await supabase
         .from("game_acceptances")
         .upsert({
@@ -287,26 +290,23 @@ Deno.serve(async (req: Request) => {
         console.log("[ranked-accept] ✅ Simple acceptance recorded");
       }
 
-      // Also update player_sessions row with new token
+      // Update player_sessions metadata WITHOUT overwriting session_token
+      // The token was already created by record_acceptance RPC - just update metadata
       const { error: sessionError } = await supabase
         .from("player_sessions")
-        .upsert(
-          {
-            session_token: sessionToken,
-            room_pda: body.roomPda,
-            wallet: playerWallet,
-            rules_hash: "stake_verified",
-            last_turn: 0,
-            last_hash: "genesis",
-            revoked: false,
-          },
-          { onConflict: "room_pda,wallet" }
-        );
+        .update({
+          rules_hash: "stake_verified",
+          last_turn: 0,
+          last_hash: "genesis",
+          revoked: false,
+        })
+        .eq("room_pda", body.roomPda)
+        .eq("wallet", playerWallet);
 
       if (sessionError) {
         console.error("[ranked-accept] Failed to update player_session:", sessionError);
       } else {
-        console.log("[ranked-accept] ✅ player_sessions row updated for simple mode");
+        console.log("[ranked-accept] ✅ player_sessions metadata updated (token preserved)");
       }
     }
 
