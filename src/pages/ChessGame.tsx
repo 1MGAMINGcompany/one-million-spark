@@ -1493,7 +1493,7 @@ const ChessGame = () => {
 
         return shouldShowRulesGate ? (
         <RulesGate
-          isRanked={isRankedGame}
+          isRanked={requiresReadyGate}
           roomPda={roomPda}
           myWallet={address}
           roomPlayers={roomPlayers}
