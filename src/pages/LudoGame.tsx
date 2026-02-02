@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import { isSameWallet, isRealWallet, getOpponentWallet } from "@/lib/walletUtils";
 import { incMissed, resetMissed, clearRoom } from "@/lib/missedTurns";
 import { GameErrorBoundary } from "@/components/GameErrorBoundary";
@@ -655,6 +656,26 @@ const LudoGame = () => {
       setTurnStartedAt(opponentTimeout.turnStartedAt);
     }
   }, [opponentTimeout.turnStartedAt, turnStartedAt]);
+
+  // Fetch initial turn_started_at when game starts (for my turn display)
+  useEffect(() => {
+    if (!effectiveStartRoll.isFinalized || !roomPda || turnStartedAt) return;
+    
+    const fetchInitialTurnStartedAt = async () => {
+      try {
+        const { data } = await supabase.functions.invoke("game-session-get", {
+          body: { roomPda },
+        });
+        if (data?.session?.turn_started_at) {
+          setTurnStartedAt(data.session.turn_started_at);
+        }
+      } catch (err) {
+        console.error("[LudoGame] Failed to fetch initial turn_started_at:", err);
+      }
+    };
+    
+    fetchInitialTurnStartedAt();
+  }, [effectiveStartRoll.isFinalized, roomPda, turnStartedAt]);
 
   const turnPlayers: TurnPlayer[] = useMemo(() => {
     return players.map((player, index) => {
