@@ -72,6 +72,11 @@ export function RecoverableRoomsSection({ wallet }: RecoverableRoomsSectionProps
       }
 
       const rows = resp?.rows ?? [];
+      
+      // Debug log: show count and first PDA for verification
+      console.log(`[RecoverableRooms] Received ${rows.length} rooms`, 
+        rows.length > 0 ? `first PDA: ${rows[0]?.room_pda?.slice(0, 12)}...` : '');
+      
       setRooms(rows);
     } catch (err) {
       console.error('[RecoverableRooms] Error:', err);
