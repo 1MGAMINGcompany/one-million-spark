@@ -717,6 +717,25 @@ export function useSolanaRooms() {
         return null;
       }
       
+      // Check for transaction expiration (block height exceeded)
+      // This happens when the user waits too long to approve or network is slow
+      if (
+        errorMsg.includes("block height exceeded") ||
+        errorMsg.includes("blockhash not found") ||
+        errorMsg.includes("transaction expired") ||
+        fullError.includes("BlockheightExceeded") ||
+        fullError.includes("TransactionExpiredBlockheightExceeded")
+      ) {
+        console.warn("[CreateRoom] Transaction expired (block height exceeded)");
+        toast({
+          title: "Transaction expired",
+          description: "Please try again. The transaction took too long to confirm.",
+          variant: "destructive",
+        });
+        // Clean exit - do NOT call record_acceptance or game-session-set-settings
+        return null;
+      }
+      
       toast({
         title: "Failed to create room",
         description: err.message || "Transaction failed",
@@ -959,6 +978,8 @@ export function useSolanaRooms() {
       
       // Check for user rejection / Phantom block
       const errorMsg = err?.message?.toLowerCase() || "";
+      const fullError = String(err?.logs || err?.message || err);
+      
       if (errorMsg.includes("reject") || errorMsg.includes("cancel") || errorMsg.includes("user denied") || errorMsg.includes("blocked")) {
         toast({
           title: "Transaction cancelled",
@@ -966,6 +987,24 @@ export function useSolanaRooms() {
           variant: "destructive",
         });
         return { ok: false, reason: "PHANTOM_BLOCKED_OR_REJECTED" };
+      }
+      
+      // Check for transaction expiration (block height exceeded)
+      if (
+        errorMsg.includes("block height exceeded") ||
+        errorMsg.includes("blockhash not found") ||
+        errorMsg.includes("transaction expired") ||
+        fullError.includes("BlockheightExceeded") ||
+        fullError.includes("TransactionExpiredBlockheightExceeded")
+      ) {
+        console.warn("[JoinRoom] Transaction expired (block height exceeded)");
+        toast({
+          title: "Transaction expired",
+          description: "Please try again. The transaction took too long to confirm.",
+          variant: "destructive",
+        });
+        // Clean exit - do NOT call record_acceptance or ranked-accept
+        return { ok: false, reason: "TX_EXPIRED" };
       }
       
       // Check for insufficient funds for rent
