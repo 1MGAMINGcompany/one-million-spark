@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { isSameWallet, isRealWallet, getOpponentWallet } from "@/lib/walletUtils";
 import { incMissed, resetMissed, clearRoom } from "@/lib/missedTurns";
 import { GameErrorBoundary } from "@/components/GameErrorBoundary";
-import { useParams, useNavigate, Link } from "react-router-dom";
+import { useParams, useNavigate, Link, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, RotateCcw, Music, Music2, Volume2, VolumeX, Users, Wifi, WifiOff, RefreshCw, LogOut } from "lucide-react";
@@ -64,9 +64,13 @@ const LudoGame = () => {
   const { roomPda } = useParams<{ roomPda: string }>();
   const roomId = roomPda; // Alias for backward compatibility with hooks/display
   const navigate = useNavigate();
+  const location = useLocation();
   const { t } = useTranslation();
   const { play } = useSound();
   const { isConnected: walletConnected, address } = useWallet();
+  
+  // Check if user just joined via JoinRulesModal (skip AcceptRulesModal)
+  const justJoined = !!(location.state as { justJoined?: boolean })?.justJoined;
 
   const [musicEnabled, setMusicEnabled] = useState(true); // Auto-start music
   const [sfxEnabled, setSfxEnabled] = useState(true);
@@ -1254,6 +1258,7 @@ const LudoGame = () => {
           onOpenWalletSelector={() => {}}
           isDataLoaded={isDataLoaded}
           startRollFinalized={effectiveStartRoll.isFinalized}
+          justJoined={justJoined}
         >
           {!isNPlayerLudo && (
           <DiceRollStart

@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { getOpponentWallet, isSameWallet, isRealWallet } from "@/lib/walletUtils";
 import { incMissed, resetMissed, getMissed, clearRoom } from "@/lib/missedTurns";
 import { GameErrorBoundary } from "@/components/GameErrorBoundary";
-import { useParams, Link, useNavigate } from "react-router-dom";
+import { useParams, Link, useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, RotateCcw, RotateCw, Gem, Flag, Users, Wifi, WifiOff, RefreshCw, LogOut, Trophy, Clock } from "lucide-react";
 import { SoundToggle } from "@/components/SoundToggle";
@@ -175,10 +175,14 @@ const BackgammonGame = () => {
   const { roomPda } = useParams<{ roomPda: string }>();
   const roomId = roomPda; // Alias for backward compatibility with hooks/display
   const navigate = useNavigate();
+  const location = useLocation();
   const { t } = useTranslation();
   const isMobile = useIsMobile();
   const { play } = useSound();
   const { isConnected: walletConnected, address } = useWallet();
+  
+  // Check if user just joined via JoinRulesModal (skip AcceptRulesModal)
+  const justJoined = !!(location.state as { justJoined?: boolean })?.justJoined;
 
   // Game state
   const [gameState, setGameState] = useState<GameState>({
@@ -2182,6 +2186,7 @@ const BackgammonGame = () => {
           onOpenWalletSelector={() => {}}
           isDataLoaded={isDataLoaded}
           startRollFinalized={startRoll.isFinalized}
+          justJoined={justJoined}
         >
           <DiceRollStart
             roomPda={roomPda || ""}

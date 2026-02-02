@@ -709,9 +709,36 @@ return () => {
           console.warn("[Room] P2 sync exception (non-blocking):", syncE);
         }
         
+        // AUTO-ACCEPT: For ranked/private games, call ranked-accept automatically
+        // This collapses the dual-modal flow: JoinRulesModal confirmation = rules acceptance
+        // The user confirmed rules in JoinRulesModal, so we record acceptance now
+        const requiresAcceptance = roomMode === 'ranked' || roomMode === 'private';
+        if (requiresAcceptance && address) {
+          try {
+            console.log("[Room] Auto-accepting rules after join (mode:", roomMode, ")");
+            const { data: acceptData, error: acceptErr } = await supabase.functions.invoke("ranked-accept", {
+              body: {
+                roomPda: roomPdaParam,
+                playerWallet: address,
+                mode: "simple", // Simple acceptance (stake tx is implicit signature)
+              },
+            });
+            
+            if (acceptErr) {
+              console.warn("[Room] Auto-accept warning (non-blocking):", acceptErr);
+            } else if (acceptData?.success) {
+              console.log("[Room] ✅ Rules auto-accepted after join");
+            } else {
+              console.warn("[Room] Auto-accept failed:", acceptData?.error);
+            }
+          } catch (acceptE) {
+            console.warn("[Room] Auto-accept exception (non-blocking):", acceptE);
+          }
+        }
+        
         // Navigate to canonical play route - game type determined from on-chain data
-        // NEVER use URL slug to determine game type
-        navigate(`/play/${roomPdaParam}`);
+        // Pass justJoined flag to skip AcceptRulesModal (rules confirmed via JoinRulesModal)
+        navigate(`/play/${roomPdaParam}`, { state: { justJoined: true } });
       } else if (!result) {
         // null means blocked by tx lock - toast already shown
       } else if (result.reason === "PHANTOM_BLOCKED_OR_REJECTED") {
