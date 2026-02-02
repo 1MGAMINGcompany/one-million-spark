@@ -225,8 +225,11 @@ Deno.serve(async (req: Request) => {
 
     const roomPda = body?.roomPda;
     const gameType = body?.gameType;
-    const winnerWalletOverride = body?.winnerWallet;
     const mode = body?.mode === "timeout" ? "timeout" : "manual";
+    
+    // 🔒 SECURITY (A): NEVER trust winnerWallet from body - always derive from participants
+    // winnerWalletOverride is intentionally ignored for security
+    
     // Generate unique requestId for this request
     const requestId = crypto.randomUUID();
     const ts = new Date().toISOString();
@@ -256,19 +259,70 @@ Deno.serve(async (req: Request) => {
 
     const callerWallet = sessionRes.session.wallet;
 
-    // IMPORTANT: Do NOT trust forfeitingWallet from request body.
-    // Manual forfeit = caller forfeits themselves (1-tap UX, no signatures).
+    // 🔒 SECURITY (B): Fetch game_sessions EARLY and validate caller is participant
+    const { data: sessionRow, error: sessionError } = await supabase
+      .from("game_sessions")
+      .select("player1_wallet, player2_wallet, participants, current_turn_wallet, turn_started_at, turn_time_seconds, status_int")
+      .eq("room_pda", roomPda)
+      .maybeSingle();
 
-    let forfeitingWallet = callerWallet;
+    if (sessionError || !sessionRow) {
+      console.error("[forfeit-game] Game session not found:", { requestId, roomPda, error: sessionError });
+      return json200({ success: false, error: "Game session not found", requestId });
+    }
+
+    // 🔒 SECURITY (B): Validate caller is a participant (applies to BOTH manual + timeout)
+    const dbParticipants: string[] = sessionRow.participants?.length 
+      ? sessionRow.participants 
+      : [sessionRow.player1_wallet, sessionRow.player2_wallet].filter(Boolean);
+    
+    const isCallerParticipant = dbParticipants.includes(callerWallet);
+    
+    if (!isCallerParticipant) {
+      console.error("[forfeit-game] Forbidden: caller not a participant", { 
+        requestId, 
+        callerWallet, 
+        participants: dbParticipants 
+      });
+      return json200({ success: false, error: "Forbidden", requestId });
+    }
+
+    // 🔒 SECURITY (A): forfeitingWallet is NEVER read from body
+    // - Manual mode: caller forfeits themselves
+    // - Timeout mode: derived from DB current_turn_wallet after expiry check
+    let forfeitingWallet: string;
+
+    if (mode === "timeout") {
+      // 🔒 SECURITY (C): Timeout mode - validate turn is expired and current_turn_wallet exists
+      if (!sessionRow.current_turn_wallet) {
+        console.error("[forfeit-game] Timeout mode: no current turn wallet", { requestId, roomPda });
+        return json200({ success: false, error: "Timeout mode: no current turn", requestId });
+      }
+
+      const startedMs = Date.parse(sessionRow.turn_started_at);
+      const turnSeconds = Number(sessionRow.turn_time_seconds || 60);
+      const expired = Date.now() > startedMs + turnSeconds * 1000;
+
+      if (!expired) {
+        return json200({ success: false, error: "Timeout not yet expired", requestId });
+      }
+
+      forfeitingWallet = sessionRow.current_turn_wallet;
+    } else {
+      // Manual mode: caller forfeits themselves (1-tap UX)
+      forfeitingWallet = callerWallet;
+    }
 
     // PER-REQUEST DEBUG
     console.log("[forfeit-game] PER_REQUEST_START", {
       requestId,
       ts,
       roomPda,
+      mode,
+      callerWallet,
       forfeitingWallet,
       gameType,
-      winnerWalletOverride,
+      participantCount: dbParticipants.length,
     });
 
     // Idempotency: already settled?
@@ -324,54 +378,54 @@ Deno.serve(async (req: Request) => {
 
     const playersOnChain = roomData.players.map((p) => p.toBase58());
 
-    // Caller must be participant
+    // 🔒 SECURITY: Cross-check caller is also in on-chain players (defense in depth)
     if (!playersOnChain.includes(callerWallet)) {
+      console.error("[forfeit-game] Caller not in on-chain players", { 
+        requestId, 
+        callerWallet, 
+        playersOnChain 
+      });
       return json200({
         success: false,
-        error: "Unauthorized: not a participant",
+        error: "Unauthorized: not a participant on-chain",
         requestId,
       });
     }
 
-    // TIMEOUT MODE — server decides forfeiter
-    if (mode === "timeout") {
-      const { data: sessionRow } = await supabase
-        .from("game_sessions")
-        .select("current_turn_wallet, turn_started_at, turn_time_seconds, status_int")
-        .eq("room_pda", roomPda)
-        .maybeSingle();
-
-      if (!sessionRow) {
-        return json200({
-          success: false,
-          error: "Timeout mode: game session not found",
-          requestId,
-        });
-      }
-
-      const startedMs = Date.parse(sessionRow.turn_started_at);
-      const turnSeconds = Number(sessionRow.turn_time_seconds || 60);
-      const expired = Date.now() > startedMs + turnSeconds * 1000;
-
-      if (!expired) {
-        return json200({
-          success: false,
-          error: "Timeout not yet expired",
-          requestId,
-        });
-      }
-
-      forfeitingWallet = sessionRow.current_turn_wallet;
-    }
-
-    // Determine winner
+    // 🔒 SECURITY (C): Derive winner from participants - NEVER use body override
+    // For 2-player games: winner is the other participant
+    // For N-player: current logic only supports 2-player settlement
     let winnerPubkey: PublicKey;
-    if (winnerWalletOverride) {
-      winnerPubkey = new PublicKey(winnerWalletOverride);
-    } else {
+
+    if (dbParticipants.length === 2) {
+      // 2-player game: winner is the participant who is NOT forfeiting
+      const winnerWallet = dbParticipants.find(p => p !== forfeitingWallet);
+      if (!winnerWallet) {
+        console.error("[forfeit-game] Could not derive winner", { 
+          requestId, 
+          forfeitingWallet, 
+          dbParticipants 
+        });
+        return json200({ success: false, error: "Could not derive winner", requestId });
+      }
+      winnerPubkey = new PublicKey(winnerWallet);
+    } else if (dbParticipants.length > 2) {
+      // N-player (e.g., Ludo): for now, only elimination is supported, not full settlement
+      // Keep existing behavior: derive from on-chain data as fallback
       const loserIndex = playersOnChain.indexOf(forfeitingWallet);
+      if (loserIndex === -1) {
+        return json200({ success: false, error: "Forfeiter not found on-chain", requestId });
+      }
+      // For N-player, we pick the first non-forfeiter (simplified logic)
       const winnerIndex = loserIndex === 0 ? 1 : 0;
       winnerPubkey = roomData.players[winnerIndex];
+      console.warn("[forfeit-game] N-player forfeit using simplified winner logic", { 
+        requestId, 
+        winnerIndex,
+        playerCount: dbParticipants.length 
+      });
+    } else {
+      return json200({ success: false, error: "Invalid participant count", requestId });
     }
 
     const submitResultDiscriminator = new Uint8Array([240, 42, 89, 180, 10, 239, 9, 214]);
