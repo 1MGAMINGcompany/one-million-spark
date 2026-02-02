@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { requireSession } from "../_shared/requireSession.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -13,7 +14,25 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const { roomPda, starterWallet, callerWallet } = await req.json();
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+    );
+
+    // 🔒 SECURITY: Require session token - derive caller from session only
+    const sessionResult = await requireSession(supabase, req);
+    if (!sessionResult.ok) {
+      console.warn("[set-manual-starter] Unauthorized:", sessionResult.error);
+      return new Response(
+        JSON.stringify({ success: false, error: "Unauthorized" }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // callerWallet is ALWAYS derived from session - ignore any body.callerWallet
+    const callerWallet = sessionResult.session.wallet;
+    
+    const { roomPda, starterWallet } = await req.json();
     
     console.log("[set-manual-starter] Request:", { 
       roomPda: roomPda?.slice(0, 12), 
@@ -21,17 +40,12 @@ Deno.serve(async (req: Request) => {
       callerWallet: callerWallet?.slice(0, 12) 
     });
     
-    if (!roomPda || !starterWallet || !callerWallet) {
+    if (!roomPda || !starterWallet) {
       return new Response(
-        JSON.stringify({ error: "Missing required params: roomPda, starterWallet, callerWallet" }), 
+        JSON.stringify({ error: "Missing required params: roomPda, starterWallet" }), 
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
-
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-    );
 
     // Fetch game session to verify caller is a participant
     const { data: session, error: fetchErr } = await supabase

@@ -339,9 +339,14 @@ export function DiceRollStart({
     console.log("[DiceRollStart] Manual pick - starter:", starterWallet);
     
     try {
-      // Call edge function to safely set starter (validates caller is participant)
+      // Get session token for authorization
+      const { getSessionToken, getAuthHeaders } = await import("@/lib/sessionToken");
+      const sessionToken = getSessionToken(roomPda);
+      
+      // Call edge function to safely set starter (validates caller via session)
       const { error: fnError } = await supabase.functions.invoke('set-manual-starter', {
-        body: { roomPda, starterWallet, callerWallet: myWallet }
+        body: { roomPda, starterWallet }, // callerWallet removed - derived from session
+        headers: sessionToken ? getAuthHeaders(sessionToken) : undefined,
       });
       
       if (fnError) {
@@ -359,7 +364,7 @@ export function DiceRollStart({
     } finally {
       setIsPickingStarter(false);
     }
-  }, [computeDeterministicStarter, roomPda, myWallet, onComplete]);
+  }, [computeDeterministicStarter, roomPda, onComplete]);
 
   const handleContinue = useCallback(() => {
     if (result) {

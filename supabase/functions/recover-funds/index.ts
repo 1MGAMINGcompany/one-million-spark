@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { Connection, PublicKey, Transaction, TransactionInstruction, SystemProgram, Keypair } from "npm:@solana/web3.js@1.95.0";
 import bs58 from "npm:bs58@5.0.0";
+import { requireSession } from "../_shared/requireSession.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -17,7 +18,7 @@ const STALE_THRESHOLD_HOURS = 24;
 
 interface RecoverRequest {
   roomPda: string;
-  callerWallet: string;
+  // callerWallet removed - derived from session
 }
 
 // Room account layout from IDL:
@@ -167,21 +168,34 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const { roomPda, callerWallet }: RecoverRequest = await req.json();
+    // Initialize Supabase client first for session validation
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
 
-    if (!roomPda || !callerWallet) {
+    // 🔒 SECURITY: Require session token - derive caller from session only
+    const sessionResult = await requireSession(supabase, req);
+    if (!sessionResult.ok) {
+      console.warn("[recover-funds] Unauthorized:", sessionResult.error);
       return new Response(
-        JSON.stringify({ error: "Missing roomPda or callerWallet" }),
+        JSON.stringify({ status: "error", error: "Unauthorized" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // callerWallet is ALWAYS derived from session - ignore any body.callerWallet
+    const callerWallet = sessionResult.session.wallet;
+
+    const { roomPda }: RecoverRequest = await req.json();
+
+    if (!roomPda) {
+      return new Response(
+        JSON.stringify({ error: "Missing roomPda" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     console.log(`[recover-funds] Recovery request for room ${roomPda} by ${callerWallet}`);
-
-    // Initialize clients
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
 
     const rpcUrl = Deno.env.get("VITE_SOLANA_RPC_URL") || "https://api.mainnet-beta.solana.com";
     const connection = new Connection(rpcUrl, "confirmed");
