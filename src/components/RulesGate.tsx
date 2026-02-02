@@ -19,6 +19,7 @@
  */
 
 import { useEffect, useMemo, useState, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { AcceptRulesModal } from "@/components/AcceptRulesModal";
 import { WaitingForOpponentPanel } from "@/components/WaitingForOpponentPanel";
 import { WalletMismatchPanel } from "@/components/WalletMismatchPanel";
@@ -27,6 +28,7 @@ import { Loader2, Wallet, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useTranslation } from "react-i18next";
 import { isSameWallet, isPlaceholderWallet } from "@/lib/walletUtils";
+import { getSessionToken } from "@/lib/sessionToken";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type ServerSession = any;
@@ -94,6 +96,19 @@ export function RulesGate({
   children,
 }: RulesGateProps) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
+  
+  // Check if session token exists for this room
+  const hasSessionToken = useMemo(() => {
+    if (!roomPda) return false;
+    const token = getSessionToken(roomPda);
+    return !!token;
+  }, [roomPda]);
+  
+  // Handler to navigate back to room list for rejoining
+  const handleRejoinRoom = useCallback(() => {
+    navigate("/rooms");
+  }, [navigate]);
   
   // --- START: Server-truth polling state (prevents mobile/desktop deadlocks) ---
   const [serverSession, setServerSession] = useState<ServerSession | null>(null);
@@ -352,6 +367,8 @@ export function RulesGate({
         connectedWallet={myWallet}
         roomPda={roomPda}
         roomPlayers={roomPlayers}
+        hasSessionToken={hasSessionToken}
+        onRejoinRoom={handleRejoinRoom}
       />
     );
   }
