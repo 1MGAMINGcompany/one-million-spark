@@ -25,6 +25,7 @@ interface SettingsFailedModalProps {
   onCancelRoom: () => Promise<void>;
   onProceedAnyway?: () => void;
   showProceedOption?: boolean;
+  mode?: "casual" | "ranked" | "private";
 }
 
 export function SettingsFailedModal({
@@ -34,6 +35,7 @@ export function SettingsFailedModal({
   onCancelRoom,
   onProceedAnyway,
   showProceedOption = false,
+  mode = "casual",
 }: SettingsFailedModalProps) {
   const { t } = useTranslation();
   const [isCanceling, setIsCanceling] = useState(false);
@@ -96,7 +98,8 @@ export function SettingsFailedModal({
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter className="flex-col sm:flex-row gap-2">
-          {showProceedOption && (
+          {/* Proceed anyway only allowed for casual mode */}
+          {showProceedOption && mode === "casual" && (
             <Button
               variant="outline"
               onClick={handleProceedAnyway}
