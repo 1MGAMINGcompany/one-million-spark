@@ -468,7 +468,9 @@
     "invitePlayers": "Mời Người Chơi",
     "sharePrivateRoom": "Chia sẻ phòng riêng này với bạn bè.",
     "share": "Chia Sẻ",
-    "walletNeeded": "Người chơi cần kết nối ví để vào"
+    "walletNeeded": "Người chơi cần kết nối ví để vào",
+    "scanToJoin": "Quét bằng điện thoại để tham gia",
+    "showQrToFriend": "Cho bạn bè quét mã QR này"
   },
   "gameBanner": {
     "gameReady": "Game Sẵn Sàng — Đối Thủ Đã Vào!",
