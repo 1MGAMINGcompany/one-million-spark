@@ -16,12 +16,11 @@ const MAX_TIMESTAMP_AGE_MS = 5 * 60 * 1000;
 interface SimpleAcceptancePayload {
   roomPda: string;
   mode: "simple"; // Simple acceptance (stake tx is implicit signature)
-  // playerWallet removed - derived from session OR on-chain
+  // playerWallet is IGNORED - always derived from session token
 }
 
 interface SignedAcceptancePayload {
   roomPda: string;
-  playerWallet: string;
   mode: "signed"; // Full cryptographic acceptance
   rulesHash: string;
   nonce: string;
@@ -29,12 +28,13 @@ interface SignedAcceptancePayload {
   signature: string;
   stakeLamports: number;
   turnTimeSeconds: number;
+  // playerWallet is IGNORED for security - derived from signature verification
 }
 
 type AcceptancePayload = SimpleAcceptancePayload | SignedAcceptancePayload;
 
 // ─────────────────────────────────────────────────────────────
-// Parse room account from on-chain data
+// Parse room account from on-chain data (for participant sync only)
 // ─────────────────────────────────────────────────────────────
 interface ParsedRoom {
   roomId: bigint;
@@ -144,22 +144,30 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // ─────────────────────────────────────────────────────────────
+    // SECURITY: Require session token for ALL modes (no fallback)
+    // ─────────────────────────────────────────────────────────────
+    const sessionResult = await requireSession(supabase, req);
+    
+    if (!sessionResult.ok) {
+      console.error("[ranked-accept] Unauthorized - no valid session token");
+      return new Response(
+        JSON.stringify({ success: false, error: "Unauthorized" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // playerWallet is ALWAYS derived from session - never from request body
+    const playerWallet = sessionResult.session.wallet;
+    console.log("[ranked-accept] Wallet from session:", playerWallet.slice(0, 8));
+
     const now = Date.now();
     let sessionToken: string;
     let signatureForRecord: string;
-    let playerWallet: string;
 
     if (body.mode === "signed") {
-      // Full cryptographic acceptance flow - playerWallet required in body
-      if (!body.playerWallet) {
-        return new Response(
-          JSON.stringify({ success: false, error: "Missing playerWallet for signed mode" }),
-          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      playerWallet = body.playerWallet;
-      
-      const { rulesHash, nonce, timestamp, signature } = body;
+      // Full cryptographic acceptance flow - wallet from session, signature in body
+      const { rulesHash, nonce, timestamp, signature } = body as SignedAcceptancePayload;
 
       console.log("[ranked-accept] Signed mode request:", {
         roomPda: body.roomPda?.slice(0, 8),
@@ -249,60 +257,9 @@ Deno.serve(async (req: Request) => {
 
     } else {
       // ─────────────────────────────────────────────────────────────
-      // SIMPLE ACCEPTANCE FLOW
-      // Derive wallet from: 1) session token, or 2) on-chain participants
+      // SIMPLE ACCEPTANCE FLOW - wallet already derived from session above
       // ─────────────────────────────────────────────────────────────
-      console.log("[ranked-accept] Simple acceptance mode");
-
-      // Try to get wallet from session token (preferred - zero trust)
-      const sessionResult = await requireSession(supabase, req);
-      
-      if (sessionResult.ok) {
-        playerWallet = sessionResult.session.wallet;
-        console.log("[ranked-accept] Wallet derived from session:", playerWallet.slice(0, 8));
-      } else {
-        // Fallback: Look up the joiner from on-chain room data
-        // This handles the case where joiner doesn't have a session yet
-        const rpcUrl = Deno.env.get("SOLANA_RPC_URL");
-        if (!rpcUrl) {
-          return new Response(
-            JSON.stringify({ success: false, error: "No session token and RPC unavailable" }),
-            { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
-
-        try {
-          const connection = new Connection(rpcUrl);
-          const roomPubkey = new PublicKey(body.roomPda);
-          const accountInfo = await connection.getAccountInfo(roomPubkey);
-          
-          if (!accountInfo?.data) {
-            return new Response(
-              JSON.stringify({ success: false, error: "Room not found on-chain" }),
-              { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-            );
-          }
-
-          const roomData = parseRoomAccount(new Uint8Array(accountInfo.data));
-          if (!roomData || roomData.players.length < 2) {
-            return new Response(
-              JSON.stringify({ success: false, error: "Room has insufficient players" }),
-              { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-            );
-          }
-
-          // Get the most recent joiner (player 2 for 2-player games)
-          // For N-player, we'd need a different approach
-          playerWallet = roomData.players[roomData.players.length - 1].toBase58();
-          console.log("[ranked-accept] Wallet derived from on-chain (joiner):", playerWallet.slice(0, 8));
-        } catch (err) {
-          console.error("[ranked-accept] On-chain lookup failed:", err);
-          return new Response(
-            JSON.stringify({ success: false, error: "Failed to determine wallet" }),
-            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
-      }
+      console.log("[ranked-accept] Simple acceptance mode for:", playerWallet.slice(0, 8));
 
       // Generate session token and record
       const nonce = crypto.randomUUID();
@@ -330,8 +287,7 @@ Deno.serve(async (req: Request) => {
         console.log("[ranked-accept] ✅ Simple acceptance recorded");
       }
 
-      // Also create player_sessions row (critical for forfeit-game)
-      // This ensures the joiner (Player 2) can call server-verified timeout forfeit.
+      // Also update player_sessions row with new token
       const { error: sessionError } = await supabase
         .from("player_sessions")
         .upsert(
@@ -348,9 +304,9 @@ Deno.serve(async (req: Request) => {
         );
 
       if (sessionError) {
-        console.error("[ranked-accept] Failed to create player_session:", sessionError);
+        console.error("[ranked-accept] Failed to update player_session:", sessionError);
       } else {
-        console.log("[ranked-accept] ✅ player_sessions row created for simple mode");
+        console.log("[ranked-accept] ✅ player_sessions row updated for simple mode");
       }
     }
 
