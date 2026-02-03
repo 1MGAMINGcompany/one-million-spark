@@ -1358,11 +1358,18 @@ const CheckersGame = () => {
       
       {/* RulesGate + DiceRollStart - RulesGate handles accept modal internally */}
       {(() => {
-        // Don't require bothReady here - let RulesGate handle showing the accept modal
+        // DB-AUTHORITATIVE: Use rankedGate.dbReady for gating, NOT roomPlayers.length
+        const dbReady = rankedGate.dbReady;
         const shouldShowRulesGate =
-          roomPlayers.length >= 2 &&
+          dbReady &&
           !!address &&
           !startRoll.isFinalized;
+
+        // DEFENSIVE: Ensure DiceRollStart cannot show if dbReady is false
+        const showDiceRoll = dbReady && !startRoll.isFinalized;
+        if (startRoll.showDiceRoll && !dbReady) {
+          console.error("[dice.gate.violation] showDiceRoll=true but dbReady=false — forcing false");
+        }
 
         if (isDebugEnabled()) {
           dbg("dice.gate", {
@@ -1372,8 +1379,13 @@ const CheckersGame = () => {
             hasAddress: !!address,
             isRankedGame,
             bothReady: rankedGate.bothReady,
+            dbReady,
+            acceptedCount: rankedGate.acceptedCount,
+            requiredCount: rankedGate.requiredCount,
+            participantsCount: rankedGate.participantsCount,
+            maxPlayers: rankedGate.maxPlayers,
             isFinalized: startRoll.isFinalized,
-            showDiceRoll: startRoll.showDiceRoll,
+            showDiceRoll,
             shouldShowRulesGate,
           });
         }
@@ -1397,8 +1409,9 @@ const CheckersGame = () => {
           isDataLoaded={isDataLoaded}
           startRollFinalized={startRoll.isFinalized}
           justJoined={justJoined}
+          dbReady={dbReady}
         >
-          {(!isRankedGame || rankedGate.bothReady) && (
+          {showDiceRoll && (
             <DiceRollStart
               roomPda={roomPda || ""}
               myWallet={address}
