@@ -114,7 +114,7 @@ export function RulesGate({
   
   // Handler to navigate back to room list for rejoining
   const handleRejoinRoom = useCallback(() => {
-    navigate("/rooms");
+    navigate("/room-list");
   }, [navigate]);
 
   // 🔍 DEBUG: Copy debug info handler (dev only)
