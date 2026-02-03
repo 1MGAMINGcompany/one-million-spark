@@ -315,33 +315,57 @@ Deno.serve(async (req: Request) => {
     // This is the AUTHORITATIVE sync step that populates:
     // - game_sessions.participants[] (array of all players)
     // - game_sessions.player2_wallet (for 2-player games)
+    // 
+    // CRITICAL: Retry up to 3 times with 300ms backoff on RPC failure
     // ─────────────────────────────────────────────────────────────
     const rpcUrl = Deno.env.get("SOLANA_RPC_URL");
     let onChainParticipants: string[] = [];
     let onChainCreator: string | null = null;
     let onChainMaxPlayers = 2;
     let onChainGameType = 0;
+    let onChainFetchSuccess = false;
+    
+    const MAX_RETRIES = 3;
+    const RETRY_DELAY_MS = 300;
     
     if (rpcUrl) {
-      try {
-        console.log("[ranked-accept] Syncing participants from on-chain...");
-        const connection = new Connection(rpcUrl);
-        const roomPubkey = new PublicKey(body.roomPda);
-        const accountInfo = await connection.getAccountInfo(roomPubkey);
-        
-        if (accountInfo?.data) {
-          const roomData = parseRoomAccount(new Uint8Array(accountInfo.data));
+      const connection = new Connection(rpcUrl);
+      const roomPubkey = new PublicKey(body.roomPda);
+      
+      for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+        try {
+          console.log(`[ranked-accept] on-chain fetch attempt ${attempt}/${MAX_RETRIES}...`);
+          const accountInfo = await connection.getAccountInfo(roomPubkey);
           
-          if (roomData) {
-            onChainParticipants = roomData.players.map(p => p.toBase58());
-            onChainCreator = roomData.creator.toBase58();
-            onChainMaxPlayers = roomData.maxPlayers;
-            onChainGameType = roomData.gameType;
-            console.log("[ranked-accept] On-chain players:", onChainParticipants);
+          if (accountInfo?.data) {
+            const roomData = parseRoomAccount(new Uint8Array(accountInfo.data));
+            
+            if (roomData && roomData.players.length > 0) {
+              onChainParticipants = roomData.players.map(p => p.toBase58());
+              onChainCreator = roomData.creator.toBase58();
+              onChainMaxPlayers = roomData.maxPlayers;
+              onChainGameType = roomData.gameType;
+              onChainFetchSuccess = true;
+              console.log(`[ranked-accept] on-chain sync success: participantsCount=${onChainParticipants.length}, players=${onChainParticipants.map(p => p.slice(0,8)).join(",")}`);
+              break; // Success - exit retry loop
+            } else {
+              console.warn(`[ranked-accept] on-chain fetch attempt ${attempt}/${MAX_RETRIES} failed: no players in parsed data`);
+            }
+          } else {
+            console.warn(`[ranked-accept] on-chain fetch attempt ${attempt}/${MAX_RETRIES} failed: no account data`);
           }
+        } catch (err) {
+          console.warn(`[ranked-accept] on-chain fetch attempt ${attempt}/${MAX_RETRIES} failed:`, err);
         }
-      } catch (err) {
-        console.warn("[ranked-accept] On-chain fetch failed:", err);
+        
+        // Wait before retry (except on last attempt)
+        if (attempt < MAX_RETRIES) {
+          await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
+        }
+      }
+      
+      if (!onChainFetchSuccess) {
+        console.warn("[ranked-accept] on-chain sync failed after retries; will preserve existing participants");
       }
     }
 
@@ -350,77 +374,109 @@ Deno.serve(async (req: Request) => {
     // ─────────────────────────────────────────────────────────────
     const { data: existingSession } = await supabase
       .from("game_sessions")
-      .select("room_pda, player1_wallet, player2_wallet, participants")
+      .select("room_pda, player1_wallet, player2_wallet, participants, max_players")
       .eq("room_pda", body.roomPda)
       .maybeSingle();
 
+    // Track if we need to signal frontend that sync is pending
+    let needsSync = false;
+
     if (!existingSession) {
-      // Session doesn't exist - CREATE it even if on-chain fetch failed
-      // P0 FIX: Use safe defaults when on-chain data is unavailable
-      const player1 = onChainCreator || onChainParticipants[0] || playerWallet;
-      const player2 = onChainMaxPlayers <= 2 && onChainParticipants.length >= 2
-        ? onChainParticipants.find(p => p !== player1) || null
-        : null;
-      // CRITICAL: Always ensure at least playerWallet is in participants
-      const participants = onChainParticipants.length > 0 ? onChainParticipants : [player1];
+      // Session doesn't exist - CREATE it
+      // CRITICAL: Only use on-chain data if fetch succeeded; otherwise use safe defaults
       
-      // Map gameType number to string (best effort, fallback to "unknown")
-      const gameTypeMap: Record<number, string> = { 
-        0: "unknown", 1: "chess", 2: "dominos", 3: "backgammon", 4: "checkers", 5: "ludo" 
-      };
-      const gameTypeStr = gameTypeMap[onChainGameType] || "unknown";
-      
-      // Mode from request body is acceptable since this is just a hint
-      const mode = (body as any).gameMode || "ranked";
-      
-      // Use safe defaults when on-chain failed
-      const safeMaxPlayers = onChainMaxPlayers > 0 ? onChainMaxPlayers : 2;
-      
-      console.log("[ranked-accept] Creating game_sessions row (on-chain success:", onChainParticipants.length > 0, "):", {
-        roomPda: body.roomPda.slice(0, 8),
-        player1: player1.slice(0, 8),
-        player2: player2?.slice(0, 8) || "null",
-        participants: participants.length,
-        mode,
-        gameType: gameTypeStr,
-        maxPlayers: safeMaxPlayers,
-      });
-      
-      const { error: insertErr } = await supabase
-        .from("game_sessions")
-        .insert({
-          room_pda: body.roomPda,
-          player1_wallet: player1,
-          player2_wallet: player2,
-          participants,
-          max_players: safeMaxPlayers,
-          game_type: gameTypeStr,
-          game_state: {},
-          status: "waiting",
-          status_int: 1,
+      if (onChainFetchSuccess) {
+        // On-chain fetch succeeded - use authoritative data
+        const player1 = onChainCreator || onChainParticipants[0] || playerWallet;
+        const player2 = onChainMaxPlayers <= 2 && onChainParticipants.length >= 2
+          ? onChainParticipants.find(p => p !== player1) || null
+          : null;
+        
+        const gameTypeMap: Record<number, string> = { 
+          0: "unknown", 1: "chess", 2: "dominos", 3: "backgammon", 4: "checkers", 5: "ludo" 
+        };
+        const gameTypeStr = gameTypeMap[onChainGameType] || "unknown";
+        const mode = (body as any).gameMode || "ranked";
+        
+        console.log("[ranked-accept] Creating game_sessions row with on-chain data:", {
+          roomPda: body.roomPda.slice(0, 8),
+          player1: player1.slice(0, 8),
+          player2: player2?.slice(0, 8) || "null",
+          participants: onChainParticipants.length,
           mode,
-          p1_ready: false,
-          p2_ready: false,
+          gameType: gameTypeStr,
+          maxPlayers: onChainMaxPlayers,
         });
-      
-      if (insertErr) {
-        // Check for conflict (race condition - another process created it)
-        if (insertErr.code === "23505") {
-          console.log("[ranked-accept] game_sessions conflict - row exists, proceeding");
-        } else {
-          // P0 FIX: Log loudly and return error - don't silently continue
+        
+        const { error: insertErr } = await supabase
+          .from("game_sessions")
+          .insert({
+            room_pda: body.roomPda,
+            player1_wallet: player1,
+            player2_wallet: player2,
+            participants: onChainParticipants,
+            max_players: onChainMaxPlayers,
+            game_type: gameTypeStr,
+            game_state: {},
+            status: "waiting",
+            status_int: 1,
+            mode,
+            p1_ready: false,
+            p2_ready: false,
+          });
+        
+        if (insertErr && insertErr.code !== "23505") {
           console.error("[ranked-accept] ❌ CRITICAL: Failed to create game_sessions:", insertErr);
           return new Response(
             JSON.stringify({ success: false, error: "Failed to initialize game session: " + insertErr.message }),
             { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         }
+        console.log("[ranked-accept] ✅ Created game_sessions row with on-chain participants");
+        
       } else {
-        console.log("[ranked-accept] ✅ Created game_sessions row");
+        // On-chain fetch FAILED - create minimal row with only playerWallet
+        // Signal that frontend needs to retry sync
+        needsSync = true;
+        
+        const gameTypeHint = (body as any).gameType || "unknown";
+        const mode = (body as any).gameMode || "ranked";
+        
+        console.log("[ranked-accept] ⚠️ Creating game_sessions row WITHOUT on-chain data (needsSync=true):", {
+          roomPda: body.roomPda.slice(0, 8),
+          player1: playerWallet.slice(0, 8),
+          gameType: gameTypeHint,
+        });
+        
+        const { error: insertErr } = await supabase
+          .from("game_sessions")
+          .insert({
+            room_pda: body.roomPda,
+            player1_wallet: playerWallet,
+            player2_wallet: null,
+            participants: [playerWallet],
+            max_players: 2,
+            game_type: gameTypeHint,
+            game_state: {},
+            status: "waiting",
+            status_int: 1,
+            mode,
+            p1_ready: false,
+            p2_ready: false,
+          });
+        
+        if (insertErr && insertErr.code !== "23505") {
+          console.error("[ranked-accept] ❌ Failed to create minimal game_sessions:", insertErr);
+          return new Response(
+            JSON.stringify({ success: false, error: "Failed to initialize game session" }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        console.log("[ranked-accept] ✅ Created minimal game_sessions row (needs sync)");
       }
     } else {
-      // Session exists - UPDATE with on-chain participants
-      if (onChainParticipants.length > 0) {
+      // Session exists - UPDATE with on-chain participants ONLY if fetch succeeded
+      if (onChainFetchSuccess && onChainParticipants.length > 0) {
         const updateObj: Record<string, unknown> = {
           participants: onChainParticipants,
           max_players: onChainMaxPlayers > 0 ? onChainMaxPlayers : 2,
@@ -447,6 +503,19 @@ Deno.serve(async (req: Request) => {
         } else {
           console.log("[ranked-accept] ✅ Synced participants:", onChainParticipants.length);
         }
+      } else if (!onChainFetchSuccess) {
+        // On-chain fetch failed - DON'T shrink existing participants
+        // Keep what's already in DB
+        console.log("[ranked-accept] on-chain sync failed after retries; leaving participants unchanged:", {
+          existingParticipants: existingSession.participants?.length || 0,
+        });
+        
+        // Only set needsSync if existing participants looks incomplete
+        const existingCount = existingSession.participants?.length || 0;
+        const expectedCount = existingSession.max_players || 2;
+        if (existingCount < expectedCount) {
+          needsSync = true;
+        }
       }
     }
 
@@ -467,13 +536,14 @@ Deno.serve(async (req: Request) => {
 
     const expiresAt = new Date(now + 4 * 60 * 60 * 1000).toISOString();
 
-    console.log("[ranked-accept] ✅ Acceptance complete for", playerWallet.slice(0, 8));
+    console.log("[ranked-accept] ✅ Acceptance complete for", playerWallet.slice(0, 8), needsSync ? "(needsSync)" : "");
 
     return new Response(
       JSON.stringify({
         success: true,
         sessionToken,
         expiresAt,
+        needsSync, // Signal frontend if on-chain sync failed
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
