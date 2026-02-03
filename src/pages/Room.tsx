@@ -514,8 +514,6 @@ return () => {
   const silentBackoffUntilRef = useRef(0);
   const lastVaultFetchMsRef = useRef(0);
   
-  // Guard: ensure ranked/private auto-accept runs exactly once per join
-  const autoAcceptRanRef = useRef(false);
   
   useEffect(() => {
     if (!room || !roomPdaParam) {
@@ -713,48 +711,9 @@ return () => {
           console.warn("[Room] P2 sync exception (non-blocking):", syncE);
         }
         
-        // AUTO-ACCEPT: For ranked/private games, call ranked-accept automatically
-        // This collapses the dual-modal flow: JoinRulesModal confirmation = rules acceptance
-        // The user confirmed rules in JoinRulesModal, so we record acceptance now
-        // GUARD: Ensure this runs exactly once per join success
-        const requiresAcceptance = roomMode === 'ranked' || roomMode === 'private';
-        if (requiresAcceptance && address && !autoAcceptRanRef.current) {
-          autoAcceptRanRef.current = true; // Set BEFORE async call to prevent race
-          try {
-            console.log("[Room] Auto-accepting rules after join (mode:", roomMode, ")");
-            
-            // Get session token for authorization (required - no fallback)
-            const sessionToken = getSessionToken(roomPdaParam);
-            if (!sessionToken) {
-              console.warn("[Room] No session token for auto-accept (skipping)");
-            } else {
-              const { data: acceptData, error: acceptErr } = await supabase.functions.invoke("ranked-accept", {
-                body: {
-                  roomPda: roomPdaParam,
-                  mode: "simple", // Simple acceptance (stake tx is implicit signature)
-                },
-                headers: getAuthHeaders(sessionToken),
-              });
-              
-              if (acceptErr) {
-                console.warn("[Room] Auto-accept warning (non-blocking):", acceptErr);
-              } else if (acceptData?.success) {
-                console.log("[Room] ✅ Rules auto-accepted after join");
-                // Store the new session token if returned
-                if (acceptData.sessionToken) {
-                  storeSessionToken(roomPdaParam, acceptData.sessionToken);
-                }
-              } else {
-                console.warn("[Room] Auto-accept failed:", acceptData?.error);
-              }
-            }
-          } catch (acceptE) {
-            console.warn("[Room] Auto-accept exception (non-blocking):", acceptE);
-          }
-        }
-        
         // Navigate to canonical play route - game type determined from on-chain data
         // Pass justJoined flag to skip AcceptRulesModal (rules confirmed via JoinRulesModal)
+        // NOTE: ranked-accept is called inside useSolanaRooms.joinRoom() - no duplicate call here
         navigate(`/play/${roomPdaParam}`, { state: { justJoined: true } });
       } else if (!result) {
         // null means blocked by tx lock - toast already shown
