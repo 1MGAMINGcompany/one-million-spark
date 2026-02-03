@@ -978,14 +978,22 @@ Deno.serve(async (req: Request) => {
         console.error("[settle-game] ⚠️ DB recording exception (non-fatal):", dbError);
       }
 
-      // Finish session (best effort)
-      const { error: finishErr } = await supabase.rpc("finish_game_session", {
-        p_room_pda: roomPda,
-        p_caller_wallet: winnerWallet,
-      });
+      // CRITICAL: Update game_sessions with winner and status_int=3
+      const { error: sessionUpdateError } = await supabase
+        .from("game_sessions")
+        .update({
+          status: "finished",
+          status_int: 3,
+          winner_wallet: winnerWallet,
+          game_over_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("room_pda", roomPda);
 
-      if (finishErr) {
-        console.error("[settle-game] finish_game_session failed:", finishErr);
+      if (sessionUpdateError) {
+        console.error("[settle-game] game_sessions update failed:", sessionUpdateError);
+      } else {
+        console.log("[settle-game] ✅ game_sessions marked finished (status_int=3, winner:", winnerWallet.slice(0, 8), ")");
       }
 
       // ─────────────────────────────────────────────────────────────

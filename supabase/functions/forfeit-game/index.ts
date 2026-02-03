@@ -519,12 +519,32 @@ Deno.serve(async (req: Request) => {
     const signature = await connection.sendRawTransaction(tx.serialize());
     await connection.confirmTransaction(signature, "confirmed");
 
+    // CRITICAL: Update game_sessions to mark as finished AFTER on-chain settlement
+    const winnerWalletStr = winnerPubkey.toBase58();
+    const { error: dbUpdateError } = await supabase
+      .from("game_sessions")
+      .update({
+        status: "finished",
+        status_int: 3,
+        winner_wallet: winnerWalletStr,
+        game_over_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("room_pda", roomPda);
+
+    if (dbUpdateError) {
+      console.error("[forfeit-game] Failed to update game_sessions:", dbUpdateError);
+      // Non-fatal: on-chain settlement succeeded
+    } else {
+      console.log("[forfeit-game] ✅ game_sessions marked finished (status_int=3, winner:", winnerWalletStr.slice(0, 8), ")");
+    }
+
     await logSettlement(supabase, {
       room_pda: roomPda,
       action: "forfeit",
       success: true,
       signature,
-      winner_wallet: winnerPubkey.toBase58(),
+      winner_wallet: winnerWalletStr,
       forfeiting_wallet: forfeitingWallet,
     });
 
@@ -532,7 +552,7 @@ Deno.serve(async (req: Request) => {
       success: true,
       action: "forfeit",
       signature,
-      winnerWallet: winnerPubkey.toBase58(),
+      winnerWallet: winnerWalletStr,
       forfeitingWallet,
     });
 
