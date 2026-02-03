@@ -1222,15 +1222,29 @@ const LudoGame = () => {
       {(() => {
         // DB-AUTHORITATIVE: Use rankedGate.dbReady for gating, NOT roomPlayers.length
         const dbReady = rankedGate.dbReady;
-        const shouldShowRulesGate =
-          dbReady &&
-          !!address &&
-          !effectiveStartRoll.isFinalized;
-
+        
         // DEFENSIVE: Ensure DiceRollStart cannot show if dbReady is false
         const showDiceRoll = dbReady && !effectiveStartRoll.isFinalized;
         if (effectiveStartRoll.showDiceRoll && !dbReady) {
           console.error("[dice.gate.violation] showDiceRoll=true but dbReady=false — forcing false");
+        }
+
+        // P0 FIX: RulesGate must NEVER render when DiceRoll should show
+        // Force shouldShowRulesGate=false when showDiceRoll=true
+        const rawShouldShowRulesGate =
+          dbReady &&
+          !!address &&
+          !effectiveStartRoll.isFinalized;
+        const shouldShowRulesGate = rawShouldShowRulesGate && !showDiceRoll;
+        
+        // Defensive assertion - this should NEVER happen after the fix
+        if (showDiceRoll && rawShouldShowRulesGate) {
+          console.error("[dice.gate.violation] showDiceRoll and rules gate both true - forcing rules gate off", {
+            game: "ludo",
+            roomPda,
+            dbReady,
+            isFinalized: effectiveStartRoll.isFinalized,
+          });
         }
 
         if (isDebugEnabled()) {
@@ -1252,42 +1266,51 @@ const LudoGame = () => {
           });
         }
 
-        return shouldShowRulesGate ? (
-        <RulesGate
-          isRanked={requiresReadyGate}
-          roomPda={roomPda}
-          myWallet={address}
-          roomPlayers={roomPlayers}
-          iAmReady={rankedGate.iAmReady}
-          opponentReady={rankedGate.opponentReady}
-          bothReady={rankedGate.bothReady}
-          isSettingReady={rankedGate.isSettingReady}
-          stakeLamports={stakeLamports}
-          turnTimeSeconds={effectiveTurnTime}
-          opponentWallet={roomPlayers.find(p => !isSameWallet(p, address))}
-          onAcceptRules={handleAcceptRules}
-          onLeave={handleUILeave}
-          onOpenWalletSelector={() => {}}
-          isDataLoaded={isDataLoaded}
-          startRollFinalized={effectiveStartRoll.isFinalized}
-          justJoined={justJoined}
-          dbReady={dbReady}
-        >
-          {!isNPlayerLudo && showDiceRoll && (
-          <DiceRollStart
-                      roomPda={roomPda || ""}
-                      myWallet={address}
-                      player1Wallet={roomPlayers[0]}
-                      player2Wallet={roomPlayers[1]}
-                      onComplete={effectiveStartRoll.handleRollComplete}
-                      onLeave={handleLeaveFromDice}
-                      isLeaving={false}
-                      isForfeiting={false}
-                    />
-        )}
-
-        </RulesGate>
-        ) : null;
+        // P0 FIX: When showDiceRoll=true (2-player Ludo), render DiceRollStart directly (NO RulesGate wrapper)
+        // When shouldShowRulesGate=true (and showDiceRoll=false), show RulesGate for loading/syncing
+        if (!isNPlayerLudo && showDiceRoll) {
+          return (
+            <DiceRollStart
+              roomPda={roomPda || ""}
+              myWallet={address}
+              player1Wallet={roomPlayers[0]}
+              player2Wallet={roomPlayers[1]}
+              onComplete={effectiveStartRoll.handleRollComplete}
+              onLeave={handleLeaveFromDice}
+              isLeaving={false}
+              isForfeiting={false}
+            />
+          );
+        }
+        
+        if (shouldShowRulesGate) {
+          return (
+            <RulesGate
+              isRanked={requiresReadyGate}
+              roomPda={roomPda}
+              myWallet={address}
+              roomPlayers={roomPlayers}
+              iAmReady={rankedGate.iAmReady}
+              opponentReady={rankedGate.opponentReady}
+              bothReady={rankedGate.bothReady}
+              isSettingReady={rankedGate.isSettingReady}
+              stakeLamports={stakeLamports}
+              turnTimeSeconds={effectiveTurnTime}
+              opponentWallet={roomPlayers.find(p => !isSameWallet(p, address))}
+              onAcceptRules={handleAcceptRules}
+              onLeave={handleUILeave}
+              onOpenWalletSelector={() => {}}
+              isDataLoaded={isDataLoaded}
+              startRollFinalized={effectiveStartRoll.isFinalized}
+              justJoined={justJoined}
+              dbReady={dbReady}
+            >
+              {null}
+            </RulesGate>
+          );
+        }
+        
+        return null;
       })()}
       
       {/* Turn Banner (fallback for no permission) */}

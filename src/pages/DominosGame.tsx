@@ -1526,15 +1526,29 @@ const DominosGame = () => {
       {(() => {
         // DB-AUTHORITATIVE: Use rankedGate.dbReady for gating, NOT roomPlayers.length
         const dbReady = rankedGate.dbReady;
-        const shouldShowRulesGate =
-          dbReady &&
-          !!address &&
-          !startRoll.isFinalized;
-
+        
         // DEFENSIVE: Ensure DiceRollStart cannot show if dbReady is false
         const showDiceRoll = dbReady && !startRoll.isFinalized;
         if (startRoll.showDiceRoll && !dbReady) {
           console.error("[dice.gate.violation] showDiceRoll=true but dbReady=false — forcing false");
+        }
+
+        // P0 FIX: RulesGate must NEVER render when DiceRoll should show
+        // Force shouldShowRulesGate=false when showDiceRoll=true
+        const rawShouldShowRulesGate =
+          dbReady &&
+          !!address &&
+          !startRoll.isFinalized;
+        const shouldShowRulesGate = rawShouldShowRulesGate && !showDiceRoll;
+        
+        // Defensive assertion - this should NEVER happen after the fix
+        if (showDiceRoll && rawShouldShowRulesGate) {
+          console.error("[dice.gate.violation] showDiceRoll and rules gate both true - forcing rules gate off", {
+            game: "dominos",
+            roomPda,
+            dbReady,
+            isFinalized: startRoll.isFinalized,
+          });
         }
 
         if (isDebugEnabled()) {
@@ -1556,28 +1570,10 @@ const DominosGame = () => {
           });
         }
 
-        return shouldShowRulesGate ? (
-        <RulesGate
-          isRanked={requiresReadyGate}
-          roomPda={roomPda}
-          myWallet={address}
-          roomPlayers={roomPlayers}
-          iAmReady={rankedGate.iAmReady}
-          opponentReady={rankedGate.opponentReady}
-          bothReady={rankedGate.bothReady}
-          isSettingReady={rankedGate.isSettingReady}
-          stakeLamports={stakeLamports}
-          turnTimeSeconds={effectiveTurnTime}
-          opponentWallet={opponentWallet || undefined}
-          onAcceptRules={handleAcceptRulesModal}
-          onLeave={handleUILeave}
-          onOpenWalletSelector={() => {}}
-          isDataLoaded={isDataLoaded}
-          startRollFinalized={startRoll.isFinalized}
-          justJoined={justJoined}
-          dbReady={dbReady}
-        >
-          {showDiceRoll && (
+        // P0 FIX: When showDiceRoll=true, render DiceRollStart directly (NO RulesGate wrapper)
+        // When shouldShowRulesGate=true (and showDiceRoll=false), show RulesGate for loading/syncing
+        if (showDiceRoll) {
+          return (
             <DiceRollStart
               roomPda={roomPda || ""}
               myWallet={address}
@@ -1589,9 +1585,37 @@ const DominosGame = () => {
               isLeaving={isLeaving}
               isForfeiting={isForfeiting}
             />
-          )}
-        </RulesGate>
-        ) : null;
+          );
+        }
+        
+        if (shouldShowRulesGate) {
+          return (
+            <RulesGate
+              isRanked={requiresReadyGate}
+              roomPda={roomPda}
+              myWallet={address}
+              roomPlayers={roomPlayers}
+              iAmReady={rankedGate.iAmReady}
+              opponentReady={rankedGate.opponentReady}
+              bothReady={rankedGate.bothReady}
+              isSettingReady={rankedGate.isSettingReady}
+              stakeLamports={stakeLamports}
+              turnTimeSeconds={effectiveTurnTime}
+              opponentWallet={opponentWallet || undefined}
+              onAcceptRules={handleAcceptRulesModal}
+              onLeave={handleUILeave}
+              onOpenWalletSelector={() => {}}
+              isDataLoaded={isDataLoaded}
+              startRollFinalized={startRoll.isFinalized}
+              justJoined={justJoined}
+              dbReady={dbReady}
+            >
+              {null}
+            </RulesGate>
+          );
+        }
+        
+        return null;
       })()}
       
       {/* Turn Banner */}

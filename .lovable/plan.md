@@ -1,16 +1,28 @@
 
 # Fix Plan: DiceRollStart Gating + Stop False "Opponent sync timed out"
 
-## Problem
-The dice roll screen shows "Opponent sync timed out" even when the real issue is that the opponent hasn't joined or accepted yet. The 15-second timeout timer and retry logic start immediately, leading to misleading error messages.
+## ✅ COMPLETED - P0 UI FIX: DiceRollStart must never be blocked by RulesGate
 
-## Root Cause
-1. The 15s timeout (lines 160-174) starts on mount regardless of opponent readiness
-2. The `handleRoll` function auto-retries 10 times, then shows "Opponent sync timed out" (line 334)
-3. No state tracks whether we're waiting for opponent vs actually syncing
+**Problem:** The dice roll screen was blocked by RulesGate overlay even when DB shows dbReady=true (acceptedCount=2, participantsCount=2). Both `showDiceRoll` and `shouldShowRulesGate` were true simultaneously.
 
-## Solution
-Add a new `waitingForOpponent` state that gates the entire dice roll flow. When the session exists but opponent hasn't joined/accepted, show a friendly "Waiting for opponent..." message WITHOUT starting any timeout timers.
+**Solution Applied:**
+1. Compute `showDiceRoll = dbReady && !startRoll.isFinalized` (unchanged)
+2. Compute `rawShouldShowRulesGate = dbReady && !!address && !startRoll.isFinalized`
+3. Force `shouldShowRulesGate = rawShouldShowRulesGate && !showDiceRoll` (P0 FIX)
+4. When `showDiceRoll=true`, render DiceRollStart directly (NO RulesGate wrapper)
+5. When `shouldShowRulesGate=true` (and showDiceRoll=false), show RulesGate for loading/syncing
+6. Added defensive log if both conditions ever become true simultaneously
+
+**Files Updated:**
+- src/pages/ChessGame.tsx
+- src/pages/BackgammonGame.tsx
+- src/pages/CheckersGame.tsx
+- src/pages/DominosGame.tsx
+- src/pages/LudoGame.tsx (2-player only; N-player Ludo bypasses dice roll system)
+
+---
+
+## Problem (Original Issue - for reference)
 
 ---
 
