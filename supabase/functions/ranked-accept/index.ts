@@ -504,16 +504,62 @@ Deno.serve(async (req: Request) => {
           console.log("[ranked-accept] ✅ Synced participants:", onChainParticipants.length);
         }
       } else if (!onChainFetchSuccess) {
-        // On-chain fetch failed - DON'T shrink existing participants
-        // Keep what's already in DB
-        console.log("[ranked-accept] on-chain sync failed after retries; leaving participants unchanged:", {
-          existingParticipants: existingSession.participants?.length || 0,
+        // On-chain fetch failed - use DB-first pattern
+        // SAFE: playerWallet comes from requireSession (verified against player_sessions table)
+        const existingParticipants: string[] = existingSession.participants || [];
+        const expectedCount = existingSession.max_players || 2;
+        
+        console.log("[ranked-accept] on-chain sync failed; checking if caller needs to be added:", {
+          callerWallet: playerWallet.slice(0, 8),
+          existingParticipants: existingParticipants.length,
+          expectedCount,
+          existingList: existingParticipants.map((p: string) => p.slice(0, 8)),
         });
         
-        // Only set needsSync if existing participants looks incomplete
-        const existingCount = existingSession.participants?.length || 0;
-        const expectedCount = existingSession.max_players || 2;
-        if (existingCount < expectedCount) {
+        // SAFETY GUARD: Only append if NOT already in list AND below maxPlayers
+        const callerNotInList = !existingParticipants.includes(playerWallet);
+        const roomNotFull = existingParticipants.length < expectedCount;
+        
+        if (callerNotInList && roomNotFull) {
+          const updatedParticipants = [...existingParticipants, playerWallet];
+          
+          const updateObj: Record<string, unknown> = {
+            participants: updatedParticipants,
+            updated_at: new Date().toISOString(),
+          };
+          
+          // For 2-player games, set player2_wallet if we're the joiner (not the creator)
+          if (expectedCount <= 2 && !existingSession.player2_wallet) {
+            if (playerWallet !== existingSession.player1_wallet) {
+              updateObj.player2_wallet = playerWallet;
+            }
+          }
+          
+          const { error: updateError } = await supabase
+            .from("game_sessions")
+            .update(updateObj)
+            .eq("room_pda", body.roomPda);
+          
+          if (!updateError) {
+            console.log("[ranked-accept] ✅ Added caller to participants (RPC fallback):", playerWallet.slice(0, 8));
+            // Don't set needsSync - we successfully synced the important part (ourselves)
+          } else {
+            console.warn("[ranked-accept] ⚠️ Failed to add caller to participants:", updateError);
+            needsSync = true;
+          }
+        } else if (!callerNotInList) {
+          console.log("[ranked-accept] Caller already in participants");
+          // Check if sync still needed for other players
+          if (existingParticipants.length < expectedCount) {
+            needsSync = true;
+          }
+        } else {
+          // Room is full but caller not in list - unusual state
+          console.warn("[ranked-accept] Room full but caller not in participants:", {
+            existingCount: existingParticipants.length,
+            expectedCount,
+            callerWallet: playerWallet.slice(0, 8),
+          });
           needsSync = true;
         }
       }
