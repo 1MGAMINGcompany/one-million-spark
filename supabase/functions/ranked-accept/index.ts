@@ -355,28 +355,35 @@ Deno.serve(async (req: Request) => {
       .maybeSingle();
 
     if (!existingSession) {
-      // Session doesn't exist - CREATE it with on-chain data
-      // player1_wallet = creator from on-chain (or fallback to first participant)
+      // Session doesn't exist - CREATE it even if on-chain fetch failed
+      // P0 FIX: Use safe defaults when on-chain data is unavailable
       const player1 = onChainCreator || onChainParticipants[0] || playerWallet;
       const player2 = onChainMaxPlayers <= 2 && onChainParticipants.length >= 2
         ? onChainParticipants.find(p => p !== player1) || null
         : null;
+      // CRITICAL: Always ensure at least playerWallet is in participants
       const participants = onChainParticipants.length > 0 ? onChainParticipants : [player1];
       
-      // Map gameType number to string (best effort)
-      const gameTypeMap: Record<number, string> = { 0: "chess", 1: "checkers", 2: "backgammon", 3: "dominos", 4: "ludo" };
-      const gameTypeStr = gameTypeMap[onChainGameType] || "chess";
+      // Map gameType number to string (best effort, fallback to "unknown")
+      const gameTypeMap: Record<number, string> = { 
+        0: "unknown", 1: "chess", 2: "dominos", 3: "backgammon", 4: "checkers", 5: "ludo" 
+      };
+      const gameTypeStr = gameTypeMap[onChainGameType] || "unknown";
       
       // Mode from request body is acceptable since this is just a hint
       const mode = (body as any).gameMode || "ranked";
       
-      console.log("[ranked-accept] Creating game_sessions row:", {
+      // Use safe defaults when on-chain failed
+      const safeMaxPlayers = onChainMaxPlayers > 0 ? onChainMaxPlayers : 2;
+      
+      console.log("[ranked-accept] Creating game_sessions row (on-chain success:", onChainParticipants.length > 0, "):", {
         roomPda: body.roomPda.slice(0, 8),
         player1: player1.slice(0, 8),
         player2: player2?.slice(0, 8) || "null",
         participants: participants.length,
         mode,
         gameType: gameTypeStr,
+        maxPlayers: safeMaxPlayers,
       });
       
       const { error: insertErr } = await supabase
@@ -386,7 +393,7 @@ Deno.serve(async (req: Request) => {
           player1_wallet: player1,
           player2_wallet: player2,
           participants,
-          max_players: onChainMaxPlayers,
+          max_players: safeMaxPlayers,
           game_type: gameTypeStr,
           game_state: {},
           status: "waiting",
@@ -401,9 +408,10 @@ Deno.serve(async (req: Request) => {
         if (insertErr.code === "23505") {
           console.log("[ranked-accept] game_sessions conflict - row exists, proceeding");
         } else {
-          console.error("[ranked-accept] Failed to create game_sessions:", insertErr);
+          // P0 FIX: Log loudly and return error - don't silently continue
+          console.error("[ranked-accept] ❌ CRITICAL: Failed to create game_sessions:", insertErr);
           return new Response(
-            JSON.stringify({ success: false, error: "Failed to initialize game session" }),
+            JSON.stringify({ success: false, error: "Failed to initialize game session: " + insertErr.message }),
             { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         }
@@ -415,7 +423,7 @@ Deno.serve(async (req: Request) => {
       if (onChainParticipants.length > 0) {
         const updateObj: Record<string, unknown> = {
           participants: onChainParticipants,
-          max_players: onChainMaxPlayers,
+          max_players: onChainMaxPlayers > 0 ? onChainMaxPlayers : 2,
           updated_at: new Date().toISOString(),
         };
         

@@ -481,13 +481,53 @@ export default function CreateRoom() {
         }
         
         // Use the new useRoomSettings hook with retry logic
-        const settingsResult = await saveRoomSettings({
+        let settingsResult = await saveRoomSettings({
           roomPda: roomPdaStr,
           turnTimeSeconds: authoritativeTurnTime,
           mode: gameMode,
           maxPlayers: effectiveMaxPlayers,
           gameType: GAME_TYPE_NAMES[parseInt(gameType)] || "unknown",
         });
+
+        // P0 FIX: If settings failed (session missing), call ranked-accept as fallback to create session
+        if (!settingsResult.success) {
+          console.warn("[CreateRoom] Settings failed, attempting ranked-accept fallback to create session...");
+          
+          const sessionToken = getSessionToken(roomPdaStr);
+          if (sessionToken) {
+            try {
+              const { error: acceptError } = await supabase.functions.invoke("ranked-accept", {
+                body: { 
+                  roomPda: roomPdaStr, 
+                  mode: "simple",
+                  gameMode: gameMode, // Pass mode hint
+                },
+                headers: getAuthHeaders(sessionToken),
+              });
+              
+              if (acceptError) {
+                console.error("[CreateRoom] ranked-accept fallback failed:", acceptError);
+              } else {
+                console.log("[CreateRoom] ✅ ranked-accept fallback succeeded, retrying settings...");
+                
+                // Retry settings once after session creation
+                settingsResult = await saveRoomSettings({
+                  roomPda: roomPdaStr,
+                  turnTimeSeconds: authoritativeTurnTime,
+                  mode: gameMode,
+                  maxPlayers: effectiveMaxPlayers,
+                  gameType: GAME_TYPE_NAMES[parseInt(gameType)] || "unknown",
+                });
+                
+                if (settingsResult.success) {
+                  console.log("[CreateRoom] ✅ Settings saved after fallback");
+                }
+              }
+            } catch (fallbackErr) {
+              console.error("[CreateRoom] ranked-accept fallback exception:", fallbackErr);
+            }
+          }
+        }
 
         if (!settingsResult.success) {
           console.error("[CreateRoom] Settings save failed after retries:", settingsResult.error);

@@ -131,6 +131,8 @@ export function DiceRollStart({
   const [isRetrying, setIsRetrying] = useState(false);
   const [isPickingStarter, setIsPickingStarter] = useState(false);
   const [isSyncingOpponent, setIsSyncingOpponent] = useState(false);
+  const [sessionMissing, setSessionMissing] = useState(false);
+  const [isSyncingRoom, setIsSyncingRoom] = useState(false);
   const syncRetryCountRef = useRef(0);
   const MAX_SYNC_RETRIES = 10;
   
@@ -179,6 +181,44 @@ export function DiceRollStart({
     }
   }, [phase]);
 
+  // P0 FIX: Handle missing session by syncing via ranked-accept
+  const handleSyncRoom = useCallback(async () => {
+    setIsSyncingRoom(true);
+    setError(null);
+    
+    try {
+      const { getSessionToken, getAuthHeaders } = await import("@/lib/sessionToken");
+      const sessionToken = getSessionToken(roomPda);
+      
+      if (!sessionToken) {
+        setError("Session token missing - please rejoin the room");
+        return;
+      }
+      
+      console.log("[DiceRollStart] Syncing room via ranked-accept...");
+      const { error: acceptError } = await supabase.functions.invoke("ranked-accept", {
+        body: { roomPda, mode: "simple" },
+        headers: getAuthHeaders(sessionToken),
+      });
+      
+      if (acceptError) {
+        console.error("[DiceRollStart] ranked-accept failed:", acceptError);
+        setError("Failed to sync room: " + acceptError.message);
+        return;
+      }
+      
+      console.log("[DiceRollStart] ✅ Room synced, refreshing...");
+      setSessionMissing(false);
+      // Re-check session after sync
+      window.location.reload();
+    } catch (e: any) {
+      console.error("[DiceRollStart] Sync error:", e);
+      setError("Failed to sync room: " + (e.message || "Unknown error"));
+    } finally {
+      setIsSyncingRoom(false);
+    }
+  }, [roomPda]);
+
   // Check if roll is already finalized on mount
   useEffect(() => {
     const checkExistingRoll = async () => {
@@ -194,6 +234,14 @@ export function DiceRollStart({
         }
 
         const session = resp?.session;
+        
+        // P0 FIX: Detect missing session and show sync CTA
+        if (!session) {
+          console.warn("[DiceRollStart] ⚠️ game_sessions row is NULL - showing sync CTA");
+          setSessionMissing(true);
+          return;
+        }
+        
         if (session?.start_roll_finalized && session.start_roll && session.starting_player_wallet) {
           // Roll already exists - display it
           const rollData = session.start_roll as unknown as StartRollResult;
@@ -382,6 +430,69 @@ export function DiceRollStart({
   
   const isWinner = result?.winner.toLowerCase() === myWallet.toLowerCase();
   const exitDisabled = isLeaving || isForfeiting || isRetrying || isPickingStarter;
+
+  // P0 FIX: Session missing guard - show sync CTA instead of proceeding
+  if (sessionMissing) {
+    return (
+      <div className="w-full min-h-[60vh] flex items-center justify-center p-4">
+        <Card className="relative w-full max-w-lg p-6 md:p-8 border-amber-500/30 bg-card/95 shadow-[0_0_60px_-10px_hsl(45_93%_54%_/_0.3)]">
+          <div className="absolute top-2 left-2 w-8 h-8 border-l-2 border-t-2 border-amber-500/40 rounded-tl-lg" />
+          <div className="absolute top-2 right-2 w-8 h-8 border-r-2 border-t-2 border-amber-500/40 rounded-tr-lg" />
+          <div className="absolute bottom-2 left-2 w-8 h-8 border-l-2 border-b-2 border-amber-500/40 rounded-bl-lg" />
+          <div className="absolute bottom-2 right-2 w-8 h-8 border-r-2 border-b-2 border-amber-500/40 rounded-br-lg" />
+
+          <h2 className="text-center font-display text-2xl mb-2 text-amber-400 drop-shadow-lg">
+            {t("diceRoll.roomNotSynced", "Room Not Synced")}
+          </h2>
+          <p className="text-center text-muted-foreground text-sm mb-6">
+            {t("diceRoll.sessionMissingDesc", "The game session needs to be synced before you can start. This usually happens when a room is created but the database wasn't updated.")}
+          </p>
+          
+          {error && (
+            <div className="text-center mb-4 py-2 px-4 rounded-lg bg-destructive/20 text-destructive text-sm">
+              {error}
+            </div>
+          )}
+          
+          <div className="text-center">
+            <Button 
+              onClick={handleSyncRoom} 
+              disabled={isSyncingRoom}
+              size="lg" 
+              className="gap-2"
+            >
+              {isSyncingRoom ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <RefreshCw className="w-5 h-5" />
+              )}
+              {t("diceRoll.syncRoom", "Sync Room")}
+            </Button>
+          </div>
+          
+          {/* Exit option */}
+          {onLeave && (
+            <div className="mt-6 pt-4 border-t border-border/50 text-center">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onLeave}
+                disabled={isLeaving || isSyncingRoom}
+                className="gap-1 text-muted-foreground hover:text-foreground"
+              >
+                {isLeaving ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <LogOut className="w-4 h-4" />
+                )}
+                {t("game.leave", "Leave")}
+              </Button>
+            </div>
+          )}
+        </Card>
+      </div>
+    );
+  }
 
   // STEP 3 FIX: Use a contained Card instead of fixed inset-0 overlay
   return (
