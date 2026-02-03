@@ -26,6 +26,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { isWalletInAppBrowser } from "@/lib/walletBrowserDetection";
 import { usePendingRoute } from "@/hooks/usePendingRoute";
 import { getSessionToken, getAuthHeaders, storeSessionToken } from "@/lib/sessionToken";
+import { hideRoomPda } from "@/lib/hiddenRooms";
 import { toast } from "sonner";
 import { showGameStartToast, isGameStartLatched, setGameStartLatch } from "@/hooks/useGameStartToast";
 import { JoinTraceDebugPanel } from "@/components/JoinTraceDebugPanel";
@@ -867,6 +868,8 @@ return () => {
       
       if (result?.ok) {
         toast.success("Room cancelled", { description: "Your stake has been refunded." });
+        // Hide room from list immediately (optimistic)
+        hideRoomPda(roomPdaParam, 60_000);
         // Clear room from state immediately
         if (clearRoomFromState) {
           clearRoomFromState(roomPdaParam);
@@ -912,6 +915,8 @@ return () => {
       
       if (result?.ok) {
         toast.success("Match forfeited", { description: "Opponent has been paid out." });
+        // Hide room from list immediately (optimistic)
+        hideRoomPda(roomPdaParam, 60_000);
         // Clear room from state immediately
         if (clearRoomFromState) {
           clearRoomFromState(roomPdaParam);

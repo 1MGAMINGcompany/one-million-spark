@@ -37,6 +37,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { JoinTraceDebugPanel } from "@/components/JoinTraceDebugPanel";
 
 import { BUILD_VERSION } from "@/lib/buildVersion";
+import { isRoomHidden, pruneHiddenRooms } from "@/lib/hiddenRooms";
 
 // Active session data for turn time display
 interface ActiveSessionData {
@@ -88,6 +89,11 @@ export default function RoomList() {
 
   const targetCluster = getSolanaCluster();
   const rpcEndpoint = getSolanaEndpoint();
+
+  // Prune expired hidden rooms on mount
+  useEffect(() => {
+    pruneHiddenRooms();
+  }, []);
 
   // Poll room list every 5 seconds
   useEffect(() => {
@@ -330,19 +336,19 @@ export default function RoomList() {
       {/* Active Game Banner handled by GlobalActiveRoomBanner in App.tsx */}
 
       {/* My Active Games Section - Show ALL rooms for this wallet */}
-      {isConnected && myOnChainRooms.length > 0 && (
+      {isConnected && myOnChainRooms.filter(r => !isRoomHidden(r.pda)).length > 0 && (
         <Card className="mb-6 border-primary/50 bg-primary/10">
           <CardHeader className="pb-2">
             <CardTitle className="text-lg flex items-center gap-2">
               <Gamepad className="h-5 w-5 text-primary" />
               {t("roomList.myActiveGames")}
               <span className="text-xs bg-primary/20 px-2 py-0.5 rounded-full ml-2">
-                {myOnChainRooms.length}
+                {myOnChainRooms.filter(r => !isRoomHidden(r.pda)).length}
               </span>
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            {myOnChainRooms.map((room) => (
+            {myOnChainRooms.filter(r => !isRoomHidden(r.pda)).map((room) => (
               <div 
                 key={room.pda}
                 className="flex flex-col md:flex-row md:items-center gap-3 p-3 bg-background/50 rounded-lg border border-border/50 w-full overflow-hidden"
@@ -518,6 +524,7 @@ export default function RoomList() {
         <div className="grid gap-4">
           {rooms
             .filter((room) => activeSessionsMap.get(room.pda)?.mode !== 'private')
+            .filter((room) => !isRoomHidden(room.pda))
             .map((room) => (
             <Card 
               key={room.pda} 
