@@ -133,6 +133,10 @@ export function DiceRollStart({
   const [isSyncingOpponent, setIsSyncingOpponent] = useState(false);
   const [sessionMissing, setSessionMissing] = useState(false);
   const [isSyncingRoom, setIsSyncingRoom] = useState(false);
+  const [waitingForOpponent, setWaitingForOpponent] = useState(false);
+  const [dbParticipantsCount, setDbParticipantsCount] = useState<number>(0);
+  const [dbAcceptedCount, setDbAcceptedCount] = useState<number>(0);
+  const [dbRequiredCount, setDbRequiredCount] = useState<number>(2);
   const syncRetryCountRef = useRef(0);
   const MAX_SYNC_RETRIES = 10;
   
@@ -156,9 +160,14 @@ export function DiceRollStart({
     return starterIndex === 0 ? player1Wallet : player2Wallet;
   }, [roomPda, player1Wallet, player2Wallet]);
 
-  // 15-second timeout for fallback UI
+  // 15-second timeout for fallback UI - GATED by opponent readiness
   useEffect(() => {
-    // Start 15s timeout when component mounts
+    // DON'T start timeout if waiting for opponent or session missing
+    if (waitingForOpponent || sessionMissing) {
+      return;
+    }
+    
+    // Start 15s timeout only when opponent is ready
     timeoutRef.current = setTimeout(() => {
       if (phase !== "result" && !fallbackUsedRef.current) {
         console.log("[DiceRollStart] 15s timeout - showing fallback options");
@@ -171,7 +180,7 @@ export function DiceRollStart({
         clearTimeout(timeoutRef.current);
       }
     };
-  }, [phase]);
+  }, [phase, waitingForOpponent, sessionMissing]);
 
   // Clear timeout when dice roll completes
   useEffect(() => {
@@ -219,8 +228,10 @@ export function DiceRollStart({
     }
   }, [roomPda]);
 
-  // Check if roll is already finalized on mount
+  // Check if roll is already finalized + track opponent readiness (poll every 3s)
   useEffect(() => {
+    let cancelled = false;
+    
     const checkExistingRoll = async () => {
       try {
         // Use Edge Function instead of direct table access (RLS locked)
@@ -228,20 +239,49 @@ export function DiceRollStart({
           body: { roomPda },
         });
         
+        if (cancelled) return;
+        
         if (error) {
           console.error("[DiceRollStart] Edge function error:", error);
           return;
         }
 
         const session = resp?.session;
+        const acceptances = resp?.acceptances;
+        const debug = resp?.debug;
         
         // P0 FIX: Detect missing session and show sync CTA
         if (!session) {
           console.warn("[DiceRollStart] ⚠️ game_sessions row is NULL - showing sync CTA");
           setSessionMissing(true);
+          setWaitingForOpponent(false);
           return;
         }
         
+        // Track participants and acceptances for gating
+        const participantsCount = debug?.participantsCount ?? session?.participants?.length ?? 0;
+        const acceptedCount = acceptances?.acceptedCount ?? 0;
+        const requiredCount = acceptances?.requiredCount ?? 2;
+        
+        setDbParticipantsCount(participantsCount);
+        setDbAcceptedCount(acceptedCount);
+        setDbRequiredCount(requiredCount);
+        
+        // Gating: Check if opponent is ready
+        const opponentReady = participantsCount >= 2 && acceptedCount >= requiredCount;
+        
+        if (!opponentReady) {
+          console.log("[DiceRollStart] Waiting for opponent:", { participantsCount, acceptedCount, requiredCount });
+          setWaitingForOpponent(true);
+          setSessionMissing(false);
+          return;
+        }
+        
+        // Opponent is ready - allow dice roll
+        setWaitingForOpponent(false);
+        setSessionMissing(false);
+        
+        // Check if roll already finalized
         if (session?.start_roll_finalized && session.start_roll && session.starting_player_wallet) {
           // Roll already exists - display it
           const rollData = session.start_roll as unknown as StartRollResult;
@@ -264,6 +304,14 @@ export function DiceRollStart({
     };
 
     checkExistingRoll();
+    
+    // Poll every 3 seconds to detect opponent joining
+    const pollInterval = setInterval(checkExistingRoll, 3000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(pollInterval);
+    };
   }, [roomPda, isPlayer1]);
 
   // Rolling animation effect
@@ -313,26 +361,15 @@ export function DiceRollStart({
       if (rpcError) {
         console.error("[DiceRollStart] RPC error:", rpcError);
         
-        // Handle "waiting for player2" gracefully - auto-retry
+        // Handle "waiting for player2" gracefully - return to waiting state (no false timeout error)
         const errorMsg = rpcError.message || "";
-        if (errorMsg.includes("waiting for player2")) {
-          console.log("[DiceRollStart] Player 2 not synced yet - showing sync UI and auto-retrying...");
-          setError(null);
-          setIsSyncingOpponent(true);
+        if (errorMsg.includes("waiting for player2") || errorMsg.includes("waiting for all players")) {
+          console.log("[DiceRollStart] Player 2 not synced yet - returning to waiting state...");
+          // Set waiting state instead of showing misleading "Opponent sync timed out" error
+          setWaitingForOpponent(true);
+          setIsSyncingOpponent(false);
+          setError(null); // Clear any error - NOT a timeout, just waiting
           setPhase("waiting");
-          
-          // Auto-retry if we haven't exceeded max retries
-          if (syncRetryCountRef.current < MAX_SYNC_RETRIES) {
-            syncRetryCountRef.current += 1;
-            console.log(`[DiceRollStart] Auto-retry ${syncRetryCountRef.current}/${MAX_SYNC_RETRIES}...`);
-            setTimeout(() => {
-              handleRoll();
-            }, 2000);
-          } else {
-            // Max retries exceeded - show error
-            setIsSyncingOpponent(false);
-            setError("Opponent sync timed out. Please refresh the page.");
-          }
           return;
         }
         
@@ -478,6 +515,57 @@ export function DiceRollStart({
                 size="sm"
                 onClick={onLeave}
                 disabled={isLeaving || isSyncingRoom}
+                className="gap-1 text-muted-foreground hover:text-foreground"
+              >
+                {isLeaving ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <LogOut className="w-4 h-4" />
+                )}
+                {t("game.leave", "Leave")}
+              </Button>
+            </div>
+          )}
+        </Card>
+      </div>
+    );
+  }
+
+  // GATE: Waiting for opponent to join/accept - show friendly message, no timers
+  if (waitingForOpponent) {
+    return (
+      <div className="w-full min-h-[60vh] flex items-center justify-center p-4">
+        <Card className="relative w-full max-w-lg p-6 md:p-8 border-amber-500/30 bg-card/95 shadow-[0_0_60px_-10px_hsl(45_93%_54%_/_0.3)]">
+          <div className="absolute top-2 left-2 w-8 h-8 border-l-2 border-t-2 border-amber-500/40 rounded-tl-lg" />
+          <div className="absolute top-2 right-2 w-8 h-8 border-r-2 border-t-2 border-amber-500/40 rounded-tr-lg" />
+          <div className="absolute bottom-2 left-2 w-8 h-8 border-l-2 border-b-2 border-amber-500/40 rounded-bl-lg" />
+          <div className="absolute bottom-2 right-2 w-8 h-8 border-r-2 border-b-2 border-amber-500/40 rounded-br-lg" />
+
+          <div className="text-center">
+            <div className="flex justify-center mb-4">
+              <Users className="w-12 h-12 text-amber-400 animate-pulse" />
+            </div>
+            <h2 className="font-display text-2xl mb-2 text-amber-400 drop-shadow-lg">
+              {t("diceRoll.waitingForOpponent", "Waiting for Opponent")}
+            </h2>
+            <p className="text-muted-foreground text-sm mb-4">
+              {t("diceRoll.opponentNotReady", "Your opponent needs to join and accept the game rules before you can roll.")}
+            </p>
+            
+            <div className="flex justify-center items-center gap-2 text-sm text-muted-foreground mb-6">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span>{dbAcceptedCount}/{dbRequiredCount} {t("diceRoll.playersReady", "players ready")}</span>
+            </div>
+          </div>
+          
+          {/* Exit option */}
+          {onLeave && (
+            <div className="pt-4 border-t border-border/50 text-center">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onLeave}
+                disabled={isLeaving}
                 className="gap-1 text-muted-foreground hover:text-foreground"
               >
                 {isLeaving ? (
