@@ -194,13 +194,20 @@ Deno.serve(async (req) => {
     }
 
     // Update settings (session already exists)
+    const updatePayload: Record<string, unknown> = {
+      turn_time_seconds: turnTimeSeconds,
+      mode,
+      max_players: maxPlayers,
+    };
+    
+    // CRITICAL FIX: Include game_type if provided - fixes "Unknown" game name bug
+    if (gameTypeFromPayload) {
+      updatePayload.game_type = gameTypeFromPayload;
+    }
+    
     const { error: updateErr } = await supabase
       .from("game_sessions")
-      .update({
-        turn_time_seconds: turnTimeSeconds,
-        mode,
-        max_players: maxPlayers,
-      })
+      .update(updatePayload)
       .eq("room_pda", roomPda);
 
     if (updateErr) {
@@ -208,7 +215,13 @@ Deno.serve(async (req) => {
       return json(500, { ok: false, error: "update_failed" });
     }
 
-    console.log("[game-session-set-settings] ✅ Settings updated:", { roomPda: roomPda.slice(0, 8), turnTimeSeconds, mode, maxPlayers });
+    console.log("[game-session-set-settings] ✅ Settings updated:", { 
+      roomPda: roomPda.slice(0, 8), 
+      turnTimeSeconds, 
+      mode, 
+      maxPlayers,
+      gameType: gameTypeFromPayload || "(not updated)",
+    });
     return json(200, { ok: true });
   } catch (e) {
     console.error("[game-session-set-settings] unexpected error", e);
