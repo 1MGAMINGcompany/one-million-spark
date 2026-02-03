@@ -175,8 +175,12 @@ export function RecoverFundsButton({ roomPda, onRecovered, className }: RecoverF
           setStatus("not_authorized");
           break;
         case "not_found":
-          toast.error("Room not found on-chain");
-          setStatus("error");
+          toast.info("Room already closed");
+          clearRoomFromState(roomPda);
+          fetchUserActiveRoom();
+          setStatus("idle");
+          onRecovered?.();
+          navigate("/room-list");
           break;
         case "error":
           // Server returned an error status in the JSON body
