@@ -136,8 +136,15 @@ Deno.serve(async (req: Request) => {
 
     const body = await req.json() as AcceptancePayload;
 
+    // Extract join trace correlation ID if present (for debugging)
+    const traceId = req.headers.get("X-Join-Trace-Id") || null;
+    if (traceId) {
+      console.log("[ranked-accept] traceId:", traceId, "roomPda:", body.roomPda?.slice(0, 8));
+    }
+
     // Validate roomPda (required for all modes)
     if (!body.roomPda) {
+      console.error("[ranked-accept] Missing roomPda", traceId ? `traceId=${traceId}` : "");
       return new Response(
         JSON.stringify({ success: false, error: "Missing roomPda" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
