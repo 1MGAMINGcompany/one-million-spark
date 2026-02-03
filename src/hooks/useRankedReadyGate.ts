@@ -45,6 +45,16 @@ interface UseRankedReadyGateResult {
   dbStatusInt: number;
   /** DB participants count - AUTHORITATIVE for cancel/forfeit eligibility */
   dbParticipantsCount: number;
+  /** DB-AUTHORITATIVE: Number of acceptances recorded in game_acceptances table */
+  acceptedCount: number;
+  /** DB-AUTHORITATIVE: Required acceptances for game to start (from max_players) */
+  requiredCount: number;
+  /** DB-AUTHORITATIVE: Number of participants in the room */
+  participantsCount: number;
+  /** DB-AUTHORITATIVE: Maximum players allowed in this room */
+  maxPlayers: number;
+  /** DB-AUTHORITATIVE: Single boolean for readiness (acceptedCount >= requiredCount for ranked, participantsCount >= maxPlayers for casual) */
+  dbReady: boolean;
 }
 
 export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRankedReadyGateResult {
@@ -64,6 +74,10 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
   const [dbStatusInt, setDbStatusInt] = useState<number>(1);
   // DB participants count - AUTHORITATIVE for cancel/forfeit eligibility
   const [dbParticipantsCount, setDbParticipantsCount] = useState<number>(0);
+  // DB-AUTHORITATIVE: acceptedCount and requiredCount from game-session-get
+  const [dbAcceptedCount, setDbAcceptedCount] = useState<number>(0);
+  const [dbRequiredCount, setDbRequiredCount] = useState<number>(2);
+  const [dbMaxPlayers, setDbMaxPlayers] = useState<number>(2);
 
   // Normalize wallet addresses (trim only - Solana base58 is case-sensitive!)
   const normalizeWallet = (w?: string | null) =>
@@ -228,6 +242,7 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
 
       const session = resp?.session;
       const debug = resp?.debug;
+      const acceptances = resp?.acceptances;
       if (!error && session) {
         setP1Ready(session.p1_ready ?? false);
         setP2Ready(session.p2_ready ?? false);
@@ -239,9 +254,13 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
         // AUTHORITATIVE DB state for leave/forfeit logic
         setDbStatusInt(session.status_int ?? 1);
         setDbParticipantsCount(debug?.participantsCount ?? session.participants?.length ?? 0);
+        // DB-AUTHORITATIVE counts from game-session-get
+        setDbAcceptedCount(acceptances?.acceptedCount ?? 0);
+        setDbRequiredCount(acceptances?.requiredCount ?? session.max_players ?? 2);
+        setDbMaxPlayers(session.max_players ?? 2);
         
         const wallets =
-          resp?.acceptances?.players
+          acceptances?.players
             ?.map((p: any) =>
               normalizeWallet(typeof p === "string" ? p : p?.wallet ?? p?.player_wallet)
             )
@@ -301,8 +320,9 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
       }
 
       // Update acceptedWallets from response
+      const acceptances = resp?.acceptances;
       const wallets =
-        resp?.acceptances?.players
+        acceptances?.players
           ?.map((p: any) =>
             normalizeWallet(typeof p === "string" ? p : p?.wallet ?? p?.player_wallet)
           )
@@ -319,10 +339,12 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
         console.log("[RankedReadyGate] Poll result:", { 
           p1_ready: newP1Ready, 
           p2_ready: newP2Ready,
-          acceptances: wallets.length,
-          bothAccepted: resp?.acceptances?.bothAccepted ?? false,
+          acceptedCount: acceptances?.acceptedCount ?? 0,
+          requiredCount: acceptances?.requiredCount ?? 2,
+          bothAccepted: acceptances?.bothAccepted ?? false,
           status_int: session.status_int,
           participantsCount: debug?.participantsCount,
+          max_players: session.max_players,
         });
         
         if (newP1Ready !== p1Ready) setP1Ready(newP1Ready);
@@ -330,6 +352,10 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
         // AUTHORITATIVE DB state for leave/forfeit logic
         setDbStatusInt(session.status_int ?? 1);
         setDbParticipantsCount(debug?.participantsCount ?? session.participants?.length ?? 0);
+        // DB-AUTHORITATIVE counts from game-session-get
+        setDbAcceptedCount(acceptances?.acceptedCount ?? 0);
+        setDbRequiredCount(acceptances?.requiredCount ?? session.max_players ?? 2);
+        setDbMaxPlayers(session.max_players ?? 2);
       }
     } catch (err) {
       console.warn("[RankedReadyGate] Poll exception:", err);
@@ -355,6 +381,11 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
     };
   }, [isRanked, enabled, bothReady, roomPda, pollForAcceptances]);
 
+  // DB-AUTHORITATIVE dbReady: single source of truth for readiness gating
+  // For ranked/private: acceptedCount >= requiredCount
+  // For casual: always true (bypasses gate)
+  const dbReady = isRanked ? dbAcceptedCount >= dbRequiredCount : true;
+
   // For casual games, return as if both are ready
   if (!isRanked) {
     return {
@@ -370,6 +401,11 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
       refetch: async () => {},
       dbStatusInt: 2, // casual games are considered "active"
       dbParticipantsCount: 2, // casual games assume 2 players
+      acceptedCount: 2,
+      requiredCount: 2,
+      participantsCount: 2,
+      maxPlayers: 2,
+      dbReady: true,
     };
   }
 
@@ -386,5 +422,10 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
     refetch,
     dbStatusInt,
     dbParticipantsCount,
+    acceptedCount: dbAcceptedCount,
+    requiredCount: dbRequiredCount,
+    participantsCount: dbParticipantsCount,
+    maxPlayers: dbMaxPlayers,
+    dbReady,
   };
 }

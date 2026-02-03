@@ -66,6 +66,8 @@ interface RulesGateProps {
    * Skip showing AcceptRulesModal - wait for polling to confirm acceptance.
    */
   justJoined?: boolean;
+  /** DB-AUTHORITATIVE: acceptedCount >= requiredCount (for ranked) or participantsCount >= maxPlayers (for casual) */
+  dbReady?: boolean;
   /** Children (DiceRollStart/GameBoard) - only rendered when both ready */
   children: React.ReactNode;
 }
@@ -89,6 +91,7 @@ export function RulesGate({
   isDataLoaded,
   startRollFinalized,
   justJoined = false,
+  dbReady = false,
   children,
 }: RulesGateProps) {
   const { t } = useTranslation();
@@ -203,7 +206,10 @@ export function RulesGate({
     serverStartRollFinalized ||
     !!serverSession?.start_roll_finalized;
 
+  // DB-AUTHORITATIVE: Use dbReady prop as PRIMARY source
+  // Fallback to polling for backward compatibility only
   const effectiveBothReady =
+    dbReady ||  // PRIMARY: DB-authoritative from useRankedReadyGate
     !!bothReady ||
     serverBothReady ||
     (!!serverSession?.p1_ready && !!serverSession?.p2_ready);
@@ -249,13 +255,14 @@ export function RulesGate({
       myReady: iAmReady,
       opponentReady,
       bothReady,
+      dbReady,
       effectiveBothReady,
       effectiveStartRollFinalized,
       isDataLoaded,
       autoAcceptTriggered: autoAcceptTriggeredRef.current,
     };
     console.log("[RulesGate]", state);
-  }, [roomPda, isRanked, myWallet, myWalletInRoom, validPlayers.length, iAmReady, opponentReady, bothReady, effectiveBothReady, effectiveStartRollFinalized, isDataLoaded]);
+  }, [roomPda, isRanked, myWallet, myWalletInRoom, validPlayers.length, iAmReady, opponentReady, bothReady, dbReady, effectiveBothReady, effectiveStartRollFinalized, isDataLoaded]);
 
   // For casual games, bypass the gate entirely
   if (!isRanked) {
