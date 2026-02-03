@@ -17,6 +17,15 @@ import { supabase } from "@/integrations/supabase/client";
 import { computeRulesHash, createRulesFromRoom } from "@/lib/gameAcceptance";
 import { getSessionToken, getAuthHeaders, storeSessionToken } from "@/lib/sessionToken";
 import {
+  isJoinTraceEnabled,
+  startJoinTrace,
+  traceLog,
+  traceLogFetch,
+  traceLogFetchResult,
+  traceLogPoll,
+  getTraceHeaders,
+} from "@/lib/joinTrace";
+import {
   RoomDisplay,
   GameType,
   RoomStatus,
@@ -767,9 +776,13 @@ export function useSolanaRooms() {
 
   // Join room - returns structured TxResult
   const joinRoom = useCallback(async (roomId: number, roomCreator: string): Promise<{ ok: boolean; signature?: string; reason?: string }> => {
+    // Start join trace if debug mode enabled
+    const traceId = startJoinTrace();
+    
     // CRITICAL: Prevent duplicate wallet prompts (React StrictMode safe)
     if (joinRoomInFlightRef.current) {
       console.warn("[TXLOCK] blocked duplicate join - transaction already in flight");
+      traceLog("join.blocked", { reason: "TX_IN_FLIGHT" });
       return { ok: false, reason: "TX_IN_FLIGHT" };
     }
     
@@ -779,8 +792,17 @@ export function useSolanaRooms() {
         description: "Please connect your wallet first",
         variant: "destructive",
       });
+      traceLog("join.blocked", { reason: "WALLET_NOT_CONNECTED" });
       return { ok: false, reason: "WALLET_NOT_CONNECTED" };
     }
+
+    // Log join start
+    traceLog("join.start", {
+      roomId,
+      roomCreator: roomCreator.slice(0, 8),
+      joiner: publicKey.toBase58().slice(0, 8),
+      traceId,
+    });
 
     // Check for existing active room
     const existingRoom = await fetchUserActiveRoom();
@@ -790,6 +812,7 @@ export function useSolanaRooms() {
         description: "Cancel your existing room before joining another",
         variant: "destructive",
       });
+      traceLog("join.blocked", { reason: "ACTIVE_ROOM_EXISTS", existingPda: existingRoom.pda?.slice(0, 8) });
       return { ok: false, reason: "ACTIVE_ROOM_EXISTS" };
     }
 
@@ -821,6 +844,7 @@ export function useSolanaRooms() {
         roomCreator: roomCreator.slice(0, 8),
         joiner: publicKey.toBase58().slice(0, 8),
       });
+      traceLog("join.tx.sent", { signature: signature.slice(0, 16), roomId });
       
       toast({
         title: "Transaction sent",
@@ -838,6 +862,7 @@ export function useSolanaRooms() {
         signature: signature.slice(0, 16) + "...",
         roomId,
       });
+      traceLog("join.tx.confirmed", { signature: signature.slice(0, 16), roomId, confirmResult: "confirmed" });
       
       toast({
         title: "Joined room!",
@@ -866,9 +891,13 @@ export function useSolanaRooms() {
         const stakeLamports = Math.floor(joinedRoom.entryFeeSol * LAMPORTS_PER_SOL);
         
         // Fetch mode from DB 
-        const { data: sessionResp } = await supabase.functions.invoke("game-session-get", {
+        traceLogFetch("game-session-get", "/functions/v1/game-session-get", "POST", false);
+        const { data: sessionResp, error: sessionFetchError } = await supabase.functions.invoke("game-session-get", {
           body: { roomPda: joinedRoom.pda },
+          headers: getTraceHeaders(),
         });
+        traceLogFetchResult("game-session-get", sessionFetchError ? undefined : 200, !sessionFetchError, sessionResp);
+        
         const mode = (sessionResp?.session?.mode as 'casual' | 'ranked' | 'private') || 'casual';
         console.log("[JoinRoom] DB mode:", mode);
 
@@ -882,6 +911,14 @@ export function useSolanaRooms() {
         );
         const rulesHash = await computeRulesHash(rules);
 
+        // Log session state before RPC
+        const existingRoomToken = getSessionToken(joinedRoom.pda);
+        traceLog("join.session.before", {
+          hasRoomToken: !!existingRoomToken,
+          roomTokenLength: existingRoomToken?.length ?? 0,
+        });
+
+        traceLogFetch("record_acceptance", "/rest/v1/rpc/record_acceptance", "POST", false);
         const { data: acceptResult, error: rpcError } = await supabase.rpc("record_acceptance", {
           p_room_pda: joinedRoom.pda,
           p_wallet: publicKey.toBase58(),
@@ -890,11 +927,13 @@ export function useSolanaRooms() {
           p_stake_lamports: stakeLamports,
           p_is_creator: false,
         });
+        traceLogFetchResult("record_acceptance", rpcError ? undefined : 200, !rpcError, acceptResult);
 
         let sessionToken: string | null = null;
 
         if (rpcError) {
           console.warn("[JoinRoom] record_acceptance RPC failed:", rpcError.message);
+          traceLog("join.error", { step: "record_acceptance", message: rpcError.message });
         } else {
           const resultObj = typeof acceptResult === 'object' && acceptResult !== null 
             ? acceptResult as Record<string, unknown> 
@@ -913,6 +952,7 @@ export function useSolanaRooms() {
         if (sessionToken) {
           console.log("[JoinRoom] 🔄 Calling ranked-accept to sync participants...");
           
+          traceLogFetch("ranked-accept", "/functions/v1/ranked-accept", "POST", true);
           const { data: rankedData, error: rankedError } = await supabase.functions.invoke("ranked-accept", {
             body: {
               roomPda: joinedRoom.pda,
@@ -920,11 +960,14 @@ export function useSolanaRooms() {
             },
             headers: {
               Authorization: `Bearer ${sessionToken}`,
+              ...getTraceHeaders(),
             },
           });
+          traceLogFetchResult("ranked-accept", rankedError ? undefined : 200, !rankedError, rankedData);
 
           if (rankedError) {
             console.error("[JoinRoom] ranked-accept failed:", rankedError);
+            traceLog("join.error", { step: "ranked-accept", message: rankedError.message });
           } else if (rankedData?.success) {
             console.log("[JoinRoom] ✅ ranked-accept SUCCESS - participants synced:", {
               sessionToken: rankedData.sessionToken?.slice(0, 8),
@@ -937,11 +980,13 @@ export function useSolanaRooms() {
             }
           } else {
             console.warn("[JoinRoom] ranked-accept returned:", rankedData);
+            traceLog("join.error", { step: "ranked-accept", success: false, data: rankedData });
           }
         } else {
           // No session token from record_acceptance - try ranked-accept directly
           // This will fail auth check, but we log for debugging
           console.warn("[JoinRoom] ⚠️ No session token - cannot call ranked-accept");
+          traceLog("join.error", { step: "ranked-accept", reason: "NO_SESSION_TOKEN" });
         }
 
         // ═══════════════════════════════════════════════════════════════════════
@@ -959,15 +1004,21 @@ export function useSolanaRooms() {
           try {
             const { data: pollResp, error: pollError } = await supabase.functions.invoke("game-session-get", {
               body: { roomPda: joinedRoom.pda },
+              headers: getTraceHeaders(),
             });
 
             if (pollError) {
               console.warn("[JoinRoom] DB sync poll error:", pollError.message);
+              traceLog("join.poll.error", { message: pollError.message });
             } else {
               const debug = pollResp?.debug || {};
               const playerSessionsCount = debug.player_sessions_count ?? 0;
               const acceptancesCount = debug.game_acceptances_count ?? 0;
               const participantsCount = debug.participantsCount ?? pollResp?.session?.participants?.length ?? 0;
+              const player2Wallet = pollResp?.session?.player2_wallet || debug.player2_wallet;
+              const requiredCount = debug.requiredCount ?? pollResp?.acceptances?.requiredCount ?? 2;
+              const acceptedCount = debug.acceptedCount ?? pollResp?.acceptances?.acceptedCount ?? 0;
+              const bothAccepted = debug.bothAccepted ?? pollResp?.acceptances?.bothAccepted ?? false;
               
               console.log("[JoinRoom] DB sync poll:", {
                 player_sessions_count: playerSessionsCount,
@@ -975,16 +1026,30 @@ export function useSolanaRooms() {
                 participantsCount: participantsCount,
                 elapsed: Date.now() - dbSyncStartTime,
               });
+              
+              // Log poll result to trace
+              traceLogPoll({
+                participantsCount,
+                player_sessions_count: playerSessionsCount,
+                game_acceptances_count: acceptancesCount,
+                player2_wallet: player2Wallet,
+                requiredCount,
+                acceptedCount,
+                bothAccepted,
+                elapsed: Date.now() - dbSyncStartTime,
+              });
 
               // Success if ANY of these counts >= 2 (joiner registered)
               if (playerSessionsCount >= 2 || acceptancesCount >= 2 || participantsCount >= 2) {
                 dbSyncSuccess = true;
                 console.log("[JoinRoom] ✅ DB sync verified - joiner is registered");
+                traceLog("join.sync.success", { elapsed: Date.now() - dbSyncStartTime });
                 break;
               }
             }
-          } catch (pollErr) {
+          } catch (pollErr: any) {
             console.warn("[JoinRoom] DB sync poll exception:", pollErr);
+            traceLog("join.poll.exception", { message: pollErr?.message || String(pollErr) });
           }
 
           // Wait before next poll
@@ -996,6 +1061,8 @@ export function useSolanaRooms() {
         // ═══════════════════════════════════════════════════════════════════════
         if (!dbSyncSuccess) {
           console.error("[JoinRoom] ❌ DB sync failed - joiner not registered after 5s");
+          traceLog("join.sync.failed", { elapsed: Date.now() - dbSyncStartTime, reason: "TIMEOUT" });
+          traceLog("join.navigate.roomlist", { reason: "JOIN_DB_SYNC_FAILED" });
           toast({
             title: "Join failed to sync",
             description: `Room ${joinedRoom.pda.slice(0, 8)}... - Please retry.`,
@@ -1006,6 +1073,8 @@ export function useSolanaRooms() {
 
       } catch (syncErr: any) {
         console.error("[JoinRoom] Failed to sync participants:", syncErr);
+        traceLog("join.error", { step: "sync", message: syncErr?.message || String(syncErr), stackPreview: syncErr?.stack?.slice(0, 200) });
+        traceLog("join.navigate.roomlist", { reason: "SYNC_EXCEPTION" });
         toast({
           title: "Join failed to sync",
           description: `Sync error. Please retry.`,
@@ -1016,9 +1085,11 @@ export function useSolanaRooms() {
       
       // Refresh rooms and active room state
       await Promise.all([fetchRooms(), fetchUserActiveRoom()]);
+      traceLog("join.navigate.play", { roomId, success: true });
       return { ok: true, signature };
     } catch (err: any) {
       console.error("Join room error:", err);
+      traceLog("join.error", { step: "outer", message: err?.message || String(err), stackPreview: err?.stack?.slice(0, 200) });
       
       // Handle insufficient balance error
       if (err?.message === "INSUFFICIENT_BALANCE") {

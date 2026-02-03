@@ -28,7 +28,13 @@ serve(async (req) => {
       })
     }
 
-    console.log('[game-session-get] Fetching session for roomPda:', roomPda.slice(0, 8))
+    // Extract join trace correlation ID if present (for debugging)
+    const traceId = req.headers.get('X-Join-Trace-Id') || null;
+    if (traceId) {
+      console.log('[game-session-get] traceId:', traceId, 'roomPda:', roomPda.slice(0, 8));
+    } else {
+      console.log('[game-session-get] Fetching session for roomPda:', roomPda.slice(0, 8));
+    }
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!

@@ -28,6 +28,7 @@ import { usePendingRoute } from "@/hooks/usePendingRoute";
 import { getSessionToken, getAuthHeaders, storeSessionToken } from "@/lib/sessionToken";
 import { toast } from "sonner";
 import { showGameStartToast, isGameStartLatched, setGameStartLatch } from "@/hooks/useGameStartToast";
+import { JoinTraceDebugPanel } from "@/components/JoinTraceDebugPanel";
 
 // Presence feature disabled until program supports ping_room
 // const CREATOR_TIMEOUT_SECS = 60;
@@ -1399,6 +1400,9 @@ return () => {
       
       {/* Transaction Debug Panel - shown on tx failure */}
       <TxDebugPanel debugInfo={txDebugInfo} onClose={clearTxDebug} />
+      
+      {/* Join Trace Debug Panel - shown when localStorage.debug_join === "1" */}
+      <JoinTraceDebugPanel />
     </div>
   );
 }

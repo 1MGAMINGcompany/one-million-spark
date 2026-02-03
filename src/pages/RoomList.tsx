@@ -34,6 +34,7 @@ import { showBrowserNotification } from "@/lib/pushNotifications";
 import { ResolveRoomModal } from "@/components/ResolveRoomModal";
 import { UnresolvedRoomModal } from "@/components/UnresolvedRoomModal";
 import { supabase } from "@/integrations/supabase/client";
+import { JoinTraceDebugPanel } from "@/components/JoinTraceDebugPanel";
 
 import { BUILD_VERSION } from "@/lib/buildVersion";
 
@@ -675,6 +676,9 @@ export default function RoomList() {
           navigate(`/room/${roomPda}`);
         }}
       />
+      
+      {/* Join Trace Debug Panel - shown when localStorage.debug_join === "1" */}
+      <JoinTraceDebugPanel />
     </div>
   );
 }
