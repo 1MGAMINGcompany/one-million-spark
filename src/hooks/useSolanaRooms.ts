@@ -944,13 +944,74 @@ export function useSolanaRooms() {
           console.warn("[JoinRoom] ⚠️ No session token - cannot call ranked-accept");
         }
 
+        // ═══════════════════════════════════════════════════════════════════════
+        // 5) FAIL-FAST DB SYNC CHECK: Poll game-session-get to verify joiner is registered
+        //    If DB does not show joiner after 5 seconds, return error (do NOT navigate to /play)
+        // ═══════════════════════════════════════════════════════════════════════
+        const DB_SYNC_POLL_INTERVAL_MS = 500;
+        const DB_SYNC_TIMEOUT_MS = 5000;
+        const dbSyncStartTime = Date.now();
+        let dbSyncSuccess = false;
+
+        console.log("[JoinRoom] 🔍 Polling DB to verify joiner sync...");
+
+        while (Date.now() - dbSyncStartTime < DB_SYNC_TIMEOUT_MS) {
+          try {
+            const { data: pollResp, error: pollError } = await supabase.functions.invoke("game-session-get", {
+              body: { roomPda: joinedRoom.pda },
+            });
+
+            if (pollError) {
+              console.warn("[JoinRoom] DB sync poll error:", pollError.message);
+            } else {
+              const debug = pollResp?.debug || {};
+              const playerSessionsCount = debug.player_sessions_count ?? 0;
+              const acceptancesCount = debug.game_acceptances_count ?? 0;
+              const participantsCount = debug.participantsCount ?? pollResp?.session?.participants?.length ?? 0;
+              
+              console.log("[JoinRoom] DB sync poll:", {
+                player_sessions_count: playerSessionsCount,
+                game_acceptances_count: acceptancesCount,
+                participantsCount: participantsCount,
+                elapsed: Date.now() - dbSyncStartTime,
+              });
+
+              // Success if ANY of these counts >= 2 (joiner registered)
+              if (playerSessionsCount >= 2 || acceptancesCount >= 2 || participantsCount >= 2) {
+                dbSyncSuccess = true;
+                console.log("[JoinRoom] ✅ DB sync verified - joiner is registered");
+                break;
+              }
+            }
+          } catch (pollErr) {
+            console.warn("[JoinRoom] DB sync poll exception:", pollErr);
+          }
+
+          // Wait before next poll
+          await new Promise(resolve => setTimeout(resolve, DB_SYNC_POLL_INTERVAL_MS));
+        }
+
+        // ═══════════════════════════════════════════════════════════════════════
+        // FAIL-FAST: If DB did not register joiner within timeout, return error
+        // ═══════════════════════════════════════════════════════════════════════
+        if (!dbSyncSuccess) {
+          console.error("[JoinRoom] ❌ DB sync failed - joiner not registered after 5s");
+          toast({
+            title: "Join failed to sync",
+            description: `Room ${joinedRoom.pda.slice(0, 8)}... - Please retry.`,
+            variant: "destructive",
+          });
+          return { ok: false, reason: "JOIN_DB_SYNC_FAILED" };
+        }
+
       } catch (syncErr: any) {
         console.error("[JoinRoom] Failed to sync participants:", syncErr);
         toast({
-          title: "Sync Warning",
-          description: "Joined room but sync incomplete. Game should still work.",
-          variant: "default",
+          title: "Join failed to sync",
+          description: `Sync error. Please retry.`,
+          variant: "destructive",
         });
+        return { ok: false, reason: "JOIN_DB_SYNC_FAILED" };
       }
       
       // Refresh rooms and active room state
