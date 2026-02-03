@@ -10,7 +10,7 @@ import { useSolanaRooms } from "@/hooks/useSolanaRooms";
 import { useTxLock } from "@/contexts/TxLockContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Construction, ArrowLeft, Loader2, Users, Coins, AlertTriangle, CheckCircle, Share2, Copy, ExternalLink, Wallet, Clock } from "lucide-react";
+import { Construction, ArrowLeft, Loader2, Users, Coins, AlertTriangle, CheckCircle, Share2, Copy, ExternalLink, Wallet, Clock, XCircle, Flag } from "lucide-react";
 import { RecoverFundsButton } from "@/components/RecoverFundsButton";
 import { WalletGateModal } from "@/components/WalletGateModal";
 import { RivalryWidget } from "@/components/RivalryWidget";
@@ -77,7 +77,7 @@ export default function Room() {
   const { isConnected, address } = useWallet();
   const { connection } = useConnection();
   const wallet = useSolanaWallet();
-  const { activeRoom, joinRoom, createRoom, cancelRoom, txPending: hookTxPending, txDebugInfo, clearTxDebug } = useSolanaRooms();
+  const { activeRoom, joinRoom, createRoom, cancelRoom, cancelRoomByPda, forfeitGame, clearRoomFromState, txPending: hookTxPending, txDebugInfo, clearTxDebug, fetchUserActiveRoom } = useSolanaRooms();
   const { isTxInFlight, withTxLock } = useTxLock();
   const [showWalletGate, setShowWalletGate] = useState(false);
   const [showMobileWalletRedirect, setShowMobileWalletRedirect] = useState(false);
@@ -120,6 +120,19 @@ export default function Room() {
   
   // Turn time from session (for share dialog)
   const [turnTimeSeconds, setTurnTimeSeconds] = useState(0);
+  
+  // DB session state for cancel/forfeit decision tree
+  const [dbSession, setDbSession] = useState<{
+    player1_wallet: string | null;
+    player2_wallet: string | null;
+    participantsCount: number;
+    start_roll_finalized: boolean;
+    status_int: number;
+  } | null>(null);
+  
+  // Action loading states
+  const [isCancellingRoom, setIsCancellingRoom] = useState(false);
+  const [isForfeitingMatch, setIsForfeitingMatch] = useState(false);
   
   // Generate room link
   const roomLink = `${window.location.origin}/room/${roomPdaParam}`;
@@ -222,7 +235,17 @@ export default function Room() {
         if (session?.mode) {
           setRoomMode(session.mode as 'casual' | 'ranked' | 'private');
           setTurnTimeSeconds(session.turn_time_seconds || 0);
-          console.log("[RoomMode] DB mode:", session.mode);
+          
+          // Store DB session state for cancel/forfeit decision tree
+          setDbSession({
+            player1_wallet: session.player1_wallet || null,
+            player2_wallet: session.player2_wallet || null,
+            participantsCount: session.participants?.length || 0,
+            start_roll_finalized: session.start_roll_finalized || false,
+            status_int: session.status_int || 1,
+          });
+          
+          console.log("[RoomMode] DB mode:", session.mode, "| status_int:", session.status_int, "| participants:", session.participants?.length);
           setRoomModeLoaded(true);
         } else if (modeFetchAttempts < MAX_MODE_RETRIES) {
           // Retry - game_session might not be created yet
@@ -791,6 +814,129 @@ return () => {
     }
   };
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Room Page Actions: Cancel Room & Refund / Forfeit Match
+  // Uses DB authoritative state for decision tree
+  // ═══════════════════════════════════════════════════════════════════════════
+  
+  // Decision tree for creator actions (based on DB truth)
+  const isCreatorByDb = address && dbSession?.player1_wallet && 
+    dbSession.player1_wallet.toLowerCase() === address.toLowerCase();
+  const dbStatusInt = dbSession?.status_int ?? 1;
+  const dbParticipantsCount = dbSession?.participantsCount ?? 0;
+  const dbStartRollFinalized = dbSession?.start_roll_finalized ?? false;
+  const dbPlayer2Wallet = dbSession?.player2_wallet;
+  
+  // CANCEL condition: creator AND (no opponent OR not started)
+  // status_int === 1 OR participantsCount <= 1 OR start_roll_finalized === false
+  const canCancelAndRefund = isConnected && isCreatorByDb && dbStatusInt !== 3 && (
+    dbStatusInt === 1 || 
+    dbParticipantsCount <= 1 || 
+    !dbStartRollFinalized ||
+    !dbPlayer2Wallet
+  );
+  
+  // FORFEIT condition: creator AND opponent joined AND room active
+  // status_int !== 3 AND (participantsCount >= 2 OR player2_wallet present)
+  const canForfeitMatch = isConnected && isCreatorByDb && dbStatusInt !== 3 && (
+    dbParticipantsCount >= 2 || !!dbPlayer2Wallet
+  ) && dbStartRollFinalized;
+  
+  // Cancel Room & Refund handler - reuses cancelRoomByPda from useSolanaRooms
+  const onCancelRoomAndRefund = useCallback(async () => {
+    if (!roomPdaParam || !address) return;
+    
+    console.log("[room.action.cancel_clicked]", { roomPda: roomPdaParam.slice(0, 8), wallet: address.slice(0, 8) });
+    
+    if (signingDisabled) {
+      toast.error("Wallet signing is disabled on preview domains. Please use 1mgaming.com");
+      return;
+    }
+    
+    if (needsMobileWalletRedirect) {
+      setShowMobileWalletRedirect(true);
+      return;
+    }
+    
+    setIsCancellingRoom(true);
+    
+    try {
+      const result = await withTxLock(async () => {
+        return await cancelRoomByPda(roomPdaParam);
+      });
+      
+      if (result?.ok) {
+        toast.success("Room cancelled", { description: "Your stake has been refunded." });
+        // Clear room from state immediately
+        if (clearRoomFromState) {
+          clearRoomFromState(roomPdaParam);
+        }
+        await fetchUserActiveRoom();
+        navigate("/room-list", { replace: true });
+      } else if (result?.reason === "ROOM_NOT_FOUND") {
+        toast.info("Room already closed");
+        navigate("/room-list", { replace: true });
+      } else if (result?.reason !== "PHANTOM_BLOCKED_OR_REJECTED") {
+        toast.error("Failed to cancel room", { description: result?.reason || "Please try again." });
+      }
+    } catch (err: any) {
+      console.error("[room.action.cancel_error]", err);
+      toast.error("Cancel failed", { description: err?.message || "Unknown error" });
+    } finally {
+      setIsCancellingRoom(false);
+    }
+  }, [roomPdaParam, address, signingDisabled, needsMobileWalletRedirect, cancelRoomByPda, clearRoomFromState, fetchUserActiveRoom, navigate, withTxLock]);
+  
+  // Forfeit Match handler - reuses forfeitGame from useSolanaRooms
+  const onForfeitMatch = useCallback(async () => {
+    if (!roomPdaParam || !address) return;
+    
+    console.log("[room.action.forfeit_clicked]", { roomPda: roomPdaParam.slice(0, 8), wallet: address.slice(0, 8) });
+    
+    if (signingDisabled) {
+      toast.error("Wallet signing is disabled on preview domains. Please use 1mgaming.com");
+      return;
+    }
+    
+    if (needsMobileWalletRedirect) {
+      setShowMobileWalletRedirect(true);
+      return;
+    }
+    
+    setIsForfeitingMatch(true);
+    
+    try {
+      const gameTypeName = GAME_NAMES[room?.gameType ?? 2]?.toLowerCase() || "unknown";
+      
+      const result = await forfeitGame(roomPdaParam, gameTypeName);
+      
+      if (result?.ok) {
+        toast.success("Match forfeited", { description: "Opponent has been paid out." });
+        // Clear room from state immediately
+        if (clearRoomFromState) {
+          clearRoomFromState(roomPdaParam);
+        }
+        await fetchUserActiveRoom();
+        navigate("/room-list", { replace: true });
+      } else if (result?.error === "VAULT_UNFUNDED") {
+        toast.error("Funding incomplete", { 
+          description: "Stakes were not fully deposited. Try cancelling the room instead." 
+        });
+      } else if (result?.error === "ROOM_NOT_STARTED") {
+        toast.info("No opponent joined yet", { 
+          description: "Use 'Cancel Room & Refund' instead." 
+        });
+      } else {
+        toast.error("Forfeit failed", { description: result?.reason || result?.error || "Please try again." });
+      }
+    } catch (err: any) {
+      console.error("[room.action.forfeit_error]", err);
+      toast.error("Forfeit failed", { description: err?.message || "Unknown error" });
+    } finally {
+      setIsForfeitingMatch(false);
+    }
+  }, [roomPdaParam, address, room?.gameType, signingDisabled, needsMobileWalletRedirect, forfeitGame, clearRoomFromState, fetchUserActiveRoom, navigate]);
+
   const onPlayAgain = async () => {
     // Check if we're on a preview domain
     if (signingDisabled) {
@@ -1295,8 +1441,62 @@ return () => {
 
             {/* Enable Presence Toggle - Disabled until program supports ping_room */}
 
-            {/* Cancel Room Button */}
-            {canCancel && (
+            {/* ═══════════════════════════════════════════════════════════════════════ */}
+            {/* Creator Actions: Cancel Room & Refund OR Forfeit Match (DB-based)      */}
+            {/* ═══════════════════════════════════════════════════════════════════════ */}
+            
+            {/* Cancel Room & Refund - shown when creator is alone / game not started */}
+            {canCancelAndRefund && !canForfeitMatch && (
+              <Button
+                onClick={onCancelRoomAndRefund}
+                size="lg"
+                variant="outline"
+                disabled={isTxInFlight || hookTxPending || signingDisabled || isCancellingRoom}
+                className="min-w-40 border-amber-500/30 text-amber-400 hover:bg-amber-500/10"
+              >
+                {isCancellingRoom ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Cancelling...
+                  </>
+                ) : signingDisabled ? (
+                  "Signing Disabled"
+                ) : (
+                  <>
+                    <XCircle className="mr-2 h-4 w-4" />
+                    Cancel Room & Refund
+                  </>
+                )}
+              </Button>
+            )}
+            
+            {/* Forfeit Match - shown when opponent has joined and game is active */}
+            {canForfeitMatch && (
+              <Button
+                onClick={onForfeitMatch}
+                size="lg"
+                variant="destructive"
+                disabled={isTxInFlight || hookTxPending || signingDisabled || isForfeitingMatch}
+                className="min-w-40"
+              >
+                {isForfeitingMatch ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Forfeiting...
+                  </>
+                ) : signingDisabled ? (
+                  "Signing Disabled"
+                ) : (
+                  <>
+                    <Flag className="mr-2 h-4 w-4" />
+                    Forfeit Match
+                  </>
+                )}
+              </Button>
+            )}
+
+            {/* Legacy Cancel Room Button (fallback via on-chain state) */}
+            {canCancel && !canCancelAndRefund && !canForfeitMatch && (
               <Button
                 onClick={onCancelRoom}
                 size="lg"
