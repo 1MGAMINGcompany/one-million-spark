@@ -58,8 +58,6 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
   const [turnTimeSeconds, setTurnTimeSeconds] = useState(60);
   const [hasLoaded, setHasLoaded] = useState(false);
   const [isSettingReady, setIsSettingReady] = useState(false);
-  // Server-side bothAccepted from game_acceptances (more reliable than realtime)
-  const [serverBothAccepted, setServerBothAccepted] = useState(false);
   // STEP 4: Track accepted wallets from game_acceptances table
   const [acceptedWallets, setAcceptedWallets] = useState<Set<string>>(new Set());
   // DB status_int (1=waiting, 2=active, 3=finished) - AUTHORITATIVE for leave/forfeit logic
@@ -99,15 +97,13 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
   const opponentReadyFromFlags = isPlayer1 ? p2Ready : isPlayer2 ? p1Ready : false;
   const opponentReady = opponentReadyFromAcceptances || opponentReadyFromFlags;
 
-  // Prefer server-side bothAccepted (from polling) over client-side p1Ready && p2Ready
-  // FIX: Also check if session is fully formed (both wallets present) for robust fallback
-  // FIX: If start_roll_finalized is true, game has already started = both were ready
-  const sessionComplete = !!(p1Wallet && p2Wallet);
-  const [startRollFinalized, setStartRollFinalized] = useState(false);
-  // FIX: Remove startRollFinalized - it's a RESULT of being ready, not a CAUSE
-  const bothReady = hasParticipants
-    ? participantsNorm.every(w => acceptedWallets.has(w))
-    : (serverBothAccepted || (sessionComplete && p1Ready && p2Ready));
+  // DETERMINISTIC requiredCount: use participants if provided, else 2 for standard games
+  const requiredCount = hasParticipants ? participantsNorm.length : 2;
+  
+  // STRICT bothReady: ONLY true when acceptedWallets.size >= requiredCount
+  // NO FALLBACKS from p1_ready/p2_ready flags - those can be stale or set prematurely
+  const bothReady = acceptedWallets.size >= requiredCount;
+  
   // Show accept modal if ranked, loaded, and this player hasn't accepted yet
   // Also require that we've identified this player's role (isPlayer1 or isPlayer2)
   const isIdentified = hasParticipants ? isParticipant : (isPlayer1 || isPlayer2);
@@ -127,8 +123,8 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
       p2Ready,
       iAmReady,
       opponentReady,
-      serverBothAccepted,
-      sessionComplete,
+      acceptedCount: acceptedWallets.size,
+      requiredCount,
       bothReady,
       showAcceptModal,
       acceptedWallets: Array.from(acceptedWallets).map(w => w.slice(0, 8)),
@@ -154,12 +150,13 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
         opponentReady,
         opponentReadyFromAcceptances,
         bothReady,
-        serverBothAccepted,
+        acceptedCount: acceptedWallets.size,
+        requiredCount,
         acceptedWallets: Array.from(acceptedWallets).map(w => w.slice(0, 8)),
         showAcceptModal,
       });
     }
-  }, [roomPda, myWalletNorm, isRanked, enabled, hasLoaded, isPlayer1, isPlayer2, isIdentified, p1Ready, p2Ready, iAmReady, iAmReadyFromAcceptances, opponentReady, opponentReadyFromAcceptances, bothReady, serverBothAccepted, acceptedWallets, showAcceptModal]);
+  }, [roomPda, myWalletNorm, isRanked, enabled, hasLoaded, isPlayer1, isPlayer2, isIdentified, p1Ready, p2Ready, iAmReady, iAmReadyFromAcceptances, opponentReady, opponentReadyFromAcceptances, bothReady, acceptedWallets, requiredCount, showAcceptModal]);
 
   // Accept rules via Edge Function (no direct table access)
   const acceptRules = useCallback(async (): Promise<{ success: boolean; error?: string }> => {
@@ -239,9 +236,6 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
         if (session.turn_time_seconds) {
           setTurnTimeSeconds(session.turn_time_seconds);
         }
-        if (session.start_roll_finalized) {
-          setStartRollFinalized(true);
-        }
         // AUTHORITATIVE DB state for leave/forfeit logic
         setDbStatusInt(session.status_int ?? 1);
         setDbParticipantsCount(debug?.participantsCount ?? session.participants?.length ?? 0);
@@ -253,7 +247,6 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
             )
             .filter(Boolean) ?? [];
         setAcceptedWallets(new Set(wallets));
-        setServerBothAccepted(resp?.acceptances?.bothAccepted ?? false);
         setHasLoaded(true);
       }
     } catch (err) {
@@ -315,7 +308,6 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
           )
           .filter(Boolean) ?? [];
       setAcceptedWallets(new Set(wallets));
-      setServerBothAccepted(resp?.acceptances?.bothAccepted ?? false);
 
       // Also update p1_ready/p2_ready from session as fallback
       const session = resp?.session;
