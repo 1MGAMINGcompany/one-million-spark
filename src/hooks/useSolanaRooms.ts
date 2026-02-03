@@ -870,57 +870,88 @@ export function useSolanaRooms() {
       });
       
       // ═══════════════════════════════════════════════════════════════════════
-      // CRITICAL: Sync participants + get session token IMMEDIATELY after join tx
-      // This is the AUTHORITATIVE DB sync step for the joiner.
+      // P0 FIX: Derive roomPda deterministically from inputs (NO RPC CALL)
+      // This ensures DB sync ALWAYS runs, even if on-chain fetch fails on mobile.
       // ═══════════════════════════════════════════════════════════════════════
+      
+      // STEP 1: Derive roomPda from creatorPubkey + roomId (same seeds as buildJoinRoomIx)
+      const [derivedRoomPda] = getRoomPDA(creatorPubkey, roomId);
+      const roomPdaStr = derivedRoomPda.toBase58();
+      
+      console.log("[JoinRoom] join.after_confirm", {
+        signature: signature.slice(0, 16),
+        roomId,
+        creatorPrefix: creatorPubkey.toBase58().slice(0, 8),
+      });
+      traceLog("join.after_confirm", {
+        signature: signature.slice(0, 16),
+        roomId,
+        creatorPrefix: creatorPubkey.toBase58().slice(0, 8),
+      });
+      
+      console.log("[JoinRoom] join.roompda.derived.ok", { roomPdaPrefix: roomPdaStr.slice(0, 8) });
+      traceLog("join.roompda.derived.ok", { roomPdaPrefix: roomPdaStr.slice(0, 8) });
+      
       try {
-        // 1) Fetch the room PDA from on-chain (just confirmed)
-        const joinedRoom = await fetchUserActiveRoom();
-        if (!joinedRoom?.pda) {
-          console.warn("[JoinRoom] ⚠️ Could not fetch joined room after tx confirmation");
-          return { ok: true, signature }; // Still success, but no session token
-        }
-
+        console.log("[JoinRoom] join.db_sync.start", { roomPdaPrefix: roomPdaStr.slice(0, 8) });
+        traceLog("join.db_sync.start", { roomPdaPrefix: roomPdaStr.slice(0, 8) });
+        
         console.log("[JoinRoom] 🔄 Syncing participants via ranked-accept...", {
-          roomPda: joinedRoom.pda.slice(0, 8),
+          roomPda: roomPdaStr.slice(0, 8),
           joiner: publicKey.toBase58().slice(0, 8),
         });
 
-        // 2) First, ensure game_session exists with joiner as player2
-        //    record_acceptance sets player2_wallet but NOT participants[]
-        const stakeLamports = Math.floor(joinedRoom.entryFeeSol * LAMPORTS_PER_SOL);
-        
-        // Fetch mode from DB 
+        // STEP 2: Fetch session from DB to get mode, gameType, entryFee (no RPC needed)
         traceLogFetch("game-session-get", "/functions/v1/game-session-get", "POST", false);
         const { data: sessionResp, error: sessionFetchError } = await supabase.functions.invoke("game-session-get", {
-          body: { roomPda: joinedRoom.pda },
+          body: { roomPda: roomPdaStr },
           headers: getTraceHeaders(),
         });
         traceLogFetchResult("game-session-get", sessionFetchError ? undefined : 200, !sessionFetchError, sessionResp);
         
-        const mode = (sessionResp?.session?.mode as 'casual' | 'ranked' | 'private') || 'casual';
-        console.log("[JoinRoom] DB mode:", mode);
+        if (sessionFetchError || !sessionResp?.session) {
+          console.error("[JoinRoom] join.db_sync.err - Cannot fetch session from DB:", sessionFetchError);
+          traceLog("join.db_sync.err", { step: "game-session-get", error: sessionFetchError?.message || "no session" });
+          toast({
+            title: "Join failed to sync",
+            description: "Could not fetch game session. Please retry.",
+            variant: "destructive",
+          });
+          return { ok: false, reason: "JOIN_DB_SYNC_FAILED" };
+        }
+        
+        const session = sessionResp.session;
+        const mode = (session.mode as 'casual' | 'ranked' | 'private') || 'casual';
+        const gameType = session.game_type ? parseInt(session.game_type, 10) || GameType.Chess : GameType.Chess;
+        const maxPlayers = session.max_players ?? 2;
+        // Derive stake from session or default to 0.01 SOL
+        const stakeLamports = session.stake_lamports ?? Math.floor(0.01 * LAMPORTS_PER_SOL);
+        
+        console.log("[JoinRoom] DB session fetched:", { mode, gameType, maxPlayers, stakeLamports });
 
-        // 3) Call record_acceptance first to get a session token
+        // STEP 3: Call record_acceptance to get a session token
         const rules = createRulesFromRoom(
-          joinedRoom.pda,
-          joinedRoom.gameType,
-          joinedRoom.maxPlayers,
+          roomPdaStr,
+          gameType,
+          maxPlayers,
           stakeLamports,
           mode
         );
         const rulesHash = await computeRulesHash(rules);
 
         // Log session state before RPC
-        const existingRoomToken = getSessionToken(joinedRoom.pda);
+        const existingRoomToken = getSessionToken(roomPdaStr);
         traceLog("join.session.before", {
           hasRoomToken: !!existingRoomToken,
           roomTokenLength: existingRoomToken?.length ?? 0,
         });
 
+        console.log("[JoinRoom] join.record_acceptance.start", { roomPdaPrefix: roomPdaStr.slice(0, 8) });
+        traceLog("join.record_acceptance.start", { roomPdaPrefix: roomPdaStr.slice(0, 8) });
+        
         traceLogFetch("record_acceptance", "/rest/v1/rpc/record_acceptance", "POST", false);
         const { data: acceptResult, error: rpcError } = await supabase.rpc("record_acceptance", {
-          p_room_pda: joinedRoom.pda,
+          p_room_pda: roomPdaStr,
           p_wallet: publicKey.toBase58(),
           p_tx_signature: signature,
           p_rules_hash: rulesHash,
@@ -932,8 +963,8 @@ export function useSolanaRooms() {
         let sessionToken: string | null = null;
 
         if (rpcError) {
-          console.warn("[JoinRoom] record_acceptance RPC failed:", rpcError.message);
-          traceLog("join.error", { step: "record_acceptance", message: rpcError.message });
+          console.warn("[JoinRoom] join.record_acceptance.err:", rpcError.message);
+          traceLog("join.record_acceptance.err", { message: rpcError.message });
         } else {
           const resultObj = typeof acceptResult === 'object' && acceptResult !== null 
             ? acceptResult as Record<string, unknown> 
@@ -941,21 +972,24 @@ export function useSolanaRooms() {
           sessionToken = (resultObj?.session_token as string) || null;
           
           if (sessionToken) {
-            storeSessionToken(joinedRoom.pda, sessionToken);
-            console.log("[JoinRoom] ✅ Session token stored from record_acceptance:", sessionToken.slice(0, 8));
+            storeSessionToken(roomPdaStr, sessionToken);
+            console.log("[JoinRoom] join.record_acceptance.ok", { sessionTokenPrefix: sessionToken.slice(0, 8) });
+            traceLog("join.record_acceptance.ok", { sessionTokenPrefix: sessionToken.slice(0, 8) });
           }
         }
 
         // 4) CRITICAL: Call ranked-accept to sync on-chain participants to DB
         //    This is the step that populates game_sessions.participants[]
         //    and ensures player2_wallet is set correctly.
+        // STEP 4: Call ranked-accept to sync on-chain participants to DB
         if (sessionToken) {
-          console.log("[JoinRoom] 🔄 Calling ranked-accept to sync participants...");
+          console.log("[JoinRoom] join.ranked_accept.start", { roomPdaPrefix: roomPdaStr.slice(0, 8) });
+          traceLog("join.ranked_accept.start", { roomPdaPrefix: roomPdaStr.slice(0, 8) });
           
           traceLogFetch("ranked-accept", "/functions/v1/ranked-accept", "POST", true);
           const { data: rankedData, error: rankedError } = await supabase.functions.invoke("ranked-accept", {
             body: {
-              roomPda: joinedRoom.pda,
+              roomPda: roomPdaStr,
               mode: "simple", // Simple mode - session token provides identity
             },
             headers: {
@@ -966,27 +1000,27 @@ export function useSolanaRooms() {
           traceLogFetchResult("ranked-accept", rankedError ? undefined : 200, !rankedError, rankedData);
 
           if (rankedError) {
-            console.error("[JoinRoom] ranked-accept failed:", rankedError);
-            traceLog("join.error", { step: "ranked-accept", message: rankedError.message });
+            console.error("[JoinRoom] join.ranked_accept.err:", rankedError.message);
+            traceLog("join.ranked_accept.err", { message: rankedError.message });
           } else if (rankedData?.success) {
-            console.log("[JoinRoom] ✅ ranked-accept SUCCESS - participants synced:", {
-              sessionToken: rankedData.sessionToken?.slice(0, 8),
+            console.log("[JoinRoom] join.ranked_accept.ok", {
+              sessionTokenPrefix: rankedData.sessionToken?.slice(0, 8),
             });
+            traceLog("join.ranked_accept.ok", { sessionTokenPrefix: rankedData.sessionToken?.slice(0, 8) });
             
             // Update session token if ranked-accept returned a new one
             if (rankedData.sessionToken) {
-              storeSessionToken(joinedRoom.pda, rankedData.sessionToken);
+              storeSessionToken(roomPdaStr, rankedData.sessionToken);
               console.log("[JoinRoom] ✅ Session token updated from ranked-accept");
             }
           } else {
-            console.warn("[JoinRoom] ranked-accept returned:", rankedData);
-            traceLog("join.error", { step: "ranked-accept", success: false, data: rankedData });
+            console.warn("[JoinRoom] join.ranked_accept.err - unexpected response:", rankedData);
+            traceLog("join.ranked_accept.err", { success: false, data: rankedData });
           }
         } else {
-          // No session token from record_acceptance - try ranked-accept directly
-          // This will fail auth check, but we log for debugging
-          console.warn("[JoinRoom] ⚠️ No session token - cannot call ranked-accept");
-          traceLog("join.error", { step: "ranked-accept", reason: "NO_SESSION_TOKEN" });
+          // No session token from record_acceptance - cannot call ranked-accept
+          console.warn("[JoinRoom] join.ranked_accept.err - NO_SESSION_TOKEN");
+          traceLog("join.ranked_accept.err", { reason: "NO_SESSION_TOKEN" });
         }
 
         // ═══════════════════════════════════════════════════════════════════════
@@ -1003,7 +1037,7 @@ export function useSolanaRooms() {
         while (Date.now() - dbSyncStartTime < DB_SYNC_TIMEOUT_MS) {
           try {
             const { data: pollResp, error: pollError } = await supabase.functions.invoke("game-session-get", {
-              body: { roomPda: joinedRoom.pda },
+              body: { roomPda: roomPdaStr },
               headers: getTraceHeaders(),
             });
 
@@ -1060,16 +1094,19 @@ export function useSolanaRooms() {
         // FAIL-FAST: If DB did not register joiner within timeout, return error
         // ═══════════════════════════════════════════════════════════════════════
         if (!dbSyncSuccess) {
-          console.error("[JoinRoom] ❌ DB sync failed - joiner not registered after 5s");
-          traceLog("join.sync.failed", { elapsed: Date.now() - dbSyncStartTime, reason: "TIMEOUT" });
-          traceLog("join.navigate.roomlist", { reason: "JOIN_DB_SYNC_FAILED" });
+          console.error("[JoinRoom] join.db_sync.failed - joiner not registered after 5s");
+          traceLog("join.db_sync.failed", { elapsed: Date.now() - dbSyncStartTime, reason: "TIMEOUT", roomPdaPrefix: roomPdaStr.slice(0, 8) });
           toast({
             title: "Join failed to sync",
-            description: `Room ${joinedRoom.pda.slice(0, 8)}... - Please retry.`,
+            description: `Room ${roomPdaStr.slice(0, 8)}... - Please retry.`,
             variant: "destructive",
           });
           return { ok: false, reason: "JOIN_DB_SYNC_FAILED" };
         }
+        
+        // STEP 6: Success - log navigate
+        console.log("[JoinRoom] join.navigate", { to: `/play/${roomPdaStr}` });
+        traceLog("join.navigate", { to: `/play/${roomPdaStr.slice(0, 8)}...` });
 
       } catch (syncErr: any) {
         console.error("[JoinRoom] Failed to sync participants:", syncErr);
