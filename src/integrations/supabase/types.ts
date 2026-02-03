@@ -657,6 +657,15 @@ export type Database = {
         Args: { p_room_pda: string; p_rules_hash: string; p_wallet: string }
         Returns: string
       }
+      rebuild_participants: {
+        Args: {
+          p_existing_participants: string[]
+          p_max_players: number
+          p_player1: string
+          p_player2: string
+        }
+        Returns: string[]
+      }
       record_acceptance: {
         Args: {
           p_is_creator?: boolean
