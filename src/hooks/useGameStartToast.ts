@@ -3,29 +3,25 @@ import { toast } from "@/hooks/use-toast";
 import { toast as sonnerToast } from "sonner";
 
 const DEDUPE_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
-const STORAGE_PREFIX = "toast_game_start_";
 
-// In-memory cache for current session
-const memoryCache = new Map<string, number>();
+// ============================================================
+// TOAST DEDUPE (prevents repeated toasts)
+// ============================================================
+const TOAST_STORAGE_PREFIX = "toast_game_start_";
+const toastMemoryCache = new Map<string, number>();
 
-/**
- * Get the last time a "game starting" toast was shown for a room
- */
-function getLastShown(roomPda: string): number {
-  // Check memory first (survives re-renders)
-  const memTs = memoryCache.get(roomPda);
+function getToastLastShown(roomPda: string): number {
+  const memTs = toastMemoryCache.get(roomPda);
   if (memTs && Date.now() - memTs < DEDUPE_WINDOW_MS) {
     return memTs;
   }
   
-  // Check localStorage (survives reload)
   try {
-    const stored = localStorage.getItem(`${STORAGE_PREFIX}${roomPda}`);
+    const stored = localStorage.getItem(`${TOAST_STORAGE_PREFIX}${roomPda}`);
     if (stored) {
       const ts = parseInt(stored, 10);
       if (!isNaN(ts) && Date.now() - ts < DEDUPE_WINDOW_MS) {
-        // Sync to memory
-        memoryCache.set(roomPda, ts);
+        toastMemoryCache.set(roomPda, ts);
         return ts;
       }
     }
@@ -36,45 +32,32 @@ function getLastShown(roomPda: string): number {
   return 0;
 }
 
-/**
- * Mark that a toast was shown for a room
- */
-function setLastShown(roomPda: string): void {
+function setToastLastShown(roomPda: string): void {
   const now = Date.now();
-  memoryCache.set(roomPda, now);
+  toastMemoryCache.set(roomPda, now);
   
   try {
-    localStorage.setItem(`${STORAGE_PREFIX}${roomPda}`, String(now));
+    localStorage.setItem(`${TOAST_STORAGE_PREFIX}${roomPda}`, String(now));
   } catch {
     // localStorage not available
   }
 }
 
-/**
- * Clear dedupe key for a room (call when room is finished/canceled/forfeited)
- */
 export function clearGameStartDedupe(roomPda: string): void {
-  memoryCache.delete(roomPda);
+  toastMemoryCache.delete(roomPda);
   
   try {
-    localStorage.removeItem(`${STORAGE_PREFIX}${roomPda}`);
+    localStorage.removeItem(`${TOAST_STORAGE_PREFIX}${roomPda}`);
   } catch {
     // localStorage not available
   }
 }
 
-/**
- * Check if a toast should be shown (not shown within dedupe window)
- */
 export function shouldShowGameStartToast(roomPda: string): boolean {
-  const lastShown = getLastShown(roomPda);
+  const lastShown = getToastLastShown(roomPda);
   return lastShown === 0 || Date.now() - lastShown >= DEDUPE_WINDOW_MS;
 }
 
-/**
- * Show a "game starting" toast with dedupe protection
- * Returns true if toast was shown, false if deduplicated
- */
 export function showGameStartToast(
   roomPda: string,
   title: string,
@@ -86,7 +69,7 @@ export function showGameStartToast(
     return false;
   }
   
-  setLastShown(roomPda);
+  setToastLastShown(roomPda);
   
   if (variant === "sonner") {
     sonnerToast.success(title, { description });
@@ -98,9 +81,89 @@ export function showGameStartToast(
   return true;
 }
 
+// ============================================================
+// GAME START LATCH (prevents repeated event loop triggers)
+// ============================================================
+const LATCH_STORAGE_PREFIX = "game_start_latch_";
+const latchMemoryCache = new Map<string, number>();
+
 /**
- * Hook version for components that need the functions with stable references
+ * Check if a game-start latch is active for a room.
+ * Returns true if the latch is active (should NOT proceed).
  */
+export function isGameStartLatched(roomPda: string): boolean {
+  // Check memory first
+  const memTs = latchMemoryCache.get(roomPda);
+  if (memTs && Date.now() - memTs < DEDUPE_WINDOW_MS) {
+    return true;
+  }
+  
+  // Check localStorage
+  try {
+    const stored = localStorage.getItem(`${LATCH_STORAGE_PREFIX}${roomPda}`);
+    if (stored) {
+      const ts = parseInt(stored, 10);
+      if (!isNaN(ts) && Date.now() - ts < DEDUPE_WINDOW_MS) {
+        // Sync to memory
+        latchMemoryCache.set(roomPda, ts);
+        return true;
+      } else {
+        // Expired, clean up
+        localStorage.removeItem(`${LATCH_STORAGE_PREFIX}${roomPda}`);
+      }
+    }
+  } catch {
+    // localStorage not available
+  }
+  
+  return false;
+}
+
+/**
+ * Set the game-start latch for a room.
+ * Once set, isGameStartLatched() will return true for 10 minutes.
+ */
+export function setGameStartLatch(roomPda: string): void {
+  const now = Date.now();
+  latchMemoryCache.set(roomPda, now);
+  
+  try {
+    localStorage.setItem(`${LATCH_STORAGE_PREFIX}${roomPda}`, String(now));
+  } catch {
+    // localStorage not available
+  }
+  
+  console.log(`[GameStartLatch] Set latch for ${roomPda.slice(0, 8)}...`);
+}
+
+/**
+ * Clear the game-start latch for a room.
+ * Call when room is finished/canceled/forfeited.
+ */
+export function clearGameStartLatch(roomPda: string): void {
+  latchMemoryCache.delete(roomPda);
+  
+  try {
+    localStorage.removeItem(`${LATCH_STORAGE_PREFIX}${roomPda}`);
+  } catch {
+    // localStorage not available
+  }
+  
+  console.log(`[GameStartLatch] Cleared latch for ${roomPda.slice(0, 8)}...`);
+}
+
+/**
+ * Clear all dedupe keys for a room (toast + latch).
+ * Call when room is finished/canceled/forfeited.
+ */
+export function clearAllGameStartKeys(roomPda: string): void {
+  clearGameStartDedupe(roomPda);
+  clearGameStartLatch(roomPda);
+}
+
+// ============================================================
+// HOOK VERSION (for components needing stable references)
+// ============================================================
 export function useGameStartToast() {
   const shownRoomsRef = useRef<Set<string>>(new Set());
   
@@ -110,7 +173,6 @@ export function useGameStartToast() {
     description: string,
     variant: "sonner" | "shadcn" = "sonner"
   ): boolean => {
-    // Additional in-component dedupe to prevent multiple effect triggers
     if (shownRoomsRef.current.has(roomPda)) {
       console.log(`[GameStartToast] Component dedupe: already shown for ${roomPda.slice(0, 8)}...`);
       return false;
@@ -125,7 +187,7 @@ export function useGameStartToast() {
   
   const clearDedupe = useCallback((roomPda: string) => {
     shownRoomsRef.current.delete(roomPda);
-    clearGameStartDedupe(roomPda);
+    clearAllGameStartKeys(roomPda);
   }, []);
   
   return { showToast, clearDedupe };
