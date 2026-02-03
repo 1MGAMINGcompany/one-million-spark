@@ -870,23 +870,28 @@ export function useSolanaRooms() {
       });
       
       // ═══════════════════════════════════════════════════════════════════════
-      // P0 FIX: Derive roomPda deterministically from inputs (NO RPC CALL)
-      // This ensures DB sync ALWAYS runs, even if on-chain fetch fails on mobile.
+      // P0 FIX: DB sync MUST happen even if Edge Functions fail
+      // Use direct RPC calls (ensure_game_session, record_acceptance) FIRST
+      // Edge Functions (ranked-accept) are best-effort only
       // ═══════════════════════════════════════════════════════════════════════
       
       // STEP 1: Derive roomPda from creatorPubkey + roomId (same seeds as buildJoinRoomIx)
       const [derivedRoomPda] = getRoomPDA(creatorPubkey, roomId);
       const roomPdaStr = derivedRoomPda.toBase58();
+      const joinerWallet = publicKey.toBase58();
+      const creatorWallet = creatorPubkey.toBase58();
       
       console.log("[JoinRoom] join.after_confirm", {
         signature: signature.slice(0, 16),
         roomId,
-        creatorPrefix: creatorPubkey.toBase58().slice(0, 8),
+        creatorPrefix: creatorWallet.slice(0, 8),
+        joinerPrefix: joinerWallet.slice(0, 8),
       });
       traceLog("join.after_confirm", {
         signature: signature.slice(0, 16),
         roomId,
-        creatorPrefix: creatorPubkey.toBase58().slice(0, 8),
+        creatorPrefix: creatorWallet.slice(0, 8),
+        joinerPrefix: joinerWallet.slice(0, 8),
       });
       
       console.log("[JoinRoom] join.roompda.derived.ok", { roomPdaPrefix: roomPdaStr.slice(0, 8) });
@@ -896,46 +901,51 @@ export function useSolanaRooms() {
         console.log("[JoinRoom] join.db_sync.start", { roomPdaPrefix: roomPdaStr.slice(0, 8) });
         traceLog("join.db_sync.start", { roomPdaPrefix: roomPdaStr.slice(0, 8) });
         
-        console.log("[JoinRoom] 🔄 Syncing participants via ranked-accept...", {
-          roomPda: roomPdaStr.slice(0, 8),
-          joiner: publicKey.toBase58().slice(0, 8),
-        });
-
-        // STEP 2: Fetch session from DB to get mode, gameType, entryFee (no RPC needed)
-        traceLogFetch("game-session-get", "/functions/v1/game-session-get", "POST", false);
-        const { data: sessionResp, error: sessionFetchError } = await supabase.functions.invoke("game-session-get", {
-          body: { roomPda: roomPdaStr },
-          headers: getTraceHeaders(),
-        });
-        traceLogFetchResult("game-session-get", sessionFetchError ? undefined : 200, !sessionFetchError, sessionResp);
+        // ═══════════════════════════════════════════════════════════════════════
+        // STEP 2: CRITICAL - Call ensure_game_session RPC FIRST (no Edge Functions)
+        // This ensures the game_sessions row has player2_wallet set IMMEDIATELY
+        // ═══════════════════════════════════════════════════════════════════════
+        console.log("[JoinRoom] join.ensure_session.start", { roomPdaPrefix: roomPdaStr.slice(0, 8) });
+        traceLog("join.ensure_session.start", { roomPdaPrefix: roomPdaStr.slice(0, 8) });
         
-        if (sessionFetchError || !sessionResp?.session) {
-          console.error("[JoinRoom] join.db_sync.err - Cannot fetch session from DB:", sessionFetchError);
-          traceLog("join.db_sync.err", { step: "game-session-get", error: sessionFetchError?.message || "no session" });
-          toast({
-            title: "Join failed to sync",
-            description: "Could not fetch game session. Please retry.",
-            variant: "destructive",
-          });
-          return { ok: false, reason: "JOIN_DB_SYNC_FAILED" };
+        traceLogFetch("ensure_game_session", "/rest/v1/rpc/ensure_game_session", "POST", false);
+        const { error: ensureError } = await supabase.rpc("ensure_game_session", {
+          p_room_pda: roomPdaStr,
+          p_player1_wallet: creatorWallet,
+          p_player2_wallet: joinerWallet,
+          p_game_type: "unknown", // Will be updated by ranked-accept with on-chain data
+          p_mode: "ranked",
+          p_max_players: 2,
+          p_participants: [creatorWallet, joinerWallet],
+        });
+        traceLogFetchResult("ensure_game_session", ensureError ? undefined : 200, !ensureError, null);
+        
+        if (ensureError) {
+          console.warn("[JoinRoom] join.ensure_session.err:", ensureError.message);
+          traceLog("join.ensure_session.err", { message: ensureError.message });
+          // Don't fail yet - record_acceptance might still work
+        } else {
+          console.log("[JoinRoom] join.ensure_session.ok - player2_wallet set");
+          traceLog("join.ensure_session.ok", { roomPdaPrefix: roomPdaStr.slice(0, 8) });
         }
         
-        const session = sessionResp.session;
-        const mode = (session.mode as 'casual' | 'ranked' | 'private') || 'casual';
-        const gameType = session.game_type ? parseInt(session.game_type, 10) || GameType.Chess : GameType.Chess;
-        const maxPlayers = session.max_players ?? 2;
-        // Derive stake from session or default to 0.01 SOL
-        const stakeLamports = session.stake_lamports ?? Math.floor(0.01 * LAMPORTS_PER_SOL);
+        // ═══════════════════════════════════════════════════════════════════════
+        // STEP 3: Call record_acceptance RPC (no Edge Functions)
+        // Use local values from the join tx - don't fetch from game-session-get
+        // ═══════════════════════════════════════════════════════════════════════
         
-        console.log("[JoinRoom] DB session fetched:", { mode, gameType, maxPlayers, stakeLamports });
-
-        // STEP 3: Call record_acceptance to get a session token
+        // Default stake/gameType used when building join tx (known locally)
+        const defaultStakeLamports = Math.floor(0.01 * LAMPORTS_PER_SOL); // 0.01 SOL default
+        const defaultGameType = GameType.Chess; // Default game type
+        const defaultMaxPlayers = 2;
+        const defaultMode: 'casual' | 'ranked' | 'private' = 'ranked';
+        
         const rules = createRulesFromRoom(
           roomPdaStr,
-          gameType,
-          maxPlayers,
-          stakeLamports,
-          mode
+          defaultGameType,
+          defaultMaxPlayers,
+          defaultStakeLamports,
+          defaultMode
         );
         const rulesHash = await computeRulesHash(rules);
 
@@ -952,10 +962,10 @@ export function useSolanaRooms() {
         traceLogFetch("record_acceptance", "/rest/v1/rpc/record_acceptance", "POST", false);
         const { data: acceptResult, error: rpcError } = await supabase.rpc("record_acceptance", {
           p_room_pda: roomPdaStr,
-          p_wallet: publicKey.toBase58(),
+          p_wallet: joinerWallet,
           p_tx_signature: signature,
           p_rules_hash: rulesHash,
-          p_stake_lamports: stakeLamports,
+          p_stake_lamports: defaultStakeLamports,
           p_is_creator: false,
         });
         traceLogFetchResult("record_acceptance", rpcError ? undefined : 200, !rpcError, acceptResult);
@@ -963,8 +973,19 @@ export function useSolanaRooms() {
         let sessionToken: string | null = null;
 
         if (rpcError) {
-          console.warn("[JoinRoom] join.record_acceptance.err:", rpcError.message);
-          traceLog("join.record_acceptance.err", { message: rpcError.message });
+          console.error("[JoinRoom] join.record_acceptance.err:", rpcError.message);
+          traceLog("join.record_acceptance.err", { 
+            message: rpcError.message,
+            origin: typeof window !== 'undefined' ? window.location?.origin : 'unknown',
+            userAgent: typeof navigator !== 'undefined' ? navigator.userAgent?.slice(0, 100) : 'unknown',
+            online: typeof navigator !== 'undefined' ? navigator.onLine : 'unknown',
+          });
+          toast({
+            title: "Join failed to register",
+            description: "Could not register acceptance. Please retry.",
+            variant: "destructive",
+          });
+          return { ok: false, reason: "JOIN_RECORD_ACCEPTANCE_FAILED" };
         } else {
           const resultObj = typeof acceptResult === 'object' && acceptResult !== null 
             ? acceptResult as Record<string, unknown> 
@@ -975,111 +996,150 @@ export function useSolanaRooms() {
             storeSessionToken(roomPdaStr, sessionToken);
             console.log("[JoinRoom] join.record_acceptance.ok", { sessionTokenPrefix: sessionToken.slice(0, 8) });
             traceLog("join.record_acceptance.ok", { sessionTokenPrefix: sessionToken.slice(0, 8) });
+          } else {
+            console.warn("[JoinRoom] join.record_acceptance.ok but no token returned");
+            traceLog("join.record_acceptance.ok", { noToken: true });
           }
         }
 
-        // 4) CRITICAL: Call ranked-accept to sync on-chain participants to DB
-        //    This is the step that populates game_sessions.participants[]
-        //    and ensures player2_wallet is set correctly.
-        // STEP 4: Call ranked-accept to sync on-chain participants to DB
+        // ═══════════════════════════════════════════════════════════════════════
+        // STEP 4: Call ranked-accept (BEST-EFFORT - Edge Function may fail on mobile)
+        // Wrap in try/catch - failures here should NOT fail the join
+        // ═══════════════════════════════════════════════════════════════════════
         if (sessionToken) {
-          console.log("[JoinRoom] join.ranked_accept.start", { roomPdaPrefix: roomPdaStr.slice(0, 8) });
-          traceLog("join.ranked_accept.start", { roomPdaPrefix: roomPdaStr.slice(0, 8) });
-          
-          traceLogFetch("ranked-accept", "/functions/v1/ranked-accept", "POST", true);
-          const { data: rankedData, error: rankedError } = await supabase.functions.invoke("ranked-accept", {
-            body: {
-              roomPda: roomPdaStr,
-              mode: "simple", // Simple mode - session token provides identity
-            },
-            headers: {
-              Authorization: `Bearer ${sessionToken}`,
-              ...getTraceHeaders(),
-            },
-          });
-          traceLogFetchResult("ranked-accept", rankedError ? undefined : 200, !rankedError, rankedData);
-
-          if (rankedError) {
-            console.error("[JoinRoom] join.ranked_accept.err:", rankedError.message);
-            traceLog("join.ranked_accept.err", { message: rankedError.message });
-          } else if (rankedData?.success) {
-            console.log("[JoinRoom] join.ranked_accept.ok", {
-              sessionTokenPrefix: rankedData.sessionToken?.slice(0, 8),
-            });
-            traceLog("join.ranked_accept.ok", { sessionTokenPrefix: rankedData.sessionToken?.slice(0, 8) });
+          try {
+            console.log("[JoinRoom] join.ranked_accept.start", { roomPdaPrefix: roomPdaStr.slice(0, 8) });
+            traceLog("join.ranked_accept.start", { roomPdaPrefix: roomPdaStr.slice(0, 8) });
             
-            // Update session token if ranked-accept returned a new one
-            if (rankedData.sessionToken) {
-              storeSessionToken(roomPdaStr, rankedData.sessionToken);
-              console.log("[JoinRoom] ✅ Session token updated from ranked-accept");
+            traceLogFetch("ranked-accept", "/functions/v1/ranked-accept", "POST", true);
+            const { data: rankedData, error: rankedError } = await supabase.functions.invoke("ranked-accept", {
+              body: {
+                roomPda: roomPdaStr,
+                mode: "simple", // Simple mode - session token provides identity
+              },
+              headers: {
+                Authorization: `Bearer ${sessionToken}`,
+                ...getTraceHeaders(),
+              },
+            });
+            traceLogFetchResult("ranked-accept", rankedError ? undefined : 200, !rankedError, rankedData);
+
+            if (rankedError) {
+              // Log detailed error info for debugging Edge Function issues
+              console.error("[JoinRoom] join.ranked_accept.err:", rankedError.message, {
+                origin: typeof window !== 'undefined' ? window.location?.origin : 'unknown',
+                userAgent: typeof navigator !== 'undefined' ? navigator.userAgent?.slice(0, 100) : 'unknown',
+                online: typeof navigator !== 'undefined' ? navigator.onLine : 'unknown',
+                errorName: rankedError.name,
+                errorCause: (rankedError as any).cause,
+              });
+              traceLog("join.ranked_accept.err", { 
+                message: rankedError.message,
+                online: typeof navigator !== 'undefined' ? navigator.onLine : 'unknown',
+              });
+              // DO NOT FAIL - ranked-accept is best-effort
+            } else if (rankedData?.success) {
+              console.log("[JoinRoom] join.ranked_accept.ok", {
+                sessionTokenPrefix: rankedData.sessionToken?.slice(0, 8),
+              });
+              traceLog("join.ranked_accept.ok", { sessionTokenPrefix: rankedData.sessionToken?.slice(0, 8) });
+              
+              // Update session token if ranked-accept returned a new one
+              if (rankedData.sessionToken) {
+                storeSessionToken(roomPdaStr, rankedData.sessionToken);
+                console.log("[JoinRoom] ✅ Session token updated from ranked-accept");
+              }
+            } else {
+              console.warn("[JoinRoom] join.ranked_accept.err - unexpected response:", rankedData);
+              traceLog("join.ranked_accept.err", { success: false, data: rankedData });
             }
-          } else {
-            console.warn("[JoinRoom] join.ranked_accept.err - unexpected response:", rankedData);
-            traceLog("join.ranked_accept.err", { success: false, data: rankedData });
+          } catch (rankedErr: any) {
+            // Edge Function completely failed - log but don't fail join
+            console.error("[JoinRoom] join.ranked_accept.exception:", rankedErr?.message || String(rankedErr));
+            traceLog("join.ranked_accept.exception", { 
+              message: rankedErr?.message || String(rankedErr),
+              origin: typeof window !== 'undefined' ? window.location?.origin : 'unknown',
+              online: typeof navigator !== 'undefined' ? navigator.onLine : 'unknown',
+            });
+            // DO NOT FAIL - continue to DB poll
           }
         } else {
           // No session token from record_acceptance - cannot call ranked-accept
-          console.warn("[JoinRoom] join.ranked_accept.err - NO_SESSION_TOKEN");
-          traceLog("join.ranked_accept.err", { reason: "NO_SESSION_TOKEN" });
+          console.warn("[JoinRoom] join.ranked_accept.skip - NO_SESSION_TOKEN");
+          traceLog("join.ranked_accept.skip", { reason: "NO_SESSION_TOKEN" });
         }
 
         // ═══════════════════════════════════════════════════════════════════════
-        // 5) FAIL-FAST DB SYNC CHECK: Poll game-session-get to verify joiner is registered
-        //    If DB does not show joiner after 5 seconds, return error (do NOT navigate to /play)
+        // STEP 5: FAIL-FAST DB SYNC CHECK - Poll using direct table queries
+        // (NOT Edge Functions - they may fail on mobile)
         // ═══════════════════════════════════════════════════════════════════════
         const DB_SYNC_POLL_INTERVAL_MS = 500;
-        const DB_SYNC_TIMEOUT_MS = 5000;
+        const DB_SYNC_TIMEOUT_MS = 7000; // Extended to 7s for mobile
         const dbSyncStartTime = Date.now();
         let dbSyncSuccess = false;
 
-        console.log("[JoinRoom] 🔍 Polling DB to verify joiner sync...");
+        console.log("[JoinRoom] 🔍 Polling DB to verify joiner sync (direct table queries)...");
 
         while (Date.now() - dbSyncStartTime < DB_SYNC_TIMEOUT_MS) {
           try {
-            const { data: pollResp, error: pollError } = await supabase.functions.invoke("game-session-get", {
-              body: { roomPda: roomPdaStr },
-              headers: getTraceHeaders(),
+            // Query game_acceptances directly (no Edge Function)
+            const { count: acceptancesCount, error: accError } = await supabase
+              .from("game_acceptances")
+              .select("*", { count: "exact", head: true })
+              .eq("room_pda", roomPdaStr);
+            
+            // Query player_sessions directly (no Edge Function)
+            const { count: playerSessionsCount, error: psError } = await supabase
+              .from("player_sessions")
+              .select("*", { count: "exact", head: true })
+              .eq("room_pda", roomPdaStr);
+            
+            // Query game_sessions.participants directly
+            const { data: sessionData, error: sessError } = await supabase
+              .from("game_sessions")
+              .select("participants, player2_wallet")
+              .eq("room_pda", roomPdaStr)
+              .maybeSingle();
+            
+            const participantsCount = sessionData?.participants?.length ?? 0;
+            const player2Wallet = sessionData?.player2_wallet;
+            
+            if (accError || psError || sessError) {
+              console.warn("[JoinRoom] DB sync poll query error:", {
+                accError: accError?.message,
+                psError: psError?.message,
+                sessError: sessError?.message,
+              });
+              traceLog("join.poll.error", { 
+                accError: accError?.message, 
+                psError: psError?.message, 
+                sessError: sessError?.message,
+              });
+            }
+            
+            console.log("[JoinRoom] DB sync poll:", {
+              player_sessions_count: playerSessionsCount ?? 0,
+              game_acceptances_count: acceptancesCount ?? 0,
+              participantsCount,
+              player2_wallet: player2Wallet?.slice(0, 8),
+              elapsed: Date.now() - dbSyncStartTime,
+            });
+            
+            // Log poll result to trace
+            traceLogPoll({
+              participantsCount,
+              player_sessions_count: playerSessionsCount ?? 0,
+              game_acceptances_count: acceptancesCount ?? 0,
+              player2_wallet: player2Wallet,
+              elapsed: Date.now() - dbSyncStartTime,
             });
 
-            if (pollError) {
-              console.warn("[JoinRoom] DB sync poll error:", pollError.message);
-              traceLog("join.poll.error", { message: pollError.message });
-            } else {
-              const debug = pollResp?.debug || {};
-              const playerSessionsCount = debug.player_sessions_count ?? 0;
-              const acceptancesCount = debug.game_acceptances_count ?? 0;
-              const participantsCount = debug.participantsCount ?? pollResp?.session?.participants?.length ?? 0;
-              const player2Wallet = pollResp?.session?.player2_wallet || debug.player2_wallet;
-              const requiredCount = debug.requiredCount ?? pollResp?.acceptances?.requiredCount ?? 2;
-              const acceptedCount = debug.acceptedCount ?? pollResp?.acceptances?.acceptedCount ?? 0;
-              const bothAccepted = debug.bothAccepted ?? pollResp?.acceptances?.bothAccepted ?? false;
-              
-              console.log("[JoinRoom] DB sync poll:", {
-                player_sessions_count: playerSessionsCount,
-                game_acceptances_count: acceptancesCount,
-                participantsCount: participantsCount,
-                elapsed: Date.now() - dbSyncStartTime,
-              });
-              
-              // Log poll result to trace
-              traceLogPoll({
-                participantsCount,
-                player_sessions_count: playerSessionsCount,
-                game_acceptances_count: acceptancesCount,
-                player2_wallet: player2Wallet,
-                requiredCount,
-                acceptedCount,
-                bothAccepted,
-                elapsed: Date.now() - dbSyncStartTime,
-              });
-
-              // Success if ANY of these counts >= 2 (joiner registered)
-              if (playerSessionsCount >= 2 || acceptancesCount >= 2 || participantsCount >= 2) {
-                dbSyncSuccess = true;
-                console.log("[JoinRoom] ✅ DB sync verified - joiner is registered");
-                traceLog("join.sync.success", { elapsed: Date.now() - dbSyncStartTime });
-                break;
-              }
+            // Success if ANY of these counts >= 2 (joiner registered)
+            if ((playerSessionsCount ?? 0) >= 2 || (acceptancesCount ?? 0) >= 2 || participantsCount >= 2) {
+              dbSyncSuccess = true;
+              console.log("[JoinRoom] ✅ DB sync verified - joiner is registered");
+              traceLog("join.sync.success", { elapsed: Date.now() - dbSyncStartTime });
+              break;
             }
           } catch (pollErr: any) {
             console.warn("[JoinRoom] DB sync poll exception:", pollErr);
@@ -1094,7 +1154,7 @@ export function useSolanaRooms() {
         // FAIL-FAST: If DB did not register joiner within timeout, return error
         // ═══════════════════════════════════════════════════════════════════════
         if (!dbSyncSuccess) {
-          console.error("[JoinRoom] join.db_sync.failed - joiner not registered after 5s");
+          console.error("[JoinRoom] join.db_sync.failed - joiner not registered after 7s");
           traceLog("join.db_sync.failed", { elapsed: Date.now() - dbSyncStartTime, reason: "TIMEOUT", roomPdaPrefix: roomPdaStr.slice(0, 8) });
           toast({
             title: "Join failed to sync",
@@ -1110,7 +1170,14 @@ export function useSolanaRooms() {
 
       } catch (syncErr: any) {
         console.error("[JoinRoom] Failed to sync participants:", syncErr);
-        traceLog("join.error", { step: "sync", message: syncErr?.message || String(syncErr), stackPreview: syncErr?.stack?.slice(0, 200) });
+        traceLog("join.error", { 
+          step: "sync", 
+          message: syncErr?.message || String(syncErr), 
+          stackPreview: syncErr?.stack?.slice(0, 200),
+          origin: typeof window !== 'undefined' ? window.location?.origin : 'unknown',
+          userAgent: typeof navigator !== 'undefined' ? navigator.userAgent?.slice(0, 100) : 'unknown',
+          online: typeof navigator !== 'undefined' ? navigator.onLine : 'unknown',
+        });
         traceLog("join.navigate.roomlist", { reason: "SYNC_EXCEPTION" });
         toast({
           title: "Join failed to sync",
