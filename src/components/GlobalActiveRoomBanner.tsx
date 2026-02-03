@@ -7,8 +7,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Play, Users, Settings } from "lucide-react";
 import { useSolanaRooms } from "@/hooks/useSolanaRooms";
 import { RoomStatus, isOpenStatus } from "@/lib/solana-program";
-import { toast } from "@/hooks/use-toast";
 import { AudioManager } from "@/lib/AudioManager";
+import { showGameStartToast } from "@/hooks/useGameStartToast";
 import { showBrowserNotification } from "@/lib/pushNotifications";
 
 // REMOVED: GAME_ROUTES - game type comes from on-chain data via /play/:pda, not URL
@@ -55,11 +55,13 @@ export function GlobalActiveRoomBanner() {
         `Your ${activeRoom.gameTypeName} game is ready to start!`
       );
 
-      // Show toast
-      toast({
-        title: `🎮 ${t("gameBanner.opponentJoined")}`,
-        description: t("gameBanner.navigateToRoom", { game: activeRoom.gameTypeName }),
-      });
+      // Dedupe toast per room (prevents repeated toasts on mobile)
+      showGameStartToast(
+        activeRoom.pda,
+        `🎮 ${t("gameBanner.opponentJoined")}`,
+        t("gameBanner.navigateToRoom", { game: activeRoom.gameTypeName }),
+        "shadcn"
+      );
 
       // Navigate directly to PLAY route (game is Started)
       navigate(`/play/${activeRoom.pda}`);

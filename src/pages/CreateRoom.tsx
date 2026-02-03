@@ -44,6 +44,7 @@ import { showBrowserNotification } from "@/lib/pushNotifications";
 import { parseRematchParams, lamportsToSol, RematchPayload, solToLamports } from "@/lib/rematchPayload";
 import { supabase } from "@/integrations/supabase/client";
 import { getSessionToken, getAuthHeaders } from "@/lib/sessionToken";
+import { showGameStartToast } from "@/hooks/useGameStartToast";
 
 // Game type mapping from string to number
 const GAME_TYPE_MAP: Record<string, string> = {
@@ -185,10 +186,13 @@ export default function CreateRoom() {
         { requireInteraction: true }
       );
       
-      toast({
-        title: `🎮 ${t("gameBanner.opponentJoined")}`,
-        description: `${activeRoom.gameTypeName} - ${t("gameBanner.enterGame")}!`,
-      });
+      // Dedupe toast per room (prevents repeated toasts on mobile)
+      showGameStartToast(
+        activeRoom.pda,
+        `🎮 ${t("gameBanner.opponentJoined")}`,
+        `${activeRoom.gameTypeName} - ${t("gameBanner.enterGame")}!`,
+        "shadcn"
+      );
       
       // Navigate to room using PDA from activeRoom (the ONLY unique identifier)
       console.log("[CreateRoom] Navigating to room via PDA:", activeRoom.pda);

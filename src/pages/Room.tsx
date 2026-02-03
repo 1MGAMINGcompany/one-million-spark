@@ -27,6 +27,7 @@ import { isWalletInAppBrowser } from "@/lib/walletBrowserDetection";
 import { usePendingRoute } from "@/hooks/usePendingRoute";
 import { getSessionToken, getAuthHeaders, storeSessionToken } from "@/lib/sessionToken";
 import { toast } from "sonner";
+import { showGameStartToast } from "@/hooks/useGameStartToast";
 
 // Presence feature disabled until program supports ping_room
 // const CREATOR_TIMEOUT_SECS = 60;
@@ -529,9 +530,13 @@ return () => {
       console.log("[Room] Game started! Redirecting to play page");
       hasNavigatedRef.current = true;
       
-      toast.success("Game is starting!", {
-        description: `${gameName} match is ready. Entering game...`,
-      });
+      // Dedupe toast per room (prevents repeated toasts on mobile)
+      showGameStartToast(
+        roomPdaParam,
+        "Game is starting!",
+        `${gameName} match is ready. Entering game...`,
+        "sonner"
+      );
       
       navigate(`/play/${roomPdaParam}`, { replace: true });
     }
@@ -618,9 +623,13 @@ return () => {
 
       hasNavigatedRef.current = true;
 
-      toast.success("Game is starting!", {
-        description: `${gameName} match is ready. Entering game...`,
-      });
+      // Dedupe toast per room (prevents repeated toasts on mobile)
+      showGameStartToast(
+        roomPdaParam,
+        "Game is starting!",
+        `${gameName} match is ready. Entering game...`,
+        "sonner"
+      );
 
       navigate(`/play/${roomPdaParam}`, { replace: true });
     }

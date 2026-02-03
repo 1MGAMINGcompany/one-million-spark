@@ -17,6 +17,7 @@ import { useConnection } from "@solana/wallet-adapter-react";
 import { finalizeGame } from "@/lib/finalizeGame";
 import { toast } from "@/hooks/use-toast";
 import { useTranslation } from "react-i18next";
+import { clearGameStartDedupe } from "@/hooks/useGameStartToast";
 
 export interface UseForfeitOptions {
   roomPda: string | null;
@@ -178,6 +179,10 @@ export function useForfeit({
       } catch (e) {
         console.warn("[useForfeit] Failed to clear room from state:", e);
       }
+      
+      // 7. Clear toast dedupe key so future rooms can show toast again
+      clearGameStartDedupe(roomPda);
+      console.log("[useForfeit] Cleared game start toast dedupe for:", roomPda.slice(0, 8));
     }
     
     console.log("[useForfeit] forceExit complete, navigating to /room-list");
