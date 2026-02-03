@@ -8,7 +8,7 @@ import { Play, Users, Settings } from "lucide-react";
 import { useSolanaRooms } from "@/hooks/useSolanaRooms";
 import { RoomStatus, isOpenStatus } from "@/lib/solana-program";
 import { AudioManager } from "@/lib/AudioManager";
-import { showGameStartToast } from "@/hooks/useGameStartToast";
+import { showGameStartToast, isGameStartLatched, setGameStartLatch } from "@/hooks/useGameStartToast";
 import { showBrowserNotification } from "@/lib/pushNotifications";
 
 // REMOVED: GAME_ROUTES - game type comes from on-chain data via /play/:pda, not URL
@@ -44,7 +44,17 @@ export function GlobalActiveRoomBanner() {
       currentStatus === RoomStatus.Started &&
       !hasNavigatedRef.current
     ) {
+      // Check latch FIRST - if latched, skip entirely (prevents UI flicker)
+      if (isGameStartLatched(activeRoom.pda)) {
+        console.log(`[GlobalActiveRoomBanner] Latch active for ${activeRoom.pda.slice(0, 8)}... skipping`);
+        hasNavigatedRef.current = true; // Still mark as navigated to prevent future checks
+        return;
+      }
+
       hasNavigatedRef.current = true;
+      
+      // Set latch BEFORE any actions (prevents re-entry)
+      setGameStartLatch(activeRoom.pda);
 
       // Play sound
       AudioManager.playPlayerJoined();

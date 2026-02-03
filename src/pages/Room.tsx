@@ -27,7 +27,7 @@ import { isWalletInAppBrowser } from "@/lib/walletBrowserDetection";
 import { usePendingRoute } from "@/hooks/usePendingRoute";
 import { getSessionToken, getAuthHeaders, storeSessionToken } from "@/lib/sessionToken";
 import { toast } from "sonner";
-import { showGameStartToast } from "@/hooks/useGameStartToast";
+import { showGameStartToast, isGameStartLatched, setGameStartLatch } from "@/hooks/useGameStartToast";
 
 // Presence feature disabled until program supports ping_room
 // const CREATOR_TIMEOUT_SECS = 60;
@@ -527,8 +527,18 @@ return () => {
     
     // Detect transition: Open -> Started means game is ready
     if (prevStatus !== null && isOpenStatus(prevStatus) && currentStatus === RoomStatus.Started && !hasNavigatedRef.current) {
+      // Check latch FIRST - if latched, skip entirely (prevents UI flicker)
+      if (isGameStartLatched(roomPdaParam)) {
+        console.log(`[Room] Latch active for ${roomPdaParam.slice(0, 8)}... skipping transition`);
+        hasNavigatedRef.current = true; // Still mark to prevent future checks
+        return;
+      }
+      
       console.log("[Room] Game started! Redirecting to play page");
       hasNavigatedRef.current = true;
+      
+      // Set latch BEFORE any actions (prevents re-entry)
+      setGameStartLatch(roomPdaParam);
       
       // Dedupe toast per room (prevents repeated toasts on mobile)
       showGameStartToast(
@@ -615,6 +625,13 @@ return () => {
 
     // Navigate if game is started OR room is full (both mean game should begin)
     if (isStarted || isFull) {
+      // Check latch FIRST - if latched, skip entirely (prevents UI flicker)
+      if (isGameStartLatched(roomPdaParam)) {
+        console.log(`[Room] Latch active for ${roomPdaParam.slice(0, 8)}... skipping direct check`);
+        hasNavigatedRef.current = true; // Still mark to prevent future checks
+        return;
+      }
+
       console.log("[Room] room is started/full -> navigating to /play", {
         status: room.status,
         playersCount,
@@ -622,6 +639,9 @@ return () => {
       });
 
       hasNavigatedRef.current = true;
+      
+      // Set latch BEFORE any actions (prevents re-entry)
+      setGameStartLatch(roomPdaParam);
 
       // Dedupe toast per room (prevents repeated toasts on mobile)
       showGameStartToast(
