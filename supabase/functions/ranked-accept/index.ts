@@ -297,24 +297,85 @@ Deno.serve(async (req: Request) => {
         console.log("[ranked-accept] ✅ Simple acceptance recorded");
       }
 
-      // Update player_sessions metadata WITHOUT overwriting session_token
-      // The token was already created by record_acceptance RPC - just update metadata
-      const { error: sessionError } = await supabase
+      // ─────────────────────────────────────────────────────────────
+      // CRITICAL FIX: Ensure player_sessions row exists (idempotent UPSERT)
+      // This fixes the bug where joiners end up with no player_sessions row
+      // ─────────────────────────────────────────────────────────────
+      const { data: existingPlayerSession } = await supabase
         .from("player_sessions")
-        .update({
-          rules_hash: "stake_verified",
-          last_turn: 0,
-          last_hash: "genesis",
-          revoked: false,
-        })
+        .select("session_token")
         .eq("room_pda", body.roomPda)
-        .eq("wallet", playerWallet);
+        .eq("wallet", playerWallet)
+        .maybeSingle();
 
-      if (sessionError) {
-        console.error("[ranked-accept] Failed to update player_session:", sessionError);
+      let sessionCreated = false;
+
+      if (existingPlayerSession?.session_token) {
+        // Row exists - UPDATE metadata only (preserve existing token)
+        const { error: updateError } = await supabase
+          .from("player_sessions")
+          .update({
+            rules_hash: "stake_verified",
+            last_turn: 0,
+            last_hash: "genesis",
+            revoked: false,
+          })
+          .eq("room_pda", body.roomPda)
+          .eq("wallet", playerWallet);
+
+        if (updateError) {
+          console.error("[ranked-accept] Failed to update player_session:", updateError);
+        } else {
+          console.log("[ranked-accept] ✅ player_sessions metadata updated (token preserved)");
+        }
       } else {
-        console.log("[ranked-accept] ✅ player_sessions metadata updated (token preserved)");
+        // Row MISSING - INSERT new row with a fresh token
+        // This is the critical fix for joiners who never got a player_sessions row
+        const newToken = crypto.randomUUID() + crypto.randomUUID().replace(/-/g, "");
+        sessionToken = newToken; // Return this new token to frontend
+        sessionCreated = true;
+
+        const { error: insertError } = await supabase
+          .from("player_sessions")
+          .insert({
+            room_pda: body.roomPda,
+            wallet: playerWallet,
+            session_token: newToken,
+            rules_hash: "stake_verified",
+            last_turn: 0,
+            last_hash: "genesis",
+            revoked: false,
+            desync_count: 0,
+          });
+
+        if (insertError) {
+          // Handle race condition - another insert happened first
+          if (insertError.code === "23505") {
+            console.log("[ranked-accept] player_sessions row inserted by concurrent request");
+            // Fetch the token that was just inserted
+            const { data: raceSession } = await supabase
+              .from("player_sessions")
+              .select("session_token")
+              .eq("room_pda", body.roomPda)
+              .eq("wallet", playerWallet)
+              .single();
+            if (raceSession?.session_token) {
+              sessionToken = raceSession.session_token;
+            }
+          } else {
+            console.error("[ranked-accept] Failed to insert player_session:", insertError);
+          }
+        } else {
+          console.log("[ranked-accept] ✅ player_sessions row CREATED (missing row fix)");
+        }
       }
+
+      // Debug log for tracking
+      console.log("[ranked-accept.session.upsert]", {
+        roomPda: body.roomPda.slice(0, 8),
+        walletPrefix: playerWallet.slice(0, 8),
+        created: sessionCreated,
+      });
     }
 
     // ─────────────────────────────────────────────────────────────
