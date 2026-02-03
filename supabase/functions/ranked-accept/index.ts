@@ -244,6 +244,7 @@ Deno.serve(async (req: Request) => {
       signatureForRecord = signature;
 
       // Record acceptance with cryptographic signature (handles UNIQUE constraint)
+      // FIX: Use fresh UUID for game_acceptances.session_token (not player_sessions token)
       const { error: acceptanceError } = await supabase
         .from("game_acceptances")
         .upsert({
@@ -253,7 +254,7 @@ Deno.serve(async (req: Request) => {
           nonce: nonce,
           timestamp_ms: timestamp,
           signature: signatureForRecord,
-          session_token: sessionToken,
+          session_token: crypto.randomUUID(),  // Fresh UUID per acceptance record
           session_expires_at: new Date(now + 4 * 60 * 60 * 1000).toISOString(),
         }, { onConflict: 'room_pda,player_wallet' });
 
@@ -277,6 +278,7 @@ Deno.serve(async (req: Request) => {
       console.log("[ranked-accept] Reusing existing session token:", sessionToken.slice(0, 8));
 
       // Record acceptance in game_acceptances (for dice roll seeding)
+      // FIX: Use fresh UUID for game_acceptances.session_token (not player_sessions token)
       const { error: acceptanceError } = await supabase
         .from("game_acceptances")
         .upsert({
@@ -286,7 +288,7 @@ Deno.serve(async (req: Request) => {
           timestamp_ms: now,
           signature: signatureForRecord,
           rules_hash: "stake_verified",
-          session_token: sessionToken,
+          session_token: crypto.randomUUID(),  // Fresh UUID per acceptance record
           session_expires_at: new Date(now + 4 * 60 * 60 * 1000).toISOString(),
         }, { onConflict: 'room_pda,player_wallet' });
 

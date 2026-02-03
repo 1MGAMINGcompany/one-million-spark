@@ -220,6 +220,7 @@ export function RulesGate({
   }, [roomPlayers]);
 
   // AUTO-ACCEPT: Silently accept rules when player enters and has session token
+  // If acceptance fails (e.g., duplicate/conflict), treat as success and re-poll
   useEffect(() => {
     // Skip if already triggered, not ranked, or not loaded
     if (autoAcceptTriggeredRef.current) return;
@@ -231,7 +232,7 @@ export function RulesGate({
     if (iAmReady) return; // Already ready
     if (isSettingReady) return; // Already in progress
 
-    // Trigger auto-accept
+    // Trigger auto-accept (conflicts treated as success by polling)
     autoAcceptTriggeredRef.current = true;
     console.log("[RulesGate] Auto-accepting rules for player:", myWallet?.slice(0, 8));
     onAcceptRules();
