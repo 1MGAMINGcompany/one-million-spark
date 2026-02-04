@@ -661,6 +661,10 @@ export type Database = {
         Args: { p_room_pda: string }
         Returns: undefined
       }
+      maybe_finalize_start_state: {
+        Args: { p_room_pda: string }
+        Returns: undefined
+      }
       rebuild_participants: {
         Args: {
           p_existing_participants: string[]
