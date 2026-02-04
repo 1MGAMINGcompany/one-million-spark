@@ -1994,11 +1994,10 @@ const BackgammonGame = () => {
     <GameErrorBoundary>
     <InAppBrowserRecovery roomPda={roomPda || ""} onResubscribeRealtime={resubscribeRealtime} bypassOverlay={true}>
     <div className={cn(
-      "game-viewport bg-background flex flex-col relative",
-      // Mobile: lock viewport to prevent scroll, Desktop: allow natural height (prevents clipping)
+      "game-viewport bg-background relative",
       isMobile 
-        ? "min-h-[calc(100dvh-4rem)] max-h-[calc(100dvh-4rem)] overflow-hidden" 
-        : "min-h-[calc(100dvh-4rem)]",
+        ? "h-[calc(100dvh-4rem)] overflow-y-hidden flex flex-col" 
+        : "min-h-screen",
       "pb-[env(safe-area-inset-bottom)]"
     )}>
       {/* Gold Confetti Explosion on Win - only after outcome resolved */}
