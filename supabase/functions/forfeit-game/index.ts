@@ -266,6 +266,39 @@ async function logBalanceDeltas(
   }
 }
 
+// ============================================================================
+// Structured Audit Log - Single source of truth for payout direction
+// ============================================================================
+interface AuditLog {
+  roomPda: string;
+  mode: string;
+  gameType: string;
+  action: string;
+  forfeiter: string | null;
+  winner: string | null;
+  stakeLamports: number;
+  feeLamports: number | null;
+  vault: string | null;
+  txSig: string | null;
+  status_int: number;
+  status: string;
+  timestamp: string;
+}
+
+function emitAuditLog(log: AuditLog) {
+  console.log("[forfeit-game] 📋 AUDIT_LOG", JSON.stringify(log));
+}
+
+// ============================================================================
+// Payout Direction Metadata - undeniable winner derivation
+// ============================================================================
+interface PayoutDirection {
+  expectedWinner: string | null;
+  computedWinner: string | null;
+  reason: string;
+  method: "2p_other_player" | "ludo_last_standing" | "cancel_refund" | "void_no_winner";
+}
+
 Deno.serve(async (req: Request) => {
   console.log("[forfeit-game] HIT", {
     ts: new Date().toISOString(),
@@ -602,6 +635,46 @@ Deno.serve(async (req: Request) => {
         player_count: roomData.playerCount,
       });
 
+      // Upsert match_share_cards for cancelled room
+      const cancelPayoutDirection: PayoutDirection = {
+        expectedWinner: null,
+        computedWinner: null,
+        reason: "Room cancelled before active - all players refunded",
+        method: "cancel_refund",
+      };
+
+      await supabase
+        .from("match_share_cards")
+        .upsert({
+          room_pda: roomPda,
+          mode: dbMode || "casual",
+          game_type: dbGameType || "unknown",
+          winner_wallet: null,
+          loser_wallet: null,
+          win_reason: "cancelled",
+          stake_lamports: Number(roomData.stakeLamports),
+          tx_signature: cancelSignature,
+          metadata: { payout_direction: cancelPayoutDirection },
+          updated_at: new Date().toISOString(),
+        }, { onConflict: "room_pda" });
+
+      // Emit structured audit log
+      emitAuditLog({
+        roomPda,
+        mode: dbMode,
+        gameType: dbGameType,
+        action: "cancel",
+        forfeiter: null,
+        winner: null,
+        stakeLamports: Number(roomData.stakeLamports),
+        feeLamports: null,
+        vault: vaultPda.toBase58(),
+        txSig: cancelSignature,
+        status_int: 5,
+        status: "cancelled",
+        timestamp: new Date().toISOString(),
+      });
+
       return json200({
         success: true,
         action: "cancel",
@@ -910,7 +983,14 @@ Deno.serve(async (req: Request) => {
         })
         .eq("room_pda", roomPda);
       
-      // Record failure in match_share_cards for visibility
+      // Record failure in match_share_cards for visibility with payout_direction
+      const voidPayoutDirection: PayoutDirection = {
+        expectedWinner: winnerWallet,
+        computedWinner: null,
+        reason: `Settlement transaction failed: ${String((txError as Error)?.message ?? txError)}`,
+        method: "void_no_winner",
+      };
+
       await supabase
         .from("match_share_cards")
         .upsert({
@@ -923,6 +1003,7 @@ Deno.serve(async (req: Request) => {
           stake_lamports: Number(roomData.stakeLamports),
           tx_signature: null,
           metadata: {
+            payout_direction: voidPayoutDirection,
             error: String((txError as Error)?.message ?? txError),
             intended_winner: winnerWallet,
             forfeiting_player: forfeitingWallet,
@@ -939,6 +1020,23 @@ Deno.serve(async (req: Request) => {
         error_message: String((txError as Error)?.message ?? txError),
         stake_per_player: Number(roomData.stakeLamports),
         player_count: participantsCount,
+      });
+
+      // Emit structured audit log for void
+      emitAuditLog({
+        roomPda,
+        mode: dbMode,
+        gameType: dbGameType,
+        action: "forfeit_failed",
+        forfeiter: forfeitingWallet,
+        winner: null,
+        stakeLamports: Number(roomData.stakeLamports),
+        feeLamports: null,
+        vault: vaultPda.toBase58(),
+        txSig: null,
+        status_int: 4,
+        status: "void",
+        timestamp: new Date().toISOString(),
       });
       
       return json200({
@@ -1001,6 +1099,16 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    // Build payout_direction metadata
+    const forfeitPayoutDirection: PayoutDirection = {
+      expectedWinner: winnerWallet,
+      computedWinner: winnerWallet,
+      reason: maxPlayers >= 3 
+        ? `Ludo last-standing: ${forfeitingWallet.slice(0, 8)} forfeited, ${winnerWallet.slice(0, 8)} is sole remaining player`
+        : `2-player forfeit: ${forfeitingWallet.slice(0, 8)} forfeited, ${winnerWallet.slice(0, 8)} wins`,
+      method: maxPlayers >= 3 ? "ludo_last_standing" : "2p_other_player",
+    };
+
     // Upsert into match_share_cards for social sharing
     const { error: shareCardError } = await supabase
       .from("match_share_cards")
@@ -1013,6 +1121,7 @@ Deno.serve(async (req: Request) => {
         win_reason: "forfeit",
         stake_lamports: Number(roomData.stakeLamports),
         tx_signature: signature,
+        metadata: { payout_direction: forfeitPayoutDirection },
         updated_at: new Date().toISOString(),
       }, { onConflict: "room_pda" });
 
@@ -1031,6 +1140,23 @@ Deno.serve(async (req: Request) => {
       forfeiting_wallet: forfeitingWallet,
       stake_per_player: Number(roomData.stakeLamports),
       player_count: participantsCount,
+    });
+
+    // Emit structured audit log
+    emitAuditLog({
+      roomPda,
+      mode: dbMode,
+      gameType: dbGameType,
+      action: "forfeit",
+      forfeiter: forfeitingWallet,
+      winner: winnerWallet,
+      stakeLamports: Number(roomData.stakeLamports),
+      feeLamports: null, // Fee is deducted on-chain
+      vault: vaultPda.toBase58(),
+      txSig: signature,
+      status_int: 3,
+      status: "finished",
+      timestamp: new Date().toISOString(),
     });
 
     return json200({

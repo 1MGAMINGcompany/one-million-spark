@@ -262,6 +262,41 @@ async function logSettlement(
   }
 }
 
+// ============================================================================
+// Structured Audit Log - Single source of truth for payout direction
+// ============================================================================
+interface AuditLog {
+  roomPda: string;
+  mode: string;
+  gameType: string;
+  action: string;
+  forfeiter: string | null;
+  winner: string | null;
+  stakeLamports: number;
+  feeLamports: number | null;
+  vault: string | null;
+  txSig: string | null;
+  status_int: number;
+  status: string;
+  timestamp: string;
+}
+
+function emitAuditLog(log: AuditLog) {
+  console.log("[settle-game] 📋 AUDIT_LOG", JSON.stringify(log));
+}
+
+// ============================================================================
+// Payout Direction Metadata - undeniable winner derivation
+// ============================================================================
+interface PayoutDirection {
+  expectedWinner: string | null;
+  computedWinner: string | null;
+  reason: string;
+  method: "seat_index" | "game_over" | "legacy_color" | "void_no_winner";
+  seatIndex?: number;
+  source?: string;
+}
+
 Deno.serve(async (req: Request) => {
   console.log("[settle-game] HIT", {
     ts: new Date().toISOString(),
@@ -784,7 +819,16 @@ Deno.serve(async (req: Request) => {
         })
         .eq("room_pda", roomPda);
 
-      // Upsert void share card
+      // Upsert void share card with payout_direction
+      const voidPayoutDirection: PayoutDirection = {
+        expectedWinner: winnerWallet,
+        computedWinner: null,
+        reason: `Vault underfunded: ${vaultLamports} lamports, need ${expectedPot}`,
+        method: "void_no_winner",
+        seatIndex,
+        source,
+      };
+
       await supabase
         .from("match_share_cards")
         .upsert({
@@ -796,9 +840,26 @@ Deno.serve(async (req: Request) => {
           win_reason: "void",
           stake_lamports: Number(roomData.stakeLamports),
           tx_signature: null,
-          metadata: { intendedWinner: winnerWallet, reason: "vault_underfunded" },
+          metadata: { payout_direction: voidPayoutDirection },
           updated_at: new Date().toISOString(),
         }, { onConflict: "room_pda" });
+
+      // Emit structured audit log
+      emitAuditLog({
+        roomPda,
+        mode: mode || "casual",
+        gameType: gameType || "unknown",
+        action: "void_underfunded",
+        forfeiter: null,
+        winner: null,
+        stakeLamports: Number(roomData.stakeLamports),
+        feeLamports: null,
+        vault: vaultPda.toBase58(),
+        txSig: null,
+        status_int: 4,
+        status: "void",
+        timestamp: new Date().toISOString(),
+      });
 
       return json200({
         success: false,
@@ -1027,6 +1088,16 @@ Deno.serve(async (req: Request) => {
           console.log("[settle-game] ✅ game_sessions marked finished (status_int=3, winner:", winnerWallet.slice(0, 8), ")");
         }
 
+        // Build payout_direction for success
+        const successPayoutDirection: PayoutDirection = {
+          expectedWinner: winnerWallet,
+          computedWinner: winnerWallet,
+          reason: `Winner derived from game_state via ${source}: seat ${seatIndex} = ${winnerWallet.slice(0, 8)}`,
+          method: source === "winnerSeat" ? "seat_index" : source === "gameOverNumeric" ? "game_over" : "legacy_color",
+          seatIndex,
+          source,
+        };
+
         // Upsert into match_share_cards for social sharing
         const loserWallet = playersOnChain.find((p: string) => p !== winnerWallet) || null;
         const { error: shareCardError } = await supabase
@@ -1040,6 +1111,7 @@ Deno.serve(async (req: Request) => {
             win_reason: reason || "checkmate",
             stake_lamports: Number(roomData.stakeLamports),
             tx_signature: signature,
+            metadata: { payout_direction: successPayoutDirection },
             updated_at: new Date().toISOString(),
           }, { onConflict: "room_pda" });
 
@@ -1113,6 +1185,23 @@ Deno.serve(async (req: Request) => {
         console.warn("[settle-game] ⚠️ close_room failed", { error: closeRoomError });
       }
 
+      // Emit structured audit log for success
+      emitAuditLog({
+        roomPda,
+        mode: mode || "casual",
+        gameType: gameType || "unknown",
+        action: "settled",
+        forfeiter: null,
+        winner: winnerWallet,
+        stakeLamports: Number(roomData.stakeLamports),
+        feeLamports: configData.feeBps ? Math.floor(Number(roomData.stakeLamports) * roomData.playerCount * configData.feeBps / 10000) : null,
+        vault: vaultPda.toBase58(),
+        txSig: signature,
+        status_int: 3,
+        status: "finished",
+        timestamp: new Date().toISOString(),
+      });
+
       return json200({
         success: true,
         action: "settled",
@@ -1175,7 +1264,16 @@ Deno.serve(async (req: Request) => {
         })
         .eq("room_pda", roomPda);
 
-      // Upsert void share card for settlement failure
+      // Upsert void share card for settlement failure with payout_direction
+      const failedPayoutDirection: PayoutDirection = {
+        expectedWinner: winnerWallet,
+        computedWinner: null,
+        reason: `Settlement failed: ${String((settlementError as Error)?.message ?? settlementError)}`,
+        method: "void_no_winner",
+        seatIndex,
+        source,
+      };
+
       await supabase
         .from("match_share_cards")
         .upsert({
@@ -1187,9 +1285,26 @@ Deno.serve(async (req: Request) => {
           win_reason: "void",
           stake_lamports: Number(roomData.stakeLamports),
           tx_signature: null,
-          metadata: { intendedWinner: winnerWallet, reason: "settlement_failed" },
+          metadata: { payout_direction: failedPayoutDirection },
           updated_at: new Date().toISOString(),
         }, { onConflict: "room_pda" });
+
+      // Emit structured audit log for failure
+      emitAuditLog({
+        roomPda,
+        mode: mode || "casual",
+        gameType: gameType || "unknown",
+        action: "settle_failed",
+        forfeiter: null,
+        winner: null,
+        stakeLamports: Number(roomData.stakeLamports),
+        feeLamports: null,
+        vault: vaultPda.toBase58(),
+        txSig: null,
+        status_int: 4,
+        status: "void",
+        timestamp: new Date().toISOString(),
+      });
 
       return json200({
         success: false,
