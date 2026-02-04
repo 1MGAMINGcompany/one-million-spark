@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Trophy, RefreshCw, BarChart2, Star, LogOut, Wallet, ChevronDown, ChevronUp, CheckCircle, ExternalLink, Loader2 } from 'lucide-react';
+import { Trophy, RefreshCw, BarChart2, Star, LogOut, Wallet, ChevronDown, ChevronUp, CheckCircle, ExternalLink, Loader2, Share2 } from 'lucide-react';
 import GoldConfettiExplosion from '@/components/GoldConfettiExplosion';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -13,6 +13,7 @@ import { RivalryWidget } from '@/components/RivalryWidget';
 import { WalletLink } from '@/components/WalletLink';
 import { DrawSettlementDebug } from '@/components/DrawSettlementDebug';
 import { DrawRefundError } from '@/components/DrawRefundError';
+import { ShareWinModal } from '@/components/ShareWinModal';
 import { 
   RematchMode, 
   RematchPayload, 
@@ -187,6 +188,9 @@ export function GameEndScreen({
   // Rematch state
   const [customStakeSol, setCustomStakeSol] = useState<string>('');
   const [showCustomInput, setShowCustomInput] = useState(false);
+  
+  // Share win modal state
+  const [showShareModal, setShowShareModal] = useState(false);
   
   const isPending = winner == null || winner === DEFAULT_PUBKEY;
   const isWinner = !isPending && winner === myAddress;
@@ -687,6 +691,18 @@ export function GameEndScreen({
               </Button>
             )}
 
+            {/* Share Win Button - Show for winners after payout */}
+            {roomPda && isWinner && isPayoutConfirmed && (
+              <Button
+                onClick={() => setShowShareModal(true)}
+                variant="secondary"
+                className="w-full gap-2"
+              >
+                <Share2 size={18} />
+                Share Win
+              </Button>
+            )}
+
             {/* Secondary Actions */}
             <div className="flex gap-2">
               {onViewStats && (
@@ -726,6 +742,17 @@ export function GameEndScreen({
           </p>
         </div>
       </Card>
+
+      {/* Share Win Modal */}
+      {roomPda && (
+        <ShareWinModal
+          open={showShareModal}
+          onOpenChange={setShowShareModal}
+          roomPda={roomPda}
+          gameType={gameType}
+          isVoid={false}
+        />
+      )}
     </div>
   );
 }
