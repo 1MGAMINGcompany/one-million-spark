@@ -132,15 +132,68 @@ serve(async (req) => {
 
   // STRICT: acceptedCount must meet requiredCount - no fallbacks
   const acceptedCount = acceptedWallets.size;
+  const participantsCount = participants.length;
   const bothAccepted = acceptedCount >= requiredCount;
+  
+  // Compute readiness for self-healing
+  const readyByCounts = participantsCount >= requiredCount && acceptedCount >= requiredCount;
 
   console.log("[game-session-get] Acceptances:", {
     acceptedCount,
     requiredCount,
     max_players: session?.max_players,
-    participantsCount: participants.length,
+    participantsCount,
     bothAccepted,
+    readyByCounts,
   });
+
+  // ========== SELF-HEALING BLOCK ==========
+  let healedSession = session;
+  
+  // Self-heal #1: Activate if ready by counts but status_int < 2
+  if (session && (session.status_int ?? 1) < 2 && readyByCounts) {
+    console.log("[game-session-get] heal.activate.start", { roomPda: roomPda.slice(0, 8), statusInt: session.status_int });
+    try {
+      const { error: activateErr } = await supabase.rpc('maybe_activate_game_session', { p_room_pda: roomPda });
+      if (activateErr) {
+        console.error("[game-session-get] heal.activate.err", activateErr);
+      } else {
+        console.log("[game-session-get] heal.activate.ok");
+        // Re-fetch session after healing
+        const { data: refreshed } = await supabase
+          .from('game_sessions')
+          .select('*, max_players, eliminated_players')
+          .eq('room_pda', roomPda)
+          .maybeSingle();
+        if (refreshed) healedSession = refreshed;
+      }
+    } catch (e) {
+      console.error("[game-session-get] heal.activate.err", e);
+    }
+  }
+
+  // Self-heal #2: Finalize start state if active but not finalized
+  if (healedSession && (healedSession.status_int ?? 1) >= 2 && healedSession.start_roll_finalized !== true) {
+    console.log("[game-session-get] heal.finalize_start.start", { roomPda: roomPda.slice(0, 8), statusInt: healedSession.status_int });
+    try {
+      const { error: finalizeErr } = await supabase.rpc('maybe_finalize_start_state', { p_room_pda: roomPda });
+      if (finalizeErr) {
+        console.error("[game-session-get] heal.finalize_start.err", finalizeErr);
+      } else {
+        console.log("[game-session-get] heal.finalize_start.ok");
+        // Re-fetch session after finalization
+        const { data: refreshed2 } = await supabase
+          .from('game_sessions')
+          .select('*, max_players, eliminated_players')
+          .eq('room_pda', roomPda)
+          .maybeSingle();
+        if (refreshed2) healedSession = refreshed2;
+      }
+    } catch (e) {
+      console.error("[game-session-get] heal.finalize_start.err", e);
+    }
+  }
+  // ========== END SELF-HEALING BLOCK ==========
 
   const acceptances = { 
     players, 
@@ -149,25 +202,27 @@ serve(async (req) => {
     requiredCount,
   };
 
-  console.log('[game-session-get] ✅ Session found:', !!session, 'Receipt:', !!receipt, 'Match:', !!match, 'Acceptances:', players.length)
+  console.log('[game-session-get] ✅ Session found:', !!healedSession, 'Receipt:', !!receipt, 'Match:', !!match, 'Acceptances:', players.length)
 
-  // 🔍 DEBUG: Build debug info object
+  // 🔍 DEBUG: Build debug info object (use healed session)
   const debugInfo = {
     roomPda,
-    status_int: session?.status_int ?? null,
-    status: session?.status ?? null,
-    player1_wallet: session?.player1_wallet?.slice(0, 8) ?? null,
-    player2_wallet: session?.player2_wallet?.slice(0, 8) ?? null,
-    participants: session?.participants ?? [],
-    participantsCount: session?.participants?.length ?? 0,
-    mode: session?.mode ?? null,
-    max_players: session?.max_players ?? null,
+    status_int: healedSession?.status_int ?? null,
+    status: healedSession?.status ?? null,
+    player1_wallet: healedSession?.player1_wallet?.slice(0, 8) ?? null,
+    player2_wallet: healedSession?.player2_wallet?.slice(0, 8) ?? null,
+    participants: healedSession?.participants ?? [],
+    participantsCount: healedSession?.participants?.length ?? 0,
+    mode: healedSession?.mode ?? null,
+    max_players: healedSession?.max_players ?? null,
     requiredCount,
     acceptedCount,
     bothAccepted,
-    p1_ready: session?.p1_ready ?? false,
-    p2_ready: session?.p2_ready ?? false,
-    start_roll_finalized: session?.start_roll_finalized ?? false,
+    p1_ready: healedSession?.p1_ready ?? false,
+    p2_ready: healedSession?.p2_ready ?? false,
+    start_roll_finalized: healedSession?.start_roll_finalized ?? false,
+    starting_player_wallet: healedSession?.starting_player_wallet?.slice(0, 8) ?? null,
+    current_turn_wallet: healedSession?.current_turn_wallet?.slice(0, 8) ?? null,
     player_sessions_count: playerSessionsCount ?? 0,
     game_acceptances_count: acceptancesCount ?? 0,
     timestamp: new Date().toISOString(),
@@ -176,7 +231,7 @@ serve(async (req) => {
   // Return backward-compatible response: { ok, session } plus optional receipt/match/acceptances + debug
   return new Response(JSON.stringify({ 
     ok: true, 
-    session, 
+    session: healedSession, 
     receipt: receipt || null,
     match: match || null,
     acceptances,
