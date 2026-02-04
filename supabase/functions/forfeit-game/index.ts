@@ -315,7 +315,7 @@ Deno.serve(async (req: Request) => {
     // 🔒 Fetch game_sessions with all needed fields including max_players and eliminated_players
     const { data: sessionRow, error: sessionError } = await supabase
       .from("game_sessions")
-      .select("player1_wallet, player2_wallet, participants, current_turn_wallet, turn_started_at, turn_time_seconds, status_int, status, max_players, eliminated_players, mode, game_type")
+      .select("player1_wallet, player2_wallet, participants, current_turn_wallet, turn_started_at, turn_time_seconds, status_int, status, max_players, eliminated_players, mode, game_type, game_state")
       .eq("room_pda", roomPda)
       .maybeSingle();
 
@@ -346,9 +346,10 @@ Deno.serve(async (req: Request) => {
       return json200({ success: false, error: "Forbidden", requestId });
     }
 
-    // 🔒 Dedupe guard - don't settle a finished/cancelled room twice
-    if (statusInt === 3 || sessionRow.status === "finished" || sessionRow.status === "cancelled") {
-      console.log("[forfeit-game] Room already finished/cancelled", { requestId, roomPda, status_int: statusInt, status: sessionRow.status });
+    // 🔒 Dedupe guard - don't settle a terminal room twice (3=finished, 4=void, 5=cancelled)
+    const isTerminal = statusInt >= 3;
+    if (isTerminal || sessionRow.status === "finished" || sessionRow.status === "cancelled" || sessionRow.status === "void") {
+      console.log("[forfeit-game] Room already terminal", { requestId, roomPda, status_int: statusInt, status: sessionRow.status });
       return json200({ 
         success: true, 
         action: "noop_already_finished",
@@ -431,15 +432,16 @@ Deno.serve(async (req: Request) => {
       const accountInfo = await connection.getAccountInfo(roomPdaKey);
       if (!accountInfo) {
         // Room already closed on-chain - just update DB
+        // INVARIANT: CANCELLED (5) requires winner_wallet=null, game_over_at=set
         console.log("[forfeit-game] Room already closed on-chain, updating DB only", { requestId });
         
         await supabase
           .from("game_sessions")
           .update({
             status: "cancelled",
-            status_int: 3,
-            winner_wallet: null,
-            game_over_at: new Date().toISOString(),
+            status_int: 5, // CANCELLED
+            winner_wallet: null, // INVARIANT: cancelled has no winner
+            game_over_at: new Date().toISOString(), // INVARIANT: must be set
             updated_at: new Date().toISOString(),
           })
           .eq("room_pda", roomPda);
@@ -520,6 +522,31 @@ Deno.serve(async (req: Request) => {
         console.log("[forfeit-game] ✅ Cancel tx confirmed", { signature: cancelSignature.slice(0, 16) });
       } catch (txError) {
         console.error("[forfeit-game] Cancel tx failed:", txError);
+        
+        // INVARIANT: On tx failure, mark as VOID (4) with null winner, game_over_at set
+        await supabase
+          .from("game_sessions")
+          .update({
+            status: "void",
+            status_int: 4, // VOID - settlement failed
+            winner_wallet: null, // INVARIANT: void has no winner
+            game_over_at: new Date().toISOString(), // INVARIANT: must be set
+            game_state: {
+              ...(sessionRow.game_state ?? {}),
+              settlement_error: String((txError as Error)?.message ?? txError),
+              settlement_failed_at: new Date().toISOString(),
+            },
+            updated_at: new Date().toISOString(),
+          })
+          .eq("room_pda", roomPda);
+        
+        await logSettlement(supabase, {
+          room_pda: roomPda,
+          action: "cancel_failed",
+          success: false,
+          error_message: String((txError as Error)?.message ?? txError),
+        });
+        
         return json200({ 
           success: false, 
           error: "Cancel transaction failed", 
@@ -548,14 +575,14 @@ Deno.serve(async (req: Request) => {
         cancelLabels
       );
 
-      // Update DB
+      // Update DB - INVARIANT: CANCELLED (5) requires winner_wallet=null, game_over_at=set
       const { error: cancelDbError } = await supabase
         .from("game_sessions")
         .update({
           status: "cancelled",
-          status_int: 3,
-          winner_wallet: null,
-          game_over_at: new Date().toISOString(),
+          status_int: 5, // CANCELLED
+          winner_wallet: null, // INVARIANT: cancelled has no winner
+          game_over_at: new Date().toISOString(), // INVARIANT: must be set
           updated_at: new Date().toISOString(),
         })
         .eq("room_pda", roomPda);
@@ -847,12 +874,82 @@ Deno.serve(async (req: Request) => {
 
     tx.sign(verifierKeypair);
 
-    const signature = await connection.sendRawTransaction(tx.serialize());
-    await connection.confirmTransaction(signature, "confirmed");
+    // =========================================================================
+    // SETTLEMENT EXECUTION WITH VOID FALLBACK
+    // INVARIANT: On failure, mark as VOID (4) with null winner, game_over_at set
+    // =========================================================================
+    let signature: string;
+    try {
+      signature = await connection.sendRawTransaction(tx.serialize());
+      await connection.confirmTransaction(signature, "confirmed");
 
-    console.log("[forfeit-game] ✅ On-chain settlement confirmed", { 
-      requestId, signature: signature.slice(0, 16), winner: winnerWallet.slice(0, 8) 
-    });
+      console.log("[forfeit-game] ✅ On-chain settlement confirmed", { 
+        requestId, signature: signature.slice(0, 16), winner: winnerWallet.slice(0, 8) 
+      });
+    } catch (txError) {
+      console.error("[forfeit-game] ❌ Settlement tx failed:", txError);
+      
+      // INVARIANT: VOID (4) requires winner_wallet=null, game_over_at=set
+      const existingGameState = (sessionRow.game_state as Record<string, unknown>) ?? {};
+      
+      await supabase
+        .from("game_sessions")
+        .update({
+          status: "void",
+          status_int: 4, // VOID - settlement failed
+          winner_wallet: null, // INVARIANT: void has no winner
+          game_over_at: new Date().toISOString(), // INVARIANT: must be set
+          game_state: {
+            ...existingGameState,
+            settlement_error: String((txError as Error)?.message ?? txError),
+            settlement_failed_at: new Date().toISOString(),
+            intended_winner: winnerWallet,
+            forfeiting_player: forfeitingWallet,
+          },
+          updated_at: new Date().toISOString(),
+        })
+        .eq("room_pda", roomPda);
+      
+      // Record failure in match_share_cards for visibility
+      await supabase
+        .from("match_share_cards")
+        .upsert({
+          room_pda: roomPda,
+          mode: dbMode || "casual",
+          game_type: dbGameType || "unknown",
+          winner_wallet: null,
+          loser_wallet: null,
+          win_reason: "settlement_failed",
+          stake_lamports: Number(roomData.stakeLamports),
+          tx_signature: null,
+          metadata: {
+            error: String((txError as Error)?.message ?? txError),
+            intended_winner: winnerWallet,
+            forfeiting_player: forfeitingWallet,
+          },
+          updated_at: new Date().toISOString(),
+        }, { onConflict: "room_pda" });
+      
+      await logSettlement(supabase, {
+        room_pda: roomPda,
+        action: "forfeit_failed",
+        success: false,
+        winner_wallet: null,
+        forfeiting_wallet: forfeitingWallet,
+        error_message: String((txError as Error)?.message ?? txError),
+        stake_per_player: Number(roomData.stakeLamports),
+        player_count: participantsCount,
+      });
+      
+      return json200({
+        success: false,
+        error: "Settlement transaction failed",
+        details: String((txError as Error)?.message ?? txError),
+        action: "void",
+        status_int: 4,
+        requestId,
+      });
+    }
 
     // =========================================================================
     // BALANCE DELTA LOGGING - "Follow the SOL"
@@ -884,13 +981,14 @@ Deno.serve(async (req: Request) => {
     );
 
     // Update game_sessions to mark as finished
+    // INVARIANT: FINISHED (3) requires winner_wallet and game_over_at
     const { error: dbUpdateError } = await supabase
       .from("game_sessions")
       .update({
         status: "finished",
-        status_int: 3,
-        winner_wallet: winnerWallet,
-        game_over_at: new Date().toISOString(),
+        status_int: 3, // FINISHED
+        winner_wallet: winnerWallet, // INVARIANT: must be set
+        game_over_at: new Date().toISOString(), // INVARIANT: must be set
         updated_at: new Date().toISOString(),
       })
       .eq("room_pda", roomPda);
