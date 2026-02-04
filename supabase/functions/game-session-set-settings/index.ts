@@ -184,7 +184,7 @@ serve(async (req) => {
       auth: { persistSession: false },
     });
 
-    // Fetch session and verify creator
+    // Fetch session to check if it exists
     const { data: session, error: sessionErr } = await supabase
       .from("game_sessions")
       .select("room_pda, status, start_roll_finalized, player1_wallet")
@@ -196,46 +196,88 @@ serve(async (req) => {
       return json(500, { ok: false, error: "session_fetch_failed" });
     }
 
-    if (!session) {
-      return json(404, { ok: false, error: "session_not_found" });
-    }
-
-    // Verify caller is the room creator (player1_wallet)
-    if (requiresSignature && creatorWallet) {
-      const sessionCreator = session.player1_wallet?.trim();
-      const requestCreator = creatorWallet.trim();
-      
-      if (sessionCreator !== requestCreator) {
-        console.warn("[game-session-set-settings] Creator mismatch:", {
-          sessionCreator: sessionCreator?.slice(0, 8),
-          requestCreator: requestCreator?.slice(0, 8),
-        });
-        return json(403, { ok: false, error: "not_room_creator" });
+    // If session exists, verify caller is the room creator and game hasn't started
+    if (session) {
+      // Verify caller is the room creator (player1_wallet)
+      if (requiresSignature && creatorWallet) {
+        const sessionCreator = session.player1_wallet?.trim();
+        const requestCreator = creatorWallet.trim();
+        
+        if (sessionCreator !== requestCreator) {
+          console.warn("[game-session-set-settings] Creator mismatch:", {
+            sessionCreator: sessionCreator?.slice(0, 8),
+            requestCreator: requestCreator?.slice(0, 8),
+          });
+          return json(403, { ok: false, error: "not_room_creator" });
+        }
       }
-    }
 
-    // Guard: do not allow changing settings after game has started
-    const status = String(session.status ?? "").toLowerCase();
-    const alreadyStarted =
-      Boolean(session.start_roll_finalized) ||
-      ["active", "started", "finished", "complete"].includes(status);
+      // Guard: do not allow changing settings after game has started
+      const status = String(session.status ?? "").toLowerCase();
+      const alreadyStarted =
+        Boolean(session.start_roll_finalized) ||
+        ["active", "started", "finished", "complete"].includes(status);
 
-    if (alreadyStarted) {
-      return json(409, { ok: false, error: "game_already_started" });
-    }
+      if (alreadyStarted) {
+        return json(409, { ok: false, error: "game_already_started" });
+      }
 
-    // Update settings
-    const { error: updateErr } = await supabase
-      .from("game_sessions")
-      .update({
-        turn_time_seconds: turnTimeSeconds,
+      // Update existing session settings
+      const { error: updateErr } = await supabase
+        .from("game_sessions")
+        .update({
+          turn_time_seconds: turnTimeSeconds,
+          mode,
+        })
+        .eq("room_pda", roomPda);
+
+      if (updateErr) {
+        console.error("[game-session-set-settings] update error", updateErr);
+        return json(500, { ok: false, error: "update_failed" });
+      }
+    } else {
+      // Session doesn't exist yet - create it with initial settings
+      // This happens when room creator sets settings before anyone joins
+      console.log("[game-session-set-settings] Creating new session with settings:", {
+        roomPda: roomPda.slice(0, 8),
+        creatorWallet: creatorWallet?.slice(0, 8),
+        turnTimeSeconds,
         mode,
-      })
-      .eq("room_pda", roomPda);
+      });
 
-    if (updateErr) {
-      console.error("[game-session-set-settings] update error", updateErr);
-      return json(500, { ok: false, error: "update_failed" });
+      const { error: insertErr } = await supabase
+        .from("game_sessions")
+        .insert({
+          room_pda: roomPda,
+          player1_wallet: creatorWallet || "",
+          game_type: "backgammon", // Default, will be updated when game starts
+          game_state: {},
+          status: "waiting",
+          mode,
+          turn_time_seconds: turnTimeSeconds,
+        });
+
+      if (insertErr) {
+        // If insert fails due to duplicate, try update instead (race condition)
+        if (insertErr.code === "23505") {
+          console.log("[game-session-set-settings] Race condition - session created by another request, updating instead");
+          const { error: updateErr } = await supabase
+            .from("game_sessions")
+            .update({
+              turn_time_seconds: turnTimeSeconds,
+              mode,
+            })
+            .eq("room_pda", roomPda);
+
+          if (updateErr) {
+            console.error("[game-session-set-settings] update after race error", updateErr);
+            return json(500, { ok: false, error: "update_failed" });
+          }
+        } else {
+          console.error("[game-session-set-settings] insert error", insertErr);
+          return json(500, { ok: false, error: "insert_failed" });
+        }
+      }
     }
 
     console.log("[game-session-set-settings] ✅ Settings updated:", { roomPda: roomPda.slice(0, 8), turnTimeSeconds, mode });
