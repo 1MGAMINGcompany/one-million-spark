@@ -55,6 +55,15 @@ export function useDurableGameSync({
   // CHANNEL_ERROR retry backoff refs
   const lastChannelErrorRetryRef = useRef<number>(0);
   const channelErrorRetryCountRef = useRef<number>(0);
+  
+  // Track previous roomPda to prevent state wipe on transient disconnects
+  const prevRoomPdaRef = useRef<string | null>(null);
+  
+  // Store callbacks in refs to prevent resubscribe thrash
+  const onMoveReceivedRef = useRef(onMoveReceived);
+  useEffect(() => {
+    onMoveReceivedRef.current = onMoveReceived;
+  }, [onMoveReceived]);
 
   // Load existing moves from DB on mount
   const loadMoves = useCallback(async (): Promise<GameMove[]> => {
@@ -299,19 +308,31 @@ export function useDurableGameSync({
           filter: `room_pda=eq.${roomPda}`,
         },
         (payload) => {
-          const newMove = payload.new as GameMove;
-          dbg("durable.realtime", { 
-            turn: newMove.turn_number, 
-            wallet: newMove.wallet.slice(0, 8),
-            type: newMove.move_data?.type
+          const newMove = payload.new as Partial<GameMove>;
+
+          const turn = typeof newMove.turn_number === "number" 
+            ? newMove.turn_number 
+            : null;
+
+          const walletShort = typeof newMove.wallet === "string" 
+            ? newMove.wallet.slice(0, 8) 
+            : "unknown";
+
+          dbg("durable.realtime", {
+            turn,
+            wallet: walletShort,
+            type: (newMove as any)?.move_data?.type,
           });
 
+          // Ignore malformed payloads
+          if (turn === null) return;
+
           // Only process if this is a new move we haven't seen
-          if (newMove.turn_number > lastTurnRef.current) {
-            setMoves((prev) => [...prev, newMove]);
-            setLastHash(newMove.move_hash);
-            lastTurnRef.current = newMove.turn_number;
-            onMoveReceived?.(newMove);
+          if (turn > lastTurnRef.current) {
+            setMoves((prev) => [...prev, newMove as GameMove]);
+            setLastHash((newMove as GameMove).move_hash);
+            lastTurnRef.current = turn;
+            onMoveReceivedRef.current?.(newMove as GameMove);
           }
         }
       )
@@ -384,7 +405,7 @@ export function useDurableGameSync({
       dbg("durable.unsubscribe", { room: roomPda.slice(0, 8) });
       supabase.removeChannel(channel);
     };
-  }, [enabled, roomPda, onMoveReceived]);
+  }, [enabled, roomPda]);
 
   // Initial load
   useEffect(() => {
@@ -394,8 +415,15 @@ export function useDurableGameSync({
     }
   }, [enabled, roomPda, loadMoves]);
 
-  // Reset when room changes
+  // Reset when room changes (guarded against transient disconnects)
   useEffect(() => {
+    // Critical: avoid clearing state during transient disconnects
+    if (!roomPda) return;
+
+    // Only reset if roomPda actually changed
+    if (prevRoomPdaRef.current === roomPda) return;
+    prevRoomPdaRef.current = roomPda;
+
     loadedRef.current = false;
     setMoves([]);
     setLastHash("genesis");
