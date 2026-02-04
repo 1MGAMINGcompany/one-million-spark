@@ -38,6 +38,7 @@ import NotFound from "./pages/NotFound";
 import PlayerProfile from "./pages/PlayerProfile";
 import Invites from "./pages/Invites";
 import Leaderboard from "./pages/Leaderboard";
+import MatchShare from "./pages/MatchShare";
 import AgeConfirmation from "./components/AgeConfirmation";
 import DebugJoinRoom from "./pages/DebugJoinRoom";
 import DebugHUD from "./components/DebugHUD";
@@ -103,6 +104,7 @@ const AppContent = () => {
           <Route path="/player/:wallet" element={<PlayerProfile />} />
           <Route path="/invites" element={<Invites />} />
           <Route path="/leaderboard/:game" element={<Leaderboard />} />
+          <Route path="/match/:roomPda" element={<MatchShare />} />
           <Route path="/debug/join" element={isDebugEnabled() ? <DebugJoinRoom /> : <Navigate to="/" replace />} />
           <Route path="*" element={<NotFound />} />
         </Routes>

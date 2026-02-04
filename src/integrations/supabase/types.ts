@@ -326,6 +326,60 @@ export type Database = {
         }
         Relationships: []
       }
+      match_share_cards: {
+        Row: {
+          created_at: string
+          game_type: string
+          loser_rank_after: number | null
+          loser_rank_before: number | null
+          loser_wallet: string | null
+          metadata: Json | null
+          mode: string
+          room_pda: string
+          stake_lamports: number
+          tx_signature: string | null
+          updated_at: string
+          win_reason: string
+          winner_rank_after: number | null
+          winner_rank_before: number | null
+          winner_wallet: string | null
+        }
+        Insert: {
+          created_at?: string
+          game_type: string
+          loser_rank_after?: number | null
+          loser_rank_before?: number | null
+          loser_wallet?: string | null
+          metadata?: Json | null
+          mode?: string
+          room_pda: string
+          stake_lamports?: number
+          tx_signature?: string | null
+          updated_at?: string
+          win_reason?: string
+          winner_rank_after?: number | null
+          winner_rank_before?: number | null
+          winner_wallet?: string | null
+        }
+        Update: {
+          created_at?: string
+          game_type?: string
+          loser_rank_after?: number | null
+          loser_rank_before?: number | null
+          loser_wallet?: string | null
+          metadata?: Json | null
+          mode?: string
+          room_pda?: string
+          stake_lamports?: number
+          tx_signature?: string | null
+          updated_at?: string
+          win_reason?: string
+          winner_rank_after?: number | null
+          winner_rank_before?: number | null
+          winner_wallet?: string | null
+        }
+        Relationships: []
+      }
       matches: {
         Row: {
           created_at: string
