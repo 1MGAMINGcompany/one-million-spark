@@ -1070,121 +1070,104 @@ export function useSolanaRooms() {
         }
 
         // ═══════════════════════════════════════════════════════════════════════
-        // STEP 5: FAIL-FAST DB SYNC CHECK - Poll using direct table queries
-        // (NOT Edge Functions - they may fail on mobile)
+        // STEP 5: NON-BLOCKING DB SYNC CHECK (TELEMETRY ONLY)
+        // Direct table queries are RLS-blocked, so this is BEST-EFFORT logging.
+        // Join NEVER fails due to polling - record_acceptance is the hard gate.
+        // Room page is DB-authoritative and will reconcile UI state.
         // ═══════════════════════════════════════════════════════════════════════
         const DB_SYNC_POLL_INTERVAL_MS = 500;
-        const DB_SYNC_TIMEOUT_MS = 7000; // Extended to 7s for mobile
+        const DB_SYNC_TIMEOUT_MS = 5000; // Shortened - non-blocking
         const dbSyncStartTime = Date.now();
-        let dbSyncSuccess = false;
 
-        console.log("[JoinRoom] 🔍 Polling DB to verify joiner sync (direct table queries)...");
+        console.log("[JoinRoom] 🔍 Starting NON-BLOCKING DB telemetry poll (RLS may block)...");
+        traceLog("join.poll.nonblocking.start", { roomPdaPrefix: roomPdaStr.slice(0, 8) });
 
-        while (Date.now() - dbSyncStartTime < DB_SYNC_TIMEOUT_MS) {
+        // Fire-and-forget async polling for telemetry only
+        (async () => {
           try {
-            // Query game_acceptances directly (no Edge Function)
-            const { count: acceptancesCount, error: accError } = await supabase
-              .from("game_acceptances")
-              .select("*", { count: "exact", head: true })
-              .eq("room_pda", roomPdaStr);
-            
-            // Query player_sessions directly (no Edge Function)
-            const { count: playerSessionsCount, error: psError } = await supabase
-              .from("player_sessions")
-              .select("*", { count: "exact", head: true })
-              .eq("room_pda", roomPdaStr);
-            
-            // Query game_sessions.participants directly
-            const { data: sessionData, error: sessError } = await supabase
-              .from("game_sessions")
-              .select("participants, player2_wallet")
-              .eq("room_pda", roomPdaStr)
-              .maybeSingle();
-            
-            const participantsCount = sessionData?.participants?.length ?? 0;
-            const player2Wallet = sessionData?.player2_wallet;
-            
-            if (accError || psError || sessError) {
-              console.warn("[JoinRoom] DB sync poll query error:", {
-                accError: accError?.message,
-                psError: psError?.message,
-                sessError: sessError?.message,
-              });
-              traceLog("join.poll.error", { 
-                accError: accError?.message, 
-                psError: psError?.message, 
-                sessError: sessError?.message,
-              });
-            }
-            
-            console.log("[JoinRoom] DB sync poll:", {
-              player_sessions_count: playerSessionsCount ?? 0,
-              game_acceptances_count: acceptancesCount ?? 0,
-              participantsCount,
-              player2_wallet: player2Wallet?.slice(0, 8),
-              elapsed: Date.now() - dbSyncStartTime,
-            });
-            
-            // Log poll result to trace
-            traceLogPoll({
-              participantsCount,
-              player_sessions_count: playerSessionsCount ?? 0,
-              game_acceptances_count: acceptancesCount ?? 0,
-              player2_wallet: player2Wallet,
-              elapsed: Date.now() - dbSyncStartTime,
-            });
+            while (Date.now() - dbSyncStartTime < DB_SYNC_TIMEOUT_MS) {
+              try {
+                // These queries may return 0 due to RLS - that's expected
+                const { count: acceptancesCount } = await supabase
+                  .from("game_acceptances")
+                  .select("*", { count: "exact", head: true })
+                  .eq("room_pda", roomPdaStr);
+                
+                const { count: playerSessionsCount } = await supabase
+                  .from("player_sessions")
+                  .select("*", { count: "exact", head: true })
+                  .eq("room_pda", roomPdaStr);
+                
+                const { data: sessionData } = await supabase
+                  .from("game_sessions")
+                  .select("participants, player2_wallet")
+                  .eq("room_pda", roomPdaStr)
+                  .maybeSingle();
+                
+                const participantsCount = sessionData?.participants?.length ?? 0;
+                const player2Wallet = sessionData?.player2_wallet;
+                
+                console.log("[JoinRoom] Non-blocking poll (telemetry):", {
+                  player_sessions_count: playerSessionsCount ?? 0,
+                  game_acceptances_count: acceptancesCount ?? 0,
+                  participantsCount,
+                  player2_wallet: player2Wallet?.slice(0, 8),
+                  elapsed: Date.now() - dbSyncStartTime,
+                });
+                
+                traceLogPoll({
+                  participantsCount,
+                  player_sessions_count: playerSessionsCount ?? 0,
+                  game_acceptances_count: acceptancesCount ?? 0,
+                  player2_wallet: player2Wallet,
+                  elapsed: Date.now() - dbSyncStartTime,
+                });
 
-            // Success if ANY of these counts >= 2 (joiner registered)
-            if ((playerSessionsCount ?? 0) >= 2 || (acceptancesCount ?? 0) >= 2 || participantsCount >= 2) {
-              dbSyncSuccess = true;
-              console.log("[JoinRoom] ✅ DB sync verified - joiner is registered");
-              traceLog("join.sync.success", { elapsed: Date.now() - dbSyncStartTime });
-              break;
+                // If we see counts >= 2, log success and stop polling
+                if ((playerSessionsCount ?? 0) >= 2 || (acceptancesCount ?? 0) >= 2 || participantsCount >= 2) {
+                  console.log("[JoinRoom] ✅ Non-blocking poll confirmed sync");
+                  traceLog("join.poll.nonblocking.confirmed", { elapsed: Date.now() - dbSyncStartTime });
+                  return; // Exit async poll
+                }
+              } catch (pollErr: any) {
+                console.warn("[JoinRoom] Non-blocking poll exception (ignored):", pollErr?.message);
+                traceLog("join.poll.nonblocking.error", { message: pollErr?.message });
+              }
+
+              await new Promise(resolve => setTimeout(resolve, DB_SYNC_POLL_INTERVAL_MS));
             }
-          } catch (pollErr: any) {
-            console.warn("[JoinRoom] DB sync poll exception:", pollErr);
-            traceLog("join.poll.exception", { message: pollErr?.message || String(pollErr) });
+            
+            // Timeout reached - log but DO NOT FAIL
+            console.warn("[JoinRoom] join.poll.nonblocking.timeout - RLS likely blocking, proceeding anyway");
+            traceLog("join.poll.nonblocking.timeout", { 
+              elapsed: Date.now() - dbSyncStartTime, 
+              roomPdaPrefix: roomPdaStr.slice(0, 8),
+              note: "RLS blocks client queries - this is expected, room page will reconcile",
+            });
+          } catch (err: any) {
+            console.warn("[JoinRoom] Non-blocking poll wrapper error (ignored):", err?.message);
           }
+        })(); // Fire and forget - don't await
 
-          // Wait before next poll
-          await new Promise(resolve => setTimeout(resolve, DB_SYNC_POLL_INTERVAL_MS));
-        }
-
-        // ═══════════════════════════════════════════════════════════════════════
-        // FAIL-FAST: If DB did not register joiner within timeout, return error
-        // ═══════════════════════════════════════════════════════════════════════
-        if (!dbSyncSuccess) {
-          console.error("[JoinRoom] join.db_sync.failed - joiner not registered after 7s");
-          traceLog("join.db_sync.failed", { elapsed: Date.now() - dbSyncStartTime, reason: "TIMEOUT", roomPdaPrefix: roomPdaStr.slice(0, 8) });
-          toast({
-            title: "Join failed to sync",
-            description: `Room ${roomPdaStr.slice(0, 8)}... - Please retry.`,
-            variant: "destructive",
-          });
-          return { ok: false, reason: "JOIN_DB_SYNC_FAILED" };
-        }
-        
-        // STEP 6: Success - log navigate
+        // STEP 6: Success - navigate immediately after record_acceptance
+        // Room page is DB-authoritative and will reconcile UI state
         console.log("[JoinRoom] join.navigate", { to: `/play/${roomPdaStr}` });
         traceLog("join.navigate", { to: `/play/${roomPdaStr.slice(0, 8)}...` });
 
       } catch (syncErr: any) {
-        console.error("[JoinRoom] Failed to sync participants:", syncErr);
+        // This catch now only handles errors from ensure_game_session / record_acceptance
+        console.error("[JoinRoom] Failed during DB registration:", syncErr);
         traceLog("join.error", { 
-          step: "sync", 
+          step: "db_registration", 
           message: syncErr?.message || String(syncErr), 
           stackPreview: syncErr?.stack?.slice(0, 200),
-          origin: typeof window !== 'undefined' ? window.location?.origin : 'unknown',
-          userAgent: typeof navigator !== 'undefined' ? navigator.userAgent?.slice(0, 100) : 'unknown',
-          online: typeof navigator !== 'undefined' ? navigator.onLine : 'unknown',
         });
-        traceLog("join.navigate.roomlist", { reason: "SYNC_EXCEPTION" });
         toast({
-          title: "Join failed to sync",
-          description: `Sync error. Please retry.`,
+          title: "Join failed",
+          description: `Database registration error. Please retry.`,
           variant: "destructive",
         });
-        return { ok: false, reason: "JOIN_DB_SYNC_FAILED" };
+        return { ok: false, reason: "JOIN_DB_REGISTRATION_FAILED" };
       }
       
       // Refresh rooms and active room state
