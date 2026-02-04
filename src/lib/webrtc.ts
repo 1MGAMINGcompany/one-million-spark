@@ -2,6 +2,7 @@
 // Uses Supabase Realtime for cross-device signaling
 
 import { SupabaseSignaling, SignalingMessage } from "./supabase-signaling";
+import { safeTrim } from "./safe";
 
 export interface RTCSignal {
   type: "offer" | "answer" | "ice-candidate";
@@ -64,14 +65,14 @@ export class WebRTCPeer {
     _options: WebRTCPeerOptions = {}
   ) {
     this.roomId = roomId;
-    // Use trim only - Base58 is case-sensitive
-    this.localAddress = localAddress.trim();
+    // Use safeTrim - Base58 is case-sensitive, guards against undefined
+    this.localAddress = safeTrim(localAddress);
     this.callbacks = callbacks;
   }
 
   async connect(remoteAddress: string, isInitiator: boolean): Promise<void> {
-    // Use trim only - Base58 is case-sensitive
-    this.remoteAddress = remoteAddress.trim();
+    // Use safeTrim - Base58 is case-sensitive, guards against undefined
+    this.remoteAddress = safeTrim(remoteAddress);
     this.isInitiator = isInitiator;
 
     console.log(`[WebRTC] Connecting as ${isInitiator ? "INITIATOR" : "RESPONDER"}`);
@@ -202,9 +203,9 @@ export class WebRTCPeer {
     }
     this.processedSignals.add(signalId);
 
-    // Verify it's from our expected peer (use trim, not toLowerCase - Base58 is case-sensitive)
-    if (signal.from.trim() !== this.remoteAddress) {
-      console.log(`[WebRTC] Ignoring signal from unknown peer: ${signal.from.slice(0, 8)}...`);
+    // Verify it's from our expected peer (use safeTrim - Base58 is case-sensitive)
+    if (safeTrim(signal.from) !== this.remoteAddress) {
+      console.log(`[WebRTC] Ignoring signal from unknown peer: ${safeTrim(signal.from).slice(0, 8)}...`);
       return;
     }
 

@@ -1,4 +1,5 @@
 import { keccak256, toHex, hexToBytes } from "viem";
+import { safeTrim } from "./safe";
 
 /**
  * Generate a cryptographically secure random secret (32 bytes)
@@ -24,7 +25,7 @@ export function computeCommitment(secret: `0x${string}`): `0x${string}` {
  * NOTE: Use trim only - Solana Base58 addresses are case-sensitive
  */
 export function storeSecret(roomId: string, walletAddress: string, secret: `0x${string}`): void {
-  const key = `seedSecret:${roomId}:${walletAddress.trim()}`;
+  const key = `seedSecret:${roomId}:${safeTrim(walletAddress)}`;
   localStorage.setItem(key, secret);
 }
 
@@ -34,7 +35,7 @@ export function storeSecret(roomId: string, walletAddress: string, secret: `0x${
  * NOTE: Use trim only - Solana Base58 addresses are case-sensitive
  */
 export function getStoredSecret(roomId: string, walletAddress: string): `0x${string}` | null {
-  const key = `seedSecret:${roomId}:${walletAddress.trim()}`;
+  const key = `seedSecret:${roomId}:${safeTrim(walletAddress)}`;
   const secret = localStorage.getItem(key);
   return secret ? (secret as `0x${string}`) : null;
 }
@@ -44,7 +45,7 @@ export function getStoredSecret(roomId: string, walletAddress: string): `0x${str
  * NOTE: Use trim only - Solana Base58 addresses are case-sensitive
  */
 export function clearStoredSecret(roomId: string, walletAddress: string): void {
-  const key = `seedSecret:${roomId}:${walletAddress.trim()}`;
+  const key = `seedSecret:${roomId}:${safeTrim(walletAddress)}`;
   localStorage.removeItem(key);
 }
 

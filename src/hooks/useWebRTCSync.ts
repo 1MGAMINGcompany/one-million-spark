@@ -5,6 +5,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useSound } from "@/contexts/SoundContext";
 import { useRealtimeGameSync, RealtimeGameMessage } from "@/hooks/useRealtimeGameSync";
 import { shouldDisableWebRTC, isWalletInAppBrowser } from "@/lib/walletBrowserDetection";
+import { safeTrim } from "@/lib/safe";
 
 export interface GameMessage {
   type: "move" | "resign" | "draw_offer" | "draw_accept" | "draw_reject" | "sync_request" | "sync_response" | "heartbeat" | "chat" | "rematch_invite" | "rematch_accept" | "rematch_decline" | "rematch_ready" | "player_eliminated";
@@ -59,10 +60,10 @@ export function useWebRTCSync({
   }, [onMessage]);
 
   // Determine if we're the initiator (based on address sorting)
-  // Use trim only - Base58 is case-sensitive, but we still need deterministic ordering
-  const localAddress = address?.trim() || "";
+  // Use safeTrim - Base58 is case-sensitive, but we still need deterministic ordering
+  const localAddress = safeTrim(address);
   const remoteAddress = players
-    .map((p) => p.trim())
+    .map((p) => safeTrim(p))
     .find((p) => p !== localAddress);
   
   // The player with the "lower" address initiates (lexicographic comparison of Base58)

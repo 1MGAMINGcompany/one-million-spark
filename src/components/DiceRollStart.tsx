@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useTranslation } from "react-i18next";
 import { AudioManager } from "@/lib/AudioManager";
+import { safeTrim } from "@/lib/safe";
 interface DiceRollStartProps {
   roomPda: string;
   myWallet: string;
@@ -144,8 +145,8 @@ export function DiceRollStart({
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const fallbackUsedRef = useRef(false);
   
-  // Determine which player is "me" for display purposes (use trim, not toLowerCase - Base58 is case-sensitive)
-  const isPlayer1 = myWallet.trim() === player1Wallet.trim();
+  // Determine which player is "me" for display purposes (use safeTrim - Base58 is case-sensitive)
+  const isPlayer1 = safeTrim(myWallet) === safeTrim(player1Wallet);
   const myName = t("common.you", "You");
   const opponentName = t("game.opponent", "Opponent");
 

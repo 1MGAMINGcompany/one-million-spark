@@ -4,6 +4,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useSound } from "@/contexts/SoundContext";
 import { RoomInviteInfo } from "@/lib/invite";
 import { getSessionToken, getAuthHeaders } from "@/lib/sessionToken";
+import { safeTrim } from "@/lib/safe";
 
 export interface GameInvite {
   id: string;
@@ -85,7 +86,7 @@ export function useGameInvites({ walletAddress, enabled = true }: UseGameInvites
     }
 
     // Validate recipient wallet format (basic Solana address check)
-    const trimmedRecipient = recipientWallet.trim();
+    const trimmedRecipient = safeTrim(recipientWallet);
     if (trimmedRecipient.length < 32 || trimmedRecipient.length > 44) {
       toast({ title: "Invalid wallet", description: "Please enter a valid Solana wallet address", variant: "destructive" });
       return false;
