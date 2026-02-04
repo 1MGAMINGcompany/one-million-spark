@@ -52,20 +52,28 @@ export function useGameInvites({ walletAddress, enabled = true }: UseGameInvites
 
     setLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke("list-invites", {
-        body: { status: "pending", direction: "incoming" },
-        headers: getAuthHeaders(token),
-      });
+    const { data, error } = await supabase.functions.invoke("list-invites", {
+      body: { status: "pending", direction: "incoming" },
+      headers: getAuthHeaders(token),
+    });
 
-      if (error) throw error;
-      if (!data?.success) throw new Error(data?.error || "Failed to fetch invites");
+    // Fail-open: never throw, just return empty invites
+    if (error || !data?.success || !Array.isArray(data?.invites)) {
+      console.error("[GameInvites] Failed to fetch invites:", error || data?.error || "Invalid response");
+      setInvites([]);
+      setUnreadCount(0);
+      return;
+    }
 
-      const typedData = (data.invites || []) as GameInvite[];
-      setInvites(typedData);
-      setUnreadCount(typedData.length);
-    } catch (err) {
-      console.error("[GameInvites] Failed to fetch invites:", err);
-    } finally {
+    const typedData = data.invites as GameInvite[];
+    setInvites(typedData);
+    setUnreadCount(typedData.length);
+  } catch (err) {
+    // Fail-open: swallow unexpected errors
+    console.error("[GameInvites] Unexpected error:", err);
+    setInvites([]);
+    setUnreadCount(0);
+  } finally {
       setLoading(false);
     }
   }, [walletAddress, enabled]);
