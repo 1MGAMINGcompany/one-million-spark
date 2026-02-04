@@ -1994,9 +1994,9 @@ const BackgammonGame = () => {
     <GameErrorBoundary>
     <InAppBrowserRecovery roomPda={roomPda || ""} onResubscribeRealtime={resubscribeRealtime} bypassOverlay={true}>
     <div className={cn(
-      "game-viewport bg-background relative",
+      "bg-background relative",
       isMobile 
-        ? "h-[calc(100dvh-4rem)] overflow-y-hidden flex flex-col" 
+        ? "game-viewport h-[calc(100dvh-4rem)] overflow-y-hidden flex flex-col" 
         : "min-h-screen",
       "pb-[env(safe-area-inset-bottom)]"
     )}>
