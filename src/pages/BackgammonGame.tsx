@@ -2162,8 +2162,10 @@ const BackgammonGame = () => {
 
       {/* Game Area */}
       <div className={cn(
-        "flex-1 flex flex-col min-h-0 overflow-hidden",
-        isMobile ? "px-2 pt-1 pb-2" : "px-2 md:px-4 py-4"
+        "relative z-10",
+        isMobile 
+          ? "flex-1 flex flex-col min-h-0 overflow-hidden px-2 pt-1 pb-2" 
+          : "px-2 md:px-4"
       )}>
         {/* Mobile Layout - Viewport-fit container to prevent zoom */}
         {isMobile ? (
