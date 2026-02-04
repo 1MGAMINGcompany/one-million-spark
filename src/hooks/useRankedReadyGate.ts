@@ -10,6 +10,7 @@ import { useState, useEffect, useCallback } from "react";
 import { dbg, isDebugEnabled } from "@/lib/debugLog";
 import { supabase } from "@/integrations/supabase/client";
 import { getSessionToken, getAuthHeaders, storeSessionToken } from "@/lib/sessionToken";
+import { safeTrim } from "@/lib/safe";
 
 interface UseRankedReadyGateOptions {
   roomPda: string | undefined;
@@ -79,9 +80,8 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
   const [dbRequiredCount, setDbRequiredCount] = useState<number>(2);
   const [dbMaxPlayers, setDbMaxPlayers] = useState<number>(2);
 
-  // Normalize wallet addresses (trim only - Solana base58 is case-sensitive!)
-  const normalizeWallet = (w?: string | null) =>
-    typeof w === "string" ? w.trim() : "";
+  // Normalize wallet addresses (use safeTrim - Solana base58 is case-sensitive!)
+  const normalizeWallet = (w?: string | null) => safeTrim(w);
 
   // Determine if I'm player 1 or player 2 (use trim for comparison, NOT toLowerCase)
   const myWalletNorm = normalizeWallet(myWallet);

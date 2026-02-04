@@ -6,11 +6,12 @@
  * Never use toLowerCase() on wallet addresses.
  */
 import { normalizeWallet } from "./walletUtils";
+import { safeTrim } from "./safe";
 
 const PREFIX = "missedTurns";
 
 function getKey(roomPda: string, wallet: string): string {
-  return `${PREFIX}:${roomPda.trim()}:${normalizeWallet(wallet)}`;
+  return `${PREFIX}:${safeTrim(roomPda)}:${normalizeWallet(wallet)}`;
 }
 
 /**
@@ -60,7 +61,7 @@ export function clearRoom(roomPda: string): void {
     const toRemove: string[] = [];
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
-      if (key?.startsWith(`${PREFIX}:${roomPda.trim()}:`)) {
+      if (key?.startsWith(`${PREFIX}:${safeTrim(roomPda)}:`)) {
         toRemove.push(key);
       }
     }
