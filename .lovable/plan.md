@@ -1,140 +1,146 @@
 
-# ✅ COMPLETED: Fix Data Integrity Bug - winner_wallet Invariant
+
+# Mobile Crash Fix: Harden `useDurableGameSync.ts`
 
 ## Problem Summary
-The `settle-game` Edge Function has two code paths where it sets `status_int: 3` (finished) WITHOUT setting `winner_wallet`, causing finished games with null winners. This breaks payouts, audits, and confuses the UI.
+Mobile in-app browsers (Phantom, Solflare) experience crashes due to:
+1. `TypeError: Cannot read property 'slice' of undefined` when realtime payload has undefined wallet
+2. Game state being wiped during transient wallet disconnects (common in mobile)
+3. Excessive channel resubscription when `onMoveReceived` callback is recreated
 
-### Problematic Paths Identified
-1. **Vault Underfunded Path** (lines 766-784): Sets `status_int: 3` but only stores `intendedWinner` in `game_state` JSON
-2. **Settlement Failed Catch Block** (lines 1103-1121): Same issue - `status_int: 3` without `winner_wallet`
+---
 
-### Correct Behavior (forfeit-game as reference)
-The `forfeit-game` function correctly handles this:
-- Cancel paths use `status: 'cancelled'` with `winner_wallet: null` (acceptable)
-- Forfeit paths use `status: 'finished'` with `winner_wallet` properly set
+## Patch 1: Safe Realtime Logging + Guard Turn Number
 
-## Solution Overview
-Introduce a new terminal status `void` with `status_int: 4` for failed settlements that cannot determine/pay a winner. This preserves the invariant:
+**Location**: Lines 301-316 (realtime callback)
 
-**Invariant: If `status_int = 3` (finished), then `winner_wallet` MUST be non-null**
-
-## Implementation Details
-
-### File: `supabase/functions/settle-game/index.ts`
-
-#### Change 1: Vault Underfunded Path (lines 766-784)
-**Before:**
+**Current Code (Crashes)**:
 ```typescript
-await supabase
-  .from("game_sessions")
-  .update({
-    status: "finished",
-    status_int: 3,
-    game_state: { ...existingState, voidSettlement: true, ... },
-    updated_at: new Date().toISOString(),
-  })
-```
-
-**After:**
-```typescript
-await supabase
-  .from("game_sessions")
-  .update({
-    status: "void",
-    status_int: 4,
-    game_over_at: new Date().toISOString(),
-    game_state: { ...existingState, voidSettlement: true, reason: "vault_underfunded", intendedWinner: winnerWallet, ... },
-    updated_at: new Date().toISOString(),
-  })
-```
-
-#### Change 2: Settlement Failed Catch Block (lines 1103-1121)
-**Before:**
-```typescript
-await supabase
-  .from("game_sessions")
-  .update({
-    status: "finished",
-    status_int: 3,
-    game_state: { ...existingState, voidSettlement: true, reason: "settlement_failed", ... },
-    updated_at: new Date().toISOString(),
-  })
-```
-
-**After:**
-```typescript
-await supabase
-  .from("game_sessions")
-  .update({
-    status: "void",
-    status_int: 4,
-    game_over_at: new Date().toISOString(),
-    game_state: { ...existingState, voidSettlement: true, reason: "settlement_failed", intendedWinner: winnerWallet, ... },
-    updated_at: new Date().toISOString(),
-  })
-```
-
-#### Change 3: Add Safety Guard Before Standard Finish Update (near line 981)
-Add a safety check before the success path update to prevent any future bugs:
-
-```typescript
-// SAFETY: Never set status_int=3 without winner_wallet
-if (!winnerWallet) {
-  console.error("[settle-game] ❌ INVARIANT VIOLATION: Attempted status_int=3 without winnerWallet");
-  // Fall back to void status
-  await supabase
-    .from("game_sessions")
-    .update({
-      status: "void",
-      status_int: 4,
-      game_over_at: new Date().toISOString(),
-      game_state: { voidSettlement: true, reason: "missing_winner" },
-      updated_at: new Date().toISOString(),
-    })
-    .eq("room_pda", roomPda);
-  
-  // Continue to return but log the anomaly
+(payload) => {
+  const newMove = payload.new as GameMove;
+  dbg("durable.realtime", { 
+    turn: newMove.turn_number, 
+    wallet: newMove.wallet.slice(0, 8),  // ← CRASH if wallet undefined
+    type: newMove.move_data?.type
+  });
+  if (newMove.turn_number > lastTurnRef.current) { ... }
 }
 ```
 
-## Status Values After Change
+**Fixed Code**:
+```typescript
+(payload) => {
+  const newMove = payload.new as Partial<GameMove>;
 
-| Status | status_int | winner_wallet | Use Case |
-|--------|------------|---------------|----------|
-| waiting | 1 | null | Lobby |
-| active | 2 | null | Game in progress |
-| finished | 3 | REQUIRED | Normal game completion |
-| cancelled | 3 | null | Room cancelled before start |
-| void | 4 | null (ok) | Settlement failed, funds stuck |
+  const turn = typeof newMove.turn_number === "number" 
+    ? newMove.turn_number 
+    : null;
 
-## Files Changed
-1. `supabase/functions/settle-game/index.ts`
+  const walletShort = typeof newMove.wallet === "string" 
+    ? newMove.wallet.slice(0, 8) 
+    : "unknown";
 
-## No Changes Required
-- `supabase/functions/forfeit-game/index.ts` - Already correct
-- Play vs AI code - Not touched
-- Database schema - No migration needed (status_int already supports any integer)
+  dbg("durable.realtime", {
+    turn,
+    wallet: walletShort,
+    type: (newMove as any)?.move_data?.type,
+  });
 
-## Test Plan
+  // Ignore malformed payloads
+  if (turn === null) return;
 
-### Test 1: Normal Settlement
-- Create ranked chess 2p game
-- Play to completion
-- Verify: `status_int=3`, `winner_wallet` is set
-
-### Test 2: Simulate Vault Underfunded (requires manual test)
-- If testable: verify `status='void'`, `status_int=4`, `game_over_at` set, `winner_wallet` null
-
-### Test 3: Verify Forfeit Still Works
-- Create room, both accept
-- One player forfeits
-- Verify: `status_int=3`, `winner_wallet` is opponent
-
-### Test 4: Query Integrity Check
-After deployment, run:
-```sql
-SELECT room_pda, status, status_int, winner_wallet 
-FROM game_sessions 
-WHERE status_int = 3 AND status = 'finished' AND winner_wallet IS NULL;
+  if (turn > lastTurnRef.current) {
+    setMoves((prev) => [...prev, newMove as GameMove]);
+    setLastHash((newMove as GameMove).move_hash);
+    lastTurnRef.current = turn;
+    onMoveReceivedRef.current?.(newMove as GameMove);
+  }
+}
 ```
-Should return 0 rows for new games.
+
+---
+
+## Patch 2: Guard State Reset Against Transient Disconnects
+
+**Location**: Lines 397-404 (reset effect)
+
+**Current Code (Wipes State on Undefined)**:
+```typescript
+useEffect(() => {
+  loadedRef.current = false;
+  setMoves([]);
+  setLastHash("genesis");
+  lastTurnRef.current = 0;
+  setIsLoading(true);
+}, [roomPda]);
+```
+
+**Fixed Code**:
+```typescript
+const prevRoomPdaRef = useRef<string | null>(null);
+
+useEffect(() => {
+  // Critical: avoid clearing state during transient disconnects
+  if (!roomPda) return;
+
+  // Only reset if roomPda actually changed
+  if (prevRoomPdaRef.current === roomPda) return;
+  prevRoomPdaRef.current = roomPda;
+
+  loadedRef.current = false;
+  setMoves([]);
+  setLastHash("genesis");
+  lastTurnRef.current = 0;
+  setIsLoading(true);
+}, [roomPda]);
+```
+
+---
+
+## Patch 3: Prevent Resubscribe Thrash (Callback Ref Pattern)
+
+**Location**: Add new refs at top of hook + update subscription effect
+
+**Add After Line 57**:
+```typescript
+// Store callbacks in refs to prevent resubscribe thrash
+const onMoveReceivedRef = useRef(onMoveReceived);
+useEffect(() => {
+  onMoveReceivedRef.current = onMoveReceived;
+}, [onMoveReceived]);
+```
+
+**Update Line 387**:
+```typescript
+// Remove onMoveReceived from deps
+}, [enabled, roomPda]);
+```
+
+---
+
+## Technical Details
+
+| Patch | Root Cause | Fix | Risk |
+|-------|-----------|-----|------|
+| 1 | Realtime payload can have undefined fields | Type as `Partial<GameMove>`, guard all accesses | Very low - defensive only |
+| 2 | State reset runs even when `roomPda` becomes undefined | Guard with `if (!roomPda) return` + track previous value | Very low - prevents data loss |
+| 3 | Subscription effect runs on callback recreation | Store in ref, remove from deps | Very low - standard React pattern |
+
+---
+
+## Files to Modify
+
+| File | Change |
+|------|--------|
+| `src/hooks/useDurableGameSync.ts` | Apply all 3 patches |
+
+---
+
+## Testing
+
+After implementation:
+1. Test on mobile in-app browser (Phantom/Solflare)
+2. Verify no crashes when receiving realtime moves
+3. Simulate wallet disconnect/reconnect → game state should persist
+4. Console should show `[DBG] durable.realtime` logs with `wallet: "unknown"` for malformed payloads (not crash)
+
