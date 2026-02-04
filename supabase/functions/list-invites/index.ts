@@ -1,34 +1,11 @@
 import { createClient } from "@supabase/supabase-js";
+import { requireSession } from "../_shared/requireSession.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type",
 };
-
-// deno-lint-ignore no-explicit-any
-async function getAuthedWallet(
-  req: Request,
-  supabase: any
-): Promise<string | null> {
-  const authHeader = req.headers.get("Authorization");
-  if (!authHeader?.startsWith("Bearer ")) return null;
-
-  const token = authHeader.replace("Bearer ", "");
-  if (!token || token.length < 30) return null;
-
-  const { data, error } = await supabase
-    .from("game_acceptances")
-    .select("player_wallet, session_expires_at")
-    .eq("session_token", token)
-    .gt("session_expires_at", new Date().toISOString())
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .single();
-
-  if (error || !data) return null;
-  return data.player_wallet;
-}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -41,12 +18,23 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // Auth: get wallet from session token
-    const authedWallet = await getAuthedWallet(req, supabase);
+    // Auth: use shared session validator (player_sessions)
+    // Fail-open: invites are optional, never block gameplay
+    let authedWallet: string | null = null;
+    try {
+      const result = await requireSession(supabase, req);
+      if (result.ok) {
+        authedWallet = result.session.wallet;
+      }
+    } catch (_) {
+      authedWallet = null;
+    }
+
     if (!authedWallet) {
+      // Fail-open: return empty invites, never 401
       return new Response(
-        JSON.stringify({ success: false, error: "Unauthorized" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ success: true, invites: [], skipped: "unauthenticated" }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
