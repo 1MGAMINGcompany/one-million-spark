@@ -10,7 +10,7 @@ import { useSolanaRooms } from "@/hooks/useSolanaRooms";
 import { useTxLock } from "@/contexts/TxLockContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Construction, ArrowLeft, Loader2, Users, Coins, AlertTriangle, CheckCircle, Share2, Copy, ExternalLink, Wallet } from "lucide-react";
+import { Construction, ArrowLeft, Loader2, Users, Coins, AlertTriangle, CheckCircle, Share2, Copy, ExternalLink, Wallet, Clock } from "lucide-react";
 import { RecoverFundsButton } from "@/components/RecoverFundsButton";
 import { WalletGateModal } from "@/components/WalletGateModal";
 import { RivalryWidget } from "@/components/RivalryWidget";
@@ -80,8 +80,9 @@ export default function Room() {
   const [vaultPdaStr, setVaultPdaStr] = useState<string>("");
   const [linkCopied, setLinkCopied] = useState(false);
   
-  // Room mode from DB (single source of truth - NOT localStorage)
+  // Room mode and turn time from DB (single source of truth - NOT localStorage)
   const [roomMode, setRoomMode] = useState<'casual' | 'ranked'>('casual');
+  const [turnTimeSeconds, setTurnTimeSeconds] = useState<number | null>(null);
   const [roomModeLoaded, setRoomModeLoaded] = useState(false);
   
   // Check if this is a rematch room (either just created or from rematch param)
@@ -181,6 +182,11 @@ export default function Room() {
         const session = resp?.session;
         if (session?.mode) {
           setRoomMode(session.mode as 'casual' | 'ranked');
+          // Also get turn_time_seconds
+          if (typeof session.turn_time_seconds === 'number') {
+            setTurnTimeSeconds(session.turn_time_seconds);
+            console.log("[RoomMode] DB turn_time_seconds:", session.turn_time_seconds);
+          }
           console.log("[RoomMode] DB mode:", session.mode);
           setRoomModeLoaded(true);
         } else if (modeFetchAttempts < MAX_MODE_RETRIES) {
@@ -989,7 +995,7 @@ export default function Room() {
               </div>
 
               {/* Game Info Grid */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className={`grid gap-4 ${turnTimeSeconds !== null && turnTimeSeconds > 0 ? 'grid-cols-3' : 'grid-cols-2'}`}>
                 <div className="bg-muted/30 rounded-lg p-3">
                   <p className="text-xs text-muted-foreground uppercase">Game</p>
                   <p className="text-lg font-semibold">{gameName}</p>
@@ -1001,6 +1007,21 @@ export default function Room() {
                   </div>
                   <p className="text-lg font-semibold">{activePlayers.length} / {maxPlayers}</p>
                 </div>
+                {/* Turn Time - Only show if set */}
+                {turnTimeSeconds !== null && turnTimeSeconds > 0 && (
+                  <div className="bg-muted/30 rounded-lg p-3">
+                    <div className="flex items-center gap-1">
+                      <Clock className="h-3 w-3 text-muted-foreground" />
+                      <p className="text-xs text-muted-foreground uppercase">Turn Time</p>
+                    </div>
+                    <p className="text-lg font-semibold">
+                      {turnTimeSeconds >= 60 
+                        ? `${Math.floor(turnTimeSeconds / 60)}m ${turnTimeSeconds % 60 > 0 ? `${turnTimeSeconds % 60}s` : ''}`
+                        : `${turnTimeSeconds}s`
+                      }
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* Stake Info */}
