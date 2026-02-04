@@ -15,6 +15,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { isSameWallet, isRealWallet } from "@/lib/walletUtils";
 import { isGameFinished } from "@/lib/gameStatus";
+import { short } from "@/lib/safe";
 
 interface StartRollResult {
   p1: { wallet: string; dice: number[]; total: number };
@@ -112,7 +113,7 @@ export function useStartRoll(options: UseStartRollOptions): UseStartRollResult {
           return;
         }
         
-        console.log("[useStartRoll] Creating game session for both players", { roomPda, player1, player2 });
+        console.log("[useStartRoll] Creating game session for both players", { roomPda: short(roomPda), player1: short(player1), player2: short(player2) });
         
         const { error } = await supabase.rpc("ensure_game_session", {
           p_room_pda: roomPda,
@@ -172,7 +173,7 @@ export function useStartRoll(options: UseStartRollOptions): UseStartRollResult {
           setStartingWallet(starter);
           setRollResult(session.start_roll as unknown as StartRollResult);
           setIsFinalized(true);
-          console.log("[useStartRoll] Start roll already finalized. Starter:", starter);
+          console.log("[useStartRoll] Start roll already finalized. Starter:", short(starter));
         } else if (session) {
           // Session exists but not finalized - check if player2 is synced
           if (!session.player2_wallet) {
@@ -228,7 +229,7 @@ export function useStartRoll(options: UseStartRollOptions): UseStartRollResult {
           setRollResult(session.start_roll as unknown as StartRollResult);
           setIsFinalized(true);
           setShowDiceRoll(false);
-          console.log("[useStartRoll] Poll found finalized roll. Starter:", starter);
+          console.log("[useStartRoll] Poll found finalized roll. Starter:", short(starter));
           clearInterval(pollInterval);
         }
       } catch (err) {
@@ -285,7 +286,7 @@ export function useStartRoll(options: UseStartRollOptions): UseStartRollResult {
           setIsFinalized(true);
           setShowDiceRoll(false);
 
-          console.log("[useStartRoll] Found finalized start roll from server. starter=", starter);
+          console.log("[useStartRoll] Found finalized start roll from server. starter=", short(starter));
           return;
         }
 
@@ -315,7 +316,7 @@ export function useStartRoll(options: UseStartRollOptions): UseStartRollResult {
     setStartingWallet(starter);
     setIsFinalized(true);
     setShowDiceRoll(false);
-    console.log("[useStartRoll] Roll complete. Starter:", starter, "My color:", isStarter ? "white" : "black");
+    console.log("[useStartRoll] Roll complete. Starter:", short(starter), "My color:", isStarter ? "white" : "black");
     
     // Use atomic RPC to set current_turn_wallet + turn_started_at
     // This prevents race conditions if both clients try to finalize
@@ -330,7 +331,7 @@ export function useStartRoll(options: UseStartRollOptions): UseStartRollResult {
         if (error) {
           console.warn("[useStartRoll] Failed to finalize start roll:", error);
         } else if (data) {
-          console.log("[useStartRoll] Start roll finalized atomically - starter:", starter.slice(0, 8));
+          console.log("[useStartRoll] Start roll finalized atomically - starter:", short(starter));
         } else {
           console.log("[useStartRoll] Start roll already finalized by opponent");
         }
@@ -370,7 +371,7 @@ export function useStartRoll(options: UseStartRollOptions): UseStartRollResult {
         setRollResult(session.start_roll as unknown as StartRollResult);
         setIsFinalized(true);
         setShowDiceRoll(false);
-        console.log("[useStartRoll] Force refetch found finalized roll. Starter:", starter);
+        console.log("[useStartRoll] Force refetch found finalized roll. Starter:", short(starter));
       }
     } catch (err) {
       console.error("[useStartRoll] Force refetch failed:", err);

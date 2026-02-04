@@ -538,34 +538,65 @@ export function WalletButton() {
     });
   }, [isMobile, isInWalletBrowser, wallets.length, sortedWallets.length]);
 
-  // Auto-sync for in-app wallet browsers (Solflare, Phantom, etc.)
-  // CRITICAL: Runs ONCE on mount to detect already-connected wallet
-  // This fixes the "Connect Wallet" loop in Solflare in-app browser
+  // Mobile wallet browser auto-connect (Phantom, Solflare, Backpack in-app browsers)
+  // CRITICAL FIX: Do NOT rely on window.solana.isConnected - it's false until approval
+  // Instead, proactively request connection when in wallet browser environment
+  const autoConnectAttemptedRef = useRef(false);
+  
   useEffect(() => {
-    const win = window as any;
+    // Skip if already connected, connecting, or already attempted
+    if (connected || connecting || autoConnectAttemptedRef.current) return;
     
-    // Skip if already connected or currently connecting
-    if (connected || connecting) return;
-    
-    // Only auto-sync in wallet browser environments
+    // Only auto-connect in wallet browser environments
     if (!isInWalletBrowser) return;
     
-    // Check if window.solana reports connected
-    if (win.solana?.isConnected && win.solana?.publicKey) {
-      console.log("[WalletState] In-app browser has connected wallet, syncing...");
+    // Mark as attempted to prevent loops
+    autoConnectAttemptedRef.current = true;
+    
+    // Wait 500ms for wallet provider to fully initialize
+    const timer = setTimeout(() => {
+      const win = window as any;
       
-      // Find matching installed adapter
-      const installedWallet = wallets.find(w => w.readyState === 'Installed');
-      if (installedWallet) {
-        select(installedWallet.adapter.name);
-        // Single connect call (NOT in a loop)
+      // Find the best adapter based on detected wallet
+      let preferredAdapter: string | null = null;
+      
+      // Detect which wallet's browser we're in
+      if (win.solana?.isPhantom || win.phantom?.solana?.isPhantom) {
+        preferredAdapter = 'Phantom';
+      } else if (win.solflare?.isSolflare || win.solana?.isSolflare) {
+        preferredAdapter = 'Solflare';
+      } else if (win.backpack?.isBackpack) {
+        preferredAdapter = 'Backpack';
+      }
+      
+      // Find the adapter
+      let walletToConnect = preferredAdapter
+        ? wallets.find(w => w.adapter.name.toLowerCase().includes(preferredAdapter!.toLowerCase()))
+        : null;
+      
+      // Fallback to first installed adapter if preferred not found
+      if (!walletToConnect) {
+        walletToConnect = wallets.find(w => w.readyState === 'Installed');
+      }
+      
+      if (walletToConnect && !connected) {
+        console.log("[WalletState] Proactively connecting in wallet browser:", walletToConnect.adapter.name);
+        select(walletToConnect.adapter.name);
+        
+        // Single connect call with error handling
         connect().catch(err => {
           console.warn("[WalletState] Auto-connect failed:", err);
+          // Reset attempt flag on failure so user can retry manually
+          autoConnectAttemptedRef.current = false;
         });
+      } else {
+        console.log("[WalletState] No installed wallet found for auto-connect");
+        autoConnectAttemptedRef.current = false;
       }
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Empty deps - run ONCE on mount
+    }, 500);
+    
+    return () => clearTimeout(timer);
+  }, [isInWalletBrowser, wallets, connected, connecting, select, connect]);
 
   // Log wallet state changes for debugging
   useEffect(() => {

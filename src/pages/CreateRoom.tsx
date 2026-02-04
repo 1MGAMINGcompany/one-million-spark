@@ -44,6 +44,7 @@ import { showBrowserNotification } from "@/lib/pushNotifications";
 import { parseRematchParams, lamportsToSol, RematchPayload, solToLamports } from "@/lib/rematchPayload";
 import { supabase } from "@/integrations/supabase/client";
 import { getSessionToken, getAuthHeaders } from "@/lib/sessionToken";
+import { short } from "@/lib/safe";
 import { showGameStartToast } from "@/hooks/useGameStartToast";
 
 // Game type mapping from string to number
@@ -222,7 +223,7 @@ export default function CreateRoom() {
       return;
     }
 
-    console.log("[CreateRoom] Auto-canceling room due to settings failure:", failedRoomPda.slice(0, 8));
+    console.log("[CreateRoom] Auto-canceling room due to settings failure:", short(failedRoomPda));
 
     try {
       // Use cancelRoomByPda which takes a PDA string
@@ -475,7 +476,7 @@ export default function CreateRoom() {
         }
         
         if (!tokenAvailable) {
-          console.warn(`[CreateRoom] Session token missing for room ${roomPdaStr.slice(0, 8)} after 1s polling`);
+          console.warn(`[CreateRoom] Session token missing for room ${short(roomPdaStr)} after 1s polling`);
           // For ranked/private, this is critical - show modal
           if (gameMode === 'ranked' || gameMode === 'private') {
             setFailedRoomPda(roomPdaStr);

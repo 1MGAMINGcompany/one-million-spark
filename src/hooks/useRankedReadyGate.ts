@@ -10,7 +10,7 @@ import { useState, useEffect, useCallback } from "react";
 import { dbg, isDebugEnabled } from "@/lib/debugLog";
 import { supabase } from "@/integrations/supabase/client";
 import { getSessionToken, getAuthHeaders, storeSessionToken } from "@/lib/sessionToken";
-import { safeTrim } from "@/lib/safe";
+import { safeTrim, short } from "@/lib/safe";
 
 interface UseRankedReadyGateOptions {
   roomPda: string | undefined;
@@ -126,10 +126,10 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
   // Debug logging for ranked gate - traces exactly why bothReady/showAcceptModal are what they are
   if (isDebugEnabled() && isRanked && hasLoaded) {
     dbg("ranked.gate", {
-      roomPda: roomPda?.slice(0, 8),
-      myWallet: myWalletNorm?.slice(0, 8),
-      p1Wallet: p1WalletNorm?.slice(0, 8),
-      p2Wallet: p2WalletNorm?.slice(0, 8),
+      roomPda: short(roomPda),
+      myWallet: short(myWalletNorm),
+      p1Wallet: short(p1WalletNorm),
+      p2Wallet: short(p2WalletNorm),
       isPlayer1,
       isPlayer2,
       isIdentified,
@@ -141,7 +141,7 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
       requiredCount,
       bothReady,
       showAcceptModal,
-      acceptedWallets: Array.from(acceptedWallets).map(w => w.slice(0, 8)),
+      acceptedWallets: Array.from(acceptedWallets).map(w => short(w)),
     });
   }
   
@@ -149,8 +149,8 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
   useEffect(() => {
     if (isRanked && hasLoaded) {
       console.log("[RankedReadyGate] State:", {
-        roomPda: roomPda?.slice(0, 8),
-        myWallet: myWalletNorm?.slice(0, 8),
+        roomPda: short(roomPda),
+        myWallet: short(myWalletNorm),
         isRanked,
         enabled,
         hasLoaded,
@@ -166,7 +166,7 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
         bothReady,
         acceptedCount: acceptedWallets.size,
         requiredCount,
-        acceptedWallets: Array.from(acceptedWallets).map(w => w.slice(0, 8)),
+        acceptedWallets: Array.from(acceptedWallets).map(w => short(w)),
         showAcceptModal,
       });
     }
