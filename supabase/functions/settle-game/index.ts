@@ -766,8 +766,9 @@ Deno.serve(async (req: Request) => {
       await supabase
         .from("game_sessions")
         .update({
-          status: "finished",
-          status_int: 3,
+          status: "void",
+          status_int: 4,
+          game_over_at: new Date().toISOString(),
           game_state: {
             ...existingState,
             playersOnChain,
@@ -978,22 +979,37 @@ Deno.serve(async (req: Request) => {
         console.error("[settle-game] ⚠️ DB recording exception (non-fatal):", dbError);
       }
 
-      // CRITICAL: Update game_sessions with winner and status_int=3
-      const { error: sessionUpdateError } = await supabase
-        .from("game_sessions")
-        .update({
-          status: "finished",
-          status_int: 3,
-          winner_wallet: winnerWallet,
-          game_over_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq("room_pda", roomPda);
-
-      if (sessionUpdateError) {
-        console.error("[settle-game] game_sessions update failed:", sessionUpdateError);
+      // SAFETY GUARD: Never set status_int=3 without winner_wallet
+      if (!winnerWallet) {
+        console.error("[settle-game] ❌ INVARIANT VIOLATION: Attempted status_int=3 without winnerWallet");
+        await supabase
+          .from("game_sessions")
+          .update({
+            status: "void",
+            status_int: 4,
+            game_over_at: new Date().toISOString(),
+            game_state: { voidSettlement: true, reason: "missing_winner" },
+            updated_at: new Date().toISOString(),
+          })
+          .eq("room_pda", roomPda);
       } else {
-        console.log("[settle-game] ✅ game_sessions marked finished (status_int=3, winner:", winnerWallet.slice(0, 8), ")");
+        // CRITICAL: Update game_sessions with winner and status_int=3
+        const { error: sessionUpdateError } = await supabase
+          .from("game_sessions")
+          .update({
+            status: "finished",
+            status_int: 3,
+            winner_wallet: winnerWallet,
+            game_over_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq("room_pda", roomPda);
+
+        if (sessionUpdateError) {
+          console.error("[settle-game] game_sessions update failed:", sessionUpdateError);
+        } else {
+          console.log("[settle-game] ✅ game_sessions marked finished (status_int=3, winner:", winnerWallet.slice(0, 8), ")");
+        }
       }
 
       // ─────────────────────────────────────────────────────────────
@@ -1103,8 +1119,9 @@ Deno.serve(async (req: Request) => {
       await supabase
         .from("game_sessions")
         .update({
-          status: "finished",
-          status_int: 3,
+          status: "void",
+          status_int: 4,
+          game_over_at: new Date().toISOString(),
           game_state: {
             ...existingState,
             playersOnChain,
