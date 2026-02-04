@@ -2,7 +2,6 @@ import React, { ReactNode, useMemo, useCallback } from "react";
 import { ConnectionProvider, WalletProvider } from "@solana/wallet-adapter-react";
 import { WalletModalProvider } from "@solana/wallet-adapter-react-ui";
 import { getSolanaEndpoint, getSolanaNetwork } from "@/lib/solana-config";
-import { isWalletInAppBrowser } from "@/lib/walletBrowserDetection";
 
 // Note: We do NOT import wallet-adapter-react-ui styles since we use custom UI
 
@@ -33,15 +32,11 @@ export function SolanaProvider({ children }: SolanaProviderProps) {
     console.warn('[Wallet] Error:', error.message);
   }, []);
 
-  // Auto-connect in wallet browsers to prevent race condition
-  // where wallet is injected but adapter reports connected=false
-  const inWalletBrowser = typeof window !== 'undefined' && isWalletInAppBrowser();
-
   return (
     <ConnectionProvider endpoint={endpoint}>
       <WalletProvider 
         wallets={wallets} 
-        autoConnect={inWalletBrowser}
+        autoConnect={false}
         onError={onError}
         localStorageKey="1m-gaming-wallet"
       >

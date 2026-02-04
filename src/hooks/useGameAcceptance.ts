@@ -29,7 +29,7 @@ interface UseGameAcceptanceOptions {
   gameType: number;
   maxPlayers: number;
   stakeLamports: number;
-  mode?: "casual" | "ranked" | "private";
+  mode?: "casual" | "ranked";
 }
 
 interface UseGameAcceptanceResult {

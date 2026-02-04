@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { getOpponentWallet, isSameWallet, isRealWallet } from "@/lib/walletUtils";
 import { incMissed, resetMissed, getMissed, clearRoom } from "@/lib/missedTurns";
 import { GameErrorBoundary } from "@/components/GameErrorBoundary";
-import { useParams, Link, useNavigate, useLocation } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, RotateCcw, RotateCw, Gem, Flag, Users, Wifi, WifiOff, RefreshCw, LogOut, Trophy, Clock } from "lucide-react";
 import { SoundToggle } from "@/components/SoundToggle";
@@ -27,8 +27,6 @@ import { useGameSessionPersistence } from "@/hooks/useGameSessionPersistence";
 import { useRoomMode } from "@/hooks/useRoomMode";
 import { useRankedReadyGate } from "@/hooks/useRankedReadyGate";
 import { useTurnTimer, DEFAULT_RANKED_TURN_TIME } from "@/hooks/useTurnTimer";
-import { useTurnCountdownDisplay } from "@/hooks/useTurnCountdownDisplay";
-import { useOpponentTimeoutDetection } from "@/hooks/useOpponentTimeoutDetection";
 import { useStartRoll } from "@/hooks/useStartRoll";
 import { useTxLock } from "@/contexts/TxLockContext";
 import { useDurableGameSync, GameMove } from "@/hooks/useDurableGameSync";
@@ -175,14 +173,10 @@ const BackgammonGame = () => {
   const { roomPda } = useParams<{ roomPda: string }>();
   const roomId = roomPda; // Alias for backward compatibility with hooks/display
   const navigate = useNavigate();
-  const location = useLocation();
   const { t } = useTranslation();
   const isMobile = useIsMobile();
   const { play } = useSound();
   const { isConnected: walletConnected, address } = useWallet();
-  
-  // Check if user just joined via JoinRulesModal (skip AcceptRulesModal)
-  const justJoined = !!(location.state as { justJoined?: boolean })?.justJoined;
 
   // Game state
   const [gameState, setGameState] = useState<GameState>({
@@ -230,7 +224,7 @@ const BackgammonGame = () => {
   const { isTxInFlight, withTxLock } = useTxLock();
   
   // Solana rooms hook for forfeit/cancel
-  const { cancelRoomByPda, clearRoomFromState } = useSolanaRooms();
+  const { cancelRoomByPda } = useSolanaRooms();
 
   // Refs for stable callback access
   const roomPlayersRef = useRef<string[]>([]);
@@ -467,10 +461,7 @@ const BackgammonGame = () => {
 
   // Room mode hook - fetches from DB for Player 2 who doesn't have localStorage data
   // Must be called before any effects that use roomMode
-  const { mode: roomMode, isRanked: roomModeIsRanked, isPrivate, turnTimeSeconds: roomTurnTime, isLoaded: modeLoaded } = useRoomMode(roomPda);
-
-  // Backward-compat alias used throughout this file
-  const isRankedGame = roomModeIsRanked;
+  const { mode: roomMode, isRanked: isRankedGame, isLoaded: modeLoaded } = useRoomMode(roomPda);
 
   const { loadSession: loadBackgammonSession, saveSession: saveBackgammonSession, finishSession: finishBackgammonSession } = useGameSessionPersistence({
     roomPda: roomPda,
@@ -522,21 +513,12 @@ const BackgammonGame = () => {
     }
   }, [gameOver, roomPlayers.length, finishBackgammonSession]);
 
-  // Private rooms require same ready gate as ranked (prevents premature timeouts)
-  const requiresReadyGate = isRankedGame || isPrivate;
-  const requiresStartRoll = isRankedGame || isPrivate;  // ranked OR private
-
-
   const rankedGate = useRankedReadyGate({
     roomPda,
     myWallet: address,
-    isRanked: requiresReadyGate,
-    enabled: requiresReadyGate && roomPlayers.length >= 2 && modeLoaded,
+    isRanked: isRankedGame,
+    enabled: roomPlayers.length >= 2 && modeLoaded,
   });
-
-  // Gate for ranked/private readiness.
-  // Use rankedGate only for ranked/private games; never block non-ranked due to hydration flips.
-  const readyGateOk = !requiresReadyGate || rankedGate.bothReady;
 
   // Check if we have 2 real player wallets (not placeholders including 111111...)
   // CRITICAL: Must be defined BEFORE useDurableGameSync to use as enabled condition
@@ -655,18 +637,17 @@ const BackgammonGame = () => {
     roomPda,
     gameType: "backgammon",
     myWallet: address,
-    isRanked: requiresStartRoll,
+    isRanked: isRankedGame,
     roomPlayers,
     hasTwoRealPlayers,
     initialColor: myRole === "player" ? "w" : "b",
-    bothReady: readyGateOk,
+    bothReady: rankedGate.bothReady,
   });
 
   // PART B FIX: Enable durable sync if EITHER:
-  // 1. readyGateOk is true (both accepted via game_acceptances)
+  // 1. rankedGate.bothReady is true (both accepted via game_acceptances)
   // 2. startRoll.isFinalized is true (game already started, so both WERE ready)
-  // Now also enabled for private mode with turn timers
-  const durableEnabled = (isRankedGame || isPrivate) && (readyGateOk || startRoll.isFinalized);
+  const durableEnabled = isRankedGame && (rankedGate.bothReady || startRoll.isFinalized);
   
   const { submitMove: durablePersistMove, moves: dbMoves, isLoading: isSyncLoading } = useDurableGameSync({
     roomPda: roomPda || "",
@@ -682,7 +663,7 @@ const BackgammonGame = () => {
       wallet: wallet?.slice(0, 8),
       durableEnabled,
       isRankedGame,
-      bothReady: readyGateOk,
+      bothReady: rankedGate.bothReady,
       startRollFinalized: startRoll.isFinalized,
       hasTwoRealPlayers,
       roomPlayers: roomPlayers.map(w => w?.slice(0, 8)),
@@ -691,7 +672,7 @@ const BackgammonGame = () => {
       type: moveData.type,
       durableEnabled,
       isRankedGame,
-      bothReady: readyGateOk,
+      bothReady: rankedGate.bothReady,
       startRollFinalized: startRoll.isFinalized,
     });
     
@@ -699,13 +680,13 @@ const BackgammonGame = () => {
       console.warn("[persistMove] SKIPPED - durable sync disabled", {
         durableEnabled,
         isRankedGame,
-        bothReady: readyGateOk,
+        bothReady: rankedGate.bothReady,
         startRollFinalized: startRoll.isFinalized,
       });
       dbg("persist.skip", {
         durableEnabled,
         isRankedGame,
-        bothReady: readyGateOk,
+        bothReady: rankedGate.bothReady,
         startRollFinalized: startRoll.isFinalized,
       });
       return false;
@@ -725,7 +706,7 @@ const BackgammonGame = () => {
     dbg("persist.result", { success: result, type: moveData.type });
     
     return result;
-  }, [durablePersistMove, durableEnabled, isRankedGame, readyGateOk, startRoll.isFinalized, hasTwoRealPlayers, roomPlayers, roomPda]);
+  }, [durablePersistMove, durableEnabled, isRankedGame, rankedGate.bothReady, startRoll.isFinalized, hasTwoRealPlayers, roomPlayers, roomPda]);
 
   // Cross-device visibility sync - force refetch when tab becomes visible
   useEffect(() => {
@@ -748,7 +729,7 @@ const BackgammonGame = () => {
       roomMode,
       isRankedGame,
       modeLoaded,
-      "readyGateOk": readyGateOk,
+      "rankedGate.bothReady": rankedGate.bothReady,
       "rankedGate.iAmReady": rankedGate.iAmReady,
       "rankedGate.opponentReady": rankedGate.opponentReady,
       "rankedGate.isDataLoaded": rankedGate.isDataLoaded,
@@ -759,7 +740,7 @@ const BackgammonGame = () => {
     });
   }, [
     roomPda, roomMode, isRankedGame, modeLoaded,
-    readyGateOk, rankedGate.iAmReady, rankedGate.opponentReady, rankedGate.isDataLoaded,
+    rankedGate.bothReady, rankedGate.iAmReady, rankedGate.opponentReady, rankedGate.isDataLoaded,
     startRoll.isFinalized, durableEnabled, hasTwoRealPlayers, roomPlayers
   ]);
 
@@ -858,26 +839,6 @@ const BackgammonGame = () => {
     }
   }, [startRoll.isFinalized, startRoll.startingWallet, address]);
 
-  // Fetch initial turn_started_at when game starts (for my turn display)
-  useEffect(() => {
-    if (!startRoll.isFinalized || !roomPda || turnStartedAt) return;
-    
-    const fetchInitialTurnStartedAt = async () => {
-      try {
-        const { data } = await supabase.functions.invoke("game-session-get", {
-          body: { roomPda },
-        });
-        if (data?.session?.turn_started_at) {
-          setTurnStartedAt(data.session.turn_started_at);
-        }
-      } catch (err) {
-        console.error("[BackgammonGame] Failed to fetch initial turn_started_at:", err);
-      }
-    };
-    
-    fetchInitialTurnStartedAt();
-  }, [startRoll.isFinalized, roomPda, turnStartedAt]);
-
   // === MATCH COMPLETE DEBUG LOG ===
   // Logs final outcome when game ends for verification on both devices
   useEffect(() => {
@@ -913,23 +874,22 @@ const BackgammonGame = () => {
       !!roomPda &&
       roomPlayers.length > 0 &&
       stakeLamports !== undefined &&
-      (!requiresReadyGate || roomTurnTime !== null) &&
+      (rankedGate.turnTimeSeconds > 0 || !isRankedGame) &&
       rankedGate.isDataLoaded
     );
-  }, [roomPda, roomPlayers.length, stakeLamports, requiresReadyGate, roomTurnTime, rankedGate.isDataLoaded]);
+  }, [roomPda, roomPlayers.length, stakeLamports, rankedGate.turnTimeSeconds, isRankedGame, rankedGate.isDataLoaded]);
 
-  // Turn time is DB-authoritative (useRoomMode). Never take turn time from rankedGate.
-  // If DB has not loaded yet, keep timers disabled until modeLoaded.
-  const effectiveTurnTime = (roomTurnTime ?? DEFAULT_RANKED_TURN_TIME);
+  // Use canonical stake for turn time
+  const effectiveTurnTime = rankedGate.turnTimeSeconds || DEFAULT_RANKED_TURN_TIME;
 
   // Determine match state for LeaveMatchModal
   const matchState: MatchState = useMemo(() => {
     if (gameOver) return "game_over";
     if (roomPlayers.length < 2) return "waiting_for_opponent";
     if (!rankedGate.iAmReady || !rankedGate.opponentReady) return "rules_pending";
-    if (readyGateOk && startRoll.isFinalized) return "match_active";
+    if (rankedGate.bothReady && startRoll.isFinalized) return "match_active";
     return "opponent_joined";
-  }, [gameOver, roomPlayers.length, rankedGate.iAmReady, rankedGate.opponentReady, readyGateOk, startRoll.isFinalized]);
+  }, [gameOver, roomPlayers.length, rankedGate.iAmReady, rankedGate.opponentReady, rankedGate.bothReady, startRoll.isFinalized]);
 
   // Is current user the room creator? (first player in roomPlayers)
   const isCreator = useMemo(() => {
@@ -966,19 +926,6 @@ const BackgammonGame = () => {
   
   // isMyTurn includes canPlay gate - used for board disable
   const isMyTurn = canPlay && isActuallyMyTurn;
-
-  // Use rankedGate only for ranked games.
-  // Non-ranked games must not be blocked by rankedGate hydration flips.
-
-  // === UNIFIED TURN SOURCE OF TRUTH ===
-  const readyToPlay =
-    hasTwoRealPlayers &&
-    (!requiresReadyGate || readyGateOk) &&
-    startRoll.isFinalized &&
-    !gameOver;
-
-  // Unified turn indicator for ALL UI elements
-  const uiIsMyTurn = readyToPlay && isActuallyMyTurn;
   const isFlipped = myRole === "ai"; // Black player sees flipped board
   
   // Timer-specific turn check (for ranked games)
@@ -992,11 +939,6 @@ const BackgammonGame = () => {
   // Handle turn timeout - SKIP to opponent (NOT immediate forfeit)
   // FIX: Ensure nextTurnWallet is computed from session wallets, NEVER same as timedOutWallet
   const handleTurnTimeout = useCallback(async () => {
-    // Gate on bothReady - NEVER process timeout before game is ready
-    if (!readyGateOk) {
-      console.log("[handleTurnTimeout] Blocked - game not ready");
-      return;
-    }
     // === MANDATORY DIAGNOSTIC LOGGING ===
     console.log("[handleTurnTimeout] ENTRY - all state:", {
       timeoutFiredRef: timeoutFiredRef.current,
@@ -1008,7 +950,7 @@ const BackgammonGame = () => {
       remainingMovesLen: remainingMoves.length,
       durableEnabled,
       isRankedGame,
-      bothReady: readyGateOk,
+      bothReady: rankedGate.bothReady,
       startRollFinalized: startRoll.isFinalized,
       currentTurnWallet: currentTurnWallet?.slice(0, 8),
       hasTwoRealPlayers,
@@ -1078,32 +1020,42 @@ const BackgammonGame = () => {
     console.log(`[BackgammonGame] Turn timeout. timedOut=${timedOutWallet?.slice(0,8)} nextTurn=${nextTurnWallet?.slice(0,8)} missed=${newMissedCount}/3`);
     
     if (newMissedCount >= 3) {
-      // 3 STRIKES = AUTO FORFEIT - Use server-verified timeout mode.
-      // Server determines forfeiter from current_turn_wallet and verifies expiry.
+      // 3 STRIKES = AUTO FORFEIT - Submit explicit auto_forfeit move type
       toast({
         title: t('gameSession.autoForfeit'),
         description: t('gameSession.missedThreeTurns'),
         variant: "destructive",
       });
-
-      if (!roomPda) return;
-
-      const token =
-        localStorage.getItem(`session_token_${roomPda}`) ||
-        localStorage.getItem("session_token_latest") ||
-        "";
-
-      supabase.functions
-        .invoke("forfeit-game", {
-          body: { roomPda, gameType: "backgammon", mode: "timeout" },
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-        })
-        .catch((err) => {
-          console.error("[BackgammonGame] Self timeout forfeit failed:", err);
-        });
-
-      // UI will update from settlement/durable sync.
-      return;
+      
+      // FIX: Await persistMove BEFORE any local state changes
+      // This prevents the race condition where the game is marked finished before the RPC completes
+      if (isRankedGame) {
+        const result = await persistMove({
+          type: "auto_forfeit",
+          timedOutWallet,
+          winnerWallet: nextTurnWallet,
+          missedCount: newMissedCount,
+          reason: "three_missed_turns",
+          gameState,
+          dice: [],
+          remainingMoves: [],
+        } as BackgammonMoveMessage, address);
+        
+        console.log("[handleTurnTimeout] auto_forfeit persistMove result:", result);
+      }
+      
+      // Location 6: THEN update local state (after RPC completes)
+      // Debug log for settlement verification
+      console.log("[handleTurnTimeout] auto_forfeit settlement:", {
+        winnerWallet: nextTurnWallet?.slice(0, 8),
+        loserWallet: address?.slice(0, 8),
+        reason: "auto_forfeit",
+      });
+      
+      forfeitFnRef.current?.();
+      // Use neutral resolving state - DB Outcome Resolver will finalize
+      enterOutcomeResolving(nextTurnWallet);
+      
     } else {
       // SKIP to opponent (not forfeit)
       toast({
@@ -1138,106 +1090,14 @@ const BackgammonGame = () => {
   // Note: This callback is now async to properly await persistMove for auto_forfeit
   }, [isActuallyMyTurn, gameOver, address, roomPda, dice, remainingMoves, myRole, gameState, isRankedGame, persistMove, play, t, enterOutcomeResolving]);
   
-  // Timer should show when turn time is configured and game has started
-  const gameStarted = startRoll.isFinalized && roomPlayers.length >= 2;
-  const shouldShowTimer = modeLoaded && effectiveTurnTime > 0 && gameStarted && !gameOver;
-  
-  // Display timer - shows ACTIVE player's remaining time on BOTH devices
-  const displayTimer = useTurnCountdownDisplay({
-    turnStartedAt,
-    turnTimeSeconds: effectiveTurnTime,
-    enabled: shouldShowTimer && readyToPlay,
-  });
-  
-  // Enforcement timer - ONLY runs on active player's device
+  // Turn timer for ranked games
+  // FIX: Use startRoll.isFinalized as fallback for timer enable (don't depend on bothReady)
   const turnTimer = useTurnTimer({
     turnTimeSeconds: effectiveTurnTime,
-    enabled: shouldShowTimer && isActuallyMyTurn && readyToPlay,
-    isMyTurn: isActuallyMyTurn,
+    enabled: isRankedGame && (canPlay || startRoll.isFinalized) && !gameOver,
+    isMyTurn: effectiveIsMyTurn,
     onTimeExpired: handleTurnTimeout,
     roomId: roomPda,
-    turnStartedAt,
-  });
-
-  // Opponent timeout detection - polls DB to detect if opponent has timed out
-  const handleOpponentTimeoutDetected = useCallback((missedCount: number) => {
-    // When opponent times out, we need to handle it on our side
-    const opponentWalletAddr = getOpponentWallet(roomPlayers, address);
-    if (!opponentWalletAddr || !roomPda) return;
-    
-    console.log(`[BackgammonGame] Opponent timeout detected! Missed: ${missedCount}/3`);
-    
-    if (missedCount >= 3) {
-      // Opponent missed 3 turns - resolve via server-verified timeout mode.
-      // Server determines forfeiter from current_turn_wallet and verifies expiry.
-      if (!roomPda) return;
-
-      const token =
-        localStorage.getItem(`session_token_${roomPda}`) ||
-        localStorage.getItem("session_token_latest") ||
-        "";
-
-      supabase.functions
-        .invoke("forfeit-game", {
-          body: { roomPda, gameType: "backgammon", mode: "timeout" },
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-        })
-        .catch((err) => {
-          console.error("[BackgammonGame] Opponent auto-forfeit failed:", err);
-        });
-
-      // UI will update from settlement/durable sync.
-      return;
-    } else {
-      // Opponent skipped - we get the turn
-      toast({
-        title: t('gameSession.opponentSkipped'),
-        description: t('gameSession.yourTurnNow'),
-      });
-      
-      // Persist turn_timeout move
-      if (isRankedGame || isPrivate) {
-        persistMove({
-          type: "turn_timeout",
-          timedOutWallet: opponentWalletAddr,
-          // FIX: Opponent timed out, so turn goes to ME
-          nextTurnWallet: address,
-          missedCount,
-          gameState,
-          dice: [],
-          remainingMoves: [],
-        } as BackgammonMoveMessage, address);
-      }
-      
-      // Set turn to us
-      setCurrentTurnWallet(address || null);
-      const myRoleValue = isSameWallet(address, roomPlayers[0]) ? "player" : "ai";
-      setCurrentPlayer(myRoleValue);
-      setDice([]);
-      setRemainingMoves([]);
-      setSelectedPoint(null);
-      setValidMoves([]);
-      setGameStatus(t('game.yourTurn') || "Your turn");
-    }
-  }, [roomPlayers, address, roomPda, isRankedGame, persistMove, gameState, t, enterOutcomeResolving]);
-
-  const handleOpponentAutoForfeit = useCallback(() => {
-    const opponentWalletAddr = getOpponentWallet(roomPlayers, address);
-    if (opponentWalletAddr) {
-      handleOpponentTimeoutDetected(3);
-    }
-  }, [roomPlayers, address, handleOpponentTimeoutDetected]);
-
-  const opponentTimeout = useOpponentTimeoutDetection({
-    roomPda: roomPda || "",
-    enabled: shouldShowTimer && !isActuallyMyTurn && startRoll.isFinalized && readyGateOk,
-    isMyTurn: effectiveIsMyTurn,
-    turnTimeSeconds: effectiveTurnTime,
-    myWallet: address,
-    onOpponentTimeout: handleOpponentTimeoutDetected,
-    onAutoForfeit: handleOpponentAutoForfeit,
-    bothReady: readyGateOk,
-    onTurnStartedAtChange: setTurnStartedAt,
   });
 
   // Convert to TurnPlayer format for notifications
@@ -1338,8 +1198,6 @@ const BackgammonGame = () => {
   const sendRematchAcceptRef = useRef<((roomId: string) => boolean) | null>(null);
   const sendRematchDeclineRef = useRef<((roomId: string) => boolean) | null>(null);
   const sendRematchReadyRef = useRef<((roomId: string) => boolean) | null>(null);
-  // Ref for sendResign to allow calling from handleTurnTimeout (defined before useWebRTCSync)
-  const sendResignRef = useRef<(() => boolean) | null>(null);
 
   const handleAcceptRematch = async (rematchRoomId: string) => {
     const result = await rematch.acceptRematch(rematchRoomId);
@@ -1550,8 +1408,7 @@ const BackgammonGame = () => {
     sendRematchAcceptRef.current = sendRematchAccept;
     sendRematchDeclineRef.current = sendRematchDecline;
     sendRematchReadyRef.current = sendRematchReady;
-    sendResignRef.current = sendResign;
-  }, [sendRematchInvite, sendRematchAccept, sendRematchDecline, sendRematchReady, sendResign]);
+  }, [sendRematchInvite, sendRematchAccept, sendRematchDecline, sendRematchReady]);
 
   // useForfeit hook - centralized forfeit/leave logic
   const { forfeit, leave, isForfeiting, isLeaving, forfeitRef } = useForfeit({
@@ -1562,12 +1419,10 @@ const BackgammonGame = () => {
     gameType: "backgammon",
     mode: isRankedGame ? 'ranked' : 'casual',
     // CRITICAL: Pass validation state for ranked games
-    bothRulesAccepted: readyGateOk,
+    bothRulesAccepted: rankedGate.bothReady,
     gameStarted: startRoll.isFinalized,
     onCleanupWebRTC: () => console.log("[BackgammonGame] Cleaning up WebRTC"),
     onCleanupSupabase: () => console.log("[BackgammonGame] Cleaning up Supabase"),
-    // CRITICAL: Clear room from global state to prevent stuck banners
-    onClearRoomFromState: clearRoomFromState,
   });
   
   // Connect forfeit function to ref for timeout handler
@@ -1631,7 +1486,7 @@ const BackgammonGame = () => {
   // Update status based on connection - don't block on WebRTC in wallet browsers
   useEffect(() => {
     if (roomPlayers.length < 2) {
-      if (!readyToPlay) setGameStatus("Waiting for opponent...");
+      setGameStatus("Waiting for opponent...");
     } else if (connectionState === "connecting" && !inWalletBrowser) {
       // Only show "Connecting" if NOT in wallet browser - realtime fallback handles sync
       setGameStatus("Connecting to opponent...");
@@ -2139,8 +1994,8 @@ const BackgammonGame = () => {
     <GameErrorBoundary>
     <InAppBrowserRecovery roomPda={roomPda || ""} onResubscribeRealtime={resubscribeRealtime} bypassOverlay={true}>
     <div className={cn(
-      "game-viewport bg-background flex flex-col relative lg:overflow-visible",
-      isMobile ? "min-h-[calc(100dvh-4rem)] max-h-[calc(100dvh-4rem)] overflow-hidden" : "min-h-[calc(100dvh-4rem)] lg:max-h-none",
+      "game-viewport bg-background flex flex-col relative overflow-hidden",
+      "min-h-[calc(100dvh-4rem)] max-h-[calc(100dvh-4rem)]",
       "pb-[env(safe-area-inset-bottom)]"
     )}>
       {/* Gold Confetti Explosion on Win - only after outcome resolved */}
@@ -2150,32 +2005,11 @@ const BackgammonGame = () => {
       
       {/* RulesGate + DiceRollStart - RulesGate handles accept modal internally */}
       {(() => {
-        // DB-AUTHORITATIVE: Use rankedGate.dbReady for gating, NOT roomPlayers.length
-        const dbReady = rankedGate.dbReady;
-        
-        // DEFENSIVE: Ensure DiceRollStart cannot show if dbReady is false
-        const showDiceRoll = dbReady && !startRoll.isFinalized;
-        if (startRoll.showDiceRoll && !dbReady) {
-          console.error("[dice.gate.violation] showDiceRoll=true but dbReady=false — forcing false");
-        }
-
-        // P0 FIX: RulesGate must NEVER render when DiceRoll should show
-        // Force shouldShowRulesGate=false when showDiceRoll=true
-        const rawShouldShowRulesGate =
-          dbReady &&
+        // Don't require bothReady here - let RulesGate handle showing the accept modal
+        const shouldShowRulesGate =
+          roomPlayers.length >= 2 &&
           !!address &&
           !startRoll.isFinalized;
-        const shouldShowRulesGate = rawShouldShowRulesGate && !showDiceRoll;
-        
-        // Defensive assertion - this should NEVER happen after the fix
-        if (showDiceRoll && rawShouldShowRulesGate) {
-          console.error("[dice.gate.violation] showDiceRoll and rules gate both true - forcing rules gate off", {
-            game: "backgammon",
-            roomPda,
-            dbReady,
-            isFinalized: startRoll.isFinalized,
-          });
-        }
 
         if (isDebugEnabled()) {
           dbg("dice.gate", {
@@ -2184,64 +2018,45 @@ const BackgammonGame = () => {
             roomPlayersLen: roomPlayers.length,
             hasAddress: !!address,
             isRankedGame,
-            bothReady: readyGateOk,
-            dbReady,
-            acceptedCount: rankedGate.acceptedCount,
-            requiredCount: rankedGate.requiredCount,
-            participantsCount: rankedGate.participantsCount,
-            maxPlayers: rankedGate.maxPlayers,
+            bothReady: rankedGate.bothReady,
             isFinalized: startRoll.isFinalized,
-            showDiceRoll,
+            showDiceRoll: startRoll.showDiceRoll,
             shouldShowRulesGate,
           });
         }
 
-        // P0 FIX: When showDiceRoll=true, render DiceRollStart directly (NO RulesGate wrapper)
-        // When shouldShowRulesGate=true (and showDiceRoll=false), show RulesGate for loading/syncing
-        if (showDiceRoll) {
-          return (
-            <DiceRollStart
-              roomPda={roomPda || ""}
-              myWallet={address}
-              player1Wallet={roomPlayers[0]}
-              player2Wallet={roomPlayers[1]}
-              onComplete={startRoll.handleRollComplete}
-              onLeave={leave}
-              onForfeit={forfeit}
-              isLeaving={isLeaving}
-              isForfeiting={isForfeiting}
-            />
-          );
-        }
-        
-        if (shouldShowRulesGate) {
-          return (
-            <RulesGate
-              isRanked={requiresReadyGate}
-              roomPda={roomPda}
-              myWallet={address}
-              roomPlayers={roomPlayers}
-              iAmReady={rankedGate.iAmReady}
-              opponentReady={rankedGate.opponentReady}
-              bothReady={readyGateOk}
-              isSettingReady={rankedGate.isSettingReady}
-              stakeLamports={stakeLamports}
-              turnTimeSeconds={effectiveTurnTime}
-              opponentWallet={opponentWallet || undefined}
-              onAcceptRules={handleAcceptRules}
-              onLeave={handleUILeave}
-              onOpenWalletSelector={() => {}}
-              isDataLoaded={isDataLoaded}
-              startRollFinalized={startRoll.isFinalized}
-              justJoined={justJoined}
-              dbReady={dbReady}
-            >
-              {null}
-            </RulesGate>
-          );
-        }
-        
-        return null;
+        return shouldShowRulesGate ? (
+        <RulesGate
+          isRanked={isRankedGame}
+          roomPda={roomPda}
+          myWallet={address}
+          roomPlayers={roomPlayers}
+          iAmReady={rankedGate.iAmReady}
+          opponentReady={rankedGate.opponentReady}
+          bothReady={rankedGate.bothReady}
+          isSettingReady={rankedGate.isSettingReady}
+          stakeLamports={stakeLamports}
+          turnTimeSeconds={effectiveTurnTime}
+          opponentWallet={opponentWallet || undefined}
+          onAcceptRules={handleAcceptRules}
+          onLeave={handleUILeave}
+          onOpenWalletSelector={() => {}}
+          isDataLoaded={isDataLoaded}
+          startRollFinalized={startRoll.isFinalized}
+        >
+          <DiceRollStart
+            roomPda={roomPda || ""}
+            myWallet={address}
+            player1Wallet={roomPlayers[0]}
+            player2Wallet={roomPlayers[1]}
+            onComplete={startRoll.handleRollComplete}
+            onLeave={leave}
+            onForfeit={forfeit}
+            isLeaving={isLeaving}
+            isForfeiting={isForfeiting}
+          />
+        </RulesGate>
+        ) : null;
       })()}
       
       <TurnBanner
@@ -2335,8 +2150,8 @@ const BackgammonGame = () => {
               activePlayer={turnPlayers[isSameWallet(currentTurnWallet, roomPlayers[0]) ? 0 : 1]}
               players={turnPlayers}
               myAddress={address}
-              remainingTime={displayTimer.displayRemainingTime ?? undefined}
-              showTimer={displayTimer.displayRemainingTime != null}
+              remainingTime={isRankedGame ? turnTimer.remainingTime : undefined}
+              showTimer={isRankedGame && startRoll.isFinalized && !gameOver}
             />
           </div>
         </div>
@@ -2344,13 +2159,12 @@ const BackgammonGame = () => {
 
       {/* Game Area */}
       <div className={cn(
-        isMobile
-          ? "flex-1 flex flex-col min-h-0 overflow-hidden px-2 pt-1 pb-2"
-          : "px-2 md:px-4 py-4"
+        "flex-1 flex flex-col min-h-0 overflow-hidden",
+        isMobile ? "px-2 pt-1 pb-2" : "px-2 md:px-4 py-4"
       )}>
         {/* Mobile Layout - Viewport-fit container to prevent zoom */}
         {isMobile ? (
-          <div className={cn("flex-1 flex flex-col min-h-0 w-full", isMobile ? "overflow-hidden" : "")}>
+          <div className="flex-1 flex flex-col overflow-hidden min-h-0 w-full">
               {/* Score Row */}
               <div className="flex justify-between items-center px-2 py-1 shrink-0">
                 <div className="flex items-center gap-2">
@@ -2377,7 +2191,7 @@ const BackgammonGame = () => {
               </div>
 
               {/* Board Container - Aspect-ratio scaling to 100vw, max-height to fit viewport */}
-              <div className={cn("relative w-full flex-1 backgammon-mp-board", isMobile ? "min-h-0 overflow-hidden" : "")}>
+              <div className="relative w-full flex-1 min-h-0 overflow-hidden backgammon-mp-board">
                 {/* Subtle glow */}
                 <div className="absolute -inset-1 bg-primary/10 rounded-xl blur-lg opacity-30" />
                 
@@ -2456,7 +2270,7 @@ const BackgammonGame = () => {
               <div className="shrink-0 mt-2 space-y-2" style={{ minHeight: '80px' }}>
                 {/* Roll Button */}
                 <div style={{ minHeight: '52px' }}>
-                  {readyToPlay && isMyTurnAuthoritative && dice.length === 0 && !gameOver ? (
+                  {isMyTurn && dice.length === 0 && !gameOver ? (
                     <Button 
                       variant="gold" 
                       size="lg" 
@@ -2482,24 +2296,26 @@ const BackgammonGame = () => {
                   {/* Turn Indicator + Timer */}
                   {!gameOver && (
                     <div className="flex items-center justify-center gap-2 mb-0.5">
-                      {uiIsMyTurn ? (
+                      {isMyTurn ? (
                         <span className="text-[10px] font-medium text-primary">YOUR TURN</span>
                       ) : (
                         <span className="text-[10px] font-medium text-slate-400">OPPONENT'S TURN</span>
                       )}
-                      {shouldShowTimer && (
+                      {isRankedGame && startRoll.isFinalized && !gameOver && (
                         <div className={cn(
                           "flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono",
-                          displayTimer.isCriticalTime 
-                            ? "bg-destructive/30 text-destructive animate-pulse"
-                            : displayTimer.isLowTime 
-                            ? "bg-yellow-500/30 text-yellow-400"
-                            : "bg-muted/50 text-muted-foreground"
+                          effectiveIsMyTurn 
+                            ? turnTimer.isCriticalTime 
+                              ? "bg-destructive/30 text-destructive animate-pulse"
+                              : turnTimer.isLowTime 
+                              ? "bg-yellow-500/30 text-yellow-400"
+                              : "bg-muted/50 text-muted-foreground"
+                            : "bg-muted/30 text-muted-foreground/70"
                         )}>
                           <Clock className="w-2.5 h-2.5" />
                           <span>
-                            {displayTimer.displayRemainingTime !== null 
-                              ? `${Math.floor(displayTimer.displayRemainingTime / 60)}:${(displayTimer.displayRemainingTime % 60).toString().padStart(2, '0')}`
+                            {effectiveIsMyTurn 
+                              ? `${Math.floor(turnTimer.remainingTime / 60)}:${(turnTimer.remainingTime % 60).toString().padStart(2, '0')}`
                               : "--:--"
                             }
                           </span>
@@ -2532,7 +2348,7 @@ const BackgammonGame = () => {
                       </span>
                     </div>
                   )}
-                  {remainingMoves.length > 0 && uiIsMyTurn && (
+                  {remainingMoves.length > 0 && isMyTurn && (
                     <p className="text-[10px] text-muted-foreground mt-0.5 text-center">
                       Moves left: {remainingMoves.join(", ")}
                     </p>
@@ -2582,18 +2398,18 @@ const BackgammonGame = () => {
             </div>
         ) : (
           /* Desktop Layout - Grid structure matching AI layout */
-          <div className="max-w-6xl mx-auto px-2 md:px-4 py-4 md:py-6">
-            <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 md:gap-6">
+          <div className="max-w-6xl mx-auto w-full flex-1 min-h-0 overflow-hidden">
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 md:gap-6 h-full min-h-0">
               {/* Board Column - 3 columns */}
-              <div className="lg:col-span-3 space-y-3 md:space-y-4">
-                {/* Board Container with gold frame */}
-                <div className="relative">
+              <div className="lg:col-span-3 flex flex-col min-h-0 overflow-hidden">
+                <div className="flex-1 min-h-0 overflow-hidden flex items-center justify-center p-2">
+                  <div className="w-full max-w-[min(100%,calc((100dvh-18rem)*2))] aspect-[2/1] relative">
                   {/* Outer glow */}
                   <div className="absolute -inset-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 rounded-2xl blur-xl opacity-50" />
                   
                   {/* Gold frame */}
-                  <div className="relative p-1 rounded-xl bg-gradient-to-br from-primary/40 via-primary/20 to-primary/40 shadow-[0_0_40px_-10px_hsl(45_93%_54%_/_0.4)]">
-                    <div className="bg-gradient-to-b from-midnight-light via-background to-midnight-light rounded-lg p-2 md:p-4 overflow-hidden">
+                  <div className="relative h-full p-1 rounded-xl bg-gradient-to-br from-primary/40 via-primary/20 to-primary/40 shadow-[0_0_40px_-10px_hsl(45_93%_54%_/_0.4)]">
+                    <div className="h-full bg-gradient-to-b from-midnight-light via-background to-midnight-light rounded-lg p-2 md:p-4 overflow-hidden flex flex-col">
                           
                       {/* Opponent Bear Off / Bar + Direction Indicators */}
                       <div className="flex justify-between items-center mb-3 px-2 shrink-0">
@@ -2621,8 +2437,8 @@ const BackgammonGame = () => {
                         )}
                       </div>
 
-                      {/* Board points area */}
-                      <div>
+                      {/* Board points area - flex-1 to scale */}
+                      <div className="flex-1 min-h-0 flex flex-col justify-center">
                         {/* Top points (13-24 or flipped) */}
                         <div className="flex justify-center gap-0.5 mb-1">
                           <div className="flex gap-0.5">
@@ -2710,11 +2526,12 @@ const BackgammonGame = () => {
                       </div>
                     </div>
                   </div>
+                  </div>
                 </div>
 
                 {/* Controls row - inside board column, shrink-0 */}
                 <div className="shrink-0 pt-3 flex flex-wrap gap-3 items-center justify-center">
-                  {readyToPlay && isMyTurnAuthoritative && dice.length === 0 && !gameOver && (
+                  {isMyTurn && dice.length === 0 && !gameOver && (
                     <Button variant="gold" size="lg" className="min-w-[140px] shadow-[0_0_30px_-8px_hsl(45_93%_54%_/_0.5)]" onClick={rollDice}>
                       🎲 Roll Dice
                     </Button>
@@ -2742,28 +2559,26 @@ const BackgammonGame = () => {
                   )}>
                     {gameStatus}
                   </p>
-                  {remainingMoves.length > 0 && uiIsMyTurn && (
+                  {remainingMoves.length > 0 && isMyTurn && (
                     <p className="text-sm text-muted-foreground mt-2">
                       Remaining: {remainingMoves.join(", ")}
                     </p>
                   )}
                 </div>
 
-                {/* Turn Timer for ranked/private */}
-                {shouldShowTimer && (
+                {/* Turn Timer if ranked */}
+                {isRankedGame && startRoll.isFinalized && !gameOver && (
                   <div className="rounded-xl border border-primary/20 bg-card/50 p-4">
                     <h3 className="text-sm font-medium text-muted-foreground mb-2">Turn Timer</h3>
                     <p className={cn(
                       "font-display text-2xl font-bold",
-                      displayTimer.isCriticalTime 
+                      turnTimer.isCriticalTime 
                         ? "text-destructive animate-pulse"
-                        : displayTimer.isLowTime 
+                        : turnTimer.isLowTime 
                         ? "text-yellow-400"
                         : "text-primary"
                     )}>
-                      {displayTimer.displayRemainingTime !== null 
-                        ? `${Math.floor(displayTimer.displayRemainingTime / 60)}:${(displayTimer.displayRemainingTime % 60).toString().padStart(2, '0')}`
-                        : "--:--"}
+                      {Math.floor(turnTimer.remainingTime / 60)}:{(turnTimer.remainingTime % 60).toString().padStart(2, '0')}
                     </p>
                   </div>
                 )}
@@ -2845,8 +2660,6 @@ const BackgammonGame = () => {
         isCreator={isCreator}
         stakeSol={entryFeeSol}
         playerCount={roomPlayers.length}
-        dbStatusInt={rankedGate.dbStatusInt}
-        dbParticipantsCount={rankedGate.dbParticipantsCount}
         onUILeave={handleUILeave}
         onCancelRoom={handleCancelRoom}
         onForfeitMatch={handleForfeitMatch}
@@ -2858,7 +2671,7 @@ const BackgammonGame = () => {
       <RulesInfoPanel 
         stakeSol={rankedGate.stakeLamports / 1_000_000_000} 
         isRanked={isRankedGame}
-        turnTimeSeconds={effectiveTurnTime}
+        turnTimeSeconds={rankedGate.turnTimeSeconds || 60}
       />
 
       {/* Accept Rules Modal and Waiting Panel - REMOVED: Now handled by Rules Gate above */}

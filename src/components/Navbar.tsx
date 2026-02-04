@@ -6,7 +6,6 @@ import { Home, Wallet, PlusCircle, LayoutList, Menu, X, Coins, Volume2, VolumeX,
 import { WalletButton } from "./WalletButton";
 import BrandLogo from "./BrandLogo";
 import LanguageSelector from "./LanguageSelector";
-import { GameInvitesDropdown } from "./GameInvitesDropdown";
 import { useSound } from "@/contexts/SoundContext";
 import { requestNotificationPermission } from "@/lib/pushNotifications";
 import type { LucideIcon } from "lucide-react";
@@ -145,11 +144,6 @@ const Navbar = () => {
               {notificationsEnabled ? <Bell size={20} /> : <BellOff size={20} />}
             </button>
             
-            {/* Game Invites Dropdown */}
-            {connected && publicKey && (
-              <GameInvitesDropdown walletAddress={publicKey.toBase58()} />
-            )}
-            
             <WalletButton />
           </div>
 
@@ -235,18 +229,6 @@ const Navbar = () => {
                 >
                   <User size={20} className="text-primary/70 group-hover:text-primary" />
                   <span>{t("nav.myProfile")}</span>
-                </Link>
-              )}
-              
-              {/* Game Invites (Mobile - only when connected) */}
-              {connected && publicKey && (
-                <Link
-                  to="/invites"
-                  onClick={() => { setIsOpen(false); handleNavClick(); }}
-                  className="group flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 text-muted-foreground hover:text-foreground hover:bg-secondary border border-transparent hover:border-primary/30"
-                >
-                  <Bell size={20} className="text-primary/70 group-hover:text-primary" />
-                  <span>{t("nav.invites", "Invites")}</span>
                 </Link>
               )}
               

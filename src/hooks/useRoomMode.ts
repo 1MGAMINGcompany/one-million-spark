@@ -9,10 +9,9 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
 interface UseRoomModeResult {
-  mode: 'casual' | 'ranked' | 'private';
+  mode: 'casual' | 'ranked';
   isRanked: boolean;
-  isPrivate: boolean;
-  turnTimeSeconds: number | null;
+  turnTimeSeconds: number;
   isLoaded: boolean;
 }
 
@@ -20,8 +19,8 @@ const MAX_RETRIES = 5;
 const RETRY_DELAY_MS = 800;
 
 export function useRoomMode(roomPda: string | undefined): UseRoomModeResult {
-  const [mode, setMode] = useState<'casual' | 'ranked' | 'private'>('casual');
-  const [turnTimeSeconds, setTurnTimeSeconds] = useState<number | null>(null);
+  const [mode, setMode] = useState<'casual' | 'ranked'>('casual');
+  const [turnTimeSeconds, setTurnTimeSeconds] = useState(60);
   const [isLoaded, setIsLoaded] = useState(false);
   const [fetchAttempts, setFetchAttempts] = useState(0);
 
@@ -59,8 +58,8 @@ export function useRoomMode(roomPda: string | undefined): UseRoomModeResult {
           return;
         }
 
-        const dbMode = (session.mode as 'casual' | 'ranked' | 'private') || 'casual';
-        const dbTurnTime = (session.turn_time_seconds ?? null);
+        const dbMode = (session.mode as 'casual' | 'ranked') || 'casual';
+        const dbTurnTime = session.turn_time_seconds || 60;
 
         console.log("[useRoomMode] DB mode fetched:", { dbMode, dbTurnTime });
 
@@ -81,7 +80,6 @@ export function useRoomMode(roomPda: string | undefined): UseRoomModeResult {
   return {
     mode,
     isRanked: mode === 'ranked',
-    isPrivate: mode === 'private',
     turnTimeSeconds,
     isLoaded,
   };

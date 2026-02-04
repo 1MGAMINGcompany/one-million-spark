@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { getOpponentWallet, isSameWallet, isRealWallet, DEFAULT_SOLANA_PUBKEY } from "@/lib/walletUtils";
 import { incMissed, resetMissed, clearRoom } from "@/lib/missedTurns";
 import { GameErrorBoundary } from "@/components/GameErrorBoundary";
-import { useParams, Link, useNavigate, useLocation } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { Chess, Square, PieceSymbol, Color } from "chess.js";
 import { ChessBoardPremium } from "@/components/ChessBoardPremium";
 import { useCaptureAnimations } from "@/components/CaptureAnimationLayer";
@@ -24,8 +24,6 @@ import { useRoomMode } from "@/hooks/useRoomMode";
 import { useRankedReadyGate } from "@/hooks/useRankedReadyGate";
 import { useStartRoll } from "@/hooks/useStartRoll";
 import { useTurnTimer, DEFAULT_RANKED_TURN_TIME } from "@/hooks/useTurnTimer";
-import { useTurnCountdownDisplay } from "@/hooks/useTurnCountdownDisplay";
-import { useOpponentTimeoutDetection } from "@/hooks/useOpponentTimeoutDetection";
 import { useDurableGameSync, GameMove } from "@/hooks/useDurableGameSync";
 import TurnStatusHeader from "@/components/TurnStatusHeader";
 import TurnHistoryDrawer from "@/components/TurnHistoryDrawer";
@@ -120,13 +118,9 @@ const ChessGame = () => {
   const { roomPda } = useParams<{ roomPda: string }>();
   const roomId = roomPda; // Alias for backward compatibility with hooks/display
   const navigate = useNavigate();
-  const location = useLocation();
   const { t } = useTranslation();
   const { play } = useSound();
   const { isConnected: walletConnected, address } = useWallet();
-  
-  // Check if user just joined via JoinRulesModal (skip AcceptRulesModal)
-  const justJoined = !!(location.state as { justJoined?: boolean })?.justJoined;
 
   const [game, setGame] = useState(new Chess());
   const [gameStatus, setGameStatus] = useState<string>(t("gameMultiplayer.waitingForOpponent"));
@@ -134,7 +128,6 @@ const ChessGame = () => {
   const [gameOver, setGameOver] = useState(false);
   const [animationsEnabled, setAnimationsEnabled] = useState(true);
   const [winnerWallet, setWinnerWallet] = useState<string | null>(null); // Direct wallet address of winner
-  const [turnStartedAt, setTurnStartedAt] = useState<string | null>(null); // For display timer
 
   // Room players - in production, this comes from on-chain room data
   const [roomPlayers, setRoomPlayers] = useState<string[]>([]);
@@ -148,7 +141,7 @@ const ChessGame = () => {
   const [isCancellingRoom, setIsCancellingRoom] = useState(false);
   
   // Solana rooms hook for forfeit/cancel
-  const { cancelRoomByPda, clearRoomFromState } = useSolanaRooms();
+  const { cancelRoomByPda } = useSolanaRooms();
   
   // WebRTC refs for cleanup
   const webrtcCleanupRef = useRef<(() => void) | null>(null);
@@ -285,7 +278,7 @@ const ChessGame = () => {
 
   // Room mode hook - fetches from DB for Player 2 who doesn't have localStorage data
   // Must be called before any effects that use roomMode
-  const { mode: roomMode, isRanked: isRankedGame, isPrivate, turnTimeSeconds: roomTurnTime, isLoaded: modeLoaded } = useRoomMode(roomPda);
+  const { mode: roomMode, isRanked: isRankedGame, isLoaded: modeLoaded } = useRoomMode(roomPda);
 
   const { loadSession: loadChessSession, saveSession: saveChessSession, finishSession: finishChessSession } = useGameSessionPersistence({
     roomPda: roomPda,
@@ -398,7 +391,7 @@ const ChessGame = () => {
 
   const { submitMove: persistMove, moves: dbMoves, isLoading: isSyncLoading } = useDurableGameSync({
     roomPda: roomPda || "",
-    enabled: (isRankedGame || isPrivate) && roomPlayers.length >= 2,
+    enabled: isRankedGame && roomPlayers.length >= 2,
     onMoveReceived: handleDurableMoveReceived,
   });
 
@@ -408,18 +401,12 @@ const ChessGame = () => {
     isRealWallet(roomPlayers[0]) && 
     isRealWallet(roomPlayers[1]);
 
-  // Private rooms require same ready gate as ranked (prevents premature timeouts)
-  const requiresReadyGate = isRankedGame || isPrivate;
-
   const rankedGate = useRankedReadyGate({
     roomPda,
     myWallet: address,
-    isRanked: requiresReadyGate,
+    isRanked: isRankedGame,
     enabled: hasTwoRealPlayers && modeLoaded,
   });
-
-  // Gate for ranked/private readiness
-  const readyGateOk = !requiresReadyGate || rankedGate.bothReady;
 
   // TxLock for preventing Phantom "Request blocked" popups
   const { isTxInFlight, withTxLock } = useTxLock();
@@ -430,10 +417,10 @@ const ChessGame = () => {
       !!roomPda &&
       roomPlayers.length > 0 &&
       stakeLamports !== undefined &&
-      (!requiresReadyGate || roomTurnTime !== null) &&
+      (rankedGate.turnTimeSeconds > 0 || !isRankedGame) &&
       rankedGate.isDataLoaded
     );
-  }, [roomPda, roomPlayers.length, stakeLamports, requiresReadyGate, roomTurnTime, rankedGate.isDataLoaded]);
+  }, [roomPda, roomPlayers.length, stakeLamports, rankedGate.turnTimeSeconds, isRankedGame, rankedGate.isDataLoaded]);
 
   // Deterministic start roll for ALL games (casual + ranked)
   const startRoll = useStartRoll({
@@ -446,13 +433,6 @@ const ChessGame = () => {
     initialColor: isSameWallet(roomPlayers[0], address) ? "w" : "b",
     bothReady: rankedGate.bothReady,
   });
-
-  // === UNIFIED TURN SOURCE OF TRUTH ===
-  const readyToPlay =
-    hasTwoRealPlayers &&
-    readyGateOk &&
-    startRoll.isFinalized &&
-    !gameOver;
 
   // Update myColor based on start roll result - THIS IS THE ONLY PLACE THAT SETS COLOR
   useEffect(() => {
@@ -530,35 +510,11 @@ const ChessGame = () => {
   const forfeitFnRef = useRef<(() => Promise<void>) | null>(null);
 
   // Turn timer for ranked games - skip on timeout, 3 strikes = forfeit
-  // FIX: Allow processing when opponent times out (detected by useOpponentTimeoutDetection)
-  const handleTurnTimeout = useCallback((timedOutWalletArg?: string | null) => {
-    // Gate on bothReady - NEVER process timeout before game is ready
-    if (!rankedGate.bothReady) {
-      console.log("[handleTurnTimeout] Blocked - game not ready");
-      return;
-    }
-    if (gameOver || !address || !roomPda) return;
-
-    // Get the wallet that timed out - either passed in or current turn holder
-    const timedOutWallet = timedOutWalletArg || activeTurnAddress || null;
-    if (!timedOutWallet) return;
+  const handleTurnTimeout = useCallback(() => {
+    if (gameOver || !address || !roomPda || !isActuallyMyTurn) return;
     
-    const iTimedOut = isSameWallet(timedOutWallet, address);
     const opponentWalletAddr = getOpponentWallet(roomPlayers, address);
-    
-    // VALIDATION: Only process if timedOutWallet matches either me or opponent
-    // This prevents stale closure issues while still allowing opponent timeout detection
-    const isValidTimeout = iTimedOut || (opponentWalletAddr && isSameWallet(timedOutWallet, opponentWalletAddr));
-    if (!isValidTimeout) {
-      console.log("[ChessGame] Ignoring timeout - wallet doesn't match player or opponent", {
-        timedOutWallet: timedOutWallet?.slice(0, 8),
-        myWallet: address?.slice(0, 8),
-        opponentWallet: opponentWalletAddr?.slice(0, 8),
-      });
-      return;
-    }
-    
-    const newMissedCount = incMissed(roomPda, timedOutWallet);
+    const newMissedCount = incMissed(roomPda, address);
     
     if (newMissedCount >= 3) {
       // 3 STRIKES = AUTO FORFEIT
@@ -568,33 +524,22 @@ const ChessGame = () => {
         variant: "destructive",
       });
       
-      // Persist auto_forfeit event (changed from turn_timeout)
-      if ((isRankedGame || isPrivate) && opponentWalletAddr) {
+      // Persist minimal turn_timeout event
+      if (isRankedGame && opponentWalletAddr) {
         persistMove({
-          action: "auto_forfeit",
-          timedOutWallet: timedOutWallet,
-          winnerWallet: iTimedOut ? opponentWalletAddr : address,
+          action: "turn_timeout",
+          timedOutWallet: address,
+          nextTurnWallet: opponentWalletAddr,
           missedCount: newMissedCount,
         } as any, address);
       }
       
-      if (iTimedOut) {
-        // I missed 3 turns -> I lose
-        // FIX: Notify opponent via WebRTC BEFORE navigating away
-        sendResignRef.current?.();
-        
-        forfeitFnRef.current?.();
-        setGameOver(true);
-        setWinnerWallet(opponentWalletAddr);
-        setGameStatus(myColor === 'w' ? t('game.black') + " wins" : t('game.white') + " wins");
-        play('chess_lose');
-      } else {
-        // Opponent missed 3 turns -> I win
-        setGameOver(true);
-        setWinnerWallet(address);
-        setGameStatus(myColor === 'w' ? t('game.white') + " wins" : t('game.black') + " wins");
-        play('chess_win');
-      }
+      // Trigger forfeit
+      forfeitFnRef.current?.();
+      setGameOver(true);
+      setWinnerWallet(opponentWalletAddr);
+      setGameStatus(myColor === 'w' ? t('game.black') + " wins" : t('game.white') + " wins");
+      play('chess_lose');
       
     } else {
       // SKIP to opponent
@@ -605,49 +550,29 @@ const ChessGame = () => {
       });
       
       // Persist minimal turn_timeout event
-      if ((isRankedGame || isPrivate) && opponentWalletAddr) {
+      if (isRankedGame && opponentWalletAddr) {
         persistMove({
           action: "turn_timeout",
-          timedOutWallet: timedOutWallet,
-          // FIX: nextTurnWallet depends on WHO timed out
-          nextTurnWallet: iTimedOut ? opponentWalletAddr : address,
+          timedOutWallet: address,
+          nextTurnWallet: opponentWalletAddr,
           missedCount: newMissedCount,
         } as any, address);
       }
       
-      // FIX: Set turnOverrideWallet based on who timed out
-      // If I timed out, opponent gets turn. If opponent timed out, I get turn.
-      if (iTimedOut) {
-        setTurnOverrideWallet(opponentWalletAddr);
-      } else {
-        // Opponent timed out - I get the turn
-        setTurnOverrideWallet(address);
-      }
+      // Grant opponent another turn via override
+      setTurnOverrideWallet(opponentWalletAddr);
     }
   }, [gameOver, address, roomPda, isActuallyMyTurn, roomPlayers, myColor, isRankedGame, persistMove, play, t]);
-  // Turn time is DB-authoritative (useRoomMode). Never take turn time from rankedGate.
-  // If DB has not loaded yet, keep timers disabled until modeLoaded.
-  const effectiveTurnTime = (roomTurnTime ?? DEFAULT_RANKED_TURN_TIME);
+
+  // Use turn time from ranked gate (fetched from DB/localStorage)
+  const effectiveTurnTime = rankedGate.turnTimeSeconds || DEFAULT_RANKED_TURN_TIME;
   
-  // Timer should show when turn time is configured and game has started
-  const gameStarted = startRoll.isFinalized && roomPlayers.length >= 2;
-  const shouldShowTimer = modeLoaded && effectiveTurnTime > 0 && gameStarted && !gameOver;
-  
-  // Display timer - shows ACTIVE player's remaining time on BOTH devices
-  const displayTimer = useTurnCountdownDisplay({
-    turnStartedAt,
-    turnTimeSeconds: effectiveTurnTime,
-    enabled: shouldShowTimer && readyToPlay,
-  });
-  
-  // Enforcement timer - ONLY runs on active player's device
   const turnTimer = useTurnTimer({
     turnTimeSeconds: effectiveTurnTime,
-    enabled: shouldShowTimer && isActuallyMyTurn && readyToPlay,
-    isMyTurn: isActuallyMyTurn,
+    enabled: isRankedGame && canPlay && !gameOver,
+    isMyTurn,
     onTimeExpired: handleTurnTimeout,
     roomId: roomPda,
-    turnStartedAt, // DB-authoritative mode
   });
 
   // Convert to TurnPlayer format for notifications
@@ -670,63 +595,6 @@ const ChessGame = () => {
     const turnIndex = game.turn() === "w" ? 0 : 1;
     return turnPlayers[turnIndex]?.address || null;
   }, [game, turnPlayers]);
-
-  // Opponent timeout detection - polls DB to detect if opponent has timed out
-  const handleOpponentTimeoutDetected = useCallback((missedCount: number) => {
-    // When opponent times out, call handleTurnTimeout with their wallet
-    const opponentWallet = getOpponentWallet(roomPlayers, address);
-    if (opponentWallet) {
-      handleTurnTimeout(opponentWallet);
-    }
-  }, [roomPlayers, address, handleTurnTimeout]);
-
-  const handleOpponentAutoForfeit = useCallback(() => {
-    // Opponent missed 3 turns - they auto-forfeit, we win
-    const opponentWallet = getOpponentWallet(roomPlayers, address);
-    if (opponentWallet) {
-      handleTurnTimeout(opponentWallet);
-    }
-  }, [roomPlayers, address, handleTurnTimeout]);
-
-  const opponentTimeout = useOpponentTimeoutDetection({
-    roomPda: roomPda || "",
-    // Enable for ranked/private when it's NOT my turn AND game is ready
-    enabled: shouldShowTimer && !isActuallyMyTurn && startRoll.isFinalized && readyToPlay,
-    isMyTurn: isActuallyMyTurn,
-    turnTimeSeconds: effectiveTurnTime,
-    myWallet: address,
-    onOpponentTimeout: handleOpponentTimeoutDetected,
-    onAutoForfeit: handleOpponentAutoForfeit,
-    bothReady: readyToPlay,
-    onTurnStartedAtChange: setTurnStartedAt,
-  });
-
-  // Sync turnStartedAt from opponentTimeout polling (for display timer)
-  useEffect(() => {
-    if (opponentTimeout.turnStartedAt && opponentTimeout.turnStartedAt !== turnStartedAt) {
-      setTurnStartedAt(opponentTimeout.turnStartedAt);
-    }
-  }, [opponentTimeout.turnStartedAt, turnStartedAt]);
-
-  // Fetch initial turn_started_at when game starts (for my turn display)
-  useEffect(() => {
-    if (!startRoll.isFinalized || !roomPda || turnStartedAt) return;
-    
-    const fetchInitialTurnStartedAt = async () => {
-      try {
-        const { data } = await supabase.functions.invoke("game-session-get", {
-          body: { roomPda },
-        });
-        if (data?.session?.turn_started_at) {
-          setTurnStartedAt(data.session.turn_started_at);
-        }
-      } catch (err) {
-        console.error("[ChessGame] Failed to fetch initial turn_started_at:", err);
-      }
-    };
-    
-    fetchInitialTurnStartedAt();
-  }, [startRoll.isFinalized, roomPda, turnStartedAt]);
 
   // Turn notification system
   const {
@@ -822,8 +690,6 @@ const ChessGame = () => {
   const sendRematchAcceptRef = useRef<((roomId: string) => boolean) | null>(null);
   const sendRematchDeclineRef = useRef<((roomId: string) => boolean) | null>(null);
   const sendRematchReadyRef = useRef<((roomId: string) => boolean) | null>(null);
-  // Ref for sendResign to allow calling from handleTurnTimeout (defined before useWebRTCSync)
-  const sendResignRef = useRef<(() => boolean) | null>(null);
 
   const handleAcceptRematch = async (rematchRoomId: string) => {
     const result = await rematch.acceptRematch(rematchRoomId);
@@ -1017,8 +883,7 @@ const ChessGame = () => {
     sendRematchAcceptRef.current = sendRematchAccept;
     sendRematchDeclineRef.current = sendRematchDecline;
     sendRematchReadyRef.current = sendRematchReady;
-    sendResignRef.current = sendResign;
-  }, [sendRematchInvite, sendRematchAccept, sendRematchDecline, sendRematchReady, sendResign]);
+  }, [sendRematchInvite, sendRematchAccept, sendRematchDecline, sendRematchReady]);
 
   // useForfeit hook - centralized forfeit/leave logic with guaranteed cleanup
   const { forfeit, leave, isForfeiting, isLeaving, forfeitRef } = useForfeit({
@@ -1039,8 +904,6 @@ const ChessGame = () => {
       // Supabase channels are cleaned up by the hook
       console.log("[ChessGame] Cleaning up Supabase via useForfeit");
     },
-    // CRITICAL: Clear room from global state to prevent stuck banners
-    onClearRoomFromState: clearRoomFromState,
   });
   
   // Connect forfeit ref for timeout handler
@@ -1311,8 +1174,8 @@ const ChessGame = () => {
               activePlayer={turnPlayers[game.turn() === "w" ? 0 : 1]}
               players={turnPlayers}
               myAddress={address}
-              remainingTime={displayTimer.displayRemainingTime ?? undefined}
-              showTimer={displayTimer.displayRemainingTime != null}
+              remainingTime={isRankedGame ? turnTimer.remainingTime : undefined}
+              showTimer={isRankedGame && canPlay}
             />
           </div>
         </div>
@@ -1488,32 +1351,11 @@ const ChessGame = () => {
 
       {/* RulesGate + DiceRollStart - RulesGate handles accept modal internally */}
       {(() => {
-        // DB-AUTHORITATIVE: Use rankedGate.dbReady for gating, NOT roomPlayers.length
-        const dbReady = rankedGate.dbReady;
-        
-        // DEFENSIVE: Ensure DiceRollStart cannot show if dbReady is false
-        const showDiceRoll = dbReady && !startRoll.isFinalized;
-        if (startRoll.showDiceRoll && !dbReady) {
-          console.error("[dice.gate.violation] showDiceRoll=true but dbReady=false — forcing false");
-        }
-
-        // P0 FIX: RulesGate must NEVER render when DiceRoll should show
-        // Force shouldShowRulesGate=false when showDiceRoll=true
-        const rawShouldShowRulesGate =
-          dbReady &&
+        // Don't require bothReady here - let RulesGate handle showing the accept modal
+        const shouldShowRulesGate =
+          roomPlayers.length >= 2 &&
           !!address &&
           !startRoll.isFinalized;
-        const shouldShowRulesGate = rawShouldShowRulesGate && !showDiceRoll;
-        
-        // Defensive assertion - this should NEVER happen after the fix
-        if (showDiceRoll && rawShouldShowRulesGate) {
-          console.error("[dice.gate.violation] showDiceRoll and rules gate both true - forcing rules gate off", {
-            game: "chess",
-            roomPda,
-            dbReady,
-            isFinalized: startRoll.isFinalized,
-          });
-        }
 
         if (isDebugEnabled()) {
           dbg("dice.gate", {
@@ -1523,62 +1365,44 @@ const ChessGame = () => {
             hasAddress: !!address,
             isRankedGame,
             bothReady: rankedGate.bothReady,
-            dbReady,
-            acceptedCount: rankedGate.acceptedCount,
-            requiredCount: rankedGate.requiredCount,
-            participantsCount: rankedGate.participantsCount,
-            maxPlayers: rankedGate.maxPlayers,
             isFinalized: startRoll.isFinalized,
-            showDiceRoll,
+            showDiceRoll: startRoll.showDiceRoll,
             shouldShowRulesGate,
           });
         }
 
-        // P0 FIX: When showDiceRoll=true, render DiceRollStart directly (NO RulesGate wrapper)
-        // When shouldShowRulesGate=true (and showDiceRoll=false), show RulesGate for loading/syncing
-        if (showDiceRoll) {
-          return (
-            <DiceRollStart
-              roomPda={roomPda || ""}
-              myWallet={address}
-              player1Wallet={roomPlayers[0]}
-              player2Wallet={roomPlayers[1]}
-              onComplete={startRoll.handleRollComplete}
-              onLeave={handleLeaveClick}
-              onForfeit={handleForfeitMatch}
-              isLeaving={isLeaving}
-              isForfeiting={isForfeiting}
-            />
-          );
-        }
-        
-        if (shouldShowRulesGate) {
-          return (
-            <RulesGate
-              isRanked={requiresReadyGate}
-              roomPda={roomPda}
-              myWallet={address}
-              roomPlayers={roomPlayers}
-              iAmReady={rankedGate.iAmReady}
-              opponentReady={rankedGate.opponentReady}
-              bothReady={rankedGate.bothReady}
-              isSettingReady={rankedGate.isSettingReady}
-              stakeLamports={stakeLamports}
-              turnTimeSeconds={effectiveTurnTime}
-              opponentWallet={roomPlayers.find(p => isRealWallet(p) && !isSameWallet(p, address))}
-              onAcceptRules={handleAcceptRules}
-              onLeave={handleLeaveClick}
-              isDataLoaded={isDataLoaded}
-              startRollFinalized={startRoll.isFinalized}
-              justJoined={justJoined}
-              dbReady={dbReady}
-            >
-              {null}
-            </RulesGate>
-          );
-        }
-        
-        return null;
+        return shouldShowRulesGate ? (
+        <RulesGate
+          isRanked={isRankedGame}
+          roomPda={roomPda}
+          myWallet={address}
+          roomPlayers={roomPlayers}
+          iAmReady={rankedGate.iAmReady}
+          opponentReady={rankedGate.opponentReady}
+          bothReady={rankedGate.bothReady}
+          isSettingReady={rankedGate.isSettingReady}
+          stakeLamports={stakeLamports}
+          turnTimeSeconds={effectiveTurnTime}
+          opponentWallet={roomPlayers.find(p => isRealWallet(p) && !isSameWallet(p, address))}
+          onAcceptRules={handleAcceptRules}
+          onLeave={handleLeaveClick}
+          isDataLoaded={isDataLoaded}
+          startRollFinalized={startRoll.isFinalized}
+        >
+          {/* DiceRollStart - rendered based on shouldShowDice, not showDiceRoll */}
+          <DiceRollStart
+            roomPda={roomPda || ""}
+            myWallet={address}
+            player1Wallet={roomPlayers[0]}
+            player2Wallet={roomPlayers[1]}
+            onComplete={startRoll.handleRollComplete}
+            onLeave={handleLeaveClick}
+            onForfeit={handleForfeitMatch}
+            isLeaving={isLeaving}
+            isForfeiting={isForfeiting}
+          />
+        </RulesGate>
+        ) : null;
       })()}
 
       {/* Leave Match Modal - Safe UI with explicit on-chain action separation */}
@@ -1590,8 +1414,6 @@ const ChessGame = () => {
         isCreator={isCreator}
         stakeSol={entryFeeSol}
         playerCount={roomPlayers.length}
-        dbStatusInt={rankedGate.dbStatusInt}
-        dbParticipantsCount={rankedGate.dbParticipantsCount}
         onUILeave={handleUILeave}
         onCancelRoom={handleCancelRoom}
         onForfeitMatch={handleForfeitMatch}

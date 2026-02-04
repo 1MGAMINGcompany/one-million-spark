@@ -21,8 +21,6 @@ interface JoinRulesModalProps {
   stakeSol: number;
   isRanked: boolean;
   isLoading?: boolean;
-  /** Room mode for display text */
-  mode?: 'casual' | 'ranked' | 'private';
 }
 
 export function JoinRulesModal({
@@ -33,7 +31,6 @@ export function JoinRulesModal({
   stakeSol,
   isRanked,
   isLoading = false,
-  mode = isRanked ? 'ranked' : 'casual',
 }: JoinRulesModalProps) {
   const feeSol = stakeSol * 2 * 0.05; // 5% of total pot
   const potSol = stakeSol * 2;
@@ -50,7 +47,7 @@ export function JoinRulesModal({
             Join {gameName} Match
           </DialogTitle>
           <DialogDescription>
-            Review the game rules before joining this {mode === 'private' ? 'private' : mode === 'ranked' ? 'ranked' : 'casual'} match.
+            Review the game rules before joining this {isRanked ? 'ranked' : 'casual'} match.
           </DialogDescription>
         </DialogHeader>
 
@@ -93,15 +90,15 @@ export function JoinRulesModal({
             </ul>
           </div>
 
-          {/* Turn Timer (for ranked and private) */}
-          {(isRanked || mode === 'private') && (
+          {/* Turn Timer (for ranked) */}
+          {isRanked && (
             <div className="rounded-lg border bg-card p-4 space-y-2">
               <div className="flex items-center gap-2 text-sm font-medium">
                 <Clock className="h-4 w-4 text-primary" />
                 Turn Timer
               </div>
               <p className="text-sm text-muted-foreground">
-                {mode === 'private' ? 'Private' : 'Ranked'} matches have a turn timer. Exceeding it results in automatic forfeit.
+                Ranked matches have a turn timer. Exceeding it results in automatic forfeit.
               </p>
             </div>
           )}

@@ -30,8 +30,8 @@ export interface FinalizeGameParams {
   gameType: string;
   /** Stake in lamports */
   stakeLamports: number;
-  /** Game mode (casual/ranked/private) */
-  mode: 'casual' | 'ranked' | 'private';
+  /** Game mode (casual/ranked) */
+  mode: 'casual' | 'ranked';
   /** Array of player wallets */
   players: string[];
   /** How the game ended */
@@ -170,17 +170,12 @@ async function finalizeViaEdgeFunction(
   });
   
   try {
-    const token =
-      localStorage.getItem(`session_token_${roomPda}`) ||
-      localStorage.getItem("session_token_latest") ||
-      "";
-
     const { data, error } = await supabase.functions.invoke('forfeit-game', {
       body: {
         roomPda,
+        forfeitingWallet: loserWallet,
         gameType,
       },
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
     
     if (error) {
@@ -325,6 +320,7 @@ export async function finalizeGame(params: FinalizeGameParams): Promise<Finalize
       const { data, error } = await supabase.functions.invoke('settle-draw', {
         body: {
           roomPda,
+          callerWallet: winnerWallet, // Either player can trigger
           gameType,
         },
       });

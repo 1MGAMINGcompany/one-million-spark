@@ -6,7 +6,6 @@
     "exit": "退出"
   },
   "game": {
-    "player": "玩家",
     "finishGame": "结束游戏",
     "finishGameDesc": "作为房间创建者，您可以结束游戏并支付奖金给获胜者。",
     "selectWinner": "选择获胜者",
@@ -720,38 +719,5 @@
     "forfeit": "弃权",
     "timeoutForfeit": "超时 = 自动弃权",
     "rulesAcceptedNote": "两位玩家在比赛开始前已接受这些规则。奖励在链上执行。"
-  },
-  "diceRoll": {
-    "rollToStart": "掷骰开始",
-    "highestGoesFirst": "点数最高者先行",
-    "syncingOpponent": "正在与对手同步...请稍候。",
-    "takingTooLong": "掷骰时间过长。请选择:",
-    "retrySync": "重试同步",
-    "pickStarterAuto": "选择先手(自动)",
-    "rolledHigher": "掷出更高点数!你先行!",
-    "theyGoFirst": "掷出更高点数!他们先行!",
-    "resolvedAfter": "在",
-    "tieBreaker": "次平局后解决",
-    "bothReady": "双方已准备好。掷骰决定谁先行!",
-    "rollDice": "掷骰子",
-    "computing": "计算中...",
-    "rolling": "投掷中...",
-    "continueToGame": "继续游戏"
-  },
-  "clearSession": {
-    "title": "在比赛进行中清除会话?",
-    "descriptionActive": "清除会话将断开连接。如果不返回,可能因超时而输掉比赛。",
-    "descriptionUnverified": "无法验证比赛状态。清除会话可能导致断开连接。",
-    "roomLabel": "房间:",
-    "inRoom": "您当前在房间:",
-    "cancel": "取消",
-    "goToRoomList": "前往房间列表",
-    "clearAnyway": "仍然清除",
-    "cleared": "会话已清除",
-    "tokensRemoved": "个令牌已移除"
-  },
-  "common": {
-    "loadingMatchDetails": "正在加载比赛详情...",
-    "confirmingEntry": "正在确认进入..."
   }
 }

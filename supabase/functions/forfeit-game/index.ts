@@ -8,7 +8,6 @@ import {
   TransactionInstruction,
 } from "npm:@solana/web3.js@1.95.0";
 import bs58 from "npm:bs58@5.0.0";
-import { requireSession } from "../_shared/requireSession.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -25,13 +24,27 @@ function json200(body: Record<string, unknown>) {
 // Mainnet production Program ID - MUST match solana-program.ts
 const PROGRAM_ID = new PublicKey("4nkWS2ZYPqQrRSYbXD6XW6U6VenmBiZV2TkutY3vSPHu");
 
+// NOTE: FEE_RECIPIENT is now fetched dynamically from on-chain Config account
+// to avoid BadFeeRecipient (0x177a) error caused by mismatch with config.fee_recipient
+
 interface ForfeitRequest {
   roomPda: string;
+  forfeitingWallet: string; // loser / forfeiter
   gameType?: string;
-  mode?: "manual" | "timeout";
+  winnerWallet?: string; // OPTIONAL: explicit winner for "win" settlement reuse
 }
 
-// Room account layout from IDL
+// Room account layout from IDL:
+// - 8 bytes discriminator
+// - 8 bytes room_id (u64)
+// - 32 bytes creator (pubkey)
+// - 1 byte game_type (u8)
+// - 1 byte max_players (u8)
+// - 1 byte player_count (u8)
+// - 1 byte status (u8)
+// - 8 bytes stake_lamports (u64)
+// - 32 bytes winner (pubkey)
+// - 128 bytes players array (4 x 32 bytes)
 interface ParsedRoom {
   roomId: bigint;
   creator: PublicKey;
@@ -98,7 +111,13 @@ function parseRoomAccount(data: Uint8Array): ParsedRoom | null {
   }
 }
 
-// Config account layout from IDL
+// Config account layout from IDL:
+// - 8 bytes discriminator
+// - 32 bytes authority (pubkey)
+// - 32 bytes fee_recipient (pubkey)
+// - 2 bytes fee_bps (u16, little-endian)
+// - 32 bytes verifier (pubkey)
+// Total: 106 bytes
 interface ParsedConfig {
   authority: PublicKey;
   feeRecipient: PublicKey;
@@ -111,15 +130,19 @@ function parseConfigAccount(data: Uint8Array): ParsedConfig | null {
     const view = new DataView(data.buffer, data.byteOffset);
     let offset = 8; // Skip 8-byte discriminator
 
+    // authority: Pubkey (32 bytes)
     const authority = new PublicKey(data.slice(offset, offset + 32));
     offset += 32;
 
+    // fee_recipient: Pubkey (32 bytes)
     const feeRecipient = new PublicKey(data.slice(offset, offset + 32));
     offset += 32;
 
+    // fee_bps: u16 (2 bytes, little-endian)
     const feeBps = view.getUint16(offset, true);
     offset += 2;
 
+    // verifier: Pubkey (32 bytes)
     const verifier = new PublicKey(data.slice(offset, offset + 32));
 
     return { authority, feeRecipient, feeBps, verifier };
@@ -169,147 +192,21 @@ async function logSettlement(
   }
 }
 
-// ============================================================================
-// Balance Delta Logging - "Follow the SOL"
-// ============================================================================
-interface BalanceDelta {
-  wallet: string;
-  label: string;
-  preBalance: number;
-  postBalance: number;
-  deltaLamports: number;
-  deltaSol: number;
-}
-
-async function logBalanceDeltas(
-  connection: Connection,
-  txSignature: string,
-  roomPda: string,
-  action: string,
-  forfeiter: string | null,
-  winner: string | null,
-  stakeLamports: bigint,
-  accountLabels: Map<string, string> // pubkey -> label (e.g., "player1", "vault")
-) {
-  try {
-    // Fetch parsed transaction with meta
-    const txResponse = await connection.getTransaction(txSignature, {
-      commitment: "confirmed",
-      maxSupportedTransactionVersion: 0,
-    });
-
-    if (!txResponse || !txResponse.meta) {
-      console.warn("[forfeit-game] ⚠️ Could not fetch tx for balance delta logging", { txSignature });
-      return;
-    }
-
-    const { meta, transaction } = txResponse;
-    const accountKeys = transaction.message.staticAccountKeys?.map(k => k.toBase58()) 
-      ?? (transaction.message as unknown as { accountKeys: PublicKey[] }).accountKeys?.map((k: PublicKey) => k.toBase58())
-      ?? [];
-
-    const preBalances = meta.preBalances ?? [];
-    const postBalances = meta.postBalances ?? [];
-
-    const deltas: BalanceDelta[] = [];
-
-    for (let i = 0; i < accountKeys.length; i++) {
-      const pubkey = accountKeys[i];
-      const pre = preBalances[i] ?? 0;
-      const post = postBalances[i] ?? 0;
-      const delta = post - pre;
-
-      // Only log accounts with changes or known labels
-      if (delta !== 0 || accountLabels.has(pubkey)) {
-        const label = accountLabels.get(pubkey) ?? `account_${i}`;
-        deltas.push({
-          wallet: pubkey,
-          label,
-          preBalance: pre,
-          postBalance: post,
-          deltaLamports: delta,
-          deltaSol: delta / 1e9,
-        });
-      }
-    }
-
-    // Find fee payer and fee
-    const feePayer = accountKeys[0] ?? "unknown";
-    const fee = meta.fee ?? 0;
-
-    console.log("[forfeit-game] 💰 BALANCE_DELTAS", {
-      roomPda: roomPda.slice(0, 8),
-      action,
-      forfeiter: forfeiter?.slice(0, 8) ?? null,
-      winner: winner?.slice(0, 8) ?? null,
-      txSig: txSignature.slice(0, 16),
-      stakeLamports: stakeLamports.toString(),
-      feePayer: feePayer.slice(0, 8),
-      feeLamports: fee,
-      deltas: deltas.map(d => ({
-        label: d.label,
-        wallet: d.wallet.slice(0, 8),
-        delta: `${d.deltaSol >= 0 ? "+" : ""}${d.deltaSol.toFixed(6)} SOL`,
-      })),
-    });
-
-    // Log detailed deltas for each participant
-    for (const d of deltas) {
-      if (d.deltaLamports !== 0) {
-        console.log(`[forfeit-game] 📊 ${d.label}: ${d.wallet.slice(0, 8)} | ${d.preBalance} → ${d.postBalance} (${d.deltaLamports >= 0 ? "+" : ""}${d.deltaLamports} lamports)`);
-      }
-    }
-
-  } catch (e) {
-    console.error("[forfeit-game] ⚠️ Balance delta logging failed:", e);
-    // Non-fatal - don't affect the main flow
-  }
-}
-
-// ============================================================================
-// Structured Audit Log - Single source of truth for payout direction
-// ============================================================================
-interface AuditLog {
-  roomPda: string;
-  mode: string;
-  gameType: string;
-  action: string;
-  forfeiter: string | null;
-  winner: string | null;
-  stakeLamports: number;
-  feeLamports: number | null;
-  vault: string | null;
-  txSig: string | null;
-  status_int: number;
-  status: string;
-  timestamp: string;
-}
-
-function emitAuditLog(log: AuditLog) {
-  console.log("[forfeit-game] 📋 AUDIT_LOG", JSON.stringify(log));
-}
-
-// ============================================================================
-// Payout Direction Metadata - undeniable winner derivation
-// ============================================================================
-interface PayoutDirection {
-  expectedWinner: string | null;
-  computedWinner: string | null;
-  reason: string;
-  method: "2p_other_player" | "ludo_last_standing" | "cancel_refund" | "void_no_winner";
-}
-
 Deno.serve(async (req: Request) => {
+  // DEBUG: First log immediately on entry
   console.log("[forfeit-game] HIT", {
     ts: new Date().toISOString(),
     method: req.method,
     url: req.url,
   });
 
+  // CORS preflight
   if (req.method === "OPTIONS") {
+    console.log("[forfeit-game] OPTIONS preflight");
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Initialize supabase early for logging
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   const supabase = supabaseUrl && supabaseServiceKey
@@ -320,494 +217,45 @@ Deno.serve(async (req: Request) => {
     const body = (await req.json().catch(() => null)) as ForfeitRequest | null;
 
     const roomPda = body?.roomPda;
+    const forfeitingWallet = body?.forfeitingWallet;
     const gameType = body?.gameType;
-    const mode = body?.mode === "timeout" ? "timeout" : "manual";
-    
+    const winnerWalletOverride = body?.winnerWallet;
+
+    // Generate unique requestId for this request
     const requestId = crypto.randomUUID();
     const ts = new Date().toISOString();
 
-    if (!roomPda) {
-      console.error("[forfeit-game] Missing roomPda", { requestId });
-      return json200({ success: false, error: "Missing roomPda", requestId });
-    }
-
-    if (!supabase) {
-      console.error("[forfeit-game] Missing SUPABASE credentials", { requestId });
-      return json200({ success: false, error: "Server configuration error", requestId });
-    }
-
-    // 🔒 SECURITY: Require session token and derive caller wallet from DB
-    const sessionRes = await requireSession(supabase, req);
-    if (!sessionRes.ok) {
-      console.error("[forfeit-game] Unauthorized:", { requestId, reason: sessionRes.error });
-      return json200({ success: false, error: "Unauthorized", details: sessionRes.error, requestId });
-    }
-
-    const callerWallet = sessionRes.session.wallet;
-
-    // 🔒 Fetch game_sessions with all needed fields including max_players and eliminated_players
-    const { data: sessionRow, error: sessionError } = await supabase
-      .from("game_sessions")
-      .select("player1_wallet, player2_wallet, participants, current_turn_wallet, turn_started_at, turn_time_seconds, status_int, status, max_players, eliminated_players, mode, game_type, game_state")
-      .eq("room_pda", roomPda)
-      .maybeSingle();
-
-    if (sessionError || !sessionRow) {
-      console.error("[forfeit-game] Game session not found:", { requestId, roomPda, error: sessionError });
-      return json200({ success: false, error: "Game session not found", requestId });
-    }
-
-    // Build DB-authoritative participants list
-    const dbParticipants: string[] = sessionRow.participants?.length 
-      ? sessionRow.participants 
-      : [sessionRow.player1_wallet, sessionRow.player2_wallet].filter(Boolean);
-    
-    const participantsCount = dbParticipants.length;
-    const maxPlayers = sessionRow.max_players ?? 2;
-    const eliminatedPlayers: string[] = sessionRow.eliminated_players ?? [];
-    const statusInt = sessionRow.status_int ?? 1;
-    const dbMode = sessionRow.mode ?? "casual";
-    const dbGameType = sessionRow.game_type ?? gameType ?? "unknown";
-    const isCreator = callerWallet === sessionRow.player1_wallet;
-
-    // Validate caller is a participant
-    const isCallerParticipant = dbParticipants.includes(callerWallet);
-    if (!isCallerParticipant) {
-      console.error("[forfeit-game] Forbidden: caller not a participant", { 
-        requestId, callerWallet, participants: dbParticipants 
-      });
-      return json200({ success: false, error: "Forbidden", requestId });
-    }
-
-    // 🔒 Dedupe guard - don't settle a terminal room twice (3=finished, 4=void, 5=cancelled)
-    const isTerminal = statusInt >= 3;
-    if (isTerminal || sessionRow.status === "finished" || sessionRow.status === "cancelled" || sessionRow.status === "void") {
-      console.log("[forfeit-game] Room already terminal", { requestId, roomPda, status_int: statusInt, status: sessionRow.status });
-      return json200({ 
-        success: true, 
-        action: "noop_already_finished",
-        message: "Room already settled",
-        requestId 
-      });
-    }
-
-    // =========================================================================
-    // COUNT ACCEPTANCES for readiness check
-    // =========================================================================
-    const { count: acceptedCount, error: accCountError } = await supabase
-      .from("game_acceptances")
-      .select("*", { count: "exact", head: true })
-      .eq("room_pda", roomPda);
-
-    if (accCountError) {
-      console.warn("[forfeit-game] game_acceptances count error:", accCountError);
-    }
-
-    const safeAcceptedCount = acceptedCount ?? 0;
-
-    // =========================================================================
-    // DECISION: CANCEL vs FORFEIT
-    // =========================================================================
-    // requiredCount = max(2, max_players)
-    // isActive = (statusInt >= 2) OR (participantsCount >= requiredCount AND acceptedCount >= requiredCount)
-    // 
-    // If !isActive: CANCEL flow (refund all joined)
-    // If isActive: FORFEIT flow (caller loses, opponent wins)
-    // =========================================================================
-    const requiredCount = Math.max(2, maxPlayers);
-    const readyByCounts = (participantsCount >= requiredCount) && (safeAcceptedCount >= requiredCount);
-    const isActive = (statusInt >= 2) || readyByCounts;
-
-    console.log("[forfeit-game] DECISION", {
-      roomPda: roomPda.slice(0, 8),
-      gameType: dbGameType,
-      mode: dbMode,
-      statusInt,
-      requiredCount,
-      acceptedCount: safeAcceptedCount,
-      participantsCount,
-      readyByCounts,
-      isActive,
-      forfeitingWallet: callerWallet.slice(0, 8),
-      isCreator,
+    // PER-REQUEST DEBUG: Log immediately after parsing body
+    console.log("[forfeit-game] PER_REQUEST_START", {
+      requestId,
+      ts,
+      roomPda,
+      forfeitingWallet,
+      gameType,
+      winnerWalletOverride,
     });
 
-    // =========================================================================
-    // CANCEL FLOW (!isActive) - refund all joined participants
-    // =========================================================================
-    if (!isActive) {
-      console.log("[forfeit-game] CANCEL_PATH: room not active, refunding all", {
-        requestId,
-        roomPda: roomPda.slice(0, 8),
-        participantsCount,
-        requiredCount,
-        acceptedCount: safeAcceptedCount,
-        isCreator,
-      });
-
-      // Load verifier key for cancel tx
-      const skRaw = Deno.env.get("VERIFIER_SECRET_KEY_V2") ?? "";
-      if (!skRaw.trim()) {
-        return json200({ success: false, error: "VERIFIER_SECRET_KEY_V2 not configured", requestId });
-      }
-      const { keypair: verifierKeypair } = loadVerifierKeypair(skRaw);
-
-      const rpcUrl = (
-        Deno.env.get("SOLANA_RPC_URL") ||
-        Deno.env.get("VITE_SOLANA_RPC_URL") ||
-        "https://api.mainnet-beta.solana.com"
-      ).replace(/^([^h])/, "https://$1");
-
-      const connection = new Connection(rpcUrl, "confirmed");
-      const roomPdaKey = new PublicKey(roomPda);
-
-      // Fetch room on-chain
-      const accountInfo = await connection.getAccountInfo(roomPdaKey);
-      if (!accountInfo) {
-        // Room already closed on-chain - just update DB
-        // INVARIANT: CANCELLED (5) requires winner_wallet=null, game_over_at=set
-        console.log("[forfeit-game] Room already closed on-chain, updating DB only", { requestId });
-        
-        await supabase
-          .from("game_sessions")
-          .update({
-            status: "cancelled",
-            status_int: 5, // CANCELLED
-            winner_wallet: null, // INVARIANT: cancelled has no winner
-            game_over_at: new Date().toISOString(), // INVARIANT: must be set
-            updated_at: new Date().toISOString(),
-          })
-          .eq("room_pda", roomPda);
-
-        return json200({
-          success: true,
-          action: "cancel",
-          message: "Room already closed on-chain, DB updated",
-          refunded: dbParticipants,
-          requestId,
-        });
-      }
-
-      const roomData = parseRoomAccount(accountInfo.data);
-      if (!roomData) {
-        return json200({ success: false, error: "Failed to parse room account", requestId });
-      }
-
-      // Use close_room instruction (discriminator for close_room)
-      // This refunds all players who deposited and returns rent to creator
-      const closeRoomDiscriminator = new Uint8Array([189, 143, 143, 182, 44, 11, 186, 234]);
-
-      const [configPda] = PublicKey.findProgramAddressSync(
-        [new TextEncoder().encode("config")],
-        PROGRAM_ID
-      );
-
-      const configInfo = await connection.getAccountInfo(configPda);
-      if (!configInfo) {
-        return json200({ success: false, error: "Config account missing", requestId });
-      }
-
-      const configData = parseConfigAccount(configInfo.data);
-      if (!configData) {
-        return json200({ success: false, error: "Config parse failed", requestId });
-      }
-
-      const [vaultPda] = PublicKey.findProgramAddressSync(
-        [new TextEncoder().encode("vault"), roomPdaKey.toBuffer()],
-        PROGRAM_ID
-      );
-
-      // Build close_room instruction
-      // Keys: [verifier, config, room, vault, creator, ...players]
-      const closeKeys = [
-        { pubkey: verifierKeypair.publicKey, isSigner: true, isWritable: false },
-        { pubkey: configPda, isSigner: false, isWritable: false },
-        { pubkey: roomPdaKey, isSigner: false, isWritable: true },
-        { pubkey: vaultPda, isSigner: false, isWritable: true },
-        { pubkey: roomData.creator, isSigner: false, isWritable: true }, // rent return
-      ];
-
-      // Add all on-chain players for refund
-      for (const player of roomData.players) {
-        if (!player.equals(PublicKey.default)) {
-          closeKeys.push({ pubkey: player, isSigner: false, isWritable: true });
-        }
-      }
-
-      const closeIx = new TransactionInstruction({
-        programId: PROGRAM_ID,
-        keys: closeKeys,
-        data: closeRoomDiscriminator,
-      });
-
-      const { blockhash } = await connection.getLatestBlockhash("confirmed");
-      const closeTx = new Transaction({
-        feePayer: verifierKeypair.publicKey,
-        recentBlockhash: blockhash,
-      }).add(closeIx);
-
-      closeTx.sign(verifierKeypair);
-
-      let cancelSignature: string;
-      try {
-        cancelSignature = await connection.sendRawTransaction(closeTx.serialize());
-        await connection.confirmTransaction(cancelSignature, "confirmed");
-        console.log("[forfeit-game] ✅ Cancel tx confirmed", { signature: cancelSignature.slice(0, 16) });
-      } catch (txError) {
-        console.error("[forfeit-game] Cancel tx failed:", txError);
-        
-        // INVARIANT: On tx failure, mark as VOID (4) with null winner, game_over_at set
-        await supabase
-          .from("game_sessions")
-          .update({
-            status: "void",
-            status_int: 4, // VOID - settlement failed
-            winner_wallet: null, // INVARIANT: void has no winner
-            game_over_at: new Date().toISOString(), // INVARIANT: must be set
-            game_state: {
-              ...(sessionRow.game_state ?? {}),
-              settlement_error: String((txError as Error)?.message ?? txError),
-              settlement_failed_at: new Date().toISOString(),
-            },
-            updated_at: new Date().toISOString(),
-          })
-          .eq("room_pda", roomPda);
-        
-        await logSettlement(supabase, {
-          room_pda: roomPda,
-          action: "cancel_failed",
-          success: false,
-          error_message: String((txError as Error)?.message ?? txError),
-        });
-        
-        return json200({ 
-          success: false, 
-          error: "Cancel transaction failed", 
-          details: String((txError as Error)?.message ?? txError),
-          requestId 
-        });
-      }
-
-      // Log balance deltas for cancel
-      const cancelLabels = new Map<string, string>();
-      cancelLabels.set(verifierKeypair.publicKey.toBase58(), "verifier");
-      cancelLabels.set(vaultPda.toBase58(), "vault");
-      cancelLabels.set(roomData.creator.toBase58(), "creator");
-      for (let i = 0; i < dbParticipants.length; i++) {
-        cancelLabels.set(dbParticipants[i], `player${i + 1}`);
-      }
-
-      await logBalanceDeltas(
-        connection,
-        cancelSignature,
-        roomPda,
-        "cancel",
-        null,
-        null,
-        roomData.stakeLamports,
-        cancelLabels
-      );
-
-      // Update DB - INVARIANT: CANCELLED (5) requires winner_wallet=null, game_over_at=set
-      const { error: cancelDbError } = await supabase
-        .from("game_sessions")
-        .update({
-          status: "cancelled",
-          status_int: 5, // CANCELLED
-          winner_wallet: null, // INVARIANT: cancelled has no winner
-          game_over_at: new Date().toISOString(), // INVARIANT: must be set
-          updated_at: new Date().toISOString(),
-        })
-        .eq("room_pda", roomPda);
-
-      if (cancelDbError) {
-        console.error("[forfeit-game] Failed to update DB after cancel:", cancelDbError);
-      }
-
-      await logSettlement(supabase, {
-        room_pda: roomPda,
-        action: "cancel",
-        success: true,
-        signature: cancelSignature,
-        winner_wallet: null,
-        forfeiting_wallet: null,
-        stake_per_player: Number(roomData.stakeLamports),
-        player_count: roomData.playerCount,
-      });
-
-      // Upsert match_share_cards for cancelled room
-      const cancelPayoutDirection: PayoutDirection = {
-        expectedWinner: null,
-        computedWinner: null,
-        reason: "Room cancelled before active - all players refunded",
-        method: "cancel_refund",
-      };
-
-      await supabase
-        .from("match_share_cards")
-        .upsert({
-          room_pda: roomPda,
-          mode: dbMode || "casual",
-          game_type: dbGameType || "unknown",
-          winner_wallet: null,
-          loser_wallet: null,
-          win_reason: "cancelled",
-          stake_lamports: Number(roomData.stakeLamports),
-          tx_signature: cancelSignature,
-          metadata: { payout_direction: cancelPayoutDirection },
-          updated_at: new Date().toISOString(),
-        }, { onConflict: "room_pda" });
-
-      // Emit structured audit log
-      emitAuditLog({
-        roomPda,
-        mode: dbMode,
-        gameType: dbGameType,
-        action: "cancel",
-        forfeiter: null,
-        winner: null,
-        stakeLamports: Number(roomData.stakeLamports),
-        feeLamports: null,
-        vault: vaultPda.toBase58(),
-        txSig: cancelSignature,
-        status_int: 5,
-        status: "cancelled",
-        timestamp: new Date().toISOString(),
-      });
-
+    if (!roomPda || !forfeitingWallet) {
+      console.error("[forfeit-game] Missing required fields:", { requestId, roomPda, forfeitingWallet });
       return json200({
-        success: true,
-        action: "cancel",
-        txSig: cancelSignature,
-        roomPda,
-        refunded: roomData.players.filter(p => !p.equals(PublicKey.default)).map(p => p.toBase58()),
-        requestId,
+        success: false,
+        error: "Missing roomPda or forfeitingWallet",
       });
     }
 
-    // =========================================================================
-    // FORFEIT FLOW (isActive = true)
-    // =========================================================================
-    // Determine forfeiting wallet based on mode
-    let forfeitingWallet: string;
-
-    if (mode === "timeout") {
-      // Timeout mode: forfeiter is current_turn_wallet
-      if (!sessionRow.current_turn_wallet) {
-        console.error("[forfeit-game] Timeout mode: no current turn wallet", { requestId, roomPda });
-        return json200({ success: false, error: "Timeout mode: no current turn", requestId });
-      }
-
-      const startedMs = Date.parse(sessionRow.turn_started_at);
-      const turnSeconds = Number(sessionRow.turn_time_seconds || 60);
-      const expired = Date.now() > startedMs + turnSeconds * 1000;
-
-      if (!expired) {
-        return json200({ success: false, error: "Timeout not yet expired", requestId });
-      }
-
-      forfeitingWallet = sessionRow.current_turn_wallet;
-
-      // Anti-grief: timed-out player cannot trigger their own timeout
-      if (callerWallet === forfeitingWallet) {
-        console.error("[forfeit-game] Forbidden: timed-out player cannot trigger own timeout", { 
-          requestId, callerWallet, forfeitingWallet 
-        });
-        return json200({ success: false, error: "Forbidden", requestId });
-      }
-    } else {
-      // Manual mode: caller forfeits themselves
-      forfeitingWallet = callerWallet;
-    }
-
-    console.log("[forfeit-game] FORFEIT_PATH", {
-      requestId, ts, roomPda: roomPda.slice(0, 8), mode,
-      callerWallet: callerWallet.slice(0, 8),
-      forfeitingWallet: forfeitingWallet.slice(0, 8),
-      gameType: dbGameType, participantsCount, maxPlayers,
-      eliminatedBefore: eliminatedPlayers.length,
-    });
-
-    // =========================================================================
-    // LUDO 3/4 PLAYER ELIMINATION LOGIC
-    // =========================================================================
-    // For max_players >= 3: leaving = elimination, not instant settlement
-    // Only settle when exactly 1 active player remains
-    // =========================================================================
-    
-    if (maxPlayers >= 3 && participantsCount >= 3) {
-      // Calculate active players (not eliminated and not the forfeiter)
-      const alreadyEliminated = new Set(eliminatedPlayers);
-      const activeBeforeThisLeave = dbParticipants.filter(
-        p => !alreadyEliminated.has(p) && p !== forfeitingWallet
-      );
-      const activeAfterThisLeave = activeBeforeThisLeave.length;
-
-      console.log("[forfeit-game] LUDO_ELIMINATION_CHECK", {
-        requestId,
-        maxPlayers,
-        participantsCount,
-        eliminatedBefore: eliminatedPlayers.length,
-        forfeitingWallet: forfeitingWallet.slice(0, 8),
-        activeAfterThisLeave,
+    // Supabase client (admin for bypassing RLS)
+    if (!supabase) {
+      console.error("[forfeit-game] Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY", { requestId });
+      return json200({
+        success: false,
+        error: "Server configuration error: Supabase service credentials missing",
       });
-
-      if (activeAfterThisLeave > 1) {
-        // Add forfeiter to eliminated_players (using DISTINCT logic)
-        const newEliminated = [...new Set([...eliminatedPlayers, forfeitingWallet])];
-        
-        const { error: elimError } = await supabase
-          .from("game_sessions")
-          .update({
-            eliminated_players: newEliminated,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("room_pda", roomPda);
-
-        if (elimError) {
-          console.error("[forfeit-game] Failed to update eliminated_players:", elimError);
-        }
-
-        console.log("[forfeit-game] 🚫 ELIMINATION (no settlement yet)", {
-          requestId,
-          roomPda: roomPda.slice(0, 8),
-          action: "eliminate",
-          forfeiter: forfeitingWallet.slice(0, 8),
-          activeRemaining: activeAfterThisLeave,
-          eliminatedNow: newEliminated.length,
-        });
-
-        await logSettlement(supabase, {
-          room_pda: roomPda,
-          action: "eliminate",
-          success: true,
-          signature: null,
-          forfeiting_wallet: forfeitingWallet,
-          winner_wallet: null,
-        });
-
-        return json200({
-          success: true,
-          action: "eliminate",
-          forfeitingWallet,
-          activeRemaining: activeAfterThisLeave,
-          message: "Player eliminated; game continues.",
-          requestId,
-        });
-      }
-
-      // activeAfterThisLeave === 1: last player standing, proceed to settlement
-      console.log("[forfeit-game] LUDO_FINAL_SETTLEMENT: 1 player remains", { requestId });
     }
 
-    // =========================================================================
-    // SETTLEMENT: 2-player games OR Ludo final winner
-    // =========================================================================
-
-    // Idempotency: already settled?
+    // Idempotency: Check if forfeit already processed (use service role client to bypass RLS)
     const { data: existingSettlement } = await supabase
       .from("settlement_logs")
-      .select("id, success, signature")
+      .select("id, success, winner_wallet, forfeiting_wallet, signature, created_at")
       .eq("room_pda", roomPda)
       .eq("action", "forfeit")
       .eq("success", true)
@@ -816,358 +264,854 @@ Deno.serve(async (req: Request) => {
       .maybeSingle();
 
     if (existingSettlement) {
-      return json200({
-        success: true,
-        alreadySettled: true,
-        signature: existingSettlement.signature,
-      });
-    }
-
-    // Load verifier key
-    const skRaw = Deno.env.get("VERIFIER_SECRET_KEY_V2") ?? "";
-    if (!skRaw.trim()) {
-      return json200({ success: false, error: "VERIFIER_SECRET_KEY_V2 not configured", requestId });
-    }
-
-    const { keypair: verifierKeypair } = loadVerifierKeypair(skRaw);
-
-    const rpcUrl = (
-      Deno.env.get("SOLANA_RPC_URL") ||
-      Deno.env.get("VITE_SOLANA_RPC_URL") ||
-      "https://api.mainnet-beta.solana.com"
-    ).replace(/^([^h])/, "https://$1");
-
-    const connection = new Connection(rpcUrl, "confirmed");
-
-    // Fetch room on-chain
-    const roomPdaKey = new PublicKey(roomPda);
-    const accountInfo = await connection.getAccountInfo(roomPdaKey);
-
-    if (!accountInfo) {
-      return json200({ success: false, error: "Room not found on-chain" });
-    }
-
-    const roomData = parseRoomAccount(accountInfo.data);
-    if (!roomData) {
-      return json200({ success: false, error: "Failed to parse room account" });
-    }
-
-    const playersOnChain = roomData.players.map((p) => p.toBase58());
-
-    // Cross-check caller is in on-chain players
-    if (!playersOnChain.includes(callerWallet)) {
-      console.error("[forfeit-game] Caller not in on-chain players", { 
-        requestId, callerWallet, playersOnChain 
-      });
-      return json200({ success: false, error: "Unauthorized: not a participant on-chain", requestId });
-    }
-
-    // =========================================================================
-    // WINNER SELECTION (DB-authoritative)
-    // =========================================================================
-    let winnerWallet: string;
-
-    if (maxPlayers >= 3 && participantsCount >= 3) {
-      // Ludo: winner is the last non-eliminated, non-forfeiting player
-      const alreadyEliminated = new Set(eliminatedPlayers);
-      const remaining = dbParticipants.filter(
-        p => !alreadyEliminated.has(p) && p !== forfeitingWallet
+      console.log("[forfeit-game] Already forfeited. Returning existing settlement:", existingSettlement.signature);
+      return new Response(
+        JSON.stringify({ ok: true, alreadySettled: true, settlement: existingSettlement }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
-      if (remaining.length !== 1) {
-        console.error("[forfeit-game] Ludo settlement: expected 1 remaining", { remaining });
-        return json200({ success: false, error: "Invalid Ludo settlement state", requestId });
-      }
-      winnerWallet = remaining[0];
-    } else {
-      // 2-player: winner is the other participant (NOT the forfeiter)
-      const otherPlayer = dbParticipants.find(p => p !== forfeitingWallet);
-      if (!otherPlayer) {
-        console.error("[forfeit-game] Could not derive winner", { forfeitingWallet, dbParticipants });
-        return json200({ success: false, error: "Could not derive winner", requestId });
-      }
-      winnerWallet = otherPlayer;
     }
 
-    const winnerPubkey = new PublicKey(winnerWallet);
+    // Load verifier key - ONLY read VERIFIER_SECRET_KEY_V2 (no fallbacks)
+    const skRaw = Deno.env.get("VERIFIER_SECRET_KEY_V2") ?? "";
 
-    console.log("[forfeit-game] WINNER_DERIVED", {
+    // Log env var presence for debugging
+    console.log("[forfeit-game] ENV check PER_REQUEST", {
       requestId,
-      forfeitingWallet: forfeitingWallet.slice(0, 8),
-      winnerWallet: winnerWallet.slice(0, 8),
-      maxPlayers,
-      method: maxPlayers >= 3 ? "ludo_last_standing" : "2p_other_player",
+      VERIFIER_SECRET_KEY_V2: !!Deno.env.get("VERIFIER_SECRET_KEY_V2"),
+      skRawLen: skRaw.length,
     });
 
-    // Build on-chain settlement tx
-    const submitResultDiscriminator = new Uint8Array([240, 42, 89, 180, 10, 239, 9, 214]);
-
-    const [configPda] = PublicKey.findProgramAddressSync(
-      [new TextEncoder().encode("config")],
-      PROGRAM_ID
-    );
-
-    const configInfo = await connection.getAccountInfo(configPda);
-    if (!configInfo) {
-      return json200({ success: false, error: "Config account missing" });
-    }
-
-    const configData = parseConfigAccount(configInfo.data);
-    if (!configData) {
-      return json200({ success: false, error: "Config parse failed" });
-    }
-
-    const [vaultPda] = PublicKey.findProgramAddressSync(
-      [new TextEncoder().encode("vault"), roomPdaKey.toBuffer()],
-      PROGRAM_ID
-    );
-
-    const ixData = new Uint8Array(8 + 32);
-    ixData.set(submitResultDiscriminator, 0);
-    ixData.set(winnerPubkey.toBytes(), 8);
-
-    const ix = new TransactionInstruction({
-      programId: PROGRAM_ID,
-      keys: [
-        { pubkey: verifierKeypair.publicKey, isSigner: true, isWritable: false },
-        { pubkey: configPda, isSigner: false, isWritable: false },
-        { pubkey: roomPdaKey, isSigner: false, isWritable: true },
-        { pubkey: vaultPda, isSigner: false, isWritable: true },
-        { pubkey: winnerPubkey, isSigner: false, isWritable: true },
-        { pubkey: configData.feeRecipient, isSigner: false, isWritable: true },
-        { pubkey: roomData.creator, isSigner: false, isWritable: true },
-      ],
-      data: ixData,
-    });
-
-    const { blockhash } = await connection.getLatestBlockhash("confirmed");
-    const tx = new Transaction({
-      feePayer: verifierKeypair.publicKey,
-      recentBlockhash: blockhash,
-    }).add(ix);
-
-    tx.sign(verifierKeypair);
-
-    // =========================================================================
-    // SETTLEMENT EXECUTION WITH VOID FALLBACK
-    // INVARIANT: On failure, mark as VOID (4) with null winner, game_over_at set
-    // =========================================================================
-    let signature: string;
-    try {
-      signature = await connection.sendRawTransaction(tx.serialize());
-      await connection.confirmTransaction(signature, "confirmed");
-
-      console.log("[forfeit-game] ✅ On-chain settlement confirmed", { 
-        requestId, signature: signature.slice(0, 16), winner: winnerWallet.slice(0, 8) 
-      });
-    } catch (txError) {
-      console.error("[forfeit-game] ❌ Settlement tx failed:", txError);
-      
-      // INVARIANT: VOID (4) requires winner_wallet=null, game_over_at=set
-      const existingGameState = (sessionRow.game_state as Record<string, unknown>) ?? {};
-      
-      await supabase
-        .from("game_sessions")
-        .update({
-          status: "void",
-          status_int: 4, // VOID - settlement failed
-          winner_wallet: null, // INVARIANT: void has no winner
-          game_over_at: new Date().toISOString(), // INVARIANT: must be set
-          game_state: {
-            ...existingGameState,
-            settlement_error: String((txError as Error)?.message ?? txError),
-            settlement_failed_at: new Date().toISOString(),
-            intended_winner: winnerWallet,
-            forfeiting_player: forfeitingWallet,
-          },
-          updated_at: new Date().toISOString(),
-        })
-        .eq("room_pda", roomPda);
-      
-      // Record failure in match_share_cards for visibility with payout_direction
-      const voidPayoutDirection: PayoutDirection = {
-        expectedWinner: winnerWallet,
-        computedWinner: null,
-        reason: `Settlement transaction failed: ${String((txError as Error)?.message ?? txError)}`,
-        method: "void_no_winner",
-      };
-
-      await supabase
-        .from("match_share_cards")
-        .upsert({
-          room_pda: roomPda,
-          mode: dbMode || "casual",
-          game_type: dbGameType || "unknown",
-          winner_wallet: null,
-          loser_wallet: null,
-          win_reason: "settlement_failed",
-          stake_lamports: Number(roomData.stakeLamports),
-          tx_signature: null,
-          metadata: {
-            payout_direction: voidPayoutDirection,
-            error: String((txError as Error)?.message ?? txError),
-            intended_winner: winnerWallet,
-            forfeiting_player: forfeitingWallet,
-          },
-          updated_at: new Date().toISOString(),
-        }, { onConflict: "room_pda" });
-      
+    if (!skRaw.trim()) {
       await logSettlement(supabase, {
         room_pda: roomPda,
-        action: "forfeit_failed",
+        action: "forfeit",
         success: false,
-        winner_wallet: null,
         forfeiting_wallet: forfeitingWallet,
-        error_message: String((txError as Error)?.message ?? txError),
-        stake_per_player: Number(roomData.stakeLamports),
-        player_count: participantsCount,
+        error_message: "VERIFIER_SECRET_KEY_V2 not set",
       });
-
-      // Emit structured audit log for void
-      emitAuditLog({
-        roomPda,
-        mode: dbMode,
-        gameType: dbGameType,
-        action: "forfeit_failed",
-        forfeiter: forfeitingWallet,
-        winner: null,
-        stakeLamports: Number(roomData.stakeLamports),
-        feeLamports: null,
-        vault: vaultPda.toBase58(),
-        txSig: null,
-        status_int: 4,
-        status: "void",
-        timestamp: new Date().toISOString(),
-      });
-      
       return json200({
         success: false,
-        error: "Settlement transaction failed",
-        details: String((txError as Error)?.message ?? txError),
-        action: "void",
-        status_int: 4,
+        error: "Server configuration error: VERIFIER_SECRET_KEY_V2 not configured",
         requestId,
       });
     }
 
-    // =========================================================================
-    // BALANCE DELTA LOGGING - "Follow the SOL"
-    // =========================================================================
-    const accountLabels = new Map<string, string>();
-    accountLabels.set(verifierKeypair.publicKey.toBase58(), "verifier");
-    accountLabels.set(vaultPda.toBase58(), "vault");
-    accountLabels.set(winnerPubkey.toBase58(), "winner");
-    accountLabels.set(configData.feeRecipient.toBase58(), "fee_recipient");
-    accountLabels.set(roomData.creator.toBase58(), "creator");
-    
-    // Label all participants
-    for (let i = 0; i < dbParticipants.length; i++) {
-      const p = dbParticipants[i];
-      if (!accountLabels.has(p)) {
-        accountLabels.set(p, `player${i + 1}`);
+    let verifierKeypair: Keypair;
+    let decodedLen = 0;
+
+    try {
+      const loaded = loadVerifierKeypair(skRaw);
+      verifierKeypair = loaded.keypair;
+      decodedLen = loaded.decodedLen;
+
+      // PER-REQUEST DEBUG: Log verifier pubkey
+      console.log("[forfeit-game] verifier pubkey PER_REQUEST", {
+        requestId,
+        verifierPubkey: verifierKeypair.publicKey.toBase58(),
+        decodedLen,
+      });
+
+      // HARD SAFETY CHECK: Ensure we loaded the correct verifier
+      const REQUIRED_VERIFIER = "HrQiwW3WZXdDC8c7wbsuBAw2nP1EVtzZyokp7xPJ6Wjx";
+      const actual = verifierKeypair.publicKey.toBase58();
+
+      if (actual !== REQUIRED_VERIFIER) {
+        console.error("[forfeit-game] WRONG VERIFIER LOADED PER_REQUEST", {
+          requestId,
+          expected: REQUIRED_VERIFIER,
+          actual,
+        });
+        return new Response(JSON.stringify({
+          ok: false,
+          code: "WRONG_VERIFIER_SECRET",
+          expected: REQUIRED_VERIFIER,
+          actual,
+          requestId,
+        }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" }});
       }
-    }
 
-    await logBalanceDeltas(
-      connection,
-      signature,
-      roomPda,
-      "forfeit",
-      forfeitingWallet,
-      winnerWallet,
-      roomData.stakeLamports,
-      accountLabels
-    );
-
-    // Update game_sessions to mark as finished
-    // INVARIANT: FINISHED (3) requires winner_wallet and game_over_at
-    const { error: dbUpdateError } = await supabase
-      .from("game_sessions")
-      .update({
-        status: "finished",
-        status_int: 3, // FINISHED
-        winner_wallet: winnerWallet, // INVARIANT: must be set
-        game_over_at: new Date().toISOString(), // INVARIANT: must be set
-        updated_at: new Date().toISOString(),
-      })
-      .eq("room_pda", roomPda);
-
-    if (dbUpdateError) {
-      console.error("[forfeit-game] Failed to update game_sessions:", dbUpdateError);
-    } else {
-      console.log("[forfeit-game] ✅ game_sessions marked finished", { 
-        status_int: 3, winner: winnerWallet.slice(0, 8) 
+      console.log("[forfeit-game] ✅ Verifier pubkey matches on-chain config", { requestId });
+    } catch (err) {
+      console.error("[forfeit-game] Failed to parse verifier key:", { requestId, err });
+      await logSettlement(supabase, {
+        room_pda: roomPda,
+        action: "forfeit",
+        success: false,
+        forfeiting_wallet: forfeitingWallet,
+        error_message: `Invalid verifier key format: ${String((err as Error)?.message ?? err)}`,
+      });
+      return json200({
+        success: false,
+        error: "Server configuration error: invalid verifier key format",
+        details: String((err as Error)?.message ?? err),
+        requestId,
       });
     }
 
-    // Build payout_direction metadata
-    const forfeitPayoutDirection: PayoutDirection = {
-      expectedWinner: winnerWallet,
-      computedWinner: winnerWallet,
-      reason: maxPlayers >= 3 
-        ? `Ludo last-standing: ${forfeitingWallet.slice(0, 8)} forfeited, ${winnerWallet.slice(0, 8)} is sole remaining player`
-        : `2-player forfeit: ${forfeitingWallet.slice(0, 8)} forfeited, ${winnerWallet.slice(0, 8)} wins`,
-      method: maxPlayers >= 3 ? "ludo_last_standing" : "2p_other_player",
-    };
+    // Solana connection with RPC URL validation and auto-fix
+    const rpcUrlFromEnv =
+      Deno.env.get("SOLANA_RPC_URL") ??
+      Deno.env.get("VITE_SOLANA_RPC_URL") ??
+      "";
 
-    // Upsert into match_share_cards for social sharing
-    const { error: shareCardError } = await supabase
-      .from("match_share_cards")
-      .upsert({
-        room_pda: roomPda,
-        mode: dbMode || "casual",
-        game_type: dbGameType || "unknown",
-        winner_wallet: winnerWallet,
-        loser_wallet: forfeitingWallet,
-        win_reason: "forfeit",
-        stake_lamports: Number(roomData.stakeLamports),
-        tx_signature: signature,
-        metadata: { payout_direction: forfeitPayoutDirection },
-        updated_at: new Date().toISOString(),
-      }, { onConflict: "room_pda" });
+    let rpcUrl = rpcUrlFromEnv.trim();
 
-    if (shareCardError) {
-      console.error("[forfeit-game] Failed to upsert match_share_cards:", shareCardError);
-    } else {
-      console.log("[forfeit-game] ✅ match_share_cards upserted");
+    // Auto-fix the common "missing https://" mistake
+    if (rpcUrl && !rpcUrl.startsWith("http://") && !rpcUrl.startsWith("https://")) {
+      console.warn("[forfeit-game] RPC URL missing protocol, adding https://");
+      rpcUrl = `https://${rpcUrl}`;
     }
 
-    await logSettlement(supabase, {
-      room_pda: roomPda,
-      action: "forfeit",
-      success: true,
-      signature,
-      winner_wallet: winnerWallet,
-      forfeiting_wallet: forfeitingWallet,
-      stake_per_player: Number(roomData.stakeLamports),
-      player_count: participantsCount,
+    // Fallback to public RPC if still invalid
+    if (!rpcUrl || (!rpcUrl.startsWith("http://") && !rpcUrl.startsWith("https://"))) {
+      console.warn("[forfeit-game] Invalid or missing RPC URL, using mainnet fallback");
+      rpcUrl = "https://api.mainnet-beta.solana.com";
+    }
+
+    console.log("[forfeit-game] Using RPC:", rpcUrl.slice(0, 60));
+
+    const connection = new Connection(rpcUrl, "confirmed");
+
+    // CRITICAL: Check verifier wallet has enough SOL for transaction fees
+    const MIN_VERIFIER_BALANCE = 10_000_000; // 0.01 SOL minimum for tx fees
+    const verifierBalance = await connection.getBalance(verifierKeypair.publicKey, "confirmed");
+
+    console.log("[forfeit-game] 💰 Verifier balance check:", {
+      pubkey: verifierKeypair.publicKey.toBase58(),
+      lamports: verifierBalance,
+      minRequired: MIN_VERIFIER_BALANCE,
+      hasSufficientFunds: verifierBalance >= MIN_VERIFIER_BALANCE,
     });
 
-    // Emit structured audit log
-    emitAuditLog({
-      roomPda,
-      mode: dbMode,
-      gameType: dbGameType,
-      action: "forfeit",
-      forfeiter: forfeitingWallet,
-      winner: winnerWallet,
-      stakeLamports: Number(roomData.stakeLamports),
-      feeLamports: null, // Fee is deducted on-chain
+    if (verifierBalance < MIN_VERIFIER_BALANCE) {
+      console.error("[forfeit-game] ❌ Verifier wallet has insufficient SOL for fees!");
+      await logSettlement(supabase, {
+        room_pda: roomPda,
+        action: "forfeit",
+        success: false,
+        forfeiting_wallet: forfeitingWallet,
+        verifier_pubkey: verifierKeypair.publicKey.toBase58(),
+        verifier_lamports: verifierBalance,
+        error_message: `Verifier needs funding: ${(verifierBalance / 1_000_000_000).toFixed(6)} SOL < 0.01 SOL required`,
+      });
+      return json200({
+        success: false,
+        error: "Server payout wallet needs funding",
+        details: `Verifier ${verifierKeypair.publicKey.toBase58()} has ${(verifierBalance / 1_000_000_000).toFixed(6)} SOL, needs at least 0.01 SOL for transaction fees`,
+        verifierPubkey: verifierKeypair.publicKey.toBase58(),
+        verifierLamports: verifierBalance,
+        minRequired: MIN_VERIFIER_BALANCE,
+      });
+    }
+
+    // Fetch room account
+    const roomPdaKey = new PublicKey(roomPda);
+    const accountInfo = await connection.getAccountInfo(roomPdaKey);
+
+    if (!accountInfo) {
+      console.error("[forfeit-game] Room not found on-chain:", roomPda);
+      await logSettlement(supabase, {
+        room_pda: roomPda,
+        action: "forfeit",
+        success: false,
+        forfeiting_wallet: forfeitingWallet,
+        verifier_pubkey: verifierKeypair.publicKey.toBase58(),
+        verifier_lamports: verifierBalance,
+        error_message: "Room not found on-chain",
+      });
+      return json200({
+        success: false,
+        error: "Room not found on-chain",
+      });
+    }
+
+    const roomData = parseRoomAccount(accountInfo.data);
+    if (!roomData) {
+      await logSettlement(supabase, {
+        room_pda: roomPda,
+        action: "forfeit",
+        success: false,
+        forfeiting_wallet: forfeitingWallet,
+        verifier_pubkey: verifierKeypair.publicKey.toBase58(),
+        verifier_lamports: verifierBalance,
+        error_message: "Failed to parse room account",
+      });
+      return json200({
+        success: false,
+        error: "Failed to parse room account",
+      });
+    }
+
+    // Extract players array for later use
+    const playersOnChain = roomData.players.map((p) => p.toBase58());
+
+    console.log("[forfeit-game] Room:", {
+      roomId: roomData.roomId.toString(),
+      status: roomData.status,
+      maxPlayers: roomData.maxPlayers,
+      playerCount: roomData.playerCount,
+      stakeLamports: roomData.stakeLamports.toString(),
+      creator: roomData.creator.toBase58(),
+    });
+    console.log("[forfeit-game] Players on-chain:", playersOnChain);
+
+    // FIX B: Sync on-chain players to game_sessions (prevent player2_wallet corruption)
+    if (playersOnChain.length >= 1) {
+      const { error: syncError } = await supabase
+        .from("game_sessions")
+        .update({
+          player1_wallet: playersOnChain[0] ?? null,
+          player2_wallet: playersOnChain[1] ?? null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("room_pda", roomPda);
+
+      if (syncError) {
+        console.error("[forfeit-game] Failed to sync players to DB:", syncError);
+      } else {
+        console.log("[forfeit-game] ✅ Synced on-chain players to game_sessions:", {
+          player1: playersOnChain[0],
+          player2: playersOnChain[1] ?? "none",
+        });
+      }
+    }
+
+    // Validate forfeiter is in room
+    const forfeitingPubkey = new PublicKey(forfeitingWallet);
+    const playerIndex = roomData.players.findIndex((p) => p.equals(forfeitingPubkey));
+    if (playerIndex === -1) {
+      await logSettlement(supabase, {
+        room_pda: roomPda,
+        action: "forfeit",
+        success: false,
+        forfeiting_wallet: forfeitingWallet,
+        verifier_pubkey: verifierKeypair.publicKey.toBase58(),
+        verifier_lamports: verifierBalance,
+        room_status: roomData.status,
+        error_message: "Player not in this room",
+      });
+      return json200({
+        success: false,
+        error: "Player not in this room",
+      });
+    }
+
+    // Validate room state (must have 2+ players and not finished/cancelled)
+    if (roomData.playerCount < 2) {
+      await logSettlement(supabase, {
+        room_pda: roomPda,
+        action: "forfeit",
+        success: false,
+        forfeiting_wallet: forfeitingWallet,
+        verifier_pubkey: verifierKeypair.publicKey.toBase58(),
+        verifier_lamports: verifierBalance,
+        player_count: roomData.playerCount,
+        room_status: roomData.status,
+        error_message: "Room has only 1 player",
+      });
+      return json200({
+        success: false,
+        error: "Room has only 1 player. Use Cancel to get refund.",
+      });
+    }
+
+    // status values depend on your program; keeping your logic:
+    // 3 finished, 4 cancelled
+    if (roomData.status === 3 || roomData.status === 4) {
+      await logSettlement(supabase, {
+        room_pda: roomPda,
+        action: "forfeit",
+        success: true,
+        forfeiting_wallet: forfeitingWallet,
+        verifier_pubkey: verifierKeypair.publicKey.toBase58(),
+        verifier_lamports: verifierBalance,
+        room_status: roomData.status,
+        error_message: "Room already closed (no action needed)",
+      });
+      return json200({
+        success: true,
+        action: "already_closed",
+        message: "Room is already closed",
+        roomPda,
+      });
+    }
+
+    // Determine winner
+    const isLudo = gameType === "ludo" || roomData.maxPlayers > 2;
+
+    // Ludo multi-player elimination path (NO on-chain submit_result)
+    if (isLudo && roomData.playerCount > 2) {
+      console.log("[forfeit-game] Ludo multi-player: marking eliminated in DB only");
+
+      const { data: sessionData, error: sessionError } = await supabase
+        .from("game_sessions")
+        .select("game_state")
+        .eq("room_pda", roomPda)
+        .single();
+
+      if (sessionError) {
+        console.error("[forfeit-game] Failed to fetch game session:", sessionError);
+      } else {
+        const currentState = (sessionData?.game_state || {}) as Record<string, unknown>;
+        const eliminatedPlayers = (currentState.eliminatedPlayers as string[] | undefined) || [];
+        eliminatedPlayers.push(forfeitingWallet);
+
+        const { error: updateError } = await supabase
+          .from("game_sessions")
+          .update({
+            game_state: { ...currentState, eliminatedPlayers },
+            updated_at: new Date().toISOString(),
+          })
+          .eq("room_pda", roomPda);
+
+        if (updateError) {
+          console.error("[forfeit-game] Failed to update game state:", updateError);
+        }
+      }
+
+      return json200({
+        success: true,
+        action: "eliminated",
+        message: "Player eliminated from Ludo game",
+        forfeitingWallet,
+      });
+    }
+
+    // 2-player winner: either explicit override OR "the other player"
+    let winnerPubkey: PublicKey;
+
+    if (winnerWalletOverride) {
+      winnerPubkey = new PublicKey(winnerWalletOverride);
+      console.log("[forfeit-game] Using explicit winnerWallet:", winnerWalletOverride);
+
+      // safety: ensure winner is actually in room
+      const ok = roomData.players.some((p) => p.equals(winnerPubkey));
+      if (!ok) {
+        await logSettlement(supabase, {
+          room_pda: roomPda,
+          action: "forfeit",
+          success: false,
+          forfeiting_wallet: forfeitingWallet,
+          winner_wallet: winnerWalletOverride,
+          verifier_pubkey: verifierKeypair.publicKey.toBase58(),
+          verifier_lamports: verifierBalance,
+          room_status: roomData.status,
+          error_message: "winnerWallet is not a player in this room",
+        });
+        return json200({
+          success: false,
+          error: "winnerWallet is not a player in this room",
+        });
+      }
+    } else {
+      const winnerIndex = playerIndex === 0 ? 1 : 0;
+      if (winnerIndex >= roomData.players.length) {
+        await logSettlement(supabase, {
+          room_pda: roomPda,
+          action: "forfeit",
+          success: false,
+          forfeiting_wallet: forfeitingWallet,
+          verifier_pubkey: verifierKeypair.publicKey.toBase58(),
+          verifier_lamports: verifierBalance,
+          player_count: roomData.playerCount,
+          room_status: roomData.status,
+          error_message: "Cannot determine winner - only one player",
+        });
+        return json200({
+          success: false,
+          error: "Cannot determine winner - room appears to have only one player",
+        });
+      }
+      winnerPubkey = roomData.players[winnerIndex];
+    }
+
+    const winnerWallet = winnerPubkey.toBase58();
+    console.log("[forfeit-game] Winner:", winnerWallet);
+
+    // Build submit_result instruction
+    const submitResultDiscriminator = new Uint8Array([240, 42, 89, 180, 10, 239, 9, 214]);
+
+    const [configPda] = PublicKey.findProgramAddressSync([new TextEncoder().encode("config")], PROGRAM_ID);
+
+    // ─────────────────────────────────────────────────────────────
+    // CRITICAL FIX: Fetch Config account to get fee_recipient dynamically
+    // This fixes BadFeeRecipient (0x177a) error
+    // ─────────────────────────────────────────────────────────────
+    const configAccountInfo = await connection.getAccountInfo(configPda);
+    if (!configAccountInfo) {
+      console.error("[forfeit-game] ❌ Config account not found on-chain");
+      await logSettlement(supabase, {
+        room_pda: roomPda,
+        action: "forfeit",
+        success: false,
+        forfeiting_wallet: forfeitingWallet,
+        verifier_pubkey: verifierKeypair.publicKey.toBase58(),
+        error_message: "Config account not found on-chain",
+      });
+      return json200({
+        success: false,
+        error: "Config account not initialized on-chain",
+      });
+    }
+
+    const configData = parseConfigAccount(configAccountInfo.data);
+    if (!configData) {
+      await logSettlement(supabase, {
+        room_pda: roomPda,
+        action: "forfeit",
+        success: false,
+        forfeiting_wallet: forfeitingWallet,
+        verifier_pubkey: verifierKeypair.publicKey.toBase58(),
+        error_message: "Failed to parse config account",
+      });
+      return json200({
+        success: false,
+        error: "Failed to parse config account",
+      });
+    }
+
+    // Log parsed config for debugging
+    console.log("[forfeit-game] 📋 On-chain config:", {
+      authority: configData.authority.toBase58(),
+      feeRecipient: configData.feeRecipient.toBase58(),
+      feeBps: configData.feeBps,
+      verifier: configData.verifier.toBase58(),
+    });
+
+    // Validate verifier matches on-chain config
+    if (!configData.verifier.equals(verifierKeypair.publicKey)) {
+      console.error("[forfeit-game] ❌ Verifier mismatch with on-chain config!", {
+        expected: configData.verifier.toBase58(),
+        actual: verifierKeypair.publicKey.toBase58(),
+      });
+      await logSettlement(supabase, {
+        room_pda: roomPda,
+        action: "forfeit",
+        success: false,
+        forfeiting_wallet: forfeitingWallet,
+        verifier_pubkey: verifierKeypair.publicKey.toBase58(),
+        error_message: `Verifier mismatch: expected ${configData.verifier.toBase58()}, got ${verifierKeypair.publicKey.toBase58()}`,
+      });
+      return json200({
+        success: false,
+        error: "Verifier mismatch with on-chain config",
+        expected: configData.verifier.toBase58(),
+        actual: verifierKeypair.publicKey.toBase58(),
+      });
+    }
+
+    console.log("[forfeit-game] ✅ Verifier matches on-chain config");
+
+    const [vaultPda] = PublicKey.findProgramAddressSync(
+      [new TextEncoder().encode("vault"), roomPdaKey.toBuffer()],
+      PROGRAM_ID,
+    );
+
+    // FIX A: Enhanced vault sanity check with better diagnostics
+    const vaultLamports = await connection.getBalance(vaultPda, "confirmed");
+    const stakePerPlayer = Number(roomData.stakeLamports);
+    const playerCount = roomData.playerCount;
+    const expectedPot = stakePerPlayer * playerCount;
+    const RENT_EXEMPT_MINIMUM = 890880; // ~0.00089 SOL rent-exempt minimum
+    const effectiveBalance = Math.max(0, vaultLamports - RENT_EXEMPT_MINIMUM);
+
+    console.log("[forfeit-game] 🏦 Vault sanity check:", {
       vault: vaultPda.toBase58(),
-      txSig: signature,
-      status_int: 3,
-      status: "finished",
-      timestamp: new Date().toISOString(),
+      vaultLamports,
+      stakePerPlayer,
+      playerCount,
+      expectedPot,
+      rentExempt: RENT_EXEMPT_MINIMUM,
+      effectiveBalance,
+      canPayout: effectiveBalance >= expectedPot,
     });
 
-    return json200({
-      success: true,
-      action: "forfeit",
-      signature,
-      winnerWallet,
-      forfeitingWallet,
-      requestId,
-    });
+    // FIX A: If vault doesn't have enough to cover the stake payout, return detailed error
+    if (effectiveBalance < expectedPot) {
+      console.error("[forfeit-game] ❌ Vault underfunded - cannot settle:", {
+        vault: vaultPda.toBase58(),
+        vaultLamports,
+        expectedPot,
+        shortfall: expectedPot - effectiveBalance,
+      });
 
+      // Log the failure
+      await logSettlement(supabase, {
+        room_pda: roomPda,
+        action: "forfeit",
+        success: false,
+        winner_wallet: winnerWallet,
+        forfeiting_wallet: forfeitingWallet,
+        vault_pda: vaultPda.toBase58(),
+        vault_lamports: vaultLamports,
+        verifier_pubkey: verifierKeypair.publicKey.toBase58(),
+        verifier_lamports: verifierBalance,
+        stake_per_player: stakePerPlayer,
+        player_count: playerCount,
+        expected_pot: expectedPot,
+        room_status: roomData.status,
+        error_message: `Vault underfunded: ${vaultLamports} lamports, need ${expectedPot}`,
+      });
+
+      // Fetch existing game state
+      const { data: sessionData } = await supabase
+        .from("game_sessions")
+        .select("game_state")
+        .eq("room_pda", roomPda)
+        .single();
+
+      const existingState = (sessionData?.game_state || {}) as Record<string, unknown>;
+
+      // Update game_sessions to mark as finished with void settlement
+      const { error: updateError } = await supabase
+        .from("game_sessions")
+        .update({
+          status: "finished",
+          game_state: {
+            ...existingState,
+            playersOnChain: playersOnChain,
+            voidSettlement: true,
+            reason: "vault_underfunded",
+            vaultLamports,
+            expectedPot,
+            shortfall: expectedPot - effectiveBalance,
+            clearedAt: new Date().toISOString(),
+            intendedWinner: winnerWallet,
+          },
+          updated_at: new Date().toISOString(),
+        })
+        .eq("room_pda", roomPda);
+
+      if (updateError) {
+        console.error("[forfeit-game] Failed to void-clear session:", updateError);
+      }
+
+      return json200({
+        success: false,
+        error: "VAULT_UNFUNDED",
+        action: "void_cleared",
+        message: "Vault has insufficient funds for payout. Deposits may have gone to wrong address.",
+        vaultLamports,
+        expectedPotLamports: expectedPot,
+        shortfall: expectedPot - effectiveBalance,
+        details: {
+          vault: vaultPda.toBase58(),
+          vaultLamports,
+          expectedPot,
+          shortfall: expectedPot - effectiveBalance,
+          stakePerPlayer,
+          playerCount,
+        },
+        roomPda,
+        intendedWinner: winnerWallet,
+        verifierLamports: verifierBalance,
+      });
+    }
+
+    // Wrap settlement in try/catch - void-clear on ANY failure
+    try {
+      // data = discriminator (8) + winner pubkey (32)
+      const ixData = new Uint8Array(8 + 32);
+      ixData.set(submitResultDiscriminator, 0);
+      ixData.set(winnerPubkey.toBytes(), 8);
+
+      // IDL accounts order: ['verifier','config','room','vault','winner','fee_recipient','creator']
+      const submitResultIx = new TransactionInstruction({
+        programId: PROGRAM_ID,
+        keys: [
+          { pubkey: verifierKeypair.publicKey, isSigner: true, isWritable: false }, // verifier
+          { pubkey: configPda, isSigner: false, isWritable: false }, // config
+          { pubkey: roomPdaKey, isSigner: false, isWritable: true }, // room
+          { pubkey: vaultPda, isSigner: false, isWritable: true }, // vault
+          { pubkey: winnerPubkey, isSigner: false, isWritable: true }, // winner
+          { pubkey: configData.feeRecipient, isSigner: false, isWritable: true }, // fee_recipient (from config)
+          { pubkey: roomData.creator, isSigner: false, isWritable: true }, // creator (for vault close refund)
+        ],
+        data: ixData as any,
+      });
+
+      console.log("[forfeit-game] submit_result account keys in order:");
+      console.log(`  [0] verifier: ${verifierKeypair.publicKey.toBase58()}`);
+      console.log(`  [1] config: ${configPda.toBase58()}`);
+      console.log(`  [2] room: ${roomPdaKey.toBase58()}`);
+      console.log(`  [3] vault: ${vaultPda.toBase58()}`);
+      console.log(`  [4] winner: ${winnerPubkey.toBase58()}`);
+      console.log(`  [5] fee_recipient: ${configData.feeRecipient.toBase58()}`);
+      console.log(`  [6] creator: ${roomData.creator.toBase58()}`);
+
+      // Build + sign tx
+      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("confirmed");
+      const tx = new Transaction({
+        feePayer: verifierKeypair.publicKey,
+        recentBlockhash: blockhash,
+      }).add(submitResultIx);
+
+      tx.sign(verifierKeypair);
+
+      console.log("[forfeit-game] Sending submit_result...");
+
+      const signature = await connection.sendRawTransaction(tx.serialize(), {
+        skipPreflight: false,
+        preflightCommitment: "confirmed",
+      });
+
+      console.log("[forfeit-game] Sent:", signature);
+
+      const confirmation = await connection.confirmTransaction(
+        { signature, blockhash, lastValidBlockHeight },
+        "confirmed",
+      );
+
+      if (confirmation.value.err) {
+        // Throw to trigger void-clear in catch block
+        throw new Error(`Transaction failed: ${JSON.stringify(confirmation.value.err)}`);
+      }
+
+      console.log("[forfeit-game] ✅ Confirmed:", signature);
+
+      // LOG SUCCESS
+      await logSettlement(supabase, {
+        room_pda: roomPda,
+        action: "forfeit",
+        success: true,
+        signature,
+        winner_wallet: winnerWallet,
+        forfeiting_wallet: forfeitingWallet,
+        vault_pda: vaultPda.toBase58(),
+        vault_lamports: vaultLamports,
+        verifier_pubkey: verifierKeypair.publicKey.toBase58(),
+        verifier_lamports: verifierBalance,
+        stake_per_player: stakePerPlayer,
+        player_count: playerCount,
+        expected_pot: expectedPot,
+        room_status: roomData.status,
+      });
+
+      // ─────────────────────────────────────────────────────────────
+      // DATABASE RECORDING (best effort - NEVER fail on-chain success)
+      // ─────────────────────────────────────────────────────────────
+      let dbRecorded = false;
+      let dbError: string | null = null;
+
+      try {
+        // Step 1: Upsert finalize_receipts (idempotent - on conflict do nothing)
+        const { error: receiptError } = await supabase
+          .from("finalize_receipts")
+          .upsert(
+            { room_pda: roomPda, finalize_tx: signature },
+            { onConflict: "room_pda", ignoreDuplicates: true }
+          );
+
+        if (receiptError) {
+          console.error("[forfeit-game] finalize_receipts upsert failed:", receiptError);
+          dbError = `finalize_receipts: ${receiptError.message}`;
+        } else {
+          console.log("[forfeit-game] ✅ finalize_receipts recorded");
+        }
+
+        // Step 2: Insert into matches directly (more reliable than RPC)
+        const { error: matchError } = await supabase
+          .from("matches")
+          .upsert(
+            {
+              room_pda: roomPda,
+              game_type: gameType || "unknown",
+              max_players: roomData.maxPlayers,
+              stake_lamports: Number(roomData.stakeLamports),
+              creator_wallet: playersOnChain[0] || roomData.creator.toBase58(),
+              winner_wallet: winnerWallet,
+              status: "finalized",
+              finalized_at: new Date().toISOString(),
+            },
+            { onConflict: "room_pda", ignoreDuplicates: true }
+          );
+
+        if (matchError) {
+          console.error("[forfeit-game] matches upsert failed:", matchError);
+          dbError = dbError ? `${dbError}; matches: ${matchError.message}` : `matches: ${matchError.message}`;
+        } else {
+          console.log("[forfeit-game] ✅ matches recorded");
+        }
+
+        // Step 3: Call record_match_result RPC for profile/rating updates
+        try {
+          const { error: rpcErr } = await supabase.rpc("record_match_result", {
+            p_room_pda: roomPda,
+            p_finalize_tx: signature,
+            p_winner_wallet: winnerWallet,
+            p_game_type: gameType || "unknown",
+            p_max_players: roomData.maxPlayers,
+            p_stake_lamports: Number(roomData.stakeLamports),
+            p_mode: "ranked",
+            p_players: playersOnChain,
+          });
+          if (rpcErr) {
+            console.warn("[forfeit-game] record_match_result RPC failed (non-fatal):", rpcErr.message);
+          }
+        } catch (rpcException) {
+          console.warn("[forfeit-game] record_match_result exception (non-fatal):", rpcException);
+        }
+
+        dbRecorded = !dbError;
+        console.log("[forfeit-game] 📊 DB recording complete:", { dbRecorded, dbError });
+
+      } catch (dbException) {
+        dbError = String((dbException as Error)?.message ?? dbException);
+        console.error("[forfeit-game] ⚠️ DB recording exception (non-fatal):", dbError);
+      }
+
+      // Finish session (best effort)
+      const { error: finishErr } = await supabase.rpc("finish_game_session", {
+        p_room_pda: roomPda,
+        p_caller_wallet: forfeitingWallet,
+      });
+
+      if (finishErr) {
+        console.error("[forfeit-game] finish_game_session failed:", finishErr);
+      }
+
+      // ─────────────────────────────────────────────────────────────
+      // AUTO CLOSE ROOM: Refund rent to creator after successful settlement
+      // close_room requires NO creator signature - verifier can pay fees
+      // ─────────────────────────────────────────────────────────────
+      let closeRoomSignature: string | null = null;
+      let closeRoomError: string | null = null;
+
+      try {
+        console.log("[forfeit-game] Closing room to refund rent...", {
+          room: roomPdaKey.toBase58(),
+          creator: roomData.creator.toBase58(),
+        });
+
+        // close_room discriminator: [152, 197, 88, 192, 98, 197, 51, 211]
+        const closeRoomDiscriminator = new Uint8Array([152, 197, 88, 192, 98, 197, 51, 211]);
+
+        // close_room accounts ORDER (from IDL):
+        // 1) room     signer=false writable=true
+        // 2) creator  signer=false writable=true
+        const closeRoomIx = new TransactionInstruction({
+          programId: PROGRAM_ID,
+          keys: [
+            { pubkey: roomPdaKey, isSigner: false, isWritable: true },         // room
+            { pubkey: roomData.creator, isSigner: false, isWritable: true },   // creator
+          ],
+          data: closeRoomDiscriminator as any,
+        });
+
+        // Build + sign close_room tx (verifier pays fees)
+        const { blockhash: closeBlockhash, lastValidBlockHeight: closeLastValid } = 
+          await connection.getLatestBlockhash("confirmed");
+
+        const closeTx = new Transaction({
+          feePayer: verifierKeypair.publicKey,
+          recentBlockhash: closeBlockhash,
+        }).add(closeRoomIx);
+
+        closeTx.sign(verifierKeypair);
+
+        closeRoomSignature = await connection.sendRawTransaction(closeTx.serialize(), {
+          skipPreflight: false,
+          preflightCommitment: "confirmed",
+        });
+
+        console.log("[forfeit-game] close_room sent:", closeRoomSignature);
+
+        const closeConfirmation = await connection.confirmTransaction(
+          { signature: closeRoomSignature, blockhash: closeBlockhash, lastValidBlockHeight: closeLastValid },
+          "confirmed",
+        );
+
+        if (closeConfirmation.value.err) {
+          throw new Error(`close_room failed: ${JSON.stringify(closeConfirmation.value.err)}`);
+        }
+
+        console.log("[forfeit-game] ✅ close_room confirmed", { closeSig: closeRoomSignature });
+
+      } catch (closeErr) {
+        // close_room failure is NOT fatal - forfeit payout already succeeded
+        closeRoomError = String((closeErr as Error)?.message ?? closeErr);
+        console.warn("[forfeit-game] ⚠️ close_room failed", { error: closeRoomError });
+      }
+
+      return json200({
+        success: true,
+        action: "forfeit",
+        signature,
+        winnerWallet,
+        forfeitingWallet,
+        vaultLamports,
+        verifierLamports: verifierBalance,
+        closeRoomSignature,
+        closeRoomError,
+        dbRecorded,
+        dbError,
+      });
+
+    } catch (settlementError) {
+      console.error("[forfeit-game] Settlement failed - void clearing room:", settlementError);
+
+      // LOG FAILURE
+      await logSettlement(supabase, {
+        room_pda: roomPda,
+        action: "forfeit",
+        success: false,
+        winner_wallet: winnerWallet,
+        forfeiting_wallet: forfeitingWallet,
+        vault_pda: vaultPda.toBase58(),
+        vault_lamports: vaultLamports,
+        verifier_pubkey: verifierKeypair.publicKey.toBase58(),
+        verifier_lamports: verifierBalance,
+        stake_per_player: stakePerPlayer,
+        player_count: playerCount,
+        expected_pot: expectedPot,
+        room_status: roomData.status,
+        error_message: String((settlementError as Error)?.message ?? settlementError),
+      });
+
+      // Fetch existing game state for merge
+      const { data: sessionData } = await supabase
+        .from("game_sessions")
+        .select("game_state")
+        .eq("room_pda", roomPda)
+        .single();
+
+      const existingState = (sessionData?.game_state || {}) as Record<string, unknown>;
+
+      // Update session to finished with void settlement - include players and vault info
+      const { error: updateError } = await supabase
+        .from("game_sessions")
+        .update({
+          status: "finished",
+          game_state: {
+            ...existingState,
+            playersOnChain: playersOnChain,
+            voidSettlement: true,
+            reason: "settlement_failed",
+            clearedAt: new Date().toISOString(),
+            intendedWinner: winnerWallet,
+            settlementError: String((settlementError as Error)?.message ?? settlementError),
+            vaultLamports,
+            expectedPot,
+          },
+          updated_at: new Date().toISOString(),
+        })
+        .eq("room_pda", roomPda);
+
+      if (updateError) {
+        console.error("[forfeit-game] Failed to void-clear session:", updateError);
+      }
+
+      return json200({
+        success: false,
+        action: "void_cleared",
+        message: "Settlement failed; room cleared without payout",
+        error: String((settlementError as Error)?.message ?? settlementError),
+        roomPda,
+        intendedWinner: winnerWallet,
+        vaultLamports,
+        verifierLamports: verifierBalance,
+      });
+    }
   } catch (error) {
     console.error("[forfeit-game] Unexpected error:", error);
     return json200({

@@ -1,7 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { archiveRoom } from '@/lib/roomArchive';
-import { GAME_STATUS } from '@/lib/gameStatus';
 
 // NOTE: Room mode (casual/ranked) is now determined SOLELY from the database.
 // STEP 7: Deprecated getRoomMode and getRoomModeData functions have been REMOVED.
@@ -15,7 +14,7 @@ interface GameSessionData {
   player1_wallet: string;
   player2_wallet: string | null;
   status: 'active' | 'finished';
-  mode: 'casual' | 'ranked' | 'private';
+  mode: 'casual' | 'ranked';
 }
 
 interface UseGameSessionPersistenceOptions {
@@ -55,7 +54,7 @@ export function useGameSessionPersistence({
       }
 
       const session = resp?.session;
-      if (session && session.status_int === GAME_STATUS.ACTIVE && session.game_state && Object.keys(session.game_state).length > 0) {
+      if (session && session.status === 'active' && session.game_state && Object.keys(session.game_state).length > 0) {
         console.log('[GameSession] Found existing session:', session);
         return session.game_state as Record<string, any>;
       }
@@ -75,7 +74,7 @@ export function useGameSessionPersistence({
     player1Wallet: string,
     player2Wallet: string | null,
     status: 'active' | 'finished' = 'active',
-    mode: 'casual' | 'ranked' | 'private' = 'casual'
+    mode: 'casual' | 'ranked' = 'casual'
   ) => {
     if (!roomPda || !enabled) return;
 

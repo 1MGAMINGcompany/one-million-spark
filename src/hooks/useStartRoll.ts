@@ -14,8 +14,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { isSameWallet, isRealWallet } from "@/lib/walletUtils";
-import { isGameFinished } from "@/lib/gameStatus";
-import { short } from "@/lib/safe";
 
 interface StartRollResult {
   p1: { wallet: string; dice: number[]; total: number };
@@ -113,7 +111,7 @@ export function useStartRoll(options: UseStartRollOptions): UseStartRollResult {
           return;
         }
         
-        console.log("[useStartRoll] Creating game session for both players", { roomPda: short(roomPda), player1: short(player1), player2: short(player2) });
+        console.log("[useStartRoll] Creating game session for both players", { roomPda, player1, player2 });
         
         const { error } = await supabase.rpc("ensure_game_session", {
           p_room_pda: roomPda,
@@ -161,7 +159,7 @@ export function useStartRoll(options: UseStartRollOptions): UseStartRollResult {
         const session = resp?.session;
         if (session?.start_roll_finalized && session.starting_player_wallet) {
           // CRITICAL: If session is finished, this is stale data - show dice UI for new game
-          if (isGameFinished(session.status_int)) {
+          if (session.status === 'finished') {
             console.log("[useStartRoll] Session finished - ignoring stale finalized data");
             setShowDiceRoll(true);
             return;
@@ -173,19 +171,10 @@ export function useStartRoll(options: UseStartRollOptions): UseStartRollResult {
           setStartingWallet(starter);
           setRollResult(session.start_roll as unknown as StartRollResult);
           setIsFinalized(true);
-          console.log("[useStartRoll] Start roll already finalized. Starter:", short(starter));
+          console.log("[useStartRoll] Start roll already finalized. Starter:", starter);
         } else if (session) {
-          // Session exists but not finalized - check if player2 is synced
-          if (!session.player2_wallet) {
-            console.log("[useStartRoll] Session exists but player2 not synced yet, waiting...");
-            // Don't show dice roll yet - poll until player2 is synced
-            setTimeout(() => {
-              // Re-trigger the effect after a delay
-              setShowDiceRoll(true); // Show anyway after delay to allow auto-retry
-            }, 1500);
-            return;
-          }
-          console.log("[useStartRoll] Session exists with both players, showing dice roll UI");
+          // Session exists but not finalized - show dice roll
+          console.log("[useStartRoll] Session exists, showing dice roll UI");
           setShowDiceRoll(true);
         } else {
           // Session doesn't exist yet - wait for it to be created
@@ -220,7 +209,7 @@ export function useStartRoll(options: UseStartRollOptions): UseStartRollResult {
         const session = resp?.session;
         if (session?.start_roll_finalized && session.starting_player_wallet) {
           // Skip if session is finished (stale data)
-          if (isGameFinished(session.status_int)) return;
+          if (session.status === 'finished') return;
           
           const starter = session.starting_player_wallet;
           const isStarter = isSameWallet(starter, myWallet);
@@ -229,7 +218,7 @@ export function useStartRoll(options: UseStartRollOptions): UseStartRollResult {
           setRollResult(session.start_roll as unknown as StartRollResult);
           setIsFinalized(true);
           setShowDiceRoll(false);
-          console.log("[useStartRoll] Poll found finalized roll. Starter:", short(starter));
+          console.log("[useStartRoll] Poll found finalized roll. Starter:", starter);
           clearInterval(pollInterval);
         }
       } catch (err) {
@@ -270,7 +259,7 @@ export function useStartRoll(options: UseStartRollOptions): UseStartRollResult {
         // If opponent already finalized, hydrate immediately
         if (s.start_roll_finalized && s.starting_player_wallet) {
           // CRITICAL: If session is finished, this is stale data - show dice UI
-          if (isGameFinished(s.status_int)) {
+          if (s.status === 'finished') {
             console.log("[useStartRoll] Session finished - showing dice roll for new game");
             setShowDiceRoll(true);
             return;
@@ -286,7 +275,7 @@ export function useStartRoll(options: UseStartRollOptions): UseStartRollResult {
           setIsFinalized(true);
           setShowDiceRoll(false);
 
-          console.log("[useStartRoll] Found finalized start roll from server. starter=", short(starter));
+          console.log("[useStartRoll] Found finalized start roll from server. starter=", starter);
           return;
         }
 
@@ -316,7 +305,7 @@ export function useStartRoll(options: UseStartRollOptions): UseStartRollResult {
     setStartingWallet(starter);
     setIsFinalized(true);
     setShowDiceRoll(false);
-    console.log("[useStartRoll] Roll complete. Starter:", short(starter), "My color:", isStarter ? "white" : "black");
+    console.log("[useStartRoll] Roll complete. Starter:", starter, "My color:", isStarter ? "white" : "black");
     
     // Use atomic RPC to set current_turn_wallet + turn_started_at
     // This prevents race conditions if both clients try to finalize
@@ -331,7 +320,7 @@ export function useStartRoll(options: UseStartRollOptions): UseStartRollResult {
         if (error) {
           console.warn("[useStartRoll] Failed to finalize start roll:", error);
         } else if (data) {
-          console.log("[useStartRoll] Start roll finalized atomically - starter:", short(starter));
+          console.log("[useStartRoll] Start roll finalized atomically - starter:", starter.slice(0, 8));
         } else {
           console.log("[useStartRoll] Start roll already finalized by opponent");
         }
@@ -358,7 +347,7 @@ export function useStartRoll(options: UseStartRollOptions): UseStartRollResult {
 
       const session = resp?.session;
       if (session?.start_roll_finalized && session.starting_player_wallet) {
-        if (isGameFinished(session.status_int)) {
+        if (session.status === 'finished') {
           console.log("[useStartRoll] Force refetch: session finished, showing dice UI");
           setShowDiceRoll(true);
           return;
@@ -371,7 +360,7 @@ export function useStartRoll(options: UseStartRollOptions): UseStartRollResult {
         setRollResult(session.start_roll as unknown as StartRollResult);
         setIsFinalized(true);
         setShowDiceRoll(false);
-        console.log("[useStartRoll] Force refetch found finalized roll. Starter:", short(starter));
+        console.log("[useStartRoll] Force refetch found finalized roll. Starter:", starter);
       }
     } catch (err) {
       console.error("[useStartRoll] Force refetch failed:", err);

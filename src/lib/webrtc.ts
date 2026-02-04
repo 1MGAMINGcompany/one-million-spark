@@ -2,7 +2,6 @@
 // Uses Supabase Realtime for cross-device signaling
 
 import { SupabaseSignaling, SignalingMessage } from "./supabase-signaling";
-import { safeTrim } from "./safe";
 
 export interface RTCSignal {
   type: "offer" | "answer" | "ice-candidate";
@@ -65,14 +64,14 @@ export class WebRTCPeer {
     _options: WebRTCPeerOptions = {}
   ) {
     this.roomId = roomId;
-    // Use safeTrim - Base58 is case-sensitive, guards against undefined
-    this.localAddress = safeTrim(localAddress);
+    // Use trim only - Base58 is case-sensitive
+    this.localAddress = localAddress.trim();
     this.callbacks = callbacks;
   }
 
   async connect(remoteAddress: string, isInitiator: boolean): Promise<void> {
-    // Use safeTrim - Base58 is case-sensitive, guards against undefined
-    this.remoteAddress = safeTrim(remoteAddress);
+    // Use trim only - Base58 is case-sensitive
+    this.remoteAddress = remoteAddress.trim();
     this.isInitiator = isInitiator;
 
     console.log(`[WebRTC] Connecting as ${isInitiator ? "INITIATOR" : "RESPONDER"}`);
@@ -203,16 +202,13 @@ export class WebRTCPeer {
     }
     this.processedSignals.add(signalId);
 
-    // Safe shortener to prevent crashes on undefined signal fields
-    const short = (v: any) => (typeof v === "string" ? v.slice(0, 8) : "unknown");
-
-    // Verify it's from our expected peer (use safeTrim - Base58 is case-sensitive)
-    if (safeTrim(signal.from) !== this.remoteAddress) {
-      console.log(`[WebRTC] Ignoring signal from unknown peer: ${short(safeTrim(signal.from))}...`);
+    // Verify it's from our expected peer (use trim, not toLowerCase - Base58 is case-sensitive)
+    if (signal.from.trim() !== this.remoteAddress) {
+      console.log(`[WebRTC] Ignoring signal from unknown peer: ${signal.from.slice(0, 8)}...`);
       return;
     }
 
-    console.log(`[WebRTC] Processing signal: ${signal.type} from ${short(signal.from)}...`);
+    console.log(`[WebRTC] Processing signal: ${signal.type} from ${signal.from.slice(0, 8)}...`);
 
     try {
       switch (signal.type) {

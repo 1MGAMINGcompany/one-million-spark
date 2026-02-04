@@ -6,7 +6,6 @@
     "exit": "Verlassen"
   },
   "game": {
-    "player": "Spieler",
     "finishGame": "Spiel Beenden",
     "finishGameDesc": "Als Raumersteller können Sie das Spiel beenden und den Gewinner auszahlen.",
     "selectWinner": "Gewinner Auswählen",
@@ -513,7 +512,7 @@
     "language": "Sprache",
     "sec": "Sek",
     "gameInfo": "Spielinfo",
-    "you": "Du",
+    "you": "Sie",
     "ai": "KI",
     "totalMoves": "Gesamtzüge",
     "waiting": "Warten...",
@@ -743,38 +742,5 @@
     "forfeit": "Aufgabe",
     "timeoutForfeit": "Zeitüberschreitung = automatische Aufgabe",
     "rulesAcceptedNote": "Beide Spieler haben diese Regeln vor Spielbeginn akzeptiert. Auszahlungen werden on-chain ausgeführt."
-  },
-  "diceRoll": {
-    "rollToStart": "Würfeln zum Starten",
-    "highestGoesFirst": "Höchste Summe beginnt",
-    "syncingOpponent": "Synchronisiere mit Gegner... Bitte warten.",
-    "takingTooLong": "Würfeln dauert zu lange. Wählen Sie eine Option:",
-    "retrySync": "Erneut versuchen",
-    "pickStarterAuto": "Startspieler wählen (Auto)",
-    "rolledHigher": "hat höher gewürfelt! Sie beginnen!",
-    "theyGoFirst": "hat höher gewürfelt! Sie beginnen!",
-    "resolvedAfter": "Gelöst nach",
-    "tieBreaker": "Gleichstandslösung",
-    "bothReady": "Beide bereit. Würfeln Sie, um zu entscheiden wer beginnt!",
-    "rollDice": "Würfel werfen",
-    "computing": "Berechne...",
-    "rolling": "Würfle...",
-    "continueToGame": "Weiter zum Spiel"
-  },
-  "clearSession": {
-    "title": "Sitzung während einer aktiven Partie löschen?",
-    "descriptionActive": "Das Löschen Ihrer Sitzung trennt Sie. Wenn Sie nicht zurückkehren, können Sie durch Timeout verlieren.",
-    "descriptionUnverified": "Wir konnten den Spielstand nicht überprüfen. Das Löschen der Sitzung kann Sie trennen.",
-    "roomLabel": "Raum:",
-    "inRoom": "Sie befinden sich derzeit im Raum:",
-    "cancel": "Abbrechen",
-    "goToRoomList": "Zur Raumliste",
-    "clearAnyway": "Trotzdem löschen",
-    "cleared": "Sitzung gelöscht",
-    "tokensRemoved": "Tokens entfernt"
-  },
-  "common": {
-    "loadingMatchDetails": "Spieldetails werden geladen...",
-    "confirmingEntry": "Bestätige Eintritt..."
   }
 }

@@ -29,7 +29,6 @@ export default defineConfig(({ mode }) => ({
       "@solana/web3.js",
       "react",
       "react-dom",
-      "react/jsx-runtime",
     ],
   },
   // Optimize deps to exclude problematic native modules

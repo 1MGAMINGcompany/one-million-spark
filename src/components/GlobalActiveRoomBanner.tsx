@@ -7,8 +7,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Play, Users, Settings } from "lucide-react";
 import { useSolanaRooms } from "@/hooks/useSolanaRooms";
 import { RoomStatus, isOpenStatus } from "@/lib/solana-program";
+import { toast } from "@/hooks/use-toast";
 import { AudioManager } from "@/lib/AudioManager";
-import { showGameStartToast, isGameStartLatched, setGameStartLatch } from "@/hooks/useGameStartToast";
 import { showBrowserNotification } from "@/lib/pushNotifications";
 
 // REMOVED: GAME_ROUTES - game type comes from on-chain data via /play/:pda, not URL
@@ -44,17 +44,7 @@ export function GlobalActiveRoomBanner() {
       currentStatus === RoomStatus.Started &&
       !hasNavigatedRef.current
     ) {
-      // Check latch FIRST - if latched, skip entirely (prevents UI flicker)
-      if (isGameStartLatched(activeRoom.pda)) {
-        console.log(`[GlobalActiveRoomBanner] Latch active for ${activeRoom.pda.slice(0, 8)}... skipping`);
-        hasNavigatedRef.current = true; // Still mark as navigated to prevent future checks
-        return;
-      }
-
       hasNavigatedRef.current = true;
-      
-      // Set latch BEFORE any actions (prevents re-entry)
-      setGameStartLatch(activeRoom.pda);
 
       // Play sound
       AudioManager.playPlayerJoined();
@@ -65,13 +55,11 @@ export function GlobalActiveRoomBanner() {
         `Your ${activeRoom.gameTypeName} game is ready to start!`
       );
 
-      // Dedupe toast per room (prevents repeated toasts on mobile)
-      showGameStartToast(
-        activeRoom.pda,
-        `🎮 ${t("gameBanner.opponentJoined")}`,
-        t("gameBanner.navigateToRoom", { game: activeRoom.gameTypeName }),
-        "shadcn"
-      );
+      // Show toast
+      toast({
+        title: `🎮 ${t("gameBanner.opponentJoined")}`,
+        description: t("gameBanner.navigateToRoom", { game: activeRoom.gameTypeName }),
+      });
 
       // Navigate directly to PLAY route (game is Started)
       navigate(`/play/${activeRoom.pda}`);

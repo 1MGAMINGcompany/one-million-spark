@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback, useMemo } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 // PublicKey import removed - we use room.pda directly as the unique identifier
@@ -14,7 +14,7 @@ import {
   AlertTriangle,
   Coins,
   Clock,
-  Timer,
+  
   Trophy,
   Gamepad,
   Settings2
@@ -33,19 +33,8 @@ import { showBrowserNotification } from "@/lib/pushNotifications";
 // getRoomPda import removed - we use activeRoom.pda directly
 import { ResolveRoomModal } from "@/components/ResolveRoomModal";
 import { UnresolvedRoomModal } from "@/components/UnresolvedRoomModal";
-import { supabase } from "@/integrations/supabase/client";
-import { JoinTraceDebugPanel } from "@/components/JoinTraceDebugPanel";
 
 import { BUILD_VERSION } from "@/lib/buildVersion";
-import { isRoomHidden, pruneHiddenRooms } from "@/lib/hiddenRooms";
-
-// Active session data for turn time display
-interface ActiveSessionData {
-  turnStartedAt: string | null;
-  turnTimeSeconds: number;
-  currentTurnWallet: string | null;
-  mode?: string;
-}
 
 export default function RoomList() {
   const navigate = useNavigate();
@@ -62,21 +51,12 @@ export default function RoomList() {
     isPlayer1: boolean;
   }>>([]);
   
-  // Active sessions map for turn time display
-  const [activeSessionsMap, setActiveSessionsMap] = useState<Map<string, ActiveSessionData>>(new Map());
-  
   // On-chain active rooms (filtered from all rooms)
   const [myOnChainRooms, setMyOnChainRooms] = useState<RoomDisplay[]>([]);
   
   // Resolve modal state
   const [resolveModalOpen, setResolveModalOpen] = useState(false);
   const [selectedRoomForResolve, setSelectedRoomForResolve] = useState<RoomDisplay | null>(null);
-  const [resolveDbState, setResolveDbState] = useState<{
-    statusInt: number;
-    participantsCount: number;
-    startRollFinalized: boolean;
-  } | null>(null);
-  const [resolveFetching, setResolveFetching] = useState(false);
   
   // Unresolved room modal state (for smart blocking)
   const [showUnresolvedModal, setShowUnresolvedModal] = useState(false);
@@ -89,11 +69,6 @@ export default function RoomList() {
 
   const targetCluster = getSolanaCluster();
   const rpcEndpoint = getSolanaEndpoint();
-
-  // Prune expired hidden rooms on mount
-  useEffect(() => {
-    pruneHiddenRooms();
-  }, []);
 
   // Poll room list every 5 seconds
   useEffect(() => {
@@ -135,41 +110,6 @@ export default function RoomList() {
     const interval = setInterval(fetchMySessions, 10000);
     return () => clearInterval(interval);
   }, [isConnected, address, findMyActiveGameSessions]);
-
-  // Fetch active sessions with turn time data for display
-  useEffect(() => {
-    const fetchActiveSessions = async () => {
-      try {
-        const { data, error } = await supabase.functions.invoke("game-sessions-list", {
-          body: { type: "active" },
-        });
-        
-        if (error) {
-          console.warn("[RoomList] Failed to fetch active sessions:", error);
-          return;
-        }
-        
-        if (data?.rows) {
-          const map = new Map<string, ActiveSessionData>();
-          for (const row of data.rows) {
-            map.set(row.room_pda, {
-              turnStartedAt: row.turn_started_at,
-              turnTimeSeconds: row.turn_time_seconds || 60,
-              currentTurnWallet: row.current_turn_wallet,
-              mode: row.mode,
-            });
-          }
-          setActiveSessionsMap(map);
-        }
-      } catch (err) {
-        console.warn("[RoomList] Error fetching active sessions:", err);
-      }
-    };
-    
-    fetchActiveSessions();
-    const interval = setInterval(fetchActiveSessions, 5000);
-    return () => clearInterval(interval);
-  }, []);
 
   // Filter on-chain rooms where this wallet is a player and room is active
   useEffect(() => {
@@ -275,15 +215,6 @@ export default function RoomList() {
     return names[gameType] || "Unknown";
   };
 
-  // Helper to format turn time display
-  const formatTurnTime = (seconds: number): string => {
-    if (seconds >= 60) {
-      const mins = Math.floor(seconds / 60);
-      return `${mins}m`;
-    }
-    return `${seconds}s`;
-  };
-
   return (
     <div className="container max-w-4xl py-8 px-4">
       {/* Header */}
@@ -336,28 +267,28 @@ export default function RoomList() {
       {/* Active Game Banner handled by GlobalActiveRoomBanner in App.tsx */}
 
       {/* My Active Games Section - Show ALL rooms for this wallet */}
-      {isConnected && myOnChainRooms.filter(r => !isRoomHidden(r.pda)).length > 0 && (
+      {isConnected && myOnChainRooms.length > 0 && (
         <Card className="mb-6 border-primary/50 bg-primary/10">
           <CardHeader className="pb-2">
             <CardTitle className="text-lg flex items-center gap-2">
               <Gamepad className="h-5 w-5 text-primary" />
               {t("roomList.myActiveGames")}
               <span className="text-xs bg-primary/20 px-2 py-0.5 rounded-full ml-2">
-                {myOnChainRooms.filter(r => !isRoomHidden(r.pda)).length}
+                {myOnChainRooms.length}
               </span>
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            {myOnChainRooms.filter(r => !isRoomHidden(r.pda)).map((room) => (
+            {myOnChainRooms.map((room) => (
               <div 
                 key={room.pda}
-                className="flex flex-col md:flex-row md:items-center gap-3 p-3 bg-background/50 rounded-lg border border-border/50 w-full overflow-hidden"
+                className="flex items-center justify-between p-3 bg-background/50 rounded-lg border border-border/50"
               >
-                <div className="flex items-center gap-3 flex-1 min-w-0">
-                  <span className="text-xl shrink-0">{getGameIcon(room.gameType)}</span>
-                  <div className="min-w-0">
-                    <p className="font-medium truncate">{room.gameTypeName}</p>
-                    <p className="text-xs text-muted-foreground truncate">
+                <div className="flex items-center gap-3">
+                  <span className="text-xl">{getGameIcon(room.gameType)}</span>
+                  <div>
+                    <p className="font-medium">{room.gameTypeName}</p>
+                    <p className="text-xs text-muted-foreground">
                       {room.creator === address ? t("roomList.youAreCreator") : t("roomList.youJoined")}
                       {" • "}
                       {room.playerCount}/{room.maxPlayers} players
@@ -365,73 +296,20 @@ export default function RoomList() {
                     </p>
                   </div>
                 </div>
-                <div className="flex gap-2 w-full md:w-auto shrink-0">
+                <div className="flex gap-2">
                   <Button 
                     size="sm" 
                     variant="outline"
-                    className="flex-1 md:flex-none"
-                    disabled={resolveFetching}
-                    onClick={async () => {
-                      // Fetch DB state to determine cancel vs forfeit
-                      setResolveFetching(true);
+                    onClick={() => {
                       setSelectedRoomForResolve(room);
-                      try {
-                        const { data, error } = await supabase.functions.invoke("game-session-get", {
-                          body: { roomPda: room.pda },
-                        });
-                        if (error) {
-                          console.warn("[RoomList] game-session-get error:", error);
-                          // Fallback to on-chain state
-                          setResolveDbState({
-                            statusInt: room.status === RoomStatus.Started ? 2 : 1,
-                            participantsCount: room.playerCount,
-                            startRollFinalized: false,
-                          });
-                        } else if (data?.session) {
-                          const session = data.session;
-                          const participants = session.participants || [];
-                          const participantsCount = participants.length > 0 
-                            ? participants.length 
-                            : [session.player1_wallet, session.player2_wallet].filter(Boolean).length;
-                          setResolveDbState({
-                            statusInt: session.status_int ?? 1,
-                            participantsCount,
-                            startRollFinalized: session.start_roll_finalized ?? false,
-                          });
-                          console.log("[RoomList] DB state for resolve:", {
-                            statusInt: session.status_int,
-                            participantsCount,
-                            startRollFinalized: session.start_roll_finalized,
-                          });
-                        } else {
-                          // No session in DB - use on-chain fallback
-                          setResolveDbState({
-                            statusInt: 1,
-                            participantsCount: room.playerCount,
-                            startRollFinalized: false,
-                          });
-                        }
-                      } catch (err) {
-                        console.error("[RoomList] Failed to fetch DB state:", err);
-                        setResolveDbState({
-                          statusInt: room.status === RoomStatus.Started ? 2 : 1,
-                          participantsCount: room.playerCount,
-                          startRollFinalized: false,
-                        });
-                      } finally {
-                        setResolveFetching(false);
-                        setResolveModalOpen(true);
-                      }
+                      setResolveModalOpen(true);
                     }}
                   >
                     <Settings2 className="h-4 w-4 mr-1" />
-                    {resolveFetching && selectedRoomForResolve?.pda === room.pda 
-                      ? t("common.loading", "Loading...") 
-                      : t("roomList.resolve", "Resolve")}
+                    {t("roomList.resolve", "Resolve")}
                   </Button>
                   <Button 
                     size="sm" 
-                    className="flex-1 md:flex-none"
                     onClick={() => navigate(`/play/${room.pda}`)}
                   >
                     {t("roomList.rejoin")}
@@ -522,97 +400,74 @@ export default function RoomList() {
       {/* Room List */}
       {!loading && !error && rooms.length > 0 && (
         <div className="grid gap-4">
-          {rooms
-            .filter((room) => activeSessionsMap.get(room.pda)?.mode !== 'private')
-            .filter((room) => !isRoomHidden(room.pda))
-            .map((room) => (
+          {rooms.map((room) => (
             <Card 
               key={room.pda} 
-              className="border-border/50 bg-card/80 backdrop-blur hover:bg-card/90 transition-colors cursor-pointer w-full max-w-full overflow-hidden"
+              className="border-border/50 bg-card/80 backdrop-blur hover:bg-card/90 transition-colors cursor-pointer"
               onClick={() => navigate(`/room/${room.pda}`)}
             >
-              <CardContent className="p-4 overflow-hidden">
-                <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-4 w-full overflow-hidden">
-                  {/* Top row: Icon + Info */}
-                  <div className="flex items-center gap-3 md:gap-4 flex-1 min-w-0">
-                    {/* Game Icon */}
-                    <div className="h-10 w-10 md:h-12 md:w-12 shrink-0 rounded-lg bg-primary/10 flex items-center justify-center text-xl md:text-2xl">
-                      {getGameIcon(room.gameType)}
-                    </div>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-4">
+                  {/* Game Icon */}
+                  <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center text-2xl">
+                    {getGameIcon(room.gameType)}
+                  </div>
 
-                    {/* Room Info */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex flex-wrap items-center gap-1.5 md:gap-2">
-                        <h3 className="font-semibold truncate">
-                          {getGameName(room.gameType)}
-                        </h3>
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-primary/20 text-primary">
-                          #{room.roomId}
-                        </span>
-                        {/* Mode Badge - STEP 7: Stake-only detection (no getRoomMode) */}
-                        {(() => {
-                          // Stake > 0 is the only reliable indicator in room list
-                          const isRanked = room.entryFeeSol > 0;
-                          return (
-                            <span className={`text-xs px-2 py-0.5 rounded-full border flex items-center gap-1 ${
-                              isRanked 
-                                ? 'bg-red-500/20 text-red-400 border-red-500/30' 
-                                : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
-                            }`}>
-                              {isRanked ? '🔴' : '🟢'} {isRanked ? t("createRoom.gameModeRanked") : t("createRoom.gameModeCasual")}
-                              <span className="opacity-70">{isRanked ? '🏆' : '🎮'}</span>
-                            </span>
-                          );
-                        })()}
-                      </div>
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground mt-1">
-                        {/* Stake display - STEP 7: Stake-only detection */}
-                        {(() => {
-                          const isRanked = room.entryFeeSol > 0;
-                          return (
-                            <span className={`flex items-center gap-1 ${isRanked ? 'text-foreground font-medium' : ''}`}>
-                              <Coins className="h-3.5 w-3.5" />
-                              {isRanked ? (
-                                `${room.entryFeeSol} SOL`
-                              ) : (
-                                <span className="text-muted-foreground italic">—</span>
-                              )}
-                            </span>
-                          );
-                        })()}
-                        <span className="flex items-center gap-1">
-                          <Users className="h-3.5 w-3.5" />
-                          {room.playerCount}/{room.maxPlayers}
-                        </span>
-                        {/* Turn time display for ranked games - show for all ranked rooms */}
-                        {(() => {
-                          const isRanked = room.entryFeeSol > 0;
-                          if (isRanked) {
-                            // Get from session if available, otherwise show default ranked time
-                            const session = activeSessionsMap.get(room.pda);
-                            const turnTime = session?.turnTimeSeconds || 60; // Default 60s for ranked
-                            return (
-                              <span className="flex items-center gap-1 text-amber-400">
-                                <Timer className="h-3.5 w-3.5" />
-                                {formatTurnTime(turnTime)} turn
-                              </span>
-                            );
-                          }
-                          return null;
-                        })()}
-                        <span className="hidden sm:flex items-center gap-1 truncate">
-                          <Clock className="h-3.5 w-3.5" />
-                          {room.creator.slice(0, 4)}...{room.creator.slice(-4)}
-                        </span>
-                      </div>
+                  {/* Room Info */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-semibold truncate">
+                        {getGameName(room.gameType)}
+                      </h3>
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-primary/20 text-primary">
+                        #{room.roomId}
+                      </span>
+                      {/* Mode Badge - STEP 7: Stake-only detection (no getRoomMode) */}
+                      {(() => {
+                        // Stake > 0 is the only reliable indicator in room list
+                        const isRanked = room.entryFeeSol > 0;
+                        return (
+                          <span className={`text-xs px-2 py-0.5 rounded-full border flex items-center gap-1 ${
+                            isRanked 
+                              ? 'bg-red-500/20 text-red-400 border-red-500/30' 
+                              : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                          }`}>
+                            {isRanked ? '🔴' : '🟢'} {isRanked ? t("createRoom.gameModeRanked") : t("createRoom.gameModeCasual")}
+                            <span className="opacity-70">{isRanked ? '🏆' : '🎮'}</span>
+                          </span>
+                        );
+                      })()}
+                    </div>
+                    <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
+                      {/* Stake display - STEP 7: Stake-only detection */}
+                      {(() => {
+                        const isRanked = room.entryFeeSol > 0;
+                        return (
+                          <span className={`flex items-center gap-1 ${isRanked ? 'text-foreground font-medium' : ''}`}>
+                            <Coins className="h-3.5 w-3.5" />
+                            {isRanked ? (
+                              `${room.entryFeeSol} SOL`
+                            ) : (
+                              <span className="text-muted-foreground italic">—</span>
+                            )}
+                          </span>
+                        );
+                      })()}
+                      <span className="flex items-center gap-1">
+                        <Users className="h-3.5 w-3.5" />
+                        {room.playerCount}/{room.maxPlayers}
+                      </span>
+                      <span className="hidden sm:flex items-center gap-1 truncate">
+                        <Clock className="h-3.5 w-3.5" />
+                        {room.creator.slice(0, 4)}...{room.creator.slice(-4)}
+                      </span>
                     </div>
                   </div>
 
-                  {/* Join Button - full width on mobile */}
+                  {/* Join Button */}
                   <Button 
                     variant="default" 
                     size="sm"
-                    className="w-full md:w-auto shrink-0"
                     title={hookBlockingRoom ? t("roomList.resolveFirst") : undefined}
                     onClick={(e) => {
                       e.stopPropagation();
@@ -651,7 +506,6 @@ export default function RoomList() {
           onClose={() => {
             setResolveModalOpen(false);
             setSelectedRoomForResolve(null);
-            setResolveDbState(null);
           }}
           roomPda={selectedRoomForResolve.pda}
           roomData={{
@@ -667,9 +521,6 @@ export default function RoomList() {
             fetchRooms();
             setMyOnChainRooms([]);
           }}
-          dbStatusInt={resolveDbState?.statusInt}
-          dbParticipantsCount={resolveDbState?.participantsCount}
-          dbStartRollFinalized={resolveDbState?.startRollFinalized}
         />
       )}
 
@@ -683,9 +534,6 @@ export default function RoomList() {
           navigate(`/room/${roomPda}`);
         }}
       />
-      
-      {/* Join Trace Debug Panel - shown when localStorage.debug_join === "1" */}
-      <JoinTraceDebugPanel />
     </div>
   );
 }

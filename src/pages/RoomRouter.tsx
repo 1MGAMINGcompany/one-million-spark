@@ -11,16 +11,13 @@
 
 import { useEffect, useState, useCallback, lazy, Suspense } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { useConnection, useWallet } from "@solana/wallet-adapter-react";
+import { useConnection } from "@solana/wallet-adapter-react";
 import { PublicKey } from "@solana/web3.js";
 import { parseRoomAccount, RoomStatus, isOpenStatus } from "@/lib/solana-program";
-import { validatePublicKey, isMobileDevice } from "@/lib/solana-utils";
-import { isWalletInAppBrowser } from "@/lib/walletBrowserDetection";
+import { validatePublicKey } from "@/lib/solana-utils";
 import { Loader2, AlertTriangle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { OpenInWalletPanel } from "@/components/OpenInWalletPanel";
-import { usePendingRoute } from "@/hooks/usePendingRoute";
 
 // Lazy load Room component - game pages are handled by /play/:roomPda
 const Room = lazy(() => import("./Room"));
@@ -37,23 +34,10 @@ function GameLoading() {
   );
 }
 
-
-const isValidPubkey = (s: string) => {
-  try {
-    // Lazy import already present in file: PublicKey from @solana/web3.js
-    // If PublicKey isn't in scope, TypeScript build will tell us.
-    new PublicKey(s);
-    return true;
-  } catch {
-    return false;
-  }
-};
-
 export default function RoomRouter() {
   const { roomPda: roomPdaParam } = useParams<{ roomPda: string }>();
   const navigate = useNavigate();
   const { connection } = useConnection();
-  const { connected } = useWallet();
   
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -63,22 +47,6 @@ export default function RoomRouter() {
     playerCount: number;
   } | null>(null);
   const [retryCount, setRetryCount] = useState(0);
-  const [dismissedWalletPanel, setDismissedWalletPanel] = useState(false);
-  
-  // Pending route persistence
-  const { setPendingRoom } = usePendingRoute();
-  
-  // Detect if we should show Open-in-Wallet panel
-  const inWalletBrowser = isWalletInAppBrowser();
-  const isRegularMobileBrowser = isMobileDevice() && !inWalletBrowser && !connected;
-  const shouldShowWalletPanel = isRegularMobileBrowser && !dismissedWalletPanel;
-  
-  // Save pending room for post-connect navigation
-  useEffect(() => {
-    if (!connected && roomPdaParam) {
-      setPendingRoom(roomPdaParam);
-    }
-  }, [connected, roomPdaParam, setPendingRoom]);
 
   const handleRetry = useCallback(() => {
     setError(null);
@@ -88,15 +56,6 @@ export default function RoomRouter() {
 
   useEffect(() => {
     async function fetchRoomData() {
-
-      // ✅ CASUAL (off-chain) rooms use UUIDs, not Solana PDAs.
-      // If the URL param is not a valid pubkey, skip Solana fetch and let Room handle DB-only session.
-      if (roomPdaParam && !isValidPubkey(roomPdaParam)) {
-        console.log("[RoomRouter] Off-chain room detected (UUID). Skipping Solana fetch:", roomPdaParam);
-        setRoomData({ gameType: 1, status: 1, playerCount: 2 }); // minimal defaults; Room will fetch real session via edge
-        setLoading(false);
-        return;
-      }
       if (!roomPdaParam) {
         setError("No room specified");
         setLoading(false);
@@ -166,19 +125,9 @@ export default function RoomRouter() {
     fetchRoomData();
   }, [roomPdaParam, connection, navigate, retryCount]);
 
-  // Loading state - show wallet panel if in regular mobile browser
+  // Loading state
   if (loading) {
-    return (
-      <>
-        {shouldShowWalletPanel && (
-          <OpenInWalletPanel
-            currentUrl={window.location.href}
-            onDismiss={() => setDismissedWalletPanel(true)}
-          />
-        )}
-        <GameLoading />
-      </>
-    );
+    return <GameLoading />;
   }
 
   // Error state

@@ -1,66 +1,7 @@
 import React from "react";
-import { getDbg, dbg } from "@/lib/debugLog";
+import { getDbg } from "@/lib/debugLog";
 import { reportClientError } from "@/lib/errorTelemetry";
 import { BUILD_VERSION } from "@/lib/buildVersion";
-
-/**
- * Global error listeners to capture crash stacks for debugging
- * Called once when AppErrorBoundary mounts
- */
-let globalListenersInstalled = false;
-
-function installGlobalCrashListeners() {
-  if (globalListenersInstalled || typeof window === "undefined") return;
-  globalListenersInstalled = true;
-
-  // Capture uncaught errors
-  window.addEventListener("error", (event) => {
-    const { message, filename, lineno, colno, error } = event;
-    const stack = error?.stack || "no stack";
-    
-    // Log to console so "Copy logs" captures it
-    console.error("[GlobalCrash] Uncaught error:", message, "\nStack:", stack);
-    
-    // Log to dbg for structured capture
-    try {
-      dbg("crash", {
-        type: "error",
-        message,
-        filename,
-        lineno,
-        colno,
-        stack,
-        build: BUILD_VERSION,
-        route: window.location.pathname,
-        time: new Date().toISOString(),
-      });
-    } catch {}
-  });
-
-  // Capture unhandled promise rejections
-  window.addEventListener("unhandledrejection", (event) => {
-    const reason = event.reason;
-    const message = reason?.message || String(reason);
-    const stack = reason?.stack || "no stack";
-    
-    // Log to console so "Copy logs" captures it
-    console.error("[GlobalCrash] Unhandled rejection:", message, "\nStack:", stack);
-    
-    // Log to dbg for structured capture
-    try {
-      dbg("crash", {
-        type: "unhandledrejection",
-        message,
-        stack,
-        build: BUILD_VERSION,
-        route: window.location.pathname,
-        time: new Date().toISOString(),
-      });
-    } catch {}
-  });
-
-  console.log("[GlobalCrash] Crash listeners installed");
-}
 
 export class AppErrorBoundary extends React.Component<
   { children: React.ReactNode },
@@ -71,34 +12,12 @@ export class AppErrorBoundary extends React.Component<
     this.state = { error: null, copied: null };
   }
 
-  componentDidMount() {
-    // Install global crash listeners once
-    installGlobalCrashListeners();
-  }
-
   static getDerivedStateFromError(error: Error) {
     return { error };
   }
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
-    const stack = error.stack || "no stack";
-    
-    // Log to console with full stack
-    console.error("[AppErrorBoundary] Crash:", error.message, "\nStack:", stack, "\nComponent:", info.componentStack);
-    
-    // Log to dbg for structured capture
-    try {
-      dbg("crash", {
-        type: "boundary",
-        message: error.message,
-        stack,
-        componentStack: info.componentStack,
-        build: BUILD_VERSION,
-        route: window.location.pathname,
-        time: new Date().toISOString(),
-      });
-    } catch {}
-    
+    console.error("[AppErrorBoundary] Crash:", error, info);
     // Report to telemetry - triple-wrapped so it can NEVER break rendering
     try {
       reportClientError(error).catch(() => {});

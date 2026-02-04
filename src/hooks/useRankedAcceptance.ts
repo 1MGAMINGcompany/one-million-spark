@@ -13,7 +13,6 @@ import { useState, useCallback, useRef } from "react";
 import { useWallet as useSolanaWallet } from "@solana/wallet-adapter-react";
 import { supabase } from "@/integrations/supabase/client";
 import { computeRulesHash, buildAcceptMessage, RankedRules } from "@/lib/rulesHash";
-import { getSessionToken, getAuthHeaders, storeSessionToken } from "@/lib/sessionToken";
 import bs58 from "bs58";
 
 interface UseRankedAcceptanceOptions {
@@ -119,17 +118,11 @@ export function useRankedAcceptance(
       console.log("[RankedAcceptance] Signature obtained:", signatureBase58.slice(0, 20) + "...");
 
       // Step 5: Call Edge Function to verify signature, create session, and record acceptance
-      // Get existing session token for authorization (may exist from creator flow)
-      const existingToken = getSessionToken(roomPda);
-      if (!existingToken) {
-        console.error("[RankedAcceptance] No session token available for authorization");
-        return { success: false, error: "Session token required - please rejoin the room" };
-      }
-      
       console.log("[RankedAcceptance] Calling ranked-accept Edge Function...");
       const { data, error: invokeError } = await supabase.functions.invoke("ranked-accept", {
         body: {
           roomPda,
+          playerWallet: wallet,
           mode: "signed",
           rulesHash: hash,
           nonce,
@@ -138,7 +131,6 @@ export function useRankedAcceptance(
           stakeLamports,
           turnTimeSeconds,
         },
-        headers: getAuthHeaders(existingToken),
       });
 
       if (invokeError) {
@@ -156,7 +148,7 @@ export function useRankedAcceptance(
       setSessionToken(token);
 
       // Store session token in localStorage for persistence
-      storeSessionToken(roomPda, token);
+      localStorage.setItem(`session_token_${roomPda}`, token);
 
       console.log("[RankedAcceptance] Acceptance complete!");
       return { success: true };

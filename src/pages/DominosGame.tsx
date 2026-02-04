@@ -1,9 +1,8 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { getOpponentWallet, isSameWallet, isRealWallet } from "@/lib/walletUtils";
 import { incMissed, resetMissed, clearRoom } from "@/lib/missedTurns";
 import { GameErrorBoundary } from "@/components/GameErrorBoundary";
-import { useParams, Link, useNavigate, useLocation } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Gem, Flag, Users, Wifi, WifiOff, Download, RefreshCw, LogOut } from "lucide-react";
 import { ForfeitConfirmDialog } from "@/components/ForfeitConfirmDialog";
@@ -22,8 +21,6 @@ import { useGameSessionPersistence } from "@/hooks/useGameSessionPersistence";
 import { useRoomMode } from "@/hooks/useRoomMode";
 import { useRankedReadyGate } from "@/hooks/useRankedReadyGate";
 import { useTurnTimer, DEFAULT_RANKED_TURN_TIME } from "@/hooks/useTurnTimer";
-import { useTurnCountdownDisplay } from "@/hooks/useTurnCountdownDisplay";
-import { useOpponentTimeoutDetection } from "@/hooks/useOpponentTimeoutDetection";
 import { useStartRoll } from "@/hooks/useStartRoll";
 import { useTxLock } from "@/contexts/TxLockContext";
 import { useDurableGameSync, GameMove } from "@/hooks/useDurableGameSync";
@@ -104,13 +101,9 @@ const DominosGame = () => {
   const { roomPda } = useParams<{ roomPda: string }>();
   const roomId = roomPda; // Alias for backward compatibility with hooks/display
   const navigate = useNavigate();
-  const location = useLocation();
   const { t } = useTranslation();
   const { play } = useSound();
   const { isConnected: walletConnected, address } = useWallet();
-  
-  // Check if user just joined via JoinRulesModal (skip AcceptRulesModal)
-  const justJoined = !!(location.state as { justJoined?: boolean })?.justJoined;
 
   const [chain, setChain] = useState<PlacedDomino[]>([]);
   const [myHand, setMyHand] = useState<Domino[]>([]);
@@ -122,7 +115,6 @@ const DominosGame = () => {
   const [selectedDomino, setSelectedDomino] = useState<number | null>(null);
   const [winner, setWinner] = useState<"me" | "opponent" | "draw" | null>(null);
   const [winnerWallet, setWinnerWallet] = useState<string | null>(null); // Direct wallet address of winner
-  const [turnStartedAt, setTurnStartedAt] = useState<string | null>(null); // For display timer
   const [gameInitialized, setGameInitialized] = useState(false);
 
   // Refs to hold current state for stable callbacks (prevents stale closures)
@@ -154,7 +146,7 @@ const DominosGame = () => {
   const { isTxInFlight, withTxLock } = useTxLock();
   
   // Solana rooms hook for forfeit/cancel
-  const { cancelRoomByPda, clearRoomFromState } = useSolanaRooms();
+  const { cancelRoomByPda } = useSolanaRooms();
 
   // Keep multiplayer refs in sync
   useEffect(() => { amIPlayer1Ref.current = amIPlayer1; }, [amIPlayer1]);
@@ -255,7 +247,7 @@ const DominosGame = () => {
 
   // Room mode hook - fetches from DB for Player 2 who doesn't have localStorage data
   // Must be called before any effects that use roomMode
-  const { mode: roomMode, isRanked: isRankedGame, isPrivate, turnTimeSeconds: roomTurnTime, isLoaded: modeLoaded } = useRoomMode(roomPda);
+  const { mode: roomMode, isRanked: isRankedGame, isLoaded: modeLoaded } = useRoomMode(roomPda);
 
   // Game session persistence hook
   const { loadSession, saveSession, finishSession } = useGameSessionPersistence({
@@ -475,18 +467,12 @@ const DominosGame = () => {
     }
   }, [gameOver, gameInitialized, finishSession]);
 
-  // Private rooms require same ready gate as ranked (prevents premature timeouts)
-  const requiresReadyGate = isRankedGame || isPrivate;
-
   const rankedGate = useRankedReadyGate({
     roomPda,
     myWallet: address,
-    isRanked: requiresReadyGate,
+    isRanked: isRankedGame,
     enabled: roomPlayers.length >= 2 && modeLoaded,
   });
-
-  // Gate for ranked/private readiness
-  const readyGateOk = !requiresReadyGate || rankedGate.bothReady;
 
   // Durable game sync - persists moves to DB for reliability
   const handleDurableMoveReceived = useCallback((move: GameMove) => {
@@ -531,7 +517,7 @@ const DominosGame = () => {
 
   const { submitMove: persistMove, moves: dbMoves, isLoading: isSyncLoading } = useDurableGameSync({
     roomPda: roomPda || "",
-    enabled: (isRankedGame || isPrivate) && roomPlayers.length >= 2,
+    enabled: isRankedGame && roomPlayers.length >= 2,
     onMoveReceived: handleDurableMoveReceived,
   });
 
@@ -552,13 +538,6 @@ const DominosGame = () => {
     initialColor: amIPlayer1 ? "w" : "b",
     bothReady: rankedGate.bothReady,
   });
-
-  // === UNIFIED TURN SOURCE OF TRUTH ===
-  const readyToPlay =
-    hasTwoRealPlayers &&
-    readyGateOk &&
-    startRoll.isFinalized &&
-    !gameOver;
 
   // Update turn based on start roll result for ranked games
   useEffect(() => {
@@ -584,10 +563,10 @@ const DominosGame = () => {
       !!roomPda &&
       roomPlayers.length > 0 &&
       stakeLamports !== undefined &&
-      (!requiresReadyGate || roomTurnTime !== null) &&
+      (rankedGate.turnTimeSeconds > 0 || !isRankedGame) &&
       rankedGate.isDataLoaded
     );
-  }, [roomPda, roomPlayers.length, stakeLamports, requiresReadyGate, roomTurnTime, rankedGate.isDataLoaded]);
+  }, [roomPda, roomPlayers.length, stakeLamports, rankedGate.turnTimeSeconds, isRankedGame, rankedGate.isDataLoaded]);
 
   // Determine match state for LeaveMatchModal
   const matchState: MatchState = useMemo(() => {
@@ -634,11 +613,6 @@ const DominosGame = () => {
 
   // Turn timer for ranked games - skip on timeout + 3 strikes = auto-forfeit
   const handleTurnTimeout = useCallback(() => {
-    // Gate on bothReady - NEVER process timeout before game is ready
-    if (!rankedGate.bothReady) {
-      console.log("[handleTurnTimeout] Blocked - game not ready");
-      return;
-    }
     if (!isActuallyMyTurn || gameOver || !address || !roomPda) return;
     
     const opponentWalletAddr = getOpponentWallet(roomPlayers, address);
@@ -654,18 +628,15 @@ const DominosGame = () => {
         variant: "destructive",
       });
       
-      // Persist auto_forfeit event (changed from turn_timeout)
-      if ((isRankedGame || isPrivate) && opponentWalletAddr) {
+      // Persist MINIMAL timeout event BEFORE forfeit
+      if (isRankedGame && opponentWalletAddr) {
         persistMove({
-          action: "auto_forfeit",
+          action: "turn_timeout",
           timedOutWallet: address,
-          winnerWallet: opponentWalletAddr,
+          nextTurnWallet: opponentWalletAddr,
           missedCount: newMissedCount,
         } as unknown as DominoMove, address);
       }
-      
-      // FIX: Notify opponent via WebRTC BEFORE navigating away
-      sendResignRef.current?.();
       
       forfeitFnRef.current?.();
       setGameOver(true);
@@ -683,11 +654,10 @@ const DominosGame = () => {
       });
       
       // Persist MINIMAL turn_timeout to DB
-      if ((isRankedGame || isPrivate) && opponentWalletAddr) {
+      if (isRankedGame && opponentWalletAddr) {
         persistMove({
           action: "turn_timeout",
           timedOutWallet: address,
-          // FIX: I timed out, so turn goes to opponent
           nextTurnWallet: opponentWalletAddr,
           missedCount: newMissedCount,
         } as unknown as DominoMove, address);
@@ -700,130 +670,16 @@ const DominosGame = () => {
     }
   }, [isActuallyMyTurn, gameOver, address, roomPda, roomPlayers, isRankedGame, persistMove, play, t]);
 
-  // Turn time is DB-authoritative (useRoomMode). Never take turn time from rankedGate.
-  // If DB has not loaded yet, keep timers disabled until modeLoaded.
-  const effectiveTurnTime = (roomTurnTime ?? DEFAULT_RANKED_TURN_TIME);
+  // Use turn time from ranked gate (fetched from DB/localStorage)
+  const effectiveTurnTime = rankedGate.turnTimeSeconds || DEFAULT_RANKED_TURN_TIME;
   
-  // Timer should show when turn time is configured and game has started
-  const gameStarted = startRoll.isFinalized && roomPlayers.length >= 2;
-  const shouldShowTimer = modeLoaded && effectiveTurnTime > 0 && gameStarted && !gameOver;
-  
-  // Display timer - shows ACTIVE player's remaining time on BOTH devices
-  const displayTimer = useTurnCountdownDisplay({
-    turnStartedAt,
-    turnTimeSeconds: effectiveTurnTime,
-    enabled: shouldShowTimer && readyToPlay,
-  });
-  
-  // Enforcement timer - ONLY runs on active player's device
   const turnTimer = useTurnTimer({
     turnTimeSeconds: effectiveTurnTime,
-    enabled: shouldShowTimer && isActuallyMyTurn && readyToPlay,
-    isMyTurn: isActuallyMyTurn,
+    enabled: isRankedGame && canPlayRanked && !gameOver,
+    isMyTurn: effectiveIsMyTurn,
     onTimeExpired: handleTurnTimeout,
     roomId: roomPda,
-    turnStartedAt, // DB-authoritative mode
   });
-
-  // Opponent timeout detection - polls DB to detect if opponent has timed out
-  const handleOpponentTimeoutDetected = useCallback((missedCount: number) => {
-    // When opponent times out, we need to handle it on our side
-    const opponentWalletAddr = getOpponentWallet(roomPlayers, address);
-    if (!opponentWalletAddr || !roomPda) return;
-    
-    console.log(`[DominosGame] Opponent timeout detected! Missed: ${missedCount}/3`);
-    
-    if (missedCount >= 3) {
-      // Opponent missed 3 turns - they auto-forfeit, we win
-      toast({
-        title: t('gameSession.opponentForfeited'),
-        description: t('gameSession.youWin'),
-      });
-      
-      // Persist auto_forfeit move
-      if (isRankedGame || isPrivate) {
-        persistMove({
-          action: "turn_timeout",
-          timedOutWallet: opponentWalletAddr,
-          nextTurnWallet: address,
-          missedCount,
-        } as unknown as DominoMove, address);
-      }
-      
-      setGameOver(true);
-      setWinner("me");
-      setWinnerWallet(address || null);
-      setGameStatus(t('game.youWin') + " - opponent timed out");
-      play('domino/win');
-    } else {
-      // Opponent skipped - we get the turn
-      toast({
-        title: t('gameSession.opponentSkipped'),
-        description: t('gameSession.yourTurnNow'),
-      });
-      
-      // Persist turn_timeout move
-      if (isRankedGame || isPrivate) {
-        persistMove({
-          action: "turn_timeout",
-          timedOutWallet: opponentWalletAddr,
-          nextTurnWallet: address,
-          missedCount,
-        } as unknown as DominoMove, address);
-      }
-      
-      // Set turn to us
-      setIsMyTurn(true);
-      setSelectedDomino(null);
-      setGameStatus(t('game.yourTurn'));
-    }
-  }, [roomPlayers, address, roomPda, isRankedGame, persistMove, t, play]);
-
-  const handleOpponentAutoForfeit = useCallback(() => {
-    const opponentWalletAddr = getOpponentWallet(roomPlayers, address);
-    if (opponentWalletAddr) {
-      handleOpponentTimeoutDetected(3);
-    }
-  }, [roomPlayers, address, handleOpponentTimeoutDetected]);
-
-  const opponentTimeout = useOpponentTimeoutDetection({
-    roomPda: roomPda || "",
-    enabled: shouldShowTimer && !isActuallyMyTurn && startRoll.isFinalized && readyToPlay,
-    isMyTurn: effectiveIsMyTurn,
-    turnTimeSeconds: effectiveTurnTime,
-    myWallet: address,
-    onOpponentTimeout: handleOpponentTimeoutDetected,
-    onAutoForfeit: handleOpponentAutoForfeit,
-    bothReady: readyToPlay,
-    onTurnStartedAtChange: setTurnStartedAt,
-  });
-
-  // Sync turnStartedAt from opponentTimeout polling
-  useEffect(() => {
-    if (opponentTimeout.turnStartedAt && opponentTimeout.turnStartedAt !== turnStartedAt) {
-      setTurnStartedAt(opponentTimeout.turnStartedAt);
-    }
-  }, [opponentTimeout.turnStartedAt, turnStartedAt]);
-
-  // Fetch initial turn_started_at when game starts (for my turn display)
-  useEffect(() => {
-    if (!startRoll.isFinalized || !roomPda || turnStartedAt) return;
-    
-    const fetchInitialTurnStartedAt = async () => {
-      try {
-        const { data } = await supabase.functions.invoke("game-session-get", {
-          body: { roomPda },
-        });
-        if (data?.session?.turn_started_at) {
-          setTurnStartedAt(data.session.turn_started_at);
-        }
-      } catch (err) {
-        console.error("[DominosGame] Failed to fetch initial turn_started_at:", err);
-      }
-    };
-    
-    fetchInitialTurnStartedAt();
-  }, [startRoll.isFinalized, roomPda, turnStartedAt]);
 
   // Turn notification players
   const turnPlayers: TurnPlayer[] = useMemo(() => {
@@ -923,8 +779,6 @@ const DominosGame = () => {
   const sendRematchAcceptRef = useRef<((roomId: string) => boolean) | null>(null);
   const sendRematchDeclineRef = useRef<((roomId: string) => boolean) | null>(null);
   const sendRematchReadyRef = useRef<((roomId: string) => boolean) | null>(null);
-  // Ref for sendResign to allow calling from handleTurnTimeout (defined before useWebRTCSync)
-  const sendResignRef = useRef<(() => boolean) | null>(null);
 
   const handleAcceptRematch = async (rematchRoomId: string) => {
     const result = await rematch.acceptRematch(rematchRoomId);
@@ -1151,8 +1005,6 @@ const DominosGame = () => {
     gameStarted: startRoll.isFinalized,
     onCleanupWebRTC: () => console.log("[DominosGame] Cleaning up WebRTC"),
     onCleanupSupabase: () => console.log("[DominosGame] Cleaning up Supabase"),
-    // CRITICAL: Clear room from global state to prevent stuck banners
-    onClearRoomFromState: clearRoomFromState,
   });
   
   // Connect forfeit ref for timeout handler
@@ -1205,8 +1057,7 @@ const DominosGame = () => {
     sendRematchAcceptRef.current = sendRematchAccept;
     sendRematchDeclineRef.current = sendRematchDecline;
     sendRematchReadyRef.current = sendRematchReady;
-    sendResignRef.current = sendResign;
-  }, [sendRematchInvite, sendRematchAccept, sendRematchDecline, sendRematchReady, sendResign]);
+  }, [sendRematchInvite, sendRematchAccept, sendRematchDecline, sendRematchReady]);
 
   // Handle chat message sending via WebRTC
   const handleChatSend = useCallback((msg: ChatMessage) => {
@@ -1524,32 +1375,11 @@ const DominosGame = () => {
       
       {/* RulesGate + DiceRollStart - RulesGate handles accept modal internally */}
       {(() => {
-        // DB-AUTHORITATIVE: Use rankedGate.dbReady for gating, NOT roomPlayers.length
-        const dbReady = rankedGate.dbReady;
-        
-        // DEFENSIVE: Ensure DiceRollStart cannot show if dbReady is false
-        const showDiceRoll = dbReady && !startRoll.isFinalized;
-        if (startRoll.showDiceRoll && !dbReady) {
-          console.error("[dice.gate.violation] showDiceRoll=true but dbReady=false — forcing false");
-        }
-
-        // P0 FIX: RulesGate must NEVER render when DiceRoll should show
-        // Force shouldShowRulesGate=false when showDiceRoll=true
-        const rawShouldShowRulesGate =
-          dbReady &&
+        // Don't require bothReady here - let RulesGate handle showing the accept modal
+        const shouldShowRulesGate =
+          roomPlayers.length >= 2 &&
           !!address &&
           !startRoll.isFinalized;
-        const shouldShowRulesGate = rawShouldShowRulesGate && !showDiceRoll;
-        
-        // Defensive assertion - this should NEVER happen after the fix
-        if (showDiceRoll && rawShouldShowRulesGate) {
-          console.error("[dice.gate.violation] showDiceRoll and rules gate both true - forcing rules gate off", {
-            game: "dominos",
-            roomPda,
-            dbReady,
-            isFinalized: startRoll.isFinalized,
-          });
-        }
 
         if (isDebugEnabled()) {
           dbg("dice.gate", {
@@ -1559,63 +1389,44 @@ const DominosGame = () => {
             hasAddress: !!address,
             isRankedGame,
             bothReady: rankedGate.bothReady,
-            dbReady,
-            acceptedCount: rankedGate.acceptedCount,
-            requiredCount: rankedGate.requiredCount,
-            participantsCount: rankedGate.participantsCount,
-            maxPlayers: rankedGate.maxPlayers,
             isFinalized: startRoll.isFinalized,
-            showDiceRoll,
+            showDiceRoll: startRoll.showDiceRoll,
             shouldShowRulesGate,
           });
         }
 
-        // P0 FIX: When showDiceRoll=true, render DiceRollStart directly (NO RulesGate wrapper)
-        // When shouldShowRulesGate=true (and showDiceRoll=false), show RulesGate for loading/syncing
-        if (showDiceRoll) {
-          return (
-            <DiceRollStart
-              roomPda={roomPda || ""}
-              myWallet={address}
-              player1Wallet={roomPlayers[0]}
-              player2Wallet={roomPlayers[1]}
-              onComplete={startRoll.handleRollComplete}
-              onLeave={leave}
-              onForfeit={forfeit}
-              isLeaving={isLeaving}
-              isForfeiting={isForfeiting}
-            />
-          );
-        }
-        
-        if (shouldShowRulesGate) {
-          return (
-            <RulesGate
-              isRanked={requiresReadyGate}
-              roomPda={roomPda}
-              myWallet={address}
-              roomPlayers={roomPlayers}
-              iAmReady={rankedGate.iAmReady}
-              opponentReady={rankedGate.opponentReady}
-              bothReady={rankedGate.bothReady}
-              isSettingReady={rankedGate.isSettingReady}
-              stakeLamports={stakeLamports}
-              turnTimeSeconds={effectiveTurnTime}
-              opponentWallet={opponentWallet || undefined}
-              onAcceptRules={handleAcceptRulesModal}
-              onLeave={handleUILeave}
-              onOpenWalletSelector={() => {}}
-              isDataLoaded={isDataLoaded}
-              startRollFinalized={startRoll.isFinalized}
-              justJoined={justJoined}
-              dbReady={dbReady}
-            >
-              {null}
-            </RulesGate>
-          );
-        }
-        
-        return null;
+        return shouldShowRulesGate ? (
+        <RulesGate
+          isRanked={isRankedGame}
+          roomPda={roomPda}
+          myWallet={address}
+          roomPlayers={roomPlayers}
+          iAmReady={rankedGate.iAmReady}
+          opponentReady={rankedGate.opponentReady}
+          bothReady={rankedGate.bothReady}
+          isSettingReady={rankedGate.isSettingReady}
+          stakeLamports={stakeLamports}
+          turnTimeSeconds={effectiveTurnTime}
+          opponentWallet={opponentWallet || undefined}
+          onAcceptRules={handleAcceptRulesModal}
+          onLeave={handleUILeave}
+          onOpenWalletSelector={() => {}}
+          isDataLoaded={isDataLoaded}
+          startRollFinalized={startRoll.isFinalized}
+        >
+          <DiceRollStart
+            roomPda={roomPda || ""}
+            myWallet={address}
+            player1Wallet={roomPlayers[0]}
+            player2Wallet={roomPlayers[1]}
+            onComplete={startRoll.handleRollComplete}
+            onLeave={leave}
+            onForfeit={forfeit}
+            isLeaving={isLeaving}
+            isForfeiting={isForfeiting}
+          />
+        </RulesGate>
+        ) : null;
       })()}
       
       {/* Turn Banner */}
@@ -1672,8 +1483,8 @@ const DominosGame = () => {
               activePlayer={turnPlayers[isMyTurn ? (amIPlayer1 ? 0 : 1) : (amIPlayer1 ? 1 : 0)]}
               players={turnPlayers}
               myAddress={address}
-              remainingTime={displayTimer.displayRemainingTime ?? undefined}
-              showTimer={displayTimer.displayRemainingTime != null}
+              remainingTime={isRankedGame ? turnTimer.remainingTime : undefined}
+              showTimer={isRankedGame && canPlayRanked}
             />
           </div>
         </div>
@@ -1867,8 +1678,6 @@ const DominosGame = () => {
         isCreator={isCreator}
         stakeSol={entryFeeSol}
         playerCount={roomPlayers.length}
-        dbStatusInt={rankedGate.dbStatusInt}
-        dbParticipantsCount={rankedGate.dbParticipantsCount}
         onUILeave={handleUILeave}
         onCancelRoom={handleCancelRoom}
         onForfeitMatch={handleForfeitMatch}

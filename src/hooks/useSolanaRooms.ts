@@ -15,16 +15,6 @@ import { normalizeSignature, isBlockingRoom } from "@/lib/solana-utils";
 import { isRoomArchived, archiveRoom } from "@/lib/roomArchive";
 import { supabase } from "@/integrations/supabase/client";
 import { computeRulesHash, createRulesFromRoom } from "@/lib/gameAcceptance";
-import { getSessionToken, getAuthHeaders, storeSessionToken } from "@/lib/sessionToken";
-import {
-  isJoinTraceEnabled,
-  startJoinTrace,
-  traceLog,
-  traceLogFetch,
-  traceLogFetchResult,
-  traceLogPoll,
-  getTraceHeaders,
-} from "@/lib/joinTrace";
 import {
   RoomDisplay,
   GameType,
@@ -83,10 +73,6 @@ export function useSolanaRooms() {
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const isFetchingActiveRoomRef = useRef(false);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
-  
-  // CRITICAL: Prevent duplicate wallet tx prompts (React StrictMode/dev double-render safe)
-  const createRoomInFlightRef = useRef(false);
-  const joinRoomInFlightRef = useRef(false);
 
   // Memoized blocking room: first unresolved room from activeRooms, fallback to activeRoom
   const blockingRoom = useMemo(() => {
@@ -359,14 +345,8 @@ export function useSolanaRooms() {
     gameType: GameType,
     entryFeeSol: number,
     maxPlayers: number,
-    mode: 'casual' | 'ranked' | 'private' = 'casual'
+    mode: 'casual' | 'ranked' = 'casual'
   ): Promise<number | null> => {
-    // CRITICAL: Prevent duplicate wallet prompts (React StrictMode safe)
-    if (createRoomInFlightRef.current) {
-      console.warn("[TXLOCK] blocked duplicate create - transaction already in flight");
-      return null;
-    }
-    
     if (!publicKey || !connected) {
       toast({
         title: "Wallet not connected",
@@ -387,10 +367,6 @@ export function useSolanaRooms() {
       return null;
     }
 
-    // Set guard BEFORE any async wallet interaction
-    createRoomInFlightRef.current = true;
-    console.log("[TXLOCK] createRoom guard SET");
-    
     setTxPending(true);
     setTxDebugInfo(null);
     
@@ -468,7 +444,7 @@ export function useSolanaRooms() {
         );
         const rulesHash = await computeRulesHash(rules);
         
-        const { data: acceptResult, error: rpcError } = await supabase.rpc("record_acceptance", {
+        const { error: rpcError } = await supabase.rpc("record_acceptance", {
           p_room_pda: roomPdaStr,
           p_wallet: publicKey.toBase58(),
           p_tx_signature: signature,
@@ -526,54 +502,24 @@ export function useSolanaRooms() {
         } else {
           console.log("[CreateRoom] Recorded acceptance with tx signature and mode:", mode);
           
-          // Store session token from record_acceptance for future auth
-          // CRITICAL: Handle BOTH object response AND JSON string response (Supabase may return either)
-          let sessionTokenFromRpc: string | undefined;
-          
-          if (typeof acceptResult === 'object' && acceptResult !== null) {
-            // Direct object response
-            sessionTokenFromRpc = (acceptResult as Record<string, unknown>).session_token as string | undefined;
-          } else if (typeof acceptResult === 'string') {
-            // JSON string response - parse it
-            try {
-              const parsed = JSON.parse(acceptResult);
-              sessionTokenFromRpc = parsed?.session_token;
-            } catch {
-              console.warn("[CreateRoom] Failed to parse acceptResult as JSON:", acceptResult);
-            }
-          }
-          
-          if (sessionTokenFromRpc) {
-            storeSessionToken(roomPdaStr, sessionTokenFromRpc);
-            console.log(`[CreateRoom] stored session token for room ${roomPdaStr.slice(0, 8)}…`);
-          } else {
-            console.warn("[CreateRoom] No session_token in record_acceptance response:", acceptResult);
-          }
-          
           // PART A FIX: For ranked games, ALSO insert into game_acceptances table
           // record_acceptance only sets p1_ready flag, but rankedGate needs game_acceptances rows
           if (mode === 'ranked') {
-            const sessionToken = getSessionToken(roomPdaStr);
-            if (!sessionToken) {
-              console.warn("[CreateRoom] No session token for ranked-accept (skipping)");
-            } else {
-              try {
-                const { error: rankedAcceptError } = await supabase.functions.invoke("ranked-accept", {
-                  body: {
-                    roomPda: roomPdaStr,
-                    mode: "simple",
-                  },
-                  headers: getAuthHeaders(sessionToken),
-                });
-                
-                if (rankedAcceptError) {
-                  console.warn("[CreateRoom] ranked-accept for creator failed:", rankedAcceptError);
-                } else {
-                  console.log("[CreateRoom] ✅ Creator acceptance recorded in game_acceptances for ranked game");
-                }
-              } catch (rankedErr) {
-                console.warn("[CreateRoom] ranked-accept call failed:", rankedErr);
+            try {
+              const { error: rankedAcceptError } = await supabase.functions.invoke("ranked-accept", {
+                body: {
+                  roomPda: roomPdaStr,
+                  playerWallet: publicKey.toBase58(),
+                },
+              });
+              
+              if (rankedAcceptError) {
+                console.warn("[CreateRoom] ranked-accept for creator failed:", rankedAcceptError);
+              } else {
+                console.log("[CreateRoom] ✅ Creator acceptance recorded in game_acceptances for ranked game");
               }
+            } catch (rankedErr) {
+              console.warn("[CreateRoom] ranked-accept call failed:", rankedErr);
             }
           }
         }
@@ -695,16 +641,6 @@ export function useSolanaRooms() {
         // Get room to link to
         const roomToNavigate = blockingRoom?.pda || activeRoom?.pda;
         
-        // If no blocking room exists, show a more helpful error message
-        if (!blockingRoom && !activeRoom) {
-          toast({
-            title: "Transaction failed",
-            description: "Unable to create room. Please check your connection and try again.",
-            variant: "destructive",
-          });
-          return null;
-        }
-        
         toast({
           title: "Action not available",
           description: `${blockingInfo}${roomToNavigate ? ` — Click to view room` : ''}`,
@@ -742,25 +678,6 @@ export function useSolanaRooms() {
         return null;
       }
       
-      // Check for transaction expiration (block height exceeded)
-      // This happens when the user waits too long to approve or network is slow
-      if (
-        errorMsg.includes("block height exceeded") ||
-        errorMsg.includes("blockhash not found") ||
-        errorMsg.includes("transaction expired") ||
-        fullError.includes("BlockheightExceeded") ||
-        fullError.includes("TransactionExpiredBlockheightExceeded")
-      ) {
-        console.warn("[CreateRoom] Transaction expired (block height exceeded)");
-        toast({
-          title: "Transaction expired",
-          description: "Please try again. The transaction took too long to confirm.",
-          variant: "destructive",
-        });
-        // Clean exit - do NOT call record_acceptance or game-session-set-settings
-        return null;
-      }
-      
       toast({
         title: "Failed to create room",
         description: err.message || "Transaction failed",
@@ -768,41 +685,20 @@ export function useSolanaRooms() {
       });
       return null;
     } finally {
-      createRoomInFlightRef.current = false;
-      console.log("[TXLOCK] createRoom guard CLEARED");
       setTxPending(false);
     }
   }, [publicKey, connected, connection, sendVersionedTx, toast, fetchRooms, fetchUserActiveRoom]);
 
   // Join room - returns structured TxResult
   const joinRoom = useCallback(async (roomId: number, roomCreator: string): Promise<{ ok: boolean; signature?: string; reason?: string }> => {
-    // Start join trace if debug mode enabled
-    const traceId = startJoinTrace();
-    
-    // CRITICAL: Prevent duplicate wallet prompts (React StrictMode safe)
-    if (joinRoomInFlightRef.current) {
-      console.warn("[TXLOCK] blocked duplicate join - transaction already in flight");
-      traceLog("join.blocked", { reason: "TX_IN_FLIGHT" });
-      return { ok: false, reason: "TX_IN_FLIGHT" };
-    }
-    
     if (!publicKey || !connected) {
       toast({
         title: "Wallet not connected",
         description: "Please connect your wallet first",
         variant: "destructive",
       });
-      traceLog("join.blocked", { reason: "WALLET_NOT_CONNECTED" });
       return { ok: false, reason: "WALLET_NOT_CONNECTED" };
     }
-
-    // Log join start
-    traceLog("join.start", {
-      roomId,
-      roomCreator: roomCreator.slice(0, 8),
-      joiner: publicKey.toBase58().slice(0, 8),
-      traceId,
-    });
 
     // Check for existing active room
     const existingRoom = await fetchUserActiveRoom();
@@ -812,14 +708,9 @@ export function useSolanaRooms() {
         description: "Cancel your existing room before joining another",
         variant: "destructive",
       });
-      traceLog("join.blocked", { reason: "ACTIVE_ROOM_EXISTS", existingPda: existingRoom.pda?.slice(0, 8) });
       return { ok: false, reason: "ACTIVE_ROOM_EXISTS" };
     }
 
-    // Set guard BEFORE any async wallet interaction
-    joinRoomInFlightRef.current = true;
-    console.log("[TXLOCK] joinRoom guard SET");
-    
     setTxPending(true);
     setTxDebugInfo(null);
     
@@ -837,15 +728,6 @@ export function useSolanaRooms() {
       // Send as VersionedTransaction
       const { signature, blockhash, lastValidBlockHeight } = await sendVersionedTx([ix]);
       
-      // 🔍 DEBUG LOG: Join tx sent
-      console.log("[JoinRoom] ✅ Join tx sent:", {
-        signature: signature.slice(0, 16) + "...",
-        roomId,
-        roomCreator: roomCreator.slice(0, 8),
-        joiner: publicKey.toBase58().slice(0, 8),
-      });
-      traceLog("join.tx.sent", { signature: signature.slice(0, 16), roomId });
-      
       toast({
         title: "Transaction sent",
         description: "Waiting for confirmation...",
@@ -857,326 +739,110 @@ export function useSolanaRooms() {
         lastValidBlockHeight,
       }, 'confirmed');
       
-      // 🔍 DEBUG LOG: Join tx confirmed
-      console.log("[JoinRoom] ✅ Join tx CONFIRMED:", {
-        signature: signature.slice(0, 16) + "...",
-        roomId,
-      });
-      traceLog("join.tx.confirmed", { signature: signature.slice(0, 16), roomId, confirmResult: "confirmed" });
-      
       toast({
         title: "Joined room!",
         description: `Successfully joined room #${roomId}`,
       });
       
-      // ═══════════════════════════════════════════════════════════════════════
-      // P0 FIX: DB sync MUST happen even if Edge Functions fail
-      // Use direct RPC calls (ensure_game_session, record_acceptance) FIRST
-      // Edge Functions (ranked-accept) are best-effort only
-      // ═══════════════════════════════════════════════════════════════════════
-      
-      // STEP 1: Derive roomPda from creatorPubkey + roomId (same seeds as buildJoinRoomIx)
-      const [derivedRoomPda] = getRoomPDA(creatorPubkey, roomId);
-      const roomPdaStr = derivedRoomPda.toBase58();
-      const joinerWallet = publicKey.toBase58();
-      const creatorWallet = creatorPubkey.toBase58();
-      
-      console.log("[JoinRoom] join.after_confirm", {
-        signature: signature.slice(0, 16),
-        roomId,
-        creatorPrefix: creatorWallet.slice(0, 8),
-        joinerPrefix: joinerWallet.slice(0, 8),
-      });
-      traceLog("join.after_confirm", {
-        signature: signature.slice(0, 16),
-        roomId,
-        creatorPrefix: creatorWallet.slice(0, 8),
-        joinerPrefix: joinerWallet.slice(0, 8),
-      });
-      
-      console.log("[JoinRoom] join.roompda.derived.ok", { roomPdaPrefix: roomPdaStr.slice(0, 8) });
-      traceLog("join.roompda.derived.ok", { roomPdaPrefix: roomPdaStr.slice(0, 8) });
-      
+      // Record acceptance using tx signature as proof (joiner is player 2)
       try {
-        console.log("[JoinRoom] join.db_sync.start", { roomPdaPrefix: roomPdaStr.slice(0, 8) });
-        traceLog("join.db_sync.start", { roomPdaPrefix: roomPdaStr.slice(0, 8) });
-        
-        // ═══════════════════════════════════════════════════════════════════════
-        // STEP 2: CRITICAL - Call ensure_game_session RPC FIRST (no Edge Functions)
-        // This ensures the game_sessions row has player2_wallet set IMMEDIATELY
-        // ═══════════════════════════════════════════════════════════════════════
-        console.log("[JoinRoom] join.ensure_session.start", { roomPdaPrefix: roomPdaStr.slice(0, 8) });
-        traceLog("join.ensure_session.start", { roomPdaPrefix: roomPdaStr.slice(0, 8) });
-        
-        traceLogFetch("ensure_game_session", "/rest/v1/rpc/ensure_game_session", "POST", false);
-        const { error: ensureError } = await supabase.rpc("ensure_game_session", {
-          p_room_pda: roomPdaStr,
-          p_player1_wallet: creatorWallet,
-          p_player2_wallet: joinerWallet,
-          p_game_type: "unknown", // Will be updated by ranked-accept with on-chain data
-          p_mode: "ranked",
-          p_max_players: 2,
-          p_participants: [creatorWallet, joinerWallet],
-        });
-        traceLogFetchResult("ensure_game_session", ensureError ? undefined : 200, !ensureError, null);
-        
-        if (ensureError) {
-          console.warn("[JoinRoom] join.ensure_session.err:", ensureError.message);
-          traceLog("join.ensure_session.err", { message: ensureError.message });
-          // Don't fail yet - record_acceptance might still work
-        } else {
-          console.log("[JoinRoom] join.ensure_session.ok - player2_wallet set");
-          traceLog("join.ensure_session.ok", { roomPdaPrefix: roomPdaStr.slice(0, 8) });
-        }
-        
-        // ═══════════════════════════════════════════════════════════════════════
-        // STEP 3: Call record_acceptance RPC (no Edge Functions)
-        // Use local values from the join tx - don't fetch from game-session-get
-        // ═══════════════════════════════════════════════════════════════════════
-        
-        // Default stake/gameType used when building join tx (known locally)
-        const defaultStakeLamports = Math.floor(0.01 * LAMPORTS_PER_SOL); // 0.01 SOL default
-        const defaultGameType = GameType.Chess; // Default game type
-        const defaultMaxPlayers = 2;
-        const defaultMode: 'casual' | 'ranked' | 'private' = 'ranked';
-        
-        const rules = createRulesFromRoom(
-          roomPdaStr,
-          defaultGameType,
-          defaultMaxPlayers,
-          defaultStakeLamports,
-          defaultMode
-        );
-        const rulesHash = await computeRulesHash(rules);
-
-        // Log session state before RPC
-        const existingRoomToken = getSessionToken(roomPdaStr);
-        traceLog("join.session.before", {
-          hasRoomToken: !!existingRoomToken,
-          roomTokenLength: existingRoomToken?.length ?? 0,
-        });
-
-        console.log("[JoinRoom] join.record_acceptance.start", { roomPdaPrefix: roomPdaStr.slice(0, 8) });
-        traceLog("join.record_acceptance.start", { roomPdaPrefix: roomPdaStr.slice(0, 8) });
-        
-        traceLogFetch("record_acceptance", "/rest/v1/rpc/record_acceptance", "POST", false);
-        const { data: acceptResult, error: rpcError } = await supabase.rpc("record_acceptance", {
-          p_room_pda: roomPdaStr,
-          p_wallet: joinerWallet,
-          p_tx_signature: signature,
-          p_rules_hash: rulesHash,
-          p_stake_lamports: defaultStakeLamports,
-          p_is_creator: false,
-        });
-        traceLogFetchResult("record_acceptance", rpcError ? undefined : 200, !rpcError, acceptResult);
-
-        let sessionToken: string | null = null;
-
-        if (rpcError) {
-          console.error("[JoinRoom] join.record_acceptance.err:", rpcError.message);
-          traceLog("join.record_acceptance.err", { 
-            message: rpcError.message,
-            origin: typeof window !== 'undefined' ? window.location?.origin : 'unknown',
-            userAgent: typeof navigator !== 'undefined' ? navigator.userAgent?.slice(0, 100) : 'unknown',
-            online: typeof navigator !== 'undefined' ? navigator.onLine : 'unknown',
-          });
-          toast({
-            title: "Join failed to register",
-            description: "Could not register acceptance. Please retry.",
-            variant: "destructive",
-          });
-          return { ok: false, reason: "JOIN_RECORD_ACCEPTANCE_FAILED" };
-        } else {
-          const resultObj = typeof acceptResult === 'object' && acceptResult !== null 
-            ? acceptResult as Record<string, unknown> 
-            : null;
-          sessionToken = (resultObj?.session_token as string) || null;
+        // Fetch the room to get PDA and stake info
+        const joinedRoom = await fetchUserActiveRoom();
+        if (joinedRoom?.pda) {
+          const stakeLamports = Math.floor(joinedRoom.entryFeeSol * LAMPORTS_PER_SOL);
           
-          if (sessionToken) {
-            storeSessionToken(roomPdaStr, sessionToken);
-            console.log("[JoinRoom] join.record_acceptance.ok", { sessionTokenPrefix: sessionToken.slice(0, 8) });
-            traceLog("join.record_acceptance.ok", { sessionTokenPrefix: sessionToken.slice(0, 8) });
-          } else {
-            console.warn("[JoinRoom] join.record_acceptance.ok but no token returned");
-            traceLog("join.record_acceptance.ok", { noToken: true });
+          // Fetch mode from DB via Edge Function (RLS locked)
+          const { data: resp, error: modeError } = await supabase.functions.invoke("game-session-get", {
+            body: { roomPda: joinedRoom.pda },
+          });
+          if (modeError) {
+            console.warn("[JoinRoom] Edge function error:", modeError);
           }
-        }
-
-        // ═══════════════════════════════════════════════════════════════════════
-        // STEP 4: Call ranked-accept (BEST-EFFORT - Edge Function may fail on mobile)
-        // Wrap in try/catch - failures here should NOT fail the join
-        // ═══════════════════════════════════════════════════════════════════════
-        if (sessionToken) {
-          try {
-            console.log("[JoinRoom] join.ranked_accept.start", { roomPdaPrefix: roomPdaStr.slice(0, 8) });
-            traceLog("join.ranked_accept.start", { roomPdaPrefix: roomPdaStr.slice(0, 8) });
-            
-            traceLogFetch("ranked-accept", "/functions/v1/ranked-accept", "POST", true);
-            const { data: rankedData, error: rankedError } = await supabase.functions.invoke("ranked-accept", {
-              body: {
-                roomPda: roomPdaStr,
-                mode: "simple", // Simple mode - session token provides identity
-              },
-              headers: {
-                Authorization: `Bearer ${sessionToken}`,
-                ...getTraceHeaders(),
-              },
-            });
-            traceLogFetchResult("ranked-accept", rankedError ? undefined : 200, !rankedError, rankedData);
-
-            if (rankedError) {
-              // Log detailed error info for debugging Edge Function issues
-              console.error("[JoinRoom] join.ranked_accept.err:", rankedError.message, {
-                origin: typeof window !== 'undefined' ? window.location?.origin : 'unknown',
-                userAgent: typeof navigator !== 'undefined' ? navigator.userAgent?.slice(0, 100) : 'unknown',
-                online: typeof navigator !== 'undefined' ? navigator.onLine : 'unknown',
-                errorName: rankedError.name,
-                errorCause: (rankedError as any).cause,
+          const mode = (resp?.session?.mode as 'casual' | 'ranked') || 'casual';
+          console.log("[JoinRoom] Fetched mode from DB:", mode);
+          
+          const rules = createRulesFromRoom(
+            joinedRoom.pda,
+            joinedRoom.gameType,
+            joinedRoom.maxPlayers,
+            stakeLamports,
+            mode // Use DB mode, NOT stake-derived
+          );
+          const rulesHash = await computeRulesHash(rules);
+          
+          const { error: rpcError } = await supabase.rpc("record_acceptance", {
+            p_room_pda: joinedRoom.pda,
+            p_wallet: publicKey.toBase58(),
+            p_tx_signature: signature,
+            p_rules_hash: rulesHash,
+            p_stake_lamports: stakeLamports,
+            p_is_creator: false,
+          });
+          
+          if (rpcError) {
+            console.warn("[JoinRoom] RPC record_acceptance failed:", rpcError);
+            // Check if 404 (function not found) - fallback to edge function
+            if (rpcError.message?.includes("404") || rpcError.code === "PGRST116") {
+              console.log("[JoinRoom] Trying verify-acceptance edge function fallback...");
+              const { error: fnError } = await supabase.functions.invoke("verify-acceptance", {
+                body: {
+                  acceptance: {
+                    roomPda: joinedRoom.pda,
+                    playerWallet: publicKey.toBase58(),
+                    rulesHash,
+                    nonce: crypto.randomUUID(),
+                    timestamp: Date.now(),
+                    signature,
+                  },
+                  rules: {
+                    roomPda: joinedRoom.pda,
+                    gameType: joinedRoom.gameType,
+                    mode,
+                    maxPlayers: joinedRoom.maxPlayers,
+                    stakeLamports,
+                    feeBps: 250,
+                    turnTimeSeconds: 60,
+                    forfeitPolicy: "timeout",
+                    version: 1,
+                  },
+                },
               });
-              traceLog("join.ranked_accept.err", { 
-                message: rankedError.message,
-                online: typeof navigator !== 'undefined' ? navigator.onLine : 'unknown',
-              });
-              // DO NOT FAIL - ranked-accept is best-effort
-            } else if (rankedData?.success) {
-              console.log("[JoinRoom] join.ranked_accept.ok", {
-                sessionTokenPrefix: rankedData.sessionToken?.slice(0, 8),
-              });
-              traceLog("join.ranked_accept.ok", { sessionTokenPrefix: rankedData.sessionToken?.slice(0, 8) });
               
-              // Update session token if ranked-accept returned a new one
-              if (rankedData.sessionToken) {
-                storeSessionToken(roomPdaStr, rankedData.sessionToken);
-                console.log("[JoinRoom] ✅ Session token updated from ranked-accept");
+              if (fnError) {
+                console.error("[JoinRoom] Both RPC and edge function failed:", fnError);
+                toast({
+                  title: "Acceptance Recording Failed",
+                  description: "Game will proceed but ranked features may not work",
+                  variant: "destructive",
+                });
+              } else {
+                console.log("[JoinRoom] Recorded acceptance via edge function fallback");
               }
             } else {
-              console.warn("[JoinRoom] join.ranked_accept.err - unexpected response:", rankedData);
-              traceLog("join.ranked_accept.err", { success: false, data: rankedData });
+              toast({
+                title: "Acceptance Recording Failed",
+                description: rpcError.message || "Unknown error",
+                variant: "destructive",
+              });
             }
-          } catch (rankedErr: any) {
-            // Edge Function completely failed - log but don't fail join
-            console.error("[JoinRoom] join.ranked_accept.exception:", rankedErr?.message || String(rankedErr));
-            traceLog("join.ranked_accept.exception", { 
-              message: rankedErr?.message || String(rankedErr),
-              origin: typeof window !== 'undefined' ? window.location?.origin : 'unknown',
-              online: typeof navigator !== 'undefined' ? navigator.onLine : 'unknown',
-            });
-            // DO NOT FAIL - continue to DB poll
+          } else {
+            console.log("[JoinRoom] Recorded acceptance with tx signature and mode:", mode);
           }
-        } else {
-          // No session token from record_acceptance - cannot call ranked-accept
-          console.warn("[JoinRoom] join.ranked_accept.skip - NO_SESSION_TOKEN");
-          traceLog("join.ranked_accept.skip", { reason: "NO_SESSION_TOKEN" });
         }
-
-        // ═══════════════════════════════════════════════════════════════════════
-        // STEP 5: NON-BLOCKING DB SYNC CHECK (TELEMETRY ONLY)
-        // Direct table queries are RLS-blocked, so this is BEST-EFFORT logging.
-        // Join NEVER fails due to polling - record_acceptance is the hard gate.
-        // Room page is DB-authoritative and will reconcile UI state.
-        // ═══════════════════════════════════════════════════════════════════════
-        const DB_SYNC_POLL_INTERVAL_MS = 500;
-        const DB_SYNC_TIMEOUT_MS = 5000; // Shortened - non-blocking
-        const dbSyncStartTime = Date.now();
-
-        console.log("[JoinRoom] 🔍 Starting NON-BLOCKING DB telemetry poll (RLS may block)...");
-        traceLog("join.poll.nonblocking.start", { roomPdaPrefix: roomPdaStr.slice(0, 8) });
-
-        // Fire-and-forget async polling for telemetry only
-        (async () => {
-          try {
-            while (Date.now() - dbSyncStartTime < DB_SYNC_TIMEOUT_MS) {
-              try {
-                // These queries may return 0 due to RLS - that's expected
-                const { count: acceptancesCount } = await supabase
-                  .from("game_acceptances")
-                  .select("*", { count: "exact", head: true })
-                  .eq("room_pda", roomPdaStr);
-                
-                const { count: playerSessionsCount } = await supabase
-                  .from("player_sessions")
-                  .select("*", { count: "exact", head: true })
-                  .eq("room_pda", roomPdaStr);
-                
-                const { data: sessionData } = await supabase
-                  .from("game_sessions")
-                  .select("participants, player2_wallet")
-                  .eq("room_pda", roomPdaStr)
-                  .maybeSingle();
-                
-                const participantsCount = sessionData?.participants?.length ?? 0;
-                const player2Wallet = sessionData?.player2_wallet;
-                
-                console.log("[JoinRoom] Non-blocking poll (telemetry):", {
-                  player_sessions_count: playerSessionsCount ?? 0,
-                  game_acceptances_count: acceptancesCount ?? 0,
-                  participantsCount,
-                  player2_wallet: player2Wallet?.slice(0, 8),
-                  elapsed: Date.now() - dbSyncStartTime,
-                });
-                
-                traceLogPoll({
-                  participantsCount,
-                  player_sessions_count: playerSessionsCount ?? 0,
-                  game_acceptances_count: acceptancesCount ?? 0,
-                  player2_wallet: player2Wallet,
-                  elapsed: Date.now() - dbSyncStartTime,
-                });
-
-                // If we see counts >= 2, log success and stop polling
-                if ((playerSessionsCount ?? 0) >= 2 || (acceptancesCount ?? 0) >= 2 || participantsCount >= 2) {
-                  console.log("[JoinRoom] ✅ Non-blocking poll confirmed sync");
-                  traceLog("join.poll.nonblocking.confirmed", { elapsed: Date.now() - dbSyncStartTime });
-                  return; // Exit async poll
-                }
-              } catch (pollErr: any) {
-                console.warn("[JoinRoom] Non-blocking poll exception (ignored):", pollErr?.message);
-                traceLog("join.poll.nonblocking.error", { message: pollErr?.message });
-              }
-
-              await new Promise(resolve => setTimeout(resolve, DB_SYNC_POLL_INTERVAL_MS));
-            }
-            
-            // Timeout reached - log but DO NOT FAIL
-            console.warn("[JoinRoom] join.poll.nonblocking.timeout - RLS likely blocking, proceeding anyway");
-            traceLog("join.poll.nonblocking.timeout", { 
-              elapsed: Date.now() - dbSyncStartTime, 
-              roomPdaPrefix: roomPdaStr.slice(0, 8),
-              note: "RLS blocks client queries - this is expected, room page will reconcile",
-            });
-          } catch (err: any) {
-            console.warn("[JoinRoom] Non-blocking poll wrapper error (ignored):", err?.message);
-          }
-        })(); // Fire and forget - don't await
-
-        // STEP 6: Success - navigate immediately after record_acceptance
-        // Room page is DB-authoritative and will reconcile UI state
-        console.log("[JoinRoom] join.navigate", { to: `/play/${roomPdaStr}` });
-        traceLog("join.navigate", { to: `/play/${roomPdaStr.slice(0, 8)}...` });
-
-      } catch (syncErr: any) {
-        // This catch now only handles errors from ensure_game_session / record_acceptance
-        console.error("[JoinRoom] Failed during DB registration:", syncErr);
-        traceLog("join.error", { 
-          step: "db_registration", 
-          message: syncErr?.message || String(syncErr), 
-          stackPreview: syncErr?.stack?.slice(0, 200),
-        });
+      } catch (acceptErr: any) {
+        console.error("[JoinRoom] Failed to record acceptance:", acceptErr);
         toast({
-          title: "Join failed",
-          description: `Database registration error. Please retry.`,
+          title: "Acceptance Error",
+          description: acceptErr?.message || "Could not record game acceptance",
           variant: "destructive",
         });
-        return { ok: false, reason: "JOIN_DB_REGISTRATION_FAILED" };
       }
       
       // Refresh rooms and active room state
       await Promise.all([fetchRooms(), fetchUserActiveRoom()]);
-      traceLog("join.navigate.play", { roomId, success: true });
       return { ok: true, signature };
     } catch (err: any) {
       console.error("Join room error:", err);
-      traceLog("join.error", { step: "outer", message: err?.message || String(err), stackPreview: err?.stack?.slice(0, 200) });
       
       // Handle insufficient balance error
       if (err?.message === "INSUFFICIENT_BALANCE") {
@@ -1213,8 +879,6 @@ export function useSolanaRooms() {
       
       // Check for user rejection / Phantom block
       const errorMsg = err?.message?.toLowerCase() || "";
-      const fullError = String(err?.logs || err?.message || err);
-      
       if (errorMsg.includes("reject") || errorMsg.includes("cancel") || errorMsg.includes("user denied") || errorMsg.includes("blocked")) {
         toast({
           title: "Transaction cancelled",
@@ -1222,24 +886,6 @@ export function useSolanaRooms() {
           variant: "destructive",
         });
         return { ok: false, reason: "PHANTOM_BLOCKED_OR_REJECTED" };
-      }
-      
-      // Check for transaction expiration (block height exceeded)
-      if (
-        errorMsg.includes("block height exceeded") ||
-        errorMsg.includes("blockhash not found") ||
-        errorMsg.includes("transaction expired") ||
-        fullError.includes("BlockheightExceeded") ||
-        fullError.includes("TransactionExpiredBlockheightExceeded")
-      ) {
-        console.warn("[JoinRoom] Transaction expired (block height exceeded)");
-        toast({
-          title: "Transaction expired",
-          description: "Please try again. The transaction took too long to confirm.",
-          variant: "destructive",
-        });
-        // Clean exit - do NOT call record_acceptance or ranked-accept
-        return { ok: false, reason: "TX_EXPIRED" };
       }
       
       // Check for insufficient funds for rent
@@ -1259,8 +905,6 @@ export function useSolanaRooms() {
       });
       return { ok: false, reason: "ERROR" };
     } finally {
-      joinRoomInFlightRef.current = false;
-      console.log("[TXLOCK] joinRoom guard CLEARED");
       setTxPending(false);
     }
   }, [publicKey, connected, connection, sendVersionedTx, toast, fetchRooms, fetchUserActiveRoom, hasAdapterSendTx, adapterName]);
@@ -1370,17 +1014,7 @@ export function useSolanaRooms() {
         }
 
         // Use the standard cancelRoom with the fetched roomId
-        const result = await cancelRoom(room.roomId);
-        
-        // On success, immediately clear room from local state for responsive UX
-        if (result.ok) {
-          console.log("[cancelRoomByPda] Success - clearing room from state:", roomPda.slice(0, 8));
-          archiveRoom(roomPda);
-          setActiveRooms(prev => prev.filter(r => r.pda !== roomPda));
-          setActiveRoom(prev => (prev?.pda === roomPda ? null : prev));
-        }
-        
-        return result;
+        return await cancelRoom(room.roomId);
       } catch (err: any) {
         console.error("[cancelRoomByPda] Error:", err);
         return { ok: false, reason: err?.message || "ERROR" };
@@ -1427,15 +1061,12 @@ export function useSolanaRooms() {
       // Import supabase client dynamically to avoid circular dependency
       const { supabase } = await import("@/integrations/supabase/client");
       
-      // Session token for authorization (edge function derives caller from token)
-      const token =
-        localStorage.getItem(`session_token_${roomPda}`) ||
-        localStorage.getItem("session_token_latest") ||
-        "";
-
-      const { data, error } = await supabase.functions.invoke("forfeit-game", {
-        body: { roomPda, gameType },
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      const { data, error } = await supabase.functions.invoke('forfeit-game', {
+        body: {
+          roomPda,
+          forfeitingWallet: publicKey.toBase58(),
+          gameType,
+        },
       });
 
       if (error) {

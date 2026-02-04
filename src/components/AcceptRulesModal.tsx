@@ -1,5 +1,4 @@
 import { useEffect } from "react";
-import { useTranslation } from "react-i18next";
 import {
   Dialog,
   DialogContent,
@@ -27,12 +26,6 @@ interface AcceptRulesModalProps {
   roomPda?: string;
   /** Room players for wallet validation */
   roomPlayers?: string[];
-  /** Room mode for title display */
-  mode?: "casual" | "ranked" | "private";
-  /** Whether session token exists for this room */
-  hasSessionToken?: boolean;
-  /** Called when user needs to rejoin to get a new session token */
-  onRejoinRoom?: () => void;
 }
 
 export function AcceptRulesModal({
@@ -47,18 +40,14 @@ export function AcceptRulesModal({
   connectedWallet,
   roomPda,
   roomPlayers = [],
-  mode,
-  hasSessionToken = true,
-  onRejoinRoom,
 }: AcceptRulesModalProps) {
-  const { t } = useTranslation();
   // Validate wallet is in room (prevent accepting with wrong wallet) - use isSameWallet for Base58
   const walletInRoom = connectedWallet && roomPlayers.length > 0
     ? roomPlayers.some(p => isSameWallet(p, connectedWallet))
     : true; // Allow if roomPlayers not passed
 
-  // Disable accept if data not loaded OR wallet not in room OR no session token
-  const canAccept = isDataLoaded && walletInRoom && stakeSol > 0 && hasSessionToken;
+  // Disable accept if data not loaded OR wallet not in room
+  const canAccept = isDataLoaded && walletInRoom && stakeSol > 0;
   // Debug logging when modal opens with loaded data
   useEffect(() => {
     if (open && isDataLoaded) {
@@ -121,14 +110,10 @@ export function AcceptRulesModal({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-xl">
             <Shield className="h-5 w-5 text-primary" />
-            {mode === "private"
-              ? t("rules.title_private", "Private Match Rules")
-              : mode === "ranked"
-                ? t("rules.title_ranked", "Ranked Match Rules")
-                : t("rules.title_default", "Match Rules")}
+            Ranked Match Rules
           </DialogTitle>
           <DialogDescription>
-            {t("rules.review_conditions", "Review the match conditions before starting.")}
+            Review the match conditions before starting.
           </DialogDescription>
         </DialogHeader>
 
@@ -213,35 +198,23 @@ export function AcceptRulesModal({
             disabled={isLoading}
             className="flex-1"
           >
-            {t("leaveMatch.leaveButton", "Leave Match")}
+            Leave Match
           </Button>
-          {/* Show Rejoin Room CTA when session token is missing */}
-          {!hasSessionToken && onRejoinRoom ? (
-            <Button
-              variant="gold"
-              onClick={onRejoinRoom}
-              disabled={isLoading}
-              className="flex-1"
-            >
-              {t("common.rejoinRoom", "Rejoin Room")}
-            </Button>
-          ) : (
-            <Button
-              variant="gold"
-              onClick={onAccept}
-              disabled={isLoading || !canAccept}
-              className="flex-1"
-            >
-              {isLoading 
-                ? t("common.pleaseWait", "Please wait...") 
-                : !walletInRoom 
-                  ? t("wallet.wrongWallet", "Wrong wallet connected")
-                  : !isDataLoaded 
-                    ? t("common.loading", "Loading...")
-                    : t("rules.imReady", "I'm Ready")
-              }
-            </Button>
-          )}
+          <Button
+            variant="gold"
+            onClick={onAccept}
+            disabled={isLoading || !canAccept}
+            className="flex-1"
+          >
+            {isLoading 
+              ? "Please wait..." 
+              : !walletInRoom 
+                ? "Wrong wallet connected" 
+                : !isDataLoaded 
+                  ? "Loading..." 
+                  : "I'm Ready"
+            }
+          </Button>
         </div>
       </DialogContent>
     </Dialog>

@@ -21,7 +21,6 @@
     "myTurn": "MY TURN",
     "opponentsTurn": "Opponent's Turn",
     "opponent": "Opponent",
-    "player": "Player",
     "playerGame": "{{count}}-player game",
     "waitingForPlayer": "Waiting for {{player}}",
     "victory": "Victory!",
@@ -428,17 +427,7 @@
     "creatingRematchRoom": "Creating Rematch Room…",
     "createRematchRoom": "Create Rematch Room",
     "rpcStatus": "RPC Status",
-    "genesis": "Genesis",
-    "privateRoomFailed": "Failed to Create Private Room",
-    "privateRoomFailedDesc": "Could not save room settings. Please try again.",
-    "settingsFailedTitle": "Room Settings Failed",
-    "settingsFailedDesc": "Room settings failed to save. The turn timer may default to an incorrect value, which could affect gameplay fairness.",
-    "settingsFailedProtection": "To protect your stake, we recommend canceling this room and trying again.",
-    "roomCanceled": "Room Canceled",
-    "roomCanceledDesc": "Your stake has been refunded. Please try creating a new room.",
-    "proceedAnyway": "Proceed Anyway",
-    "cancelAndRefund": "Cancel Room & Refund",
-    "canceling": "Canceling..."
+    "genesis": "Genesis"
   },
   "roomList": {
     "title": "Public Game Rooms",
@@ -477,9 +466,7 @@
     "invitePlayers": "Invite Players",
     "sharePrivateRoom": "Share this private room with friends and family.",
     "share": "Share",
-    "walletNeeded": "Players will need to connect their wallet to join",
-    "scanToJoin": "Scan with phone to join",
-    "showQrToFriend": "Show this QR to a friend"
+    "walletNeeded": "Players will need to connect their wallet to join"
   },
   "gameBanner": {
     "gameReady": "Game Ready — Opponent Joined!",
@@ -911,23 +898,11 @@
     "roomCancelled": "Room Cancelled",
     "stakeRefunded": "Your stake has been refunded",
     "playerEliminated": "Player Eliminated",
-    "playerLeft": "{{player}} has left the game",
-    "roomNotStarted": "Waiting for Opponent",
-    "useCancelInstead": "No opponent has joined yet. Cancel the room to get your stake refunded.",
-    "waitingForOpponent": "Waiting for Opponent",
-    "cancelRoomDescription": "No opponent has joined yet. Cancel the room to get your full stake refunded.",
-    "refundAmount": "You will receive {{stake}} SOL back",
-    "cancelRoom": "Cancel Room & Refund"
+    "playerLeft": "{{player}} has left the game"
   },
   "common": {
     "processing": "Processing...",
-    "error": "Error",
-    "rejoinRoom": "Rejoin Room",
-    "pleaseWait": "Please wait...",
-    "loading": "Loading...",
-    "loadingMatchDetails": "Loading match details...",
-    "confirmingEntry": "Confirming entry...",
-    "copyFailed": "Failed to copy"
+    "error": "Error"
   },
   "unresolvedRoom": {
     "title": "Finish Your Active Game",
@@ -939,44 +914,5 @@
   "creatorDeposit": {
     "title": "Creator Deposit (Refundable)",
     "desc": "Creating a room requires a small temporary Solana storage deposit. You get this back when the game ends — win, lose, forfeit, or cancel."
-  },
-  "rules": {
-    "title_ranked": "Ranked Match Rules",
-    "title_private": "Private Match Rules",
-    "title_default": "Match Rules",
-    "review_conditions": "Review the match conditions before starting.",
-    "imReady": "I'm Ready"
-  },
-  "wallet": {
-    "wrongWallet": "Wrong wallet connected"
-  },
-  "diceRoll": {
-    "rollToStart": "Roll to Start",
-    "highestGoesFirst": "Highest total goes first",
-    "syncingOpponent": "Syncing with opponent... Please wait.",
-    "takingTooLong": "Dice roll taking too long. Choose an option:",
-    "retrySync": "Retry Sync",
-    "pickStarterAuto": "Pick Starter (Auto)",
-    "rolledHigher": "rolled higher! You go first.",
-    "theyGoFirst": "rolled higher! They go first.",
-    "resolvedAfter": "Resolved after",
-    "tieBreaker": "tie-breaker",
-    "bothReady": "Both players ready. Roll to decide who goes first!",
-    "rollDice": "Roll Dice",
-    "computing": "Computing...",
-    "rolling": "Rolling...",
-    "continueToGame": "Continue to Game"
-  },
-  "clearSession": {
-    "title": "Clear session while in a live match?",
-    "descriptionActive": "Clearing your session disconnects you. If you don't return, you may time out and lose your stake.",
-    "descriptionUnverified": "We couldn't verify this match state. Clearing session may disconnect you and lead to timeout.",
-    "roomLabel": "Room:",
-    "inRoom": "You are currently in room:",
-    "cancel": "Cancel",
-    "goToRoomList": "Go to Room List",
-    "clearAnyway": "Clear anyway",
-    "cleared": "Session cleared",
-    "tokensRemoved": "tokens removed"
   }
 }

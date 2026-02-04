@@ -7,7 +7,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-
+import { BUILD_VERSION } from "@/lib/buildVersion";
 
 const Footer = () => {
   const { t } = useTranslation();
@@ -69,7 +69,7 @@ const Footer = () => {
           {t("footer.tagline")}
         </p>
         <p className="text-[10px] text-muted-foreground/40 mt-2 font-mono">
-          Build: prelaunch-audit 8bacd62
+          {BUILD_VERSION}
         </p>
       </div>
     </footer>

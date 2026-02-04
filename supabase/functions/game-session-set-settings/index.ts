@@ -1,22 +1,29 @@
 /**
  * Edge Function: game-session-set-settings
  * 
- * 🔒 SECURITY: Caller identity is derived from session token ONLY.
- * Only the room creator (player1_wallet or participants[0]) can update settings.
+ * HARDENED with signature verification - only the room creator can set settings.
  * 
- * Request body (creatorWallet IGNORED - derived from session):
+ * Request body:
  * {
  *   roomPda: string,
  *   turnTimeSeconds: number,
- *   mode: "casual" | "ranked" | "private",
- *   maxPlayers?: number,
- *   gameType?: string,
+ *   mode: "casual" | "ranked",
+ *   creatorWallet: string,
+ *   timestamp: number,  // unix ms
+ *   signature: string   // base64 ed25519 signature
  * }
+ * 
+ * Signature message format:
+ * 1MGAMING:SET_SETTINGS
+ * roomPda=${roomPda}
+ * turnTimeSeconds=${turnTimeSeconds}
+ * mode=${mode}
+ * ts=${timestamp}
  */
 
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "npm:@supabase/supabase-js@2";
-import { requireSession } from "../_shared/requireSession.ts";
+import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
+import * as ed from "@noble/ed25519";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -25,7 +32,7 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-type Mode = "casual" | "ranked" | "private";
+type Mode = "casual" | "ranked";
 
 function json(status: number, body: unknown) {
   return new Response(JSON.stringify(body), {
@@ -34,7 +41,67 @@ function json(status: number, body: unknown) {
   });
 }
 
-Deno.serve(async (req) => {
+// Base58 alphabet (Bitcoin/Solana)
+const BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+
+function decodeBase58(str: string): Uint8Array {
+  const bytes: number[] = [];
+  for (const char of str) {
+    let carry = BASE58_ALPHABET.indexOf(char);
+    if (carry < 0) throw new Error(`Invalid base58 character: ${char}`);
+    for (let j = 0; j < bytes.length; j++) {
+      const x = bytes[j] * 58 + carry;
+      bytes[j] = x & 0xff;
+      carry = x >> 8;
+    }
+    while (carry > 0) {
+      bytes.push(carry & 0xff);
+      carry >>= 8;
+    }
+  }
+  // Handle leading zeros
+  for (const char of str) {
+    if (char === "1") bytes.push(0);
+    else break;
+  }
+  return new Uint8Array(bytes.reverse());
+}
+
+function decodeBase64(str: string): Uint8Array {
+  const binary = atob(str);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
+
+async function verifySignature(
+  message: string,
+  signatureBase64: string,
+  publicKeyBase58: string
+): Promise<boolean> {
+  try {
+    const publicKey = decodeBase58(publicKeyBase58);
+    const signature = decodeBase64(signatureBase64);
+    const messageBytes = new TextEncoder().encode(message);
+
+    // Verify ed25519 signature
+    return await ed.verifyAsync(signature, messageBytes, publicKey);
+  } catch (e) {
+    console.error("[game-session-set-settings] Signature verification error:", e);
+    return false;
+  }
+}
+
+// Check if running in dev/preview environment
+function isDevEnvironment(): boolean {
+  const url = Deno.env.get("SUPABASE_URL") || "";
+  // Devnet/preview domains or localhost
+  return url.includes("localhost") || url.includes("127.0.0.1") || url.includes("preview");
+}
+
+serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -44,6 +111,67 @@ Deno.serve(async (req) => {
   }
 
   try {
+    const payload = await req.json().catch(() => null);
+    const roomPda = payload?.roomPda;
+    const turnTimeSecondsRaw = payload?.turnTimeSeconds;
+    const mode = payload?.mode as Mode;
+    const creatorWallet = payload?.creatorWallet;
+    const timestamp = payload?.timestamp;
+    const signature = payload?.signature;
+
+    // Validate required fields
+    if (!roomPda || typeof roomPda !== "string") {
+      return json(400, { ok: false, error: "roomPda_required" });
+    }
+
+    const turnTimeSeconds = Number(turnTimeSecondsRaw);
+    if (!Number.isFinite(turnTimeSeconds) || turnTimeSeconds < 0) {
+      return json(400, { ok: false, error: "turnTimeSeconds_invalid" });
+    }
+
+    if (mode !== "casual" && mode !== "ranked") {
+      return json(400, { ok: false, error: "mode_invalid" });
+    }
+
+    // Check if signature verification is required
+    const requiresSignature = !isDevEnvironment();
+    
+    if (requiresSignature) {
+      // Signature verification required for production
+      if (!creatorWallet || typeof creatorWallet !== "string") {
+        return json(400, { ok: false, error: "creatorWallet_required" });
+      }
+      if (typeof timestamp !== "number") {
+        return json(400, { ok: false, error: "timestamp_required" });
+      }
+      if (!signature || typeof signature !== "string") {
+        return json(400, { ok: false, error: "signature_required" });
+      }
+
+      // Verify timestamp is within 2 minutes
+      const now = Date.now();
+      const MAX_AGE_MS = 2 * 60 * 1000; // 2 minutes
+      if (Math.abs(now - timestamp) > MAX_AGE_MS) {
+        console.warn("[game-session-set-settings] Timestamp out of range:", { timestamp, now, diff: Math.abs(now - timestamp) });
+        return json(401, { ok: false, error: "timestamp_expired" });
+      }
+
+      // Build message for signature verification
+      const message = `1MGAMING:SET_SETTINGS\nroomPda=${roomPda}\nturnTimeSeconds=${turnTimeSeconds}\nmode=${mode}\nts=${timestamp}`;
+      
+      console.log("[game-session-set-settings] Verifying signature for message:", message.replace(/\n/g, " | "));
+
+      const isValid = await verifySignature(message, signature, creatorWallet);
+      if (!isValid) {
+        console.warn("[game-session-set-settings] Invalid signature for wallet:", creatorWallet.slice(0, 8));
+        return json(401, { ok: false, error: "invalid_signature" });
+      }
+
+      console.log("[game-session-set-settings] ✅ Signature verified for:", creatorWallet.slice(0, 8));
+    } else {
+      console.log("[game-session-set-settings] Dev environment - skipping signature verification");
+    }
+
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
@@ -56,42 +184,10 @@ Deno.serve(async (req) => {
       auth: { persistSession: false },
     });
 
-    // 🔒 SECURITY: Require session token - derive caller identity from session only
-    const sessionResult = await requireSession(supabase, req);
-    if (!sessionResult.ok) {
-      console.warn("[game-session-set-settings] Unauthorized:", sessionResult.error);
-      return json(401, { ok: false, error: "unauthorized", details: sessionResult.error });
-    }
-
-    // callerWallet is ALWAYS derived from session - ignore any body.creatorWallet
-    const callerWallet = sessionResult.session.wallet;
-
-    const payload = await req.json().catch(() => null);
-    const roomPda = payload?.roomPda;
-    const turnTimeSecondsRaw = payload?.turnTimeSeconds;
-    const mode = payload?.mode as Mode;
-    // creatorWallet from body is IGNORED - callerWallet from session is authoritative
-    const maxPlayersRaw = payload?.maxPlayers;
-    const gameTypeFromPayload = payload?.gameType;
-
-    // Validate required fields
-    if (!roomPda || typeof roomPda !== "string") {
-      return json(400, { ok: false, error: "roomPda_required" });
-    }
-
-    const turnTimeSeconds = Number(turnTimeSecondsRaw);
-    if (!Number.isFinite(turnTimeSeconds) || turnTimeSeconds < 0) {
-      return json(400, { ok: false, error: "turnTimeSeconds_invalid" });
-    }
-
-    if (mode !== "casual" && mode !== "ranked" && mode !== "private") {
-      return json(400, { ok: false, error: "mode_invalid" });
-    }
-
-    // Fetch session to verify ownership (include participants for fallback)
-    let { data: session, error: sessionErr } = await supabase
+    // Fetch session and verify creator
+    const { data: session, error: sessionErr } = await supabase
       .from("game_sessions")
-      .select("room_pda, status, start_roll_finalized, player1_wallet, participants")
+      .select("room_pda, status, start_roll_finalized, player1_wallet")
       .eq("room_pda", roomPda)
       .maybeSingle();
 
@@ -100,87 +196,22 @@ Deno.serve(async (req) => {
       return json(500, { ok: false, error: "session_fetch_failed" });
     }
 
-    // Parse max_players if provided (for Ludo: 2, 3, or 4)
-    const maxPlayers = typeof maxPlayersRaw === "number" && maxPlayersRaw >= 2 && maxPlayersRaw <= 4
-      ? maxPlayersRaw
-      : 2;
-
     if (!session) {
-      // Session doesn't exist yet - CREATE it with the settings
-      // 🔒 callerWallet becomes player1_wallet (room creator)
-      console.log("[game-session-set-settings] No session found, creating new one for:", callerWallet.slice(0, 8));
-      
-      const { error: insertErr } = await supabase
-        .from("game_sessions")
-        .insert({
-          room_pda: roomPda,
-          player1_wallet: callerWallet,
-          player2_wallet: null,
-          game_type: gameTypeFromPayload || "unknown",
-          game_state: {},
-          status: "waiting",
-          status_int: 1,
-          mode: mode,
-          turn_time_seconds: turnTimeSeconds,
-          max_players: maxPlayers,
-          p1_ready: false,
-          p2_ready: false,
-          participants: [callerWallet],
-        });
-
-      if (insertErr) {
-        // Check if conflict (room created by another process)
-        if (insertErr.code === "23505") {
-          console.log("[game-session-set-settings] Conflict detected, falling back to update");
-        } else {
-          console.error("[game-session-set-settings] insert error", insertErr);
-          return json(500, { ok: false, error: "insert_failed" });
-        }
-      } else {
-        console.log("[game-session-set-settings] ✅ Session created:", { 
-          roomPda: roomPda.slice(0, 8), 
-          mode, 
-          turnTimeSeconds, 
-          maxPlayers,
-          gameType: gameTypeFromPayload || "unknown",
-          creator: callerWallet.slice(0, 8),
-        });
-        return json(200, { ok: true });
-      }
-      
-      // If we got here due to conflict, re-fetch and continue to UPDATE
-      const { data: conflictSession } = await supabase
-        .from("game_sessions")
-        .select("room_pda, status, start_roll_finalized, player1_wallet, participants")
-        .eq("room_pda", roomPda)
-        .maybeSingle();
-        
-      if (!conflictSession) {
-        return json(500, { ok: false, error: "session_race_condition" });
-      }
-      
-      session = conflictSession;
+      return json(404, { ok: false, error: "session_not_found" });
     }
 
-    // 🔒 SECURITY: Verify caller is room creator
-    // Check player1_wallet first, fallback to participants[0]
-    const callerTrimmed = callerWallet.trim();
-    const p1Wallet = session.player1_wallet?.trim();
-    const firstParticipant = Array.isArray(session.participants) && session.participants.length > 0
-      ? session.participants[0]?.trim()
-      : null;
-
-    const isCreator = 
-      (p1Wallet && callerTrimmed === p1Wallet) ||
-      (!p1Wallet && firstParticipant && callerTrimmed === firstParticipant);
-
-    if (!isCreator) {
-      console.warn("[game-session-set-settings] Forbidden - not room creator:", {
-        callerWallet: callerTrimmed.slice(0, 8),
-        player1_wallet: p1Wallet?.slice(0, 8) || "null",
-        firstParticipant: firstParticipant?.slice(0, 8) || "null",
-      });
-      return json(403, { ok: false, error: "forbidden" });
+    // Verify caller is the room creator (player1_wallet)
+    if (requiresSignature && creatorWallet) {
+      const sessionCreator = session.player1_wallet?.trim();
+      const requestCreator = creatorWallet.trim();
+      
+      if (sessionCreator !== requestCreator) {
+        console.warn("[game-session-set-settings] Creator mismatch:", {
+          sessionCreator: sessionCreator?.slice(0, 8),
+          requestCreator: requestCreator?.slice(0, 8),
+        });
+        return json(403, { ok: false, error: "not_room_creator" });
+      }
     }
 
     // Guard: do not allow changing settings after game has started
@@ -193,21 +224,13 @@ Deno.serve(async (req) => {
       return json(409, { ok: false, error: "game_already_started" });
     }
 
-    // Update settings (session already exists)
-    const updatePayload: Record<string, unknown> = {
-      turn_time_seconds: turnTimeSeconds,
-      mode,
-      max_players: maxPlayers,
-    };
-    
-    // CRITICAL FIX: Include game_type if provided - fixes "Unknown" game name bug
-    if (gameTypeFromPayload) {
-      updatePayload.game_type = gameTypeFromPayload;
-    }
-    
+    // Update settings
     const { error: updateErr } = await supabase
       .from("game_sessions")
-      .update(updatePayload)
+      .update({
+        turn_time_seconds: turnTimeSeconds,
+        mode,
+      })
       .eq("room_pda", roomPda);
 
     if (updateErr) {
@@ -215,13 +238,7 @@ Deno.serve(async (req) => {
       return json(500, { ok: false, error: "update_failed" });
     }
 
-    console.log("[game-session-set-settings] ✅ Settings updated:", { 
-      roomPda: roomPda.slice(0, 8), 
-      turnTimeSeconds, 
-      mode, 
-      maxPlayers,
-      gameType: gameTypeFromPayload || "(not updated)",
-    });
+    console.log("[game-session-set-settings] ✅ Settings updated:", { roomPda: roomPda.slice(0, 8), turnTimeSeconds, mode });
     return json(200, { ok: true });
   } catch (e) {
     console.error("[game-session-set-settings] unexpected error", e);

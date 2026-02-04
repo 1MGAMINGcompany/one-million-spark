@@ -2,7 +2,6 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { dbg } from "@/lib/debugLog";
-import { getSessionToken, getAuthHeaders } from "@/lib/sessionToken";
 
 export interface GameMove {
   room_pda: string;
@@ -55,15 +54,6 @@ export function useDurableGameSync({
   // CHANNEL_ERROR retry backoff refs
   const lastChannelErrorRetryRef = useRef<number>(0);
   const channelErrorRetryCountRef = useRef<number>(0);
-  
-  // Track previous roomPda to prevent state wipe on transient disconnects
-  const prevRoomPdaRef = useRef<string | null>(null);
-  
-  // Store callbacks in refs to prevent resubscribe thrash
-  const onMoveReceivedRef = useRef(onMoveReceived);
-  useEffect(() => {
-    onMoveReceivedRef.current = onMoveReceived;
-  }, [onMoveReceived]);
 
   // Load existing moves from DB on mount
   const loadMoves = useCallback(async (): Promise<GameMove[]> => {
@@ -114,21 +104,8 @@ export function useDurableGameSync({
   }, [roomPda, onMovesLoaded]);
 
   // Submit a move to DB - server validates turn and assigns sequence
-  // 🔒 Identity is derived from session token on server - wallet param is for local logging only
   const submitMove = useCallback(async (moveData: any, wallet: string): Promise<boolean> => {
     if (!roomPda) return false;
-
-    // 🔒 SECURITY: Get session token - required for authenticated submission
-    const sessionToken = getSessionToken(roomPda);
-    if (!sessionToken) {
-      console.error("[DurableSync] No session token found for room:", roomPda.slice(0, 8));
-      dbg("durable.submit.no_session_token", { room: roomPda.slice(0, 8) });
-      toast.error("Session expired", {
-        description: "Please re-ready to continue playing",
-        duration: 5000,
-      });
-      return false;
-    }
 
     // Generate unique client ID for idempotency (retries are safe)
     const clientMoveId = crypto.randomUUID();
@@ -142,23 +119,20 @@ export function useDurableGameSync({
     try {
       console.log("[DurableSync] Invoking submit-move edge function:", {
         roomPda: roomPda.slice(0, 8),
-        wallet: wallet.slice(0, 8), // Local logging only - server derives from session
+        wallet: wallet.slice(0, 8),
         moveType: moveData.type,
         clientMoveId: clientMoveId.slice(0, 8),
       });
       
-      // 🔒 Body schema: { roomPda, moveData, clientMoveId } - NO wallet
-      // Wallet identity is derived from Authorization header on server
       const { data, error } = await supabase.functions.invoke("submit-move", {
         body: {
           roomPda,
+          wallet,
           moveData,
           clientMoveId,
-          // NO wallet - server derives from session token
           // NO turnNumber - server assigns
           // NO prevHash - server computes chain
         },
-        headers: getAuthHeaders(sessionToken),
       });
 
       if (error) {
@@ -254,15 +228,6 @@ export function useDurableGameSync({
             toast.error("You are not a participant in this game", { duration: 3000 });
             return false;
             
-          case "unauthorized":
-            console.warn("[DurableSync] Session token invalid or expired");
-            dbg("durable.submit.unauthorized", { wallet: wallet.slice(0, 8) });
-            toast.error("Session expired", {
-              description: "Please re-ready to continue playing",
-              duration: 5000,
-            });
-            return false;
-            
           case "hash_mismatch":
             console.warn("[DurableSync] Hash mismatch - resyncing");
             await loadMoves();
@@ -308,31 +273,19 @@ export function useDurableGameSync({
           filter: `room_pda=eq.${roomPda}`,
         },
         (payload) => {
-          const newMove = payload.new as Partial<GameMove>;
-
-          const turn = typeof newMove.turn_number === "number" 
-            ? newMove.turn_number 
-            : null;
-
-          const walletShort = typeof newMove.wallet === "string" 
-            ? newMove.wallet.slice(0, 8) 
-            : "unknown";
-
-          dbg("durable.realtime", {
-            turn,
-            wallet: walletShort,
-            type: (newMove as any)?.move_data?.type,
+          const newMove = payload.new as GameMove;
+          dbg("durable.realtime", { 
+            turn: newMove.turn_number, 
+            wallet: newMove.wallet.slice(0, 8),
+            type: newMove.move_data?.type
           });
 
-          // Ignore malformed payloads
-          if (turn === null) return;
-
           // Only process if this is a new move we haven't seen
-          if (turn > lastTurnRef.current) {
-            setMoves((prev) => [...prev, newMove as GameMove]);
-            setLastHash((newMove as GameMove).move_hash);
-            lastTurnRef.current = turn;
-            onMoveReceivedRef.current?.(newMove as GameMove);
+          if (newMove.turn_number > lastTurnRef.current) {
+            setMoves((prev) => [...prev, newMove]);
+            setLastHash(newMove.move_hash);
+            lastTurnRef.current = newMove.turn_number;
+            onMoveReceived?.(newMove);
           }
         }
       )
@@ -405,7 +358,7 @@ export function useDurableGameSync({
       dbg("durable.unsubscribe", { room: roomPda.slice(0, 8) });
       supabase.removeChannel(channel);
     };
-  }, [enabled, roomPda]);
+  }, [enabled, roomPda, onMoveReceived]);
 
   // Initial load
   useEffect(() => {
@@ -415,15 +368,8 @@ export function useDurableGameSync({
     }
   }, [enabled, roomPda, loadMoves]);
 
-  // Reset when room changes (guarded against transient disconnects)
+  // Reset when room changes
   useEffect(() => {
-    // Critical: avoid clearing state during transient disconnects
-    if (!roomPda) return;
-
-    // Only reset if roomPda actually changed
-    if (prevRoomPdaRef.current === roomPda) return;
-    prevRoomPdaRef.current = roomPda;
-
     loadedRef.current = false;
     setMoves([]);
     setLastHash("genesis");

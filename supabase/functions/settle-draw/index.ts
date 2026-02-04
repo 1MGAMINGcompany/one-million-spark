@@ -303,7 +303,6 @@ Deno.serve(async (req: Request) => {
         .from("game_sessions")
         .update({
           status: "finished",
-          status_int: 3,
           game_state: {
             voidSettlement: true,
             reason: "vault_underfunded",
@@ -458,8 +457,7 @@ Deno.serve(async (req: Request) => {
     await supabase
       .from("game_sessions")
       .update({ 
-        status: "finished",
-        status_int: 3,
+        status: "finished", 
         updated_at: new Date().toISOString() 
       })
       .eq("room_pda", roomPda);

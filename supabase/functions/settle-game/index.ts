@@ -262,41 +262,6 @@ async function logSettlement(
   }
 }
 
-// ============================================================================
-// Structured Audit Log - Single source of truth for payout direction
-// ============================================================================
-interface AuditLog {
-  roomPda: string;
-  mode: string;
-  gameType: string;
-  action: string;
-  forfeiter: string | null;
-  winner: string | null;
-  stakeLamports: number;
-  feeLamports: number | null;
-  vault: string | null;
-  txSig: string | null;
-  status_int: number;
-  status: string;
-  timestamp: string;
-}
-
-function emitAuditLog(log: AuditLog) {
-  console.log("[settle-game] 📋 AUDIT_LOG", JSON.stringify(log));
-}
-
-// ============================================================================
-// Payout Direction Metadata - undeniable winner derivation
-// ============================================================================
-interface PayoutDirection {
-  expectedWinner: string | null;
-  computedWinner: string | null;
-  reason: string;
-  method: "seat_index" | "game_over" | "legacy_color" | "void_no_winner";
-  seatIndex?: number;
-  source?: string;
-}
-
 Deno.serve(async (req: Request) => {
   console.log("[settle-game] HIT", {
     ts: new Date().toISOString(),
@@ -801,9 +766,7 @@ Deno.serve(async (req: Request) => {
       await supabase
         .from("game_sessions")
         .update({
-          status: "void",
-          status_int: 4,
-          game_over_at: new Date().toISOString(),
+          status: "finished",
           game_state: {
             ...existingState,
             playersOnChain,
@@ -818,48 +781,6 @@ Deno.serve(async (req: Request) => {
           updated_at: new Date().toISOString(),
         })
         .eq("room_pda", roomPda);
-
-      // Upsert void share card with payout_direction
-      const voidPayoutDirection: PayoutDirection = {
-        expectedWinner: winnerWallet,
-        computedWinner: null,
-        reason: `Vault underfunded: ${vaultLamports} lamports, need ${expectedPot}`,
-        method: "void_no_winner",
-        seatIndex,
-        source,
-      };
-
-      await supabase
-        .from("match_share_cards")
-        .upsert({
-          room_pda: roomPda,
-          mode: mode || "casual",
-          game_type: gameType || "unknown",
-          winner_wallet: null, // void - no winner
-          loser_wallet: null,
-          win_reason: "void",
-          stake_lamports: Number(roomData.stakeLamports),
-          tx_signature: null,
-          metadata: { payout_direction: voidPayoutDirection },
-          updated_at: new Date().toISOString(),
-        }, { onConflict: "room_pda" });
-
-      // Emit structured audit log
-      emitAuditLog({
-        roomPda,
-        mode: mode || "casual",
-        gameType: gameType || "unknown",
-        action: "void_underfunded",
-        forfeiter: null,
-        winner: null,
-        stakeLamports: Number(roomData.stakeLamports),
-        feeLamports: null,
-        vault: vaultPda.toBase58(),
-        txSig: null,
-        status_int: 4,
-        status: "void",
-        timestamp: new Date().toISOString(),
-      });
 
       return json200({
         success: false,
@@ -1056,70 +977,14 @@ Deno.serve(async (req: Request) => {
         console.error("[settle-game] ⚠️ DB recording exception (non-fatal):", dbError);
       }
 
-      // SAFETY GUARD: Never set status_int=3 without winner_wallet
-      if (!winnerWallet) {
-        console.error("[settle-game] ❌ INVARIANT VIOLATION: Attempted status_int=3 without winnerWallet");
-        await supabase
-          .from("game_sessions")
-          .update({
-            status: "void",
-            status_int: 4,
-            game_over_at: new Date().toISOString(),
-            game_state: { voidSettlement: true, reason: "missing_winner" },
-            updated_at: new Date().toISOString(),
-          })
-          .eq("room_pda", roomPda);
-      } else {
-        // CRITICAL: Update game_sessions with winner and status_int=3
-        const { error: sessionUpdateError } = await supabase
-          .from("game_sessions")
-          .update({
-            status: "finished",
-            status_int: 3,
-            winner_wallet: winnerWallet,
-            game_over_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          })
-          .eq("room_pda", roomPda);
+      // Finish session (best effort)
+      const { error: finishErr } = await supabase.rpc("finish_game_session", {
+        p_room_pda: roomPda,
+        p_caller_wallet: winnerWallet,
+      });
 
-        if (sessionUpdateError) {
-          console.error("[settle-game] game_sessions update failed:", sessionUpdateError);
-        } else {
-          console.log("[settle-game] ✅ game_sessions marked finished (status_int=3, winner:", winnerWallet.slice(0, 8), ")");
-        }
-
-        // Build payout_direction for success
-        const successPayoutDirection: PayoutDirection = {
-          expectedWinner: winnerWallet,
-          computedWinner: winnerWallet,
-          reason: `Winner derived from game_state via ${source}: seat ${seatIndex} = ${winnerWallet.slice(0, 8)}`,
-          method: source === "winnerSeat" ? "seat_index" : source === "gameOverNumeric" ? "game_over" : "legacy_color",
-          seatIndex,
-          source,
-        };
-
-        // Upsert into match_share_cards for social sharing
-        const loserWallet = playersOnChain.find((p: string) => p !== winnerWallet) || null;
-        const { error: shareCardError } = await supabase
-          .from("match_share_cards")
-          .upsert({
-            room_pda: roomPda,
-            mode: mode || "casual",
-            game_type: gameType || "unknown",
-            winner_wallet: winnerWallet,
-            loser_wallet: loserWallet,
-            win_reason: reason || "checkmate",
-            stake_lamports: Number(roomData.stakeLamports),
-            tx_signature: signature,
-            metadata: { payout_direction: successPayoutDirection },
-            updated_at: new Date().toISOString(),
-          }, { onConflict: "room_pda" });
-
-        if (shareCardError) {
-          console.error("[settle-game] Failed to upsert match_share_cards:", shareCardError);
-        } else {
-          console.log("[settle-game] ✅ match_share_cards upserted");
-        }
+      if (finishErr) {
+        console.error("[settle-game] finish_game_session failed:", finishErr);
       }
 
       // ─────────────────────────────────────────────────────────────
@@ -1185,23 +1050,6 @@ Deno.serve(async (req: Request) => {
         console.warn("[settle-game] ⚠️ close_room failed", { error: closeRoomError });
       }
 
-      // Emit structured audit log for success
-      emitAuditLog({
-        roomPda,
-        mode: mode || "casual",
-        gameType: gameType || "unknown",
-        action: "settled",
-        forfeiter: null,
-        winner: winnerWallet,
-        stakeLamports: Number(roomData.stakeLamports),
-        feeLamports: configData.feeBps ? Math.floor(Number(roomData.stakeLamports) * roomData.playerCount * configData.feeBps / 10000) : null,
-        vault: vaultPda.toBase58(),
-        txSig: signature,
-        status_int: 3,
-        status: "finished",
-        timestamp: new Date().toISOString(),
-      });
-
       return json200({
         success: true,
         action: "settled",
@@ -1246,9 +1094,7 @@ Deno.serve(async (req: Request) => {
       await supabase
         .from("game_sessions")
         .update({
-          status: "void",
-          status_int: 4,
-          game_over_at: new Date().toISOString(),
+          status: "finished",
           game_state: {
             ...existingState,
             playersOnChain,
@@ -1263,48 +1109,6 @@ Deno.serve(async (req: Request) => {
           updated_at: new Date().toISOString(),
         })
         .eq("room_pda", roomPda);
-
-      // Upsert void share card for settlement failure with payout_direction
-      const failedPayoutDirection: PayoutDirection = {
-        expectedWinner: winnerWallet,
-        computedWinner: null,
-        reason: `Settlement failed: ${String((settlementError as Error)?.message ?? settlementError)}`,
-        method: "void_no_winner",
-        seatIndex,
-        source,
-      };
-
-      await supabase
-        .from("match_share_cards")
-        .upsert({
-          room_pda: roomPda,
-          mode: mode || "casual",
-          game_type: gameType || "unknown",
-          winner_wallet: null,
-          loser_wallet: null,
-          win_reason: "void",
-          stake_lamports: Number(roomData.stakeLamports),
-          tx_signature: null,
-          metadata: { payout_direction: failedPayoutDirection },
-          updated_at: new Date().toISOString(),
-        }, { onConflict: "room_pda" });
-
-      // Emit structured audit log for failure
-      emitAuditLog({
-        roomPda,
-        mode: mode || "casual",
-        gameType: gameType || "unknown",
-        action: "settle_failed",
-        forfeiter: null,
-        winner: null,
-        stakeLamports: Number(roomData.stakeLamports),
-        feeLamports: null,
-        vault: vaultPda.toBase58(),
-        txSig: null,
-        status_int: 4,
-        status: "void",
-        timestamp: new Date().toISOString(),
-      });
 
       return json200({
         success: false,

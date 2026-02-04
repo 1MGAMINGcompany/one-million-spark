@@ -10,7 +10,6 @@
  * IMPORTANT: Solana Base58 addresses are case-sensitive - use isSameWallet for comparisons
  */
 import { isSameWallet } from "./walletUtils";
-import { short } from "./safe";
 
 export interface SeatInfo {
   seatIndex: number;
@@ -59,8 +58,8 @@ export function getSeat(
 
   if (seatIndex === -1) {
     console.log("[getSeat] Wallet not found in room players", {
-      wallet: short(walletPubkey),
-      players: roomPlayers.map((p) => short(p)),
+      wallet: walletPubkey.slice(0, 8),
+      players: roomPlayers.map((p) => p.slice(0, 8)),
     });
     return invalidSeat;
   }
@@ -72,7 +71,7 @@ export function getSeat(
   const ludoColor = LUDO_COLORS[seatIndex] ?? "gold";
 
   console.log("[getSeat] Seat assigned", {
-    wallet: short(walletPubkey),
+    wallet: walletPubkey.slice(0, 8),
     seatIndex,
     isCreator,
     color,

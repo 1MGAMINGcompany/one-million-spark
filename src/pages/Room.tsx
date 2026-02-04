@@ -10,7 +10,7 @@ import { useSolanaRooms } from "@/hooks/useSolanaRooms";
 import { useTxLock } from "@/contexts/TxLockContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Construction, ArrowLeft, Loader2, Users, Coins, AlertTriangle, CheckCircle, Share2, Copy, ExternalLink, Wallet, Clock, XCircle, Flag } from "lucide-react";
+import { Construction, ArrowLeft, Loader2, Users, Coins, AlertTriangle, CheckCircle, Share2, Copy, ExternalLink, Wallet } from "lucide-react";
 import { RecoverFundsButton } from "@/components/RecoverFundsButton";
 import { WalletGateModal } from "@/components/WalletGateModal";
 import { RivalryWidget } from "@/components/RivalryWidget";
@@ -19,17 +19,10 @@ import { TxDebugPanel } from "@/components/TxDebugPanel";
 import { MobileWalletRedirect } from "@/components/MobileWalletRedirect";
 import { PreviewDomainBanner, useSigningDisabled } from "@/components/PreviewDomainBanner";
 import { JoinRulesModal } from "@/components/JoinRulesModal";
-import { ShareInviteDialog } from "@/components/ShareInviteDialog";
-import { OpenInWalletPanel } from "@/components/OpenInWalletPanel";
 import { validatePublicKey, isMobileDevice, hasInjectedSolanaWallet, getRoomPda } from "@/lib/solana-utils";
 import { supabase } from "@/integrations/supabase/client";
 import { isWalletInAppBrowser } from "@/lib/walletBrowserDetection";
-import { usePendingRoute } from "@/hooks/usePendingRoute";
-import { getSessionToken, getAuthHeaders, storeSessionToken } from "@/lib/sessionToken";
-import { hideRoomPda } from "@/lib/hiddenRooms";
 import { toast } from "sonner";
-import { showGameStartToast, isGameStartLatched, setGameStartLatch } from "@/hooks/useGameStartToast";
-import { JoinTraceDebugPanel } from "@/components/JoinTraceDebugPanel";
 
 // Presence feature disabled until program supports ping_room
 // const CREATOR_TIMEOUT_SECS = 60;
@@ -61,16 +54,6 @@ function formatSol(lamports: bigint | number | string, maxDecimals = 4): string 
     .replace(/\.0+$/, "");
 }
 
-
-const isValidPubkey = (s: string) => {
-  try {
-    new PublicKey(s);
-    return true;
-  } catch {
-    return false;
-  }
-};
-
 export default function Room() {
   const { roomPda: roomPdaParam } = useParams<{ roomPda: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -78,25 +61,15 @@ export default function Room() {
   const { isConnected, address } = useWallet();
   const { connection } = useConnection();
   const wallet = useSolanaWallet();
-  const { activeRoom, joinRoom, createRoom, cancelRoom, cancelRoomByPda, forfeitGame, clearRoomFromState, txPending: hookTxPending, txDebugInfo, clearTxDebug, fetchUserActiveRoom } = useSolanaRooms();
+  const { activeRoom, joinRoom, createRoom, cancelRoom, txPending: hookTxPending, txDebugInfo, clearTxDebug } = useSolanaRooms();
   const { isTxInFlight, withTxLock } = useTxLock();
   const [showWalletGate, setShowWalletGate] = useState(false);
   const [showMobileWalletRedirect, setShowMobileWalletRedirect] = useState(false);
   const [showJoinRulesModal, setShowJoinRulesModal] = useState(false);
   const [joinInProgress, setJoinInProgress] = useState(false);
   
-  // Open-in-wallet panel state (for mobile users in Chrome/Safari)
-  const [dismissedWalletPanel, setDismissedWalletPanel] = useState(false);
-  
-  // Pending route persistence
-  const { setPendingRoom } = usePendingRoute();
-  
   // Wallet in-app browsers (Phantom/Solflare) often miss WS updates
   const inWalletBrowser = isWalletInAppBrowser();
-  
-  // Detect if we should show Open-in-Wallet panel
-  const isRegularMobileBrowser = isMobileDevice() && !inWalletBrowser && !isConnected;
-  const shouldShowWalletPanel = isRegularMobileBrowser && !dismissedWalletPanel;
 
   const [room, setRoom] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -108,45 +81,18 @@ export default function Room() {
   const [linkCopied, setLinkCopied] = useState(false);
   
   // Room mode from DB (single source of truth - NOT localStorage)
-  const [roomMode, setRoomMode] = useState<'casual' | 'ranked' | 'private'>('casual');
+  const [roomMode, setRoomMode] = useState<'casual' | 'ranked'>('casual');
   const [roomModeLoaded, setRoomModeLoaded] = useState(false);
   
   // Check if this is a rematch room (either just created or from rematch param)
   const isRematchCreated = searchParams.get('rematch_created') === '1';
-  const isPrivateCreated = searchParams.get('private_created') === '1';
   const isRematch = searchParams.get('rematch') === '1' || isRematchCreated;
-  
-  // Share dialog for private rooms
-  const [showShareDialog, setShowShareDialog] = useState(false);
-  
-  // Turn time from session (for share dialog)
-  const [turnTimeSeconds, setTurnTimeSeconds] = useState(0);
-  
-  // DB session state for cancel/forfeit decision tree
-  const [dbSession, setDbSession] = useState<{
-    player1_wallet: string | null;
-    player2_wallet: string | null;
-    participantsCount: number;
-    start_roll_finalized: boolean;
-    status_int: number;
-  } | null>(null);
-  
-  // Action loading states
-  const [isCancellingRoom, setIsCancellingRoom] = useState(false);
-  const [isForfeitingMatch, setIsForfeitingMatch] = useState(false);
   
   // Generate room link
   const roomLink = `${window.location.origin}/room/${roomPdaParam}`;
   
   // Check if native share is available
   const canNativeShare = typeof navigator !== 'undefined' && !!navigator.share;
-  
-  // Save pending room for post-connect navigation
-  useEffect(() => {
-    if (!isConnected && roomPdaParam) {
-      setPendingRoom(roomPdaParam);
-    }
-  }, [isConnected, roomPdaParam, setPendingRoom]);
   
   // Dismiss rematch banner
   const dismissRematchBanner = () => {
@@ -234,19 +180,8 @@ export default function Room() {
         
         const session = resp?.session;
         if (session?.mode) {
-          setRoomMode(session.mode as 'casual' | 'ranked' | 'private');
-          setTurnTimeSeconds(session.turn_time_seconds || 0);
-          
-          // Store DB session state for cancel/forfeit decision tree
-          setDbSession({
-            player1_wallet: session.player1_wallet || null,
-            player2_wallet: session.player2_wallet || null,
-            participantsCount: session.participants?.length || 0,
-            start_roll_finalized: session.start_roll_finalized || false,
-            status_int: session.status_int || 1,
-          });
-          
-          console.log("[RoomMode] DB mode:", session.mode, "| status_int:", session.status_int, "| participants:", session.participants?.length);
+          setRoomMode(session.mode as 'casual' | 'ranked');
+          console.log("[RoomMode] DB mode:", session.mode);
           setRoomModeLoaded(true);
         } else if (modeFetchAttempts < MAX_MODE_RETRIES) {
           // Retry - game_session might not be created yet
@@ -266,18 +201,6 @@ export default function Room() {
     
     fetchRoomMode();
   }, [roomPdaParam, modeFetchAttempts]);
-
-  // Auto-open share dialog for private rooms when created
-  // FIX: Trust the query param immediately - don't wait for DB confirmation
-  // This ensures the dialog opens even if the edge function had delays
-  useEffect(() => {
-    if (isPrivateCreated) {
-      setShowShareDialog(true);
-      // Clear the query param
-      searchParams.delete('private_created');
-      setSearchParams(searchParams, { replace: true });
-    }
-  }, [isPrivateCreated, searchParams, setSearchParams]);
 
   const status = room?.status ?? 0;
   const statusName = statusToName(status);
@@ -347,7 +270,7 @@ export default function Room() {
           setError(null);
         }
 
-        const roomPda = isValidPubkey(roomPdaParam) ? new PublicKey(roomPdaParam) : null;
+        const roomPda = new PublicKey(roomPdaParam);
 
         // Use proxy for getAccountInfo instead of direct connection
         console.log("[Room] Using solana-rpc-read proxy for getAccountInfo");
@@ -475,7 +398,7 @@ export default function Room() {
 
     (async () => {
       try {
-        const roomPda = isValidPubkey(roomPdaParam) ? new PublicKey(roomPdaParam) : null;
+        const roomPda = new PublicKey(roomPdaParam);
 
         subId = connection.onAccountChange(
           roomPda,
@@ -485,7 +408,7 @@ export default function Room() {
               const data = Buffer.from(accountInfo.data);
               const parsed = parseRoomAccount(data);
               if (parsed) {
-              const roomPda = isValidPubkey(roomPdaParam) ? new PublicKey(roomPdaParam) : null;
+              const roomPda = new PublicKey(roomPdaParam);
                 const roomAccount = {
                   roomId: parsed.roomId,
                   creator: parsed.creator,
@@ -524,7 +447,7 @@ export default function Room() {
       }
     })();
 
-return () => {
+    return () => {
       if (subId !== null) {
         connection.removeAccountChangeListener(subId);
       }
@@ -540,7 +463,6 @@ return () => {
   const silentBackoffUntilRef = useRef(0);
   const lastVaultFetchMsRef = useRef(0);
   
-  
   useEffect(() => {
     if (!room || !roomPdaParam) {
       prevStatusRef.current = null;
@@ -552,26 +474,12 @@ return () => {
     
     // Detect transition: Open -> Started means game is ready
     if (prevStatus !== null && isOpenStatus(prevStatus) && currentStatus === RoomStatus.Started && !hasNavigatedRef.current) {
-      // Check latch FIRST - if latched, skip entirely (prevents UI flicker)
-      if (isGameStartLatched(roomPdaParam)) {
-        console.log(`[Room] Latch active for ${roomPdaParam.slice(0, 8)}... skipping transition`);
-        hasNavigatedRef.current = true; // Still mark to prevent future checks
-        return;
-      }
-      
       console.log("[Room] Game started! Redirecting to play page");
       hasNavigatedRef.current = true;
       
-      // Set latch BEFORE any actions (prevents re-entry)
-      setGameStartLatch(roomPdaParam);
-      
-      // Dedupe toast per room (prevents repeated toasts on mobile)
-      showGameStartToast(
-        roomPdaParam,
-        "Game is starting!",
-        `${gameName} match is ready. Entering game...`,
-        "sonner"
-      );
+      toast.success("Game is starting!", {
+        description: `${gameName} match is ready. Entering game...`,
+      });
       
       navigate(`/play/${roomPdaParam}`, { replace: true });
     }
@@ -650,13 +558,6 @@ return () => {
 
     // Navigate if game is started OR room is full (both mean game should begin)
     if (isStarted || isFull) {
-      // Check latch FIRST - if latched, skip entirely (prevents UI flicker)
-      if (isGameStartLatched(roomPdaParam)) {
-        console.log(`[Room] Latch active for ${roomPdaParam.slice(0, 8)}... skipping direct check`);
-        hasNavigatedRef.current = true; // Still mark to prevent future checks
-        return;
-      }
-
       console.log("[Room] room is started/full -> navigating to /play", {
         status: room.status,
         playersCount,
@@ -664,17 +565,10 @@ return () => {
       });
 
       hasNavigatedRef.current = true;
-      
-      // Set latch BEFORE any actions (prevents re-entry)
-      setGameStartLatch(roomPdaParam);
 
-      // Dedupe toast per room (prevents repeated toasts on mobile)
-      showGameStartToast(
-        roomPdaParam,
-        "Game is starting!",
-        `${gameName} match is ready. Entering game...`,
-        "sonner"
-      );
+      toast.success("Game is starting!", {
+        description: `${gameName} match is ready. Entering game...`,
+      });
 
       navigate(`/play/${roomPdaParam}`, { replace: true });
     }
@@ -741,34 +635,9 @@ return () => {
       });
 
       if (result?.ok) {
-        // CRITICAL: Sync player2 wallet to database session BEFORE navigating
-        // This prevents the "waiting for player2" race condition at dice roll
-        try {
-          const player1Wallet = room.creator?.toBase58?.() || "";
-          const gameType = GAME_NAMES[room.gameType]?.toLowerCase() || "dominos";
-          
-          console.log("[Room] Syncing P2 wallet to game session before navigation...");
-          const { error: syncErr } = await supabase.rpc("ensure_game_session", {
-            p_room_pda: roomPdaParam,
-            p_game_type: gameType,
-            p_player1_wallet: player1Wallet,
-            p_player2_wallet: address, // Joining player
-            p_mode: roomMode,
-          });
-          
-          if (syncErr) {
-            console.warn("[Room] P2 sync warning (non-blocking):", syncErr);
-          } else {
-            console.log("[Room] P2 wallet synced successfully to game session");
-          }
-        } catch (syncE) {
-          console.warn("[Room] P2 sync exception (non-blocking):", syncE);
-        }
-        
         // Navigate to canonical play route - game type determined from on-chain data
-        // Pass justJoined flag to skip AcceptRulesModal (rules confirmed via JoinRulesModal)
-        // NOTE: ranked-accept is called inside useSolanaRooms.joinRoom() - no duplicate call here
-        navigate(`/play/${roomPdaParam}`, { state: { justJoined: true } });
+        // NEVER use URL slug to determine game type
+        navigate(`/play/${roomPdaParam}`);
       } else if (!result) {
         // null means blocked by tx lock - toast already shown
       } else if (result.reason === "PHANTOM_BLOCKED_OR_REJECTED") {
@@ -814,133 +683,6 @@ return () => {
       navigate("/room-list");
     }
   };
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // Room Page Actions: Cancel Room & Refund / Forfeit Match
-  // Uses DB authoritative state for decision tree
-  // ═══════════════════════════════════════════════════════════════════════════
-  
-  // Decision tree for creator actions (based on DB truth)
-  const isCreatorByDb = address && dbSession?.player1_wallet && 
-    dbSession.player1_wallet.toLowerCase() === address.toLowerCase();
-  const dbStatusInt = dbSession?.status_int ?? 1;
-  const dbParticipantsCount = dbSession?.participantsCount ?? 0;
-  const dbStartRollFinalized = dbSession?.start_roll_finalized ?? false;
-  const dbPlayer2Wallet = dbSession?.player2_wallet;
-  
-  // CANCEL condition: creator AND (no opponent OR not started)
-  // status_int === 1 OR participantsCount <= 1 OR start_roll_finalized === false
-  const canCancelAndRefund = isConnected && isCreatorByDb && dbStatusInt !== 3 && (
-    dbStatusInt === 1 || 
-    dbParticipantsCount <= 1 || 
-    !dbStartRollFinalized ||
-    !dbPlayer2Wallet
-  );
-  
-  // FORFEIT condition: creator AND opponent joined AND room active
-  // status_int !== 3 AND (participantsCount >= 2 OR player2_wallet present)
-  const canForfeitMatch = isConnected && isCreatorByDb && dbStatusInt !== 3 && (
-    dbParticipantsCount >= 2 || !!dbPlayer2Wallet
-  ) && dbStartRollFinalized;
-  
-  // Cancel Room & Refund handler - reuses cancelRoomByPda from useSolanaRooms
-  const onCancelRoomAndRefund = useCallback(async () => {
-    if (!roomPdaParam || !address) return;
-    
-    console.log("[room.action.cancel_clicked]", { roomPda: roomPdaParam.slice(0, 8), wallet: address.slice(0, 8) });
-    
-    if (signingDisabled) {
-      toast.error("Wallet signing is disabled on preview domains. Please use 1mgaming.com");
-      return;
-    }
-    
-    if (needsMobileWalletRedirect) {
-      setShowMobileWalletRedirect(true);
-      return;
-    }
-    
-    setIsCancellingRoom(true);
-    
-    try {
-      const result = await withTxLock(async () => {
-        return await cancelRoomByPda(roomPdaParam);
-      });
-      
-      if (result?.ok) {
-        toast.success("Room cancelled", { description: "Your stake has been refunded." });
-        // Hide room from list immediately (optimistic)
-        hideRoomPda(roomPdaParam, 60_000);
-        // Clear room from state immediately
-        if (clearRoomFromState) {
-          clearRoomFromState(roomPdaParam);
-        }
-        await fetchUserActiveRoom();
-        navigate("/room-list", { replace: true });
-      } else if (result?.reason === "ROOM_NOT_FOUND") {
-        toast.info("Room already closed");
-        navigate("/room-list", { replace: true });
-      } else if (result?.reason !== "PHANTOM_BLOCKED_OR_REJECTED") {
-        toast.error("Failed to cancel room", { description: result?.reason || "Please try again." });
-      }
-    } catch (err: any) {
-      console.error("[room.action.cancel_error]", err);
-      toast.error("Cancel failed", { description: err?.message || "Unknown error" });
-    } finally {
-      setIsCancellingRoom(false);
-    }
-  }, [roomPdaParam, address, signingDisabled, needsMobileWalletRedirect, cancelRoomByPda, clearRoomFromState, fetchUserActiveRoom, navigate, withTxLock]);
-  
-  // Forfeit Match handler - reuses forfeitGame from useSolanaRooms
-  const onForfeitMatch = useCallback(async () => {
-    if (!roomPdaParam || !address) return;
-    
-    console.log("[room.action.forfeit_clicked]", { roomPda: roomPdaParam.slice(0, 8), wallet: address.slice(0, 8) });
-    
-    if (signingDisabled) {
-      toast.error("Wallet signing is disabled on preview domains. Please use 1mgaming.com");
-      return;
-    }
-    
-    if (needsMobileWalletRedirect) {
-      setShowMobileWalletRedirect(true);
-      return;
-    }
-    
-    setIsForfeitingMatch(true);
-    
-    try {
-      const gameTypeName = GAME_NAMES[room?.gameType ?? 2]?.toLowerCase() || "unknown";
-      
-      const result = await forfeitGame(roomPdaParam, gameTypeName);
-      
-      if (result?.ok) {
-        toast.success("Match forfeited", { description: "Opponent has been paid out." });
-        // Hide room from list immediately (optimistic)
-        hideRoomPda(roomPdaParam, 60_000);
-        // Clear room from state immediately
-        if (clearRoomFromState) {
-          clearRoomFromState(roomPdaParam);
-        }
-        await fetchUserActiveRoom();
-        navigate("/room-list", { replace: true });
-      } else if (result?.error === "VAULT_UNFUNDED") {
-        toast.error("Funding incomplete", { 
-          description: "Stakes were not fully deposited. Try cancelling the room instead." 
-        });
-      } else if (result?.error === "ROOM_NOT_STARTED") {
-        toast.info("No opponent joined yet", { 
-          description: "Use 'Cancel Room & Refund' instead." 
-        });
-      } else {
-        toast.error("Forfeit failed", { description: result?.reason || result?.error || "Please try again." });
-      }
-    } catch (err: any) {
-      console.error("[room.action.forfeit_error]", err);
-      toast.error("Forfeit failed", { description: err?.message || "Unknown error" });
-    } finally {
-      setIsForfeitingMatch(false);
-    }
-  }, [roomPdaParam, address, room?.gameType, signingDisabled, needsMobileWalletRedirect, forfeitGame, clearRoomFromState, fetchUserActiveRoom, navigate]);
 
   const onPlayAgain = async () => {
     // Check if we're on a preview domain
@@ -1103,14 +845,6 @@ return () => {
 
   return (
     <div className="container max-w-2xl py-8 px-4">
-      {/* Open-in-Wallet panel for mobile users in Chrome/Safari */}
-      {shouldShowWalletPanel && (
-        <OpenInWalletPanel
-          currentUrl={window.location.href}
-          onDismiss={() => setDismissedWalletPanel(true)}
-        />
-      )}
-      
       <Button variant="ghost" size="sm" className="mb-4" onClick={() => navigate("/room-list")}>
         <ArrowLeft className="mr-2 h-4 w-4" /> Back to Rooms
       </Button>
@@ -1236,11 +970,9 @@ return () => {
                   <span className={`px-3 py-1 rounded-full text-sm font-medium border ${
                     roomMode === 'ranked' 
                       ? 'bg-red-500/20 text-red-400 border-red-500/30' 
-                      : roomMode === 'private'
-                        ? 'bg-violet-500/20 text-violet-400 border-violet-500/30'
-                        : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                      : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
                   }`}>
-                    {roomMode === 'ranked' ? '🔴 Ranked' : roomMode === 'private' ? '🟣 Private' : '🟢 Casual'}
+                    {roomMode === 'ranked' ? '🔴 Ranked' : '🟢 Casual'}
                   </span>
                 )}
                 {isPlayer && (
@@ -1294,14 +1026,6 @@ return () => {
                   </div>
                 </div>
                 <p className="text-xs text-muted-foreground">5% platform fee deducted from winnings</p>
-                {/* Turn Time - for ranked/private modes */}
-                {turnTimeSeconds > 0 && (
-                  <div className="flex items-center gap-2 mt-2 pt-2 border-t border-primary/10">
-                    <Clock className="h-4 w-4 text-primary" />
-                    <span className="text-sm text-muted-foreground">Time per turn:</span>
-                    <span className="text-sm font-semibold text-primary">{turnTimeSeconds} seconds</span>
-                  </div>
-                )}
               </div>
 
               {/* Players List */}
@@ -1410,19 +1134,6 @@ return () => {
                 </div>
               )}
 
-              {/* Share button for private rooms - visible to creator */}
-              {isOpenStatus(status) && isCreator && roomMode === 'private' && roomModeLoaded && (
-                <Button
-                  onClick={() => setShowShareDialog(true)}
-                  size="lg"
-                  variant="outline"
-                  className="gap-2 border-violet-500/30 text-violet-400 hover:bg-violet-500/10"
-                >
-                  <Share2 className="h-4 w-4" />
-                  Share Invite Link
-                </Button>
-              )}
-
               {/* Room full message (for non-players) */}
               {status === RoomStatus.Started && !isPlayer && (
                 <div className="flex items-center gap-2 px-4 py-2 bg-amber-500/10 border border-amber-500/30 rounded-lg">
@@ -1446,62 +1157,8 @@ return () => {
 
             {/* Enable Presence Toggle - Disabled until program supports ping_room */}
 
-            {/* ═══════════════════════════════════════════════════════════════════════ */}
-            {/* Creator Actions: Cancel Room & Refund OR Forfeit Match (DB-based)      */}
-            {/* ═══════════════════════════════════════════════════════════════════════ */}
-            
-            {/* Cancel Room & Refund - shown when creator is alone / game not started */}
-            {canCancelAndRefund && !canForfeitMatch && (
-              <Button
-                onClick={onCancelRoomAndRefund}
-                size="lg"
-                variant="outline"
-                disabled={isTxInFlight || hookTxPending || signingDisabled || isCancellingRoom}
-                className="min-w-40 border-amber-500/30 text-amber-400 hover:bg-amber-500/10"
-              >
-                {isCancellingRoom ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Cancelling...
-                  </>
-                ) : signingDisabled ? (
-                  "Signing Disabled"
-                ) : (
-                  <>
-                    <XCircle className="mr-2 h-4 w-4" />
-                    Cancel Room & Refund
-                  </>
-                )}
-              </Button>
-            )}
-            
-            {/* Forfeit Match - shown when opponent has joined and game is active */}
-            {canForfeitMatch && (
-              <Button
-                onClick={onForfeitMatch}
-                size="lg"
-                variant="destructive"
-                disabled={isTxInFlight || hookTxPending || signingDisabled || isForfeitingMatch}
-                className="min-w-40"
-              >
-                {isForfeitingMatch ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Forfeiting...
-                  </>
-                ) : signingDisabled ? (
-                  "Signing Disabled"
-                ) : (
-                  <>
-                    <Flag className="mr-2 h-4 w-4" />
-                    Forfeit Match
-                  </>
-                )}
-              </Button>
-            )}
-
-            {/* Legacy Cancel Room Button (fallback via on-chain state) */}
-            {canCancel && !canCancelAndRefund && !canForfeitMatch && (
+            {/* Cancel Room Button */}
+            {canCancel && (
               <Button
                 onClick={onCancelRoom}
                 size="lg"
@@ -1589,25 +1246,8 @@ return () => {
 
       {/* Cancel Room Confirmation Modal - Disabled until program supports cancel_room */}
       
-      {/* Share Invite Dialog for Private Rooms */}
-      <ShareInviteDialog
-        open={showShareDialog}
-        onOpenChange={setShowShareDialog}
-        roomId={roomPdaParam || ""}
-        gameName={gameName}
-        stakeSol={Number(stakeLamports) / LAMPORTS_PER_SOL}
-        winnerPayout={Number(winnerGetsFullLamports) / LAMPORTS_PER_SOL}
-        turnTimeSeconds={turnTimeSeconds}
-        maxPlayers={maxPlayers}
-        playerCount={playerCount}
-        mode={roomMode}
-      />
-      
       {/* Transaction Debug Panel - shown on tx failure */}
       <TxDebugPanel debugInfo={txDebugInfo} onClose={clearTxDebug} />
-      
-      {/* Join Trace Debug Panel - shown when localStorage.debug_join === "1" */}
-      <JoinTraceDebugPanel />
     </div>
   );
 }

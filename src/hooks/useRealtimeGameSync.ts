@@ -2,7 +2,6 @@
 import { useEffect, useRef, useCallback, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { RealtimeChannel } from "@supabase/supabase-js";
-import { safeTrim } from "@/lib/safe";
 
 export interface RealtimeGameMessage {
   type: string;
@@ -73,8 +72,8 @@ export function useRealtimeGameSync({
           processedIds.current = new Set(ids.slice(-250));
         }
         
-        // Ignore our own messages (use safeTrim - Base58 is case-sensitive)
-        if (safeTrim(payload.sender) === safeTrim(localAddressRef.current)) {
+        // Ignore our own messages (use trim, not toLowerCase - Base58 is case-sensitive)
+        if (payload.sender?.trim() === localAddressRef.current.trim()) {
           console.log(`[RealtimeGameSync] Ignoring own message: ${payload.type}`);
           return;
         }
@@ -121,8 +120,8 @@ export function useRealtimeGameSync({
               const msgId = `${payload.type}-${payload.sender}-${payload.timestamp}`;
               if (processedIds.current.has(msgId)) return;
               processedIds.current.add(msgId);
-              // Use safeTrim - Base58 is case-sensitive
-              if (safeTrim(payload.sender) === safeTrim(localAddressRef.current)) return;
+              // Use trim, not toLowerCase - Base58 is case-sensitive
+              if (payload.sender?.trim() === localAddressRef.current.trim()) return;
               lastMessageTime.current = Date.now();
               reconnectAttempts.current = 0;
               onMessageRef.current(payload as RealtimeGameMessage);
@@ -211,8 +210,8 @@ export function useRealtimeGameSync({
         const msgId = `${payload.type}-${payload.sender}-${payload.timestamp}`;
         if (processedIds.current.has(msgId)) return;
         processedIds.current.add(msgId);
-        // Use safeTrim - Base58 is case-sensitive
-        if (safeTrim(payload.sender) === safeTrim(localAddressRef.current)) return;
+        // Use trim, not toLowerCase - Base58 is case-sensitive
+        if (payload.sender?.trim() === localAddressRef.current.trim()) return;
         lastMessageTime.current = Date.now();
         reconnectAttempts.current = 0;
         onMessageRef.current(payload as RealtimeGameMessage);

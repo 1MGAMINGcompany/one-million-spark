@@ -2,7 +2,6 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { Connection, PublicKey, Transaction, TransactionInstruction, SystemProgram, Keypair } from "npm:@solana/web3.js@1.95.0";
 import bs58 from "npm:bs58@5.0.0";
-import { requireSession } from "../_shared/requireSession.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -18,7 +17,7 @@ const STALE_THRESHOLD_HOURS = 24;
 
 interface RecoverRequest {
   roomPda: string;
-  // callerWallet removed - derived from session
+  callerWallet: string;
 }
 
 // Room account layout from IDL:
@@ -168,34 +167,21 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    // Initialize Supabase client first for session validation
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const { roomPda, callerWallet }: RecoverRequest = await req.json();
 
-    // 🔒 SECURITY: Require session token - derive caller from session only
-    const sessionResult = await requireSession(supabase, req);
-    if (!sessionResult.ok) {
-      console.warn("[recover-funds] Unauthorized:", sessionResult.error);
+    if (!roomPda || !callerWallet) {
       return new Response(
-        JSON.stringify({ status: "error", error: "Unauthorized" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // callerWallet is ALWAYS derived from session - ignore any body.callerWallet
-    const callerWallet = sessionResult.session.wallet;
-
-    const { roomPda }: RecoverRequest = await req.json();
-
-    if (!roomPda) {
-      return new Response(
-        JSON.stringify({ error: "Missing roomPda" }),
+        JSON.stringify({ error: "Missing roomPda or callerWallet" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     console.log(`[recover-funds] Recovery request for room ${roomPda} by ${callerWallet}`);
+
+    // Initialize clients
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
 
     const rpcUrl = Deno.env.get("VITE_SOLANA_RPC_URL") || "https://api.mainnet-beta.solana.com";
     const connection = new Connection(rpcUrl, "confirmed");
@@ -301,86 +287,46 @@ Deno.serve(async (req: Request) => {
           );
         }
 
-      case 2: // Started (on-chain status)
-        // ─────────────────────────────────────────────────────────────
-        // FETCH DB SESSION to determine ACTUAL game state
-        // ─────────────────────────────────────────────────────────────
+      case 2: // Started
+        // Check if game is stale
         const { data: session } = await supabase
           .from("game_sessions")
-          .select("created_at, updated_at, status_int, participants, player1_wallet, player2_wallet, start_roll_finalized")
+          .select("created_at, updated_at, status")
           .eq("room_pda", roomPda)
           .single();
 
-        // Compute participantsCount from participants array or legacy p1/p2 fallback
-        let participantsCount = 0;
-        if (session?.participants && Array.isArray(session.participants)) {
-          participantsCount = session.participants.filter((p: string) => p && p.length > 10).length;
-        } else {
-          // Legacy fallback
-          if (session?.player1_wallet) participantsCount++;
-          if (session?.player2_wallet) participantsCount++;
-        }
+        const { data: lastMove } = await supabase
+          .from("game_moves")
+          .select("created_at")
+          .eq("room_pda", roomPda)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .single();
 
-        const dbStatusInt = session?.status_int ?? 1;
-        const startRollFinalized = session?.start_roll_finalized === true;
+        const lastActivity = lastMove?.created_at || session?.updated_at || session?.created_at;
+        const hoursSinceActivity = lastActivity 
+          ? (Date.now() - new Date(lastActivity).getTime()) / (1000 * 60 * 60)
+          : Infinity;
 
-        console.log(`[recover-funds] DB state: status_int=${dbStatusInt}, participants=${participantsCount}, start_roll_finalized=${startRollFinalized}`);
+        console.log(`[recover-funds] Hours since last activity: ${hoursSinceActivity}`);
 
-        // ─────────────────────────────────────────────────────────────
-        // IMMEDIATE RECOVERY CONDITIONS (game never really started):
-        // - status_int === 1 (WAITING)
-        // - start_roll_finalized === false
-        // - participantsCount <= 1 (nobody joined)
-        // ─────────────────────────────────────────────────────────────
-        const isWaiting = dbStatusInt === 1;
-        const noStartRoll = !startRollFinalized;
-        const noOpponent = participantsCount <= 1;
-
-        const allowImmediateRecovery = isWaiting || noStartRoll || noOpponent;
-
-        if (allowImmediateRecovery) {
-          console.log(`[recover-funds] ✅ Immediate recovery allowed: waiting=${isWaiting}, noStartRoll=${noStartRoll}, noOpponent=${noOpponent}`);
-          // Fall through to force-settle logic (no stale check needed)
-        } else {
-          // ─────────────────────────────────────────────────────────────
-          // STALE CHECK: Only enforce 24h rule when game is TRULY active:
-          // - status_int === 2 (ACTIVE)
-          // - participantsCount >= 2
-          // - start_roll_finalized === true
-          // ─────────────────────────────────────────────────────────────
-          const { data: lastMove } = await supabase
-            .from("game_moves")
-            .select("created_at")
-            .eq("room_pda", roomPda)
-            .order("created_at", { ascending: false })
-            .limit(1)
-            .single();
-
-          const lastActivity = lastMove?.created_at || session?.updated_at || session?.created_at;
-          const hoursSinceActivity = lastActivity 
-            ? (Date.now() - new Date(lastActivity).getTime()) / (1000 * 60 * 60)
-            : Infinity;
-
-          console.log(`[recover-funds] Game is ACTIVE. Hours since last activity: ${hoursSinceActivity}`);
-
-          if (hoursSinceActivity < STALE_THRESHOLD_HOURS) {
-            await logRecoveryAttempt(supabase, roomPda, callerWallet, "check", "game_active");
-            return new Response(
-              JSON.stringify({
-                status: "game_active",
-                message: `Game is still active. Recovery available after ${STALE_THRESHOLD_HOURS} hours of inactivity.`,
-                hoursSinceActivity: Math.round(hoursSinceActivity * 10) / 10,
-                hoursRemaining: Math.round((STALE_THRESHOLD_HOURS - hoursSinceActivity) * 10) / 10,
-              }),
-              { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-            );
-          }
+        if (hoursSinceActivity < STALE_THRESHOLD_HOURS) {
+          await logRecoveryAttempt(supabase, roomPda, callerWallet, "check", "game_active");
+          return new Response(
+            JSON.stringify({
+              status: "game_active",
+              message: `Game is still active. Recovery available after ${STALE_THRESHOLD_HOURS} hours of inactivity.`,
+              hoursSinceActivity: Math.round(hoursSinceActivity * 10) / 10,
+              hoursRemaining: Math.round((STALE_THRESHOLD_HOURS - hoursSinceActivity) * 10) / 10,
+            }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
         }
 
         // Game is stale - verifier force-settles
-        const verifierSecretKey = Deno.env.get("VERIFIER_SECRET_KEY_V2") || Deno.env.get("VERIFIER_SECRET_KEY");
+        const verifierSecretKey = Deno.env.get("VERIFIER_SECRET_KEY");
         if (!verifierSecretKey) {
-          console.error("[recover-funds] VERIFIER_SECRET_KEY_V2 not configured");
+          console.error("[recover-funds] VERIFIER_SECRET_KEY not configured");
           await logRecoveryAttempt(supabase, roomPda, callerWallet, "force_settle", "verifier_key_missing");
           return new Response(
             JSON.stringify({ status: "error", message: "Server configuration error" }),
@@ -511,7 +457,7 @@ Deno.serve(async (req: Request) => {
           // Update game session status
           await supabase
             .from("game_sessions")
-            .update({ status: "finished", status_int: 3, updated_at: new Date().toISOString() })
+            .update({ status: "finished", updated_at: new Date().toISOString() })
             .eq("room_pda", roomPda);
 
           await logRecoveryAttempt(supabase, roomPda, callerWallet, "force_settle", "success", signature);

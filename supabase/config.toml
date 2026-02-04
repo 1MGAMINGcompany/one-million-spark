@@ -44,21 +44,3 @@ verify_jwt = false
 
 [functions.solana-rpc-read]
 verify_jwt = false
-
-[functions.send-invite]
-verify_jwt = false
-
-[functions.list-invites]
-verify_jwt = false
-
-[functions.respond-invite]
-verify_jwt = false
-
-[functions.cancel-invite]
-verify_jwt = false
-
-[functions.match-get]
-verify_jwt = false
-
-[functions.match-og]
-verify_jwt = false

@@ -2,28 +2,15 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { useWallet, useConnection } from "@solana/wallet-adapter-react";
 import { LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { useTranslation } from "react-i18next";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Wallet, LogOut, RefreshCw, Copy, Check, AlertCircle, Loader2, ExternalLink, User, Trash2 } from "lucide-react";
+import { Wallet, LogOut, RefreshCw, Copy, Check, AlertCircle, Loader2, ExternalLink, User } from "lucide-react";
 import { toast } from "sonner";
 import { fetchBalance as fetchBalanceRpc, is403Error } from "@/lib/solana-rpc";
 import { NetworkProofBadge } from "./NetworkProofBadge";
 import { MobileWalletFallback } from "./MobileWalletFallback";
 import { WalletNotDetectedModal } from "./WalletNotDetectedModal";
-import { usePendingRoute } from "@/hooks/usePendingRoute";
-import { clearAllSessionTokens } from "@/lib/sessionToken";
-import { supabase } from "@/integrations/supabase/client";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 
 // Import local wallet icons
 import phantomIcon from "@/assets/wallets/phantom.svg";
@@ -133,14 +120,6 @@ export function WalletButton() {
   const [notDetectedWallet, setNotDetectedWallet] = useState<'phantom' | 'solflare' | 'backpack' | null>(null);
   const connectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // State for clear session confirmation dialog
-  const [showClearConfirm, setShowClearConfirm] = useState(false);
-  const [clearSessionLoading, setClearSessionLoading] = useState(false);
-  const [dangerousRoomPda, setDangerousRoomPda] = useState<string | null>(null);
-  const [dangerousReason, setDangerousReason] = useState<'active' | 'unverified' | null>(null);
-
-  const navigate = useNavigate();
-
   // Platform detection
   const isMobile = getIsMobile();
   const isAndroid = getIsAndroid();
@@ -193,17 +172,12 @@ export function WalletButton() {
     }
   }, [connected, publicKey, connection]);
 
-  // Pending route for auto-navigation after connect
-  const { autoNavigateIfPending } = usePendingRoute();
-
-  // Fetch balance and auto-navigate when connected
+  // Fetch balance when connected
   useEffect(() => {
     if (connected && publicKey) {
       fetchBalance();
-      // Check for pending room destination
-      autoNavigateIfPending(true);
     }
-  }, [connected, publicKey, fetchBalance, autoNavigateIfPending]);
+  }, [connected, publicKey, fetchBalance]);
 
   // Handle MWA timeout - show fallback panel (MOBILE ONLY)
   const handleMWATimeout = useCallback(() => {
@@ -282,154 +256,6 @@ export function WalletButton() {
     } catch (err) {
       console.error('[Wallet] Disconnect error:', err);
     }
-  };
-
-  /**
-   * Check if user is in a dangerous active game.
-   * DOES NOT short-circuit on missing global token.
-   * Scans all session_token_<roomPda> keys deterministically.
-   * 
-   * Refined behavior for empty tokens:
-   * - If empty token found: remove the key and continue scanning
-   * - Only return 'unverified' if empty found twice OR no other rooms remain
-   */
-  const checkActiveGameState = async (): Promise<{
-    isDangerous: boolean;
-    roomPda?: string;
-    reason?: 'active' | 'unverified';
-  }> => {
-    // Collect all roomPdas from localStorage keys
-    const roomPdas: string[] = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (!key) continue;
-      
-      // Only process session_token_<roomPda> keys (not session_token_latest)
-      if (key.startsWith("session_token_") && key !== "session_token_latest") {
-        const roomPda = key.replace("session_token_", "");
-        if (roomPda && roomPda.length >= 32) {
-          roomPdas.push(roomPda);
-        }
-      }
-    }
-    
-    // If no room tokens found, safe to clear
-    if (roomPdas.length === 0) {
-      return { isDangerous: false };
-    }
-    
-    let emptyTokenCount = 0;
-    let lastEmptyRoomPda: string | null = null;
-    let validRoomsChecked = 0;
-    
-    // Check each room
-    for (const roomPda of roomPdas) {
-      const key = `session_token_${roomPda}`;
-      const token = localStorage.getItem(key) || "";
-      
-      // If token is empty/missing for this key:
-      // 1. Remove the orphan key (self-healing)
-      // 2. Track how many empties we've seen
-      if (!token) {
-        localStorage.removeItem(key);
-        emptyTokenCount++;
-        lastEmptyRoomPda = roomPda;
-        console.warn("[ClearSession] Removed empty token key:", roomPda.slice(0, 8));
-        continue; // Continue to check other rooms
-      }
-      
-      validRoomsChecked++;
-      
-      try {
-        // Call game-session-get WITH Authorization header
-        const { data, error } = await supabase.functions.invoke("game-session-get", {
-          body: { roomPda },
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        
-        if (error || !data?.ok || !data?.session) continue;
-        
-        const session = data.session;
-        const statusInt = session.status_int ?? 1;
-        const participantsCount = session.participants?.length ?? 
-          (session.player1_wallet && session.player2_wallet ? 2 : session.player1_wallet ? 1 : 0);
-        const startRollFinalized = session.start_roll_finalized ?? false;
-        
-        // DANGEROUS: status_int === 2 AND participantsCount >= 2 AND start_roll_finalized === true
-        const isDangerous = statusInt === 2 && participantsCount >= 2 && startRollFinalized;
-        
-        if (isDangerous) {
-          return { isDangerous: true, roomPda, reason: 'active' };
-        }
-      } catch (e) {
-        console.warn("[ClearSession] Failed to check room:", roomPda.slice(0, 8), e);
-        // On error, continue checking other rooms
-      }
-    }
-    
-    // After scanning all rooms:
-    // Return 'unverified' if:
-    // 1. Empty token found twice in a row (persistent problem), OR
-    // 2. We found empty tokens AND checked no valid rooms (no other rooms to verify)
-    if (emptyTokenCount >= 2 || (emptyTokenCount > 0 && validRoomsChecked === 0)) {
-      return { 
-        isDangerous: true, 
-        roomPda: lastEmptyRoomPda || roomPdas[0], 
-        reason: 'unverified' 
-      };
-    }
-    
-    return { isDangerous: false };
-  };
-
-  // Execute the clear
-  const executeClearSession = () => {
-    const count = clearAllSessionTokens();
-    toast.success(t("clearSession.cleared", "Session cleared") + ` (${count} ${t("clearSession.tokensRemoved", "tokens removed").replace("{{count}}", String(count))})`);
-    navigate("/room-list");
-  };
-
-  // Handle clear session button click
-  const handleClearSession = async () => {
-    setClearSessionLoading(true);
-    setDangerousRoomPda(null);
-    setDangerousReason(null);
-    
-    try {
-      const { isDangerous, roomPda, reason } = await checkActiveGameState();
-      
-      if (isDangerous && roomPda) {
-        // Show confirmation dialog with room info
-        setDangerousRoomPda(roomPda);
-        setDangerousReason(reason || 'active');
-        setShowClearConfirm(true);
-      } else {
-        // Clear immediately
-        executeClearSession();
-      }
-    } catch (e) {
-      console.error("[ClearSession] Check failed:", e);
-      // On error, allow clear anyway (don't block user)
-      executeClearSession();
-    } finally {
-      setClearSessionLoading(false);
-    }
-  };
-
-  // Confirmed clear (from dialog)
-  const handleClearConfirmed = () => {
-    setShowClearConfirm(false);
-    setDangerousRoomPda(null);
-    setDangerousReason(null);
-    executeClearSession();
-  };
-
-  // Go to room list (no clearing) - for unverified state
-  const handleGoToRoomList = () => {
-    setShowClearConfirm(false);
-    setDangerousRoomPda(null);
-    setDangerousReason(null);
-    navigate("/room-list");
   };
 
   const handleCopyAddress = async () => {
@@ -538,65 +364,34 @@ export function WalletButton() {
     });
   }, [isMobile, isInWalletBrowser, wallets.length, sortedWallets.length]);
 
-  // Mobile wallet browser auto-connect (Phantom, Solflare, Backpack in-app browsers)
-  // CRITICAL FIX: Do NOT rely on window.solana.isConnected - it's false until approval
-  // Instead, proactively request connection when in wallet browser environment
-  const autoConnectAttemptedRef = useRef(false);
-  
+  // Auto-sync for in-app wallet browsers (Solflare, Phantom, etc.)
+  // CRITICAL: Runs ONCE on mount to detect already-connected wallet
+  // This fixes the "Connect Wallet" loop in Solflare in-app browser
   useEffect(() => {
-    // Skip if already connected, connecting, or already attempted
-    if (connected || connecting || autoConnectAttemptedRef.current) return;
+    const win = window as any;
     
-    // Only auto-connect in wallet browser environments
+    // Skip if already connected or currently connecting
+    if (connected || connecting) return;
+    
+    // Only auto-sync in wallet browser environments
     if (!isInWalletBrowser) return;
     
-    // Mark as attempted to prevent loops
-    autoConnectAttemptedRef.current = true;
-    
-    // Wait 500ms for wallet provider to fully initialize
-    const timer = setTimeout(() => {
-      const win = window as any;
+    // Check if window.solana reports connected
+    if (win.solana?.isConnected && win.solana?.publicKey) {
+      console.log("[WalletState] In-app browser has connected wallet, syncing...");
       
-      // Find the best adapter based on detected wallet
-      let preferredAdapter: string | null = null;
-      
-      // Detect which wallet's browser we're in
-      if (win.solana?.isPhantom || win.phantom?.solana?.isPhantom) {
-        preferredAdapter = 'Phantom';
-      } else if (win.solflare?.isSolflare || win.solana?.isSolflare) {
-        preferredAdapter = 'Solflare';
-      } else if (win.backpack?.isBackpack) {
-        preferredAdapter = 'Backpack';
-      }
-      
-      // Find the adapter
-      let walletToConnect = preferredAdapter
-        ? wallets.find(w => w.adapter.name.toLowerCase().includes(preferredAdapter!.toLowerCase()))
-        : null;
-      
-      // Fallback to first installed adapter if preferred not found
-      if (!walletToConnect) {
-        walletToConnect = wallets.find(w => w.readyState === 'Installed');
-      }
-      
-      if (walletToConnect && !connected) {
-        console.log("[WalletState] Proactively connecting in wallet browser:", walletToConnect.adapter.name);
-        select(walletToConnect.adapter.name);
-        
-        // Single connect call with error handling
+      // Find matching installed adapter
+      const installedWallet = wallets.find(w => w.readyState === 'Installed');
+      if (installedWallet) {
+        select(installedWallet.adapter.name);
+        // Single connect call (NOT in a loop)
         connect().catch(err => {
           console.warn("[WalletState] Auto-connect failed:", err);
-          // Reset attempt flag on failure so user can retry manually
-          autoConnectAttemptedRef.current = false;
         });
-      } else {
-        console.log("[WalletState] No installed wallet found for auto-connect");
-        autoConnectAttemptedRef.current = false;
       }
-    }, 500);
-    
-    return () => clearTimeout(timer);
-  }, [isInWalletBrowser, wallets, connected, connecting, select, connect]);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty deps - run ONCE on mount
 
   // Log wallet state changes for debugging
   useEffect(() => {
@@ -1065,24 +860,8 @@ export function WalletButton() {
           variant="ghost"
           size="icon"
           className="h-8 w-8 text-destructive hover:text-destructive"
-          title="Disconnect wallet"
         >
           <LogOut size={14} />
-        </Button>
-        
-        <Button
-          onClick={handleClearSession}
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8 text-muted-foreground hover:text-foreground"
-          title="Clear session tokens"
-          disabled={clearSessionLoading}
-        >
-          {clearSessionLoading ? (
-            <Loader2 size={14} className="animate-spin" />
-          ) : (
-            <Trash2 size={14} />
-          )}
         </Button>
       </div>
       
@@ -1106,55 +885,6 @@ export function WalletButton() {
       
       {/* Network Proof Badge - compact view */}
       <NetworkProofBadge compact showBalance={false} />
-
-      {/* Clear Session Confirmation Dialog */}
-      <AlertDialog open={showClearConfirm} onOpenChange={setShowClearConfirm}>
-        <AlertDialogContent className="max-w-[90vw] sm:max-w-md">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-amber-500">
-              {t("clearSession.title", "Clear session while in a live match?")}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {dangerousReason === 'unverified' ? (
-                <>
-                  {t("clearSession.descriptionUnverified", "We couldn't verify this match state. Clearing session may disconnect you and lead to timeout.")}
-                  {dangerousRoomPda && (
-                    <span className="block mt-2 font-mono text-xs text-amber-400">
-                      {t("clearSession.roomLabel", "Room:")} {dangerousRoomPda.slice(0, 8)}...
-                    </span>
-                  )}
-                </>
-              ) : (
-                <>
-                  {t("clearSession.descriptionActive", "Clearing your session disconnects you. If you don't return, you may time out and lose your stake.")}
-                  {dangerousRoomPda && (
-                    <span className="block mt-2 font-mono text-xs">
-                      {t("clearSession.inRoom", "You are currently in room:")} {dangerousRoomPda.slice(0, 8)}...
-                    </span>
-                  )}
-                </>
-              )}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="flex-col sm:flex-row gap-2">
-            <AlertDialogCancel>{t("clearSession.cancel", "Cancel")}</AlertDialogCancel>
-            {dangerousReason === 'unverified' && (
-              <Button 
-                variant="outline" 
-                onClick={handleGoToRoomList}
-              >
-                {t("clearSession.goToRoomList", "Go to Room List")}
-              </Button>
-            )}
-            <AlertDialogAction 
-              onClick={handleClearConfirmed}
-              className="bg-amber-600 hover:bg-amber-700"
-            >
-              {t("clearSession.clearAnyway", "Clear anyway")}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }

@@ -26,7 +26,6 @@ import { useSound } from "@/contexts/SoundContext";
 import { useSolPrice } from "@/hooks/useSolPrice";
 import { useSolanaRooms } from "@/hooks/useSolanaRooms";
 import { useSolanaNetwork } from "@/hooks/useSolanaNetwork";
-import { useRoomSettings } from "@/hooks/useRoomSettings";
 import { Wallet, Loader2, AlertCircle, RefreshCw, RefreshCcw, Info } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { GameType, RoomStatus, isOpenStatus, type RoomDisplay } from "@/lib/solana-program";
@@ -37,15 +36,11 @@ import { PreviewDomainBanner, useSigningDisabled } from "@/components/PreviewDom
 import { getRoomPda, isMobileDevice, hasInjectedSolanaWallet, isBlockingRoom } from "@/lib/solana-utils";
 import { ActiveGameBanner } from "@/components/ActiveGameBanner";
 import { UnresolvedRoomModal } from "@/components/UnresolvedRoomModal";
-import { SettingsFailedModal } from "@/components/SettingsFailedModal";
 import { requestNotificationPermission } from "@/lib/pushNotifications";
 import { AudioManager } from "@/lib/AudioManager";
 import { showBrowserNotification } from "@/lib/pushNotifications";
 import { parseRematchParams, lamportsToSol, RematchPayload, solToLamports } from "@/lib/rematchPayload";
 import { supabase } from "@/integrations/supabase/client";
-import { getSessionToken, getAuthHeaders } from "@/lib/sessionToken";
-import { short } from "@/lib/safe";
-import { showGameStartToast } from "@/hooks/useGameStartToast";
 
 // Game type mapping from string to number
 const GAME_TYPE_MAP: Record<string, string> = {
@@ -54,15 +49,6 @@ const GAME_TYPE_MAP: Record<string, string> = {
   backgammon: "3",
   checkers: "4",
   ludo: "5",
-};
-
-// Game type number to name mapping (for edge function)
-const GAME_TYPE_NAMES: Record<number, string> = {
-  1: "Chess",
-  2: "Dominos",
-  3: "Backgammon",
-  4: "Checkers",
-  5: "Ludo",
 };
 
 // Target minimum fee in USD
@@ -75,18 +61,17 @@ export default function CreateRoom() {
   const [searchParams] = useSearchParams();
   const { t } = useTranslation();
   const { isConnected, address } = useWallet();
-  // Wallet adapter used for connection status (signMessage removed - no longer needed)
+  const { signMessage } = useWalletAdapter(); // For signing settings message
   const { toast } = useToast();
   const { play } = useSound();
   const { price, formatUsd, loading: priceLoading, refetch: refetchPrice } = useSolPrice();
-  const { createRoom, txPending, activeRoom, blockingRoom: hookBlockingRoom, cancelRoom, cancelRoomByPda, fetchRooms, txDebugInfo, clearTxDebug, fetchUserActiveRoom } = useSolanaRooms();
-  const {
+  const { createRoom, txPending, activeRoom, blockingRoom: hookBlockingRoom, cancelRoom, fetchRooms, txDebugInfo, clearTxDebug, fetchUserActiveRoom } = useSolanaRooms();
+  const { 
     balanceInfo, 
     fetchBalance, 
     networkInfo, 
     checkNetworkMismatch 
   } = useSolanaNetwork();
-  const { saveSettings: saveRoomSettings, isSaving: isSavingSettings } = useRoomSettings();
 
   // Parse rematch params from URL
   const rematchData = parseRematchParams(searchParams);
@@ -95,18 +80,13 @@ export default function CreateRoom() {
   const [gameType, setGameType] = useState<string>("1"); // Chess
   const [entryFee, setEntryFee] = useState<string>("0"); // Default to 0 for casual
   const [maxPlayers, setMaxPlayers] = useState<string>("2");
-  const [ludoPlayerCount, setLudoPlayerCount] = useState<string>("4"); // Ludo-specific: 2, 3, or 4 players
   const [turnTime, setTurnTime] = useState<string>("10");
-  const [gameMode, setGameMode] = useState<'casual' | 'ranked' | 'private'>('casual');
+  const [gameMode, setGameMode] = useState<'casual' | 'ranked'>('casual');
   const [checkingActiveRoom, setCheckingActiveRoom] = useState(true);
   const [refreshingBalance, setRefreshingBalance] = useState(false);
   const [showMobileWalletRedirect, setShowMobileWalletRedirect] = useState(false);
   const [showUnresolvedModal, setShowUnresolvedModal] = useState(false);
   const [modalBlockingRoom, setModalBlockingRoom] = useState<RoomDisplay | null>(null);
-  
-  // Settings failure modal state
-  const [showSettingsFailedModal, setShowSettingsFailedModal] = useState(false);
-  const [failedRoomPda, setFailedRoomPda] = useState<string | null>(null);
   
   // Track previous status and navigation state
   const prevStatusRef = useRef<number | null>(null);
@@ -187,13 +167,10 @@ export default function CreateRoom() {
         { requireInteraction: true }
       );
       
-      // Dedupe toast per room (prevents repeated toasts on mobile)
-      showGameStartToast(
-        activeRoom.pda,
-        `🎮 ${t("gameBanner.opponentJoined")}`,
-        `${activeRoom.gameTypeName} - ${t("gameBanner.enterGame")}!`,
-        "shadcn"
-      );
+      toast({
+        title: `🎮 ${t("gameBanner.opponentJoined")}`,
+        description: `${activeRoom.gameTypeName} - ${t("gameBanner.enterGame")}!`,
+      });
       
       // Navigate to room using PDA from activeRoom (the ONLY unique identifier)
       console.log("[CreateRoom] Navigating to room via PDA:", activeRoom.pda);
@@ -215,57 +192,6 @@ export default function CreateRoom() {
     setShowUnresolvedModal(false);
     navigate(`/room/${roomPda}`);
   }, [navigate]);
-
-  // Handler for auto-cancel when settings fail
-  const handleSettingsFailedCancel = useCallback(async () => {
-    if (!failedRoomPda) {
-      console.error("[CreateRoom] No failed room PDA to cancel");
-      return;
-    }
-
-    console.log("[CreateRoom] Auto-canceling room due to settings failure:", short(failedRoomPda));
-
-    try {
-      // Use cancelRoomByPda which takes a PDA string
-      const result = await cancelRoomByPda(failedRoomPda);
-      
-      if (result.ok) {
-        toast({
-          title: t("createRoom.roomCanceled", "Room Canceled"),
-          description: t("createRoom.roomCanceledDesc", "Your stake has been refunded. Please try creating a new room."),
-        });
-        
-        // Clear the failed room state
-        setFailedRoomPda(null);
-        
-        // Refresh room state
-        await fetchUserActiveRoom();
-      } else {
-        throw new Error(result.reason || "Cancel room failed");
-      }
-    } catch (err: unknown) {
-      console.error("[CreateRoom] Auto-cancel failed:", err);
-      throw err; // Let the modal handle the error display
-    }
-  }, [failedRoomPda, cancelRoomByPda, toast, t, fetchUserActiveRoom]);
-
-  // Handler to proceed anyway despite settings failure
-  const handleProceedAnyway = useCallback(() => {
-    if (!failedRoomPda) return;
-    
-    console.warn("[CreateRoom] User chose to proceed despite settings failure");
-    toast({
-      title: "Warning",
-      description: "Room created but settings may not be saved. Timer may default to 60s.",
-      variant: "default",
-    });
-    
-    // Navigate to the room
-    const queryParam = gameMode === 'private' ? '?private_created=1' : '';
-    navigate(`/room/${failedRoomPda}${queryParam}`);
-    
-    setFailedRoomPda(null);
-  }, [failedRoomPda, gameMode, navigate, toast]);
 
   const handleCreateRoom = async () => {
     // Check if we're on a preview domain
@@ -350,83 +276,10 @@ export default function CreateRoom() {
     
     // Pass mode to createRoom - this is the AUTHORITATIVE source of truth
     // Mode is written to DB immediately, not localStorage
-    // For Ludo, use ludoPlayerCount; for other games, use maxPlayers (default 2)
-    const effectiveMaxPlayers = gameType === "5" ? parseInt(ludoPlayerCount) : parseInt(maxPlayers);
-
-    // ✅ CASUAL (FREE) = OFF-CHAIN ONLY (Supabase game_sessions)
-    // Do NOT touch Solana program for casual rooms.
-    if (gameMode === "casual") {
-      if (!address) {
-        toast({
-          title: "Wallet not connected",
-          description: "Please connect your wallet first",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      const roomKey = crypto.randomUUID();
-
-      const { error: upsertErr } = await supabase.rpc("upsert_game_session", {
-        p_room_pda: roomKey,
-        p_game_type: (parseInt(gameType) as GameType).toString(),
-        p_game_state: {},
-        p_current_turn_wallet: address,
-        p_player1_wallet: address,
-        p_player2_wallet: "",
-        p_status: "active",
-        p_mode: "casual",
-        p_caller_wallet: address,
-      });
-
-      if (upsertErr) {
-        console.error("[CreateRoom] Casual upsert_game_session failed:", upsertErr);
-        toast({
-          title: "Failed to create casual room",
-          description: upsertErr.message || "Unknown error",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      // Persist settings (non-fatal if it fails for casual)
-      // 🔒 Session token required for auth - try to get one but don't block casual flow
-      const sessionToken = getSessionToken(roomKey);
-      try {
-        await supabase.functions.invoke("game-session-set-settings", {
-          body: {
-            roomPda: roomKey,
-            turnTimeSeconds: 0,
-            mode: "casual",
-            maxPlayers: effectiveMaxPlayers,
-            gameType: GAME_TYPE_NAMES[parseInt(gameType)] || "unknown",
-            // creatorWallet removed - derived from session on server
-          },
-          headers: sessionToken ? getAuthHeaders(sessionToken) : undefined,
-        });
-      } catch (e) {
-        console.warn("[CreateRoom] Casual settings save threw:", e);
-      }
-
-      navigate(`/room/${roomKey}?casual_created=1`);
-      return;
-    }
-
-    // ✅ RANKED/PRIVATE (ON-CHAIN) must have stake > 0 (program enforces this)
-    if ((gameMode === "ranked" || gameMode === "private") && entryFeeNum <= 0) {
-      toast({
-        title: "Invalid stake",
-        description: "Stake must be > 0 for ranked/private rooms.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    
     const roomId = await createRoom(
       parseInt(gameType) as GameType,
       entryFeeNum,
-      effectiveMaxPlayers,
+      parseInt(maxPlayers),
       gameMode // Pass mode directly to createRoom
     );
 
@@ -451,118 +304,91 @@ export default function CreateRoom() {
         });
         
         // localStorage is NO LONGER authoritative for mode - only a display hint
-        // FIX: Private rooms also have turn times (not just ranked)
-        const authoritativeTurnTime = (gameMode === 'ranked' || gameMode === 'private') ? turnTimeSeconds : 0;
-        
         localStorage.setItem(`room_settings_${roomPdaStr}`, JSON.stringify({
-          turnTimeSeconds: authoritativeTurnTime,
+          turnTimeSeconds: gameMode === 'ranked' ? turnTimeSeconds : 0,
           stakeLamports: solToLamports(entryFeeNum),
         }));
         
-        // ═══════════════════════════════════════════════════════════════════════
-        // CRITICAL: Wait for session token before calling set-settings
-        // The createRoom flow in useSolanaRooms stores the session token AFTER
-        // record_acceptance succeeds. Poll up to 1s to ensure it's available.
-        // ═══════════════════════════════════════════════════════════════════════
+        // Persist settings authoritatively in game_sessions via Edge Function
+        // With signature verification for production security
+        const authoritativeTurnTime = gameMode === 'ranked' ? turnTimeSeconds : 0;
         
-        // Poll for session token availability (5 attempts × 200ms = 1 second max)
-        let tokenAvailable = false;
-        for (let attempt = 0; attempt < 5 && !tokenAvailable; attempt++) {
-          await new Promise(resolve => setTimeout(resolve, 200));
-          tokenAvailable = !!getSessionToken(roomPdaStr);
-          if (!tokenAvailable) {
-            console.log(`[CreateRoom] Token poll attempt ${attempt + 1}/5 - not found yet`);
-          }
-        }
-        
-        if (!tokenAvailable) {
-          console.warn(`[CreateRoom] Session token missing for room ${short(roomPdaStr)} after 1s polling`);
-          // For ranked/private, this is critical - show modal
-          if (gameMode === 'ranked' || gameMode === 'private') {
-            setFailedRoomPda(roomPdaStr);
-            setShowSettingsFailedModal(true);
-            return;
-          }
-        }
-        
-        // Use the new useRoomSettings hook with retry logic
-        let settingsResult = await saveRoomSettings({
-          roomPda: roomPdaStr,
-          turnTimeSeconds: authoritativeTurnTime,
-          mode: gameMode,
-          maxPlayers: effectiveMaxPlayers,
-          gameType: GAME_TYPE_NAMES[parseInt(gameType)] || "unknown",
-        });
+        try {
+          const timestamp = Date.now();
 
-        // P0 FIX: If settings failed (session missing), call ranked-accept as fallback to create session
-        if (!settingsResult.success) {
-          console.warn("[CreateRoom] Settings failed, attempting ranked-accept fallback to create session...");
-          
-          const sessionToken = getSessionToken(roomPdaStr);
-          if (sessionToken) {
-            try {
-              const { error: acceptError } = await supabase.functions.invoke("ranked-accept", {
-                body: { 
-                  roomPda: roomPdaStr, 
-                  mode: "simple",
-                  gameMode: gameMode, // Pass mode hint
-                },
-                headers: getAuthHeaders(sessionToken),
-              });
-              
-              if (acceptError) {
-                console.error("[CreateRoom] ranked-accept fallback failed:", acceptError);
-              } else {
-                console.log("[CreateRoom] ✅ ranked-accept fallback succeeded, retrying settings...");
-                
-                // Retry settings once after session creation
-                settingsResult = await saveRoomSettings({
-                  roomPda: roomPdaStr,
-                  turnTimeSeconds: authoritativeTurnTime,
-                  mode: gameMode,
-                  maxPlayers: effectiveMaxPlayers,
-                  gameType: GAME_TYPE_NAMES[parseInt(gameType)] || "unknown",
-                });
-                
-                if (settingsResult.success) {
-                  console.log("[CreateRoom] ✅ Settings saved after fallback");
-                }
-              }
-            } catch (fallbackErr) {
-              console.error("[CreateRoom] ranked-accept fallback exception:", fallbackErr);
+          // IMPORTANT: Must match edge function message format exactly (newline-separated)
+          const message =
+            `1MGAMING:SET_SETTINGS\n` +
+            `roomPda=${roomPdaStr}\n` +
+            `turnTimeSeconds=${authoritativeTurnTime}\n` +
+            `mode=${gameMode}\n` +
+            `ts=${timestamp}`;
+
+          // Convert Uint8Array -> base64
+          const toBase64 = (bytes: Uint8Array) =>
+            btoa(String.fromCharCode(...Array.from(bytes)));
+
+          let signature: string | undefined;
+
+          if (!signMessage) {
+            toast({
+              title: "Settings Error",
+              description: "Wallet does not support message signing. Turn timer may default to 60s.",
+              variant: "destructive",
+            });
+          } else {
+            const msgBytes = new TextEncoder().encode(message);
+            const sigBytes = await signMessage(msgBytes);
+            signature = toBase64(sigBytes);
+          }
+
+          const { data, error: settingsErr } = await supabase.functions.invoke(
+            "game-session-set-settings",
+            {
+              body: {
+                roomPda: roomPdaStr,
+                turnTimeSeconds: authoritativeTurnTime,
+                mode: gameMode,
+                creatorWallet: address,
+                timestamp,
+                signature,
+                message, // optional debugging field
+              },
             }
-          }
-        }
+          );
 
-        if (!settingsResult.success) {
-          console.error("[CreateRoom] Settings save failed after retries:", settingsResult.error);
-          
-          // For ranked/private rooms, settings failure is CRITICAL
-          // Show modal to offer auto-cancel to protect user's stake
-          if (gameMode === 'ranked' || gameMode === 'private') {
-            setFailedRoomPda(roomPdaStr);
-            setShowSettingsFailedModal(true);
-            // Don't navigate - let user decide via modal
-            return;
+          if (settingsErr) {
+            console.error("[TurnTimer] Failed to persist session settings:", settingsErr);
+            toast({
+              title: "Settings Error",
+              description: "Failed to save game settings. Turn timer may default to 60s.",
+              variant: "destructive",
+            });
+          } else if (data?.ok === false) {
+            console.error("[TurnTimer] Edge function rejected:", data?.error);
+            toast({
+              title: "Settings Error",
+              description: `Failed to save settings: ${data?.error ?? "Unknown error"}`,
+              variant: "destructive",
+            });
+          } else {
+            console.log("[TurnTimer] ✅ Persisted session settings:", {
+              roomPda: roomPdaStr.slice(0, 8),
+              authoritativeTurnTime,
+              mode: gameMode,
+            });
           }
-          
-          // For casual games, just show warning and continue
+        } catch (e) {
+          console.error("[TurnTimer] Unexpected error persisting session settings:", e);
           toast({
-            title: "Settings Warning",
-            description: "Settings may not be saved. Default timer will be used.",
-            variant: "default",
-          });
-        } else {
-          console.log("[TurnTimer] ✅ Settings saved successfully:", {
-            roomPda: roomPdaStr.slice(0, 8),
-            authoritativeTurnTime,
-            mode: gameMode,
-            maxPlayers: effectiveMaxPlayers,
+            title: "Settings Error",
+            description: "Unexpected error saving settings. Turn timer may default to 60s.",
+            variant: "destructive",
           });
         }
         
-        // Add rematch_created or private_created flag
-        const queryParam = isRematch ? '?rematch_created=1' : gameMode === 'private' ? '?private_created=1' : '';
+        // Add rematch_created flag if this was a rematch
+        const queryParam = isRematch ? '?rematch_created=1' : '';
         navigate(`/room/${roomPdaStr}${queryParam}`);
       } catch (e) {
         console.error("[CreateRoom] Failed to compute room PDA:", e);
@@ -729,27 +555,7 @@ export default function CreateRoom() {
             </Select>
           </div>
 
-          {/* Ludo Player Count - Only shown when Ludo is selected */}
-          {gameType === "5" && (
-            <div className="space-y-1.5">
-              <Label className="text-sm">{t("createRoom.numberOfPlayers", "Number of Players")}</Label>
-              <Select value={ludoPlayerCount} onValueChange={setLudoPlayerCount}>
-                <SelectTrigger className="h-9">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="2">2 {t("createRoom.players", "Players")}</SelectItem>
-                  <SelectItem value="3">3 {t("createRoom.players", "Players")}</SelectItem>
-                  <SelectItem value="4">4 {t("createRoom.players", "Players")}</SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                {t("createRoom.ludoPlayersDesc", "Choose how many players will compete in this Ludo game")}
-              </p>
-            </div>
-          )}
-
-
+          {/* Entry Fee - Styled based on mode */}
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
               <Label className="text-sm">{t("createRoom.entryFeeSol")}</Label>
@@ -801,10 +607,10 @@ export default function CreateRoom() {
             </Select>
           </div>
 
-          {/* Game Mode Toggle (Casual vs Ranked vs Private) */}
+          {/* Game Mode Toggle (Casual vs Ranked) */}
           <div className="space-y-1.5">
             <Label className="text-sm">{t("createRoom.roomType") || "Game Mode"}</Label>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               <Button
                 type="button"
                 variant={gameMode === 'casual' ? 'default' : 'outline'}
@@ -836,27 +642,11 @@ export default function CreateRoom() {
                 <span className="mr-1.5">🔴</span> {t("createRoom.gameModeRanked")}
                 <span className="ml-1 opacity-70 text-xs">🏆</span>
               </Button>
-              <Button
-                type="button"
-                variant={gameMode === 'private' ? 'default' : 'outline'}
-                size="sm"
-                className={`h-10 ${gameMode === 'private' ? 'bg-violet-600 hover:bg-violet-700' : ''}`}
-                onClick={() => {
-                  setGameMode('private');
-                  // Default stake to 0 for private
-                  if (!isRematch) setEntryFee("0");
-                }}
-              >
-                <span className="mr-1.5">🟣</span> {t("createRoom.gameModePrivate", "Private")}
-                <span className="ml-1 opacity-70 text-xs">🔒</span>
-              </Button>
             </div>
             <p className="text-xs text-muted-foreground">
               {gameMode === 'ranked' 
                 ? t("createRoom.rankedDesc")
-                : gameMode === 'private'
-                  ? t("createRoom.privateDesc", "Invite-only room hidden from public list. Share link with friends!")
-                  : t("createRoom.casualDesc")}
+                : t("createRoom.casualDesc")}
             </p>
           </div>
 
@@ -880,7 +670,7 @@ export default function CreateRoom() {
                 </TooltipProvider>
               </span>
               <span className="font-semibold text-primary">
-                {(entryFeeNum * (gameType === "5" ? parseInt(ludoPlayerCount) : parseInt(maxPlayers))).toFixed(3)} SOL
+                {(entryFeeNum * parseInt(maxPlayers)).toFixed(3)} SOL
               </span>
             </div>
             <div className="flex justify-between text-xs text-muted-foreground">
@@ -996,16 +786,6 @@ export default function CreateRoom() {
         onClose={() => setShowUnresolvedModal(false)}
         room={modalBlockingRoom}
         onResolve={handleResolveBlockingRoom}
-      />
-      
-      {/* Settings Failed Modal - shows when game settings fail to save */}
-      <SettingsFailedModal
-        open={showSettingsFailedModal}
-        onOpenChange={setShowSettingsFailedModal}
-        roomPda={failedRoomPda || ""}
-        onCancelRoom={handleSettingsFailedCancel}
-        onProceedAnyway={handleProceedAnyway}
-        showProceedOption={gameMode === 'casual'}
       />
     </div>
   );

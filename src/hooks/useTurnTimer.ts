@@ -17,8 +17,6 @@ interface UseTurnTimerOptions {
   onTimeExpired?: () => void;
   /** Room ID for logging */
   roomId?: string;
-  /** ISO timestamp when current turn started (from DB). If provided, timer becomes DB-authoritative. */
-  turnStartedAt?: string | null;
 }
 
 interface UseTurnTimerResult {
@@ -39,23 +37,12 @@ interface UseTurnTimerResult {
 }
 
 export function useTurnTimer(options: UseTurnTimerOptions): UseTurnTimerResult {
-  const { turnTimeSeconds, enabled, isMyTurn, onTimeExpired, roomId, turnStartedAt } = options;
+  const { turnTimeSeconds, enabled, isMyTurn, onTimeExpired, roomId } = options;
   
   const [remainingTime, setRemainingTime] = useState(turnTimeSeconds);
   const [isPaused, setIsPaused] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const hasExpiredRef = useRef(false);
-
-  // Helper: calculate remaining time from server timestamp (DB-authoritative mode)
-  const calculateRemainingFromServer = useCallback((): number => {
-    if (!turnStartedAt) return turnTimeSeconds;
-
-    const startMs = new Date(turnStartedAt).getTime();
-    if (isNaN(startMs)) return turnTimeSeconds;
-
-    const elapsedSecs = Math.floor((Date.now() - startMs) / 1000);
-    return Math.max(0, turnTimeSeconds - elapsedSecs);
-  }, [turnStartedAt, turnTimeSeconds]);
 
   // Clear interval helper
   const clearTimerInterval = useCallback(() => {
@@ -65,42 +52,33 @@ export function useTurnTimer(options: UseTurnTimerOptions): UseTurnTimerResult {
     }
   }, []);
 
-  // Reset timer (legacy: full time; DB-authoritative: snap to server remaining)
+  // Reset timer to full time
   const resetTimer = useCallback(() => {
     clearTimerInterval();
-    hasExpiredRef.current = false;
-
-    if (turnStartedAt) {
-      setRemainingTime(calculateRemainingFromServer());
-      console.log(
-        `[useTurnTimer] Timer snap to server remaining for room ${roomId} (turnStartedAt=${turnStartedAt.slice(0, 19)})`
-      );
-      return;
-    }
-
     setRemainingTime(turnTimeSeconds);
+    hasExpiredRef.current = false;
     console.log(`[useTurnTimer] Timer reset to ${turnTimeSeconds}s for room ${roomId}`);
-  }, [turnTimeSeconds, roomId, clearTimerInterval, turnStartedAt, calculateRemainingFromServer]);
+  }, [turnTimeSeconds, roomId, clearTimerInterval]);
 
   // Pause timer
   const pauseTimer = useCallback(() => {
     clearTimerInterval();
     setIsPaused(true);
-    console.log(`[useTurnTimer] Timer paused for room ${roomId}`);
-  }, [clearTimerInterval, roomId]);
+    console.log(`[useTurnTimer] Timer paused at ${remainingTime}s`);
+  }, [remainingTime, clearTimerInterval]);
 
   // Resume timer
   const resumeTimer = useCallback(() => {
     setIsPaused(false);
-    console.log(`[useTurnTimer] Timer resumed for room ${roomId}`);
-  }, [roomId]);
+    console.log(`[useTurnTimer] Timer resumed at ${remainingTime}s`);
+  }, [remainingTime]);
 
-  // Reset timer when it becomes MY turn OR when DB announces a new turnStartedAt
+  // Reset timer when turn changes (isMyTurn changes)
   useEffect(() => {
-    if (enabled && isMyTurn) {
+    if (enabled) {
       resetTimer();
     }
-  }, [isMyTurn, enabled, turnStartedAt, resetTimer]);
+  }, [isMyTurn, enabled, resetTimer]);
 
   // Main timer countdown effect
   useEffect(() => {
@@ -109,56 +87,35 @@ export function useTurnTimer(options: UseTurnTimerOptions): UseTurnTimerResult {
       return;
     }
 
-    // Avoid multiple intervals
-    clearTimerInterval();
-
+    // Start countdown
     intervalRef.current = setInterval(() => {
-      // DB-authoritative mode: recompute from timestamp every tick
-      if (turnStartedAt) {
-        const newTime = calculateRemainingFromServer();
-        setRemainingTime(newTime);
-
+      setRemainingTime((prev) => {
+        const newTime = prev - 1;
+        
+        // Check for expiration
         if (newTime <= 0 && !hasExpiredRef.current) {
           hasExpiredRef.current = true;
           console.log(`[useTurnTimer] Time expired for room ${roomId}!`);
+          
+          // Clear interval before callback to prevent multiple calls
           clearTimerInterval();
+          
+          // Trigger callback on next tick to avoid state update during render
           setTimeout(() => {
             onTimeExpired?.();
           }, 0);
+          
+          return 0;
         }
-        return;
-      }
-
-      // Legacy mode: decrement safely with functional update
-      setRemainingTime((prev) => {
-        const next = Math.max(0, prev - 1);
-
-        if (next <= 0 && !hasExpiredRef.current) {
-          hasExpiredRef.current = true;
-          console.log(`[useTurnTimer] Time expired for room ${roomId}!`);
-          clearTimerInterval();
-          setTimeout(() => {
-            onTimeExpired?.();
-          }, 0);
-        }
-
-        return next;
+        
+        return Math.max(0, newTime);
       });
     }, 1000);
 
     return () => {
       clearTimerInterval();
     };
-  }, [
-    enabled,
-    isPaused,
-    isMyTurn,
-    onTimeExpired,
-    roomId,
-    turnStartedAt,
-    calculateRemainingFromServer,
-    clearTimerInterval,
-  ]);
+  }, [enabled, isPaused, isMyTurn, onTimeExpired, roomId, clearTimerInterval]);
 
   // Cleanup on unmount
   useEffect(() => {

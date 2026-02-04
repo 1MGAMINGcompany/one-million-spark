@@ -12,7 +12,6 @@ import zh from './locales/zh.json';
 import it from './locales/it.json';
 import ja from './locales/ja.json';
 import hi from './locales/hi.json';
-import vi from './locales/vi.json';
 
 export const languages = [
   { code: 'en', name: 'English', nativeName: 'English', dir: 'ltr' },
@@ -25,7 +24,6 @@ export const languages = [
   { code: 'it', name: 'Italian', nativeName: 'Italiano', dir: 'ltr' },
   { code: 'ja', name: 'Japanese', nativeName: '日本語', dir: 'ltr' },
   { code: 'hi', name: 'Hindi', nativeName: 'हिन्दी', dir: 'ltr' },
-  { code: 'vi', name: 'Vietnamese', nativeName: 'Tiếng Việt', dir: 'ltr' },
 ] as const;
 
 export type LanguageCode = typeof languages[number]['code'];
@@ -45,7 +43,6 @@ i18n
       it: { translation: it },
       ja: { translation: ja },
       hi: { translation: hi },
-      vi: { translation: vi },
     },
     fallbackLng: 'en',
     interpolation: {

@@ -4,9 +4,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { RealtimeChannel } from "@supabase/supabase-js";
 
-// Safe shortener to prevent crashes on undefined values
-const short = (v: any) => (typeof v === "string" ? v.slice(0, 8) : "unknown");
-
 export interface SignalingMessage {
   type: "offer" | "answer" | "ice-candidate";
   roomId: string;
@@ -30,7 +27,7 @@ export class SupabaseSignaling {
   async connect(): Promise<void> {
     const channelName = `webrtc-${this.roomId}`;
     console.log(`[SupabaseSignaling] Connecting to channel: ${channelName}`);
-    console.log(`[SupabaseSignaling] Local address: ${short(this.localAddress)}...`);
+    console.log(`[SupabaseSignaling] Local address: ${this.localAddress.slice(0, 8)}...`);
     
     return new Promise((resolve, reject) => {
       // Create a broadcast channel for WebRTC signaling
@@ -51,14 +48,14 @@ export class SupabaseSignaling {
             return;
           }
           
-          console.log(`[SupabaseSignaling] Received signal: ${payload.type} from ${short(payload.from)}... to ${short(payload.to)}...`);
+          console.log(`[SupabaseSignaling] Received signal: ${payload.type} from ${payload.from?.slice(0, 8)}... to ${payload.to?.slice(0, 8)}...`);
           
           // Only process signals meant for us
           if (payload.to?.toLowerCase() === this.localAddress.toLowerCase()) {
             console.log(`[SupabaseSignaling] Signal is for us, processing...`);
             this.onSignal(payload as SignalingMessage);
           } else {
-            console.log(`[SupabaseSignaling] Signal not for us (we are ${short(this.localAddress)}...), ignoring`);
+            console.log(`[SupabaseSignaling] Signal not for us (we are ${this.localAddress.slice(0, 8)}...), ignoring`);
           }
         })
         .subscribe((status, err) => {
@@ -130,7 +127,7 @@ export class SupabaseSignaling {
       return;
     }
 
-    console.log(`[SupabaseSignaling] Sending signal: ${signal.type} to ${short(signal.to)}...`);
+    console.log(`[SupabaseSignaling] Sending signal: ${signal.type} to ${signal.to.slice(0, 8)}...`);
     
     // Retry up to 3 times
     for (let attempt = 0; attempt < 3; attempt++) {

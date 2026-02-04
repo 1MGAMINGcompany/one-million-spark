@@ -6,7 +6,6 @@
     "exit": "退出"
   },
   "game": {
-    "player": "プレイヤー",
     "finishGame": "ゲーム終了",
     "finishGameDesc": "ルーム作成者として、ゲームを終了し勝者に支払いができます。",
     "selectWinner": "勝者を選択",
@@ -740,38 +739,5 @@
     "forfeit": "棄権",
     "timeoutForfeit": "タイムアウト = 自動棄権",
     "rulesAcceptedNote": "両プレイヤーはマッチ開始前にこれらのルールに同意しました。支払いはオンチェーンで実行されます。"
-  },
-  "diceRoll": {
-    "rollToStart": "サイコロを振って開始",
-    "highestGoesFirst": "高い方が先攻",
-    "syncingOpponent": "対戦相手と同期中...お待ちください。",
-    "takingTooLong": "サイコロ振りに時間がかかっています。選択してください:",
-    "retrySync": "再同期",
-    "pickStarterAuto": "先攻を選択(自動)",
-    "rolledHigher": "が高い目を出しました!あなたが先攻!",
-    "theyGoFirst": "が高い目を出しました!相手が先攻!",
-    "resolvedAfter": "で解決",
-    "tieBreaker": "回のタイブレーク後",
-    "bothReady": "両者準備完了。誰が先攻か決めるためにサイコロを振ってください!",
-    "rollDice": "サイコロを振る",
-    "computing": "計算中...",
-    "rolling": "振り中...",
-    "continueToGame": "ゲームへ進む"
-  },
-  "clearSession": {
-    "title": "試合中にセッションをクリアしますか?",
-    "descriptionActive": "セッションをクリアすると切断されます。戻らないとタイムアウトで負ける可能性があります。",
-    "descriptionUnverified": "試合状態を確認できませんでした。セッションをクリアすると切断される可能性があります。",
-    "roomLabel": "ルーム:",
-    "inRoom": "現在ルームにいます:",
-    "cancel": "キャンセル",
-    "goToRoomList": "ルームリストへ",
-    "clearAnyway": "それでもクリア",
-    "cleared": "セッションをクリアしました",
-    "tokensRemoved": "トークンを削除"
-  },
-  "common": {
-    "loadingMatchDetails": "マッチ詳細を読み込み中...",
-    "confirmingEntry": "参加を確認中..."
   }
 }

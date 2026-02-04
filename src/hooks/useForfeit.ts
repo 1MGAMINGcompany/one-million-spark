@@ -17,7 +17,6 @@ import { useConnection } from "@solana/wallet-adapter-react";
 import { finalizeGame } from "@/lib/finalizeGame";
 import { toast } from "@/hooks/use-toast";
 import { useTranslation } from "react-i18next";
-import { clearAllGameStartKeys } from "@/hooks/useGameStartToast";
 
 export interface UseForfeitOptions {
   roomPda: string | null;
@@ -38,10 +37,6 @@ export interface UseForfeitOptions {
   onCleanupWebRTC?: () => void;
   onCleanupSupabase?: () => void;
   onCleanupLocalState?: () => void;
-  /** CRITICAL: Callback to clear room from useSolanaRooms state - prevents stuck banners */
-  onClearRoomFromState?: (roomPda: string) => void;
-  /** Callback when room is not started (WAITING) and should be cancelled instead */
-  onRoomNotStarted?: () => void;
 }
 
 export interface UseForfeitReturn {
@@ -51,8 +46,6 @@ export interface UseForfeitReturn {
   isLeaving: boolean;
   /** Ref for timeout handlers - call forfeitRef.current() to trigger forfeit */
   forfeitRef: React.MutableRefObject<(() => Promise<void>) | null>;
-  /** True when last forfeit attempt returned ROOM_NOT_STARTED */
-  roomNotStarted: boolean;
 }
 
 // Generic room storage keys that should always be cleared
@@ -80,8 +73,6 @@ export function useForfeit({
   onCleanupWebRTC,
   onCleanupSupabase,
   onCleanupLocalState,
-  onClearRoomFromState,
-  onRoomNotStarted,
 }: UseForfeitOptions): UseForfeitReturn {
   const navigate = useNavigate();
   const { t } = useTranslation();
@@ -89,7 +80,6 @@ export function useForfeit({
   
   const [isForfeiting, setIsForfeiting] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
-  const [roomNotStarted, setRoomNotStarted] = useState(false);
   
   // Idempotent exit tracking
   const exitedRef = useRef(false);
@@ -171,25 +161,11 @@ export function useForfeit({
       console.warn("[useForfeit] Local state cleanup error:", e);
     }
     
-    // 6. CRITICAL: Clear room from useSolanaRooms state to remove stuck banners
-    if (roomPda) {
-      try {
-        onClearRoomFromState?.(roomPda);
-        console.log("[useForfeit] Cleared room from global state:", roomPda.slice(0, 8));
-      } catch (e) {
-        console.warn("[useForfeit] Failed to clear room from state:", e);
-      }
-      
-      // 7. Clear toast + latch dedupe keys so future rooms can show toast again
-      clearAllGameStartKeys(roomPda);
-      console.log("[useForfeit] Cleared all game start keys for:", roomPda.slice(0, 8));
-    }
-    
     console.log("[useForfeit] forceExit complete, navigating to /room-list");
     
-    // 7. Navigate with replace (no back button to stuck state)
+    // 6. Navigate with replace (no back button to stuck state)
     navigate("/room-list", { replace: true });
-  }, [roomPda, navigate, onCleanupWebRTC, onCleanupSupabase, onCleanupLocalState, onClearRoomFromState]);
+  }, [roomPda, navigate, onCleanupWebRTC, onCleanupSupabase, onCleanupLocalState]);
 
   /**
    * forfeit() - On-chain payout to opponent via finalize_room
@@ -326,27 +302,6 @@ export function useForfeit({
         // Still call forceExit - navigate away
         forceExit();
         return;
-      } else if (result.error === "ROOM_NOT_STARTED") {
-        // Room is WAITING with only 1 player - cannot forfeit, show cancel option
-        console.warn("[useForfeit] Room not started - use cancel instead");
-        setRoomNotStarted(true);
-        toast({
-          title: t("forfeit.roomNotStarted", "Waiting for Opponent"),
-          description: t(
-            "forfeit.useCancelInstead",
-            "No opponent has joined yet. Cancel the room to get your stake refunded."
-          ),
-        });
-        // Call callback if provided
-        onRoomNotStarted?.();
-        // Clear the timeout but DON'T forceExit - let user see the cancel option
-        if (forceExitTimeoutRef.current) {
-          clearTimeout(forceExitTimeoutRef.current);
-          forceExitTimeoutRef.current = null;
-        }
-        setIsForfeiting(false);
-        executingRef.current = false;
-        return;
       } else {
         console.error("[FinalizeForfeit] failed:", result.error);
       }
@@ -463,6 +418,5 @@ export function useForfeit({
     isForfeiting,
     isLeaving,
     forfeitRef,
-    roomNotStarted,
   };
 }
