@@ -784,6 +784,22 @@ Deno.serve(async (req: Request) => {
         })
         .eq("room_pda", roomPda);
 
+      // Upsert void share card
+      await supabase
+        .from("match_share_cards")
+        .upsert({
+          room_pda: roomPda,
+          mode: mode || "casual",
+          game_type: gameType || "unknown",
+          winner_wallet: null, // void - no winner
+          loser_wallet: null,
+          win_reason: "void",
+          stake_lamports: Number(roomData.stakeLamports),
+          tx_signature: null,
+          metadata: { intendedWinner: winnerWallet, reason: "vault_underfunded" },
+          updated_at: new Date().toISOString(),
+        }, { onConflict: "room_pda" });
+
       return json200({
         success: false,
         error: "VAULT_UNFUNDED",
@@ -1010,6 +1026,28 @@ Deno.serve(async (req: Request) => {
         } else {
           console.log("[settle-game] ✅ game_sessions marked finished (status_int=3, winner:", winnerWallet.slice(0, 8), ")");
         }
+
+        // Upsert into match_share_cards for social sharing
+        const loserWallet = playersOnChain.find((p: string) => p !== winnerWallet) || null;
+        const { error: shareCardError } = await supabase
+          .from("match_share_cards")
+          .upsert({
+            room_pda: roomPda,
+            mode: mode || "casual",
+            game_type: gameType || "unknown",
+            winner_wallet: winnerWallet,
+            loser_wallet: loserWallet,
+            win_reason: reason || "checkmate",
+            stake_lamports: Number(roomData.stakeLamports),
+            tx_signature: signature,
+            updated_at: new Date().toISOString(),
+          }, { onConflict: "room_pda" });
+
+        if (shareCardError) {
+          console.error("[settle-game] Failed to upsert match_share_cards:", shareCardError);
+        } else {
+          console.log("[settle-game] ✅ match_share_cards upserted");
+        }
       }
 
       // ─────────────────────────────────────────────────────────────
@@ -1136,6 +1174,22 @@ Deno.serve(async (req: Request) => {
           updated_at: new Date().toISOString(),
         })
         .eq("room_pda", roomPda);
+
+      // Upsert void share card for settlement failure
+      await supabase
+        .from("match_share_cards")
+        .upsert({
+          room_pda: roomPda,
+          mode: mode || "casual",
+          game_type: gameType || "unknown",
+          winner_wallet: null,
+          loser_wallet: null,
+          win_reason: "void",
+          stake_lamports: Number(roomData.stakeLamports),
+          tx_signature: null,
+          metadata: { intendedWinner: winnerWallet, reason: "settlement_failed" },
+          updated_at: new Date().toISOString(),
+        }, { onConflict: "room_pda" });
 
       return json200({
         success: false,

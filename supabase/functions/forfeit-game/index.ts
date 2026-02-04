@@ -903,6 +903,27 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    // Upsert into match_share_cards for social sharing
+    const { error: shareCardError } = await supabase
+      .from("match_share_cards")
+      .upsert({
+        room_pda: roomPda,
+        mode: dbMode || "casual",
+        game_type: dbGameType || "unknown",
+        winner_wallet: winnerWallet,
+        loser_wallet: forfeitingWallet,
+        win_reason: "forfeit",
+        stake_lamports: Number(roomData.stakeLamports),
+        tx_signature: signature,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "room_pda" });
+
+    if (shareCardError) {
+      console.error("[forfeit-game] Failed to upsert match_share_cards:", shareCardError);
+    } else {
+      console.log("[forfeit-game] ✅ match_share_cards upserted");
+    }
+
     await logSettlement(supabase, {
       room_pda: roomPda,
       action: "forfeit",
