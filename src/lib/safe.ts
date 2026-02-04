@@ -30,3 +30,37 @@ export function safeWalletMatch(a: unknown, b: unknown): boolean {
   const trimB = safeTrim(b);
   return trimA !== "" && trimB !== "" && trimA === trimB;
 }
+
+/**
+ * Safely shorten a string for logging - NEVER crashes
+ * Prevents: "Cannot read property 'slice' of undefined/null"
+ * 
+ * @param v - Any value (string, null, undefined, object)
+ * @param n - Number of characters to keep (default 8)
+ * @returns Shortened string or "unknown"
+ */
+export function short(v: unknown, n = 8): string {
+  return typeof v === "string" ? v.slice(0, n) : "unknown";
+}
+
+/**
+ * Safely shorten a PublicKey or string for logging - NEVER crashes
+ * Handles: string, PublicKey (has toBase58), null, undefined
+ * 
+ * @param pk - PublicKey, string, null, or undefined
+ * @param n - Number of characters to keep (default 8)
+ * @returns Shortened base58 string or "unknown"
+ */
+export function shortPk(pk: unknown, n = 8): string {
+  if (typeof pk === "string") {
+    return pk.slice(0, n);
+  }
+  if (pk && typeof pk === "object" && "toBase58" in pk && typeof (pk as any).toBase58 === "function") {
+    try {
+      return (pk as any).toBase58().slice(0, n);
+    } catch {
+      return "unknown";
+    }
+  }
+  return "unknown";
+}
