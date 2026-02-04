@@ -56,3 +56,9 @@ verify_jwt = false
 
 [functions.cancel-invite]
 verify_jwt = false
+
+[functions.match-get]
+verify_jwt = false
+
+[functions.match-og]
+verify_jwt = false

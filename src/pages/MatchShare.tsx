@@ -1,11 +1,10 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Trophy, Copy, Check, ExternalLink, Swords, Clock, Flag, XCircle, AlertTriangle } from "lucide-react";
+import { Trophy, Copy, Check, ExternalLink, Swords, Clock, Flag, XCircle, AlertTriangle, Image } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface MatchData {
@@ -59,13 +58,74 @@ function formatGameType(type: string): string {
   return type.charAt(0).toUpperCase() + type.slice(1);
 }
 
+function useOgMetaTags(match: MatchData | null, roomPda: string | undefined) {
+  useEffect(() => {
+    if (!match || !roomPda) return;
+
+    const ogImageUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/match-og?roomPda=${encodeURIComponent(roomPda)}`;
+    const pageUrl = window.location.href;
+    const title = `${formatGameType(match.game_type)} Match - 1M Gaming`;
+    const description = match.win_reason === "void"
+      ? "Settlement failed - match voided"
+      : `${shortenWallet(match.winner_wallet)} won vs ${shortenWallet(match.loser_wallet)} • ${formatStake(match.stake_lamports)}`;
+
+    // Set OG meta tags
+    const setMeta = (property: string, content: string) => {
+      let meta = document.querySelector(`meta[property="${property}"]`) as HTMLMetaElement;
+      if (!meta) {
+        meta = document.createElement("meta");
+        meta.setAttribute("property", property);
+        document.head.appendChild(meta);
+      }
+      meta.setAttribute("content", content);
+    };
+
+    const setTwitterMeta = (name: string, content: string) => {
+      let meta = document.querySelector(`meta[name="${name}"]`) as HTMLMetaElement;
+      if (!meta) {
+        meta = document.createElement("meta");
+        meta.setAttribute("name", name);
+        document.head.appendChild(meta);
+      }
+      meta.setAttribute("content", content);
+    };
+
+    // OpenGraph tags
+    setMeta("og:type", "website");
+    setMeta("og:url", pageUrl);
+    setMeta("og:title", title);
+    setMeta("og:description", description);
+    setMeta("og:image", ogImageUrl);
+    setMeta("og:image:width", "1200");
+    setMeta("og:image:height", "630");
+
+    // Twitter Card tags
+    setTwitterMeta("twitter:card", "summary_large_image");
+    setTwitterMeta("twitter:title", title);
+    setTwitterMeta("twitter:description", description);
+    setTwitterMeta("twitter:image", ogImageUrl);
+
+    // Update document title
+    document.title = title;
+
+    // Cleanup
+    return () => {
+      document.title = "1M Gaming";
+    };
+  }, [match, roomPda]);
+}
+
 export default function MatchShare() {
   const { roomPda } = useParams<{ roomPda: string }>();
   const { toast } = useToast();
   const [match, setMatch] = useState<MatchData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [copiedImage, setCopiedImage] = useState(false);
+
+  // Set OG meta tags
+  useOgMetaTags(match, roomPda);
 
   useEffect(() => {
     if (!roomPda) return;
@@ -75,13 +135,6 @@ export default function MatchShare() {
       setError(null);
 
       try {
-        const { data, error: fnError } = await supabase.functions.invoke("match-get", {
-          method: "GET",
-          headers: { "Content-Type": "application/json" },
-          body: null,
-        });
-
-        // Workaround: functions.invoke doesn't support query params well, use fetch
         const response = await fetch(
           `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/match-get?roomPda=${encodeURIComponent(roomPda)}`,
           {
@@ -112,13 +165,28 @@ export default function MatchShare() {
     fetchMatch();
   }, [roomPda]);
 
+  const ogImageUrl = roomPda
+    ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/match-og?roomPda=${encodeURIComponent(roomPda)}`
+    : "";
+
   const handleCopyLink = async () => {
     const url = window.location.href;
     try {
       await navigator.clipboard.writeText(url);
-      setCopied(true);
+      setCopiedLink(true);
       toast({ title: "Link copied!", description: "Share this match with friends" });
-      setTimeout(() => setCopied(false), 2000);
+      setTimeout(() => setCopiedLink(false), 2000);
+    } catch {
+      toast({ title: "Copy failed", variant: "destructive" });
+    }
+  };
+
+  const handleCopyImageLink = async () => {
+    try {
+      await navigator.clipboard.writeText(ogImageUrl);
+      setCopiedImage(true);
+      toast({ title: "Image link copied!", description: "Use this for embeds" });
+      setTimeout(() => setCopiedImage(false), 2000);
     } catch {
       toast({ title: "Copy failed", variant: "destructive" });
     }
@@ -128,10 +196,8 @@ export default function MatchShare() {
     return (
       <div className="container max-w-lg mx-auto py-12 px-4">
         <Card className="bg-card/80 backdrop-blur-sm border-primary/20">
-          <CardHeader>
+          <CardContent className="py-8 space-y-4">
             <Skeleton className="h-8 w-48 mx-auto" />
-          </CardHeader>
-          <CardContent className="space-y-4">
             <Skeleton className="h-24 w-full" />
             <Skeleton className="h-12 w-full" />
             <Skeleton className="h-10 w-32 mx-auto" />
@@ -186,7 +252,7 @@ export default function MatchShare() {
             {!isVoid && match.winner_wallet && (
               <div className="py-4">
                 <div className="flex items-center justify-center gap-3">
-                  <Trophy className="h-8 w-8 text-yellow-500" />
+                  <Trophy className="h-8 w-8 text-accent" />
                   <div>
                     <p className="text-sm text-muted-foreground">Winner</p>
                     <p className="text-xl font-bold font-mono">{shortenWallet(match.winner_wallet)}</p>
@@ -245,13 +311,19 @@ export default function MatchShare() {
           </div>
 
           {/* Actions */}
-          <div className="flex flex-col sm:flex-row gap-3 pt-4">
-            <Button onClick={handleCopyLink} className="flex-1">
-              {copied ? <Check className="h-4 w-4 mr-2" /> : <Copy className="h-4 w-4 mr-2" />}
-              {copied ? "Copied!" : "Share Link"}
-            </Button>
+          <div className="flex flex-col gap-3 pt-4">
+            <div className="flex flex-col sm:flex-row gap-3">
+              <Button onClick={handleCopyLink} className="flex-1">
+                {copiedLink ? <Check className="h-4 w-4 mr-2" /> : <Copy className="h-4 w-4 mr-2" />}
+                {copiedLink ? "Copied!" : "Copy Share Link"}
+              </Button>
+              <Button onClick={handleCopyImageLink} variant="outline" className="flex-1">
+                {copiedImage ? <Check className="h-4 w-4 mr-2" /> : <Image className="h-4 w-4 mr-2" />}
+                {copiedImage ? "Copied!" : "Copy Image Link"}
+              </Button>
+            </div>
             {match.tx_signature && (
-              <Button variant="outline" asChild className="flex-1">
+              <Button variant="secondary" asChild className="w-full">
                 <a
                   href={`https://solscan.io/tx/${match.tx_signature}?cluster=devnet`}
                   target="_blank"
