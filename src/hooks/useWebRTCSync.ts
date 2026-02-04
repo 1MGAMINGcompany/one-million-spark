@@ -7,6 +7,9 @@ import { useRealtimeGameSync, RealtimeGameMessage } from "@/hooks/useRealtimeGam
 import { shouldDisableWebRTC, isWalletInAppBrowser } from "@/lib/walletBrowserDetection";
 import { safeTrim } from "@/lib/safe";
 
+// Safe shortener to prevent crashes on undefined values
+const short = (v: any) => (typeof v === "string" ? v.slice(0, 8) : "unknown");
+
 export interface GameMessage {
   type: "move" | "resign" | "draw_offer" | "draw_accept" | "draw_reject" | "sync_request" | "sync_response" | "heartbeat" | "chat" | "rematch_invite" | "rematch_accept" | "rematch_decline" | "rematch_ready" | "player_eliminated";
   payload?: any;
@@ -128,7 +131,7 @@ export function useWebRTCSync({
       peerRef.current = null;
     }
 
-    console.log(`[WebRTCSync] Connecting WebRTC to peer ${remoteAddress.slice(0, 8)}...`);
+    console.log(`[WebRTCSync] Connecting WebRTC to peer ${short(remoteAddress)}...`);
 
     const peer = new WebRTCPeer(roomId, localAddress, {
       onConnected: () => {
@@ -183,7 +186,7 @@ export function useWebRTCSync({
     }
 
     if (enabled && localAddress && remoteAddress) {
-      console.log(`[WebRTCSync] Ready to connect - local: ${localAddress.slice(0, 8)}, remote: ${remoteAddress.slice(0, 8)}, initiator: ${isInitiator}`);
+      console.log(`[WebRTCSync] Ready to connect - local: ${short(localAddress)}, remote: ${short(remoteAddress)}, initiator: ${isInitiator}`);
       
       // Initiator starts immediately, responder waits to ensure signaling is subscribed
       const delay = isInitiator ? 1000 : 2500;
