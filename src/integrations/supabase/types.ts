@@ -110,6 +110,57 @@ export type Database = {
         }
         Relationships: []
       }
+      game_invites: {
+        Row: {
+          created_at: string | null
+          expires_at: string | null
+          game_name: string | null
+          game_type: string
+          id: string
+          max_players: number | null
+          mode: string | null
+          recipient_wallet: string
+          room_pda: string
+          sender_wallet: string
+          stake_sol: number | null
+          status: string | null
+          turn_time_seconds: number | null
+          winner_payout: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          expires_at?: string | null
+          game_name?: string | null
+          game_type: string
+          id?: string
+          max_players?: number | null
+          mode?: string | null
+          recipient_wallet: string
+          room_pda: string
+          sender_wallet: string
+          stake_sol?: number | null
+          status?: string | null
+          turn_time_seconds?: number | null
+          winner_payout?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          expires_at?: string | null
+          game_name?: string | null
+          game_type?: string
+          id?: string
+          max_players?: number | null
+          mode?: string | null
+          recipient_wallet?: string
+          room_pda?: string
+          sender_wallet?: string
+          stake_sol?: number | null
+          status?: string | null
+          turn_time_seconds?: number | null
+          winner_payout?: number | null
+        }
+        Relationships: []
+      }
       game_moves: {
         Row: {
           client_move_id: string | null
@@ -147,13 +198,17 @@ export type Database = {
         Row: {
           created_at: string
           current_turn_wallet: string | null
+          eliminated_players: string[] | null
+          game_over_at: string | null
           game_state: Json
           game_type: string
+          max_players: number
           mode: string
           p1_acceptance_tx: string | null
           p1_ready: boolean
           p2_acceptance_tx: string | null
           p2_ready: boolean
+          participants: string[]
           player1_wallet: string
           player2_wallet: string | null
           room_pda: string
@@ -162,20 +217,26 @@ export type Database = {
           start_roll_seed: string | null
           starting_player_wallet: string | null
           status: string
+          status_int: number
           turn_started_at: string | null
           turn_time_seconds: number
           updated_at: string
+          winner_wallet: string | null
         }
         Insert: {
           created_at?: string
           current_turn_wallet?: string | null
+          eliminated_players?: string[] | null
+          game_over_at?: string | null
           game_state?: Json
           game_type: string
+          max_players?: number
           mode?: string
           p1_acceptance_tx?: string | null
           p1_ready?: boolean
           p2_acceptance_tx?: string | null
           p2_ready?: boolean
+          participants?: string[]
           player1_wallet: string
           player2_wallet?: string | null
           room_pda: string
@@ -184,20 +245,26 @@ export type Database = {
           start_roll_seed?: string | null
           starting_player_wallet?: string | null
           status?: string
+          status_int?: number
           turn_started_at?: string | null
           turn_time_seconds?: number
           updated_at?: string
+          winner_wallet?: string | null
         }
         Update: {
           created_at?: string
           current_turn_wallet?: string | null
+          eliminated_players?: string[] | null
+          game_over_at?: string | null
           game_state?: Json
           game_type?: string
+          max_players?: number
           mode?: string
           p1_acceptance_tx?: string | null
           p1_ready?: boolean
           p2_acceptance_tx?: string | null
           p2_ready?: boolean
+          participants?: string[]
           player1_wallet?: string
           player2_wallet?: string | null
           room_pda?: string
@@ -206,9 +273,11 @@ export type Database = {
           start_roll_seed?: string | null
           starting_player_wallet?: string | null
           status?: string
+          status_int?: number
           turn_started_at?: string | null
           turn_time_seconds?: number
           updated_at?: string
+          winner_wallet?: string | null
         }
         Relationships: []
       }
@@ -254,6 +323,60 @@ export type Database = {
           player_b_wallet?: string
           total_games?: number
           updated_at?: string
+        }
+        Relationships: []
+      }
+      match_share_cards: {
+        Row: {
+          created_at: string
+          game_type: string
+          loser_rank_after: number | null
+          loser_rank_before: number | null
+          loser_wallet: string | null
+          metadata: Json | null
+          mode: string
+          room_pda: string
+          stake_lamports: number
+          tx_signature: string | null
+          updated_at: string
+          win_reason: string
+          winner_rank_after: number | null
+          winner_rank_before: number | null
+          winner_wallet: string | null
+        }
+        Insert: {
+          created_at?: string
+          game_type: string
+          loser_rank_after?: number | null
+          loser_rank_before?: number | null
+          loser_wallet?: string | null
+          metadata?: Json | null
+          mode?: string
+          room_pda: string
+          stake_lamports?: number
+          tx_signature?: string | null
+          updated_at?: string
+          win_reason?: string
+          winner_rank_after?: number | null
+          winner_rank_before?: number | null
+          winner_wallet?: string | null
+        }
+        Update: {
+          created_at?: string
+          game_type?: string
+          loser_rank_after?: number | null
+          loser_rank_before?: number | null
+          loser_wallet?: string | null
+          metadata?: Json | null
+          mode?: string
+          room_pda?: string
+          stake_lamports?: number
+          tx_signature?: string | null
+          updated_at?: string
+          win_reason?: string
+          winner_rank_after?: number | null
+          winner_rank_before?: number | null
+          winner_wallet?: string | null
         }
         Relationships: []
       }
@@ -544,17 +667,34 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      compute_start_roll: { Args: { p_room_pda: string }; Returns: Json }
-      ensure_game_session: {
-        Args: {
-          p_game_type: string
-          p_mode?: string
-          p_player1_wallet: string
-          p_player2_wallet: string
-          p_room_pda: string
-        }
-        Returns: undefined
+      all_participants_accepted: {
+        Args: { p_room_pda: string }
+        Returns: boolean
       }
+      compute_start_roll: { Args: { p_room_pda: string }; Returns: Json }
+      ensure_game_session:
+        | {
+            Args: {
+              p_game_type: string
+              p_mode?: string
+              p_player1_wallet: string
+              p_player2_wallet: string
+              p_room_pda: string
+            }
+            Returns: undefined
+          }
+        | {
+            Args: {
+              p_game_type: string
+              p_max_players?: number
+              p_mode?: string
+              p_participants?: string[]
+              p_player1_wallet: string
+              p_player2_wallet: string
+              p_room_pda: string
+            }
+            Returns: undefined
+          }
       finalize_start_roll: {
         Args: {
           p_room_pda: string
@@ -570,6 +710,23 @@ export type Database = {
       issue_nonce: {
         Args: { p_room_pda: string; p_rules_hash: string; p_wallet: string }
         Returns: string
+      }
+      maybe_activate_game_session: {
+        Args: { p_room_pda: string }
+        Returns: undefined
+      }
+      maybe_finalize_start_state: {
+        Args: { p_room_pda: string }
+        Returns: undefined
+      }
+      rebuild_participants: {
+        Args: {
+          p_existing_participants: string[]
+          p_max_players: number
+          p_player1: string
+          p_player2: string
+        }
+        Returns: string[]
       }
       record_acceptance: {
         Args: {

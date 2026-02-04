@@ -2398,18 +2398,18 @@ const BackgammonGame = () => {
             </div>
         ) : (
           /* Desktop Layout - Grid structure matching AI layout */
-          <div className="max-w-6xl mx-auto w-full flex-1 min-h-0 overflow-hidden">
-            <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 md:gap-6 h-full min-h-0">
+          <div className="max-w-6xl mx-auto w-full flex-1 min-h-0 overflow-hidden h-full">
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 md:gap-6 h-full min-h-0 overflow-hidden">
               {/* Board Column - 3 columns */}
               <div className="lg:col-span-3 flex flex-col min-h-0 overflow-hidden">
                 <div className="flex-1 min-h-0 overflow-hidden flex items-center justify-center p-2">
-                  <div className="w-full max-w-[min(100%,calc((100dvh-18rem)*2))] aspect-[2/1] relative">
+                  <div className="h-full max-h-[min(100%,calc(100%-1rem))] aspect-[2/1] max-w-full relative">
                   {/* Outer glow */}
                   <div className="absolute -inset-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 rounded-2xl blur-xl opacity-50" />
                   
                   {/* Gold frame */}
-                  <div className="relative h-full p-1 rounded-xl bg-gradient-to-br from-primary/40 via-primary/20 to-primary/40 shadow-[0_0_40px_-10px_hsl(45_93%_54%_/_0.4)]">
-                    <div className="h-full bg-gradient-to-b from-midnight-light via-background to-midnight-light rounded-lg p-2 md:p-4 overflow-hidden flex flex-col">
+                  <div className="relative h-full min-h-0 p-1 rounded-xl bg-gradient-to-br from-primary/40 via-primary/20 to-primary/40 shadow-[0_0_40px_-10px_hsl(45_93%_54%_/_0.4)]">
+                    <div className="h-full min-h-0 bg-gradient-to-b from-midnight-light via-background to-midnight-light rounded-lg p-2 md:p-4 overflow-hidden flex flex-col">
                           
                       {/* Opponent Bear Off / Bar + Direction Indicators */}
                       <div className="flex justify-between items-center mb-3 px-2 shrink-0">
