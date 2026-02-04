@@ -2398,18 +2398,18 @@ const BackgammonGame = () => {
             </div>
         ) : (
           /* Desktop Layout - Grid structure matching AI layout */
-          <div className="max-w-6xl mx-auto w-full flex-1 min-h-0 overflow-hidden h-full">
-            <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 md:gap-6 h-full min-h-0 overflow-hidden">
+          <div className="max-w-6xl mx-auto px-2 md:px-4 py-4 md:py-6">
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 md:gap-6">
               {/* Board Column - 3 columns */}
-              <div className="lg:col-span-3 flex flex-col min-h-0 overflow-hidden">
-                <div className="flex-1 min-h-0 overflow-hidden flex items-center justify-center p-2">
-                  <div className="h-full max-h-[min(100%,calc(100%-1rem))] aspect-[2/1] max-w-full relative">
+              <div className="lg:col-span-3 space-y-3 md:space-y-4">
+                {/* Board Container with gold frame */}
+                <div className="relative">
                   {/* Outer glow */}
                   <div className="absolute -inset-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 rounded-2xl blur-xl opacity-50" />
                   
                   {/* Gold frame */}
-                  <div className="relative h-full min-h-0 p-1 rounded-xl bg-gradient-to-br from-primary/40 via-primary/20 to-primary/40 shadow-[0_0_40px_-10px_hsl(45_93%_54%_/_0.4)]">
-                    <div className="h-full min-h-0 bg-gradient-to-b from-midnight-light via-background to-midnight-light rounded-lg p-2 md:p-4 overflow-hidden flex flex-col">
+                  <div className="relative p-1 rounded-xl bg-gradient-to-br from-primary/40 via-primary/20 to-primary/40 shadow-[0_0_40px_-10px_hsl(45_93%_54%_/_0.4)]">
+                    <div className="bg-gradient-to-b from-midnight-light via-background to-midnight-light rounded-lg p-2 md:p-4 overflow-hidden">
                           
                       {/* Opponent Bear Off / Bar + Direction Indicators */}
                       <div className="flex justify-between items-center mb-3 px-2 shrink-0">
@@ -2437,8 +2437,8 @@ const BackgammonGame = () => {
                         )}
                       </div>
 
-                      {/* Board points area - flex-1 to scale */}
-                      <div className="flex-1 min-h-0 flex flex-col justify-center">
+                      {/* Board points area */}
+                      <div>
                         {/* Top points (13-24 or flipped) */}
                         <div className="flex justify-center gap-0.5 mb-1">
                           <div className="flex gap-0.5">
@@ -2526,11 +2526,10 @@ const BackgammonGame = () => {
                       </div>
                     </div>
                   </div>
-                  </div>
                 </div>
 
-                {/* Controls row - inside board column, shrink-0 */}
-                <div className="shrink-0 pt-3 flex flex-wrap gap-3 items-center justify-center">
+                {/* Controls row - inside board column */}
+                <div className="pt-3 flex flex-wrap gap-3 items-center justify-center">
                   {isMyTurn && dice.length === 0 && !gameOver && (
                     <Button variant="gold" size="lg" className="min-w-[140px] shadow-[0_0_30px_-8px_hsl(45_93%_54%_/_0.5)]" onClick={rollDice}>
                       🎲 Roll Dice
