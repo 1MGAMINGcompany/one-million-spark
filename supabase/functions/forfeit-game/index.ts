@@ -315,7 +315,7 @@ Deno.serve(async (req: Request) => {
     // 🔒 Fetch game_sessions with all needed fields including max_players and eliminated_players
     const { data: sessionRow, error: sessionError } = await supabase
       .from("game_sessions")
-      .select("player1_wallet, player2_wallet, participants, current_turn_wallet, turn_started_at, turn_time_seconds, status_int, status, max_players, eliminated_players")
+      .select("player1_wallet, player2_wallet, participants, current_turn_wallet, turn_started_at, turn_time_seconds, status_int, status, max_players, eliminated_players, mode, game_type")
       .eq("room_pda", roomPda)
       .maybeSingle();
 
@@ -332,6 +332,10 @@ Deno.serve(async (req: Request) => {
     const participantsCount = dbParticipants.length;
     const maxPlayers = sessionRow.max_players ?? 2;
     const eliminatedPlayers: string[] = sessionRow.eliminated_players ?? [];
+    const statusInt = sessionRow.status_int ?? 1;
+    const dbMode = sessionRow.mode ?? "casual";
+    const dbGameType = sessionRow.game_type ?? gameType ?? "unknown";
+    const isCreator = callerWallet === sessionRow.player1_wallet;
 
     // Validate caller is a participant
     const isCallerParticipant = dbParticipants.includes(callerWallet);
@@ -342,9 +346,9 @@ Deno.serve(async (req: Request) => {
       return json200({ success: false, error: "Forbidden", requestId });
     }
 
-    // 🔒 Dedupe guard - don't settle a finished room twice
-    if (sessionRow.status_int === 3 || sessionRow.status === "finished") {
-      console.log("[forfeit-game] Room already finished", { requestId, roomPda, status_int: sessionRow.status_int });
+    // 🔒 Dedupe guard - don't settle a finished/cancelled room twice
+    if (statusInt === 3 || sessionRow.status === "finished" || sessionRow.status === "cancelled") {
+      console.log("[forfeit-game] Room already finished/cancelled", { requestId, roomPda, status_int: statusInt, status: sessionRow.status });
       return json200({ 
         success: true, 
         action: "noop_already_finished",
@@ -354,28 +358,236 @@ Deno.serve(async (req: Request) => {
     }
 
     // =========================================================================
-    // DECISION: CANCEL vs FORFEIT based on DB-authoritative participantsCount
+    // COUNT ACCEPTANCES for readiness check
     // =========================================================================
-    // - participantsCount < 2: CANCEL (refund creator only, no opponent)
-    // - participantsCount >= 2: FORFEIT (caller loses, opponent wins stake)
-    // This does NOT rely on status_int (which can be stale)
+    const { count: acceptedCount, error: accCountError } = await supabase
+      .from("game_acceptances")
+      .select("*", { count: "exact", head: true })
+      .eq("room_pda", roomPda);
+
+    if (accCountError) {
+      console.warn("[forfeit-game] game_acceptances count error:", accCountError);
+    }
+
+    const safeAcceptedCount = acceptedCount ?? 0;
+
     // =========================================================================
-    
-    if (participantsCount < 2) {
-      console.log("[forfeit-game] CANCEL path: participantsCount < 2", { 
-        requestId, roomPda, participantsCount, callerWallet 
-      });
-      return json200({ 
-        success: false, 
-        error: "ROOM_NOT_STARTED",
-        action: "cancel_required",
-        message: "No opponent joined — use Cancel Room to get a refund.",
+    // DECISION: CANCEL vs FORFEIT
+    // =========================================================================
+    // requiredCount = max(2, max_players)
+    // isActive = (statusInt >= 2) OR (participantsCount >= requiredCount AND acceptedCount >= requiredCount)
+    // 
+    // If !isActive: CANCEL flow (refund all joined)
+    // If isActive: FORFEIT flow (caller loses, opponent wins)
+    // =========================================================================
+    const requiredCount = Math.max(2, maxPlayers);
+    const readyByCounts = (participantsCount >= requiredCount) && (safeAcceptedCount >= requiredCount);
+    const isActive = (statusInt >= 2) || readyByCounts;
+
+    console.log("[forfeit-game] DECISION", {
+      roomPda: roomPda.slice(0, 8),
+      gameType: dbGameType,
+      mode: dbMode,
+      statusInt,
+      requiredCount,
+      acceptedCount: safeAcceptedCount,
+      participantsCount,
+      readyByCounts,
+      isActive,
+      forfeitingWallet: callerWallet.slice(0, 8),
+      isCreator,
+    });
+
+    // =========================================================================
+    // CANCEL FLOW (!isActive) - refund all joined participants
+    // =========================================================================
+    if (!isActive) {
+      console.log("[forfeit-game] CANCEL_PATH: room not active, refunding all", {
+        requestId,
+        roomPda: roomPda.slice(0, 8),
         participantsCount,
-        requestId 
+        requiredCount,
+        acceptedCount: safeAcceptedCount,
+        isCreator,
+      });
+
+      // Load verifier key for cancel tx
+      const skRaw = Deno.env.get("VERIFIER_SECRET_KEY_V2") ?? "";
+      if (!skRaw.trim()) {
+        return json200({ success: false, error: "VERIFIER_SECRET_KEY_V2 not configured", requestId });
+      }
+      const { keypair: verifierKeypair } = loadVerifierKeypair(skRaw);
+
+      const rpcUrl = (
+        Deno.env.get("SOLANA_RPC_URL") ||
+        Deno.env.get("VITE_SOLANA_RPC_URL") ||
+        "https://api.mainnet-beta.solana.com"
+      ).replace(/^([^h])/, "https://$1");
+
+      const connection = new Connection(rpcUrl, "confirmed");
+      const roomPdaKey = new PublicKey(roomPda);
+
+      // Fetch room on-chain
+      const accountInfo = await connection.getAccountInfo(roomPdaKey);
+      if (!accountInfo) {
+        // Room already closed on-chain - just update DB
+        console.log("[forfeit-game] Room already closed on-chain, updating DB only", { requestId });
+        
+        await supabase
+          .from("game_sessions")
+          .update({
+            status: "cancelled",
+            status_int: 3,
+            winner_wallet: null,
+            game_over_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq("room_pda", roomPda);
+
+        return json200({
+          success: true,
+          action: "cancel",
+          message: "Room already closed on-chain, DB updated",
+          refunded: dbParticipants,
+          requestId,
+        });
+      }
+
+      const roomData = parseRoomAccount(accountInfo.data);
+      if (!roomData) {
+        return json200({ success: false, error: "Failed to parse room account", requestId });
+      }
+
+      // Use close_room instruction (discriminator for close_room)
+      // This refunds all players who deposited and returns rent to creator
+      const closeRoomDiscriminator = new Uint8Array([189, 143, 143, 182, 44, 11, 186, 234]);
+
+      const [configPda] = PublicKey.findProgramAddressSync(
+        [new TextEncoder().encode("config")],
+        PROGRAM_ID
+      );
+
+      const configInfo = await connection.getAccountInfo(configPda);
+      if (!configInfo) {
+        return json200({ success: false, error: "Config account missing", requestId });
+      }
+
+      const configData = parseConfigAccount(configInfo.data);
+      if (!configData) {
+        return json200({ success: false, error: "Config parse failed", requestId });
+      }
+
+      const [vaultPda] = PublicKey.findProgramAddressSync(
+        [new TextEncoder().encode("vault"), roomPdaKey.toBuffer()],
+        PROGRAM_ID
+      );
+
+      // Build close_room instruction
+      // Keys: [verifier, config, room, vault, creator, ...players]
+      const closeKeys = [
+        { pubkey: verifierKeypair.publicKey, isSigner: true, isWritable: false },
+        { pubkey: configPda, isSigner: false, isWritable: false },
+        { pubkey: roomPdaKey, isSigner: false, isWritable: true },
+        { pubkey: vaultPda, isSigner: false, isWritable: true },
+        { pubkey: roomData.creator, isSigner: false, isWritable: true }, // rent return
+      ];
+
+      // Add all on-chain players for refund
+      for (const player of roomData.players) {
+        if (!player.equals(PublicKey.default)) {
+          closeKeys.push({ pubkey: player, isSigner: false, isWritable: true });
+        }
+      }
+
+      const closeIx = new TransactionInstruction({
+        programId: PROGRAM_ID,
+        keys: closeKeys,
+        data: closeRoomDiscriminator,
+      });
+
+      const { blockhash } = await connection.getLatestBlockhash("confirmed");
+      const closeTx = new Transaction({
+        feePayer: verifierKeypair.publicKey,
+        recentBlockhash: blockhash,
+      }).add(closeIx);
+
+      closeTx.sign(verifierKeypair);
+
+      let cancelSignature: string;
+      try {
+        cancelSignature = await connection.sendRawTransaction(closeTx.serialize());
+        await connection.confirmTransaction(cancelSignature, "confirmed");
+        console.log("[forfeit-game] ✅ Cancel tx confirmed", { signature: cancelSignature.slice(0, 16) });
+      } catch (txError) {
+        console.error("[forfeit-game] Cancel tx failed:", txError);
+        return json200({ 
+          success: false, 
+          error: "Cancel transaction failed", 
+          details: String((txError as Error)?.message ?? txError),
+          requestId 
+        });
+      }
+
+      // Log balance deltas for cancel
+      const cancelLabels = new Map<string, string>();
+      cancelLabels.set(verifierKeypair.publicKey.toBase58(), "verifier");
+      cancelLabels.set(vaultPda.toBase58(), "vault");
+      cancelLabels.set(roomData.creator.toBase58(), "creator");
+      for (let i = 0; i < dbParticipants.length; i++) {
+        cancelLabels.set(dbParticipants[i], `player${i + 1}`);
+      }
+
+      await logBalanceDeltas(
+        connection,
+        cancelSignature,
+        roomPda,
+        "cancel",
+        null,
+        null,
+        roomData.stakeLamports,
+        cancelLabels
+      );
+
+      // Update DB
+      const { error: cancelDbError } = await supabase
+        .from("game_sessions")
+        .update({
+          status: "cancelled",
+          status_int: 3,
+          winner_wallet: null,
+          game_over_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("room_pda", roomPda);
+
+      if (cancelDbError) {
+        console.error("[forfeit-game] Failed to update DB after cancel:", cancelDbError);
+      }
+
+      await logSettlement(supabase, {
+        room_pda: roomPda,
+        action: "cancel",
+        success: true,
+        signature: cancelSignature,
+        winner_wallet: null,
+        forfeiting_wallet: null,
+        stake_per_player: Number(roomData.stakeLamports),
+        player_count: roomData.playerCount,
+      });
+
+      return json200({
+        success: true,
+        action: "cancel",
+        txSig: cancelSignature,
+        roomPda,
+        refunded: roomData.players.filter(p => !p.equals(PublicKey.default)).map(p => p.toBase58()),
+        requestId,
       });
     }
 
-    // participantsCount >= 2: FORFEIT path
+    // =========================================================================
+    // FORFEIT FLOW (isActive = true)
+    // =========================================================================
     // Determine forfeiting wallet based on mode
     let forfeitingWallet: string;
 
@@ -412,7 +624,7 @@ Deno.serve(async (req: Request) => {
       requestId, ts, roomPda: roomPda.slice(0, 8), mode,
       callerWallet: callerWallet.slice(0, 8),
       forfeitingWallet: forfeitingWallet.slice(0, 8),
-      gameType, participantsCount, maxPlayers,
+      gameType: dbGameType, participantsCount, maxPlayers,
       eliminatedBefore: eliminatedPlayers.length,
     });
 
