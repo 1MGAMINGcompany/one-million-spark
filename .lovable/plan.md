@@ -1,5 +1,5 @@
 
-# Fix Data Integrity Bug: Enforce winner_wallet Invariant in settle-game
+# ✅ COMPLETED: Fix Data Integrity Bug - winner_wallet Invariant
 
 ## Problem Summary
 The `settle-game` Edge Function has two code paths where it sets `status_int: 3` (finished) WITHOUT setting `winner_wallet`, causing finished games with null winners. This breaks payouts, audits, and confuses the UI.

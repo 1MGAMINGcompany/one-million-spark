@@ -10,6 +10,7 @@ export const GAME_STATUS = {
   WAITING: 1,
   ACTIVE: 2,
   FINISHED: 3,
+  VOID: 4,
 } as const;
 
 export type GameStatusInt = typeof GAME_STATUS[keyof typeof GAME_STATUS];
@@ -19,6 +20,20 @@ export type GameStatusInt = typeof GAME_STATUS[keyof typeof GAME_STATUS];
  */
 export function isGameFinished(statusInt: number | undefined): boolean {
   return statusInt === GAME_STATUS.FINISHED;
+}
+
+/**
+ * Check if a game session is void (status_int === 4) - settlement failed
+ */
+export function isGameVoid(statusInt: number | undefined): boolean {
+  return statusInt === GAME_STATUS.VOID;
+}
+
+/**
+ * Check if a game session is terminal (finished or void)
+ */
+export function isGameTerminal(statusInt: number | undefined): boolean {
+  return statusInt === GAME_STATUS.FINISHED || statusInt === GAME_STATUS.VOID;
 }
 
 /**
