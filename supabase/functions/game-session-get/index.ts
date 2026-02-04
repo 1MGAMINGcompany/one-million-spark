@@ -42,7 +42,7 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, serviceKey)
 
     // Fetch game session
-    const { data: session, error: sessionError } = await supabase
+    let { data: session, error: sessionError } = await supabase
       .from('game_sessions')
       .select('*, max_players, eliminated_players')
       .eq('room_pda', roomPda)
@@ -54,6 +54,50 @@ serve(async (req) => {
         status: 500, 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
       })
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // P0 SAFETY NET: Backfill game_type if it's 'unknown' or missing
+    // Source of truth: `matches` table (created on room creation)
+    // ─────────────────────────────────────────────────────────────
+    if (session && (!session.game_type || session.game_type === 'unknown')) {
+      console.log('[game-session-get] ⚠️ game_type is unknown, attempting backfill from matches table');
+      
+      const { data: matchRecord } = await supabase
+        .from('matches')
+        .select('game_type, max_players')
+        .eq('room_pda', roomPda)
+        .maybeSingle()
+      
+      if (matchRecord?.game_type && matchRecord.game_type !== 'unknown') {
+        // Update the session with correct game_type
+        const updatePayload: Record<string, unknown> = {
+          game_type: matchRecord.game_type,
+        };
+        
+        // Also fix max_players if it was defaulted
+        if (matchRecord.max_players && matchRecord.max_players !== session.max_players) {
+          updatePayload.max_players = matchRecord.max_players;
+        }
+        
+        const { error: updateErr } = await supabase
+          .from('game_sessions')
+          .update(updatePayload)
+          .eq('room_pda', roomPda);
+        
+        if (!updateErr) {
+          // Update local session object for response
+          session = { ...session, game_type: matchRecord.game_type };
+          if (matchRecord.max_players) {
+            session = { ...session, max_players: matchRecord.max_players };
+          }
+          console.log('[game-session-get] ✅ Backfilled game_type from matches:', matchRecord.game_type);
+        } else {
+          console.error('[game-session-get] Failed to backfill game_type:', updateErr);
+        }
+      } else {
+        console.warn('[game-session-get] No match record found for game_type backfill');
+      }
     }
 
     // Fetch finalize receipt (settlement status) - optional field
