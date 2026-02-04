@@ -510,13 +510,33 @@ Deno.serve(async (req: Request) => {
         // Signal that frontend needs to retry sync
         needsSync = true;
         
-        const gameTypeHint = (body as any).gameType || "unknown";
-        const mode = (body as any).gameMode || "ranked";
+        // ─────────────────────────────────────────────────────────────
+        // P0 FIX: Query `matches` table as authoritative source for game_type
+        // This ensures we NEVER create a session with game_type="unknown"
+        // ─────────────────────────────────────────────────────────────
+        let gameTypeFallback = (body as any).gameType || "unknown";
+        let modeFallback = (body as any).gameMode || "ranked";
+        let maxPlayersFallback = 2;
+        
+        const { data: matchRecord } = await supabase
+          .from("matches")
+          .select("game_type, max_players")
+          .eq("room_pda", body.roomPda)
+          .maybeSingle();
+        
+        if (matchRecord?.game_type) {
+          gameTypeFallback = matchRecord.game_type;
+          maxPlayersFallback = matchRecord.max_players || 2;
+          console.log("[ranked-accept] ✅ Got game_type from matches table:", gameTypeFallback);
+        } else {
+          console.warn("[ranked-accept] ⚠️ No match record found, using hint:", gameTypeFallback);
+        }
         
         console.log("[ranked-accept] ⚠️ Creating game_sessions row WITHOUT on-chain data (needsSync=true):", {
           roomPda: body.roomPda.slice(0, 8),
           player1: playerWallet.slice(0, 8),
-          gameType: gameTypeHint,
+          gameType: gameTypeFallback,
+          maxPlayers: maxPlayersFallback,
         });
         
         const { error: insertErr } = await supabase
@@ -526,12 +546,12 @@ Deno.serve(async (req: Request) => {
             player1_wallet: playerWallet,
             player2_wallet: null,
             participants: [playerWallet],
-            max_players: 2,
-            game_type: gameTypeHint,
+            max_players: maxPlayersFallback,
+            game_type: gameTypeFallback,
             game_state: {},
             status: "waiting",
             status_int: 1,
-            mode,
+            mode: modeFallback,
             p1_ready: false,
             p2_ready: false,
           });
@@ -543,7 +563,7 @@ Deno.serve(async (req: Request) => {
             { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         }
-        console.log("[ranked-accept] ✅ Created minimal game_sessions row (needs sync)");
+        console.log("[ranked-accept] ✅ Created minimal game_sessions row with fallback game_type");
       }
     } else {
       // Session exists - UPDATE with on-chain participants ONLY if fetch succeeded
