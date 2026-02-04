@@ -203,13 +203,16 @@ export class WebRTCPeer {
     }
     this.processedSignals.add(signalId);
 
+    // Safe shortener to prevent crashes on undefined signal fields
+    const short = (v: any) => (typeof v === "string" ? v.slice(0, 8) : "unknown");
+
     // Verify it's from our expected peer (use safeTrim - Base58 is case-sensitive)
     if (safeTrim(signal.from) !== this.remoteAddress) {
-      console.log(`[WebRTC] Ignoring signal from unknown peer: ${safeTrim(signal.from).slice(0, 8)}...`);
+      console.log(`[WebRTC] Ignoring signal from unknown peer: ${short(safeTrim(signal.from))}...`);
       return;
     }
 
-    console.log(`[WebRTC] Processing signal: ${signal.type} from ${signal.from.slice(0, 8)}...`);
+    console.log(`[WebRTC] Processing signal: ${signal.type} from ${short(signal.from)}...`);
 
     try {
       switch (signal.type) {
