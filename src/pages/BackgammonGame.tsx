@@ -2132,6 +2132,8 @@ const BackgammonGame = () => {
           onOpenWalletSelector={() => {}}
           isDataLoaded={isDataLoaded}
           startRollFinalized={startRoll.isFinalized}
+          onForfeit={forfeit}
+          isForfeiting={isForfeiting}
         >
           <DiceRollStart
             roomPda={roomPda || ""}

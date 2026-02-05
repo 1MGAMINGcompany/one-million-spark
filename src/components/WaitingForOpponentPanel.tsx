@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
-import { Check, Clock, Copy, CheckCheck, Users, Link2, Loader2 } from "lucide-react";
+import { Check, Clock, Copy, CheckCheck, Users, Link2, Loader2, AlertTriangle, Flag } from "lucide-react";
 import { toast } from "sonner";
 
 interface WaitingForOpponentPanelProps {
@@ -11,6 +11,14 @@ interface WaitingForOpponentPanelProps {
   opponentWallet?: string;
   /** What we're waiting for: "join" (default) or "rules" (acceptance) */
   waitingFor?: "join" | "rules";
+  /** Stake in SOL for display */
+  stakeSol?: number;
+  /** On-chain player count (2 = both joined) */
+  playerCount?: number;
+  /** Handler to trigger forfeit settlement */
+  onForfeit?: () => void;
+  /** Loading state during forfeit */
+  isForfeiting?: boolean;
 }
 
 /** Format wallet address to short form: first 4...last 4 */
@@ -31,6 +39,10 @@ export function WaitingForOpponentPanel({
   roomPda,
   opponentWallet,
   waitingFor = "join",
+  stakeSol,
+  playerCount,
+  onForfeit,
+  isForfeiting,
 }: WaitingForOpponentPanelProps) {
   const [copied, setCopied] = useState(false);
   const { t } = useTranslation();
@@ -104,6 +116,23 @@ export function WaitingForOpponentPanel({
           </div>
         </div>
 
+        {/* Sync Issue Warning - shows when both players joined on-chain but sync shows waiting */}
+        {playerCount !== undefined && playerCount >= 2 && stakeSol !== undefined && stakeSol > 0 && (
+          <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 text-left">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="h-4 w-4 text-amber-500 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-xs text-amber-600 dark:text-amber-400 font-medium">
+                  {t("waitingPanel.syncDelayTitle", "Sync Delayed")}
+                </p>
+                <p className="text-xs text-amber-500/80 mt-1">
+                  {t("waitingPanel.syncDelayMessage", "Both players have joined on-chain but sync is delayed. You can forfeit to settle immediately.")}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Info Note */}
         <p className="text-xs text-muted-foreground">
           {t("waitingPanel.gameStartsAuto")}
@@ -128,6 +157,28 @@ export function WaitingForOpponentPanel({
               </>
             )}
           </Button>
+          
+          {/* Forfeit Button - only shows when both players joined on-chain and stake > 0 */}
+          {playerCount !== undefined && playerCount >= 2 && stakeSol !== undefined && stakeSol > 0 && onForfeit && (
+            <Button 
+              variant="destructive" 
+              onClick={onForfeit}
+              disabled={isForfeiting}
+              className="w-full gap-2"
+            >
+              {isForfeiting ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  {t("waitingPanel.forfeiting", "Settling...")}
+                </>
+              ) : (
+                <>
+                  <Flag className="h-4 w-4" />
+                  {t("waitingPanel.forfeitMatch", "Forfeit Match")} (-{stakeSol.toFixed(3)} SOL)
+                </>
+              )}
+            </Button>
+          )}
           
           <Button 
             variant="ghost" 

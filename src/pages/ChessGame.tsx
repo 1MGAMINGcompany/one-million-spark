@@ -1388,6 +1388,8 @@ const ChessGame = () => {
           onLeave={handleLeaveClick}
           isDataLoaded={isDataLoaded}
           startRollFinalized={startRoll.isFinalized}
+          onForfeit={forfeit}
+          isForfeiting={isForfeiting}
         >
           {/* DiceRollStart - rendered based on shouldShowDice, not showDiceRoll */}
           <DiceRollStart
