@@ -1,104 +1,145 @@
 
-## Add Turn Time Display to Room List
 
-### Problem
-The Room List page doesn't show turn times for rooms because:
-1. Turn time is stored in the database (`game_sessions.turn_time_seconds`), not on the Solana blockchain
-2. The current code fetches rooms only from Solana, where `turnTimeSec` defaults to `0`
-3. The UI only shows turn time when `turnTimeSec > 0`, so nothing appears
+## Fix Plan: Turn Timeout Reliability + Game Move Audit Log
 
-### Solution
-Enrich room data from Solana with turn time from the database after fetching.
+### Issues Found
+
+After analyzing the game logs for room `Rb7nvzh5...`:
+
+1. **Turn 4 Bug**: A `move` was recorded after a `turn_end` by the same player - race condition
+2. **First timeout shows `missedCount: 2`**: localStorage had stale data from previous session
+3. **Only 1 timeout recorded**: You saw 2 missed turns locally but only 1 was submitted
+4. **Final forfeit triggered manually**: No second timeout was recorded for the third strike
+
+### Root Causes
+
+| Issue | Root Cause |
+|-------|------------|
+| Turn after turn_end | Client submitted move before turn_end response updated local state |
+| Wrong missedCount | `localStorage` key `missedTurns:roomPda:wallet` persists across room sessions |
+| Missing timeouts | Either `timeout_too_early` rejection or `timeoutFiredRef` not reset properly |
+| Timer not switching | Polling detected turn change but timer state wasn't fully reset |
 
 ---
 
-### Implementation
+## Fix 1: Clear Missed Turns on New Game Start
 
-#### File: `src/hooks/useSolanaRooms.ts`
+**File:** `src/pages/BackgammonGame.tsx`
 
-Update the `fetchRooms` function to:
-1. Fetch rooms from Solana (existing behavior)
-2. Query `game_sessions` table for turn times of fetched rooms
-3. Merge the turn time data into the room objects
-
-```text
-Current flow:
-  Solana -> rooms (turnTimeSec = 0) -> display
-
-New flow:
-  Solana -> rooms (turnTimeSec = 0)
-                          |
-                          v
-            game_sessions (turn_time_seconds)
-                          |
-                          v
-        Enriched rooms (turnTimeSec = actual value) -> display
-```
-
-**Changes to `fetchRooms`:**
+When the game starts (room is activated), clear any stale missed turn counts:
 
 ```typescript
-const fetchRooms = useCallback(async () => {
-  setLoading(true);
-  setError(null);
-  
-  try {
-    // Step 1: Fetch rooms from Solana
-    const fetchedRooms = await fetchOpenPublicRooms(connection);
-    
-    // Step 2: Enrich with turn time from database
-    if (fetchedRooms.length > 0) {
-      const roomPdas = fetchedRooms.map(r => r.pda);
-      const { data: sessions } = await supabase
-        .from("game_sessions")
-        .select("room_pda, turn_time_seconds")
-        .in("room_pda", roomPdas);
-      
-      if (sessions && sessions.length > 0) {
-        // Create lookup map
-        const turnTimeMap = new Map<string, number>();
-        for (const s of sessions) {
-          if (s.turn_time_seconds != null) {
-            turnTimeMap.set(s.room_pda, s.turn_time_seconds);
-          }
-        }
-        
-        // Enrich rooms
-        for (const room of fetchedRooms) {
-          const dbTurnTime = turnTimeMap.get(room.pda);
-          if (dbTurnTime !== undefined && dbTurnTime > 0) {
-            room.turnTimeSec = dbTurnTime;
-          }
-        }
-      }
-    }
-    
-    setRooms(fetchedRooms);
-  } catch (err) {
-    setError("Failed to fetch rooms");
-  } finally {
-    setLoading(false);
+// In the effect that handles game start / startRoll.isFinalized
+useEffect(() => {
+  if (startRoll.isFinalized && roomPda && address) {
+    // Clear stale missed turns from any previous session with this room
+    clearRoom(roomPda);
   }
-}, [connection]);
+}, [startRoll.isFinalized, roomPda, address]);
+```
+
+Import `clearRoom` from `@/lib/missedTurns`.
+
+---
+
+## Fix 2: Reset Timer State When Turn Changes via Polling
+
+**File:** `src/pages/BackgammonGame.tsx`
+
+The `useTurnTimer` hook has an effect that resets on `isMyTurn` change. But the `isMyTurn` check uses stale `currentTurnWallet`. Need to explicitly call `resetTimer()` when polling detects a turn change.
+
+Add to the polling turn change handler (around line 841):
+
+```typescript
+setCurrentTurnWallet(dbTurnWallet);
+timeoutFiredRef.current = false;
+
+// FIX: Explicitly reset the turn timer when polling detects turn change
+turnTimer.resetTimer();
 ```
 
 ---
 
-### Expected Result
+## Fix 3: Add Game Move Audit Log Component
 
-After implementation, the Room List will show:
+Create a debug/audit view for game moves that can be toggled in DebugHUD.
 
-| Before | After |
-|--------|-------|
-| Backgammon #123 - 0.0056 SOL - 1/2 | Backgammon #123 - 0.0056 SOL - 1/2 - **10s** |
+**New File:** `src/components/GameMoveAudit.tsx`
 
-The amber clock icon with turn time will appear for all ranked rooms that have a turn timer configured.
+```typescript
+interface GameMoveAuditProps {
+  roomPda: string;
+  enabled?: boolean;
+}
+
+export function GameMoveAudit({ roomPda, enabled = false }: GameMoveAuditProps) {
+  const [moves, setMoves] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const fetchMoves = async () => {
+    setLoading(true);
+    const { data } = await supabase.functions.invoke("get-moves", {
+      body: { roomPda },
+    });
+    setMoves(data?.moves || []);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    if (enabled && roomPda) fetchMoves();
+  }, [enabled, roomPda]);
+
+  // Render a table with: turn_number, wallet (short), type, created_at, flags
+  // Highlight anomalies: moves after turn_end by same player, etc.
+}
+```
+
+Add a "View Moves" button to DebugHUD that opens this panel.
 
 ---
 
-### Technical Notes
+## Fix 4: Server-Side Guard Against Move After Turn End
 
-- No database migration needed - `game_sessions.turn_time_seconds` column already exists
-- The enrichment query is batched (single query for all room PDAs) for efficiency
-- Only rooms with `turn_time_seconds > 0` will show the timer badge
-- Casual rooms (turn_time_seconds = 0 or 60) may show differently based on configuration
+**Database Migration:** Add validation in `submit_game_move` RPC
+
+```sql
+-- Reject moves from a player who just submitted turn_end
+-- Check: if last move was turn_end and nextTurnWallet != p_wallet, reject
+
+-- Get last move for this room
+SELECT * INTO v_last_move
+FROM game_moves
+WHERE room_pda = p_room_pda
+ORDER BY turn_number DESC
+LIMIT 1;
+
+-- If last move was turn_end and handed turn to someone else, reject regular moves from original player
+IF v_last_move IS NOT NULL 
+   AND v_last_move.move_data->>'type' = 'turn_end'
+   AND v_move_type IN ('dice_roll', 'move')
+   AND v_last_move.wallet = p_wallet
+THEN
+  RETURN jsonb_build_object('success', false, 'error', 'turn_already_ended');
+END IF;
+```
+
+---
+
+## Summary of Changes
+
+| File | Change |
+|------|--------|
+| `BackgammonGame.tsx` | Clear stale missed turns on game start |
+| `BackgammonGame.tsx` | Call `turnTimer.resetTimer()` when polling detects turn change |
+| `GameMoveAudit.tsx` | New component for viewing/debugging move history |
+| `DebugHUD.tsx` | Add "View Moves" button to open audit panel |
+| Database Migration | Server guard against move after turn_end |
+
+---
+
+## Technical Notes
+
+- The `clearRoom()` function in `missedTurns.ts` already exists - just needs to be called at the right time
+- The `turnTimer.resetTimer()` is exposed by the hook but wasn't being called explicitly on poll-detected turn changes
+- The server-side guard is a defense-in-depth measure - the client should prevent this but the server should also reject
+
