@@ -816,9 +816,9 @@ const BackgammonGame = () => {
             // Fetch latest move to see why turn changed
             try {
               const { data: movesData } = await supabase.functions.invoke("get-moves", {
-                body: { roomPda, limit: 1, orderDesc: true },
+                body: { roomPda },
               });
-              const lastMove = movesData?.moves?.[0];
+              const lastMove = movesData?.moves?.at(-1);
               const lastMoveType = lastMove?.move_data?.type;
               
               console.log("[BackgammonGame] Turn passed to me via polling:", {
