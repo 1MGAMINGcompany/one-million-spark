@@ -964,6 +964,7 @@ Deno.serve(async (req: Request) => {
       const { error: finishErr } = await supabase.rpc("finish_game_session", {
         p_room_pda: roomPda,
         p_caller_wallet: forfeitingWallet,
+        p_winner_wallet: winnerWallet,
       });
 
       if (finishErr) {

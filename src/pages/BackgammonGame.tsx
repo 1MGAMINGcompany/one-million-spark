@@ -768,9 +768,9 @@ const BackgammonGame = () => {
           if (!dbWinner) {
             try {
               const { data: movesData } = await supabase.functions.invoke("get-moves", {
-                body: { roomPda, limit: 1, orderDesc: true },
+                body: { roomPda },
               });
-              const lastMove = movesData?.moves?.[0];
+              const lastMove = movesData?.moves?.at(-1);
               if (lastMove) {
                 const outcome = computeOutcomeFromLastMove({
                   lastMove,
@@ -839,6 +839,8 @@ const BackgammonGame = () => {
           }
           
           setCurrentTurnWallet(dbTurnWallet);
+          // Reset timeout debounce since turn actually changed
+          timeoutFiredRef.current = false;
           // Clear stale dice/moves to ensure clean turn start
           setDice([]);
           setRemainingMoves([]);
