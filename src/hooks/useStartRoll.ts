@@ -35,6 +35,8 @@ interface UseStartRollOptions {
   initialColor: "w" | "b";
   /** Whether both players have accepted rules (for ranked games) - triggers polling */
   bothReady?: boolean;
+  /** Max players in room (2 = no dice roll, 3-4 = Ludo with random start) */
+  maxPlayers?: number;
 }
 
 interface UseStartRollResult {
@@ -57,7 +59,10 @@ interface UseStartRollResult {
 }
 
 export function useStartRoll(options: UseStartRollOptions): UseStartRollResult {
-  const { roomPda, gameType, myWallet, isRanked, roomPlayers, hasTwoRealPlayers, initialColor, bothReady } = options;
+  const { roomPda, gameType, myWallet, isRanked, roomPlayers, hasTwoRealPlayers, initialColor, bothReady, maxPlayers = 2 } = options;
+  
+  // For 2-player games: NEVER show dice roll UI - DB auto-finalizes with creator starting
+  const isTwoPlayerGame = maxPlayers <= 2;
 
   const [isFinalized, setIsFinalized] = useState(false);
   const [showDiceRoll, setShowDiceRoll] = useState(false);
@@ -139,6 +144,7 @@ export function useStartRoll(options: UseStartRollOptions): UseStartRollResult {
   }, [roomPda, gameType, hasTwoRealPlayers, roomPlayers, isRanked]);
 
   // Check for existing roll OR show dice roll UI when session is ready
+  // For 2-player games: NEVER show dice UI, just poll for finalized state
   useEffect(() => {
     if (!roomPda || isFinalized || !hasTwoRealPlayers) return;
     if (isCreatingSession) return;
@@ -152,7 +158,8 @@ export function useStartRoll(options: UseStartRollOptions): UseStartRollResult {
         
         if (error) {
           console.error("[useStartRoll] Edge function error:", error);
-          setShowDiceRoll(true);
+          // Only show dice UI for 3-4 player games
+          if (!isTwoPlayerGame) setShowDiceRoll(true);
           return;
         }
 
@@ -161,7 +168,7 @@ export function useStartRoll(options: UseStartRollOptions): UseStartRollResult {
           // CRITICAL: If session is finished, this is stale data - show dice UI for new game
           if (session.status === 'finished') {
             console.log("[useStartRoll] Session finished - ignoring stale finalized data");
-            setShowDiceRoll(true);
+            if (!isTwoPlayerGame) setShowDiceRoll(true);
             return;
           }
           // Roll already finalized
@@ -173,29 +180,38 @@ export function useStartRoll(options: UseStartRollOptions): UseStartRollResult {
           setIsFinalized(true);
           console.log("[useStartRoll] Start roll already finalized. Starter:", starter);
         } else if (session) {
-          // Session exists but not finalized - show dice roll
-          console.log("[useStartRoll] Session exists, showing dice roll UI");
-          setShowDiceRoll(true);
+          // Session exists but not finalized
+          if (isTwoPlayerGame) {
+            // For 2-player: DB will auto-finalize, just poll - no dice UI
+            console.log("[useStartRoll] 2-player game: waiting for DB auto-finalization");
+          } else {
+            // For 3-4 player: show dice roll UI
+            console.log("[useStartRoll] N-player game: showing dice roll UI");
+            setShowDiceRoll(true);
+          }
         } else {
           // Session doesn't exist yet - wait for it to be created
           console.log("[useStartRoll] Session not found yet, waiting...");
           // Re-check after a short delay
           setTimeout(() => {
-            setShowDiceRoll(true); // Show anyway after delay
+            if (!isTwoPlayerGame) setShowDiceRoll(true); // Only show for Ludo
           }, 1000);
         }
       } catch (err) {
         console.error("[useStartRoll] Failed to check start roll:", err);
-        setShowDiceRoll(true);
+        if (!isTwoPlayerGame) setShowDiceRoll(true);
       }
     };
 
     checkStartRoll();
-  }, [roomPda, hasTwoRealPlayers, isFinalized, myWallet, isCreatingSession]);
+  }, [roomPda, hasTwoRealPlayers, isFinalized, myWallet, isCreatingSession, isTwoPlayerGame]);
 
   // Poll for roll result (in case other player triggered it)
+  // For 2-player games, this is the main path since DB auto-finalizes
   useEffect(() => {
-    if (!roomPda || isFinalized || !showDiceRoll) return;
+    if (!roomPda || isFinalized) return;
+    // For 2-player: poll even without showDiceRoll since we skip dice UI
+    if (!isTwoPlayerGame && !showDiceRoll) return;
 
     const pollInterval = setInterval(async () => {
       try {
@@ -224,19 +240,20 @@ export function useStartRoll(options: UseStartRollOptions): UseStartRollResult {
       } catch (err) {
         // Silent fail on poll
       }
-    }, 2000);
+    }, isTwoPlayerGame ? 1000 : 2000); // Poll faster for 2-player since no UI
 
     return () => clearInterval(pollInterval);
-  }, [roomPda, isFinalized, showDiceRoll, myWallet]);
+  }, [roomPda, isFinalized, showDiceRoll, myWallet, isTwoPlayerGame]);
 
   // --- START: Baseline start-roll polling (runs even if realtime drops) ---
   // This poll runs independently of hasTwoRealPlayers, bothReady, or showDiceRoll
   // It ensures mobile can recover even if it missed every WebSocket event
-  // Only depends on: roomPda exists, not finalized, not showing dice UI
+  // For 2-player games: this is the PRIMARY finalization path (no dice UI)
   useEffect(() => {
     if (!roomPda) return;
     if (isFinalized) return;
-    if (showDiceRoll) return;
+    // For 2-player: always poll (no dice UI). For 3-4 player: skip if showing dice
+    if (!isTwoPlayerGame && showDiceRoll) return;
 
     let cancelled = false;
 
@@ -258,10 +275,10 @@ export function useStartRoll(options: UseStartRollOptions): UseStartRollResult {
 
         // If opponent already finalized, hydrate immediately
         if (s.start_roll_finalized && s.starting_player_wallet) {
-          // CRITICAL: If session is finished, this is stale data - show dice UI
+          // CRITICAL: If session is finished, this is stale data
           if (s.status === 'finished') {
-            console.log("[useStartRoll] Session finished - showing dice roll for new game");
-            setShowDiceRoll(true);
+            console.log("[useStartRoll] Session finished - ignoring stale data");
+            if (!isTwoPlayerGame) setShowDiceRoll(true);
             return;
           }
           
@@ -279,10 +296,16 @@ export function useStartRoll(options: UseStartRollOptions): UseStartRollResult {
           return;
         }
 
-        // If both players are ready server-side, force dice UI to appear
+        // If both players are ready server-side
         if (s.p1_ready && s.p2_ready) {
-          console.log("[useStartRoll] Server shows both ready, showing dice roll UI");
-          setShowDiceRoll(true);
+          if (isTwoPlayerGame) {
+            // For 2-player: DB should auto-finalize soon, keep polling
+            console.log("[useStartRoll] 2-player: both ready, waiting for auto-finalization");
+          } else {
+            // For 3-4 player: show dice UI
+            console.log("[useStartRoll] N-player: both ready, showing dice roll UI");
+            setShowDiceRoll(true);
+          }
         }
       } catch (e) {
         if (!cancelled) console.warn("[useStartRoll] pre-roll poll exception:", e);
@@ -290,13 +313,14 @@ export function useStartRoll(options: UseStartRollOptions): UseStartRollResult {
     };
 
     poll();
-    const id = setInterval(poll, 2000);
+    const id = setInterval(poll, isTwoPlayerGame ? 1000 : 2000);
+
 
     return () => {
       cancelled = true;
       clearInterval(id);
     };
-  }, [roomPda, isFinalized, showDiceRoll, myWallet]);
+  }, [roomPda, isFinalized, showDiceRoll, myWallet, isTwoPlayerGame]);
   // --- END: Baseline start-roll polling ---
 
   const handleRollComplete = useCallback(async (starter: string) => {
