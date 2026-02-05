@@ -414,36 +414,38 @@ export default function RoomList() {
                   </div>
 
                   {/* Room Info */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
+                  <div className="flex-1 min-w-0 overflow-hidden">
+                    {/* First row: Game name + badges - wrap on mobile */}
+                    <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
                       <h3 className="font-semibold truncate">
                         {getGameName(room.gameType)}
                       </h3>
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-primary/20 text-primary">
+                      <span className="text-xs px-1.5 sm:px-2 py-0.5 rounded-full bg-primary/20 text-primary shrink-0">
                         #{room.roomId}
                       </span>
-                      {/* Mode Badge - STEP 7: Stake-only detection (no getRoomMode) */}
+                      {/* Mode Badge - smaller on mobile */}
                       {(() => {
-                        // Stake > 0 is the only reliable indicator in room list
                         const isRanked = room.entryFeeSol > 0;
                         return (
-                          <span className={`text-xs px-2 py-0.5 rounded-full border flex items-center gap-1 ${
+                          <span className={`text-xs px-1.5 sm:px-2 py-0.5 rounded-full border flex items-center gap-0.5 sm:gap-1 shrink-0 ${
                             isRanked 
                               ? 'bg-red-500/20 text-red-400 border-red-500/30' 
                               : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
                           }`}>
-                            {isRanked ? '🔴' : '🟢'} {isRanked ? t("createRoom.gameModeRanked") : t("createRoom.gameModeCasual")}
-                            <span className="opacity-70">{isRanked ? '🏆' : '🎮'}</span>
+                            {isRanked ? '🔴' : '🟢'}
+                            <span className="hidden sm:inline">{isRanked ? t("createRoom.gameModeRanked") : t("createRoom.gameModeCasual")}</span>
+                            <span className="sm:hidden">{isRanked ? 'Ranked' : 'Casual'}</span>
                           </span>
                         );
                       })()}
                     </div>
-                    <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
-                      {/* Stake display - STEP 7: Stake-only detection */}
+                    {/* Second row: Stats - wrap on mobile */}
+                    <div className="flex items-center gap-2 sm:gap-4 text-sm text-muted-foreground mt-1 flex-wrap">
+                      {/* Stake display */}
                       {(() => {
                         const isRanked = room.entryFeeSol > 0;
                         return (
-                          <span className={`flex items-center gap-1 ${isRanked ? 'text-foreground font-medium' : ''}`}>
+                          <span className={`flex items-center gap-1 shrink-0 ${isRanked ? 'text-foreground font-medium' : ''}`}>
                             <Coins className="h-3.5 w-3.5" />
                             {isRanked ? (
                               `${room.entryFeeSol} SOL`
@@ -453,18 +455,18 @@ export default function RoomList() {
                           </span>
                         );
                       })()}
-                      <span className="flex items-center gap-1">
+                      <span className="flex items-center gap-1 shrink-0">
                         <Users className="h-3.5 w-3.5" />
                         {room.playerCount}/{room.maxPlayers}
                       </span>
                       {room.turnTimeSec > 0 && (
-                        <span className="flex items-center gap-1">
+                        <span className="flex items-center gap-1 shrink-0">
                           <Clock className="h-3.5 w-3.5 text-amber-400" />
                           {room.turnTimeSec}s
                         </span>
                       )}
-                      <span className="hidden sm:flex items-center gap-1 truncate">
-                        <Clock className="h-3.5 w-3.5" />
+                      {/* Creator wallet only on larger screens */}
+                      <span className="hidden md:flex items-center gap-1 truncate">
                         {room.creator.slice(0, 4)}...{room.creator.slice(-4)}
                       </span>
                     </div>
