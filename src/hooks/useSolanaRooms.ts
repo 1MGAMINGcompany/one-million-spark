@@ -538,28 +538,12 @@ export function useSolanaRooms() {
             });
           }
         } else {
-          console.log("[CreateRoom] Recorded acceptance with tx signature and mode:", mode);
-          
-          // PART A FIX: For ranked games, ALSO insert into game_acceptances table
-          // record_acceptance only sets p1_ready flag, but rankedGate needs game_acceptances rows
-          if (mode === 'ranked') {
-            try {
-              const { error: rankedAcceptError } = await supabase.functions.invoke("ranked-accept", {
-                body: {
-                  roomPda: roomPdaStr,
-                  playerWallet: publicKey.toBase58(),
-                },
-              });
-              
-              if (rankedAcceptError) {
-                console.warn("[CreateRoom] ranked-accept for creator failed:", rankedAcceptError);
-              } else {
-                console.log("[CreateRoom] ✅ Creator acceptance recorded in game_acceptances for ranked game");
-              }
-            } catch (rankedErr) {
-              console.warn("[CreateRoom] ranked-accept call failed:", rankedErr);
-            }
-          }
+          console.log("[CreateRoom] ✅ Recorded acceptance with tx signature and mode:", mode);
+          // record_acceptance RPC handles EVERYTHING:
+          // - game_acceptances insert (idempotent)
+          // - p1_ready / p2_ready flags
+          // - status_int transition via maybe_activate_game_session
+          // NO ranked-accept call needed - single authority pattern
         }
       } catch (acceptErr: any) {
         console.error("[CreateRoom] Failed to record acceptance:", acceptErr);
