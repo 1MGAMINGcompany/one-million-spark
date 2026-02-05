@@ -492,55 +492,10 @@ export function useSolanaRooms() {
         });
         
         if (rpcError) {
-          console.warn("[CreateRoom] RPC record_acceptance failed:", rpcError);
-          // Check if 404 (function not found) - fallback to edge function
-          if (rpcError.message?.includes("404") || rpcError.code === "PGRST116") {
-            console.log("[CreateRoom] Trying verify-acceptance edge function fallback...");
-            const { error: fnError } = await supabase.functions.invoke("verify-acceptance", {
-              body: {
-                acceptance: {
-                  roomPda: roomPdaStr,
-                  playerWallet: publicKey.toBase58(),
-                  rulesHash,
-                  nonce: crypto.randomUUID(),
-                  timestamp: Date.now(),
-                  signature,
-                },
-                rules: {
-                  roomPda: roomPdaStr,
-                  gameType,
-                  mode,
-                  maxPlayers,
-                  stakeLamports,
-                  feeBps: 250,
-                  turnTimeSeconds: 60,
-                  forfeitPolicy: "timeout",
-                  version: 1,
-                },
-              },
-            });
-            
-            if (fnError) {
-              console.error("[CreateRoom] Both RPC and edge function failed:", fnError);
-              toast({
-                title: "Acceptance Recording Failed",
-                description: "Game will proceed but ranked features may not work",
-                variant: "destructive",
-              });
-            } else {
-              console.log("[CreateRoom] Recorded acceptance via edge function fallback");
-            }
-          } else {
-            toast({
-              title: "Acceptance Recording Failed",
-              description: rpcError.message || "Unknown error",
-              variant: "destructive",
-            });
-          }
+          // FAIL-OPEN: Log error but don't block room creation
+          console.warn("[CreateRoom] record_acceptance failed (non-blocking):", rpcError.message);
         } else {
-          console.log("[CreateRoom] Recorded acceptance with tx signature and mode:", mode);
-          // record_acceptance RPC is now the SINGLE AUTHORITY for game_acceptances + ready flags
-          // No need to call ranked-accept Edge Function - it's handled by record_acceptance above
+          console.log("[CreateRoom] ✅ Recorded acceptance with tx signature and mode:", mode);
         }
       } catch (acceptErr: any) {
         console.error("[CreateRoom] Failed to record acceptance:", acceptErr);
