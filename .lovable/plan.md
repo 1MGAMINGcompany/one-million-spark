@@ -1,145 +1,117 @@
 
+## Fix Plan: Room List UI + Turn Sync Debugging
 
-## Fix Plan: Turn Timeout Reliability + Game Move Audit Log
+### Issues to Fix
 
-### Issues Found
+1. **Turn Time Not Showing in Room List**
+   - The enrichment code was added to `useSolanaRooms.ts` but there may be a timing issue or the data isn't being returned correctly
+   - Need to verify the enrichment is working
 
-After analyzing the game logs for room `Rb7nvzh5...`:
+2. **Mobile Room Card Layout Cut Off**
+   - The room card content is overflowing on mobile (visible in screenshot)
+   - The badges and buttons need to wrap/stack on smaller screens
 
-1. **Turn 4 Bug**: A `move` was recorded after a `turn_end` by the same player - race condition
-2. **First timeout shows `missedCount: 2`**: localStorage had stale data from previous session
-3. **Only 1 timeout recorded**: You saw 2 missed turns locally but only 1 was submitted
-4. **Final forfeit triggered manually**: No second timeout was recorded for the third strike
-
-### Root Causes
-
-| Issue | Root Cause |
-|-------|------------|
-| Turn after turn_end | Client submitted move before turn_end response updated local state |
-| Wrong missedCount | `localStorage` key `missedTurns:roomPda:wallet` persists across room sessions |
-| Missing timeouts | Either `timeout_too_early` rejection or `timeoutFiredRef` not reset properly |
-| Timer not switching | Polling detected turn change but timer state wasn't fully reset |
+3. **Turn Sync Verification**
+   - The server-side guard was already added in the recent migration
+   - The game log shows Turn 4 had a race condition (move after turn_end)
+   - With the new guard, this should now be rejected
 
 ---
 
-## Fix 1: Clear Missed Turns on New Game Start
+### Fix 1: Mobile Room Card Layout
 
-**File:** `src/pages/BackgammonGame.tsx`
+**File:** `src/pages/RoomList.tsx`
 
-When the game starts (room is activated), clear any stale missed turn counts:
+Update the room card to handle mobile better:
+
+```text
+Current layout:
+[Icon] [Game Name #ID] [Ranked Badge] [← cuts off on mobile]
+       [Stake] [Players] [Timer] [Creator]               [Join]
+
+Proposed mobile layout:
+[Icon] [Game Name]                                       [Join]
+       [#ID] [Ranked]
+       [Stake] [Players] [Timer]
+```
+
+Changes:
+- Use `flex-wrap` on the badges row to allow wrapping
+- Hide less critical badges on mobile (creator wallet)
+- Reduce badge padding/sizing on mobile
+- Make the join button shrink-proof
+
+### Fix 2: Verify Turn Time Enrichment
+
+**File:** `src/hooks/useSolanaRooms.ts`
+
+Add debug logging to verify the enrichment is working:
+- Log when sessions are fetched from database
+- Log the turn time map contents
+
+### Fix 3: Turn Sync - Already Applied
+
+The server-side guard in `submit_game_move` RPC was added in the recent migration. It rejects:
+- `dice_roll` or `move` from the same wallet that just submitted `turn_end`
+
+This should prevent the Turn 4 race condition going forward.
+
+---
+
+### Implementation Details
+
+#### RoomList.tsx - Mobile Card Layout
 
 ```typescript
-// In the effect that handles game start / startRoll.isFinalized
-useEffect(() => {
-  if (startRoll.isFinalized && roomPda && address) {
-    // Clear stale missed turns from any previous session with this room
-    clearRoom(roomPda);
-  }
-}, [startRoll.isFinalized, roomPda, address]);
-```
-
-Import `clearRoom` from `@/lib/missedTurns`.
-
----
-
-## Fix 2: Reset Timer State When Turn Changes via Polling
-
-**File:** `src/pages/BackgammonGame.tsx`
-
-The `useTurnTimer` hook has an effect that resets on `isMyTurn` change. But the `isMyTurn` check uses stale `currentTurnWallet`. Need to explicitly call `resetTimer()` when polling detects a turn change.
-
-Add to the polling turn change handler (around line 841):
-
-```typescript
-setCurrentTurnWallet(dbTurnWallet);
-timeoutFiredRef.current = false;
-
-// FIX: Explicitly reset the turn timer when polling detects turn change
-turnTimer.resetTimer();
-```
-
----
-
-## Fix 3: Add Game Move Audit Log Component
-
-Create a debug/audit view for game moves that can be toggled in DebugHUD.
-
-**New File:** `src/components/GameMoveAudit.tsx`
-
-```typescript
-interface GameMoveAuditProps {
-  roomPda: string;
-  enabled?: boolean;
-}
-
-export function GameMoveAudit({ roomPda, enabled = false }: GameMoveAuditProps) {
-  const [moves, setMoves] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
-
-  const fetchMoves = async () => {
-    setLoading(true);
-    const { data } = await supabase.functions.invoke("get-moves", {
-      body: { roomPda },
-    });
-    setMoves(data?.moves || []);
-    setLoading(false);
-  };
-
-  useEffect(() => {
-    if (enabled && roomPda) fetchMoves();
-  }, [enabled, roomPda]);
-
-  // Render a table with: turn_number, wallet (short), type, created_at, flags
-  // Highlight anomalies: moves after turn_end by same player, etc.
-}
-```
-
-Add a "View Moves" button to DebugHUD that opens this panel.
-
----
-
-## Fix 4: Server-Side Guard Against Move After Turn End
-
-**Database Migration:** Add validation in `submit_game_move` RPC
-
-```sql
--- Reject moves from a player who just submitted turn_end
--- Check: if last move was turn_end and nextTurnWallet != p_wallet, reject
-
--- Get last move for this room
-SELECT * INTO v_last_move
-FROM game_moves
-WHERE room_pda = p_room_pda
-ORDER BY turn_number DESC
-LIMIT 1;
-
--- If last move was turn_end and handed turn to someone else, reject regular moves from original player
-IF v_last_move IS NOT NULL 
-   AND v_last_move.move_data->>'type' = 'turn_end'
-   AND v_move_type IN ('dice_roll', 'move')
-   AND v_last_move.wallet = p_wallet
-THEN
-  RETURN jsonb_build_object('success', false, 'error', 'turn_already_ended');
-END IF;
+// Line ~410-471: Room Info section
+<div className="flex-1 min-w-0 overflow-hidden">
+  {/* First row: Game name + Join button context */}
+  <div className="flex items-center gap-2 flex-wrap">
+    <h3 className="font-semibold truncate">
+      {getGameName(room.gameType)}
+    </h3>
+    {/* Room ID and mode badges on same row, wrapping allowed */}
+    <span className="text-xs px-2 py-0.5 rounded-full bg-primary/20 text-primary shrink-0">
+      #{room.roomId}
+    </span>
+    {/* Mode Badge - smaller on mobile */}
+    <span className={`text-xs px-1.5 sm:px-2 py-0.5 rounded-full border flex items-center gap-0.5 sm:gap-1 shrink-0 ${...}`}>
+      {/* Shorter labels on mobile */}
+      <span className="hidden sm:inline">{isRanked ? t("createRoom.gameModeRanked") : t("createRoom.gameModeCasual")}</span>
+      <span className="sm:hidden">{isRanked ? 'Ranked' : 'Casual'}</span>
+    </span>
+  </div>
+  
+  {/* Second row: Stats - wrap on mobile */}
+  <div className="flex items-center gap-2 sm:gap-4 text-sm text-muted-foreground mt-1 flex-wrap">
+    <span className="flex items-center gap-1 shrink-0">
+      <Coins className="h-3.5 w-3.5" />
+      {room.entryFeeSol > 0 ? `${room.entryFeeSol} SOL` : '—'}
+    </span>
+    <span className="flex items-center gap-1 shrink-0">
+      <Users className="h-3.5 w-3.5" />
+      {room.playerCount}/{room.maxPlayers}
+    </span>
+    {room.turnTimeSec > 0 && (
+      <span className="flex items-center gap-1 shrink-0">
+        <Clock className="h-3.5 w-3.5 text-amber-400" />
+        {room.turnTimeSec}s
+      </span>
+    )}
+    {/* Creator wallet only on larger screens */}
+    <span className="hidden md:flex items-center gap-1 truncate">
+      {room.creator.slice(0, 4)}...{room.creator.slice(-4)}
+    </span>
+  </div>
+</div>
 ```
 
 ---
 
-## Summary of Changes
+### Technical Notes
 
-| File | Change |
-|------|--------|
-| `BackgammonGame.tsx` | Clear stale missed turns on game start |
-| `BackgammonGame.tsx` | Call `turnTimer.resetTimer()` when polling detects turn change |
-| `GameMoveAudit.tsx` | New component for viewing/debugging move history |
-| `DebugHUD.tsx` | Add "View Moves" button to open audit panel |
-| Database Migration | Server guard against move after turn_end |
+1. **Turn time enrichment** - The code in `useSolanaRooms.ts` is correct, but sessions might not exist yet for rooms where the creator just created but hasn't been joined. Only rooms with an active game session will have turn times.
 
----
+2. **Mobile card overflow** - The current `flex` layout doesn't handle small screens well because badges don't wrap. Adding `flex-wrap` and `shrink-0` on badges fixes this.
 
-## Technical Notes
-
-- The `clearRoom()` function in `missedTurns.ts` already exists - just needs to be called at the right time
-- The `turnTimer.resetTimer()` is exposed by the hook but wasn't being called explicitly on poll-detected turn changes
-- The server-side guard is a defense-in-depth measure - the client should prevent this but the server should also reject
-
+3. **Server-side turn guard** - Already deployed. The guard checks if the last move was `turn_end` by the same wallet and rejects subsequent `dice_roll` or `move` attempts.
