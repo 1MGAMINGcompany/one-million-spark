@@ -1,75 +1,167 @@
 
-# Plan: Remove Dice Roll for ALL Ludo Games (2, 3, 4 Player)
+# Plan: Eliminate Double Acceptance Race Condition
 
-## Summary
-Remove the dice roll ceremony for all Ludo multiplayer games. The creator (player1) will always start for all game sizes, just like the 2-player Chess/Backgammon/Checkers/Dominos games.
+## Problem Summary
+The codebase has **two competing acceptance paths** that cause race conditions:
 
-## Current State
-- **Database function** `maybe_finalize_start_state` already auto-starts for 2-player games (creator starts)
-- For 3-4 player Ludo, it uses **random selection** with `gen_random_bytes`
-- **Frontend** `useStartRoll.ts` uses `isTwoPlayerGame = maxPlayers <= 2` to decide whether to show dice UI
-- **LudoGame.tsx** currently does NOT pass `maxPlayers` to `useStartRoll`, so it defaults to 2 (accidentally correct for hiding dice, but random starter logic still runs in DB)
+| Path | Location | What It Does |
+|------|----------|--------------|
+| `record_acceptance` | PostgreSQL RPC | Creates session, inserts game_acceptances, sets p1_ready/p2_ready, activates game |
+| `ranked-accept` | Edge Function | **Also** inserts into game_acceptances and calls set_player_ready |
+
+This causes:
+- **Duplicate key errors** (SQLSTATE 23505) on `game_acceptances`
+- **Race condition** where edge function tries to call `set_player_ready` before session exists
+- **Stuck "Waiting for opponent"** because `p2_ready` never gets set after the error
+
+## Solution: Single Authority Pattern
+Make `record_acceptance` the **single authority** for all acceptance logic.
+
+---
 
 ## Changes Required
 
-### 1. Database: Update `maybe_finalize_start_state` (SQL Migration)
-Modify the function to use **creator starts** for ALL games (not just 2-player):
+### 1. Simplify `ranked-accept` Edge Function (Critical)
+**File:** `supabase/functions/ranked-accept/index.ts`
 
-```text
-┌─────────────────────────────────────────────────────────┐
-│ Before (3-4 player):                                    │
-│   v_random_byte := gen_random_bytes(1)                 │
-│   v_starting_wallet := random participant              │
-├─────────────────────────────────────────────────────────┤
-│ After (all games):                                      │
-│   v_starting_wallet := player1_wallet (creator)        │
-│   method: 'creator_starts'                             │
-└─────────────────────────────────────────────────────────┘
-```
+Remove ALL acceptance/readiness logic. The function should ONLY:
+- Validate inputs
+- Return `{ success: true }`
 
-The function will:
-- Remove the 2-player conditional branch
-- Always use `player1_wallet` as the starting player
-- Record method as `'creator_starts'` for all games
-- Still validate acceptance/participant count thresholds
+Remove:
+- Lines 152-169: Insert into `game_acceptances` (signed mode)
+- Lines 180-199: Insert into `game_acceptances` (simple mode)
+- Lines 202-215: Call `set_player_ready` RPC
 
-### 2. Frontend: Ensure LudoGame passes correct maxPlayers
-Update `LudoGame.tsx` to:
-- Extract `maxPlayers` from on-chain room data (already available in `parsed.maxPlayers`)
-- Store it in state
-- Pass it to `useStartRoll` hook
+The simplified function becomes a no-op authentication stub that can be removed in future.
 
-This ensures the frontend correctly treats ALL Ludo games as "instant start" games.
+### 2. Remove Dual Calls from Frontend - Creator Flow
+**File:** `src/hooks/useSolanaRooms.ts`
 
-### 3. Frontend: useStartRoll already handles this
-The hook already has logic:
+In `createRoom` (~lines 543-562), remove the redundant `ranked-accept` call after `record_acceptance` succeeds:
 ```typescript
-const isTwoPlayerGame = maxPlayers <= 2;
+// REMOVE THIS BLOCK:
+if (mode === 'ranked') {
+  try {
+    const { error: rankedAcceptError } = await supabase.functions.invoke("ranked-accept", ...);
+    ...
+  }
+}
 ```
 
-We'll update this to:
-```typescript
-// For this project: ALL games skip dice roll (creator always starts)
-const skipDiceRoll = true; // or maxPlayers <= 4
-```
+`record_acceptance` already handles everything including `game_acceptances` insert.
 
-This makes the dice UI never appear regardless of player count.
+### 3. Remove `ranked-accept` from `useRankedReadyGate`
+**File:** `src/hooks/useRankedReadyGate.ts`
+
+The `acceptRules` callback (~lines 144-188) calls `ranked-accept`. Since readiness is now auto-recorded, this function should either:
+- Option A: Remove completely (preferred - no manual accept needed)
+- Option B: Make it a no-op that returns success immediately
+
+Given the "silent auto-accept" feature from memory, Option A is correct.
+
+### 4. Verify `record_acceptance` Handles All Cases
+The current PostgreSQL function already:
+- Creates `player_sessions` entry (idempotent)
+- Inserts into `game_acceptances` (idempotent via ON CONFLICT)
+- Sets `p1_ready` / `p2_ready`
+- Sets `player2_wallet` for joiners
+- Calls `maybe_activate_game_session` to transition `status_int`
+
+No changes needed to the RPC function itself.
 
 ---
 
-## Files Changed
+## Files Modified
 
 | File | Change |
 |------|--------|
-| `supabase/migrations/*.sql` | Update `maybe_finalize_start_state` - creator starts for ALL games |
-| `src/hooks/useStartRoll.ts` | Change `isTwoPlayerGame` to always skip dice roll |
-| `src/pages/LudoGame.tsx` | Add `maxPlayers` state and pass to `useStartRoll` (for correctness) |
+| `supabase/functions/ranked-accept/index.ts` | Remove game_acceptances insert + set_player_ready calls |
+| `src/hooks/useSolanaRooms.ts` | Remove `ranked-accept` call from createRoom (~line 547) |
+| `src/hooks/useRankedReadyGate.ts` | Remove `ranked-accept` call from acceptRules callback |
 
 ---
 
-## Technical Notes
+## Technical Details
 
-- **No impact on Play vs AI**: AI games don't use `useStartRoll` or the DB function
-- **No impact on join/create transactions**: On-chain logic unchanged
-- **No impact on settlement/forfeit**: Turn management unchanged
-- **Backward compatible**: Existing sessions with `start_roll_finalized = true` continue working
+### Simplified `ranked-accept` Edge Function
+```typescript
+Deno.serve(async (req: Request) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const body = await req.json();
+    
+    // Basic validation only
+    if (!body.roomPda || !body.playerWallet) {
+      return new Response(
+        JSON.stringify({ success: false, error: "Missing roomPda or playerWallet" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    console.log("[ranked-accept] Validation-only mode:", body.roomPda.slice(0, 8));
+
+    // No acceptance logic - record_acceptance handles everything
+    return new Response(
+      JSON.stringify({ success: true, message: "Acceptance handled by record_acceptance RPC" }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  } catch (error) {
+    console.error("[ranked-accept] Error:", error);
+    return new Response(
+      JSON.stringify({ success: false, error: "Internal server error" }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+});
+```
+
+### Flow After Fix
+
+**Creator Flow:**
+1. `createRoom` transaction confirms
+2. `ensure_game_session` RPC creates session with mode
+3. `record_acceptance` RPC → sets p1_ready, inserts game_acceptances
+4. Done - no ranked-accept call
+
+**Joiner Flow:**
+1. `joinRoom` transaction confirms  
+2. `record_acceptance` RPC → sets player2_wallet, p2_ready, inserts game_acceptances
+3. `maybe_activate_game_session` triggers → transitions status_int 1→2
+4. `maybe_finalize_start_state` triggers → sets creator as starter
+5. Done - no ranked-accept call
+
+---
+
+## Success Criteria
+
+After joiner acceptance:
+- `p1_ready = TRUE`
+- `p2_ready = TRUE`
+- `status_int = 2` (ACTIVE)
+- `game_acceptances` has 2 rows (no duplicate key errors)
+- No "Waiting for opponent" deadlock
+- Turn time displays correctly in Room List
+
+---
+
+## Verification Steps
+
+1. Create a ranked room as Device A (creator)
+2. Join the room as Device B (joiner)
+3. Verify:
+   - Game starts immediately without "Accept Rules" modal
+   - No dice roll appears
+   - Creator goes first
+   - Database shows correct state:
+     ```sql
+     SELECT p1_ready, p2_ready, status_int, starting_player_wallet 
+     FROM game_sessions WHERE room_pda = '...';
+     -- Expected: TRUE, TRUE, 2, <creator_wallet>
+     
+     SELECT COUNT(*) FROM game_acceptances WHERE room_pda = '...';
+     -- Expected: 2
+     ```
