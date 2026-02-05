@@ -1,84 +1,112 @@
-# Fix Plan: Restore Game Acceptance Flow
 
-## Status: ✅ COMPLETE
+# Fix Plan: Add Forfeit Button to WaitingForOpponentPanel
 
----
+## Problem
+When two players have paid and joined a ranked game room, but the sync system shows one player as still "waiting for opponent to accept," there is no way to forfeit the match. The current "Leave Match" button only navigates away without settling the on-chain stakes.
 
-## Changes Completed
+This leaves players with locked funds and no way to resolve the game.
 
-### 1. ✅ Fixed `record_acceptance` RPC to Insert into `game_acceptances`
+## Solution
+Add a Forfeit button to the `WaitingForOpponentPanel` component that appears when:
+- 2+ players have joined (indicated by `playerCount >= 2` from on-chain data)
+- There is a stake involved (`stakeSol > 0`)
 
-Migration applied that adds the missing `INSERT INTO game_acceptances` statement with all required columns (`nonce`, `timestamp_ms`, `session_expires_at`).
+The forfeit action will call the existing `forfeit-game` Edge Function which handles on-chain settlement.
 
-### 2. ✅ Removed Dead Code: `verify-acceptance` Fallback in `useSolanaRooms.ts`
+## Implementation Details
 
-Removed ~50 lines of dead code from `createRoom` function. Now uses fail-open pattern:
-```typescript
-if (rpcError) {
-  console.warn("[CreateRoom] record_acceptance failed (non-blocking):", rpcError.message);
-} else {
-  console.log("[CreateRoom] ✅ Recorded acceptance with tx signature and mode:", mode);
-}
-```
+### 1. Update `WaitingForOpponentPanel` Component
 
-### 3. ✅ Deleted Unused Hooks
+**File:** `src/components/WaitingForOpponentPanel.tsx`
 
-- `src/hooks/useRankedAcceptance.ts` - DELETED (called deprecated `ranked-accept`)
-- `src/hooks/useGameAcceptance.ts` - DELETED (called deprecated `verify-acceptance`)
+Add new props:
+- `stakeSol?: number` - The stake amount for display
+- `playerCount?: number` - On-chain player count (2 = both joined)
+- `onForfeit?: () => void` - Handler to trigger forfeit settlement
+- `isForfeiting?: boolean` - Loading state during forfeit
 
-### 4. ✅ Kept `src/lib/gameAcceptance.ts`
-
-Still used by `useSolanaRooms.ts` for:
-- `computeRulesHash()` - computes SHA-256 hash of rules
-- `createRulesFromRoom()` - creates rules object from room parameters
-
----
-
-## Expected Result
-
-**Database after joiner accepts:**
-```sql
-SELECT COUNT(*) FROM game_acceptances WHERE room_pda = '...';
--- Expected: 2 (one per player)
-
-SELECT p1_ready, p2_ready, status_int FROM game_sessions WHERE room_pda = '...';
--- Expected: TRUE, TRUE, 2
-```
-
-**Frontend behavior:**
-- `useRankedReadyGate` receives `acceptedWallets` with 2 entries
-- `bothReady` becomes `true` via `fromAcceptances`
-- No "Accept Rules" modal (silent auto-accept works)
-
----
-
-## Architecture (Single Authority Pattern)
+Add a Forfeit button section that appears when `playerCount >= 2 && stakeSol > 0 && onForfeit`:
 
 ```text
-┌────────────────────┐
-│   createRoom()     │
-│   joinRoom()       │
-└─────────┬──────────┘
-          │
-          ▼
+Before changes:
 ┌────────────────────────────────────┐
-│  record_acceptance RPC             │
-│  ─────────────────────────────────│
-│  1. UPDATE game_sessions           │
-│     (p1_ready/p2_ready = TRUE)     │
-│  2. INSERT INTO game_acceptances   │
-│  3. UPSERT player_sessions         │
+│  [Status Icon]                     │
+│  Room: 9myQJDpN                    │
+│  ✓ You accepted the rules         │
+│  ⏳ Waiting for opponent...        │
+│                                    │
+│  [Copy Invite Link]                │
+│  Leave Match                       │
 └────────────────────────────────────┘
-          │
-          ▼
+
+After changes (when 2 players joined):
 ┌────────────────────────────────────┐
-│  game-session-get Edge Function    │
-│  Reads from game_acceptances       │
-└────────────────────────────────────┘
-          │
-          ▼
-┌────────────────────────────────────┐
-│  useRankedReadyGate Hook           │
-│  bothReady = fromAcceptances ✓     │
+│  [Status Icon]                     │
+│  Room: 9myQJDpN                    │
+│  ✓ You accepted the rules         │
+│  ⏳ Waiting for opponent...        │
+│                                    │
+│  ⚠️ Both players have joined...   │  ← NEW: Warning when 2 players but sync issue
+│                                    │
+│  [Copy Invite Link]                │
+│  [🚩 Forfeit Match -0.005 SOL]     │  ← NEW: Forfeit button
+│  Leave Match                       │
 └────────────────────────────────────┘
 ```
+
+### 2. Update Game Pages to Pass Props
+
+**Files:** 
+- `src/pages/BackgammonGame.tsx`
+- `src/pages/ChessGame.tsx`
+- `src/pages/CheckersGame.tsx`
+- `src/pages/DominosGame.tsx`
+- `src/pages/LudoGame.tsx`
+
+Update the `RulesGate` component usage to pass:
+- `stakeSol={entryFeeSol}`
+- `playerCount={roomPlayers.length}` (from on-chain data)
+- `onForfeit={forfeit}` (from useForfeit hook)
+- `isForfeiting={isForfeiting}`
+
+### 3. Update `RulesGate` Component
+
+**File:** `src/components/RulesGate.tsx`
+
+Add new props and pass them to `WaitingForOpponentPanel`:
+- `stakeSol?: number`
+- `playerCount?: number`
+- `onForfeit?: () => void`
+- `isForfeiting?: boolean`
+
+### Technical Details
+
+The forfeit action uses the existing `useForfeit` hook which:
+1. Calls the `forfeit-game` Edge Function
+2. Edge function executes `submit_result` on-chain with winner = opponent
+3. Winner receives the pot, creator gets vault rent back
+4. Game session is marked as finished in the database
+5. Player is navigated to `/room-list`
+
+The forfeit-game Edge Function already handles the case where `playerCount >= 2` and `status === 2` (Started) - it will correctly settle the match.
+
+## Files to Modify
+
+| File | Changes |
+|------|---------|
+| `src/components/WaitingForOpponentPanel.tsx` | Add forfeit button, new props, warning message |
+| `src/components/RulesGate.tsx` | Pass forfeit props to WaitingForOpponentPanel |
+| `src/pages/BackgammonGame.tsx` | Pass forfeit props to RulesGate |
+| `src/pages/ChessGame.tsx` | Pass forfeit props to RulesGate |
+| `src/pages/CheckersGame.tsx` | Pass forfeit props to RulesGate |
+| `src/pages/DominosGame.tsx` | Pass forfeit props to RulesGate |
+| `src/pages/LudoGame.tsx` | Pass forfeit props to RulesGate |
+
+## Expected Behavior After Fix
+
+When a player is on the "Waiting for opponent to accept" screen but both players have actually joined:
+1. A warning message appears explaining both players joined but sync may be delayed
+2. A "Forfeit Match" button appears with the stake amount shown
+3. Clicking forfeit triggers a confirmation dialog
+4. Confirming forfeit settles the match on-chain (caller loses, opponent wins)
+5. Both players can then exit cleanly with proper settlement
