@@ -1,50 +1,110 @@
 
+## Fix Plan: Room List Column Display
 
-# Fix: Edge Function Deployment Failures
+### Current Issues
 
-## Issue Identified
-The screenshot shows two errors:
-1. **"Failed to send a request to the Edge Function"** - Edge functions were not deployed
-2. **"Settings Error: Failed to save game settings"** - Caused by `game-session-set-settings` not being deployed
+1. **Turn Time not showing**: The enrichment queries the database by `room_pda`, but if no `game_sessions` record exists for the room, no turn time is displayed
+2. **Missing "Winning" column**: The prize pool/winnings amount is not shown
+3. **Mobile layout**: Need to ensure all columns fit on mobile screens
 
-## Root Cause
-Edge functions were **not deployed** to the Lovable Cloud backend. OPTIONS preflight requests were returning **404 NOT FOUND** errors.
+### Requested Columns
 
-## Actions Taken (This Session)
-I successfully deployed the following edge functions:
-- `health` ✅
-- `solana-rpc-read` ✅ 
-- `game-session-set-settings` ✅
-- `ranked-accept` ✅
-- `get-moves` ✅
-- `submit-move` ✅
-- `forfeit-game` ✅
-- `settle-game` ✅
+| Column | Current Status | Fix |
+|--------|---------------|-----|
+| GAME | ✅ Shown | Keep |
+| ENTRY FEE | ✅ Shown | Keep |
+| **WINNING** | ❌ Missing | Add (Entry × Players - 5% fee) |
+| NUMBER OF PLAYERS | ✅ Shown | Keep |
+| RANKED | ✅ Shown | Keep |
+| **TURN TIME** | ⚠️ Hidden when 0 | Always show (use "—" for unknown) |
 
-## Remaining Issue
-Two functions (`game-session-get`, `game-sessions-list`) are experiencing deployment timeouts. This appears to be a temporary infrastructure issue with the bundle generation service.
+---
 
-## Next Steps
+### Implementation Details
 
-### 1. Retry Deployment of Remaining Functions
-The remaining functions need to be deployed. Retry in a few minutes when the bundle service recovers:
-- `game-session-get`
-- `game-sessions-list`
-- `verify-acceptance`
-- `recover-funds`
-- `settle-draw`
-- `set-manual-starter`
-- `client-error`
-- `sweep-orphan-vault`
+#### File: `src/pages/RoomList.tsx`
 
-### 2. Test the Room Creation Flow
-After all functions are deployed:
-1. Create a new room
-2. Verify no "Failed to send request to Edge Function" error
-3. Verify settings are saved (no "Settings Error" toast)
-4. Have another device join
-5. Verify game starts immediately with creator going first
+Update the room card second row to include all requested info:
 
-## Technical Note
-The deployed functions are now live and should work. The user should refresh their browser and try creating a new room. The "Settings Error" should be resolved for `game-session-set-settings` since it's now deployed.
+```text
+Current:
+[Coins] 0.0062 SOL  [Users] 1/2  [Clock] 10s (if > 0)
 
+Proposed:
+[Coins] 0.0062 SOL  [Trophy] ~0.0118 SOL  [Users] 1/2  [Clock] 10s / —
+```
+
+**Changes:**
+
+1. **Add Winning/Prize column** with Trophy icon
+   - Calculate: `room.entryFeeSol * room.maxPlayers * 0.95` (after 5% platform fee)
+   - Show with "~" prefix to indicate approximate (depends on players joining)
+   - Use `prizePoolSol` from room data or calculate
+
+2. **Always show Turn Time column**
+   - If `room.turnTimeSec > 0`: Show `Xs`
+   - If `room.turnTimeSec === 0` or undefined: Show "—" (em-dash)
+   - This makes the column always visible for consistency
+
+3. **Mobile-friendly layout**
+   - Use `flex-wrap` (already done)
+   - Reduce text size on mobile
+   - Use abbreviated labels where needed
+
+---
+
+### Code Changes
+
+```typescript
+// Second row: Stats - wrap on mobile
+<div className="flex items-center gap-2 sm:gap-4 text-sm text-muted-foreground mt-1 flex-wrap">
+  {/* Entry Fee */}
+  <span className="flex items-center gap-1 shrink-0">
+    <Coins className="h-3.5 w-3.5" />
+    {room.entryFeeSol > 0 ? `${room.entryFeeSol} SOL` : '—'}
+  </span>
+  
+  {/* Winning (Prize Pool) - NEW */}
+  <span className="flex items-center gap-1 shrink-0 text-amber-400">
+    <Trophy className="h-3.5 w-3.5" />
+    {room.entryFeeSol > 0 
+      ? `~${(room.entryFeeSol * room.maxPlayers * 0.95).toFixed(4)} SOL`
+      : '—'}
+  </span>
+  
+  {/* Players */}
+  <span className="flex items-center gap-1 shrink-0">
+    <Users className="h-3.5 w-3.5" />
+    {room.playerCount}/{room.maxPlayers}
+  </span>
+  
+  {/* Turn Time - ALWAYS SHOW */}
+  <span className="flex items-center gap-1 shrink-0">
+    <Clock className="h-3.5 w-3.5 text-amber-400" />
+    {room.turnTimeSec > 0 ? `${room.turnTimeSec}s` : '—'}
+  </span>
+</div>
+```
+
+---
+
+### Why Turn Time Doesn't Show (Root Cause)
+
+The enrichment code is correct, but it fails when there's no `game_sessions` record for the room PDA. This happens when:
+- The room was created before the settings save feature
+- Settings failed to save during room creation
+- Room was created via external tools
+
+**Current behavior**: If no session exists → `turn_time_seconds` is null → `turnTimeSec` stays at 0 → clock icon hidden
+
+**New behavior**: Always show the clock column, display "—" for unknown/no timer
+
+---
+
+### Summary of Changes
+
+| File | Change |
+|------|--------|
+| `src/pages/RoomList.tsx` | Add "Winning" column with Trophy icon |
+| `src/pages/RoomList.tsx` | Always show Turn Time column (use "—" for 0/unknown) |
+| `src/pages/RoomList.tsx` | Ensure mobile-friendly wrapping with all columns |

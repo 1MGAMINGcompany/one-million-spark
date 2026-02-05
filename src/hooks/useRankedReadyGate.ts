@@ -141,6 +141,52 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
     }
   }, [roomPda, myWalletNorm, isRanked, enabled, hasLoaded, isPlayer1, isPlayer2, isIdentified, p1Ready, p2Ready, iAmReady, iAmReadyFromAcceptances, opponentReady, opponentReadyFromAcceptances, bothReady, serverBothAccepted, acceptedWallets, showAcceptModal]);
 
+  // Accept rules via Edge Function (no direct table access)
+  const acceptRules = useCallback(async (): Promise<{ success: boolean; error?: string }> => {
+    if (!roomPda || !myWalletNorm) {
+      return { success: false, error: "Missing room or wallet" };
+    }
+
+    setIsSettingReady(true);
+    
+    try {
+      console.log("[RankedReadyGate] Calling ranked-accept Edge Function...", { roomPda, myWallet: myWalletNorm });
+      
+      // Call Edge Function instead of direct table insert
+      const { data, error } = await supabase.functions.invoke("ranked-accept", {
+        body: {
+          roomPda,
+          playerWallet: myWalletNorm,
+          mode: "simple", // Simple acceptance (stake tx is implicit signature)
+        },
+      });
+
+      if (error) {
+        console.error("[RankedReadyGate] Edge function error:", error);
+        return { success: false, error: error.message || "Failed to accept" };
+      }
+
+      if (!data?.success) {
+        console.error("[RankedReadyGate] Acceptance failed:", data?.error);
+        return { success: false, error: data?.error || "Acceptance failed" };
+      }
+
+      console.log("[RankedReadyGate] ✅ Player marked as ready via Edge Function!");
+      
+      // STEP 4: Optimistic update - immediately add my wallet to acceptedWallets
+      if (myWalletNorm) {
+        setAcceptedWallets(prev => new Set([...prev, myWalletNorm]));
+      }
+      
+      return { success: true };
+    } catch (err: any) {
+      console.error("[RankedReadyGate] Error:", err);
+      return { success: false, error: err.message || "Unexpected error" };
+    } finally {
+      setIsSettingReady(false);
+    }
+  }, [roomPda, myWalletNorm]);
+
   // Refetch function for cross-device sync (extracted for reuse)
   const refetch = useCallback(async () => {
     if (!roomPda) return;
@@ -178,26 +224,6 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
       console.error("[RankedReadyGate] Refetch error:", err);
     }
   }, [roomPda]);
-
-  // Accept rules - now a no-op since record_acceptance handles everything
-  // Kept for interface compatibility but should not be called
-  const acceptRules = useCallback(async (): Promise<{ success: boolean; error?: string }> => {
-    if (!roomPda || !myWalletNorm) {
-      return { success: false, error: "Missing room or wallet" };
-    }
-
-    console.log("[RankedReadyGate] acceptRules called - record_acceptance RPC handles everything");
-    
-    // Optimistic update - acceptance should already be recorded by join/create flow
-    if (myWalletNorm) {
-      setAcceptedWallets(prev => new Set([...prev, myWalletNorm]));
-    }
-    
-    // Force refetch to get latest state from server
-    await refetch();
-    
-    return { success: true };
-  }, [roomPda, myWalletNorm, refetch]);
 
   // Load initial state and subscribe to changes
   useEffect(() => {
