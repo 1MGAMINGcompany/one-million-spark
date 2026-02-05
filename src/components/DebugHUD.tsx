@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { getDbg, clearDbg, isDebugEnabled } from "@/lib/debugLog";
+import { GameMoveAudit } from "@/components/GameMoveAudit";
 
 type Pos = { x: number; y: number };
 const POS_KEY = "__debughud_pos_v2";
@@ -20,6 +21,16 @@ export default function DebugHUD() {
       return false;
     }
   });
+  
+  // Game Move Audit state
+  const [showMoveAudit, setShowMoveAudit] = useState(false);
+  const [auditRoomPda, setAuditRoomPda] = useState<string | null>(null);
+
+  // Extract roomPda from URL if on a game page
+  const roomPdaFromUrl = useMemo(() => {
+    const match = location.pathname.match(/\/room\/([A-Za-z0-9]+)/);
+    return match?.[1] || null;
+  }, [location.pathname]);
 
   const [pos, setPos] = useState<Pos>(() => {
     try {
@@ -84,8 +95,17 @@ export default function DebugHUD() {
     persistMin(next);
   };
 
+  const openMoveAudit = () => {
+    const roomPda = roomPdaFromUrl || prompt("Enter roomPda:");
+    if (roomPda) {
+      setAuditRoomPda(roomPda);
+      setShowMoveAudit(true);
+    }
+  };
+
   return (
     // Outer wrapper does NOT block the app
+    <>
     <div
       style={{
         position: "fixed",
@@ -133,6 +153,7 @@ export default function DebugHUD() {
           <div style={{ display: "flex", gap: 4, padding: 6 }}>
             <button onClick={copyLogs} style={{ padding: "6px 8px", flex: 1 }}>Copy</button>
             <button onClick={() => { clearDbg(); setTick((t) => t + 1); }} style={{ padding: "6px 8px", flex: 1 }}>Clear</button>
+            <button onClick={openMoveAudit} style={{ padding: "6px 8px", flex: 1, background: "#333" }}>Moves</button>
           </div>
         ) : (
           <>
@@ -140,6 +161,7 @@ export default function DebugHUD() {
               <button onClick={copyLogs} style={{ padding: "6px 8px", flex: 1 }}>Copy logs</button>
               <button onClick={() => window.location.reload()} style={{ padding: "6px 8px", flex: 1 }}>Reload</button>
               <button onClick={() => { clearDbg(); setTick((t) => t + 1); }} style={{ padding: "6px 8px", flex: 1 }}>Clear</button>
+              <button onClick={openMoveAudit} style={{ padding: "6px 8px", flex: 1, background: "#333" }}>Moves</button>
             </div>
 
             <div style={{ padding: "4px 10px", borderTop: "1px solid #333" }}>
@@ -154,5 +176,14 @@ export default function DebugHUD() {
         )}
       </div>
     </div>
+    
+    {/* Game Move Audit Modal */}
+    {showMoveAudit && auditRoomPda && (
+      <GameMoveAudit
+        roomPda={auditRoomPda}
+        onClose={() => setShowMoveAudit(false)}
+      />
+    )}
+    </>
   );
 }

@@ -841,6 +841,10 @@ const BackgammonGame = () => {
           setCurrentTurnWallet(dbTurnWallet);
           // Reset timeout debounce since turn actually changed
           timeoutFiredRef.current = false;
+          
+          // FIX: Explicitly reset the turn timer when polling detects turn change
+          turnTimer.resetTimer();
+          
           // Clear stale dice/moves to ensure clean turn start
           setDice([]);
           setRemainingMoves([]);
@@ -907,6 +911,13 @@ const BackgammonGame = () => {
   useEffect(() => {
     if (startRoll.isFinalized && startRoll.startingWallet) {
       console.log("[BackgammonGame] Start roll finalized. Starting wallet:", startRoll.startingWallet.slice(0, 8));
+      
+      // FIX: Clear stale missed turns from any previous session with this room
+      if (roomPda) {
+        clearRoom(roomPda);
+        console.log("[BackgammonGame] Cleared stale missed turns for room:", roomPda.slice(0, 8));
+      }
+      
       setCurrentTurnWallet(startRoll.startingWallet);
       
       const isStarter = isSameWallet(startRoll.startingWallet, address);
