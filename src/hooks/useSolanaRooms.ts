@@ -324,6 +324,33 @@ export function useSolanaRooms() {
       console.log("[RoomList] Calling fetchOpenPublicRooms...");
       const fetchedRooms = await fetchOpenPublicRooms(connection);
       console.log("[RoomList] fetchOpenPublicRooms returned", fetchedRooms.length, "rooms");
+     
+     // Enrich rooms with turn time from database (not stored on-chain)
+     if (fetchedRooms.length > 0) {
+       const roomPdas = fetchedRooms.map(r => r.pda);
+       const { data: sessions } = await supabase
+         .from("game_sessions")
+         .select("room_pda, turn_time_seconds")
+         .in("room_pda", roomPdas);
+       
+       if (sessions && sessions.length > 0) {
+         const turnTimeMap = new Map<string, number>();
+         for (const s of sessions) {
+           if (s.turn_time_seconds != null) {
+             turnTimeMap.set(s.room_pda, s.turn_time_seconds);
+           }
+         }
+         
+         for (const room of fetchedRooms) {
+           const dbTurnTime = turnTimeMap.get(room.pda);
+           if (dbTurnTime !== undefined && dbTurnTime > 0) {
+             room.turnTimeSec = dbTurnTime;
+           }
+         }
+         console.log("[RoomList] Enriched", turnTimeMap.size, "rooms with turn times");
+       }
+     }
+     
       setRooms(fetchedRooms);
     } catch (err) {
       console.error("[RoomList] Error fetching rooms:", err);
