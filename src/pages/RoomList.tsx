@@ -441,30 +441,33 @@ export default function RoomList() {
                     </div>
                     {/* Second row: Stats - wrap on mobile */}
                     <div className="flex items-center gap-2 sm:gap-4 text-sm text-muted-foreground mt-1 flex-wrap">
-                      {/* Stake display */}
+                      {/* Entry Fee */}
                       {(() => {
                         const isRanked = room.entryFeeSol > 0;
                         return (
                           <span className={`flex items-center gap-1 shrink-0 ${isRanked ? 'text-foreground font-medium' : ''}`}>
                             <Coins className="h-3.5 w-3.5" />
-                            {isRanked ? (
-                              `${room.entryFeeSol} SOL`
-                            ) : (
-                              <span className="text-muted-foreground italic">—</span>
-                            )}
+                            {isRanked ? `${room.entryFeeSol} SOL` : <span className="text-muted-foreground italic">—</span>}
                           </span>
                         );
                       })()}
+                      {/* Winning (Prize Pool) */}
+                      <span className="flex items-center gap-1 shrink-0 text-amber-400">
+                        <Trophy className="h-3.5 w-3.5" />
+                        {room.entryFeeSol > 0 
+                          ? `~${(room.entryFeeSol * room.maxPlayers * 0.95).toFixed(4)} SOL`
+                          : <span className="text-muted-foreground italic">—</span>}
+                      </span>
+                      {/* Players */}
                       <span className="flex items-center gap-1 shrink-0">
                         <Users className="h-3.5 w-3.5" />
                         {room.playerCount}/{room.maxPlayers}
                       </span>
-                      {room.turnTimeSec > 0 && (
-                        <span className="flex items-center gap-1 shrink-0">
-                          <Clock className="h-3.5 w-3.5 text-amber-400" />
-                          {room.turnTimeSec}s
-                        </span>
-                      )}
+                      {/* Turn Time - always show */}
+                      <span className="flex items-center gap-1 shrink-0">
+                        <Clock className="h-3.5 w-3.5 text-amber-400" />
+                        {room.turnTimeSec > 0 ? `${room.turnTimeSec}s` : <span className="text-muted-foreground italic">—</span>}
+                      </span>
                       {/* Creator wallet only on larger screens */}
                       <span className="hidden md:flex items-center gap-1 truncate">
                         {room.creator.slice(0, 4)}...{room.creator.slice(-4)}
