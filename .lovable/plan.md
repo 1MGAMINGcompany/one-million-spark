@@ -1,110 +1,75 @@
 
-## Fix Plan: Room List Column Display
+# Plan: Remove Dice Roll for ALL Ludo Games (2, 3, 4 Player)
 
-### Current Issues
+## Summary
+Remove the dice roll ceremony for all Ludo multiplayer games. The creator (player1) will always start for all game sizes, just like the 2-player Chess/Backgammon/Checkers/Dominos games.
 
-1. **Turn Time not showing**: The enrichment queries the database by `room_pda`, but if no `game_sessions` record exists for the room, no turn time is displayed
-2. **Missing "Winning" column**: The prize pool/winnings amount is not shown
-3. **Mobile layout**: Need to ensure all columns fit on mobile screens
+## Current State
+- **Database function** `maybe_finalize_start_state` already auto-starts for 2-player games (creator starts)
+- For 3-4 player Ludo, it uses **random selection** with `gen_random_bytes`
+- **Frontend** `useStartRoll.ts` uses `isTwoPlayerGame = maxPlayers <= 2` to decide whether to show dice UI
+- **LudoGame.tsx** currently does NOT pass `maxPlayers` to `useStartRoll`, so it defaults to 2 (accidentally correct for hiding dice, but random starter logic still runs in DB)
 
-### Requested Columns
+## Changes Required
 
-| Column | Current Status | Fix |
-|--------|---------------|-----|
-| GAME | ✅ Shown | Keep |
-| ENTRY FEE | ✅ Shown | Keep |
-| **WINNING** | ❌ Missing | Add (Entry × Players - 5% fee) |
-| NUMBER OF PLAYERS | ✅ Shown | Keep |
-| RANKED | ✅ Shown | Keep |
-| **TURN TIME** | ⚠️ Hidden when 0 | Always show (use "—" for unknown) |
-
----
-
-### Implementation Details
-
-#### File: `src/pages/RoomList.tsx`
-
-Update the room card second row to include all requested info:
+### 1. Database: Update `maybe_finalize_start_state` (SQL Migration)
+Modify the function to use **creator starts** for ALL games (not just 2-player):
 
 ```text
-Current:
-[Coins] 0.0062 SOL  [Users] 1/2  [Clock] 10s (if > 0)
-
-Proposed:
-[Coins] 0.0062 SOL  [Trophy] ~0.0118 SOL  [Users] 1/2  [Clock] 10s / —
+┌─────────────────────────────────────────────────────────┐
+│ Before (3-4 player):                                    │
+│   v_random_byte := gen_random_bytes(1)                 │
+│   v_starting_wallet := random participant              │
+├─────────────────────────────────────────────────────────┤
+│ After (all games):                                      │
+│   v_starting_wallet := player1_wallet (creator)        │
+│   method: 'creator_starts'                             │
+└─────────────────────────────────────────────────────────┘
 ```
 
-**Changes:**
+The function will:
+- Remove the 2-player conditional branch
+- Always use `player1_wallet` as the starting player
+- Record method as `'creator_starts'` for all games
+- Still validate acceptance/participant count thresholds
 
-1. **Add Winning/Prize column** with Trophy icon
-   - Calculate: `room.entryFeeSol * room.maxPlayers * 0.95` (after 5% platform fee)
-   - Show with "~" prefix to indicate approximate (depends on players joining)
-   - Use `prizePoolSol` from room data or calculate
+### 2. Frontend: Ensure LudoGame passes correct maxPlayers
+Update `LudoGame.tsx` to:
+- Extract `maxPlayers` from on-chain room data (already available in `parsed.maxPlayers`)
+- Store it in state
+- Pass it to `useStartRoll` hook
 
-2. **Always show Turn Time column**
-   - If `room.turnTimeSec > 0`: Show `Xs`
-   - If `room.turnTimeSec === 0` or undefined: Show "—" (em-dash)
-   - This makes the column always visible for consistency
+This ensures the frontend correctly treats ALL Ludo games as "instant start" games.
 
-3. **Mobile-friendly layout**
-   - Use `flex-wrap` (already done)
-   - Reduce text size on mobile
-   - Use abbreviated labels where needed
-
----
-
-### Code Changes
-
+### 3. Frontend: useStartRoll already handles this
+The hook already has logic:
 ```typescript
-// Second row: Stats - wrap on mobile
-<div className="flex items-center gap-2 sm:gap-4 text-sm text-muted-foreground mt-1 flex-wrap">
-  {/* Entry Fee */}
-  <span className="flex items-center gap-1 shrink-0">
-    <Coins className="h-3.5 w-3.5" />
-    {room.entryFeeSol > 0 ? `${room.entryFeeSol} SOL` : '—'}
-  </span>
-  
-  {/* Winning (Prize Pool) - NEW */}
-  <span className="flex items-center gap-1 shrink-0 text-amber-400">
-    <Trophy className="h-3.5 w-3.5" />
-    {room.entryFeeSol > 0 
-      ? `~${(room.entryFeeSol * room.maxPlayers * 0.95).toFixed(4)} SOL`
-      : '—'}
-  </span>
-  
-  {/* Players */}
-  <span className="flex items-center gap-1 shrink-0">
-    <Users className="h-3.5 w-3.5" />
-    {room.playerCount}/{room.maxPlayers}
-  </span>
-  
-  {/* Turn Time - ALWAYS SHOW */}
-  <span className="flex items-center gap-1 shrink-0">
-    <Clock className="h-3.5 w-3.5 text-amber-400" />
-    {room.turnTimeSec > 0 ? `${room.turnTimeSec}s` : '—'}
-  </span>
-</div>
+const isTwoPlayerGame = maxPlayers <= 2;
 ```
 
----
+We'll update this to:
+```typescript
+// For this project: ALL games skip dice roll (creator always starts)
+const skipDiceRoll = true; // or maxPlayers <= 4
+```
 
-### Why Turn Time Doesn't Show (Root Cause)
-
-The enrichment code is correct, but it fails when there's no `game_sessions` record for the room PDA. This happens when:
-- The room was created before the settings save feature
-- Settings failed to save during room creation
-- Room was created via external tools
-
-**Current behavior**: If no session exists → `turn_time_seconds` is null → `turnTimeSec` stays at 0 → clock icon hidden
-
-**New behavior**: Always show the clock column, display "—" for unknown/no timer
+This makes the dice UI never appear regardless of player count.
 
 ---
 
-### Summary of Changes
+## Files Changed
 
 | File | Change |
 |------|--------|
-| `src/pages/RoomList.tsx` | Add "Winning" column with Trophy icon |
-| `src/pages/RoomList.tsx` | Always show Turn Time column (use "—" for 0/unknown) |
-| `src/pages/RoomList.tsx` | Ensure mobile-friendly wrapping with all columns |
+| `supabase/migrations/*.sql` | Update `maybe_finalize_start_state` - creator starts for ALL games |
+| `src/hooks/useStartRoll.ts` | Change `isTwoPlayerGame` to always skip dice roll |
+| `src/pages/LudoGame.tsx` | Add `maxPlayers` state and pass to `useStartRoll` (for correctness) |
+
+---
+
+## Technical Notes
+
+- **No impact on Play vs AI**: AI games don't use `useStartRoll` or the DB function
+- **No impact on join/create transactions**: On-chain logic unchanged
+- **No impact on settlement/forfeit**: Turn management unchanged
+- **Backward compatible**: Existing sessions with `start_roll_finalized = true` continue working
