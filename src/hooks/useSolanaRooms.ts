@@ -799,53 +799,10 @@ export function useSolanaRooms() {
           });
           
           if (rpcError) {
-            console.warn("[JoinRoom] RPC record_acceptance failed:", rpcError);
-            // Check if 404 (function not found) - fallback to edge function
-            if (rpcError.message?.includes("404") || rpcError.code === "PGRST116") {
-              console.log("[JoinRoom] Trying verify-acceptance edge function fallback...");
-              const { error: fnError } = await supabase.functions.invoke("verify-acceptance", {
-                body: {
-                  acceptance: {
-                    roomPda: joinedRoom.pda,
-                    playerWallet: publicKey.toBase58(),
-                    rulesHash,
-                    nonce: crypto.randomUUID(),
-                    timestamp: Date.now(),
-                    signature,
-                  },
-                  rules: {
-                    roomPda: joinedRoom.pda,
-                    gameType: joinedRoom.gameType,
-                    mode,
-                    maxPlayers: joinedRoom.maxPlayers,
-                    stakeLamports,
-                    feeBps: 250,
-                    turnTimeSeconds: 60,
-                    forfeitPolicy: "timeout",
-                    version: 1,
-                  },
-                },
-              });
-              
-              if (fnError) {
-                console.error("[JoinRoom] Both RPC and edge function failed:", fnError);
-                toast({
-                  title: "Acceptance Recording Failed",
-                  description: "Game will proceed but ranked features may not work",
-                  variant: "destructive",
-                });
-              } else {
-                console.log("[JoinRoom] Recorded acceptance via edge function fallback");
-              }
-            } else {
-              toast({
-                title: "Acceptance Recording Failed",
-                description: rpcError.message || "Unknown error",
-                variant: "destructive",
-              });
-            }
+            // FAIL-OPEN: Log error but don't block join - game proceeds regardless
+            console.warn("[JoinRoom] record_acceptance failed (non-blocking):", rpcError.message);
           } else {
-            console.log("[JoinRoom] Recorded acceptance with tx signature and mode:", mode);
+            console.log("[JoinRoom] ✅ Recorded acceptance with tx signature and mode:", mode);
           }
         }
       } catch (acceptErr: any) {
