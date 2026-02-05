@@ -703,10 +703,19 @@ export type Database = {
         }
         Returns: boolean
       }
-      finish_game_session: {
-        Args: { p_caller_wallet?: string; p_room_pda: string }
-        Returns: undefined
-      }
+      finish_game_session:
+        | {
+            Args: { p_caller_wallet?: string; p_room_pda: string }
+            Returns: undefined
+          }
+        | {
+            Args: {
+              p_caller_wallet?: string
+              p_room_pda: string
+              p_winner_wallet?: string
+            }
+            Returns: undefined
+          }
       issue_nonce: {
         Args: { p_room_pda: string; p_rules_hash: string; p_wallet: string }
         Returns: string
