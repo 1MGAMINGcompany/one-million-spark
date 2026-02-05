@@ -808,15 +808,57 @@ const BackgammonGame = () => {
             from: currentTurnWallet?.slice(0, 8),
             to: dbTurnWallet.slice(0, 8),
           });
+          
+          // Check if turn changed TO ME - need to update game state
+          const isNowMyTurn = isSameWallet(dbTurnWallet, address);
+          
+          if (isNowMyTurn) {
+            // Fetch latest move to see why turn changed
+            try {
+              const { data: movesData } = await supabase.functions.invoke("get-moves", {
+                body: { roomPda, limit: 1, orderDesc: true },
+              });
+              const lastMove = movesData?.moves?.[0];
+              const lastMoveType = lastMove?.move_data?.type;
+              
+              console.log("[BackgammonGame] Turn passed to me via polling:", {
+                lastMoveType,
+                lastMoveWallet: lastMove?.wallet?.slice(0, 8),
+              });
+              
+              // If opponent timed out, show notification
+              if (lastMoveType === 'turn_timeout') {
+                toast({
+                  title: t('gameSession.opponentSkipped'),
+                  description: t('gameSession.yourTurnNow'),
+                });
+              }
+            } catch (err) {
+              console.warn("[BackgammonGame] Failed to fetch last move for timeout check:", err);
+            }
+          }
+          
           setCurrentTurnWallet(dbTurnWallet);
           // Clear stale dice/moves to ensure clean turn start
           setDice([]);
           setRemainingMoves([]);
+          setSelectedPoint(null);
+          setValidMoves([]);
+          
+          // Update game status
+          const turnToMe = isSameWallet(dbTurnWallet, address);
+          if (turnToMe) {
+            setGameStatus("Your turn - Roll the dice!");
+          } else {
+            setGameStatus("Opponent's turn");
+          }
         }
         
         // Also track turn_started_at for debounce reset
         if (dbTurnStartedAt && dbTurnStartedAt !== turnStartedAt) {
           setTurnStartedAt(dbTurnStartedAt);
+          // Reset timeout debounce when turn_started_at changes
+          timeoutFiredRef.current = false;
         }
       } catch (err) {
         console.error("[BackgammonGame] Polling error:", err);
@@ -826,6 +868,38 @@ const BackgammonGame = () => {
     const interval = setInterval(pollTurnWallet, 5000);
     return () => clearInterval(interval);
   }, [roomPda, isRankedGame, gameOver, startRoll.isFinalized, currentTurnWallet, turnStartedAt, address, myRole, play, t]);
+
+  // Visibility change handler - poll immediately when tab becomes visible
+  useEffect(() => {
+    if (!roomPda || !isRankedGame || gameOver) return;
+    
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        console.log("[BackgammonGame] Tab became visible - polling for updates");
+        // Force immediate sync
+        supabase.functions.invoke("game-session-get", {
+          body: { roomPda },
+        }).then(({ data }) => {
+          const dbTurnWallet = data?.session?.current_turn_wallet;
+          if (dbTurnWallet && dbTurnWallet !== currentTurnWallet) {
+            console.log("[BackgammonGame] Visibility poll detected turn change");
+            setCurrentTurnWallet(dbTurnWallet);
+            setDice([]);
+            setRemainingMoves([]);
+            setSelectedPoint(null);
+            setValidMoves([]);
+            const isNowMyTurn = isSameWallet(dbTurnWallet, address);
+            setGameStatus(isNowMyTurn ? "Your turn - Roll the dice!" : "Opponent's turn");
+          }
+        }).catch(err => {
+          console.warn("[BackgammonGame] Visibility poll error:", err);
+        });
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [roomPda, isRankedGame, gameOver, currentTurnWallet, address]);
 
   // Update myRole and currentTurnWallet based on start roll result
   useEffect(() => {
