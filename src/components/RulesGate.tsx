@@ -293,26 +293,11 @@ export function RulesGate({
     );
   }
 
-  // 4. If I haven't accepted → show AcceptRulesModal (blocking)
-  if (!iAmReady) {
-    return (
-      <AcceptRulesModal
-        open={true}
-        onAccept={onAcceptRules}
-        onLeave={onLeave}
-        stakeSol={stakeSol}
-        turnTimeSeconds={turnTimeSeconds}
-        isLoading={isSettingReady}
-        opponentReady={opponentReady}
-        isDataLoaded={isDataLoaded}
-        connectedWallet={myWallet}
-        roomPda={roomPda}
-        roomPlayers={roomPlayers}
-      />
-    );
-  }
-
-  // 5. If I accepted but opponent hasn't → show WaitingForOpponentPanel
+  // 4. REMOVED: AcceptRulesModal - readiness is now set automatically via record_acceptance
+  // Creator: set on room creation
+  // Joiner: set immediately after join transaction
+  
+  // 5. If not both ready yet → show passive waiting panel (no button, no "I'm Ready" click)
   if (!effectiveBothReady) {
     return (
       <WaitingForOpponentPanel
