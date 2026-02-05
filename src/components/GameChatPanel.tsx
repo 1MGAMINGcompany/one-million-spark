@@ -400,9 +400,9 @@ const DesktopChatPanel = ({ chat }: { chat: GameChatReturn }) => {
               </span>
             </div>
             <Button
-              variant="ghost"
+              variant="outline"
               size="sm"
-              className="h-7 w-7 p-0 hover:bg-destructive/10 hover:text-destructive"
+              className="h-7 w-7 p-0 border-border hover:bg-destructive/20 hover:border-destructive hover:text-destructive"
               onClick={() => chat.setIsOpen(false)}
             >
               <X className="w-4 h-4" />
