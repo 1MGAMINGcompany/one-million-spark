@@ -387,6 +387,48 @@ export default function CreateRoom() {
           });
         }
         
+        // ===== CREATOR ACCEPTANCE: Ensure p1_ready is set =====
+        // This prevents "players_not_ready" errors when moves are submitted
+        try {
+          // 1. Ensure game session exists with creator as player1
+          const gameTypeName = Object.entries(GAME_TYPE_MAP).find(([_, v]) => v === gameType)?.[0] || "chess";
+          await supabase.rpc("ensure_game_session", {
+            p_room_pda: roomPdaStr,
+            p_game_type: gameTypeName,
+            p_player1_wallet: address,
+            p_player2_wallet: null,
+            p_mode: gameMode,
+            p_max_players: parseInt(maxPlayers),
+          });
+          console.log("[CreateRoom] ✅ ensure_game_session called for creator");
+          
+          // 2. Record acceptance to set p1_ready = true
+          const { data: acceptResult, error: acceptErr } = await supabase.rpc("record_acceptance", {
+            p_room_pda: roomPdaStr,
+            p_wallet: address,
+            p_tx_signature: `create_${roomId}_${Date.now()}`,
+            p_rules_hash: "creator_implicit",
+            p_stake_lamports: solToLamports(entryFeeNum),
+            p_is_creator: true,
+          });
+          
+          if (acceptErr) {
+            console.error("[CreateRoom] record_acceptance error:", acceptErr);
+          } else {
+            console.log("[CreateRoom] ✅ record_acceptance success, p1_ready set");
+            
+            // Store session token for later use
+            const sessionToken = (acceptResult as { session_token?: string })?.session_token;
+            if (sessionToken) {
+              localStorage.setItem(`session_token_${roomPdaStr}`, sessionToken);
+              console.log("[CreateRoom] ✅ Session token stored:", sessionToken.slice(0, 8));
+            }
+          }
+        } catch (acceptanceErr) {
+          console.error("[CreateRoom] Creator acceptance error (non-fatal):", acceptanceErr);
+          // Non-fatal: ranked-accept edge function may still work as fallback
+        }
+        
         // Add rematch_created flag if this was a rematch
         const queryParam = isRematch ? '?rematch_created=1' : '';
         navigate(`/room/${roomPdaStr}${queryParam}`);
