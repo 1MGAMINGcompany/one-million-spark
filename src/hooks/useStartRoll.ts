@@ -61,8 +61,10 @@ interface UseStartRollResult {
 export function useStartRoll(options: UseStartRollOptions): UseStartRollResult {
   const { roomPda, gameType, myWallet, isRanked, roomPlayers, hasTwoRealPlayers, initialColor, bothReady, maxPlayers = 2 } = options;
   
-  // For 2-player games: NEVER show dice roll UI - DB auto-finalizes with creator starting
-  const isTwoPlayerGame = maxPlayers <= 2;
+  // ALL games skip dice roll UI - DB auto-finalizes with creator starting
+  // This applies to Chess, Backgammon, Checkers, Dominos, AND Ludo (2/3/4 players)
+  const skipDiceRoll = true;
+  const isTwoPlayerGame = skipDiceRoll; // Legacy alias for compatibility
 
   const [isFinalized, setIsFinalized] = useState(false);
   const [showDiceRoll, setShowDiceRoll] = useState(false);
