@@ -328,12 +328,20 @@ export function useSolanaRooms() {
      // Enrich rooms with turn time from database (not stored on-chain)
      if (fetchedRooms.length > 0) {
        const roomPdas = fetchedRooms.map(r => r.pda);
-       const { data: sessions } = await supabase
+       console.log("[RoomList] Fetching turn times for", roomPdas.length, "rooms from database");
+       
+       const { data: sessions, error: sessionsError } = await supabase
          .from("game_sessions")
-         .select("room_pda, turn_time_seconds")
+         .select("room_pda, turn_time_seconds, mode")
          .in("room_pda", roomPdas);
        
-       if (sessions && sessions.length > 0) {
+       if (sessionsError) {
+         console.warn("[RoomList] Failed to fetch sessions:", sessionsError.message);
+       } else if (sessions && sessions.length > 0) {
+         console.log("[RoomList] Database returned", sessions.length, "sessions:", 
+           sessions.map(s => ({ pda: s.room_pda.slice(0, 8), turnTime: s.turn_time_seconds, mode: s.mode }))
+         );
+         
          const turnTimeMap = new Map<string, number>();
          for (const s of sessions) {
            if (s.turn_time_seconds != null) {
@@ -345,9 +353,12 @@ export function useSolanaRooms() {
            const dbTurnTime = turnTimeMap.get(room.pda);
            if (dbTurnTime !== undefined && dbTurnTime > 0) {
              room.turnTimeSec = dbTurnTime;
+             console.log("[RoomList] Room", room.pda.slice(0, 8), "enriched with turnTime:", dbTurnTime);
            }
          }
          console.log("[RoomList] Enriched", turnTimeMap.size, "rooms with turn times");
+       } else {
+         console.log("[RoomList] No sessions found in database for these room PDAs");
        }
      }
      
