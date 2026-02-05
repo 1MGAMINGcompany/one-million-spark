@@ -21,9 +21,11 @@
  * ts=${timestamp}
  */
 
-import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
-import * as ed from "@noble/ed25519";
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from "npm:@supabase/supabase-js@2";
+import * as ed from "npm:@noble/ed25519@2.0.0";
+
+const VERSION = "v1.0.1";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -35,7 +37,7 @@ const corsHeaders = {
 type Mode = "casual" | "ranked";
 
 function json(status: number, body: unknown) {
-  return new Response(JSON.stringify(body), {
+  return new Response(JSON.stringify({ ...body as object, _version: VERSION }), {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
@@ -101,7 +103,9 @@ function isDevEnvironment(): boolean {
   return url.includes("localhost") || url.includes("127.0.0.1") || url.includes("preview");
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
+  console.log(`[${VERSION}] game-session-set-settings request received`);
+
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
