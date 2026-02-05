@@ -1049,6 +1049,8 @@ const LudoGame = () => {
           onOpenWalletSelector={() => {}}
           isDataLoaded={isDataLoaded}
           startRollFinalized={startRoll.isFinalized}
+          onForfeit={handleForfeitMatch}
+          isForfeiting={isForfeitLoading}
         >
           <DiceRollStart
             roomPda={roomPda || ""}

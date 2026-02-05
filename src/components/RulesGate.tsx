@@ -66,6 +66,10 @@ interface RulesGateProps {
   startRollFinalized: boolean;
   /** Children (DiceRollStart/GameBoard) - only rendered when both ready */
   children: React.ReactNode;
+  /** Handler to trigger forfeit settlement when stuck on waiting screen */
+  onForfeit?: () => void;
+  /** Loading state during forfeit */
+  isForfeiting?: boolean;
 }
 
 export function RulesGate({
@@ -86,6 +90,8 @@ export function RulesGate({
   isDataLoaded,
   startRollFinalized,
   children,
+  onForfeit,
+  isForfeiting,
 }: RulesGateProps) {
   const { t } = useTranslation();
   
@@ -305,6 +311,10 @@ export function RulesGate({
         roomPda={roomPda}
         opponentWallet={opponentWallet}
         waitingFor="rules"
+        stakeSol={stakeSol}
+        playerCount={validPlayers.length}
+        onForfeit={onForfeit}
+        isForfeiting={isForfeiting}
       />
     );
   }
