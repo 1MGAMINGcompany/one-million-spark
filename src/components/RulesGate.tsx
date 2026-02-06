@@ -64,8 +64,8 @@ interface RulesGateProps {
   isDataLoaded: boolean;
   /** Whether start roll is finalized */
   startRollFinalized: boolean;
-  /** Children (DiceRollStart/GameBoard) - only rendered when both ready */
-  children: React.ReactNode;
+  /** Children - DEPRECATED: no longer rendered (dice roll skipped, game starts immediately) */
+  children?: React.ReactNode;
   /** Handler to trigger forfeit settlement when stuck on waiting screen */
   onForfeit?: () => void;
   /** Loading state during forfeit */
@@ -319,8 +319,10 @@ export function RulesGate({
     );
   }
 
-  // 6. Both ready → render children (DiceRollStart or GameBoard)
-  // NOTE: Removed the fullscreen "syncing" overlay that was blocking DiceRollStart.
-  // If the roll isn't finalized yet, DiceRollStart handles that UI - don't block it!
-  return <>{children}</>;
+  // 6. Both ready → per architecture decision (game-start-creator-first-no-dice),
+  // the game starts immediately with creator going first - NO dice roll ceremony.
+  // The DB function maybe_finalize_start_state handles this automatically.
+  // Render null (not children) - the game page will show the game board directly.
+  // Children (DiceRollStart) are no longer rendered.
+  return null;
 }
