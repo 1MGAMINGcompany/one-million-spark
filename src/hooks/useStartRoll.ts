@@ -70,6 +70,8 @@ export function useStartRoll(options: UseStartRollOptions): UseStartRollResult {
   }, [roomPda]);
 
   // Create game session when both players connect (still needed for game state)
+  // The updated ensure_game_session RPC now sets p1_ready, p2_ready, start_roll_finalized,
+  // current_turn_wallet, and turn_started_at when both players are present
   useEffect(() => {
     if (!roomPda || !hasTwoRealPlayers || sessionCreatedRef.current) return;
     if (roomPlayers.length < 2) return;
@@ -85,19 +87,9 @@ export function useStartRoll(options: UseStartRollOptions): UseStartRollResult {
       sessionCreatedRef.current = true;
       
       try {
-        // Check if session already exists
-        const { data: existingData } = await supabase.functions.invoke("game-session-get", {
-          body: { roomPda },
-        });
+        console.log("[useStartRoll] Creating game session for both players (FAST START)", { roomPda, player1, player2 });
         
-        if (existingData?.session?.room_pda) {
-          console.log("[useStartRoll] Session already exists, skipping ensure_game_session");
-          setIsCreatingSession(false);
-          return;
-        }
-        
-        console.log("[useStartRoll] Creating game session for both players", { roomPda, player1, player2 });
-        
+        // Call ensure_game_session - it now automatically sets all flags when both players join
         const { error } = await supabase.rpc("ensure_game_session", {
           p_room_pda: roomPda,
           p_game_type: gameType,
@@ -110,7 +102,7 @@ export function useStartRoll(options: UseStartRollOptions): UseStartRollResult {
           console.error("[useStartRoll] Failed to ensure game session:", error);
           sessionCreatedRef.current = false;
         } else {
-          console.log("[useStartRoll] Game session created/ensured successfully");
+          console.log("[useStartRoll] Game session created with FAST START flags (p1_ready, p2_ready, current_turn_wallet)");
         }
       } catch (err) {
         console.error("[useStartRoll] Error ensuring game session:", err);
