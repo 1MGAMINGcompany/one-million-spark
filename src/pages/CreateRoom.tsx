@@ -369,17 +369,9 @@ export default function CreateRoom() {
         // ===== CREATOR ACCEPTANCE: Ensure p1_ready is set =====
         // This prevents "players_not_ready" errors when moves are submitted
         try {
-          // 1. Ensure game session exists with creator as player1
+          // record_acceptance creates the session if missing (single authority pattern)
           const gameTypeName = Object.entries(GAME_TYPE_MAP).find(([_, v]) => v === gameType)?.[0] || "chess";
-          await supabase.rpc("ensure_game_session", {
-            p_room_pda: roomPdaStr,
-            p_game_type: gameTypeName,
-            p_player1_wallet: address,
-            p_player2_wallet: null,
-            p_mode: gameMode,
-            p_max_players: parseInt(maxPlayers),
-          });
-          console.log("[CreateRoom] ✅ ensure_game_session called for creator");
+          console.log("[CreateRoom] Recording creator acceptance for game:", gameTypeName);
           
           // 2. Record acceptance to set p1_ready = true
           const { data: acceptResult, error: acceptErr } = await supabase.rpc("record_acceptance", {
