@@ -561,6 +561,9 @@ const ChessGame = () => {
       
       // Grant opponent another turn via override
       setTurnOverrideWallet(opponentWalletAddr);
+      
+      // FIX: The turn has now passed to opponent
+      // Their device will detect via polling and start their timer
     }
   }, [gameOver, address, roomPda, isActuallyMyTurn, roomPlayers, myColor, isRankedGame, persistMove, play, t]);
 

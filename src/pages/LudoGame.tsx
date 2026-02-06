@@ -539,6 +539,9 @@ const LudoGame = () => {
       // Advance to next player (pass 1 since we're skipping, not rolling 6)
       advanceTurn(1);
       play('ludo_dice');
+      
+      // FIX: The turn has now passed to the next player
+      // Their device will detect via polling and start their timer
     }
   }, [gameOver, address, roomPda, isActuallyMyTurn, roomPlayers, eliminatedPlayers, currentPlayerIndex, isRankedGame, persistMove, advanceTurn, play, t]);
 
