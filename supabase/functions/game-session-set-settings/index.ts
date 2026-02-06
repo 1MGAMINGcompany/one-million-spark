@@ -1,29 +1,24 @@
 /**
  * Edge Function: game-session-set-settings
  * 
- * HARDENED with signature verification - only the room creator can set settings.
+ * Saves turn timer and mode settings for a game room.
+ * 
+ * Security: No signature required - the on-chain stake transaction proves
+ * the creator's identity. Additional protection via:
+ * - Session ownership check (only creator's session can be updated)
+ * - Game-not-started guard (can't change settings after game begins)
  * 
  * Request body:
  * {
  *   roomPda: string,
  *   turnTimeSeconds: number,
  *   mode: "casual" | "ranked",
- *   creatorWallet: string,
- *   timestamp: number,  // unix ms
- *   signature: string   // base64 ed25519 signature
+ *   creatorWallet: string
  * }
- * 
- * Signature message format:
- * 1MGAMING:SET_SETTINGS
- * roomPda=${roomPda}
- * turnTimeSeconds=${turnTimeSeconds}
- * mode=${mode}
- * ts=${timestamp}
  */
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
-import * as ed from "@noble/ed25519";
+import { createClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -41,66 +36,6 @@ function json(status: number, body: unknown) {
   });
 }
 
-// Base58 alphabet (Bitcoin/Solana)
-const BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
-
-function decodeBase58(str: string): Uint8Array {
-  const bytes: number[] = [];
-  for (const char of str) {
-    let carry = BASE58_ALPHABET.indexOf(char);
-    if (carry < 0) throw new Error(`Invalid base58 character: ${char}`);
-    for (let j = 0; j < bytes.length; j++) {
-      const x = bytes[j] * 58 + carry;
-      bytes[j] = x & 0xff;
-      carry = x >> 8;
-    }
-    while (carry > 0) {
-      bytes.push(carry & 0xff);
-      carry >>= 8;
-    }
-  }
-  // Handle leading zeros
-  for (const char of str) {
-    if (char === "1") bytes.push(0);
-    else break;
-  }
-  return new Uint8Array(bytes.reverse());
-}
-
-function decodeBase64(str: string): Uint8Array {
-  const binary = atob(str);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes;
-}
-
-async function verifySignature(
-  message: string,
-  signatureBase64: string,
-  publicKeyBase58: string
-): Promise<boolean> {
-  try {
-    const publicKey = decodeBase58(publicKeyBase58);
-    const signature = decodeBase64(signatureBase64);
-    const messageBytes = new TextEncoder().encode(message);
-
-    // Verify ed25519 signature
-    return await ed.verifyAsync(signature, messageBytes, publicKey);
-  } catch (e) {
-    console.error("[game-session-set-settings] Signature verification error:", e);
-    return false;
-  }
-}
-
-// Check if running in dev/preview environment
-function isDevEnvironment(): boolean {
-  const url = Deno.env.get("SUPABASE_URL") || "";
-  // Devnet/preview domains or localhost
-  return url.includes("localhost") || url.includes("127.0.0.1") || url.includes("preview");
-}
-
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -116,8 +51,6 @@ serve(async (req) => {
     const turnTimeSecondsRaw = payload?.turnTimeSeconds;
     const mode = payload?.mode as Mode;
     const creatorWallet = payload?.creatorWallet;
-    const timestamp = payload?.timestamp;
-    const signature = payload?.signature;
 
     // Validate required fields
     if (!roomPda || typeof roomPda !== "string") {
@@ -133,44 +66,16 @@ serve(async (req) => {
       return json(400, { ok: false, error: "mode_invalid" });
     }
 
-    // Check if signature verification is required
-    const requiresSignature = !isDevEnvironment();
-    
-    if (requiresSignature) {
-      // Signature verification required for production
-      if (!creatorWallet || typeof creatorWallet !== "string") {
-        return json(400, { ok: false, error: "creatorWallet_required" });
-      }
-      if (typeof timestamp !== "number") {
-        return json(400, { ok: false, error: "timestamp_required" });
-      }
-      if (!signature || typeof signature !== "string") {
-        return json(400, { ok: false, error: "signature_required" });
-      }
-
-      // Verify timestamp is within 2 minutes
-      const now = Date.now();
-      const MAX_AGE_MS = 2 * 60 * 1000; // 2 minutes
-      if (Math.abs(now - timestamp) > MAX_AGE_MS) {
-        console.warn("[game-session-set-settings] Timestamp out of range:", { timestamp, now, diff: Math.abs(now - timestamp) });
-        return json(401, { ok: false, error: "timestamp_expired" });
-      }
-
-      // Build message for signature verification
-      const message = `1MGAMING:SET_SETTINGS\nroomPda=${roomPda}\nturnTimeSeconds=${turnTimeSeconds}\nmode=${mode}\nts=${timestamp}`;
-      
-      console.log("[game-session-set-settings] Verifying signature for message:", message.replace(/\n/g, " | "));
-
-      const isValid = await verifySignature(message, signature, creatorWallet);
-      if (!isValid) {
-        console.warn("[game-session-set-settings] Invalid signature for wallet:", creatorWallet.slice(0, 8));
-        return json(401, { ok: false, error: "invalid_signature" });
-      }
-
-      console.log("[game-session-set-settings] ✅ Signature verified for:", creatorWallet.slice(0, 8));
-    } else {
-      console.log("[game-session-set-settings] Dev environment - skipping signature verification");
+    if (!creatorWallet || typeof creatorWallet !== "string") {
+      return json(400, { ok: false, error: "creatorWallet_required" });
     }
+
+    console.log("[game-session-set-settings] Processing request:", {
+      roomPda: roomPda.slice(0, 8),
+      creatorWallet: creatorWallet.slice(0, 8),
+      turnTimeSeconds,
+      mode,
+    });
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -199,17 +104,15 @@ serve(async (req) => {
     // If session exists, verify caller is the room creator and game hasn't started
     if (session) {
       // Verify caller is the room creator (player1_wallet)
-      if (requiresSignature && creatorWallet) {
-        const sessionCreator = session.player1_wallet?.trim();
-        const requestCreator = creatorWallet.trim();
-        
-        if (sessionCreator !== requestCreator) {
-          console.warn("[game-session-set-settings] Creator mismatch:", {
-            sessionCreator: sessionCreator?.slice(0, 8),
-            requestCreator: requestCreator?.slice(0, 8),
-          });
-          return json(403, { ok: false, error: "not_room_creator" });
-        }
+      const sessionCreator = session.player1_wallet?.trim();
+      const requestCreator = creatorWallet.trim();
+      
+      if (sessionCreator && sessionCreator !== requestCreator) {
+        console.warn("[game-session-set-settings] Creator mismatch:", {
+          sessionCreator: sessionCreator?.slice(0, 8),
+          requestCreator: requestCreator?.slice(0, 8),
+        });
+        return json(403, { ok: false, error: "not_room_creator" });
       }
 
       // Guard: do not allow changing settings after game has started

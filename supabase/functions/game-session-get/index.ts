@@ -100,8 +100,11 @@ serve(async (req) => {
   const fromSessionFlags = Boolean(session?.p1_ready && session?.p2_ready);
   // 3. If start_roll_finalized is true, both players MUST have been ready
   const fromStartRoll = session?.start_roll_finalized === true;
+  // 4. FALLBACK: If participants array has required count, they're implicitly ready
+  //    (participants is synced from on-chain data which is authoritative)
+  const participantsReady = (session?.participants?.length ?? 0) >= requiredPlayers;
 
-  const bothAccepted = fromAcceptances || fromSessionFlags || fromStartRoll;
+  const bothAccepted = fromAcceptances || fromSessionFlags || fromStartRoll || participantsReady;
 
   console.log("[game-session-get] Acceptances:", {
     playersCount: players.length,
@@ -109,12 +112,13 @@ serve(async (req) => {
     fromAcceptances,
     fromSessionFlags,
     fromStartRoll,
+    participantsReady,
     bothAccepted,
   });
 
   const acceptances = { players, bothAccepted };
 
-  console.log('[game-session-get] ✅ Session found:', !!session, 'Receipt:', !!receipt, 'Match:', !!match, 'Acceptances:', players.length)
+  console.log('[game-session-get] ✅ Session found:', !!session, 'Receipt:', !!receipt, 'Match:', !!match, 'Acceptances:', players.length, 'Participants:', session?.participants?.length ?? 0)
     
   // Return backward-compatible response: { ok, session } plus optional receipt/match/acceptances
   return new Response(JSON.stringify({ 
