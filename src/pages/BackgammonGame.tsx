@@ -2355,7 +2355,10 @@ const BackgammonGame = () => {
                           onClick={() => handlePointClick(-1)}
                         >
                           <div className={cn(
-                            "w-7 h-7 rounded-full bg-gradient-to-br from-primary to-amber-700 border-2 border-amber-500 flex items-center justify-center text-[11px] text-amber-900 font-bold shadow-md",
+                            "w-7 h-7 rounded-full border-2 flex items-center justify-center text-[11px] font-bold shadow-md",
+                            myRole === "player"
+                              ? "bg-gradient-to-br from-primary to-amber-700 border-amber-500 text-amber-900"
+                              : "bg-gradient-to-br from-slate-600 to-slate-900 border-primary/40 text-primary",
                             selectedPoint === -1 && "ring-2 ring-offset-1 ring-offset-background ring-primary"
                           )}>
                             {myRole === "player" ? gameState.bar.player : gameState.bar.ai}
@@ -2562,14 +2565,51 @@ const BackgammonGame = () => {
                           </div>
                         </div>
 
-                        {/* Middle bar with dice */}
-                        <div className="h-16 bg-gradient-to-r from-midnight-light via-background to-midnight-light my-2 rounded-lg border border-primary/20 flex items-center justify-center gap-1 shrink-0">
-                          {dice.length > 0 && (
-                            <div className="flex gap-4 items-center">
-                              <Dice3D value={dice[0]} variant={isMyTurn ? "ivory" : "obsidian"} />
-                              <Dice3D value={dice[1]} variant={isMyTurn ? "ivory" : "obsidian"} />
+                        {/* Middle bar with dice AND captured checkers */}
+                        <div className="h-16 bg-gradient-to-r from-midnight-light via-background to-midnight-light my-2 rounded-lg border border-primary/20 flex items-center justify-between px-4 shrink-0">
+                          {/* Opponent's bar - left side */}
+                          {(myRole === "player" ? gameState.bar.ai : gameState.bar.player) > 0 ? (
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-muted-foreground">Opp:</span>
+                              <CheckerStack 
+                                count={myRole === "player" ? gameState.bar.ai : gameState.bar.player} 
+                                variant={myRole === "player" ? "obsidian" : "gold"}
+                                size="sm"
+                                isTop={true}
+                              />
                             </div>
-                          )}
+                          ) : <div className="w-16" />}
+                          
+                          {/* Dice - center */}
+                          <div className="flex-1 flex justify-center">
+                            {dice.length > 0 && (
+                              <div className="flex gap-4 items-center">
+                                <Dice3D value={dice[0]} variant={isMyTurn ? "ivory" : "obsidian"} />
+                                <Dice3D value={dice[1]} variant={isMyTurn ? "ivory" : "obsidian"} />
+                              </div>
+                            )}
+                          </div>
+                          
+                          {/* My bar - right side */}
+                          {(myRole === "player" ? gameState.bar.player : gameState.bar.ai) > 0 ? (
+                            <div 
+                              className={cn(
+                                "flex items-center gap-2 cursor-pointer rounded-lg p-1 transition-all",
+                                selectedPoint === -1 && "ring-2 ring-primary bg-primary/10"
+                              )}
+                              onClick={() => handlePointClick(-1)}
+                            >
+                              <span className="text-xs text-muted-foreground">Bar:</span>
+                              <CheckerStack 
+                                count={myRole === "player" ? gameState.bar.player : gameState.bar.ai} 
+                                variant={myRole === "player" ? "gold" : "obsidian"}
+                                size="sm"
+                                isSelected={selectedPoint === -1}
+                                onClick={() => handlePointClick(-1)}
+                                isTop={true}
+                              />
+                            </div>
+                          ) : <div className="w-16" />}
                         </div>
 
                         {/* Bottom points (1-12 or flipped) */}
@@ -2584,28 +2624,8 @@ const BackgammonGame = () => {
                         </div>
                       </div>
 
-                      {/* Player Bar / Bear Off Zone */}
-                      <div className="flex justify-between items-center mt-3 px-2 shrink-0">
-                        {(myRole === "player" ? gameState.bar.player : gameState.bar.ai) > 0 ? (
-                          <div 
-                            className={cn(
-                              "flex items-center gap-2 cursor-pointer transition-all rounded-lg p-1",
-                              selectedPoint === -1 && "ring-2 ring-primary bg-primary/10"
-                            )}
-                            onClick={() => handlePointClick(-1)}
-                          >
-                            <span className="text-xs text-muted-foreground">Your Bar:</span>
-                            <CheckerStack 
-                              count={myRole === "player" ? gameState.bar.player : gameState.bar.ai} 
-                              variant="gold" 
-                              isSelected={selectedPoint === -1}
-                              onClick={() => handlePointClick(-1)}
-                              isTop={false} 
-                            />
-                          </div>
-                        ) : <div />}
-                        
-                        {/* Bear Off Zone - Always visible, clickable when valid */}
+                      {/* Bear Off Zone - centered at bottom */}
+                      <div className="flex justify-center items-center mt-3 px-2 shrink-0">
                         <div 
                           className={cn(
                             "flex items-center gap-2 rounded-lg px-3 py-2 transition-all",
