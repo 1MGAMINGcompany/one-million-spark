@@ -226,15 +226,17 @@ const BackgammonGame = () => {
   // Solana rooms hook for forfeit/cancel
   const { cancelRoomByPda } = useSolanaRooms();
 
-  // Refs for stable callback access
+  // Refs for stable callback access (prevents stale closures in polling/visibility handlers)
   const roomPlayersRef = useRef<string[]>([]);
   const currentPlayerRef = useRef<"player" | "ai">("player");
   const myRoleRef = useRef<"player" | "ai">("player");
   const currentTurnWalletRef = useRef<string | null>(null);
+  const diceRef = useRef<number[]>([]); // FIX: Track dice to prevent stale closure in polling
   useEffect(() => { roomPlayersRef.current = roomPlayers; }, [roomPlayers]);
   useEffect(() => { currentPlayerRef.current = currentPlayer; }, [currentPlayer]);
   useEffect(() => { myRoleRef.current = myRole; }, [myRole]);
   useEffect(() => { currentTurnWalletRef.current = currentTurnWallet; }, [currentTurnWallet]);
+  useEffect(() => { diceRef.current = dice; }, [dice]); // FIX: Keep diceRef in sync
   
   // Ref for forfeit function (set after useForfeit hook)
   const forfeitFnRef = useRef<(() => Promise<void>) | null>(null);
@@ -900,8 +902,8 @@ const BackgammonGame = () => {
           
           // Update game status appropriately
           if (isNowMyTurn) {
-            // Only prompt to roll if we don't already have dice
-            if (dice.length === 0) {
+            // FIX: Use diceRef to avoid stale closure - dice state may not be current
+            if (diceRef.current.length === 0) {
               setGameStatus("Your turn - Roll the dice!");
             }
           } else {
@@ -957,8 +959,8 @@ const BackgammonGame = () => {
               setValidMoves([]);
             }
             
-            // Only show roll prompt if no dice exist
-            if (isNowMyTurn && dice.length === 0) {
+            // FIX: Use diceRef to avoid stale closure - dice state may not be current
+            if (isNowMyTurn && diceRef.current.length === 0) {
               setGameStatus("Your turn - Roll the dice!");
             } else if (!isNowMyTurn) {
               setGameStatus("Opponent's turn");
