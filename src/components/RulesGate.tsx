@@ -236,6 +236,13 @@ export function RulesGate({
     return <>{children}</>;
   }
 
+  // FAST START: If we have two real players in the room, bypass the gate
+  // They already staked to join - implicit acceptance
+  if (validPlayers.length >= 2) {
+    console.log("[RulesGate] FAST START: 2 real players detected, bypassing gates");
+    return <>{children}</>;
+  }
+
   // STEP 5: If dice roll is finalized (prop OR server-polled), game has started - NEVER re-gate
   // This prevents black screen when app backgrounds/foregrounds mid-game
   if (effectiveStartRollFinalized) {
