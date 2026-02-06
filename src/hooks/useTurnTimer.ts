@@ -50,6 +50,9 @@ export function useTurnTimer(options: UseTurnTimerOptions): UseTurnTimerResult {
     turnTimeSecondsRef.current = turnTimeSeconds;
   }, [turnTimeSeconds]);
 
+  // Track previous turnTimeSeconds to detect meaningful changes (e.g., 60 → 10 from DB)
+  const prevTurnTimeRef = useRef(turnTimeSeconds);
+
   // Verbose state logging for debugging timer issues
   useEffect(() => {
     console.log(`[useTurnTimer] State: enabled=${enabled}, isMyTurn=${isMyTurn}, isPaused=${isPaused}, remaining=${remainingTime}s, turnTime=${turnTimeSeconds}s, roomId=${roomId?.slice(0, 8) || "none"}`);
@@ -91,12 +94,13 @@ export function useTurnTimer(options: UseTurnTimerOptions): UseTurnTimerResult {
     }
   }, [isMyTurn, enabled, resetTimer]);
 
-  // Sync remaining time when turnTimeSeconds prop changes (DB data loaded)
-  // Only update if timer isn't actively counting down
+  // Sync remaining time when turnTimeSeconds prop value actually changes (e.g., 60 → 10 from DB)
+  // This MUST override even an active countdown to fix the "57 seconds" bug
   useEffect(() => {
-    if (enabled && !intervalRef.current) {
+    if (enabled && prevTurnTimeRef.current !== turnTimeSeconds) {
+      console.log(`[useTurnTimer] turnTimeSeconds changed from ${prevTurnTimeRef.current}s to ${turnTimeSeconds}s, syncing remainingTime`);
       setRemainingTime(turnTimeSeconds);
-      console.log(`[useTurnTimer] turnTimeSeconds prop changed to ${turnTimeSeconds}s, synced remainingTime`);
+      prevTurnTimeRef.current = turnTimeSeconds;
     }
   }, [turnTimeSeconds, enabled]);
 
