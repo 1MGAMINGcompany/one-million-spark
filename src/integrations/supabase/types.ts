@@ -203,6 +203,7 @@ export type Database = {
           game_state: Json
           game_type: string
           max_players: number
+          missed_turns: Json | null
           mode: string
           p1_acceptance_tx: string | null
           p1_ready: boolean
@@ -231,6 +232,7 @@ export type Database = {
           game_state?: Json
           game_type: string
           max_players?: number
+          missed_turns?: Json | null
           mode?: string
           p1_acceptance_tx?: string | null
           p1_ready?: boolean
@@ -259,6 +261,7 @@ export type Database = {
           game_state?: Json
           game_type?: string
           max_players?: number
+          missed_turns?: Json | null
           mode?: string
           p1_acceptance_tx?: string | null
           p1_ready?: boolean
@@ -724,6 +727,7 @@ export type Database = {
         Args: { p_room_pda: string }
         Returns: undefined
       }
+      maybe_apply_turn_timeout: { Args: { p_room_pda: string }; Returns: Json }
       maybe_finalize_start_state: {
         Args: { p_room_pda: string }
         Returns: undefined

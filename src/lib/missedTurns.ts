@@ -1,6 +1,13 @@
 /**
  * Missed turns tracking utility for ranked games
- * Stores counts in localStorage to survive refresh
+ * 
+ * @deprecated This file is kept for backward compatibility only.
+ * Strike tracking is now handled server-side in the `maybe_apply_turn_timeout` RPC.
+ * The `game_sessions.missed_turns` JSONB column stores strike counts per wallet.
+ * 
+ * Only `clearRoom` is still used for localStorage cleanup on game start.
+ * The `incMissed`, `resetMissed`, and `getMissed` functions are no longer
+ * used for enforcement - the server is the single source of truth.
  *
  * IMPORTANT: Uses normalizeWallet() (trim only) - Solana Base58 is case-sensitive!
  * Never use toLowerCase() on wallet addresses.

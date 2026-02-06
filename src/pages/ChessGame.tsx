@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { getOpponentWallet, isSameWallet, isRealWallet, DEFAULT_SOLANA_PUBKEY } from "@/lib/walletUtils";
-import { incMissed, resetMissed, clearRoom } from "@/lib/missedTurns";
+import { clearRoom } from "@/lib/missedTurns"; // Only clearRoom needed - strikes now tracked server-side
 import { GameErrorBoundary } from "@/components/GameErrorBoundary";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { Chess, Square, PieceSymbol, Color } from "chess.js";
@@ -377,10 +377,7 @@ const ChessGame = () => {
             setGame(new Chess(gameCopy.fen()));
             setMoveHistory(gameCopy.history());
             setTurnOverrideWallet(null); // Clear override on real move
-            // Reset missed turns for the mover
-            if (move.wallet && roomPda) {
-              resetMissed(roomPda, move.wallet);
-            }
+            // Note: Strike count reset is now handled server-side in submit_game_move RPC
           }
         } catch (e) {
           console.error("[ChessGame] Failed to apply DB move:", e);
@@ -509,63 +506,62 @@ const ChessGame = () => {
   // Ref for forfeit function - will be set by useForfeit hook
   const forfeitFnRef = useRef<(() => Promise<void>) | null>(null);
 
-  // Turn timer for ranked games - skip on timeout, 3 strikes = forfeit
-  const handleTurnTimeout = useCallback(() => {
+  // Turn timer for ranked games - calls server RPC for DB-authoritative timeout
+  const handleTurnTimeout = useCallback(async () => {
     if (gameOver || !address || !roomPda || !isActuallyMyTurn) return;
     
-    const opponentWalletAddr = getOpponentWallet(roomPlayers, address);
-    const newMissedCount = incMissed(roomPda, address);
-    
-    if (newMissedCount >= 3) {
-      // 3 STRIKES = AUTO FORFEIT
-      toast({
-        title: t('gameSession.autoForfeit'),
-        description: t('gameSession.missedThreeTurns'),
-        variant: "destructive",
+    try {
+      // Call server-side RPC - handles all timeout logic atomically
+      const { data, error } = await supabase.rpc("maybe_apply_turn_timeout", {
+        p_room_pda: roomPda,
       });
       
-      // Persist minimal turn_timeout event
-      if (isRankedGame && opponentWalletAddr) {
-        persistMove({
-          action: "turn_timeout",
-          timedOutWallet: address,
-          nextTurnWallet: opponentWalletAddr,
-          missedCount: newMissedCount,
-        } as any, address);
+      if (error) {
+        console.error("[ChessGame] Timeout RPC error:", error);
+        return;
       }
       
-      // Trigger forfeit
-      forfeitFnRef.current?.();
-      setGameOver(true);
-      setWinnerWallet(opponentWalletAddr);
-      setGameStatus(myColor === 'w' ? t('game.black') + " wins" : t('game.white') + " wins");
-      play('chess_lose');
+      // Type assertion for RPC response
+      const result = data as {
+        applied: boolean;
+        type?: string;
+        reason?: string;
+        winnerWallet?: string;
+        nextTurnWallet?: string;
+        strikes?: number;
+      } | null;
       
-    } else {
-      // SKIP to opponent
-      toast({
-        title: t('gameSession.turnSkipped'),
-        description: `${newMissedCount}/3 ${t('gameSession.missedTurns')}`,
-        variant: "destructive",
-      });
-      
-      // Persist minimal turn_timeout event
-      if (isRankedGame && opponentWalletAddr) {
-        persistMove({
-          action: "turn_timeout",
-          timedOutWallet: address,
-          nextTurnWallet: opponentWalletAddr,
-          missedCount: newMissedCount,
-        } as any, address);
+      if (result?.applied) {
+        if (result.type === "auto_forfeit") {
+          // 3 strikes - game over
+          toast({
+            title: t('gameSession.autoForfeit'),
+            description: t('gameSession.missedThreeTurns'),
+            variant: "destructive",
+          });
+          
+          forfeitFnRef.current?.();
+          setGameOver(true);
+          setWinnerWallet(result.winnerWallet || null);
+          setGameStatus(myColor === 'w' ? t('game.black') + " wins" : t('game.white') + " wins");
+          play('chess_lose');
+          
+        } else if (result.type === "turn_timeout" && result.nextTurnWallet) {
+          // Turn skipped - update local state from server
+          toast({
+            title: t('gameSession.turnSkipped'),
+            description: `${result.strikes}/3 ${t('gameSession.missedTurns')}`,
+            variant: "destructive",
+          });
+          
+          // Grant opponent turn via override
+          setTurnOverrideWallet(result.nextTurnWallet);
+        }
       }
-      
-      // Grant opponent another turn via override
-      setTurnOverrideWallet(opponentWalletAddr);
-      
-      // FIX: The turn has now passed to opponent
-      // Their device will detect via polling and start their timer
+    } catch (err) {
+      console.error("[ChessGame] Timeout exception:", err);
     }
-  }, [gameOver, address, roomPda, isActuallyMyTurn, roomPlayers, myColor, isRankedGame, persistMove, play, t]);
+  }, [gameOver, address, roomPda, isActuallyMyTurn, myColor, play, t]);
 
   // Use turn time from ranked gate (fetched from DB/localStorage)
   const effectiveTurnTime = rankedGate.turnTimeSeconds || DEFAULT_RANKED_TURN_TIME;
