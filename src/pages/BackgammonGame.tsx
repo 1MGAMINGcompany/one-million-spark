@@ -876,12 +876,14 @@ const BackgammonGame = () => {
   }, [roomPda, isRankedGame, gameOver, startRoll.isFinalized, currentTurnWallet, turnStartedAt, address, myRole, play, t]);
 
   // Visibility change handler - poll immediately when tab becomes visible
+  // NOTE: Timer resume logic is in a separate effect after turnTimer is declared
   useEffect(() => {
     if (!roomPda || !isRankedGame || gameOver) return;
     
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         console.log("[BackgammonGame] Tab became visible - polling for updates");
+        
         // Force immediate sync
         supabase.functions.invoke("game-session-get", {
           body: { roomPda },
@@ -896,6 +898,7 @@ const BackgammonGame = () => {
             setValidMoves([]);
             const isNowMyTurn = isSameWallet(dbTurnWallet, address);
             setGameStatus(isNowMyTurn ? "Your turn - Roll the dice!" : "Opponent's turn");
+            timeoutFiredRef.current = false;
           }
         }).catch(err => {
           console.warn("[BackgammonGame] Visibility poll error:", err);
@@ -1187,7 +1190,23 @@ const BackgammonGame = () => {
     roomId: roomPda,
   });
 
-  // Convert to TurnPlayer format for notifications
+  // Timer visibility handler - resume timer when tab becomes visible
+  useEffect(() => {
+    if (!roomPda || !isRankedGame || gameOver) return;
+    
+    const handleTimerVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        console.log("[BackgammonGame] Tab visible - checking timer state");
+        if (turnTimer.isPaused) {
+          console.log("[BackgammonGame] Resuming paused timer");
+          turnTimer.resumeTimer();
+        }
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleTimerVisibility);
+    return () => document.removeEventListener('visibilitychange', handleTimerVisibility);
+  }, [roomPda, isRankedGame, gameOver, turnTimer]);
   const turnPlayers: TurnPlayer[] = useMemo(() => {
     return roomPlayers.map((playerAddress, index) => {
       const isMe = isSameWallet(playerAddress, address);
@@ -2626,6 +2645,23 @@ const BackgammonGame = () => {
                   {isMyTurn && dice.length === 0 && !gameOver && (
                     <Button variant="gold" size="lg" className="min-w-[140px] shadow-[0_0_30px_-8px_hsl(45_93%_54%_/_0.5)]" onClick={rollDice}>
                       🎲 Roll Dice
+                    </Button>
+                  )}
+                  
+                  {/* Bear Off button - desktop - show when all checkers in home */}
+                  {canBearOff(gameState, myRole) && !gameOver && (
+                    <Button 
+                      variant={validMoves.includes(-2) ? "gold" : "outline"}
+                      size="lg"
+                      className={cn(
+                        "min-w-[140px]",
+                        validMoves.includes(-2) && "animate-pulse shadow-[0_0_30px_-8px_hsl(45_93%_54%_/_0.5)]"
+                      )}
+                      onClick={() => validMoves.includes(-2) && handlePointClick(-2)}
+                      disabled={!validMoves.includes(-2)}
+                    >
+                      <Trophy className="w-4 h-4 mr-2" />
+                      Bear Off ({myRole === "player" ? gameState.bearOff.player : gameState.bearOff.ai}/15)
                     </Button>
                   )}
                   
