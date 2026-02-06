@@ -430,19 +430,10 @@ const BackgammonGame = () => {
       
       // Missed turns are now handled via shared utility - no need to restore from persisted state
       
-      // CRITICAL: Clear stale dice on restore if it's my turn
-      // Dice from previous turn can bleed into the restored state
-      const restoredPlayer = persisted.currentPlayer;
-      const isRestoredToMyTurn = restoredPlayer === myRoleRef.current;
-      
-      if (isRestoredToMyTurn && persisted.dice?.length > 0) {
-        console.log("[BackgammonGame] Clearing stale dice on session restore - it's my turn but dice exist");
-        setDice([]);
-        setRemainingMoves([]);
-      } else {
-        setDice(persisted.dice || []);
-        setRemainingMoves(persisted.remainingMoves || []);
-      }
+      // Always restore dice from persisted state
+      // Turn-based clearing is handled by polling/realtime handlers on actual turn change
+      setDice(persisted.dice ?? []);
+      setRemainingMoves(persisted.remainingMoves ?? []);
       
       // Only show toast once per session load
       if (showToast && !restoredToastShownRef.current) {
