@@ -14,7 +14,7 @@ interface GameSessionData {
   player1_wallet: string;
   player2_wallet: string | null;
   status: 'active' | 'finished';
-  mode: 'casual' | 'ranked';
+  mode: 'casual' | 'ranked' | 'private';
 }
 
 interface UseGameSessionPersistenceOptions {
@@ -74,7 +74,7 @@ export function useGameSessionPersistence({
     player1Wallet: string,
     player2Wallet: string | null,
     status: 'active' | 'finished' = 'active',
-    mode: 'casual' | 'ranked' = 'casual'
+    mode: 'casual' | 'ranked' | 'private' = 'casual'
   ) => {
     if (!roomPda || !enabled) return;
 
