@@ -891,11 +891,14 @@ const BackgammonGame = () => {
           timeoutFiredRef.current = false;
           turnTimer.resetTimer();
           
-          // FIX: Only clear per-turn state when turn LEAVES me (I ended my turn)
-          // Don't clear when turn ARRIVES to me (opponent ended their turn)
+          // FIX: Always clear dice/remainingMoves on ANY turn change
+          // - When turn leaves me: my dice are consumed
+          // - When turn arrives to me: opponent's dice are stale garbage
+          setDice([]);
+          setRemainingMoves([]);
+          
+          // Only clear selection/validMoves when turn LEAVES me
           if (wasMyTurn && !isNowMyTurn) {
-            setDice([]);
-            setRemainingMoves([]);
             setSelectedPoint(null);
             setValidMoves([]);
           }
@@ -951,10 +954,12 @@ const BackgammonGame = () => {
             setCurrentTurnWallet(dbTurnWallet);
             timeoutFiredRef.current = false;
             
-            // FIX: Only clear dice when turn LEAVES me
+            // FIX: Always clear dice/remainingMoves on ANY turn change
+            setDice([]);
+            setRemainingMoves([]);
+            
+            // Only clear selection/validMoves when turn LEAVES me
             if (wasMyTurn && !isNowMyTurn) {
-              setDice([]);
-              setRemainingMoves([]);
               setSelectedPoint(null);
               setValidMoves([]);
             }
