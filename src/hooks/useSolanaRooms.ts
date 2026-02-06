@@ -326,49 +326,49 @@ export function useSolanaRooms() {
       const fetchedRooms = await fetchOpenPublicRooms(connection);
       console.log("[RoomList] fetchOpenPublicRooms returned", fetchedRooms.length, "rooms");
      
-     // Enrich rooms with turn time from database (not stored on-chain)
+     // Enrich rooms with turn time from database via edge function (bypasses RLS)
      if (fetchedRooms.length > 0) {
        const roomPdas = fetchedRooms.map(r => r.pda);
-       console.log("[RoomList] Enriching", roomPdas.length, "rooms. PDAs:", roomPdas.map(p => p.slice(0, 12)));
+       console.log("[RoomList] Enriching", roomPdas.length, "rooms via edge function");
        
-       const { data: sessions, error: sessionsError } = await supabase
-         .from("game_sessions")
-         .select("room_pda, turn_time_seconds, mode")
-         .in("room_pda", roomPdas);
-       
-        if (sessionsError) {
-          console.warn("[RoomList] Failed to fetch sessions:", sessionsError.message);
-        } else if (sessions && sessions.length > 0) {
-          console.log("[RoomList] DB returned", sessions.length, "sessions. DB PDAs:", sessions.map(s => s.room_pda.slice(0, 12)));
-          
-          const turnTimeMap = new Map<string, number>();
-          for (const s of sessions) {
-            if (s.turn_time_seconds != null && s.turn_time_seconds > 0) {
-              turnTimeMap.set(s.room_pda, s.turn_time_seconds);
-              console.log("[RoomList] Mapped turn time:", s.room_pda.slice(0, 12), "->", s.turn_time_seconds, "s");
-            }
-          }
-          
-          let enrichedCount = 0;
-          for (const room of fetchedRooms) {
-            const dbTurnTime = turnTimeMap.get(room.pda);
-            console.log("[RoomList] Checking room:", room.pda.slice(0, 12), "dbTurnTime:", dbTurnTime);
-            if (dbTurnTime !== undefined) {
-              room.turnTimeSec = dbTurnTime;
-              enrichedCount++;
-            }
-          }
-          console.log("[RoomList] Enrichment summary:", {
-            solanaRoomCount: fetchedRooms.length,
-            dbSessionCount: sessions.length,
-            enrichedCount,
-            solanaPdas: roomPdas.map(p => p.slice(0, 12)),
-            dbPdas: sessions.map(s => s.room_pda.slice(0, 12)),
-          });
-        } else {
-          console.log("[RoomList] No matching sessions in DB. Solana PDAs:", roomPdas.map(p => p.slice(0, 12)));
-        }
+       try {
+         // Use edge function to bypass RLS (game_sessions has no public read policy)
+         const { data: resp, error: edgeError } = await supabase.functions.invoke("game-sessions-list", {
+           body: { type: "active" },
+         });
+         
+         if (edgeError) {
+           console.warn("[RoomList] Edge function error:", edgeError.message);
+         } else if (resp?.rows && resp.rows.length > 0) {
+           const sessions = resp.rows as Array<{ room_pda: string; turn_time_seconds: number | null; mode: string | null }>;
+           console.log("[RoomList] Edge function returned", sessions.length, "sessions");
+           
+           const turnTimeMap = new Map<string, number>();
+           for (const s of sessions) {
+             if (s.turn_time_seconds != null && s.turn_time_seconds > 0) {
+               turnTimeMap.set(s.room_pda, s.turn_time_seconds);
+             }
+           }
+           
+           let enrichedCount = 0;
+           for (const room of fetchedRooms) {
+             const dbTurnTime = turnTimeMap.get(room.pda);
+             if (dbTurnTime !== undefined) {
+               room.turnTimeSec = dbTurnTime;
+               enrichedCount++;
+             }
+           }
+           console.log("[RoomList] Enriched", enrichedCount, "of", fetchedRooms.length, "rooms with turn time");
+         } else {
+           console.log("[RoomList] No sessions from edge function");
+         }
+       } catch (enrichErr) {
+         console.warn("[RoomList] Enrichment failed:", enrichErr);
+       }
      }
+     
+     // Sort rooms by roomId descending (newest first)
+     fetchedRooms.sort((a, b) => b.roomId - a.roomId);
      
       setRooms(fetchedRooms);
     } catch (err) {
