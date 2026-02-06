@@ -9,7 +9,8 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
 interface UseRoomModeResult {
-  mode: 'casual' | 'ranked';
+  mode: 'casual' | 'ranked' | 'private';
+  /** True for both 'ranked' AND 'private' - enforces rules gate, stake, forfeit */
   isRanked: boolean;
   turnTimeSeconds: number;
   isLoaded: boolean;
@@ -19,7 +20,7 @@ const MAX_RETRIES = 5;
 const RETRY_DELAY_MS = 800;
 
 export function useRoomMode(roomPda: string | undefined): UseRoomModeResult {
-  const [mode, setMode] = useState<'casual' | 'ranked'>('casual');
+  const [mode, setMode] = useState<'casual' | 'ranked' | 'private'>('casual');
   const [turnTimeSeconds, setTurnTimeSeconds] = useState(60);
   const [isLoaded, setIsLoaded] = useState(false);
   const [fetchAttempts, setFetchAttempts] = useState(0);
@@ -58,7 +59,7 @@ export function useRoomMode(roomPda: string | undefined): UseRoomModeResult {
           return;
         }
 
-        const dbMode = (session.mode as 'casual' | 'ranked') || 'casual';
+        const dbMode = (session.mode as 'casual' | 'ranked' | 'private') || 'casual';
         const dbTurnTime = session.turn_time_seconds || 60;
 
         console.log("[useRoomMode] DB mode fetched:", { dbMode, dbTurnTime });
@@ -79,7 +80,8 @@ export function useRoomMode(roomPda: string | undefined): UseRoomModeResult {
 
   return {
     mode,
-    isRanked: mode === 'ranked',
+    // Private rooms use ranked enforcement (stake, rules gate, forfeit) but skip ELO
+    isRanked: mode === 'ranked' || mode === 'private',
     turnTimeSeconds,
     isLoaded,
   };

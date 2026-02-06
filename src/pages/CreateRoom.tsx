@@ -262,7 +262,8 @@ export default function CreateRoom() {
       });
       return;
     }
-    if (gameMode === 'ranked' && entryFeeNum < dynamicMinFee) {
+    // Private rooms require minimum stake like ranked
+    if ((gameMode === 'ranked' || gameMode === 'private') && entryFeeNum < dynamicMinFee) {
       toast({
         title: t("createRoom.invalidFee"),
         description: t("createRoom.minFeeError", { amount: dynamicMinFee.toFixed(4), usd: MIN_FEE_USD.toFixed(2) }),
@@ -588,11 +589,11 @@ export default function CreateRoom() {
                 type="number"
                 value={entryFee}
                 onChange={(e) => setEntryFee(e.target.value)}
-                placeholder={gameMode === 'ranked' ? dynamicMinFee.toFixed(4) : "0"}
-                min={gameMode === 'ranked' ? dynamicMinFee : 0}
+                placeholder={(gameMode === 'ranked' || gameMode === 'private') ? dynamicMinFee.toFixed(4) : "0"}
+                min={(gameMode === 'ranked' || gameMode === 'private') ? dynamicMinFee : 0}
                 step="0.001"
                 className={`h-9 ${isRematch ? 'border-primary/50' : ''} ${
-                  gameMode === 'casual' || gameMode === 'private'
+                  gameMode === 'casual'
                     ? 'border-muted/50 bg-muted/20 text-muted-foreground focus:border-muted' 
                     : 'border-primary/50 bg-primary/5 text-foreground focus:border-primary'
                 }`}
@@ -603,8 +604,8 @@ export default function CreateRoom() {
                 </span>
               )}
             </div>
-            <p className={`text-xs ${gameMode === 'casual' || gameMode === 'private' ? 'text-muted-foreground' : 'text-primary/80'}`}>
-              {gameMode === 'casual' || gameMode === 'private'
+            <p className={`text-xs ${gameMode === 'casual' ? 'text-muted-foreground' : 'text-primary/80'}`}>
+              {gameMode === 'casual'
                 ? t("createRoom.stakeOptional")
                 : `${t("createRoom.stakeMinRequired")} (${dynamicMinFee.toFixed(4)} SOL ≈ $${MIN_FEE_USD.toFixed(2)})`
               }
@@ -675,8 +676,11 @@ export default function CreateRoom() {
                 className={`h-10 ${gameMode === 'private' ? 'bg-violet-600 hover:bg-violet-700' : ''}`}
                 onClick={() => {
                   setGameMode('private');
-                  // Private rooms use custom stakes (allow any amount including 0)
-                  if (!isRematch) setEntryFee("0");
+                  // Private rooms require stake like ranked - set minimum if current is below
+                  const currentFee = parseFloat(entryFee) || 0;
+                  if (!isRematch && currentFee < dynamicMinFee) {
+                    setEntryFee(dynamicMinFee.toFixed(4));
+                  }
                 }}
               >
                 <span className="mr-1.5">🟣</span> {t("createRoom.gameModePrivate", "Private")}
