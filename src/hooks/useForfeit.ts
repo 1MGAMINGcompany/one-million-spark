@@ -14,6 +14,7 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useConnection } from "@solana/wallet-adapter-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { finalizeGame } from "@/lib/finalizeGame";
 import { toast } from "@/hooks/use-toast";
 import { useTranslation } from "react-i18next";
@@ -77,6 +78,7 @@ export function useForfeit({
   const navigate = useNavigate();
   const { t } = useTranslation();
   const { connection } = useConnection();
+  const queryClient = useQueryClient();
   
   const [isForfeiting, setIsForfeiting] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
@@ -181,16 +183,18 @@ export function useForfeit({
     exitedRef.current = false; // Reset for new forfeit attempt
     setIsForfeiting(true);
     
-    // START 1-SECOND GUARANTEED EXIT TIMER
+    // START 15-SECOND GUARANTEED EXIT TIMER
+    // Increased from 1s to 15s to allow forfeit-game edge function to complete
+    // Edge function needs time to: fetch room on-chain, verify, build tx, sign, confirm
     forceExitTimeoutRef.current = setTimeout(() => {
-      console.log("[useForfeit] Force exit after 1000ms timeout");
+      console.log("[useForfeit] Force exit after 15000ms timeout");
       forceExit();
       toast({
         title: t("forfeit.exitedMatch", "Exited match"),
         description: t("forfeit.settlementPending", "Settlement may be pending"),
         variant: "destructive",
       });
-    }, 1000);
+    }, 15000);
     
     let success = false;
     let signature: string | undefined;
@@ -274,6 +278,12 @@ export function useForfeit({
         signature = result.signature;
         console.log("[FinalizeForfeit] edge_response", { ok: true, sig: signature });
         
+        // CRITICAL: Invalidate React Query cache to remove stale room data from UI
+        console.log("[FinalizeForfeit] Invalidating room queries...");
+        queryClient.invalidateQueries({ queryKey: ['solana-rooms'] });
+        queryClient.invalidateQueries({ queryKey: ['game-session'] });
+        queryClient.invalidateQueries({ queryKey: ['room-data', roomPda] });
+        queryClient.invalidateQueries({ queryKey: ['recoverable-sessions'] });
         // Poll for on-chain confirmation if signature is returned
         if (signature && connection) {
           try {
@@ -352,6 +362,7 @@ export function useForfeit({
     mode,
     gameType,
     connection,
+    queryClient,
     forceExit,
     t,
   ]);
