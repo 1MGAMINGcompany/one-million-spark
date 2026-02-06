@@ -1176,6 +1176,11 @@ const BackgammonGame = () => {
       setSelectedPoint(null);
       setValidMoves([]);
       setGameStatus("Opponent's turn");
+      
+      // FIX: Reset timer state for consecutive timeout detection on opponent's device
+      // The opponent will detect the turn change via polling and start their timer
+      // On this device, isMyTurn becomes false so timer stops (correct behavior)
+      timeoutFiredRef.current = false;
     }
   // Note: This callback is now async to properly await persistMove for auto_forfeit
   }, [isActuallyMyTurn, gameOver, address, roomPda, dice, remainingMoves, myRole, gameState, isRankedGame, persistMove, play, t, enterOutcomeResolving]);

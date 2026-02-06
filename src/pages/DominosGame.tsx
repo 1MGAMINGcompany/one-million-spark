@@ -667,6 +667,9 @@ const DominosGame = () => {
       setIsMyTurn(false);
       setSelectedDomino(null);
       setGameStatus(t('game.opponentsTurn'));
+      
+      // FIX: The turn has now passed to opponent
+      // Their device will detect via polling and start their timer
     }
   }, [isActuallyMyTurn, gameOver, address, roomPda, roomPlayers, isRankedGame, persistMove, play, t]);
 
