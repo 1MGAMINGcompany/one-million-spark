@@ -1,5 +1,6 @@
 // App Root
 import { useEffect } from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -44,6 +45,16 @@ import { isDebugEnabled } from "@/lib/debugLog";
 
 // DEV-ONLY: Import to auto-run config check on app load
 import "./lib/devConfigCheck";
+
+// Create QueryClient instance outside component to prevent recreation on re-renders
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60, // 1 minute
+      retry: 1,
+    },
+  },
+});
 
 // PART D: visualViewport fallback for mobile browsers
 function useVisualViewportHeight() {
@@ -112,27 +123,29 @@ const AppContent = () => {
 
 const App = () => (
   <AppErrorBoundary>
-    <SolanaProvider>
-      <TxLockProvider>
-        <LoadingProvider>
-          <AudioProvider>
-            <SoundProvider>
-              <TooltipProvider>
-                <Toaster />
-                <Sonner />
-                <PyramidLoader />
-                <GoldenParticles />
-                <AgeConfirmation />
-                <BrowserRouter>
-                  <GlobalBackgroundMusic />
-                  <AppContent />
-                </BrowserRouter>
-              </TooltipProvider>
-            </SoundProvider>
-          </AudioProvider>
-        </LoadingProvider>
-      </TxLockProvider>
-    </SolanaProvider>
+    <QueryClientProvider client={queryClient}>
+      <SolanaProvider>
+        <TxLockProvider>
+          <LoadingProvider>
+            <AudioProvider>
+              <SoundProvider>
+                <TooltipProvider>
+                  <Toaster />
+                  <Sonner />
+                  <PyramidLoader />
+                  <GoldenParticles />
+                  <AgeConfirmation />
+                  <BrowserRouter>
+                    <GlobalBackgroundMusic />
+                    <AppContent />
+                  </BrowserRouter>
+                </TooltipProvider>
+              </SoundProvider>
+            </AudioProvider>
+          </LoadingProvider>
+        </TxLockProvider>
+      </SolanaProvider>
+    </QueryClientProvider>
   </AppErrorBoundary>
 );
 
