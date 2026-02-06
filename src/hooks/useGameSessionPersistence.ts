@@ -137,6 +137,7 @@ export function useGameSessionPersistence({
       const { error } = await supabase.rpc('finish_game_session', {
         p_room_pda: roomPda,
         p_caller_wallet: callerWallet || null,
+        p_winner_wallet: null,
       });
 
       if (error) {

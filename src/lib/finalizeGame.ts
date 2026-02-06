@@ -104,6 +104,7 @@ async function markGameFinished(roomPda: string, winnerWallet: string): Promise<
     const { error: rpcError } = await supabase.rpc('finish_game_session', {
       p_room_pda: roomPda,
       p_caller_wallet: winnerWallet,
+      p_winner_wallet: winnerWallet,
     });
     
     if (rpcError) {
