@@ -2839,7 +2839,7 @@ const BackgammonGame = () => {
       <RulesInfoPanel 
         stakeSol={rankedGate.stakeLamports / 1_000_000_000} 
         isRanked={isRankedGame}
-        turnTimeSeconds={rankedGate.turnTimeSeconds || 60}
+        turnTimeSeconds={effectiveTurnTime}
       />
 
       {/* Accept Rules Modal and Waiting Panel - REMOVED: Now handled by Rules Gate above */}
