@@ -1,109 +1,88 @@
 
-# Fix: Turn Timer Sync Must Override Active Countdown
 
-## Problem Identified
+# Fix CORS Headers for Edge Functions
 
-The timer shows **57 seconds** because:
+## Problem
+Browser requests from `https://1mgaming.com` to `/functions/v1/health` and `/functions/v1/get-moves` are blocked by CORS preflight failures.
 
-1. `useRankedReadyGate` initializes `turnTimeSeconds` to `60` (default)
-2. `useTurnTimer` initializes `remainingTime` state to `60`  
-3. Timer countdown starts immediately when `enabled && isMyTurn` (interval created)
-4. DB loads ~3 seconds later with `turn_time_seconds: 10`
-5. The sync `useEffect` (line 94-101) checks `!intervalRef.current` — **but interval exists!**
-6. Sync is skipped → timer continues counting from ~57
-
-**The condition `!intervalRef.current` was too conservative.** It prevents sync when we actually need it most.
+## Root Cause
+The `corsHeaders` object is missing:
+1. **`Access-Control-Allow-Methods`** - browsers need this to know which HTTP methods are allowed
+2. **Extended Supabase headers** - the Supabase JS client sends additional headers that must be whitelisted
 
 ## Solution
+Update `corsHeaders` in both files to include all required headers.
 
-Change the sync logic to **always** update `remainingTime` when `turnTimeSeconds` prop changes, but only if the new value is significantly different (not just noise from re-renders).
+---
 
-Two options:
+## Changes
 
-### Option A: Remove the `!intervalRef.current` guard (simple)
+### File 1: `supabase/functions/health/index.ts`
 
+**Before (lines 3-6):**
 ```typescript
-useEffect(() => {
-  if (enabled) {
-    setRemainingTime(turnTimeSeconds);
-    console.log(`[useTurnTimer] turnTimeSeconds prop changed to ${turnTimeSeconds}s, synced remainingTime`);
-  }
-}, [turnTimeSeconds, enabled]);
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
 ```
 
-Risk: If `turnTimeSeconds` re-renders frequently, timer could reset unexpectedly.
-
-### Option B: Track previous value and only sync on meaningful change (safer)
-
+**After:**
 ```typescript
-const prevTurnTimeRef = useRef(turnTimeSeconds);
-
-useEffect(() => {
-  // Only sync if the turnTimeSeconds actually changed value (not just a re-render)
-  if (enabled && prevTurnTimeRef.current !== turnTimeSeconds) {
-    console.log(`[useTurnTimer] turnTimeSeconds changed from ${prevTurnTimeRef.current}s to ${turnTimeSeconds}s, syncing remainingTime`);
-    setRemainingTime(turnTimeSeconds);
-    prevTurnTimeRef.current = turnTimeSeconds;
-  }
-}, [turnTimeSeconds, enabled]);
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+  "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
+};
 ```
 
-This ensures sync only happens when DB value actually differs from initial default.
+---
 
-## Recommended: Option B
+### File 2: `supabase/functions/get-moves/index.ts`
 
-It's safer because it only resets the timer when the source value changes (60→10), not on every render.
+**Before (lines 4-7):**
+```typescript
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+```
+
+**After:**
+```typescript
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+  "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
+};
+```
 
 ---
 
 ## Technical Details
 
-**Files to change:**
-- `src/hooks/useTurnTimer.ts` only
+| Header | Purpose |
+|--------|---------|
+| `Access-Control-Allow-Methods` | Tells browser which HTTP methods are allowed (GET, POST, OPTIONS) |
+| `x-supabase-client-platform` | Supabase JS client sends this header automatically |
+| `x-supabase-client-platform-version` | Client version info |
+| `x-supabase-client-runtime` | Runtime environment (browser/node) |
+| `x-supabase-client-runtime-version` | Runtime version |
 
-**Specific change:**
-
-| Line | Before | After |
-|------|--------|-------|
-| ~48 | N/A | Add: `const prevTurnTimeRef = useRef(turnTimeSeconds);` |
-| 94-101 | `if (enabled && !intervalRef.current)` | `if (enabled && prevTurnTimeRef.current !== turnTimeSeconds)` |
+If these headers are not whitelisted in `Access-Control-Allow-Headers`, the preflight OPTIONS request fails and the actual request is blocked.
 
 ---
 
-## Updated Code
+## Verification
 
-```typescript
-// Add after line 48 (after turnTimeSecondsRef)
-const prevTurnTimeRef = useRef(turnTimeSeconds);
-
-// Replace lines 94-101
-useEffect(() => {
-  // Only sync if turnTimeSeconds prop value actually changed (e.g., 60 → 10 from DB)
-  if (enabled && prevTurnTimeRef.current !== turnTimeSeconds) {
-    console.log(`[useTurnTimer] turnTimeSeconds changed from ${prevTurnTimeRef.current}s to ${turnTimeSeconds}s, syncing remainingTime`);
-    setRemainingTime(turnTimeSeconds);
-    prevTurnTimeRef.current = turnTimeSeconds;
-  }
-}, [turnTimeSeconds, enabled]);
+After deployment, test with:
+```bash
+curl -X OPTIONS https://mhtikjiticopicziepnj.supabase.co/functions/v1/health \
+  -H "Origin: https://1mgaming.com" \
+  -H "Access-Control-Request-Method: POST" \
+  -H "Access-Control-Request-Headers: content-type, x-supabase-client-platform" \
+  -v
 ```
 
----
+Should return `200 OK` with proper CORS headers.
 
-## Expected Behavior After Fix
-
-1. Component mounts with `turnTimeSeconds: 60` (default)
-2. Timer initializes `remainingTime: 60`, `prevTurnTimeRef: 60`
-3. Timer starts counting: 60 → 59 → 58 → 57...
-4. DB loads, `turnTimeSeconds` prop becomes `10`
-5. Sync effect runs: `prevTurnTimeRef (60) !== turnTimeSeconds (10)` → TRUE
-6. `remainingTime` is set to `10`, `prevTurnTimeRef` updated to `10`
-7. Timer now shows `0:10` and counts down correctly
-
----
-
-## Testing
-
-1. Create ranked Backgammon room with 10s timer
-2. Join game
-3. Timer should show `0:10` (not 57 or 60)
-4. On subsequent turns, timer should reset to 10s
