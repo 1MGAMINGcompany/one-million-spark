@@ -30,6 +30,7 @@ import {
   buildJoinRoomIx,
   buildCancelRoomIx,
   getRoomPDA,
+  parseRoomAccount,
 } from "@/lib/solana-program";
 
 // Debug info type for failed transactions
@@ -719,33 +720,62 @@ export function useSolanaRooms() {
       });
       
       // Record acceptance using tx signature as proof (joiner is player 2)
+      // FIX: Use roomPda directly from join parameters instead of fetching to avoid race condition
       try {
-        // Fetch the room to get PDA and stake info
-        const joinedRoom = await fetchUserActiveRoom();
-        if (joinedRoom?.pda) {
-          const stakeLamports = Math.floor(joinedRoom.entryFeeSol * LAMPORTS_PER_SOL);
-          
-          // Fetch mode from DB via Edge Function (RLS locked)
-          const { data: resp, error: modeError } = await supabase.functions.invoke("game-session-get", {
-            body: { roomPda: joinedRoom.pda },
-          });
-          if (modeError) {
-            console.warn("[JoinRoom] Edge function error:", modeError);
+        // Derive roomPda from the room parameters we already have
+        const [roomPdaKey] = getRoomPDA(new PublicKey(roomCreator), roomId);
+        const roomPda = roomPdaKey.toBase58();
+        
+        // Fetch stake from on-chain room data
+        const accountInfo = await connection.getAccountInfo(roomPdaKey);
+        
+        let stakeLamports = 0;
+        let gameType: number = GameType.Chess;
+        let maxPlayers = 2;
+        
+        if (accountInfo?.data) {
+          const parsed = parseRoomAccount(accountInfo.data as Buffer);
+          if (parsed) {
+            stakeLamports = parsed.entryFee || 0;
+            gameType = parsed.gameType ?? GameType.Chess;
+            maxPlayers = parsed.maxPlayers || 2;
           }
-          const mode = (resp?.session?.mode as 'casual' | 'ranked') || 'casual';
-          console.log("[JoinRoom] Fetched mode from DB:", mode);
+        }
+        
+        // Fetch mode from DB via Edge Function (RLS locked)
+        const { data: resp, error: modeError } = await supabase.functions.invoke("game-session-get", {
+          body: { roomPda },
+        });
+        if (modeError) {
+          console.warn("[JoinRoom] Edge function error:", modeError);
+        }
+        const mode = (resp?.session?.mode as 'casual' | 'ranked') || (stakeLamports > 0 ? 'ranked' : 'casual');
+        console.log("[JoinRoom] Using roomPda directly:", roomPda.slice(0, 8), "mode:", mode);
+        
+        const rules = createRulesFromRoom(
+          roomPda,
+          gameType,
+          maxPlayers,
+          stakeLamports,
+          mode
+        );
+        const rulesHash = await computeRulesHash(rules);
+        
+        const { data: acceptResult, error: rpcError } = await supabase.rpc("record_acceptance", {
+          p_room_pda: roomPda,
+          p_wallet: publicKey.toBase58(),
+          p_tx_signature: signature,
+          p_rules_hash: rulesHash,
+          p_stake_lamports: stakeLamports,
+          p_is_creator: false,
+        });
+        
+        if (rpcError) {
+          // FAIL-CLOSED: Retry once before surfacing error
+          console.error("[JoinRoom] record_acceptance failed, retrying once...", rpcError.message);
           
-          const rules = createRulesFromRoom(
-            joinedRoom.pda,
-            joinedRoom.gameType,
-            joinedRoom.maxPlayers,
-            stakeLamports,
-            mode // Use DB mode, NOT stake-derived
-          );
-          const rulesHash = await computeRulesHash(rules);
-          
-          const { data: acceptResult, error: rpcError } = await supabase.rpc("record_acceptance", {
-            p_room_pda: joinedRoom.pda,
+          const { data: retryResult, error: retryError } = await supabase.rpc("record_acceptance", {
+            p_room_pda: roomPda,
             p_wallet: publicKey.toBase58(),
             p_tx_signature: signature,
             p_rules_hash: rulesHash,
@@ -753,43 +783,29 @@ export function useSolanaRooms() {
             p_is_creator: false,
           });
           
-          if (rpcError) {
-            // FAIL-CLOSED: Retry once before surfacing error
-            console.error("[JoinRoom] record_acceptance failed, retrying once...", rpcError.message);
-            
-            const { data: retryResult, error: retryError } = await supabase.rpc("record_acceptance", {
-              p_room_pda: joinedRoom.pda,
-              p_wallet: publicKey.toBase58(),
-              p_tx_signature: signature,
-              p_rules_hash: rulesHash,
-              p_stake_lamports: stakeLamports,
-              p_is_creator: false,
+          if (retryError) {
+            console.error("[JoinRoom] record_acceptance retry also failed:", retryError.message);
+            toast({
+              title: "Sync Warning",
+              description: "Game acceptance may be delayed. If stuck, refresh the page.",
+              variant: "destructive",
             });
-            
-            if (retryError) {
-              console.error("[JoinRoom] record_acceptance retry also failed:", retryError.message);
-              toast({
-                title: "Sync Warning",
-                description: "Game acceptance may be delayed. If stuck, refresh the page.",
-                variant: "destructive",
-              });
-            } else {
-              console.log("[JoinRoom] ✅ Recorded acceptance on retry:", mode);
-              // Store session token if returned
-              const sessionToken = (retryResult as { session_token?: string })?.session_token;
-              if (sessionToken) {
-                localStorage.setItem(`session_token_${joinedRoom.pda}`, sessionToken);
-                console.log("[JoinRoom] ✅ Session token stored (retry):", sessionToken.slice(0, 8));
-              }
-            }
           } else {
-            console.log("[JoinRoom] ✅ Recorded acceptance with tx signature and mode:", mode);
+            console.log("[JoinRoom] ✅ Recorded acceptance on retry:", mode);
             // Store session token if returned
-            const sessionToken = (acceptResult as { session_token?: string })?.session_token;
+            const sessionToken = (retryResult as { session_token?: string })?.session_token;
             if (sessionToken) {
-              localStorage.setItem(`session_token_${joinedRoom.pda}`, sessionToken);
-              console.log("[JoinRoom] ✅ Session token stored:", sessionToken.slice(0, 8));
+              localStorage.setItem(`session_token_${roomPda}`, sessionToken);
+              console.log("[JoinRoom] ✅ Session token stored (retry):", sessionToken.slice(0, 8));
             }
+          }
+        } else {
+          console.log("[JoinRoom] ✅ Recorded acceptance with tx signature and mode:", mode);
+          // Store session token if returned
+          const sessionToken = (acceptResult as { session_token?: string })?.session_token;
+          if (sessionToken) {
+            localStorage.setItem(`session_token_${roomPda}`, sessionToken);
+            console.log("[JoinRoom] ✅ Session token stored:", sessionToken.slice(0, 8));
           }
         }
       } catch (acceptErr: any) {
