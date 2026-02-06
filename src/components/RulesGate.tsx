@@ -322,7 +322,7 @@ export function RulesGate({
   // 6. Both ready → per architecture decision (game-start-creator-first-no-dice),
   // the game starts immediately with creator going first - NO dice roll ceremony.
   // The DB function maybe_finalize_start_state handles this automatically.
-  // Render null (not children) - the game page will show the game board directly.
-  // Children (DiceRollStart) are no longer rendered.
-  return null;
+  // Now we render children to signal the gate is passed - game pages use this
+  // to show the game board directly.
+  return <>{children}</>;
 }
