@@ -1,13 +1,10 @@
 // Solana-based invite links (placeholder for future Solana program integration)
 
 export function buildInviteLink(params: {
-  roomId: string;
-  cluster?: string;
+  roomPda: string;
 }) {
   const url = new URL(window.location.origin);
-  url.pathname = "/join";
-  url.searchParams.set("roomId", params.roomId);
-  url.searchParams.set("cluster", params.cluster || "mainnet-beta");
+  url.pathname = `/room/${params.roomPda}`;
   return url.toString();
 }
 
