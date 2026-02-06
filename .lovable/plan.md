@@ -1,171 +1,184 @@
 
-# Fix Plan: Turn Time Display, Desktop Bear Off Button & Turn Timer Forfeit
+# Fix Plan: Checker Bar Color Bug + Desktop Bar Placement
 
-## Summary of Issues Found
+## Summary
 
-### Issue 1: Turn Time Not Showing in Room List (Shows "—")
-**Location:** Screenshot shows `Clock` icon with "—" instead of "10s"
+When playing multiplayer Backgammon, captured checkers sent to the "bar" (jail) are displaying as **gold color regardless of which player owns them**. Additionally, the desktop bar display should be repositioned to the **center of the board** like mobile, without hiding the dice.
 
-**Root Cause:** The database session for `AFqKJMHtjBz5nTvLkUSYR66L4dqMHzvqgeX3q7y8DcYe` (room #1770341757994 visible in screenshot) has `turn_time_seconds: 10` in the DB, but the Room PDA in the screenshot is a DIFFERENT room being shown.
+---
 
-Looking at the DB query results:
-```text
-room_pda: BqsuTuDFxQESLKjsx3QA1eREBhe1SWG2FUAwc54sJcZ - turn_time_seconds: 10
-room_pda: AFqKJMHtjBz5nTvLkUSYR66L4dqMHzvqgeX3q7y8DcYe - turn_time_seconds: 10
-```
+## Issues to Fix
 
-The enrichment in `useSolanaRooms.ts` queries the database and maps by `room_pda`. The issue is likely that the room PDA format from Solana vs. what's stored in `game_sessions` doesn't match.
+| Issue | Location | Description |
+|-------|----------|-------------|
+| Wrong bar color | Desktop line 2600, Mobile line 2358 | "Your Bar" checkers always show as gold, even when playing as black |
+| Bar placement | Desktop lines 2588-2606 | Bar is at bottom-left corner instead of center |
 
-**Fix:** Add debug logging to verify matching and ensure the enrichment query actually finds sessions.
+---
 
-### Issue 2: Missing Bear Off Button on Desktop (CRITICAL)
-**Location:** Lines 2589-2618 in `BackgammonGame.tsx`
+## Technical Analysis
 
-The Bear Off zone IS present in the desktop layout, but comparing to `BackgammonAI.tsx` (lines 1183-1212), I can see the key difference:
+### Color Bug Root Cause
 
-**BackgammonAI (working):**
-- Bear Off zone has a clear clickable area with proper styling
-- Uses `canBearOff(gameState, "player")` to show status
-
-**BackgammonGame (multiplayer):**
-- Bear Off zone exists but uses `canBearOff(gameState, myRole)`
-- The zone is smaller and less prominent
-- Need to add an explicit **"Bear Off" button** in the controls row like mobile has
-
-**Fix:** Add a more prominent Bear Off button in the desktop controls area (lines 2624-2638), matching what mobile has.
-
-### Issue 3: Turn Timer Not Triggering Forfeit
-**Location:** Lines 1182-1188 in `BackgammonGame.tsx`
-
-The `useTurnTimer` hook is correctly configured:
+**Desktop (line 2598-2600):**
 ```typescript
-const turnTimer = useTurnTimer({
-  turnTimeSeconds: effectiveTurnTime,  // 10 seconds
-  enabled: isRankedGame && (canPlay || startRoll.isFinalized) && !gameOver,
-  isMyTurn: effectiveIsMyTurn,
-  onTimeExpired: handleTurnTimeout,
-  roomId: roomPda,
-});
+<CheckerStack 
+  count={myRole === "player" ? gameState.bar.player : gameState.bar.ai} 
+  variant="gold"  // ← HARDCODED - wrong when myRole === "ai"
 ```
 
-**Potential causes:**
-1. The `mid-turn guard` at lines 1072-1079 prevents timeout if `dice.length > 0 && remainingMoves.length > 0`
-2. If you rolled dice but didn't finish all moves, the timer WON'T fire
-3. This is intentional to prevent accidental forfeits mid-move
-
-**However**, looking at the DB data:
-```text
-turn_started_at: 2026-02-06 01:44:33.743588+00
-```
-
-If the current time was 01:48+ (logs show activity until 01:48), that's 4+ minutes since last turn started. The 10-second timer should have fired many times.
-
-**Real Issue:** The `effectiveIsMyTurn` might be `false` even when it's actually your turn, OR the timer interval stopped.
-
-Looking at line 1184-1185:
+**Mobile (line 2357-2358):**
 ```typescript
-enabled: isRankedGame && (canPlay || startRoll.isFinalized) && !gameOver,
-isMyTurn: effectiveIsMyTurn,
+<div className="...bg-gradient-to-br from-primary to-amber-700 border-2 border-amber-500..."
+// ← HARDCODED gold styling - wrong when myRole === "ai"
 ```
 
-The timer only counts down when `isMyTurn: true`. If `effectiveIsMyTurn` becomes `false` for any reason (polling updates, state desync), the timer pauses.
+When the user joins as the second player, they play as `myRole === "ai"` (obsidian/black checkers). Their captured checkers should display in **obsidian/black** color, not gold.
 
-**Fix:** Add more aggressive timer reset and ensure `effectiveIsMyTurn` correctly reflects turn state from DB. Also ensure timer doesn't silently pause.
+### Current Bar Layout
+
+- **Mobile**: Bar is correctly centered in the vertical middle bar between left and right point columns
+- **Desktop**: Bar is incorrectly placed in the bottom-left corner, separate from the main board
+
+---
 
 ## Implementation Plan
 
-### Step 1: Fix Desktop Bear Off Button (Priority: HIGH)
-**File:** `src/pages/BackgammonGame.tsx`
+### Fix 1: Desktop - Correct Bar Checker Color
 
-Add a larger, more visible Bear Off button in the desktop controls row (around line 2625):
+**File:** `src/pages/BackgammonGame.tsx`  
+**Location:** Lines 2598-2601
+
+Change:
+```typescript
+<CheckerStack 
+  count={myRole === "player" ? gameState.bar.player : gameState.bar.ai} 
+  variant="gold"  // ← Change this
+```
+
+To:
+```typescript
+<CheckerStack 
+  count={myRole === "player" ? gameState.bar.player : gameState.bar.ai} 
+  variant={myRole === "player" ? "gold" : "obsidian"}  // ← Dynamic based on role
+```
+
+### Fix 2: Mobile - Correct Bar Checker Color
+
+**File:** `src/pages/BackgammonGame.tsx`  
+**Location:** Lines 2357-2362
+
+Change the hardcoded gold styling to be dynamic based on `myRole`:
 
 ```typescript
-{/* Bear Off button - desktop - show when all checkers in home */}
-{canBearOff(gameState, myRole) && !gameOver && (
-  <Button 
-    variant={validMoves.includes(-2) ? "gold" : "outline"}
-    size="lg"
-    className={cn(
-      "min-w-[140px]",
-      validMoves.includes(-2) && "animate-pulse shadow-[0_0_30px_-8px_hsl(45_93%_54%_/_0.5)]"
+<div className={cn(
+  "w-7 h-7 rounded-full border-2 flex items-center justify-center text-[11px] font-bold shadow-md",
+  myRole === "player"
+    ? "bg-gradient-to-br from-primary to-amber-700 border-amber-500 text-amber-900"
+    : "bg-gradient-to-br from-slate-600 to-slate-900 border-primary/40 text-primary",
+  selectedPoint === -1 && "ring-2 ring-offset-1 ring-offset-background ring-primary"
+)}>
+```
+
+### Fix 3: Desktop - Move Bar to Center Board Section
+
+**File:** `src/pages/BackgammonGame.tsx`  
+**Location:** Lines 2565-2573 (middle bar section)
+
+Currently the middle bar only shows dice. Add the player's bar checkers here alongside the dice:
+
+```typescript
+{/* Middle bar with dice AND captured checkers */}
+<div className="h-16 bg-gradient-to-r from-midnight-light via-background to-midnight-light my-2 rounded-lg border border-primary/20 flex items-center justify-between px-4 shrink-0">
+  {/* Opponent's bar - left side */}
+  {(myRole === "player" ? gameState.bar.ai : gameState.bar.player) > 0 && (
+    <div className="flex items-center gap-2">
+      <span className="text-xs text-muted-foreground">Opp:</span>
+      <CheckerStack 
+        count={myRole === "player" ? gameState.bar.ai : gameState.bar.player} 
+        variant="obsidian" 
+        size="sm"
+        isTop={true}
+      />
+    </div>
+  )}
+  
+  {/* Dice - center */}
+  <div className="flex-1 flex justify-center">
+    {dice.length > 0 && (
+      <div className="flex gap-4 items-center">
+        <Dice3D value={dice[0]} variant={isMyTurn ? "ivory" : "obsidian"} />
+        <Dice3D value={dice[1]} variant={isMyTurn ? "ivory" : "obsidian"} />
+      </div>
     )}
-    onClick={() => validMoves.includes(-2) && handlePointClick(-2)}
-    disabled={!validMoves.includes(-2)}
-  >
-    <Trophy className="w-4 h-4 mr-2" />
-    Bear Off ({myRole === "player" ? gameState.bearOff.player : gameState.bearOff.ai}/15)
-  </Button>
-)}
+  </div>
+  
+  {/* My bar - right side */}
+  {(myRole === "player" ? gameState.bar.player : gameState.bar.ai) > 0 && (
+    <div 
+      className={cn(
+        "flex items-center gap-2 cursor-pointer rounded-lg p-1 transition-all",
+        selectedPoint === -1 && "ring-2 ring-primary bg-primary/10"
+      )}
+      onClick={() => handlePointClick(-1)}
+    >
+      <span className="text-xs text-muted-foreground">Bar:</span>
+      <CheckerStack 
+        count={myRole === "player" ? gameState.bar.player : gameState.bar.ai} 
+        variant={myRole === "player" ? "gold" : "obsidian"}
+        size="sm"
+        isSelected={selectedPoint === -1}
+        onClick={() => handlePointClick(-1)}
+        isTop={true}
+      />
+    </div>
+  )}
+</div>
 ```
 
-### Step 2: Fix Turn Timer Debug Logging
-**File:** `src/hooks/useTurnTimer.ts`
+Then **remove** the old bar display from lines 2588-2606 (the "Player Bar / Bear Off Zone" section), keeping only the Bear Off zone there.
 
-Add more verbose logging when timer state changes to debug why it's not firing:
-
-```typescript
-// Add effect to log timer state changes
-useEffect(() => {
-  console.log(`[useTurnTimer] State: enabled=${enabled}, isMyTurn=${isMyTurn}, isPaused=${isPaused}, remaining=${remainingTime}s, roomId=${roomId?.slice(0, 8)}`);
-}, [enabled, isMyTurn, isPaused, remainingTime, roomId]);
-```
-
-### Step 3: Fix Room List Turn Time Display
-**File:** `src/hooks/useSolanaRooms.ts`
-
-The enrichment logic looks correct, but add more diagnostic logging to understand why no sessions are matching:
-
-```typescript
-// After fetching sessions, log what we got
-console.log("[RoomList] Enrichment check:", {
-  fetchedRoomPdas: roomPdas.map(p => p.slice(0, 12)),
-  dbSessionPdas: sessions?.map(s => s.room_pda.slice(0, 12)) || [],
-  matchCount: turnTimeMap.size,
-});
-```
-
-### Step 4: Ensure Timer Continues When Tab is Visible
-**File:** `src/pages/BackgammonGame.tsx`
-
-In the visibility change handler, also resume the timer:
-
-```typescript
-// When tab becomes visible, resume timer if it was paused
-if (document.visibilityState === 'visible') {
-  if (turnTimer.isPaused) {
-    turnTimer.resumeTimer();
-  }
-}
-```
+---
 
 ## Files to Modify
 
 | File | Changes |
 |------|---------|
-| `src/pages/BackgammonGame.tsx` | Add prominent Bear Off button in desktop controls row, add timer resume on visibility |
-| `src/hooks/useTurnTimer.ts` | Add verbose state logging |
-| `src/hooks/useSolanaRooms.ts` | Add enrichment diagnostic logging |
+| `src/pages/BackgammonGame.tsx` | Fix bar color (desktop + mobile), move desktop bar to center |
+
+**Note:** No changes to `BackgammonAI.tsx` - it's single-player where you always play as gold
+
+---
 
 ## Why This Will Work
 
-1. **Bear Off Button:** Adding an explicit button in the controls row makes the action discoverable, matching the mobile experience where there's a full-width "Tap to Bear Off" button.
+1. **Color Fix**: Using `myRole === "player" ? "gold" : "obsidian"` ensures checkers display in the correct color based on which side the player is on
 
-2. **Timer Logging:** Will help diagnose WHY the timer isn't firing - whether it's `enabled=false`, `isMyTurn=false`, or `isPaused=true`.
+2. **Center Placement**: Moving the bar into the middle section keeps captured checkers visible and accessible without hiding the dice - they sit on either side of the dice
 
-3. **Turn Time Display:** The diagnostic logging will reveal if the room PDAs don't match between Solana and DB, allowing us to fix the enrichment logic.
+3. **Consistent UX**: Matches the mobile experience where the bar is in the center of the board
 
-## Technical Notes
+---
 
-- The Bear Off zone in `BackgammonGame.tsx` lines 2589-2618 IS present but is styled as a subtle info display, not a prominent action button
-- BackgammonAI uses the same subtle approach and it works because it's a smaller focused area
-- For multiplayer, users need a more obvious action button especially since checkers must be selected first
-- The timer mid-turn guard (dice rolled but moves remaining) is intentional and correct - don't want to forfeit mid-move
+## Visual Result
 
-## Testing After Fix
+```text
+┌───────────────────────────────────────────────────────┐
+│                    TOP POINTS 13-24                   │
+├───────────────────────────────────────────────────────┤
+│   [Opp Bar: ●●]     🎲 🎲     [Your Bar: ○○ TAP]     │  ← Center bar section
+├───────────────────────────────────────────────────────┤
+│                   BOTTOM POINTS 1-12                  │
+└───────────────────────────────────────────────────────┘
+```
 
-1. Create ranked room with 10s turn timer
-2. Join with second wallet
-3. Play a few turns - verify sync works
-4. Get all checkers to home board - verify Bear Off button appears prominently on desktop
-5. Let timer run out - verify timeout toast and turn passes to opponent
-6. Miss 3 turns - verify auto-forfeit triggers
+---
+
+## Testing Checklist
+
+After implementing:
+1. Create a ranked game and join with second wallet (you'll play as black)
+2. Hit an opponent's checker - verify it shows as GOLD on opponent's bar
+3. Let opponent hit your checker - verify it shows as BLACK on your bar  
+4. Verify bar is in center of desktop board, not blocking dice
+5. Click on your bar checkers to re-enter - verify the flow works
