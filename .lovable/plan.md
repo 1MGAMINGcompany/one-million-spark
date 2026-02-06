@@ -1,140 +1,131 @@
 
-# Unify All "Connect Wallet" Buttons to Use Same Handler
+# Private Rooms — Step 1 (UI Only)
 
-## Problem Summary
-Multiple "Connect Wallet" buttons exist across the app with different implementations:
-- **Working**: `WalletButton.tsx` (Navbar desktop + mobile dropdown)  
-- **Broken/Incomplete**: Uses `useWalletModal().setVisible(true)` which opens the native modal instead of the custom deep-link-aware dialog
+## Overview
+Add a third mode option "🟣 Private" to the CreateRoom page alongside the existing Casual and Ranked modes. This is a UI-only change — no backend modifications.
 
-When users click connect buttons outside the Navbar, they get the native wallet-adapter modal which doesn't handle iOS deep links or Android MWA properly.
+## File Changes
 
-## Solution
+### `src/pages/CreateRoom.tsx`
 
-### 1. Create Unified Hook: `src/hooks/useUnifiedWalletConnect.ts`
+**Change 1: Update state type (line 84)**
 
-A single hook that exposes:
-- `openWalletDialog()` - Opens the wallet chooser dialog
-- `dialogOpen` / `setDialogOpen` - Dialog state
-- All platform detection + handlers reused from WalletButton
-
-This hook will NOT duplicate the WalletButton logic—it will export a **ref callback** that WalletButton can use to expose its dialog opener.
-
-### 2. Create Wallet Connect Context: `src/contexts/WalletConnectContext.tsx`
-
-Since WalletButton manages its own dialog state, we need a context to share the "open dialog" function across the app:
+Expand the `gameMode` state to include "private":
 
 ```typescript
-// WalletConnectContext.tsx
-interface WalletConnectContextType {
-  openConnectDialog: () => void;
-}
+// Before:
+const [gameMode, setGameMode] = useState<'casual' | 'ranked'>('casual');
 
-const WalletConnectContext = createContext<WalletConnectContextType | null>(null);
-
-export function useConnectWallet() {
-  const ctx = useContext(WalletConnectContext);
-  if (!ctx) throw new Error("useConnectWallet must be used within WalletConnectProvider");
-  return ctx;
-}
-
-export function WalletConnectProvider({ children }) {
-  const [openFn, setOpenFn] = useState<(() => void) | null>(null);
-  
-  const registerOpenDialog = useCallback((fn: () => void) => {
-    setOpenFn(() => fn);
-  }, []);
-  
-  const openConnectDialog = useCallback(() => {
-    openFn?.();
-  }, [openFn]);
-  
-  return (
-    <WalletConnectContext.Provider value={{ openConnectDialog, registerOpenDialog }}>
-      {children}
-    </WalletConnectContext.Provider>
-  );
-}
+// After:
+const [gameMode, setGameMode] = useState<'casual' | 'ranked' | 'private'>('casual');
 ```
 
-### 3. Update WalletButton to Register Its Dialog Opener
+**Change 2: Update mode toggle grid (lines 637-675)**
+
+Change from 2-column to 3-column grid and add Private button:
 
 ```typescript
-// In WalletButton.tsx
-const { registerOpenDialog } = useConnectWallet();
+// Before:
+<div className="grid grid-cols-2 gap-2">
 
-useEffect(() => {
-  registerOpenDialog(() => setDialogOpen(true));
-}, [registerOpenDialog]);
+// After:
+<div className="grid grid-cols-3 gap-2">
 ```
 
-### 4. Replace All Other Connect Handlers
+Add new Private button after the Ranked button:
 
-| File | Line(s) | Current | Replace With |
-|------|---------|---------|--------------|
-| `WalletGateModal.tsx` | 30-33 | `setVisible(true)` | `openConnectDialog()` |
-| `AddFunds.tsx` | 151 | `setVisible(true)` | `openConnectDialog()` |
-| `ConnectWalletGate.tsx` | 165 | Opens own dialog | Use `openConnectDialog()` |
-| `Room.tsx` | 1169 | Opens WalletGateModal | Use `openConnectDialog()` directly |
-| `ChessGame.tsx` | 1097-1101 | Text only | Add button with `openConnectDialog()` |
-| `CheckersGame.tsx` | 1214-1218 | Text only | Add button with `openConnectDialog()` |
-| `DominosGame.tsx` | 1309-1313 | Text only | Add button with `openConnectDialog()` |
-| `LudoGame.tsx` | 984-988 | Text only | Add button with `openConnectDialog()` |
-| `BackgammonGame.tsx` | 1923-1927 | Text only | Add button with `openConnectDialog()` |
-| `MultiplayerGamePlaceholder.tsx` | 105-109 | Text only | Add button with `openConnectDialog()` |
-| `WalletRequired.tsx` | 17-21 | Text only | Add button with `openConnectDialog()` |
+```typescript
+<Button
+  type="button"
+  variant={gameMode === 'private' ? 'default' : 'outline'}
+  size="sm"
+  className={`h-10 ${gameMode === 'private' ? 'bg-violet-600 hover:bg-violet-700' : ''}`}
+  onClick={() => {
+    setGameMode('private');
+    // Private rooms use custom stakes (allow any amount including 0)
+    if (!isRematch) setEntryFee("0");
+  }}
+>
+  <span className="mr-1.5">🟣</span> {t("createRoom.gameModePrivate", "Private")}
+  <span className="ml-1 opacity-70 text-xs">🔗</span>
+</Button>
+```
 
-### 5. Add Provider to App.tsx
+**Change 3: Update helper text for all modes (lines 670-674)**
 
-Wrap app with `<WalletConnectProvider>` inside the existing SolanaProvider.
+Add private mode description:
 
-## File Changes Summary
+```typescript
+// Before:
+<p className="text-xs text-muted-foreground">
+  {gameMode === 'ranked' 
+    ? t("createRoom.rankedDesc")
+    : t("createRoom.casualDesc")}
+</p>
 
-| File | Change Type |
-|------|-------------|
-| `src/contexts/WalletConnectContext.tsx` | **NEW** - Context + hook |
-| `src/components/WalletButton.tsx` | Register dialog opener |
-| `src/App.tsx` | Add WalletConnectProvider |
-| `src/components/WalletGateModal.tsx` | Use `openConnectDialog()` |
-| `src/pages/AddFunds.tsx` | Use `openConnectDialog()` |
-| `src/components/ConnectWalletGate.tsx` | Simplify to use `openConnectDialog()` |
-| `src/pages/Room.tsx` | Use `openConnectDialog()` directly |
-| `src/pages/ChessGame.tsx` | Add connect button |
-| `src/pages/CheckersGame.tsx` | Add connect button |
-| `src/pages/DominosGame.tsx` | Add connect button |
-| `src/pages/LudoGame.tsx` | Add connect button |
-| `src/pages/BackgammonGame.tsx` | Add connect button |
-| `src/components/MultiplayerGamePlaceholder.tsx` | Add connect button |
-| `src/components/WalletRequired.tsx` | Add connect button |
+// After:
+<p className="text-xs text-muted-foreground">
+  {gameMode === 'private' 
+    ? t("createRoom.privateDesc", "Private rooms don't appear in public list. Share an invite link to let friends join.")
+    : gameMode === 'ranked' 
+      ? t("createRoom.rankedDesc")
+      : t("createRoom.casualDesc")}
+</p>
+```
+
+**Change 4: Update entry fee styling and validation (lines 589-609)**
+
+Private mode should use casual-style stake input (optional, any amount):
+
+```typescript
+// Entry fee input className - add private to casual styling
+className={`h-9 ${isRematch ? 'border-primary/50' : ''} ${
+  gameMode === 'casual' || gameMode === 'private'
+    ? 'border-muted/50 bg-muted/20 text-muted-foreground focus:border-muted' 
+    : 'border-primary/50 bg-primary/5 text-foreground focus:border-primary'
+}`}
+
+// Entry fee helper text - add private mode
+<p className={`text-xs ${gameMode === 'casual' || gameMode === 'private' ? 'text-muted-foreground' : 'text-primary/80'}`}>
+  {gameMode === 'casual' || gameMode === 'private'
+    ? t("createRoom.stakeOptional")
+    : `${t("createRoom.stakeMinRequired")} (${dynamicMinFee.toFixed(4)} SOL ≈ $${MIN_FEE_USD.toFixed(2)})`
+  }
+</p>
+```
+
+**Change 5: Update minimum fee validation (line 265)**
+
+Skip minimum fee enforcement for private mode (same as casual):
+
+```typescript
+// Before:
+if (gameMode === 'ranked' && entryFeeNum < dynamicMinFee) {
+
+// After:  
+if (gameMode === 'ranked' && entryFeeNum < dynamicMinFee) {
+  // (no change - private mode already bypasses this since it's not 'ranked')
+```
+
+No change needed here — the existing condition already only enforces minimum for ranked.
+
+## Visual Result
+
+| Mode | Color | Emoji | Description |
+|------|-------|-------|-------------|
+| Casual | Green | 🟢 | Practice mode, optional stakes |
+| Ranked | Red | 🔴 | Competitive, requires min stake |
+| **Private** | **Violet** | **🟣** | **Invite-only, hidden from list** |
 
 ## What's NOT Changing
 
-- WalletButton.tsx dialog UI/logic - stays exactly the same
-- Navbar placement - stays exactly the same
-- No new modals - reuses existing WalletButton dialog
-- Mobile deep link logic - already works, just centralizing access
+- Backend logic (edge functions, database)
+- Stake logic (private uses same rules as casual)
+- Turn time options (unchanged)
+- Game type selection (unchanged)
+- Any room creation flow
 
-## Verification
+## Translation Keys Used
 
-After implementation, searching for these patterns should show unified usage:
-- `useWalletModal` - Should only remain in WalletButton.tsx (if needed at all)
-- `setVisible(true)` - Should be removed entirely
-- `openConnectDialog` - Should appear in all connect buttons
-
-## Technical Details
-
-```text
-┌─────────────────────────────────────────────────────────────────┐
-│                         App.tsx                                  │
-│  ┌──────────────────────────────────────────────────────────┐   │
-│  │              WalletConnectProvider                        │   │
-│  │  ┌────────────────────────────────────────────────────┐  │   │
-│  │  │  Navbar                                            │  │   │
-│  │  │   └─ WalletButton (registers openDialog)           │  │   │
-│  │  └────────────────────────────────────────────────────┘  │   │
-│  │  ┌────────────────────────────────────────────────────┐  │   │
-│  │  │  Any Page/Component                                │  │   │
-│  │  │   └─ useConnectWallet().openConnectDialog()        │  │   │
-│  │  └────────────────────────────────────────────────────┘  │   │
-│  └──────────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────┘
-```
+- `createRoom.gameModePrivate` — "Private" (with fallback)
+- `createRoom.privateDesc` — Helper text (with fallback)
