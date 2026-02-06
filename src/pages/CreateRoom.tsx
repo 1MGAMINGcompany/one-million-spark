@@ -61,7 +61,7 @@ export default function CreateRoom() {
   const [searchParams] = useSearchParams();
   const { t } = useTranslation();
   const { isConnected, address } = useWallet();
-  const { signMessage } = useWalletAdapter(); // For signing settings message
+  // signMessage no longer needed - settings saved without signature
   const { toast } = useToast();
   const { play } = useSound();
   const { price, formatUsd, loading: priceLoading, refetch: refetchPrice } = useSolPrice();
@@ -313,35 +313,9 @@ export default function CreateRoom() {
         // With signature verification for production security
         const authoritativeTurnTime = gameMode === 'ranked' ? turnTimeSeconds : 0;
         
+        // Persist settings authoritatively in game_sessions via Edge Function
+        // No signature needed - on-chain stake transaction already proves ownership
         try {
-          const timestamp = Date.now();
-
-          // IMPORTANT: Must match edge function message format exactly (newline-separated)
-          const message =
-            `1MGAMING:SET_SETTINGS\n` +
-            `roomPda=${roomPdaStr}\n` +
-            `turnTimeSeconds=${authoritativeTurnTime}\n` +
-            `mode=${gameMode}\n` +
-            `ts=${timestamp}`;
-
-          // Convert Uint8Array -> base64
-          const toBase64 = (bytes: Uint8Array) =>
-            btoa(String.fromCharCode(...Array.from(bytes)));
-
-          let signature: string | undefined;
-
-          if (!signMessage) {
-            toast({
-              title: "Settings Error",
-              description: "Wallet does not support message signing. Turn timer may default to 60s.",
-              variant: "destructive",
-            });
-          } else {
-            const msgBytes = new TextEncoder().encode(message);
-            const sigBytes = await signMessage(msgBytes);
-            signature = toBase64(sigBytes);
-          }
-
           const { data, error: settingsErr } = await supabase.functions.invoke(
             "game-session-set-settings",
             {
@@ -350,9 +324,6 @@ export default function CreateRoom() {
                 turnTimeSeconds: authoritativeTurnTime,
                 mode: gameMode,
                 creatorWallet: address,
-                timestamp,
-                signature,
-                message, // optional debugging field
               },
             }
           );

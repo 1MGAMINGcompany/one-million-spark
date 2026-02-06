@@ -744,7 +744,7 @@ export function useSolanaRooms() {
           );
           const rulesHash = await computeRulesHash(rules);
           
-          const { error: rpcError } = await supabase.rpc("record_acceptance", {
+          const { data: acceptResult, error: rpcError } = await supabase.rpc("record_acceptance", {
             p_room_pda: joinedRoom.pda,
             p_wallet: publicKey.toBase58(),
             p_tx_signature: signature,
@@ -754,17 +754,49 @@ export function useSolanaRooms() {
           });
           
           if (rpcError) {
-            // FAIL-OPEN: Log error but don't block join - game proceeds regardless
-            console.warn("[JoinRoom] record_acceptance failed (non-blocking):", rpcError.message);
+            // FAIL-CLOSED: Retry once before surfacing error
+            console.error("[JoinRoom] record_acceptance failed, retrying once...", rpcError.message);
+            
+            const { data: retryResult, error: retryError } = await supabase.rpc("record_acceptance", {
+              p_room_pda: joinedRoom.pda,
+              p_wallet: publicKey.toBase58(),
+              p_tx_signature: signature,
+              p_rules_hash: rulesHash,
+              p_stake_lamports: stakeLamports,
+              p_is_creator: false,
+            });
+            
+            if (retryError) {
+              console.error("[JoinRoom] record_acceptance retry also failed:", retryError.message);
+              toast({
+                title: "Sync Warning",
+                description: "Game acceptance may be delayed. If stuck, refresh the page.",
+                variant: "destructive",
+              });
+            } else {
+              console.log("[JoinRoom] ✅ Recorded acceptance on retry:", mode);
+              // Store session token if returned
+              const sessionToken = (retryResult as { session_token?: string })?.session_token;
+              if (sessionToken) {
+                localStorage.setItem(`session_token_${joinedRoom.pda}`, sessionToken);
+                console.log("[JoinRoom] ✅ Session token stored (retry):", sessionToken.slice(0, 8));
+              }
+            }
           } else {
             console.log("[JoinRoom] ✅ Recorded acceptance with tx signature and mode:", mode);
+            // Store session token if returned
+            const sessionToken = (acceptResult as { session_token?: string })?.session_token;
+            if (sessionToken) {
+              localStorage.setItem(`session_token_${joinedRoom.pda}`, sessionToken);
+              console.log("[JoinRoom] ✅ Session token stored:", sessionToken.slice(0, 8));
+            }
           }
         }
       } catch (acceptErr: any) {
         console.error("[JoinRoom] Failed to record acceptance:", acceptErr);
         toast({
-          title: "Acceptance Error",
-          description: acceptErr?.message || "Could not record game acceptance",
+          title: "Sync Warning",
+          description: "Game acceptance may be delayed. If stuck, refresh the page.",
           variant: "destructive",
         });
       }
