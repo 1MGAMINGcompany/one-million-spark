@@ -4,7 +4,7 @@ import { clearRoom } from "@/lib/missedTurns"; // Only clearRoom needed - strike
 import { GameErrorBoundary } from "@/components/GameErrorBoundary";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Gem, Star, Flag, Users, Wifi, WifiOff, Crown, RotateCcw, LogOut, Loader2 } from "lucide-react";
+import { ArrowLeft, Gem, Star, Flag, Users, Wifi, WifiOff, Crown, RotateCcw, LogOut, Loader2, Wallet } from "lucide-react";
 import { ForfeitConfirmDialog } from "@/components/ForfeitConfirmDialog";
 import { LeaveMatchModal, MatchState } from "@/components/LeaveMatchModal";
 import { useForfeit } from "@/hooks/useForfeit";
@@ -12,6 +12,7 @@ import { useSolanaRooms } from "@/hooks/useSolanaRooms";
 import { useSound } from "@/contexts/SoundContext";
 import { useTranslation } from "react-i18next";
 import { useWallet } from "@/hooks/useWallet";
+import { useConnectWallet } from "@/contexts/WalletConnectContext";
 import { useWebRTCSync, GameMessage } from "@/hooks/useWebRTCSync";
 import { useTurnNotifications, TurnPlayer } from "@/hooks/useTurnNotifications";
 import { useGameChat, ChatPlayer, ChatMessage } from "@/hooks/useGameChat";
@@ -1204,6 +1205,9 @@ const CheckersGame = () => {
     ));
   };
 
+  // Get connect dialog function
+  const { openConnectDialog } = useConnectWallet();
+
   // Require wallet connection
   if (!walletConnected || !address) {
     return (
@@ -1214,7 +1218,11 @@ const CheckersGame = () => {
         <div className="text-center py-12">
           <Users className="h-16 w-16 text-primary mx-auto mb-4" />
           <h3 className="text-xl font-semibold mb-2">{t("gameMultiplayer.connectWalletToPlay")}</h3>
-          <p className="text-muted-foreground">{t("gameMultiplayer.connectWalletDesc")}</p>
+          <p className="text-muted-foreground mb-4">{t("gameMultiplayer.connectWalletDesc")}</p>
+          <Button onClick={openConnectDialog}>
+            <Wallet className="mr-2 h-4 w-4" />
+            Connect Wallet
+          </Button>
         </div>
       </div>
     );

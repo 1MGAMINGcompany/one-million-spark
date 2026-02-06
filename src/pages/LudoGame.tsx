@@ -5,7 +5,7 @@ import { GameErrorBoundary } from "@/components/GameErrorBoundary";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, RotateCcw, Music, Music2, Volume2, VolumeX, Users, Wifi, WifiOff, RefreshCw, LogOut } from "lucide-react";
+import { ArrowLeft, RotateCcw, Music, Music2, Volume2, VolumeX, Users, Wifi, WifiOff, RefreshCw, LogOut, Wallet } from "lucide-react";
 import { ForfeitConfirmDialog } from "@/components/ForfeitConfirmDialog";
 import { LeaveMatchModal, MatchState } from "@/components/LeaveMatchModal";
 import { useForfeit } from "@/hooks/useForfeit";
@@ -14,6 +14,7 @@ import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useSound } from "@/contexts/SoundContext";
 import { useWallet } from "@/hooks/useWallet";
+import { useConnectWallet } from "@/contexts/WalletConnectContext";
 import { useWebRTCSync, GameMessage } from "@/hooks/useWebRTCSync";
 import { useGameSessionPersistence } from "@/hooks/useGameSessionPersistence";
 import { useRoomMode } from "@/hooks/useRoomMode";
@@ -974,6 +975,9 @@ const LudoGame = () => {
     };
   }, [currentPlayerIndex, myPlayerIndex, currentPlayer?.color, gameOver, diceValue, isRolling, isAnimating, players, rollDice, executeMove, advanceTurn, setDiceValue, setMovableTokens, turnSignal, recordPlayerMove, roomPlayers]);
 
+  // Get connect dialog function
+  const { openConnectDialog } = useConnectWallet();
+
   // Require wallet connection
   if (!walletConnected || !address) {
     return (
@@ -984,7 +988,11 @@ const LudoGame = () => {
         <div className="text-center py-12">
           <Users className="h-16 w-16 text-primary mx-auto mb-4" />
           <h3 className="text-xl font-semibold mb-2">Connect Wallet to Play</h3>
-          <p className="text-muted-foreground">Please connect your wallet to join this game.</p>
+          <p className="text-muted-foreground mb-4">Please connect your wallet to join this game.</p>
+          <Button onClick={openConnectDialog}>
+            <Wallet className="mr-2 h-4 w-4" />
+            Connect Wallet
+          </Button>
         </div>
       </div>
     );
