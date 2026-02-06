@@ -339,27 +339,41 @@ export function useSolanaRooms() {
          
          if (edgeError) {
            console.warn("[RoomList] Edge function error:", edgeError.message);
-         } else if (resp?.rows && resp.rows.length > 0) {
-           const sessions = resp.rows as Array<{ room_pda: string; turn_time_seconds: number | null; mode: string | null }>;
-           console.log("[RoomList] Edge function returned", sessions.length, "sessions");
-           
-           const turnTimeMap = new Map<string, number>();
-           for (const s of sessions) {
-             if (s.turn_time_seconds != null && s.turn_time_seconds > 0) {
-               turnTimeMap.set(s.room_pda, s.turn_time_seconds);
-             }
-           }
-           
-           let enrichedCount = 0;
-           for (const room of fetchedRooms) {
-             const dbTurnTime = turnTimeMap.get(room.pda);
-             if (dbTurnTime !== undefined) {
-               room.turnTimeSec = dbTurnTime;
-               enrichedCount++;
-             }
-           }
-           console.log("[RoomList] Enriched", enrichedCount, "of", fetchedRooms.length, "rooms with turn time");
-         } else {
+          } else if (resp?.rows && resp.rows.length > 0) {
+            const sessions = resp.rows as Array<{ room_pda: string; turn_time_seconds: number | null; mode: string | null }>;
+            console.log("[RoomList] Edge function returned", sessions.length, "sessions");
+            
+            const turnTimeMap = new Map<string, number>();
+            const privateRoomPdas = new Set<string>();
+            
+            for (const s of sessions) {
+              if (s.turn_time_seconds != null && s.turn_time_seconds > 0) {
+                turnTimeMap.set(s.room_pda, s.turn_time_seconds);
+              }
+              // Track private rooms for filtering (edge function already excludes them, but double-check)
+              if (s.mode === 'private') {
+                privateRoomPdas.add(s.room_pda);
+              }
+            }
+            
+            // Filter out any private rooms that might have slipped through
+            const publicRooms = fetchedRooms.filter(room => !privateRoomPdas.has(room.pda));
+            if (publicRooms.length < fetchedRooms.length) {
+              console.log("[RoomList] Filtered out", fetchedRooms.length - publicRooms.length, "private rooms");
+              fetchedRooms.length = 0;
+              fetchedRooms.push(...publicRooms);
+            }
+            
+            let enrichedCount = 0;
+            for (const room of fetchedRooms) {
+              const dbTurnTime = turnTimeMap.get(room.pda);
+              if (dbTurnTime !== undefined) {
+                room.turnTimeSec = dbTurnTime;
+                enrichedCount++;
+              }
+            }
+            console.log("[RoomList] Enriched", enrichedCount, "of", fetchedRooms.length, "rooms with turn time");
+          } else {
            console.log("[RoomList] No sessions from edge function");
          }
        } catch (enrichErr) {
