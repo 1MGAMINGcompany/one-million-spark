@@ -329,7 +329,7 @@ export function useSolanaRooms() {
      // Enrich rooms with turn time from database (not stored on-chain)
      if (fetchedRooms.length > 0) {
        const roomPdas = fetchedRooms.map(r => r.pda);
-       console.log("[RoomList] Fetching turn times for", roomPdas.length, "rooms from database");
+       console.log("[RoomList] Enriching", roomPdas.length, "rooms. PDAs:", roomPdas.map(p => p.slice(0, 12)));
        
        const { data: sessions, error: sessionsError } = await supabase
          .from("game_sessions")
@@ -339,27 +339,26 @@ export function useSolanaRooms() {
        if (sessionsError) {
          console.warn("[RoomList] Failed to fetch sessions:", sessionsError.message);
        } else if (sessions && sessions.length > 0) {
-         console.log("[RoomList] Database returned", sessions.length, "sessions:", 
-           sessions.map(s => ({ pda: s.room_pda.slice(0, 8), turnTime: s.turn_time_seconds, mode: s.mode }))
-         );
+         console.log("[RoomList] DB returned", sessions.length, "sessions");
          
          const turnTimeMap = new Map<string, number>();
          for (const s of sessions) {
-           if (s.turn_time_seconds != null) {
+           if (s.turn_time_seconds != null && s.turn_time_seconds > 0) {
              turnTimeMap.set(s.room_pda, s.turn_time_seconds);
            }
          }
          
+         let enrichedCount = 0;
          for (const room of fetchedRooms) {
            const dbTurnTime = turnTimeMap.get(room.pda);
-           if (dbTurnTime !== undefined && dbTurnTime > 0) {
+           if (dbTurnTime !== undefined) {
              room.turnTimeSec = dbTurnTime;
-             console.log("[RoomList] Room", room.pda.slice(0, 8), "enriched with turnTime:", dbTurnTime);
+             enrichedCount++;
            }
          }
-         console.log("[RoomList] Enriched", turnTimeMap.size, "rooms with turn times");
+         console.log("[RoomList] Enriched", enrichedCount, "of", fetchedRooms.length, "rooms with turn times");
        } else {
-         console.log("[RoomList] No sessions found in database for these room PDAs");
+         console.log("[RoomList] No matching sessions in DB for room PDAs:", roomPdas.map(p => p.slice(0, 12)));
        }
      }
      
