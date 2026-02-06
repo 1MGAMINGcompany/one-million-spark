@@ -857,7 +857,8 @@ const BackgammonGame = () => {
             to: freshTurnWallet.slice(0, 8),
           });
           
-          // Check if turn changed TO ME - need to update game state
+          // Compute turn direction to decide whether to clear per-turn state
+          const wasMyTurn = currentTurnWallet && isSameWallet(currentTurnWallet, address);
           const isNowMyTurn = isSameWallet(freshTurnWallet, address);
           
           if (isNowMyTurn) {
@@ -883,23 +884,26 @@ const BackgammonGame = () => {
             }
           }
           
+          // Always update turn wallet and reset timer on any turn change
           setCurrentTurnWallet(freshTurnWallet);
-          // Reset timeout debounce since turn actually changed
           timeoutFiredRef.current = false;
-          
-          // FIX: Explicitly reset the turn timer when polling detects turn change
           turnTimer.resetTimer();
           
-          // Clear stale dice/moves to ensure clean turn start
-          setDice([]);
-          setRemainingMoves([]);
-          setSelectedPoint(null);
-          setValidMoves([]);
+          // FIX: Only clear per-turn state when turn LEAVES me (I ended my turn)
+          // Don't clear when turn ARRIVES to me (opponent ended their turn)
+          if (wasMyTurn && !isNowMyTurn) {
+            setDice([]);
+            setRemainingMoves([]);
+            setSelectedPoint(null);
+            setValidMoves([]);
+          }
           
-          // Update game status
-          const turnToMe = isSameWallet(freshTurnWallet, address);
-          if (turnToMe) {
-            setGameStatus("Your turn - Roll the dice!");
+          // Update game status appropriately
+          if (isNowMyTurn) {
+            // Only prompt to roll if we don't already have dice
+            if (dice.length === 0) {
+              setGameStatus("Your turn - Roll the dice!");
+            }
           } else {
             setGameStatus("Opponent's turn");
           }
@@ -937,14 +941,28 @@ const BackgammonGame = () => {
           const dbTurnWallet = data?.session?.current_turn_wallet;
           if (dbTurnWallet && dbTurnWallet !== currentTurnWallet) {
             console.log("[BackgammonGame] Visibility poll detected turn change");
-            setCurrentTurnWallet(dbTurnWallet);
-            setDice([]);
-            setRemainingMoves([]);
-            setSelectedPoint(null);
-            setValidMoves([]);
+            
+            // Compute turn direction
+            const wasMyTurn = currentTurnWallet && isSameWallet(currentTurnWallet, address);
             const isNowMyTurn = isSameWallet(dbTurnWallet, address);
-            setGameStatus(isNowMyTurn ? "Your turn - Roll the dice!" : "Opponent's turn");
+            
+            setCurrentTurnWallet(dbTurnWallet);
             timeoutFiredRef.current = false;
+            
+            // FIX: Only clear dice when turn LEAVES me
+            if (wasMyTurn && !isNowMyTurn) {
+              setDice([]);
+              setRemainingMoves([]);
+              setSelectedPoint(null);
+              setValidMoves([]);
+            }
+            
+            // Only show roll prompt if no dice exist
+            if (isNowMyTurn && dice.length === 0) {
+              setGameStatus("Your turn - Roll the dice!");
+            } else if (!isNowMyTurn) {
+              setGameStatus("Opponent's turn");
+            }
           }
         }).catch(err => {
           console.warn("[BackgammonGame] Visibility poll error:", err);
