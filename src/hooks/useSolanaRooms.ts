@@ -336,30 +336,38 @@ export function useSolanaRooms() {
          .select("room_pda, turn_time_seconds, mode")
          .in("room_pda", roomPdas);
        
-       if (sessionsError) {
-         console.warn("[RoomList] Failed to fetch sessions:", sessionsError.message);
-       } else if (sessions && sessions.length > 0) {
-         console.log("[RoomList] DB returned", sessions.length, "sessions");
-         
-         const turnTimeMap = new Map<string, number>();
-         for (const s of sessions) {
-           if (s.turn_time_seconds != null && s.turn_time_seconds > 0) {
-             turnTimeMap.set(s.room_pda, s.turn_time_seconds);
-           }
-         }
-         
-         let enrichedCount = 0;
-         for (const room of fetchedRooms) {
-           const dbTurnTime = turnTimeMap.get(room.pda);
-           if (dbTurnTime !== undefined) {
-             room.turnTimeSec = dbTurnTime;
-             enrichedCount++;
-           }
-         }
-         console.log("[RoomList] Enriched", enrichedCount, "of", fetchedRooms.length, "rooms with turn times");
-       } else {
-         console.log("[RoomList] No matching sessions in DB for room PDAs:", roomPdas.map(p => p.slice(0, 12)));
-       }
+        if (sessionsError) {
+          console.warn("[RoomList] Failed to fetch sessions:", sessionsError.message);
+        } else if (sessions && sessions.length > 0) {
+          console.log("[RoomList] DB returned", sessions.length, "sessions. DB PDAs:", sessions.map(s => s.room_pda.slice(0, 12)));
+          
+          const turnTimeMap = new Map<string, number>();
+          for (const s of sessions) {
+            if (s.turn_time_seconds != null && s.turn_time_seconds > 0) {
+              turnTimeMap.set(s.room_pda, s.turn_time_seconds);
+              console.log("[RoomList] Mapped turn time:", s.room_pda.slice(0, 12), "->", s.turn_time_seconds, "s");
+            }
+          }
+          
+          let enrichedCount = 0;
+          for (const room of fetchedRooms) {
+            const dbTurnTime = turnTimeMap.get(room.pda);
+            console.log("[RoomList] Checking room:", room.pda.slice(0, 12), "dbTurnTime:", dbTurnTime);
+            if (dbTurnTime !== undefined) {
+              room.turnTimeSec = dbTurnTime;
+              enrichedCount++;
+            }
+          }
+          console.log("[RoomList] Enrichment summary:", {
+            solanaRoomCount: fetchedRooms.length,
+            dbSessionCount: sessions.length,
+            enrichedCount,
+            solanaPdas: roomPdas.map(p => p.slice(0, 12)),
+            dbPdas: sessions.map(s => s.room_pda.slice(0, 12)),
+          });
+        } else {
+          console.log("[RoomList] No matching sessions in DB. Solana PDAs:", roomPdas.map(p => p.slice(0, 12)));
+        }
      }
      
       setRooms(fetchedRooms);

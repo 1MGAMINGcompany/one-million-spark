@@ -44,6 +44,11 @@ export function useTurnTimer(options: UseTurnTimerOptions): UseTurnTimerResult {
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const hasExpiredRef = useRef(false);
 
+  // Verbose state logging for debugging timer issues
+  useEffect(() => {
+    console.log(`[useTurnTimer] State: enabled=${enabled}, isMyTurn=${isMyTurn}, isPaused=${isPaused}, remaining=${remainingTime}s, roomId=${roomId?.slice(0, 8) || "none"}`);
+  }, [enabled, isMyTurn, isPaused, remainingTime, roomId]);
+
   // Clear interval helper
   const clearTimerInterval = useCallback(() => {
     if (intervalRef.current) {
