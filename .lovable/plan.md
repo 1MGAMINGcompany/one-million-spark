@@ -1,170 +1,168 @@
 
+# Comprehensive Fix: Game Sync Flow
 
-# Fix Plan: Game Sync Flow + Turn Timer Display
+## Current Status: Why It's Broken
 
-## Problem Summary
+The game flow is broken due to a **missing trigger mechanism**. Here's the chain of failure:
 
-There are three interconnected issues preventing games from starting:
-
-### Issue 1: Joiner's Acceptance Not Recorded
-When a player joins a room, their acceptance entry isn't being created in `game_acceptances`. The database shows:
-- `participants`: 2 wallets (from on-chain sync)
-- `game_acceptances`: Only 1 entry (creator)
-- `p2_ready`: false despite the joiner having staked on-chain
-
-The `maybe_finalize_start_state` function requires BOTH counts to be >= 2, so the game never starts.
-
-### Issue 2: RulesGate Returns Null But Game Board Not Rendered
-After removing the dice roll ceremony, `RulesGate` returns `null` when `effectiveBothReady` is true. However, the game pages still wrap `DiceRollStart` in `RulesGate`, and render the actual game board AFTER the gate based on `startRoll.isFinalized`. This creates a gap where:
-- RulesGate returns null (no children)
-- Game board doesn't render (waiting for `startRoll.isFinalized`)
-- Result: blank screen
-
-### Issue 3: Turn Timer Display
-The turn timer IS displayed in the room list (line 466-470), but rooms may show "—" if the database session doesn't exist yet or `turn_time_seconds` is null.
+```text
+1. Creator creates room → record_acceptance called → sets p1_ready=true ✓
+2. Joiner joins room → record_acceptance called → sets p2_ready=true ✓
+3. BUT: maybe_finalize_start_state is NEVER called
+4. AND: participants array is NEVER populated
+5. RESULT: start_roll_finalized stays false forever
+6. RESULT: Game board never renders, stuck on "Waiting for opponent"
+```
 
 ## Root Causes
 
-### Cause A: fetchUserActiveRoom() Race Condition
-In the join flow (useSolanaRooms.ts line 723), the code calls `fetchUserActiveRoom()` to get the room PDA for recording acceptance. However, this function fetches from on-chain data which may not be updated yet immediately after the transaction confirms.
+### Cause 1: `participants` Array Never Populated
+The `record_acceptance` function updates `p1_ready`/`p2_ready` flags and `player1_wallet`/`player2_wallet`, but does NOT update the `participants` array. The migration we created expects this array to be filled.
 
-The fix from earlier added a retry, but the underlying issue is that `fetchUserActiveRoom()` may return the wrong room or null.
+### Cause 2: `maybe_finalize_start_state` Never Called
+There's no trigger, no direct call from `record_acceptance`, and no other mechanism that invokes this function after both players are ready.
 
-### Cause B: Game Start Logic Mismatch
-The memory says "creator-first-no-dice" but `maybe_finalize_start_state` requires:
-1. `game_acceptances` count >= `max_players`
-2. `participants` count >= `max_players`
+### Cause 3: Logic Gap in Recent Migration
+The new `maybe_finalize_start_state` function checks `participants` array first, but since nothing populates it, the condition `v_participants_count < v_required_count` is always true, so it returns early.
 
-When joiner's acceptance fails, condition 1 fails, so the game never auto-starts.
+## Solution: Fix `record_acceptance` to Auto-Start Game
 
-### Cause C: RulesGate/Game Page Rendering Gap
-The current flow:
-1. RulesGate checks `effectiveBothReady`
-2. If true, returns `null` (per previous edit)
-3. Game page checks `startRoll.isFinalized` to render game board
-4. But `startRoll.isFinalized` depends on DB having `start_roll_finalized=true`
-5. That flag is set by `maybe_finalize_start_state` which never runs because acceptance failed
+The cleanest fix is to make `record_acceptance` do TWO things when the joiner (non-creator) records acceptance:
 
-## Solution
+1. **Populate `participants` array** from `player1_wallet` and `player2_wallet`
+2. **Call `maybe_finalize_start_state`** directly to auto-start the game
 
-### Fix 1: Use Room PDA from Join Transaction Directly
-Instead of calling `fetchUserActiveRoom()` after join, we already know the roomPda from the join function parameters. Pass it through directly to avoid race conditions.
+This creates a clean trigger chain:
+```text
+Joiner records acceptance → participants populated → maybe_finalize called → game starts
+```
 
-### Fix 2: Fallback Auto-Start Based on Participants Only
-Update `maybe_finalize_start_state` to use `participants` array as the primary signal since it's synced from authoritative on-chain data. If `participants.length >= required_count`, auto-start regardless of `game_acceptances` count.
+## Implementation Details
 
-### Fix 3: RulesGate Should Show Game When Both Ready
-Instead of returning `null`, RulesGate should signal that the gate is passed. The game pages should then render the game board directly. We need to add a "gatePassed" signal or restructure the rendering.
+### Database Migration: Update `record_acceptance` Function
 
-### Fix 4: Ensure Turn Time is Saved During Room Creation
-The turn time is already being saved via `game-session-set-settings`. The issue may be timing - the session row might not exist when settings are saved.
+```sql
+CREATE OR REPLACE FUNCTION public.record_acceptance(
+  p_room_pda text,
+  p_wallet text,
+  p_tx_signature text,
+  p_rules_hash text,
+  p_stake_lamports bigint,
+  p_is_creator boolean DEFAULT false
+) RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_session_token TEXT;
+  v_expires_at TIMESTAMPTZ;
+  v_nonce TEXT;
+  v_session RECORD;
+BEGIN
+  v_session_token := encode(extensions.gen_random_bytes(32), 'hex');
+  v_expires_at := NOW() + INTERVAL '4 hours';
+  v_nonce := encode(extensions.gen_random_bytes(16), 'hex');
+  
+  -- Update game_sessions ready flags
+  IF p_is_creator THEN
+    UPDATE game_sessions
+    SET p1_acceptance_tx = p_tx_signature,
+        p1_ready = TRUE,
+        updated_at = NOW()
+    WHERE room_pda = p_room_pda;
+  ELSE
+    -- Joiner: set p2_ready AND populate participants array
+    UPDATE game_sessions
+    SET p2_acceptance_tx = p_tx_signature,
+        p2_ready = TRUE,
+        player2_wallet = p_wallet,
+        -- CRITICAL: Populate participants array for maybe_finalize_start_state
+        participants = ARRAY[player1_wallet, p_wallet],
+        updated_at = NOW()
+    WHERE room_pda = p_room_pda
+    RETURNING * INTO v_session;
+    
+    -- If both players now ready, auto-start the game
+    IF v_session.p1_ready AND v_session.p2_ready THEN
+      PERFORM maybe_finalize_start_state(p_room_pda);
+    END IF;
+  END IF;
+  
+  -- Insert into game_acceptances table
+  INSERT INTO game_acceptances (
+    room_pda, player_wallet, rules_hash, signature, session_token, nonce,
+    timestamp_ms, session_expires_at
+  ) VALUES (
+    p_room_pda, p_wallet, p_rules_hash, p_tx_signature, v_session_token, v_nonce,
+    EXTRACT(EPOCH FROM NOW())::bigint * 1000, v_expires_at
+  )
+  ON CONFLICT (room_pda, player_wallet) DO UPDATE SET
+    signature = EXCLUDED.signature,
+    session_token = EXCLUDED.session_token,
+    session_expires_at = EXCLUDED.session_expires_at,
+    created_at = NOW();
+  
+  -- Update player_sessions
+  INSERT INTO player_sessions (room_pda, wallet, session_token, rules_hash, last_turn, last_hash)
+  VALUES (p_room_pda, p_wallet, v_session_token, p_rules_hash, 0, NULL)
+  ON CONFLICT (room_pda, wallet) 
+  DO UPDATE SET 
+    session_token = v_session_token,
+    rules_hash = p_rules_hash,
+    revoked = FALSE,
+    last_move_at = NOW();
+  
+  RETURN jsonb_build_object(
+    'session_token', v_session_token,
+    'expires_at', v_expires_at
+  );
+END;
+$$;
+```
+
+Key changes:
+1. When joiner calls `record_acceptance`, also set `participants = ARRAY[player1_wallet, p_wallet]`
+2. After updating, check if `p1_ready AND p2_ready`, if so call `maybe_finalize_start_state`
+3. This creates the missing trigger that starts the game
+
+### Frontend: No Changes Needed
+The existing `RulesGate` and game page logic already correctly handles `start_roll_finalized`. Once the database properly sets this flag, the UI will automatically transition to the game board.
+
+## Why This Will Work
+
+| Step | Before Fix | After Fix |
+|------|------------|-----------|
+| Creator creates room | p1_ready=true, participants=[] | p1_ready=true, participants=[] |
+| Joiner joins room | p2_ready=true, participants=[] | p2_ready=true, participants=[p1,p2] |
+| Auto-start check | Never happens | maybe_finalize_start_state called |
+| start_roll_finalized | Stays false | Set to true |
+| Game board renders | Stuck on "Waiting" | Board shows ✓ |
+
+## Edge Function Status
+
+The `solana-rpc-read` edge function IS working (confirmed by logs showing successful `getProgramAccounts` calls). The "Failed to Load Rooms" error was a temporary deployment issue that has been resolved. The rooms will load correctly once refreshed.
 
 ## Files to Modify
 
 | File | Changes |
 |------|---------|
-| `src/hooks/useSolanaRooms.ts` | Pass roomPda directly to record_acceptance instead of fetching |
-| `supabase/migrations/new.sql` | Update `maybe_finalize_start_state` to use participants as primary signal |
-| `src/components/RulesGate.tsx` | Return a proper signal instead of null, or pass through children |
-| `src/pages/ChessGame.tsx` | Update rendering to not depend on DiceRollStart when gate passed |
-| `src/pages/BackgammonGame.tsx` | Same update |
-| `src/pages/CheckersGame.tsx` | Same update |
-| `src/pages/DominosGame.tsx` | Same update |
-| `src/pages/LudoGame.tsx` | Same update |
-
-## Implementation Details
-
-### Fix 1: Direct PDA Usage in Join Flow
-
-In `useSolanaRooms.ts` `joinRoom` function, the roomPda is already available from the function parameters. Update the acceptance recording to use it directly:
-
-```typescript
-// Before (line 723-726):
-const joinedRoom = await fetchUserActiveRoom();
-if (joinedRoom?.pda) {
-  const stakeLamports = Math.floor(joinedRoom.entryFeeSol * LAMPORTS_PER_SOL);
-
-// After:
-// Use the roomPda we already have from the room parameter
-// and fetch stake from on-chain data we already fetched
-const { data: acceptResult, error: rpcError } = await supabase.rpc("record_acceptance", {
-  p_room_pda: roomPda, // Use the PDA we already know
-  p_wallet: publicKey.toBase58(),
-  // ... rest of params
-});
-```
-
-### Fix 2: Update maybe_finalize_start_state
-
-Change the function to prioritize `participants` array (from on-chain) over `game_acceptances`:
-
-```sql
--- NEW: Participants-first logic
--- If participants is full, start immediately (on-chain is authoritative)
-IF v_participants_count >= v_required_count THEN
-  -- Continue to auto-start
-  -- Don't wait for game_acceptances
-END IF;
-```
-
-### Fix 3: RulesGate Rendering Fix
-
-Instead of returning `null`, RulesGate should explicitly render children when ready:
-
-```tsx
-// When both ready, per architecture decision
-// Per memory: game starts immediately with creator first
-if (effectiveBothReady) {
-  // Render children (or game should render directly based on this)
-  return <>{children}</>;
-}
-```
-
-But wait - the issue is that children = DiceRollStart which we want to skip. The real fix is:
-
-1. Remove `DiceRollStart` from RulesGate children
-2. Have RulesGate return empty fragment when passed
-3. Game pages render game board based on `rankedGate.bothReady` instead of `startRoll.isFinalized`
-
-### Fix 4: Game Page Rendering Update
-
-Update all game pages to render game board when `rankedGate.bothReady` OR `startRoll.isFinalized`:
-
-```tsx
-// Current condition to show game board:
-if (!rankedGate.bothReady || !startRoll.isFinalized) {
-  return <RulesGate ...> {/* gates */} </RulesGate>
-}
-
-// New condition:
-const canShowGameBoard = rankedGate.bothReady && (
-  !isRankedGame || // Casual games show immediately
-  startRoll.isFinalized || // Normal case
-  startRoll.showDiceRoll === false // Server auto-finalized
-);
-```
-
-## Technical Notes
-
-- The `participants` array is synced from on-chain by `ranked-accept` edge function when the room reaches 2 players
-- When both players have staked on-chain, `participants.length >= 2` is guaranteed
-- The `maybe_finalize_start_state` function should trust this on-chain data
-- `game_acceptances` is a secondary confirmation that may fail due to network issues
-
-## Expected Behavior After Fix
-
-1. When joiner stakes on-chain, `participants` array is updated
-2. `maybe_finalize_start_state` detects `participants.length >= 2`
-3. Game auto-starts with creator going first
-4. Both devices see game board within 2-3 seconds
-5. Turn timer displays correctly in room list (if session exists)
+| New migration | Update `record_acceptance` to populate `participants` and call `maybe_finalize_start_state` |
 
 ## Testing Checklist
 
-- Create a ranked room with turn timer set to 10s
-- Have another wallet join the room
-- Verify both devices show game board (not stuck on "Waiting")
-- Verify turn timer shows "10s" in room list before joining
-- Verify turn timer counts down during gameplay
-- Verify forfeit button works
+After implementing:
+1. Refresh the Room List page - should load rooms
+2. Create a new ranked room with 10s turn timer
+3. Have another wallet join the room
+4. Both devices should transition to game board within 2-3 seconds
+5. Turn timer should display and count down
+6. First player (creator) should be able to move immediately
 
+## Turn Timer Display in Room List
+
+The turn timer IS already shown in the Room List dropdown (lines 466-470 show `Clock` icon with `{room.turnTimeSec}s`). If it shows "—", it means:
+- The `game_sessions` row doesn't exist yet (room just created)
+- Or `turn_time_seconds` is null/0 in the session
+
+The `game-session-set-settings` edge function already saves this during room creation. This should work correctly once the game flow is fixed.
