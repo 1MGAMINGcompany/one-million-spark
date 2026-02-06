@@ -1,255 +1,109 @@
 
-# DB-Authoritative Turn Timer & Strike Tracking Implementation
+# Fix: Turn Timer Sync Must Override Active Countdown
 
-## Overview
+## Problem Identified
 
-This implementation creates a fully DB-authoritative timeout and strike tracking system that fixes:
-- Games stalling when a player goes offline
-- Phantom forfeits from localStorage-based strike tracking
-- Timer pauses in mobile wallet browsers/background tabs
-- Missing `turn_timeout` moves causing invalid auto-forfeits
+The timer shows **57 seconds** because:
 
-## Changes Summary
+1. `useRankedReadyGate` initializes `turnTimeSeconds` to `60` (default)
+2. `useTurnTimer` initializes `remainingTime` state to `60`  
+3. Timer countdown starts immediately when `enabled && isMyTurn` (interval created)
+4. DB loads ~3 seconds later with `turn_time_seconds: 10`
+5. The sync `useEffect` (line 94-101) checks `!intervalRef.current` — **but interval exists!**
+6. Sync is skipped → timer continues counting from ~57
 
-| Component | Change |
-|-----------|--------|
-| **New DB Column** | `game_sessions.missed_turns JSONB` for server-side strike tracking |
-| **New RPC** | `maybe_apply_turn_timeout(room_pda)` - idempotent server-side timeout check |
-| **Updated RPC** | `submit_game_move` - reset strikes on successful actions |
-| **Frontend** | `BackgammonGame.tsx` - call server RPC on timeout + polling |
-| **Deprecate** | `src/lib/missedTurns.ts` - no longer used for enforcement |
+**The condition `!intervalRef.current` was too conservative.** It prevents sync when we actually need it most.
 
----
+## Solution
 
-## 1. Database Migration
+Change the sync logic to **always** update `remainingTime` when `turnTimeSeconds` prop changes, but only if the new value is significantly different (not just noise from re-renders).
 
-### 1.1 Add `missed_turns` JSONB Column
+Two options:
 
-```sql
-ALTER TABLE game_sessions 
-ADD COLUMN IF NOT EXISTS missed_turns JSONB DEFAULT '{}'::jsonb;
-
-COMMENT ON COLUMN game_sessions.missed_turns IS 
-  'Server-side strike tracking: {"wallet_address": count}. Reset on successful action.';
-```
-
-### 1.2 Create `maybe_apply_turn_timeout` RPC
-
-This function is the core of the server-authoritative timeout system:
-
-- **Idempotent**: Uses `FOR UPDATE` lock + deadline check to only apply once per turn
-- **Validates expiry**: Only applies if `turn_started_at + turn_time_seconds < now()`
-- **Records move**: Inserts `turn_timeout` move with proper hash chain
-- **Updates session**: Sets `current_turn_wallet`, `turn_started_at`, clears dice state
-- **Tracks strikes**: Increments `missed_turns[wallet]` 
-- **Handles 3 strikes**: For 2-player games, triggers `auto_forfeit` and ends game
-
-Key logic:
-```sql
-CREATE OR REPLACE FUNCTION public.maybe_apply_turn_timeout(p_room_pda TEXT)
-RETURNS JSONB
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
-  -- Lock session for atomic update
-  SELECT * INTO v_session FROM game_sessions WHERE room_pda = p_room_pda FOR UPDATE;
-  
-  -- Skip if not active, no turn holder, or already finished
-  IF v_session.status_int >= 3 THEN RETURN 'not_applied'; END IF;
-  
-  -- Calculate deadline
-  v_deadline := v_session.turn_started_at + (v_session.turn_time_seconds || ' seconds')::INTERVAL;
-  IF NOW() < v_deadline - INTERVAL '2 seconds' THEN RETURN 'not_expired'; END IF;
-  
-  -- Apply timeout: insert move, update session, track strikes
-  ...
-$$;
-```
-
-### 1.3 Update `submit_game_move` to Reset Strikes
-
-Add logic to clear a player's strike count on any successful action:
-
-```sql
--- After successful move insertion:
-IF v_move_type IN ('dice_roll', 'move', 'turn_end') THEN
-  UPDATE game_sessions
-  SET missed_turns = missed_turns - p_wallet
-  WHERE room_pda = p_room_pda 
-    AND missed_turns ? p_wallet;
-END IF;
-```
-
----
-
-## 2. Frontend Changes
-
-### 2.1 Update `handleTurnTimeout` in BackgammonGame.tsx
-
-**Current behavior**: Uses `localStorage` via `incMissed()` for strike tracking
-
-**New behavior**: Calls server-side `maybe_apply_turn_timeout` RPC
+### Option A: Remove the `!intervalRef.current` guard (simple)
 
 ```typescript
-const handleTurnTimeout = useCallback(async () => {
-  if (timeoutFiredRef.current || !isActuallyMyTurn || gameOver || !roomPda) return;
-  timeoutFiredRef.current = true;
-  
-  // Call server-side RPC instead of localStorage
-  const { data, error } = await supabase.rpc("maybe_apply_turn_timeout", {
-    p_room_pda: roomPda,
-  });
-  
-  if (data?.applied) {
-    if (data.type === "auto_forfeit") {
-      // 3 strikes - game over
-      enterOutcomeResolving(data.winnerWallet);
-    } else {
-      // Turn skipped - update local state from server
-      setCurrentTurnWallet(data.nextTurnWallet);
-      toast({ title: "Turn skipped", description: `${data.strikes}/3 missed turns` });
-    }
+useEffect(() => {
+  if (enabled) {
+    setRemainingTime(turnTimeSeconds);
+    console.log(`[useTurnTimer] turnTimeSeconds prop changed to ${turnTimeSeconds}s, synced remainingTime`);
   }
-  
-  timeoutFiredRef.current = false;
-}, [/* deps */]);
+}, [turnTimeSeconds, enabled]);
 ```
 
-### 2.2 Update Polling to Call `maybe_apply_turn_timeout`
+Risk: If `turnTimeSeconds` re-renders frequently, timer could reset unexpectedly.
 
-In the polling effect (~line 750), add a call to check/apply timeout:
+### Option B: Track previous value and only sync on meaningful change (safer)
 
 ```typescript
-// Inside pollTurnWallet, after session fetch:
-if (data?.session?.status !== 'finished') {
-  // Try to apply timeout if opponent is idle
-  const { data: timeoutResult } = await supabase.rpc("maybe_apply_turn_timeout", {
-    p_room_pda: roomPda,
-  });
-  
-  if (timeoutResult?.applied) {
-    console.log("[Polling] Server applied timeout:", timeoutResult);
-    // UI will update on next poll or realtime event
+const prevTurnTimeRef = useRef(turnTimeSeconds);
+
+useEffect(() => {
+  // Only sync if the turnTimeSeconds actually changed value (not just a re-render)
+  if (enabled && prevTurnTimeRef.current !== turnTimeSeconds) {
+    console.log(`[useTurnTimer] turnTimeSeconds changed from ${prevTurnTimeRef.current}s to ${turnTimeSeconds}s, syncing remainingTime`);
+    setRemainingTime(turnTimeSeconds);
+    prevTurnTimeRef.current = turnTimeSeconds;
   }
-}
+}, [turnTimeSeconds, enabled]);
 ```
 
-### 2.3 Process `turn_timeout` Moves Like `turn_end`
+This ensures sync only happens when DB value actually differs from initial default.
 
-In `handleDurableMoveReceived` (~line 570), ensure `turn_timeout` properly clears per-turn state:
+## Recommended: Option B
+
+It's safer because it only resets the timer when the source value changes (60→10), not on every render.
+
+---
+
+## Technical Details
+
+**Files to change:**
+- `src/hooks/useTurnTimer.ts` only
+
+**Specific change:**
+
+| Line | Before | After |
+|------|--------|-------|
+| ~48 | N/A | Add: `const prevTurnTimeRef = useRef(turnTimeSeconds);` |
+| 94-101 | `if (enabled && !intervalRef.current)` | `if (enabled && prevTurnTimeRef.current !== turnTimeSeconds)` |
+
+---
+
+## Updated Code
 
 ```typescript
-} else if (bgMove.type === "turn_timeout") {
-  // Update from server-authoritative data
-  setCurrentTurnWallet(bgMove.nextTurnWallet);
-  setDice([]);
-  setRemainingMoves([]);
-  turnTimer.resetTimer();
-  timeoutFiredRef.current = false;
-  
-  if (isSameWallet(bgMove.nextTurnWallet, address)) {
-    toast({ title: "Opponent skipped - Your turn!" });
-    setGameStatus("Your turn - Roll the dice!");
+// Add after line 48 (after turnTimeSecondsRef)
+const prevTurnTimeRef = useRef(turnTimeSeconds);
+
+// Replace lines 94-101
+useEffect(() => {
+  // Only sync if turnTimeSeconds prop value actually changed (e.g., 60 → 10 from DB)
+  if (enabled && prevTurnTimeRef.current !== turnTimeSeconds) {
+    console.log(`[useTurnTimer] turnTimeSeconds changed from ${prevTurnTimeRef.current}s to ${turnTimeSeconds}s, syncing remainingTime`);
+    setRemainingTime(turnTimeSeconds);
+    prevTurnTimeRef.current = turnTimeSeconds;
   }
-}
-```
-
-### 2.4 Remove localStorage Strike Tracking
-
-Remove imports and calls to `incMissed`, `resetMissed`, `getMissed` from BackgammonGame.tsx. Keep `clearRoom` for cleanup only.
-
----
-
-## 3. Multi-Player Game Support (Ludo)
-
-The `maybe_apply_turn_timeout` RPC handles 3-4 player games differently:
-
-```sql
-IF v_session.max_players > 2 AND v_new_strikes >= 3 THEN
-  -- Eliminate player instead of ending game
-  UPDATE game_sessions
-  SET eliminated_players = array_append(
-        COALESCE(eliminated_players, '{}'), 
-        v_timed_out_wallet
-      ),
-      current_turn_wallet = v_next_wallet,
-      turn_started_at = NOW()
-  WHERE room_pda = p_room_pda;
-  
-  -- Check if only 1 active player remains
-  IF (SELECT count(*) FROM unnest(participants) 
-      EXCEPT SELECT unnest(eliminated_players)) = 1 THEN
-    -- Mark winner
-  END IF;
-END IF;
+}, [turnTimeSeconds, enabled]);
 ```
 
 ---
 
-## 4. Files to Modify
+## Expected Behavior After Fix
 
-| File | Changes |
-|------|---------|
-| `new migration .sql` | Add column, create RPC, update submit_game_move |
-| `src/pages/BackgammonGame.tsx` | Update handleTurnTimeout, polling, move handler |
-| `src/pages/ChessGame.tsx` | Same pattern as Backgammon |
-| `src/pages/CheckersGame.tsx` | Same pattern as Backgammon |
-| `src/pages/DominosGame.tsx` | Same pattern as Backgammon |
-| `src/pages/LudoGame.tsx` | Same pattern + elimination logic |
-| `src/lib/missedTurns.ts` | Mark as deprecated (keep for backward compat) |
+1. Component mounts with `turnTimeSeconds: 60` (default)
+2. Timer initializes `remainingTime: 60`, `prevTurnTimeRef: 60`
+3. Timer starts counting: 60 → 59 → 58 → 57...
+4. DB loads, `turnTimeSeconds` prop becomes `10`
+5. Sync effect runs: `prevTurnTimeRef (60) !== turnTimeSeconds (10)` → TRUE
+6. `remainingTime` is set to `10`, `prevTurnTimeRef` updated to `10`
+7. Timer now shows `0:10` and counts down correctly
 
 ---
 
-## 5. Turn Flow After Implementation
+## Testing
 
-```text
-1. Timer expires on Player A's device
-2. Frontend calls maybe_apply_turn_timeout(roomPda)
-3. Server validates turn is actually expired
-4. Server inserts turn_timeout move (atomic, idempotent)
-5. Server updates current_turn_wallet = Player B
-6. Server resets turn_started_at = NOW()
-7. Server increments missed_turns[Player A]
-8. Server returns { applied: true, nextTurnWallet: B, strikes: 1 }
-9. Both devices see turn_timeout via realtime/polling
-10. Player B can immediately roll dice
-11. If Player A gets 3 strikes, server inserts auto_forfeit + ends game
-```
-
----
-
-## 6. Testing Checklist
-
-1. Create ranked room with 10s turn timer
-2. Both players enter game board immediately
-3. Timer counts down visibly
-4. Let timer expire → verify `turn_timeout` move in DB
-5. Verify `game_sessions.current_turn_wallet` changed
-6. Verify `game_sessions.missed_turns` has strike count
-7. Next player can roll immediately
-8. Let player time out 3 times → verify `auto_forfeit`
-9. Test: Player A offline, Player B polls → timeout applied by server
-10. Verify dice/remainingMoves cleared on timeout
-
----
-
-## 7. Acceptance Criteria
-
-After a timeout:
-- [x] `game_moves` contains a `turn_timeout` row (via `maybe_apply_turn_timeout` RPC)
-- [x] `game_sessions.current_turn_wallet` = next player
-- [x] `game_sessions.turn_started_at` = fresh timestamp
-- [x] `game_sessions.missed_turns` shows updated strike count
-- [x] Both devices can reload `/play/:roomPda` and see correct state
-- [x] Next player can immediately roll dice
-- [x] No localStorage is used for strike enforcement
-
-## 8. Implementation Status: COMPLETE ✅
-
-Changes made:
-- Added `missed_turns JSONB` column to `game_sessions`
-- Created `maybe_apply_turn_timeout` RPC (idempotent, server-authoritative)
-- Updated `submit_game_move` RPC to reset strikes on successful actions
-- Updated all 5 game pages (Backgammon, Chess, Checkers, Dominos, Ludo) to call server RPC
-- Added polling-based timeout enforcement in BackgammonGame.tsx
-- Deprecated `src/lib/missedTurns.ts` (only `clearRoom` still used)
+1. Create ranked Backgammon room with 10s timer
+2. Join game
+3. Timer should show `0:10` (not 57 or 60)
+4. On subsequent turns, timer should reset to 10s
