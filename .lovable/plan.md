@@ -1,131 +1,97 @@
 
-# Private Rooms — Step 1 (UI Only)
+# PRIVATE ROOMS — STEP 2 (BACKEND)
 
 ## Overview
-Add a third mode option "🟣 Private" to the CreateRoom page alongside the existing Casual and Ranked modes. This is a UI-only change — no backend modifications.
+Enable server-side support for `mode="private"` so that:
+1. Private rooms are persisted correctly in the database
+2. Private rooms are excluded from the public room list
+3. Private rooms remain joinable via direct link and visible to their owner
+
+## Architecture
+
+The room list uses a **dual-source pattern**:
+- **On-chain**: Rooms are fetched via `fetchOpenPublicRooms()` (Solana RPC)
+- **Database enrichment**: Metadata (turn time, mode) is fetched via `game-sessions-list` edge function
+
+Filtering by `mode` must happen at the **database level** since the on-chain room data doesn't include a mode field.
 
 ## File Changes
 
-### `src/pages/CreateRoom.tsx`
+### 1. `supabase/functions/game-session-set-settings/index.ts`
 
-**Change 1: Update state type (line 84)**
+**Change**: Allow `mode="private"` in validation
 
-Expand the `gameMode` state to include "private":
+| Line | Before | After |
+|------|--------|-------|
+| 30 | `type Mode = "casual" \| "ranked";` | `type Mode = "casual" \| "ranked" \| "private";` |
+| 65 | `if (mode !== "casual" && mode !== "ranked")` | `if (mode !== "casual" && mode !== "ranked" && mode !== "private")` |
+| 15 | Docstring says `"casual" \| "ranked"` | Update to `"casual" \| "ranked" \| "private"` |
+
+### 2. `supabase/functions/game-sessions-list/index.ts`
+
+**Change**: Exclude private rooms from public room list query
+
+For `type="active"` query, add filter `.neq('mode', 'private')`:
 
 ```typescript
-// Before:
-const [gameMode, setGameMode] = useState<'casual' | 'ranked'>('casual');
-
-// After:
-const [gameMode, setGameMode] = useState<'casual' | 'ranked' | 'private'>('casual');
+// Line 35-40: Update query
+const { data, error } = await supabase
+  .from('game_sessions')
+  .select('room_pda, game_type, status, player1_wallet, player2_wallet, current_turn_wallet, created_at, updated_at, mode, turn_time_seconds')
+  .in('status', ['active', 'waiting'])
+  .neq('mode', 'private')  // ← ADD THIS LINE
+  .order('updated_at', { ascending: false })
+  .limit(500)
 ```
 
-**Change 2: Update mode toggle grid (lines 637-675)**
+**Note**: The `recoverable_for_wallet` query is NOT modified — users can still see and recover their own private rooms.
 
-Change from 2-column to 3-column grid and add Private button:
+### 3. `src/hooks/useSolanaRooms.ts`
 
-```typescript
-// Before:
-<div className="grid grid-cols-2 gap-2">
+**Change**: Filter out private rooms in the client-side enrichment loop
 
-// After:
-<div className="grid grid-cols-3 gap-2">
-```
-
-Add new Private button after the Ranked button:
+Since on-chain rooms don't have mode info, we need to filter AFTER enrichment:
 
 ```typescript
-<Button
-  type="button"
-  variant={gameMode === 'private' ? 'default' : 'outline'}
-  size="sm"
-  className={`h-10 ${gameMode === 'private' ? 'bg-violet-600 hover:bg-violet-700' : ''}`}
-  onClick={() => {
-    setGameMode('private');
-    // Private rooms use custom stakes (allow any amount including 0)
-    if (!isRematch) setEntryFee("0");
-  }}
->
-  <span className="mr-1.5">🟣</span> {t("createRoom.gameModePrivate", "Private")}
-  <span className="ml-1 opacity-70 text-xs">🔗</span>
-</Button>
-```
-
-**Change 3: Update helper text for all modes (lines 670-674)**
-
-Add private mode description:
-
-```typescript
-// Before:
-<p className="text-xs text-muted-foreground">
-  {gameMode === 'ranked' 
-    ? t("createRoom.rankedDesc")
-    : t("createRoom.casualDesc")}
-</p>
-
-// After:
-<p className="text-xs text-muted-foreground">
-  {gameMode === 'private' 
-    ? t("createRoom.privateDesc", "Private rooms don't appear in public list. Share an invite link to let friends join.")
-    : gameMode === 'ranked' 
-      ? t("createRoom.rankedDesc")
-      : t("createRoom.casualDesc")}
-</p>
-```
-
-**Change 4: Update entry fee styling and validation (lines 589-609)**
-
-Private mode should use casual-style stake input (optional, any amount):
-
-```typescript
-// Entry fee input className - add private to casual styling
-className={`h-9 ${isRematch ? 'border-primary/50' : ''} ${
-  gameMode === 'casual' || gameMode === 'private'
-    ? 'border-muted/50 bg-muted/20 text-muted-foreground focus:border-muted' 
-    : 'border-primary/50 bg-primary/5 text-foreground focus:border-primary'
-}`}
-
-// Entry fee helper text - add private mode
-<p className={`text-xs ${gameMode === 'casual' || gameMode === 'private' ? 'text-muted-foreground' : 'text-primary/80'}`}>
-  {gameMode === 'casual' || gameMode === 'private'
-    ? t("createRoom.stakeOptional")
-    : `${t("createRoom.stakeMinRequired")} (${dynamicMinFee.toFixed(4)} SOL ≈ $${MIN_FEE_USD.toFixed(2)})`
+// In fetchRooms() callback, after enrichment (around line 360)
+// Build a set of private room PDAs
+const privateRoomPdas = new Set<string>();
+for (const s of sessions) {
+  if (s.mode === 'private') {
+    privateRoomPdas.add(s.room_pda);
   }
-</p>
+}
+
+// Filter out private rooms from display
+const publicRooms = fetchedRooms.filter(room => !privateRoomPdas.has(room.pda));
 ```
 
-**Change 5: Update minimum fee validation (line 265)**
+## Changes Summary
 
-Skip minimum fee enforcement for private mode (same as casual):
+| File | Change |
+|------|--------|
+| `supabase/functions/game-session-set-settings/index.ts` | Allow `mode="private"` in validation |
+| `supabase/functions/game-sessions-list/index.ts` | Exclude `mode='private'` from active sessions query |
+| `src/hooks/useSolanaRooms.ts` | Filter private rooms from display list |
 
-```typescript
-// Before:
-if (gameMode === 'ranked' && entryFeeNum < dynamicMinFee) {
+## How Private Rooms Are Filtered
 
-// After:  
-if (gameMode === 'ranked' && entryFeeNum < dynamicMinFee) {
-  // (no change - private mode already bypasses this since it's not 'ranked')
-```
-
-No change needed here — the existing condition already only enforces minimum for ranked.
-
-## Visual Result
-
-| Mode | Color | Emoji | Description |
-|------|-------|-------|-------------|
-| Casual | Green | 🟢 | Practice mode, optional stakes |
-| Ranked | Red | 🔴 | Competitive, requires min stake |
-| **Private** | **Violet** | **🟣** | **Invite-only, hidden from list** |
+Private rooms are filtered from the RoomList by **excluding any room whose database session has `mode='private'`** — this happens in two places:
+1. The `game-sessions-list` edge function excludes them from the enrichment response
+2. The client-side `useSolanaRooms.fetchRooms()` filters out any room PDA found in the private set
 
 ## What's NOT Changing
 
-- Backend logic (edge functions, database)
-- Stake logic (private uses same rules as casual)
-- Turn time options (unchanged)
-- Game type selection (unchanged)
-- Any room creation flow
+- On-chain room creation (mode is not stored on-chain)
+- Direct room access via `/room/:pda` URL (private rooms remain joinable via link)
+- `recoverable_for_wallet` query (users can see their own private rooms)
+- CreateRoom.tsx (already passes `mode: gameMode` correctly)
+- No database schema changes required
 
-## Translation Keys Used
+## Testing Verification
 
-- `createRoom.gameModePrivate` — "Private" (with fallback)
-- `createRoom.privateDesc` — Helper text (with fallback)
+After implementation:
+1. Create a private room → should NOT appear in RoomList
+2. Create a casual/ranked room → should appear in RoomList
+3. Access private room via direct link → should work
+4. Private room owner sees it in "My Active Games" section
