@@ -236,10 +236,20 @@ END IF;
 ## 7. Acceptance Criteria
 
 After a timeout:
-- [ ] `game_moves` contains a `turn_timeout` row
-- [ ] `game_sessions.current_turn_wallet` = next player
-- [ ] `game_sessions.turn_started_at` = fresh timestamp
-- [ ] `game_sessions.missed_turns` shows updated strike count
-- [ ] Both devices can reload `/play/:roomPda` and see correct state
-- [ ] Next player can immediately roll dice
-- [ ] No localStorage is used for strike enforcement
+- [x] `game_moves` contains a `turn_timeout` row (via `maybe_apply_turn_timeout` RPC)
+- [x] `game_sessions.current_turn_wallet` = next player
+- [x] `game_sessions.turn_started_at` = fresh timestamp
+- [x] `game_sessions.missed_turns` shows updated strike count
+- [x] Both devices can reload `/play/:roomPda` and see correct state
+- [x] Next player can immediately roll dice
+- [x] No localStorage is used for strike enforcement
+
+## 8. Implementation Status: COMPLETE ✅
+
+Changes made:
+- Added `missed_turns JSONB` column to `game_sessions`
+- Created `maybe_apply_turn_timeout` RPC (idempotent, server-authoritative)
+- Updated `submit_game_move` RPC to reset strikes on successful actions
+- Updated all 5 game pages (Backgammon, Chess, Checkers, Dominos, Ludo) to call server RPC
+- Added polling-based timeout enforcement in BackgammonGame.tsx
+- Deprecated `src/lib/missedTurns.ts` (only `clearRoom` still used)

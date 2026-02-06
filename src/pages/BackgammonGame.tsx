@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { getOpponentWallet, isSameWallet, isRealWallet } from "@/lib/walletUtils";
-import { incMissed, resetMissed, getMissed, clearRoom } from "@/lib/missedTurns";
+import { clearRoom } from "@/lib/missedTurns"; // Only clearRoom needed for cleanup - strikes now tracked server-side
 import { GameErrorBoundary } from "@/components/GameErrorBoundary";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -800,17 +800,65 @@ const BackgammonGame = () => {
         // Skip turn sync if game is over
         if (gameOver) return;
 
+        // === SERVER-SIDE TIMEOUT CHECK ===
+        // If opponent is idle, try to apply timeout via server RPC
+        // This allows connected players to advance the game even if opponent is offline
         const dbTurnWallet = data?.session?.current_turn_wallet;
+        const isOpponentsTurn = dbTurnWallet && !isSameWallet(dbTurnWallet, address);
+        
+        if (isOpponentsTurn && data?.session?.status !== 'finished') {
+          try {
+            const { data: timeoutResult } = await supabase.rpc("maybe_apply_turn_timeout", {
+              p_room_pda: roomPda,
+            });
+            
+            // Type assertion for RPC response
+            const result = timeoutResult as {
+              applied: boolean;
+              type?: string;
+              reason?: string;
+              winnerWallet?: string;
+              nextTurnWallet?: string;
+              strikes?: number;
+            } | null;
+            
+            if (result?.applied) {
+              console.log("[Polling] Server applied timeout:", result);
+              
+              if (result.type === "auto_forfeit") {
+                // Game ended due to 3 strikes
+                enterOutcomeResolving(result.winnerWallet);
+                return;
+              } else if (result.type === "turn_timeout" && result.nextTurnWallet) {
+                // Turn passed to me - UI will update below
+                toast({
+                  title: t('gameSession.opponentSkipped'),
+                  description: `${result.strikes}/3 ${t('gameSession.missedTurns')}`,
+                });
+              }
+            }
+          } catch (err) {
+            console.warn("[Polling] Server timeout check failed:", err);
+          }
+        }
+        // === END SERVER-SIDE TIMEOUT CHECK ===
+
         const dbTurnStartedAt = data?.session?.turn_started_at;
         
-        if (dbTurnWallet && dbTurnWallet !== currentTurnWallet) {
+        // Re-fetch session to get updated state after potential timeout
+        const { data: freshData } = await supabase.functions.invoke("game-session-get", {
+          body: { roomPda },
+        });
+        const freshTurnWallet = freshData?.session?.current_turn_wallet;
+        
+        if (freshTurnWallet && freshTurnWallet !== currentTurnWallet) {
           console.log("[BackgammonGame] Polling detected turn change:", {
             from: currentTurnWallet?.slice(0, 8),
-            to: dbTurnWallet.slice(0, 8),
+            to: freshTurnWallet.slice(0, 8),
           });
           
           // Check if turn changed TO ME - need to update game state
-          const isNowMyTurn = isSameWallet(dbTurnWallet, address);
+          const isNowMyTurn = isSameWallet(freshTurnWallet, address);
           
           if (isNowMyTurn) {
             // Fetch latest move to see why turn changed
@@ -826,19 +874,16 @@ const BackgammonGame = () => {
                 lastMoveWallet: lastMove?.wallet?.slice(0, 8),
               });
               
-              // If opponent timed out, show notification
+              // If opponent timed out (and we didn't already show toast from timeout check), show notification
               if (lastMoveType === 'turn_timeout') {
-                toast({
-                  title: t('gameSession.opponentSkipped'),
-                  description: t('gameSession.yourTurnNow'),
-                });
+                // Toast already shown in timeout check above
               }
             } catch (err) {
               console.warn("[BackgammonGame] Failed to fetch last move for timeout check:", err);
             }
           }
           
-          setCurrentTurnWallet(dbTurnWallet);
+          setCurrentTurnWallet(freshTurnWallet);
           // Reset timeout debounce since turn actually changed
           timeoutFiredRef.current = false;
           
@@ -852,7 +897,7 @@ const BackgammonGame = () => {
           setValidMoves([]);
           
           // Update game status
-          const turnToMe = isSameWallet(dbTurnWallet, address);
+          const turnToMe = isSameWallet(freshTurnWallet, address);
           if (turnToMe) {
             setGameStatus("Your turn - Roll the dice!");
           } else {
@@ -861,8 +906,9 @@ const BackgammonGame = () => {
         }
         
         // Also track turn_started_at for debounce reset
-        if (dbTurnStartedAt && dbTurnStartedAt !== turnStartedAt) {
-          setTurnStartedAt(dbTurnStartedAt);
+        const freshTurnStartedAt = freshData?.session?.turn_started_at || dbTurnStartedAt;
+        if (freshTurnStartedAt && freshTurnStartedAt !== turnStartedAt) {
+          setTurnStartedAt(freshTurnStartedAt);
           // Reset timeout debounce when turn_started_at changes
           timeoutFiredRef.current = false;
         }
@@ -873,7 +919,7 @@ const BackgammonGame = () => {
 
     const interval = setInterval(pollTurnWallet, 5000);
     return () => clearInterval(interval);
-  }, [roomPda, isRankedGame, gameOver, startRoll.isFinalized, currentTurnWallet, turnStartedAt, address, myRole, play, t]);
+  }, [roomPda, isRankedGame, gameOver, startRoll.isFinalized, currentTurnWallet, turnStartedAt, address, myRole, play, t, enterOutcomeResolving]);
 
   // Visibility change handler - poll immediately when tab becomes visible
   // NOTE: Timer resume logic is in a separate effect after turnTimer is declared
@@ -1026,8 +1072,8 @@ const BackgammonGame = () => {
     timeoutFiredRef.current = false;
   }, [currentTurnWallet, turnStartedAt]);
 
-  // Handle turn timeout - SKIP to opponent (NOT immediate forfeit)
-  // FIX: Ensure nextTurnWallet is computed from session wallets, NEVER same as timedOutWallet
+  // Handle turn timeout - calls server-side RPC for DB-authoritative timeout
+  // Server handles: move insertion, turn switching, strike tracking, auto-forfeit on 3 strikes
   const handleTurnTimeout = useCallback(async () => {
     // === MANDATORY DIAGNOSTIC LOGGING ===
     console.log("[handleTurnTimeout] ENTRY - all state:", {
@@ -1084,106 +1130,81 @@ const BackgammonGame = () => {
     // Set debounce flag BEFORE any async operations
     timeoutFiredRef.current = true;
     
-    // FIX: Compute wallets from roomPlayers (session data), not local state
-    const timedOutWallet = currentTurnWalletRef.current || address;
-    const p1 = roomPlayersRef.current[0];
-    const p2 = roomPlayersRef.current[1];
+    console.log("[handleTurnTimeout] Calling server-side maybe_apply_turn_timeout RPC");
     
-    // Compute opponent wallet - MUST be different from timedOutWallet
-    const nextTurnWallet = isSameWallet(timedOutWallet, p1) ? p2 : p1;
-    
-    // CRITICAL VALIDATION: nextTurnWallet must never equal timedOutWallet
-    if (!nextTurnWallet || isSameWallet(nextTurnWallet, timedOutWallet)) {
-      console.error("[BackgammonGame] INVALID timeout - nextTurnWallet equals timedOutWallet or is null!", {
-        timedOutWallet: timedOutWallet?.slice(0, 8),
-        nextTurnWallet: nextTurnWallet?.slice(0, 8),
-        p1: p1?.slice(0, 8),
-        p2: p2?.slice(0, 8),
-      });
-      timeoutFiredRef.current = false; // Reset on error
-      return;
-    }
-    
-    // Use shared utility for missed turns tracking
-    const newMissedCount = incMissed(roomPda, address);
-    
-    console.log(`[BackgammonGame] Turn timeout. timedOut=${timedOutWallet?.slice(0,8)} nextTurn=${nextTurnWallet?.slice(0,8)} missed=${newMissedCount}/3`);
-    
-    if (newMissedCount >= 3) {
-      // 3 STRIKES = AUTO FORFEIT - Submit explicit auto_forfeit move type
-      toast({
-        title: t('gameSession.autoForfeit'),
-        description: t('gameSession.missedThreeTurns'),
-        variant: "destructive",
+    try {
+      // Call server-side RPC - handles all timeout logic atomically
+      const { data, error } = await supabase.rpc("maybe_apply_turn_timeout", {
+        p_room_pda: roomPda,
       });
       
-      // FIX: Await persistMove BEFORE any local state changes
-      // This prevents the race condition where the game is marked finished before the RPC completes
-      if (isRankedGame) {
-        const result = await persistMove({
-          type: "auto_forfeit",
-          timedOutWallet,
-          winnerWallet: nextTurnWallet,
-          missedCount: newMissedCount,
-          reason: "three_missed_turns",
-          gameState,
-          dice: [],
-          remainingMoves: [],
-        } as BackgammonMoveMessage, address);
-        
-        console.log("[handleTurnTimeout] auto_forfeit persistMove result:", result);
+      if (error) {
+        console.error("[handleTurnTimeout] RPC error:", error);
+        timeoutFiredRef.current = false;
+        return;
       }
       
-      // Location 6: THEN update local state (after RPC completes)
-      // Debug log for settlement verification
-      console.log("[handleTurnTimeout] auto_forfeit settlement:", {
-        winnerWallet: nextTurnWallet?.slice(0, 8),
-        loserWallet: address?.slice(0, 8),
-        reason: "auto_forfeit",
-      });
+      // Type assertion for RPC response
+      const result = data as {
+        applied: boolean;
+        type?: string;
+        reason?: string;
+        winnerWallet?: string;
+        nextTurnWallet?: string;
+        timedOutWallet?: string;
+        strikes?: number;
+      } | null;
       
-      forfeitFnRef.current?.();
-      // Use neutral resolving state - DB Outcome Resolver will finalize
-      enterOutcomeResolving(nextTurnWallet);
+      console.log("[handleTurnTimeout] Server response:", result);
       
-    } else {
-      // SKIP to opponent (not forfeit)
-      toast({
-        title: t('gameSession.turnSkipped'),
-        description: `${newMissedCount}/3 ${t('gameSession.missedTurns')}`,
-        variant: "destructive",
-      });
-      
-      // Persist MINIMAL turn_timeout to DB
-      if (isRankedGame) {
-        persistMove({
-          type: "turn_timeout",
-          timedOutWallet,
-          nextTurnWallet,
-          missedCount: newMissedCount,
-          gameState,
-          dice: [],
-          remainingMoves: [],
-        } as BackgammonMoveMessage, address);
+      if (result?.applied) {
+        if (result.type === "auto_forfeit") {
+          // 3 strikes - game over
+          toast({
+            title: t('gameSession.autoForfeit'),
+            description: t('gameSession.missedThreeTurns'),
+            variant: "destructive",
+          });
+          
+          // Trigger forfeit settlement flow
+          forfeitFnRef.current?.();
+          
+          // Use neutral resolving state - DB Outcome Resolver will finalize
+          enterOutcomeResolving(result.winnerWallet);
+          
+        } else if (result.type === "turn_timeout") {
+          // Turn skipped - update local state from server
+          toast({
+            title: t('gameSession.turnSkipped'),
+            description: `${result.strikes}/3 ${t('gameSession.missedTurns')}`,
+            variant: "destructive",
+          });
+          
+          // WALLET-AUTHORITATIVE: Set opponent as next turn
+          if (result.nextTurnWallet) {
+            setCurrentTurnWallet(result.nextTurnWallet);
+            const nextRole = isSameWallet(result.nextTurnWallet, roomPlayersRef.current[0]) ? "player" : "ai";
+            setCurrentPlayer(nextRole);
+          }
+          setDice([]);
+          setRemainingMoves([]);
+          setSelectedPoint(null);
+          setValidMoves([]);
+          setGameStatus("Opponent's turn");
+          
+          // Reset debounce for next turn
+          timeoutFiredRef.current = false;
+        }
+      } else {
+        // Timeout not applied (not expired, already processed, etc.)
+        console.log("[handleTurnTimeout] Server did not apply timeout:", result?.reason);
+        timeoutFiredRef.current = false;
       }
-      
-      // WALLET-AUTHORITATIVE: Set opponent as next turn
-      setCurrentTurnWallet(nextTurnWallet);
-      const nextRole = isSameWallet(nextTurnWallet, roomPlayersRef.current[0]) ? "player" : "ai";
-      setCurrentPlayer(nextRole);
-      setDice([]);
-      setRemainingMoves([]);
-      setSelectedPoint(null);
-      setValidMoves([]);
-      setGameStatus("Opponent's turn");
-      
-      // FIX: Reset timer state for consecutive timeout detection on opponent's device
-      // The opponent will detect the turn change via polling and start their timer
-      // On this device, isMyTurn becomes false so timer stops (correct behavior)
+    } catch (err) {
+      console.error("[handleTurnTimeout] Exception:", err);
       timeoutFiredRef.current = false;
     }
-  // Note: This callback is now async to properly await persistMove for auto_forfeit
-  }, [isActuallyMyTurn, gameOver, address, roomPda, dice, remainingMoves, myRole, gameState, isRankedGame, persistMove, play, t, enterOutcomeResolving]);
+  }, [isActuallyMyTurn, gameOver, address, roomPda, dice, remainingMoves, isRankedGame, t, enterOutcomeResolving, durableEnabled, rankedGate.bothReady, startRoll.isFinalized, currentTurnWallet, hasTwoRealPlayers, roomPlayers]);
   
   // Turn timer for ranked games
   // FIX: Use startRoll.isFinalized as fallback for timer enable (don't depend on bothReady)
@@ -1647,12 +1668,9 @@ const BackgammonGame = () => {
     sendMove(moveMsg);
     
     // CRITICAL: Persist dice_roll to DB for cross-device sync (durable path)
+    // Note: Strike count reset is now handled server-side in submit_game_move RPC
     if (isRankedGame && address) {
       persistMove(moveMsg, address);
-      // PART C: Reset missed turns on successful dice roll (consecutive rule)
-      if (roomPda) {
-        resetMissed(roomPda, address);
-      }
     }
     
     // Check if moves available
@@ -1711,10 +1729,7 @@ const BackgammonGame = () => {
     setValidMoves([]);
     setGameStatus("Opponent's turn");
     
-    // Reset missed turns on successful turn completion using shared utility
-    if (address && roomPda) {
-      resetMissed(roomPda, address);
-    }
+    // Note: Strike count reset is now handled server-side in submit_game_move RPC
   }, [gameState, sendMove, isRankedGame, address, persistMove]);
 
   // Handle point click

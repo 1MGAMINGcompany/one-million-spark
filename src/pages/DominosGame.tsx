@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { getOpponentWallet, isSameWallet, isRealWallet } from "@/lib/walletUtils";
-import { incMissed, resetMissed, clearRoom } from "@/lib/missedTurns";
+import { clearRoom } from "@/lib/missedTurns"; // Only clearRoom needed - strikes now tracked server-side
 import { GameErrorBoundary } from "@/components/GameErrorBoundary";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -37,6 +37,7 @@ import { RulesGate } from "@/components/RulesGate";
 import { RulesInfoPanel } from "@/components/RulesInfoPanel";
 import { InAppBrowserRecovery } from "@/components/InAppBrowserRecovery";
 import { toast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 import { fetchRoomByPda, getConnection } from "@/lib/solana-program";
 import { seededShuffle } from "@/lib/seedUtils";
 import { dbg, isDebugEnabled } from "@/lib/debugLog";
@@ -611,67 +612,56 @@ const DominosGame = () => {
   // Ref for forfeit function - will be set by useForfeit hook
   const forfeitFnRef = useRef<(() => Promise<void>) | null>(null);
 
-  // Turn timer for ranked games - skip on timeout + 3 strikes = auto-forfeit
-  const handleTurnTimeout = useCallback(() => {
+  // Turn timer for ranked games - calls server RPC for DB-authoritative timeout
+  const handleTurnTimeout = useCallback(async () => {
     if (!isActuallyMyTurn || gameOver || !address || !roomPda) return;
     
-    const opponentWalletAddr = getOpponentWallet(roomPlayers, address);
-    const newMissedCount = incMissed(roomPda, address);
-    
-    console.log(`[DominosGame] Turn timeout. Wallet ${address?.slice(0,8)} missed ${newMissedCount}/3`);
-    
-    if (newMissedCount >= 3) {
-      // 3 STRIKES = AUTO FORFEIT
-      toast({
-        title: t('gameSession.autoForfeit'),
-        description: t('gameSession.missedThreeTurns'),
-        variant: "destructive",
+    try {
+      const { data, error } = await supabase.rpc("maybe_apply_turn_timeout", {
+        p_room_pda: roomPda,
       });
       
-      // Persist MINIMAL timeout event BEFORE forfeit
-      if (isRankedGame && opponentWalletAddr) {
-        persistMove({
-          action: "turn_timeout",
-          timedOutWallet: address,
-          nextTurnWallet: opponentWalletAddr,
-          missedCount: newMissedCount,
-        } as unknown as DominoMove, address);
+      if (error) {
+        console.error("[DominosGame] Timeout RPC error:", error);
+        return;
       }
       
-      forfeitFnRef.current?.();
-      setGameOver(true);
-      setWinner("opponent");
-      setWinnerWallet(opponentWalletAddr);
-      setGameStatus(t('game.youLose') + " - 3 missed turns");
-      play('domino/lose');
+      const result = data as {
+        applied: boolean;
+        type?: string;
+        winnerWallet?: string;
+        nextTurnWallet?: string;
+        strikes?: number;
+      } | null;
       
-    } else {
-      // SKIP to opponent (not forfeit)
-      toast({
-        title: t('gameSession.turnSkipped'),
-        description: `${newMissedCount}/3 ${t('gameSession.missedTurns')}`,
-        variant: "destructive",
-      });
-      
-      // Persist MINIMAL turn_timeout to DB
-      if (isRankedGame && opponentWalletAddr) {
-        persistMove({
-          action: "turn_timeout",
-          timedOutWallet: address,
-          nextTurnWallet: opponentWalletAddr,
-          missedCount: newMissedCount,
-        } as unknown as DominoMove, address);
+      if (result?.applied) {
+        if (result.type === "auto_forfeit") {
+          toast({
+            title: t('gameSession.autoForfeit'),
+            description: t('gameSession.missedThreeTurns'),
+            variant: "destructive",
+          });
+          forfeitFnRef.current?.();
+          setGameOver(true);
+          setWinner("opponent");
+          setWinnerWallet(result.winnerWallet || null);
+          setGameStatus(t('game.youLose') + " - 3 missed turns");
+          play('domino/lose');
+        } else if (result.type === "turn_timeout") {
+          toast({
+            title: t('gameSession.turnSkipped'),
+            description: `${result.strikes}/3 ${t('gameSession.missedTurns')}`,
+            variant: "destructive",
+          });
+          setIsMyTurn(false);
+          setSelectedDomino(null);
+          setGameStatus(t('game.opponentsTurn'));
+        }
       }
-      
-      // Skip turn using existing state
-      setIsMyTurn(false);
-      setSelectedDomino(null);
-      setGameStatus(t('game.opponentsTurn'));
-      
-      // FIX: The turn has now passed to opponent
-      // Their device will detect via polling and start their timer
+    } catch (err) {
+      console.error("[DominosGame] Timeout exception:", err);
     }
-  }, [isActuallyMyTurn, gameOver, address, roomPda, roomPlayers, isRankedGame, persistMove, play, t]);
+  }, [isActuallyMyTurn, gameOver, address, roomPda, play, t]);
 
   // Use turn time from ranked gate (fetched from DB/localStorage)
   const effectiveTurnTime = rankedGate.turnTimeSeconds || DEFAULT_RANKED_TURN_TIME;
@@ -1116,10 +1106,7 @@ const DominosGame = () => {
     setChain(newChain);
     setMyHand(newHand);
     
-    // Reset missed turns on successful move
-    if (address && roomPda) {
-      resetMissed(roomPda, address);
-    }
+    // Note: Strike count reset is now handled server-side in submit_game_move RPC
     
     // Send move to opponent
     const moveData: DominoMove = {
@@ -1215,10 +1202,7 @@ const DominosGame = () => {
     setBoneyard(newBoneyard);
     play('domino/draw');
     
-    // Reset missed turns on successful move
-    if (address && roomPda) {
-      resetMissed(roomPda, address);
-    }
+    // Note: Strike count reset is now handled server-side in submit_game_move RPC
     
     // Track the drawn tile for this player
     if (amIPlayer1) {
@@ -1269,10 +1253,7 @@ const DominosGame = () => {
       return;
     }
     
-    // Reset missed turns on successful move (pass counts as a valid move)
-    if (address && roomPda) {
-      resetMissed(roomPda, address);
-    }
+    // Note: Strike count reset is now handled server-side in submit_game_move RPC
     
     // Send pass action
     const moveData: DominoMove = {
