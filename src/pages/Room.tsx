@@ -11,6 +11,7 @@ import { useTxLock } from "@/contexts/TxLockContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Construction, ArrowLeft, Loader2, Users, Coins, AlertTriangle, CheckCircle, Share2, Copy, ExternalLink, Wallet, Clock } from "lucide-react";
+import { ShareInviteDialog } from "@/components/ShareInviteDialog";
 import { RecoverFundsButton } from "@/components/RecoverFundsButton";
 import { WalletGateModal } from "@/components/WalletGateModal";
 import { RivalryWidget } from "@/components/RivalryWidget";
@@ -67,6 +68,7 @@ export default function Room() {
   const [showMobileWalletRedirect, setShowMobileWalletRedirect] = useState(false);
   const [showJoinRulesModal, setShowJoinRulesModal] = useState(false);
   const [joinInProgress, setJoinInProgress] = useState(false);
+  const [showShareDialog, setShowShareDialog] = useState(false);
   
   // Wallet in-app browsers (Phantom/Solflare) often miss WS updates
   const inWalletBrowser = isWalletInAppBrowser();
@@ -81,7 +83,7 @@ export default function Room() {
   const [linkCopied, setLinkCopied] = useState(false);
   
   // Room mode and turn time from DB (single source of truth - NOT localStorage)
-  const [roomMode, setRoomMode] = useState<'casual' | 'ranked'>('casual');
+  const [roomMode, setRoomMode] = useState<'casual' | 'ranked' | 'private'>('casual');
   const [turnTimeSeconds, setTurnTimeSeconds] = useState<number | null>(null);
   const [roomModeLoaded, setRoomModeLoaded] = useState(false);
   
@@ -181,7 +183,7 @@ export default function Room() {
         
         const session = resp?.session;
         if (session?.mode) {
-          setRoomMode(session.mode as 'casual' | 'ranked');
+          setRoomMode(session.mode as 'casual' | 'ranked' | 'private');
           // Also get turn_time_seconds
           if (typeof session.turn_time_seconds === 'number') {
             setTurnTimeSeconds(session.turn_time_seconds);
@@ -976,9 +978,11 @@ export default function Room() {
                   <span className={`px-3 py-1 rounded-full text-sm font-medium border ${
                     roomMode === 'ranked' 
                       ? 'bg-red-500/20 text-red-400 border-red-500/30' 
+                      : roomMode === 'private'
+                      ? 'bg-violet-500/20 text-violet-400 border-violet-500/30'
                       : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
                   }`}>
-                    {roomMode === 'ranked' ? '🔴 Ranked' : '🟢 Casual'}
+                    {roomMode === 'ranked' ? '🔴 Ranked' : roomMode === 'private' ? '🟣 Private' : '🟢 Casual'}
                   </span>
                 )}
                 {isPlayer && (
@@ -1155,6 +1159,18 @@ export default function Room() {
                 </div>
               )}
 
+              {/* Share button for private room creators */}
+              {isOpenStatus(status) && isCreator && roomMode === 'private' && (
+                <Button 
+                  variant="outline"
+                  onClick={() => setShowShareDialog(true)}
+                  className="gap-2 border-violet-500/30 text-violet-400 hover:bg-violet-500/10"
+                >
+                  <Share2 className="h-4 w-4" />
+                  Share Invite
+                </Button>
+              )}
+
               {/* Room full message (for non-players) */}
               {status === RoomStatus.Started && !isPlayer && (
                 <div className="flex items-center gap-2 px-4 py-2 bg-amber-500/10 border border-amber-500/30 rounded-lg">
@@ -1252,8 +1268,16 @@ export default function Room() {
         onCancel={() => setShowJoinRulesModal(false)}
         gameName={gameName}
         stakeSol={Number(stakeLamports) / LAMPORTS_PER_SOL}
-        isRanked={roomMode === 'ranked'}
+        isRanked={roomMode === 'ranked' || roomMode === 'private'}
         isLoading={joinInProgress}
+      />
+
+      {/* Share Invite Dialog */}
+      <ShareInviteDialog
+        open={showShareDialog}
+        onOpenChange={setShowShareDialog}
+        roomPda={roomPdaParam || ""}
+        gameName={gameName}
       />
       
       {/* Preview Domain Banner */}

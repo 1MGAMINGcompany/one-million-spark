@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Copy, Share2, Mail, MessageCircle, Facebook, Check, X } from "lucide-react";
+import { Copy, Share2, Mail, MessageCircle, Facebook, Check } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -12,6 +13,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useSound } from "@/contexts/SoundContext";
+import { isWalletInAppBrowser } from "@/lib/walletBrowserDetection";
 import {
   buildInviteLink,
   shareInvite,
@@ -24,14 +26,14 @@ import {
 interface ShareInviteDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  roomId: string;
+  roomPda: string;
   gameName?: string;
 }
 
 export function ShareInviteDialog({
   open,
   onOpenChange,
-  roomId,
+  roomPda,
   gameName,
 }: ShareInviteDialogProps) {
   const [copied, setCopied] = useState(false);
@@ -39,7 +41,8 @@ export function ShareInviteDialog({
   const { play } = useSound();
   const { t } = useTranslation();
 
-  const inviteLink = buildInviteLink({ roomId });
+  const inWalletBrowser = isWalletInAppBrowser();
+  const inviteLink = buildInviteLink({ roomPda });
 
   const handleCopy = async () => {
     try {
@@ -97,6 +100,21 @@ export function ShareInviteDialog({
         </DialogHeader>
 
         <div className="space-y-4">
+          {/* QR Code */}
+          <div className="flex flex-col items-center gap-2 py-4">
+            <div className="bg-white p-3 rounded-lg">
+              <QRCodeSVG
+                value={inviteLink}
+                size={120}
+                bgColor="#ffffff"
+                fgColor="#000000"
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {t("shareInvite.showQrToFriend", "Show this QR to a friend to scan")}
+            </p>
+          </div>
+
           {/* Copy Link Input */}
           <div className="flex items-center gap-2">
             <Input
@@ -149,18 +167,21 @@ export function ShareInviteDialog({
               Facebook
             </Button>
 
-            <Button
-              variant="outline"
-              onClick={handleEmail}
-              className="border-primary/30 hover:bg-primary/10 gap-2"
-            >
-              <Mail className="h-4 w-4" />
-              Email
-            </Button>
+            {/* Hide Email in wallet in-app browsers (mailto: blocked) */}
+            {!inWalletBrowser && (
+              <Button
+                variant="outline"
+                onClick={handleEmail}
+                className="border-primary/30 hover:bg-primary/10 gap-2"
+              >
+                <Mail className="h-4 w-4" />
+                Email
+              </Button>
+            )}
           </div>
 
           <p className="text-xs text-muted-foreground text-center">
-            {t("game.room")} #{roomId} • {t("shareInvite.walletNeeded")}
+            {t("game.room")} #{roomPda.slice(0, 8)}... • {t("shareInvite.walletNeeded")}
           </p>
         </div>
       </DialogContent>
