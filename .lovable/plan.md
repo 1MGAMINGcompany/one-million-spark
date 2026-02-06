@@ -1,142 +1,173 @@
 
-# Fix Plan: Checker Bar Color Bug + Desktop Bar Placement
+# Fix Plan: Turn Timer Issues + Room List Turn Time Display
 
-## Summary
+## Summary of Issues Identified
 
-When playing multiplayer Backgammon, captured checkers sent to the "bar" (jail) are displaying as **gold color regardless of which player owns them**. Additionally, the desktop bar display should be repositioned to the **center of the board** like mobile, without hiding the dice.
+### Issue 1: Room List Turn Time Not Showing (Still shows "—")
+**Root Cause:** The enrichment query is working correctly (logs show `turn_time_seconds: 10` in DB), but the room PDA returned from Solana doesn't match what's stored in `game_sessions`. 
+
+Looking at the database:
+- DB has: `BqsuTuDFxQESLKjsx3QA1eREBhe1SWG2FUAwc54sJcZ` and `64rQ8DP5TCgj7xGTp8NYoAQHv2aVNyTmxtGd83baM5tM`
+- But Room List query is looking for rooms that haven't created sessions yet
+
+The issue: `game_sessions` is only created AFTER the room creator sets settings or someone joins. For newly created rooms that are "waiting for opponent", no session exists yet = no turn time to display.
+
+**Fix:** When a room is created, ensure `game_session_set_settings` is called to create the session immediately.
 
 ---
 
-## Issues to Fix
+### Issue 2: Turn Timer Stays With Same User Until 3 Missed Turns
 
-| Issue | Location | Description |
-|-------|----------|-------------|
-| Wrong bar color | Desktop line 2600, Mobile line 2358 | "Your Bar" checkers always show as gold, even when playing as black |
-| Bar placement | Desktop lines 2588-2606 | Bar is at bottom-left corner instead of center |
+**Evidence from Game Logs:**
+```
+Turn 13: turn_end → nextTurnWallet = BSBA... (opponent)
+Turn 14: auto_forfeit → missedCount=3, timedOutWallet = BSBA... 
+```
+
+The gap between turn 13 (02:15:01) and turn 14 (02:15:45) is **44 seconds**. With a 10-second turn timer, there should have been:
+- Turn 14: turn_timeout after 10s (02:15:11)
+- Turn 15: turn_timeout after 10s (02:15:21)  
+- Turn 16: auto_forfeit after 10s (02:15:31)
+
+**Root Cause:** The timer IS counting on the non-moving player's device, but:
+1. When the timer fires `handleTurnTimeout`, it increments `missedCount` and sends a `turn_timeout` move
+2. The local state updates to pass turn to opponent (`setCurrentTurnWallet(nextTurnWallet)`)
+3. BUT there's no **timer reset and restart** for the next missed turn detection
+4. The `timeoutFiredRef.current = true` debounce prevents multiple fires, but it's never reset for the SAME player's consecutive missed turns
+
+**Issue:** The timer only fires ONCE per `isMyTurn` change. If my turn stays "true" (because I missed), the timer doesn't restart.
 
 ---
 
-## Technical Analysis
+### Issue 3: After Rolling Dice & Playing, No Timer Enforcement
 
-### Color Bug Root Cause
+**Root Cause:** The mid-turn guard (lines 1076-1082 in BackgammonGame.tsx):
 
-**Desktop (line 2598-2600):**
 ```typescript
-<CheckerStack 
-  count={myRole === "player" ? gameState.bar.player : gameState.bar.ai} 
-  variant="gold"  // ← HARDCODED - wrong when myRole === "ai"
+if (dice.length > 0 && remainingMoves.length > 0) {
+  console.log("[handleTurnTimeout] Ignoring timeout - mid-turn with dice");
+  return;  // Timer is BLOCKED while player has moves remaining
+}
 ```
 
-**Mobile (line 2357-2358):**
-```typescript
-<div className="...bg-gradient-to-br from-primary to-amber-700 border-2 border-amber-500..."
-// ← HARDCODED gold styling - wrong when myRole === "ai"
-```
+This prevents timeout while the player is actively moving pieces. **This is intentional** to avoid unfair forfeits mid-move. However, the user wants strict enforcement where even mid-move delays cause turn loss.
 
-When the user joins as the second player, they play as `myRole === "ai"` (obsidian/black checkers). Their captured checkers should display in **obsidian/black** color, not gold.
+**Behavior Decision Required:**
+- **Current (generous):** Timer only fires before rolling dice or after completing all moves
+- **User wants (strict):** Timer runs continuously regardless of game phase
 
-### Current Bar Layout
+---
 
-- **Mobile**: Bar is correctly centered in the vertical middle bar between left and right point columns
-- **Desktop**: Bar is incorrectly placed in the bottom-left corner, separate from the main board
+### Issue 4: Remove 5-Second Turn Timer for Backgammon and Ludo
+
+The user requests removing the 5-second timer option for Backgammon and Ludo since these games have more complex decisions. Keep 5-second option only for Chess, Checkers, and Dominos.
+
+---
+
+## How Turn Time Works in These Games
+
+| Game | Typical Turn Time | Complexity |
+|------|------------------|------------|
+| **Chess** | 5-60s (fast chess) to unlimited | Single piece moves, but deep strategy |
+| **Checkers** | 5-30s | Simple piece moves |
+| **Dominos** | 5-30s | Single tile placement |
+| **Backgammon** | 15-60s | Roll dice, potentially 2-4 checker moves per turn |
+| **Ludo** | 10-30s | Roll dice, move token, can involve captures |
+
+**Backgammon** and **Ludo** require multiple sub-actions per turn (roll + multiple moves), so 5 seconds is too aggressive.
 
 ---
 
 ## Implementation Plan
 
-### Fix 1: Desktop - Correct Bar Checker Color
+### Fix 1: Consecutive Missed Turn Detection (HIGH PRIORITY)
 
-**File:** `src/pages/BackgammonGame.tsx`  
-**Location:** Lines 2598-2601
+**Problem:** After a missed turn, the timer doesn't restart for the same player.
 
-Change:
-```typescript
-<CheckerStack 
-  count={myRole === "player" ? gameState.bar.player : gameState.bar.ai} 
-  variant="gold"  // ← Change this
-```
+**Solution:** When `handleTurnTimeout` processes a missed turn (not auto_forfeit), reset the timer to allow consecutive timeout detection:
 
-To:
-```typescript
-<CheckerStack 
-  count={myRole === "player" ? gameState.bar.player : gameState.bar.ai} 
-  variant={myRole === "player" ? "gold" : "obsidian"}  // ← Dynamic based on role
-```
-
-### Fix 2: Mobile - Correct Bar Checker Color
-
-**File:** `src/pages/BackgammonGame.tsx`  
-**Location:** Lines 2357-2362
-
-Change the hardcoded gold styling to be dynamic based on `myRole`:
+**File:** `src/pages/BackgammonGame.tsx`
 
 ```typescript
-<div className={cn(
-  "w-7 h-7 rounded-full border-2 flex items-center justify-center text-[11px] font-bold shadow-md",
-  myRole === "player"
-    ? "bg-gradient-to-br from-primary to-amber-700 border-amber-500 text-amber-900"
-    : "bg-gradient-to-br from-slate-600 to-slate-900 border-primary/40 text-primary",
-  selectedPoint === -1 && "ring-2 ring-offset-1 ring-offset-background ring-primary"
-)}>
+// After updating local state for turn skip (around line 1175-1179):
+// Reset timer for consecutive missed turn detection
+turnTimer.resetTimer();
+timeoutFiredRef.current = false;  // Allow next timeout to fire
 ```
 
-### Fix 3: Desktop - Move Bar to Center Board Section
+Also add this pattern to `LudoGame.tsx`, `ChessGame.tsx`, `CheckersGame.tsx`, and `DominosGame.tsx`.
 
-**File:** `src/pages/BackgammonGame.tsx`  
-**Location:** Lines 2565-2573 (middle bar section)
+---
 
-Currently the middle bar only shows dice. Add the player's bar checkers here alongside the dice:
+### Fix 2: Remove 5-Second Timer for Backgammon & Ludo
+
+**File:** `src/pages/CreateRoom.tsx`
+
+Add game-type-aware timer options:
 
 ```typescript
-{/* Middle bar with dice AND captured checkers */}
-<div className="h-16 bg-gradient-to-r from-midnight-light via-background to-midnight-light my-2 rounded-lg border border-primary/20 flex items-center justify-between px-4 shrink-0">
-  {/* Opponent's bar - left side */}
-  {(myRole === "player" ? gameState.bar.ai : gameState.bar.player) > 0 && (
-    <div className="flex items-center gap-2">
-      <span className="text-xs text-muted-foreground">Opp:</span>
-      <CheckerStack 
-        count={myRole === "player" ? gameState.bar.ai : gameState.bar.player} 
-        variant="obsidian" 
-        size="sm"
-        isTop={true}
-      />
-    </div>
-  )}
-  
-  {/* Dice - center */}
-  <div className="flex-1 flex justify-center">
-    {dice.length > 0 && (
-      <div className="flex gap-4 items-center">
-        <Dice3D value={dice[0]} variant={isMyTurn ? "ivory" : "obsidian"} />
-        <Dice3D value={dice[1]} variant={isMyTurn ? "ivory" : "obsidian"} />
-      </div>
-    )}
-  </div>
-  
-  {/* My bar - right side */}
-  {(myRole === "player" ? gameState.bar.player : gameState.bar.ai) > 0 && (
-    <div 
-      className={cn(
-        "flex items-center gap-2 cursor-pointer rounded-lg p-1 transition-all",
-        selectedPoint === -1 && "ring-2 ring-primary bg-primary/10"
-      )}
-      onClick={() => handlePointClick(-1)}
-    >
-      <span className="text-xs text-muted-foreground">Bar:</span>
-      <CheckerStack 
-        count={myRole === "player" ? gameState.bar.player : gameState.bar.ai} 
-        variant={myRole === "player" ? "gold" : "obsidian"}
-        size="sm"
-        isSelected={selectedPoint === -1}
-        onClick={() => handlePointClick(-1)}
-        isTop={true}
-      />
-    </div>
-  )}
-</div>
+// Around line 614-619, make timer options dynamic based on game type
+const timerOptions = useMemo(() => {
+  const gameTypeNum = parseInt(gameType);
+  // Backgammon (3) and Ludo (5) - no 5-second option
+  if (gameTypeNum === 3 || gameTypeNum === 5) {
+    return [
+      { value: "10", label: t("createRoom.seconds", { count: 10 }) },
+      { value: "15", label: t("createRoom.seconds", { count: 15 }) },
+      { value: "30", label: t("createRoom.seconds", { count: 30 }) },
+      { value: "0", label: t("createRoom.unlimited") },
+    ];
+  }
+  // Chess, Checkers, Dominos - include 5-second option
+  return [
+    { value: "5", label: t("createRoom.seconds", { count: 5 }) },
+    { value: "10", label: t("createRoom.seconds", { count: 10 }) },
+    { value: "15", label: t("createRoom.seconds", { count: 15 }) },
+    { value: "0", label: t("createRoom.unlimited") },
+  ];
+}, [gameType, t]);
+
+// Reset turn time if current selection is invalid for new game type
+useEffect(() => {
+  const gameTypeNum = parseInt(gameType);
+  if ((gameTypeNum === 3 || gameTypeNum === 5) && turnTime === "5") {
+    setTurnTime("10");  // Default to 10s for Backgammon/Ludo
+  }
+}, [gameType, turnTime]);
 ```
 
-Then **remove** the old bar display from lines 2588-2606 (the "Player Bar / Bear Off Zone" section), keeping only the Bear Off zone there.
+---
+
+### Fix 3: Room List Turn Time - Ensure Session Created on Room Creation
+
+**File:** `src/hooks/useSolanaRooms.ts` (in `createRoom` function)
+
+Currently, `game-session-set-settings` is called after room creation, but we need to verify it's being called correctly and the room PDA matches.
+
+**Investigation:** Add debug logging to verify the room PDA being passed:
+
+```typescript
+// After room creation (around line 450+)
+console.log("[CreateRoom] Calling game-session-set-settings with PDA:", roomPda);
+```
+
+**Potential Fix:** Ensure the exact same PDA string format is used for both Solana account and DB storage.
+
+---
+
+### Fix 4: Strict Timer Enforcement (Optional - Based on User Preference)
+
+If the user wants the timer to continue even while moving checkers:
+
+**Option A (Recommended):** Keep mid-turn guard but reduce remaining time instead of full reset:
+- When player rolls dice, don't reset timer
+- Timer continues from where it was
+
+**Option B (Aggressive):** Remove mid-turn guard entirely:
+- Player must complete all moves within time limit
+- May cause frustration on slow connections
+
+**Current recommendation:** Keep the mid-turn guard but ensure timer doesn't reset after each individual move.
 
 ---
 
@@ -144,41 +175,83 @@ Then **remove** the old bar display from lines 2588-2606 (the "Player Bar / Bear
 
 | File | Changes |
 |------|---------|
-| `src/pages/BackgammonGame.tsx` | Fix bar color (desktop + mobile), move desktop bar to center |
-
-**Note:** No changes to `BackgammonAI.tsx` - it's single-player where you always play as gold
-
----
-
-## Why This Will Work
-
-1. **Color Fix**: Using `myRole === "player" ? "gold" : "obsidian"` ensures checkers display in the correct color based on which side the player is on
-
-2. **Center Placement**: Moving the bar into the middle section keeps captured checkers visible and accessible without hiding the dice - they sit on either side of the dice
-
-3. **Consistent UX**: Matches the mobile experience where the bar is in the center of the board
+| `src/pages/BackgammonGame.tsx` | Reset timer after missed turn to detect consecutive misses |
+| `src/pages/LudoGame.tsx` | Same timer reset pattern |
+| `src/pages/ChessGame.tsx` | Same timer reset pattern |
+| `src/pages/CheckersGame.tsx` | Same timer reset pattern |
+| `src/pages/DominosGame.tsx` | Same timer reset pattern |
+| `src/pages/CreateRoom.tsx` | Remove 5-second option for Backgammon/Ludo |
+| `src/hooks/useSolanaRooms.ts` | Debug logging for room creation PDA |
 
 ---
 
-## Visual Result
+## Technical Details
 
-```text
-┌───────────────────────────────────────────────────────┐
-│                    TOP POINTS 13-24                   │
-├───────────────────────────────────────────────────────┤
-│   [Opp Bar: ●●]     🎲 🎲     [Your Bar: ○○ TAP]     │  ← Center bar section
-├───────────────────────────────────────────────────────┤
-│                   BOTTOM POINTS 1-12                  │
-└───────────────────────────────────────────────────────┘
+### Why Consecutive Timeouts Don't Work Currently
+
+```
+Timeline (10s timer):
+00:00 - Turn passes to Player B (BSBA...)
+00:10 - Timer expires → handleTurnTimeout fires
+       → missedCount = 1
+       → setCurrentTurnWallet(opponent) ← LOCAL state says "opponent's turn"
+       → timeoutFiredRef.current = true ← BLOCKS future fires
+       → BUT isMyTurn is still TRUE (state hasn't propagated)
+       
+00:11 - useEffect detects currentTurnWallet changed
+       → Resets turnTimer.resetTimer() ← Timer resets
+       → BUT effectiveIsMyTurn is now FALSE
+       → Timer STOPS counting because !isMyTurn
+
+Result: Timer stops after first missed turn because the local state update
+        makes isMyTurn = false, which stops the countdown.
 ```
 
+**The Real Problem:** After the local `setCurrentTurnWallet(nextTurnWallet)` call, `effectiveIsMyTurn` becomes `false`, which stops the timer. But the turn didn't actually pass on the opponent's device!
+
+### Correct Behavior Required
+
+When a player misses a turn:
+1. Record `turn_timeout` to DB
+2. Update `current_turn_wallet` in DB → opponent takes over
+3. On opponent's device, polling detects turn change → they get the turn
+4. On the timeouting player's device, timer should STOP (they lost their turn)
+
+The issue is that after `setCurrentTurnWallet(nextTurnWallet)`:
+- Local state: "It's opponent's turn"
+- DB state: `current_turn_wallet` = opponent
+- Timer: Stops (correctly)
+
+**BUT** if the opponent doesn't move, the opponent's device should be counting down their turn. The timeout detection is correct - the problem is the consecutive miss tracking.
+
+### Root Issue Identified
+
+Looking at game logs again:
+```
+02:15:01 - turn_end from Fbk1 → nextTurn = BSBA
+02:15:45 - auto_forfeit from BSBA (missedCount=3)
+```
+
+44 seconds gap, 3 missed turns detected. This means the timer WAS firing repeatedly on BSBA's device, incrementing missedCount until it hit 3.
+
+**The actual issue:** The timer IS working, but the consecutive misses aren't being recorded as separate `turn_timeout` moves in the database. Only the final `auto_forfeit` is recorded.
+
+**Solution:** Each missed turn should record a `turn_timeout` move AND pass the turn to opponent in the DB. Currently, after missing, the local state changes but the opponent doesn't get notified until the final forfeit.
+
 ---
 
-## Testing Checklist
+## Summary: What Needs to Happen
 
-After implementing:
-1. Create a ranked game and join with second wallet (you'll play as black)
-2. Hit an opponent's checker - verify it shows as GOLD on opponent's bar
-3. Let opponent hit your checker - verify it shows as BLACK on your bar  
-4. Verify bar is in center of desktop board, not blocking dice
-5. Click on your bar checkers to re-enter - verify the flow works
+1. **After each missed turn (not just forfeit):**
+   - Record `turn_timeout` move to DB ← This IS happening (line 1158-1168)
+   - Update `current_turn_wallet` in DB to opponent ← This should happen via submit_game_move RPC
+   - On opponent's device, they should see "Opponent skipped, your turn"
+   
+2. **The consecutive miss tracking is CLIENT-SIDE (localStorage):**
+   - This is the design flaw - if the user closes tab, missed count resets
+   - Should be tracked server-side in `game_sessions` or `game_moves`
+
+3. **For this fix, we'll ensure:**
+   - Timer reset works correctly for consecutive detection
+   - Each timeout is properly recorded
+   - Remove 5s option for Backgammon/Ludo
