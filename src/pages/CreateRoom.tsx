@@ -114,8 +114,13 @@ export default function CreateRoom() {
   // Auto-switch turn time to 10s for Backgammon/Ludo if 5s is selected
   // These games have complex multi-action turns that need more time
   useEffect(() => {
+    // 5s excluded for Backgammon (3) and Ludo (5) - too complex for fast turns
     if ((gameType === "3" || gameType === "5") && turnTime === "5") {
-      setTurnTime("10");
+      setTurnTime("15");
+    }
+    // 10s also excluded for Backgammon (3) - multi-step turns need more time
+    if (gameType === "3" && turnTime === "10") {
+      setTurnTime("15");
     }
   }, [gameType, turnTime]);
 
@@ -616,7 +621,10 @@ export default function CreateRoom() {
                 {gameType !== "3" && gameType !== "5" && (
                   <SelectItem value="5">{t("createRoom.seconds", { count: 5 })}</SelectItem>
                 )}
-                <SelectItem value="10">{t("createRoom.seconds", { count: 10 })}</SelectItem>
+                {/* 10s option NOT available for Backgammon (3) - multi-step turns need more time */}
+                {gameType !== "3" && (
+                  <SelectItem value="10">{t("createRoom.seconds", { count: 10 })}</SelectItem>
+                )}
                 <SelectItem value="15">{t("createRoom.seconds", { count: 15 })}</SelectItem>
                 <SelectItem value="0">{t("createRoom.unlimited")}</SelectItem>
               </SelectContent>
