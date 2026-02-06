@@ -81,7 +81,7 @@ export default function CreateRoom() {
   const [entryFee, setEntryFee] = useState<string>("0"); // Default to 0 for casual
   const [maxPlayers, setMaxPlayers] = useState<string>("2");
   const [turnTime, setTurnTime] = useState<string>("10");
-  const [gameMode, setGameMode] = useState<'casual' | 'ranked'>('casual');
+  const [gameMode, setGameMode] = useState<'casual' | 'ranked' | 'private'>('casual');
   const [checkingActiveRoom, setCheckingActiveRoom] = useState(true);
   const [refreshingBalance, setRefreshingBalance] = useState(false);
   const [showMobileWalletRedirect, setShowMobileWalletRedirect] = useState(false);
@@ -289,11 +289,13 @@ export default function CreateRoom() {
     
     // Pass mode to createRoom - this is the AUTHORITATIVE source of truth
     // Mode is written to DB immediately, not localStorage
+    // Note: For now, 'private' mode uses 'casual' for on-chain creation (backend update pending)
+    const onChainMode = gameMode === 'private' ? 'casual' : gameMode;
     const roomId = await createRoom(
       parseInt(gameType) as GameType,
       entryFeeNum,
       parseInt(maxPlayers),
-      gameMode // Pass mode directly to createRoom
+      onChainMode
     );
 
     if (roomId && address) {
@@ -590,7 +592,7 @@ export default function CreateRoom() {
                 min={gameMode === 'ranked' ? dynamicMinFee : 0}
                 step="0.001"
                 className={`h-9 ${isRematch ? 'border-primary/50' : ''} ${
-                  gameMode === 'casual' 
+                  gameMode === 'casual' || gameMode === 'private'
                     ? 'border-muted/50 bg-muted/20 text-muted-foreground focus:border-muted' 
                     : 'border-primary/50 bg-primary/5 text-foreground focus:border-primary'
                 }`}
@@ -601,8 +603,8 @@ export default function CreateRoom() {
                 </span>
               )}
             </div>
-            <p className={`text-xs ${gameMode === 'casual' ? 'text-muted-foreground' : 'text-primary/80'}`}>
-              {gameMode === 'casual' 
+            <p className={`text-xs ${gameMode === 'casual' || gameMode === 'private' ? 'text-muted-foreground' : 'text-primary/80'}`}>
+              {gameMode === 'casual' || gameMode === 'private'
                 ? t("createRoom.stakeOptional")
                 : `${t("createRoom.stakeMinRequired")} (${dynamicMinFee.toFixed(4)} SOL ≈ $${MIN_FEE_USD.toFixed(2)})`
               }
@@ -631,10 +633,10 @@ export default function CreateRoom() {
             </Select>
           </div>
 
-          {/* Game Mode Toggle (Casual vs Ranked) */}
+          {/* Game Mode Toggle (Casual vs Ranked vs Private) */}
           <div className="space-y-1.5">
             <Label className="text-sm">{t("createRoom.roomType") || "Game Mode"}</Label>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               <Button
                 type="button"
                 variant={gameMode === 'casual' ? 'default' : 'outline'}
@@ -666,11 +668,27 @@ export default function CreateRoom() {
                 <span className="mr-1.5">🔴</span> {t("createRoom.gameModeRanked")}
                 <span className="ml-1 opacity-70 text-xs">🏆</span>
               </Button>
+              <Button
+                type="button"
+                variant={gameMode === 'private' ? 'default' : 'outline'}
+                size="sm"
+                className={`h-10 ${gameMode === 'private' ? 'bg-violet-600 hover:bg-violet-700' : ''}`}
+                onClick={() => {
+                  setGameMode('private');
+                  // Private rooms use custom stakes (allow any amount including 0)
+                  if (!isRematch) setEntryFee("0");
+                }}
+              >
+                <span className="mr-1.5">🟣</span> {t("createRoom.gameModePrivate", "Private")}
+                <span className="ml-1 opacity-70 text-xs">🔗</span>
+              </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              {gameMode === 'ranked' 
-                ? t("createRoom.rankedDesc")
-                : t("createRoom.casualDesc")}
+              {gameMode === 'private' 
+                ? t("createRoom.privateDesc", "Private rooms don't appear in public list. Share an invite link to let friends join.")
+                : gameMode === 'ranked' 
+                  ? t("createRoom.rankedDesc")
+                  : t("createRoom.casualDesc")}
             </p>
           </div>
 
