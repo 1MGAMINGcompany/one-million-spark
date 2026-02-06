@@ -6,7 +6,6 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { isSameWallet, isRealWallet } from "@/lib/walletUtils";
 
 interface StartRollResult {
@@ -87,23 +86,9 @@ export function useStartRoll(options: UseStartRollOptions): UseStartRollResult {
       sessionCreatedRef.current = true;
       
       try {
-        console.log("[useStartRoll] Creating game session for both players (FAST START)", { roomPda, player1, player2 });
-        
-        // Call ensure_game_session - it now automatically sets all flags when both players join
-        const { error } = await supabase.rpc("ensure_game_session", {
-          p_room_pda: roomPda,
-          p_game_type: gameType,
-          p_player1_wallet: player1,
-          p_player2_wallet: player2,
-          p_mode: isRanked ? "ranked" : "casual",
-        });
-
-        if (error) {
-          console.error("[useStartRoll] Failed to ensure game session:", error);
-          sessionCreatedRef.current = false;
-        } else {
-          console.log("[useStartRoll] Game session created with FAST START flags (p1_ready, p2_ready, current_turn_wallet)");
-        }
+        // Session is created by record_acceptance (single authority pattern)
+        // This hook now only logs for debugging - session already exists
+        console.log("[useStartRoll] Session should exist via record_acceptance (FAST START)", { roomPda, player1, player2 });
       } catch (err) {
         console.error("[useStartRoll] Error ensuring game session:", err);
         sessionCreatedRef.current = false;

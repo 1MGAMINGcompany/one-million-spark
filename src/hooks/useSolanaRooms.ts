@@ -470,16 +470,8 @@ export function useSolanaRooms() {
         // We already know the room PDA from findCollisionFreeRoomId
         const roomPdaStr = roomPda.toBase58();
         
-        // CRITICAL: Create game_sessions with correct mode IMMEDIATELY
-        // This ensures Player 2 sees the correct mode when they join
-        console.log("[CreateRoom] Creating game_session with mode:", mode);
-        await supabase.rpc("ensure_game_session", {
-          p_room_pda: roomPdaStr,
-          p_game_type: gameType.toString(),
-          p_player1_wallet: publicKey.toBase58(),
-          p_player2_wallet: null, // Will be set when player 2 joins via record_acceptance
-          p_mode: mode, // Use authoritative mode from CreateRoom form
-        });
+        // record_acceptance creates the session if missing (single authority pattern)
+        console.log("[CreateRoom] Recording acceptance with mode:", mode);
         
         const rules = createRulesFromRoom(
           roomPdaStr,
