@@ -43,11 +43,17 @@ export function useTurnTimer(options: UseTurnTimerOptions): UseTurnTimerResult {
   const [isPaused, setIsPaused] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const hasExpiredRef = useRef(false);
+  
+  // Store turnTimeSeconds in ref to avoid stale closures in resetTimer
+  const turnTimeSecondsRef = useRef(turnTimeSeconds);
+  useEffect(() => {
+    turnTimeSecondsRef.current = turnTimeSeconds;
+  }, [turnTimeSeconds]);
 
   // Verbose state logging for debugging timer issues
   useEffect(() => {
-    console.log(`[useTurnTimer] State: enabled=${enabled}, isMyTurn=${isMyTurn}, isPaused=${isPaused}, remaining=${remainingTime}s, roomId=${roomId?.slice(0, 8) || "none"}`);
-  }, [enabled, isMyTurn, isPaused, remainingTime, roomId]);
+    console.log(`[useTurnTimer] State: enabled=${enabled}, isMyTurn=${isMyTurn}, isPaused=${isPaused}, remaining=${remainingTime}s, turnTime=${turnTimeSeconds}s, roomId=${roomId?.slice(0, 8) || "none"}`);
+  }, [enabled, isMyTurn, isPaused, remainingTime, turnTimeSeconds, roomId]);
 
   // Clear interval helper
   const clearTimerInterval = useCallback(() => {
@@ -57,13 +63,13 @@ export function useTurnTimer(options: UseTurnTimerOptions): UseTurnTimerResult {
     }
   }, []);
 
-  // Reset timer to full time
+  // Reset timer to full time (uses ref to avoid stale closure)
   const resetTimer = useCallback(() => {
     clearTimerInterval();
-    setRemainingTime(turnTimeSeconds);
+    setRemainingTime(turnTimeSecondsRef.current);
     hasExpiredRef.current = false;
-    console.log(`[useTurnTimer] Timer reset to ${turnTimeSeconds}s for room ${roomId}`);
-  }, [turnTimeSeconds, roomId, clearTimerInterval]);
+    console.log(`[useTurnTimer] Timer reset to ${turnTimeSecondsRef.current}s for room ${roomId}`);
+  }, [roomId, clearTimerInterval]);
 
   // Pause timer
   const pauseTimer = useCallback(() => {
@@ -84,6 +90,15 @@ export function useTurnTimer(options: UseTurnTimerOptions): UseTurnTimerResult {
       resetTimer();
     }
   }, [isMyTurn, enabled, resetTimer]);
+
+  // Sync remaining time when turnTimeSeconds prop changes (DB data loaded)
+  // Only update if timer isn't actively counting down
+  useEffect(() => {
+    if (enabled && !intervalRef.current) {
+      setRemainingTime(turnTimeSeconds);
+      console.log(`[useTurnTimer] turnTimeSeconds prop changed to ${turnTimeSeconds}s, synced remainingTime`);
+    }
+  }, [turnTimeSeconds, enabled]);
 
   // Main timer countdown effect
   useEffect(() => {
