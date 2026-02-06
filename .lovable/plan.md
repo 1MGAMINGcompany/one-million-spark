@@ -1,142 +1,245 @@
 
-# Fix Plan: Turn Timer Not Starting + Game Entry Blocked
+# DB-Authoritative Turn Timer & Strike Tracking Implementation
 
-## Root Cause Analysis
+## Overview
 
-Based on the investigation, I found **multiple interconnected issues** blocking games from starting:
+This implementation creates a fully DB-authoritative timeout and strike tracking system that fixes:
+- Games stalling when a player goes offline
+- Phantom forfeits from localStorage-based strike tracking
+- Timer pauses in mobile wallet browsers/background tabs
+- Missing `turn_timeout` moves causing invalid auto-forfeits
 
-| Issue | Root Cause | Impact |
-|-------|-----------|--------|
-| `game-session-get` 404 | Edge function wasn't deployed | Polling for readiness fails |
-| `bothReady` never true | `record_acceptance` not setting flags | Games stuck on "Waiting" screen |
-| Timer doesn't start | `effectiveIsMyTurn` is false until `currentTurnWallet` is set | No timeout enforcement |
-| Dice roll blocking | `useStartRoll` returns `isFinalized: true` but session isn't created | Deadlock between session creation and UI |
+## Changes Summary
 
-### The Deadlock Explained
+| Component | Change |
+|-----------|--------|
+| **New DB Column** | `game_sessions.missed_turns JSONB` for server-side strike tracking |
+| **New RPC** | `maybe_apply_turn_timeout(room_pda)` - idempotent server-side timeout check |
+| **Updated RPC** | `submit_game_move` - reset strikes on successful actions |
+| **Frontend** | `BackgammonGame.tsx` - call server RPC on timeout + polling |
+| **Deprecate** | `src/lib/missedTurns.ts` - no longer used for enforcement |
 
-```text
-1. useStartRoll says isFinalized=true immediately
-2. RulesGate checks !isFinalized → false → never shows waiting UI
-3. But useStartRoll also calls ensure_game_session which sets current_turn_wallet
-4. Until that completes, currentTurnWallet is null → timer doesn't know whose turn it is
-5. If game-session-get was 404ing, the polling never detected bothReady
+---
+
+## 1. Database Migration
+
+### 1.1 Add `missed_turns` JSONB Column
+
+```sql
+ALTER TABLE game_sessions 
+ADD COLUMN IF NOT EXISTS missed_turns JSONB DEFAULT '{}'::jsonb;
+
+COMMENT ON COLUMN game_sessions.missed_turns IS 
+  'Server-side strike tracking: {"wallet_address": count}. Reset on successful action.';
+```
+
+### 1.2 Create `maybe_apply_turn_timeout` RPC
+
+This function is the core of the server-authoritative timeout system:
+
+- **Idempotent**: Uses `FOR UPDATE` lock + deadline check to only apply once per turn
+- **Validates expiry**: Only applies if `turn_started_at + turn_time_seconds < now()`
+- **Records move**: Inserts `turn_timeout` move with proper hash chain
+- **Updates session**: Sets `current_turn_wallet`, `turn_started_at`, clears dice state
+- **Tracks strikes**: Increments `missed_turns[wallet]` 
+- **Handles 3 strikes**: For 2-player games, triggers `auto_forfeit` and ends game
+
+Key logic:
+```sql
+CREATE OR REPLACE FUNCTION public.maybe_apply_turn_timeout(p_room_pda TEXT)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+  -- Lock session for atomic update
+  SELECT * INTO v_session FROM game_sessions WHERE room_pda = p_room_pda FOR UPDATE;
+  
+  -- Skip if not active, no turn holder, or already finished
+  IF v_session.status_int >= 3 THEN RETURN 'not_applied'; END IF;
+  
+  -- Calculate deadline
+  v_deadline := v_session.turn_started_at + (v_session.turn_time_seconds || ' seconds')::INTERVAL;
+  IF NOW() < v_deadline - INTERVAL '2 seconds' THEN RETURN 'not_expired'; END IF;
+  
+  -- Apply timeout: insert move, update session, track strikes
+  ...
+$$;
+```
+
+### 1.3 Update `submit_game_move` to Reset Strikes
+
+Add logic to clear a player's strike count on any successful action:
+
+```sql
+-- After successful move insertion:
+IF v_move_type IN ('dice_roll', 'move', 'turn_end') THEN
+  UPDATE game_sessions
+  SET missed_turns = missed_turns - p_wallet
+  WHERE room_pda = p_room_pda 
+    AND missed_turns ? p_wallet;
+END IF;
 ```
 
 ---
 
-## Fixes Required
+## 2. Frontend Changes
 
-### Fix 1: Edge Function Deployed ✅
-The `game-session-get` edge function is now deployed - this was causing 404 errors and blocking all polling.
+### 2.1 Update `handleTurnTimeout` in BackgammonGame.tsx
 
-### Fix 2: Ensure `currentTurnWallet` Is Set Immediately
+**Current behavior**: Uses `localStorage` via `incMissed()` for strike tracking
 
-**File:** `src/hooks/useStartRoll.ts`
-
-The hook should set the starting wallet in the database when both players are present. Currently it calls `ensure_game_session` but this RPC may not set `current_turn_wallet`.
-
-**Current issue:** The `startingWallet` is returned but `currentTurnWallet` in the game state isn't updated until the session is created in DB.
-
-**Solution:** After creating the session, trigger a refetch so `current_turn_wallet` is populated from the DB.
-
-### Fix 3: Set `p1_ready`/`p2_ready` When Session Is Created
-
-**File:** `src/hooks/useStartRoll.ts` or database RPC
-
-When `ensure_game_session` is called with both players present, it should also mark both players as ready (since they've already staked to join).
-
-**Add to `ensure_game_session` RPC or call separately:**
-```sql
-UPDATE game_sessions 
-SET p1_ready = true, p2_ready = true, start_roll_finalized = true
-WHERE room_pda = p_room_pda;
-```
-
-### Fix 4: RulesGate Should Pass Through When `hasTwoRealPlayers`
-
-**File:** `src/components/RulesGate.tsx`
-
-The gate should bypass immediately if:
-1. Two real players are present
-2. AND session creation is complete
-
-Currently it waits for `effectiveBothReady` from polling, but the polling was broken.
-
-**Alternative solution:** Add `hasTwoRealPlayers` as a bypass condition in RulesGate:
+**New behavior**: Calls server-side `maybe_apply_turn_timeout` RPC
 
 ```typescript
-// If we have two real players in the room, the game can proceed
-// (they already staked to join - implicit acceptance)
-if (roomPlayers.filter(p => !isPlaceholderWallet(p)).length >= 2) {
-  return <>{children}</>;
+const handleTurnTimeout = useCallback(async () => {
+  if (timeoutFiredRef.current || !isActuallyMyTurn || gameOver || !roomPda) return;
+  timeoutFiredRef.current = true;
+  
+  // Call server-side RPC instead of localStorage
+  const { data, error } = await supabase.rpc("maybe_apply_turn_timeout", {
+    p_room_pda: roomPda,
+  });
+  
+  if (data?.applied) {
+    if (data.type === "auto_forfeit") {
+      // 3 strikes - game over
+      enterOutcomeResolving(data.winnerWallet);
+    } else {
+      // Turn skipped - update local state from server
+      setCurrentTurnWallet(data.nextTurnWallet);
+      toast({ title: "Turn skipped", description: `${data.strikes}/3 missed turns` });
+    }
+  }
+  
+  timeoutFiredRef.current = false;
+}, [/* deps */]);
+```
+
+### 2.2 Update Polling to Call `maybe_apply_turn_timeout`
+
+In the polling effect (~line 750), add a call to check/apply timeout:
+
+```typescript
+// Inside pollTurnWallet, after session fetch:
+if (data?.session?.status !== 'finished') {
+  // Try to apply timeout if opponent is idle
+  const { data: timeoutResult } = await supabase.rpc("maybe_apply_turn_timeout", {
+    p_room_pda: roomPda,
+  });
+  
+  if (timeoutResult?.applied) {
+    console.log("[Polling] Server applied timeout:", timeoutResult);
+    // UI will update on next poll or realtime event
+  }
 }
 ```
 
-### Fix 5: Initialize Timer with `startingWallet` from `useStartRoll`
+### 2.3 Process `turn_timeout` Moves Like `turn_end`
 
-**File:** `src/pages/BackgammonGame.tsx`
+In `handleDurableMoveReceived` (~line 570), ensure `turn_timeout` properly clears per-turn state:
 
-Ensure `currentTurnWallet` is set from `startRoll.startingWallet` immediately on mount, not just after an effect runs.
+```typescript
+} else if (bgMove.type === "turn_timeout") {
+  // Update from server-authoritative data
+  setCurrentTurnWallet(bgMove.nextTurnWallet);
+  setDice([]);
+  setRemainingMoves([]);
+  turnTimer.resetTimer();
+  timeoutFiredRef.current = false;
+  
+  if (isSameWallet(bgMove.nextTurnWallet, address)) {
+    toast({ title: "Opponent skipped - Your turn!" });
+    setGameStatus("Your turn - Roll the dice!");
+  }
+}
+```
 
----
+### 2.4 Remove localStorage Strike Tracking
 
-## Implementation Details
-
-### Option A: Quick Fix (Database-side)
-
-Modify the `ensure_game_session` RPC to:
-1. Set `p1_ready = true` and `p2_ready = true` when both wallets are provided
-2. Set `start_roll_finalized = true`
-3. Set `current_turn_wallet = p_player1_wallet`
-
-This ensures the DB is in the correct state as soon as both players join.
-
-### Option B: Client-side Fix
-
-Modify `useStartRoll.ts` to:
-1. After calling `ensure_game_session`, call `supabase.rpc("record_acceptance")` for both players
-2. OR call a new edge function that sets all the required flags
-
-### Option C: Simplify RulesGate (Recommended)
-
-Since we're in "Fast Start" mode where there's no dice roll:
-1. RulesGate should pass through immediately when `hasTwoRealPlayers` is true
-2. Remove the polling complexity since the decision is now simple
+Remove imports and calls to `incMissed`, `resetMissed`, `getMissed` from BackgammonGame.tsx. Keep `clearRoom` for cleanup only.
 
 ---
 
-## Files to Modify
+## 3. Multi-Player Game Support (Ludo)
 
-| File | Change |
-|------|--------|
-| `src/components/RulesGate.tsx` | Add bypass for `validPlayers.length >= 2` |
-| `src/hooks/useStartRoll.ts` | Ensure session flags are set after creation |
-| Database RPC `ensure_game_session` | Set ready flags and current_turn_wallet |
+The `maybe_apply_turn_timeout` RPC handles 3-4 player games differently:
 
----
-
-## Turn Timer Flow (After Fix)
-
-```text
-1. Both players in room (hasTwoRealPlayers = true)
-2. RulesGate bypasses (new condition)
-3. useStartRoll.startingWallet = roomPlayers[0] (creator)
-4. setCurrentTurnWallet(startingWallet) runs immediately
-5. Timer starts: enabled=true, isMyTurn=(creator sees true, joiner sees false)
-6. Creator has 10s to roll dice and move
-7. On timeout: turn_timeout recorded → currentTurnWallet changes to opponent
-8. Timer resets on opponent's device
+```sql
+IF v_session.max_players > 2 AND v_new_strikes >= 3 THEN
+  -- Eliminate player instead of ending game
+  UPDATE game_sessions
+  SET eliminated_players = array_append(
+        COALESCE(eliminated_players, '{}'), 
+        v_timed_out_wallet
+      ),
+      current_turn_wallet = v_next_wallet,
+      turn_started_at = NOW()
+  WHERE room_pda = p_room_pda;
+  
+  -- Check if only 1 active player remains
+  IF (SELECT count(*) FROM unnest(participants) 
+      EXCEPT SELECT unnest(eliminated_players)) = 1 THEN
+    -- Mark winner
+  END IF;
+END IF;
 ```
 
 ---
 
-## Testing Checklist
+## 4. Files to Modify
 
-After implementing:
-1. Create a ranked Backgammon room with 10s timer
-2. Have second player join immediately
-3. Verify both players see the game board (not "Waiting for opponent")
-4. Verify timer is counting down for Player 1 (creator)
-5. Let timer expire - verify turn passes to Player 2
-6. Let Player 2's timer expire - verify turn passes back to Player 1
-7. Let 3 consecutive timeouts occur - verify auto-forfeit
+| File | Changes |
+|------|---------|
+| `new migration .sql` | Add column, create RPC, update submit_game_move |
+| `src/pages/BackgammonGame.tsx` | Update handleTurnTimeout, polling, move handler |
+| `src/pages/ChessGame.tsx` | Same pattern as Backgammon |
+| `src/pages/CheckersGame.tsx` | Same pattern as Backgammon |
+| `src/pages/DominosGame.tsx` | Same pattern as Backgammon |
+| `src/pages/LudoGame.tsx` | Same pattern + elimination logic |
+| `src/lib/missedTurns.ts` | Mark as deprecated (keep for backward compat) |
+
+---
+
+## 5. Turn Flow After Implementation
+
+```text
+1. Timer expires on Player A's device
+2. Frontend calls maybe_apply_turn_timeout(roomPda)
+3. Server validates turn is actually expired
+4. Server inserts turn_timeout move (atomic, idempotent)
+5. Server updates current_turn_wallet = Player B
+6. Server resets turn_started_at = NOW()
+7. Server increments missed_turns[Player A]
+8. Server returns { applied: true, nextTurnWallet: B, strikes: 1 }
+9. Both devices see turn_timeout via realtime/polling
+10. Player B can immediately roll dice
+11. If Player A gets 3 strikes, server inserts auto_forfeit + ends game
+```
+
+---
+
+## 6. Testing Checklist
+
+1. Create ranked room with 10s turn timer
+2. Both players enter game board immediately
+3. Timer counts down visibly
+4. Let timer expire → verify `turn_timeout` move in DB
+5. Verify `game_sessions.current_turn_wallet` changed
+6. Verify `game_sessions.missed_turns` has strike count
+7. Next player can roll immediately
+8. Let player time out 3 times → verify `auto_forfeit`
+9. Test: Player A offline, Player B polls → timeout applied by server
+10. Verify dice/remainingMoves cleared on timeout
+
+---
+
+## 7. Acceptance Criteria
+
+After a timeout:
+- [ ] `game_moves` contains a `turn_timeout` row
+- [ ] `game_sessions.current_turn_wallet` = next player
+- [ ] `game_sessions.turn_started_at` = fresh timestamp
+- [ ] `game_sessions.missed_turns` shows updated strike count
+- [ ] Both devices can reload `/play/:roomPda` and see correct state
+- [ ] Next player can immediately roll dice
+- [ ] No localStorage is used for strike enforcement
