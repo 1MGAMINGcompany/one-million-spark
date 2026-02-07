@@ -1,147 +1,177 @@
 
-# Fix: Solflare In-App Browser Auto-Connect Loop
+# Fix: Solflare In-App Browser Auto-Connect Not Working
 
-## Problem Analysis
+## Problem Summary
+When a user scans a QR invite link with Solflare mobile app:
+1. Solflare opens the page in its in-app browser
+2. The wallet does NOT auto-connect (unlike Phantom which works)
+3. Clicking "Connect Wallet" button results in an error: "If connection didn't work, try tapping Connect again"
+4. This creates a frustrating loop where the user can't connect
 
-When users open a QR invite link in Solflare's in-app browser, the wallet doesn't auto-connect like Phantom does. The current behavior:
-1. User scans QR → Solflare opens the Room page
-2. Wallet not connected → WalletGateModal shows "Connect Wallet" button
-3. User clicks → Opens connect dialog 
-4. Nothing happens → Dialog closes → Still disconnected → Loop
+## Root Cause Analysis
 
-### Root Causes
+### Issue 1: Wallet Standard Auto-Detection Timing
+The current `SolanaProvider.tsx` uses:
+```typescript
+const wallets = useMemo(() => [], []);
+```
+This relies 100% on Wallet Standard auto-detection. However, Solflare's in-app browser may not register via the Standard API fast enough.
 
-1. **Incomplete Solflare Detection**: The current `getIsInWalletBrowser()` only checks `win.solflare?.isSolflare`, but Solflare's in-app browser may inject the provider differently (e.g., via `window.Solflare` or `window.solana.isSolflare`)
+### Issue 2: Adapter Not Found During Auto-Connect
+When the auto-connect effect runs (lines 428-582 in WalletButton.tsx):
+```typescript
+preferredAdapter = wallets.find(w => 
+  w.adapter.name.toLowerCase().includes('solflare') &&
+  w.readyState === 'Installed'
+);
+```
+This often returns `undefined` because the `wallets` array from `useWallet()` hasn't populated with Solflare yet, even though `window.solflare` exists.
 
-2. **Auto-Connect Logic Issues**: The current retry loop looks for any "Installed" adapter but doesn't specifically target Solflare's adapter in Solflare browser. It also stops retrying too early when `win.solana` exists but the wallet-adapter isn't ready.
+### Issue 3: Direct Provider Connect Success Doesn't Sync with Adapter
+The fallback logic tries `win.solflare.connect()` directly, but even if it succeeds, the subsequent adapter operations fail because the adapter isn't in the list.
 
-3. **No Connect Loop Guard**: If auto-connect fails, the Room page can repeatedly trigger the WalletGateModal, creating a poor UX loop.
+### Issue 4: Manual Connect Doesn't Retry with Direct Provider
+When user clicks "Connect Wallet" in the dialog, `handleWalletClick()` only tries `select()` + `connect()` via the adapter. If the adapter isn't detected, it shows the fallback panel.
 
 ---
 
-## Solution Overview
+## Solution
 
-### 1. Improve Solflare In-App Browser Detection
+### 1. Add Explicit Solflare Adapter (SolanaProvider.tsx)
 
-Add comprehensive Solflare detection in `WalletButton.tsx`:
+Add the `SolflareWalletAdapter` explicitly to ensure it's always available, especially in mobile in-app browsers:
 
 ```typescript
-// Specific Solflare in-app browser detection
-const getIsSolflareBrowser = () => {
-  const win = window as any;
-  const ua = (navigator.userAgent || '').toLowerCase();
-  const isMobile = /mobile|android|iphone|ipad|ipod/i.test(ua);
-  
-  // Explicit Solflare flags
-  const hasSolflareInAppFlag = !!win.solflare?.isInAppBrowser;
-  const hasSolflareIsSolflare = !!win.solflare?.isSolflare;
-  const hasWindowSolflare = !!win.Solflare;
-  
-  // window.solana may have Solflare flags
-  const solanaIsSolflare = !!win.solana?.isSolflare || !!win.solana?.isSolflareWallet;
-  
-  // UA-based detection (Solflare includes its name in UA)
-  const solflareInUA = ua.includes('solflare');
-  
-  // In-app browser = mobile + Solflare provider present
-  return isMobile && (
-    hasSolflareInAppFlag ||
-    hasSolflareIsSolflare ||
-    hasWindowSolflare ||
-    solanaIsSolflare ||
-    solflareInUA
-  );
-};
+import { SolflareWalletAdapter } from "@solana/wallet-adapter-solflare";
+
+const wallets = useMemo(() => [
+  new SolflareWalletAdapter()
+], []);
 ```
 
-### 2. Wallet-Specific Auto-Connect Logic
+**Why this helps**: Even if Wallet Standard detection is slow, the explicit adapter will be available immediately. Duplicate adapters are automatically deduplicated by the wallet-adapter library.
 
-Modify the auto-connect `useEffect` in `WalletButton.tsx` to:
-- Detect which wallet browser we're in (Phantom vs Solflare)
-- Select the appropriate adapter by name match
-- Retry more aggressively for Solflare (which may take longer to inject)
-- Don't rely on `window.solana.isConnected` for Solflare
+### 2. Improve Solflare Auto-Connect with Direct Provider Fallback (WalletButton.tsx)
+
+When in Solflare browser but no adapter found, try direct provider connect AND wait for adapter to appear:
 
 ```typescript
-// In auto-connect effect:
-const tryConnect = async () => {
+// If Solflare browser but no adapter found yet, try direct connect
+if (isSolflareBrowser && !preferredAdapter) {
   const win = window as any;
-  attempts++;
   
-  // Determine which wallet browser we're in
-  const isPhantomBrowser = !!win.phantom?.solana?.isPhantom && isMobile;
-  const isSolflareBrowser = getIsSolflareBrowser();
-  
-  // Find preferred adapter based on browser
-  let preferredAdapter = null;
-  if (isSolflareBrowser) {
-    preferredAdapter = wallets.find(w => 
-      w.adapter.name.toLowerCase().includes('solflare') &&
-      w.readyState === 'Installed'
-    );
-  } else if (isPhantomBrowser) {
-    preferredAdapter = wallets.find(w => 
-      w.adapter.name.toLowerCase().includes('phantom') &&
-      w.readyState === 'Installed'
-    );
-  }
-  
-  // Fallback to any installed adapter
-  const targetAdapter = preferredAdapter || 
-    wallets.find(w => w.readyState === 'Installed');
-  
-  if (targetAdapter) {
+  // Try direct provider connect first
+  if (win.solflare?.connect) {
     try {
-      select(targetAdapter.adapter.name);
-      await connect();
-      console.log("[WalletBrowser] Auto-connect succeeded:", targetAdapter.adapter.name);
-      return true; // Success - stop retrying
-    } catch (err) {
-      console.warn("[WalletBrowser] Auto-connect attempt failed:", err);
-    }
-  }
-  
-  // For Solflare: also try direct provider connect
-  if (isSolflareBrowser && win.solflare?.connect) {
-    try {
-      await win.solflare.connect();
-      console.log("[WalletBrowser] Direct solflare.connect() succeeded");
-      return true;
+      const resp = await win.solflare.connect();
+      if (resp?.publicKey) {
+        console.log("[WalletBrowser] Direct solflare.connect() succeeded");
+        // Now wait a tick for adapter to appear
+        await new Promise(r => setTimeout(r, 100));
+        
+        // Re-check for adapter
+        const newAdapter = wallets.find(w => 
+          w.adapter.name.toLowerCase().includes('solflare') &&
+          w.readyState === 'Installed'
+        );
+        
+        if (newAdapter) {
+          select(newAdapter.adapter.name);
+          // Don't call connect() again - already connected via direct provider
+          connectSucceeded = true;
+          return true;
+        }
+      }
     } catch (err) {
       console.warn("[WalletBrowser] Direct solflare.connect() failed:", err);
     }
   }
+}
+```
+
+### 3. Increase Retry Attempts and Add Delay for Solflare (WalletButton.tsx)
+
+Solflare's in-app browser may take longer to inject its provider:
+
+```typescript
+const AUTO_CONNECT_MAX_TRIES = 15; // Increase from 10 to 15
+const AUTO_CONNECT_RETRY_MS = 300; // Increase from 250 to 300
+```
+
+### 4. Add Solflare Direct Connect in Manual Click Flow (WalletButton.tsx)
+
+When user clicks Solflare in the connect dialog and adapter isn't found, try direct provider:
+
+```typescript
+const handleWalletClick = (walletId: string) => {
+  const matchingWallet = sortedWallets.find(w => 
+    w.adapter.name.toLowerCase().includes(walletId)
+  );
   
-  return false; // Continue retrying
+  if (matchingWallet) {
+    // ... existing logic
+  } else if (walletId === 'solflare' && getIsSolflareBrowser()) {
+    // Special handling for Solflare in-app browser when adapter not found
+    handleSolflareDirectConnect();
+  } else if (isMobile) {
+    // ... existing modal logic
+  }
+};
+
+const handleSolflareDirectConnect = async () => {
+  const win = window as any;
+  setConnectingWallet('Solflare');
+  setDialogOpen(false);
+  
+  try {
+    if (win.solflare?.connect) {
+      const resp = await win.solflare.connect();
+      if (resp?.publicKey) {
+        // Wait for wallet-adapter to sync
+        await new Promise(r => setTimeout(r, 500));
+        
+        // Force a re-render by triggering connect again
+        const adapter = wallets.find(w => 
+          w.adapter.name.toLowerCase().includes('solflare')
+        );
+        if (adapter) {
+          select(adapter.adapter.name);
+          await connect();
+        }
+        return;
+      }
+    }
+    throw new Error('Solflare connect failed');
+  } catch (err) {
+    console.error('[Wallet] Solflare direct connect failed:', err);
+    setConnectingWallet(null);
+    setShowFallbackPanel(true);
+  }
 };
 ```
 
-### 3. Prevent Connect Modal Loop on Room Page
+### 5. Prevent Modal Loop in Room.tsx
 
-Add a guard in `Room.tsx` to prevent repeated modal opening in wallet browsers:
+Add check to not show WalletGateModal if we're in Solflare browser and auto-connect is still running:
 
 ```typescript
-// Add ref to track if we've already prompted
-const hasAutoPromptedConnectRef = useRef(false);
+// Add state to track if auto-connect is in progress
+const [autoConnectInProgress, setAutoConnectInProgress] = useState(false);
 
-// In useEffect that handles wallet state
-useEffect(() => {
-  // In wallet browser: don't auto-show modal, let auto-connect handle it
-  if (inWalletBrowser && !isConnected) {
-    // Give auto-connect time to work before showing any prompt
-    if (hasAutoPromptedConnectRef.current) return;
-    
-    const timer = setTimeout(() => {
-      if (!isConnected && !hasAutoPromptedConnectRef.current) {
-        hasAutoPromptedConnectRef.current = true;
-        // Optionally show a toast instead of modal
-        toast.info("Connecting wallet...");
-      }
-    }, 3000); // Wait for auto-connect to complete
-    
-    return () => clearTimeout(timer);
+// In handleJoinButtonClick
+if (!isConnected) {
+  if (inWalletBrowser) {
+    // Give auto-connect more time before showing modal
+    if (!hasAutoPromptedConnectRef.current) {
+      hasAutoPromptedConnectRef.current = true;
+      toast.info("Connecting to wallet...", { duration: 3000 });
+      // Don't show modal - auto-connect should handle it
+      return;
+    }
   }
-}, [inWalletBrowser, isConnected]);
+  setShowWalletGate(true);
+  return;
+}
 ```
 
 ---
@@ -150,49 +180,58 @@ useEffect(() => {
 
 | File | Changes |
 |------|---------|
-| `src/components/WalletButton.tsx` | Add `getIsSolflareBrowser()` detection, update auto-connect effect to prefer Solflare adapter in Solflare browser, add direct `solflare.connect()` fallback |
-| `src/pages/Room.tsx` | Add `hasAutoPromptedConnectRef` guard to prevent modal loop in wallet browsers |
+| `src/components/SolanaProvider.tsx` | Add explicit `SolflareWalletAdapter` |
+| `src/components/WalletButton.tsx` | Improve auto-connect timing, add direct connect handler for Solflare, increase retry attempts |
+| `src/pages/Room.tsx` | Improve wallet gate logic for Solflare browser |
 
 ---
 
-## Detection Confirmation
+## Technical Details
 
-After implementation, Solflare will be detected via:
-
+### SolanaProvider.tsx Changes
 ```typescript
-const isSolflareBrowser = 
-  !!win.solflare?.isInAppBrowser ||   // Explicit flag
-  !!win.solflare?.isSolflare ||       // Provider flag
-  !!win.Solflare ||                   // Capital-S variant
-  !!win.solana?.isSolflare ||         // On window.solana
-  !!win.solana?.isSolflareWallet ||   // Alt flag
-  ua.includes('solflare');            // UA string
+import { SolflareWalletAdapter } from "@solana/wallet-adapter-solflare";
+
+// In component:
+const wallets = useMemo(() => [
+  new SolflareWalletAdapter(),
+], []);
 ```
 
-## Adapter Selection Confirmation
+### WalletButton.tsx Changes
+1. Increase `AUTO_CONNECT_MAX_TRIES` to 15 and `AUTO_CONNECT_RETRY_MS` to 300
+2. Add `handleSolflareDirectConnect()` function
+3. Modify `handleWalletClick()` to call direct connect for Solflare in-app browser
+4. Improve auto-connect effect to better handle Solflare timing
 
-For Solflare browser, the adapter selection will:
-1. First look for adapter with name containing "solflare" (case-insensitive)
-2. Ensure it has `readyState === 'Installed'`
-3. Fallback to any installed adapter if specific one not found
+### Room.tsx Changes
+1. Don't immediately show WalletGateModal in Solflare browser
+2. Show toast instead giving auto-connect time to work
 
 ---
 
 ## Expected Behavior After Fix
 
-1. User scans QR code → Solflare opens Room page
-2. `getIsSolflareBrowser()` returns `true`
-3. Auto-connect effect starts retry loop
-4. Finds Solflare adapter by name → calls `select()` then `connect()`
-5. Connection succeeds → wallet connected
-6. If auto-connect fails after retries → single toast notification (not modal loop)
-7. Pending route restoration works as before
+1. User scans QR code with Solflare
+2. Solflare opens in-app browser to room page
+3. `SolflareWalletAdapter` is immediately available (explicit adapter)
+4. Auto-connect effect detects Solflare browser
+5. Calls `select('Solflare')` + `connect()` 
+6. Connection succeeds
+7. User can join the game
+
+**Fallback if auto-connect fails:**
+1. User clicks "Connect Wallet"
+2. Solflare button shown with "Detected" badge
+3. Click triggers direct `window.solflare.connect()`
+4. Connection succeeds
 
 ---
 
-## No Changes to Desktop
+## Verification Steps
 
-- `getIsSolflareBrowser()` only returns `true` when `isMobile === true`
-- Desktop Solflare extension behavior unchanged
-- Phantom detection unchanged
-- QR link format unchanged (`/room/:roomPda`)
+1. Generate a QR code for a private room
+2. Scan with Solflare mobile app
+3. Verify wallet auto-connects within ~3 seconds
+4. Verify you can join the game
+5. Test the same flow with Phantom to ensure no regression
