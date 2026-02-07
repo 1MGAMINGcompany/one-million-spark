@@ -74,6 +74,9 @@ export default function Room() {
   
   // Wallet in-app browsers (Phantom/Solflare) often miss WS updates
   const inWalletBrowser = isWalletInAppBrowser();
+  
+  // Guard to prevent repeated WalletGateModal in wallet browsers (auto-connect should handle it)
+  const hasAutoPromptedConnectRef = useRef(false);
 
   const [room, setRoom] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -595,6 +598,12 @@ export default function Room() {
     if (!roomPdaParam || !room) return;
 
     if (!isConnected) {
+      // In wallet browser: avoid opening modal repeatedly (let auto-connect handle it)
+      if (inWalletBrowser && hasAutoPromptedConnectRef.current) {
+        toast.info("Connecting wallet...", { duration: 2000 });
+        return;
+      }
+      hasAutoPromptedConnectRef.current = true;
       setShowWalletGate(true);
       return;
     }
