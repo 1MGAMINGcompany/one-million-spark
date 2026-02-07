@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, Loader2, RefreshCw } from "lucide-react";
 import { useWallet, useConnection } from "@solana/wallet-adapter-react";
@@ -44,6 +45,7 @@ interface RecoveryResult {
 }
 
 export function RecoverFundsButton({ roomPda, onRecovered, className }: RecoverFundsButtonProps) {
+  const { t } = useTranslation();
   const { publicKey, signTransaction } = useWallet();
   const { connection } = useConnection();
   const [status, setStatus] = useState<RecoveryStatus>("idle");
@@ -165,12 +167,12 @@ export function RecoverFundsButton({ roomPda, onRecovered, className }: RecoverF
         {isLoading ? (
           <>
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            {status === "checking" ? "Checking..." : "Processing..."}
+            {status === "checking" ? t("recoverFunds.checking") : t("recoverFunds.processing")}
           </>
         ) : (
           <>
             <RefreshCw className="mr-2 h-4 w-4" />
-            Recover Funds
+            {t("recoverFunds.recoverFunds")}
           </>
         )}
       </Button>
@@ -180,29 +182,25 @@ export function RecoverFundsButton({ roomPda, onRecovered, className }: RecoverF
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 text-yellow-500" />
-              Cancel Room & Recover Funds
+              {t("recoverFunds.cancelRoomRecoverTitle")}
             </AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-2">
                 <p>
-                  This will cancel the room and return your stake of{" "}
-                  <span className="font-semibold text-foreground">
-                    {result?.stakeAmount ? formatSol(result.stakeAmount) : "?"} SOL
-                  </span>{" "}
-                  to your wallet.
+                  {t("recoverFunds.cancelRoomRecoverDesc", { amount: result?.stakeAmount ? formatSol(result.stakeAmount) : "?" })}
                 </p>
                 <p className="text-muted-foreground text-sm">
-                  You will need to sign a transaction to complete this action.
+                  {t("recoverFunds.signTransactionNote")}
                 </p>
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => setPendingTx(null)}>
-              Cancel
+              {t("recoverFunds.cancel")}
             </AlertDialogCancel>
             <AlertDialogAction onClick={executeCancel}>
-              Confirm & Sign
+              {t("recoverFunds.confirmAndSign")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
