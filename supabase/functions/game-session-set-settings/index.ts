@@ -12,7 +12,7 @@
  * {
  *   roomPda: string,
  *   turnTimeSeconds: number,
- *   mode: "casual" | "ranked" | "private",
+ *   mode: "casual" | "ranked",
  *   creatorWallet: string
  * }
  */
@@ -27,7 +27,7 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-type Mode = "casual" | "ranked" | "private";
+type Mode = "casual" | "ranked";
 
 function json(status: number, body: unknown) {
   return new Response(JSON.stringify(body), {
@@ -51,7 +51,6 @@ serve(async (req) => {
     const turnTimeSecondsRaw = payload?.turnTimeSeconds;
     const mode = payload?.mode as Mode;
     const creatorWallet = payload?.creatorWallet;
-    const gameType = payload?.gameType as string | undefined;
 
     // Validate required fields
     if (!roomPda || typeof roomPda !== "string") {
@@ -63,7 +62,7 @@ serve(async (req) => {
       return json(400, { ok: false, error: "turnTimeSeconds_invalid" });
     }
 
-    if (mode !== "casual" && mode !== "ranked" && mode !== "private") {
+    if (mode !== "casual" && mode !== "ranked") {
       return json(400, { ok: false, error: "mode_invalid" });
     }
 
@@ -76,7 +75,6 @@ serve(async (req) => {
       creatorWallet: creatorWallet.slice(0, 8),
       turnTimeSeconds,
       mode,
-      gameType: gameType || "(not provided)",
     });
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
@@ -127,17 +125,13 @@ serve(async (req) => {
         return json(409, { ok: false, error: "game_already_started" });
       }
 
-      // Update existing session settings (only include gameType if provided)
-      const updatePayload: Record<string, unknown> = {
-        turn_time_seconds: turnTimeSeconds,
-        mode,
-      };
-      if (gameType) {
-        updatePayload.game_type = gameType;
-      }
+      // Update existing session settings
       const { error: updateErr } = await supabase
         .from("game_sessions")
-        .update(updatePayload)
+        .update({
+          turn_time_seconds: turnTimeSeconds,
+          mode,
+        })
         .eq("room_pda", roomPda);
 
       if (updateErr) {
@@ -159,7 +153,7 @@ serve(async (req) => {
         .insert({
           room_pda: roomPda,
           player1_wallet: creatorWallet || "",
-          game_type: gameType || "unknown", // Use provided gameType, fallback to "unknown" if missing
+          game_type: "backgammon", // Default, will be updated when game starts
           game_state: {},
           status: "waiting",
           mode,
@@ -170,16 +164,12 @@ serve(async (req) => {
         // If insert fails due to duplicate, try update instead (race condition)
         if (insertErr.code === "23505") {
           console.log("[game-session-set-settings] Race condition - session created by another request, updating instead");
-          const raceUpdatePayload: Record<string, unknown> = {
-            turn_time_seconds: turnTimeSeconds,
-            mode,
-          };
-          if (gameType) {
-            raceUpdatePayload.game_type = gameType;
-          }
           const { error: updateErr } = await supabase
             .from("game_sessions")
-            .update(raceUpdatePayload)
+            .update({
+              turn_time_seconds: turnTimeSeconds,
+              mode,
+            })
             .eq("room_pda", roomPda);
 
           if (updateErr) {
@@ -193,7 +183,7 @@ serve(async (req) => {
       }
     }
 
-    console.log("[game-session-set-settings] ✅ Settings updated:", { roomPda: roomPda.slice(0, 8), turnTimeSeconds, mode, gameType: gameType || "(not set)" });
+    console.log("[game-session-set-settings] ✅ Settings updated:", { roomPda: roomPda.slice(0, 8), turnTimeSeconds, mode });
     return json(200, { ok: true });
   } catch (e) {
     console.error("[game-session-set-settings] unexpected error", e);

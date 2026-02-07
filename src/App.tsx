@@ -10,7 +10,6 @@ import { LoadingProvider } from "./contexts/LoadingContext";
 import { AudioProvider } from "./contexts/AudioContext";
 import { SoundProvider } from "./contexts/SoundContext";
 import { TxLockProvider } from "./contexts/TxLockContext";
-import { WalletConnectProvider } from "./contexts/WalletConnectContext";
 import { GlobalBackgroundMusic } from "./components/GlobalBackgroundMusic";
 import { GlobalActiveRoomBanner } from "./components/GlobalActiveRoomBanner";
 import { AppErrorBoundary } from "./components/AppErrorBoundary";
@@ -126,27 +125,25 @@ const App = () => (
   <AppErrorBoundary>
     <QueryClientProvider client={queryClient}>
       <SolanaProvider>
-        <WalletConnectProvider>
-          <TxLockProvider>
-            <LoadingProvider>
-              <AudioProvider>
-                <SoundProvider>
-                  <TooltipProvider>
-                    <Toaster />
-                    <Sonner />
-                    <PyramidLoader />
-                    <GoldenParticles />
-                    <AgeConfirmation />
-                    <BrowserRouter>
-                      <GlobalBackgroundMusic />
-                      <AppContent />
-                    </BrowserRouter>
-                  </TooltipProvider>
-                </SoundProvider>
-              </AudioProvider>
-            </LoadingProvider>
-          </TxLockProvider>
-        </WalletConnectProvider>
+        <TxLockProvider>
+          <LoadingProvider>
+            <AudioProvider>
+              <SoundProvider>
+                <TooltipProvider>
+                  <Toaster />
+                  <Sonner />
+                  <PyramidLoader />
+                  <GoldenParticles />
+                  <AgeConfirmation />
+                  <BrowserRouter>
+                    <GlobalBackgroundMusic />
+                    <AppContent />
+                  </BrowserRouter>
+                </TooltipProvider>
+              </SoundProvider>
+            </AudioProvider>
+          </LoadingProvider>
+        </TxLockProvider>
       </SolanaProvider>
     </QueryClientProvider>
   </AppErrorBoundary>

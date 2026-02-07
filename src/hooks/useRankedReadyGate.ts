@@ -292,7 +292,6 @@ export function useRankedReadyGate(options: UseRankedReadyGateOptions): UseRanke
   }, [isRanked, enabled, bothReady, roomPda, pollForAcceptances]);
 
   // For casual games, return as if both are ready
-  // NOTE: Private games are NOT casual - they go through ranked flow and need DB turn time
   if (!isRanked) {
     return {
       iAmReady: true,

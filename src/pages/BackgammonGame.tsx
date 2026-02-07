@@ -4,7 +4,7 @@ import { clearRoom } from "@/lib/missedTurns"; // Only clearRoom needed for clea
 import { GameErrorBoundary } from "@/components/GameErrorBoundary";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, RotateCcw, RotateCw, Gem, Flag, Users, Wifi, WifiOff, RefreshCw, LogOut, Trophy, Clock, Wallet } from "lucide-react";
+import { ArrowLeft, RotateCcw, RotateCw, Gem, Flag, Users, Wifi, WifiOff, RefreshCw, LogOut, Trophy, Clock } from "lucide-react";
 import { SoundToggle } from "@/components/SoundToggle";
 import { ForfeitConfirmDialog } from "@/components/ForfeitConfirmDialog";
 import { LeaveMatchModal, MatchState } from "@/components/LeaveMatchModal";
@@ -19,7 +19,6 @@ import { useSound } from "@/contexts/SoundContext";
 import { AudioManager } from "@/lib/AudioManager";
 import { useTranslation } from "react-i18next";
 import { useWallet } from "@/hooks/useWallet";
-import { useConnectWallet } from "@/contexts/WalletConnectContext";
 import { useWebRTCSync, GameMessage } from "@/hooks/useWebRTCSync";
 import { useTurnNotifications, TurnPlayer } from "@/hooks/useTurnNotifications";
 import { useGameChat, ChatPlayer, ChatMessage } from "@/hooks/useGameChat";
@@ -1225,10 +1224,9 @@ const BackgammonGame = () => {
   
   // Turn timer for ranked games
   // FIX: Use startRoll.isFinalized as fallback for timer enable (don't depend on bothReady)
-  // Also enable timer when stake exists (fallback for mode loading)
   const turnTimer = useTurnTimer({
     turnTimeSeconds: effectiveTurnTime,
-    enabled: (isRankedGame || (stakeLamports && stakeLamports > 0)) && (canPlay || startRoll.isFinalized) && !gameOver,
+    enabled: isRankedGame && (canPlay || startRoll.isFinalized) && !gameOver,
     isMyTurn: effectiveIsMyTurn,
     onTimeExpired: handleTurnTimeout,
     roomId: roomPda,
@@ -1915,9 +1913,6 @@ const BackgammonGame = () => {
     }
   }, [sendResign, forfeit, roomPlayers, address, enterOutcomeResolving]);
 
-  // Get connect dialog function
-  const { openConnectDialog } = useConnectWallet();
-
   // Require wallet
   if (!walletConnected || !address) {
     return (
@@ -1928,11 +1923,7 @@ const BackgammonGame = () => {
         <div className="text-center py-12">
           <Users className="h-16 w-16 text-primary mx-auto mb-4" />
           <h3 className="text-xl font-semibold mb-2">Connect Wallet to Play</h3>
-          <p className="text-muted-foreground mb-4">Please connect your wallet to join this game.</p>
-          <Button onClick={openConnectDialog}>
-            <Wallet className="mr-2 h-4 w-4" />
-            Connect Wallet
-          </Button>
+          <p className="text-muted-foreground">Please connect your wallet to join this game.</p>
         </div>
       </div>
     );
@@ -2305,8 +2296,8 @@ const BackgammonGame = () => {
               activePlayer={turnPlayers[isSameWallet(currentTurnWallet, roomPlayers[0]) ? 0 : 1]}
               players={turnPlayers}
               myAddress={address}
-              remainingTime={(isRankedGame || (stakeLamports && stakeLamports > 0)) ? turnTimer.remainingTime : undefined}
-              showTimer={(isRankedGame || (stakeLamports && stakeLamports > 0)) && startRoll.isFinalized && !gameOver}
+              remainingTime={isRankedGame ? turnTimer.remainingTime : undefined}
+              showTimer={isRankedGame && startRoll.isFinalized && !gameOver}
             />
           </div>
         </div>
@@ -2461,7 +2452,7 @@ const BackgammonGame = () => {
                       ) : (
                         <span className="text-[10px] font-medium text-slate-400">OPPONENT'S TURN</span>
                       )}
-                      {(isRankedGame || (stakeLamports && stakeLamports > 0)) && startRoll.isFinalized && !gameOver && (
+                      {isRankedGame && startRoll.isFinalized && !gameOver && (
                         <div className={cn(
                           "flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono",
                           effectiveIsMyTurn 

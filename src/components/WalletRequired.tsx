@@ -1,14 +1,10 @@
 import { Wallet, Coins } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { useConnectWallet } from "@/contexts/WalletConnectContext";
 
 interface WalletRequiredProps {
   message?: string;
 }
 
 export function WalletRequired({ message }: WalletRequiredProps) {
-  const { openConnectDialog } = useConnectWallet();
-
   return (
     <div className="min-h-screen bg-background flex items-center justify-center px-4">
       <div className="text-center max-w-md">
@@ -21,11 +17,9 @@ export function WalletRequired({ message }: WalletRequiredProps) {
         <p className="text-muted-foreground mb-4">
           {message || "Please connect your Solana wallet to continue."}
         </p>
-        
-        <Button onClick={openConnectDialog} className="mb-6">
-          <Wallet className="mr-2" size={18} />
-          Connect Wallet
-        </Button>
+        <p className="text-sm text-muted-foreground mb-6">
+          Click "Select Wallet" in the navigation bar to connect.
+        </p>
         
         {/* SOL on Solana info */}
         <div className="bg-primary/10 border border-primary/20 rounded-lg p-4 mt-4">

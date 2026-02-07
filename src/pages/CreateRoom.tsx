@@ -81,7 +81,7 @@ export default function CreateRoom() {
   const [entryFee, setEntryFee] = useState<string>("0"); // Default to 0 for casual
   const [maxPlayers, setMaxPlayers] = useState<string>("2");
   const [turnTime, setTurnTime] = useState<string>("10");
-  const [gameMode, setGameMode] = useState<'casual' | 'ranked' | 'private'>('casual');
+  const [gameMode, setGameMode] = useState<'casual' | 'ranked'>('casual');
   const [checkingActiveRoom, setCheckingActiveRoom] = useState(true);
   const [refreshingBalance, setRefreshingBalance] = useState(false);
   const [showMobileWalletRedirect, setShowMobileWalletRedirect] = useState(false);
@@ -262,8 +262,7 @@ export default function CreateRoom() {
       });
       return;
     }
-    // Private rooms require minimum stake like ranked
-    if ((gameMode === 'ranked' || gameMode === 'private') && entryFeeNum < dynamicMinFee) {
+    if (gameMode === 'ranked' && entryFeeNum < dynamicMinFee) {
       toast({
         title: t("createRoom.invalidFee"),
         description: t("createRoom.minFeeError", { amount: dynamicMinFee.toFixed(4), usd: MIN_FEE_USD.toFixed(2) }),
@@ -290,13 +289,11 @@ export default function CreateRoom() {
     
     // Pass mode to createRoom - this is the AUTHORITATIVE source of truth
     // Mode is written to DB immediately, not localStorage
-    // Note: For now, 'private' mode uses 'casual' for on-chain creation (backend update pending)
-    const onChainMode = gameMode === 'private' ? 'casual' : gameMode;
     const roomId = await createRoom(
       parseInt(gameType) as GameType,
       entryFeeNum,
       parseInt(maxPlayers),
-      onChainMode
+      gameMode // Pass mode directly to createRoom
     );
 
     if (roomId && address) {
@@ -321,17 +318,16 @@ export default function CreateRoom() {
         
         // localStorage is NO LONGER authoritative for mode - only a display hint
         localStorage.setItem(`room_settings_${roomPdaStr}`, JSON.stringify({
-          turnTimeSeconds: (gameMode === 'ranked' || gameMode === 'private') ? turnTimeSeconds : 0,
+          turnTimeSeconds: gameMode === 'ranked' ? turnTimeSeconds : 0,
           stakeLamports: solToLamports(entryFeeNum),
         }));
         
         // Persist settings authoritatively in game_sessions via Edge Function
         // With signature verification for production security
-        const authoritativeTurnTime = (gameMode === 'ranked' || gameMode === 'private') ? turnTimeSeconds : 0;
+        const authoritativeTurnTime = gameMode === 'ranked' ? turnTimeSeconds : 0;
         
         // Persist settings authoritatively in game_sessions via Edge Function
         // No signature needed - on-chain stake transaction already proves ownership
-        const gameTypeName = Object.entries(GAME_TYPE_MAP).find(([_, v]) => v === gameType)?.[0] || "chess";
         try {
           const { data, error: settingsErr } = await supabase.functions.invoke(
             "game-session-set-settings",
@@ -341,7 +337,6 @@ export default function CreateRoom() {
                 turnTimeSeconds: authoritativeTurnTime,
                 mode: gameMode,
                 creatorWallet: address,
-                gameType: gameTypeName,
               },
             }
           );
@@ -591,11 +586,11 @@ export default function CreateRoom() {
                 type="number"
                 value={entryFee}
                 onChange={(e) => setEntryFee(e.target.value)}
-                placeholder={(gameMode === 'ranked' || gameMode === 'private') ? dynamicMinFee.toFixed(4) : "0"}
-                min={(gameMode === 'ranked' || gameMode === 'private') ? dynamicMinFee : 0}
+                placeholder={gameMode === 'ranked' ? dynamicMinFee.toFixed(4) : "0"}
+                min={gameMode === 'ranked' ? dynamicMinFee : 0}
                 step="0.001"
                 className={`h-9 ${isRematch ? 'border-primary/50' : ''} ${
-                  gameMode === 'casual'
+                  gameMode === 'casual' 
                     ? 'border-muted/50 bg-muted/20 text-muted-foreground focus:border-muted' 
                     : 'border-primary/50 bg-primary/5 text-foreground focus:border-primary'
                 }`}
@@ -607,7 +602,7 @@ export default function CreateRoom() {
               )}
             </div>
             <p className={`text-xs ${gameMode === 'casual' ? 'text-muted-foreground' : 'text-primary/80'}`}>
-              {gameMode === 'casual'
+              {gameMode === 'casual' 
                 ? t("createRoom.stakeOptional")
                 : `${t("createRoom.stakeMinRequired")} (${dynamicMinFee.toFixed(4)} SOL ≈ $${MIN_FEE_USD.toFixed(2)})`
               }
@@ -636,10 +631,10 @@ export default function CreateRoom() {
             </Select>
           </div>
 
-          {/* Game Mode Toggle (Casual vs Ranked vs Private) */}
+          {/* Game Mode Toggle (Casual vs Ranked) */}
           <div className="space-y-1.5">
             <Label className="text-sm">{t("createRoom.roomType") || "Game Mode"}</Label>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               <Button
                 type="button"
                 variant={gameMode === 'casual' ? 'default' : 'outline'}
@@ -671,30 +666,11 @@ export default function CreateRoom() {
                 <span className="mr-1.5">🔴</span> {t("createRoom.gameModeRanked")}
                 <span className="ml-1 opacity-70 text-xs">🏆</span>
               </Button>
-              <Button
-                type="button"
-                variant={gameMode === 'private' ? 'default' : 'outline'}
-                size="sm"
-                className={`h-10 ${gameMode === 'private' ? 'bg-violet-600 hover:bg-violet-700' : ''}`}
-                onClick={() => {
-                  setGameMode('private');
-                  // Private rooms require stake like ranked - set minimum if current is below
-                  const currentFee = parseFloat(entryFee) || 0;
-                  if (!isRematch && currentFee < dynamicMinFee) {
-                    setEntryFee(dynamicMinFee.toFixed(4));
-                  }
-                }}
-              >
-                <span className="mr-1.5">🟣</span> {t("createRoom.gameModePrivate", "Private")}
-                <span className="ml-1 opacity-70 text-xs">🔗</span>
-              </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              {gameMode === 'private' 
-                ? t("createRoom.privateDesc", "Private rooms don't appear in public list. Share an invite link to let friends join.")
-                : gameMode === 'ranked' 
-                  ? t("createRoom.rankedDesc")
-                  : t("createRoom.casualDesc")}
+              {gameMode === 'ranked' 
+                ? t("createRoom.rankedDesc")
+                : t("createRoom.casualDesc")}
             </p>
           </div>
 

@@ -11,7 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 export interface RulesParams {
   roomPda: string;
   gameType: number;
-  mode: "casual" | "ranked" | "private";
+  mode: "casual" | "ranked";
   maxPlayers: number;
   stakeLamports: number;
   feeBps: number;
@@ -91,7 +91,7 @@ export function createRulesFromRoom(
   gameType: number,
   maxPlayers: number,
   stakeLamports: number,
-  mode: "casual" | "ranked" | "private" = "casual"
+  mode: "casual" | "ranked" = "casual"
 ): RulesParams {
   return {
     roomPda,

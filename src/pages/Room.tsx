@@ -1,6 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { useTranslation } from "react-i18next";
 import { PublicKey, LAMPORTS_PER_SOL, VersionedTransaction, TransactionMessage } from "@solana/web3.js";
 
 import { useConnection, useWallet as useSolanaWallet } from "@solana/wallet-adapter-react";
@@ -12,7 +11,6 @@ import { useTxLock } from "@/contexts/TxLockContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Construction, ArrowLeft, Loader2, Users, Coins, AlertTriangle, CheckCircle, Share2, Copy, ExternalLink, Wallet, Clock } from "lucide-react";
-import { ShareInviteDialog } from "@/components/ShareInviteDialog";
 import { RecoverFundsButton } from "@/components/RecoverFundsButton";
 import { WalletGateModal } from "@/components/WalletGateModal";
 import { RivalryWidget } from "@/components/RivalryWidget";
@@ -60,7 +58,6 @@ export default function Room() {
   const { roomPda: roomPdaParam } = useParams<{ roomPda: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { t } = useTranslation();
   const { isConnected, address } = useWallet();
   const { connection } = useConnection();
   const wallet = useSolanaWallet();
@@ -70,13 +67,9 @@ export default function Room() {
   const [showMobileWalletRedirect, setShowMobileWalletRedirect] = useState(false);
   const [showJoinRulesModal, setShowJoinRulesModal] = useState(false);
   const [joinInProgress, setJoinInProgress] = useState(false);
-  const [showShareDialog, setShowShareDialog] = useState(false);
   
   // Wallet in-app browsers (Phantom/Solflare) often miss WS updates
   const inWalletBrowser = isWalletInAppBrowser();
-  
-  // Guard to prevent repeated WalletGateModal in wallet browsers (auto-connect should handle it)
-  const hasAutoPromptedConnectRef = useRef(false);
 
   const [room, setRoom] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -88,7 +81,7 @@ export default function Room() {
   const [linkCopied, setLinkCopied] = useState(false);
   
   // Room mode and turn time from DB (single source of truth - NOT localStorage)
-  const [roomMode, setRoomMode] = useState<'casual' | 'ranked' | 'private'>('casual');
+  const [roomMode, setRoomMode] = useState<'casual' | 'ranked'>('casual');
   const [turnTimeSeconds, setTurnTimeSeconds] = useState<number | null>(null);
   const [roomModeLoaded, setRoomModeLoaded] = useState(false);
   
@@ -188,7 +181,7 @@ export default function Room() {
         
         const session = resp?.session;
         if (session?.mode) {
-          setRoomMode(session.mode as 'casual' | 'ranked' | 'private');
+          setRoomMode(session.mode as 'casual' | 'ranked');
           // Also get turn_time_seconds
           if (typeof session.turn_time_seconds === 'number') {
             setTurnTimeSeconds(session.turn_time_seconds);
@@ -598,16 +591,6 @@ export default function Room() {
     if (!roomPdaParam || !room) return;
 
     if (!isConnected) {
-      // In wallet browser: give auto-connect more time before showing modal
-      if (inWalletBrowser) {
-        if (!hasAutoPromptedConnectRef.current) {
-          hasAutoPromptedConnectRef.current = true;
-          // Show a toast and wait for auto-connect instead of immediately showing modal
-          toast.info("Connecting to wallet...", { duration: 3000 });
-          return;
-        }
-        // Already prompted once and still not connected - now show the modal
-      }
       setShowWalletGate(true);
       return;
     }
@@ -855,10 +838,10 @@ export default function Room() {
             <AlertTriangle className="h-12 w-12 text-amber-500 mx-auto mb-4" />
             <h3 className="text-xl font-semibold mb-2">{pdaError}</h3>
             <p className="text-muted-foreground mb-6">
-              {t("roomPage.invalidRoomLink")}
+              The room link appears to be invalid or malformed.
             </p>
             <Button onClick={() => navigate("/room-list")}>
-              {t("roomPage.backToRoomList")}
+              Back to Room List
             </Button>
           </CardContent>
         </Card>
@@ -869,21 +852,21 @@ export default function Room() {
   return (
     <div className="container max-w-2xl py-8 px-4">
       <Button variant="ghost" size="sm" className="mb-4" onClick={() => navigate("/room-list")}>
-        <ArrowLeft className="mr-2 h-4 w-4" /> {t("roomPage.backToRooms")}
+        <ArrowLeft className="mr-2 h-4 w-4" /> Back to Rooms
       </Button>
 
       <Card className="border-border/50 bg-card/80 backdrop-blur">
         <CardHeader>
           <CardTitle className="text-2xl font-cinzel flex items-center gap-3">
             <Construction className="h-6 w-6 text-primary" />
-            {t("game.room")} {roomPdaParam ? `${roomPdaParam.slice(0, 8)}...` : ""}
+            Room {roomPdaParam ? `${roomPdaParam.slice(0, 8)}...` : ""}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
           {loading && (
             <div className="flex items-center justify-center py-8">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              <span className="ml-2 text-muted-foreground">{t("roomPage.loadingRoom")}</span>
+              <span className="ml-2 text-muted-foreground">Loading room…</span>
             </div>
           )}
           {error && <p className="text-destructive">{error}</p>}
@@ -895,11 +878,11 @@ export default function Room() {
                 <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-lg space-y-3">
                   <div className="flex items-center gap-2">
                     <CheckCircle className="h-5 w-5 text-emerald-400 shrink-0" />
-                    <p className="text-emerald-400 font-medium">{t("roomPage.rematchCreated")}</p>
+                    <p className="text-emerald-400 font-medium">Rematch room created!</p>
                   </div>
                   
                   <p className="text-sm text-muted-foreground">
-                    {t("roomPage.invitePlayersWithLink")}
+                    Invite players with a link. Anyone can join if they have SOL.
                   </p>
                   
                   {/* Room URL input */}
@@ -921,7 +904,7 @@ export default function Room() {
                       className="gap-1.5 flex-1"
                     >
                       {linkCopied ? <CheckCircle className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                      {linkCopied ? t("roomPage.copied") : t("roomPage.copyLink")}
+                      {linkCopied ? 'Copied!' : 'Copy Link'}
                     </Button>
                     <Button 
                       size="sm" 
@@ -929,7 +912,7 @@ export default function Room() {
                       className="gap-1.5 flex-1"
                     >
                       <Share2 className="h-4 w-4" />
-                      {t("roomPage.share")}
+                      Share…
                     </Button>
                   </div>
                   
@@ -939,7 +922,7 @@ export default function Room() {
                     onClick={dismissRematchBanner}
                     className="text-muted-foreground w-full"
                   >
-                    {t("roomPage.dismiss")}
+                    Dismiss
                   </Button>
                 </div>
               )}
@@ -958,15 +941,15 @@ export default function Room() {
                 <div className="flex items-start gap-2 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
                   <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
                   <div className="text-sm">
-                    <p className="text-amber-200 font-medium">{t("roomPage.activeRoomWarning")}</p>
-                    <p className="text-amber-200/70">{t("roomPage.activeRoomWarningDesc")}</p>
+                    <p className="text-amber-200 font-medium">You have an active room</p>
+                    <p className="text-amber-200/70">Cancel your room before joining or creating another.</p>
                     <Button 
                       variant="link" 
                       size="sm" 
                       className="text-amber-400 p-0 h-auto mt-1"
                       onClick={() => navigate(`/room/${activeRoom?.pda}`)}
                     >
-                      {t("roomPage.goToYourRoom")}
+                      Go to your room →
                     </Button>
                   </div>
                 </div>
@@ -993,16 +976,14 @@ export default function Room() {
                   <span className={`px-3 py-1 rounded-full text-sm font-medium border ${
                     roomMode === 'ranked' 
                       ? 'bg-red-500/20 text-red-400 border-red-500/30' 
-                      : roomMode === 'private'
-                      ? 'bg-violet-500/20 text-violet-400 border-violet-500/30'
                       : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
                   }`}>
-                    {roomMode === 'ranked' ? `🔴 ${t("createRoom.gameModeRanked")}` : roomMode === 'private' ? `🟣 ${t("createRoom.privateRoom")}` : `🟢 ${t("createRoom.gameModeCasual")}`}
+                    {roomMode === 'ranked' ? '🔴 Ranked' : '🟢 Casual'}
                   </span>
                 )}
                 {isPlayer && (
                   <span className="px-3 py-1 rounded-full text-sm font-medium bg-primary/20 text-primary">
-                    {t("room.youreInGame", "You're in this game")}
+                    You're in this game
                   </span>
                 )}
                 {isCreator && (
@@ -1016,13 +997,13 @@ export default function Room() {
               {/* Game Info Grid */}
               <div className={`grid gap-4 ${turnTimeSeconds !== null && turnTimeSeconds > 0 ? 'grid-cols-3' : 'grid-cols-2'}`}>
                 <div className="bg-muted/30 rounded-lg p-3">
-                  <p className="text-xs text-muted-foreground uppercase">{t("roomPage.game")}</p>
+                  <p className="text-xs text-muted-foreground uppercase">Game</p>
                   <p className="text-lg font-semibold">{gameName}</p>
                 </div>
                 <div className="bg-muted/30 rounded-lg p-3">
                   <div className="flex items-center gap-1">
                     <Users className="h-3 w-3 text-muted-foreground" />
-                    <p className="text-xs text-muted-foreground uppercase">{t("roomPage.players")}</p>
+                    <p className="text-xs text-muted-foreground uppercase">Players</p>
                   </div>
                   <p className="text-lg font-semibold">{activePlayers.length} / {maxPlayers}</p>
                 </div>
@@ -1031,7 +1012,7 @@ export default function Room() {
                   <div className="bg-muted/30 rounded-lg p-3">
                     <div className="flex items-center gap-1">
                       <Clock className="h-3 w-3 text-muted-foreground" />
-                      <p className="text-xs text-muted-foreground uppercase">{t("roomPage.turnTime")}</p>
+                      <p className="text-xs text-muted-foreground uppercase">Turn Time</p>
                     </div>
                     <p className="text-lg font-semibold">
                       {turnTimeSeconds >= 60 
@@ -1047,30 +1028,30 @@ export default function Room() {
               <div className="bg-primary/10 border border-primary/20 rounded-lg p-4 space-y-2">
                 <div className="flex items-center gap-2 text-primary">
                   <Coins className="h-4 w-4" />
-                  <span className="font-medium">{t("roomPage.stakeInformation")}</span>
+                  <span className="font-medium">Stake Information</span>
                 </div>
                 <div className="grid grid-cols-3 gap-2 text-sm">
                   <div>
-                    <p className="text-muted-foreground">{t("roomPage.entryFee")}</p>
+                    <p className="text-muted-foreground">Entry Fee</p>
                     <p className="font-semibold">{stakeSOL} SOL</p>
                   </div>
                 <div>
-                    <p className="text-muted-foreground">{t("roomPage.potWhenFull")}</p>
+                    <p className="text-muted-foreground">Pot (when full)</p>
                     <p className="font-semibold">{formatSol(fullPotLamports)} SOL</p>
-                    <p className="text-xs text-muted-foreground/70">{t("roomPage.currentDeposited")}: {formatSol(vaultLamports)} SOL</p>
+                    <p className="text-xs text-muted-foreground/70">Current deposited: {formatSol(vaultLamports)} SOL</p>
                     <p className="text-xs text-muted-foreground/50">[{vaultPdaStr.slice(0, 6)}...{vaultPdaStr.slice(-4)}]</p>
                   </div>
                   <div>
-                    <p className="text-muted-foreground">{t("roomPage.winnerGets")}</p>
+                    <p className="text-muted-foreground">Winner Gets</p>
                     <p className="font-semibold text-green-400">{formatSol(winnerGetsFullLamports)} SOL</p>
                   </div>
                 </div>
-                <p className="text-xs text-muted-foreground">{t("roomPage.platformFeeNote")}</p>
+                <p className="text-xs text-muted-foreground">5% platform fee deducted from winnings</p>
               </div>
 
               {/* Players List */}
               <div>
-                <p className="text-sm text-muted-foreground mb-2">{t("roomPage.playersLabel")}</p>
+                <p className="text-sm text-muted-foreground mb-2">Players:</p>
                 <ul className="space-y-1">
                   {activePlayers.map((p: any, i: number) => {
                     const walletAddr = p.toBase58();
@@ -1081,13 +1062,13 @@ export default function Room() {
                         <span className="w-2 h-2 rounded-full bg-green-400" />
                         {isMe ? (
                           <span className="text-primary font-medium font-mono">
-                            {walletAddr.slice(0, 4)}…{walletAddr.slice(-4)} ({t("roomPage.you")})
-                            {isCreator && ` · ${t("roomPage.creator")}`}
+                            {walletAddr.slice(0, 4)}…{walletAddr.slice(-4)} (You)
+                            {isCreator && ' · Creator'}
                           </span>
                         ) : (
                           <WalletLink 
                             wallet={walletAddr} 
-                            suffix={isCreator ? ` (${t("roomPage.creator")})` : ''} 
+                            suffix={isCreator ? ' (Creator)' : ''} 
                           />
                         )}
                       </li>
@@ -1101,9 +1082,9 @@ export default function Room() {
           {!loading && !error && !room && (
             <div className="text-center py-12">
               <Construction className="h-16 w-16 text-primary mx-auto mb-4" />
-              <h3 className="text-xl font-semibold mb-2">{t("roomPage.roomNotFound")}</h3>
+              <h3 className="text-xl font-semibold mb-2">Room Not Found</h3>
               <p className="text-muted-foreground mb-6">
-                {t("roomPage.roomNotFoundDesc")}
+                This room may have been cancelled or doesn't exist.
               </p>
             </div>
           )}
@@ -1111,150 +1092,138 @@ export default function Room() {
           {/* Action Buttons */}
           <div className="flex flex-col gap-3">
             <div className="flex justify-center gap-3">
-                {canJoin && (
-                  <Button 
-                    onClick={handleJoinButtonClick} 
-                    size="lg" 
-                    variant="gold"
-                    disabled={isTxInFlight || hookTxPending || signingDisabled || hasBlockingActiveRoom}
-                    className="min-w-40"
-                  >
-                    {isTxInFlight ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        {t("roomPage.waitingForWallet")}
-                      </>
-                    ) : signingDisabled ? (
-                      t("roomPage.signingDisabled")
-                    ) : hasBlockingActiveRoom ? (
-                      t("roomPage.resolveActiveRoomFirst")
-                    ) : Number(stakeLamports) > 0 ? (
-                      t("roomPage.joinGameAndStake", { amount: stakeSOL })
-                    ) : (
-                      t("roomPage.joinGame")
-                    )}
-                  </Button>
-                )}
+              {canJoin && (
+                <Button 
+                  onClick={handleJoinButtonClick} 
+                  size="lg" 
+                  variant="gold"
+                  disabled={isTxInFlight || hookTxPending || signingDisabled || hasBlockingActiveRoom}
+                  className="min-w-40"
+                >
+                  {isTxInFlight ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Waiting for wallet...
+                    </>
+                  ) : signingDisabled ? (
+                    "Signing Disabled"
+                  ) : hasBlockingActiveRoom ? (
+                    "Resolve Active Room First"
+                  ) : Number(stakeLamports) > 0 ? (
+                    `Join Game & Stake ${stakeSOL} SOL`
+                  ) : (
+                    "Join Game"
+                  )}
+                </Button>
+              )}
               
-                {canPlayAgain && (
-                  <Button 
-                    onClick={onPlayAgain} 
-                    size="lg" 
-                    variant="outline"
-                    disabled={isTxInFlight || hookTxPending || signingDisabled || hasBlockingActiveRoom}
-                    className="min-w-32"
-                  >
-                    {isTxInFlight ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        {t("roomPage.waitingForWallet")}
-                      </>
-                    ) : signingDisabled ? (
-                      t("roomPage.signingDisabled")
-                    ) : hasBlockingActiveRoom ? (
-                      t("roomPage.resolveActiveRoomFirst")
-                    ) : (
-                      t("roomPage.playAgain")
-                    )}
-                  </Button>
-                )}
+              {canPlayAgain && (
+                <Button 
+                  onClick={onPlayAgain} 
+                  size="lg" 
+                  variant="outline"
+                  disabled={isTxInFlight || hookTxPending || signingDisabled || hasBlockingActiveRoom}
+                  className="min-w-32"
+                >
+                  {isTxInFlight ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Waiting for wallet...
+                    </>
+                  ) : signingDisabled ? (
+                    "Signing Disabled"
+                  ) : hasBlockingActiveRoom ? (
+                    "Resolve Active Room First"
+                  ) : (
+                    'Play Again'
+                  )}
+                </Button>
+              )}
 
               {/* Player status messages */}
               {isOpenStatus(status) && isPlayer && !isCreator && (
                 <div className="flex items-center gap-2 px-4 py-2 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
                   <CheckCircle className="h-4 w-4 text-emerald-500" />
-                  <span className="text-sm text-emerald-400">{t("room.youreInGameWaiting", "You're in this game. Waiting for opponent...")}</span>
+                  <span className="text-sm text-emerald-400">You're in this game. Waiting for opponent...</span>
                 </div>
               )}
               
-                {isOpenStatus(status) && isPlayer && isCreator && (
-                  <div className="flex items-center gap-2 px-4 py-2 bg-primary/10 border border-primary/30 rounded-lg">
-                    <Users className="h-4 w-4 text-primary" />
-                    <span className="text-sm text-primary">{t("roomPage.waitingForOpponent")}</span>
-                  </div>
-                )}
-
-              {/* Share button for private room creators - PROMINENT */}
-              {isOpenStatus(status) && isCreator && roomMode === 'private' && (
-                <Button 
-                  size="lg"
-                  onClick={() => setShowShareDialog(true)}
-                  className="gap-2 bg-violet-600 hover:bg-violet-700 text-white font-semibold px-6 py-3 min-w-48"
-                >
-                  <Share2 className="h-5 w-5" />
-                  {t("shareInvite.shareRoom", "Share Room")}
-                </Button>
+              {isOpenStatus(status) && isPlayer && isCreator && (
+                <div className="flex items-center gap-2 px-4 py-2 bg-primary/10 border border-primary/30 rounded-lg">
+                  <Users className="h-4 w-4 text-primary" />
+                  <span className="text-sm text-primary">Waiting for opponent to join...</span>
+                </div>
               )}
 
               {/* Room full message (for non-players) */}
-                {status === RoomStatus.Started && !isPlayer && (
-                  <div className="flex items-center gap-2 px-4 py-2 bg-amber-500/10 border border-amber-500/30 rounded-lg">
-                    <AlertTriangle className="h-4 w-4 text-amber-500" />
-                    <span className="text-sm text-amber-400">{t("roomPage.gameInProgress")}</span>
-                  </div>
-                )}
+              {status === RoomStatus.Started && !isPlayer && (
+                <div className="flex items-center gap-2 px-4 py-2 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                  <AlertTriangle className="h-4 w-4 text-amber-500" />
+                  <span className="text-sm text-amber-400">Game in progress</span>
+                </div>
+              )}
 
-                {/* Connect wallet prompt for non-connected users */}
-                {!isConnected && isOpenStatus(status) && playerCount < maxPlayers && (
-                  <Button 
-                    onClick={() => setShowWalletGate(true)} 
-                    size="lg"
-                    variant="outline"
-                    className="min-w-40"
-                  >
-                    {t("roomPage.connectWalletToJoin")}
-                  </Button>
-                )}
+              {/* Connect wallet prompt for non-connected users */}
+              {!isConnected && isOpenStatus(status) && playerCount < maxPlayers && (
+                <Button 
+                  onClick={() => setShowWalletGate(true)} 
+                  size="lg"
+                  variant="outline"
+                  className="min-w-40"
+                >
+                  Connect Wallet to Join
+                </Button>
+              )}
             </div>
 
             {/* Enable Presence Toggle - Disabled until program supports ping_room */}
 
             {/* Cancel Room Button */}
-              {canCancel && (
-                <Button
-                  onClick={onCancelRoom}
-                  size="lg"
-                  variant="destructive"
-                  disabled={isTxInFlight || hookTxPending || signingDisabled}
-                  className="min-w-32"
-                >
-                  {isTxInFlight || hookTxPending ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      {t("roomPage.cancelling")}
-                    </>
-                  ) : signingDisabled ? (
-                    t("roomPage.signingDisabled")
-                  ) : (
-                    t("roomPage.cancelRoom")
-                  )}
-                </Button>
-              )}
+            {canCancel && (
+              <Button
+                onClick={onCancelRoom}
+                size="lg"
+                variant="destructive"
+                disabled={isTxInFlight || hookTxPending || signingDisabled}
+                className="min-w-32"
+              >
+                {isTxInFlight || hookTxPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Cancelling…
+                  </>
+                ) : signingDisabled ? (
+                  "Signing Disabled"
+                ) : (
+                  "Cancel Room"
+                )}
+              </Button>
+            )}
 
-              {/* Close Room Button - for creator to reclaim rent after game ends */}
-              {canCloseRoom && (
-                <Button
-                  onClick={onCloseRoom}
-                  size="lg"
-                  variant="outline"
-                  disabled={isTxInFlight || hookTxPending || signingDisabled || closingRoom}
-                  className="min-w-32 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10"
-                >
-                  {closingRoom ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      {t("roomPage.closing")}
-                    </>
-                  ) : signingDisabled ? (
-                    t("roomPage.signingDisabled")
-                  ) : (
-                    <>
-                      <Wallet className="mr-2 h-4 w-4" />
-                      {t("roomPage.recoverRentCloseRoom")}
-                    </>
-                  )}
-                </Button>
-              )}
+            {/* Close Room Button - for creator to reclaim rent after game ends */}
+            {canCloseRoom && (
+              <Button
+                onClick={onCloseRoom}
+                size="lg"
+                variant="outline"
+                disabled={isTxInFlight || hookTxPending || signingDisabled || closingRoom}
+                className="min-w-32 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10"
+              >
+                {closingRoom ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Closing…
+                  </>
+                ) : signingDisabled ? (
+                  "Signing Disabled"
+                ) : (
+                  <>
+                    <Wallet className="mr-2 h-4 w-4" />
+                    Recover Rent (Close Room)
+                  </>
+                )}
+              </Button>
+            )}
             
             {/* Recover Funds Button - for stuck/orphaned rooms */}
             {room && isPlayer && (
@@ -1272,8 +1241,8 @@ export default function Room() {
       <WalletGateModal 
         isOpen={showWalletGate}
         onClose={() => setShowWalletGate(false)}
-        title={t("roomPage.connectWalletTitle")}
-        description={t("roomPage.connectWalletDesc")}
+        title="Connect a Solana Wallet to Play"
+        description="Connect your wallet to join this room and compete for SOL prizes."
       />
       
       {/* Join Rules Modal - shown before joining */}
@@ -1283,16 +1252,8 @@ export default function Room() {
         onCancel={() => setShowJoinRulesModal(false)}
         gameName={gameName}
         stakeSol={Number(stakeLamports) / LAMPORTS_PER_SOL}
-        isRanked={roomMode === 'ranked' || roomMode === 'private'}
+        isRanked={roomMode === 'ranked'}
         isLoading={joinInProgress}
-      />
-
-      {/* Share Invite Dialog */}
-      <ShareInviteDialog
-        open={showShareDialog}
-        onOpenChange={setShowShareDialog}
-        roomPda={roomPdaParam || ""}
-        gameName={gameName}
       />
       
       {/* Preview Domain Banner */}

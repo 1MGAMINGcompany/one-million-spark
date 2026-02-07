@@ -4,7 +4,7 @@ import { clearRoom } from "@/lib/missedTurns"; // Only clearRoom needed - strike
 import { GameErrorBoundary } from "@/components/GameErrorBoundary";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Gem, Star, Flag, Users, Wifi, WifiOff, Crown, RotateCcw, LogOut, Loader2, Wallet } from "lucide-react";
+import { ArrowLeft, Gem, Star, Flag, Users, Wifi, WifiOff, Crown, RotateCcw, LogOut, Loader2 } from "lucide-react";
 import { ForfeitConfirmDialog } from "@/components/ForfeitConfirmDialog";
 import { LeaveMatchModal, MatchState } from "@/components/LeaveMatchModal";
 import { useForfeit } from "@/hooks/useForfeit";
@@ -12,7 +12,6 @@ import { useSolanaRooms } from "@/hooks/useSolanaRooms";
 import { useSound } from "@/contexts/SoundContext";
 import { useTranslation } from "react-i18next";
 import { useWallet } from "@/hooks/useWallet";
-import { useConnectWallet } from "@/contexts/WalletConnectContext";
 import { useWebRTCSync, GameMessage } from "@/hooks/useWebRTCSync";
 import { useTurnNotifications, TurnPlayer } from "@/hooks/useTurnNotifications";
 import { useGameChat, ChatPlayer, ChatMessage } from "@/hooks/useGameChat";
@@ -493,138 +492,11 @@ const CheckersGame = () => {
   
   const turnTimer = useTurnTimer({
     turnTimeSeconds: effectiveTurnTime,
-    // Enable timer for ranked/private games, or when stake exists (fallback for mode loading)
-    enabled: (isRankedGame || (stakeLamports && stakeLamports > 0)) && canPlay && !gameOver,
+    enabled: isRankedGame && canPlay && !gameOver,
     isMyTurn,
     onTimeExpired: handleTurnTimeout,
     roomId: roomPda,
   });
-
-  // =====================================================
-  // POLLING FALLBACK: Sync turn state from DB when opponent times out
-  // Mirrors BackgammonGame.tsx polling pattern (lines 741-923)
-  // =====================================================
-  const timeoutFiredRef = useRef(false);
-  
-  useEffect(() => {
-    // Only poll for ranked/staked games during active play
-    if (!roomPda || (!isRankedGame && !(stakeLamports && stakeLamports > 0)) || !startRoll.isFinalized || gameOver) return;
-
-    const pollTurnWallet = async () => {
-      try {
-        const { data, error } = await supabase.functions.invoke("game-session-get", {
-          body: { roomPda },
-        });
-
-        if (error || !data?.session) return;
-        
-        // Check for finished game
-        if (data.session.status === 'finished' && !gameOver) {
-          const winner = data.session.winner_wallet;
-          setWinnerWallet(winner);
-          setGameOver(isSameWallet(winner, address) ? myColor : (myColor === 'gold' ? 'obsidian' : 'gold'));
-          const iWon = isSameWallet(winner, address);
-          play(iWon ? 'checkers_win' : 'checkers_lose');
-          return;
-        }
-
-        // SERVER-SIDE TIMEOUT CHECK (for opponent's turn)
-        const dbTurnWallet = data.session.current_turn_wallet;
-        const isOpponentsTurn = dbTurnWallet && !isSameWallet(dbTurnWallet, address);
-        
-        if (isOpponentsTurn) {
-          // Try to apply timeout if opponent is idle
-          const { data: timeoutResult } = await supabase.rpc("maybe_apply_turn_timeout", {
-            p_room_pda: roomPda,
-          });
-          
-          const result = timeoutResult as {
-            applied: boolean;
-            type?: string;
-            winnerWallet?: string;
-            nextTurnWallet?: string;
-            strikes?: number;
-          } | null;
-          
-          if (result?.applied) {
-            if (result.type === "auto_forfeit") {
-              // 3 strikes - game over
-              setWinnerWallet(result.winnerWallet || null);
-              setGameOver(myColor); // I win
-              play('checkers_win');
-              return;
-            } else if (result.type === "turn_timeout") {
-              toast({
-                title: t('gameSession.opponentSkipped'),
-                description: `${result.strikes}/3 ${t('gameSession.missedTurns')}`,
-              });
-            }
-          }
-        }
-
-        // Re-fetch to get updated turn wallet after potential timeout
-        const { data: freshData } = await supabase.functions.invoke("game-session-get", {
-          body: { roomPda },
-        });
-        const freshTurnWallet = freshData?.session?.current_turn_wallet;
-
-        // Detect turn change and update local state
-        if (freshTurnWallet && freshTurnWallet !== turnOverrideWallet) {
-          const wasMyTurn = turnOverrideWallet && isSameWallet(turnOverrideWallet, address);
-          const isNowMyTurn = isSameWallet(freshTurnWallet, address);
-          
-          if (wasMyTurn !== isNowMyTurn || !turnOverrideWallet) {
-            console.log("[CheckersGame Polling] Turn changed:", {
-              from: turnOverrideWallet?.slice(0, 8),
-              to: freshTurnWallet.slice(0, 8),
-            });
-            
-            setTurnOverrideWallet(freshTurnWallet);
-            turnTimer.resetTimer();
-            timeoutFiredRef.current = false;
-          }
-        }
-      } catch (err) {
-        console.error("[CheckersGame Polling] Error:", err);
-      }
-    };
-
-    const interval = setInterval(pollTurnWallet, 5000);
-    return () => clearInterval(interval);
-  }, [roomPda, isRankedGame, stakeLamports, startRoll.isFinalized, gameOver, turnOverrideWallet, address, myColor, t, turnTimer, play]);
-
-  // Visibility change handler - force immediate poll when tab becomes visible
-  useEffect(() => {
-    if (!roomPda || gameOver) return;
-
-    const handleVisibility = async () => {
-      if (document.visibilityState === 'visible') {
-        console.log("[CheckersGame] Tab visible, forcing poll");
-        turnTimer.resumeTimer?.();
-        
-        // Immediate poll
-        try {
-          const { data } = await supabase.functions.invoke("game-session-get", {
-            body: { roomPda },
-          });
-          
-          if (data?.session?.current_turn_wallet) {
-            const freshTurnWallet = data.session.current_turn_wallet;
-            if (freshTurnWallet !== turnOverrideWallet) {
-              setTurnOverrideWallet(freshTurnWallet);
-              turnTimer.resetTimer();
-              timeoutFiredRef.current = false;
-            }
-          }
-        } catch (err) {
-          console.error("[CheckersGame] Visibility poll error:", err);
-        }
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibility);
-    return () => document.removeEventListener('visibilitychange', handleVisibility);
-  }, [roomPda, gameOver, turnOverrideWallet, turnTimer]);
 
   // Turn notification players
   const turnPlayers: TurnPlayer[] = useMemo(() => {
@@ -1332,9 +1204,6 @@ const CheckersGame = () => {
     ));
   };
 
-  // Get connect dialog function
-  const { openConnectDialog } = useConnectWallet();
-
   // Require wallet connection
   if (!walletConnected || !address) {
     return (
@@ -1345,11 +1214,7 @@ const CheckersGame = () => {
         <div className="text-center py-12">
           <Users className="h-16 w-16 text-primary mx-auto mb-4" />
           <h3 className="text-xl font-semibold mb-2">{t("gameMultiplayer.connectWalletToPlay")}</h3>
-          <p className="text-muted-foreground mb-4">{t("gameMultiplayer.connectWalletDesc")}</p>
-          <Button onClick={openConnectDialog}>
-            <Wallet className="mr-2 h-4 w-4" />
-            Connect Wallet
-          </Button>
+          <p className="text-muted-foreground">{t("gameMultiplayer.connectWalletDesc")}</p>
         </div>
       </div>
     );
@@ -1476,8 +1341,8 @@ const CheckersGame = () => {
               activePlayer={turnPlayers[currentPlayer === "gold" ? 0 : 1]}
               players={turnPlayers}
               myAddress={address}
-              remainingTime={(isRankedGame || (stakeLamports && stakeLamports > 0)) ? turnTimer.remainingTime : undefined}
-              showTimer={(isRankedGame || (stakeLamports && stakeLamports > 0)) && canPlay}
+              remainingTime={isRankedGame ? turnTimer.remainingTime : undefined}
+              showTimer={isRankedGame && canPlay}
             />
           </div>
         </div>

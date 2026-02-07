@@ -9,68 +9,27 @@ export function isWalletInAppBrowser(): boolean {
   const ua = (navigator.userAgent || "").toLowerCase();
   const isMobile = /mobile|android|iphone|ipad|ipod/.test(ua);
 
-  // Only detect as in-app browser on mobile
-  if (!isMobile) return false;
-
-  const win = window as any;
-  
-  // Solflare detection (comprehensive)
-  const solflareInApp = isSolflareInAppBrowser();
+  // Solflare exposes explicit in-app flag
+  const solflareInApp = !!(window as any).solflare?.isInAppBrowser;
 
   /**
    * Phantom in-app browser typically includes "Phantom" in the UA on mobile.
    * DO NOT use window.phantom.solana as a signal, because desktop Phantom extension injects it too.
    */
-  const phantomInApp = ua.includes("phantom") || (isMobile && !!win.phantom?.solana?.isPhantom);
+  const phantomInApp = isMobile && ua.includes("phantom");
 
-  // Backpack detection
-  const backpackInApp = isMobile && !!win.backpack?.isBackpack;
+  // Solflare UA sometimes includes "solflare"
+  const solflareUa = isMobile && ua.includes("solflare");
 
   // Generic fallback: mobile + injected wallet provider
   const hasInjectedWallet =
-    !!win.solana ||
-    !!win.phantom?.solana ||
-    !!win.solflare ||
-    !!win.Solflare;
+    !!(window as any).solana ||
+    !!(window as any).phantom?.solana ||
+    !!(window as any).solflare;
 
-  const genericMobileWallet = hasInjectedWallet;
+  const genericMobileWallet = isMobile && hasInjectedWallet;
 
-  return phantomInApp || solflareInApp || backpackInApp || genericMobileWallet;
-}
-
-/**
- * Robust detection for Solflare in-app browser specifically
- */
-export function isSolflareInAppBrowser(): boolean {
-  if (typeof navigator === "undefined") return false;
-  if (typeof window === "undefined") return false;
-  
-  const ua = (navigator.userAgent || "").toLowerCase();
-  const isMobile = /mobile|android|iphone|ipad|ipod/.test(ua);
-  
-  // Only detect as Solflare in-app browser on mobile
-  if (!isMobile) return false;
-  
-  const win = window as any;
-  
-  // Explicit Solflare flags
-  const hasSolflareInAppFlag = !!win.solflare?.isInAppBrowser;
-  const hasSolflareIsSolflare = !!win.solflare?.isSolflare;
-  const hasWindowSolflare = !!win.Solflare;
-  
-  // window.solana may have Solflare flags
-  const solanaIsSolflare = !!win.solana?.isSolflare || !!win.solana?.isSolflareWallet;
-  
-  // UA-based detection (Solflare includes its name in UA)
-  const solflareInUA = ua.includes('solflare');
-  
-  return (
-    hasSolflareInAppFlag ||
-    hasSolflareIsSolflare ||
-    hasWindowSolflare ||
-    solanaIsSolflare ||
-    solflareInUA
-  );
+  return phantomInApp || solflareInApp || solflareUa || genericMobileWallet;
 }
 
 /**

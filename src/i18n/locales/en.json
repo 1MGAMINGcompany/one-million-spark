@@ -64,10 +64,6 @@
     "backgammonMoveRules": "Gold moves CLOCKWISE (24→1), Black moves COUNTER-CLOCKWISE (1→24). Hit blots to send them to the bar.",
     "dominosWinCondition": "Win by playing all your tiles first or having the lowest score."
   },
-  "room": {
-    "youreInGame": "You're in this game",
-    "youreInGameWaiting": "You're in this game. Waiting for opponent..."
-  },
   "walletRequired": {
     "title": "Wallet Required",
     "description": "Please connect your Solana wallet to use this feature.",
@@ -416,12 +412,8 @@
     "stakeMinRequired": "Minimum stake required",
     "gameModeCasual": "Casual",
     "gameModeRanked": "Ranked",
-    "gameModePrivate": "Private",
     "casualDesc": "No rating changes — just for fun",
     "rankedDesc": "ELO rating will be updated after this match",
-    "privateDesc": "Private rooms don't appear in public list. Share an invite link to let friends join.",
-    "rentDeposit": "Rent Deposit (Refundable)",
-    "rentDepositDesc": "Creating a room requires a ~0.002 SOL temporary storage deposit. This rent is always returned to you when the game ends — whether you win, lose, forfeit, or cancel.",
     "signingDisabled": "Signing Disabled",
     "signingDisabledDesc": "Wallet signing is disabled on preview domains. Please use 1mgaming.com",
     "wrongNetwork": "Wrong Network",
@@ -470,6 +462,12 @@
     "rejoin": "Rejoin",
     "resolveFirst": "Resolve your active room first"
   },
+  "shareInvite": {
+    "invitePlayers": "Invite Players",
+    "sharePrivateRoom": "Share this private room with friends and family.",
+    "share": "Share",
+    "walletNeeded": "Players will need to connect their wallet to join"
+  },
   "gameBanner": {
     "gameReady": "Game Ready — Opponent Joined!",
     "waitingForOpponent": "Waiting for Opponent",
@@ -485,27 +483,11 @@
   "waitingPanel": {
     "youAccepted": "You accepted the rules",
     "waitingOpponentAccept": "Waiting for opponent to accept…",
-    "waitingOpponentJoin": "Waiting for opponent to join...",
     "gameStartsAuto": "Game starts automatically when both players accept.",
     "copyInviteLink": "Copy Invite Link",
     "linkCopied": "Link Copied!",
     "leaveMatch": "Leave Match",
-    "linkCopiedToast": "Link copied! Share it with your opponent.",
-    "scanToJoin": "Scan to join",
-    "syncDelayTitle": "Sync Delayed",
-    "syncDelayMessage": "Both players have joined on-chain but sync is delayed. You can forfeit to settle immediately.",
-    "forfeiting": "Settling...",
-    "forfeitMatch": "Forfeit Match"
-  },
-  "shareInvite": {
-    "invitePlayers": "Invite Players",
-    "sharePrivateRoom": "Share this private room with friends to play",
-    "showQrToFriend": "Show this QR code to a friend to scan",
-    "share": "Share",
-    "shareRoom": "Share Room",
-    "walletNeeded": "Solana wallet needed to join",
-    "joinMyGame": "Join my {{game}} game!",
-    "gameInvite": "Game Invite"
+    "linkCopiedToast": "Link copied! Share it with your opponent."
   },
   "gameChat": {
     "gameChat": "Game Chat",
@@ -918,6 +900,10 @@
     "playerEliminated": "Player Eliminated",
     "playerLeft": "{{player}} has left the game"
   },
+  "common": {
+    "processing": "Processing...",
+    "error": "Error"
+  },
   "unresolvedRoom": {
     "title": "Finish Your Active Game",
     "description": "You already have an active game that hasn't been settled yet.",
@@ -928,60 +914,5 @@
   "creatorDeposit": {
     "title": "Creator Deposit (Refundable)",
     "desc": "Creating a room requires a small temporary Solana storage deposit. You get this back when the game ends — win, lose, forfeit, or cancel."
-  },
-  "roomPage": {
-    "backToRooms": "Back to Rooms",
-    "loadingRoom": "Loading room…",
-    "roomNotFound": "Room Not Found",
-    "roomNotFoundDesc": "This room may have been cancelled or doesn't exist.",
-    "invalidRoomLink": "The room link appears to be invalid or malformed.",
-    "backToRoomList": "Back to Room List",
-    "yourRoom": "Your Room",
-    "game": "GAME",
-    "players": "PLAYERS",
-    "turnTime": "TURN TIME",
-    "stakeInformation": "Stake Information",
-    "entryFee": "Entry Fee",
-    "potWhenFull": "Pot (when full)",
-    "currentDeposited": "Current deposited",
-    "winnerGets": "Winner Gets",
-    "platformFeeNote": "5% platform fee deducted from winnings",
-    "playersLabel": "Players:",
-    "you": "You",
-    "creator": "Creator",
-    "waitingForOpponent": "Waiting for opponent to join...",
-    "connectWalletToJoin": "Connect Wallet to Join",
-    "waitingForWallet": "Waiting for wallet...",
-    "signingDisabled": "Signing Disabled",
-    "resolveActiveRoomFirst": "Resolve Active Room First",
-    "joinGameAndStake": "Join Game & Stake {{amount}} SOL",
-    "joinGame": "Join Game",
-    "playAgain": "Play Again",
-    "gameInProgress": "Game in progress",
-    "cancelling": "Cancelling…",
-    "cancelRoom": "Cancel Room",
-    "closing": "Closing…",
-    "recoverRentCloseRoom": "Recover Rent (Close Room)",
-    "connectWalletTitle": "Connect a Solana Wallet to Play",
-    "connectWalletDesc": "Connect your wallet to join this room and compete for SOL prizes.",
-    "rematchCreated": "Rematch room created!",
-    "invitePlayersWithLink": "Invite players with a link. Anyone can join if they have SOL.",
-    "copied": "Copied!",
-    "copyLink": "Copy Link",
-    "share": "Share…",
-    "dismiss": "Dismiss",
-    "activeRoomWarning": "You have an active room",
-    "activeRoomWarningDesc": "Cancel your room before joining or creating another.",
-    "goToYourRoom": "Go to your room →"
-  },
-  "recoverFunds": {
-    "recoverFunds": "Recover Funds",
-    "checking": "Checking...",
-    "processing": "Processing...",
-    "cancelRoomRecoverTitle": "Cancel Room & Recover Funds",
-    "cancelRoomRecoverDesc": "This will cancel the room and return your stake of {{amount}} SOL to your wallet.",
-    "signTransactionNote": "You will need to sign a transaction to complete this action.",
-    "confirmAndSign": "Confirm & Sign",
-    "cancel": "Cancel"
   }
 }

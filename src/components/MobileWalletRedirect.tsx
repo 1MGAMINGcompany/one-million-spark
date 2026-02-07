@@ -7,8 +7,6 @@ interface MobileWalletRedirectProps {
   onClose: () => void;
 }
 
-const PENDING_ROUTE_KEY = "pending_route";
-
 /**
  * Deep links for opening the current URL inside wallet in-app browsers
  */
@@ -22,16 +20,6 @@ function getWalletDeepLinks() {
     solflare: `https://solflare.com/ul/v1/browse/${encodedUrl}`,
     backpack: `https://backpack.app/ul/browse/${encodedUrl}`,
   };
-}
-
-/**
- * Persist pending route and navigate to wallet deep link
- */
-function handleDeepLinkClick(deepLink: string) {
-  const currentRoute = window.location.pathname + window.location.search;
-  localStorage.setItem(PENDING_ROUTE_KEY, currentRoute);
-  console.log("[MobileWalletRedirect] Stored pending route:", currentRoute);
-  window.open(deepLink, "_blank");
 }
 
 /**
@@ -125,7 +113,7 @@ export function MobileWalletRedirect({ isOpen, onClose }: MobileWalletRedirectPr
           <Button 
             variant="outline" 
             className="w-full justify-between h-11"
-            onClick={() => handleDeepLinkClick(deepLinks.phantom)}
+            onClick={() => window.open(deepLinks.phantom, "_blank")}
           >
             <span className="flex items-center gap-2">
               <img 
@@ -143,7 +131,7 @@ export function MobileWalletRedirect({ isOpen, onClose }: MobileWalletRedirectPr
           <Button 
             variant="outline" 
             className="w-full justify-between h-11"
-            onClick={() => handleDeepLinkClick(deepLinks.solflare)}
+            onClick={() => window.open(deepLinks.solflare, "_blank")}
           >
             <span className="flex items-center gap-2">
               <img 
@@ -164,7 +152,7 @@ export function MobileWalletRedirect({ isOpen, onClose }: MobileWalletRedirectPr
           <Button 
             variant="outline" 
             className="w-full justify-between h-11"
-            onClick={() => handleDeepLinkClick(deepLinks.backpack)}
+            onClick={() => window.open(deepLinks.backpack, "_blank")}
           >
             <span className="flex items-center gap-2">
               <img 

@@ -1,10 +1,9 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, RotateCcw, Construction, Users, Wallet } from "lucide-react";
+import { ArrowLeft, RotateCcw, Construction, Users } from "lucide-react";
 import { useWallet } from "@/hooks/useWallet";
 import { useTurnNotifications, TurnPlayer } from "@/hooks/useTurnNotifications";
-import { useConnectWallet } from "@/contexts/WalletConnectContext";
 import TurnStatusHeader from "@/components/TurnStatusHeader";
 import TurnHistoryDrawer from "@/components/TurnHistoryDrawer";
 import NotificationToggle from "@/components/NotificationToggle";
@@ -96,9 +95,6 @@ export function MultiplayerGamePlaceholder({
     setCurrentPlayerIndex(prev => (prev + 1) % maxPlayers);
   }, [currentPlayerIndex, maxPlayers, turnPlayers, recordPlayerMove]);
 
-  // Get connect dialog function
-  const { openConnectDialog } = useConnectWallet();
-
   // Require wallet connection
   if (!walletConnected || !address) {
     return (
@@ -109,11 +105,7 @@ export function MultiplayerGamePlaceholder({
         <div className="text-center py-12">
           <Users className="h-16 w-16 text-primary mx-auto mb-4" />
           <h3 className="text-xl font-semibold mb-2">Connect Wallet to Play</h3>
-          <p className="text-muted-foreground mb-4">Please connect your wallet to join this game.</p>
-          <Button onClick={openConnectDialog}>
-            <Wallet className="mr-2 h-4 w-4" />
-            Connect Wallet
-          </Button>
+          <p className="text-muted-foreground">Please connect your wallet to join this game.</p>
         </div>
       </div>
     );

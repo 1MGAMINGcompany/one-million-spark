@@ -482,7 +482,7 @@ Deno.serve(async (req: Request) => {
     // ─────────────────────────────────────────────────────────────
     const { data: sessionRow, error: sessionError } = await supabase
       .from("game_sessions")
-      .select("game_state, game_type, mode")
+      .select("game_state, game_type")
       .eq("room_pda", roomPda)
       .single();
 
@@ -497,9 +497,6 @@ Deno.serve(async (req: Request) => {
 
     const gameState = sessionRow.game_state as Record<string, unknown> | null;
     const gameType = sessionRow.game_type || requestedGameType || "unknown";
-    // Use mode from DB (authoritative) - fallback to request body for backward compat
-    const sessionMode = sessionRow.mode || mode || "ranked";
-    console.log("[settle-game] Using mode:", sessionMode, "(from DB:", !!sessionRow.mode, ")");
 
     // ─────────────────────────────────────────────────────────────
     // STEP 3: RESOLVE WINNER SEAT FROM GAME STATE
@@ -961,7 +958,7 @@ Deno.serve(async (req: Request) => {
               p_game_type: gameType || "unknown",
               p_max_players: roomData.maxPlayers,
               p_stake_lamports: Number(roomData.stakeLamports),
-              p_mode: sessionMode,
+              p_mode: mode,
               p_players: playersOnChain,
             });
             if (rpcErr) {

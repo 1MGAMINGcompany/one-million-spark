@@ -1,8 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
-import { Check, Clock, Copy, CheckCheck, Users, Link2, Loader2, AlertTriangle, Flag, Share2 } from "lucide-react";
-import { QRCodeSVG } from "qrcode.react";
+import { Check, Clock, Copy, CheckCheck, Users, Link2, Loader2, AlertTriangle, Flag } from "lucide-react";
 import { toast } from "sonner";
 
 interface WaitingForOpponentPanelProps {
@@ -20,10 +19,6 @@ interface WaitingForOpponentPanelProps {
   onForfeit?: () => void;
   /** Loading state during forfeit */
   isForfeiting?: boolean;
-  /** Game name for sharing */
-  gameName?: string;
-  /** Whether this is a private room */
-  isPrivateRoom?: boolean;
 }
 
 /** Format wallet address to short form: first 4...last 4 */
@@ -48,17 +43,15 @@ export function WaitingForOpponentPanel({
   playerCount,
   onForfeit,
   isForfeiting,
-  gameName,
-  isPrivateRoom,
 }: WaitingForOpponentPanelProps) {
   const [copied, setCopied] = useState(false);
   const { t } = useTranslation();
 
-  const inviteUrl = roomPda 
-    ? `${window.location.origin}/room/${roomPda}`
-    : window.location.href;
-
   const handleCopyLink = async () => {
+    const inviteUrl = roomPda 
+      ? `${window.location.origin}/room/${roomPda}`
+      : window.location.href;
+    
     try {
       await navigator.clipboard.writeText(inviteUrl);
       setCopied(true);
@@ -66,27 +59,6 @@ export function WaitingForOpponentPanel({
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
       toast.error(t("common.failedToCopy"));
-    }
-  };
-
-  const handleShare = async () => {
-    if (navigator.share) {
-      try {
-        const shareTitle = gameName 
-          ? t("shareInvite.joinMyGame", { game: gameName, defaultValue: `Join my ${gameName} game!` })
-          : t("shareInvite.gameInvite", { defaultValue: "Game Invite" });
-        await navigator.share({ 
-          title: shareTitle,
-          url: inviteUrl 
-        });
-      } catch (err) {
-        // User cancelled or share failed - fallback to copy
-        if ((err as Error).name !== 'AbortError') {
-          handleCopyLink();
-        }
-      }
-    } else {
-      handleCopyLink();
     }
   };
 
@@ -144,18 +116,6 @@ export function WaitingForOpponentPanel({
           </div>
         </div>
 
-        {/* QR Code for private rooms */}
-        {isPrivateRoom && (
-          <div className="flex flex-col items-center gap-2 pt-2">
-            <div className="bg-white p-2 rounded-lg">
-              <QRCodeSVG value={inviteUrl} size={100} bgColor="#ffffff" fgColor="#000000" />
-            </div>
-            <p className="text-xs text-muted-foreground">
-              {t("waitingPanel.scanToJoin", "Scan to join")}
-            </p>
-          </div>
-        )}
-
         {/* Sync Issue Warning - shows when both players joined on-chain but sync shows waiting */}
         {playerCount !== undefined && playerCount >= 2 && stakeSol !== undefined && stakeSol > 0 && (
           <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 text-left">
@@ -180,17 +140,6 @@ export function WaitingForOpponentPanel({
 
         {/* Actions */}
         <div className="flex flex-col gap-2 pt-2">
-          {/* Share Button */}
-          <Button
-            variant="outline"
-            onClick={handleShare}
-            className="w-full gap-2"
-          >
-            <Share2 className="h-4 w-4" />
-            {t("shareInvite.share", "Share")}
-          </Button>
-
-          {/* Copy Link Button */}
           <Button
             variant="outline"
             onClick={handleCopyLink}

@@ -934,18 +934,7 @@ Deno.serve(async (req: Request) => {
         }
 
         // Step 3: Call record_match_result RPC for profile/rating updates
-        // Fetch mode from DB to pass correct value (private skips ELO, ranked updates ELO)
         try {
-          // Fetch mode from game_sessions
-          const { data: sessionData } = await supabase
-            .from("game_sessions")
-            .select("mode")
-            .eq("room_pda", roomPda)
-            .single();
-          
-          const sessionMode = sessionData?.mode || "ranked";
-          console.log("[forfeit-game] Using mode from DB:", sessionMode);
-
           const { error: rpcErr } = await supabase.rpc("record_match_result", {
             p_room_pda: roomPda,
             p_finalize_tx: signature,
@@ -953,7 +942,7 @@ Deno.serve(async (req: Request) => {
             p_game_type: gameType || "unknown",
             p_max_players: roomData.maxPlayers,
             p_stake_lamports: Number(roomData.stakeLamports),
-            p_mode: sessionMode,
+            p_mode: "ranked",
             p_players: playersOnChain,
           });
           if (rpcErr) {

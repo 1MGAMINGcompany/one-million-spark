@@ -326,37 +326,11 @@ export function useSolanaRooms() {
       const fetchedRooms = await fetchOpenPublicRooms(connection);
       console.log("[RoomList] fetchOpenPublicRooms returned", fetchedRooms.length, "rooms");
      
-     // STEP 1: Fetch private room PDAs to exclude (DB-authoritative)
-     // On-chain has no mode concept, so we must query DB for private rooms first
-     let privatePdas = new Set<string>();
+     // Enrich rooms with turn time from database via edge function (bypasses RLS)
      if (fetchedRooms.length > 0) {
-       try {
-         const { data: privateResp, error: privateErr } = await supabase.functions.invoke("game-sessions-list", {
-           body: { type: "private_room_pdas" },
-         });
-         
-         if (privateErr) {
-           console.warn("[RoomList] Failed to fetch private PDAs:", privateErr.message);
-         } else if (privateResp?.rows) {
-           privatePdas = new Set(privateResp.rows.map((r: { room_pda: string }) => r.room_pda));
-           console.log("[RoomList] Fetched", privatePdas.size, "private PDAs to exclude");
-         }
-       } catch (err) {
-         console.warn("[RoomList] Private PDAs fetch failed:", err);
-       }
-     }
-     
-     // STEP 2: Filter out private rooms BEFORE enrichment
-     let publicRooms = fetchedRooms;
-     if (privatePdas.size > 0) {
-       publicRooms = fetchedRooms.filter(room => !privatePdas.has(room.pda));
-       if (publicRooms.length < fetchedRooms.length) {
-         console.log("[RoomList] ✅ Filtered out", fetchedRooms.length - publicRooms.length, "private rooms");
-       }
-     }
-     
-     // STEP 3: Enrich remaining public rooms with turn time from database
-     if (publicRooms.length > 0) {
+       const roomPdas = fetchedRooms.map(r => r.pda);
+       console.log("[RoomList] Enriching", roomPdas.length, "rooms via edge function");
+       
        try {
          // Use edge function to bypass RLS (game_sessions has no public read policy)
          const { data: resp, error: edgeError } = await supabase.functions.invoke("game-sessions-list", {
@@ -366,8 +340,8 @@ export function useSolanaRooms() {
          if (edgeError) {
            console.warn("[RoomList] Edge function error:", edgeError.message);
          } else if (resp?.rows && resp.rows.length > 0) {
-           const sessions = resp.rows as Array<{ room_pda: string; turn_time_seconds: number | null }>;
-           console.log("[RoomList] Edge function returned", sessions.length, "sessions for enrichment");
+           const sessions = resp.rows as Array<{ room_pda: string; turn_time_seconds: number | null; mode: string | null }>;
+           console.log("[RoomList] Edge function returned", sessions.length, "sessions");
            
            const turnTimeMap = new Map<string, number>();
            for (const s of sessions) {
@@ -377,27 +351,20 @@ export function useSolanaRooms() {
            }
            
            let enrichedCount = 0;
-           for (const room of publicRooms) {
+           for (const room of fetchedRooms) {
              const dbTurnTime = turnTimeMap.get(room.pda);
              if (dbTurnTime !== undefined) {
                room.turnTimeSec = dbTurnTime;
                enrichedCount++;
              }
            }
-           console.log("[RoomList] Enriched", enrichedCount, "of", publicRooms.length, "rooms with turn time");
+           console.log("[RoomList] Enriched", enrichedCount, "of", fetchedRooms.length, "rooms with turn time");
          } else {
            console.log("[RoomList] No sessions from edge function");
          }
        } catch (enrichErr) {
          console.warn("[RoomList] Enrichment failed:", enrichErr);
        }
-       
-       // Replace fetchedRooms with filtered public rooms
-       fetchedRooms.length = 0;
-       fetchedRooms.push(...publicRooms);
-     } else {
-       // No public rooms after filtering
-       fetchedRooms.length = 0;
      }
      
      // Sort rooms by roomId descending (newest first)

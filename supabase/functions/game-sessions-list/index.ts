@@ -32,12 +32,10 @@ serve(async (req) => {
 
     if (type === 'active') {
       // Include both 'active' AND 'waiting' sessions for room list enrichment
-      // Exclude private rooms from public room list
       const { data, error } = await supabase
         .from('game_sessions')
         .select('room_pda, game_type, status, player1_wallet, player2_wallet, current_turn_wallet, created_at, updated_at, mode, turn_time_seconds')
         .in('status', ['active', 'waiting'])
-        .neq('mode', 'private')
         .order('updated_at', { ascending: false })
         .limit(500) // Prevent unbounded results
 
@@ -50,30 +48,6 @@ serve(async (req) => {
       }
       
       console.log('[game-sessions-list] ✅ Found', data?.length || 0, 'active/waiting sessions')
-      return new Response(JSON.stringify({ ok: true, rows: data }), { 
-        status: 200,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      })
-    }
-
-    if (type === 'private_room_pdas') {
-      // Return PDAs of private rooms for frontend filtering
-      // On-chain has no mode concept, so frontend needs this to exclude private rooms
-      const { data, error } = await supabase
-        .from('game_sessions')
-        .select('room_pda')
-        .eq('mode', 'private')
-        .in('status', ['active', 'waiting'])
-
-      if (error) {
-        console.error('[game-sessions-list] Private PDAs query error:', error)
-        return new Response(JSON.stringify({ error: error.message }), { 
-          status: 500,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        })
-      }
-      
-      console.log('[game-sessions-list] ✅ Found', data?.length || 0, 'private room PDAs to exclude')
       return new Response(JSON.stringify({ ok: true, rows: data }), { 
         status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
