@@ -669,7 +669,8 @@ const DominosGame = () => {
   
   const turnTimer = useTurnTimer({
     turnTimeSeconds: effectiveTurnTime,
-    enabled: isRankedGame && canPlayRanked && !gameOver,
+    // Enable timer for ranked/private games, or when stake exists (fallback for mode loading)
+    enabled: (isRankedGame || (stakeLamports && stakeLamports > 0)) && canPlayRanked && !gameOver,
     isMyTurn: effectiveIsMyTurn,
     onTimeExpired: handleTurnTimeout,
     roomId: roomPda,
@@ -1477,8 +1478,8 @@ const DominosGame = () => {
               activePlayer={turnPlayers[isMyTurn ? (amIPlayer1 ? 0 : 1) : (amIPlayer1 ? 1 : 0)]}
               players={turnPlayers}
               myAddress={address}
-              remainingTime={isRankedGame ? turnTimer.remainingTime : undefined}
-              showTimer={isRankedGame && canPlayRanked}
+              remainingTime={(isRankedGame || (stakeLamports && stakeLamports > 0)) ? turnTimer.remainingTime : undefined}
+              showTimer={(isRankedGame || (stakeLamports && stakeLamports > 0)) && canPlayRanked}
             />
           </div>
         </div>
