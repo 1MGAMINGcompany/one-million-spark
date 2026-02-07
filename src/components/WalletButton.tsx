@@ -420,18 +420,19 @@ export function WalletButton() {
     });
   }, [isMobile, isInWalletBrowser, wallets.length, sortedWallets.length]);
 
-  // Ref to prevent duplicate auto-connect attempts
-  const autoConnectAttemptedRef = useRef(false);
+  // Compute a key that changes when installed wallets change
+  // This allows the effect to re-run when adapter readyState transitions from NotDetected -> Installed
+  const installedWalletsKey = wallets
+    .filter(w => w.readyState === 'Installed')
+    .map(w => w.adapter.name)
+    .join(',');
   
   // Auto-connect for in-app wallet browsers (Phantom, Solflare, Backpack)
-  // Uses retry loop because window.solana may not be injected immediately
+  // Uses installedWalletsKey to react to readyState changes (not just wallets.length)
   useEffect(() => {
     // Skip if not in wallet browser or already connected
     if (!isInWalletBrowser) return;
     if (connected) return;
-    if (autoConnectAttemptedRef.current) return;
-    
-    autoConnectAttemptedRef.current = true;
     
     const isPhantomBrowser = getIsPhantomBrowser();
     const isSolflareBrowser = getIsSolflareBrowser();
@@ -578,8 +579,9 @@ export function WalletButton() {
     return () => {
       if (intervalId) clearInterval(intervalId);
     };
+  // Re-run when installedWalletsKey changes (adapter readyState transitions)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isInWalletBrowser, wallets.length]); // Re-run when wallets list changes
+  }, [isInWalletBrowser, connected, installedWalletsKey]);
   
   // Restore pending route after wallet connects in wallet browser
   useEffect(() => {
