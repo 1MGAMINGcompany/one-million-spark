@@ -297,8 +297,12 @@
     "stakeMinRequired": "Mindesteinsatz erforderlich",
     "gameModeCasual": "Locker",
     "gameModeRanked": "Ranglistenspiel",
+    "gameModePrivate": "Privat",
     "casualDesc": "Keine Änderung der Rangliste — nur zum Spaß",
     "rankedDesc": "ELO-Wertung wird nach diesem Match aktualisiert",
+    "privateDesc": "Private Räume erscheinen nicht in der öffentlichen Liste. Teile einen Einladungslink, damit Freunde beitreten können.",
+    "rentDeposit": "Mietkaution (Erstattbar)",
+    "rentDepositDesc": "Das Erstellen eines Raums erfordert eine temporäre Speicherkaution von ~0,002 SOL. Diese Miete wird dir immer zurückerstattet, wenn das Spiel endet — ob du gewinnst, verlierst, aufgibst oder stornierst.",
     "signingDisabled": "Signierung Deaktiviert",
     "signingDisabledDesc": "Die Wallet-Signierung ist auf Vorschau-Domains deaktiviert. Bitte verwende 1mgaming.com",
     "wrongNetwork": "Falsches Netzwerk",
@@ -769,6 +773,9 @@
     "sharePrivateRoom": "Teile diesen privaten Raum mit Freunden zum Spielen",
     "showQrToFriend": "Zeige diesen QR-Code einem Freund zum Scannen",
     "share": "Teilen",
-    "walletNeeded": "Solana Wallet zum Beitreten erforderlich"
+    "shareRoom": "Raum Teilen",
+    "walletNeeded": "Solana Wallet zum Beitreten erforderlich",
+    "joinMyGame": "Tritt meinem {{game}}-Spiel bei!",
+    "gameInvite": "Spieleinladung"
   }
 }
