@@ -1,101 +1,161 @@
 
+# Fix: Turn Timer Not Passing Turn After Timeout (Chess, Checkers, Dominos)
 
-# Fix: Turn Timer and Auto-Forfeit for Private Games
+## Problem Summary
+When a player's turn timer expires, the server correctly records a `turn_timeout` event and updates `current_turn_wallet` in the database, but the **UI never updates** - the board still shows it's the same player's turn.
 
-## Investigation Results
+## Root Cause
+ChessGame, CheckersGame, and DominosGame are **missing the polling fallback** that BackgammonGame has. The games call `maybe_apply_turn_timeout` when their own timer expires, but they never:
+1. Poll the database to detect when the opponent's timeout was applied
+2. Update local turn state (`setTurnOverrideWallet`) based on DB changes
 
-### What's Working ✅
-Based on the database logs, your most recent test (room `43x66...`) shows:
-- Turn time correctly saved as 10 seconds in database
-- Two `turn_timeout` events were recorded (one for each player)
-- Strikes tracked correctly in `missed_turns` field
+## Evidence from Your Tests
 
-### What Needs Fixing
+| Game | Room | Turn Time | Timeout Recorded? | Turn Passed in UI? |
+|------|------|-----------|-------------------|-------------------|
+| Private Chess | AJCR5ft... | 10s | ✅ Yes | ❌ No |
+| Ranked Chess | 2zxNPas... | 10s | ✅ Yes | ❌ No |
 
-I identified a potential issue where the timer may not be **visually displayed** even though it's **working server-side**. Here's why:
+The server is working correctly - we can see `turn_timeout` moves recorded with `nextTurnWallet` set to the opponent. The problem is purely on the frontend.
 
-**Problem Location:** The `TurnStatusHeader` component receives `remainingTime` conditionally:
+## Backgammon Working Pattern (DO NOT MODIFY)
 
-```typescript
-// ChessGame.tsx line 1184-1185
-remainingTime={isRankedGame ? turnTimer.remainingTime : undefined}
-showTimer={isRankedGame && canPlay}
-```
+BackgammonGame.tsx has a polling effect (lines 741-923) that:
+1. Polls `game-session-get` every 5 seconds
+2. Checks if it's opponent's turn and calls `maybe_apply_turn_timeout`
+3. Detects when `current_turn_wallet` changed in DB
+4. Updates local state: `setCurrentTurnWallet(freshTurnWallet)`
+5. Resets timer: `turnTimer.resetTimer()`
+6. Shows toast: "Opponent skipped - 1/3 missed turns"
 
-If `isRankedGame` is `false` when the component renders (before DB fetch completes), the timer won't display.
+## Solution: Add Polling Fallback to Chess, Checkers, and Dominos
 
-**Root Cause:** There's a race condition where:
-1. `useRoomMode` starts fetching from DB
-2. Before fetch completes, `isRankedGame` defaults to `false`
-3. Timer UI doesn't render even though timer logic runs in background
+Add the same polling pattern from Backgammon to the other three games. This involves adding a new `useEffect` that:
 
----
-
-## Technical Fix
-
-### 1. Ensure Timer Shows During Loading (All Game Pages)
-
-**Files:** `ChessGame.tsx`, `BackgammonGame.tsx`, `CheckersGame.tsx`, `DominosGame.tsx`, `LudoGame.tsx`
-
-Change the timer visibility logic to show timer whenever `canPlay` is true AND we're in a stake game (private or ranked), using a loading-safe approach:
+### Polling Logic to Add (for each game)
 
 ```typescript
-// Before:
-showTimer={isRankedGame && canPlay}
+// Polling fallback for turn sync (in case WebRTC fails)
+useEffect(() => {
+  if (!roomPda || !isRankedGame || !startRoll.isFinalized || gameOver) return;
 
-// After - show timer for both ranked AND private, with loading state handled:
-showTimer={(isRankedGame || roomMode === 'private') && canPlay}
+  const pollTurnWallet = async () => {
+    try {
+      const { data, error } = await supabase.functions.invoke("game-session-get", {
+        body: { roomPda },
+      });
+
+      if (error || !data?.session) return;
+      
+      // Check for finished game
+      if (data.session.status === 'finished' && !gameOver) {
+        const winner = data.session.winner_wallet;
+        setWinnerWallet(winner);
+        setGameOver(true);
+        // Play appropriate sound
+        return;
+      }
+
+      // SERVER-SIDE TIMEOUT CHECK (for opponent's turn)
+      const dbTurnWallet = data.session.current_turn_wallet;
+      const isOpponentsTurn = dbTurnWallet && !isSameWallet(dbTurnWallet, address);
+      
+      if (isOpponentsTurn) {
+        // Try to apply timeout if opponent is idle
+        const { data: timeoutResult } = await supabase.rpc("maybe_apply_turn_timeout", {
+          p_room_pda: roomPda,
+        });
+        
+        if (timeoutResult?.applied) {
+          if (timeoutResult.type === "auto_forfeit") {
+            // 3 strikes - game over
+            setWinnerWallet(timeoutResult.winnerWallet);
+            setGameOver(true);
+            return;
+          } else if (timeoutResult.type === "turn_timeout") {
+            toast({
+              title: t('gameSession.opponentSkipped'),
+              description: `${timeoutResult.strikes}/3 ${t('gameSession.missedTurns')}`,
+            });
+          }
+        }
+      }
+
+      // Re-fetch to get updated turn wallet after potential timeout
+      const { data: freshData } = await supabase.functions.invoke("game-session-get", {
+        body: { roomPda },
+      });
+      const freshTurnWallet = freshData?.session?.current_turn_wallet;
+
+      // Detect turn change and update local state
+      if (freshTurnWallet && freshTurnWallet !== turnOverrideWallet) {
+        const wasMyTurn = turnOverrideWallet && isSameWallet(turnOverrideWallet, address);
+        const isNowMyTurn = isSameWallet(freshTurnWallet, address);
+        
+        if (isNowMyTurn !== wasMyTurn) {
+          console.log("[Polling] Turn changed:", {
+            from: turnOverrideWallet?.slice(0, 8),
+            to: freshTurnWallet.slice(0, 8),
+          });
+          
+          setTurnOverrideWallet(freshTurnWallet);
+          turnTimer.resetTimer();
+        }
+      }
+    } catch (err) {
+      console.error("[Polling] Error:", err);
+    }
+  };
+
+  const interval = setInterval(pollTurnWallet, 5000);
+  return () => clearInterval(interval);
+}, [roomPda, isRankedGame, startRoll.isFinalized, gameOver, turnOverrideWallet, address, t]);
 ```
-
-Since `isRankedGame` already includes private games (via `useRoomMode`), the real fix is to ensure we don't hide the timer before mode loads.
-
-### 2. Add Loading Fallback for Mode Check
-
-**File:** `src/hooks/useRoomMode.ts`
-
-Return `isRanked: true` as default while loading for stake rooms (safer than defaulting to casual):
-
-```typescript
-// Add check for stake from on-chain data as fallback
-// If stake > 0 and mode not loaded yet, treat as ranked
-```
-
-### 3. Ensure Timer Syncs with DB Value on Load
-
-**File:** `src/hooks/useTurnTimer.ts`
-
-Already has the fix from earlier (lines 53-59) that syncs `remainingTime` when `turnTimeSeconds` changes.
-
----
 
 ## Files to Modify
 
-| File | Change |
-|------|--------|
-| `src/pages/ChessGame.tsx` | Ensure timer displays while mode loads |
-| `src/pages/BackgammonGame.tsx` | Same fix |
-| `src/pages/CheckersGame.tsx` | Same fix |
-| `src/pages/DominosGame.tsx` | Same fix |
-| `src/pages/LudoGame.tsx` | Same fix |
-| `src/hooks/useRoomMode.ts` | Default to ranked for rooms with stake while loading |
+| File | Changes |
+|------|---------|
+| `src/pages/ChessGame.tsx` | Add polling fallback useEffect (~60 lines) |
+| `src/pages/CheckersGame.tsx` | Add polling fallback useEffect (~60 lines) |
+| `src/pages/DominosGame.tsx` | Add polling fallback useEffect (~60 lines) |
 
----
+## Technical Details
 
-## Auto-Forfeit Clarification
+### State Changes Needed
 
-The 3-strike auto-forfeit **is working correctly**. In your test:
-- You had 1 missed turn, then played (strike reset)
-- Opponent had 1 missed turn, then played (strike reset)
+For Chess (turn is derived from `game.turn()` + `turnOverrideWallet`):
+- The `turnOverrideWallet` state already exists (line 493)
+- Polling just needs to update this when DB turn changes
 
-To trigger auto-forfeit, a player must miss **3 consecutive turns** without making any move in between. This is by design to prevent accidental forfeits from brief disconnections.
+For Checkers and Dominos:
+- Same pattern - they use `turnOverrideWallet` or equivalent turn state
+- Update that state when DB `current_turn_wallet` changes
 
----
+### Timer Reset
+When turn changes are detected via polling:
+- Call `turnTimer.resetTimer()` to give the new turn-holder full time
+- Set `timeoutFiredRef.current = false` if applicable
 
-## Testing Verification
+### Visibility Change Handler
+Also add visibility change handler (like Backgammon lines 925-974) to force immediate poll when tab becomes visible.
 
-After this fix:
-1. Create a private room with 10-second timer
-2. Verify timer countdown appears on screen
-3. Let one player miss 3 turns consecutively (no moves at all)
-4. Confirm auto-forfeit triggers and game ends
+## Expected Result After Fix
 
+1. Player A makes move → Timer starts for Player B
+2. Player B's timer expires (10 seconds)
+3. Server records `turn_timeout` → Updates `current_turn_wallet` to Player A
+4. Polling detects change → Updates `turnOverrideWallet` to Player A
+5. UI now shows it's Player A's turn again
+6. Toast: "Opponent skipped - 1/3 missed turns"
+7. After 3 consecutive skips → Auto-forfeit triggers
+
+## Verification Steps
+
+1. Create private chess room with 10-second timer
+2. Make one move each
+3. Let timer expire (do nothing for 10+ seconds)
+4. **Expected:** Turn passes to opponent, toast shows "1/3 missed turns"
+5. Let opponent's timer expire
+6. **Expected:** Turn passes back to you
+7. Repeat until 3 consecutive timeouts → Auto-forfeit triggers
