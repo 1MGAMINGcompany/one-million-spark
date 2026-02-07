@@ -1161,15 +1161,15 @@ export default function Room() {
                 </div>
               )}
 
-              {/* Share button for private room creators */}
+              {/* Share button for private room creators - PROMINENT */}
               {isOpenStatus(status) && isCreator && roomMode === 'private' && (
                 <Button 
-                  variant="outline"
+                  size="lg"
                   onClick={() => setShowShareDialog(true)}
-                  className="gap-2 border-violet-500/30 text-violet-400 hover:bg-violet-500/10"
+                  className="gap-2 bg-violet-600 hover:bg-violet-700 text-white font-semibold px-6 py-3 min-w-48"
                 >
-                  <Share2 className="h-4 w-4" />
-                  {t("shareInvite.share")} {t("common.invite", "Invite")}
+                  <Share2 className="h-5 w-5" />
+                  {t("shareInvite.shareRoom", "Share Room")}
                 </Button>
               )}
 

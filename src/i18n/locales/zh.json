@@ -294,8 +294,12 @@
     "stakeMinRequired": "需要最低赌注",
     "gameModeCasual": "休闲",
     "gameModeRanked": "排位",
+    "gameModePrivate": "私密",
     "casualDesc": "不影响排名 — 只为娱乐",
     "rankedDesc": "本场比赛后将更新ELO评分",
+    "privateDesc": "私密房间不会出现在公开列表中。分享邀请链接让朋友加入。",
+    "rentDeposit": "租金押金（可退还）",
+    "rentDepositDesc": "创建房间需要约0.002 SOL的临时存储押金。无论您赢、输、弃权还是取消，游戏结束时都会退还此租金。",
     "signingDisabled": "签名已禁用",
     "signingDisabledDesc": "预览域名上的钱包签名已禁用。请使用 1mgaming.com",
     "wrongNetwork": "网络错误",
@@ -746,6 +750,9 @@
     "sharePrivateRoom": "与朋友分享此私人房间进行游戏",
     "showQrToFriend": "向朋友展示此二维码进行扫描",
     "share": "分享",
-    "walletNeeded": "需要Solana钱包才能加入"
+    "shareRoom": "分享房间",
+    "walletNeeded": "需要Solana钱包才能加入",
+    "joinMyGame": "加入我的{{game}}游戏！",
+    "gameInvite": "游戏邀请"
   }
 }

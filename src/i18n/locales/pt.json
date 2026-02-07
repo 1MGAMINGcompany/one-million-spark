@@ -297,8 +297,12 @@
     "stakeMinRequired": "Aposta mínima obrigatória",
     "gameModeCasual": "Casual",
     "gameModeRanked": "Ranqueado",
+    "gameModePrivate": "Privada",
     "casualDesc": "Sem alterações de classificação — apenas por diversão",
     "rankedDesc": "O ELO será atualizado após esta partida",
+    "privateDesc": "Salas privadas não aparecem na lista pública. Compartilhe um link de convite para que amigos possam entrar.",
+    "rentDeposit": "Depósito de Aluguel (Reembolsável)",
+    "rentDepositDesc": "Criar uma sala requer um depósito de armazenamento temporário de ~0,002 SOL. Este aluguel sempre é devolvido a você quando o jogo termina — seja ganhando, perdendo, desistindo ou cancelando.",
     "signingDisabled": "Assinatura Desativada",
     "signingDisabledDesc": "A assinatura da carteira está desativada em domínios de preview. Por favor use 1mgaming.com",
     "wrongNetwork": "Rede Incorreta",
@@ -769,6 +773,9 @@
     "sharePrivateRoom": "Compartilhe esta sala privada com amigos para jogar",
     "showQrToFriend": "Mostre este QR code para um amigo escanear",
     "share": "Compartilhar",
-    "walletNeeded": "Carteira Solana necessária para entrar"
+    "shareRoom": "Compartilhar Sala",
+    "walletNeeded": "Carteira Solana necessária para entrar",
+    "joinMyGame": "Entre na minha partida de {{game}}!",
+    "gameInvite": "Convite de Jogo"
   }
 }

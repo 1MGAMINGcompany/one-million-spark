@@ -294,8 +294,12 @@
     "stakeMinRequired": "الحد الأدنى للرهان مطلوب",
     "gameModeCasual": "عادي",
     "gameModeRanked": "تصنيفي",
+    "gameModePrivate": "خاصة",
     "casualDesc": "لا تغيير في التصنيف — للمتعة فقط",
     "rankedDesc": "سيتم تحديث تصنيف ELO بعد هذه المباراة",
+    "privateDesc": "الغرف الخاصة لا تظهر في القائمة العامة. شارك رابط دعوة للسماح للأصدقاء بالانضمام.",
+    "rentDeposit": "إيداع الإيجار (قابل للاسترداد)",
+    "rentDepositDesc": "يتطلب إنشاء غرفة إيداع تخزين مؤقت ~0.002 SOL. يتم إرجاع هذا الإيجار دائمًا عند انتهاء اللعبة — سواء فزت أو خسرت أو انسحبت أو ألغيت.",
     "signingDisabled": "التوقيع معطل",
     "signingDisabledDesc": "توقيع المحفظة معطل على نطاقات المعاينة. يرجى استخدام 1mgaming.com",
     "wrongNetwork": "شبكة خاطئة",
@@ -746,6 +750,9 @@
     "sharePrivateRoom": "شارك هذه الغرفة الخاصة مع الأصدقاء للعب",
     "showQrToFriend": "أظهر رمز QR هذا لصديق للمسح",
     "share": "مشاركة",
-    "walletNeeded": "محفظة Solana مطلوبة للانضمام"
+    "shareRoom": "مشاركة الغرفة",
+    "walletNeeded": "محفظة Solana مطلوبة للانضمام",
+    "joinMyGame": "انضم إلى لعبتي {{game}}!",
+    "gameInvite": "دعوة لعبة"
   }
 }

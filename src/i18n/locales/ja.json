@@ -320,8 +320,12 @@
     "stakeMinRequired": "最低賭け金が必要です",
     "gameModeCasual": "カジュアル",
     "gameModeRanked": "ランク戦",
+    "gameModePrivate": "プライベート",
     "casualDesc": "ランキング変動なし — 楽しむだけ",
     "rankedDesc": "この試合後にELOレーティングが更新されます",
+    "privateDesc": "プライベートルームは公開リストに表示されません。招待リンクを共有して友達を招待しましょう。",
+    "rentDeposit": "レンタルデポジット（返金可能）",
+    "rentDepositDesc": "ルームの作成には約0.002 SOLの一時的なストレージデポジットが必要です。このレンタルは、勝ち、負け、棄権、キャンセルに関わらず、ゲーム終了時に必ず返金されます。",
     "signingDisabled": "署名が無効",
     "signingDisabledDesc": "プレビュードメインではウォレット署名が無効です。1mgaming.comをご利用ください",
     "wrongNetwork": "ネットワークエラー",
@@ -766,6 +770,9 @@
     "sharePrivateRoom": "このプライベートルームを友達と共有して遊びましょう",
     "showQrToFriend": "このQRコードを友達に見せてスキャンしてもらいましょう",
     "share": "共有",
-    "walletNeeded": "参加にはSolanaウォレットが必要です"
+    "shareRoom": "ルームを共有",
+    "walletNeeded": "参加にはSolanaウォレットが必要です",
+    "joinMyGame": "{{game}}のゲームに参加しよう！",
+    "gameInvite": "ゲーム招待"
   }
 }
