@@ -69,7 +69,13 @@
     "backgammonWinCondition": "Gewinnen Sie, indem Sie alle Ihre Steine zuerst herauswürfeln.",
     "backgammonMoveRules": "Bewegen Sie Steine gemäß Würfelwurf. Schlagen Sie einzelne gegnerische Steine auf die Bar.",
     "dominosWinCondition": "Gewinnen Sie durch Ausspielen aller Steine oder niedrigste Punktzahl.",
-    "dominosMoveRules": "Passende Enden anlegen – ansonsten vom Stapel ziehen.",
+    "dominosMoveRules": "Passende Enden anlegen – ansonsten vom Stapel ziehen."
+  },
+  "room": {
+    "youreInGame": "Du bist in diesem Spiel",
+    "youreInGameWaiting": "Du bist in diesem Spiel. Warte auf Gegner..."
+  },
+  "game": {
     "checkersMoveRules": "Steine bewegen sich diagonal. Damen können rückwärts. Schlagen ist Pflicht.",
     "ludoMoveRules": "Würfeln Sie 6 zum Starten. Bewegen Sie Figuren nach Würfelwert. Schlagen Sie gegnerische Figuren.",
     "yourCheckers": "Ihre Steine",
@@ -742,5 +748,27 @@
     "forfeit": "Aufgabe",
     "timeoutForfeit": "Zeitüberschreitung = automatische Aufgabe",
     "rulesAcceptedNote": "Beide Spieler haben diese Regeln vor Spielbeginn akzeptiert. Auszahlungen werden on-chain ausgeführt."
+  },
+  "waitingPanel": {
+    "youAccepted": "Du hast die Regeln akzeptiert",
+    "waitingOpponentAccept": "Warte auf Gegner-Akzeptanz…",
+    "waitingOpponentJoin": "Warte auf Gegner...",
+    "gameStartsAuto": "Das Spiel beginnt automatisch, wenn beide Spieler akzeptieren.",
+    "copyInviteLink": "Einladungslink Kopieren",
+    "linkCopied": "Link Kopiert!",
+    "leaveMatch": "Match Verlassen",
+    "linkCopiedToast": "Link kopiert! Teile ihn mit deinem Gegner.",
+    "scanToJoin": "Scannen zum Beitreten",
+    "syncDelayTitle": "Synchronisierung Verzögert",
+    "syncDelayMessage": "Beide Spieler sind on-chain beigetreten, aber die Synchronisierung ist verzögert. Du kannst aufgeben, um sofort abzurechnen.",
+    "forfeiting": "Abrechnung...",
+    "forfeitMatch": "Match Aufgeben"
+  },
+  "shareInvite": {
+    "invitePlayers": "Spieler Einladen",
+    "sharePrivateRoom": "Teile diesen privaten Raum mit Freunden zum Spielen",
+    "showQrToFriend": "Zeige diesen QR-Code einem Freund zum Scannen",
+    "share": "Teilen",
+    "walletNeeded": "Solana Wallet zum Beitreten erforderlich"
   }
 }

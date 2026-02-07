@@ -72,8 +72,11 @@ export function WaitingForOpponentPanel({
   const handleShare = async () => {
     if (navigator.share) {
       try {
+        const shareTitle = gameName 
+          ? t("shareInvite.joinMyGame", { game: gameName, defaultValue: `Join my ${gameName} game!` })
+          : t("shareInvite.gameInvite", { defaultValue: "Game Invite" });
         await navigator.share({ 
-          title: gameName ? `Join my ${gameName} game!` : 'Game Invite',
+          title: shareTitle,
           url: inviteUrl 
         });
       } catch (err) {

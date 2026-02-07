@@ -66,7 +66,13 @@
     "backgammonWinCondition": "اربح بإخراج كل قطعك أولاً.",
     "backgammonMoveRules": "حرك القطع حسب النرد. اضرب قطع الخصم المنفردة لإرسالها للشريط.",
     "dominosWinCondition": "اربح بلعب كل قطعك أو بأقل نقاط.",
-    "dominosMoveRules": "طابق الأطراف للعب – إن لم تستطع، اسحب من الكومة.",
+    "dominosMoveRules": "طابق الأطراف للعب – إن لم تستطع، اسحب من الكومة."
+  },
+  "room": {
+    "youreInGame": "أنت في هذه اللعبة",
+    "youreInGameWaiting": "أنت في هذه اللعبة. في انتظار الخصم..."
+  },
+  "game": {
     "checkersMoveRules": "القطع تتحرك قطرياً. الملوك تتراجع. الأسر إجباري.",
     "ludoMoveRules": "ارمِ 6 للخروج. حرك القطع حسب النرد. اأسر قطع الخصم.",
     "yourCheckers": "قطعك",
@@ -719,5 +725,27 @@
     "forfeit": "الانسحاب",
     "timeoutForfeit": "انتهاء الوقت = انسحاب تلقائي",
     "rulesAcceptedNote": "قبل كلا اللاعبين هذه القواعد قبل بدء المباراة. يتم تنفيذ المدفوعات على السلسلة."
+  },
+  "waitingPanel": {
+    "youAccepted": "قبلت القواعد",
+    "waitingOpponentAccept": "في انتظار قبول الخصم…",
+    "waitingOpponentJoin": "في انتظار انضمام الخصم...",
+    "gameStartsAuto": "تبدأ اللعبة تلقائياً عندما يقبل كلا اللاعبين.",
+    "copyInviteLink": "نسخ رابط الدعوة",
+    "linkCopied": "تم نسخ الرابط!",
+    "leaveMatch": "مغادرة المباراة",
+    "linkCopiedToast": "تم نسخ الرابط! شاركه مع خصمك.",
+    "scanToJoin": "امسح للانضمام",
+    "syncDelayTitle": "تأخر المزامنة",
+    "syncDelayMessage": "انضم كلا اللاعبين على السلسلة لكن المزامنة متأخرة. يمكنك الانسحاب للتسوية فوراً.",
+    "forfeiting": "جاري التسوية...",
+    "forfeitMatch": "انسحب من المباراة"
+  },
+  "shareInvite": {
+    "invitePlayers": "دعوة اللاعبين",
+    "sharePrivateRoom": "شارك هذه الغرفة الخاصة مع الأصدقاء للعب",
+    "showQrToFriend": "أظهر رمز QR هذا لصديق للمسح",
+    "share": "مشاركة",
+    "walletNeeded": "محفظة Solana مطلوبة للانضمام"
   }
 }

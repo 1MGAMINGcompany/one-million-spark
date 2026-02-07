@@ -69,7 +69,13 @@
     "backgammonWinCondition": "Gana sacando todas tus fichas primero.",
     "backgammonMoveRules": "Mueve fichas según los dados. Golpea blots del oponente para enviarlos a la barra.",
     "dominosWinCondition": "Gana jugando todas tus fichas o teniendo menor puntuación.",
-    "dominosMoveRules": "Combina extremos para jugar – si no puedes, roba del montón.",
+    "dominosMoveRules": "Combina extremos para jugar – si no puedes, roba del montón."
+  },
+  "room": {
+    "youreInGame": "Estás en este juego",
+    "youreInGameWaiting": "Estás en este juego. Esperando al oponente..."
+  },
+  "game": {
     "checkersMoveRules": "Las piezas se mueven en diagonal. Los reyes pueden retroceder. Las capturas son obligatorias.",
     "ludoMoveRules": "Saca 6 para salir de casa. Mueve fichas según los dados. Captura fichas del oponente.",
     "yourCheckers": "Tus fichas",
@@ -869,5 +875,37 @@
     "forfeit": "Abandono",
     "timeoutForfeit": "Tiempo agotado = abandono automático",
     "rulesAcceptedNote": "Ambos jugadores aceptaron estas reglas antes del inicio del partido. Los pagos se ejecutan en la cadena."
+  },
+  "waitingPanel": {
+    "youAccepted": "Aceptaste las reglas",
+    "waitingOpponentAccept": "Esperando que el oponente acepte…",
+    "waitingOpponentJoin": "Esperando que el oponente se una...",
+    "gameStartsAuto": "El juego comienza automáticamente cuando ambos jugadores aceptan.",
+    "copyInviteLink": "Copiar Enlace de Invitación",
+    "linkCopied": "¡Enlace Copiado!",
+    "leaveMatch": "Abandonar Partida",
+    "linkCopiedToast": "¡Enlace copiado! Compártelo con tu oponente.",
+    "scanToJoin": "Escanear para unirse",
+    "syncDelayTitle": "Sincronización Retrasada",
+    "syncDelayMessage": "Ambos jugadores se han unido en cadena pero la sincronización está retrasada. Puedes abandonar para liquidar inmediatamente.",
+    "forfeiting": "Liquidando...",
+    "forfeitMatch": "Abandonar Partida"
+  },
+  "shareInvite": {
+    "invitePlayers": "Invitar Jugadores",
+    "sharePrivateRoom": "Comparte esta sala privada con amigos para jugar",
+    "showQrToFriend": "Muestra este código QR a un amigo para escanear",
+    "share": "Compartir",
+    "walletNeeded": "Se necesita billetera Solana para unirse",
+    "joinMyGame": "¡Únete a mi partida de {{game}}!",
+    "gameInvite": "Invitación de Juego"
+  },
+  "common": {
+    "processing": "Procesando...",
+    "error": "Error",
+    "linkCopied": "¡Enlace Copiado!",
+    "linkCopiedDesc": "Compártelo con tu oponente.",
+    "failedToCopy": "Error al Copiar",
+    "copyManually": "Por favor copia el enlace manualmente."
   }
 }

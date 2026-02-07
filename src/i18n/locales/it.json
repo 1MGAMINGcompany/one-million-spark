@@ -66,7 +66,13 @@
     "backgammonWinCondition": "Vinci portando fuori tutte le tue pedine per primo.",
     "backgammonMoveRules": "Muovi le pedine secondo i dadi. Colpisci i blot avversari per mandarli alla barra.",
     "dominosWinCondition": "Vinci giocando tutte le tessere o avendo il punteggio più basso.",
-    "dominosMoveRules": "Abbina le estremità per giocare – altrimenti pesca.",
+    "dominosMoveRules": "Abbina le estremità per giocare – altrimenti pesca."
+  },
+  "room": {
+    "youreInGame": "Sei in questo gioco",
+    "youreInGameWaiting": "Sei in questo gioco. In attesa dell'avversario..."
+  },
+  "game": {
     "checkersMoveRules": "Le pedine si muovono in diagonale. Le dame possono tornare indietro. Le catture sono obbligatorie.",
     "ludoMoveRules": "Fai 6 per uscire dalla base. Muovi secondo i dadi. Cattura le pedine avversarie.",
     "yourCheckers": "Le tue pedine",
@@ -719,5 +725,27 @@
     "forfeit": "Abbandono",
     "timeoutForfeit": "Tempo scaduto = abbandono automatico",
     "rulesAcceptedNote": "Entrambi i giocatori hanno accettato queste regole prima dell'inizio della partita. I pagamenti vengono eseguiti on-chain."
+  },
+  "waitingPanel": {
+    "youAccepted": "Hai accettato le regole",
+    "waitingOpponentAccept": "In attesa che l'avversario accetti…",
+    "waitingOpponentJoin": "In attesa dell'avversario...",
+    "gameStartsAuto": "La partita inizia automaticamente quando entrambi i giocatori accettano.",
+    "copyInviteLink": "Copia Link di Invito",
+    "linkCopied": "Link Copiato!",
+    "leaveMatch": "Abbandona Partita",
+    "linkCopiedToast": "Link copiato! Condividilo con il tuo avversario.",
+    "scanToJoin": "Scansiona per unirti",
+    "syncDelayTitle": "Sincronizzazione Ritardata",
+    "syncDelayMessage": "Entrambi i giocatori si sono uniti on-chain ma la sincronizzazione è ritardata. Puoi abbandonare per liquidare immediatamente.",
+    "forfeiting": "Liquidazione...",
+    "forfeitMatch": "Abbandona Partita"
+  },
+  "shareInvite": {
+    "invitePlayers": "Invita Giocatori",
+    "sharePrivateRoom": "Condividi questa stanza privata con amici per giocare",
+    "showQrToFriend": "Mostra questo codice QR a un amico per scansionare",
+    "share": "Condividi",
+    "walletNeeded": "Portafoglio Solana necessario per unirti"
   }
 }

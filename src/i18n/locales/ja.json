@@ -66,7 +66,13 @@
     "backgammonWinCondition": "すべての駒を先にベアオフして勝利。",
     "backgammonMoveRules": "サイコロの目に従って駒を動かします。相手のブロットをバーに送ります。",
     "dominosWinCondition": "すべての牌を先に出すか最低点で勝利。",
-    "dominosMoveRules": "端を合わせて出す – 出せない場合は山から引く。",
+    "dominosMoveRules": "端を合わせて出す – 出せない場合は山から引く。"
+  },
+  "room": {
+    "youreInGame": "このゲームに参加中",
+    "youreInGameWaiting": "このゲームに参加中。対戦相手を待っています..."
+  },
+  "game": {
     "checkersMoveRules": "駒は斜めに動きます。キングは後退可能。取りは強制。",
     "ludoMoveRules": "6を出してスタート。サイコロで駒を動かす。相手の駒を取る。",
     "yourCheckers": "あなたの駒",
@@ -739,5 +745,27 @@
     "forfeit": "棄権",
     "timeoutForfeit": "タイムアウト = 自動棄権",
     "rulesAcceptedNote": "両プレイヤーはマッチ開始前にこれらのルールに同意しました。支払いはオンチェーンで実行されます。"
+  },
+  "waitingPanel": {
+    "youAccepted": "ルールを承諾しました",
+    "waitingOpponentAccept": "対戦相手の承諾を待っています…",
+    "waitingOpponentJoin": "対戦相手の参加を待っています...",
+    "gameStartsAuto": "両プレイヤーが承諾するとゲームが自動開始されます。",
+    "copyInviteLink": "招待リンクをコピー",
+    "linkCopied": "リンクをコピーしました！",
+    "leaveMatch": "試合を離れる",
+    "linkCopiedToast": "リンクをコピーしました！対戦相手に共有してください。",
+    "scanToJoin": "スキャンして参加",
+    "syncDelayTitle": "同期遅延",
+    "syncDelayMessage": "両プレイヤーがオンチェーンで参加しましたが同期が遅延しています。棄権して即座に精算できます。",
+    "forfeiting": "精算中...",
+    "forfeitMatch": "試合を棄権"
+  },
+  "shareInvite": {
+    "invitePlayers": "プレイヤーを招待",
+    "sharePrivateRoom": "このプライベートルームを友達と共有して遊びましょう",
+    "showQrToFriend": "このQRコードを友達に見せてスキャンしてもらいましょう",
+    "share": "共有",
+    "walletNeeded": "参加にはSolanaウォレットが必要です"
   }
 }

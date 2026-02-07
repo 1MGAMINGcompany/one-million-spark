@@ -64,6 +64,10 @@
     "backgammonMoveRules": "Gold moves CLOCKWISE (24→1), Black moves COUNTER-CLOCKWISE (1→24). Hit blots to send them to the bar.",
     "dominosWinCondition": "Win by playing all your tiles first or having the lowest score."
   },
+  "room": {
+    "youreInGame": "You're in this game",
+    "youreInGameWaiting": "You're in this game. Waiting for opponent..."
+  },
   "walletRequired": {
     "title": "Wallet Required",
     "description": "Please connect your Solana wallet to use this feature.",
@@ -462,12 +466,6 @@
     "rejoin": "Rejoin",
     "resolveFirst": "Resolve your active room first"
   },
-  "shareInvite": {
-    "invitePlayers": "Invite Players",
-    "sharePrivateRoom": "Share this private room with friends and family.",
-    "share": "Share",
-    "walletNeeded": "Players will need to connect their wallet to join"
-  },
   "gameBanner": {
     "gameReady": "Game Ready — Opponent Joined!",
     "waitingForOpponent": "Waiting for Opponent",
@@ -483,11 +481,26 @@
   "waitingPanel": {
     "youAccepted": "You accepted the rules",
     "waitingOpponentAccept": "Waiting for opponent to accept…",
+    "waitingOpponentJoin": "Waiting for opponent to join...",
     "gameStartsAuto": "Game starts automatically when both players accept.",
     "copyInviteLink": "Copy Invite Link",
     "linkCopied": "Link Copied!",
     "leaveMatch": "Leave Match",
-    "linkCopiedToast": "Link copied! Share it with your opponent."
+    "linkCopiedToast": "Link copied! Share it with your opponent.",
+    "scanToJoin": "Scan to join",
+    "syncDelayTitle": "Sync Delayed",
+    "syncDelayMessage": "Both players have joined on-chain but sync is delayed. You can forfeit to settle immediately.",
+    "forfeiting": "Settling...",
+    "forfeitMatch": "Forfeit Match"
+  },
+  "shareInvite": {
+    "invitePlayers": "Invite Players",
+    "sharePrivateRoom": "Share this private room with friends to play",
+    "showQrToFriend": "Show this QR code to a friend to scan",
+    "share": "Share",
+    "walletNeeded": "Solana wallet needed to join",
+    "joinMyGame": "Join my {{game}} game!",
+    "gameInvite": "Game Invite"
   },
   "gameChat": {
     "gameChat": "Game Chat",
@@ -899,10 +912,6 @@
     "stakeRefunded": "Your stake has been refunded",
     "playerEliminated": "Player Eliminated",
     "playerLeft": "{{player}} has left the game"
-  },
-  "common": {
-    "processing": "Processing...",
-    "error": "Error"
   },
   "unresolvedRoom": {
     "title": "Finish Your Active Game",
