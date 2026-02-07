@@ -8,6 +8,11 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
+interface UseRoomModeOptions {
+  /** If stake > 0, treat as ranked while loading (prevents timer hiding during fetch) */
+  stakeFromChain?: number;
+}
+
 interface UseRoomModeResult {
   mode: 'casual' | 'ranked' | 'private';
   /** True for both 'ranked' AND 'private' - enforces rules gate, stake, forfeit */
@@ -19,11 +24,15 @@ interface UseRoomModeResult {
 const MAX_RETRIES = 5;
 const RETRY_DELAY_MS = 800;
 
-export function useRoomMode(roomPda: string | undefined): UseRoomModeResult {
+export function useRoomMode(roomPda: string | undefined, options?: UseRoomModeOptions): UseRoomModeResult {
   const [mode, setMode] = useState<'casual' | 'ranked' | 'private'>('casual');
   const [turnTimeSeconds, setTurnTimeSeconds] = useState(60);
   const [isLoaded, setIsLoaded] = useState(false);
   const [fetchAttempts, setFetchAttempts] = useState(0);
+  
+  // If stake > 0, assume ranked while loading (prevents timer from hiding during DB fetch)
+  const stakeFromChain = options?.stakeFromChain ?? 0;
+  const assumeRankedWhileLoading = stakeFromChain > 0 && !isLoaded;
 
   useEffect(() => {
     if (!roomPda) {
@@ -76,12 +85,16 @@ export function useRoomMode(roomPda: string | undefined): UseRoomModeResult {
     fetchModeFromDB();
   }, [roomPda, fetchAttempts]);
 
-  console.log("[useRoomMode] Current state:", { roomPda: roomPda?.slice(0, 8), mode, isLoaded, fetchAttempts });
+  console.log("[useRoomMode] Current state:", { roomPda: roomPda?.slice(0, 8), mode, isLoaded, fetchAttempts, assumeRankedWhileLoading });
+
+  // If stake exists on-chain but mode not yet loaded, assume ranked (safe default)
+  // This ensures timer displays immediately instead of hiding during DB fetch
+  const effectiveIsRanked = assumeRankedWhileLoading || mode === 'ranked' || mode === 'private';
 
   return {
     mode,
     // Private rooms use ranked enforcement (stake, rules gate, forfeit) but skip ELO
-    isRanked: mode === 'ranked' || mode === 'private',
+    isRanked: effectiveIsRanked,
     turnTimeSeconds,
     isLoaded,
   };

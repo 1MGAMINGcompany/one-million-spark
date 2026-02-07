@@ -1225,9 +1225,10 @@ const BackgammonGame = () => {
   
   // Turn timer for ranked games
   // FIX: Use startRoll.isFinalized as fallback for timer enable (don't depend on bothReady)
+  // Also enable timer when stake exists (fallback for mode loading)
   const turnTimer = useTurnTimer({
     turnTimeSeconds: effectiveTurnTime,
-    enabled: isRankedGame && (canPlay || startRoll.isFinalized) && !gameOver,
+    enabled: (isRankedGame || (stakeLamports && stakeLamports > 0)) && (canPlay || startRoll.isFinalized) && !gameOver,
     isMyTurn: effectiveIsMyTurn,
     onTimeExpired: handleTurnTimeout,
     roomId: roomPda,
@@ -2304,8 +2305,8 @@ const BackgammonGame = () => {
               activePlayer={turnPlayers[isSameWallet(currentTurnWallet, roomPlayers[0]) ? 0 : 1]}
               players={turnPlayers}
               myAddress={address}
-              remainingTime={isRankedGame ? turnTimer.remainingTime : undefined}
-              showTimer={isRankedGame && startRoll.isFinalized && !gameOver}
+              remainingTime={(isRankedGame || (stakeLamports && stakeLamports > 0)) ? turnTimer.remainingTime : undefined}
+              showTimer={(isRankedGame || (stakeLamports && stakeLamports > 0)) && startRoll.isFinalized && !gameOver}
             />
           </div>
         </div>
@@ -2460,7 +2461,7 @@ const BackgammonGame = () => {
                       ) : (
                         <span className="text-[10px] font-medium text-slate-400">OPPONENT'S TURN</span>
                       )}
-                      {isRankedGame && startRoll.isFinalized && !gameOver && (
+                      {(isRankedGame || (stakeLamports && stakeLamports > 0)) && startRoll.isFinalized && !gameOver && (
                         <div className={cn(
                           "flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono",
                           effectiveIsMyTurn 

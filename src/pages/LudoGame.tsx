@@ -533,7 +533,8 @@ const LudoGame = () => {
   
   const turnTimer = useTurnTimer({
     turnTimeSeconds: effectiveTurnTime,
-    enabled: isRankedGame && canPlay && !gameOver,
+    // Enable timer for ranked/private games, or when stake exists (fallback for mode loading)
+    enabled: (isRankedGame || (stakeLamports && stakeLamports > 0)) && canPlay && !gameOver,
     isMyTurn: isMyTurnLocal,
     onTimeExpired: handleTurnTimeout,
     roomId: roomPda,
@@ -1113,8 +1114,8 @@ const LudoGame = () => {
             activePlayer={turnPlayers[currentPlayerIndex]}
             players={turnPlayers}
             myAddress={address}
-            remainingTime={isRankedGame ? turnTimer.remainingTime : undefined}
-            showTimer={isRankedGame && canPlay}
+            remainingTime={(isRankedGame || (stakeLamports && stakeLamports > 0)) ? turnTimer.remainingTime : undefined}
+            showTimer={(isRankedGame || (stakeLamports && stakeLamports > 0)) && canPlay}
           />
         </div>
       </div>
