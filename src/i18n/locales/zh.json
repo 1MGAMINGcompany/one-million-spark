@@ -66,7 +66,13 @@
     "backgammonWinCondition": "先将所有棋子移出棋盘获胜。",
     "backgammonMoveRules": "按骰子移动棋子。击打对手单子送至栏杆。",
     "dominosWinCondition": "先出完所有牌或点数最少获胜。",
-    "dominosMoveRules": "匹配端点出牌 - 无法出牌时抽牌。",
+    "dominosMoveRules": "匹配端点出牌 - 无法出牌时抽牌。"
+  },
+  "room": {
+    "youreInGame": "你在此游戏中",
+    "youreInGameWaiting": "你在此游戏中。等待对手..."
+  },
+  "game": {
     "checkersMoveRules": "棋子斜向移动。国王可后退。吃子为强制。",
     "ludoMoveRules": "掷6出发。按骰子移动棋子。吃掉对手棋子。",
     "yourCheckers": "你的棋子",
@@ -719,5 +725,27 @@
     "forfeit": "弃权",
     "timeoutForfeit": "超时 = 自动弃权",
     "rulesAcceptedNote": "两位玩家在比赛开始前已接受这些规则。奖励在链上执行。"
+  },
+  "waitingPanel": {
+    "youAccepted": "您已接受规则",
+    "waitingOpponentAccept": "等待对手接受…",
+    "waitingOpponentJoin": "等待对手加入...",
+    "gameStartsAuto": "双方接受后游戏自动开始。",
+    "copyInviteLink": "复制邀请链接",
+    "linkCopied": "链接已复制！",
+    "leaveMatch": "离开比赛",
+    "linkCopiedToast": "链接已复制！分享给你的对手。",
+    "scanToJoin": "扫码加入",
+    "syncDelayTitle": "同步延迟",
+    "syncDelayMessage": "双方已在链上加入但同步延迟。您可以弃权立即结算。",
+    "forfeiting": "结算中...",
+    "forfeitMatch": "放弃比赛"
+  },
+  "shareInvite": {
+    "invitePlayers": "邀请玩家",
+    "sharePrivateRoom": "与朋友分享此私人房间进行游戏",
+    "showQrToFriend": "向朋友展示此二维码进行扫描",
+    "share": "分享",
+    "walletNeeded": "需要Solana钱包才能加入"
   }
 }

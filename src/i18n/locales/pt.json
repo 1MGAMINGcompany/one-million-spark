@@ -69,7 +69,13 @@
     "backgammonWinCondition": "Vença retirando todas as suas peças primeiro.",
     "backgammonMoveRules": "Mova peças de acordo com os dados. Acerte blots do oponente para enviá-los à barra.",
     "dominosWinCondition": "Vença jogando todas as peças ou tendo menor pontuação.",
-    "dominosMoveRules": "Combine extremidades para jogar – se não puder, compre do monte.",
+    "dominosMoveRules": "Combine extremidades para jogar – se não puder, compre do monte."
+  },
+  "room": {
+    "youreInGame": "Você está neste jogo",
+    "youreInGameWaiting": "Você está neste jogo. Aguardando oponente..."
+  },
+  "game": {
     "checkersMoveRules": "Peças movem na diagonal. Damas podem recuar. Capturas são obrigatórias.",
     "ludoMoveRules": "Tire 6 para sair de casa. Mova peças de acordo com os dados. Capture peças do oponente.",
     "yourCheckers": "Suas peças",
@@ -742,5 +748,27 @@
     "forfeit": "Desistência",
     "timeoutForfeit": "Tempo esgotado = desistência automática",
     "rulesAcceptedNote": "Ambos os jogadores aceitaram estas regras antes do início da partida. Os pagamentos são executados on-chain."
+  },
+  "waitingPanel": {
+    "youAccepted": "Você aceitou as regras",
+    "waitingOpponentAccept": "Aguardando oponente aceitar…",
+    "waitingOpponentJoin": "Aguardando oponente entrar...",
+    "gameStartsAuto": "O jogo começa automaticamente quando ambos aceitam.",
+    "copyInviteLink": "Copiar Link de Convite",
+    "linkCopied": "Link Copiado!",
+    "leaveMatch": "Sair da Partida",
+    "linkCopiedToast": "Link copiado! Compartilhe com seu oponente.",
+    "scanToJoin": "Escaneie para entrar",
+    "syncDelayTitle": "Sincronização Atrasada",
+    "syncDelayMessage": "Ambos os jogadores entraram on-chain mas a sincronização está atrasada. Você pode desistir para liquidar imediatamente.",
+    "forfeiting": "Liquidando...",
+    "forfeitMatch": "Desistir da Partida"
+  },
+  "shareInvite": {
+    "invitePlayers": "Convidar Jogadores",
+    "sharePrivateRoom": "Compartilhe esta sala privada com amigos para jogar",
+    "showQrToFriend": "Mostre este QR code para um amigo escanear",
+    "share": "Compartilhar",
+    "walletNeeded": "Carteira Solana necessária para entrar"
   }
 }

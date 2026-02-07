@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { PublicKey, LAMPORTS_PER_SOL, VersionedTransaction, TransactionMessage } from "@solana/web3.js";
 
 import { useConnection, useWallet as useSolanaWallet } from "@solana/wallet-adapter-react";
@@ -59,6 +60,7 @@ export default function Room() {
   const { roomPda: roomPdaParam } = useParams<{ roomPda: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const { isConnected, address } = useWallet();
   const { connection } = useConnection();
   const wallet = useSolanaWallet();
@@ -982,12 +984,12 @@ export default function Room() {
                       ? 'bg-violet-500/20 text-violet-400 border-violet-500/30'
                       : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
                   }`}>
-                    {roomMode === 'ranked' ? '🔴 Ranked' : roomMode === 'private' ? '🟣 Private' : '🟢 Casual'}
+                    {roomMode === 'ranked' ? `🔴 ${t("createRoom.gameModeRanked")}` : roomMode === 'private' ? `🟣 ${t("createRoom.privateRoom")}` : `🟢 ${t("createRoom.gameModeCasual")}`}
                   </span>
                 )}
                 {isPlayer && (
                   <span className="px-3 py-1 rounded-full text-sm font-medium bg-primary/20 text-primary">
-                    You're in this game
+                    {t("room.youreInGame", "You're in this game")}
                   </span>
                 )}
                 {isCreator && (
@@ -1148,7 +1150,7 @@ export default function Room() {
               {isOpenStatus(status) && isPlayer && !isCreator && (
                 <div className="flex items-center gap-2 px-4 py-2 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
                   <CheckCircle className="h-4 w-4 text-emerald-500" />
-                  <span className="text-sm text-emerald-400">You're in this game. Waiting for opponent...</span>
+                  <span className="text-sm text-emerald-400">{t("room.youreInGameWaiting", "You're in this game. Waiting for opponent...")}</span>
                 </div>
               )}
               
@@ -1167,7 +1169,7 @@ export default function Room() {
                   className="gap-2 border-violet-500/30 text-violet-400 hover:bg-violet-500/10"
                 >
                   <Share2 className="h-4 w-4" />
-                  Share Invite
+                  {t("shareInvite.share")} {t("common.invite", "Invite")}
                 </Button>
               )}
 
