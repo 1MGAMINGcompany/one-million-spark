@@ -331,6 +331,7 @@ export default function CreateRoom() {
         
         // Persist settings authoritatively in game_sessions via Edge Function
         // No signature needed - on-chain stake transaction already proves ownership
+        const gameTypeName = Object.entries(GAME_TYPE_MAP).find(([_, v]) => v === gameType)?.[0] || "chess";
         try {
           const { data, error: settingsErr } = await supabase.functions.invoke(
             "game-session-set-settings",
@@ -340,6 +341,7 @@ export default function CreateRoom() {
                 turnTimeSeconds: authoritativeTurnTime,
                 mode: gameMode,
                 creatorWallet: address,
+                gameType: gameTypeName,
               },
             }
           );
