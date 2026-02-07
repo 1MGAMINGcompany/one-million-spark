@@ -1,6 +1,7 @@
 import React, { ReactNode, useMemo, useCallback } from "react";
 import { ConnectionProvider, WalletProvider } from "@solana/wallet-adapter-react";
 import { WalletModalProvider } from "@solana/wallet-adapter-react-ui";
+import { SolflareWalletAdapter } from "@solana/wallet-adapter-solflare";
 import { getSolanaEndpoint, getSolanaNetwork } from "@/lib/solana-config";
 
 // Note: We do NOT import wallet-adapter-react-ui styles since we use custom UI
@@ -18,9 +19,11 @@ export function SolanaProvider({ children }: SolanaProviderProps) {
     return url;
   }, []);
 
-  // Let Standard Wallet API handle wallet detection (Phantom, Solflare, Backpack)
-  // No explicit adapters needed - removes duplicate registration warnings
-  const wallets = useMemo(() => [], []);
+  // Explicit SolflareWalletAdapter ensures it's available immediately in Solflare's in-app browser
+  // where Wallet Standard auto-detection may be slow. Duplicates are automatically deduplicated.
+  const wallets = useMemo(() => [
+    new SolflareWalletAdapter(),
+  ], []);
 
   // Handle wallet errors - log but don't crash
   const onError = useCallback((error: Error) => {
