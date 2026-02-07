@@ -676,6 +676,138 @@ const DominosGame = () => {
     roomId: roomPda,
   });
 
+  // =====================================================
+  // POLLING FALLBACK: Sync turn state from DB when opponent times out
+  // Mirrors BackgammonGame.tsx polling pattern (lines 741-923)
+  // =====================================================
+  const timeoutFiredRef = useRef(false);
+  
+  useEffect(() => {
+    // Only poll for ranked/staked games during active play
+    if (!roomPda || (!isRankedGame && !(stakeLamports && stakeLamports > 0)) || !startRoll.isFinalized || gameOver) return;
+
+    const pollTurnWallet = async () => {
+      try {
+        const { data, error } = await supabase.functions.invoke("game-session-get", {
+          body: { roomPda },
+        });
+
+        if (error || !data?.session) return;
+        
+        // Check for finished game
+        if (data.session.status === 'finished' && !gameOver) {
+          const winner = data.session.winner_wallet;
+          setWinnerWallet(winner);
+          setGameOver(true);
+          const iWon = isSameWallet(winner, address);
+          setWinner(iWon ? "me" : "opponent");
+          play(iWon ? 'domino/win' : 'domino/lose');
+          return;
+        }
+
+        // SERVER-SIDE TIMEOUT CHECK (for opponent's turn)
+        const dbTurnWallet = data.session.current_turn_wallet;
+        const isOpponentsTurn = dbTurnWallet && !isSameWallet(dbTurnWallet, address);
+        
+        if (isOpponentsTurn) {
+          // Try to apply timeout if opponent is idle
+          const { data: timeoutResult } = await supabase.rpc("maybe_apply_turn_timeout", {
+            p_room_pda: roomPda,
+          });
+          
+          const result = timeoutResult as {
+            applied: boolean;
+            type?: string;
+            winnerWallet?: string;
+            nextTurnWallet?: string;
+            strikes?: number;
+          } | null;
+          
+          if (result?.applied) {
+            if (result.type === "auto_forfeit") {
+              // 3 strikes - game over
+              setWinnerWallet(result.winnerWallet || null);
+              setGameOver(true);
+              setWinner("me");
+              play('domino/win');
+              return;
+            } else if (result.type === "turn_timeout") {
+              toast({
+                title: t('gameSession.opponentSkipped'),
+                description: `${result.strikes}/3 ${t('gameSession.missedTurns')}`,
+              });
+            }
+          }
+        }
+
+        // Re-fetch to get updated turn wallet after potential timeout
+        const { data: freshData } = await supabase.functions.invoke("game-session-get", {
+          body: { roomPda },
+        });
+        const freshTurnWallet = freshData?.session?.current_turn_wallet;
+
+        // Detect turn change and update local state
+        if (freshTurnWallet) {
+          const wasMyTurn = isMyTurn;
+          const isNowMyTurn = isSameWallet(freshTurnWallet, address);
+          
+          if (wasMyTurn !== isNowMyTurn) {
+            console.log("[DominosGame Polling] Turn changed:", {
+              wasMyTurn,
+              isNowMyTurn,
+              freshTurnWallet: freshTurnWallet.slice(0, 8),
+            });
+            
+            setIsMyTurn(isNowMyTurn);
+            setGameStatus(isNowMyTurn ? t('game.yourTurn') : t('game.opponentsTurn'));
+            turnTimer.resetTimer();
+            timeoutFiredRef.current = false;
+          }
+        }
+      } catch (err) {
+        console.error("[DominosGame Polling] Error:", err);
+      }
+    };
+
+    const interval = setInterval(pollTurnWallet, 5000);
+    return () => clearInterval(interval);
+  }, [roomPda, isRankedGame, stakeLamports, startRoll.isFinalized, gameOver, isMyTurn, address, t, turnTimer, play]);
+
+  // Visibility change handler - force immediate poll when tab becomes visible
+  useEffect(() => {
+    if (!roomPda || gameOver) return;
+
+    const handleVisibility = async () => {
+      if (document.visibilityState === 'visible') {
+        console.log("[DominosGame] Tab visible, forcing poll");
+        turnTimer.resumeTimer?.();
+        
+        // Immediate poll
+        try {
+          const { data } = await supabase.functions.invoke("game-session-get", {
+            body: { roomPda },
+          });
+          
+          if (data?.session?.current_turn_wallet) {
+            const freshTurnWallet = data.session.current_turn_wallet;
+            const isNowMyTurn = isSameWallet(freshTurnWallet, address);
+            if (isNowMyTurn !== isMyTurn) {
+              setIsMyTurn(isNowMyTurn);
+              setGameStatus(isNowMyTurn ? t('game.yourTurn') : t('game.opponentsTurn'));
+              turnTimer.resetTimer();
+              timeoutFiredRef.current = false;
+            }
+          }
+        } catch (err) {
+          console.error("[DominosGame] Visibility poll error:", err);
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, [roomPda, gameOver, isMyTurn, address, t, turnTimer]);
+
   // Turn notification players
   const turnPlayers: TurnPlayer[] = useMemo(() => {
     return roomPlayers.map((playerAddress, index) => {
