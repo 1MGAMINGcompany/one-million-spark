@@ -56,6 +56,30 @@ serve(async (req) => {
       })
     }
 
+    if (type === 'private_room_pdas') {
+      // Return PDAs of private rooms for frontend filtering
+      // On-chain has no mode concept, so frontend needs this to exclude private rooms
+      const { data, error } = await supabase
+        .from('game_sessions')
+        .select('room_pda')
+        .eq('mode', 'private')
+        .in('status', ['active', 'waiting'])
+
+      if (error) {
+        console.error('[game-sessions-list] Private PDAs query error:', error)
+        return new Response(JSON.stringify({ error: error.message }), { 
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        })
+      }
+      
+      console.log('[game-sessions-list] ✅ Found', data?.length || 0, 'private room PDAs to exclude')
+      return new Response(JSON.stringify({ ok: true, rows: data }), { 
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      })
+    }
+
     if (type === 'recoverable_for_wallet') {
       const wallet = body.wallet
       if (!wallet || typeof wallet !== 'string') {
