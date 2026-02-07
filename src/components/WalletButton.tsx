@@ -20,8 +20,8 @@ import backpackIcon from "@/assets/wallets/backpack.svg";
 
 const CONNECT_TIMEOUT_MS = 8000;
 const PENDING_ROUTE_KEY = "pending_route";
-const AUTO_CONNECT_RETRY_MS = 250;
-const AUTO_CONNECT_MAX_TRIES = 10; // ~2.5s total
+const AUTO_CONNECT_RETRY_MS = 300; // Increased for Solflare
+const AUTO_CONNECT_MAX_TRIES = 15; // ~4.5s total - Solflare needs more time
 
 // ===== ENVIRONMENT DETECTION =====
 const getIsMobile = () => /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
@@ -750,6 +750,53 @@ export function WalletButton() {
     );
   };
 
+  // Direct Solflare connect for in-app browser when adapter not found
+  const handleSolflareDirectConnect = async () => {
+    const win = window as any;
+    setConnectingWallet('Solflare');
+    setDialogOpen(false);
+    
+    try {
+      // Try direct provider connect
+      if (win.solflare?.connect) {
+        const resp = await win.solflare.connect();
+        if (resp?.publicKey) {
+          console.log("[Wallet] Direct solflare.connect() succeeded:", resp.publicKey.toBase58?.() || resp.publicKey);
+          // Wait for wallet-adapter to sync
+          await new Promise(r => setTimeout(r, 500));
+          
+          // Re-check for adapter after direct connect
+          const adapter = wallets.find(w => 
+            w.adapter.name.toLowerCase().includes('solflare') &&
+            w.readyState === 'Installed'
+          );
+          if (adapter) {
+            select(adapter.adapter.name);
+            // Connection already established via direct provider
+          }
+          setConnectingWallet(null);
+          return;
+        }
+      }
+      // Also try window.Solflare (capital S)
+      if (win.Solflare?.connect) {
+        const resp = await win.Solflare.connect();
+        if (resp?.publicKey) {
+          console.log("[Wallet] Direct Solflare.connect() succeeded");
+          await new Promise(r => setTimeout(r, 500));
+          setConnectingWallet(null);
+          return;
+        }
+      }
+      throw new Error('Solflare connect failed - no provider responded');
+    } catch (err) {
+      console.error('[Wallet] Solflare direct connect failed:', err);
+      setConnectingWallet(null);
+      toast.error("Connection failed. If connection didn't work, try tapping Connect again.");
+      setShowFallbackPanel(true);
+    }
+  };
+
   const handleWalletClick = (walletId: string) => {
     // Find matching wallet from detected wallets
     const matchingWallet = sortedWallets.find(w => 
@@ -780,6 +827,10 @@ export function WalletButton() {
           setShowFallbackPanel(true);
         }
       }
+    } else if (walletId === 'solflare' && getIsSolflareBrowser()) {
+      // Special handling for Solflare in-app browser when adapter not found
+      // Try direct provider connect instead of showing error
+      handleSolflareDirectConnect();
     } else if (isMobile) {
       // On mobile with no wallet detected: show modal with 2 options
       setNotDetectedWallet(walletId as 'phantom' | 'solflare' | 'backpack');

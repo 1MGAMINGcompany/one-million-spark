@@ -598,12 +598,16 @@ export default function Room() {
     if (!roomPdaParam || !room) return;
 
     if (!isConnected) {
-      // In wallet browser: avoid opening modal repeatedly (let auto-connect handle it)
-      if (inWalletBrowser && hasAutoPromptedConnectRef.current) {
-        toast.info("Connecting wallet...", { duration: 2000 });
-        return;
+      // In wallet browser: give auto-connect more time before showing modal
+      if (inWalletBrowser) {
+        if (!hasAutoPromptedConnectRef.current) {
+          hasAutoPromptedConnectRef.current = true;
+          // Show a toast and wait for auto-connect instead of immediately showing modal
+          toast.info("Connecting to wallet...", { duration: 3000 });
+          return;
+        }
+        // Already prompted once and still not connected - now show the modal
       }
-      hasAutoPromptedConnectRef.current = true;
       setShowWalletGate(true);
       return;
     }
