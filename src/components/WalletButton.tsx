@@ -47,10 +47,51 @@ const getWalletBrowseDeepLink = (walletType: 'phantom' | 'solflare', url: string
 const getIsInWalletBrowser = () => {
   const win = window as any;
   const isInPhantom = !!win?.phantom?.solana?.isPhantom;
-  const isInSolflare = !!win?.solflare?.isSolflare;
+  const isInSolflare = getIsSolflareBrowser();
   // Check for any injected Solana provider (covers other wallet browsers)
   const hasSolanaProvider = !!win?.solana;
   return isInPhantom || isInSolflare || hasSolanaProvider;
+};
+
+// Specific Solflare in-app browser detection (robust)
+const getIsSolflareBrowser = () => {
+  const win = window as any;
+  const ua = (navigator.userAgent || '').toLowerCase();
+  const isMobile = /mobile|android|iphone|ipad|ipod/i.test(ua);
+  
+  // Only detect as Solflare browser on mobile (desktop extension uses different flow)
+  if (!isMobile) return false;
+  
+  // Explicit Solflare flags
+  const hasSolflareInAppFlag = !!win.solflare?.isInAppBrowser;
+  const hasSolflareIsSolflare = !!win.solflare?.isSolflare;
+  const hasWindowSolflare = !!win.Solflare;
+  
+  // window.solana may have Solflare flags
+  const solanaIsSolflare = !!win.solana?.isSolflare || !!win.solana?.isSolflareWallet;
+  
+  // UA-based detection (Solflare includes its name in UA)
+  const solflareInUA = ua.includes('solflare');
+  
+  return (
+    hasSolflareInAppFlag ||
+    hasSolflareIsSolflare ||
+    hasWindowSolflare ||
+    solanaIsSolflare ||
+    solflareInUA
+  );
+};
+
+// Specific Phantom in-app browser detection
+const getIsPhantomBrowser = () => {
+  const win = window as any;
+  const ua = (navigator.userAgent || '').toLowerCase();
+  const isMobile = /mobile|android|iphone|ipad|ipod/i.test(ua);
+  
+  // Only detect as Phantom browser on mobile
+  if (!isMobile) return false;
+  
+  return !!win.phantom?.solana?.isPhantom;
 };
 
 // Explicit wallet detection helpers
@@ -391,17 +432,27 @@ export function WalletButton() {
     if (autoConnectAttemptedRef.current) return;
     
     autoConnectAttemptedRef.current = true;
-    console.log("[WalletBrowser] Starting auto-connect retry loop");
+    
+    const isPhantomBrowser = getIsPhantomBrowser();
+    const isSolflareBrowser = getIsSolflareBrowser();
+    
+    console.log("[WalletBrowser] Starting auto-connect retry loop", {
+      isPhantomBrowser,
+      isSolflareBrowser,
+    });
     
     let attempts = 0;
     let intervalId: ReturnType<typeof setInterval> | null = null;
+    let connectSucceeded = false;
     
-    const tryConnect = async () => {
+    const tryConnect = async (): Promise<boolean> => {
+      if (connectSucceeded) return true;
+      
       const win = window as any;
       attempts++;
       
       // Check if provider is ready
-      const hasProvider = !!win.solana || !!win.phantom?.solana || !!win.solflare;
+      const hasProvider = !!win.solana || !!win.phantom?.solana || !!win.solflare || !!win.Solflare;
       
       if (!hasProvider) {
         console.log(`[WalletBrowser] Attempt ${attempts}/${AUTO_CONNECT_MAX_TRIES}: Provider not ready`);
@@ -409,57 +460,116 @@ export function WalletButton() {
           clearInterval(intervalId);
           console.warn("[WalletBrowser] Max attempts reached, provider never injected");
         }
-        return;
-      }
-      
-      // Provider is ready - stop retrying
-      if (intervalId) {
-        clearInterval(intervalId);
-        intervalId = null;
+        return false;
       }
       
       console.log("[WalletBrowser] Provider detected, attempting connection...");
       
-      // Find installed wallet adapter
-      const installedWallet = wallets.find(w => w.readyState === 'Installed');
-      if (installedWallet) {
+      // Find preferred adapter based on which wallet browser we're in
+      let preferredAdapter = null;
+      
+      if (isSolflareBrowser) {
+        // Prefer Solflare adapter in Solflare browser
+        preferredAdapter = wallets.find(w => 
+          w.adapter.name.toLowerCase().includes('solflare') &&
+          w.readyState === 'Installed'
+        );
+        console.log("[WalletBrowser] Looking for Solflare adapter:", preferredAdapter?.adapter.name);
+      } else if (isPhantomBrowser) {
+        // Prefer Phantom adapter in Phantom browser
+        preferredAdapter = wallets.find(w => 
+          w.adapter.name.toLowerCase().includes('phantom') &&
+          w.readyState === 'Installed'
+        );
+        console.log("[WalletBrowser] Looking for Phantom adapter:", preferredAdapter?.adapter.name);
+      }
+      
+      // Fallback to any installed adapter
+      const targetAdapter = preferredAdapter || wallets.find(w => w.readyState === 'Installed');
+      
+      if (targetAdapter) {
         try {
-          select(installedWallet.adapter.name);
+          select(targetAdapter.adapter.name);
           await connect();
-          console.log("[WalletBrowser] Auto-connect succeeded:", installedWallet.adapter.name);
+          console.log("[WalletBrowser] Auto-connect succeeded:", targetAdapter.adapter.name);
+          connectSucceeded = true;
+          if (intervalId) clearInterval(intervalId);
+          return true;
         } catch (err) {
-          console.warn("[WalletBrowser] Auto-connect failed:", err);
+          console.warn("[WalletBrowser] Auto-connect via adapter failed:", err);
         }
-      } else {
-        // Try direct window.solana connect if no adapter found
-        if (win.solana?.connect) {
+      }
+      
+      // For Solflare: try direct provider connect as fallback
+      if (isSolflareBrowser) {
+        if (win.solflare?.connect) {
           try {
-            await win.solana.connect();
-            console.log("[WalletBrowser] Direct solana.connect() succeeded");
+            await win.solflare.connect();
+            console.log("[WalletBrowser] Direct solflare.connect() succeeded");
             // Re-check adapters after direct connect
-            const newInstalled = wallets.find(w => w.readyState === 'Installed');
+            const newInstalled = wallets.find(w => 
+              w.adapter.name.toLowerCase().includes('solflare') &&
+              w.readyState === 'Installed'
+            ) || wallets.find(w => w.readyState === 'Installed');
             if (newInstalled) {
               select(newInstalled.adapter.name);
               await connect();
+              connectSucceeded = true;
+              if (intervalId) clearInterval(intervalId);
+              return true;
             }
           } catch (err) {
-            console.warn("[WalletBrowser] Direct solana.connect() failed:", err);
+            console.warn("[WalletBrowser] Direct solflare.connect() failed:", err);
+          }
+        }
+        // Also try window.Solflare (capital S)
+        if (win.Solflare?.connect) {
+          try {
+            await win.Solflare.connect();
+            console.log("[WalletBrowser] Direct Solflare.connect() succeeded");
+            connectSucceeded = true;
+            if (intervalId) clearInterval(intervalId);
+            return true;
+          } catch (err) {
+            console.warn("[WalletBrowser] Direct Solflare.connect() failed:", err);
           }
         }
       }
+      
+      // Fallback: try direct window.solana connect
+      if (win.solana?.connect && !win.solana.isConnected) {
+        try {
+          await win.solana.connect();
+          console.log("[WalletBrowser] Direct solana.connect() succeeded");
+          // Re-check adapters after direct connect
+          const newInstalled = wallets.find(w => w.readyState === 'Installed');
+          if (newInstalled) {
+            select(newInstalled.adapter.name);
+            await connect();
+            connectSucceeded = true;
+            if (intervalId) clearInterval(intervalId);
+            return true;
+          }
+        } catch (err) {
+          console.warn("[WalletBrowser] Direct solana.connect() failed:", err);
+        }
+      }
+      
+      return false;
     };
     
     // First immediate attempt
     tryConnect();
     
-    // Retry loop
+    // Retry loop - continue until success or max attempts
     intervalId = setInterval(() => {
-      if (connected) {
+      if (connected || connectSucceeded) {
         if (intervalId) clearInterval(intervalId);
         return;
       }
       if (attempts >= AUTO_CONNECT_MAX_TRIES) {
         if (intervalId) clearInterval(intervalId);
+        console.warn("[WalletBrowser] Max attempts reached without successful connection");
         return;
       }
       tryConnect();
