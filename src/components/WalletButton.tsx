@@ -19,6 +19,9 @@ import solflareIcon from "@/assets/wallets/solflare.svg";
 import backpackIcon from "@/assets/wallets/backpack.svg";
 
 const CONNECT_TIMEOUT_MS = 8000;
+const PENDING_ROUTE_KEY = "pending_route";
+const AUTO_CONNECT_RETRY_MS = 250;
+const AUTO_CONNECT_MAX_TRIES = 10; // ~2.5s total
 
 // ===== ENVIRONMENT DETECTION =====
 const getIsMobile = () => /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
@@ -297,6 +300,11 @@ export function WalletButton() {
     setSelectedWalletType(walletType);
     setDialogOpen(false);
     
+    // PERSIST pending route before deep link redirect
+    const currentRoute = window.location.pathname + window.location.search;
+    localStorage.setItem(PENDING_ROUTE_KEY, currentRoute);
+    console.log("[WalletButton] Stored pending route:", currentRoute);
+    
     const deepLink = getWalletDeepLink(walletType);
     
     // Try to open the deep link
@@ -371,34 +379,115 @@ export function WalletButton() {
     });
   }, [isMobile, isInWalletBrowser, wallets.length, sortedWallets.length]);
 
-  // Auto-sync for in-app wallet browsers (Solflare, Phantom, etc.)
-  // CRITICAL: Runs ONCE on mount to detect already-connected wallet
-  // This fixes the "Connect Wallet" loop in Solflare in-app browser
+  // Ref to prevent duplicate auto-connect attempts
+  const autoConnectAttemptedRef = useRef(false);
+  
+  // Auto-connect for in-app wallet browsers (Phantom, Solflare, Backpack)
+  // Uses retry loop because window.solana may not be injected immediately
   useEffect(() => {
-    const win = window as any;
-    
-    // Skip if already connected or currently connecting
-    if (connected || connecting) return;
-    
-    // Only auto-sync in wallet browser environments
+    // Skip if not in wallet browser or already connected
     if (!isInWalletBrowser) return;
+    if (connected) return;
+    if (autoConnectAttemptedRef.current) return;
     
-    // Check if window.solana reports connected
-    if (win.solana?.isConnected && win.solana?.publicKey) {
-      console.log("[WalletState] In-app browser has connected wallet, syncing...");
+    autoConnectAttemptedRef.current = true;
+    console.log("[WalletBrowser] Starting auto-connect retry loop");
+    
+    let attempts = 0;
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+    
+    const tryConnect = async () => {
+      const win = window as any;
+      attempts++;
       
-      // Find matching installed adapter
+      // Check if provider is ready
+      const hasProvider = !!win.solana || !!win.phantom?.solana || !!win.solflare;
+      
+      if (!hasProvider) {
+        console.log(`[WalletBrowser] Attempt ${attempts}/${AUTO_CONNECT_MAX_TRIES}: Provider not ready`);
+        if (attempts >= AUTO_CONNECT_MAX_TRIES && intervalId) {
+          clearInterval(intervalId);
+          console.warn("[WalletBrowser] Max attempts reached, provider never injected");
+        }
+        return;
+      }
+      
+      // Provider is ready - stop retrying
+      if (intervalId) {
+        clearInterval(intervalId);
+        intervalId = null;
+      }
+      
+      console.log("[WalletBrowser] Provider detected, attempting connection...");
+      
+      // Find installed wallet adapter
       const installedWallet = wallets.find(w => w.readyState === 'Installed');
       if (installedWallet) {
-        select(installedWallet.adapter.name);
-        // Single connect call (NOT in a loop)
-        connect().catch(err => {
-          console.warn("[WalletState] Auto-connect failed:", err);
-        });
+        try {
+          select(installedWallet.adapter.name);
+          await connect();
+          console.log("[WalletBrowser] Auto-connect succeeded:", installedWallet.adapter.name);
+        } catch (err) {
+          console.warn("[WalletBrowser] Auto-connect failed:", err);
+        }
+      } else {
+        // Try direct window.solana connect if no adapter found
+        if (win.solana?.connect) {
+          try {
+            await win.solana.connect();
+            console.log("[WalletBrowser] Direct solana.connect() succeeded");
+            // Re-check adapters after direct connect
+            const newInstalled = wallets.find(w => w.readyState === 'Installed');
+            if (newInstalled) {
+              select(newInstalled.adapter.name);
+              await connect();
+            }
+          } catch (err) {
+            console.warn("[WalletBrowser] Direct solana.connect() failed:", err);
+          }
+        }
+      }
+    };
+    
+    // First immediate attempt
+    tryConnect();
+    
+    // Retry loop
+    intervalId = setInterval(() => {
+      if (connected) {
+        if (intervalId) clearInterval(intervalId);
+        return;
+      }
+      if (attempts >= AUTO_CONNECT_MAX_TRIES) {
+        if (intervalId) clearInterval(intervalId);
+        return;
+      }
+      tryConnect();
+    }, AUTO_CONNECT_RETRY_MS);
+    
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isInWalletBrowser, wallets.length]); // Re-run when wallets list changes
+  
+  // Restore pending route after wallet connects in wallet browser
+  useEffect(() => {
+    if (!connected || !isInWalletBrowser) return;
+    
+    const pendingRoute = localStorage.getItem(PENDING_ROUTE_KEY);
+    if (pendingRoute) {
+      const currentPath = window.location.pathname + window.location.search;
+      localStorage.removeItem(PENDING_ROUTE_KEY);
+      
+      if (pendingRoute !== currentPath) {
+        console.log("[WalletBrowser] Restoring pending route:", pendingRoute);
+        window.location.replace(pendingRoute);
+      } else {
+        console.log("[WalletBrowser] Already on pending route:", pendingRoute);
       }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Empty deps - run ONCE on mount
+  }, [connected, isInWalletBrowser]);
 
   // Log wallet state changes for debugging
   useEffect(() => {
@@ -626,6 +715,11 @@ export function WalletButton() {
 
   // Handle deep link to open dapp in wallet browser (iOS)
   const handleOpenInWallet = (walletType: 'phantom' | 'solflare') => {
+    // PERSIST pending route before deep link redirect
+    const currentRoute = window.location.pathname + window.location.search;
+    localStorage.setItem(PENDING_ROUTE_KEY, currentRoute);
+    console.log("[WalletButton] Stored pending route (iOS):", currentRoute);
+    
     const deepLink = getWalletBrowseDeepLink(walletType, window.location.href);
     window.location.href = deepLink;
   };
