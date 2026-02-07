@@ -321,13 +321,13 @@ export default function CreateRoom() {
         
         // localStorage is NO LONGER authoritative for mode - only a display hint
         localStorage.setItem(`room_settings_${roomPdaStr}`, JSON.stringify({
-          turnTimeSeconds: gameMode === 'ranked' ? turnTimeSeconds : 0,
+          turnTimeSeconds: (gameMode === 'ranked' || gameMode === 'private') ? turnTimeSeconds : 0,
           stakeLamports: solToLamports(entryFeeNum),
         }));
         
         // Persist settings authoritatively in game_sessions via Edge Function
         // With signature verification for production security
-        const authoritativeTurnTime = gameMode === 'ranked' ? turnTimeSeconds : 0;
+        const authoritativeTurnTime = (gameMode === 'ranked' || gameMode === 'private') ? turnTimeSeconds : 0;
         
         // Persist settings authoritatively in game_sessions via Edge Function
         // No signature needed - on-chain stake transaction already proves ownership
