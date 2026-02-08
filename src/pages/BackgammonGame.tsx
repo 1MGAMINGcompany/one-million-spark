@@ -32,6 +32,7 @@ import { useTurnTimer, DEFAULT_RANKED_TURN_TIME } from "@/hooks/useTurnTimer";
 import { useStartRoll } from "@/hooks/useStartRoll";
 import { useTxLock } from "@/contexts/TxLockContext";
 import { useDurableGameSync, GameMove } from "@/hooks/useDurableGameSync";
+import { useAutoSettlement } from "@/hooks/useAutoSettlement";
 import { DiceRollStart } from "@/components/DiceRollStart";
 import TurnStatusHeader from "@/components/TurnStatusHeader";
 import TurnHistoryDrawer from "@/components/TurnHistoryDrawer";
@@ -517,6 +518,15 @@ const BackgammonGame = () => {
     myWallet: address,
     isRanked: isRankedGame,
     enabled: roomPlayers.length >= 2 && modeLoaded,
+  });
+
+  // Auto-settlement hook - triggers settle-game edge function when game ends
+  // This ensures on-chain payout happens automatically without user clicking "Settle"
+  const autoSettlement = useAutoSettlement({
+    roomPda,
+    winner: winnerWallet,
+    reason: "gameover",
+    isRanked: isRankedGame,
   });
 
   // Check if we have 2 real player wallets (not placeholders including 111111...)
@@ -2823,7 +2833,7 @@ const BackgammonGame = () => {
           onExit={() => navigate("/room-list")}
           result={gameResultInfo ? `${formatResultType(gameResultInfo.resultType).label} (${formatResultType(gameResultInfo.resultType).multiplier})` : undefined}
           roomPda={roomPda}
-          isStaked={false}
+          isStaked={isRankedGame}
         />
       )}
       

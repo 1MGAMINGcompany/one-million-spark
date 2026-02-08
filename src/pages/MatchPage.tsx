@@ -1,14 +1,13 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { Loader2, ExternalLink, Gamepad2 } from "lucide-react";
+import { Loader2, ExternalLink, Gamepad2, Trophy, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MatchShareCard, MatchData, WinnerProfile } from "@/components/MatchShareCard";
-import { ShareMatchButton } from "@/components/ShareMatchButton";
 import GoldConfettiExplosion from "@/components/GoldConfettiExplosion";
 import { useTranslation } from "react-i18next";
 import { supabase } from "@/integrations/supabase/client";
 import { useWallet } from "@solana/wallet-adapter-react";
-import { copyMatchLink, buildMatchShareUrl, isNativeShareAvailable, buildWhatsAppShareUrl, getGameDisplayName } from "@/lib/shareMatch";
+import { copyMatchLink, buildWhatsAppShareUrl, getGameDisplayName, buildTwitterShareUrl, isNativeShareAvailable, nativeShare } from "@/lib/shareMatch";
 import { Copy, Check, MessageCircle, Share2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -54,9 +53,9 @@ export default function MatchPage() {
         setMatchData(data.match);
         setWinnerProfile(data.winner_profile || null);
 
-        // Show confetti if the viewer is the winner
+        // Show confetti if the viewer is the winner (with delay for effect)
         if (publicKey && data.match.winner_wallet === publicKey.toBase58()) {
-          setShowConfetti(true);
+          setTimeout(() => setShowConfetti(true), 500);
         }
       } catch (err) {
         console.error("[MatchPage] Exception:", err);
@@ -83,6 +82,17 @@ export default function MatchPage() {
     if (!roomPda || !matchData) return;
     const url = buildWhatsAppShareUrl(roomPda, !!isWinner, getGameDisplayName(matchData.game_type));
     window.open(url, "_blank", "noopener,noreferrer");
+  };
+
+  const handleTwitter = () => {
+    if (!roomPda || !matchData) return;
+    const url = buildTwitterShareUrl(roomPda, !!isWinner, getGameDisplayName(matchData.game_type));
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
+
+  const handleNativeShare = async () => {
+    if (!roomPda || !matchData) return;
+    await nativeShare(roomPda, !!isWinner, getGameDisplayName(matchData.game_type));
   };
 
   if (loading) {
@@ -120,28 +130,71 @@ export default function MatchPage() {
     );
   }
 
+  // Calculate net win for display
+  const netWinSol = matchData.winner_payout_sol 
+    ? matchData.winner_payout_sol.toFixed(4)
+    : ((matchData.stake_lamports * 2 * 0.95) / 1_000_000_000).toFixed(4);
+
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background via-background to-amber-950/10 py-8 px-4">
+    <div className="min-h-screen bg-gradient-to-b from-background via-background to-amber-950/20 py-8 px-4 overflow-hidden relative">
+      {/* Background glow effect for winners */}
+      {isWinner && (
+        <div className="absolute inset-0 pointer-events-none">
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-amber-500/10 rounded-full blur-3xl" />
+        </div>
+      )}
+      
       {/* Confetti for winner */}
       <GoldConfettiExplosion active={showConfetti} originX={50} originY={20} />
       
-      <div className="max-w-lg mx-auto space-y-6">
-        {/* Header */}
-        <div className="text-center space-y-2">
-          <h1 className="text-2xl font-bold bg-gradient-to-r from-amber-400 to-amber-600 bg-clip-text text-transparent">
-            1M GAMING
-          </h1>
-          <p className="text-sm text-muted-foreground">Match Result</p>
+      <div className="max-w-lg mx-auto space-y-6 relative z-10">
+        {/* Header with animation */}
+        <div className="text-center space-y-2 animate-in fade-in slide-in-from-top-4 duration-500">
+          <div className="flex items-center justify-center gap-2">
+            {isWinner && <Sparkles className="w-5 h-5 text-amber-400 animate-pulse" />}
+            <h1 className="text-2xl font-bold bg-gradient-to-r from-amber-400 to-amber-600 bg-clip-text text-transparent">
+              1M GAMING
+            </h1>
+            {isWinner && <Sparkles className="w-5 h-5 text-amber-400 animate-pulse" />}
+          </div>
+          <p className="text-sm text-muted-foreground">
+            {isWinner ? "🏆 Victory Celebration!" : "Match Result"}
+          </p>
         </div>
 
+        {/* Winner Banner (for winners viewing their match) */}
+        {isWinner && (
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 delay-300">
+            <div className="bg-gradient-to-r from-amber-500/20 via-amber-400/30 to-amber-500/20 border border-amber-500/50 rounded-xl p-4 text-center">
+              <div className="flex items-center justify-center gap-2 mb-2">
+                <Trophy className="w-6 h-6 text-amber-400" />
+                <span className="text-xl font-bold text-amber-400">YOU WON!</span>
+                <Trophy className="w-6 h-6 text-amber-400" />
+              </div>
+              <p className="text-2xl font-bold text-foreground">
+                +{netWinSol} SOL
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Net profit after platform fee
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Match Card */}
-        <MatchShareCard 
-          matchData={matchData} 
-          winnerProfile={winnerProfile}
-        />
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 delay-150">
+          <MatchShareCard 
+            matchData={matchData} 
+            winnerProfile={winnerProfile}
+          />
+        </div>
 
         {/* Share Buttons */}
-        <div className="space-y-3">
+        <div className="space-y-3 animate-in fade-in slide-in-from-bottom-4 duration-500 delay-300">
+          <p className="text-sm text-center text-muted-foreground">
+            {isWinner ? "🎉 Brag about your win!" : "Share this match with friends"}
+          </p>
+          
           <div className="grid grid-cols-2 gap-3">
             {/* Copy Link */}
             <Button
@@ -167,25 +220,37 @@ export default function MatchPage() {
             </Button>
           </div>
 
-          {/* Native Share (mobile) */}
-          {isNativeShareAvailable() && roomPda && matchData && (
-            <ShareMatchButton
-              roomPda={roomPda}
-              isWinner={!!isWinner}
-              gameName={matchData.game_type}
-              className="w-full"
-            />
-          )}
+          {/* Native Share (mobile) or Twitter */}
+          <div className="grid grid-cols-1 gap-3">
+            {isNativeShareAvailable() ? (
+              <Button
+                onClick={handleNativeShare}
+                variant="secondary"
+                className="w-full gap-2 h-12"
+              >
+                <Share2 className="w-4 h-4" />
+                Share
+              </Button>
+            ) : (
+              <Button
+                onClick={handleTwitter}
+                variant="secondary"
+                className="w-full gap-2 h-12"
+              >
+                Share on X
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* CTA: Play on 1M Gaming */}
-        <div className="pt-4">
+        <div className="pt-4 animate-in fade-in slide-in-from-bottom-4 duration-500 delay-500">
           <Link to="/room-list" className="block">
             <Button 
               size="lg" 
-              className="w-full gap-2 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 font-semibold py-6"
+              className="w-full gap-2 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 font-semibold py-6 group"
             >
-              <Gamepad2 className="w-5 h-5" />
+              <Gamepad2 className="w-5 h-5 group-hover:rotate-12 transition-transform" />
               {t("shareMatch.playOn1M", "Play on 1M Gaming")}
             </Button>
           </Link>
@@ -197,12 +262,19 @@ export default function MatchPage() {
             href={`https://explorer.solana.com/tx/${matchData.tx_signature}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center justify-center gap-2 text-xs text-muted-foreground hover:text-primary transition-colors"
+            className="flex items-center justify-center gap-2 text-xs text-muted-foreground hover:text-primary transition-colors animate-in fade-in duration-500 delay-700"
           >
             <ExternalLink className="w-3 h-3" />
             View on-chain transaction
           </a>
         )}
+
+        {/* Fun footer */}
+        <div className="text-center pt-4 animate-in fade-in duration-500 delay-700">
+          <p className="text-xs text-muted-foreground/60">
+            Powered by Solana • Instant payouts • Provably fair
+          </p>
+        </div>
       </div>
     </div>
   );
