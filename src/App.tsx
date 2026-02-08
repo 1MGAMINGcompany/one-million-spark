@@ -6,6 +6,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { SolanaProvider } from "./components/SolanaProvider";
+import { WalletConnectProvider } from "./contexts/WalletConnectContext";
 import { LoadingProvider } from "./contexts/LoadingContext";
 import { AudioProvider } from "./contexts/AudioContext";
 import { SoundProvider } from "./contexts/SoundContext";
@@ -125,25 +126,27 @@ const App = () => (
   <AppErrorBoundary>
     <QueryClientProvider client={queryClient}>
       <SolanaProvider>
-        <TxLockProvider>
-          <LoadingProvider>
-            <AudioProvider>
-              <SoundProvider>
-                <TooltipProvider>
-                  <Toaster />
-                  <Sonner />
-                  <PyramidLoader />
-                  <GoldenParticles />
-                  <AgeConfirmation />
-                  <BrowserRouter>
-                    <GlobalBackgroundMusic />
-                    <AppContent />
-                  </BrowserRouter>
-                </TooltipProvider>
-              </SoundProvider>
-            </AudioProvider>
-          </LoadingProvider>
-        </TxLockProvider>
+        <WalletConnectProvider>
+          <TxLockProvider>
+            <LoadingProvider>
+              <AudioProvider>
+                <SoundProvider>
+                  <TooltipProvider>
+                    <Toaster />
+                    <Sonner />
+                    <PyramidLoader />
+                    <GoldenParticles />
+                    <AgeConfirmation />
+                    <BrowserRouter>
+                      <GlobalBackgroundMusic />
+                      <AppContent />
+                    </BrowserRouter>
+                  </TooltipProvider>
+                </SoundProvider>
+              </AudioProvider>
+            </LoadingProvider>
+          </TxLockProvider>
+        </WalletConnectProvider>
       </SolanaProvider>
     </QueryClientProvider>
   </AppErrorBoundary>

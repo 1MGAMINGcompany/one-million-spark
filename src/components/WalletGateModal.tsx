@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import {
   Dialog,
   DialogContent,
@@ -10,6 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Wallet, Info, Eye } from "lucide-react";
 import { HowToConnectSolModal } from "./HowToConnectSolModal";
+import { useConnectWallet } from "@/contexts/WalletConnectContext";
 
 interface WalletGateModalProps {
   isOpen: boolean;
@@ -24,12 +24,12 @@ export function WalletGateModal({
   title = "Connect a Solana Wallet to Play",
   description = "A Solana wallet is required to join games and compete for prizes."
 }: WalletGateModalProps) {
-  const { setVisible } = useWalletModal();
+  const { openConnectDialog } = useConnectWallet();
   const [showHelp, setShowHelp] = useState(false);
 
   const handleConnectWallet = () => {
     onClose();
-    setVisible(true);
+    openConnectDialog();
   };
 
   return (
