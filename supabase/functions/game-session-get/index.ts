@@ -35,7 +35,7 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, serviceKey)
 
     // Fetch game session
-    const { data: session, error: sessionError } = await supabase
+    let { data: session, error: sessionError } = await supabase
       .from('game_sessions')
       .select('*')
       .eq('room_pda', roomPda)
@@ -47,6 +47,33 @@ serve(async (req) => {
         status: 500, 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
       })
+    }
+
+    // Check for waiting timeout (only for WAITING rooms with status_int = 1)
+    if (session?.status_int === 1) {
+      try {
+        const { data: timeoutResult, error: timeoutError } = await supabase
+          .rpc('maybe_apply_waiting_timeout', { p_room_pda: roomPda })
+
+        if (timeoutError) {
+          console.warn('[game-session-get] Waiting timeout check error:', timeoutError)
+        } else if (timeoutResult?.applied) {
+          console.log('[game-session-get] ⏰ Waiting timeout applied:', timeoutResult)
+          
+          // Re-fetch session after cancellation
+          const { data: updatedSession } = await supabase
+            .from('game_sessions')
+            .select('*')
+            .eq('room_pda', roomPda)
+            .maybeSingle()
+
+          if (updatedSession) {
+            session = updatedSession
+          }
+        }
+      } catch (e) {
+        console.warn('[game-session-get] Waiting timeout exception:', e)
+      }
     }
 
     // Fetch finalize receipt (settlement status) - optional field

@@ -222,6 +222,7 @@ export type Database = {
           turn_started_at: string | null
           turn_time_seconds: number
           updated_at: string
+          waiting_started_at: string | null
           winner_wallet: string | null
         }
         Insert: {
@@ -251,6 +252,7 @@ export type Database = {
           turn_started_at?: string | null
           turn_time_seconds?: number
           updated_at?: string
+          waiting_started_at?: string | null
           winner_wallet?: string | null
         }
         Update: {
@@ -280,6 +282,7 @@ export type Database = {
           turn_started_at?: string | null
           turn_time_seconds?: number
           updated_at?: string
+          waiting_started_at?: string | null
           winner_wallet?: string | null
         }
         Relationships: []
@@ -723,6 +726,10 @@ export type Database = {
         Returns: undefined
       }
       maybe_apply_turn_timeout: { Args: { p_room_pda: string }; Returns: Json }
+      maybe_apply_waiting_timeout: {
+        Args: { p_room_pda: string }
+        Returns: Json
+      }
       maybe_finalize_start_state: {
         Args: { p_room_pda: string }
         Returns: undefined
