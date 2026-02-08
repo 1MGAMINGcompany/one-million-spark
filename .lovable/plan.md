@@ -1,197 +1,113 @@
 
-# Unify All Connect Wallet Buttons
+# Fix: Wallet Selection Not Connecting
 
-## Problem Statement
-Currently, the application has **two different connection methods** causing inconsistent mobile wallet behavior:
+## Root Cause Analysis
 
-| Component | Current Method | MWA Support | Deep Links |
-|-----------|---------------|-------------|------------|
-| `WalletButton.tsx` (Navbar) | Custom dialog | ✅ Yes | ✅ Yes |
-| `ConnectWalletGate.tsx` (Create/Join Room) | Custom dialog | ✅ Yes | ✅ Yes |
-| `WalletGateModal.tsx` (Room entry) | `setVisible(true)` | ❌ No | ❌ No |
-| `AddFunds.tsx` (Add Funds page) | `setVisible(true)` | ❌ No | ❌ No |
+The user flow shows:
+1. Click "Create Room" → "Select Wallet" → "Phantom"
+2. Dialog closes, but user returns to "Connect Wallet" page
+3. Console shows: `connected: false, adapterName: "Phantom"`
 
-The `setVisible(true)` method opens the standard `@solana/wallet-adapter-react-ui` modal, which:
-- Does NOT support Mobile Wallet Adapter (MWA) on Android
-- Does NOT show iOS deep links to open in wallet browser
-- Does NOT handle the "wallet not detected" fallback flow
+**The problem:** `ConnectWalletGate.tsx` calls `select()` but never calls `connect()`.
 
-## Solution Architecture
+With `autoConnect={false}` in `SolanaProvider.tsx`, the `select()` function only **sets the active adapter** - it does NOT trigger an actual connection. An explicit `connect()` call is required.
 
-Create a **WalletConnectContext** that allows the primary `WalletButton` component to register its dialog opener function. All secondary components will call this registered function instead of `setVisible(true)`.
-
-```text
-┌─────────────────────────────────────────────────────────────┐
-│                   WalletConnectProvider                      │
-│  ┌─────────────────────────────────────────────────────┐    │
-│  │  openConnectDialog: () => void                       │    │
-│  │  registerDialogOpener: (fn) => void                  │    │
-│  └─────────────────────────────────────────────────────┘    │
-│                            │                                 │
-│           ┌────────────────┼────────────────┐               │
-│           ▼                ▼                ▼               │
-│    WalletButton     WalletGateModal    AddFunds             │
-│    (registers)      (calls context)   (calls context)       │
-└─────────────────────────────────────────────────────────────┘
-```
-
-## Files to Create
-
-### 1. `src/contexts/WalletConnectContext.tsx` (NEW)
+## Current Broken Code
 
 ```typescript
-import { createContext, useContext, useState, useCallback, ReactNode } from "react";
-
-interface WalletConnectContextType {
-  openConnectDialog: () => void;
-  registerDialogOpener: (opener: () => void) => void;
-}
-
-const WalletConnectContext = createContext<WalletConnectContextType | null>(null);
-
-export function WalletConnectProvider({ children }: { children: ReactNode }) {
-  const [dialogOpener, setDialogOpener] = useState<(() => void) | null>(null);
-
-  const registerDialogOpener = useCallback((opener: () => void) => {
-    setDialogOpener(() => opener);
-  }, []);
-
-  const openConnectDialog = useCallback(() => {
-    if (dialogOpener) {
-      dialogOpener();
-    } else {
-      console.warn("[WalletConnect] No dialog opener registered");
-    }
-  }, [dialogOpener]);
-
-  return (
-    <WalletConnectContext.Provider value={{ openConnectDialog, registerDialogOpener }}>
-      {children}
-    </WalletConnectContext.Provider>
+// ConnectWalletGate.tsx - lines 116-133
+const handleSelectWallet = (walletId: string) => {
+  const matchingWallet = wallets.find(w => 
+    w.adapter.name.toLowerCase().includes(walletId)
   );
-}
-
-export function useConnectWallet() {
-  const context = useContext(WalletConnectContext);
-  if (!context) {
-    throw new Error("useConnectWallet must be used within WalletConnectProvider");
+  
+  if (matchingWallet) {
+    select(matchingWallet.adapter.name);  // ❌ Only selects adapter
+    setDialogOpen(false);                  // ❌ Closes dialog immediately
+    // ❌ Never calls connect() - wallet never actually connects!
   }
-  return context;
-}
-```
-
-## Files to Modify
-
-### 2. `src/App.tsx`
-
-Add the new provider to the provider tree (inside SolanaProvider):
-
-```typescript
-import { WalletConnectProvider } from "./contexts/WalletConnectContext";
-
-// In the provider tree:
-<SolanaProvider>
-  <WalletConnectProvider>
-    {/* rest of providers */}
-  </WalletConnectProvider>
-</SolanaProvider>
-```
-
-### 3. `src/components/WalletButton.tsx`
-
-Register the dialog opener function when component mounts:
-
-```typescript
-import { useConnectWallet } from "@/contexts/WalletConnectContext";
-
-// Inside component:
-const { registerDialogOpener } = useConnectWallet();
-
-// Register the dialog opener on mount
-useEffect(() => {
-  registerDialogOpener(() => setDialogOpen(true));
-}, [registerDialogOpener]);
-```
-
-### 4. `src/components/WalletGateModal.tsx`
-
-Replace `setVisible(true)` with context call:
-
-```typescript
-// Before:
-import { useWalletModal } from "@solana/wallet-adapter-react-ui";
-const { setVisible } = useWalletModal();
-const handleConnectWallet = () => {
-  onClose();
-  setVisible(true);
-};
-
-// After:
-import { useConnectWallet } from "@/contexts/WalletConnectContext";
-const { openConnectDialog } = useConnectWallet();
-const handleConnectWallet = () => {
-  onClose();
-  openConnectDialog();
+  // ...
 };
 ```
 
-### 5. `src/pages/AddFunds.tsx`
+## Solution
 
-Replace `setVisible(true)` with context call:
+Update `ConnectWalletGate.tsx` to call `connect()` after `select()`:
 
 ```typescript
-// Before:
-import { useWalletModal } from "@solana/wallet-adapter-react-ui";
-const { setVisible } = useWalletModal();
-<Button onClick={() => setVisible(true)}>Connect Wallet</Button>
+// Add connect to useWallet hook
+const { wallets, select, connect, connecting } = useWallet();
 
-// After:
-import { useConnectWallet } from "@/contexts/WalletConnectContext";
-const { openConnectDialog } = useConnectWallet();
-<Button onClick={openConnectDialog}>Connect Wallet</Button>
+// Update handleSelectWallet
+const handleSelectWallet = async (walletId: string) => {
+  const matchingWallet = wallets.find(w => 
+    w.adapter.name.toLowerCase().includes(walletId)
+  );
+  
+  if (matchingWallet) {
+    try {
+      select(matchingWallet.adapter.name);
+      setDialogOpen(false);
+      
+      // ✅ Actually connect to the wallet after selecting
+      await connect();
+    } catch (err) {
+      console.error('[ConnectWalletGate] Connect error:', err);
+      // Handle connection failure gracefully
+      if (isMobile) {
+        setNotDetectedWallet(walletId as 'phantom' | 'solflare' | 'backpack');
+      } else {
+        toast.error(`Failed to connect to ${walletId}. Please try again.`);
+      }
+    }
+  } else if (isMobile) {
+    // ... existing mobile fallback
+  } else {
+    toast.error(`${walletId} wallet not detected.`);
+  }
+};
 ```
+
+## File Changes
+
+| File | Change |
+|------|--------|
+| `src/components/ConnectWalletGate.tsx` | Add `connect` to useWallet hook and call it after `select()` |
 
 ## Technical Details
 
-### Why Context Pattern?
+### Why WalletButton Works (Sometimes)
 
-1. **Single Source of Truth**: The `WalletButton` component already contains all the complex logic for:
-   - MWA detection and connection on Android
-   - iOS deep links to wallet browsers (Phantom, Solflare)
-   - Wallet detection fallback modals
-   - Connection timeout handling
+`WalletButton.tsx` has this auto-sync effect (lines 377-401):
 
-2. **No Code Duplication**: Secondary components simply trigger the dialog - no need to copy 500+ lines of wallet logic
+```typescript
+useEffect(() => {
+  if (!isInWalletBrowser) return;
+  if (win.solana?.isConnected && win.solana?.publicKey) {
+    select(installedWallet.adapter.name);
+    connect();  // ← It calls connect() here
+  }
+}, []); // Runs once on mount
+```
 
-3. **Consistent UX**: Users get the same mobile-optimized experience everywhere
+But this only runs on **mount** in a **wallet browser** environment. It doesn't help when:
+- User clicks a wallet button manually
+- User is on desktop browser
+- User is not in an in-app wallet browser
 
-### What Happens on Mobile Now
+### The Standard Pattern
 
-**Before (broken):**
-- User taps "Connect Wallet" in AddFunds or WalletGateModal
-- Standard adapter modal opens
-- On iOS: No way to open in wallet browser
-- On Android: MWA not triggered properly
+Per Solana wallet adapter docs, the correct connection flow is:
+1. `select(walletName)` - Choose which adapter to use
+2. `connect()` - Actually trigger the connection
 
-**After (unified):**
-- User taps "Connect Wallet" anywhere
-- WalletButton's custom dialog opens
-- On iOS: Shows "Open in Phantom/Solflare" deep links
-- On Android: Shows "Use Installed Wallet" MWA option + fallback deep links
+With `autoConnect={true}`, step 2 happens automatically after step 1. But this project has `autoConnect={false}` (for reliability on mobile), so both steps must be explicit.
 
-## Summary of Changes
+## Expected Behavior After Fix
 
-| File | Action |
-|------|--------|
-| `src/contexts/WalletConnectContext.tsx` | Create new context |
-| `src/App.tsx` | Add WalletConnectProvider |
-| `src/components/WalletButton.tsx` | Register dialog opener |
-| `src/components/WalletGateModal.tsx` | Use context instead of setVisible |
-| `src/pages/AddFunds.tsx` | Use context instead of setVisible |
-
-## No Changes To
-
-- `ConnectWalletGate.tsx` - Already has correct implementation
-- Mobile wallet adapter registration
-- Deep link logic
-- Any game files or AI files
+1. Click "Create Room" → "Select Wallet" → "Phantom"
+2. `select("Phantom")` is called
+3. `connect()` is called immediately after
+4. Phantom popup appears asking user to approve connection
+5. On success: wallet shows as connected, user can create room
+6. On failure/cancel: User stays on page with error toast
