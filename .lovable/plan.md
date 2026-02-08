@@ -1,113 +1,291 @@
 
-# Fix: Wallet Selection Not Connecting
 
-## Root Cause Analysis
+# Dead Room Auto-Resolution (Safe Version)
 
-The user flow shows:
-1. Click "Create Room" → "Select Wallet" → "Phantom"
-2. Dialog closes, but user returns to "Connect Wallet" page
-3. Console shows: `connected: false, adapterName: "Phantom"`
+## Overview
 
-**The problem:** `ConnectWalletGate.tsx` calls `select()` but never calls `connect()`.
+Implement server-side auto-cancellation for rooms stuck in WAITING state (status_int = 1) with only 1 participant for > 120 seconds. The DB marks the room as CANCELLED (status_int = 5), and the creator can claim their refund by signing a single transaction.
 
-With `autoConnect={false}` in `SolanaProvider.tsx`, the `select()` function only **sets the active adapter** - it does NOT trigger an actual connection. An explicit `connect()` call is required.
+## Architecture
 
-## Current Broken Code
-
-```typescript
-// ConnectWalletGate.tsx - lines 116-133
-const handleSelectWallet = (walletId: string) => {
-  const matchingWallet = wallets.find(w => 
-    w.adapter.name.toLowerCase().includes(walletId)
-  );
-  
-  if (matchingWallet) {
-    select(matchingWallet.adapter.name);  // ❌ Only selects adapter
-    setDialogOpen(false);                  // ❌ Closes dialog immediately
-    // ❌ Never calls connect() - wallet never actually connects!
-  }
-  // ...
-};
+```text
+┌─────────────────────────────────────────────────────────────────────┐
+│                    WAITING TIMEOUT FLOW                              │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  Creator accepts (record_acceptance, is_creator=true)               │
+│       │                                                             │
+│       ▼                                                             │
+│  ┌─────────────────────────────────────────────────┐                │
+│  │ waiting_started_at = COALESCE(existing, now()) │                │
+│  │ status_int = 1 (WAITING)                        │                │
+│  └────────────────────┬────────────────────────────┘                │
+│                       │                                              │
+│         ┌─────────────┴─────────────┐                               │
+│         │                           │                                │
+│         ▼                           ▼                                │
+│  ┌────────────────┐        ┌─────────────────────────┐             │
+│  │ Joiner accepts │        │ No joiner after 120s    │             │
+│  │ is_creator=false│        │ (polling via game-      │             │
+│  │                │        │  session-get)           │             │
+│  └───────┬────────┘        └────────────┬────────────┘             │
+│          │                              │                           │
+│          ▼                              ▼                           │
+│  ┌────────────────┐        ┌─────────────────────────┐             │
+│  │ Clear waiting_ │        │ maybe_apply_waiting_    │             │
+│  │ started_at=NULL│        │ timeout(room_pda)       │             │
+│  │ Game starts!   │        │ → status_int = 5        │             │
+│  └────────────────┘        │ → status = 'cancelled'  │             │
+│                            │ → game_over_at = now()  │             │
+│                            └────────────┬────────────┘             │
+│                                         │                           │
+│                                         ▼                           │
+│                            ┌─────────────────────────┐             │
+│                            │ Room.tsx shows:         │             │
+│                            │ "Opponent didn't show." │             │
+│                            │ [Claim Refund] button   │             │
+│                            └────────────┬────────────┘             │
+│                                         │                           │
+│                                         ▼                           │
+│                            ┌─────────────────────────┐             │
+│                            │ RecoverFundsButton      │             │
+│                            │ → recover-funds edge fn │             │
+│                            │ → creator signs cancel  │             │
+│                            │ → funds returned        │             │
+│                            └─────────────────────────┘             │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
-## Solution
+## Implementation Details
 
-Update `ConnectWalletGate.tsx` to call `connect()` after `select()`:
+### 1. Database Migration
+
+Add `waiting_started_at` column to `game_sessions`:
+
+```sql
+ALTER TABLE game_sessions
+ADD COLUMN IF NOT EXISTS waiting_started_at TIMESTAMPTZ DEFAULT NULL;
+
+COMMENT ON COLUMN game_sessions.waiting_started_at IS
+  'Timestamp when room entered WAITING with only 1 participant. Cleared when opponent joins.';
+```
+
+### 2. Update `record_acceptance` RPC
+
+Modify the existing RPC to set/clear `waiting_started_at`:
+
+**When creator accepts (p_is_creator = true):**
+- Set `waiting_started_at = COALESCE(waiting_started_at, NOW())`
+- This marks "creator is now waiting for opponent"
+
+**When joiner accepts (p_is_creator = false):**
+- Clear `waiting_started_at = NULL`
+- Opponent arrived, no longer in waiting timeout territory
+
+From the useful-context, the current `record_acceptance` function structure:
+```sql
+-- Line to add for creator:
+UPDATE game_sessions
+SET p1_acceptance_tx = p_tx_signature,
+    p1_ready = TRUE,
+    waiting_started_at = COALESCE(waiting_started_at, NOW()),  -- ADD THIS
+    updated_at = NOW()
+WHERE room_pda = p_room_pda;
+
+-- Line to add for joiner:
+UPDATE game_sessions  
+SET p2_acceptance_tx = p_tx_signature,
+    p2_ready = TRUE,
+    player2_wallet = p_wallet,
+    participants = ARRAY[player1_wallet, p_wallet],
+    waiting_started_at = NULL,  -- ADD THIS (clear timeout)
+    updated_at = NOW()
+WHERE room_pda = p_room_pda
+```
+
+### 3. New RPC: `maybe_apply_waiting_timeout`
+
+```sql
+CREATE OR REPLACE FUNCTION public.maybe_apply_waiting_timeout(p_room_pda TEXT)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = 'public'
+AS $$
+DECLARE
+  v_session RECORD;
+  v_deadline TIMESTAMPTZ;
+  v_participant_count INTEGER;
+  v_waiting_timeout_seconds INTEGER := 120;
+BEGIN
+  -- Lock session for atomic update
+  SELECT * INTO v_session
+  FROM game_sessions
+  WHERE room_pda = p_room_pda
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('applied', false, 'reason', 'session_not_found');
+  END IF;
+
+  -- Only apply to WAITING status (status_int = 1)
+  IF v_session.status_int != 1 THEN
+    RETURN jsonb_build_object('applied', false, 'reason', 'not_waiting');
+  END IF;
+
+  -- Count real participants (exclude placeholders)
+  SELECT COUNT(*) INTO v_participant_count
+  FROM unnest(COALESCE(v_session.participants, ARRAY[]::TEXT[])) AS p
+  WHERE p IS NOT NULL 
+    AND p != '' 
+    AND p != '11111111111111111111111111111111';
+
+  -- Only apply if exactly 1 participant (opponent never joined)
+  IF v_participant_count >= 2 THEN
+    RETURN jsonb_build_object('applied', false, 'reason', 'has_opponent');
+  END IF;
+
+  -- Backfill waiting_started_at if null (use created_at)
+  IF v_session.waiting_started_at IS NULL THEN
+    v_session.waiting_started_at := v_session.created_at;
+  END IF;
+
+  -- Calculate deadline
+  v_deadline := v_session.waiting_started_at + 
+                (v_waiting_timeout_seconds || ' seconds')::INTERVAL;
+
+  IF NOW() < v_deadline THEN
+    RETURN jsonb_build_object(
+      'applied', false, 
+      'reason', 'not_expired',
+      'remaining_seconds', EXTRACT(EPOCH FROM (v_deadline - NOW()))::INTEGER
+    );
+  END IF;
+
+  -- === TIMEOUT EXPIRED ===
+  -- Mark session as CANCELLED (DB only - no on-chain action)
+  UPDATE game_sessions
+  SET status = 'cancelled',
+      status_int = 5,
+      game_over_at = NOW(),
+      updated_at = NOW()
+  WHERE room_pda = p_room_pda;
+
+  RETURN jsonb_build_object(
+    'applied', true,
+    'action', 'cancelled',
+    'creatorWallet', v_session.player1_wallet,
+    'reason', 'opponent_no_show'
+  );
+END;
+$$;
+```
+
+### 4. Update `game-session-get` Edge Function
+
+After fetching the session, if `status_int === 1` (WAITING), call the timeout RPC:
 
 ```typescript
-// Add connect to useWallet hook
-const { wallets, select, connect, connecting } = useWallet();
+// After line 50 (after fetching session)
 
-// Update handleSelectWallet
-const handleSelectWallet = async (walletId: string) => {
-  const matchingWallet = wallets.find(w => 
-    w.adapter.name.toLowerCase().includes(walletId)
-  );
-  
-  if (matchingWallet) {
-    try {
-      select(matchingWallet.adapter.name);
-      setDialogOpen(false);
+// Check for waiting timeout (only for WAITING rooms)
+if (session?.status_int === 1) {
+  try {
+    const { data: timeoutResult, error: timeoutError } = await supabase
+      .rpc('maybe_apply_waiting_timeout', { p_room_pda: roomPda });
+
+    if (timeoutError) {
+      console.warn('[game-session-get] Waiting timeout check error:', timeoutError);
+    } else if (timeoutResult?.applied) {
+      console.log('[game-session-get] Waiting timeout applied:', timeoutResult);
       
-      // ✅ Actually connect to the wallet after selecting
-      await connect();
-    } catch (err) {
-      console.error('[ConnectWalletGate] Connect error:', err);
-      // Handle connection failure gracefully
-      if (isMobile) {
-        setNotDetectedWallet(walletId as 'phantom' | 'solflare' | 'backpack');
-      } else {
-        toast.error(`Failed to connect to ${walletId}. Please try again.`);
+      // Re-fetch session after cancellation
+      const { data: updatedSession } = await supabase
+        .from('game_sessions')
+        .select('*')
+        .eq('room_pda', roomPda)
+        .maybeSingle();
+
+      if (updatedSession) {
+        session = updatedSession;
       }
     }
-  } else if (isMobile) {
-    // ... existing mobile fallback
-  } else {
-    toast.error(`${walletId} wallet not detected.`);
+  } catch (e) {
+    console.warn('[game-session-get] Waiting timeout exception:', e);
   }
-};
+}
 ```
 
-## File Changes
+### 5. Update `Room.tsx` UI
+
+Add state to track DB session's `status_int` and display cancelled room UI:
+
+**State additions:**
+```typescript
+const [dbStatusInt, setDbStatusInt] = useState<number | null>(null);
+```
+
+**In the existing fetchRoomMode useEffect, also capture status_int:**
+```typescript
+if (session?.mode) {
+  setRoomMode(session.mode as 'casual' | 'ranked');
+  setDbStatusInt(session.status_int ?? null);  // ADD THIS
+  // ... rest of existing code
+}
+```
+
+**New UI block (add before "Action Buttons" section, around line 1090):**
+```tsx
+{/* Cancelled Room - Waiting Timeout */}
+{dbStatusInt === 5 && isCreator && (
+  <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-4 space-y-3">
+    <div className="flex items-center gap-2 text-amber-400">
+      <AlertTriangle className="h-5 w-5" />
+      <span className="font-medium">Opponent didn't show</span>
+    </div>
+    <p className="text-sm text-muted-foreground">
+      The room was automatically cancelled after 2 minutes of waiting. 
+      Click below to reclaim your stake.
+    </p>
+    <RecoverFundsButton 
+      roomPda={roomPdaParam || ""} 
+      onRecovered={() => navigate('/room-list')}
+    />
+  </div>
+)}
+```
+
+## Files to Change
 
 | File | Change |
 |------|--------|
-| `src/components/ConnectWalletGate.tsx` | Add `connect` to useWallet hook and call it after `select()` |
+| **New migration** | Add `waiting_started_at` column + create `maybe_apply_waiting_timeout` RPC + update `record_acceptance` RPC |
+| `supabase/functions/game-session-get/index.ts` | Call `maybe_apply_waiting_timeout` for WAITING rooms |
+| `src/pages/Room.tsx` | Add `dbStatusInt` state, show cancelled room UI with refund button |
 
-## Technical Details
+## Security & Safety
 
-### Why WalletButton Works (Sometimes)
+- **No verifier signing**: Creator must sign their own cancel transaction
+- **No new auth**: Uses existing `recover-funds` flow
+- **Idempotent**: Multiple calls to `maybe_apply_waiting_timeout` are safe
+- **Atomic**: Uses `FOR UPDATE` lock to prevent race conditions
+- **DB-only**: Does NOT attempt on-chain cancel - that's user-signed
 
-`WalletButton.tsx` has this auto-sync effect (lines 377-401):
+## Edge Cases
 
-```typescript
-useEffect(() => {
-  if (!isInWalletBrowser) return;
-  if (win.solana?.isConnected && win.solana?.publicKey) {
-    select(installedWallet.adapter.name);
-    connect();  // ← It calls connect() here
-  }
-}, []); // Runs once on mount
-```
+1. **Backfill**: If `waiting_started_at` is NULL (old rooms), uses `created_at` as fallback
+2. **Already cancelled**: RPC returns early with `'reason': 'not_waiting'`
+3. **Opponent joins during timeout**: `record_acceptance` clears `waiting_started_at`, so timeout check returns `'has_opponent'`
+4. **On-chain still open**: Expected - the on-chain room remains open until creator signs cancel tx
 
-But this only runs on **mount** in a **wallet browser** environment. It doesn't help when:
-- User clicks a wallet button manually
-- User is on desktop browser
-- User is not in an in-app wallet browser
+## Status Integer Reference
 
-### The Standard Pattern
+| status_int | status | Meaning |
+|------------|--------|---------|
+| 1 | waiting | Room created, waiting for players |
+| 2 | active | Game in progress |
+| 3 | finished | Game completed normally |
+| 4 | void | Settlement failed |
+| 5 | cancelled | Room cancelled (pre-active) |
 
-Per Solana wallet adapter docs, the correct connection flow is:
-1. `select(walletName)` - Choose which adapter to use
-2. `connect()` - Actually trigger the connection
-
-With `autoConnect={true}`, step 2 happens automatically after step 1. But this project has `autoConnect={false}` (for reliability on mobile), so both steps must be explicit.
-
-## Expected Behavior After Fix
-
-1. Click "Create Room" → "Select Wallet" → "Phantom"
-2. `select("Phantom")` is called
-3. `connect()` is called immediately after
-4. Phantom popup appears asking user to approve connection
-5. On success: wallet shows as connected, user can create room
-6. On failure/cancel: User stays on page with error toast
