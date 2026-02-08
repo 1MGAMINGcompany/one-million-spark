@@ -686,6 +686,17 @@
     "inviteCopied": "邀请链接已复制！"
   },
   "gameSession": {
+    "opponentAbsent": "对手缺席",
+    "opponent": "对手",
+    "opponentMissedTurns": "对手已错过{{count}}/3回合",
+    "playerMissedTurns": "{{player}}已错过{{count}}/3回合",
+    "autoWinIn": "自动获胜倒计时",
+    "playerWillBeEliminated": "{{player}}将被淘汰: {{time}}",
+    "strikes": "警告",
+    "nextTimeoutWins": "下次超时 = 胜利",
+    "strikesReset": "对手已重新连接",
+    "opponentForfeited": "对手弃权",
+    "youWin": "你赢了！",
     "gameRestored": "游戏已恢复",
     "sessionRecovered": "您的游戏会话已恢复。",
     "rulesAccepted": "规则已接受",

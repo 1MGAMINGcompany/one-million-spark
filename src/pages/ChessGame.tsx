@@ -2,6 +2,7 @@ import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { getOpponentWallet, isSameWallet, isRealWallet, DEFAULT_SOLANA_PUBKEY } from "@/lib/walletUtils";
 import { clearRoom } from "@/lib/missedTurns"; // Only clearRoom needed - strikes now tracked server-side
 import { isWalletInAppBrowser } from "@/lib/walletBrowserDetection";
+import { OpponentAbsenceIndicator } from "@/components/OpponentAbsenceIndicator";
 
 // Polling intervals for opponent timeout detection
 const POLL_INTERVAL_DESKTOP = 3000; // 3 seconds
@@ -144,6 +145,10 @@ const ChessGame = () => {
   const [entryFeeSol, setEntryFeeSol] = useState(0);
   const [stakeLamports, setStakeLamports] = useState<number | undefined>(undefined); // Guardrail A: Canonical on-chain stake
   const [isCancellingRoom, setIsCancellingRoom] = useState(false);
+  
+  // Opponent absence tracking (for UI indicator)
+  const [opponentStrikes, setOpponentStrikes] = useState(0);
+  const [dbTurnStartedAt, setDbTurnStartedAt] = useState<string | null>(null);
   
   // Solana rooms hook for forfeit/cancel
   const { cancelRoomByPda } = useSolanaRooms();
@@ -641,8 +646,16 @@ const ChessGame = () => {
         // Skip if game is over
         if (gameOver) return;
 
+        // === EXTRACT OPPONENT STRIKES FOR UI ===
+        const session = data?.session;
+        const missedTurns = (session?.missed_turns || {}) as Record<string, number>;
+        const opponentWalletAddr = getOpponentWallet(roomPlayers, address);
+        const strikes = opponentWalletAddr ? (missedTurns[opponentWalletAddr] || 0) : 0;
+        setOpponentStrikes(strikes);
+        setDbTurnStartedAt(session?.turn_started_at || null);
+
         // === SERVER-SIDE TIMEOUT CHECK ===
-        const dbTurnWallet = data?.session?.current_turn_wallet;
+        const dbTurnWallet = session?.current_turn_wallet;
         const isOpponentsTurn = dbTurnWallet && !isSameWallet(dbTurnWallet, address);
 
         if (isOpponentsTurn && dbStatus !== 'finished') {
@@ -667,6 +680,7 @@ const ChessGame = () => {
                 // Opponent forfeited by 3 strikes - I WIN
                 setGameOver(true);
                 setWinnerWallet(result.winnerWallet || address || null);
+                setOpponentStrikes(0); // Reset after forfeit
                 setGameStatus(t("gameSession.opponentForfeited"));
                 play('chess_win');
                 toast({
@@ -674,7 +688,8 @@ const ChessGame = () => {
                   description: t("gameSession.youWin"),
                 });
               } else if (result.type === "turn_timeout" && result.nextTurnWallet) {
-                // Turn passed to me
+                // Turn passed to me - update strikes count
+                setOpponentStrikes(result.strikes || 0);
                 setTurnOverrideWallet(result.nextTurnWallet);
                 turnTimer.resetTimer();
                 toast({
@@ -715,7 +730,7 @@ const ChessGame = () => {
     return () => clearInterval(interval);
   }, [
     roomPda, isRankedGame, startRoll.isFinalized, gameOver, 
-    address, turnOverrideWallet, activeTurnAddress, 
+    address, turnOverrideWallet, activeTurnAddress, roomPlayers,
     turnTimer, play, t
   ]);
 
@@ -1316,6 +1331,15 @@ const ChessGame = () => {
         {/* For casual games: requires dice roll finalized */}
         {canPlay ? (
           <div className="max-w-6xl mx-auto px-4 py-4">
+            {/* Opponent Absence Indicator */}
+            <OpponentAbsenceIndicator
+              opponentStrikes={opponentStrikes}
+              turnTimeSeconds={effectiveTurnTime}
+              turnStartedAt={dbTurnStartedAt}
+              isOpponentsTurn={!isActuallyMyTurn && !gameOver}
+              playerCount={2}
+            />
+            
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Chess Board Column */}
               <div className="lg:col-span-2 space-y-4">

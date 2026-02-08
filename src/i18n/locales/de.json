@@ -568,6 +568,17 @@
     "samePlayers": "Gleiche Spieler • Neuer Pot • Neuer Raum"
   },
   "gameSession": {
+    "opponentAbsent": "Gegner Abwesend",
+    "opponent": "Gegner",
+    "opponentMissedTurns": "Gegner hat {{count}}/3 Züge verpasst",
+    "playerMissedTurns": "{{player}} hat {{count}}/3 Züge verpasst",
+    "autoWinIn": "Auto-Sieg in",
+    "playerWillBeEliminated": "{{player}} wird eliminiert in: {{time}}",
+    "strikes": "Strikes",
+    "nextTimeoutWins": "Nächster Timeout = Sieg",
+    "strikesReset": "Gegner wieder verbunden",
+    "opponentForfeited": "Gegner Hat Aufgegeben",
+    "youWin": "Sie gewinnen!",
     "gameRestored": "Spiel Wiederhergestellt",
     "sessionRecovered": "Ihre Spielsitzung wurde wiederhergestellt.",
     "rulesAccepted": "Regeln akzeptiert",

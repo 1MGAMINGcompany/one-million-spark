@@ -680,6 +680,17 @@
     "samePlayers": "Same players • New pot • New room"
   },
   "gameSession": {
+    "opponentAbsent": "Opponent Absent",
+    "opponent": "Opponent",
+    "opponentMissedTurns": "Opponent has missed {{count}}/3 turns",
+    "playerMissedTurns": "{{player}} has missed {{count}}/3 turns",
+    "autoWinIn": "Auto-win in",
+    "playerWillBeEliminated": "{{player}} will be eliminated in: {{time}}",
+    "strikes": "strikes",
+    "nextTimeoutWins": "Next timeout = victory",
+    "strikesReset": "Opponent reconnected",
+    "opponentForfeited": "Opponent Forfeited",
+    "youWin": "You win!",
     "gameRestored": "Game Restored",
     "sessionRecovered": "Your game session has been recovered.",
     "rulesAccepted": "Rules accepted",

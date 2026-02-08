@@ -1,18 +1,16 @@
 
 # Opponent Absence Detection & UX - All Games
 
-## Problem Analysis
+## ✅ COMPLETED: Phase 1 - Chess Implementation
 
-From your test (Room `9M6iS3jV...`):
+- Created `OpponentAbsenceIndicator` component with countdown, strike progress
+- Added localization keys to all 10 locale files
+- Integrated into ChessGame with `opponentStrikes` and `dbTurnStartedAt` state
+- Polling extracts `missed_turns` from session data and displays indicator
 
-```text
-TIMELINE:
-20:10:49 - Creator timeout (strike 1) → Your turn
-20:10:57 - YOU timed out (strike 1) → Creator's turn
-20:11:05 - Creator timeout (strike 2) → Your turn  
-20:11:15 - YOU timed out (strike 2) → Creator's turn
-20:11:24 - Creator timeout (strike 3) → AUTO-FORFEIT → YOU WON ✅
-```
+## 🔄 PENDING: Phase 2 - Other Games
+
+Remaining games need the same pattern:
 
 **The auto-forfeit worked!** But the UX was confusing because:
 1. No clear indication that opponent was disconnected/absent
