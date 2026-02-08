@@ -21,6 +21,7 @@ import { useSolanaRooms } from "@/hooks/useSolanaRooms";
 import { useSound } from "@/contexts/SoundContext";
 import { useTranslation } from "react-i18next";
 import { useWallet } from "@/hooks/useWallet";
+import { useAutoSettlement } from "@/hooks/useAutoSettlement";
 import { useWebRTCSync, GameMessage } from "@/hooks/useWebRTCSync";
 import { useTurnNotifications, TurnPlayer } from "@/hooks/useTurnNotifications";
 import { useGameChat, ChatPlayer, ChatMessage } from "@/hooks/useGameChat";
@@ -413,6 +414,15 @@ const ChessGame = () => {
     myWallet: address,
     isRanked: isRankedGame,
     enabled: hasTwoRealPlayers && modeLoaded,
+  });
+
+  // Auto-settlement hook - triggers on-chain settlement when game ends
+  const autoSettlement = useAutoSettlement({
+    roomPda,
+    winner: gameOver ? winnerWallet : null,
+    reason: gameStatus.includes("Checkmate") ? "gameover" : 
+            gameStatus.includes("resign") ? "resign" : "gameover",
+    isRanked: isRankedGame,
   });
 
   // TxLock for preventing Phantom "Request blocked" popups
@@ -1482,7 +1492,7 @@ const ChessGame = () => {
           onExit={() => navigate("/room-list")}
           result={gameStatus.includes("Checkmate") ? "Checkmate" : gameStatus.includes("Stalemate") ? "Stalemate" : undefined}
           roomPda={roomPda}
-          isStaked={false}
+          isStaked={isRankedGame}
         />
       )}
 

@@ -19,6 +19,7 @@ import DominoTile3D, { DominoTileBack, TileHalfClicked } from "@/components/Domi
 import { useSound } from "@/contexts/SoundContext";
 import { useTranslation } from "react-i18next";
 import { useWallet } from "@/hooks/useWallet";
+import { useAutoSettlement } from "@/hooks/useAutoSettlement";
 import { useWebRTCSync, GameMessage } from "@/hooks/useWebRTCSync";
 import { useTurnNotifications, TurnPlayer } from "@/hooks/useTurnNotifications";
 import { useGameChat, ChatPlayer, ChatMessage } from "@/hooks/useGameChat";
@@ -267,6 +268,14 @@ const DominosGame = () => {
     enabled: roomPlayers.length >= 2 && !!address,
     onStateRestored: handleRealtimeStateRestored,
     callerWallet: address, // Pass caller wallet for secure RPC validation
+  });
+
+  // Auto-settlement hook - triggers on-chain settlement when game ends
+  const autoSettlement = useAutoSettlement({
+    roomPda,
+    winner: gameOver ? winnerWallet : null,
+    reason: "gameover",
+    isRanked: isRankedGame,
   });
 
   // Track drawn tiles for each player
