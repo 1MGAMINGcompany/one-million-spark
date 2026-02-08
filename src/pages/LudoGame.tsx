@@ -20,6 +20,7 @@ import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useSound } from "@/contexts/SoundContext";
 import { useWallet } from "@/hooks/useWallet";
+import { useAutoSettlement } from "@/hooks/useAutoSettlement";
 import { useWebRTCSync, GameMessage } from "@/hooks/useWebRTCSync";
 import { useGameSessionPersistence } from "@/hooks/useGameSessionPersistence";
 import { useRoomMode } from "@/hooks/useRoomMode";
@@ -290,6 +291,21 @@ const LudoGame = () => {
     myWallet: address,
     isRanked: isRankedGame,
     enabled: roomPlayers.length >= 2 && modeLoaded,
+  });
+
+  // Derive winner wallet for auto-settlement from gameOver (PlayerColor) 
+  const winnerWallet = useMemo(() => {
+    if (!gameOver || roomPlayers.length === 0) return null;
+    const winnerIndex = PLAYER_COLORS.indexOf(gameOver);
+    return winnerIndex >= 0 && winnerIndex < roomPlayers.length ? roomPlayers[winnerIndex] : null;
+  }, [gameOver, roomPlayers]);
+
+  // Auto-settlement hook - triggers on-chain settlement when game ends
+  const autoSettlement = useAutoSettlement({
+    roomPda,
+    winner: winnerWallet,
+    reason: "gameover",
+    isRanked: isRankedGame,
   });
 
   // Durable game sync - persists moves to DB for reliability
@@ -1297,7 +1313,7 @@ const LudoGame = () => {
           onRematch={() => rematch.openRematchModal()}
           onExit={() => navigate("/room-list")}
           roomPda={roomPda}
-          isStaked={false}
+          isStaked={isRankedGame}
         />
       )}
 
