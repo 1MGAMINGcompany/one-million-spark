@@ -699,6 +699,17 @@
     "inviteCopied": "आमंत्रण लिंक कॉपी हो गया!"
   },
   "gameSession": {
+    "opponentAbsent": "प्रतिद्वंद्वी अनुपस्थित",
+    "opponent": "प्रतिद्वंद्वी",
+    "opponentMissedTurns": "प्रतिद्वंद्वी ने {{count}}/3 बारियां खोई",
+    "playerMissedTurns": "{{player}} ने {{count}}/3 बारियां खोई",
+    "autoWinIn": "स्वत: जीत में",
+    "playerWillBeEliminated": "{{player}} बाहर होगा: {{time}}",
+    "strikes": "स्ट्राइक",
+    "nextTimeoutWins": "अगला टाइमआउट = जीत",
+    "strikesReset": "प्रतिद्वंद्वी वापस आया",
+    "opponentForfeited": "प्रतिद्वंद्वी ने हार मानी",
+    "youWin": "आप जीते!",
     "gameRestored": "गेम बहाल हो गया",
     "sessionRecovered": "आपका गेम सेशन बहाल हो गया है।",
     "rulesAccepted": "नियम स्वीकृत",

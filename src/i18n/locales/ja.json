@@ -706,6 +706,17 @@
     "inviteCopied": "招待リンクがコピーされました！"
   },
   "gameSession": {
+    "opponentAbsent": "対戦相手不在",
+    "opponent": "対戦相手",
+    "opponentMissedTurns": "対戦相手が{{count}}/3ターンをミスしました",
+    "playerMissedTurns": "{{player}}が{{count}}/3ターンをミスしました",
+    "autoWinIn": "自動勝利まで",
+    "playerWillBeEliminated": "{{player}}は脱落します: {{time}}",
+    "strikes": "ストライク",
+    "nextTimeoutWins": "次のタイムアウト = 勝利",
+    "strikesReset": "対戦相手が復帰しました",
+    "opponentForfeited": "対戦相手が棄権",
+    "youWin": "あなたの勝ち！",
     "gameRestored": "ゲーム復元完了",
     "sessionRecovered": "ゲームセッションが復元されました。",
     "rulesAccepted": "ルール承認済み",

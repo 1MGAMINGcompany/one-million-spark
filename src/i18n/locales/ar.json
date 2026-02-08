@@ -686,6 +686,17 @@
     "inviteCopied": "تم نسخ رابط الدعوة!"
   },
   "gameSession": {
+    "opponentAbsent": "الخصم غائب",
+    "opponent": "الخصم",
+    "opponentMissedTurns": "الخصم فاتته {{count}}/3 أدوار",
+    "playerMissedTurns": "{{player}} فاتته {{count}}/3 أدوار",
+    "autoWinIn": "فوز تلقائي في",
+    "playerWillBeEliminated": "{{player}} سيتم إقصاؤه في: {{time}}",
+    "strikes": "مخالفات",
+    "nextTimeoutWins": "انتهاء الوقت القادم = فوز",
+    "strikesReset": "عاد الخصم",
+    "opponentForfeited": "انسحب الخصم",
+    "youWin": "فزت!",
     "gameRestored": "تم استعادة اللعبة",
     "sessionRecovered": "تم استعادة جلسة اللعب الخاصة بك.",
     "rulesAccepted": "تم قبول القواعد",

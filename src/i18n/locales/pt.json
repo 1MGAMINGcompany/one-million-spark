@@ -568,6 +568,17 @@
     "samePlayers": "Mesmos jogadores • Novo prêmio • Nova sala"
   },
   "gameSession": {
+    "opponentAbsent": "Oponente Ausente",
+    "opponent": "Oponente",
+    "opponentMissedTurns": "Oponente perdeu {{count}}/3 turnos",
+    "playerMissedTurns": "{{player}} perdeu {{count}}/3 turnos",
+    "autoWinIn": "Vitória automática em",
+    "playerWillBeEliminated": "{{player}} será eliminado em: {{time}}",
+    "strikes": "strikes",
+    "nextTimeoutWins": "Próximo timeout = vitória",
+    "strikesReset": "Oponente reconectado",
+    "opponentForfeited": "Oponente Desistiu",
+    "youWin": "Você venceu!",
     "gameRestored": "Jogo Restaurado",
     "sessionRecovered": "Sua sessão de jogo foi recuperada.",
     "rulesAccepted": "Regras aceitas",

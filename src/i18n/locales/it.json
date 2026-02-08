@@ -686,6 +686,17 @@
     "inviteCopied": "Link invito copiato!"
   },
   "gameSession": {
+    "opponentAbsent": "Avversario Assente",
+    "opponent": "Avversario",
+    "opponentMissedTurns": "L'avversario ha perso {{count}}/3 turni",
+    "playerMissedTurns": "{{player}} ha perso {{count}}/3 turni",
+    "autoWinIn": "Vittoria auto in",
+    "playerWillBeEliminated": "{{player}} sarà eliminato in: {{time}}",
+    "strikes": "strike",
+    "nextTimeoutWins": "Prossimo timeout = vittoria",
+    "strikesReset": "Avversario riconnesso",
+    "opponentForfeited": "Avversario Ha Abbandonato",
+    "youWin": "Hai vinto!",
     "gameRestored": "Gioco Ripristinato",
     "sessionRecovered": "La tua sessione di gioco è stata recuperata.",
     "rulesAccepted": "Regole accettate",
