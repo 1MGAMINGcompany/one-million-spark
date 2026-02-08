@@ -81,7 +81,7 @@ const WALLET_CONFIG = [
  */
 export function ConnectWalletGate({ className }: ConnectWalletGateProps) {
   const { t } = useTranslation();
-  const { wallets, select, connecting } = useWallet();
+  const { wallets, select, connect, connecting } = useWallet();
   const [showHelp, setShowHelp] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [notDetectedWallet, setNotDetectedWallet] = useState<'phantom' | 'solflare' | 'backpack' | null>(null);
@@ -97,13 +97,19 @@ export function ConnectWalletGate({ className }: ConnectWalletGateProps) {
   );
 
   // Handle MWA connect (Android)
-  const handleMWAConnect = () => {
+  const handleMWAConnect = async () => {
     const mwaWallet = wallets.find(w => 
       w.adapter.name.toLowerCase().includes('mobile wallet adapter')
     );
     if (mwaWallet) {
-      select(mwaWallet.adapter.name);
-      setDialogOpen(false);
+      try {
+        select(mwaWallet.adapter.name);
+        setDialogOpen(false);
+        await connect();
+      } catch (err) {
+        console.error('[ConnectWalletGate] MWA connect error:', err);
+        toast.error(t("wallet.connectionFailed"));
+      }
     }
   };
 
@@ -113,15 +119,25 @@ export function ConnectWalletGate({ className }: ConnectWalletGateProps) {
     window.location.href = deepLink;
   };
 
-  const handleSelectWallet = (walletId: string) => {
+  const handleSelectWallet = async (walletId: string) => {
     // Find matching wallet from detected wallets
     const matchingWallet = wallets.find(w => 
       w.adapter.name.toLowerCase().includes(walletId)
     );
     
     if (matchingWallet) {
-      select(matchingWallet.adapter.name);
-      setDialogOpen(false);
+      try {
+        select(matchingWallet.adapter.name);
+        setDialogOpen(false);
+        await connect();
+      } catch (err) {
+        console.error('[ConnectWalletGate] Connect error:', err);
+        if (isMobile) {
+          setNotDetectedWallet(walletId as 'phantom' | 'solflare' | 'backpack');
+        } else {
+          toast.error(t("wallet.connectionFailed"));
+        }
+      }
     } else if (isMobile) {
       // On mobile with no wallet detected: show modal with 2 options
       setNotDetectedWallet(walletId as 'phantom' | 'solflare' | 'backpack');
