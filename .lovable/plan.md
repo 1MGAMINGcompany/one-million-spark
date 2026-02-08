@@ -8,15 +8,13 @@
 - Integrated into ChessGame with `opponentStrikes` and `dbTurnStartedAt` state
 - Polling extracts `missed_turns` from session data and displays indicator
 
-## 🔄 PENDING: Phase 2 - Other Games
+## ✅ COMPLETED: Phase 2 - All Other Games
 
-Remaining games need the same pattern:
-
-**The auto-forfeit worked!** But the UX was confusing because:
-1. No clear indication that opponent was disconnected/absent
-2. No countdown showing "X seconds until opponent forfeits"
-3. When turn passed to you, you couldn't play because your timer was also running (10s is very short)
-4. Strikes alternated between both players
+Implemented the same pattern for:
+- **BackgammonGame**: Added strike tracking to existing polling, integrated indicator
+- **CheckersGame**: Added full polling loop + indicator
+- **DominosGame**: Added full polling loop + indicator  
+- **LudoGame**: Added polling with multi-player support (shows current turn holder's strikes)
 
 ## Solution Overview
 

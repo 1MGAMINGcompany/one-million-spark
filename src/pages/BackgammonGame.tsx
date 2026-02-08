@@ -1,6 +1,8 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { getOpponentWallet, isSameWallet, isRealWallet } from "@/lib/walletUtils";
 import { clearRoom } from "@/lib/missedTurns"; // Only clearRoom needed for cleanup - strikes now tracked server-side
+import { isWalletInAppBrowser } from "@/lib/walletBrowserDetection";
+import { OpponentAbsenceIndicator } from "@/components/OpponentAbsenceIndicator";
 import { GameErrorBoundary } from "@/components/GameErrorBoundary";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -194,6 +196,10 @@ const BackgammonGame = () => {
   const [gameResultInfo, setGameResultInfo] = useState<{ winner: Player | null; resultType: GameResultType | null; multiplier: number } | null>(null);
   const [winnerWallet, setWinnerWallet] = useState<string | null>(null); // Direct wallet address of winner
   const [outcomeResolving, setOutcomeResolving] = useState(false); // Neutral "resolving..." state
+  
+  // Opponent absence tracking
+  const [opponentStrikes, setOpponentStrikes] = useState(0);
+  const [dbTurnStartedAt, setDbTurnStartedAt] = useState<string | null>(null);
   
   // Timeout debounce - prevent double-fire
   const timeoutFiredRef = useRef(false);
@@ -912,6 +918,15 @@ const BackgammonGame = () => {
           // Reset timeout debounce when turn_started_at changes
           timeoutFiredRef.current = false;
         }
+        
+        // Extract opponent strikes for absence indicator
+        const missedTurns = (freshData?.session?.missed_turns || {}) as Record<string, number>;
+        const opponentWalletAddr = getOpponentWallet(roomPlayersRef.current, address);
+        if (opponentWalletAddr) {
+          const strikes = missedTurns[opponentWalletAddr] || 0;
+          setOpponentStrikes(strikes);
+        }
+        setDbTurnStartedAt(freshTurnStartedAt || null);
       } catch (err) {
         console.error("[BackgammonGame] Polling error:", err);
       }
@@ -2298,6 +2313,14 @@ const BackgammonGame = () => {
               myAddress={address}
               remainingTime={isRankedGame ? turnTimer.remainingTime : undefined}
               showTimer={isRankedGame && startRoll.isFinalized && !gameOver}
+            />
+            
+            {/* Opponent Absence Indicator */}
+            <OpponentAbsenceIndicator
+              opponentStrikes={opponentStrikes}
+              turnTimeSeconds={effectiveTurnTime}
+              turnStartedAt={dbTurnStartedAt}
+              isOpponentsTurn={!isActuallyMyTurn && startRoll.isFinalized && !gameOver}
             />
           </div>
         </div>
