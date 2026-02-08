@@ -39,6 +39,7 @@ import TermsOfService from "./pages/TermsOfService";
 import NotFound from "./pages/NotFound";
 import PlayerProfile from "./pages/PlayerProfile";
 import Leaderboard from "./pages/Leaderboard";
+import MatchPage from "./pages/MatchPage";
 import AgeConfirmation from "./components/AgeConfirmation";
 import DebugJoinRoom from "./pages/DebugJoinRoom";
 import DebugHUD from "./components/DebugHUD";
@@ -112,6 +113,7 @@ const AppContent = () => {
           <Route path="/terms-of-service" element={<TermsOfService />} />
           <Route path="/player/:wallet" element={<PlayerProfile />} />
           <Route path="/leaderboard/:game" element={<Leaderboard />} />
+          <Route path="/match/:roomPda" element={<MatchPage />} />
           <Route path="/debug/join" element={isDebugEnabled() ? <DebugJoinRoom /> : <Navigate to="/" replace />} />
           <Route path="*" element={<NotFound />} />
         </Routes>

@@ -925,5 +925,24 @@
   "creatorDeposit": {
     "title": "Creator Deposit (Refundable)",
     "desc": "Creating a room requires a small temporary Solana storage deposit. You get this back when the game ends — win, lose, forfeit, or cancel."
+  },
+  "shareMatch": {
+    "shareWin": "Share Win",
+    "shareMatch": "Share Match",
+    "winner": "Winner",
+    "wonAmount": "Won {{amount}} SOL",
+    "stake": "Stake",
+    "fee": "Platform Fee",
+    "pot": "Total Pot",
+    "playOn1M": "Play on 1M Gaming",
+    "copyLink": "Copy Link",
+    "linkCopied": "Link copied!",
+    "matchDetails": "View Match Details",
+    "winnerStats": "Winner Stats",
+    "totalWon": "Total Won",
+    "currentStreak": "Current Streak",
+    "matchNotFound": "Match Not Found",
+    "matchVoided": "This match was voided",
+    "matchCancelled": "This match was cancelled"
   }
 }
