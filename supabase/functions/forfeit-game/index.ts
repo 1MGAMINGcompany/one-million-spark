@@ -933,6 +933,37 @@ Deno.serve(async (req: Request) => {
           console.log("[forfeit-game] ✅ matches recorded");
         }
 
+        // Step 2b: Upsert match_share_cards for social sharing
+        const potLamports = Number(roomData.stakeLamports) * roomData.playerCount;
+        const feeLamports = Math.floor(potLamports * 500 / 10000); // 5% fee
+        const winnerPayoutLamports = potLamports - feeLamports;
+
+        const { error: shareCardError } = await supabase
+          .from("match_share_cards")
+          .upsert(
+            {
+              room_pda: roomPda,
+              game_type: gameType || "unknown",
+              mode: "ranked",
+              stake_lamports: Number(roomData.stakeLamports),
+              winner_wallet: winnerWallet,
+              loser_wallet: forfeitingWallet,
+              win_reason: "forfeit",
+              winner_payout_lamports: winnerPayoutLamports,
+              fee_lamports: feeLamports,
+              tx_signature: signature,
+              finished_at: new Date().toISOString(),
+              metadata: { payout_direction: "winner_takes_all", forfeit: true },
+            },
+            { onConflict: "room_pda" }
+          );
+
+        if (shareCardError) {
+          console.error("[forfeit-game] match_share_cards upsert failed:", shareCardError);
+        } else {
+          console.log("[forfeit-game] ✅ match_share_cards recorded");
+        }
+
         // Step 3: Call record_match_result RPC for profile/rating updates
         try {
           const { error: rpcErr } = await supabase.rpc("record_match_result", {

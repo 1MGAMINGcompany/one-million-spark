@@ -927,6 +927,38 @@ Deno.serve(async (req: Request) => {
           console.log("[settle-game] ✅ matches recorded");
         }
 
+        // Step 2b: Upsert match_share_cards for social sharing
+        const loserWallet = playersOnChain.find(p => p !== winnerWallet) || null;
+        const potLamports = Number(roomData.stakeLamports) * roomData.playerCount;
+        const feeLamports = Math.floor(potLamports * 500 / 10000); // 5% fee
+        const winnerPayoutLamports = potLamports - feeLamports;
+
+        const { error: shareCardError } = await supabase
+          .from("match_share_cards")
+          .upsert(
+            {
+              room_pda: roomPda,
+              game_type: gameType || "unknown",
+              mode: mode || "ranked",
+              stake_lamports: Number(roomData.stakeLamports),
+              winner_wallet: winnerWallet,
+              loser_wallet: loserWallet,
+              win_reason: reason || "gameover",
+              winner_payout_lamports: winnerPayoutLamports,
+              fee_lamports: feeLamports,
+              tx_signature: signature,
+              finished_at: new Date().toISOString(),
+              metadata: { payout_direction: "winner_takes_all" },
+            },
+            { onConflict: "room_pda" }
+          );
+
+        if (shareCardError) {
+          console.error("[settle-game] match_share_cards upsert failed:", shareCardError);
+        } else {
+          console.log("[settle-game] ✅ match_share_cards recorded");
+        }
+
         // Step 3: Update player_profiles (winner) - DO NOT include win_rate (generated column)
         const { error: winnerProfileError } = await supabase
           .from("player_profiles")
