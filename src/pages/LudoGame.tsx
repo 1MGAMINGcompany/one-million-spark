@@ -1,6 +1,12 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { isSameWallet, isRealWallet, getOpponentWallet } from "@/lib/walletUtils";
 import { clearRoom } from "@/lib/missedTurns"; // Only clearRoom needed - strikes now tracked server-side
+import { isWalletInAppBrowser } from "@/lib/walletBrowserDetection";
+import { OpponentAbsenceIndicator } from "@/components/OpponentAbsenceIndicator";
+
+// Polling intervals for opponent timeout detection
+const POLL_INTERVAL_DESKTOP = 3000;
+const POLL_INTERVAL_WALLET = 1500;
 import { GameErrorBoundary } from "@/components/GameErrorBoundary";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -75,6 +81,10 @@ const LudoGame = () => {
   const [roomPlayers, setRoomPlayers] = useState<string[]>([]);
   const [entryFeeSol, setEntryFeeSol] = useState(0);
   const [stakeLamports, setStakeLamports] = useState<number | undefined>(undefined);
+  
+  // Opponent absence tracking (for current turn holder if not me)
+  const [currentPlayerStrikes, setCurrentPlayerStrikes] = useState(0);
+  const [dbTurnStartedAt, setDbTurnStartedAt] = useState<string | null>(null);
   
   // Leave/Forfeit dialog states
   const [showForfeitDialog, setShowForfeitDialog] = useState(false);
@@ -537,6 +547,101 @@ const LudoGame = () => {
     onTimeExpired: handleTurnTimeout,
     roomId: roomPda,
   });
+
+  // === OPPONENT TURN TIMEOUT POLLING ===
+  // Polls server to apply timeouts when it's not my turn
+  useEffect(() => {
+    if (!roomPda || !isRankedGame || !startRoll.isFinalized || gameOver) return;
+
+    const pollInterval = isWalletInAppBrowser() ? POLL_INTERVAL_WALLET : POLL_INTERVAL_DESKTOP;
+
+    const pollOpponentTimeout = async () => {
+      try {
+        const { data, error } = await supabase.functions.invoke("game-session-get", {
+          body: { roomPda },
+        });
+
+        if (error) {
+          console.warn("[LudoGame] Poll error:", error);
+          return;
+        }
+
+        // Check if game finished
+        const dbStatus = data?.session?.status;
+        if (dbStatus === 'finished' && !gameOver) {
+          const dbWinner = data?.session?.winner_wallet;
+          console.log("[LudoGame] Polling detected game finished. Winner:", dbWinner?.slice(0, 8));
+          // TODO: Handle game over state for Ludo
+          return;
+        }
+
+        if (gameOver) return;
+
+        // Server-side timeout check when not my turn
+        const dbTurnWallet = data?.session?.current_turn_wallet;
+        const isOpponentsTurn = dbTurnWallet && !isSameWallet(dbTurnWallet, address);
+
+        if (isOpponentsTurn && dbStatus !== 'finished') {
+          try {
+            const { data: timeoutResult } = await supabase.rpc("maybe_apply_turn_timeout", {
+              p_room_pda: roomPda,
+            });
+
+            const result = timeoutResult as {
+              applied: boolean;
+              type?: string;
+              winnerWallet?: string;
+              nextTurnWallet?: string;
+              strikes?: number;
+            } | null;
+
+            if (result?.applied) {
+              console.log("[LudoGame] Polling applied timeout:", result);
+
+              if (result.type === "auto_forfeit" || result.type === "player_eliminated") {
+                // In Ludo, this eliminates the player. Check if I win.
+                const remainingPlayers = roomPlayers.filter(p => 
+                  isRealWallet(p) && !isSameWallet(p, result.winnerWallet ? "" : dbTurnWallet)
+                );
+                if (remainingPlayers.length === 1 && isSameWallet(remainingPlayers[0], address)) {
+                  play('ludo_dice');
+                  toast({
+                    title: t("gameSession.youWin"),
+                    description: t("gameSession.opponentForfeited"),
+                  });
+                }
+              } else if (result.type === "turn_timeout" && result.nextTurnWallet) {
+                advanceTurn(1);
+                turnTimer.resetTimer();
+                toast({
+                  title: t("gameSession.opponentSkipped"),
+                  description: `${result.strikes}/3 ${t("gameSession.missedTurns")}`,
+                });
+              }
+            }
+          } catch (err) {
+            console.warn("[LudoGame] Polling timeout check failed:", err);
+          }
+        }
+
+        // Extract current turn holder's strikes for absence indicator
+        const missedTurns = (data?.session?.missed_turns || {}) as Record<string, number>;
+        if (dbTurnWallet && !isSameWallet(dbTurnWallet, address)) {
+          const strikes = missedTurns[dbTurnWallet] || 0;
+          setCurrentPlayerStrikes(strikes);
+        } else {
+          setCurrentPlayerStrikes(0);
+        }
+        setDbTurnStartedAt(data?.session?.turn_started_at || null);
+      } catch (err) {
+        console.error("[LudoGame] Poll exception:", err);
+      }
+    };
+
+    pollOpponentTimeout();
+    const interval = setInterval(pollOpponentTimeout, pollInterval);
+    return () => clearInterval(interval);
+  }, [roomPda, isRankedGame, startRoll.isFinalized, gameOver, address, roomPlayers, advanceTurn, turnTimer, play, t]);
 
   // Convert Ludo players to TurnPlayer format for notifications
   const turnPlayers: TurnPlayer[] = useMemo(() => {
@@ -1107,9 +1212,19 @@ const LudoGame = () => {
             myAddress={address}
             remainingTime={isRankedGame ? turnTimer.remainingTime : undefined}
             showTimer={isRankedGame && canPlay}
-          />
+            />
+            
+            {/* Opponent/Current Player Absence Indicator */}
+            <OpponentAbsenceIndicator
+              opponentStrikes={currentPlayerStrikes}
+              turnTimeSeconds={effectiveTurnTime}
+              turnStartedAt={dbTurnStartedAt}
+              isOpponentsTurn={!isActuallyMyTurn && canPlay && !gameOver}
+              playerCount={roomPlayers.length}
+              opponentName={turnPlayers[currentPlayerIndex]?.name}
+            />
+          </div>
         </div>
-      </div>
 
       {/* Game Area */}
       <div className="flex-1 flex items-center justify-center p-2 md:p-4 relative">
