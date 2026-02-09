@@ -699,17 +699,6 @@ export function GameEndScreen({
               </div>
             )}
 
-            {/* Share Match Button - Show for ALL multiplayer staked games (both winner and loser) */}
-            {isStaked && roomPda && (
-              <div className="pt-2">
-                <ShareMatchButton
-                  roomPda={roomPda}
-                  isWinner={isWinner}
-                  gameName={gameType}
-                  className="w-full"
-                />
-              </div>
-            )}
 
             {/* Primary: Rematch (for non-staked games or as fallback) */}
             {(!isStaked || !roomPda || stakeLamports === 0) && (

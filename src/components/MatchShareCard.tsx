@@ -143,12 +143,14 @@ export function MatchShareCard({ matchData, winnerProfile, compact = false }: Ma
                 <p className="text-xs text-muted-foreground">{t("shareMatch.totalWon", "Total Won")} (SOL)</p>
               </div>
               <div>
-                <p className="text-lg font-bold text-amber-400 font-mono">{winnerProfile.current_streak}</p>
-                <p className="text-xs text-muted-foreground">{t("shareMatch.currentStreak", "Streak")}</p>
+                <p className="text-lg font-bold text-amber-400 font-mono">
+                  {winnerProfile.games_played > 0 ? Math.round((winnerProfile.wins / winnerProfile.games_played) * 100) : 0}%
+                </p>
+                <p className="text-xs text-muted-foreground">{t("shareMatch.winRate", "Win Rate")}</p>
               </div>
               <div>
                 <p className="text-lg font-bold text-foreground font-mono">{winnerProfile.wins}</p>
-                <p className="text-xs text-muted-foreground">Wins</p>
+                <p className="text-xs text-muted-foreground">{t("shareMatch.gamesWon", "Games Won")}</p>
               </div>
             </div>
           </div>
