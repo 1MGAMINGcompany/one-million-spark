@@ -508,6 +508,7 @@ const CheckersGame = () => {
     turnTimeSeconds: effectiveTurnTime,
     enabled: isRankedGame && canPlay && !gameOver,
     isMyTurn,
+    turnStartedAt: dbTurnStartedAt,
     onTimeExpired: handleTurnTimeout,
     roomId: roomPda,
   });
@@ -612,7 +613,7 @@ const CheckersGame = () => {
     pollOpponentTimeout();
     const interval = setInterval(pollOpponentTimeout, pollInterval);
     return () => clearInterval(interval);
-  }, [roomPda, isRankedGame, startRoll.isFinalized, gameOver, address, myColor, roomPlayers, turnOverrideWallet, currentPlayer, turnTimer.resetTimer, play, t]);
+  }, [roomPda, isRankedGame, startRoll.isFinalized, gameOver, address, myColor, roomPlayers, turnOverrideWallet, currentPlayer, play, t]);
 
   // Turn notification players
   const turnPlayers: TurnPlayer[] = useMemo(() => {

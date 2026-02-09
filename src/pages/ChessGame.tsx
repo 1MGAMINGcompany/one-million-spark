@@ -594,6 +594,7 @@ const ChessGame = () => {
     turnTimeSeconds: effectiveTurnTime,
     enabled: isRankedGame && canPlay && !gameOver,
     isMyTurn,
+    turnStartedAt: dbTurnStartedAt,
     onTimeExpired: handleTurnTimeout,
     roomId: roomPda,
   });
@@ -745,7 +746,7 @@ const ChessGame = () => {
   }, [
     roomPda, isRankedGame, startRoll.isFinalized, gameOver, 
     address, turnOverrideWallet, activeTurnAddress, roomPlayers,
-    turnTimer.resetTimer, play, t
+    play, t
   ]);
 
   // Visibility change handler - poll immediately when tab becomes visible
@@ -800,7 +801,7 @@ const ChessGame = () => {
     
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [roomPda, isRankedGame, gameOver, activeTurnAddress, address, turnTimer.resetTimer, turnTimer.isPaused, turnTimer.resumeTimer, play, t]);
+  }, [roomPda, isRankedGame, gameOver, activeTurnAddress, address, play, t]);
 
   // Turn notification system
   const {

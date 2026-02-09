@@ -693,6 +693,7 @@ const DominosGame = () => {
     turnTimeSeconds: effectiveTurnTime,
     enabled: isRankedGame && canPlayRanked && !gameOver,
     isMyTurn: effectiveIsMyTurn,
+    turnStartedAt: dbTurnStartedAt,
     onTimeExpired: handleTurnTimeout,
     roomId: roomPda,
   });
@@ -789,7 +790,7 @@ const DominosGame = () => {
     pollOpponentTimeout();
     const interval = setInterval(pollOpponentTimeout, pollInterval);
     return () => clearInterval(interval);
-  }, [roomPda, isRankedGame, startRoll.isFinalized, gameOver, address, roomPlayers, turnTimer.resetTimer, play, t]);
+  }, [roomPda, isRankedGame, startRoll.isFinalized, gameOver, address, roomPlayers, play, t]);
 
   // Turn notification players
   const turnPlayers: TurnPlayer[] = useMemo(() => {
