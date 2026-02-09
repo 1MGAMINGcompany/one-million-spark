@@ -1168,6 +1168,28 @@ Deno.serve(async (req: Request) => {
         })
         .eq("room_pda", roomPda);
 
+      // Still record share card so UI shows result even on failed settlement
+      try {
+        const loserWallet = playersOnChain.find(p => p !== winnerWallet) || null;
+        await supabase.from("match_share_cards").upsert({
+          room_pda: roomPda,
+          game_type: gameType || "unknown",
+          mode: mode || "ranked",
+          stake_lamports: Number(roomData.stakeLamports),
+          winner_wallet: winnerWallet,
+          loser_wallet: loserWallet,
+          win_reason: "settlement_failed",
+          winner_payout_lamports: 0,
+          fee_lamports: 0,
+          tx_signature: null,
+          finished_at: new Date().toISOString(),
+          metadata: { payout_direction: "failed", error: String((settlementError as Error)?.message ?? settlementError) },
+        }, { onConflict: "room_pda" });
+        console.log("[settle-game] ✅ match_share_cards fallback recorded");
+      } catch (e) {
+        console.warn("[settle-game] match_share_cards fallback failed:", e);
+      }
+
       return json200({
         success: false,
         action: "void_cleared",
