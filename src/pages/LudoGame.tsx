@@ -60,6 +60,7 @@ interface PersistedLudoState {
   currentPlayerIndex: number;
   diceValue: number | null;
   gameOver: PlayerColor | null;
+  winnerSeat?: number;
 }
 
 // Player color to wallet mapping (would come from room data in production)
@@ -267,6 +268,7 @@ const LudoGame = () => {
         currentPlayerIndex,
         diceValue,
         gameOver,
+        ...(gameOver ? { winnerSeat: PLAYER_COLORS.indexOf(gameOver) } : {}),
       };
       saveLudoSession(
         persisted,

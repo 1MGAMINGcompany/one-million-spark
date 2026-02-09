@@ -54,6 +54,7 @@ interface PersistedCheckersState {
   board: (Piece | null)[][];
   currentPlayer: Player;
   gameOver: Player | "draw" | null;
+  winnerSeat?: number;
 }
 
 type Player = "gold" | "obsidian";
@@ -268,6 +269,9 @@ const CheckersGame = () => {
         board,
         currentPlayer,
         gameOver,
+        ...(gameOver && winnerWallet && roomPlayers.length >= 2
+          ? { winnerSeat: roomPlayers.indexOf(winnerWallet) >= 0 ? roomPlayers.indexOf(winnerWallet) : undefined }
+          : {}),
       };
       saveCheckersSession(
         persisted,

@@ -930,7 +930,7 @@
     "shareWin": "Share Win",
     "shareMatch": "Share Match",
     "winner": "Winner",
-    "wonAmount": "Won {{amount}} SOL",
+    "wonAmount": "Won",
     "stake": "Stake",
     "fee": "Platform Fee",
     "pot": "Total Pot",

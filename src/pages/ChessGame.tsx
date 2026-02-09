@@ -60,6 +60,7 @@ interface PersistedChessState {
   moveHistory: string[];
   gameOver: boolean;
   gameStatus: string;
+  winnerSeat?: number;
 }
 
 // Animation Toggle Component
@@ -320,6 +321,9 @@ const ChessGame = () => {
         moveHistory,
         gameOver,
         gameStatus,
+        ...(gameOver && winnerWallet && roomPlayers.length >= 2
+          ? { winnerSeat: roomPlayers.indexOf(winnerWallet) >= 0 ? roomPlayers.indexOf(winnerWallet) : undefined }
+          : {}),
       };
       saveChessSession(
         persisted,
