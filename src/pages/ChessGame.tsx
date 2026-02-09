@@ -707,6 +707,17 @@ const ChessGame = () => {
                 setOpponentStrikes(result.strikes || 0);
                 setTurnOverrideWallet(result.nextTurnWallet);
                 turnTimer.resetTimer();
+
+                // Flip chess.js FEN active color to match server state
+                // (timeout is server-only; no chess.js move was made)
+                setGame(prev => {
+                  const fen = prev.fen();
+                  const parts = fen.split(' ');
+                  parts[1] = parts[1] === 'w' ? 'b' : 'w';
+                  try { return new Chess(parts.join(' ')); }
+                  catch { return prev; }
+                });
+
                 toast({
                   title: t("gameSession.opponentSkipped"),
                   description: `${result.strikes}/3 ${t("gameSession.missedTurns")}`,
@@ -729,6 +740,18 @@ const ChessGame = () => {
           if (isNowMyTurn) {
             setTurnOverrideWallet(dbTurnWallet);
             turnTimer.resetTimer();
+
+            // Flip chess.js FEN active color if engine disagrees with server
+            setGame(prev => {
+              const expectedColor = isNowMyTurn ? effectiveColor : (effectiveColor === 'w' ? 'b' : 'w');
+              if (prev.turn() !== expectedColor) {
+                const parts = prev.fen().split(' ');
+                parts[1] = expectedColor!;
+                try { return new Chess(parts.join(' ')); }
+                catch { return prev; }
+              }
+              return prev;
+            });
           }
         }
       } catch (err) {
@@ -786,6 +809,18 @@ const ChessGame = () => {
             if (isNowMyTurn) {
               setTurnOverrideWallet(dbTurnWallet);
               turnTimer.resetTimer();
+
+              // Flip chess.js FEN active color if engine disagrees with server
+              setGame(prev => {
+                const expectedColor = isNowMyTurn ? effectiveColor : (effectiveColor === 'w' ? 'b' : 'w');
+                if (prev.turn() !== expectedColor) {
+                  const parts = prev.fen().split(' ');
+                  parts[1] = expectedColor!;
+                  try { return new Chess(parts.join(' ')); }
+                  catch { return prev; }
+                }
+                return prev;
+              });
             }
           }
           
