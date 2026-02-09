@@ -282,14 +282,14 @@ const CheckersGame = () => {
         roomMode
       );
     }
-  }, [board, currentPlayer, gameOver, roomPlayers, saveCheckersSession, roomMode]);
+  }, [board, currentPlayer, gameOver, roomPlayers, saveCheckersSession, roomMode, winnerWallet]);
 
   // Finish session and archive room when game ends
   useEffect(() => {
-    if (gameOver && roomPlayers.length >= 2) {
-      finishCheckersSession();
+    if (gameOver && roomPlayers.length >= 2 && winnerWallet) {
+      finishCheckersSession(winnerWallet);
     }
-  }, [gameOver, roomPlayers.length, finishCheckersSession]);
+  }, [gameOver, roomPlayers.length, finishCheckersSession, winnerWallet]);
 
   const rankedGate = useRankedReadyGate({
     roomPda,

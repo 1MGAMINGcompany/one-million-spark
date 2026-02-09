@@ -281,13 +281,6 @@ const LudoGame = () => {
     }
   }, [players, currentPlayerIndex, diceValue, gameOver, roomPlayers, saveLudoSession, roomMode]);
 
-  // Finish session and archive room when game ends
-  useEffect(() => {
-    if (gameOver && roomPlayers.length >= 2) {
-      finishLudoSession();
-    }
-  }, [gameOver, roomPlayers.length, finishLudoSession]);
-
   const rankedGate = useRankedReadyGate({
     roomPda,
     myWallet: address,
@@ -301,6 +294,13 @@ const LudoGame = () => {
     const winnerIndex = PLAYER_COLORS.indexOf(gameOver);
     return winnerIndex >= 0 && winnerIndex < roomPlayers.length ? roomPlayers[winnerIndex] : null;
   }, [gameOver, roomPlayers]);
+
+  // Finish session and archive room when game ends
+  useEffect(() => {
+    if (gameOver && roomPlayers.length >= 2 && winnerWallet) {
+      finishLudoSession(winnerWallet);
+    }
+  }, [gameOver, roomPlayers.length, finishLudoSession, winnerWallet]);
 
   // Auto-settlement hook - triggers on-chain settlement when game ends
   const autoSettlement = useAutoSettlement({

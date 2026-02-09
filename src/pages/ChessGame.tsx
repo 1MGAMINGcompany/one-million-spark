@@ -334,14 +334,14 @@ const ChessGame = () => {
         roomMode
       );
     }
-  }, [game, moveHistory, gameOver, gameStatus, roomPlayers, saveChessSession, roomMode]);
+  }, [game, moveHistory, gameOver, gameStatus, roomPlayers, saveChessSession, roomMode, winnerWallet]);
 
   // Finish session and archive room when game ends
   useEffect(() => {
-    if (gameOver && roomPlayers.length >= 2) {
-      finishChessSession();
+    if (gameOver && roomPlayers.length >= 2 && winnerWallet) {
+      finishChessSession(winnerWallet);
     }
-  }, [gameOver, roomPlayers.length, finishChessSession]);
+  }, [gameOver, roomPlayers.length, finishChessSession, winnerWallet]);
 
   // Capture animations hook
   const { animations, triggerAnimation, handleAnimationComplete } = useCaptureAnimations(animationsEnabled);

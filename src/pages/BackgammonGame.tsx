@@ -508,14 +508,14 @@ const BackgammonGame = () => {
         roomMode
       );
     }
-  }, [gameState, dice, remainingMoves, currentPlayer, gameOver, gameStatus, roomPlayers, saveBackgammonSession, roomMode]);
+  }, [gameState, dice, remainingMoves, currentPlayer, gameOver, gameStatus, roomPlayers, saveBackgammonSession, roomMode, winnerWallet]);
 
   // Finish session and archive room when game ends
   useEffect(() => {
-    if (gameOver && roomPlayers.length >= 2) {
-      finishBackgammonSession();
+    if (gameOver && roomPlayers.length >= 2 && winnerWallet) {
+      finishBackgammonSession(winnerWallet);
     }
-  }, [gameOver, roomPlayers.length, finishBackgammonSession]);
+  }, [gameOver, roomPlayers.length, finishBackgammonSession, winnerWallet]);
 
   const rankedGate = useRankedReadyGate({
     roomPda,

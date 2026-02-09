@@ -486,10 +486,10 @@ const DominosGame = () => {
 
   // Mark session as finished when game ends
   useEffect(() => {
-    if (gameOver && gameInitialized) {
-      finishSession();
+    if (gameOver && gameInitialized && winnerWallet) {
+      finishSession(winnerWallet);
     }
-  }, [gameOver, gameInitialized, finishSession]);
+  }, [gameOver, gameInitialized, finishSession, winnerWallet]);
 
   const rankedGate = useRankedReadyGate({
     roomPda,
