@@ -1,71 +1,91 @@
 
-# Fix: Anchor Turn Timer to Server Time
 
-## Problem
+# Audit: Game Flow Alignment + Fixes
 
-The timer counts down from a client-side value and resets every time `isMyTurn` changes. Since polling can trigger `isMyTurn` re-evaluations, the timer gets spurious resets mid-countdown, appearing to jump around. The client timer and the server's `turn_started_at` are fundamentally disconnected.
+## Audit Results
 
-## Solution
+### What matches your spec (working correctly)
 
-Replace the client-side decrementing counter with a server-anchored calculation:
+1. **useTurnTimer hook** -- Server-anchored, counts down for both players, only turn holder triggers timeout RPC. Correct.
+2. **submit_game_move RPC** -- Auto-flips turn for Chess/Checkers/Dominos, skips flip for Backgammon/Ludo. Correct.
+3. **maybe_apply_turn_timeout RPC** -- Records turn_timeout, increments strikes, flips turn, 3 strikes = auto_forfeit. Correct.
+4. **Auto-settlement** -- `useAutoSettlement` triggers `settle-game` when `winnerWallet` is set. Fires automatically via useEffect. Correct.
+5. **Backgammon multi-move turns** -- Timer per turn (not per sub-move), dice roll + moves + explicit turn_end. Correct.
+6. **Ludo elimination** -- 3 missed turns = elimination, game continues until 1 player remains. Correct.
+7. **OpponentAbsenceIndicator** -- Shows strikes, countdown, and auto-forfeit progress. Correct.
 
-```
-remainingTime = turnTimeSeconds - (Date.now() - turn_started_at) / 1000
-```
+### Issues Found (need fixing)
 
-This makes the timer immune to polling resets and keeps both players perfectly in sync.
+**Issue 1: Timer doesn't update after local move (all single-action games)**
+
+When you make a chess/checkers/dominos move, the server updates `turn_started_at = NOW()`, but the client's `dbTurnStartedAt` state only updates on the next poll cycle (3-5 seconds later). During that gap:
+- Your timer shows stale time from the previous turn
+- The opponent's device also shows stale time until their poll catches up
+- This creates the "all over the place" visual desync
+
+**Fix**: After submitting a move locally, immediately set `dbTurnStartedAt` to the current time as a best-effort local estimate. The next poll will overwrite it with the authoritative server timestamp.
+
+**Issue 2: "Settle" button flashing on win screen**
+
+The `useAutoSettlement` hook fires when `winnerWallet` changes, but the settlement is async (takes 1-3 seconds for on-chain confirmation). During that window, the GameEndScreen may show a "Settle" button because `result` is still null. This is a UI timing issue -- the settlement IS automatic, but the button appears before it completes.
+
+**Fix**: Pass `autoSettlement.isSettling` to GameEndScreen to hide/disable the settle button while auto-settlement is in progress.
+
+**Issue 3: Stale rooms in room list**
+
+Previous test sessions that weren't properly closed remain in `waiting` or `active` status. This is expected behavior for rooms that failed settlement or were abandoned before the 3-strike timeout completed. No code fix needed -- these will be cleaned up by the sweep-orphan-vault function or manual cleanup.
 
 ## Technical Changes
 
-### 1. Update `useTurnTimer` interface and implementation (`src/hooks/useTurnTimer.ts`)
+### 1. Chess, Checkers, Dominos: Set `dbTurnStartedAt` after local move
 
-**New prop**: Add `turnStartedAt: string | null` to `UseTurnTimerOptions`.
-
-**Replace countdown logic**: Instead of `setInterval` that decrements `prev - 1`, use a `setInterval` that computes remaining time from the server timestamp on every tick:
+In each game's move handler, immediately after persisting the move, update the local timer anchor:
 
 ```typescript
-intervalRef.current = setInterval(() => {
-  if (!turnStartedAt) return;
-  const elapsed = (Date.now() - new Date(turnStartedAt).getTime()) / 1000;
-  const remaining = Math.max(0, turnTimeSeconds - elapsed);
-  setRemainingTime(Math.ceil(remaining));
-
-  if (remaining <= 0 && !hasExpiredRef.current) {
-    hasExpiredRef.current = true;
-    clearTimerInterval();
-    setTimeout(() => onTimeExpired?.(), 0);
-  }
-}, 1000);
+// After persistMove call
+setDbTurnStartedAt(new Date().toISOString());
 ```
 
-**Remove `isMyTurn` reset effect**: The effect at line 91-95 that calls `resetTimer()` whenever `isMyTurn` changes is no longer needed -- the timer is always derived from `turnStartedAt`. When `turnStartedAt` changes (real turn transition), the timer naturally resets.
+Files:
+- `src/pages/ChessGame.tsx` -- in `handleSquareClick` after `persistMove` (around line 1228)
+- `src/pages/CheckersGame.tsx` -- in move handler after `persistMove`
+- `src/pages/DominosGame.tsx` -- in move handler after `persistMove`
 
-**Remove `resetTimer` and related methods**: `resetTimer`, `pauseTimer`, `resumeTimer` become unnecessary since the timer is purely derived from the server timestamp. Keep the interface shape but make them no-ops to avoid breaking callers.
+### 2. GameEndScreen: Hide settle button during auto-settlement
 
-### 2. Pass `turnStartedAt` from game pages to `useTurnTimer`
+Pass `isSettling` from `useAutoSettlement` to `GameEndScreen` to suppress the manual settle button while the automatic process is running.
 
-Each game page already has access to `turn_started_at` from the game session data. Pass it through to the hook.
+Files:
+- `src/pages/ChessGame.tsx` -- pass `isSettling={autoSettlement.isSettling}` to GameEndScreen
+- `src/pages/CheckersGame.tsx` -- same
+- `src/pages/BackgammonGame.tsx` -- same
+- `src/pages/DominosGame.tsx` -- same
+- `src/pages/LudoGame.tsx` -- same
+- `src/components/GameEndScreen.tsx` -- accept `isSettling` prop, hide settle button when true
 
-**Files affected** (add `turnStartedAt` prop):
-- `src/pages/ChessGame.tsx`
-- `src/pages/CheckersGame.tsx`
-- `src/pages/BackgammonGame.tsx`
-- `src/pages/DominosGame.tsx`
-- `src/pages/LudoGame.tsx`
+### 3. Clean up harmless dead code (optional, low priority)
 
-### 3. Remove polling dependency on `turnTimer.resetTimer`
+The `turnTimer.resetTimer()` calls scattered across polling handlers are no-ops and harmless. They can stay for now -- removing them is cosmetic cleanup only.
 
-Since the timer no longer needs manual resets, remove `turnTimer.resetTimer` from polling effect dependency arrays in all 5 game pages.
+## What NOT to change
 
-## Summary of changes
+- `useTurnTimer.ts` -- already correct, no changes needed
+- `submit_game_move` RPC -- auto-flip logic is correct
+- `maybe_apply_turn_timeout` RPC -- grace period fix is already deployed
+- `useAutoSettlement` -- logic is correct, only UI integration needs adjustment
+- Backgammon turn flow -- multi-move turns working correctly
+- Ludo elimination flow -- working correctly
+
+## Summary
 
 | File | Change |
 |------|--------|
-| `src/hooks/useTurnTimer.ts` | Add `turnStartedAt` prop; replace decrement countdown with server-anchored calculation; remove `isMyTurn`-triggered reset effect |
-| `src/pages/ChessGame.tsx` | Pass `turnStartedAt` to `useTurnTimer`; remove `turnTimer.resetTimer` from polling deps |
-| `src/pages/CheckersGame.tsx` | Same |
-| `src/pages/BackgammonGame.tsx` | Same |
-| `src/pages/DominosGame.tsx` | Same |
-| `src/pages/LudoGame.tsx` | Same |
+| `src/pages/ChessGame.tsx` | Set `dbTurnStartedAt` after local move; pass `isSettling` to GameEndScreen |
+| `src/pages/CheckersGame.tsx` | Set `dbTurnStartedAt` after local move; pass `isSettling` to GameEndScreen |
+| `src/pages/DominosGame.tsx` | Set `dbTurnStartedAt` after local move; pass `isSettling` to GameEndScreen |
+| `src/pages/BackgammonGame.tsx` | Pass `isSettling` to GameEndScreen (timer already updates on turn_end) |
+| `src/pages/LudoGame.tsx` | Pass `isSettling` to GameEndScreen |
+| `src/components/GameEndScreen.tsx` | Accept `isSettling` prop; hide settle button while settling |
 
-No database changes needed -- the RPC fix from the previous migration is working correctly (timeouts at ~12s = 10s + 2s grace).
+No database changes needed.
+
