@@ -1206,7 +1206,8 @@ const ChessGame = () => {
         recordPlayerMove(address || "", result.san);
         
         // Send move via WebRTC
-        const moveData: ChessMove = {
+        const moveData: ChessMove & { type?: string } = {
+          type: 'chess_move',
           from,
           to,
           promotion,
