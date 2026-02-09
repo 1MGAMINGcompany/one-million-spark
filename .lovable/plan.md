@@ -1,79 +1,77 @@
 
 
-# Fix Chess FEN Desync on Self-Timeout + Timer Display Per-Turn-Owner
+# Fix Chess Timeout UX: Timer Jump + Board Freeze
 
-## Test Results Summary (Room Gu8HCXHM, 10s turns)
+## Changes
 
-The game played 8 turns: 2 timeouts for Fbk1, 1 timeout for 4aTb, 5 successful chess moves, ending in a manual resign/forfeit.
+### 1. useTurnTimer.ts (line 63-67) — Eliminate timer "jump"
 
-The FEN flip patch from earlier IS working for polling-detected timeouts (turns 2-6 played successfully after turn 1 timeout). However, two issues remain:
-
----
-
-## Bug #1: FEN not flipped on SELF-timeout
-
-**File:** `src/pages/ChessGame.tsx`, lines 573-583
-
-When `handleTurnTimeout` fires (your OWN turn expired), it calls the server RPC and gets `result.nextTurnWallet`. It then sets `setTurnOverrideWallet(result.nextTurnWallet)` -- but does NOT flip the chess.js FEN active color. The FEN flip was only added to:
-- Polling handler (line 713) -- works
-- Visibility handler (line 814) -- works
-- Self-timeout handler (line 582) -- MISSING
-
-This means after your own timeout, the opponent's engine still thinks it's your color's turn. Their move is rejected by chess.js.
-
-**Fix:** Add the same FEN flip after line 582:
+When `turnStartedAt` changes (new turn detected), immediately set `remainingTime` to the full `turnTimeSeconds`. This prevents the "0 then 10" visual glitch. The next 1-second tick will recompute from the server anchor (at most 1s off).
 
 ```typescript
-setTurnOverrideWallet(result.nextTurnWallet);
-
-// Flip chess.js FEN active color to match server state
-setGame(prev => {
-  const fen = prev.fen();
-  const parts = fen.split(' ');
-  parts[1] = parts[1] === 'w' ? 'b' : 'w';
-  try { return new Chess(parts.join(' ')); }
-  catch { return prev; }
-});
+useEffect(() => {
+  if (turnStartedAt) {
+    hasExpiredRef.current = false;
+    setRemainingTime(turnTimeSeconds); // snap to full time immediately
+  }
+}, [turnStartedAt, turnTimeSeconds]);
 ```
 
----
+### 2. ChessGame.tsx — Snap `dbTurnStartedAt` in all timeout/turn-change handlers
 
-## Bug #2: Timer visible to both players
+The timer derives from `dbTurnStartedAt`. Currently, only `turnOverrideWallet` is set after timeouts -- the timer anchor is never updated, so the timer shows stale/expired values until the next full poll cycle.
 
-**File:** `src/components/TurnStatusHeader.tsx`, line 118
-
-Currently, the timer displays whenever `showTimer && remainingTime > 0`. Both players see the same countdown ticking. The user wants:
-- Timer ONLY visible to the player whose turn it is
-- When it becomes your turn, timer starts at the full chosen time (e.g., 10s)
-- When it's opponent's turn, no timer shown to you
-
-**Fix:** Change line 118 from:
-
+**Line 582 (self-timeout handler):** Add after `setTurnOverrideWallet`:
 ```typescript
-{showTimer && remainingTime > 0 && (
+setDbTurnStartedAt(new Date().toISOString());
 ```
 
+**Line 717-718 (polling timeout handler):** Add after `setTurnOverrideWallet`:
+```typescript
+setDbTurnStartedAt(new Date().toISOString());
+```
+
+**Line 750-751 (polling turn-change handler):** Replace `turnTimer.resetTimer()` with:
+```typescript
+setDbTurnStartedAt(data?.session?.turn_started_at || new Date().toISOString());
+```
+
+**Line 819-820 (visibility handler):** Replace `turnTimer.resetTimer()` with:
+```typescript
+setDbTurnStartedAt(data?.session?.turn_started_at || new Date().toISOString());
+```
+
+### 3. ChessGame.tsx line 780 — Remove `turnOverrideWallet` from polling deps
+
+`turnOverrideWallet` is in the polling effect's dependency array. Every time it changes (after a timeout), the effect re-creates, restarting the interval. During this restart gap, the next poll is delayed. Removing it prevents interval disruption.
+
+Change line 780 from:
+```
+address, turnOverrideWallet, activeTurnAddress, roomPlayers,
+```
 to:
-
-```typescript
-{showTimer && remainingTime > 0 && isMyTurn && (
+```
+address, activeTurnAddress, roomPlayers,
 ```
 
-The `isMyTurn` prop is already passed to `TurnStatusHeader`. This hides the countdown when it's not your turn, and shows it starting from full time when your turn begins (since `useTurnTimer` resets from `turnStartedAt`).
+The polling callback already reads `turnOverrideWallet` via the closure at comparison time -- it doesn't need it as a dep since we compare against `activeTurnAddress` which IS in deps.
 
----
+## Files Modified
 
-## Files to Modify
+| File | Lines | Change |
+|------|-------|--------|
+| `src/hooks/useTurnTimer.ts` | 63-67 | Add `setRemainingTime(turnTimeSeconds)` on turnStartedAt change |
+| `src/pages/ChessGame.tsx` | 582 | Add `setDbTurnStartedAt(now)` in self-timeout handler |
+| `src/pages/ChessGame.tsx` | 717-718 | Add `setDbTurnStartedAt(now)` in polling timeout handler |
+| `src/pages/ChessGame.tsx` | 750-751 | Set `dbTurnStartedAt` from server value in polling turn-change |
+| `src/pages/ChessGame.tsx` | 819-820 | Set `dbTurnStartedAt` from server value in visibility handler |
+| `src/pages/ChessGame.tsx` | 780 | Remove `turnOverrideWallet` from polling effect deps |
 
-| File | Line | Change |
-|------|------|--------|
-| `src/pages/ChessGame.tsx` | 582 | Add FEN flip after `setTurnOverrideWallet` in self-timeout handler |
-| `src/components/TurnStatusHeader.tsx` | 118 | Add `isMyTurn &&` condition to timer display |
-
-## Verification Checklist
+## Verification
 
 1. Create ranked chess game with 10s turns
-2. Let White's timer expire (self-timeout fires via `handleTurnTimeout`)
-3. Black's board is enabled, Black can move a piece (FEN is flipped)
-4. While it's Black's turn, White does NOT see a countdown timer
-5. When turn flips to White, timer appears starting at 10s
+2. Let White's timer expire -- Black sees timer start at 10s (no jump from 0)
+3. Black can move immediately (board is not frozen)
+4. Let White timeout twice in a row -- Black can still move after each one
+5. Timer is only visible to the player whose turn it is
+
