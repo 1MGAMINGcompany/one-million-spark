@@ -51,6 +51,7 @@ serve(async (req) => {
     const turnTimeSecondsRaw = payload?.turnTimeSeconds;
     const mode = payload?.mode as Mode;
     const creatorWallet = payload?.creatorWallet;
+    const gameType = payload?.gameType || "unknown";
 
     // Validate required fields
     if (!roomPda || typeof roomPda !== "string") {
@@ -131,6 +132,7 @@ serve(async (req) => {
         .update({
           turn_time_seconds: turnTimeSeconds,
           mode,
+          game_type: gameType,
         })
         .eq("room_pda", roomPda);
 
@@ -153,7 +155,7 @@ serve(async (req) => {
         .insert({
           room_pda: roomPda,
           player1_wallet: creatorWallet || "",
-          game_type: "backgammon", // Default, will be updated when game starts
+          game_type: gameType,
           game_state: {},
           status: "waiting",
           mode,
