@@ -87,8 +87,14 @@ export function useTurnTimer(options: UseTurnTimerOptions): UseTurnTimerResult {
       if (remaining <= 0 && !hasExpiredRef.current) {
         hasExpiredRef.current = true;
         clearTimerInterval();
-        console.log(`[useTurnTimer] Time expired for room ${roomId}!`);
-        setTimeout(() => onTimeExpired?.(), 0);
+        // CRITICAL: Only fire the timeout action if it's MY turn.
+        // The timer displays for both players, but only the turn holder triggers the RPC.
+        if (isMyTurn) {
+          console.log(`[useTurnTimer] Time expired for room ${roomId} (my turn) — triggering timeout`);
+          setTimeout(() => onTimeExpired?.(), 0);
+        } else {
+          console.log(`[useTurnTimer] Time expired for room ${roomId} (opponent's turn) — waiting for poll`);
+        }
       }
     };
 
@@ -98,7 +104,7 @@ export function useTurnTimer(options: UseTurnTimerOptions): UseTurnTimerResult {
     intervalRef.current = setInterval(computeRemaining, 1000);
 
     return () => clearTimerInterval();
-  }, [enabled, turnStartedAt, turnTimeSeconds, onTimeExpired, roomId, clearTimerInterval]);
+  }, [enabled, turnStartedAt, turnTimeSeconds, isMyTurn, onTimeExpired, roomId, clearTimerInterval]);
 
   // Cleanup on unmount
   useEffect(() => {
