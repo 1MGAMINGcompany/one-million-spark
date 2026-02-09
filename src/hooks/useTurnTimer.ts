@@ -63,8 +63,9 @@ export function useTurnTimer(options: UseTurnTimerOptions): UseTurnTimerResult {
   useEffect(() => {
     if (turnStartedAt) {
       hasExpiredRef.current = false;
+      setRemainingTime(turnTimeSeconds); // snap to full time immediately
     }
-  }, [turnStartedAt]);
+  }, [turnStartedAt, turnTimeSeconds]);
 
   // Main timer effect: compute remaining from server timestamp
   useEffect(() => {
