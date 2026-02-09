@@ -92,6 +92,7 @@ interface PersistedGameState {
   currentTurnPlayer: 1 | 2;
   gameOver: boolean;
   winner: "player1" | "player2" | "draw" | null;
+  winnerSeat?: number;
 }
 
 const generateDominoSet = (): Domino[] => {
@@ -304,6 +305,9 @@ const DominosGame = () => {
       currentTurnPlayer,
       gameOver,
       winner: winnerValue,
+      ...(gameOver && winnerValue && winnerValue !== "draw"
+        ? { winnerSeat: winnerValue === "player1" ? 0 : 1 }
+        : {}),
     };
   }, [chain, boneyard, player1DrawnIds, player2DrawnIds, isMyTurn, amIPlayer1, gameOver, winner]);
 

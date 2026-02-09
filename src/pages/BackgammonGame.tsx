@@ -75,6 +75,7 @@ interface PersistedBackgammonState {
   currentPlayer: "player" | "ai";
   gameOver: boolean;
   gameStatus: string;
+  winnerSeat?: number;
 }
 
 // Multiplayer move message
@@ -494,6 +495,9 @@ const BackgammonGame = () => {
         currentPlayer,
         gameOver,
         gameStatus,
+        ...(gameOver && winnerWallet && roomPlayers.length >= 2
+          ? { winnerSeat: roomPlayers.indexOf(winnerWallet) >= 0 ? roomPlayers.indexOf(winnerWallet) : undefined }
+          : {}),
       };
       saveBackgammonSession(
         persisted,

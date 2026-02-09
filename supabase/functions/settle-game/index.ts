@@ -482,7 +482,7 @@ Deno.serve(async (req: Request) => {
     // ─────────────────────────────────────────────────────────────
     const { data: sessionRow, error: sessionError } = await supabase
       .from("game_sessions")
-      .select("game_state, game_type")
+      .select("game_state, game_type, winner_wallet")
       .eq("room_pda", roomPda)
       .single();
 
@@ -501,10 +501,35 @@ Deno.serve(async (req: Request) => {
     // ─────────────────────────────────────────────────────────────
     // STEP 3: RESOLVE WINNER SEAT FROM GAME STATE
     // ─────────────────────────────────────────────────────────────
-    const seatResult = resolveWinnerSeat(gameState, gameType);
+    let seatResult = resolveWinnerSeat(gameState, gameType);
+
+    // FALLBACK: If resolveWinnerSeat fails (e.g. gameOver is boolean true),
+    // use winner_wallet from game_sessions to find seat in on-chain players[]
+    if ("error" in seatResult) {
+      console.warn("[settle-game] resolveWinnerSeat failed, trying DB fallback:", seatResult.error);
+      
+      const dbWinnerWallet = sessionRow.winner_wallet as string | null;
+      if (dbWinnerWallet) {
+        const seatFromWallet = playersOnChain.indexOf(dbWinnerWallet);
+        if (seatFromWallet >= 0) {
+          console.log("[settle-game] ✅ Fallback: resolved winner from session.winner_wallet", {
+            wallet: dbWinnerWallet.slice(0, 8),
+            seat: seatFromWallet,
+          });
+          seatResult = { seatIndex: seatFromWallet, source: "winnerSeat" as const, rawValue: seatFromWallet };
+        } else {
+          console.error("[settle-game] Fallback failed: winner_wallet not in on-chain players[]", {
+            winnerWallet: dbWinnerWallet.slice(0, 8),
+            players: playersOnChain.map(p => p.slice(0, 8)),
+          });
+        }
+      } else {
+        console.error("[settle-game] Fallback failed: no winner_wallet in game_sessions");
+      }
+    }
 
     if ("error" in seatResult) {
-      console.error("[settle-game] Cannot resolve winner seat:", seatResult.error);
+      console.error("[settle-game] Cannot resolve winner seat (all methods exhausted):", seatResult.error);
       return json200({
         success: false,
         error: `Cannot resolve winner seat: ${seatResult.error}`,
