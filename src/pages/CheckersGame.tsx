@@ -1125,6 +1125,7 @@ const CheckersGame = () => {
           // Persist move to DB for ranked games (durable sync)
           if (isRankedGame && address) {
             persistMove(moveData, address);
+            setDbTurnStartedAt(new Date().toISOString());
           }
           
           recordPlayerMove(address || "", "capture");
@@ -1182,6 +1183,7 @@ const CheckersGame = () => {
         // Persist move to DB for ranked games (durable sync)
         if (isRankedGame && address) {
           persistMove(moveData, address);
+          setDbTurnStartedAt(new Date().toISOString());
         }
         
         recordPlayerMove(address || "", move.captures ? "capture" : "move");
@@ -1544,6 +1546,7 @@ const CheckersGame = () => {
           onExit={() => navigate("/room-list")}
           roomPda={roomPda}
           isStaked={isRankedGame}
+          isSettling={autoSettlement.isSettling}
         />
       )}
 

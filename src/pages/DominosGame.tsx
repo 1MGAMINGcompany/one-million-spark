@@ -1242,6 +1242,7 @@ const DominosGame = () => {
     // Persist move to DB for ranked games
     if (isRankedGame && address) {
       persistMove(moveData, address);
+      setDbTurnStartedAt(new Date().toISOString());
     }
     
     recordPlayerMove(address || "", "played");
@@ -1748,6 +1749,7 @@ const DominosGame = () => {
           onExit={() => navigate("/room-list")}
           roomPda={roomPda}
           isStaked={entryFeeSol > 0}
+          isSettling={autoSettlement.isSettling}
         />
       )}
 

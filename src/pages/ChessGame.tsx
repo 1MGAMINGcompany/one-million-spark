@@ -1224,9 +1224,11 @@ const ChessGame = () => {
         // Persist move to DB for ranked games
         if (isRankedGame && address) {
           persistMove(moveData, address);
+          // Immediately anchor timer to now (server will overwrite on next poll)
+          setDbTurnStartedAt(new Date().toISOString());
         }
         
-        // Reset turn timer
+        // Reset turn timer (no-op, kept for compat)
         turnTimer.resetTimer();
         
         // Check game over
@@ -1499,6 +1501,7 @@ const ChessGame = () => {
           result={gameStatus.includes("Checkmate") ? "Checkmate" : gameStatus.includes("Stalemate") ? "Stalemate" : undefined}
           roomPda={roomPda}
           isStaked={isRankedGame}
+          isSettling={autoSettlement.isSettling}
         />
       )}
 

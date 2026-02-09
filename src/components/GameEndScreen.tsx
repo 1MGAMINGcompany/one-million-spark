@@ -41,6 +41,7 @@ interface GameEndScreenProps {
   roomPda?: string; // Room PDA for finalization
   isStaked?: boolean; // Whether this is a staked game requiring finalization
   isRematch?: boolean; // Whether this game was created as a rematch
+  isSettling?: boolean; // Whether auto-settlement is in progress
 }
 
 // Default pubkey (11111111111111111111111111111111) indicates no winner set yet
@@ -163,6 +164,7 @@ export function GameEndScreen({
   roomPda,
   isStaked,
   isRematch,
+  isSettling,
 }: GameEndScreenProps) {
   const { t } = useTranslation();
   const { connection } = useConnection();
@@ -248,7 +250,8 @@ export function GameEndScreen({
   }, [roomPda, isStaked, connection]);
   
   // Show finalize button for staked games with a winner OR draw
-  const showFinalizeButton = isStaked && roomPda && winner;
+  // Hide while auto-settlement is in progress
+  const showFinalizeButton = isStaked && roomPda && winner && !isSettling;
   const showDrawSettlement = isStaked && roomPda && isDraw;
   const isAlreadySettled = roomAlreadySettled || finalizeState === 'success';
   
