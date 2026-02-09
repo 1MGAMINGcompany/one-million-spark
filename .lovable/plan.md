@@ -1,72 +1,71 @@
 
-# Fix: Turn Timer Problems -- Stagnant Display and Premature Timeouts
+# Fix: Anchor Turn Timer to Server Time
 
-## Problems Found
+## Problem
 
-### 1. CRITICAL: Grace period is INVERTED in the database RPC (causes premature timeouts)
+The timer counts down from a client-side value and resets every time `isMyTurn` changes. Since polling can trigger `isMyTurn` re-evaluations, the timer gets spurious resets mid-countdown, appearing to jump around. The client timer and the server's `turn_started_at` are fundamentally disconnected.
 
-In the `maybe_apply_turn_timeout` RPC function (line 54), the check is:
+## Solution
 
-```sql
-IF NOW() < v_deadline - INTERVAL '2 seconds' THEN
-  RETURN 'not_expired';
-END IF;
+Replace the client-side decrementing counter with a server-anchored calculation:
+
+```
+remainingTime = turnTimeSeconds - (Date.now() - turn_started_at) / 1000
 ```
 
-This means: "skip if current time is before (deadline minus 2 seconds)." So timeout fires 2 seconds **BEFORE** the turn time expires. With a 10-second turn, the timeout triggers at 8 seconds. This is the opposite of the intended 2-second grace.
-
-**Evidence from the database**: The move timestamps show timeouts happening 8-10 seconds apart -- consistent with a 10-second turn minus a 2-second anti-grace.
-
-The correct logic should be:
-
-```sql
-IF NOW() < v_deadline + INTERVAL '2 seconds' THEN
-  RETURN 'not_expired';
-END IF;
-```
-
-This gives players their full turn time plus a 2-second grace period.
-
-### 2. Timer display frozen (already planned -- approved in previous plan)
-
-The `useTurnTimer` hook gates the countdown on `isMyTurn`, so it never counts down during the opponent's turn. This was already identified and has an approved fix (remove `!isMyTurn` from the countdown condition).
-
-### 3. Polling restarts every second (already planned -- approved in previous plan)
-
-Including the `turnTimer` object in polling effect dependency arrays causes the interval to clear/restart every second.
+This makes the timer immune to polling resets and keeps both players perfectly in sync.
 
 ## Technical Changes
 
-| Change | Detail |
-|--------|--------|
-| **Database migration** | Fix `maybe_apply_turn_timeout` RPC: change `v_deadline - INTERVAL '2 seconds'` to `v_deadline + INTERVAL '2 seconds'` |
-| **`src/hooks/useTurnTimer.ts`** | Remove `!isMyTurn` from countdown gate so timer counts for both turns |
-| **Game pages (5 files)** | Replace `turnTimer` with `turnTimer.resetTimer` in polling effect deps |
+### 1. Update `useTurnTimer` interface and implementation (`src/hooks/useTurnTimer.ts`)
 
-### RPC Fix (most critical)
+**New prop**: Add `turnStartedAt: string | null` to `UseTurnTimerOptions`.
 
-Replace line 54 in `maybe_apply_turn_timeout`:
-```sql
--- BEFORE (fires 2s early):
-IF NOW() < v_deadline - INTERVAL '2 seconds' THEN
+**Replace countdown logic**: Instead of `setInterval` that decrements `prev - 1`, use a `setInterval` that computes remaining time from the server timestamp on every tick:
 
--- AFTER (fires 2s late, giving grace):
-IF NOW() < v_deadline + INTERVAL '2 seconds' THEN
-```
-
-### Timer display fix (`useTurnTimer.ts`)
-
-Change the countdown gate (around line 107):
 ```typescript
-// BEFORE:
-if (!enabled || isPaused || !isMyTurn) {
+intervalRef.current = setInterval(() => {
+  if (!turnStartedAt) return;
+  const elapsed = (Date.now() - new Date(turnStartedAt).getTime()) / 1000;
+  const remaining = Math.max(0, turnTimeSeconds - elapsed);
+  setRemainingTime(Math.ceil(remaining));
 
-// AFTER:
-if (!enabled || isPaused) {
+  if (remaining <= 0 && !hasExpiredRef.current) {
+    hasExpiredRef.current = true;
+    clearTimerInterval();
+    setTimeout(() => onTimeExpired?.(), 0);
+  }
+}, 1000);
 ```
 
-Remove `isMyTurn` from the effect dependency array as well.
+**Remove `isMyTurn` reset effect**: The effect at line 91-95 that calls `resetTimer()` whenever `isMyTurn` changes is no longer needed -- the timer is always derived from `turnStartedAt`. When `turnStartedAt` changes (real turn transition), the timer naturally resets.
 
-### Polling dependency fix (all 5 game pages)
+**Remove `resetTimer` and related methods**: `resetTimer`, `pauseTimer`, `resumeTimer` become unnecessary since the timer is purely derived from the server timestamp. Keep the interface shape but make them no-ops to avoid breaking callers.
 
-In each game's polling `useEffect`, replace `turnTimer` with `turnTimer.resetTimer` in the dependency array to prevent the interval from being torn down and restarted every second.
+### 2. Pass `turnStartedAt` from game pages to `useTurnTimer`
+
+Each game page already has access to `turn_started_at` from the game session data. Pass it through to the hook.
+
+**Files affected** (add `turnStartedAt` prop):
+- `src/pages/ChessGame.tsx`
+- `src/pages/CheckersGame.tsx`
+- `src/pages/BackgammonGame.tsx`
+- `src/pages/DominosGame.tsx`
+- `src/pages/LudoGame.tsx`
+
+### 3. Remove polling dependency on `turnTimer.resetTimer`
+
+Since the timer no longer needs manual resets, remove `turnTimer.resetTimer` from polling effect dependency arrays in all 5 game pages.
+
+## Summary of changes
+
+| File | Change |
+|------|--------|
+| `src/hooks/useTurnTimer.ts` | Add `turnStartedAt` prop; replace decrement countdown with server-anchored calculation; remove `isMyTurn`-triggered reset effect |
+| `src/pages/ChessGame.tsx` | Pass `turnStartedAt` to `useTurnTimer`; remove `turnTimer.resetTimer` from polling deps |
+| `src/pages/CheckersGame.tsx` | Same |
+| `src/pages/BackgammonGame.tsx` | Same |
+| `src/pages/DominosGame.tsx` | Same |
+| `src/pages/LudoGame.tsx` | Same |
+
+No database changes needed -- the RPC fix from the previous migration is working correctly (timeouts at ~12s = 10s + 2s grace).
