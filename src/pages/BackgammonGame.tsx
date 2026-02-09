@@ -1257,27 +1257,12 @@ const BackgammonGame = () => {
     turnTimeSeconds: effectiveTurnTime,
     enabled: isRankedGame && (canPlay || startRoll.isFinalized) && !gameOver,
     isMyTurn: effectiveIsMyTurn,
+    turnStartedAt: dbTurnStartedAt,
     onTimeExpired: handleTurnTimeout,
     roomId: roomPda,
   });
 
-  // Timer visibility handler - resume timer when tab becomes visible
-  useEffect(() => {
-    if (!roomPda || !isRankedGame || gameOver) return;
-    
-    const handleTimerVisibility = () => {
-      if (document.visibilityState === 'visible') {
-        console.log("[BackgammonGame] Tab visible - checking timer state");
-        if (turnTimer.isPaused) {
-          console.log("[BackgammonGame] Resuming paused timer");
-          turnTimer.resumeTimer();
-        }
-      }
-    };
-    
-    document.addEventListener('visibilitychange', handleTimerVisibility);
-    return () => document.removeEventListener('visibilitychange', handleTimerVisibility);
-  }, [roomPda, isRankedGame, gameOver, turnTimer]);
+  // Timer visibility handler - no-op now, timer is server-anchored
   const turnPlayers: TurnPlayer[] = useMemo(() => {
     return roomPlayers.map((playerAddress, index) => {
       const isMe = isSameWallet(playerAddress, address);

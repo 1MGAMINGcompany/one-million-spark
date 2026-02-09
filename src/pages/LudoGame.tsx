@@ -562,6 +562,7 @@ const LudoGame = () => {
     turnTimeSeconds: effectiveTurnTime,
     enabled: isRankedGame && canPlay && !gameOver,
     isMyTurn: isMyTurnLocal,
+    turnStartedAt: dbTurnStartedAt,
     onTimeExpired: handleTurnTimeout,
     roomId: roomPda,
   });
@@ -659,7 +660,7 @@ const LudoGame = () => {
     pollOpponentTimeout();
     const interval = setInterval(pollOpponentTimeout, pollInterval);
     return () => clearInterval(interval);
-  }, [roomPda, isRankedGame, startRoll.isFinalized, gameOver, address, roomPlayers, advanceTurn, turnTimer.resetTimer, play, t]);
+  }, [roomPda, isRankedGame, startRoll.isFinalized, gameOver, address, roomPlayers, advanceTurn, play, t]);
 
   // Convert Ludo players to TurnPlayer format for notifications
   const turnPlayers: TurnPlayer[] = useMemo(() => {
