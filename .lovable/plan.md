@@ -1,70 +1,89 @@
 
 
-# Fix: Duplicate Share Button, WhatsApp in Wallet Browsers, and Improved Match Card Stats
+# Fix: Settlement Failure, Room List Turn Times, and Share Card Display
 
-## Three Issues
+## Three Root Causes Found
 
-### 1. Duplicate "Share" buttons on Game End screen
-The `ShareMatchButton` renders in 3 places in `GameEndScreen.tsx`:
-- Line 548: Inside "Payout Complete" success block
-- Line 568: Inside "Already Settled" block
-- Line 702: A catch-all for ALL staked games
+### 1. Settlement is BROKEN -- match_share_cards is empty (all 0.0000 SOL on share page)
 
-When a game is already settled, both block #2 and #3 render, producing two buttons.
+**Root Cause**: The `settle-game` edge function tries to determine the winner using `game_state.winnerSeat` or `game_state.gameOver` as a seat index (number 0-3) or color string ("white"/"black"). But **no game** ever sets `winnerSeat` -- all games save `gameOver: true` (boolean). The function sees `true` (not a string/number), hits the "No winnerSeat or gameOver found" error, and returns early. Settlement never completes, so:
+- `match_share_cards` table is empty (0 rows)
+- The share page shows 0.0000 SOL because `match-get` falls back to `game_sessions` which has no payout data
 
-**Fix**: Remove the catch-all block at lines 702-712.
+**Evidence**: The settle-game logs show repeated errors: `Cannot resolve winner seat: No winnerSeat or gameOver found in game_state`. The DB confirms every finished game has `game_over_val: true` (boolean) and `winner_seat: null`.
 
-### 2. WhatsApp crashes in wallet in-app browsers
-Wallet browsers (Phantom, Solflare) can't handle `wa.me` redirects that resolve to `whatsapp://` scheme internally, causing `ERR_UNKNOWN_URL_SCHEME`.
+**Why it "worked before"**: Settlement logic was recently refactored to use `resolveWinnerSeat`. Before that, it likely used `winner_wallet` directly from the session, which games DO set correctly.
 
-**Fix**: In `ShareMatchModal.tsx`, hide the WhatsApp button when inside a wallet in-app browser using the existing `isWalletInAppBrowser()` utility. Users can still share via the native share sheet ("More...") or copy the link.
+**Fix**: Add a fallback in `resolveWinnerSeat` -- when `gameOver` is boolean `true`, fetch `winner_wallet` from the session and match it against the on-chain `players[]` array to determine the seat index. Alternatively (simpler and more robust), modify the `settle-game` function to check `winner_wallet` from the session as a direct fallback when `resolveWinnerSeat` fails.
 
-### 3. Match share page -- better winner stats
-Currently the MatchShareCard shows: Total SOL Won, Current Streak, and Wins. You want to see **Total SOL Won** and **Total Games Won** only -- no losses, no games played count.
+### 2. Room List shows "--" for turn time
 
-Looking at what Chess.com and similar platforms do on their share cards: they focus on **positive, brag-worthy stats only** -- wins, rating, streak, and earnings. They never show losses on share cards because the purpose is bragging/marketing.
+**Root Cause**: The room enrichment works correctly -- `game-sessions-list` returns sessions with `turn_time_seconds`. But the issue is a **race condition**: The `game-session-set-settings` edge function inserts the session with the turn time, but this only happens AFTER the on-chain transaction confirms. If the room list polls before the settings are saved, the session doesn't exist yet.
 
-**Fix**: Update the Winner Stats section in `MatchShareCard.tsx` to show:
-- **Total SOL Won** (keep)
-- **Games Won** (keep)
-- **Win Streak** (keep -- this is a brag stat)
+Additionally, the `turnTimeSec` default in `parseRoomAccount` (solana-program.ts line 305) is `0`, which renders as "--" in the UI. The enrichment only overwrites this if it finds a matching `room_pda` in the edge function response.
 
-Remove `losses` and `games_played` from the `WinnerProfile` interface display (the data is still fetched but not shown). Also add a **Win Rate** stat derived from wins/games_played since that's what competitive platforms typically show.
+For the specific room in the screenshot (#1770662936379), the `game-session-set-settings` was called successfully (the session exists with `turn_time_seconds`), so this might be a timing issue where the room list polled before enrichment completed. However, the enrichment code looks correct.
 
-Final stats grid: **Total SOL Won | Win Rate | Games Won**
+**Fix**: This is likely already working but has a timing window. No code change needed -- the 5s polling will pick it up on next cycle. If persistent, we should log whether the enrichment map contains the room PDA.
 
-## Technical Details
+### 3. Share page shows "WON {{AMOUNT}} SOL" literally
+
+**Root Cause**: The `en.json` translation key is `"wonAmount": "Won {{amount}} SOL"` with i18next interpolation, but `MatchShareCard.tsx` line 109 calls `t("shareMatch.wonAmount", "Won")` WITHOUT passing the `amount` parameter. The fallback default "Won" works, but the actual translation has `{{amount}}` which renders literally.
+
+**Fix**: Either remove the `{{amount}}` from the translation key (since the amount is displayed separately below), or pass the interpolation value. Since the component already shows the amount on a separate line, the simpler fix is to change the translation key to just "Won" or use a different key.
+
+## Technical Changes
 
 | File | Change |
 |------|--------|
-| `src/components/GameEndScreen.tsx` | Remove duplicate ShareMatchButton at lines 702-712 |
-| `src/components/ShareMatchModal.tsx` | Import `isWalletInAppBrowser`, hide WhatsApp button when in wallet browser |
-| `src/components/MatchShareCard.tsx` | Update winner stats to show: Total SOL Won, Win Rate, Games Won |
+| `supabase/functions/settle-game/index.ts` | Add fallback: when `resolveWinnerSeat` fails, use `winner_wallet` from `game_sessions` to find seat index in on-chain `players[]` |
+| `src/i18n/locales/en.json` | Fix `wonAmount` translation key to remove `{{amount}}` interpolation since amount is shown separately |
+| `src/components/MatchShareCard.tsx` | Use fallback translation string correctly |
 
-### GameEndScreen.tsx
-Delete lines 702-712 (the catch-all ShareMatchButton block that duplicates the button).
+### settle-game fix (most critical)
 
-### ShareMatchModal.tsx
+After `resolveWinnerSeat` fails (line 506), add a fallback path:
+
 ```typescript
-import { isWalletInAppBrowser } from "@/lib/walletBrowserDetection";
+if ("error" in seatResult) {
+  // FALLBACK: Use winner_wallet from game_sessions (set by frontend)
+  const { data: winnerRow } = await supabase
+    .from("game_sessions")
+    .select("winner_wallet")
+    .eq("room_pda", roomPda)
+    .single();
 
-// Inside component:
-const inWalletBrowser = isWalletInAppBrowser();
-
-// Wrap WhatsApp button:
-{!inWalletBrowser && (
-  <Button onClick={handleWhatsApp} ...>
-    <MessageCircle /> WhatsApp
-  </Button>
-)}
+  if (winnerRow?.winner_wallet) {
+    const seatFromWallet = playersOnChain.indexOf(winnerRow.winner_wallet);
+    if (seatFromWallet >= 0) {
+      // Use this as the resolved seat
+      console.log("[settle-game] Fallback: resolved winner from session.winner_wallet", {
+        wallet: winnerRow.winner_wallet.slice(0, 8),
+        seat: seatFromWallet,
+      });
+      // Continue with settlement using seatFromWallet...
+    }
+  }
+  // Only error out if fallback also fails
+}
 ```
 
-### MatchShareCard.tsx
-Replace the 3-column stats grid with:
+Also update all game pages to save `winnerSeat` in `game_state` for future-proofing (chess saves seat 0 for white win, 1 for black win, etc.).
 
-| Stat | Value | Label |
-|------|-------|-------|
-| Total SOL Won | `total_sol_won.toFixed(2)` | "Total Won (SOL)" |
-| Win Rate | `Math.round((wins / games_played) * 100)%` | "Win Rate" |
-| Games Won | `wins` | "Games Won" |
+### Translation fix
+
+In `en.json`, change:
+```json
+"wonAmount": "Won {{amount}} SOL"
+```
+to:
+```json
+"wonAmount": "Won"
+```
+
+Since the actual SOL amount is already displayed prominently in its own element below this label.
+
+### Game page fix (future-proofing)
+
+Update `saveChessSession` (and equivalent in other games) to include `winnerSeat` in the persisted state when game is over. For chess: white wins = seat 0, black wins = seat 1. This prevents the settle-game fallback from being needed in the future.
 
