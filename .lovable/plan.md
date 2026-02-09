@@ -1,89 +1,96 @@
 
 
-# Fix: Settlement Failure, Room List Turn Times, and Share Card Display
+# Fix: Settlement Still Broken -- Two Missing Dependencies
 
-## Three Root Causes Found
+## Problem
 
-### 1. Settlement is BROKEN -- match_share_cards is empty (all 0.0000 SOL on share page)
+The settle-game fallback added in the previous change will **never work** because:
 
-**Root Cause**: The `settle-game` edge function tries to determine the winner using `game_state.winnerSeat` or `game_state.gameOver` as a seat index (number 0-3) or color string ("white"/"black"). But **no game** ever sets `winnerSeat` -- all games save `gameOver: true` (boolean). The function sees `true` (not a string/number), hits the "No winnerSeat or gameOver found" error, and returns early. Settlement never completes, so:
-- `match_share_cards` table is empty (0 rows)
-- The share page shows 0.0000 SOL because `match-get` falls back to `game_sessions` which has no payout data
+1. **`winnerSeat` is never persisted to `game_state`** -- The save effect in Chess, Checkers, and Backgammon uses `winnerWallet` to compute `winnerSeat`, but `winnerWallet` is NOT in the `useEffect` dependency array. When `gameOver` becomes true, `winnerWallet` is still null (set by a separate handler). The save fires once without `winnerSeat`, then never re-fires when `winnerWallet` arrives.
 
-**Evidence**: The settle-game logs show repeated errors: `Cannot resolve winner seat: No winnerSeat or gameOver found in game_state`. The DB confirms every finished game has `game_over_val: true` (boolean) and `winner_seat: null`.
+2. **`winner_wallet` is always null in `game_sessions`** -- The `finishSession()` function in `useGameSessionPersistence.ts` hardcodes `p_winner_wallet: null`. So the DB fallback in settle-game reads null and also fails.
 
-**Why it "worked before"**: Settlement logic was recently refactored to use `resolveWinnerSeat`. Before that, it likely used `winner_wallet` directly from the session, which games DO set correctly.
+Both paths to resolve the winner in settle-game are broken -- the game_state path and the DB fallback path.
 
-**Fix**: Add a fallback in `resolveWinnerSeat` -- when `gameOver` is boolean `true`, fetch `winner_wallet` from the session and match it against the on-chain `players[]` array to determine the seat index. Alternatively (simpler and more robust), modify the `settle-game` function to check `winner_wallet` from the session as a direct fallback when `resolveWinnerSeat` fails.
+## Fix
 
-### 2. Room List shows "--" for turn time
+### 1. Add `winnerWallet` to save effect dependency arrays (4 files)
 
-**Root Cause**: The room enrichment works correctly -- `game-sessions-list` returns sessions with `turn_time_seconds`. But the issue is a **race condition**: The `game-session-set-settings` edge function inserts the session with the turn time, but this only happens AFTER the on-chain transaction confirms. If the room list polls before the settings are saved, the session doesn't exist yet.
+| File | Line | Current deps | Add |
+|------|------|-------------|-----|
+| `ChessGame.tsx` | 337 | `[game, moveHistory, gameOver, gameStatus, roomPlayers, saveChessSession, roomMode]` | `winnerWallet` |
+| `CheckersGame.tsx` | 285 | `[board, currentPlayer, gameOver, roomPlayers, saveCheckersSession, roomMode]` | `winnerWallet` |
+| `BackgammonGame.tsx` | 511 | `[gameState, dice, ..., roomPlayers, saveBackgammonSession, roomMode]` | `winnerWallet` |
+| `LudoGame.tsx` | 282 | Ludo uses `gameOver` directly as winner -- verify if dependency needed |
 
-Additionally, the `turnTimeSec` default in `parseRoomAccount` (solana-program.ts line 305) is `0`, which renders as "--" in the UI. The enrichment only overwrites this if it finds a matching `room_pda` in the edge function response.
+This ensures that when `winnerWallet` is set after `gameOver`, the save effect re-fires and persists `winnerSeat` in the game_state.
 
-For the specific room in the screenshot (#1770662936379), the `game-session-set-settings` was called successfully (the session exists with `turn_time_seconds`), so this might be a timing issue where the room list polled before enrichment completed. However, the enrichment code looks correct.
+### 2. Pass `winnerWallet` to `finishSession` (1 file + 5 callers)
 
-**Fix**: This is likely already working but has a timing window. No code change needed -- the 5s polling will pick it up on next cycle. If persistent, we should log whether the enrichment map contains the room PDA.
+Update `useGameSessionPersistence.ts`:
+- Add optional `winnerWallet` parameter to `finishSession`
+- Pass it as `p_winner_wallet` instead of hardcoded `null`
 
-### 3. Share page shows "WON {{AMOUNT}} SOL" literally
+Update all game pages' finish effect to pass `winnerWallet`:
+```typescript
+useEffect(() => {
+  if (gameOver && roomPlayers.length >= 2) {
+    finishSession(winnerWallet);  // was: finishSession()
+  }
+}, [gameOver, roomPlayers.length, finishSession, winnerWallet]);
+```
 
-**Root Cause**: The `en.json` translation key is `"wonAmount": "Won {{amount}} SOL"` with i18next interpolation, but `MatchShareCard.tsx` line 109 calls `t("shareMatch.wonAmount", "Won")` WITHOUT passing the `amount` parameter. The fallback default "Won" works, but the actual translation has `{{amount}}` which renders literally.
+This ensures `game_sessions.winner_wallet` is set before settle-game reads it.
 
-**Fix**: Either remove the `{{amount}}` from the translation key (since the amount is displayed separately below), or pass the interpolation value. Since the component already shows the amount on a separate line, the simpler fix is to change the translation key to just "Won" or use a different key.
+### 3. Add `winnerWallet` to finish effect dependency arrays (5 files)
 
-## Technical Changes
+The finish effect also needs `winnerWallet` in its deps so it re-fires when the winner is determined. Currently it fires immediately when `gameOver` becomes true but `winnerWallet` might still be null.
+
+## Technical Details
+
+### useGameSessionPersistence.ts change
+
+```typescript
+const finishSession = useCallback(async (winnerWallet?: string | null) => {
+  if (!roomPda || !enabled) return;
+  try {
+    const { error } = await supabase.rpc('finish_game_session', {
+      p_room_pda: roomPda,
+      p_caller_wallet: callerWallet || null,
+      p_winner_wallet: winnerWallet || null,  // was: null
+    });
+    // ...
+  }
+}, [roomPda, enabled, callerWallet]);
+```
+
+### Game page save effect fix (example: ChessGame.tsx)
+
+```typescript
+}, [game, moveHistory, gameOver, gameStatus, roomPlayers, saveChessSession, roomMode, winnerWallet]);
+//                                                                                    ^^^^^^^^^^^^ ADDED
+```
+
+### Game page finish effect fix (example: ChessGame.tsx)
+
+```typescript
+useEffect(() => {
+  if (gameOver && roomPlayers.length >= 2 && winnerWallet) {
+    finishChessSession(winnerWallet);
+  }
+}, [gameOver, roomPlayers.length, finishChessSession, winnerWallet]);
+```
+
+Note: We gate on `winnerWallet` being truthy to ensure we don't call finish with null. For draws, the draw settlement path handles it separately.
+
+## Files Changed
 
 | File | Change |
 |------|--------|
-| `supabase/functions/settle-game/index.ts` | Add fallback: when `resolveWinnerSeat` fails, use `winner_wallet` from `game_sessions` to find seat index in on-chain `players[]` |
-| `src/i18n/locales/en.json` | Fix `wonAmount` translation key to remove `{{amount}}` interpolation since amount is shown separately |
-| `src/components/MatchShareCard.tsx` | Use fallback translation string correctly |
-
-### settle-game fix (most critical)
-
-After `resolveWinnerSeat` fails (line 506), add a fallback path:
-
-```typescript
-if ("error" in seatResult) {
-  // FALLBACK: Use winner_wallet from game_sessions (set by frontend)
-  const { data: winnerRow } = await supabase
-    .from("game_sessions")
-    .select("winner_wallet")
-    .eq("room_pda", roomPda)
-    .single();
-
-  if (winnerRow?.winner_wallet) {
-    const seatFromWallet = playersOnChain.indexOf(winnerRow.winner_wallet);
-    if (seatFromWallet >= 0) {
-      // Use this as the resolved seat
-      console.log("[settle-game] Fallback: resolved winner from session.winner_wallet", {
-        wallet: winnerRow.winner_wallet.slice(0, 8),
-        seat: seatFromWallet,
-      });
-      // Continue with settlement using seatFromWallet...
-    }
-  }
-  // Only error out if fallback also fails
-}
-```
-
-Also update all game pages to save `winnerSeat` in `game_state` for future-proofing (chess saves seat 0 for white win, 1 for black win, etc.).
-
-### Translation fix
-
-In `en.json`, change:
-```json
-"wonAmount": "Won {{amount}} SOL"
-```
-to:
-```json
-"wonAmount": "Won"
-```
-
-Since the actual SOL amount is already displayed prominently in its own element below this label.
-
-### Game page fix (future-proofing)
-
-Update `saveChessSession` (and equivalent in other games) to include `winnerSeat` in the persisted state when game is over. For chess: white wins = seat 0, black wins = seat 1. This prevents the settle-game fallback from being needed in the future.
+| `src/hooks/useGameSessionPersistence.ts` | Accept optional `winnerWallet` param in `finishSession`, pass to RPC |
+| `src/pages/ChessGame.tsx` | Add `winnerWallet` to save and finish effect deps, pass to `finishSession` |
+| `src/pages/CheckersGame.tsx` | Same |
+| `src/pages/BackgammonGame.tsx` | Same |
+| `src/pages/DominosGame.tsx` | Same (finish effect only -- save already works) |
+| `src/pages/LudoGame.tsx` | Same |
 
