@@ -1,96 +1,72 @@
 
+# Fix: Turn Timer Problems -- Stagnant Display and Premature Timeouts
 
-# Fix: Settlement Still Broken -- Two Missing Dependencies
+## Problems Found
 
-## Problem
+### 1. CRITICAL: Grace period is INVERTED in the database RPC (causes premature timeouts)
 
-The settle-game fallback added in the previous change will **never work** because:
+In the `maybe_apply_turn_timeout` RPC function (line 54), the check is:
 
-1. **`winnerSeat` is never persisted to `game_state`** -- The save effect in Chess, Checkers, and Backgammon uses `winnerWallet` to compute `winnerSeat`, but `winnerWallet` is NOT in the `useEffect` dependency array. When `gameOver` becomes true, `winnerWallet` is still null (set by a separate handler). The save fires once without `winnerSeat`, then never re-fires when `winnerWallet` arrives.
-
-2. **`winner_wallet` is always null in `game_sessions`** -- The `finishSession()` function in `useGameSessionPersistence.ts` hardcodes `p_winner_wallet: null`. So the DB fallback in settle-game reads null and also fails.
-
-Both paths to resolve the winner in settle-game are broken -- the game_state path and the DB fallback path.
-
-## Fix
-
-### 1. Add `winnerWallet` to save effect dependency arrays (4 files)
-
-| File | Line | Current deps | Add |
-|------|------|-------------|-----|
-| `ChessGame.tsx` | 337 | `[game, moveHistory, gameOver, gameStatus, roomPlayers, saveChessSession, roomMode]` | `winnerWallet` |
-| `CheckersGame.tsx` | 285 | `[board, currentPlayer, gameOver, roomPlayers, saveCheckersSession, roomMode]` | `winnerWallet` |
-| `BackgammonGame.tsx` | 511 | `[gameState, dice, ..., roomPlayers, saveBackgammonSession, roomMode]` | `winnerWallet` |
-| `LudoGame.tsx` | 282 | Ludo uses `gameOver` directly as winner -- verify if dependency needed |
-
-This ensures that when `winnerWallet` is set after `gameOver`, the save effect re-fires and persists `winnerSeat` in the game_state.
-
-### 2. Pass `winnerWallet` to `finishSession` (1 file + 5 callers)
-
-Update `useGameSessionPersistence.ts`:
-- Add optional `winnerWallet` parameter to `finishSession`
-- Pass it as `p_winner_wallet` instead of hardcoded `null`
-
-Update all game pages' finish effect to pass `winnerWallet`:
-```typescript
-useEffect(() => {
-  if (gameOver && roomPlayers.length >= 2) {
-    finishSession(winnerWallet);  // was: finishSession()
-  }
-}, [gameOver, roomPlayers.length, finishSession, winnerWallet]);
+```sql
+IF NOW() < v_deadline - INTERVAL '2 seconds' THEN
+  RETURN 'not_expired';
+END IF;
 ```
 
-This ensures `game_sessions.winner_wallet` is set before settle-game reads it.
+This means: "skip if current time is before (deadline minus 2 seconds)." So timeout fires 2 seconds **BEFORE** the turn time expires. With a 10-second turn, the timeout triggers at 8 seconds. This is the opposite of the intended 2-second grace.
 
-### 3. Add `winnerWallet` to finish effect dependency arrays (5 files)
+**Evidence from the database**: The move timestamps show timeouts happening 8-10 seconds apart -- consistent with a 10-second turn minus a 2-second anti-grace.
 
-The finish effect also needs `winnerWallet` in its deps so it re-fires when the winner is determined. Currently it fires immediately when `gameOver` becomes true but `winnerWallet` might still be null.
+The correct logic should be:
 
-## Technical Details
-
-### useGameSessionPersistence.ts change
-
-```typescript
-const finishSession = useCallback(async (winnerWallet?: string | null) => {
-  if (!roomPda || !enabled) return;
-  try {
-    const { error } = await supabase.rpc('finish_game_session', {
-      p_room_pda: roomPda,
-      p_caller_wallet: callerWallet || null,
-      p_winner_wallet: winnerWallet || null,  // was: null
-    });
-    // ...
-  }
-}, [roomPda, enabled, callerWallet]);
+```sql
+IF NOW() < v_deadline + INTERVAL '2 seconds' THEN
+  RETURN 'not_expired';
+END IF;
 ```
 
-### Game page save effect fix (example: ChessGame.tsx)
+This gives players their full turn time plus a 2-second grace period.
 
-```typescript
-}, [game, moveHistory, gameOver, gameStatus, roomPlayers, saveChessSession, roomMode, winnerWallet]);
-//                                                                                    ^^^^^^^^^^^^ ADDED
+### 2. Timer display frozen (already planned -- approved in previous plan)
+
+The `useTurnTimer` hook gates the countdown on `isMyTurn`, so it never counts down during the opponent's turn. This was already identified and has an approved fix (remove `!isMyTurn` from the countdown condition).
+
+### 3. Polling restarts every second (already planned -- approved in previous plan)
+
+Including the `turnTimer` object in polling effect dependency arrays causes the interval to clear/restart every second.
+
+## Technical Changes
+
+| Change | Detail |
+|--------|--------|
+| **Database migration** | Fix `maybe_apply_turn_timeout` RPC: change `v_deadline - INTERVAL '2 seconds'` to `v_deadline + INTERVAL '2 seconds'` |
+| **`src/hooks/useTurnTimer.ts`** | Remove `!isMyTurn` from countdown gate so timer counts for both turns |
+| **Game pages (5 files)** | Replace `turnTimer` with `turnTimer.resetTimer` in polling effect deps |
+
+### RPC Fix (most critical)
+
+Replace line 54 in `maybe_apply_turn_timeout`:
+```sql
+-- BEFORE (fires 2s early):
+IF NOW() < v_deadline - INTERVAL '2 seconds' THEN
+
+-- AFTER (fires 2s late, giving grace):
+IF NOW() < v_deadline + INTERVAL '2 seconds' THEN
 ```
 
-### Game page finish effect fix (example: ChessGame.tsx)
+### Timer display fix (`useTurnTimer.ts`)
 
+Change the countdown gate (around line 107):
 ```typescript
-useEffect(() => {
-  if (gameOver && roomPlayers.length >= 2 && winnerWallet) {
-    finishChessSession(winnerWallet);
-  }
-}, [gameOver, roomPlayers.length, finishChessSession, winnerWallet]);
+// BEFORE:
+if (!enabled || isPaused || !isMyTurn) {
+
+// AFTER:
+if (!enabled || isPaused) {
 ```
 
-Note: We gate on `winnerWallet` being truthy to ensure we don't call finish with null. For draws, the draw settlement path handles it separately.
+Remove `isMyTurn` from the effect dependency array as well.
 
-## Files Changed
+### Polling dependency fix (all 5 game pages)
 
-| File | Change |
-|------|--------|
-| `src/hooks/useGameSessionPersistence.ts` | Accept optional `winnerWallet` param in `finishSession`, pass to RPC |
-| `src/pages/ChessGame.tsx` | Add `winnerWallet` to save and finish effect deps, pass to `finishSession` |
-| `src/pages/CheckersGame.tsx` | Same |
-| `src/pages/BackgammonGame.tsx` | Same |
-| `src/pages/DominosGame.tsx` | Same (finish effect only -- save already works) |
-| `src/pages/LudoGame.tsx` | Same |
-
+In each game's polling `useEffect`, replace `turnTimer` with `turnTimer.resetTimer` in the dependency array to prevent the interval from being torn down and restarted every second.
