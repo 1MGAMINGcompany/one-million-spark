@@ -2823,6 +2823,7 @@ const BackgammonGame = () => {
           result={gameResultInfo ? `${formatResultType(gameResultInfo.resultType).label} (${formatResultType(gameResultInfo.resultType).multiplier})` : undefined}
           roomPda={roomPda}
           isStaked={isRankedGame}
+          isSettling={autoSettlement.isSettling}
         />
       )}
       

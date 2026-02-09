@@ -1317,6 +1317,7 @@ const LudoGame = () => {
           onExit={() => navigate("/room-list")}
           roomPda={roomPda}
           isStaked={isRankedGame}
+          isSettling={autoSettlement.isSettling}
         />
       )}
 
