@@ -1,100 +1,92 @@
 
 
-# Backend Security Hardening - Option B (Critical Fixes Only, No Session Tokens)
+# Fix: Pass actual game_type when creating rooms
 
-## Good News: Your Funds Are Already Protected
+## Root Cause
 
-Your edge functions already have **on-chain validation** that prevents hackers from stealing funds:
+The `game-session-set-settings` edge function hardcodes `game_type: "backgammon"` (line 156) when inserting a new session. The comment says "will be updated when game starts" but nothing ever does. This means:
 
-```text
-┌──────────────────────────────────────────────────────────────────────────┐
-│  FORFEIT-GAME.TS (Line 479-497) - ALREADY VALIDATES:                    │
-│                                                                          │
-│  1. Fetches room from SOLANA BLOCKCHAIN (immutable source of truth)     │
-│  2. Extracts players[] array from on-chain account                       │
-│  3. Validates forfeitingWallet IS IN players[] on-chain                  │
-│  4. Rejects if wallet not found: "Player not in this room"              │
-│                                                                          │
-│  RESULT: A hacker can't forfeit games they're not in!                   │
-│  The blockchain itself is the authentication layer.                      │
-└──────────────────────────────────────────────────────────────────────────┘
-```
+- Chess rooms get `game_type: backgammon`
+- The new auto-flip logic (which checks for `chess`/`checkers`/`dominos`) never fires
+- Turns only flip via `maybe_apply_turn_timeout`, which wastes strikes and creates delays
 
-### Alternative to Session Tokens: **On-Chain Player Verification**
+## Why It "Worked Before"
 
-Instead of maintaining session tokens with TTLs, your edge functions already use a simpler and equally secure approach:
+The previous system didn't use `game_type` for turn management. All turn flipping relied on explicit `turn_end` moves or timeout polling. The new migration added game-type-aware auto-flip but the wrong game_type means it's dead code for non-backgammon rooms.
 
-| Check | How It Works |
-|-------|--------------|
-| **forfeit-game** | Fetches room from Solana, validates wallet is in `roomData.players[]` before allowing forfeit |
-| **settle-game** | No wallet input needed - reads winner from `game_sessions.game_state` and maps to on-chain players |
-| **settle-draw** | Same as above - no wallet trust needed |
+## Fix (2 changes)
 
-This is **blockchain-based authentication** - the on-chain players array is immutable and verifiable.
+### 1. Frontend: Send `gameType` in the settings request
 
-## What We WILL Fix: Database RLS Vulnerabilities
+In `src/pages/CreateRoom.tsx`, add the `gameType` field to the `game-session-set-settings` invocation body. The numeric game type ID (e.g., `"1"` for chess) needs to be mapped to the string name the RPC expects.
 
-### Current Problem
+Map: `1 = chess`, `2 = dominos`, `3 = backgammon`, `4 = checkers`, `5 = ludo`
 
-The `matches`, `h2h`, and `settlement_logs` tables currently have **SELECT-only** RLS policies:
+### 2. Edge Function: Accept and use `gameType` parameter
 
-| Table | Current Policies | Risk |
-|-------|-----------------|------|
-| `matches` | Only `SELECT` allowed | ✅ Safe - can't INSERT/UPDATE |
-| `h2h` | Only `SELECT` allowed | ✅ Safe - can't INSERT/UPDATE |  
-| `settlement_logs` | `SELECT` for everyone | ⚠️ Exposes vault balances & errors |
+In `supabase/functions/game-session-set-settings/index.ts`:
 
-Looking at the memory notes and the actual RLS policies, I see the tables already have restrictive policies. Let me verify what's actually happening:
+- Accept optional `gameType` field from the request body
+- Use it in the INSERT (line 156) instead of hardcoded `"backgammon"`
+- Also apply it during UPDATE (line 132) so existing sessions with wrong game_type get corrected
+- Default to `"unknown"` if not provided (backward compat)
 
-### Database Migration to Restrict settlement_logs
+### 3. Fix existing broken sessions (optional cleanup)
 
-```sql
--- 1. Restrict settlement_logs visibility (hide system internals)
--- Current: Anyone can read vault balances, errors, verifier info
--- New: No public access (only edge functions with service role can read/write)
+Any recently created sessions may have the wrong `game_type`. The fix going forward prevents new ones, but old rooms stuck as "backgammon" when they're actually chess won't retroactively change. This is acceptable since those games are already finished.
 
-DROP POLICY IF EXISTS "public read settlement_logs" ON settlement_logs;
-
--- Optional: Allow players to see their own settlements only
-CREATE POLICY "participants_read_own_settlements" ON settlement_logs
-FOR SELECT USING (
-  winner_wallet = current_setting('request.headers', true)::json->>'x-wallet'
-  OR forfeiting_wallet = current_setting('request.headers', true)::json->>'x-wallet'
-);
-```
-
-## Summary: No Password Needed
-
-Your security model is:
-
-| Layer | Protection | Status |
-|-------|-----------|--------|
-| **Funds (SOL)** | VERIFIER_SECRET_KEY_V2 + Solana program validation | ✅ Fully protected |
-| **Settlement calls** | On-chain player[] validation in forfeit-game | ✅ Already implemented |
-| **Win determination** | Read from game_sessions, mapped to on-chain players | ✅ Server-controlled |
-| **Match stats** | RLS allows SELECT only | ✅ Already protected |
-| **Settlement logs** | Public SELECT exposes internals | ⚠️ Needs restriction |
-
-## Implementation
-
-### Files to Modify
+## Technical Details
 
 | File | Change |
 |------|--------|
-| Database Migration | Drop `public read settlement_logs` policy to hide system internals |
+| `src/pages/CreateRoom.tsx` | Add `gameType` name string to the `game-session-set-settings` invocation body |
+| `supabase/functions/game-session-set-settings/index.ts` | Accept `gameType` param, use it in INSERT and UPDATE instead of hardcoded `"backgammon"` |
 
-### What We're NOT Changing
+### CreateRoom.tsx change
 
-- No session token validation (on-chain validation is sufficient)
-- No password protection needed (Helius/Solana keys already protect funds)
-- No changes to matches/h2h tables (already properly locked down)
+Find the call to `game-session-set-settings` and add a `gameType` field derived from the numeric game type:
 
-## Outcome
+```typescript
+const GAME_TYPE_NAMES: Record<string, string> = {
+  "1": "chess",
+  "2": "dominos", 
+  "3": "backgammon",
+  "4": "checkers",
+  "5": "ludo",
+};
 
-After this fix:
-- ✅ Hackers cannot forge match statistics
-- ✅ Hackers cannot close rooms they're not in (on-chain validation)
-- ✅ System internals (vault balances, errors) hidden from public
-- ✅ Leaderboard remains publicly readable
-- ✅ No additional complexity from session token management
+// In the invoke call:
+body: {
+  roomPda,
+  turnTimeSeconds,
+  mode,
+  creatorWallet,
+  gameType: GAME_TYPE_NAMES[gameType] || "unknown",
+}
+```
+
+### Edge Function change
+
+```typescript
+// Accept from payload
+const gameType = payload?.gameType || "unknown";
+
+// Use in INSERT (replacing hardcoded "backgammon")
+game_type: gameType,
+
+// Also set during UPDATE
+.update({
+  turn_time_seconds: turnTimeSeconds,
+  mode,
+  game_type: gameType,  // Fix stale game_type
+})
+```
+
+## Verification
+
+After applying:
+1. Create a ranked chess room with 10s timer
+2. Make a move -- confirm `current_turn_wallet` flips immediately (no timeout needed)
+3. Confirm `game_type` in DB is `chess` (not `backgammon`)
+4. Test backgammon still works correctly with multi-move turns
 
