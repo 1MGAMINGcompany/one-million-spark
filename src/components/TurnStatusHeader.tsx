@@ -115,7 +115,7 @@ export const TurnStatusHeader = memo(function TurnStatusHeader({
         </div>
 
         {/* Timer */}
-        {showTimer && remainingTime > 0 && (
+        {showTimer && remainingTime > 0 && isMyTurn && (
           <div
             className={cn(
               "flex items-center gap-1.5 px-3 py-1.5 rounded-md font-mono",

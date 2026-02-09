@@ -580,6 +580,15 @@ const ChessGame = () => {
           
           // Grant opponent turn via override
           setTurnOverrideWallet(result.nextTurnWallet);
+
+          // Flip chess.js FEN active color to match server state
+          setGame(prev => {
+            const fen = prev.fen();
+            const parts = fen.split(' ');
+            parts[1] = parts[1] === 'w' ? 'b' : 'w';
+            try { return new Chess(parts.join(' ')); }
+            catch { return prev; }
+          });
         }
       }
     } catch (err) {
