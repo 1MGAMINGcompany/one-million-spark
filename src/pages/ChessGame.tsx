@@ -580,6 +580,7 @@ const ChessGame = () => {
           
           // Grant opponent turn via override
           setTurnOverrideWallet(result.nextTurnWallet);
+          setDbTurnStartedAt(new Date().toISOString());
 
           // Flip chess.js FEN active color to match server state
           setGame(prev => {
@@ -715,7 +716,7 @@ const ChessGame = () => {
                 // Turn passed to me - update strikes count
                 setOpponentStrikes(result.strikes || 0);
                 setTurnOverrideWallet(result.nextTurnWallet);
-                turnTimer.resetTimer();
+                setDbTurnStartedAt(new Date().toISOString());
 
                 // Flip chess.js FEN active color to match server state
                 // (timeout is server-only; no chess.js move was made)
@@ -748,7 +749,7 @@ const ChessGame = () => {
           const isNowMyTurn = isSameWallet(dbTurnWallet, address);
           if (isNowMyTurn) {
             setTurnOverrideWallet(dbTurnWallet);
-            turnTimer.resetTimer();
+            setDbTurnStartedAt(data?.session?.turn_started_at || new Date().toISOString());
 
             // Flip chess.js FEN active color if engine disagrees with server
             setGame(prev => {
@@ -777,7 +778,7 @@ const ChessGame = () => {
     return () => clearInterval(interval);
   }, [
     roomPda, isRankedGame, startRoll.isFinalized, gameOver, 
-    address, turnOverrideWallet, activeTurnAddress, roomPlayers,
+    address, activeTurnAddress, roomPlayers,
     play, t
   ]);
 
@@ -817,7 +818,7 @@ const ChessGame = () => {
             const isNowMyTurn = isSameWallet(dbTurnWallet, address);
             if (isNowMyTurn) {
               setTurnOverrideWallet(dbTurnWallet);
-              turnTimer.resetTimer();
+              setDbTurnStartedAt(data?.session?.turn_started_at || new Date().toISOString());
 
               // Flip chess.js FEN active color if engine disagrees with server
               setGame(prev => {
