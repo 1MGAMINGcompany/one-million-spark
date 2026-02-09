@@ -1,91 +1,79 @@
 
 
-# Audit: Game Flow Alignment + Fixes
+# Add Comprehensive Game Rules to the Rules Page (All 10 Languages)
 
-## Audit Results
+## Overview
 
-### What matches your spec (working correctly)
+The current Game Rules page only shows basic game-specific rules (piece movement, board setup). Your detailed rules document covers much more: turn timers, missed turns/forfeits, disconnection behavior, settlement, no-show protection, and fair play guarantees. All of this needs to be added to the page and translated into all 10 languages.
 
-1. **useTurnTimer hook** -- Server-anchored, counts down for both players, only turn holder triggers timeout RPC. Correct.
-2. **submit_game_move RPC** -- Auto-flips turn for Chess/Checkers/Dominos, skips flip for Backgammon/Ludo. Correct.
-3. **maybe_apply_turn_timeout RPC** -- Records turn_timeout, increments strikes, flips turn, 3 strikes = auto_forfeit. Correct.
-4. **Auto-settlement** -- `useAutoSettlement` triggers `settle-game` when `winnerWallet` is set. Fires automatically via useEffect. Correct.
-5. **Backgammon multi-move turns** -- Timer per turn (not per sub-move), dice roll + moves + explicit turn_end. Correct.
-6. **Ludo elimination** -- 3 missed turns = elimination, game continues until 1 player remains. Correct.
-7. **OpponentAbsenceIndicator** -- Shows strikes, countdown, and auto-forfeit progress. Correct.
+## Compliance Audit
 
-### Issues Found (need fixing)
+Before adding content, here is a quick check of whether the app actually follows these rules:
 
-**Issue 1: Timer doesn't update after local move (all single-action games)**
+| Rule | Status | Notes |
+|------|--------|-------|
+| Chess/Checkers/Dominos: auto-flip turn after move | OK | `submit_game_move` RPC handles this |
+| Backgammon: multi-action turn (dice + moves + turn_end) | OK | Backend skips auto-flip for game type 3 |
+| Ludo: elimination after 3 strikes | OK | Backend handles elimination logic |
+| Server-anchored turn timer | OK | Just fixed -- `useTurnTimer` uses `turnStartedAt` from DB |
+| 3 missed turns = auto-forfeit/elimination | OK | `maybe_apply_turn_timeout` RPC handles this |
+| Auto-settlement on game end | OK | `useAutoSettlement` fires automatically; "Settle" button now hidden during settlement |
+| No-show / waiting timeout + refund | OK | `forfeit-game` edge function handles cancel flow with refund |
+| Shareable match results | OK | `match_share_cards` table populated on settlement |
 
-When you make a chess/checkers/dominos move, the server updates `turn_started_at = NOW()`, but the client's `dbTurnStartedAt` state only updates on the next poll cycle (3-5 seconds later). During that gap:
-- Your timer shows stale time from the previous turn
-- The opponent's device also shows stale time until their poll catches up
-- This creates the "all over the place" visual desync
+**No code logic fixes needed.** Everything matches your spec.
 
-**Fix**: After submitting a move locally, immediately set `dbTurnStartedAt` to the current time as a best-effort local estimate. The next poll will overwrite it with the authoritative server timestamp.
+## What Changes
 
-**Issue 2: "Settle" button flashing on win screen**
+### 1. Restructure the GameRules page (`src/pages/GameRules.tsx`)
 
-The `useAutoSettlement` hook fires when `winnerWallet` changes, but the settlement is async (takes 1-3 seconds for on-chain confirmation). During that window, the GameEndScreen may show a "Settle" button because `result` is still null. This is a UI timing issue -- the settlement IS automatic, but the button appears before it completes.
+The current page has one accordion with 5 game-specific sections. The new page will have:
 
-**Fix**: Pass `autoSettlement.isSettling` to GameEndScreen to hide/disable the settle button while auto-settlement is in progress.
+- **Section 1: General Rules** (timers, missed turns, disconnects) -- always visible at top
+- **Section 2: Game-Specific Rules** (accordion, same as today but updated content)
+  - Chess, Checkers, Dominos (grouped -- same turn model)
+  - Backgammon (multi-action turns)
+  - Ludo (multiplayer elimination)
+- **Section 3: No-Show Protection** (waiting timeout, refund)
+- **Section 4: Winnings & Settlement** (auto-settlement, sharing)
+- **Section 5: Fair Play Guarantee** (server-enforced, no stalling)
 
-**Issue 3: Stale rooms in room list**
+Each section uses translated i18n keys. No hardcoded English.
 
-Previous test sessions that weren't properly closed remain in `waiting` or `active` status. This is expected behavior for rooms that failed settlement or were abandoned before the 3-strike timeout completed. No code fix needed -- these will be cleaned up by the sweep-orphan-vault function or manual cleanup.
+### 2. Add new i18n keys to all 10 locale files
 
-## Technical Changes
+New namespace: `gameRulesDetailed` with keys for every section, heading, and bullet point from your document. This keeps the existing `gameRules` namespace intact (no breaking changes).
 
-### 1. Chess, Checkers, Dominos: Set `dbTurnStartedAt` after local move
+Approximately 60-70 new keys per language file, covering:
+- `generalRules.title`, `generalRules.turnTimers`, `generalRules.timerDesc`, etc.
+- `chessCheckersRules.title`, `chessCheckersRules.turnFlow`, etc.
+- `backgammonRules.title`, `backgammonRules.turnFlow`, etc.
+- `ludoRules.title`, `ludoRules.turnFlow`, etc.
+- `noShowProtection.title`, `noShowProtection.desc`, etc.
+- `settlement.title`, `settlement.desc`, etc.
+- `fairPlay.title`, `fairPlay.guarantee`, etc.
 
-In each game's move handler, immediately after persisting the move, update the local timer anchor:
-
-```typescript
-// After persistMove call
-setDbTurnStartedAt(new Date().toISOString());
-```
-
-Files:
-- `src/pages/ChessGame.tsx` -- in `handleSquareClick` after `persistMove` (around line 1228)
-- `src/pages/CheckersGame.tsx` -- in move handler after `persistMove`
-- `src/pages/DominosGame.tsx` -- in move handler after `persistMove`
-
-### 2. GameEndScreen: Hide settle button during auto-settlement
-
-Pass `isSettling` from `useAutoSettlement` to `GameEndScreen` to suppress the manual settle button while the automatic process is running.
-
-Files:
-- `src/pages/ChessGame.tsx` -- pass `isSettling={autoSettlement.isSettling}` to GameEndScreen
-- `src/pages/CheckersGame.tsx` -- same
-- `src/pages/BackgammonGame.tsx` -- same
-- `src/pages/DominosGame.tsx` -- same
-- `src/pages/LudoGame.tsx` -- same
-- `src/components/GameEndScreen.tsx` -- accept `isSettling` prop, hide settle button when true
-
-### 3. Clean up harmless dead code (optional, low priority)
-
-The `turnTimer.resetTimer()` calls scattered across polling handlers are no-ops and harmless. They can stay for now -- removing them is cosmetic cleanup only.
-
-## What NOT to change
-
-- `useTurnTimer.ts` -- already correct, no changes needed
-- `submit_game_move` RPC -- auto-flip logic is correct
-- `maybe_apply_turn_timeout` RPC -- grace period fix is already deployed
-- `useAutoSettlement` -- logic is correct, only UI integration needs adjustment
-- Backgammon turn flow -- multi-move turns working correctly
-- Ludo elimination flow -- working correctly
-
-## Summary
+### 3. Files to modify
 
 | File | Change |
 |------|--------|
-| `src/pages/ChessGame.tsx` | Set `dbTurnStartedAt` after local move; pass `isSettling` to GameEndScreen |
-| `src/pages/CheckersGame.tsx` | Set `dbTurnStartedAt` after local move; pass `isSettling` to GameEndScreen |
-| `src/pages/DominosGame.tsx` | Set `dbTurnStartedAt` after local move; pass `isSettling` to GameEndScreen |
-| `src/pages/BackgammonGame.tsx` | Pass `isSettling` to GameEndScreen (timer already updates on turn_end) |
-| `src/pages/LudoGame.tsx` | Pass `isSettling` to GameEndScreen |
-| `src/components/GameEndScreen.tsx` | Accept `isSettling` prop; hide settle button while settling |
+| `src/pages/GameRules.tsx` | Rebuild with sections for general rules, per-game rules, settlement, fair play |
+| `src/i18n/locales/en.json` | Add `gameRulesDetailed` namespace (~65 keys) |
+| `src/i18n/locales/es.json` | Add Spanish translations |
+| `src/i18n/locales/pt.json` | Add Portuguese translations |
+| `src/i18n/locales/fr.json` | Add French translations |
+| `src/i18n/locales/de.json` | Add German translations |
+| `src/i18n/locales/ar.json` | Add Arabic translations |
+| `src/i18n/locales/zh.json` | Add Chinese translations |
+| `src/i18n/locales/it.json` | Add Italian translations |
+| `src/i18n/locales/ja.json` | Add Japanese translations |
+| `src/i18n/locales/hi.json` | Add Hindi translations |
 
-No database changes needed.
+### 4. No breaking changes
+
+- Existing `gameRules` keys remain untouched
+- No database changes
+- No backend changes
+- No game logic changes
+- Only the GameRules page UI and i18n files are modified
 
