@@ -4,6 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+import { isWalletInAppBrowser } from "@/lib/walletBrowserDetection";
 import {
   buildMatchShareUrl,
   buildWhatsAppShareUrl,
@@ -25,6 +26,7 @@ interface ShareMatchModalProps {
 export function ShareMatchModal({ open, onOpenChange, roomPda, isWinner, gameName }: ShareMatchModalProps) {
   const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
+  const inWalletBrowser = isWalletInAppBrowser();
 
   const matchUrl = buildMatchShareUrl(roomPda);
   const gameDisplayName = getGameDisplayName(gameName);
@@ -105,14 +107,16 @@ export function ShareMatchModal({ open, onOpenChange, roomPda, isWinner, gameNam
               {t("shareMatch.copyLink", "Copy Link")}
             </Button>
 
-            {/* WhatsApp */}
-            <Button
-              onClick={handleWhatsApp}
-              className="gap-2 h-12 bg-emerald-600 hover:bg-emerald-700 text-white"
-            >
-              <MessageCircle className="w-4 h-4" />
-              WhatsApp
-            </Button>
+            {/* WhatsApp - hidden in wallet browsers */}
+            {!inWalletBrowser && (
+              <Button
+                onClick={handleWhatsApp}
+                className="gap-2 h-12 bg-emerald-600 hover:bg-emerald-700 text-white"
+              >
+                <MessageCircle className="w-4 h-4" />
+                WhatsApp
+              </Button>
+            )}
 
             {/* Twitter/X */}
             <Button
