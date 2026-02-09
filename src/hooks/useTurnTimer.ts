@@ -106,7 +106,7 @@ export function useTurnTimer(options: UseTurnTimerOptions): UseTurnTimerResult {
 
   // Main timer countdown effect
   useEffect(() => {
-    if (!enabled || isPaused || !isMyTurn) {
+    if (!enabled || isPaused) {
       clearTimerInterval();
       return;
     }
@@ -139,7 +139,7 @@ export function useTurnTimer(options: UseTurnTimerOptions): UseTurnTimerResult {
     return () => {
       clearTimerInterval();
     };
-  }, [enabled, isPaused, isMyTurn, onTimeExpired, roomId, clearTimerInterval]);
+  }, [enabled, isPaused, onTimeExpired, roomId, clearTimerInterval]);
 
   // Cleanup on unmount
   useEffect(() => {

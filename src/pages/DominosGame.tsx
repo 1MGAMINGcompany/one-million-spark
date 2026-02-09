@@ -789,7 +789,7 @@ const DominosGame = () => {
     pollOpponentTimeout();
     const interval = setInterval(pollOpponentTimeout, pollInterval);
     return () => clearInterval(interval);
-  }, [roomPda, isRankedGame, startRoll.isFinalized, gameOver, address, roomPlayers, turnTimer, play, t]);
+  }, [roomPda, isRankedGame, startRoll.isFinalized, gameOver, address, roomPlayers, turnTimer.resetTimer, play, t]);
 
   // Turn notification players
   const turnPlayers: TurnPlayer[] = useMemo(() => {
