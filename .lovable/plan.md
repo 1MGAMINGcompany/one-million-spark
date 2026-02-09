@@ -1,92 +1,70 @@
 
 
-# Fix: Pass actual game_type when creating rooms
+# Fix: Duplicate Share Button, WhatsApp in Wallet Browsers, and Improved Match Card Stats
 
-## Root Cause
+## Three Issues
 
-The `game-session-set-settings` edge function hardcodes `game_type: "backgammon"` (line 156) when inserting a new session. The comment says "will be updated when game starts" but nothing ever does. This means:
+### 1. Duplicate "Share" buttons on Game End screen
+The `ShareMatchButton` renders in 3 places in `GameEndScreen.tsx`:
+- Line 548: Inside "Payout Complete" success block
+- Line 568: Inside "Already Settled" block
+- Line 702: A catch-all for ALL staked games
 
-- Chess rooms get `game_type: backgammon`
-- The new auto-flip logic (which checks for `chess`/`checkers`/`dominos`) never fires
-- Turns only flip via `maybe_apply_turn_timeout`, which wastes strikes and creates delays
+When a game is already settled, both block #2 and #3 render, producing two buttons.
 
-## Why It "Worked Before"
+**Fix**: Remove the catch-all block at lines 702-712.
 
-The previous system didn't use `game_type` for turn management. All turn flipping relied on explicit `turn_end` moves or timeout polling. The new migration added game-type-aware auto-flip but the wrong game_type means it's dead code for non-backgammon rooms.
+### 2. WhatsApp crashes in wallet in-app browsers
+Wallet browsers (Phantom, Solflare) can't handle `wa.me` redirects that resolve to `whatsapp://` scheme internally, causing `ERR_UNKNOWN_URL_SCHEME`.
 
-## Fix (2 changes)
+**Fix**: In `ShareMatchModal.tsx`, hide the WhatsApp button when inside a wallet in-app browser using the existing `isWalletInAppBrowser()` utility. Users can still share via the native share sheet ("More...") or copy the link.
 
-### 1. Frontend: Send `gameType` in the settings request
+### 3. Match share page -- better winner stats
+Currently the MatchShareCard shows: Total SOL Won, Current Streak, and Wins. You want to see **Total SOL Won** and **Total Games Won** only -- no losses, no games played count.
 
-In `src/pages/CreateRoom.tsx`, add the `gameType` field to the `game-session-set-settings` invocation body. The numeric game type ID (e.g., `"1"` for chess) needs to be mapped to the string name the RPC expects.
+Looking at what Chess.com and similar platforms do on their share cards: they focus on **positive, brag-worthy stats only** -- wins, rating, streak, and earnings. They never show losses on share cards because the purpose is bragging/marketing.
 
-Map: `1 = chess`, `2 = dominos`, `3 = backgammon`, `4 = checkers`, `5 = ludo`
+**Fix**: Update the Winner Stats section in `MatchShareCard.tsx` to show:
+- **Total SOL Won** (keep)
+- **Games Won** (keep)
+- **Win Streak** (keep -- this is a brag stat)
 
-### 2. Edge Function: Accept and use `gameType` parameter
+Remove `losses` and `games_played` from the `WinnerProfile` interface display (the data is still fetched but not shown). Also add a **Win Rate** stat derived from wins/games_played since that's what competitive platforms typically show.
 
-In `supabase/functions/game-session-set-settings/index.ts`:
-
-- Accept optional `gameType` field from the request body
-- Use it in the INSERT (line 156) instead of hardcoded `"backgammon"`
-- Also apply it during UPDATE (line 132) so existing sessions with wrong game_type get corrected
-- Default to `"unknown"` if not provided (backward compat)
-
-### 3. Fix existing broken sessions (optional cleanup)
-
-Any recently created sessions may have the wrong `game_type`. The fix going forward prevents new ones, but old rooms stuck as "backgammon" when they're actually chess won't retroactively change. This is acceptable since those games are already finished.
+Final stats grid: **Total SOL Won | Win Rate | Games Won**
 
 ## Technical Details
 
 | File | Change |
 |------|--------|
-| `src/pages/CreateRoom.tsx` | Add `gameType` name string to the `game-session-set-settings` invocation body |
-| `supabase/functions/game-session-set-settings/index.ts` | Accept `gameType` param, use it in INSERT and UPDATE instead of hardcoded `"backgammon"` |
+| `src/components/GameEndScreen.tsx` | Remove duplicate ShareMatchButton at lines 702-712 |
+| `src/components/ShareMatchModal.tsx` | Import `isWalletInAppBrowser`, hide WhatsApp button when in wallet browser |
+| `src/components/MatchShareCard.tsx` | Update winner stats to show: Total SOL Won, Win Rate, Games Won |
 
-### CreateRoom.tsx change
+### GameEndScreen.tsx
+Delete lines 702-712 (the catch-all ShareMatchButton block that duplicates the button).
 
-Find the call to `game-session-set-settings` and add a `gameType` field derived from the numeric game type:
-
+### ShareMatchModal.tsx
 ```typescript
-const GAME_TYPE_NAMES: Record<string, string> = {
-  "1": "chess",
-  "2": "dominos", 
-  "3": "backgammon",
-  "4": "checkers",
-  "5": "ludo",
-};
+import { isWalletInAppBrowser } from "@/lib/walletBrowserDetection";
 
-// In the invoke call:
-body: {
-  roomPda,
-  turnTimeSeconds,
-  mode,
-  creatorWallet,
-  gameType: GAME_TYPE_NAMES[gameType] || "unknown",
-}
+// Inside component:
+const inWalletBrowser = isWalletInAppBrowser();
+
+// Wrap WhatsApp button:
+{!inWalletBrowser && (
+  <Button onClick={handleWhatsApp} ...>
+    <MessageCircle /> WhatsApp
+  </Button>
+)}
 ```
 
-### Edge Function change
+### MatchShareCard.tsx
+Replace the 3-column stats grid with:
 
-```typescript
-// Accept from payload
-const gameType = payload?.gameType || "unknown";
-
-// Use in INSERT (replacing hardcoded "backgammon")
-game_type: gameType,
-
-// Also set during UPDATE
-.update({
-  turn_time_seconds: turnTimeSeconds,
-  mode,
-  game_type: gameType,  // Fix stale game_type
-})
-```
-
-## Verification
-
-After applying:
-1. Create a ranked chess room with 10s timer
-2. Make a move -- confirm `current_turn_wallet` flips immediately (no timeout needed)
-3. Confirm `game_type` in DB is `chess` (not `backgammon`)
-4. Test backgammon still works correctly with multi-move turns
+| Stat | Value | Label |
+|------|-------|-------|
+| Total SOL Won | `total_sol_won.toFixed(2)` | "Total Won (SOL)" |
+| Win Rate | `Math.round((wins / games_played) * 100)%` | "Win Rate" |
+| Games Won | `wins` | "Games Won" |
 
