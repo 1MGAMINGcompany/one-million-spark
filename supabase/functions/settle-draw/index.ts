@@ -468,29 +468,6 @@ Deno.serve(async (req: Request) => {
       finalize_tx: refundSignature,
     });
 
-    // Upsert match_share_cards for draw sharing
-    try {
-      const stakePerPlayer = Number(roomData.stakeAmount);
-      const refundPerPlayer = stakePerPlayer; // In a draw, each player gets their stake back (minus fee split)
-
-      await supabase.from("match_share_cards").upsert({
-        room_pda: roomPda,
-        game_type: "unknown", // settle-draw doesn't have game_type context
-        mode: "ranked",
-        stake_lamports: stakePerPlayer,
-        winner_wallet: null,
-        loser_wallet: null,
-        winner_payout_lamports: refundPerPlayer,
-        fee_lamports: 0,
-        tx_signature: refundSignature,
-        win_reason: "draw",
-        finished_at: new Date().toISOString(),
-      }, { onConflict: "room_pda" });
-      console.log("[settle-draw] ✅ match_share_cards upserted (draw)");
-    } catch (e) {
-      console.warn("[settle-draw] match_share_cards upsert failed (non-fatal):", e);
-    }
-
     console.log("[settle-draw] Draw settlement complete");
 
     return new Response(

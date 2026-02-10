@@ -1,11 +1,6 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { getOpponentWallet, isSameWallet, isRealWallet, DEFAULT_SOLANA_PUBKEY } from "@/lib/walletUtils";
 import { clearRoom } from "@/lib/missedTurns"; // Only clearRoom needed - strikes now tracked server-side
-import { isWalletInAppBrowser } from "@/lib/walletBrowserDetection";
-
-// Polling intervals for opponent timeout detection
-const POLL_INTERVAL_DESKTOP = 3000; // 3 seconds
-const POLL_INTERVAL_WALLET = 1500;  // 1.5 seconds for wallet browsers
 import { GameErrorBoundary } from "@/components/GameErrorBoundary";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { Chess, Square, PieceSymbol, Color } from "chess.js";
@@ -156,12 +151,10 @@ const ChessGame = () => {
   const gameRef = useRef(game);
   const roomPlayersRef = useRef<string[]>([]);
   const animationsEnabledRef = useRef(animationsEnabled);
-  const addressRef = useRef(address);
   
   useEffect(() => { gameRef.current = game; }, [game]);
   useEffect(() => { roomPlayersRef.current = roomPlayers; }, [roomPlayers]);
   useEffect(() => { animationsEnabledRef.current = animationsEnabled; }, [animationsEnabled]);
-  useEffect(() => { addressRef.current = address; }, [address]);
 
   // Fetch real player order from on-chain room account with polling for second player
   useEffect(() => {
@@ -262,10 +255,9 @@ const ChessGame = () => {
       setGame(restoredGame);
       setMoveHistory(persisted.moveHistory || []);
       setGameOver(persisted.gameOver || false);
-      // CRITICAL: Do NOT restore gameStatus text from DB.
-      // gameStatus contains player-perspective strings like "You Win!" / "Opponent resigned"
-      // which are WRONG for the other player. Let the local device derive its own
-      // status text from the chess engine state or DB winner_wallet on next poll.
+      if (persisted.gameStatus) {
+        setGameStatus(persisted.gameStatus);
+      }
       
       // Only show toast once per session load
       if (showToast && !restoredToastShownRef.current) {
@@ -498,8 +490,6 @@ const ChessGame = () => {
   
   // Turn override for skip functionality (when opponent times out, we get another turn)
   const [turnOverrideWallet, setTurnOverrideWallet] = useState<string | null>(null);
-  const turnOverrideRef = useRef<string | null>(null);
-  useEffect(() => { turnOverrideRef.current = turnOverrideWallet; }, [turnOverrideWallet]);
 
   // Check if it's my turn from engine
   const isMyTurnFromEngine = game.turn() === effectiveColor && !gameOver;
@@ -564,9 +554,8 @@ const ChessGame = () => {
             variant: "destructive",
           });
           
-          // Grant opponent turn via override + reset timer immediately
+          // Grant opponent turn via override
           setTurnOverrideWallet(result.nextTurnWallet);
-          turnTimer.resetTimer();
         }
       }
     } catch (err) {
@@ -605,208 +594,6 @@ const ChessGame = () => {
     const turnIndex = game.turn() === "w" ? 0 : 1;
     return turnPlayers[turnIndex]?.address || null;
   }, [game, turnPlayers]);
-
-  console.log("[Chess] isMyTurn debug:", {
-    isMyTurn,
-    isActuallyMyTurn,
-    isMyTurnFromEngine,
-    isMyTurnOverride,
-    turnOverrideWallet: turnOverrideWallet?.slice(0, 8),
-    activeTurnAddress: activeTurnAddress?.slice(0, 8),
-    addressRef: addressRef.current?.slice(0, 8),
-    canPlay,
-    gameOver,
-    effectiveTurnTime,
-  });
-
-  // === OPPONENT TURN TIMEOUT POLLING ===
-  // This polls the server to apply timeouts when opponent is idle
-  // Mirrors BackgammonGame polling pattern - ensures 3-strike auto-forfeit works
-  useEffect(() => {
-    if (!roomPda || !isRankedGame || !startRoll.isFinalized || gameOver) return;
-
-    const pollInterval = isWalletInAppBrowser() ? POLL_INTERVAL_WALLET : POLL_INTERVAL_DESKTOP;
-
-    const pollOpponentTimeout = async () => {
-      try {
-        const { data, error } = await supabase.functions.invoke("game-session-get", {
-          body: { roomPda },
-        });
-
-        if (error) {
-          console.warn("[ChessGame] Poll error:", error);
-          return;
-        }
-
-        // Check if game finished while we weren't looking
-        const dbStatus = data?.session?.status;
-        
-        if (dbStatus === 'finished' && !gameOver) {
-          const dbWinner = data?.session?.winner_wallet;
-          const currentAddr = addressRef.current;
-          console.log("[ChessGame] Polling detected game finished. Winner:", dbWinner?.slice(0, 8), "Me:", currentAddr?.slice(0, 8));
-          setGameOver(true);
-          setWinnerWallet(dbWinner);
-          // Derive player-perspective status locally — never from shared game_state
-          if (currentAddr && isSameWallet(dbWinner, currentAddr)) {
-            setGameStatus(t("gameSession.youWin"));
-            play('chess_win');
-          } else if (currentAddr) {
-            setGameStatus(t("gameSession.youLose"));
-            play('chess_lose');
-          } else {
-            setGameStatus(t("gameSession.gameOver"));
-          }
-          return;
-        }
-
-        // Skip if game is over
-        if (gameOver) return;
-
-        // === SERVER-SIDE TIMEOUT CHECK ===
-        const dbTurnWallet = data?.session?.current_turn_wallet;
-        const isOpponentsTurn = dbTurnWallet && !isSameWallet(dbTurnWallet, address);
-
-        if (isOpponentsTurn && dbStatus !== 'finished') {
-          try {
-            const { data: timeoutResult } = await supabase.rpc("maybe_apply_turn_timeout", {
-              p_room_pda: roomPda,
-            });
-
-            const result = timeoutResult as {
-              applied: boolean;
-              type?: string;
-              reason?: string;
-              winnerWallet?: string;
-              nextTurnWallet?: string;
-              strikes?: number;
-            } | null;
-
-            if (result?.applied) {
-              console.log("[ChessGame] Polling applied opponent timeout:", result);
-
-              if (result.type === "auto_forfeit") {
-                // Opponent forfeited by 3 strikes - I WIN
-                setGameOver(true);
-                setWinnerWallet(result.winnerWallet || address || null);
-                setGameStatus(t("gameSession.opponentForfeited"));
-                play('chess_win');
-                toast({
-                  title: t("gameSession.opponentForfeited"),
-                  description: t("gameSession.youWin"),
-                });
-              } else if (result.type === "turn_timeout" && result.nextTurnWallet) {
-                // Turn passed to me
-                setTurnOverrideWallet(result.nextTurnWallet);
-                turnTimer.resetTimer();
-                toast({
-                  title: t("gameSession.opponentSkipped"),
-                  description: `${result.strikes}/3 ${t("gameSession.missedTurns")}`,
-                });
-              }
-            }
-          } catch (err) {
-            console.warn("[ChessGame] Polling timeout check failed:", err);
-          }
-        }
-
-        // Update turn override if DB says turn changed
-        if (dbTurnWallet) {
-          const isNowMyTurn = isSameWallet(dbTurnWallet, addressRef.current);
-
-          if (isNowMyTurn) {
-            const prev = turnOverrideRef.current;
-            if (!isSameWallet(prev, dbTurnWallet)) {
-              console.log("[ChessGame] Polling: turn is mine, setting override", dbTurnWallet.slice(0, 8));
-              setTurnOverrideWallet(dbTurnWallet);
-              turnTimer.resetTimer();
-            } else if (turnTimer.remainingTime <= 0) {
-              console.log("[ChessGame] Timer stuck at 0 on my turn, forcing reset");
-              turnTimer.resetTimer();
-            }
-          } else {
-            // DB says it's NOT my turn — clear any stale override
-            if (turnOverrideRef.current) {
-              console.log("[ChessGame] Polling: not my turn, clearing stale override");
-              setTurnOverrideWallet(null);
-            }
-          }
-        }
-      } catch (err) {
-        console.error("[ChessGame] Poll exception:", err);
-      }
-    };
-
-    // Initial poll
-    pollOpponentTimeout();
-
-    // Set up interval
-    const interval = setInterval(pollOpponentTimeout, pollInterval);
-    
-    return () => clearInterval(interval);
-  }, [
-    roomPda, isRankedGame, startRoll.isFinalized, gameOver, 
-    address, activeTurnAddress, 
-    turnTimer, play, t
-  ]);
-
-  // Visibility change handler - poll immediately when tab becomes visible
-  useEffect(() => {
-    if (!roomPda || !isRankedGame || gameOver) return;
-    
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        console.log("[ChessGame] Tab became visible - forcing sync");
-        
-        // Force immediate sync
-        supabase.functions.invoke("game-session-get", {
-          body: { roomPda },
-        }).then(({ data }) => {
-          const dbTurnWallet = data?.session?.current_turn_wallet;
-          const dbStatus = data?.session?.status;
-          
-          // Check if game ended while away
-          if (dbStatus === 'finished' && !gameOver) {
-            const dbWinner = data?.session?.winner_wallet;
-            const currentAddr = addressRef.current;
-            setGameOver(true);
-            setWinnerWallet(dbWinner);
-            // Derive player-perspective status locally
-            if (currentAddr && isSameWallet(dbWinner, currentAddr)) {
-              setGameStatus(t("gameSession.youWin"));
-              play('chess_win');
-            } else if (currentAddr) {
-              setGameStatus(t("gameSession.youLose"));
-              play('chess_lose');
-            } else {
-              setGameStatus(t("gameSession.gameOver"));
-            }
-            return;
-          }
-          
-          if (dbTurnWallet && !isSameWallet(dbTurnWallet, activeTurnAddress)) {
-            console.log("[ChessGame] Visibility poll detected turn change");
-            
-            const isNowMyTurn = isSameWallet(dbTurnWallet, address);
-            if (isNowMyTurn) {
-              setTurnOverrideWallet(dbTurnWallet);
-              turnTimer.resetTimer();
-            }
-          }
-          
-          // Resume timer if it was paused
-          if (turnTimer.isPaused) {
-            turnTimer.resumeTimer();
-          }
-        }).catch(err => {
-          console.warn("[ChessGame] Visibility poll error:", err);
-        });
-      }
-    };
-    
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [roomPda, isRankedGame, gameOver, activeTurnAddress, address, turnTimer, play, t]);
 
   // Turn notification system
   const {
@@ -861,18 +648,17 @@ const ChessGame = () => {
     }));
   }, [turnPlayers]);
 
-  // Winner address for end screen - DB-authoritative, no string fallbacks
+  // Winner address for end screen - prioritize winnerWallet (from resign/forfeit)
   const winnerAddress = useMemo(() => {
-    // Direct wallet address from DB/resign/forfeit — sole source of truth
+    // Direct wallet address from resign/forfeit takes priority
     if (winnerWallet) return winnerWallet;
     
-    // Draw detection from chess.js engine state (not string matching)
+    // Fallback for normal game endings
     if (!gameOver) return null;
-    if (game.isDraw() || game.isStalemate()) return "draw";
-    
-    // If game is over but winnerWallet not yet set, return null (pending resolution)
-    return null;
-  }, [winnerWallet, gameOver, game]);
+    if (gameStatus.includes("draw") || gameStatus.includes("Stalemate")) return "draw";
+    if (gameStatus.includes("win")) return address;
+    return getOpponentWallet(roomPlayers, address);
+  }, [winnerWallet, gameOver, gameStatus, address, roomPlayers]);
 
   // Players for GameEndScreen
   const gameEndPlayers = useMemo(() => {
@@ -948,13 +734,8 @@ const ChessGame = () => {
   const checkGameOverInline = useCallback((currentGame: Chess) => {
     if (currentGame.isCheckmate()) {
       const isPlayerWin = currentGame.turn() !== myColor;
-      // DB-authoritative: set winnerWallet explicitly from room players
-      const currentAddr = addressRef.current;
-      const winnerAddr = isPlayerWin
-        ? currentAddr
-        : getOpponentWallet(roomPlayersRef.current, currentAddr);
-      setWinnerWallet(winnerAddr || null);
-      setGameStatus(isPlayerWin ? t("gameMultiplayer.checkmateYouWin") : t("gameMultiplayer.checkmateYouLose"));
+      const winner = isPlayerWin ? t("gameMultiplayer.checkmateYouWin") : t("gameMultiplayer.checkmateYouLose");
+      setGameStatus(winner);
       setGameOver(true);
       play(isPlayerWin ? 'chess_win' : 'chess_lose');
       return true;
@@ -1119,137 +900,183 @@ const ChessGame = () => {
       console.log("[ChessGame] Cleaning up WebRTC via useForfeit");
     },
     onCleanupSupabase: () => {
-      // Cleanup Supabase subscriptions
+      // Supabase channels are cleaned up by the hook
       console.log("[ChessGame] Cleaning up Supabase via useForfeit");
     },
   });
   
-  // Store forfeit function in ref for timeout handler
+  // Connect forfeit ref for timeout handler
   useEffect(() => {
-    forfeitFnRef.current = forfeit;
-  }, [forfeit]);
+    forfeitFnRef.current = forfeitRef.current;
+  }, [forfeitRef]);
 
-  // Handle leave button click - opens modal
-  const handleLeaveClick = () => {
-    setShowLeaveModal(true);
-  };
+  // ========== Leave/Forfeit handlers (defined after useForfeit) ==========
   
-  // Handle UI-only leave (no on-chain action needed)
-  const handleUILeave = async () => {
-    await leave();
-  };
-  
-  // Handle room cancellation (creator only, no opponent)
-  const handleCancelRoom = async () => {
-    if (!roomPda || !address) return;
+  // UI-only leave handler - NO wallet calls
+  const handleUILeave = useCallback(() => {
+    console.log("[LeaveMatch] UI exit only");
+    leave(); // This is the UI-only cleanup + navigate function
+  }, [leave]);
+
+  // On-chain: Cancel room and get refund (creator only)
+  const handleCancelRoom = useCallback(async () => {
+    console.log("[LeaveMatch] On-chain action: Cancel room (refund)");
     setIsCancellingRoom(true);
     try {
-      await cancelRoomByPda(roomPda);
-      clearRoom(roomPda);
+      const result = await cancelRoomByPda(roomPda || "");
+      if (result.ok) {
+        toast({ title: t('forfeit.roomCancelled'), description: t('forfeit.stakeRefunded') });
+      } else {
+        toast({ title: t('common.error'), description: result.reason, variant: "destructive" });
+      }
       navigate("/room-list");
-    } catch (err) {
-      console.error("[ChessGame] Cancel room error:", err);
-      toast({
-        title: t("error.cancelFailed"),
-        description: String(err),
-        variant: "destructive",
-      });
     } finally {
       setIsCancellingRoom(false);
     }
-  };
-  
-  // Handle forfeit match
-  const handleForfeitMatch = async () => {
+  }, [cancelRoomByPda, roomPda, navigate, t]);
+
+  // On-chain: Forfeit match (pay opponent)
+  const handleForfeitMatch = useCallback(async () => {
+    console.log("[ForfeitMatch] On-chain action requested");
     await forfeit();
-  };
+  }, [forfeit]);
 
-  // Handle resign via WebRTC
-  const handleResign = async () => {
-    // Send resign message to opponent
-    sendResign();
-    
-    // Update local state - opponent wins
-    const opponentAddr = getOpponentWallet(roomPlayers, address);
-    setWinnerWallet(opponentAddr);
-    setGameStatus(t("gameMultiplayer.youResigned"));
-    setGameOver(true);
-    play('chess_lose');
-    chat.addSystemMessage(t("gameMultiplayer.youResignedMessage"));
-    
-    // For ranked games, also trigger forfeit to settle on-chain
-    if (isRankedGame) {
-      await forfeit();
+  // Open leave modal - NEVER triggers wallet
+  const handleLeaveClick = useCallback(() => {
+    console.log("[LeaveMatch] Opening leave modal (UI only)");
+    setShowLeaveModal(true);
+  }, []);
+
+  // isActuallyMyTurn already computed above with turn override support
+
+  useEffect(() => {
+    if (roomPlayers.length < 2) {
+      setGameStatus(t("gameMultiplayer.waitingForOpponent"));
+    } else if (effectiveConnectionState === "connecting" && !inWalletBrowser) {
+      // Only show "Connecting" if NOT in wallet browser - realtime/polling handles sync
+      setGameStatus(t("gameMultiplayer.connectingToOpponent"));
+    } else if (effectiveConnectionState === "connected" || inWalletBrowser) {
+      // In wallet browsers, proceed even if still "connecting" - polling/realtime will sync
+      setGameStatus(isActuallyMyTurn ? t("gameMultiplayer.yourTurn") : t("gameMultiplayer.opponentsTurn"));
+    } else if (effectiveConnectionState === "disconnected") {
+      setGameStatus(t("gameMultiplayer.connectionLost"));
     }
-  };
+  }, [roomPlayers.length, effectiveConnectionState, isActuallyMyTurn, inWalletBrowser, t]);
 
-  // Handle move
-  const handleMove = useCallback((from: Square, to: Square, promotion?: string): boolean => {
-    if (!isMyTurn || gameOver) return false;
-    
+  const checkGameOver = useCallback((currentGame: Chess) => {
+    if (currentGame.isCheckmate()) {
+      const isPlayerWin = currentGame.turn() !== myColor;
+      const winner = isPlayerWin ? t("gameMultiplayer.checkmateYouWin") : t("gameMultiplayer.checkmateYouLose");
+      setGameStatus(winner);
+      setGameOver(true);
+      play(isPlayerWin ? 'chess_win' : 'chess_lose');
+      return true;
+    }
+    if (currentGame.isStalemate()) {
+      setGameStatus(t("gameMultiplayer.drawStalemate"));
+      setGameOver(true);
+      return true;
+    }
+    if (currentGame.isDraw()) {
+      setGameStatus(t("game.draw"));
+      setGameOver(true);
+      return true;
+    }
+    if (currentGame.isCheck()) {
+      play('chess_check');
+    }
+    return false;
+  }, [myColor, play]);
+
+  const handleMove = useCallback((from: Square, to: Square): boolean => {
+    if (gameOver || !isMyTurn) return false;
+
     const gameCopy = new Chess(game.fen());
+    
     const attackingPiece = gameCopy.get(from);
     const targetPiece = gameCopy.get(to);
     
     try {
-      const result = gameCopy.move({
+      const move = gameCopy.move({
         from,
         to,
-        promotion: (promotion || 'q') as 'q' | 'r' | 'b' | 'n',
+        promotion: "q",
       });
-      
-      if (result) {
-        // Play sounds and trigger animations
-        if (targetPiece) {
-          play('chess_capture');
-          if (animationsEnabled && attackingPiece) {
-            triggerAnimation(attackingPiece.type, targetPiece.type, to);
-          }
-        } else {
-          play('chess_move');
-        }
-        
-        if (result.promotion) {
-          play('chess_promotion');
-        }
-        
-        // Update state
-        setGame(new Chess(gameCopy.fen()));
-        setMoveHistory(gameCopy.history());
-        setTurnOverrideWallet(null); // Clear override when making a move
-        
-        // Record move for notifications
-        recordPlayerMove(address || "", result.san);
-        
-        // Send move via WebRTC
-        const moveData: ChessMove = {
-          from,
-          to,
-          promotion,
-          fen: gameCopy.fen(),
-          san: result.san,
-        };
-        sendMove(moveData);
-        
-        // Persist move to DB for ranked games
-        if (isRankedGame && address) {
-          persistMove(moveData, address);
-        }
-        
-        // Reset turn timer
-        turnTimer.resetTimer();
-        
-        // Check game over
-        checkGameOverInline(gameCopy);
-        
-        return true;
+
+      if (move === null) return false;
+
+      // Play sound
+      if (targetPiece) {
+        play('chess_capture');
+      } else {
+        play('chess_move');
       }
-    } catch (error) {
-      console.error("[ChessGame] Invalid move:", error);
+      
+      if (move.promotion) {
+        play('chess_promotion');
+      }
+
+      // Trigger capture animation
+      if (targetPiece && attackingPiece && animationsEnabled) {
+        triggerAnimation(attackingPiece.type, targetPiece.type, to);
+      }
+
+      // Update local state
+      setGame(new Chess(gameCopy.fen()));
+      setMoveHistory(gameCopy.history());
+
+      // Send move to opponent via WebRTC
+      const moveData: ChessMove = {
+        from,
+        to,
+        promotion: move.promotion || undefined,
+        fen: gameCopy.fen(),
+        san: move.san,
+      };
+      sendMove(moveData);
+
+      // Persist move to DB for ranked games (durable sync)
+      if (isRankedGame && address) {
+        persistMove(moveData, address);
+      }
+
+      // Record move for turn history
+      recordPlayerMove(address || "", move.san);
+
+      if (!checkGameOver(gameCopy)) {
+        setGameStatus(t("gameMultiplayer.opponentsTurn"));
+      }
+
+      return true;
+    } catch {
+      return false;
     }
+  }, [game, gameOver, isMyTurn, checkGameOver, animationsEnabled, triggerAnimation, play, sendMove, recordPlayerMove, address]);
+
+  const handleResign = useCallback(async () => {
+    // 1. Send WebRTC message immediately for instant opponent UX
+    sendResign();
     
-    return false;
-  }, [isMyTurn, gameOver, game, animationsEnabled, play, triggerAnimation, recordPlayerMove, address, sendMove, isRankedGame, persistMove, turnTimer, checkGameOverInline]);
+    // 2. Update local UI optimistically - opponent wins, store their wallet
+    const opponentWalletAddr = getOpponentWallet(roomPlayers, address);
+    setWinnerWallet(opponentWalletAddr);
+    setGameStatus(t("gameMultiplayer.youResignedLose"));
+    setGameOver(true);
+    play('chess_lose');
+    
+    // 3. CRITICAL: Trigger on-chain settlement via edge function
+    try {
+      await forfeit();
+    } catch (err) {
+      console.error("[handleResign] forfeit settlement failed:", err);
+      toast({
+        title: "Settlement pending",
+        description: "On-chain settlement may still complete",
+        variant: "destructive",
+      });
+    }
+  }, [sendResign, play, t, forfeit, roomPlayers, address]);
+
 
   const formattedMoves = [];
   for (let i = 0; i < moveHistory.length; i += 2) {

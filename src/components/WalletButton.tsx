@@ -11,7 +11,6 @@ import { fetchBalance as fetchBalanceRpc, is403Error } from "@/lib/solana-rpc";
 import { NetworkProofBadge } from "./NetworkProofBadge";
 import { MobileWalletFallback } from "./MobileWalletFallback";
 import { WalletNotDetectedModal } from "./WalletNotDetectedModal";
-import { useConnectWallet } from "@/contexts/WalletConnectContext";
 
 // Import local wallet icons
 import phantomIcon from "@/assets/wallets/phantom.svg";
@@ -108,7 +107,6 @@ export function WalletButton() {
   const { t } = useTranslation();
   const { connected, publicKey, disconnect, connecting, wallets, select, wallet, connect } = useWallet();
   const { connection } = useConnection();
-  const { registerDialogOpener } = useConnectWallet();
   
   const [balance, setBalance] = useState<number | null>(null);
   const [balanceLoading, setBalanceLoading] = useState(false);
@@ -127,11 +125,6 @@ export function WalletButton() {
   const isAndroid = getIsAndroid();
   const isIOS = getIsIOS();
   const isInWalletBrowser = getIsInWalletBrowser();
-
-  // Register the dialog opener for global access
-  useEffect(() => {
-    registerDialogOpener(() => setDialogOpen(true));
-  }, [registerDialogOpener]);
 
 
   // Clear timeout on unmount or when connected

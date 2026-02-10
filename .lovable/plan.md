@@ -1,51 +1,88 @@
 
 
-# Add "Share Your Match" Section to Game End Screen
+# Fix CORS Headers for Edge Functions
 
-## What changes
+## Problem
+Browser requests from `https://1mgaming.com` to `/functions/v1/health` and `/functions/v1/get-moves` are blocked by CORS preflight failures.
 
-A new, prominent share section will appear at the bottom of the end-game popup for **ranked and private** games (staked games). It will show for both winners and losers, with different messaging:
+## Root Cause
+The `corsHeaders` object is missing:
+1. **`Access-Control-Allow-Methods`** - browsers need this to know which HTTP methods are allowed
+2. **Extended Supabase headers** - the Supabase JS client sends additional headers that must be whitelisted
 
-- **Winners**: "Brag About Your Win" with WhatsApp, Twitter/X, Copy Link, and native share buttons
-- **Losers**: "Share Match" (more neutral tone) with the same sharing options
+## Solution
+Update `corsHeaders` in both files to include all required headers.
 
-The existing small `ShareMatchButton` inside the payout success/settled blocks will be removed to avoid duplication.
+---
 
-## Where it appears
+## Changes
 
-- Only for staked games (`isStaked && roomPda`) -- this covers both ranked and private modes
-- Shows after payout is settled (success or already settled state), so the share card has real data
-- Positioned between the rematch section and the exit buttons for maximum visibility
+### File 1: `supabase/functions/health/index.ts`
 
-## Design
+**Before (lines 3-6):**
+```typescript
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+```
 
-A card-like section with:
-- A fun emoji-accented heading ("Brag About Your Win" or "Share Match")
-- 3 action buttons in a row: WhatsApp (green), Twitter/X (dark), Copy Link (outline)
-- A "More..." button using native share API (if available)
-- Uses existing share utilities from `src/lib/shareMatch.ts`
+**After:**
+```typescript
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+  "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
+};
+```
+
+---
+
+### File 2: `supabase/functions/get-moves/index.ts`
+
+**Before (lines 4-7):**
+```typescript
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+```
+
+**After:**
+```typescript
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+  "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
+};
+```
+
+---
 
 ## Technical Details
 
-### File: `src/components/GameEndScreen.tsx`
+| Header | Purpose |
+|--------|---------|
+| `Access-Control-Allow-Methods` | Tells browser which HTTP methods are allowed (GET, POST, OPTIONS) |
+| `x-supabase-client-platform` | Supabase JS client sends this header automatically |
+| `x-supabase-client-platform-version` | Client version info |
+| `x-supabase-client-runtime` | Runtime environment (browser/node) |
+| `x-supabase-client-runtime-version` | Runtime version |
 
-1. **Import** `whatsappShareMatch`, `twitterShareMatch`, `copyMatchLink` from `@/lib/shareMatch` and `MessageCircle` from lucide-react
-2. **Remove** the `ShareMatchButton` import and its two usages inside the success/settled blocks (lines 551-554 and 566-569)
-3. **Add new share section** after the rematch block (around line 694), conditionally rendered when `isStaked && roomPda && isAlreadySettled`:
+If these headers are not whitelisted in `Access-Control-Allow-Headers`, the preflight OPTIONS request fails and the actual request is blocked.
 
+---
+
+## Verification
+
+After deployment, test with:
+```bash
+curl -X OPTIONS https://mhtikjiticopicziepnj.supabase.co/functions/v1/health \
+  -H "Origin: https://1mgaming.com" \
+  -H "Access-Control-Request-Method: POST" \
+  -H "Access-Control-Request-Headers: content-type, x-supabase-client-platform" \
+  -v
 ```
-Share Your Match section:
-- Heading: winner sees "Brag About Your Win", loser sees "Share Match"  
-- WhatsApp button (hidden in wallet in-app browsers via existing isWalletInAppBrowser)
-- Twitter/X button
-- Copy Link button with copied feedback
-- Native share "More..." button (if navigator.share available)
-```
 
-4. **Import** `isWalletInAppBrowser` from `@/lib/walletBrowserDetection` (already used in ShareMatchModal)
-
-### No other files changed
-- Reuses existing `whatsappShareMatch`, `twitterShareMatch`, `copyMatchLink` from `src/lib/shareMatch.ts`
-- No new components needed
-- No database changes
+Should return `200 OK` with proper CORS headers.
 

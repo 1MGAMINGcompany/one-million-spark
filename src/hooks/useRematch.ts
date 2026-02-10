@@ -27,7 +27,7 @@ const initialState: RematchState = {
   settings: {
     gameType: '',
     stakeAmount: 1,
-    timePerTurn: 30,
+    timePerTurn: 60,
     players: [],
   },
   rulesAccepted: false,
@@ -53,15 +53,12 @@ export function useRematch(gameType: string, previousPlayers: string[]) {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const openRematchModal = useCallback(() => {
-    // Backgammon defaults to 60s, everything else to 30s
-    const defaultTime = gameType.toLowerCase() === 'backgammon' ? 60 : 30;
     setState({
       ...initialState,
       settings: {
         ...initialState.settings,
         gameType,
         players: previousPlayers,
-        timePerTurn: defaultTime,
       },
     });
     setIsModalOpen(true);
@@ -231,11 +228,14 @@ export function useRematch(gameType: string, previousPlayers: string[]) {
   };
 }
 
-// Time options for turn timer (rematch modal)
+// Time options for turn timer
 export const TIME_OPTIONS = [
-  { value: 10, label: '10s ⚡ Blitz' },
-  { value: 30, label: '30s Standard' },
-  { value: 60, label: '60s Relaxed' },
+  { value: 15, label: '15s' },
+  { value: 30, label: '30s' },
+  { value: 60, label: '1m' },
+  { value: 120, label: '2m' },
+  { value: 300, label: '5m' },
+  { value: 600, label: '10m' },
   { value: 0, label: 'Unlimited' },
 ];
 

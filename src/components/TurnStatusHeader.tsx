@@ -114,28 +114,20 @@ export const TurnStatusHeader = memo(function TurnStatusHeader({
           )}
         </div>
 
-        {/* Timer - only shown for current turn holder */}
-        {showTimer && (() => { console.log("[TimerUI]", { isMyTurn, remainingTime, showTimer }); return null; })()}
-        {showTimer && isMyTurn && remainingTime > 0 && (
+        {/* Timer */}
+        {showTimer && remainingTime > 0 && (
           <div
             className={cn(
               "flex items-center gap-1.5 px-3 py-1.5 rounded-md font-mono",
-              isCriticalTime
+              isMyTurn && isCriticalTime
                 ? "bg-destructive/30 text-destructive animate-pulse"
-                : isLowTime
+                : isMyTurn && isLowTime
                 ? "bg-yellow-500/30 text-yellow-400"
                 : "bg-muted/50 text-muted-foreground"
             )}
           >
             <Clock className="w-4 h-4" />
             <span className="text-sm font-medium">{formatTime(remainingTime)}</span>
-          </div>
-        )}
-        {/* Timer syncing placeholder - my turn but timer hasn't started yet */}
-        {showTimer && isMyTurn && remainingTime <= 0 && (
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-muted/50">
-            <Clock className="w-4 h-4 text-muted-foreground animate-pulse" />
-            <span className="text-xs text-muted-foreground">Syncing…</span>
           </div>
         )}
       </div>

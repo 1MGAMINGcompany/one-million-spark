@@ -222,7 +222,6 @@ export type Database = {
           turn_started_at: string | null
           turn_time_seconds: number
           updated_at: string
-          waiting_started_at: string | null
           winner_wallet: string | null
         }
         Insert: {
@@ -252,7 +251,6 @@ export type Database = {
           turn_started_at?: string | null
           turn_time_seconds?: number
           updated_at?: string
-          waiting_started_at?: string | null
           winner_wallet?: string | null
         }
         Update: {
@@ -282,7 +280,6 @@ export type Database = {
           turn_started_at?: string | null
           turn_time_seconds?: number
           updated_at?: string
-          waiting_started_at?: string | null
           winner_wallet?: string | null
         }
         Relationships: []
@@ -335,8 +332,6 @@ export type Database = {
       match_share_cards: {
         Row: {
           created_at: string
-          fee_lamports: number | null
-          finished_at: string | null
           game_type: string
           loser_rank_after: number | null
           loser_rank_before: number | null
@@ -348,15 +343,12 @@ export type Database = {
           tx_signature: string | null
           updated_at: string
           win_reason: string
-          winner_payout_lamports: number | null
           winner_rank_after: number | null
           winner_rank_before: number | null
           winner_wallet: string | null
         }
         Insert: {
           created_at?: string
-          fee_lamports?: number | null
-          finished_at?: string | null
           game_type: string
           loser_rank_after?: number | null
           loser_rank_before?: number | null
@@ -368,15 +360,12 @@ export type Database = {
           tx_signature?: string | null
           updated_at?: string
           win_reason?: string
-          winner_payout_lamports?: number | null
           winner_rank_after?: number | null
           winner_rank_before?: number | null
           winner_wallet?: string | null
         }
         Update: {
           created_at?: string
-          fee_lamports?: number | null
-          finished_at?: string | null
           game_type?: string
           loser_rank_after?: number | null
           loser_rank_before?: number | null
@@ -388,7 +377,6 @@ export type Database = {
           tx_signature?: string | null
           updated_at?: string
           win_reason?: string
-          winner_payout_lamports?: number | null
           winner_rank_after?: number | null
           winner_rank_before?: number | null
           winner_wallet?: string | null
@@ -718,14 +706,19 @@ export type Database = {
         }
         Returns: boolean
       }
-      finish_game_session: {
-        Args: {
-          p_caller_wallet?: string
-          p_room_pda: string
-          p_winner_wallet?: string
-        }
-        Returns: undefined
-      }
+      finish_game_session:
+        | {
+            Args: { p_caller_wallet?: string; p_room_pda: string }
+            Returns: undefined
+          }
+        | {
+            Args: {
+              p_caller_wallet?: string
+              p_room_pda: string
+              p_winner_wallet?: string
+            }
+            Returns: undefined
+          }
       issue_nonce: {
         Args: { p_room_pda: string; p_rules_hash: string; p_wallet: string }
         Returns: string
@@ -735,10 +728,6 @@ export type Database = {
         Returns: undefined
       }
       maybe_apply_turn_timeout: { Args: { p_room_pda: string }; Returns: Json }
-      maybe_apply_waiting_timeout: {
-        Args: { p_room_pda: string }
-        Returns: Json
-      }
       maybe_finalize_start_state: {
         Args: { p_room_pda: string }
         Returns: undefined

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Trophy, RefreshCw, BarChart2, Star, LogOut, Wallet, ChevronDown, ChevronUp, CheckCircle, ExternalLink, Loader2, MessageCircle, Copy, Check, Share2 } from 'lucide-react';
+import { Trophy, RefreshCw, BarChart2, Star, LogOut, Wallet, ChevronDown, ChevronUp, CheckCircle, ExternalLink, Loader2 } from 'lucide-react';
 import GoldConfettiExplosion from '@/components/GoldConfettiExplosion';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -13,9 +13,6 @@ import { RivalryWidget } from '@/components/RivalryWidget';
 import { WalletLink } from '@/components/WalletLink';
 import { DrawSettlementDebug } from '@/components/DrawSettlementDebug';
 import { DrawRefundError } from '@/components/DrawRefundError';
-import { whatsappShareMatch, twitterShareMatch, copyMatchLink, nativeShareMatch } from '@/lib/shareMatch';
-import { isWalletInAppBrowser } from '@/lib/walletBrowserDetection';
-import { isSameWallet } from '@/lib/walletUtils';
 import { 
   RematchMode, 
   RematchPayload, 
@@ -190,13 +187,10 @@ export function GameEndScreen({
   // Rematch state
   const [customStakeSol, setCustomStakeSol] = useState<string>('');
   const [showCustomInput, setShowCustomInput] = useState(false);
-  const [linkCopied, setLinkCopied] = useState(false);
   
   const isPending = winner == null || winner === DEFAULT_PUBKEY;
+  const isWinner = !isPending && winner === myAddress;
   const isDraw = winner === 'draw';
-  // DB-authoritative: use isSameWallet for case-sensitive Base58 comparison
-  // If myAddress is null (wallet briefly disconnected), treat as pending to avoid false "You Lost"
-  const isWinner = !isPending && !isDraw && myAddress != null && isSameWallet(winner, myAddress);
   
   // Check on-chain room status on mount and compute payout info
   useEffect(() => {
@@ -341,8 +335,6 @@ export function GameEndScreen({
   
   const getResultText = () => {
     if (isPending) return 'Resolving outcome...';
-    // If wallet disconnected momentarily, show neutral state instead of "You Lost"
-    if (!isDraw && !isPending && myAddress == null) return 'Match Complete';
     if (isDraw) return 'Draw';
     if (isWinner) {
       // For staked games, show pending until payout confirmed
@@ -423,7 +415,7 @@ export function GameEndScreen({
           {!isDraw && winner && winner !== 'draw' && (
             <div className="bg-muted/30 rounded-lg p-4 text-center">
               <p className="text-sm text-muted-foreground mb-1">Winner</p>
-              {isSameWallet(winner, myAddress) ? (
+              {winner === myAddress ? (
                 <p className="font-mono text-primary font-medium">You</p>
               ) : (
                 <WalletLink wallet={winner} className="text-foreground" />
@@ -436,8 +428,8 @@ export function GameEndScreen({
             <p className="text-xs uppercase tracking-wider text-muted-foreground">Players</p>
             <div className="space-y-1">
               {players.map((player) => {
-                const isMe = isSameWallet(player.address, myAddress);
-                const isWinner = isSameWallet(player.address, winner);
+                const isMe = player.address === myAddress;
+                const isWinner = player.address === winner;
                 return (
                   <div 
                     key={player.address}
@@ -473,7 +465,7 @@ export function GameEndScreen({
               playerA={myAddress}
               playerB={players.find(p => p.address !== myAddress)?.address || ''}
               gameType={gameType}
-              isLoser={!!winner && winner !== DEFAULT_PUBKEY && !isSameWallet(winner, myAddress) && winner !== 'draw'}
+              isLoser={!!winner && winner !== DEFAULT_PUBKEY && winner !== myAddress && winner !== 'draw'}
             />
           )}
 
@@ -555,11 +547,9 @@ export function GameEndScreen({
 
                 {/* Already Settled State (detected on load) */}
                 {isAlreadySettled && finalizeState !== 'success' && (
-                  <div className="bg-emerald-500/20 border border-emerald-500/50 rounded-lg p-4 space-y-3">
-                    <div className="text-center flex items-center justify-center gap-2">
-                      <CheckCircle size={20} className="text-emerald-400" />
-                      <p className="text-emerald-400 font-semibold">Already Settled</p>
-                    </div>
+                  <div className="bg-emerald-500/20 border border-emerald-500/50 rounded-lg p-4 text-center flex items-center justify-center gap-2">
+                    <CheckCircle size={20} className="text-emerald-400" />
+                    <p className="text-emerald-400 font-semibold">Already Settled</p>
                   </div>
                 )}
 
@@ -682,84 +672,6 @@ export function GameEndScreen({
                     </Button>
                   </div>
                 )}
-              </div>
-            )}
-
-            {/* Share Your Match - prominent section for staked games */}
-            {isStaked && roomPda && isAlreadySettled && (
-              <div className="bg-muted/30 border border-primary/20 rounded-lg p-4 space-y-3">
-                <p className="text-center text-sm font-semibold text-foreground">
-                  {isWinner ? '🏆 Brag About Your Win' : '📊 Share Match'}
-                </p>
-                <div className="grid grid-cols-2 gap-2">
-                  {/* WhatsApp */}
-                  {!isWalletInAppBrowser() && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="gap-2 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10"
-                      asChild
-                    >
-                      <a
-                        href={whatsappShareMatch(roomPda, gameType)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        <MessageCircle size={16} />
-                        WhatsApp
-                      </a>
-                    </Button>
-                  )}
-
-                  {/* Twitter / X */}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-2 border-border/50"
-                    asChild
-                  >
-                    <a
-                      href={twitterShareMatch(roomPda, gameType, payoutInfo?.winnerPayout)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      <svg viewBox="0 0 24 24" className="w-4 h-4 fill-current">
-                        <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-                      </svg>
-                      Twitter / X
-                    </a>
-                  </Button>
-
-                  {/* Copy Link */}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-2 border-border/50"
-                    onClick={async () => {
-                      const ok = await copyMatchLink(roomPda);
-                      if (ok) {
-                        setLinkCopied(true);
-                        setTimeout(() => setLinkCopied(false), 2000);
-                      }
-                    }}
-                  >
-                    {linkCopied ? <Check size={16} className="text-emerald-400" /> : <Copy size={16} />}
-                    {linkCopied ? 'Copied!' : 'Copy Link'}
-                  </Button>
-
-                  {/* Native Share */}
-                  {typeof navigator !== 'undefined' && 'share' in navigator && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="gap-2 border-border/50"
-                      onClick={() => nativeShareMatch(roomPda, gameType)}
-                    >
-                      <Share2 size={16} />
-                      More…
-                    </Button>
-                  )}
-                </div>
               </div>
             )}
 

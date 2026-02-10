@@ -117,14 +117,6 @@ export function useTurnTimer(options: UseTurnTimerOptions): UseTurnTimerResult {
         const newTime = prev - 1;
         
         // Check for expiration
-        if (newTime > 0 && newTime % 5 === 0) {
-          console.log("[useTurnTimer] tick:", {
-            roomId: roomId?.slice(0, 8),
-            remainingTime: newTime,
-            isMyTurn,
-            enabled,
-          });
-        }
         if (newTime <= 0 && !hasExpiredRef.current) {
           hasExpiredRef.current = true;
           console.log(`[useTurnTimer] Time expired for room ${roomId}!`);

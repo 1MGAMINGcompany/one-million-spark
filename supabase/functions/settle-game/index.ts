@@ -969,31 +969,6 @@ Deno.serve(async (req: Request) => {
           }
         }
 
-        // Upsert match_share_cards for sharing
-        try {
-          const loserWallet = playersOnChain.find(p => p !== winnerWallet) || null;
-          const pot = stakePerPlayer * playerCount;
-          const fee = Math.floor(pot * configData.feeBps / 10_000);
-          const winnerPayout = pot - fee;
-
-          await supabase.from("match_share_cards").upsert({
-            room_pda: roomPda,
-            game_type: normalizeGameType(gameType),
-            mode,
-            stake_lamports: stakePerPlayer,
-            winner_wallet: winnerWallet,
-            loser_wallet: loserWallet,
-            winner_payout_lamports: winnerPayout,
-            fee_lamports: fee,
-            tx_signature: signature,
-            win_reason: reason,
-            finished_at: new Date().toISOString(),
-          }, { onConflict: "room_pda" });
-          console.log("[settle-game] ✅ match_share_cards upserted");
-        } catch (e) {
-          console.warn("[settle-game] match_share_cards upsert failed (non-fatal):", e);
-        }
-
         dbRecorded = !dbError;
         console.log("[settle-game] 📊 DB recording complete:", { dbRecorded, dbError });
 
@@ -1006,7 +981,6 @@ Deno.serve(async (req: Request) => {
       const { error: finishErr } = await supabase.rpc("finish_game_session", {
         p_room_pda: roomPda,
         p_caller_wallet: winnerWallet,
-        p_winner_wallet: winnerWallet,
       });
 
       if (finishErr) {
@@ -1135,25 +1109,6 @@ Deno.serve(async (req: Request) => {
           updated_at: new Date().toISOString(),
         })
         .eq("room_pda", roomPda);
-
-      // Fallback match_share_cards upsert (ensures Share button works even on failure)
-      try {
-        await supabase.from("match_share_cards").upsert({
-          room_pda: roomPda,
-          game_type: normalizeGameType(gameType),
-          mode,
-          stake_lamports: stakePerPlayer,
-          winner_wallet: winnerWallet,
-          loser_wallet: playersOnChain.find(p => p !== winnerWallet) || null,
-          winner_payout_lamports: null,
-          fee_lamports: null,
-          tx_signature: null,
-          win_reason: "settlement_failed",
-          finished_at: new Date().toISOString(),
-        }, { onConflict: "room_pda" });
-      } catch (e) {
-        console.warn("[settle-game] fallback match_share_cards upsert failed:", e);
-      }
 
       return json200({
         success: false,

@@ -44,9 +44,3 @@ verify_jwt = false
 
 [functions.solana-rpc-read]
 verify_jwt = false
-
-[functions.match-get]
-verify_jwt = false
-
-[functions.match-og]
-verify_jwt = false

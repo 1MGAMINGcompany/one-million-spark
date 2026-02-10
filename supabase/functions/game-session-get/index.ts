@@ -35,7 +35,7 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, serviceKey)
 
     // Fetch game session
-    let { data: session, error: sessionError } = await supabase
+    const { data: session, error: sessionError } = await supabase
       .from('game_sessions')
       .select('*')
       .eq('room_pda', roomPda)
@@ -47,110 +47,6 @@ serve(async (req) => {
         status: 500, 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
       })
-    }
-
-    // Check for waiting timeout (only for WAITING rooms with status_int = 1)
-    if (session?.status_int === 1) {
-      try {
-        const { data: timeoutResult, error: timeoutError } = await supabase
-          .rpc('maybe_apply_waiting_timeout', { p_room_pda: roomPda })
-
-        if (timeoutError) {
-          console.warn('[game-session-get] Waiting timeout check error:', timeoutError)
-        } else if (timeoutResult?.applied) {
-          console.log('[game-session-get] ⏰ Waiting timeout applied:', timeoutResult)
-          
-          // Re-fetch session after cancellation
-          const { data: updatedSession } = await supabase
-            .from('game_sessions')
-            .select('*')
-            .eq('room_pda', roomPda)
-            .maybeSingle()
-
-          if (updatedSession) {
-            session = updatedSession
-          }
-        }
-      } catch (e) {
-        console.warn('[game-session-get] Waiting timeout exception:', e)
-      }
-    }
-
-    // Check for turn timeout (only for ACTIVE rooms with status_int = 2)
-    if (session?.status_int === 2) {
-      try {
-        const { data: turnTimeoutResult, error: turnTimeoutError } = await supabase
-          .rpc('maybe_apply_turn_timeout', { p_room_pda: roomPda })
-
-        if (turnTimeoutError) {
-          console.warn('[game-session-get] Turn timeout check error:', turnTimeoutError)
-        } else if (turnTimeoutResult?.applied) {
-          console.log('[game-session-get] ⏰ Turn timeout applied:', turnTimeoutResult)
-
-          // Re-fetch session after turn advancement
-          const { data: updatedSession } = await supabase
-            .from('game_sessions')
-            .select('*')
-            .eq('room_pda', roomPda)
-            .maybeSingle()
-
-          if (updatedSession) {
-            session = updatedSession
-          }
-
-          // AUTO-FORFEIT PAYOUT: If the timeout caused a game-ending action,
-          // call forfeit-game internally to trigger on-chain settlement.
-          const action = turnTimeoutResult.action
-          if (action === 'auto_forfeit' || action === 'auto_eliminate_and_finish') {
-            const forfeitingWallet = turnTimeoutResult.timedOutWallet
-              || (session?.winner_wallet === session?.player1_wallet
-                ? session?.player2_wallet
-                : session?.player1_wallet)
-
-            console.log('[game-session-get] 🚨 Auto-forfeit detected, calling forfeit-game', {
-              roomPda: roomPda.slice(0, 8),
-              forfeitingWallet: forfeitingWallet?.slice(0, 8),
-              action,
-            })
-
-            try {
-              const forfeitResp = await fetch(`${supabaseUrl}/functions/v1/forfeit-game`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${serviceKey}`,
-                },
-                body: JSON.stringify({
-                  roomPda,
-                  forfeitingWallet,
-                  winnerWallet: turnTimeoutResult.winnerWallet || undefined,
-                  gameType: session?.game_type,
-                }),
-              })
-              const forfeitData = await forfeitResp.json()
-              console.log('[game-session-get] forfeit-game result:', {
-                status: forfeitResp.status,
-                alreadySettled: forfeitData?.alreadySettled,
-                success: forfeitData?.ok || forfeitData?.success,
-              })
-
-              // Re-fetch session after settlement
-              const { data: postForfeitSession } = await supabase
-                .from('game_sessions')
-                .select('*')
-                .eq('room_pda', roomPda)
-                .maybeSingle()
-              if (postForfeitSession) {
-                session = postForfeitSession
-              }
-            } catch (forfeitErr) {
-              console.error('[game-session-get] forfeit-game call failed (non-fatal):', forfeitErr)
-            }
-          }
-        }
-      } catch (e) {
-        console.warn('[game-session-get] Turn timeout exception:', e)
-      }
     }
 
     // Fetch finalize receipt (settlement status) - optional field

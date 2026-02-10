@@ -85,9 +85,6 @@ export default function Room() {
   const [turnTimeSeconds, setTurnTimeSeconds] = useState<number | null>(null);
   const [roomModeLoaded, setRoomModeLoaded] = useState(false);
   
-  // DB session status for detecting cancelled rooms (waiting timeout)
-  const [dbStatusInt, setDbStatusInt] = useState<number | null>(null);
-  
   // Check if this is a rematch room (either just created or from rematch param)
   const isRematchCreated = searchParams.get('rematch_created') === '1';
   const isRematch = searchParams.get('rematch') === '1' || isRematchCreated;
@@ -189,11 +186,6 @@ export default function Room() {
           if (typeof session.turn_time_seconds === 'number') {
             setTurnTimeSeconds(session.turn_time_seconds);
             console.log("[RoomMode] DB turn_time_seconds:", session.turn_time_seconds);
-          }
-          // Capture status_int for cancelled room detection
-          if (typeof session.status_int === 'number') {
-            setDbStatusInt(session.status_int);
-            console.log("[RoomMode] DB status_int:", session.status_int);
           }
           console.log("[RoomMode] DB mode:", session.mode);
           setRoomModeLoaded(true);
@@ -1097,24 +1089,6 @@ export default function Room() {
             </div>
           )}
           
-          {/* Cancelled Room - Waiting Timeout (DB says cancelled, creator can claim refund) */}
-          {dbStatusInt === 5 && isCreator && (
-            <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-4 space-y-3">
-              <div className="flex items-center gap-2 text-amber-400">
-                <AlertTriangle className="h-5 w-5" />
-                <span className="font-medium">Opponent didn't show</span>
-              </div>
-              <p className="text-sm text-muted-foreground">
-                The room was automatically cancelled after 2 minutes of waiting. 
-                Click below to reclaim your stake.
-              </p>
-              <RecoverFundsButton 
-                roomPda={roomPdaParam || ""} 
-                onRecovered={() => navigate('/room-list')}
-              />
-            </div>
-          )}
-
           {/* Action Buttons */}
           <div className="flex flex-col gap-3">
             <div className="flex justify-center gap-3">

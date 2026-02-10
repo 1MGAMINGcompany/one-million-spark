@@ -952,31 +952,6 @@ Deno.serve(async (req: Request) => {
           console.warn("[forfeit-game] record_match_result exception (non-fatal):", rpcException);
         }
 
-        // Upsert match_share_cards for sharing
-        try {
-          const loserWallet = playersOnChain.find(p => p !== winnerWallet) || null;
-          const pot = stakePerPlayer * playerCount;
-          const fee = Math.floor(pot * configData.feeBps / 10_000);
-          const winnerPayout = pot - fee;
-
-          await supabase.from("match_share_cards").upsert({
-            room_pda: roomPda,
-            game_type: gameType || "unknown",
-            mode: "ranked",
-            stake_lamports: stakePerPlayer,
-            winner_wallet: winnerWallet,
-            loser_wallet: loserWallet,
-            winner_payout_lamports: winnerPayout,
-            fee_lamports: fee,
-            tx_signature: signature,
-            win_reason: "forfeit",
-            finished_at: new Date().toISOString(),
-          }, { onConflict: "room_pda" });
-          console.log("[forfeit-game] ✅ match_share_cards upserted");
-        } catch (e) {
-          console.warn("[forfeit-game] match_share_cards upsert failed (non-fatal):", e);
-        }
-
         dbRecorded = !dbError;
         console.log("[forfeit-game] 📊 DB recording complete:", { dbRecorded, dbError });
 
@@ -1125,25 +1100,6 @@ Deno.serve(async (req: Request) => {
 
       if (updateError) {
         console.error("[forfeit-game] Failed to void-clear session:", updateError);
-      }
-
-      // Fallback match_share_cards upsert
-      try {
-        await supabase.from("match_share_cards").upsert({
-          room_pda: roomPda,
-          game_type: gameType || "unknown",
-          mode: "ranked",
-          stake_lamports: stakePerPlayer,
-          winner_wallet: winnerWallet,
-          loser_wallet: forfeitingWallet,
-          winner_payout_lamports: null,
-          fee_lamports: null,
-          tx_signature: null,
-          win_reason: "settlement_failed",
-          finished_at: new Date().toISOString(),
-        }, { onConflict: "room_pda" });
-      } catch (e) {
-        console.warn("[forfeit-game] fallback match_share_cards upsert failed:", e);
       }
 
       return json200({

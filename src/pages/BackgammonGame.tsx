@@ -226,17 +226,15 @@ const BackgammonGame = () => {
   // Solana rooms hook for forfeit/cancel
   const { cancelRoomByPda } = useSolanaRooms();
 
-  // Refs for stable callback access (prevents stale closures in polling/visibility handlers)
+  // Refs for stable callback access
   const roomPlayersRef = useRef<string[]>([]);
   const currentPlayerRef = useRef<"player" | "ai">("player");
   const myRoleRef = useRef<"player" | "ai">("player");
   const currentTurnWalletRef = useRef<string | null>(null);
-  const diceRef = useRef<number[]>([]); // FIX: Track dice to prevent stale closure in polling
   useEffect(() => { roomPlayersRef.current = roomPlayers; }, [roomPlayers]);
   useEffect(() => { currentPlayerRef.current = currentPlayer; }, [currentPlayer]);
   useEffect(() => { myRoleRef.current = myRole; }, [myRole]);
   useEffect(() => { currentTurnWalletRef.current = currentTurnWallet; }, [currentTurnWallet]);
-  useEffect(() => { diceRef.current = dice; }, [dice]); // FIX: Keep diceRef in sync
   
   // Ref for forfeit function (set after useForfeit hook)
   const forfeitFnRef = useRef<(() => Promise<void>) | null>(null);
@@ -430,10 +428,19 @@ const BackgammonGame = () => {
       
       // Missed turns are now handled via shared utility - no need to restore from persisted state
       
-      // Always restore dice from persisted state
-      // Turn-based clearing is handled by polling/realtime handlers on actual turn change
-      setDice(persisted.dice ?? []);
-      setRemainingMoves(persisted.remainingMoves ?? []);
+      // CRITICAL: Clear stale dice on restore if it's my turn
+      // Dice from previous turn can bleed into the restored state
+      const restoredPlayer = persisted.currentPlayer;
+      const isRestoredToMyTurn = restoredPlayer === myRoleRef.current;
+      
+      if (isRestoredToMyTurn && persisted.dice?.length > 0) {
+        console.log("[BackgammonGame] Clearing stale dice on session restore - it's my turn but dice exist");
+        setDice([]);
+        setRemainingMoves([]);
+      } else {
+        setDice(persisted.dice || []);
+        setRemainingMoves(persisted.remainingMoves || []);
+      }
       
       // Only show toast once per session load
       if (showToast && !restoredToastShownRef.current) {
@@ -850,8 +857,7 @@ const BackgammonGame = () => {
             to: freshTurnWallet.slice(0, 8),
           });
           
-          // Compute turn direction to decide whether to clear per-turn state
-          const wasMyTurn = currentTurnWallet && isSameWallet(currentTurnWallet, address);
+          // Check if turn changed TO ME - need to update game state
           const isNowMyTurn = isSameWallet(freshTurnWallet, address);
           
           if (isNowMyTurn) {
@@ -877,29 +883,23 @@ const BackgammonGame = () => {
             }
           }
           
-          // Always update turn wallet and reset timer on any turn change
           setCurrentTurnWallet(freshTurnWallet);
+          // Reset timeout debounce since turn actually changed
           timeoutFiredRef.current = false;
+          
+          // FIX: Explicitly reset the turn timer when polling detects turn change
           turnTimer.resetTimer();
           
-          // FIX: Always clear dice/remainingMoves on ANY turn change
-          // - When turn leaves me: my dice are consumed
-          // - When turn arrives to me: opponent's dice are stale garbage
+          // Clear stale dice/moves to ensure clean turn start
           setDice([]);
           setRemainingMoves([]);
+          setSelectedPoint(null);
+          setValidMoves([]);
           
-          // Only clear selection/validMoves when turn LEAVES me
-          if (wasMyTurn && !isNowMyTurn) {
-            setSelectedPoint(null);
-            setValidMoves([]);
-          }
-          
-          // Update game status appropriately
-          if (isNowMyTurn) {
-            // FIX: Use diceRef to avoid stale closure - dice state may not be current
-            if (diceRef.current.length === 0) {
-              setGameStatus("Your turn - Roll the dice!");
-            }
+          // Update game status
+          const turnToMe = isSameWallet(freshTurnWallet, address);
+          if (turnToMe) {
+            setGameStatus("Your turn - Roll the dice!");
           } else {
             setGameStatus("Opponent's turn");
           }
@@ -937,30 +937,14 @@ const BackgammonGame = () => {
           const dbTurnWallet = data?.session?.current_turn_wallet;
           if (dbTurnWallet && dbTurnWallet !== currentTurnWallet) {
             console.log("[BackgammonGame] Visibility poll detected turn change");
-            
-            // Compute turn direction
-            const wasMyTurn = currentTurnWallet && isSameWallet(currentTurnWallet, address);
-            const isNowMyTurn = isSameWallet(dbTurnWallet, address);
-            
             setCurrentTurnWallet(dbTurnWallet);
-            timeoutFiredRef.current = false;
-            
-            // FIX: Always clear dice/remainingMoves on ANY turn change
             setDice([]);
             setRemainingMoves([]);
-            
-            // Only clear selection/validMoves when turn LEAVES me
-            if (wasMyTurn && !isNowMyTurn) {
-              setSelectedPoint(null);
-              setValidMoves([]);
-            }
-            
-            // FIX: Use diceRef to avoid stale closure - dice state may not be current
-            if (isNowMyTurn && diceRef.current.length === 0) {
-              setGameStatus("Your turn - Roll the dice!");
-            } else if (!isNowMyTurn) {
-              setGameStatus("Opponent's turn");
-            }
+            setSelectedPoint(null);
+            setValidMoves([]);
+            const isNowMyTurn = isSameWallet(dbTurnWallet, address);
+            setGameStatus(isNowMyTurn ? "Your turn - Roll the dice!" : "Opponent's turn");
+            timeoutFiredRef.current = false;
           }
         }).catch(err => {
           console.warn("[BackgammonGame] Visibility poll error:", err);
