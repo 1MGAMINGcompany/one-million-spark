@@ -97,6 +97,56 @@ serve(async (req) => {
           if (updatedSession) {
             session = updatedSession
           }
+
+          // AUTO-FORFEIT PAYOUT: If the timeout caused a game-ending action,
+          // call forfeit-game internally to trigger on-chain settlement.
+          const action = turnTimeoutResult.action
+          if (action === 'auto_forfeit' || action === 'auto_eliminate_and_finish') {
+            const forfeitingWallet = turnTimeoutResult.timedOutWallet
+              || (session?.winner_wallet === session?.player1_wallet
+                ? session?.player2_wallet
+                : session?.player1_wallet)
+
+            console.log('[game-session-get] 🚨 Auto-forfeit detected, calling forfeit-game', {
+              roomPda: roomPda.slice(0, 8),
+              forfeitingWallet: forfeitingWallet?.slice(0, 8),
+              action,
+            })
+
+            try {
+              const forfeitResp = await fetch(`${supabaseUrl}/functions/v1/forfeit-game`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${serviceKey}`,
+                },
+                body: JSON.stringify({
+                  roomPda,
+                  forfeitingWallet,
+                  winnerWallet: turnTimeoutResult.winnerWallet || undefined,
+                  gameType: session?.game_type,
+                }),
+              })
+              const forfeitData = await forfeitResp.json()
+              console.log('[game-session-get] forfeit-game result:', {
+                status: forfeitResp.status,
+                alreadySettled: forfeitData?.alreadySettled,
+                success: forfeitData?.ok || forfeitData?.success,
+              })
+
+              // Re-fetch session after settlement
+              const { data: postForfeitSession } = await supabase
+                .from('game_sessions')
+                .select('*')
+                .eq('room_pda', roomPda)
+                .maybeSingle()
+              if (postForfeitSession) {
+                session = postForfeitSession
+              }
+            } catch (forfeitErr) {
+              console.error('[game-session-get] forfeit-game call failed (non-fatal):', forfeitErr)
+            }
+          }
         }
       } catch (e) {
         console.warn('[game-session-get] Turn timeout exception:', e)
