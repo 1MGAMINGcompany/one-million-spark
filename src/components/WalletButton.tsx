@@ -213,7 +213,6 @@ export function WalletButton() {
 
         select(selectedWallet.adapter.name);
         setDialogOpen(false);
-        await connect();
         
         // For MWA on Android, show immediate feedback
         if (isMWA && isAndroid) {
@@ -385,8 +384,7 @@ export function WalletButton() {
     if (!isInWalletBrowser) return;
     
     // Check if window.solana reports connected
-    const solProvider = win.solflare || win.solana;
-    if (solProvider?.isConnected && solProvider?.publicKey) {
+    if (win.solana?.isConnected && win.solana?.publicKey) {
       console.log("[WalletState] In-app browser has connected wallet, syncing...");
       
       // Find matching installed adapter

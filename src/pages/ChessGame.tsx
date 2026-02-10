@@ -2,7 +2,6 @@ import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { getOpponentWallet, isSameWallet, isRealWallet, DEFAULT_SOLANA_PUBKEY } from "@/lib/walletUtils";
 import { clearRoom } from "@/lib/missedTurns"; // Only clearRoom needed - strikes now tracked server-side
 import { isWalletInAppBrowser } from "@/lib/walletBrowserDetection";
-import { OpponentAbsenceIndicator } from "@/components/OpponentAbsenceIndicator";
 
 // Polling intervals for opponent timeout detection
 const POLL_INTERVAL_DESKTOP = 3000; // 3 seconds
@@ -21,7 +20,6 @@ import { useSolanaRooms } from "@/hooks/useSolanaRooms";
 import { useSound } from "@/contexts/SoundContext";
 import { useTranslation } from "react-i18next";
 import { useWallet } from "@/hooks/useWallet";
-import { useAutoSettlement } from "@/hooks/useAutoSettlement";
 import { useWebRTCSync, GameMessage } from "@/hooks/useWebRTCSync";
 import { useTurnNotifications, TurnPlayer } from "@/hooks/useTurnNotifications";
 import { useGameChat, ChatPlayer, ChatMessage } from "@/hooks/useGameChat";
@@ -60,7 +58,6 @@ interface PersistedChessState {
   moveHistory: string[];
   gameOver: boolean;
   gameStatus: string;
-  winnerSeat?: number;
 }
 
 // Animation Toggle Component
@@ -147,10 +144,6 @@ const ChessGame = () => {
   const [entryFeeSol, setEntryFeeSol] = useState(0);
   const [stakeLamports, setStakeLamports] = useState<number | undefined>(undefined); // Guardrail A: Canonical on-chain stake
   const [isCancellingRoom, setIsCancellingRoom] = useState(false);
-  
-  // Opponent absence tracking (for UI indicator)
-  const [opponentStrikes, setOpponentStrikes] = useState(0);
-  const [dbTurnStartedAt, setDbTurnStartedAt] = useState<string | null>(null);
   
   // Solana rooms hook for forfeit/cancel
   const { cancelRoomByPda } = useSolanaRooms();
@@ -321,9 +314,6 @@ const ChessGame = () => {
         moveHistory,
         gameOver,
         gameStatus,
-        ...(gameOver && winnerWallet && roomPlayers.length >= 2
-          ? { winnerSeat: roomPlayers.indexOf(winnerWallet) >= 0 ? roomPlayers.indexOf(winnerWallet) : undefined }
-          : {}),
       };
       saveChessSession(
         persisted,
@@ -334,14 +324,14 @@ const ChessGame = () => {
         roomMode
       );
     }
-  }, [game, moveHistory, gameOver, gameStatus, roomPlayers, saveChessSession, roomMode, winnerWallet]);
+  }, [game, moveHistory, gameOver, gameStatus, roomPlayers, saveChessSession, roomMode]);
 
   // Finish session and archive room when game ends
   useEffect(() => {
-    if (gameOver && roomPlayers.length >= 2 && winnerWallet) {
-      finishChessSession(winnerWallet);
+    if (gameOver && roomPlayers.length >= 2) {
+      finishChessSession();
     }
-  }, [gameOver, roomPlayers.length, finishChessSession, winnerWallet]);
+  }, [gameOver, roomPlayers.length, finishChessSession]);
 
   // Capture animations hook
   const { animations, triggerAnimation, handleAnimationComplete } = useCaptureAnimations(animationsEnabled);
@@ -418,15 +408,6 @@ const ChessGame = () => {
     myWallet: address,
     isRanked: isRankedGame,
     enabled: hasTwoRealPlayers && modeLoaded,
-  });
-
-  // Auto-settlement hook - triggers on-chain settlement when game ends
-  const autoSettlement = useAutoSettlement({
-    roomPda,
-    winner: gameOver ? winnerWallet : null,
-    reason: gameStatus.includes("Checkmate") ? "gameover" : 
-            gameStatus.includes("resign") ? "resign" : "gameover",
-    isRanked: isRankedGame,
   });
 
   // TxLock for preventing Phantom "Request blocked" popups
@@ -580,16 +561,6 @@ const ChessGame = () => {
           
           // Grant opponent turn via override
           setTurnOverrideWallet(result.nextTurnWallet);
-          setDbTurnStartedAt(new Date().toISOString());
-
-          // Flip chess.js FEN active color to match server state
-          setGame(prev => {
-            const fen = prev.fen();
-            const parts = fen.split(' ');
-            parts[1] = parts[1] === 'w' ? 'b' : 'w';
-            try { return new Chess(parts.join(' ')); }
-            catch { return prev; }
-          });
         }
       }
     } catch (err) {
@@ -604,7 +575,6 @@ const ChessGame = () => {
     turnTimeSeconds: effectiveTurnTime,
     enabled: isRankedGame && canPlay && !gameOver,
     isMyTurn,
-    turnStartedAt: dbTurnStartedAt,
     onTimeExpired: handleTurnTimeout,
     roomId: roomPda,
   });
@@ -624,13 +594,11 @@ const ChessGame = () => {
     });
   }, [roomPlayers, address]);
 
-  // Active turn address: override takes priority so polling comparisons
-  // immediately reflect timeout-driven turn flips (no waiting for next poll).
+  // Active turn address based on chess turn
   const activeTurnAddress = useMemo(() => {
-    if (turnOverrideWallet) return turnOverrideWallet;
     const turnIndex = game.turn() === "w" ? 0 : 1;
     return turnPlayers[turnIndex]?.address || null;
-  }, [game, turnPlayers, turnOverrideWallet]);
+  }, [game, turnPlayers]);
 
   // === OPPONENT TURN TIMEOUT POLLING ===
   // This polls the server to apply timeouts when opponent is idle
@@ -673,17 +641,8 @@ const ChessGame = () => {
         // Skip if game is over
         if (gameOver) return;
 
-        // === EXTRACT OPPONENT STRIKES FOR UI ===
-        const session = data?.session;
-        const missedTurns = (session?.missed_turns || {}) as Record<string, number>;
-        const opponentWalletAddr = getOpponentWallet(roomPlayers, address);
-        const strikes = opponentWalletAddr ? (missedTurns[opponentWalletAddr] || 0) : 0;
-        setOpponentStrikes(strikes);
-        // dbTurnStartedAt is only updated inside turn-change/timeout handlers below
-        // to prevent polling from overwriting the local timer anchor.
-
         // === SERVER-SIDE TIMEOUT CHECK ===
-        const dbTurnWallet = session?.current_turn_wallet;
+        const dbTurnWallet = data?.session?.current_turn_wallet;
         const isOpponentsTurn = dbTurnWallet && !isSameWallet(dbTurnWallet, address);
 
         if (isOpponentsTurn && dbStatus !== 'finished') {
@@ -708,7 +667,6 @@ const ChessGame = () => {
                 // Opponent forfeited by 3 strikes - I WIN
                 setGameOver(true);
                 setWinnerWallet(result.winnerWallet || address || null);
-                setOpponentStrikes(0); // Reset after forfeit
                 setGameStatus(t("gameSession.opponentForfeited"));
                 play('chess_win');
                 toast({
@@ -716,21 +674,9 @@ const ChessGame = () => {
                   description: t("gameSession.youWin"),
                 });
               } else if (result.type === "turn_timeout" && result.nextTurnWallet) {
-                // Turn passed to me - update strikes count
-                setOpponentStrikes(result.strikes || 0);
+                // Turn passed to me
                 setTurnOverrideWallet(result.nextTurnWallet);
-                setDbTurnStartedAt(new Date().toISOString());
-
-                // Flip chess.js FEN active color to match server state
-                // (timeout is server-only; no chess.js move was made)
-                setGame(prev => {
-                  const fen = prev.fen();
-                  const parts = fen.split(' ');
-                  parts[1] = parts[1] === 'w' ? 'b' : 'w';
-                  try { return new Chess(parts.join(' ')); }
-                  catch { return prev; }
-                });
-
+                turnTimer.resetTimer();
                 toast({
                   title: t("gameSession.opponentSkipped"),
                   description: `${result.strikes}/3 ${t("gameSession.missedTurns")}`,
@@ -752,19 +698,7 @@ const ChessGame = () => {
           const isNowMyTurn = isSameWallet(dbTurnWallet, address);
           if (isNowMyTurn) {
             setTurnOverrideWallet(dbTurnWallet);
-            setDbTurnStartedAt(data?.session?.turn_started_at || new Date().toISOString());
-
-            // Flip chess.js FEN active color if engine disagrees with server
-            setGame(prev => {
-              const expectedColor = isNowMyTurn ? effectiveColor : (effectiveColor === 'w' ? 'b' : 'w');
-              if (prev.turn() !== expectedColor) {
-                const parts = prev.fen().split(' ');
-                parts[1] = expectedColor!;
-                try { return new Chess(parts.join(' ')); }
-                catch { return prev; }
-              }
-              return prev;
-            });
+            turnTimer.resetTimer();
           }
         }
       } catch (err) {
@@ -781,8 +715,8 @@ const ChessGame = () => {
     return () => clearInterval(interval);
   }, [
     roomPda, isRankedGame, startRoll.isFinalized, gameOver, 
-    address, activeTurnAddress, roomPlayers,
-    play, t
+    address, turnOverrideWallet, activeTurnAddress, 
+    turnTimer, play, t
   ]);
 
   // Visibility change handler - poll immediately when tab becomes visible
@@ -821,19 +755,7 @@ const ChessGame = () => {
             const isNowMyTurn = isSameWallet(dbTurnWallet, address);
             if (isNowMyTurn) {
               setTurnOverrideWallet(dbTurnWallet);
-              setDbTurnStartedAt(data?.session?.turn_started_at || new Date().toISOString());
-
-              // Flip chess.js FEN active color if engine disagrees with server
-              setGame(prev => {
-                const expectedColor = isNowMyTurn ? effectiveColor : (effectiveColor === 'w' ? 'b' : 'w');
-                if (prev.turn() !== expectedColor) {
-                  const parts = prev.fen().split(' ');
-                  parts[1] = expectedColor!;
-                  try { return new Chess(parts.join(' ')); }
-                  catch { return prev; }
-                }
-                return prev;
-              });
+              turnTimer.resetTimer();
             }
           }
           
@@ -849,7 +771,7 @@ const ChessGame = () => {
     
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [roomPda, isRankedGame, gameOver, activeTurnAddress, address, play, t]);
+  }, [roomPda, isRankedGame, gameOver, activeTurnAddress, address, turnTimer, play, t]);
 
   // Turn notification system
   const {
@@ -1259,8 +1181,7 @@ const ChessGame = () => {
         recordPlayerMove(address || "", result.san);
         
         // Send move via WebRTC
-        const moveData: ChessMove & { type?: string } = {
-          type: 'chess_move',
+        const moveData: ChessMove = {
           from,
           to,
           promotion,
@@ -1272,11 +1193,9 @@ const ChessGame = () => {
         // Persist move to DB for ranked games
         if (isRankedGame && address) {
           persistMove(moveData, address);
-          // Immediately anchor timer to now (server will overwrite on next poll)
-          setDbTurnStartedAt(new Date().toISOString());
         }
         
-        // Reset turn timer (no-op, kept for compat)
+        // Reset turn timer
         turnTimer.resetTimer();
         
         // Check game over
@@ -1397,15 +1316,6 @@ const ChessGame = () => {
         {/* For casual games: requires dice roll finalized */}
         {canPlay ? (
           <div className="max-w-6xl mx-auto px-4 py-4">
-            {/* Opponent Absence Indicator */}
-            <OpponentAbsenceIndicator
-              opponentStrikes={opponentStrikes}
-              turnTimeSeconds={effectiveTurnTime}
-              turnStartedAt={dbTurnStartedAt}
-              isOpponentsTurn={!isActuallyMyTurn && !gameOver}
-              playerCount={2}
-            />
-            
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Chess Board Column */}
               <div className="lg:col-span-2 space-y-4">
@@ -1548,8 +1458,7 @@ const ChessGame = () => {
           onExit={() => navigate("/room-list")}
           result={gameStatus.includes("Checkmate") ? "Checkmate" : gameStatus.includes("Stalemate") ? "Stalemate" : undefined}
           roomPda={roomPda}
-          isStaked={isRankedGame}
-          isSettling={autoSettlement.isSettling}
+          isStaked={false}
         />
       )}
 

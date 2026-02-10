@@ -201,19 +201,6 @@ export function useDurableGameSync({
             dbg("durable.submit.timeout_early", {});
             return false;
             
-          case "already_rolled":
-            console.warn("[DurableSync] Dice already rolled this turn");
-            dbg("durable.submit.already_rolled", {});
-            // Silent - dice are already present, just refresh state
-            await loadMoves();
-            return false;
-            
-          case "game_finished":
-            console.warn("[DurableSync] Game already finished");
-            dbg("durable.submit.game_finished", {});
-            // Silent - game ended, no action needed
-            return false;
-            
           case "missing_client_move_id":
             // This should never happen if client code is correct
             console.error("[DurableSync] Missing clientMoveId for ranked game - this is a bug!");

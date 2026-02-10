@@ -13,7 +13,6 @@ import { RivalryWidget } from '@/components/RivalryWidget';
 import { WalletLink } from '@/components/WalletLink';
 import { DrawSettlementDebug } from '@/components/DrawSettlementDebug';
 import { DrawRefundError } from '@/components/DrawRefundError';
-import { ShareMatchButton } from '@/components/ShareMatchButton';
 import { 
   RematchMode, 
   RematchPayload, 
@@ -41,7 +40,6 @@ interface GameEndScreenProps {
   roomPda?: string; // Room PDA for finalization
   isStaked?: boolean; // Whether this is a staked game requiring finalization
   isRematch?: boolean; // Whether this game was created as a rematch
-  isSettling?: boolean; // Whether auto-settlement is in progress
 }
 
 // Default pubkey (11111111111111111111111111111111) indicates no winner set yet
@@ -164,7 +162,6 @@ export function GameEndScreen({
   roomPda,
   isStaked,
   isRematch,
-  isSettling,
 }: GameEndScreenProps) {
   const { t } = useTranslation();
   const { connection } = useConnection();
@@ -250,8 +247,7 @@ export function GameEndScreen({
   }, [roomPda, isStaked, connection]);
   
   // Show finalize button for staked games with a winner OR draw
-  // Hide while auto-settlement is in progress
-  const showFinalizeButton = isStaked && roomPda && winner && !isSettling;
+  const showFinalizeButton = isStaked && roomPda && winner;
   const showDrawSettlement = isStaked && roomPda && isDraw;
   const isAlreadySettled = roomAlreadySettled || finalizeState === 'success';
   
@@ -546,37 +542,14 @@ export function GameEndScreen({
                     <p className="text-[10px] text-muted-foreground text-center pt-1 border-t border-emerald-500/20">
                       Payout executed on-chain via finalize_room. Funds sent directly to winner's wallet.
                     </p>
-                    
-                    {/* Share Button - Show after successful payout */}
-                    {roomPda && (
-                      <div className="pt-2">
-                        <ShareMatchButton
-                          roomPda={roomPda}
-                          isWinner={isWinner}
-                          gameName={gameType}
-                          className="w-full"
-                        />
-                      </div>
-                    )}
                   </div>
                 )}
 
                 {/* Already Settled State (detected on load) */}
                 {isAlreadySettled && finalizeState !== 'success' && (
-                  <div className="space-y-3">
-                    <div className="bg-emerald-500/20 border border-emerald-500/50 rounded-lg p-4 text-center flex items-center justify-center gap-2">
-                      <CheckCircle size={20} className="text-emerald-400" />
-                      <p className="text-emerald-400 font-semibold">Already Settled</p>
-                    </div>
-                    {/* Share Button - Show for already settled games */}
-                    {roomPda && (
-                      <ShareMatchButton
-                        roomPda={roomPda}
-                        isWinner={isWinner}
-                        gameName={gameType}
-                        className="w-full"
-                      />
-                    )}
+                  <div className="bg-emerald-500/20 border border-emerald-500/50 rounded-lg p-4 text-center flex items-center justify-center gap-2">
+                    <CheckCircle size={20} className="text-emerald-400" />
+                    <p className="text-emerald-400 font-semibold">Already Settled</p>
                   </div>
                 )}
 
@@ -701,7 +674,6 @@ export function GameEndScreen({
                 )}
               </div>
             )}
-
 
             {/* Primary: Rematch (for non-staked games or as fallback) */}
             {(!isStaked || !roomPda || stakeLamports === 0) && (

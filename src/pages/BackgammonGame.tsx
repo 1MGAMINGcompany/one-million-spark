@@ -1,8 +1,6 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { getOpponentWallet, isSameWallet, isRealWallet } from "@/lib/walletUtils";
 import { clearRoom } from "@/lib/missedTurns"; // Only clearRoom needed for cleanup - strikes now tracked server-side
-import { isWalletInAppBrowser } from "@/lib/walletBrowserDetection";
-import { OpponentAbsenceIndicator } from "@/components/OpponentAbsenceIndicator";
 import { GameErrorBoundary } from "@/components/GameErrorBoundary";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -32,7 +30,6 @@ import { useTurnTimer, DEFAULT_RANKED_TURN_TIME } from "@/hooks/useTurnTimer";
 import { useStartRoll } from "@/hooks/useStartRoll";
 import { useTxLock } from "@/contexts/TxLockContext";
 import { useDurableGameSync, GameMove } from "@/hooks/useDurableGameSync";
-import { useAutoSettlement } from "@/hooks/useAutoSettlement";
 import { DiceRollStart } from "@/components/DiceRollStart";
 import TurnStatusHeader from "@/components/TurnStatusHeader";
 import TurnHistoryDrawer from "@/components/TurnHistoryDrawer";
@@ -75,7 +72,6 @@ interface PersistedBackgammonState {
   currentPlayer: "player" | "ai";
   gameOver: boolean;
   gameStatus: string;
-  winnerSeat?: number;
 }
 
 // Multiplayer move message
@@ -198,10 +194,6 @@ const BackgammonGame = () => {
   const [gameResultInfo, setGameResultInfo] = useState<{ winner: Player | null; resultType: GameResultType | null; multiplier: number } | null>(null);
   const [winnerWallet, setWinnerWallet] = useState<string | null>(null); // Direct wallet address of winner
   const [outcomeResolving, setOutcomeResolving] = useState(false); // Neutral "resolving..." state
-  
-  // Opponent absence tracking
-  const [opponentStrikes, setOpponentStrikes] = useState(0);
-  const [dbTurnStartedAt, setDbTurnStartedAt] = useState<string | null>(null);
   
   // Timeout debounce - prevent double-fire
   const timeoutFiredRef = useRef(false);
@@ -495,9 +487,6 @@ const BackgammonGame = () => {
         currentPlayer,
         gameOver,
         gameStatus,
-        ...(gameOver && winnerWallet && roomPlayers.length >= 2
-          ? { winnerSeat: roomPlayers.indexOf(winnerWallet) >= 0 ? roomPlayers.indexOf(winnerWallet) : undefined }
-          : {}),
       };
       saveBackgammonSession(
         persisted,
@@ -508,29 +497,20 @@ const BackgammonGame = () => {
         roomMode
       );
     }
-  }, [gameState, dice, remainingMoves, currentPlayer, gameOver, gameStatus, roomPlayers, saveBackgammonSession, roomMode, winnerWallet]);
+  }, [gameState, dice, remainingMoves, currentPlayer, gameOver, gameStatus, roomPlayers, saveBackgammonSession, roomMode]);
 
   // Finish session and archive room when game ends
   useEffect(() => {
-    if (gameOver && roomPlayers.length >= 2 && winnerWallet) {
-      finishBackgammonSession(winnerWallet);
+    if (gameOver && roomPlayers.length >= 2) {
+      finishBackgammonSession();
     }
-  }, [gameOver, roomPlayers.length, finishBackgammonSession, winnerWallet]);
+  }, [gameOver, roomPlayers.length, finishBackgammonSession]);
 
   const rankedGate = useRankedReadyGate({
     roomPda,
     myWallet: address,
     isRanked: isRankedGame,
     enabled: roomPlayers.length >= 2 && modeLoaded,
-  });
-
-  // Auto-settlement hook - triggers settle-game edge function when game ends
-  // This ensures on-chain payout happens automatically without user clicking "Settle"
-  const autoSettlement = useAutoSettlement({
-    roomPda,
-    winner: winnerWallet,
-    reason: "gameover",
-    isRanked: isRankedGame,
   });
 
   // Check if we have 2 real player wallets (not placeholders including 111111...)
@@ -932,15 +912,6 @@ const BackgammonGame = () => {
           // Reset timeout debounce when turn_started_at changes
           timeoutFiredRef.current = false;
         }
-        
-        // Extract opponent strikes for absence indicator
-        const missedTurns = (freshData?.session?.missed_turns || {}) as Record<string, number>;
-        const opponentWalletAddr = getOpponentWallet(roomPlayersRef.current, address);
-        if (opponentWalletAddr) {
-          const strikes = missedTurns[opponentWalletAddr] || 0;
-          setOpponentStrikes(strikes);
-        }
-        setDbTurnStartedAt(freshTurnStartedAt || null);
       } catch (err) {
         console.error("[BackgammonGame] Polling error:", err);
       }
@@ -1257,12 +1228,27 @@ const BackgammonGame = () => {
     turnTimeSeconds: effectiveTurnTime,
     enabled: isRankedGame && (canPlay || startRoll.isFinalized) && !gameOver,
     isMyTurn: effectiveIsMyTurn,
-    turnStartedAt: dbTurnStartedAt,
     onTimeExpired: handleTurnTimeout,
     roomId: roomPda,
   });
 
-  // Timer visibility handler - no-op now, timer is server-anchored
+  // Timer visibility handler - resume timer when tab becomes visible
+  useEffect(() => {
+    if (!roomPda || !isRankedGame || gameOver) return;
+    
+    const handleTimerVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        console.log("[BackgammonGame] Tab visible - checking timer state");
+        if (turnTimer.isPaused) {
+          console.log("[BackgammonGame] Resuming paused timer");
+          turnTimer.resumeTimer();
+        }
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleTimerVisibility);
+    return () => document.removeEventListener('visibilitychange', handleTimerVisibility);
+  }, [roomPda, isRankedGame, gameOver, turnTimer]);
   const turnPlayers: TurnPlayer[] = useMemo(() => {
     return roomPlayers.map((playerAddress, index) => {
       const isMe = isSameWallet(playerAddress, address);
@@ -2313,14 +2299,6 @@ const BackgammonGame = () => {
               remainingTime={isRankedGame ? turnTimer.remainingTime : undefined}
               showTimer={isRankedGame && startRoll.isFinalized && !gameOver}
             />
-            
-            {/* Opponent Absence Indicator */}
-            <OpponentAbsenceIndicator
-              opponentStrikes={opponentStrikes}
-              turnTimeSeconds={effectiveTurnTime}
-              turnStartedAt={dbTurnStartedAt}
-              isOpponentsTurn={!isActuallyMyTurn && startRoll.isFinalized && !gameOver}
-            />
           </div>
         </div>
       )}
@@ -2822,8 +2800,7 @@ const BackgammonGame = () => {
           onExit={() => navigate("/room-list")}
           result={gameResultInfo ? `${formatResultType(gameResultInfo.resultType).label} (${formatResultType(gameResultInfo.resultType).multiplier})` : undefined}
           roomPda={roomPda}
-          isStaked={isRankedGame}
-          isSettling={autoSettlement.isSettling}
+          isStaked={false}
         />
       )}
       

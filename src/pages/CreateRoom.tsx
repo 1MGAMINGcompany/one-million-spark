@@ -51,15 +51,6 @@ const GAME_TYPE_MAP: Record<string, string> = {
   ludo: "5",
 };
 
-// Reverse map: numeric ID -> canonical game type name for DB
-const GAME_TYPE_NAMES: Record<string, string> = {
-  "1": "chess",
-  "2": "dominos",
-  "3": "backgammon",
-  "4": "checkers",
-  "5": "ludo",
-};
-
 // Target minimum fee in USD
 const MIN_FEE_USD = 0.50;
 // Fallback minimum if price unavailable
@@ -346,7 +337,6 @@ export default function CreateRoom() {
                 turnTimeSeconds: authoritativeTurnTime,
                 mode: gameMode,
                 creatorWallet: address,
-                gameType: GAME_TYPE_NAMES[gameType] || "unknown",
               },
             }
           );

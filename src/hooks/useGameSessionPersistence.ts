@@ -127,17 +127,17 @@ export function useGameSessionPersistence({
   }, [roomPda, gameType, enabled, callerWallet]);
 
   // Mark session as finished using secure RPC function and archive the room
-  const finishSession = useCallback(async (winnerWallet?: string | null) => {
+  const finishSession = useCallback(async () => {
     if (!roomPda || !enabled) return;
 
     try {
-      console.log('[GameSession] Marking session as finished via secure RPC', { winnerWallet: winnerWallet?.slice(0, 8) });
+      console.log('[GameSession] Marking session as finished via secure RPC');
       
       // Use the secure RPC function instead of direct update
       const { error } = await supabase.rpc('finish_game_session', {
         p_room_pda: roomPda,
         p_caller_wallet: callerWallet || null,
-        p_winner_wallet: winnerWallet || null,
+        p_winner_wallet: null,
       });
 
       if (error) {

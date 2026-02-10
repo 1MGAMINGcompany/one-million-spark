@@ -482,7 +482,7 @@ Deno.serve(async (req: Request) => {
     // ─────────────────────────────────────────────────────────────
     const { data: sessionRow, error: sessionError } = await supabase
       .from("game_sessions")
-      .select("game_state, game_type, winner_wallet")
+      .select("game_state, game_type")
       .eq("room_pda", roomPda)
       .single();
 
@@ -501,35 +501,10 @@ Deno.serve(async (req: Request) => {
     // ─────────────────────────────────────────────────────────────
     // STEP 3: RESOLVE WINNER SEAT FROM GAME STATE
     // ─────────────────────────────────────────────────────────────
-    let seatResult = resolveWinnerSeat(gameState, gameType);
-
-    // FALLBACK: If resolveWinnerSeat fails (e.g. gameOver is boolean true),
-    // use winner_wallet from game_sessions to find seat in on-chain players[]
-    if ("error" in seatResult) {
-      console.warn("[settle-game] resolveWinnerSeat failed, trying DB fallback:", seatResult.error);
-      
-      const dbWinnerWallet = sessionRow.winner_wallet as string | null;
-      if (dbWinnerWallet) {
-        const seatFromWallet = playersOnChain.indexOf(dbWinnerWallet);
-        if (seatFromWallet >= 0) {
-          console.log("[settle-game] ✅ Fallback: resolved winner from session.winner_wallet", {
-            wallet: dbWinnerWallet.slice(0, 8),
-            seat: seatFromWallet,
-          });
-          seatResult = { seatIndex: seatFromWallet, source: "winnerSeat" as const, rawValue: seatFromWallet };
-        } else {
-          console.error("[settle-game] Fallback failed: winner_wallet not in on-chain players[]", {
-            winnerWallet: dbWinnerWallet.slice(0, 8),
-            players: playersOnChain.map(p => p.slice(0, 8)),
-          });
-        }
-      } else {
-        console.error("[settle-game] Fallback failed: no winner_wallet in game_sessions");
-      }
-    }
+    const seatResult = resolveWinnerSeat(gameState, gameType);
 
     if ("error" in seatResult) {
-      console.error("[settle-game] Cannot resolve winner seat (all methods exhausted):", seatResult.error);
+      console.error("[settle-game] Cannot resolve winner seat:", seatResult.error);
       return json200({
         success: false,
         error: `Cannot resolve winner seat: ${seatResult.error}`,
@@ -952,38 +927,6 @@ Deno.serve(async (req: Request) => {
           console.log("[settle-game] ✅ matches recorded");
         }
 
-        // Step 2b: Upsert match_share_cards for social sharing
-        const loserWallet = playersOnChain.find(p => p !== winnerWallet) || null;
-        const potLamports = Number(roomData.stakeLamports) * roomData.playerCount;
-        const feeLamports = Math.floor(potLamports * 500 / 10000); // 5% fee
-        const winnerPayoutLamports = potLamports - feeLamports;
-
-        const { error: shareCardError } = await supabase
-          .from("match_share_cards")
-          .upsert(
-            {
-              room_pda: roomPda,
-              game_type: gameType || "unknown",
-              mode: mode || "ranked",
-              stake_lamports: Number(roomData.stakeLamports),
-              winner_wallet: winnerWallet,
-              loser_wallet: loserWallet,
-              win_reason: reason || "gameover",
-              winner_payout_lamports: winnerPayoutLamports,
-              fee_lamports: feeLamports,
-              tx_signature: signature,
-              finished_at: new Date().toISOString(),
-              metadata: { payout_direction: "winner_takes_all" },
-            },
-            { onConflict: "room_pda" }
-          );
-
-        if (shareCardError) {
-          console.error("[settle-game] match_share_cards upsert failed:", shareCardError);
-        } else {
-          console.log("[settle-game] ✅ match_share_cards recorded");
-        }
-
         // Step 3: Update player_profiles (winner) - DO NOT include win_rate (generated column)
         const { error: winnerProfileError } = await supabase
           .from("player_profiles")
@@ -1167,28 +1110,6 @@ Deno.serve(async (req: Request) => {
           updated_at: new Date().toISOString(),
         })
         .eq("room_pda", roomPda);
-
-      // Still record share card so UI shows result even on failed settlement
-      try {
-        const loserWallet = playersOnChain.find(p => p !== winnerWallet) || null;
-        await supabase.from("match_share_cards").upsert({
-          room_pda: roomPda,
-          game_type: gameType || "unknown",
-          mode: mode || "ranked",
-          stake_lamports: Number(roomData.stakeLamports),
-          winner_wallet: winnerWallet,
-          loser_wallet: loserWallet,
-          win_reason: "settlement_failed",
-          winner_payout_lamports: 0,
-          fee_lamports: 0,
-          tx_signature: null,
-          finished_at: new Date().toISOString(),
-          metadata: { payout_direction: "failed", error: String((settlementError as Error)?.message ?? settlementError) },
-        }, { onConflict: "room_pda" });
-        console.log("[settle-game] ✅ match_share_cards fallback recorded");
-      } catch (e) {
-        console.warn("[settle-game] match_share_cards fallback failed:", e);
-      }
 
       return json200({
         success: false,
