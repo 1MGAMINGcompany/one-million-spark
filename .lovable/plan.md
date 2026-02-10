@@ -1,68 +1,51 @@
 
 
-# Fix: Auto-Forfeit Must Trigger On-Chain Payout
+# Add "Share Your Match" Section to Game End Screen
 
-## Problem
+## What changes
 
-When a player misses 3 consecutive turns, `maybe_apply_turn_timeout` correctly sets `status_int = 3` and `winner_wallet` in the database, but **no edge function is called** to execute the on-chain payout (`submit_result` + `close_room`). The winner never gets paid.
+A new, prominent share section will appear at the bottom of the end-game popup for **ranked and private** games (staked games). It will show for both winners and losers, with different messaging:
 
-## Solution
+- **Winners**: "Brag About Your Win" with WhatsApp, Twitter/X, Copy Link, and native share buttons
+- **Losers**: "Share Match" (more neutral tone) with the same sharing options
 
-Add a server-side internal call from `game-session-get` to `forfeit-game` immediately after `maybe_apply_turn_timeout` returns an `auto_forfeit` (or `auto_eliminate_and_finish`) result. This is the same polling endpoint both clients hit every few seconds, so it guarantees the payout fires regardless of which device detects the timeout.
+The existing small `ShareMatchButton` inside the payout success/settled blocks will be removed to avoid duplication.
 
-## Implementation
+## Where it appears
 
-### File: `supabase/functions/game-session-get/index.ts`
+- Only for staked games (`isStaked && roomPda`) -- this covers both ranked and private modes
+- Shows after payout is settled (success or already settled state), so the share card has real data
+- Positioned between the rematch section and the exit buttons for maximum visibility
 
-After the existing block (lines 80-103) that calls `maybe_apply_turn_timeout` and re-fetches the session, add:
+## Design
 
-```text
-If turnTimeoutResult.action is "auto_forfeit" or "auto_eliminate_and_finish":
+A card-like section with:
+- A fun emoji-accented heading ("Brag About Your Win" or "Share Match")
+- 3 action buttons in a row: WhatsApp (green), Twitter/X (dark), Copy Link (outline)
+- A "More..." button using native share API (if available)
+- Uses existing share utilities from `src/lib/shareMatch.ts`
 
-  1. Determine forfeitingWallet:
-     - Use turnTimeoutResult.timedOutWallet (always present in the RPC result)
-  
-  2. Make an internal fetch to forfeit-game:
-     fetch(`${supabaseUrl}/functions/v1/forfeit-game`, {
-       method: "POST",
-       headers: {
-         "Content-Type": "application/json",
-         "Authorization": `Bearer ${serviceKey}`,
-       },
-       body: JSON.stringify({
-         roomPda,
-         forfeitingWallet: turnTimeoutResult.timedOutWallet,
-         winnerWallet: turnTimeoutResult.winnerWallet,  // optional override
-         gameType: session.game_type,
-       }),
-     })
-  
-  3. Log the result (success or error) but do NOT block/fail
-     the response -- the forfeit-game call is fire-and-forget
-     from game-session-get's perspective.
+## Technical Details
 
-  4. After the forfeit call, re-fetch:
-     - game_sessions (already done)
-     - finalize_receipts (fetched later in the function anyway)
-     - matches (fetched later in the function anyway)
+### File: `src/components/GameEndScreen.tsx`
+
+1. **Import** `whatsappShareMatch`, `twitterShareMatch`, `copyMatchLink` from `@/lib/shareMatch` and `MessageCircle` from lucide-react
+2. **Remove** the `ShareMatchButton` import and its two usages inside the success/settled blocks (lines 551-554 and 566-569)
+3. **Add new share section** after the rematch block (around line 694), conditionally rendered when `isStaked && roomPda && isAlreadySettled`:
+
+```
+Share Your Match section:
+- Heading: winner sees "Brag About Your Win", loser sees "Share Match"  
+- WhatsApp button (hidden in wallet in-app browsers via existing isWalletInAppBrowser)
+- Twitter/X button
+- Copy Link button with copied feedback
+- Native share "More..." button (if navigator.share available)
 ```
 
-### Why this is safe
-
-- **Idempotent**: `forfeit-game` already checks `settlement_logs` for existing successful forfeit entries and returns `alreadySettled: true` if found. Repeated polls will not double-pay.
-- **No client wallet needed**: `forfeit-game` accepts `forfeitingWallet` in the body and uses the service role key for the on-chain transaction (verifier keypair signs).
-- **No DB schema changes**: All tables (`settlement_logs`, `finalize_receipts`, `matches`, `match_share_cards`) already exist and are written to by `forfeit-game`.
-- **No RPC function changes**: `maybe_apply_turn_timeout` already returns all needed fields (`timedOutWallet`, `winnerWallet`, `action`).
-
-### Timing
-
-The internal `forfeit-game` call may take 2-5 seconds (Solana transaction). The `game-session-get` response will be slightly delayed on the poll that triggers the auto-forfeit, but subsequent polls will be fast (idempotent check returns immediately).
-
-### Files changed
-- `supabase/functions/game-session-get/index.ts` -- one addition (~25 lines) after the turn timeout block
+4. **Import** `isWalletInAppBrowser` from `@/lib/walletBrowserDetection` (already used in ShareMatchModal)
 
 ### No other files changed
-- No DB migrations
-- No client-side changes
-- No changes to `forfeit-game` itself
+- Reuses existing `whatsappShareMatch`, `twitterShareMatch`, `copyMatchLink` from `src/lib/shareMatch.ts`
+- No new components needed
+- No database changes
 
