@@ -1,77 +1,59 @@
 
+# Fix: Stop Polling From Overwriting Timer Anchor
 
-# Fix Chess Timeout UX: Timer Jump + Board Freeze
+## Root Cause
 
-## Changes
-
-### 1. useTurnTimer.ts (line 63-67) — Eliminate timer "jump"
-
-When `turnStartedAt` changes (new turn detected), immediately set `remainingTime` to the full `turnTimeSeconds`. This prevents the "0 then 10" visual glitch. The next 1-second tick will recompute from the server anchor (at most 1s off).
-
+`src/pages/ChessGame.tsx` line 680 runs unconditionally on every poll:
 ```typescript
-useEffect(() => {
-  if (turnStartedAt) {
-    hasExpiredRef.current = false;
-    setRemainingTime(turnTimeSeconds); // snap to full time immediately
-  }
-}, [turnStartedAt, turnTimeSeconds]);
+setDbTurnStartedAt(session?.turn_started_at || null);
 ```
 
-### 2. ChessGame.tsx — Snap `dbTurnStartedAt` in all timeout/turn-change handlers
+This overwrites the local timer anchor (set to NOW by timeout/turn-change handlers) with the server's `turn_started_at` (which is the moment the timeout was APPLIED, not when polling detected it). This eats into the new player's turn time and causes timer visual jumps.
 
-The timer derives from `dbTurnStartedAt`. Currently, only `turnOverrideWallet` is set after timeouts -- the timer anchor is never updated, so the timer shows stale/expired values until the next full poll cycle.
+## Fix 1: ChessGame.tsx line 680 — Move dbTurnStartedAt update inside turn-change detection
 
-**Line 582 (self-timeout handler):** Add after `setTurnOverrideWallet`:
+Remove the unconditional `setDbTurnStartedAt` on line 680 and only update it when a turn change is actually detected.
+
+**Before (line 680):**
 ```typescript
-setDbTurnStartedAt(new Date().toISOString());
+setDbTurnStartedAt(session?.turn_started_at || null);
 ```
 
-**Line 717-718 (polling timeout handler):** Add after `setTurnOverrideWallet`:
+**After:**
 ```typescript
-setDbTurnStartedAt(new Date().toISOString());
+// DO NOT unconditionally update dbTurnStartedAt here.
+// It is only updated inside the turn-change handlers below
+// to prevent overwriting the local timer anchor.
 ```
 
-**Line 750-751 (polling turn-change handler):** Replace `turnTimer.resetTimer()` with:
-```typescript
-setDbTurnStartedAt(data?.session?.turn_started_at || new Date().toISOString());
-```
+This ensures the timer anchor is only set:
+- In the timeout handler (line 719): `setDbTurnStartedAt(new Date().toISOString())`
+- In the turn-change handler (line 752): `setDbTurnStartedAt(data?.session?.turn_started_at || new Date().toISOString())`
+- In the self-timeout handler (line 583): `setDbTurnStartedAt(new Date().toISOString())`
+- In the visibility handler (line 821): `setDbTurnStartedAt(data?.session?.turn_started_at || new Date().toISOString())`
 
-**Line 819-820 (visibility handler):** Replace `turnTimer.resetTimer()` with:
-```typescript
-setDbTurnStartedAt(data?.session?.turn_started_at || new Date().toISOString());
-```
+All of these fire only on actual state transitions, not every 3 seconds.
 
-### 3. ChessGame.tsx line 780 — Remove `turnOverrideWallet` from polling deps
+## Fix 2: useTurnTimer.ts — Already fixed (snap effect)
 
-`turnOverrideWallet` is in the polling effect's dependency array. Every time it changes (after a timeout), the effect re-creates, restarting the interval. During this restart gap, the next poll is delayed. Removing it prevents interval disruption.
-
-Change line 780 from:
-```
-address, turnOverrideWallet, activeTurnAddress, roomPlayers,
-```
-to:
-```
-address, activeTurnAddress, roomPlayers,
-```
-
-The polling callback already reads `turnOverrideWallet` via the closure at comparison time -- it doesn't need it as a dep since we compare against `activeTurnAddress` which IS in deps.
+The snap effect from the previous edit (line 66: `setRemainingTime(turnTimeSeconds)`) is correct and stays. With Fix 1 applied, `turnStartedAt` will only change on actual turn transitions, so the snap effect will only fire once per turn (not every poll).
 
 ## Files Modified
 
-| File | Lines | Change |
-|------|-------|--------|
-| `src/hooks/useTurnTimer.ts` | 63-67 | Add `setRemainingTime(turnTimeSeconds)` on turnStartedAt change |
-| `src/pages/ChessGame.tsx` | 582 | Add `setDbTurnStartedAt(now)` in self-timeout handler |
-| `src/pages/ChessGame.tsx` | 717-718 | Add `setDbTurnStartedAt(now)` in polling timeout handler |
-| `src/pages/ChessGame.tsx` | 750-751 | Set `dbTurnStartedAt` from server value in polling turn-change |
-| `src/pages/ChessGame.tsx` | 819-820 | Set `dbTurnStartedAt` from server value in visibility handler |
-| `src/pages/ChessGame.tsx` | 780 | Remove `turnOverrideWallet` from polling effect deps |
+| File | Line | Change |
+|------|------|--------|
+| `src/pages/ChessGame.tsx` | 680 | Remove unconditional `setDbTurnStartedAt(session?.turn_started_at)` |
+
+## Why this fixes both issues
+
+1. **Timer flash ("0 then 10")**: Without the unconditional overwrite, `turnStartedAt` only changes when the turn actually changes. The snap effect fires once, shows 10s, and subsequent ticks compute correctly from a stable anchor.
+
+2. **Board frozen after timeout**: Without the overwrite, BSBA's timer anchor stays at the value set by the timeout handler (NOW), giving the full 10 seconds. The server's `turn_started_at` (set earlier) no longer silently shortens the turn.
 
 ## Verification
 
 1. Create ranked chess game with 10s turns
-2. Let White's timer expire -- Black sees timer start at 10s (no jump from 0)
-3. Black can move immediately (board is not frozen)
-4. Let White timeout twice in a row -- Black can still move after each one
-5. Timer is only visible to the player whose turn it is
-
+2. Let White timeout once -- Black sees timer start at 10s (no jump), can move immediately
+3. Let White timeout twice -- Black still gets full 10s each time and can move
+4. No timer visible during opponent's turn
+5. No "0 then 10" flash at any point
