@@ -335,6 +335,7 @@ export default function CreateRoom() {
                 turnTimeSeconds: authoritativeTurnTime,
                 mode: gameMode,
                 creatorWallet: address,
+                gameType: Object.entries(GAME_TYPE_MAP).find(([_, v]) => v === gameType)?.[0] || "chess",
               },
             }
           );
