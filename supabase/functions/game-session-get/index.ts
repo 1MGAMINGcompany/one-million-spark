@@ -74,6 +74,32 @@ serve(async (req) => {
           if (!session2Err && session2) {
             session = session2;
           }
+
+          // Auto-settle if auto_forfeit triggered (3 strikes)
+          if (timeoutRes?.action === "auto_forfeit" && session?.winner_wallet) {
+            try {
+              const fnUrl = `${supabaseUrl}/functions/v1/forfeit-game`;
+              const settleRes = await fetch(fnUrl, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "Authorization": `Bearer ${serviceKey}`,
+                },
+                body: JSON.stringify({
+                  roomPda,
+                  forfeitingWallet: timeoutRes?.timedOutWallet,
+                  gameType: session?.game_type,
+                  winnerWallet: timeoutRes?.winnerWallet ?? session?.winner_wallet,
+                  mode: "timeout",
+                }),
+              });
+              const settleText = await settleRes.text().catch(() => "");
+              console.log("[game-session-get] Auto-forfeit settlement status:", settleRes.status);
+              console.log("[game-session-get] Auto-forfeit settlement body:", settleText.slice(0, 500));
+            } catch (settleErr) {
+              console.warn("[game-session-get] Auto-forfeit settlement error (non-fatal):", settleErr);
+            }
+          }
         }
       } catch (e) {
         console.warn("[game-session-get] maybe_apply_turn_timeout exception (non-fatal):", e);
