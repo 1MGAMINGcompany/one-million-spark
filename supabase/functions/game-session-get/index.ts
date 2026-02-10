@@ -76,6 +76,33 @@ serve(async (req) => {
       }
     }
 
+    // Check for turn timeout (only for ACTIVE rooms with status_int = 2)
+    if (session?.status_int === 2) {
+      try {
+        const { data: turnTimeoutResult, error: turnTimeoutError } = await supabase
+          .rpc('maybe_apply_turn_timeout', { p_room_pda: roomPda })
+
+        if (turnTimeoutError) {
+          console.warn('[game-session-get] Turn timeout check error:', turnTimeoutError)
+        } else if (turnTimeoutResult?.applied) {
+          console.log('[game-session-get] ⏰ Turn timeout applied:', turnTimeoutResult)
+
+          // Re-fetch session after turn advancement
+          const { data: updatedSession } = await supabase
+            .from('game_sessions')
+            .select('*')
+            .eq('room_pda', roomPda)
+            .maybeSingle()
+
+          if (updatedSession) {
+            session = updatedSession
+          }
+        }
+      } catch (e) {
+        console.warn('[game-session-get] Turn timeout exception:', e)
+      }
+    }
+
     // Fetch finalize receipt (settlement status) - optional field
     const { data: receipt, error: receiptError } = await supabase
       .from('finalize_receipts')
