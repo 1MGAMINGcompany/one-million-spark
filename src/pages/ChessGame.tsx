@@ -624,11 +624,13 @@ const ChessGame = () => {
     });
   }, [roomPlayers, address]);
 
-  // Active turn address based on chess turn
+  // Active turn address: override takes priority so polling comparisons
+  // immediately reflect timeout-driven turn flips (no waiting for next poll).
   const activeTurnAddress = useMemo(() => {
+    if (turnOverrideWallet) return turnOverrideWallet;
     const turnIndex = game.turn() === "w" ? 0 : 1;
     return turnPlayers[turnIndex]?.address || null;
-  }, [game, turnPlayers]);
+  }, [game, turnPlayers, turnOverrideWallet]);
 
   // === OPPONENT TURN TIMEOUT POLLING ===
   // This polls the server to apply timeouts when opponent is idle
