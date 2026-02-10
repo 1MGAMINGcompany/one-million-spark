@@ -156,10 +156,12 @@ const ChessGame = () => {
   const gameRef = useRef(game);
   const roomPlayersRef = useRef<string[]>([]);
   const animationsEnabledRef = useRef(animationsEnabled);
+  const addressRef = useRef(address);
   
   useEffect(() => { gameRef.current = game; }, [game]);
   useEffect(() => { roomPlayersRef.current = roomPlayers; }, [roomPlayers]);
   useEffect(() => { animationsEnabledRef.current = animationsEnabled; }, [animationsEnabled]);
+  useEffect(() => { addressRef.current = address; }, [address]);
 
   // Fetch real player order from on-chain room account with polling for second player
   useEffect(() => {
@@ -625,15 +627,14 @@ const ChessGame = () => {
         
         if (dbStatus === 'finished' && !gameOver) {
           const dbWinner = data?.session?.winner_wallet;
-          console.log("[ChessGame] Polling detected game finished. Winner:", dbWinner?.slice(0, 8));
+          const currentAddr = addressRef.current;
+          console.log("[ChessGame] Polling detected game finished. Winner:", dbWinner?.slice(0, 8), "Me:", currentAddr?.slice(0, 8));
           setGameOver(true);
           setWinnerWallet(dbWinner);
-          // Determine if I won or lost
-          if (isSameWallet(dbWinner, address)) {
-            setGameStatus(t("gameMultiplayer.checkmateYouWin"));
+          // Play sound based on DB winner — GameEndScreen handles display
+          if (currentAddr && isSameWallet(dbWinner, currentAddr)) {
             play('chess_win');
-          } else {
-            setGameStatus(t("gameMultiplayer.checkmateYouLose"));
+          } else if (currentAddr) {
             play('chess_lose');
           }
           return;
@@ -738,13 +739,12 @@ const ChessGame = () => {
           // Check if game ended while away
           if (dbStatus === 'finished' && !gameOver) {
             const dbWinner = data?.session?.winner_wallet;
+            const currentAddr = addressRef.current;
             setGameOver(true);
             setWinnerWallet(dbWinner);
-            if (isSameWallet(dbWinner, address)) {
-              setGameStatus(t("gameMultiplayer.checkmateYouWin"));
+            if (currentAddr && isSameWallet(dbWinner, currentAddr)) {
               play('chess_win');
-            } else {
-              setGameStatus(t("gameMultiplayer.checkmateYouLose"));
+            } else if (currentAddr) {
               play('chess_lose');
             }
             return;
@@ -827,17 +827,18 @@ const ChessGame = () => {
     }));
   }, [turnPlayers]);
 
-  // Winner address for end screen - prioritize winnerWallet (from resign/forfeit)
+  // Winner address for end screen - DB-authoritative, no string fallbacks
   const winnerAddress = useMemo(() => {
-    // Direct wallet address from resign/forfeit takes priority
+    // Direct wallet address from DB/resign/forfeit — sole source of truth
     if (winnerWallet) return winnerWallet;
     
-    // Fallback for normal game endings
+    // Draw detection from chess.js engine state (not string matching)
     if (!gameOver) return null;
-    if (gameStatus.includes("draw") || gameStatus.includes("Stalemate")) return "draw";
-    if (gameStatus.includes("win")) return address;
-    return getOpponentWallet(roomPlayers, address);
-  }, [winnerWallet, gameOver, gameStatus, address, roomPlayers]);
+    if (game.isDraw() || game.isStalemate()) return "draw";
+    
+    // If game is over but winnerWallet not yet set, return null (pending resolution)
+    return null;
+  }, [winnerWallet, gameOver, game]);
 
   // Players for GameEndScreen
   const gameEndPlayers = useMemo(() => {
@@ -913,8 +914,13 @@ const ChessGame = () => {
   const checkGameOverInline = useCallback((currentGame: Chess) => {
     if (currentGame.isCheckmate()) {
       const isPlayerWin = currentGame.turn() !== myColor;
-      const winner = isPlayerWin ? t("gameMultiplayer.checkmateYouWin") : t("gameMultiplayer.checkmateYouLose");
-      setGameStatus(winner);
+      // DB-authoritative: set winnerWallet explicitly from room players
+      const currentAddr = addressRef.current;
+      const winnerAddr = isPlayerWin
+        ? currentAddr
+        : getOpponentWallet(roomPlayersRef.current, currentAddr);
+      setWinnerWallet(winnerAddr || null);
+      setGameStatus(isPlayerWin ? t("gameMultiplayer.checkmateYouWin") : t("gameMultiplayer.checkmateYouLose"));
       setGameOver(true);
       play(isPlayerWin ? 'chess_win' : 'chess_lose');
       return true;
