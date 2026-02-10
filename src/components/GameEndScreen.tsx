@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Trophy, RefreshCw, BarChart2, Star, LogOut, Wallet, ChevronDown, ChevronUp, CheckCircle, ExternalLink, Loader2 } from 'lucide-react';
+import { Trophy, RefreshCw, BarChart2, Star, LogOut, Wallet, ChevronDown, ChevronUp, CheckCircle, ExternalLink, Loader2, Copy, Check, MessageCircle, Mail } from 'lucide-react';
 import GoldConfettiExplosion from '@/components/GoldConfettiExplosion';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -170,6 +170,7 @@ export function GameEndScreen({
   
   const [finalizeState, setFinalizeState] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [finalizeError, setFinalizeError] = useState<string | null>(null);
+  const [linkCopied, setLinkCopied] = useState(false);
   const [showErrorDetails, setShowErrorDetails] = useState(false);
   const [txSignature, setTxSignature] = useState<string | null>(null);
   
@@ -422,6 +423,66 @@ export function GameEndScreen({
               )}
             </div>
           )}
+
+          {/* Share Match Section - Only for staked games with a roomPda */}
+          {isStaked && roomPda && !isPending && (() => {
+            const matchLink = `${window.location.origin}/match/${roomPda}`;
+            const gameLabel = gameType ? ` ${gameType}` : '';
+            const winnerMsg = `I just won${gameLabel} on 1MGAMING 🔥 Check the match: ${matchLink}`;
+            const loserMsg = `Just played${gameLabel} on 1MGAMING — check the match: ${matchLink}`;
+            const shareMsg = isWinner ? winnerMsg : loserMsg;
+            const emailSubject = isWinner ? `I won${gameLabel} on 1MGAMING!` : `Check out this${gameLabel} match on 1MGAMING`;
+
+            const handleCopyLink = async () => {
+              try {
+                await navigator.clipboard.writeText(matchLink);
+                setLinkCopied(true);
+                setTimeout(() => setLinkCopied(false), 2000);
+              } catch { /* fallback: ignore */ }
+            };
+
+            return (
+              <div className="bg-muted/30 border border-primary/20 rounded-lg p-4 space-y-3">
+                <p className="text-sm font-semibold text-center">
+                  {isWinner ? '🏆 Brag About Your Win' : '📊 Share Match'}
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <a
+                    href={`https://wa.me/?text=${encodeURIComponent(shareMsg)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center justify-center gap-2 rounded-lg font-semibold text-sm min-h-[48px] px-4 bg-green-600 hover:bg-green-700 text-white transition-colors"
+                  >
+                    <MessageCircle size={18} />
+                    WhatsApp
+                  </a>
+                  <a
+                    href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(shareMsg)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center justify-center gap-2 rounded-lg font-semibold text-sm min-h-[48px] px-4 bg-foreground text-background hover:opacity-90 transition-colors"
+                  >
+                    <svg viewBox="0 0 24 24" className="w-[18px] h-[18px] fill-current"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+                    Share on X
+                  </a>
+                  <a
+                    href={`mailto:?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(shareMsg)}`}
+                    className="inline-flex items-center justify-center gap-2 rounded-lg font-semibold text-sm min-h-[48px] px-4 border border-border bg-secondary hover:bg-secondary/80 text-secondary-foreground transition-colors"
+                  >
+                    <Mail size={18} />
+                    Email
+                  </a>
+                  <button
+                    onClick={handleCopyLink}
+                    className="inline-flex items-center justify-center gap-2 rounded-lg font-semibold text-sm min-h-[48px] px-4 border border-border bg-secondary hover:bg-secondary/80 text-secondary-foreground transition-colors"
+                  >
+                    {linkCopied ? <Check size={18} className="text-green-500" /> : <Copy size={18} />}
+                    {linkCopied ? 'Copied!' : 'Copy Link'}
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Players List */}
           <div className="space-y-2">
