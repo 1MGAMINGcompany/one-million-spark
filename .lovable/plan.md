@@ -1,66 +1,68 @@
 
 
-# Debug Plan: Add Diagnostic Logs to Chess Timer Flow
+# Fix: Auto-Forfeit Must Trigger On-Chain Payout
 
-## Goal
-Add minimal temporary `console.log` statements to trace exactly why the countdown sometimes fails to appear on the active player's turn. No logic changes.
+## Problem
 
-## Changes
+When a player misses 3 consecutive turns, `maybe_apply_turn_timeout` correctly sets `status_int = 3` and `winner_wallet` in the database, but **no edge function is called** to execute the on-chain payout (`submit_result` + `close_room`). The winner never gets paid.
 
-### 1. `src/pages/ChessGame.tsx` — Log `isMyTurn` computation (after line 511)
+## Solution
 
-Add one log right after `isMyTurn` is computed:
+Add a server-side internal call from `game-session-get` to `forfeit-game` immediately after `maybe_apply_turn_timeout` returns an `auto_forfeit` (or `auto_eliminate_and_finish`) result. This is the same polling endpoint both clients hit every few seconds, so it guarantees the payout fires regardless of which device detects the timeout.
 
-```typescript
-// After line 511
-console.log("[Chess] isMyTurn debug:", {
-  isMyTurn,
-  isActuallyMyTurn,
-  isMyTurnFromEngine,
-  isMyTurnOverride,
-  turnOverrideWallet: turnOverrideWallet?.slice(0, 8),
-  activeTurnAddress: activeTurnAddress?.slice(0, 8),
-  addressRef: addressRef.current?.slice(0, 8),
-  canPlay,
-  gameOver,
-  effectiveTurnTime,
-});
+## Implementation
+
+### File: `supabase/functions/game-session-get/index.ts`
+
+After the existing block (lines 80-103) that calls `maybe_apply_turn_timeout` and re-fetches the session, add:
+
+```text
+If turnTimeoutResult.action is "auto_forfeit" or "auto_eliminate_and_finish":
+
+  1. Determine forfeitingWallet:
+     - Use turnTimeoutResult.timedOutWallet (always present in the RPC result)
+  
+  2. Make an internal fetch to forfeit-game:
+     fetch(`${supabaseUrl}/functions/v1/forfeit-game`, {
+       method: "POST",
+       headers: {
+         "Content-Type": "application/json",
+         "Authorization": `Bearer ${serviceKey}`,
+       },
+       body: JSON.stringify({
+         roomPda,
+         forfeitingWallet: turnTimeoutResult.timedOutWallet,
+         winnerWallet: turnTimeoutResult.winnerWallet,  // optional override
+         gameType: session.game_type,
+       }),
+     })
+  
+  3. Log the result (success or error) but do NOT block/fail
+     the response -- the forfeit-game call is fire-and-forget
+     from game-session-get's perspective.
+
+  4. After the forfeit call, re-fetch:
+     - game_sessions (already done)
+     - finalize_receipts (fetched later in the function anyway)
+     - matches (fetched later in the function anyway)
 ```
 
-### 2. `src/components/TurnStatusHeader.tsx` — Log before timer render
+### Why this is safe
 
-Add one log right before the timer/syncing JSX block (before the `showTimer && isMyTurn && remainingTime > 0` conditional):
+- **Idempotent**: `forfeit-game` already checks `settlement_logs` for existing successful forfeit entries and returns `alreadySettled: true` if found. Repeated polls will not double-pay.
+- **No client wallet needed**: `forfeit-game` accepts `forfeitingWallet` in the body and uses the service role key for the on-chain transaction (verifier keypair signs).
+- **No DB schema changes**: All tables (`settlement_logs`, `finalize_receipts`, `matches`, `match_share_cards`) already exist and are written to by `forfeit-game`.
+- **No RPC function changes**: `maybe_apply_turn_timeout` already returns all needed fields (`timedOutWallet`, `winnerWallet`, `action`).
 
-```typescript
-if (showTimer) {
-  console.log("[TimerUI]", { isMyTurn, remainingTime, showTimer });
-}
-```
+### Timing
 
-### 3. `src/hooks/useTurnTimer.ts` — Log every 5s inside the countdown interval
+The internal `forfeit-game` call may take 2-5 seconds (Solana transaction). The `game-session-get` response will be slightly delayed on the poll that triggers the auto-forfeit, but subsequent polls will be fast (idempotent check returns immediately).
 
-Inside the `setInterval` callback (line 116), add a throttled log:
+### Files changed
+- `supabase/functions/game-session-get/index.ts` -- one addition (~25 lines) after the turn timeout block
 
-```typescript
-// Inside setInterval, before the return
-if (newTime > 0 && newTime % 5 === 0) {
-  console.log("[useTurnTimer] tick:", {
-    roomId: roomId?.slice(0, 8),
-    remainingTime: newTime,
-    isMyTurn,
-    enabled,
-  });
-}
-```
-
-## What these logs will reveal
-
-- **isMyTurn is false when it shouldn't be**: `canPlay` is false, or `turnOverrideWallet` hasn't been set yet, or `addressRef` is null.
-- **remainingTime is stuck at 0 or full value**: The interval isn't running (killed by the `!isMyTurn` guard on line 109), or `resetTimer` is being called repeatedly by polling.
-- **Timer UI hidden despite countdown running**: `showTimer` prop is false, or `isMyTurn` differs between ChessGame and TurnStatusHeader.
-
-## Files to edit
-- `src/pages/ChessGame.tsx` (1 log addition)
-- `src/components/TurnStatusHeader.tsx` (1 log addition)
-- `src/hooks/useTurnTimer.ts` (1 log addition inside interval)
+### No other files changed
+- No DB migrations
+- No client-side changes
+- No changes to `forfeit-game` itself
 
