@@ -691,15 +691,23 @@ const ChessGame = () => {
         }
 
         // Update turn override if DB says turn changed
-        if (dbTurnWallet && dbTurnWallet !== (turnOverrideWallet || activeTurnAddress)) {
-          console.log("[ChessGame] Polling detected turn change:", {
-            from: (turnOverrideWallet || activeTurnAddress)?.slice(0, 8),
-            to: dbTurnWallet.slice(0, 8),
-          });
+        if (dbTurnWallet) {
+          const currentTurnSource = turnOverrideWallet || activeTurnAddress;
+          const isNowMyTurn = isSameWallet(dbTurnWallet, addressRef.current);
           
-          const isNowMyTurn = isSameWallet(dbTurnWallet, address);
-          if (isNowMyTurn) {
-            setTurnOverrideWallet(dbTurnWallet);
+          if (dbTurnWallet !== currentTurnSource) {
+            console.log("[ChessGame] Polling detected turn change:", {
+              from: currentTurnSource?.slice(0, 8),
+              to: dbTurnWallet.slice(0, 8),
+            });
+            
+            if (isNowMyTurn) {
+              setTurnOverrideWallet(dbTurnWallet);
+              turnTimer.resetTimer();
+            }
+          } else if (isNowMyTurn && turnTimer.remainingTime <= 0) {
+            // Timer stuck at 0 but it's my turn — force reset
+            console.log("[ChessGame] Timer stuck at 0 on my turn, forcing reset");
             turnTimer.resetTimer();
           }
         }
