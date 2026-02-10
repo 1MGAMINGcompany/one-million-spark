@@ -262,9 +262,10 @@ const ChessGame = () => {
       setGame(restoredGame);
       setMoveHistory(persisted.moveHistory || []);
       setGameOver(persisted.gameOver || false);
-      if (persisted.gameStatus) {
-        setGameStatus(persisted.gameStatus);
-      }
+      // CRITICAL: Do NOT restore gameStatus text from DB.
+      // gameStatus contains player-perspective strings like "You Win!" / "Opponent resigned"
+      // which are WRONG for the other player. Let the local device derive its own
+      // status text from the chess engine state or DB winner_wallet on next poll.
       
       // Only show toast once per session load
       if (showToast && !restoredToastShownRef.current) {
@@ -644,11 +645,15 @@ const ChessGame = () => {
           console.log("[ChessGame] Polling detected game finished. Winner:", dbWinner?.slice(0, 8), "Me:", currentAddr?.slice(0, 8));
           setGameOver(true);
           setWinnerWallet(dbWinner);
-          // Play sound based on DB winner — GameEndScreen handles display
+          // Derive player-perspective status locally — never from shared game_state
           if (currentAddr && isSameWallet(dbWinner, currentAddr)) {
+            setGameStatus(t("gameSession.youWin"));
             play('chess_win');
           } else if (currentAddr) {
+            setGameStatus(t("gameSession.youLose"));
             play('chess_lose');
+          } else {
+            setGameStatus(t("gameSession.gameOver"));
           }
           return;
         }
@@ -763,10 +768,15 @@ const ChessGame = () => {
             const currentAddr = addressRef.current;
             setGameOver(true);
             setWinnerWallet(dbWinner);
+            // Derive player-perspective status locally
             if (currentAddr && isSameWallet(dbWinner, currentAddr)) {
+              setGameStatus(t("gameSession.youWin"));
               play('chess_win');
             } else if (currentAddr) {
+              setGameStatus(t("gameSession.youLose"));
               play('chess_lose');
+            } else {
+              setGameStatus(t("gameSession.gameOver"));
             }
             return;
           }
