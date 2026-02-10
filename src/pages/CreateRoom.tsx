@@ -80,7 +80,7 @@ export default function CreateRoom() {
   const [gameType, setGameType] = useState<string>("1"); // Chess
   const [entryFee, setEntryFee] = useState<string>("0"); // Default to 0 for casual
   const [maxPlayers, setMaxPlayers] = useState<string>("2");
-  const [turnTime, setTurnTime] = useState<string>("10");
+  const [turnTime, setTurnTime] = useState<string>("30");
   const [gameMode, setGameMode] = useState<'casual' | 'ranked'>('casual');
   const [checkingActiveRoom, setCheckingActiveRoom] = useState(true);
   const [refreshingBalance, setRefreshingBalance] = useState(false);
@@ -111,18 +111,16 @@ export default function CreateRoom() {
     }
   }, [rematchData]);
 
-  // Auto-switch turn time to 10s for Backgammon/Ludo if 5s is selected
-  // These games have complex multi-action turns that need more time
+  // Set default turn time based on game type
   useEffect(() => {
-    // 5s excluded for Backgammon (3) and Ludo (5) - too complex for fast turns
-    if ((gameType === "3" || gameType === "5") && turnTime === "5") {
-      setTurnTime("15");
+    // Backgammon defaults to 60s (multi-step turns)
+    if (gameType === "3") {
+      setTurnTime("60");
+    } else {
+      // Chess, Checkers, Dominos, Ludo default to 30s
+      setTurnTime("30");
     }
-    // 10s also excluded for Backgammon (3) - multi-step turns need more time
-    if (gameType === "3" && turnTime === "10") {
-      setTurnTime("15");
-    }
-  }, [gameType, turnTime]);
+  }, [gameType]);
 
   // Check if signing is disabled (preview domain)
   const signingDisabled = useSigningDisabled();
@@ -617,15 +615,9 @@ export default function CreateRoom() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {/* 5s option NOT available for Backgammon (3) and Ludo (5) - too complex for fast turns */}
-                {gameType !== "3" && gameType !== "5" && (
-                  <SelectItem value="5">{t("createRoom.seconds", { count: 5 })}</SelectItem>
-                )}
-                {/* 10s option NOT available for Backgammon (3) - multi-step turns need more time */}
-                {gameType !== "3" && (
-                  <SelectItem value="10">{t("createRoom.seconds", { count: 10 })}</SelectItem>
-                )}
-                <SelectItem value="15">{t("createRoom.seconds", { count: 15 })}</SelectItem>
+                <SelectItem value="10">10s — {t("createRoom.blitz", "Blitz")} ⚡</SelectItem>
+                <SelectItem value="30">30s — {t("createRoom.standard", "Standard")}</SelectItem>
+                <SelectItem value="60">60s — {t("createRoom.relaxed", "Relaxed")}</SelectItem>
                 <SelectItem value="0">{t("createRoom.unlimited")}</SelectItem>
               </SelectContent>
             </Select>
