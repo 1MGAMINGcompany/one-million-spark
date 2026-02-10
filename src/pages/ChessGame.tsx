@@ -559,8 +559,9 @@ const ChessGame = () => {
             variant: "destructive",
           });
           
-          // Grant opponent turn via override
+          // Grant opponent turn via override + reset timer immediately
           setTurnOverrideWallet(result.nextTurnWallet);
+          turnTimer.resetTimer();
         }
       }
     } catch (err) {
