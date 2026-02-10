@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Trophy, RefreshCw, BarChart2, Star, LogOut, Wallet, ChevronDown, ChevronUp, CheckCircle, ExternalLink, Loader2 } from 'lucide-react';
+import { Trophy, RefreshCw, BarChart2, Star, LogOut, Wallet, ChevronDown, ChevronUp, CheckCircle, ExternalLink, Loader2, MessageCircle, Copy, Check, Share2 } from 'lucide-react';
 import GoldConfettiExplosion from '@/components/GoldConfettiExplosion';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -13,7 +13,8 @@ import { RivalryWidget } from '@/components/RivalryWidget';
 import { WalletLink } from '@/components/WalletLink';
 import { DrawSettlementDebug } from '@/components/DrawSettlementDebug';
 import { DrawRefundError } from '@/components/DrawRefundError';
-import { ShareMatchButton } from '@/components/ShareMatchButton';
+import { whatsappShareMatch, twitterShareMatch, copyMatchLink, nativeShareMatch } from '@/lib/shareMatch';
+import { isWalletInAppBrowser } from '@/lib/walletBrowserDetection';
 import { isSameWallet } from '@/lib/walletUtils';
 import { 
   RematchMode, 
@@ -189,6 +190,7 @@ export function GameEndScreen({
   // Rematch state
   const [customStakeSol, setCustomStakeSol] = useState<string>('');
   const [showCustomInput, setShowCustomInput] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
   
   const isPending = winner == null || winner === DEFAULT_PUBKEY;
   const isDraw = winner === 'draw';
@@ -548,11 +550,6 @@ export function GameEndScreen({
                     <p className="text-[10px] text-muted-foreground text-center pt-1 border-t border-emerald-500/20">
                       Payout executed on-chain via finalize_room. Funds sent directly to winner's wallet.
                     </p>
-                    {roomPda && (
-                      <div className="flex justify-center pt-2">
-                        <ShareMatchButton roomPda={roomPda} gameType={gameType} solWon={payoutInfo?.winnerPayout} />
-                      </div>
-                    )}
                   </div>
                 )}
 
@@ -563,11 +560,6 @@ export function GameEndScreen({
                       <CheckCircle size={20} className="text-emerald-400" />
                       <p className="text-emerald-400 font-semibold">Already Settled</p>
                     </div>
-                    {roomPda && (
-                      <div className="flex justify-center">
-                        <ShareMatchButton roomPda={roomPda} gameType={gameType} solWon={payoutInfo?.winnerPayout} />
-                      </div>
-                    )}
                   </div>
                 )}
 
@@ -690,6 +682,84 @@ export function GameEndScreen({
                     </Button>
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Share Your Match - prominent section for staked games */}
+            {isStaked && roomPda && isAlreadySettled && (
+              <div className="bg-muted/30 border border-primary/20 rounded-lg p-4 space-y-3">
+                <p className="text-center text-sm font-semibold text-foreground">
+                  {isWinner ? '🏆 Brag About Your Win' : '📊 Share Match'}
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  {/* WhatsApp */}
+                  {!isWalletInAppBrowser() && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-2 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10"
+                      asChild
+                    >
+                      <a
+                        href={whatsappShareMatch(roomPda, gameType)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        <MessageCircle size={16} />
+                        WhatsApp
+                      </a>
+                    </Button>
+                  )}
+
+                  {/* Twitter / X */}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2 border-border/50"
+                    asChild
+                  >
+                    <a
+                      href={twitterShareMatch(roomPda, gameType, payoutInfo?.winnerPayout)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <svg viewBox="0 0 24 24" className="w-4 h-4 fill-current">
+                        <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                      </svg>
+                      Twitter / X
+                    </a>
+                  </Button>
+
+                  {/* Copy Link */}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2 border-border/50"
+                    onClick={async () => {
+                      const ok = await copyMatchLink(roomPda);
+                      if (ok) {
+                        setLinkCopied(true);
+                        setTimeout(() => setLinkCopied(false), 2000);
+                      }
+                    }}
+                  >
+                    {linkCopied ? <Check size={16} className="text-emerald-400" /> : <Copy size={16} />}
+                    {linkCopied ? 'Copied!' : 'Copy Link'}
+                  </Button>
+
+                  {/* Native Share */}
+                  {typeof navigator !== 'undefined' && 'share' in navigator && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-2 border-border/50"
+                      onClick={() => nativeShareMatch(roomPda, gameType)}
+                    >
+                      <Share2 size={16} />
+                      More…
+                    </Button>
+                  )}
+                </div>
               </div>
             )}
 
