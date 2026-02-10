@@ -14,6 +14,7 @@ import { WalletLink } from '@/components/WalletLink';
 import { DrawSettlementDebug } from '@/components/DrawSettlementDebug';
 import { DrawRefundError } from '@/components/DrawRefundError';
 import { ShareMatchButton } from '@/components/ShareMatchButton';
+import { isSameWallet } from '@/lib/walletUtils';
 import { 
   RematchMode, 
   RematchPayload, 
@@ -190,8 +191,10 @@ export function GameEndScreen({
   const [showCustomInput, setShowCustomInput] = useState(false);
   
   const isPending = winner == null || winner === DEFAULT_PUBKEY;
-  const isWinner = !isPending && winner === myAddress;
   const isDraw = winner === 'draw';
+  // DB-authoritative: use isSameWallet for case-sensitive Base58 comparison
+  // If myAddress is null (wallet briefly disconnected), treat as pending to avoid false "You Lost"
+  const isWinner = !isPending && !isDraw && myAddress != null && isSameWallet(winner, myAddress);
   
   // Check on-chain room status on mount and compute payout info
   useEffect(() => {
@@ -336,6 +339,8 @@ export function GameEndScreen({
   
   const getResultText = () => {
     if (isPending) return 'Resolving outcome...';
+    // If wallet disconnected momentarily, show neutral state instead of "You Lost"
+    if (!isDraw && !isPending && myAddress == null) return 'Match Complete';
     if (isDraw) return 'Draw';
     if (isWinner) {
       // For staked games, show pending until payout confirmed
@@ -416,7 +421,7 @@ export function GameEndScreen({
           {!isDraw && winner && winner !== 'draw' && (
             <div className="bg-muted/30 rounded-lg p-4 text-center">
               <p className="text-sm text-muted-foreground mb-1">Winner</p>
-              {winner === myAddress ? (
+              {isSameWallet(winner, myAddress) ? (
                 <p className="font-mono text-primary font-medium">You</p>
               ) : (
                 <WalletLink wallet={winner} className="text-foreground" />
@@ -429,8 +434,8 @@ export function GameEndScreen({
             <p className="text-xs uppercase tracking-wider text-muted-foreground">Players</p>
             <div className="space-y-1">
               {players.map((player) => {
-                const isMe = player.address === myAddress;
-                const isWinner = player.address === winner;
+                const isMe = isSameWallet(player.address, myAddress);
+                const isWinner = isSameWallet(player.address, winner);
                 return (
                   <div 
                     key={player.address}
@@ -466,7 +471,7 @@ export function GameEndScreen({
               playerA={myAddress}
               playerB={players.find(p => p.address !== myAddress)?.address || ''}
               gameType={gameType}
-              isLoser={!!winner && winner !== DEFAULT_PUBKEY && winner !== myAddress && winner !== 'draw'}
+              isLoser={!!winner && winner !== DEFAULT_PUBKEY && !isSameWallet(winner, myAddress) && winner !== 'draw'}
             />
           )}
 
