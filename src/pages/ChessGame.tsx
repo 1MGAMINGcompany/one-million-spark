@@ -498,6 +498,8 @@ const ChessGame = () => {
   
   // Turn override for skip functionality (when opponent times out, we get another turn)
   const [turnOverrideWallet, setTurnOverrideWallet] = useState<string | null>(null);
+  const turnOverrideRef = useRef<string | null>(null);
+  useEffect(() => { turnOverrideRef.current = turnOverrideWallet; }, [turnOverrideWallet]);
 
   // Check if it's my turn from engine
   const isMyTurnFromEngine = game.turn() === effectiveColor && !gameOver;
@@ -710,23 +712,24 @@ const ChessGame = () => {
 
         // Update turn override if DB says turn changed
         if (dbTurnWallet) {
-          const currentTurnSource = turnOverrideWallet || activeTurnAddress;
           const isNowMyTurn = isSameWallet(dbTurnWallet, addressRef.current);
-          
-          if (dbTurnWallet !== currentTurnSource) {
-            console.log("[ChessGame] Polling detected turn change:", {
-              from: currentTurnSource?.slice(0, 8),
-              to: dbTurnWallet.slice(0, 8),
-            });
-            
-            if (isNowMyTurn) {
+
+          if (isNowMyTurn) {
+            const prev = turnOverrideRef.current;
+            if (!isSameWallet(prev, dbTurnWallet)) {
+              console.log("[ChessGame] Polling: turn is mine, setting override", dbTurnWallet.slice(0, 8));
               setTurnOverrideWallet(dbTurnWallet);
               turnTimer.resetTimer();
+            } else if (turnTimer.remainingTime <= 0) {
+              console.log("[ChessGame] Timer stuck at 0 on my turn, forcing reset");
+              turnTimer.resetTimer();
             }
-          } else if (isNowMyTurn && turnTimer.remainingTime <= 0) {
-            // Timer stuck at 0 but it's my turn — force reset
-            console.log("[ChessGame] Timer stuck at 0 on my turn, forcing reset");
-            turnTimer.resetTimer();
+          } else {
+            // DB says it's NOT my turn — clear any stale override
+            if (turnOverrideRef.current) {
+              console.log("[ChessGame] Polling: not my turn, clearing stale override");
+              setTurnOverrideWallet(null);
+            }
           }
         }
       } catch (err) {
@@ -743,7 +746,7 @@ const ChessGame = () => {
     return () => clearInterval(interval);
   }, [
     roomPda, isRankedGame, startRoll.isFinalized, gameOver, 
-    address, turnOverrideWallet, activeTurnAddress, 
+    address, activeTurnAddress, 
     turnTimer, play, t
   ]);
 
