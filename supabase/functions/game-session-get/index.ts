@@ -35,7 +35,7 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, serviceKey)
 
     // Fetch game session
-    const { data: session, error: sessionError } = await supabase
+    const { data: session1, error: sessionError } = await supabase
       .from('game_sessions')
       .select('*')
       .eq('room_pda', roomPda)
@@ -47,6 +47,37 @@ serve(async (req) => {
         status: 500, 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
       })
+    }
+
+    let session = session1;
+
+    // Server-side timeout enforcement for active games
+    if (session && session.status_int === 2) {
+      try {
+        const { data: timeoutRes, error: timeoutErr } = await supabase.rpc(
+          "maybe_apply_turn_timeout",
+          { p_room_pda: roomPda }
+        );
+
+        if (timeoutErr) {
+          console.warn("[game-session-get] maybe_apply_turn_timeout error (non-fatal):", timeoutErr);
+        }
+
+        if (timeoutRes?.applied) {
+          console.log("[game-session-get] Timeout applied:", timeoutRes);
+          const { data: session2, error: session2Err } = await supabase
+            .from("game_sessions")
+            .select("*")
+            .eq("room_pda", roomPda)
+            .maybeSingle();
+
+          if (!session2Err && session2) {
+            session = session2;
+          }
+        }
+      } catch (e) {
+        console.warn("[game-session-get] maybe_apply_turn_timeout exception (non-fatal):", e);
+      }
     }
 
     // Fetch finalize receipt (settlement status) - optional field
