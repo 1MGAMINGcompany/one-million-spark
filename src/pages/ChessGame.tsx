@@ -677,7 +677,8 @@ const ChessGame = () => {
         const opponentWalletAddr = getOpponentWallet(roomPlayers, address);
         const strikes = opponentWalletAddr ? (missedTurns[opponentWalletAddr] || 0) : 0;
         setOpponentStrikes(strikes);
-        setDbTurnStartedAt(session?.turn_started_at || null);
+        // dbTurnStartedAt is only updated inside turn-change/timeout handlers below
+        // to prevent polling from overwriting the local timer anchor.
 
         // === SERVER-SIDE TIMEOUT CHECK ===
         const dbTurnWallet = session?.current_turn_wallet;
