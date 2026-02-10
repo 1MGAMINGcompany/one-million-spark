@@ -1,88 +1,72 @@
 
 
-# Fix CORS Headers for Edge Functions
+# Add Server-Side Timeout Enforcement to game-session-get
 
 ## Problem
-Browser requests from `https://1mgaming.com` to `/functions/v1/health` and `/functions/v1/get-moves` are blocked by CORS preflight failures.
+`game-session-get` is read-only. If the opponent is offline, no client calls `maybe_apply_turn_timeout`, so turns stall indefinitely.
 
-## Root Cause
-The `corsHeaders` object is missing:
-1. **`Access-Control-Allow-Methods`** - browsers need this to know which HTTP methods are allowed
-2. **Extended Supabase headers** - the Supabase JS client sends additional headers that must be whitelisted
+## Fix (single file: `supabase/functions/game-session-get/index.ts`)
 
-## Solution
-Update `corsHeaders` in both files to include all required headers.
+### Change 1: Make `session` reassignable (line 38)
 
----
-
-## Changes
-
-### File 1: `supabase/functions/health/index.ts`
-
-**Before (lines 3-6):**
+Change:
 ```typescript
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+const { data: session, error: sessionError } = await supabase
 ```
-
-**After:**
+To:
 ```typescript
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-  "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
-};
+const { data: session1, error: sessionError } = await supabase
 ```
-
----
-
-### File 2: `supabase/functions/get-moves/index.ts`
-
-**Before (lines 4-7):**
+And add after line 50:
 ```typescript
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+let session = session1;
 ```
 
-**After:**
+### Change 2: Insert timeout enforcement block (after the new `let session` line, before line 52)
+
 ```typescript
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-  "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
-};
+// Server-side timeout enforcement for active games
+if (session && session.status_int === 2) {
+  try {
+    const { data: timeoutRes, error: timeoutErr } = await supabase.rpc(
+      "maybe_apply_turn_timeout",
+      { p_room_pda: roomPda }
+    );
+
+    if (timeoutErr) {
+      console.warn("[game-session-get] maybe_apply_turn_timeout error (non-fatal):", timeoutErr);
+    }
+
+    if (timeoutRes?.applied) {
+      console.log("[game-session-get] Timeout applied:", timeoutRes);
+      const { data: session2, error: session2Err } = await supabase
+        .from("game_sessions")
+        .select("*")
+        .eq("room_pda", roomPda)
+        .maybeSingle();
+
+      if (!session2Err && session2) {
+        session = session2;
+      }
+    }
+  } catch (e) {
+    console.warn("[game-session-get] maybe_apply_turn_timeout exception (non-fatal):", e);
+  }
+}
 ```
 
----
+### What this does
+- On every poll where `status_int === 2` (active game), the server calls the existing `maybe_apply_turn_timeout` RPC
+- The RPC is idempotent: if the turn hasn't expired, it returns `{ applied: false }` and does nothing
+- If a timeout fires (or an auto-forfeit on 3 strikes), we re-fetch the session so the response includes updated state
+- Wrapped in try/catch so a failure never breaks the read path
 
-## Technical Details
+### What this does NOT do
+- No CORS changes
+- No forfeit-game calls
+- No readiness gating (no p1_ready/p2_ready checks)
+- No changes to any other file
 
-| Header | Purpose |
-|--------|---------|
-| `Access-Control-Allow-Methods` | Tells browser which HTTP methods are allowed (GET, POST, OPTIONS) |
-| `x-supabase-client-platform` | Supabase JS client sends this header automatically |
-| `x-supabase-client-platform-version` | Client version info |
-| `x-supabase-client-runtime` | Runtime environment (browser/node) |
-| `x-supabase-client-runtime-version` | Runtime version |
-
-If these headers are not whitelisted in `Access-Control-Allow-Headers`, the preflight OPTIONS request fails and the actual request is blocked.
-
----
-
-## Verification
-
-After deployment, test with:
-```bash
-curl -X OPTIONS https://mhtikjiticopicziepnj.supabase.co/functions/v1/health \
-  -H "Origin: https://1mgaming.com" \
-  -H "Access-Control-Request-Method: POST" \
-  -H "Access-Control-Request-Headers: content-type, x-supabase-client-platform" \
-  -v
-```
-
-Should return `200 OK` with proper CORS headers.
+## Files changed
+Only `supabase/functions/game-session-get/index.ts`
 
