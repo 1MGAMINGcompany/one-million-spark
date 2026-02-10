@@ -115,6 +115,7 @@ export const TurnStatusHeader = memo(function TurnStatusHeader({
         </div>
 
         {/* Timer - only shown for current turn holder */}
+        {showTimer && (() => { console.log("[TimerUI]", { isMyTurn, remainingTime, showTimer }); return null; })()}
         {showTimer && isMyTurn && remainingTime > 0 && (
           <div
             className={cn(

@@ -603,6 +603,19 @@ const ChessGame = () => {
     return turnPlayers[turnIndex]?.address || null;
   }, [game, turnPlayers]);
 
+  console.log("[Chess] isMyTurn debug:", {
+    isMyTurn,
+    isActuallyMyTurn,
+    isMyTurnFromEngine,
+    isMyTurnOverride,
+    turnOverrideWallet: turnOverrideWallet?.slice(0, 8),
+    activeTurnAddress: activeTurnAddress?.slice(0, 8),
+    addressRef: addressRef.current?.slice(0, 8),
+    canPlay,
+    gameOver,
+    effectiveTurnTime,
+  });
+
   // === OPPONENT TURN TIMEOUT POLLING ===
   // This polls the server to apply timeouts when opponent is idle
   // Mirrors BackgammonGame polling pattern - ensures 3-strike auto-forfeit works
