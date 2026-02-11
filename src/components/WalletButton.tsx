@@ -658,71 +658,33 @@ export function WalletButton() {
               </Button>
             )}
 
-            {/* iOS: Show deep link buttons to open dapp in wallet browser */}
-            {isIOS && !isInWalletBrowser && (
-              <>
-                <p className="text-sm text-muted-foreground text-center">
-                  Open this page in your wallet app:
-                </p>
+            {/* 3 Wallet buttons with icons - shown on ALL platforms */}
+            {WALLET_CONFIG.map((wallet) => {
+              const detected = isWalletDetected(wallet.id);
+              return (
                 <Button
+                  key={wallet.id}
                   variant="outline"
                   className="w-full justify-start gap-3 h-14"
-                  onClick={() => handleOpenInWallet('phantom')}
+                  onClick={() => handleWalletClick(wallet.id)}
                 >
-                  <img src={phantomIcon} alt="Phantom" className="w-8 h-8" />
+                  <img 
+                    src={wallet.icon} 
+                    alt={wallet.name} 
+                    className="w-8 h-8"
+                  />
                   <div className="flex flex-col items-start">
-                    <span className="font-medium">Open in Phantom</span>
-                    <span className="text-xs text-muted-foreground">Opens wallet browser</span>
+                    <span className="font-medium">{wallet.name}</span>
+                    {detected && (
+                      <span className="text-xs text-green-500">{t("wallet.detected")}</span>
+                    )}
                   </div>
-                  <ExternalLink size={16} className="ml-auto opacity-50" />
                 </Button>
-                <Button
-                  variant="outline"
-                  className="w-full justify-start gap-3 h-14"
-                  onClick={() => handleOpenInWallet('solflare')}
-                >
-                  <img src={solflareIcon} alt="Solflare" className="w-8 h-8" />
-                  <div className="flex flex-col items-start">
-                    <span className="font-medium">Open in Solflare</span>
-                    <span className="text-xs text-muted-foreground">Opens wallet browser</span>
-                  </div>
-                  <ExternalLink size={16} className="ml-auto opacity-50" />
-                </Button>
-              </>
-            )}
-
-            {/* In wallet browser: show wallet buttons to connect */}
-            {(!isMobile || isInWalletBrowser) && (
-              <>
-                {/* 3 Wallet buttons with icons - clean custom UI */}
-                {WALLET_CONFIG.map((wallet) => {
-                  const detected = isWalletDetected(wallet.id);
-                  return (
-                    <Button
-                      key={wallet.id}
-                      variant="outline"
-                      className="w-full justify-start gap-3 h-14"
-                      onClick={() => handleWalletClick(wallet.id)}
-                    >
-                      <img 
-                        src={wallet.icon} 
-                        alt={wallet.name} 
-                        className="w-8 h-8"
-                      />
-                      <div className="flex flex-col items-start">
-                        <span className="font-medium">{wallet.name}</span>
-                        {detected && (
-                          <span className="text-xs text-green-500">{t("wallet.detected")}</span>
-                        )}
-                      </div>
-                    </Button>
-                  );
-                })}
-              </>
-            )}
+              );
+            })}
 
             {/* Android (not in wallet browser): also show wallet buttons as fallback */}
-            {isAndroid && !isInWalletBrowser && (
+            {isMobile && !isInWalletBrowser && (
               <>
                 <div className="border-t border-border pt-3 mt-1">
                   <p className="text-xs text-muted-foreground text-center mb-3">
