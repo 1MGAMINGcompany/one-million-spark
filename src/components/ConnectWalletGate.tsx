@@ -209,68 +209,40 @@ export function ConnectWalletGate({ className }: ConnectWalletGateProps) {
               </Button>
             )}
 
-            {/* iOS: Show deep link buttons to open dapp in wallet browser */}
-            {isIOS && !isInWalletBrowser && (
-              <>
-                <p className="text-sm text-muted-foreground text-center">
-                  Open this page in your wallet app:
-                </p>
+            {/* Wallet buttons — shown on ALL platforms */}
+            {WALLET_CONFIG.map((wallet) => {
+              const detected = isWalletDetected(wallet.id);
+              return (
                 <Button
+                  key={wallet.id}
                   variant="outline"
                   className="w-full justify-start gap-3 h-14"
-                  onClick={() => handleOpenInWallet('phantom')}
+                  onClick={() => handleSelectWallet(wallet.id)}
                 >
-                  <img src={phantomIcon} alt="Phantom" className="w-8 h-8" />
+                  <img 
+                    src={wallet.icon} 
+                    alt={wallet.name} 
+                    className="w-8 h-8"
+                  />
                   <div className="flex flex-col items-start">
-                    <span className="font-medium">Open in Phantom</span>
-                    <span className="text-xs text-muted-foreground">Opens wallet browser</span>
+                    <span className="font-medium">{wallet.name}</span>
+                    {detected && (
+                      <span className="text-xs text-green-500">{t("wallet.detected")}</span>
+                    )}
                   </div>
                 </Button>
-                <Button
-                  variant="outline"
-                  className="w-full justify-start gap-3 h-14"
-                  onClick={() => handleOpenInWallet('solflare')}
-                >
-                  <img src={solflareIcon} alt="Solflare" className="w-8 h-8" />
-                  <div className="flex flex-col items-start">
-                    <span className="font-medium">Open in Solflare</span>
-                    <span className="text-xs text-muted-foreground">Opens wallet browser</span>
-                  </div>
-                </Button>
-              </>
+              );
+            })}
+
+            {/* In wallet browser success */}
+            {isMobile && isInWalletBrowser && (
+              <p className="text-xs text-green-500 text-center mt-2 bg-green-500/10 p-2 rounded">
+                ✓ {t("wallet.inWalletBrowser")}
+              </p>
             )}
 
-            {/* In wallet browser or desktop: show wallet buttons to connect */}
-            {(!isMobile || isInWalletBrowser) && (
-              <>
-                {WALLET_CONFIG.map((wallet) => {
-                  const detected = isWalletDetected(wallet.id);
-                  return (
-                    <Button
-                      key={wallet.id}
-                      variant="outline"
-                      className="w-full justify-start gap-3 h-14"
-                      onClick={() => handleSelectWallet(wallet.id)}
-                    >
-                      <img 
-                        src={wallet.icon} 
-                        alt={wallet.name} 
-                        className="w-8 h-8"
-                      />
-                      <div className="flex flex-col items-start">
-                        <span className="font-medium">{wallet.name}</span>
-                        {detected && (
-                          <span className="text-xs text-green-500">{t("wallet.detected")}</span>
-                        )}
-                      </div>
-                    </Button>
-                  );
-                })}
-              </>
-            )}
-
-            {/* Android (not in wallet browser): also show deep link fallback */}
-            {isAndroid && !isInWalletBrowser && (
+            {/* Secondary: deep link fallback for mobile (not in wallet browser) */}
+            {isMobile && !isInWalletBrowser && (
               <div className="border-t border-border pt-3 mt-1">
                 <p className="text-xs text-muted-foreground text-center mb-3">
                   Or open in wallet browser:
@@ -296,13 +268,6 @@ export function ConnectWalletGate({ className }: ConnectWalletGateProps) {
                   </Button>
                 </div>
               </div>
-            )}
-
-            {/* In wallet browser success */}
-            {isMobile && isInWalletBrowser && (
-              <p className="text-xs text-green-500 text-center mt-2 bg-green-500/10 p-2 rounded">
-                ✓ {t("wallet.inWalletBrowser")}
-              </p>
             )}
           </div>
         </DialogContent>
