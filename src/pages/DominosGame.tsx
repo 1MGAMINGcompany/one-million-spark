@@ -628,14 +628,14 @@ const DominosGame = () => {
       
       const result = data as {
         applied: boolean;
-        type?: string;
+        action?: string;
         winnerWallet?: string;
         nextTurnWallet?: string;
         strikes?: number;
       } | null;
       
       if (result?.applied) {
-        if (result.type === "auto_forfeit") {
+        if (result.action === "auto_forfeit") {
           toast({
             title: t('gameSession.autoForfeit'),
             description: t('gameSession.missedThreeTurns'),
@@ -647,7 +647,7 @@ const DominosGame = () => {
           setWinnerWallet(result.winnerWallet || null);
           setGameStatus(t('game.youLose') + " - 3 missed turns");
           play('domino/lose');
-        } else if (result.type === "turn_timeout") {
+        } else if (result.action === "turn_timeout") {
           toast({
             title: t('gameSession.turnSkipped'),
             description: `${result.strikes}/3 ${t('gameSession.missedTurns')}`,
@@ -673,6 +673,59 @@ const DominosGame = () => {
     onTimeExpired: handleTurnTimeout,
     roomId: roomPda,
   });
+
+  // Polling fallback for opponent timeout detection
+  useEffect(() => {
+    if (!roomPda || !isRankedGame || !startRoll.isFinalized || gameOver) return;
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const { data, error } = await supabase.functions.invoke("game-session-get", {
+          body: { roomPda },
+        });
+        if (error) return;
+
+        const dbStatus = data?.session?.status;
+        const dbWinner = data?.session?.winner_wallet;
+        if (dbStatus === "finished" && !gameOver) {
+          const iWin = isSameWallet(dbWinner, address);
+          setGameOver(true);
+          setWinner(iWin ? "me" : "opponent");
+          setWinnerWallet(dbWinner || null);
+          setGameStatus(iWin ? t("game.youWin") : t("game.youLose"));
+          play(iWin ? "domino/win" : "domino/lose");
+          return;
+        }
+
+        const dbTurnWallet = data?.session?.current_turn_wallet;
+        if (dbTurnWallet) {
+          const isNowMyTurn = isSameWallet(dbTurnWallet, address);
+          if (isNowMyTurn !== isMyTurn) {
+            setIsMyTurn(isNowMyTurn);
+            setGameStatus(isNowMyTurn ? t("game.yourTurn") : t("game.opponentsTurn"));
+            turnTimer.resetTimer();
+          }
+
+          try {
+            const { data: movesData } = await supabase.functions.invoke("get-moves", {
+              body: { roomPda },
+            });
+            const lastMove = movesData?.moves?.at(-1);
+            if (lastMove?.move_data?.action === "turn_timeout" && isNowMyTurn) {
+              toast({
+                title: t("gameSession.opponentSkipped"),
+                description: `${lastMove.move_data.strikes || "?"}/3 ${t("gameSession.missedTurns")}`,
+              });
+            }
+          } catch {}
+        }
+      } catch (err) {
+        console.warn("[DominosGame] Poll error:", err);
+      }
+    }, 5000);
+
+    return () => clearInterval(pollInterval);
+  }, [roomPda, isRankedGame, gameOver, startRoll.isFinalized, address, isMyTurn, t, play]);
 
   // Turn notification players
   const turnPlayers: TurnPlayer[] = useMemo(() => {

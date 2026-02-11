@@ -498,21 +498,21 @@ const LudoGame = () => {
       
       const result = data as {
         applied: boolean;
-        type?: string;
+        action?: string;
         winnerWallet?: string;
         nextTurnWallet?: string;
         strikes?: number;
       } | null;
       
       if (result?.applied) {
-        if (result.type === "auto_forfeit" || result.type === "player_eliminated") {
+        if (result.action === "auto_forfeit" || result.action === "player_eliminated") {
           toast({
             title: t('gameSession.autoForfeit'),
             description: t('gameSession.missedThreeTurns'),
             variant: "destructive",
           });
           forfeitFnRef.current?.();
-        } else if (result.type === "turn_timeout") {
+        } else if (result.action === "turn_timeout") {
           toast({
             title: t('gameSession.turnSkipped'),
             description: `${result.strikes}/3 ${t('gameSession.missedTurns')}`,
@@ -537,6 +537,57 @@ const LudoGame = () => {
     onTimeExpired: handleTurnTimeout,
     roomId: roomPda,
   });
+
+  // Polling fallback for opponent timeout detection
+  useEffect(() => {
+    if (!roomPda || !isRankedGame || !startRoll.isFinalized || gameOver) return;
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const { data, error } = await supabase.functions.invoke("game-session-get", {
+          body: { roomPda },
+        });
+        if (error) return;
+
+        const dbStatus = data?.session?.status;
+        const dbWinner = data?.session?.winner_wallet;
+        if (dbStatus === "finished" && !gameOver) {
+          const iWin = isSameWallet(dbWinner, address);
+          toast({
+            title: iWin ? t("game.youWin") : t("game.youLose"),
+            variant: iWin ? "default" : "destructive",
+          });
+          return;
+        }
+
+        const dbTurnWallet = data?.session?.current_turn_wallet;
+        if (dbTurnWallet) {
+          const dbTurnIndex = roomPlayers.findIndex(p => isSameWallet(p, dbTurnWallet));
+          if (dbTurnIndex >= 0 && dbTurnIndex !== currentPlayerIndex) {
+            setCurrentPlayerIndex(dbTurnIndex);
+            turnTimer.resetTimer();
+
+            try {
+              const { data: movesData } = await supabase.functions.invoke("get-moves", {
+                body: { roomPda },
+              });
+              const lastMove = movesData?.moves?.at(-1);
+              if (lastMove?.move_data?.action === "turn_timeout" && isSameWallet(dbTurnWallet, address)) {
+                toast({
+                  title: t("gameSession.opponentSkipped"),
+                  description: `${lastMove.move_data.strikes || "?"}/3 ${t("gameSession.missedTurns")}`,
+                });
+              }
+            } catch {}
+          }
+        }
+      } catch (err) {
+        console.warn("[LudoGame] Poll error:", err);
+      }
+    }, 5000);
+
+    return () => clearInterval(pollInterval);
+  }, [roomPda, isRankedGame, gameOver, startRoll.isFinalized, address, roomPlayers, currentPlayerIndex, t]);
 
   // Convert Ludo players to TurnPlayer format for notifications
   const turnPlayers: TurnPlayer[] = useMemo(() => {

@@ -450,7 +450,7 @@ const CheckersGame = () => {
       // Type assertion for RPC response
       const result = data as {
         applied: boolean;
-        type?: string;
+        action?: string;
         reason?: string;
         winnerWallet?: string;
         nextTurnWallet?: string;
@@ -458,7 +458,7 @@ const CheckersGame = () => {
       } | null;
       
       if (result?.applied) {
-        if (result.type === "auto_forfeit") {
+        if (result.action === "auto_forfeit") {
           // 3 strikes - game over
           toast({
             title: t('gameSession.autoForfeit'),
@@ -471,7 +471,7 @@ const CheckersGame = () => {
           setWinnerWallet(result.winnerWallet || null);
           play('checkers_lose');
           
-        } else if (result.type === "turn_timeout" && result.nextTurnWallet) {
+        } else if (result.action === "turn_timeout" && result.nextTurnWallet) {
           // Turn skipped - update local state from server
           toast({
             title: t('gameSession.turnSkipped'),
@@ -497,6 +497,59 @@ const CheckersGame = () => {
     onTimeExpired: handleTurnTimeout,
     roomId: roomPda,
   });
+
+  // Polling fallback for opponent timeout detection
+  useEffect(() => {
+    if (!roomPda || !isRankedGame || !startRoll.isFinalized || gameOver) return;
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const { data, error } = await supabase.functions.invoke("game-session-get", {
+          body: { roomPda },
+        });
+        if (error) return;
+
+        const dbStatus = data?.session?.status;
+        const dbWinner = data?.session?.winner_wallet;
+        if (dbStatus === "finished" && !gameOver) {
+          const iWin = isSameWallet(dbWinner, address);
+          setGameOver(iWin ? (myColor === "gold" ? "obsidian" : "gold") : myColor);
+          setWinnerWallet(dbWinner || null);
+          play(iWin ? "checkers_win" : "checkers_lose");
+          return;
+        }
+
+        const dbTurnWallet = data?.session?.current_turn_wallet;
+        if (dbTurnWallet && turnOverrideWallet !== dbTurnWallet) {
+          const isNowMyTurn = isSameWallet(dbTurnWallet, address);
+          const engineSaysMyTurn = currentPlayer === myColor;
+          if (isNowMyTurn !== engineSaysMyTurn) {
+            setTurnOverrideWallet(dbTurnWallet);
+            turnTimer.resetTimer();
+          } else if (turnOverrideWallet) {
+            setTurnOverrideWallet(null);
+          }
+
+          try {
+            const { data: movesData } = await supabase.functions.invoke("get-moves", {
+              body: { roomPda },
+            });
+            const lastMove = movesData?.moves?.at(-1);
+            if (lastMove?.move_data?.action === "turn_timeout" && isNowMyTurn) {
+              toast({
+                title: t("gameSession.opponentSkipped"),
+                description: `${lastMove.move_data.strikes || "?"}/3 ${t("gameSession.missedTurns")}`,
+              });
+            }
+          } catch {}
+        }
+      } catch (err) {
+        console.warn("[CheckersGame] Poll error:", err);
+      }
+    }, 5000);
+
+    return () => clearInterval(pollInterval);
+  }, [roomPda, isRankedGame, gameOver, startRoll.isFinalized, address, turnOverrideWallet, currentPlayer, myColor, t, play]);
 
   // Turn notification players
   const turnPlayers: TurnPlayer[] = useMemo(() => {
