@@ -16,10 +16,10 @@ import { WalletGateModal } from "@/components/WalletGateModal";
 import { RivalryWidget } from "@/components/RivalryWidget";
 import { WalletLink } from "@/components/WalletLink";
 import { TxDebugPanel } from "@/components/TxDebugPanel";
-import { MobileWalletRedirect } from "@/components/MobileWalletRedirect";
+
 import { PreviewDomainBanner, useSigningDisabled } from "@/components/PreviewDomainBanner";
 import { JoinRulesModal } from "@/components/JoinRulesModal";
-import { validatePublicKey, isMobileDevice, hasInjectedSolanaWallet, getRoomPda } from "@/lib/solana-utils";
+import { validatePublicKey, getRoomPda } from "@/lib/solana-utils";
 import { supabase } from "@/integrations/supabase/client";
 import { isWalletInAppBrowser } from "@/lib/walletBrowserDetection";
 import { toast } from "sonner";
@@ -64,7 +64,7 @@ export default function Room() {
   const { activeRoom, joinRoom, createRoom, cancelRoom, txPending: hookTxPending, txDebugInfo, clearTxDebug } = useSolanaRooms();
   const { isTxInFlight, withTxLock } = useTxLock();
   const [showWalletGate, setShowWalletGate] = useState(false);
-  const [showMobileWalletRedirect, setShowMobileWalletRedirect] = useState(false);
+  
   const [showJoinRulesModal, setShowJoinRulesModal] = useState(false);
   const [joinInProgress, setJoinInProgress] = useState(false);
   
@@ -135,8 +135,6 @@ export default function Room() {
   // Check if signing is disabled (preview domain)
   const signingDisabled = useSigningDisabled();
   
-  // Check if we need to redirect to wallet app
-  const needsMobileWalletRedirect = isMobileDevice() && !hasInjectedSolanaWallet();
   
   // Validate PDA param on mount
   useEffect(() => {
@@ -601,11 +599,6 @@ export default function Room() {
       return;
     }
     
-    // Check if we need mobile wallet redirect
-    if (needsMobileWalletRedirect) {
-      setShowMobileWalletRedirect(true);
-      return;
-    }
 
     // Check if user has an active room
     if (hasBlockingActiveRoom) {
@@ -674,10 +667,6 @@ export default function Room() {
       return;
     }
 
-    if (needsMobileWalletRedirect) {
-      setShowMobileWalletRedirect(true);
-      return;
-    }
 
     const roomId = typeof room.roomId === "object" ? room.roomId.toNumber() : room.roomId;
 
@@ -697,11 +686,6 @@ export default function Room() {
       return;
     }
     
-    // Check if we need mobile wallet redirect
-    if (needsMobileWalletRedirect) {
-      setShowMobileWalletRedirect(true);
-      return;
-    }
     
     // Check if user has an active room
     if (hasBlockingActiveRoom) {
@@ -743,10 +727,6 @@ export default function Room() {
       return;
     }
 
-    if (needsMobileWalletRedirect) {
-      setShowMobileWalletRedirect(true);
-      return;
-    }
 
     // Verify user is the creator
     if (!isCreator) {
@@ -1259,11 +1239,6 @@ export default function Room() {
       {/* Preview Domain Banner */}
       <PreviewDomainBanner />
       
-      {/* Mobile Wallet Redirect Modal */}
-      <MobileWalletRedirect 
-        isOpen={showMobileWalletRedirect}
-        onClose={() => setShowMobileWalletRedirect(false)}
-      />
 
       {/* Cancel Room Confirmation Modal - Disabled until program supports cancel_room */}
       

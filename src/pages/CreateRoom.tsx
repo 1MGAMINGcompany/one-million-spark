@@ -31,9 +31,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { GameType, RoomStatus, isOpenStatus, type RoomDisplay } from "@/lib/solana-program";
 import { ConnectWalletGate } from "@/components/ConnectWalletGate";
 import { TxDebugPanel } from "@/components/TxDebugPanel";
-import { MobileWalletRedirect } from "@/components/MobileWalletRedirect";
+
 import { PreviewDomainBanner, useSigningDisabled } from "@/components/PreviewDomainBanner";
-import { getRoomPda, isMobileDevice, hasInjectedSolanaWallet, isBlockingRoom } from "@/lib/solana-utils";
+import { getRoomPda, isBlockingRoom } from "@/lib/solana-utils";
 import { ActiveGameBanner } from "@/components/ActiveGameBanner";
 import { UnresolvedRoomModal } from "@/components/UnresolvedRoomModal";
 import { requestNotificationPermission } from "@/lib/pushNotifications";
@@ -84,7 +84,7 @@ export default function CreateRoom() {
   const [gameMode, setGameMode] = useState<'casual' | 'ranked'>('casual');
   const [checkingActiveRoom, setCheckingActiveRoom] = useState(true);
   const [refreshingBalance, setRefreshingBalance] = useState(false);
-  const [showMobileWalletRedirect, setShowMobileWalletRedirect] = useState(false);
+  
   const [showUnresolvedModal, setShowUnresolvedModal] = useState(false);
   const [modalBlockingRoom, setModalBlockingRoom] = useState<RoomDisplay | null>(null);
   
@@ -129,7 +129,7 @@ export default function CreateRoom() {
   const signingDisabled = useSigningDisabled();
   
   // Check if we need to redirect to wallet app
-  const needsMobileWalletRedirect = isMobileDevice() && !hasInjectedSolanaWallet();
+  
   
   // Use balance from network hook (null means not fetched, not 0)
   const balance = balanceInfo.sol ?? 0;
@@ -218,11 +218,6 @@ export default function CreateRoom() {
       return;
     }
     
-    // Check if we need mobile wallet redirect
-    if (needsMobileWalletRedirect) {
-      setShowMobileWalletRedirect(true);
-      return;
-    }
     
     // Check network first
     const networkError = checkNetworkMismatch();
@@ -793,11 +788,6 @@ export default function CreateRoom() {
       {/* Preview Domain Banner */}
       <PreviewDomainBanner />
       
-      {/* Mobile Wallet Redirect Modal */}
-      <MobileWalletRedirect 
-        isOpen={showMobileWalletRedirect}
-        onClose={() => setShowMobileWalletRedirect(false)}
-      />
       
       {/* Transaction Debug Panel - shown on tx failure */}
       <TxDebugPanel debugInfo={txDebugInfo} onClose={clearTxDebug} />
