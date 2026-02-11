@@ -497,7 +497,15 @@
       "title": "Backpack से कनेक्ट करें",
       "step1": "Backpack ऐप खोलें",
       "step2": "ब्राउज़र आइकन पर टैप करें"
-    }
+    },
+    "iosInstructions": "iPhone को वॉलेट ब्राउज़र में खोलना आवश्यक है",
+    "iosInstructionsDetail": "iPhone ब्राउज़र सीधे वॉलेट ऐप्स से कनेक्ट नहीं हो सकते। अपने वॉलेट के ब्राउज़र में इस साइट को खोलने के लिए नीचे टैप करें।",
+    "iosModalDescription": "iPhone ब्राउज़र सीधे वॉलेट से कनेक्ट नहीं हो सकते। इस साइट को अपने वॉलेट के बिल्ट-इन ब्राउज़र में खोलें।",
+    "desktopModalDescription": "जारी रखने के लिए वॉलेट एक्सटेंशन इंस्टॉल करें या वॉलेट ब्राउज़र में खोलें।",
+    "openInPhantom": "Phantom में खोलें",
+    "openInSolflare": "Solflare में खोलें",
+    "openInWalletBrowser": "{{wallet}} ब्राउज़र में खोलें",
+    "orOpenInWalletBrowser": "या वॉलेट ब्राउज़र में खोलें:"
   },
   "common": {
     "loading": "लोड हो रहा है...",

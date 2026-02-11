@@ -3,6 +3,8 @@ import { Button } from "@/components/ui/button";
 import { ExternalLink, RefreshCw } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
+const getIsIOS = () => /iPhone|iPad|iPod/i.test(navigator.userAgent);
+
 // Import local wallet icons
 import phantomIcon from "@/assets/wallets/phantom.svg";
 import solflareIcon from "@/assets/wallets/solflare.svg";
@@ -54,6 +56,7 @@ export function WalletNotDetectedModal({
   const { t } = useTranslation();
   const walletInfo = WALLET_INFO[walletType];
   const currentUrl = window.location.href;
+  const isIOS = getIsIOS();
   
   const handleOpenApp = () => {
     const deepLink = getDeepLink(walletType, currentUrl);
@@ -73,7 +76,9 @@ export function WalletNotDetectedModal({
             {t("wallet.walletNotDetected", { wallet: walletInfo.name })}
           </DialogTitle>
           <DialogDescription className="text-sm text-muted-foreground">
-            Install the wallet extension or open in wallet browser to continue
+            {isIOS
+              ? t("wallet.iosModalDescription")
+              : t("wallet.desktopModalDescription")}
           </DialogDescription>
         </DialogHeader>
         
@@ -93,7 +98,9 @@ export function WalletNotDetectedModal({
               size="lg"
             >
               <ExternalLink size={18} />
-              {t("wallet.openWalletApp", { wallet: walletInfo.name })}
+              {isIOS
+                ? t("wallet.openInWalletBrowser", { wallet: walletInfo.name })
+                : t("wallet.openWalletApp", { wallet: walletInfo.name })}
             </Button>
             
             <Button 

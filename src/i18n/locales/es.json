@@ -617,7 +617,15 @@
       "title": "Conectar con Backpack",
       "step1": "Abre la app Backpack",
       "step2": "Toca el ícono del Navegador"
-    }
+    },
+    "iosInstructions": "iPhone requiere abrir en el navegador de la billetera",
+    "iosInstructionsDetail": "Los navegadores de iPhone no pueden conectarse directamente a las billeteras. Toca abajo para abrir este sitio en el navegador de tu billetera.",
+    "iosModalDescription": "Los navegadores de iPhone no pueden conectarse directamente a las billeteras. Abre este sitio en el navegador integrado de tu billetera.",
+    "desktopModalDescription": "Instala la extensión de billetera o abre en el navegador de billetera para continuar.",
+    "openInPhantom": "Abrir en Phantom",
+    "openInSolflare": "Abrir en Solflare",
+    "openInWalletBrowser": "Abrir en navegador de {{wallet}}",
+    "orOpenInWalletBrowser": "O abre en el navegador de billetera:"
   },
   "common": {
     "loading": "Cargando...",

@@ -484,7 +484,15 @@
       "title": "使用Backpack连接",
       "step1": "打开Backpack应用",
       "step2": "点击浏览器图标"
-    }
+    },
+    "iosInstructions": "iPhone需要在钱包浏览器中打开",
+    "iosInstructionsDetail": "iPhone浏览器无法直接连接钱包应用。点击下方在钱包浏览器中打开此网站。",
+    "iosModalDescription": "iPhone浏览器无法直接连接钱包。请在钱包的内置浏览器中打开此网站。",
+    "desktopModalDescription": "安装钱包扩展程序或在钱包浏览器中打开以继续。",
+    "openInPhantom": "在Phantom中打开",
+    "openInSolflare": "在Solflare中打开",
+    "openInWalletBrowser": "在{{wallet}}浏览器中打开",
+    "orOpenInWalletBrowser": "或在钱包浏览器中打开："
   },
   "common": {
     "loading": "加载中...",

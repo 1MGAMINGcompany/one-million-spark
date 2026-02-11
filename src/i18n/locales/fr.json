@@ -487,7 +487,15 @@
       "title": "Connecter avec Backpack",
       "step1": "Ouvrez l'application Backpack",
       "step2": "Appuyez sur l'icône Navigateur"
-    }
+    },
+    "iosInstructions": "iPhone nécessite l'ouverture dans le navigateur du portefeuille",
+    "iosInstructionsDetail": "Les navigateurs iPhone ne peuvent pas se connecter directement aux applications de portefeuille. Appuyez ci-dessous pour ouvrir ce site dans le navigateur de votre portefeuille.",
+    "iosModalDescription": "Les navigateurs iPhone ne peuvent pas se connecter directement aux portefeuilles. Ouvrez ce site dans le navigateur intégré de votre portefeuille.",
+    "desktopModalDescription": "Installez l'extension de portefeuille ou ouvrez dans le navigateur du portefeuille pour continuer.",
+    "openInPhantom": "Ouvrir dans Phantom",
+    "openInSolflare": "Ouvrir dans Solflare",
+    "openInWalletBrowser": "Ouvrir dans le navigateur {{wallet}}",
+    "orOpenInWalletBrowser": "Ou ouvrir dans le navigateur du portefeuille :"
   },
   "common": {
     "loading": "Chargement...",
