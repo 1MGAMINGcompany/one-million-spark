@@ -205,6 +205,7 @@ export function WalletButton() {
         }, CONNECT_TIMEOUT_MS);
 
         select(selectedWallet.adapter.name);
+        connect().catch(() => {}); // Explicit connect to trigger wallet handshake
         setDialogOpen(false);
         
         // For MWA on Android, show immediate feedback
@@ -688,35 +689,67 @@ export function WalletButton() {
               );
             })}
 
-            {/* Android (not in wallet browser): also show wallet buttons as fallback */}
-            {isMobile && !isInWalletBrowser && (
-              <>
-                <div className="border-t border-border pt-3 mt-1">
-                  <p className="text-xs text-muted-foreground text-center mb-3">
-                    Or open in wallet browser:
+            {/* iOS: Show prominent instructions for wallet browser */}
+            {isIOS && !isInWalletBrowser && (
+              <div className="border-t border-border pt-3 mt-1">
+                <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 mb-3">
+                  <p className="text-sm font-medium text-blue-600 dark:text-blue-400 mb-1">
+                    {t("wallet.iosInstructions")}
                   </p>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="gap-2"
-                      onClick={() => handleOpenInWallet('phantom')}
-                    >
-                      <img src={phantomIcon} alt="Phantom" className="w-5 h-5" />
-                      Phantom
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="gap-2"
-                      onClick={() => handleOpenInWallet('solflare')}
-                    >
-                      <img src={solflareIcon} alt="Solflare" className="w-5 h-5" />
-                      Solflare
-                    </Button>
-                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {t("wallet.iosInstructionsDetail")}
+                  </p>
                 </div>
-              </>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    onClick={() => handleOpenInWallet('phantom')}
+                  >
+                    <img src={phantomIcon} alt="Phantom" className="w-5 h-5" />
+                    {t("wallet.openInPhantom")}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    onClick={() => handleOpenInWallet('solflare')}
+                  >
+                    <img src={solflareIcon} alt="Solflare" className="w-5 h-5" />
+                    {t("wallet.openInSolflare")}
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Android (not in wallet browser): subtle deep link fallback */}
+            {isAndroid && !isInWalletBrowser && (
+              <div className="border-t border-border pt-3 mt-1">
+                <p className="text-xs text-muted-foreground text-center mb-3">
+                  {t("wallet.orOpenInWalletBrowser")}
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    onClick={() => handleOpenInWallet('phantom')}
+                  >
+                    <img src={phantomIcon} alt="Phantom" className="w-5 h-5" />
+                    Phantom
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    onClick={() => handleOpenInWallet('solflare')}
+                  >
+                    <img src={solflareIcon} alt="Solflare" className="w-5 h-5" />
+                    Solflare
+                  </Button>
+                </div>
+              </div>
             )}
 
             {/* In wallet browser success */}

@@ -487,7 +487,15 @@
       "title": "Mit Backpack verbinden",
       "step1": "Öffnen Sie die Backpack-App",
       "step2": "Tippen Sie auf das Browser-Symbol"
-    }
+    },
+    "iosInstructions": "iPhone erfordert das Öffnen im Wallet-Browser",
+    "iosInstructionsDetail": "iPhone-Browser können sich nicht direkt mit Wallet-Apps verbinden. Tippen Sie unten, um diese Seite im Browser Ihres Wallets zu öffnen.",
+    "iosModalDescription": "iPhone-Browser können sich nicht direkt mit Wallets verbinden. Öffnen Sie diese Seite im integrierten Browser Ihres Wallets.",
+    "desktopModalDescription": "Installieren Sie die Wallet-Erweiterung oder öffnen Sie im Wallet-Browser, um fortzufahren.",
+    "openInPhantom": "In Phantom öffnen",
+    "openInSolflare": "In Solflare öffnen",
+    "openInWalletBrowser": "Im {{wallet}}-Browser öffnen",
+    "orOpenInWalletBrowser": "Oder im Wallet-Browser öffnen:"
   },
   "common": {
     "loading": "Laden...",

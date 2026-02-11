@@ -484,7 +484,15 @@
       "title": "الاتصال بـ Backpack",
       "step1": "افتح تطبيق Backpack",
       "step2": "اضغط على أيقونة المتصفح"
-    }
+    },
+    "iosInstructions": "iPhone يتطلب الفتح في متصفح المحفظة",
+    "iosInstructionsDetail": "متصفحات iPhone لا يمكنها الاتصال مباشرة بتطبيقات المحفظة. اضغط أدناه لفتح هذا الموقع في متصفح محفظتك.",
+    "iosModalDescription": "متصفحات iPhone لا يمكنها الاتصال مباشرة بالمحافظ. افتح هذا الموقع في المتصفح المدمج في محفظتك.",
+    "desktopModalDescription": "قم بتثبيت إضافة المحفظة أو افتح في متصفح المحفظة للمتابعة.",
+    "openInPhantom": "افتح في Phantom",
+    "openInSolflare": "افتح في Solflare",
+    "openInWalletBrowser": "افتح في متصفح {{wallet}}",
+    "orOpenInWalletBrowser": "أو افتح في متصفح المحفظة:"
   },
   "common": {
     "loading": "جارٍ التحميل...",

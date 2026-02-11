@@ -584,7 +584,15 @@
     "copyPage": "Copy page link",
     "siteLinkCopied": "Site link copied!",
     "pageLinkCopied": "Page link copied!",
-    "openingWallet": "Opening wallet app..."
+    "openingWallet": "Opening wallet app...",
+    "iosInstructions": "iPhone requires opening in wallet browser",
+    "iosInstructionsDetail": "iPhone browsers can't connect directly to wallet apps. Tap below to open this site inside your wallet's browser.",
+    "iosModalDescription": "iPhone browsers can't connect directly to wallet apps. Open this site in your wallet's built-in browser instead.",
+    "desktopModalDescription": "Install the wallet extension or open in wallet browser to continue.",
+    "openInPhantom": "Open in Phantom",
+    "openInSolflare": "Open in Solflare",
+    "openInWalletBrowser": "Open in {{wallet}} Browser",
+    "orOpenInWalletBrowser": "Or open in wallet browser:"
   },
   "common": {
     "loading": "Loading...",

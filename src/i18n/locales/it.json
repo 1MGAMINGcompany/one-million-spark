@@ -484,7 +484,15 @@
       "title": "Connetti con Backpack",
       "step1": "Apri l'app Backpack",
       "step2": "Tocca l'icona Browser"
-    }
+    },
+    "iosInstructions": "iPhone richiede l'apertura nel browser del portafoglio",
+    "iosInstructionsDetail": "I browser iPhone non possono connettersi direttamente alle app del portafoglio. Tocca sotto per aprire questo sito nel browser del tuo portafoglio.",
+    "iosModalDescription": "I browser iPhone non possono connettersi direttamente ai portafogli. Apri questo sito nel browser integrato del tuo portafoglio.",
+    "desktopModalDescription": "Installa l'estensione del portafoglio o apri nel browser del portafoglio per continuare.",
+    "openInPhantom": "Apri in Phantom",
+    "openInSolflare": "Apri in Solflare",
+    "openInWalletBrowser": "Apri nel browser {{wallet}}",
+    "orOpenInWalletBrowser": "Oppure apri nel browser del portafoglio:"
   },
   "common": {
     "loading": "Caricamento...",

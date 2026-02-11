@@ -510,7 +510,15 @@
       "title": "Backpackで接続",
       "step1": "Backpackアプリを開く",
       "step2": "ブラウザアイコンをタップ"
-    }
+    },
+    "iosInstructions": "iPhoneではウォレットブラウザで開く必要があります",
+    "iosInstructionsDetail": "iPhoneのブラウザはウォレットアプリに直接接続できません。下をタップしてウォレットのブラウザでこのサイトを開いてください。",
+    "iosModalDescription": "iPhoneのブラウザはウォレットに直接接続できません。ウォレットの内蔵ブラウザでこのサイトを開いてください。",
+    "desktopModalDescription": "ウォレット拡張機能をインストールするか、ウォレットブラウザで開いて続行してください。",
+    "openInPhantom": "Phantomで開く",
+    "openInSolflare": "Solflareで開く",
+    "openInWalletBrowser": "{{wallet}}ブラウザで開く",
+    "orOpenInWalletBrowser": "またはウォレットブラウザで開く："
   },
   "common": {
     "loading": "読み込み中...",
