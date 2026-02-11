@@ -60,7 +60,9 @@ export function RecoverableRoomsSection({ wallet }: RecoverableRoomsSectionProps
         return;
       }
 
-      const rows = resp?.rows ?? [];
+      const rows = (resp?.rows ?? []).filter(
+        (r: RecoverableRoom) => r.room_pda && !r.room_pda.includes('-')
+      );
       setRooms(rows);
     } catch (err) {
       console.error('[RecoverableRooms] Error:', err);
