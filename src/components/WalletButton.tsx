@@ -575,9 +575,14 @@ export function WalletButton() {
         }
       }
     } else if (isMobile) {
-      // On mobile with no wallet detected: show modal with 2 options
-      setNotDetectedWallet(walletId as 'phantom' | 'solflare' | 'backpack');
-      setDialogOpen(false);
+      // Android with MWA: use MWA to open system wallet picker (includes Solflare, etc.)
+      if (isAndroid && hasMWA) {
+        handleMWAConnect();
+      } else {
+        // iOS or no MWA: show "not detected" modal with deep link fallback
+        setNotDetectedWallet(walletId as 'phantom' | 'solflare' | 'backpack');
+        setDialogOpen(false);
+      }
     } else {
       // Desktop: just show toast
       toast.error(`${walletId} wallet not detected. Please install it first.`);
