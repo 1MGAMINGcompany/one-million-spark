@@ -1,63 +1,48 @@
 
-# Re-enable Mobile Wallet Connection from Regular Browsers
 
-## Problem
-Mobile users in regular browsers (Safari, Chrome) are currently blocked from connecting wallets. They're forced to open the app inside a wallet's in-app browser (Phantom, Solflare). This was done for iOS compatibility but it also blocks Android users who can use MWA from any browser.
+# Fix Wallet Switching — Show Wallet Buttons in WalletButton.tsx
+
+## Root Cause
+The navbar's "Connect Wallet" dialog lives in `WalletButton.tsx` (not `ConnectWalletGate.tsx`). This file was **never updated** with the same fixes we applied to `ConnectWalletGate.tsx`. It still has the old gating that hides Phantom/Solflare/Backpack buttons on mobile and shows only "Open in wallet browser" deep links instead.
+
+Two blocking conditions:
+- **Line 662**: iOS users only see deep-link buttons ("Open in Phantom", "Open in Solflare")
+- **Line 695**: `(!isMobile || isInWalletBrowser)` hides the 3 wallet buttons on mobile
 
 ## What Changes
 
-### 1. ConnectWalletGate.tsx -- Show wallet buttons on ALL platforms
+### WalletButton.tsx — Single file change
 
-Currently line 244 hides wallet buttons on mobile unless in-app:
-```
-{(!isMobile || isInWalletBrowser) && ( ... wallet buttons ... )}
-```
+1. **Remove the iOS-only deep link section** (lines 661-692)
+   - Currently: `{isIOS && !isInWalletBrowser && ( ... deep links only ... )}`
+   - These deep links will move to the secondary fallback section below
 
-**Change:** Always show the three wallet buttons (Phantom, Solflare, Backpack) regardless of platform. Keep the MWA button for Android as a top option. Keep deep-link buttons as a secondary "Or open in wallet browser" section for iOS/Android -- but no longer hide the direct connect buttons.
+2. **Remove the desktop/in-app-only gate on wallet buttons** (line 695)
+   - Currently: `{(!isMobile || isInWalletBrowser) && ( ... wallet buttons ... )}`
+   - Change: Always show the 3 wallet buttons (Phantom, Solflare, Backpack) on ALL platforms — no conditional wrapper
 
-### 2. ConnectWalletGate.tsx -- iOS section change
+3. **Update the Android deep-link section to cover all mobile** (lines 724-753)
+   - Currently: `{isAndroid && !isInWalletBrowser && ( ... )}`
+   - Change: `{isMobile && !isInWalletBrowser && ( ... )}` — show deep links as a secondary "Or open in wallet browser" fallback for all mobile users (iOS and Android), not just Android
 
-Currently line 213 shows ONLY deep links for iOS users not in wallet browser:
-```
-{isIOS && !isInWalletBrowser && ( ... deep links only ... )}
-```
-
-**Change:** Remove this exclusive iOS deep-link section. Instead, show the standard wallet buttons for everyone, and move the deep-link options to a secondary "Alternative: open in wallet browser" section below (for cases where direct connect fails).
-
-### 3. CreateRoom.tsx -- Remove mobile wallet redirect gate
-
-Currently line 132 and line 222 block room creation on mobile:
-```
-const needsMobileWalletRedirect = isMobileDevice() && !hasInjectedSolanaWallet();
-if (needsMobileWalletRedirect) { setShowMobileWalletRedirect(true); return; }
-```
-
-**Change:** Remove the `needsMobileWalletRedirect` variable and all its conditional checks. Remove the `MobileWalletRedirect` modal import and rendering. If the user has no wallet connected, let the existing `ConnectWalletGate` component handle it (it already shows when `!publicKey`).
-
-### 4. Room.tsx -- Remove mobile wallet redirect gate
-
-Same pattern as CreateRoom -- lines 139, 605, 677, 701, 746 all block actions with the redirect modal.
-
-**Change:** Remove all `needsMobileWalletRedirect` checks and the `MobileWalletRedirect` modal. Let existing wallet connection UI handle the flow naturally.
-
-### 5. SolanaProvider.tsx -- Enable autoConnect
-
-Currently line 39: `autoConnect={false}`
-
-**Change:** Set `autoConnect={true}` so returning users who previously connected get auto-reconnected on page load. This restores the session seamlessly on both desktop and mobile.
-
----
+This matches exactly what we already did in `ConnectWalletGate.tsx`.
 
 ## What stays the same
-- Preview domain signing block (PreviewDomainBanner) -- still needed for security
-- WebRTC disable in wallet browsers -- still correct for those environments  
-- WalletNotDetectedModal -- still useful when a wallet isn't installed
-- Deep-link buttons remain available as a secondary option, not the only option
+- MWA button for Android at the top
+- Desktop "Get Wallet" install links section
+- In-wallet-browser success indicator
+- All disconnect, balance, copy address logic
+- `ConnectWalletGate.tsx` (already fixed)
 
-## Summary of files changed
-| File | Change |
-|---|---|
-| `src/components/ConnectWalletGate.tsx` | Show wallet buttons on all platforms; move deep links to secondary section |
-| `src/pages/CreateRoom.tsx` | Remove `needsMobileWalletRedirect` gate and `MobileWalletRedirect` modal |
-| `src/pages/Room.tsx` | Remove `needsMobileWalletRedirect` gate and `MobileWalletRedirect` modal |
-| `src/components/SolanaProvider.tsx` | Set `autoConnect={true}` |
+## How similar apps handle this
+Apps like Raydium, Jupiter, and Tensor show all wallet options in one list regardless of platform. Deep links to wallet browsers are either absent or shown as a small secondary note. The wallet picker always displays Phantom, Solflare, Backpack as clickable buttons.
+
+## Technical Details
+
+| Line(s) | Current Code | New Code |
+|---|---|---|
+| 661-692 | `{isIOS && !isInWalletBrowser && ( ...deep links only... )}` | Remove entire block |
+| 695 | `{(!isMobile \|\| isInWalletBrowser) && (` | Remove conditional — always render wallet buttons |
+| 721-722 | `</>` and `)}` closing the conditional | Remove these closing tags |
+| 725 | `{isAndroid && !isInWalletBrowser && (` | `{isMobile && !isInWalletBrowser && (` |
+
