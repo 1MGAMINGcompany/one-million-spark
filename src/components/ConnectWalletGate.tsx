@@ -81,7 +81,7 @@ const WALLET_CONFIG = [
  */
 export function ConnectWalletGate({ className }: ConnectWalletGateProps) {
   const { t } = useTranslation();
-  const { wallets, select, connecting } = useWallet();
+  const { wallets, select, connect, connecting } = useWallet();
   const [showHelp, setShowHelp] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [notDetectedWallet, setNotDetectedWallet] = useState<'phantom' | 'solflare' | 'backpack' | null>(null);
@@ -121,6 +121,7 @@ export function ConnectWalletGate({ className }: ConnectWalletGateProps) {
     
     if (matchingWallet) {
       select(matchingWallet.adapter.name);
+      connect().catch(() => {});
       setDialogOpen(false);
     } else if (isMobile) {
       // On mobile with no wallet detected: show modal with 2 options
