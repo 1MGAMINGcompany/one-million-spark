@@ -524,7 +524,7 @@ const ChessGame = () => {
       // Type assertion for RPC response
       const result = data as {
         applied: boolean;
-        type?: string;
+        action?: string;
         reason?: string;
         winnerWallet?: string;
         nextTurnWallet?: string;
@@ -532,7 +532,7 @@ const ChessGame = () => {
       } | null;
       
       if (result?.applied) {
-        if (result.type === "auto_forfeit") {
+        if (result.action === "auto_forfeit") {
           // 3 strikes - game over
           toast({
             title: t('gameSession.autoForfeit'),
@@ -546,7 +546,7 @@ const ChessGame = () => {
           setGameStatus(myColor === 'w' ? t('game.black') + " wins" : t('game.white') + " wins");
           play('chess_lose');
           
-        } else if (result.type === "turn_timeout" && result.nextTurnWallet) {
+        } else if (result.action === "turn_timeout" && result.nextTurnWallet) {
           // Turn skipped - update local state from server
           toast({
             title: t('gameSession.turnSkipped'),
@@ -574,7 +574,73 @@ const ChessGame = () => {
     roomId: roomPda,
   });
 
-  // Convert to TurnPlayer format for notifications
+  // Polling fallback for opponent timeout detection
+  // When it's the opponent's turn, poll game-session-get which triggers maybe_apply_turn_timeout server-side
+  useEffect(() => {
+    if (!roomPda || !isRankedGame || !startRoll.isFinalized || gameOver) return;
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const { data, error } = await supabase.functions.invoke("game-session-get", {
+          body: { roomPda },
+        });
+        if (error) return;
+
+        const dbStatus = data?.session?.status;
+        const dbWinner = data?.session?.winner_wallet;
+        if (dbStatus === "finished" && !gameOver) {
+          setGameOver(true);
+          setWinnerWallet(dbWinner || null);
+          const iWin = isSameWallet(dbWinner, address);
+          setGameStatus(iWin ? t("gameMultiplayer.checkmateYouWin") : t("gameMultiplayer.checkmateYouLose"));
+          play(iWin ? "chess_win" : "chess_lose");
+          return;
+        }
+
+        const dbTurnWallet = data?.session?.current_turn_wallet;
+        if (dbTurnWallet && turnOverrideWallet !== dbTurnWallet) {
+          // Detect turn change
+          const isNowMyTurn = isSameWallet(dbTurnWallet, address);
+          
+          // Sync FEN from DB to keep engine in sync
+          const dbFen = data?.session?.game_state?.fen;
+          if (dbFen && dbFen !== game.fen()) {
+            const synced = new Chess(dbFen);
+            setGame(synced);
+          }
+
+          // If turn changed, update override and reset timer
+          const engineTurn = game.turn() === effectiveColor;
+          if (isNowMyTurn !== engineTurn) {
+            setTurnOverrideWallet(dbTurnWallet);
+            turnTimer.resetTimer();
+          } else {
+            // Engine agrees, clear override
+            if (turnOverrideWallet) setTurnOverrideWallet(null);
+          }
+
+          // Check last move for timeout toast
+          try {
+            const { data: movesData } = await supabase.functions.invoke("get-moves", {
+              body: { roomPda },
+            });
+            const lastMove = movesData?.moves?.at(-1);
+            if (lastMove?.move_data?.action === "turn_timeout" && isNowMyTurn) {
+              toast({
+                title: t("gameSession.opponentSkipped"),
+                description: `${lastMove.move_data.strikes || "?"}/3 ${t("gameSession.missedTurns")}`,
+              });
+            }
+          } catch {}
+        }
+      } catch (err) {
+        console.warn("[ChessGame] Poll error:", err);
+      }
+    }, 5000);
+
+    return () => clearInterval(pollInterval);
+  }, [roomPda, isRankedGame, gameOver, startRoll.isFinalized, address, turnOverrideWallet, game, effectiveColor, t, play]);
+
   const turnPlayers: TurnPlayer[] = useMemo(() => {
     return roomPlayers.map((playerAddress, index) => {
       const isMe = isSameWallet(playerAddress, address);

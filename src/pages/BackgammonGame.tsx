@@ -815,7 +815,7 @@ const BackgammonGame = () => {
             // Type assertion for RPC response
             const result = timeoutResult as {
               applied: boolean;
-              type?: string;
+              action?: string;
               reason?: string;
               winnerWallet?: string;
               nextTurnWallet?: string;
@@ -825,11 +825,11 @@ const BackgammonGame = () => {
             if (result?.applied) {
               console.log("[Polling] Server applied timeout:", result);
               
-              if (result.type === "auto_forfeit") {
+              if (result.action === "auto_forfeit") {
                 // Game ended due to 3 strikes
                 enterOutcomeResolving(result.winnerWallet);
                 return;
-              } else if (result.type === "turn_timeout" && result.nextTurnWallet) {
+              } else if (result.action === "turn_timeout" && result.nextTurnWallet) {
                 // Turn passed to me - UI will update below
                 toast({
                   title: t('gameSession.opponentSkipped'),
@@ -1147,7 +1147,7 @@ const BackgammonGame = () => {
       // Type assertion for RPC response
       const result = data as {
         applied: boolean;
-        type?: string;
+        action?: string;
         reason?: string;
         winnerWallet?: string;
         nextTurnWallet?: string;
@@ -1158,7 +1158,7 @@ const BackgammonGame = () => {
       console.log("[handleTurnTimeout] Server response:", result);
       
       if (result?.applied) {
-        if (result.type === "auto_forfeit") {
+        if (result.action === "auto_forfeit") {
           // 3 strikes - game over
           toast({
             title: t('gameSession.autoForfeit'),
@@ -1172,7 +1172,7 @@ const BackgammonGame = () => {
           // Use neutral resolving state - DB Outcome Resolver will finalize
           enterOutcomeResolving(result.winnerWallet);
           
-        } else if (result.type === "turn_timeout") {
+        } else if (result.action === "turn_timeout") {
           // Turn skipped - update local state from server
           toast({
             title: t('gameSession.turnSkipped'),
