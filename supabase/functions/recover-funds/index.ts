@@ -176,6 +176,15 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // Validate roomPda is a valid base58 Solana address (not a UUID)
+    const BASE58_REGEX = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+    if (!BASE58_REGEX.test(roomPda)) {
+      return new Response(
+        JSON.stringify({ status: "error", message: "Invalid room address format" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     console.log(`[recover-funds] Recovery request for room ${roomPda} by ${callerWallet}`);
 
     // Initialize clients
