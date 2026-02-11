@@ -85,15 +85,13 @@ function loadStored(): DebugEvent[] {
 }
 
 export function dbg(tag: string, data?: any) {
-  const IS_DEV = import.meta.env.DEV;
-  if (!IS_DEV && !isDebugEnabled()) return;
-
   const evt: DebugEvent = {
     t: Date.now(),
     tag,
     data: sanitize(data),
   };
 
+  // ALWAYS store in ring buffer (production + dev, ~50KB max)
   const w = window as any;
   if (!w.__DBG) {
     w.__DBG = loadStored();
@@ -110,10 +108,14 @@ export function dbg(tag: string, data?: any) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(arr));
   } catch {}
 
-  try {
-    // eslint-disable-next-line no-console
-    console.log(`[DBG] ${tag}`, evt.data ?? "");
-  } catch {}
+  // Only print to console in dev or when ?debug=1 is active
+  const IS_DEV = import.meta.env.DEV;
+  if (IS_DEV || isDebugEnabled()) {
+    try {
+      // eslint-disable-next-line no-console
+      console.log(`[DBG] ${tag}`, evt.data ?? "");
+    } catch {}
+  }
 }
 
 export function getDbg(): DebugEvent[] {

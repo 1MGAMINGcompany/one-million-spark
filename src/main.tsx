@@ -17,11 +17,10 @@ import { BUILD_VERSION, BUILD_TIMESTAMP } from "./lib/buildVersion";
 console.log(`[1MGAMING] App started | Build: ${BUILD_VERSION} | ${BUILD_TIMESTAMP}`);
 
 // Debug instrumentation: capture global errors
-import { dbg, isDebugEnabled } from "./lib/debugLog";
+import { dbg } from "./lib/debugLog";
 
 if (typeof window !== "undefined") {
   window.addEventListener("error", (e) => {
-    if (!isDebugEnabled()) return;
     dbg("window.error", {
       message: e.message,
       filename: e.filename,
@@ -31,7 +30,6 @@ if (typeof window !== "undefined") {
   });
 
   window.addEventListener("unhandledrejection", (e) => {
-    if (!isDebugEnabled()) return;
     dbg("unhandledrejection", {
       reason: String(e.reason),
     });
