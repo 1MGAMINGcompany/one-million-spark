@@ -1,89 +1,86 @@
 
+# Fix Auto-Forfeit: Two Critical Bugs
 
-# Always-On Game Logging (Production-Safe)
+## Bug 1: Field Name Mismatch (ALL games broken)
 
-## The Real Problem
+The `maybe_apply_turn_timeout` RPC returns `action` in its response:
+- `action: 'turn_timeout'` (single strike)
+- `action: 'auto_forfeit'` (3 strikes)
 
-Right now, `dbg()` has an early return that skips everything in production unless `?debug=1`:
+But ALL game pages check `result.type` instead of `result.action`. This means the response is **always silently ignored** -- even when the RPC successfully applies a timeout, the client never processes it.
+
+**Affected files (5):**
+- `src/pages/ChessGame.tsx` (lines 535, 549)
+- `src/pages/CheckersGame.tsx` (lines 461, 474)
+- `src/pages/DominosGame.tsx` (lines 638, 650)
+- `src/pages/LudoGame.tsx` (lines 508, 515)
+- `src/pages/BackgammonGame.tsx` (lines 828, 832, 1161, 1175)
+
+**Fix:** Change every `result.type` to `result.action` in all 5 files.
+
+---
+
+## Bug 2: No Polling for Opponent Timeout (Chess, Checkers, Dominos, Ludo)
+
+Backgammon has a dedicated polling effect (~line 749) that:
+1. Polls `game-session-get` every few seconds
+2. Detects if it's the opponent's turn
+3. Calls `maybe_apply_turn_timeout` to advance the game if the opponent is idle
+4. Detects game-over from DB
+
+Chess, Checkers, Dominos, and Ludo **do not have this**. The `useTurnTimer` hook only runs when `isMyTurn === true`, so it only handles self-timeout. If both players are online but the opponent is AFK, nothing triggers their timeout -- nobody calls the RPC.
+
+**Fix:** Add a polling effect to Chess, Checkers, Dominos, and Ludo similar to Backgammon's. The poll:
+- Runs every 3-5 seconds when the game is active and ranked
+- Calls `game-session-get` (which itself calls `maybe_apply_turn_timeout` server-side for active games)
+- Detects `current_turn_wallet` changes and game completion from DB
+- Handles timeout results using `result.action` (not `result.type`)
+
+---
+
+## Technical Details
+
+### File Changes
+
+1. **`src/pages/ChessGame.tsx`**
+   - Fix `result.type` to `result.action` in `handleTurnTimeout` (2 occurrences)
+   - Add polling effect after `useTurnTimer` that polls `game-session-get` every 3s when ranked, active, and it's the opponent's turn; detects turn changes and game-over
+
+2. **`src/pages/CheckersGame.tsx`**
+   - Fix `result.type` to `result.action` (2 occurrences)
+   - Add same polling effect
+
+3. **`src/pages/DominosGame.tsx`**
+   - Fix `result.type` to `result.action` (2 occurrences)
+   - Add same polling effect
+
+4. **`src/pages/LudoGame.tsx`**
+   - Fix `result.type` to `result.action` (2 occurrences)
+   - Add same polling effect
+
+5. **`src/pages/BackgammonGame.tsx`**
+   - Fix `result.type` to `result.action` (4 occurrences: 2 in polling, 2 in handleTurnTimeout)
+
+### No Backend Changes Needed
+
+The `maybe_apply_turn_timeout` RPC is correct -- it returns `action`. The `game-session-get` edge function already calls the RPC for active games. The bug is purely client-side field name mismatch + missing polling in 4 games.
+
+### How It Works After Fix
 
 ```text
-if (!IS_DEV && !isDebugEnabled()) return;
+Scenario: Player A lets their turn expire (30s chess)
+
+1. Player A's client: useTurnTimer counts to 0, fires handleTurnTimeout
+   -> Calls maybe_apply_turn_timeout RPC
+   -> RPC returns { applied: true, action: "turn_timeout", strikes: 1 }
+   -> Client reads result.action (FIXED), shows "Turn skipped 1/3"
+
+2. Player B's client: Polling effect detects turn change
+   -> game-session-get returns updated current_turn_wallet
+   -> Player B sees "Your turn" and timer resets
+
+3. After 3 consecutive timeouts:
+   -> RPC returns { applied: true, action: "auto_forfeit", winnerWallet: B }
+   -> Client processes forfeit, shows game-over screen
+   -> Server-side auto-settlement via game-session-get handles payout
 ```
-
-This means:
-- The ring buffer is empty in production
-- When `reportClientError` fires on a crash, it sends zero debug events (the last 20 are all blank)
-- You lose all diagnostic context for real user issues
-
-## What Good Apps Do
-
-Production apps (games, fintech, etc.) use a **two-tier logging** approach:
-
-1. **Always collect** structured events into a memory ring buffer (cheap, no UI, no console spam)
-2. **Only display** console output and the HUD overlay when explicitly enabled
-
-This way, when something goes wrong, the telemetry report (`reportClientError`) always has the last N events attached -- even if the user never typed `?debug=1`.
-
-## The Fix (1 file, ~5 lines changed)
-
-**File: `src/lib/debugLog.ts`** -- Split the `dbg()` function into two concerns:
-
-```text
-BEFORE (line 88-89):
-  if (!IS_DEV && !isDebugEnabled()) return;  // skips EVERYTHING
-
-AFTER:
-  // ALWAYS write to ring buffer (production + dev)
-  // Only console.log when debug mode is active
-```
-
-Specifically:
-1. Remove the early return that blocks ring buffer writes
-2. Keep the `console.log` call gated behind `IS_DEV || isDebugEnabled()`
-3. No other files change -- `getDbg()`, `clearDbg()`, `reportClientError`, `DebugHUD` all read from the same ring buffer and work as-is
-
-### Updated `dbg()` logic:
-
-```text
-export function dbg(tag: string, data?: any) {
-  const evt = { t: Date.now(), tag, data: sanitize(data) };
-
-  // ALWAYS store in ring buffer (production-safe, ~50KB max)
-  const w = window as any;
-  if (!w.__DBG) w.__DBG = loadStored();
-  const arr = w.__DBG;
-  arr.push(evt);
-  if (arr.length > MAX) arr.splice(0, arr.length - MAX);
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(arr)); } catch {}
-
-  // Only print to console in dev or when ?debug=1 is active
-  const IS_DEV = import.meta.env.DEV;
-  if (IS_DEV || isDebugEnabled()) {
-    try { console.log(`[DBG] ${tag}`, evt.data ?? ""); } catch {}
-  }
-}
-```
-
-### Also update `main.tsx` error listeners (lines 23-38):
-
-Remove the `if (!isDebugEnabled()) return;` guards from the global error/rejection listeners so crashes are always captured in the ring buffer:
-
-```text
-window.addEventListener("error", (e) => {
-  dbg("window.error", { ... });  // dbg itself handles the gating now
-});
-```
-
-## What This Gets You
-
-- Every game played on production builds up a ring buffer of the last 400 events
-- If a crash happens, `reportClientError` sends those events to your `client_errors` table automatically
-- The DebugHUD and console spam only appear when you opt in with `?debug=1`
-- Zero performance impact -- `sanitize()` + `JSON.stringify` on small objects is sub-millisecond
-- Ring buffer caps at ~50KB in localStorage, auto-evicts old entries
-
-## Files Changed
-
-1. **`src/lib/debugLog.ts`** -- Remove early return, gate only console output
-2. **`src/main.tsx`** -- Remove `isDebugEnabled()` guards from error listeners (lines 23-34)
-
