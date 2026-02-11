@@ -424,18 +424,24 @@ export function GameEndScreen({
             </div>
           )}
 
-          {/* Share Match Section - Only for staked games with a roomPda */}
-          {isStaked && roomPda && !isPending && (() => {
-            const matchLink = `${window.location.origin}/match/${roomPda}`;
+          {/* Share Match Section - Show for ALL completed games */}
+          {!isPending && (() => {
             const gameLabel = gameType ? ` ${gameType}` : '';
-            const winnerMsg = `I just won${gameLabel} on 1MGAMING 🔥 Check the match: ${matchLink}`;
-            const loserMsg = `Just played${gameLabel} on 1MGAMING — check the match: ${matchLink}`;
+            const hasMatchLink = !!roomPda;
+            const matchLink = hasMatchLink ? `${window.location.origin}/match/${roomPda}` : '';
+            const winnerMsg = hasMatchLink
+              ? `I just won${gameLabel} on 1MGAMING 🔥 Check the match: ${matchLink}`
+              : `I just won${gameLabel} on 1MGAMING 🔥`;
+            const loserMsg = hasMatchLink
+              ? `Just played${gameLabel} on 1MGAMING — check the match: ${matchLink}`
+              : `Just played${gameLabel} on 1MGAMING 🎮`;
             const shareMsg = isWinner ? winnerMsg : loserMsg;
             const emailSubject = isWinner ? `I won${gameLabel} on 1MGAMING!` : `Check out this${gameLabel} match on 1MGAMING`;
 
             const handleCopyLink = async () => {
+              const textToCopy = hasMatchLink ? matchLink : shareMsg;
               try {
-                await navigator.clipboard.writeText(matchLink);
+                await navigator.clipboard.writeText(textToCopy);
                 setLinkCopied(true);
                 setTimeout(() => setLinkCopied(false), 2000);
               } catch { /* fallback: ignore */ }
@@ -477,7 +483,7 @@ export function GameEndScreen({
                     className="inline-flex items-center justify-center gap-2 rounded-lg font-semibold text-sm min-h-[48px] px-4 border border-border bg-secondary hover:bg-secondary/80 text-secondary-foreground transition-colors"
                   >
                     {linkCopied ? <Check size={18} className="text-green-500" /> : <Copy size={18} />}
-                    {linkCopied ? 'Copied!' : 'Copy Link'}
+                    {linkCopied ? 'Copied!' : hasMatchLink ? 'Copy Link' : 'Copy Message'}
                   </button>
                 </div>
               </div>
