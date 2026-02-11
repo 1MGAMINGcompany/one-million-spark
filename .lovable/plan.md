@@ -1,86 +1,63 @@
 
-# Fix Auto-Forfeit: Two Critical Bugs
+# Re-enable Mobile Wallet Connection from Regular Browsers
 
-## Bug 1: Field Name Mismatch (ALL games broken)
+## Problem
+Mobile users in regular browsers (Safari, Chrome) are currently blocked from connecting wallets. They're forced to open the app inside a wallet's in-app browser (Phantom, Solflare). This was done for iOS compatibility but it also blocks Android users who can use MWA from any browser.
 
-The `maybe_apply_turn_timeout` RPC returns `action` in its response:
-- `action: 'turn_timeout'` (single strike)
-- `action: 'auto_forfeit'` (3 strikes)
+## What Changes
 
-But ALL game pages check `result.type` instead of `result.action`. This means the response is **always silently ignored** -- even when the RPC successfully applies a timeout, the client never processes it.
+### 1. ConnectWalletGate.tsx -- Show wallet buttons on ALL platforms
 
-**Affected files (5):**
-- `src/pages/ChessGame.tsx` (lines 535, 549)
-- `src/pages/CheckersGame.tsx` (lines 461, 474)
-- `src/pages/DominosGame.tsx` (lines 638, 650)
-- `src/pages/LudoGame.tsx` (lines 508, 515)
-- `src/pages/BackgammonGame.tsx` (lines 828, 832, 1161, 1175)
-
-**Fix:** Change every `result.type` to `result.action` in all 5 files.
-
----
-
-## Bug 2: No Polling for Opponent Timeout (Chess, Checkers, Dominos, Ludo)
-
-Backgammon has a dedicated polling effect (~line 749) that:
-1. Polls `game-session-get` every few seconds
-2. Detects if it's the opponent's turn
-3. Calls `maybe_apply_turn_timeout` to advance the game if the opponent is idle
-4. Detects game-over from DB
-
-Chess, Checkers, Dominos, and Ludo **do not have this**. The `useTurnTimer` hook only runs when `isMyTurn === true`, so it only handles self-timeout. If both players are online but the opponent is AFK, nothing triggers their timeout -- nobody calls the RPC.
-
-**Fix:** Add a polling effect to Chess, Checkers, Dominos, and Ludo similar to Backgammon's. The poll:
-- Runs every 3-5 seconds when the game is active and ranked
-- Calls `game-session-get` (which itself calls `maybe_apply_turn_timeout` server-side for active games)
-- Detects `current_turn_wallet` changes and game completion from DB
-- Handles timeout results using `result.action` (not `result.type`)
-
----
-
-## Technical Details
-
-### File Changes
-
-1. **`src/pages/ChessGame.tsx`**
-   - Fix `result.type` to `result.action` in `handleTurnTimeout` (2 occurrences)
-   - Add polling effect after `useTurnTimer` that polls `game-session-get` every 3s when ranked, active, and it's the opponent's turn; detects turn changes and game-over
-
-2. **`src/pages/CheckersGame.tsx`**
-   - Fix `result.type` to `result.action` (2 occurrences)
-   - Add same polling effect
-
-3. **`src/pages/DominosGame.tsx`**
-   - Fix `result.type` to `result.action` (2 occurrences)
-   - Add same polling effect
-
-4. **`src/pages/LudoGame.tsx`**
-   - Fix `result.type` to `result.action` (2 occurrences)
-   - Add same polling effect
-
-5. **`src/pages/BackgammonGame.tsx`**
-   - Fix `result.type` to `result.action` (4 occurrences: 2 in polling, 2 in handleTurnTimeout)
-
-### No Backend Changes Needed
-
-The `maybe_apply_turn_timeout` RPC is correct -- it returns `action`. The `game-session-get` edge function already calls the RPC for active games. The bug is purely client-side field name mismatch + missing polling in 4 games.
-
-### How It Works After Fix
-
-```text
-Scenario: Player A lets their turn expire (30s chess)
-
-1. Player A's client: useTurnTimer counts to 0, fires handleTurnTimeout
-   -> Calls maybe_apply_turn_timeout RPC
-   -> RPC returns { applied: true, action: "turn_timeout", strikes: 1 }
-   -> Client reads result.action (FIXED), shows "Turn skipped 1/3"
-
-2. Player B's client: Polling effect detects turn change
-   -> game-session-get returns updated current_turn_wallet
-   -> Player B sees "Your turn" and timer resets
-
-3. After 3 consecutive timeouts:
-   -> RPC returns { applied: true, action: "auto_forfeit", winnerWallet: B }
-   -> Client processes forfeit, shows game-over screen
-   -> Server-side auto-settlement via game-session-get handles payout
+Currently line 244 hides wallet buttons on mobile unless in-app:
 ```
+{(!isMobile || isInWalletBrowser) && ( ... wallet buttons ... )}
+```
+
+**Change:** Always show the three wallet buttons (Phantom, Solflare, Backpack) regardless of platform. Keep the MWA button for Android as a top option. Keep deep-link buttons as a secondary "Or open in wallet browser" section for iOS/Android -- but no longer hide the direct connect buttons.
+
+### 2. ConnectWalletGate.tsx -- iOS section change
+
+Currently line 213 shows ONLY deep links for iOS users not in wallet browser:
+```
+{isIOS && !isInWalletBrowser && ( ... deep links only ... )}
+```
+
+**Change:** Remove this exclusive iOS deep-link section. Instead, show the standard wallet buttons for everyone, and move the deep-link options to a secondary "Alternative: open in wallet browser" section below (for cases where direct connect fails).
+
+### 3. CreateRoom.tsx -- Remove mobile wallet redirect gate
+
+Currently line 132 and line 222 block room creation on mobile:
+```
+const needsMobileWalletRedirect = isMobileDevice() && !hasInjectedSolanaWallet();
+if (needsMobileWalletRedirect) { setShowMobileWalletRedirect(true); return; }
+```
+
+**Change:** Remove the `needsMobileWalletRedirect` variable and all its conditional checks. Remove the `MobileWalletRedirect` modal import and rendering. If the user has no wallet connected, let the existing `ConnectWalletGate` component handle it (it already shows when `!publicKey`).
+
+### 4. Room.tsx -- Remove mobile wallet redirect gate
+
+Same pattern as CreateRoom -- lines 139, 605, 677, 701, 746 all block actions with the redirect modal.
+
+**Change:** Remove all `needsMobileWalletRedirect` checks and the `MobileWalletRedirect` modal. Let existing wallet connection UI handle the flow naturally.
+
+### 5. SolanaProvider.tsx -- Enable autoConnect
+
+Currently line 39: `autoConnect={false}`
+
+**Change:** Set `autoConnect={true}` so returning users who previously connected get auto-reconnected on page load. This restores the session seamlessly on both desktop and mobile.
+
+---
+
+## What stays the same
+- Preview domain signing block (PreviewDomainBanner) -- still needed for security
+- WebRTC disable in wallet browsers -- still correct for those environments  
+- WalletNotDetectedModal -- still useful when a wallet isn't installed
+- Deep-link buttons remain available as a secondary option, not the only option
+
+## Summary of files changed
+| File | Change |
+|---|---|
+| `src/components/ConnectWalletGate.tsx` | Show wallet buttons on all platforms; move deep links to secondary section |
+| `src/pages/CreateRoom.tsx` | Remove `needsMobileWalletRedirect` gate and `MobileWalletRedirect` modal |
+| `src/pages/Room.tsx` | Remove `needsMobileWalletRedirect` gate and `MobileWalletRedirect` modal |
+| `src/components/SolanaProvider.tsx` | Set `autoConnect={true}` |
