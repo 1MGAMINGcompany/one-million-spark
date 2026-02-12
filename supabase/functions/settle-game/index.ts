@@ -969,6 +969,39 @@ Deno.serve(async (req: Request) => {
           }
         }
 
+        // Step 4: Insert match_share_card for brag link
+        try {
+          const potLamports = Number(roomData.stakeLamports) * roomData.maxPlayers;
+          const feeLamports = Math.floor(potLamports * 0.05);
+          const payoutLamports = potLamports - feeLamports;
+          const loserWallet = playersOnChain.find((p: string) => p !== winnerWallet) || null;
+
+          const { error: shareErr } = await supabase.from("match_share_cards").upsert(
+            {
+              room_pda: roomPda,
+              game_type: normalizeGameType(gameType),
+              mode: mode || "casual",
+              winner_wallet: winnerWallet,
+              loser_wallet: loserWallet,
+              win_reason: reason === "resign" ? "forfeit" : reason || "gameover",
+              stake_lamports: Number(roomData.stakeLamports),
+              winner_payout_lamports: payoutLamports,
+              fee_lamports: feeLamports,
+              tx_signature: signature,
+              finished_at: new Date().toISOString(),
+            },
+            { onConflict: "room_pda", ignoreDuplicates: true }
+          );
+
+          if (shareErr) {
+            console.warn("[settle-game] match_share_cards insert failed (non-fatal):", shareErr.message);
+          } else {
+            console.log("[settle-game] ✅ match_share_cards recorded");
+          }
+        } catch (shareException) {
+          console.warn("[settle-game] match_share_cards exception (non-fatal):", shareException);
+        }
+
         dbRecorded = !dbError;
         console.log("[settle-game] 📊 DB recording complete:", { dbRecorded, dbError });
 
