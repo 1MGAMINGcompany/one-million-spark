@@ -2491,37 +2491,52 @@ const BackgammonGame = () => {
                 </div>
 
                 {/* Bear Off Zone - Mobile - Always visible, disabled when not allowed */}
-                <div 
-                  className={cn(
-                    "w-full py-1.5 rounded-lg flex items-center justify-center gap-2 transition-all",
-                    validMoves.includes(-2) 
-                      ? "bg-primary/20 border-2 border-primary animate-pulse cursor-pointer shadow-[0_0_20px_hsl(45_93%_54%_/_0.4)]" 
-                      : canBearOff(gameState, myRole)
-                        ? "border border-primary/30 bg-primary/5 cursor-pointer"
-                        : "border border-primary/10 bg-muted/5 opacity-50"
-                  )}
-                  onClick={() => {
-                    if (validMoves.includes(-2)) handlePointClick(-2);
-                  }}
-                >
-                  <Trophy className={cn("w-4 h-4", validMoves.includes(-2) ? "text-primary" : "text-primary/50")} />
-                  <span className={cn(
-                    "font-bold",
-                    validMoves.includes(-2) ? "text-primary" : canBearOff(gameState, myRole) ? "text-muted-foreground" : "text-muted-foreground/50"
-                  )}>
-                    {validMoves.includes(-2) 
-                      ? "Tap to Bear Off" 
-                      : canBearOff(gameState, myRole)
-                        ? `Bear Off: ${myRole === "player" ? gameState.bearOff.player : gameState.bearOff.ai}/15`
-                        : "Bear Off (locked)"}
-                  </span>
-                  {validMoves.includes(-2) && (
-                    <span className="text-xs text-primary/70">({myRole === "player" ? gameState.bearOff.player : gameState.bearOff.ai}/15)</span>
-                  )}
-                  {!canBearOff(gameState, myRole) && (
-                    <span className="text-[10px] text-muted-foreground/50">Move all to home first</span>
-                  )}
-                </div>
+                {(() => {
+                  const bearOffReady = isMyTurn && !gameOver && dice.length > 0 && canBearOff(gameState, myRole) && !validMoves.includes(-2);
+                  return (
+                    <div 
+                      className={cn(
+                        "w-full py-1.5 rounded-lg flex items-center justify-center gap-2 transition-all",
+                        validMoves.includes(-2) 
+                          ? "bg-primary/20 border-2 border-primary animate-pulse cursor-pointer shadow-[0_0_20px_hsl(45_93%_54%_/_0.4)]" 
+                          : bearOffReady
+                            ? "bg-primary/15 border-2 border-primary/70 cursor-pointer shadow-[0_0_15px_hsl(45_93%_54%_/_0.3)]"
+                            : canBearOff(gameState, myRole)
+                              ? "border border-primary/30 bg-primary/5"
+                              : "border border-primary/10 bg-muted/5 opacity-50"
+                      )}
+                      onClick={() => {
+                        if (validMoves.includes(-2)) {
+                          handlePointClick(-2);
+                        } else if (bearOffReady) {
+                          const allMoves = getAllLegalMoves(gameState, remainingMoves, myRole);
+                          const bearOffMove = allMoves.find(m => m.to === -2 || m.to === 25);
+                          if (bearOffMove) handlePointClick(bearOffMove.from);
+                        }
+                      }}
+                    >
+                      <Trophy className={cn("w-4 h-4", (validMoves.includes(-2) || bearOffReady) ? "text-primary" : "text-primary/50")} />
+                      <span className={cn(
+                        "font-bold",
+                        validMoves.includes(-2) ? "text-primary" : bearOffReady ? "text-primary" : canBearOff(gameState, myRole) ? "text-muted-foreground" : "text-muted-foreground/50"
+                      )}>
+                        {validMoves.includes(-2) 
+                          ? "Tap to Bear Off" 
+                          : bearOffReady
+                            ? `Select checker to Bear Off (${myRole === "player" ? gameState.bearOff.player : gameState.bearOff.ai}/15)`
+                            : canBearOff(gameState, myRole)
+                              ? `Bear Off: ${myRole === "player" ? gameState.bearOff.player : gameState.bearOff.ai}/15`
+                              : "Bear Off (locked)"}
+                      </span>
+                      {validMoves.includes(-2) && (
+                        <span className="text-xs text-primary/70">({myRole === "player" ? gameState.bearOff.player : gameState.bearOff.ai}/15)</span>
+                      )}
+                      {!canBearOff(gameState, myRole) && (
+                        <span className="text-[10px] text-muted-foreground/50">Move all to home first</span>
+                      )}
+                    </div>
+                  );
+                })()}
 
                 {/* Resign button - mobile - show when game is active (not just on your turn) */}
                 {!gameOver && canPlay && (
