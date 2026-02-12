@@ -2402,14 +2402,14 @@ const BackgammonGame = () => {
               </div>
 
               {/* Controls Area - Fixed height section below board */}
-              <div className="shrink-0 mt-2 space-y-2" style={{ minHeight: '80px' }}>
+              <div className="shrink-0 mt-1 space-y-1 overflow-y-auto max-h-[40vh]">
                 {/* Roll Button */}
-                <div style={{ minHeight: '52px' }}>
+                <div>
                   {isMyTurn && dice.length === 0 && !gameOver ? (
                     <Button 
                       variant="gold" 
                       size="lg" 
-                      className="w-full py-3 text-base font-bold shadow-[0_0_24px_-6px_hsl(45_93%_54%_/_0.6)]" 
+                      className="w-full py-2 text-sm font-bold shadow-[0_0_24px_-6px_hsl(45_93%_54%_/_0.6)]" 
                       onClick={rollDice}
                     >
                       🎲 ROLL DICE
@@ -2420,7 +2420,7 @@ const BackgammonGame = () => {
                 {/* Status Bar */}
                 <div 
                   className={cn(
-                    "rounded-lg border px-3 py-1.5",
+                    "rounded-lg border px-2 py-1",
                     gameOver 
                       ? gameStatus.includes("win") 
                         ? "bg-green-500/10 border-green-500/30" 
@@ -2493,7 +2493,7 @@ const BackgammonGame = () => {
                 {/* Bear Off Zone - Mobile - Always visible, disabled when not allowed */}
                 <div 
                   className={cn(
-                    "w-full py-2 rounded-lg flex items-center justify-center gap-2 transition-all",
+                    "w-full py-1.5 rounded-lg flex items-center justify-center gap-2 transition-all",
                     validMoves.includes(-2) 
                       ? "bg-primary/20 border-2 border-primary animate-pulse cursor-pointer shadow-[0_0_20px_hsl(45_93%_54%_/_0.4)]" 
                       : canBearOff(gameState, myRole)
