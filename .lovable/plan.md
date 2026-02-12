@@ -1,86 +1,63 @@
 
-# Fix: Translate All Hardcoded English Strings in Wallet Components
+
+# Fix: Multiplayer Backgammon Board Cut Off on Mobile
 
 ## Problem
-There are 10+ hardcoded English strings scattered across the wallet connection components. This violates the zero-leak i18n rule and means non-English users see a mix of translated and untranslated text.
+On mobile, the controls area below the board (Roll Dice, status bar, Bear Off zone, Resign button) pushes content past the bottom of the viewport. The board itself gets compressed but the controls still overflow, making Bear Off and Resign partially or fully hidden.
 
-## Hardcoded Strings Found
-
-| String | File(s) |
-|--------|---------|
-| `Open in ${wallet.name}` | WalletButton, ConnectWalletGate, MobileWalletFallback |
-| `Opens wallet browser` | WalletButton, ConnectWalletGate, MobileWalletFallback |
-| `Use Installed Wallet` | WalletButton, ConnectWalletGate |
-| `Phantom, Solflare, Backpack` (MWA subtitle) | WalletButton, ConnectWalletGate |
-| `Or use "Use Installed Wallet" above...` | WalletButton, ConnectWalletGate |
-| `How to connect & get SOL` | ConnectWalletGate, WalletGateModal |
-| `Select your wallet provider to connect` | ConnectWalletGate |
-| `Open this page in your wallet's browser` | MobileWalletFallback |
+## Root Cause
+The controls section has `shrink-0` with `minHeight: 80px`, plus multiple stacked elements each with padding and `space-y-2` gaps. Combined height of all controls exceeds available space after the board takes its share.
 
 ## Solution
+Compact the controls area so everything fits within the viewport without scrolling. No changes to the game-viewport container height or the BackgammonAI page.
 
-### 1. Add new i18n keys to `en.json` (wallet section)
+### Changes to `src/pages/BackgammonGame.tsx` (mobile layout only)
 
-Add these keys (some already exist and just need to be used):
-- `wallet.openInWallet`: "Open in {{wallet}}" 
-- `wallet.opensWalletBrowser`: "Opens wallet browser"
-- `wallet.useInstalledWallet`: "Use Installed Wallet"
-- `wallet.mwaSubtitle`: "Phantom, Solflare, Backpack"
-- `wallet.mwaNote`: "Or use \"Use Installed Wallet\" above for system wallet picker"
-- `wallet.howToConnectSol`: "How to connect & get SOL"
-- `wallet.selectProvider`: "Select your wallet provider to connect"
-- `wallet.openPageInWalletBrowser`: "Open this page in your wallet's browser"
+1. **Remove rigid `minHeight` on controls container** (line 2405): Change `style={{ minHeight: '80px' }}` to no minHeight, and reduce `space-y-2` to `space-y-1`
 
-### 2. Add translations for all 10 language files
+2. **Remove rigid `minHeight` on Roll Button wrapper** (line 2407): Remove `style={{ minHeight: '52px' }}` -- let the button size itself naturally, and only reserve space when visible
 
-Add the same keys to: es, pt, fr, de, ar, zh, it, ja, hi
+3. **Compact the Roll Dice button**: Reduce from `py-3 text-base` to `py-2 text-sm` to save vertical space
 
-Also backfill any missing existing keys (like `detected`, `inWalletBrowser`, `stillNotDetected`, `balance`, `connected`) in language files that are missing them (notably FR which has fewer wallet keys).
+4. **Compact the Status Bar**: Reduce `px-3 py-1.5` to `px-2 py-1` for tighter fit
 
-### 3. Replace hardcoded strings in components
+5. **Compact the Bear Off zone**: Reduce `py-2` to `py-1.5`
 
-**`src/components/WalletButton.tsx`** (3 locations):
-- Line 678: `Open in ${wallet.name}` becomes `t("wallet.openInWallet", { wallet: wallet.name })`
-- Line 684: `"Opens wallet browser"` becomes `t("wallet.opensWalletBrowser")`
-- Line 654: `"Use Installed Wallet"` becomes `t("wallet.useInstalledWallet")`
-- Line 655: `"Phantom, Solflare, Backpack"` becomes `t("wallet.mwaSubtitle")`
-- Line 695: MWA note becomes `t("wallet.mwaNote")`
+6. **Make controls area scrollable as safety net**: Add `overflow-y-auto` to the controls container so if content still overflows on very small screens, it scrolls rather than being cut off
 
-**`src/components/ConnectWalletGate.tsx`** (5 locations):
-- Line 226: `"How to connect & get SOL"` becomes `t("wallet.howToConnectSol")`
-- Line 236: `"Select your wallet provider..."` becomes `t("wallet.selectProvider")`
-- Line 251: `"Use Installed Wallet"` becomes `t("wallet.useInstalledWallet")`
-- Line 252: `"Phantom, Solflare, Backpack"` becomes `t("wallet.mwaSubtitle")`
-- Line 275: `Open in ${wallet.name}` becomes `t("wallet.openInWallet", { wallet: wallet.name })`
-- Line 281: `"Opens wallet browser"` becomes `t("wallet.opensWalletBrowser")`
-- Line 298: MWA note becomes `t("wallet.mwaNote")`
+7. **Reduce `mt-2` to `mt-1`** on the controls container to reclaim more space
 
-**`src/components/MobileWalletFallback.tsx`** (3 locations):
-- Line 87: `"Open this page in your wallet's browser"` becomes `t("wallet.openPageInWalletBrowser")`
-- Line 98: `Open in ${wallet.name}` becomes `t("wallet.openInWallet", { wallet: wallet.name })`
-- Line 99: `"Opens wallet browser"` becomes `t("wallet.opensWalletBrowser")`
+### What This Achieves
+- Saves ~40-50px of vertical space by removing minHeights and reducing padding
+- Controls fit within the viewport on standard mobile devices
+- Scrollable fallback prevents cutoff on unusually small screens
+- Board stays at maximum size via `flex-1 min-h-0`
+- No changes to the viewport container class or height calculation
+- No changes to BackgammonAI (Play vs AI) page
 
-**`src/components/WalletGateModal.tsx`** (1 location):
-- Line 68: `"How to connect & get SOL"` becomes `t("wallet.howToConnectSol")`
+### Technical Details
 
-Also fix toast on line 582 of WalletButton.tsx: `` `${walletId} wallet not detected...` `` should use `t("wallet.walletNotDetected", { wallet: walletId })`
+The controls container changes from:
+```
+<div className="shrink-0 mt-2 space-y-2" style={{ minHeight: '80px' }}>
+```
+to:
+```
+<div className="shrink-0 mt-1 space-y-1 overflow-y-auto max-h-[40vh]">
+```
 
-### 4. Backfill missing wallet keys in FR and other languages
+Roll button wrapper changes from:
+```
+<div style={{ minHeight: '52px' }}>
+```
+to:
+```
+<div>
+```
 
-French and some other language files are missing several wallet keys that EN/ES have (like `balance`, `connected`, `detected`, `inWalletBrowser`, `stillNotDetected`, `noWalletsDetected`, `installWallet`, `mobileHelperText`, `retryHelperText`, `walletNotDetected`, `openWalletApp`, `alreadyInWallet`, `copySite`, `copyPage`, etc.). These will be added to all 9 non-English locale files.
+Roll button changes from `py-3 text-base` to `py-2 text-sm`.
 
-## Files Changed
-- `src/i18n/locales/en.json` -- add 8 new keys
-- `src/i18n/locales/es.json` -- add 8 new keys (translated)
-- `src/i18n/locales/pt.json` -- add 8 new keys + backfill missing
-- `src/i18n/locales/fr.json` -- add 8 new keys + backfill missing
-- `src/i18n/locales/de.json` -- add 8 new keys + backfill missing
-- `src/i18n/locales/ar.json` -- add 8 new keys + backfill missing
-- `src/i18n/locales/zh.json` -- add 8 new keys + backfill missing
-- `src/i18n/locales/it.json` -- add 8 new keys + backfill missing
-- `src/i18n/locales/ja.json` -- add 8 new keys + backfill missing
-- `src/i18n/locales/hi.json` -- add 8 new keys + backfill missing
-- `src/components/WalletButton.tsx` -- replace 5 hardcoded strings with t() calls
-- `src/components/ConnectWalletGate.tsx` -- replace 7 hardcoded strings with t() calls
-- `src/components/MobileWalletFallback.tsx` -- replace 3 hardcoded strings with t() calls
-- `src/components/WalletGateModal.tsx` -- replace 1 hardcoded string with t() call
+Status bar changes from `px-3 py-1.5` to `px-2 py-1`.
+
+Bear Off zone changes from `py-2` to `py-1.5`.
+
