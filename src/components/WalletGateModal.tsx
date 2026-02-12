@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Wallet, Info, Eye } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { HowToConnectSolModal } from "./HowToConnectSolModal";
 
 interface WalletGateModalProps {
@@ -25,6 +26,7 @@ export function WalletGateModal({
   description = "A Solana wallet is required to join games and compete for prizes."
 }: WalletGateModalProps) {
   const { setVisible } = useWalletModal();
+  const { t } = useTranslation();
   const [showHelp, setShowHelp] = useState(false);
 
   const handleConnectWallet = () => {
@@ -65,7 +67,7 @@ export function WalletGateModal({
               className="w-full flex items-center justify-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors py-2"
             >
               <Info size={14} />
-              How to connect & get SOL
+              {t("wallet.howToConnectSol")}
             </button>
 
             {/* Browse Note */}

@@ -592,7 +592,15 @@
     "openInPhantom": "Open in Phantom",
     "openInSolflare": "Open in Solflare",
     "openInWalletBrowser": "Open in {{wallet}} Browser",
-    "orOpenInWalletBrowser": "Or open in wallet browser:"
+    "orOpenInWalletBrowser": "Or open in wallet browser:",
+    "openInWallet": "Open in {{wallet}}",
+    "opensWalletBrowser": "Opens wallet browser",
+    "useInstalledWallet": "Use Installed Wallet",
+    "mwaSubtitle": "Phantom, Solflare, Backpack",
+    "mwaNote": "Or use \"Use Installed Wallet\" above for system wallet picker",
+    "howToConnectSol": "How to connect & get SOL",
+    "selectProvider": "Select your wallet provider to connect",
+    "openPageInWalletBrowser": "Open this page in your wallet's browser"
   },
   "common": {
     "loading": "Loading...",

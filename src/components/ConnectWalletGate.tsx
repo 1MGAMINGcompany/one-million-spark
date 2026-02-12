@@ -174,7 +174,7 @@ export function ConnectWalletGate({ className }: ConnectWalletGateProps) {
       setDialogOpen(false);
     } else {
       // Desktop: wallet not installed
-      toast.error(`${walletId} wallet not detected. Please install it first.`);
+      toast.error(t("wallet.walletNotDetected", { wallet: walletId }));
     }
   };
 
@@ -223,7 +223,7 @@ export function ConnectWalletGate({ className }: ConnectWalletGateProps) {
           className="w-full flex items-center justify-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors"
         >
           <Info size={14} />
-          How to connect & get SOL
+          {t("wallet.howToConnectSol")}
         </button>
       </div>
 
@@ -233,7 +233,7 @@ export function ConnectWalletGate({ className }: ConnectWalletGateProps) {
           <DialogHeader>
             <DialogTitle>{t("wallet.connectWallet")}</DialogTitle>
             <DialogDescription className="text-sm text-muted-foreground">
-              Select your wallet provider to connect
+              {t("wallet.selectProvider")}
             </DialogDescription>
           </DialogHeader>
           
@@ -248,8 +248,8 @@ export function ConnectWalletGate({ className }: ConnectWalletGateProps) {
               >
                 <Wallet size={24} />
                 <div className="flex flex-col items-start">
-                  <span className="font-medium">Use Installed Wallet</span>
-                  <span className="text-xs opacity-80">Phantom, Solflare, Backpack</span>
+                  <span className="font-medium">{t("wallet.useInstalledWallet")}</span>
+                  <span className="text-xs opacity-80">{t("wallet.mwaSubtitle")}</span>
                 </div>
               </Button>
             )}
@@ -272,13 +272,13 @@ export function ConnectWalletGate({ className }: ConnectWalletGateProps) {
                   />
                   <div className="flex flex-col items-start">
                     <span className="font-medium">
-                      {showDeepLinkLabel ? `Open in ${wallet.name}` : wallet.name}
+                      {showDeepLinkLabel ? t("wallet.openInWallet", { wallet: wallet.name }) : wallet.name}
                     </span>
                     {detected && (
                       <span className="text-xs text-green-500">{t("wallet.detected")}</span>
                     )}
                     {showDeepLinkLabel && (
-                      <span className="text-xs text-muted-foreground">Opens wallet browser</span>
+                      <span className="text-xs text-muted-foreground">{t("wallet.opensWalletBrowser")}</span>
                     )}
                   </div>
                 </Button>
@@ -295,7 +295,7 @@ export function ConnectWalletGate({ className }: ConnectWalletGateProps) {
             {/* MWA note for Android */}
             {isAndroid && !isInWalletBrowser && hasMWA && (
               <p className="text-xs text-muted-foreground text-center mt-1">
-                Or use "Use Installed Wallet" above for system wallet picker
+                {t("wallet.mwaNote")}
               </p>
             )}
           </div>

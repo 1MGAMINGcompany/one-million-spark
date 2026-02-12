@@ -84,7 +84,7 @@ export function MobileWalletFallback({ onClose, isAndroid, isIOS, selectedWallet
         <div className="max-w-sm mx-auto space-y-4">
           {/* Primary action: Open in wallet browser */}
           <div className="bg-card rounded-xl p-5 border space-y-3">
-            <p className="text-sm font-medium">Open this page in your wallet's browser</p>
+            <p className="text-sm font-medium">{t("wallet.openPageInWalletBrowser")}</p>
             <div className="flex flex-col gap-2">
               {(Object.entries(walletConfig) as [WalletType, typeof walletConfig[WalletType]][]).map(([id, wallet]) => (
                 <Button
@@ -95,8 +95,8 @@ export function MobileWalletFallback({ onClose, isAndroid, isIOS, selectedWallet
                 >
                   <img src={wallet.icon} alt={wallet.name} className="w-8 h-8" />
                   <div className="flex flex-col items-start">
-                    <span className="font-medium">Open in {wallet.name}</span>
-                    <span className="text-xs opacity-70">Opens wallet browser</span>
+                    <span className="font-medium">{t("wallet.openInWallet", { wallet: wallet.name })}</span>
+                    <span className="text-xs opacity-70">{t("wallet.opensWalletBrowser")}</span>
                   </div>
                   <ExternalLink size={14} className="ml-auto" />
                 </Button>

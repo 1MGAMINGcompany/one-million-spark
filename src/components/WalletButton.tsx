@@ -579,7 +579,7 @@ export function WalletButton() {
       }
     } else {
       // Desktop: wallet not installed
-      toast.error(`${walletId} wallet not detected. Please install it first.`);
+      toast.error(t("wallet.walletNotDetected", { wallet: walletId }));
     }
   };
 
@@ -651,8 +651,8 @@ export function WalletButton() {
               >
                 <Wallet size={24} />
                 <div className="flex flex-col items-start">
-                  <span className="font-medium">Use Installed Wallet</span>
-                  <span className="text-xs opacity-80">Phantom, Solflare, Backpack</span>
+                  <span className="font-medium">{t("wallet.useInstalledWallet")}</span>
+                  <span className="text-xs opacity-80">{t("wallet.mwaSubtitle")}</span>
                 </div>
               </Button>
             )}
@@ -675,13 +675,13 @@ export function WalletButton() {
                   />
                   <div className="flex flex-col items-start">
                     <span className="font-medium">
-                      {showDeepLinkLabel ? `Open in ${wallet.name}` : wallet.name}
+                      {showDeepLinkLabel ? t("wallet.openInWallet", { wallet: wallet.name }) : wallet.name}
                     </span>
                     {detected && (
                       <span className="text-xs text-green-500">{t("wallet.detected")}</span>
                     )}
                     {showDeepLinkLabel && (
-                      <span className="text-xs text-muted-foreground">Opens wallet browser</span>
+                      <span className="text-xs text-muted-foreground">{t("wallet.opensWalletBrowser")}</span>
                     )}
                   </div>
                   {showDeepLinkLabel && <ExternalLink size={14} className="ml-auto text-muted-foreground" />}
@@ -692,7 +692,7 @@ export function WalletButton() {
             {/* MWA note for Android users not in wallet browser */}
             {isAndroid && !isInWalletBrowser && hasMWA && (
               <p className="text-xs text-muted-foreground text-center mt-1">
-                Or use "Use Installed Wallet" above for system wallet picker
+                {t("wallet.mwaNote")}
               </p>
             )}
 
