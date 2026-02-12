@@ -546,23 +546,27 @@ export function WalletButton() {
   };
 
   const handleWalletClick = (walletId: string) => {
-    // Find matching wallet from detected wallets
+    // MOBILE REGULAR BROWSER: deep link is the only way to connect
+    // window.solana is never injected in Chrome/Safari, so select()+connect() always fails
+    if (isMobile && !isInWalletBrowser) {
+      handleWalletDeepLink(walletId as 'phantom' | 'solflare' | 'backpack');
+      return;
+    }
+
+    // DESKTOP or WALLET BROWSER: standard select()+connect() flow
     const matchingWallet = sortedWallets.find(w => 
       w.adapter.name.toLowerCase().includes(walletId)
     );
     
     if (matchingWallet) {
-      // CRITICAL: Call select() and connect() IMMEDIATELY in user gesture context
-      // No awaits/toasts/setTimeout BEFORE connect() to preserve Chrome's user gesture
       try {
         setConnectingWallet(matchingWallet.adapter.name);
         setConnectTimeout(false);
         setDialogOpen(false);
         
         select(matchingWallet.adapter.name);
-        connect(); // Call immediately, no awaits before this
+        connect();
         
-        // Start timeout AFTER connect() is called
         connectTimeoutRef.current = setTimeout(() => {
           if (!connected) {
             handleMWATimeout();
@@ -571,21 +575,10 @@ export function WalletButton() {
       } catch (err) {
         console.error('[Wallet] Connect failed:', err);
         setConnectingWallet(null);
-        if (isMobile) {
-          setShowFallbackPanel(true);
-        }
-      }
-    } else if (isMobile) {
-      // Android with MWA: use MWA to open system wallet picker (includes Solflare, etc.)
-      if (isAndroid && hasMWA) {
-        handleMWAConnect();
-      } else {
-        // iOS or no MWA: show "not detected" modal with deep link fallback
-        setNotDetectedWallet(walletId as 'phantom' | 'solflare' | 'backpack');
-        setDialogOpen(false);
+        setShowFallbackPanel(true);
       }
     } else {
-      // Desktop: just show toast
+      // Desktop: wallet not installed
       toast.error(`${walletId} wallet not detected. Please install it first.`);
     }
   };
@@ -667,6 +660,7 @@ export function WalletButton() {
             {/* 3 Wallet buttons with icons - shown on ALL platforms */}
             {WALLET_CONFIG.map((wallet) => {
               const detected = isWalletDetected(wallet.id);
+              const showDeepLinkLabel = isMobile && !isInWalletBrowser;
               return (
                 <Button
                   key={wallet.id}
@@ -680,76 +674,26 @@ export function WalletButton() {
                     className="w-8 h-8"
                   />
                   <div className="flex flex-col items-start">
-                    <span className="font-medium">{wallet.name}</span>
+                    <span className="font-medium">
+                      {showDeepLinkLabel ? `Open in ${wallet.name}` : wallet.name}
+                    </span>
                     {detected && (
                       <span className="text-xs text-green-500">{t("wallet.detected")}</span>
                     )}
+                    {showDeepLinkLabel && (
+                      <span className="text-xs text-muted-foreground">Opens wallet browser</span>
+                    )}
                   </div>
+                  {showDeepLinkLabel && <ExternalLink size={14} className="ml-auto text-muted-foreground" />}
                 </Button>
               );
             })}
 
-            {/* iOS: Show prominent instructions for wallet browser */}
-            {isIOS && !isInWalletBrowser && (
-              <div className="border-t border-border pt-3 mt-1">
-                <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 mb-3">
-                  <p className="text-sm font-medium text-blue-600 dark:text-blue-400 mb-1">
-                    {t("wallet.iosInstructions")}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {t("wallet.iosInstructionsDetail")}
-                  </p>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-2"
-                    onClick={() => handleOpenInWallet('phantom')}
-                  >
-                    <img src={phantomIcon} alt="Phantom" className="w-5 h-5" />
-                    {t("wallet.openInPhantom")}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-2"
-                    onClick={() => handleOpenInWallet('solflare')}
-                  >
-                    <img src={solflareIcon} alt="Solflare" className="w-5 h-5" />
-                    {t("wallet.openInSolflare")}
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            {/* Android (not in wallet browser): subtle deep link fallback */}
-            {isAndroid && !isInWalletBrowser && (
-              <div className="border-t border-border pt-3 mt-1">
-                <p className="text-xs text-muted-foreground text-center mb-3">
-                  {t("wallet.orOpenInWalletBrowser")}
-                </p>
-                <div className="grid grid-cols-2 gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-2"
-                    onClick={() => handleOpenInWallet('phantom')}
-                  >
-                    <img src={phantomIcon} alt="Phantom" className="w-5 h-5" />
-                    Phantom
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-2"
-                    onClick={() => handleOpenInWallet('solflare')}
-                  >
-                    <img src={solflareIcon} alt="Solflare" className="w-5 h-5" />
-                    Solflare
-                  </Button>
-                </div>
-              </div>
+            {/* MWA note for Android users not in wallet browser */}
+            {isAndroid && !isInWalletBrowser && hasMWA && (
+              <p className="text-xs text-muted-foreground text-center mt-1">
+                Or use "Use Installed Wallet" above for system wallet picker
+              </p>
             )}
 
             {/* In wallet browser success */}
