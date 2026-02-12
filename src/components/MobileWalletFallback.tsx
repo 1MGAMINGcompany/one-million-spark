@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Copy, Check, ExternalLink, X, ArrowLeft } from "lucide-react";
+import { Copy, Check, ExternalLink, X, ArrowLeft, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
+import { useWallet } from "@solana/wallet-adapter-react";
 
 // Import local wallet icons
 import phantomIcon from "@/assets/wallets/phantom.svg";
@@ -15,18 +16,47 @@ interface MobileWalletFallbackProps {
   onClose: () => void;
   isAndroid: boolean;
   isIOS: boolean;
-  selectedWallet: WalletType;
+  selectedWallet: WalletType | null;
 }
 
 export function MobileWalletFallback({ onClose, isAndroid, isIOS, selectedWallet }: MobileWalletFallbackProps) {
   const { t } = useTranslation();
+  const { wallets, select, connect } = useWallet();
   const [copiedSite, setCopiedSite] = useState(false);
   const [copiedPage, setCopiedPage] = useState(false);
+  const [connectingNow, setConnectingNow] = useState(false);
 
   const currentUrl = window.location.href;
   const siteUrl = "https://www.1mgaming.com";
 
-  const solflareDeeplink = `https://solflare.com/ul/v1/browse/${encodeURIComponent(currentUrl)}?ref=${encodeURIComponent(siteUrl)}`;
+  const handleConnectNow = async () => {
+    setConnectingNow(true);
+    try {
+      // Try to find an installed wallet and connect directly
+      const installed = wallets.find(w => w.readyState === 'Installed');
+      if (installed) {
+        select(installed.adapter.name);
+        await connect();
+        onClose();
+        return;
+      }
+      // Fallback: try MWA on Android
+      if (isAndroid) {
+        const mwa = wallets.find(w => w.adapter.name.toLowerCase().includes('mobile wallet adapter'));
+        if (mwa) {
+          select(mwa.adapter.name);
+          await connect();
+          onClose();
+          return;
+        }
+      }
+      toast.error(t("wallet.stillNotDetected"));
+    } catch {
+      toast.error(t("common.error"));
+    } finally {
+      setConnectingNow(false);
+    }
+  };
 
   const handleCopySite = async () => {
     try {
@@ -50,131 +80,13 @@ export function MobileWalletFallback({ onClose, isAndroid, isIOS, selectedWallet
     }
   };
 
-  const handleOpenSolflare = () => {
-    window.location.href = solflareDeeplink;
+  const walletConfig: Record<WalletType, { icon: string; name: string }> = {
+    phantom: { icon: phantomIcon, name: "Phantom" },
+    solflare: { icon: solflareIcon, name: "Solflare" },
+    backpack: { icon: backpackIcon, name: "Backpack" },
   };
 
-  const renderPhantomInstructions = () => (
-    <div className="space-y-4">
-      <div className="flex items-center gap-3">
-        <img 
-          src={phantomIcon} 
-          alt="Phantom" 
-          className="w-10 h-10 rounded-lg"
-        />
-        <div>
-          <h3 className="font-semibold text-lg">{t("wallet.phantom.title")}</h3>
-        </div>
-      </div>
-      
-      <ol className="space-y-3 text-sm">
-        <li className="flex gap-3">
-          <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xs font-medium">1</span>
-          <span>{t("wallet.phantom.step1")}</span>
-        </li>
-        <li className="flex gap-3">
-          <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xs font-medium">2</span>
-          <span>{t("wallet.phantom.step2")}</span>
-        </li>
-        <li className="flex gap-3">
-          <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xs font-medium">3</span>
-          <span>{t("wallet.phantom.step3")}</span>
-        </li>
-      </ol>
-
-      <div className="flex flex-col gap-2 pt-2">
-        <Button 
-          onClick={handleCopyPage}
-          variant="default"
-          className="w-full gap-2"
-        >
-          {copiedPage ? <Check size={16} className="text-green-500" /> : <Copy size={16} />}
-          {copiedPage ? t("wallet.copied") : t("wallet.copyLink")}
-        </Button>
-        <Button 
-          onClick={handleCopySite}
-          variant="outline"
-          className="w-full gap-2"
-        >
-          {copiedSite ? <Check size={16} className="text-green-500" /> : <Copy size={16} />}
-          {copiedSite ? t("wallet.copied") : t("wallet.copySite")}
-        </Button>
-      </div>
-    </div>
-  );
-
-  const renderSolflareInstructions = () => (
-    <div className="space-y-4">
-      <div className="flex items-center gap-3">
-        <img 
-          src={solflareIcon} 
-          alt="Solflare" 
-          className="w-10 h-10 rounded-lg"
-        />
-        <div>
-          <h3 className="font-semibold text-lg">{t("wallet.solflare.title")}</h3>
-        </div>
-      </div>
-
-      <Button 
-        onClick={handleOpenSolflare}
-        className="w-full gap-2"
-        size="lg"
-      >
-        <ExternalLink size={18} />
-        {t("wallet.solflare.openButton")}
-      </Button>
-
-      <p className="text-xs text-muted-foreground text-center">
-        {t("wallet.solflare.note")}
-      </p>
-    </div>
-  );
-
-  const renderBackpackInstructions = () => (
-    <div className="space-y-4">
-      <div className="flex items-center gap-3">
-        <img 
-          src={backpackIcon} 
-          alt="Backpack" 
-          className="w-10 h-10 rounded-lg"
-        />
-        <div>
-          <h3 className="font-semibold text-lg">{t("wallet.backpack.title")}</h3>
-        </div>
-      </div>
-      
-      <ol className="space-y-3 text-sm">
-        <li className="flex gap-3">
-          <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xs font-medium">1</span>
-          <span>{t("wallet.backpack.step1")}</span>
-        </li>
-        <li className="flex gap-3">
-          <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xs font-medium">2</span>
-          <span>{t("wallet.backpack.step2")}</span>
-        </li>
-      </ol>
-
-      <div className="flex flex-col gap-2 pt-2">
-        <Button 
-          onClick={handleCopyPage}
-          variant="default"
-          className="w-full gap-2"
-        >
-          {copiedPage ? <Check size={16} className="text-green-500" /> : <Copy size={16} />}
-          {copiedPage ? t("wallet.copied") : t("wallet.copyLink")}
-        </Button>
-        <Button 
-          onClick={handleCopySite}
-          variant="outline"
-          className="w-full gap-2"
-        >
-          {copiedSite ? <Check size={16} className="text-green-500" /> : <Copy size={16} />}
-          {copiedSite ? t("wallet.copied") : t("wallet.copySite")}
-        </Button>
-      </div>
-    </div>
-  );
+  const activeWallet = selectedWallet ? walletConfig[selectedWallet] : walletConfig.phantom;
 
   return (
     <div className="fixed inset-0 z-50 bg-background/95 backdrop-blur-sm flex flex-col">
@@ -191,30 +103,79 @@ export function MobileWalletFallback({ onClose, isAndroid, isIOS, selectedWallet
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-6">
-        <div className="max-w-sm mx-auto">
-          {/* Platform hint */}
-          <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 mb-6">
-            <p className="text-sm text-blue-600 dark:text-blue-400">
-              {t("wallet.retryHelperText")}
+        <div className="max-w-sm mx-auto space-y-4">
+          {/* Connect Now - primary action */}
+          <div className="bg-card rounded-xl p-5 border space-y-4">
+            <div className="flex items-center gap-3">
+              <img src={activeWallet.icon} alt={activeWallet.name} className="w-10 h-10 rounded-lg" />
+              <div>
+                <h3 className="font-semibold text-lg">{activeWallet.name}</h3>
+              </div>
+            </div>
+
+            <Button
+              onClick={handleConnectNow}
+              className="w-full gap-2"
+              size="lg"
+              disabled={connectingNow}
+            >
+              <Wallet size={18} />
+              {connectingNow ? t("wallet.connecting") : "Connect Now"}
+            </Button>
+
+            <p className="text-xs text-muted-foreground text-center">
+              Tap above to retry the wallet connection directly.
             </p>
           </div>
 
-          {/* Wallet-specific instructions */}
-          <div className="bg-card rounded-xl p-5 border">
-            {selectedWallet === "phantom" && renderPhantomInstructions()}
-            {selectedWallet === "solflare" && renderSolflareInstructions()}
-            {selectedWallet === "backpack" && renderBackpackInstructions()}
+          {/* Alternative: open in wallet browser */}
+          <div className="bg-card rounded-xl p-5 border space-y-3">
+            <p className="text-sm font-medium text-muted-foreground">Alternative: Open in wallet browser</p>
+            <div className="flex flex-col gap-2">
+              <Button
+                onClick={() => {
+                  const deepLink = `https://phantom.app/ul/browse/${encodeURIComponent(currentUrl)}?ref=${encodeURIComponent(siteUrl)}`;
+                  window.location.href = deepLink;
+                }}
+                variant="outline"
+                className="w-full gap-2"
+              >
+                <img src={phantomIcon} alt="Phantom" className="w-5 h-5" />
+                <ExternalLink size={14} />
+                Open in Phantom
+              </Button>
+              <Button
+                onClick={() => {
+                  const deepLink = `https://solflare.com/ul/v1/browse/${encodeURIComponent(currentUrl)}?ref=${encodeURIComponent(siteUrl)}`;
+                  window.location.href = deepLink;
+                }}
+                variant="outline"
+                className="w-full gap-2"
+              >
+                <img src={solflareIcon} alt="Solflare" className="w-5 h-5" />
+                <ExternalLink size={14} />
+                Open in Solflare
+              </Button>
+            </div>
+          </div>
+
+          {/* Copy links */}
+          <div className="flex flex-col gap-2">
+            <Button onClick={handleCopyPage} variant="ghost" className="w-full gap-2 text-xs">
+              {copiedPage ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
+              {copiedPage ? t("wallet.copied") : t("wallet.copyLink")}
+            </Button>
+            <Button onClick={handleCopySite} variant="ghost" className="w-full gap-2 text-xs">
+              {copiedSite ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
+              {copiedSite ? t("wallet.copied") : t("wallet.copySite")}
+            </Button>
           </div>
         </div>
       </div>
 
       {/* Footer */}
       <div className="p-4 border-t">
-        <Button 
-          onClick={onClose}
-          variant="ghost"
-          className="w-full"
-        >
+        <Button onClick={onClose} variant="ghost" className="w-full">
           {t("wallet.cancel")}
         </Button>
       </div>

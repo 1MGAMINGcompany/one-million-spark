@@ -17,7 +17,7 @@ import phantomIcon from "@/assets/wallets/phantom.svg";
 import solflareIcon from "@/assets/wallets/solflare.svg";
 import backpackIcon from "@/assets/wallets/backpack.svg";
 
-const CONNECT_TIMEOUT_MS = 8000;
+const CONNECT_TIMEOUT_MS = 15000;
 
 // ===== ENVIRONMENT DETECTION =====
 const getIsMobile = () => /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
@@ -293,13 +293,9 @@ export function WalletButton() {
     
     const deepLink = getWalletDeepLink(walletType);
     
-    // Try to open the deep link
+    // Open the deep link - do NOT set a premature fallback timer
+    // The user is navigating away; if they return, auto-connect polling will handle it
     window.location.href = deepLink;
-    
-    // Show fallback panel after a short delay in case user comes back
-    setTimeout(() => {
-      setShowFallbackPanel(true);
-    }, 1500);
   };
 
   // SOLANA-ONLY: Filter to allowed wallets, block EVM/MetaMask
@@ -365,34 +361,38 @@ export function WalletButton() {
     });
   }, [isMobile, isInWalletBrowser, wallets.length, sortedWallets.length]);
 
-  // Auto-sync for in-app wallet browsers (Solflare, Phantom, etc.)
-  // CRITICAL: Runs ONCE on mount to detect already-connected wallet
-  // This fixes the "Connect Wallet" loop in Solflare in-app browser
+  // Auto-connect polling for wallet browser environments
+  // Polls for injected provider for up to 3 seconds (wallets inject async)
   useEffect(() => {
-    const win = window as any;
-    
-    // Skip if already connected or currently connecting
     if (connected || connecting) return;
-    
-    // Only auto-sync in wallet browser environments
-    if (!isInWalletBrowser) return;
-    
-    // Check if window.solana reports connected
-    if (win.solana?.isConnected && win.solana?.publicKey) {
-      console.log("[WalletState] In-app browser has connected wallet, syncing...");
-      
-      // Find matching installed adapter
-      const installedWallet = wallets.find(w => w.readyState === 'Installed');
-      if (installedWallet) {
-        select(installedWallet.adapter.name);
-        // Single connect call (NOT in a loop)
-        connect().catch(err => {
-          console.warn("[WalletState] Auto-connect failed:", err);
-        });
+    if (!isMobile) return;
+
+    let attempts = 0;
+    const maxAttempts = 15; // 15 x 200ms = 3 seconds
+
+    const interval = setInterval(() => {
+      attempts++;
+      const win = window as any;
+      const hasProvider = win.solana || win.phantom?.solana || win.solflare;
+
+      if (hasProvider) {
+        clearInterval(interval);
+        const installed = wallets.find(w => w.readyState === 'Installed');
+        if (installed && !connected) {
+          console.log("[WalletAutoConnect] Provider detected, connecting via", installed.adapter.name);
+          select(installed.adapter.name);
+          connect().catch(err => console.warn("[WalletAutoConnect] Failed:", err));
+        }
       }
-    }
+
+      if (attempts >= maxAttempts) {
+        clearInterval(interval);
+      }
+    }, 200);
+
+    return () => clearInterval(interval);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Empty deps - run ONCE on mount
+  }, []); // Run once on mount
 
   // Log wallet state changes for debugging
   useEffect(() => {

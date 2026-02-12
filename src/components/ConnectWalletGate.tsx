@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Wallet, Info } from "lucide-react";
@@ -81,7 +81,7 @@ const WALLET_CONFIG = [
  */
 export function ConnectWalletGate({ className }: ConnectWalletGateProps) {
   const { t } = useTranslation();
-  const { wallets, select, connect, connecting } = useWallet();
+  const { wallets, select, connect, connecting, connected } = useWallet();
   const [showHelp, setShowHelp] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [notDetectedWallet, setNotDetectedWallet] = useState<'phantom' | 'solflare' | 'backpack' | null>(null);
@@ -90,6 +90,38 @@ export function ConnectWalletGate({ className }: ConnectWalletGateProps) {
   const isAndroid = getIsAndroid();
   const isIOS = getIsIOS();
   const isInWalletBrowser = getIsInWalletBrowser();
+
+  // Auto-connect polling for wallet browser environments
+  useEffect(() => {
+    if (connected || connecting) return;
+    if (!isMobile) return;
+
+    let attempts = 0;
+    const maxAttempts = 15; // 15 x 200ms = 3 seconds
+
+    const interval = setInterval(() => {
+      attempts++;
+      const win = window as any;
+      const hasProvider = win.solana || win.phantom?.solana || win.solflare;
+
+      if (hasProvider) {
+        clearInterval(interval);
+        const installed = wallets.find(w => w.readyState === 'Installed');
+        if (installed && !connected) {
+          console.log("[WalletAutoConnect] Gate: Provider detected, connecting via", installed.adapter.name);
+          select(installed.adapter.name);
+          connect().catch(err => console.warn("[WalletAutoConnect] Gate: Failed:", err));
+        }
+      }
+
+      if (attempts >= maxAttempts) {
+        clearInterval(interval);
+      }
+    }, 200);
+
+    return () => clearInterval(interval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Check if MWA is available (Android only)
   const hasMWA = isAndroid && wallets.some(w => 
