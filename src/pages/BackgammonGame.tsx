@@ -548,13 +548,17 @@ const BackgammonGame = () => {
         // Opponent ended their turn - WALLET-AUTHORITATIVE: use nextTurnWallet
         console.log("[BackgammonGame] Received turn_end from opponent. nextTurnWallet:", bgMove.nextTurnWallet?.slice(0, 8));
         const nextWallet = bgMove.nextTurnWallet || address; // Fallback to me (I get the turn)
+        const alreadySameTurn = isSameWallet(nextWallet, currentTurnWallet);
         if (nextWallet) {
           setCurrentTurnWallet(nextWallet);
           const nextRole = isSameWallet(nextWallet, roomPlayersRef.current[0]) ? "player" : "ai";
           setCurrentPlayer(nextRole);
         }
-        setDice([]);
-        setRemainingMoves([]);
+        // Only clear dice if turn actually changed (prevent clearing after player already rolled)
+        if (!alreadySameTurn || dice.length === 0) {
+          setDice([]);
+          setRemainingMoves([]);
+        }
         setGameStatus("Your turn - Roll the dice!");
         
       } else if (bgMove.type === "turn_timeout") {
@@ -890,9 +894,13 @@ const BackgammonGame = () => {
           // FIX: Explicitly reset the turn timer when polling detects turn change
           turnTimer.resetTimer();
           
-          // Clear stale dice/moves to ensure clean turn start
-          setDice([]);
-          setRemainingMoves([]);
+          // Only clear dice if the player hasn't already rolled for their new turn
+          // (polling can fire after the player already rolled, causing double-roll prompt)
+          const pollingTurnToMe = isSameWallet(freshTurnWallet, address);
+          if (!pollingTurnToMe || dice.length === 0) {
+            setDice([]);
+            setRemainingMoves([]);
+          }
           setSelectedPoint(null);
           setValidMoves([]);
           
@@ -1413,13 +1421,17 @@ const BackgammonGame = () => {
       } else if (moveMsg.type === "turn_end") {
         // WALLET-AUTHORITATIVE: Use nextTurnWallet from message
         const nextWallet = moveMsg.nextTurnWallet || address;
+        const alreadySameTurnWR = isSameWallet(nextWallet, currentTurnWallet);
         if (nextWallet) {
           setCurrentTurnWallet(nextWallet);
           const nextRole = isSameWallet(nextWallet, roomPlayersRef.current[0]) ? "player" : "ai";
           setCurrentPlayer(nextRole);
         }
-        setDice([]);
-        setRemainingMoves([]);
+        // Only clear dice if turn actually changed (prevent clearing after player already rolled)
+        if (!alreadySameTurnWR || dice.length === 0) {
+          setDice([]);
+          setRemainingMoves([]);
+        }
         // Use current state to determine message
         setGameStatus("Your turn - Roll the dice!");
       } else if (moveMsg.type === "turn_timeout") {
@@ -1817,9 +1829,10 @@ const BackgammonGame = () => {
         return;
       }
       
-      if (validMoves.includes(pointIndex) || (pointIndex === -2 && validMoves.includes(-2))) {
+      const isBearOffClick = pointIndex === -2 || pointIndex === 25;
+      if (validMoves.includes(pointIndex) || (isBearOffClick && (validMoves.includes(-2) || validMoves.includes(25)))) {
         const moves = getLegalMovesFromPoint(gameState, selectedPoint, remainingMoves, myRole);
-        const move = moves.find(m => m.to === pointIndex);
+        const move = moves.find(m => isBearOffClick ? (m.to === -2 || m.to === 25) : m.to === pointIndex);
         
         if (move) {
           const newState = applyMoveWithSound(gameState, move, myRole);
@@ -2492,12 +2505,13 @@ const BackgammonGame = () => {
 
                 {/* Bear Off Zone - Mobile - Always visible, disabled when not allowed */}
                 {(() => {
-                  const bearOffReady = isMyTurn && !gameOver && dice.length > 0 && canBearOff(gameState, myRole) && !validMoves.includes(-2);
+                  const hasBearOffTarget = validMoves.includes(-2) || validMoves.includes(25);
+                  const bearOffReady = isMyTurn && !gameOver && dice.length > 0 && canBearOff(gameState, myRole) && !hasBearOffTarget;
                   return (
                     <div 
                       className={cn(
                         "w-full py-1.5 rounded-lg flex items-center justify-center gap-2 transition-all",
-                        validMoves.includes(-2) 
+                        hasBearOffTarget 
                           ? "bg-primary/20 border-2 border-primary animate-pulse cursor-pointer shadow-[0_0_20px_hsl(45_93%_54%_/_0.4)]" 
                           : bearOffReady
                             ? "bg-primary/15 border-2 border-primary/70 cursor-pointer shadow-[0_0_15px_hsl(45_93%_54%_/_0.3)]"
@@ -2506,8 +2520,8 @@ const BackgammonGame = () => {
                               : "border border-primary/10 bg-muted/5 opacity-50"
                       )}
                       onClick={() => {
-                        if (validMoves.includes(-2)) {
-                          handlePointClick(-2);
+                        if (hasBearOffTarget) {
+                          handlePointClick(myRole === "player" ? -2 : 25);
                         } else if (bearOffReady) {
                           const allMoves = getAllLegalMoves(gameState, remainingMoves, myRole);
                           const bearOffMove = allMoves.find(m => m.to === -2 || m.to === 25);
@@ -2515,12 +2529,12 @@ const BackgammonGame = () => {
                         }
                       }}
                     >
-                      <Trophy className={cn("w-4 h-4", (validMoves.includes(-2) || bearOffReady) ? "text-primary" : "text-primary/50")} />
+                      <Trophy className={cn("w-4 h-4", (hasBearOffTarget || bearOffReady) ? "text-primary" : "text-primary/50")} />
                       <span className={cn(
                         "font-bold",
-                        validMoves.includes(-2) ? "text-primary" : bearOffReady ? "text-primary" : canBearOff(gameState, myRole) ? "text-muted-foreground" : "text-muted-foreground/50"
+                        hasBearOffTarget ? "text-primary" : bearOffReady ? "text-primary" : canBearOff(gameState, myRole) ? "text-muted-foreground" : "text-muted-foreground/50"
                       )}>
-                        {validMoves.includes(-2) 
+                        {hasBearOffTarget 
                           ? "Tap to Bear Off" 
                           : bearOffReady
                             ? `Select checker to Bear Off (${myRole === "player" ? gameState.bearOff.player : gameState.bearOff.ai}/15)`
@@ -2528,7 +2542,7 @@ const BackgammonGame = () => {
                               ? `Bear Off: ${myRole === "player" ? gameState.bearOff.player : gameState.bearOff.ai}/15`
                               : "Bear Off (locked)"}
                       </span>
-                      {validMoves.includes(-2) && (
+                      {hasBearOffTarget && (
                         <span className="text-xs text-primary/70">({myRole === "player" ? gameState.bearOff.player : gameState.bearOff.ai}/15)</span>
                       )}
                       {!canBearOff(gameState, myRole) && (
