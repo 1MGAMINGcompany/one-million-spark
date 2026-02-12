@@ -1,63 +1,67 @@
 
 
-# Fix: Multiplayer Backgammon Board Cut Off on Mobile
+# Fix: Bear Off Zone Should Light Up When Bear Off Is Available
 
 ## Problem
-On mobile, the controls area below the board (Roll Dice, status bar, Bear Off zone, Resign button) pushes content past the bottom of the viewport. The board itself gets compressed but the controls still overflow, making Bear Off and Resign partially or fully hidden.
+The bear off zone on mobile multiplayer only lights up after a player selects a specific checker that can bear off. Before selecting a checker, it stays dim even when all pieces are in the home board and bearing off is possible. Players don't realize they can bear off.
 
 ## Root Cause
-The controls section has `shrink-0` with `minHeight: 80px`, plus multiple stacked elements each with padding and `space-y-2` gaps. Combined height of all controls exceeds available space after the board takes its share.
+The glow condition is `validMoves.includes(-2)`, which is only populated after tapping a checker. The zone needs a second "ready" state that activates when `canBearOff` is true, it's the player's turn, and dice have been rolled.
 
 ## Solution
-Compact the controls area so everything fits within the viewport without scrolling. No changes to the game-viewport container height or the BackgammonAI page.
+Add an intermediate "ready to bear off" visual state that glows (without the full pulse animation) when bearing off is available but no checker is selected yet. This signals to the player that bear off is active.
 
-### Changes to `src/pages/BackgammonGame.tsx` (mobile layout only)
+### Changes to `src/pages/BackgammonGame.tsx` (mobile bear off zone only, lines ~2493-2524)
 
-1. **Remove rigid `minHeight` on controls container** (line 2405): Change `style={{ minHeight: '80px' }}` to no minHeight, and reduce `space-y-2` to `space-y-1`
+**1. Add a computed flag** before the mobile return block:
+```
+const bearOffReady = isMyTurn && !gameOver && dice.length > 0 && canBearOff(gameState, myRole) && !validMoves.includes(-2);
+```
 
-2. **Remove rigid `minHeight` on Roll Button wrapper** (line 2407): Remove `style={{ minHeight: '52px' }}` -- let the button size itself naturally, and only reserve space when visible
+**2. Update the bear off zone styling** to add a "ready" glow state:
 
-3. **Compact the Roll Dice button**: Reduce from `py-3 text-base` to `py-2 text-sm` to save vertical space
+Current 3 states:
+- `validMoves.includes(-2)` -- full pulse (selected checker can bear off)
+- `canBearOff` -- dim border
+- else -- locked/disabled
 
-4. **Compact the Status Bar**: Reduce `px-3 py-1.5` to `px-2 py-1` for tighter fit
+New 4 states:
+- `validMoves.includes(-2)` -- full pulse, "Tap to Bear Off" (unchanged)
+- `bearOffReady` -- **NEW**: solid gold border + subtle glow, "Select checker to Bear Off (X/15)" -- tells player to tap a home checker
+- `canBearOff` but not my turn -- dim border, shows count
+- else -- locked/disabled
 
-5. **Compact the Bear Off zone**: Reduce `py-2` to `py-1.5`
+**3. Update the label text** for the new ready state:
+- Show "Select checker to Bear Off" so the player knows to tap a piece first
 
-6. **Make controls area scrollable as safety net**: Add `overflow-y-auto` to the controls container so if content still overflows on very small screens, it scrolls rather than being cut off
-
-7. **Reduce `mt-2` to `mt-1`** on the controls container to reclaim more space
+**4. Make the ready state clickable** -- when tapped in the "ready" state, auto-select the furthest checker in home board that has a bear-off move, populating validMoves with -2
 
 ### What This Achieves
-- Saves ~40-50px of vertical space by removing minHeights and reducing padding
-- Controls fit within the viewport on standard mobile devices
-- Scrollable fallback prevents cutoff on unusually small screens
-- Board stays at maximum size via `flex-1 min-h-0`
-- No changes to the viewport container class or height calculation
-- No changes to BackgammonAI (Play vs AI) page
+- Bear off zone glows gold as soon as all checkers are home and dice are rolled
+- Player sees clear indication that bearing off is available
+- Tapping the glowing zone auto-selects the best checker for bear off
+- No changes to desktop, Play vs AI, or board size
 
 ### Technical Details
 
-The controls container changes from:
+The styling for the new `bearOffReady` state:
 ```
-<div className="shrink-0 mt-2 space-y-2" style={{ minHeight: '80px' }}>
-```
-to:
-```
-<div className="shrink-0 mt-1 space-y-1 overflow-y-auto max-h-[40vh]">
+"bg-primary/15 border-2 border-primary/70 cursor-pointer shadow-[0_0_15px_hsl(45_93%_54%_/_0.3)]"
 ```
 
-Roll button wrapper changes from:
+The onClick handler update:
+```typescript
+onClick={() => {
+  if (validMoves.includes(-2)) {
+    handlePointClick(-2);
+  } else if (bearOffReady) {
+    // Find first home checker that can bear off and select it
+    const allMoves = getAllLegalMoves(gameState, remainingMoves, myRole);
+    const bearOffMove = allMoves.find(m => m.to === -2 || m.to === 25);
+    if (bearOffMove) {
+      handlePointClick(bearOffMove.from);
+    }
+  }
+}}
 ```
-<div style={{ minHeight: '52px' }}>
-```
-to:
-```
-<div>
-```
-
-Roll button changes from `py-3 text-base` to `py-2 text-sm`.
-
-Status bar changes from `px-3 py-1.5` to `px-2 py-1`.
-
-Bear Off zone changes from `py-2` to `py-1.5`.
 
