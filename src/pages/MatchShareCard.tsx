@@ -32,16 +32,46 @@ export default function MatchShareCard() {
     if (!roomPda) return;
     document.title = "Match Result — 1M Gaming";
 
-    supabase
-      .from("match_share_cards")
-      .select("*")
-      .eq("room_pda", roomPda)
-      .single()
-      .then(({ data, error: err }) => {
-        if (err || !data) setError(true);
-        else setMatch(data);
+    (async () => {
+      // Try match_share_cards first
+      const { data, error: err } = await supabase
+        .from("match_share_cards")
+        .select("*")
+        .eq("room_pda", roomPda)
+        .maybeSingle();
+
+      if (data) {
+        setMatch(data);
         setLoading(false);
-      });
+        return;
+      }
+
+      // Fallback: query matches table for older games
+      const { data: fallback } = await supabase
+        .from("matches")
+        .select("*")
+        .eq("room_pda", roomPda)
+        .maybeSingle();
+
+      if (fallback) {
+        setMatch({
+          room_pda: fallback.room_pda,
+          game_type: fallback.game_type,
+          mode: "ranked",
+          winner_wallet: fallback.winner_wallet,
+          loser_wallet: null,
+          win_reason: "gameover",
+          stake_lamports: fallback.stake_lamports,
+          winner_payout_lamports: Math.floor(fallback.stake_lamports * fallback.max_players * 0.95),
+          fee_lamports: Math.floor(fallback.stake_lamports * fallback.max_players * 0.05),
+          tx_signature: null,
+          finished_at: fallback.finalized_at,
+        });
+      } else {
+        setError(true);
+      }
+      setLoading(false);
+    })();
   }, [roomPda]);
 
   if (loading) {
