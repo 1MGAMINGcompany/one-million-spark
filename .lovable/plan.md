@@ -1,110 +1,89 @@
 
+# Match Brag Card with Promotional Logo and Banner
 
-# Fix: Android MWA Connect + iOS Clear Instructions
+## What You'll Get
+A shareable Match Card page at `/match/:roomPda` that displays:
+- Your uploaded **banner** at the top (the backgammon/1M Gaming banner)
+- Your uploaded **pyramid logo** as the branded logo on the card
+- Match stats: game type, winner, SOL won, win reason
+- A premium dark card design consistent with the 1M Gaming brand
 
-## Two Issues to Fix
+When users share a match link on WhatsApp, X, or anywhere else, the recipient sees this branded card.
 
-### 1. Android: MWA `connect()` call missing
-The `handleMWAConnect()` in both files only calls `select()` but never calls `connect()`. This means the Android system wallet chooser never actually opens. We need to add an explicit `connect()` call after `select()`.
+## Your Image Links (as .png-equivalent URLs)
+After implementation, the images will be accessible at:
+- **Logo**: `https://one-million-spark.lovable.app/images/1m-logo.jpeg`
+- **Banner**: `https://one-million-spark.lovable.app/images/1m-banner-backgmmn.jpeg`
 
-### 2. iOS: No clear instructions for iPhone users
-When an iOS user taps a wallet button, they currently get a generic "not detected" modal. iOS doesn't have MWA, so users must open the site inside the wallet's built-in browser. The current UI doesn't make this clear enough. We'll add iOS-specific guidance directly in the wallet picker dialog.
-
----
+(Preview versions at `https://id-preview--d73f6b95-8220-42be-818d-0debaaad3e5a.lovable.app/images/1m-logo.jpeg` and same for banner)
 
 ## Files Changed
 
-### 1. `src/components/ConnectWalletGate.tsx`
+### 1. Copy images to `public/images/`
+- `public/images/1m-logo.jpeg` -- the pyramid logo
+- `public/images/1m-banner-backgmmn.jpeg` -- the banner
 
-**Fix MWA connect** -- add `connect()` after `select()` in `handleMWAConnect`:
-```typescript
-const handleMWAConnect = () => {
-  const mwaWallet = wallets.find(w =>
-    w.adapter.name.toLowerCase().includes('mobile wallet adapter')
-  );
-  if (mwaWallet) {
-    select(mwaWallet.adapter.name);
-    connect().catch(() => {});  // <-- ADD THIS
-    setDialogOpen(false);
-  }
-};
-```
+### 2. Create `src/pages/MatchShareCard.tsx` (new file)
+The brag card page at `/match/:roomPda`:
+- Fetches match data from the `match_share_cards` table using `roomPda`
+- Layout:
+  - **Banner** across the top (full width)
+  - **Logo** centered below the banner
+  - **"1M GAMING"** gold text branding
+  - **Game type** badge (Chess, Backgammon, etc.)
+  - **Winner wallet** (shortened)
+  - **Brag stats only**: SOL Won, Win Reason (no losses shown per existing style rule)
+  - **CTA button**: "Play Now" linking to homepage
+- Handles loading and "match not found" states
+- Dark background matching brand colors
 
-**Add iOS instructions section** in the wallet picker dialog -- after the wallet buttons, show a clear iOS-specific section:
-- Styled info box explaining: "On iPhone, open this site inside your wallet app's browser"
-- Step 1: Open Phantom/Solflare app
-- Step 2: Tap the browser/globe icon
-- Step 3: Navigate to this site
-- Deep link buttons to open directly in Phantom or Solflare browser
+### 3. Update `src/App.tsx`
+- Import `MatchShareCard`
+- Add route: `<Route path="/match/:roomPda" element={<MatchShareCard />} />`
 
-**Differentiate the "open in wallet browser" section** -- currently it shows for all mobile users identically. Change it to:
-- iOS: Show a prominent blue info box with clear step-by-step instructions + deep link buttons labeled "Open in Phantom Browser" / "Open in Solflare Browser"
-- Android: Keep the existing subtle "Or open in wallet browser" fallback section
+### 4. Update `index.html` OG meta tags (optional enhancement)
+- The `/match/:roomPda` page can set document title dynamically for basic SEO
 
-### 2. `src/components/WalletButton.tsx`
+## What the Card Will Look Like
 
-**Fix MWA connect** -- `handleMWAConnect` calls `handleSelectWallet(mwaWallet.adapter.name)` which goes through the full flow. But `handleSelectWallet` doesn't call `connect()` either (line 207 just does `select()` then `setDialogOpen(false)`). Add `connect().catch(() => {})` after the `select()` call on line 207.
-
-**Add iOS instructions section** -- same as ConnectWalletGate: replace the generic "Or open in wallet browser" section with an iOS-specific informational panel when `isIOS` is true, with clear step-by-step guidance and deep link buttons.
-
-### 3. `src/components/WalletNotDetectedModal.tsx`
-
-**Improve iOS messaging** -- when shown on iOS, update the description to say something like "iPhone browsers can't connect directly to wallet apps. Open this site in your wallet's built-in browser instead." Make the primary button say "Open in [Wallet] Browser" instead of the generic "Open Wallet App".
-
----
+The card layout (top to bottom):
+1. Full-width banner image (the backgammon promotional banner)
+2. Centered pyramid logo (smaller, ~80px)
+3. "1M GAMING" gold gradient text
+4. Game type pill (e.g., "CHESS" or "BACKGAMMON")
+5. Trophy icon + "VICTORY" heading
+6. Winner wallet address
+7. Stats row: SOL Won | Win Reason
+8. "Play Now on 1MGaming.com" button
+9. Subtle footer: "Skill-Based Games on Solana"
 
 ## Technical Details
 
-### WalletButton.tsx -- `handleSelectWallet` fix (line 207):
+**MatchShareCard.tsx** key structure:
 ```typescript
-select(selectedWallet.adapter.name);
-connect().catch(() => {});  // ADD: explicit connect call
-setDialogOpen(false);
+// Fetch match data
+const { data } = await supabase
+  .from('match_share_cards')
+  .select('*')
+  .eq('room_pda', roomPda)
+  .single();
+
+// Display brag-worthy stats only (per project style rule)
+// - SOL Won (winner_payout_lamports)
+// - Win Reason (win_reason)
+// - Game Type (game_type)
+// No losses or total games shown
 ```
 
-### iOS section in both wallet picker dialogs:
+**Route addition in App.tsx:**
 ```typescript
-{isIOS && !isInWalletBrowser && (
-  <div className="border-t border-border pt-3 mt-1">
-    <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 mb-3">
-      <p className="text-sm font-medium text-blue-600 dark:text-blue-400 mb-1">
-        {t("wallet.iosInstructions")}
-      </p>
-      <p className="text-xs text-muted-foreground">
-        {t("wallet.iosInstructionsDetail")}
-      </p>
-    </div>
-    <div className="grid grid-cols-2 gap-2">
-      <Button onClick={() => handleOpenInWallet('phantom')} ...>
-        Open in Phantom
-      </Button>
-      <Button onClick={() => handleOpenInWallet('solflare')} ...>
-        Open in Solflare
-      </Button>
-    </div>
-  </div>
-)}
+import MatchShareCard from "./pages/MatchShareCard";
+// ...
+<Route path="/match/:roomPda" element={<MatchShareCard />} />
 ```
 
-### Android section (kept as-is, subtle fallback):
+**Image references (from public/):**
 ```typescript
-{isAndroid && !isInWalletBrowser && (
-  <div className="border-t border-border pt-3 mt-1">
-    <p className="text-xs text-muted-foreground text-center mb-3">
-      Or open in wallet browser:
-    </p>
-    ...
-  </div>
-)}
+<img src="/images/1m-banner-backgmmn.jpeg" alt="1M Gaming" />
+<img src="/images/1m-logo.jpeg" alt="1M Gaming Logo" />
 ```
-
-### Translation keys to add (all 11 languages):
-- `wallet.iosInstructions` -- "iPhone requires opening in wallet browser"
-- `wallet.iosInstructionsDetail` -- "iPhone browsers can't connect directly to wallet apps. Tap below to open this site inside your wallet's browser."
-- `wallet.openInWalletBrowser` (already exists, reuse)
-
-## What Users Will See
-- **Android**: Tapping any wallet button or "Use Installed Wallet" now actually opens the system wallet chooser (MWA). The subtle "open in wallet browser" deep links remain as a fallback at the bottom.
-- **iOS**: A clear blue info panel explains that iPhones need to open the site in the wallet's browser, with prominent "Open in Phantom Browser" and "Open in Solflare Browser" buttons.
-- **Desktop**: No changes.
-
