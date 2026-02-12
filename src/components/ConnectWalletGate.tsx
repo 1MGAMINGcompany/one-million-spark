@@ -147,7 +147,23 @@ export function ConnectWalletGate({ className }: ConnectWalletGateProps) {
   };
 
   const handleSelectWallet = (walletId: string) => {
-    // Find matching wallet from detected wallets
+    // MOBILE REGULAR BROWSER: deep link is the only way to connect
+    if (isMobile && !isInWalletBrowser) {
+      const deepLink = getWalletBrowseDeepLink(
+        walletId === 'backpack' ? 'phantom' : walletId as 'phantom' | 'solflare',
+        window.location.href
+      );
+      // Backpack has its own deep link format
+      if (walletId === 'backpack') {
+        window.location.href = `https://backpack.app/ul/browse/${encodeURIComponent(window.location.href)}`;
+      } else {
+        window.location.href = deepLink;
+      }
+      setDialogOpen(false);
+      return;
+    }
+
+    // DESKTOP or WALLET BROWSER: standard select()+connect() flow
     const matchingWallet = wallets.find(w => 
       w.adapter.name.toLowerCase().includes(walletId)
     );
@@ -156,17 +172,8 @@ export function ConnectWalletGate({ className }: ConnectWalletGateProps) {
       select(matchingWallet.adapter.name);
       connect().catch(() => {});
       setDialogOpen(false);
-    } else if (isMobile) {
-      // Android with MWA: use MWA to open system wallet picker
-      if (isAndroid && hasMWA) {
-        handleMWAConnect();
-      } else {
-        // iOS or no MWA: show "not detected" modal with deep link fallback
-        setNotDetectedWallet(walletId as 'phantom' | 'solflare' | 'backpack');
-        setDialogOpen(false);
-      }
     } else {
-      // Desktop: just show toast
+      // Desktop: wallet not installed
       toast.error(`${walletId} wallet not detected. Please install it first.`);
     }
   };
@@ -250,6 +257,7 @@ export function ConnectWalletGate({ className }: ConnectWalletGateProps) {
             {/* Wallet buttons — shown on ALL platforms */}
             {WALLET_CONFIG.map((wallet) => {
               const detected = isWalletDetected(wallet.id);
+              const showDeepLinkLabel = isMobile && !isInWalletBrowser;
               return (
                 <Button
                   key={wallet.id}
@@ -263,9 +271,14 @@ export function ConnectWalletGate({ className }: ConnectWalletGateProps) {
                     className="w-8 h-8"
                   />
                   <div className="flex flex-col items-start">
-                    <span className="font-medium">{wallet.name}</span>
+                    <span className="font-medium">
+                      {showDeepLinkLabel ? `Open in ${wallet.name}` : wallet.name}
+                    </span>
                     {detected && (
                       <span className="text-xs text-green-500">{t("wallet.detected")}</span>
+                    )}
+                    {showDeepLinkLabel && (
+                      <span className="text-xs text-muted-foreground">Opens wallet browser</span>
                     )}
                   </div>
                 </Button>
@@ -279,67 +292,11 @@ export function ConnectWalletGate({ className }: ConnectWalletGateProps) {
               </p>
             )}
 
-            {/* iOS: Prominent instructions for wallet browser */}
-            {isIOS && !isInWalletBrowser && (
-              <div className="border-t border-border pt-3 mt-1">
-                <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 mb-3">
-                  <p className="text-sm font-medium text-blue-600 dark:text-blue-400 mb-1">
-                    {t("wallet.iosInstructions")}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {t("wallet.iosInstructionsDetail")}
-                  </p>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-2"
-                    onClick={() => handleOpenInWallet('phantom')}
-                  >
-                    <img src={phantomIcon} alt="Phantom" className="w-5 h-5" />
-                    {t("wallet.openInPhantom")}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-2"
-                    onClick={() => handleOpenInWallet('solflare')}
-                  >
-                    <img src={solflareIcon} alt="Solflare" className="w-5 h-5" />
-                    {t("wallet.openInSolflare")}
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            {/* Android: subtle deep link fallback */}
-            {isAndroid && !isInWalletBrowser && (
-              <div className="border-t border-border pt-3 mt-1">
-                <p className="text-xs text-muted-foreground text-center mb-3">
-                  {t("wallet.orOpenInWalletBrowser")}
-                </p>
-                <div className="grid grid-cols-2 gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-2"
-                    onClick={() => handleOpenInWallet('phantom')}
-                  >
-                    <img src={phantomIcon} alt="Phantom" className="w-5 h-5" />
-                    Phantom
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-2"
-                    onClick={() => handleOpenInWallet('solflare')}
-                  >
-                    <img src={solflareIcon} alt="Solflare" className="w-5 h-5" />
-                    Solflare
-                  </Button>
-                </div>
-              </div>
+            {/* MWA note for Android */}
+            {isAndroid && !isInWalletBrowser && hasMWA && (
+              <p className="text-xs text-muted-foreground text-center mt-1">
+                Or use "Use Installed Wallet" above for system wallet picker
+              </p>
             )}
           </div>
         </DialogContent>
