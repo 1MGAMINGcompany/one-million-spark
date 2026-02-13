@@ -1,119 +1,109 @@
 
 
-# SEO Blog / Help Center for 1MGAMING
+# CRITICAL FIX: Forfeit-Game Identity Spoofing Exploit
 
-## Overview
+## The Problem
 
-Add a Help Center with 6 long-form SEO articles targeting Solana wallet users, crypto gamers, and skill-game players. Zero risk to existing game/wallet logic -- only new files plus minor additions to the router and footer.
+An attacker (wallet `4nQha4dV`) exploited your game twice by calling the `forfeit-game` edge function with YOUR wallet address as the `forfeitingWallet`. The function has **no caller identity verification** -- it trusts whatever wallet address is sent in the request body.
 
-## New Files to Create
+This is a critical vulnerability: anyone can forfeit anyone else's game and steal their SOL.
 
-| File | Purpose |
-|------|---------|
-| `src/pages/HelpCenter.tsx` | Hub page listing all 6 article cards at `/help` |
-| `src/pages/HelpArticle.tsx` | Slug-based article renderer at `/help/:slug` |
-| `src/data/helpArticles.ts` | All 6 articles as a typed array (title, slug, meta description, content as JSX) |
+## Evidence
 
-## Existing Files Modified (minimal, safe changes only)
+Both games (DxHGKhY1 and JDpWu962) show the same pattern:
+- Opponent joins, game ends within 13-15 seconds
+- Zero game moves recorded
+- Your wallet listed as `forfeiting_wallet` in settlement logs
+- Opponent received the payout
 
-| File | Change |
-|------|--------|
-| `src/App.tsx` | Add 2 routes: `/help` and `/help/:slug`. Import `HelpCenter` and `HelpArticle`. |
-| `src/components/Footer.tsx` | Add `{ to: "/help", labelKey: "footer.helpGuides" }` to the `links` array |
-| `src/i18n/locales/en.json` | Add `"footer.helpGuides": "Help & Guides"` |
+## Fix: Two Changes Required
 
-No other files are touched. No wallet, game, edge function, or layout changes.
+### Fix 1: Add `requireSession()` identity check to `forfeit-game` edge function
 
-## Architecture
+**File:** `supabase/functions/forfeit-game/index.ts`
 
-### Data Layer: `src/data/helpArticles.ts`
+The edge function must verify that the caller's session token matches the `forfeitingWallet` they claim to be forfeiting for. The caller can only forfeit THEIR OWN game, not someone else's.
 
-A single file exporting an array of article objects:
+Add at the top of the request handler (after body parsing):
 
 ```text
-interface HelpArticle {
-  slug: string;
-  title: string;
-  metaDescription: string;  // 150-160 chars for SEO
-  keywords: string[];
-  content: () => JSX.Element; // Returns article body with h1, h2s, paragraphs
+// SECURITY: Derive caller wallet from session token
+// The forfeitingWallet in the body MUST match the authenticated caller
+const authHeader = req.headers.get("Authorization");
+if (authHeader) {
+  const token = authHeader.replace("Bearer ", "");
+  const { data: sessionRow } = await supabase
+    .from("player_sessions")
+    .select("wallet")
+    .eq("session_token", token)
+    .eq("room_pda", roomPda)
+    .eq("revoked", false)
+    .maybeSingle();
+
+  if (sessionRow && sessionRow.wallet !== forfeitingWallet) {
+    // BLOCKED: Caller is trying to forfeit someone else
+    return json200({ success: false, error: "IDENTITY_MISMATCH" });
+  }
 }
 ```
 
-Each article's `content` function returns properly structured JSX with:
-- One `<h1>` (the title)
-- Multiple `<h2>` section headings
-- Natural keyword density
-- Internal links to other articles and the homepage
-- 800-1200 words per article
+**Exception:** Server-to-server calls (from `game-session-get` auto-forfeit) use the service role key in the Authorization header, which bypasses this check. These are trusted internal calls.
 
-### HelpCenter Page (`/help`)
+### Fix 2: Protect `finish_game_session` from participant manipulation
 
-- Header: "1MGAMING Help & Guides"
-- Intro paragraph explaining the platform
-- 6 clickable cards in a responsive grid (1 col mobile, 2 col tablet, 3 col desktop)
-- Each card shows title + short description, links to `/help/[slug]`
-- Uses existing Card components for visual consistency
+**Database migration:**
 
-### HelpArticle Page (`/help/:slug`)
+The `finish_game_session` RPC currently allows any participant to set `winner_wallet`. Add a guard: only allow setting `winner_wallet` if the session's `status_int` is still 2 (active) AND there's evidence of a completed game (moves exist in `game_moves`).
 
-- Reads `slug` from `useParams()`
-- Looks up article from the data array
-- Sets `document.title` and meta description via `useEffect` for SEO
-- Renders the article content
-- Shows "Back to Help Center" link
-- 404-style fallback if slug not found
-- Bottom section with links to related articles
-
-## The 6 Articles
-
-| # | Slug | Title |
-|---|------|-------|
-| 1 | `connect-phantom-wallet-1mgaming` | How to Connect Phantom Wallet to 1MGAMING |
-| 2 | `connect-solflare-wallet-1mgaming` | How to Connect Solflare Wallet to 1MGAMING |
-| 3 | `connect-backpack-wallet-1mgaming` | How to Connect Backpack Wallet to 1MGAMING |
-| 4 | `solana-skill-games-not-luck` | Solana Skill Games -- Skill Not Luck |
-| 5 | `play-real-money-chess-solana` | Play Real Money Chess on Solana (No RNG) |
-| 6 | `compare-solana-wallets-gaming` | Compare Solana Wallets for Gaming: Phantom vs Solflare vs Backpack |
-
-Each article includes internal links to at least one other help article and the homepage.
-
-## SEO Structure per Article
-
-- `document.title` set dynamically (e.g., "How to Connect Phantom Wallet to 1MGAMING | 1M Gaming")
-- Meta description tag updated via `useEffect`
-- Clean URL slugs
-- Proper heading hierarchy (h1 > h2)
-- Natural keyword usage, no stuffing
-
-## Router Changes (in `src/App.tsx`)
-
-Two new routes added alongside existing ones:
-
-```text
-<Route path="/help" element={<HelpCenter />} />
-<Route path="/help/:slug" element={<HelpArticle />} />
+```sql
+-- Only allow winner_wallet to be set if game has actual moves
+IF p_winner_wallet IS NOT NULL THEN
+  IF NOT EXISTS (
+    SELECT 1 FROM game_moves WHERE room_pda = p_room_pda LIMIT 1
+  ) THEN
+    RAISE EXCEPTION 'Cannot set winner without game moves';
+  END IF;
+END IF;
 ```
 
-## Footer Change
+### Fix 3: Add minimum game duration guard to `forfeit-game`
 
-Add one entry to the existing `links` array in `Footer.tsx`:
+Prevent forfeits within the first 30 seconds of a game starting. If a game just started, no one should be forfeiting yet.
 
 ```text
-{ to: "/help", labelKey: "footer.helpGuides" }
+// In forfeit-game edge function, after fetching game session:
+const session = await supabase.from("game_sessions")
+  .select("turn_started_at, status_int")
+  .eq("room_pda", roomPda)
+  .single();
+
+if (session.data) {
+  const gameAgeSeconds = (Date.now() - new Date(session.data.turn_started_at).getTime()) / 1000;
+  if (gameAgeSeconds < 30 && session.data.status_int === 2) {
+    return json200({ success: false, error: "GAME_TOO_NEW", details: "Cannot forfeit within 30 seconds of game start" });
+  }
+}
 ```
 
-This automatically appears in both the desktop link row and the mobile collapsible menu.
+## Files Changed
 
-## Safety Guarantees
+| File | Change | Risk |
+|------|--------|------|
+| `supabase/functions/forfeit-game/index.ts` | Add session-based identity verification + minimum game age guard | Low -- additive check, existing auto-forfeit path (service role) unaffected |
+| Database migration | Add move-existence guard to `finish_game_session` | Low -- only blocks setting winner when no moves exist |
 
-- No wallet logic modified
-- No game engine files touched
-- No edge functions changed
-- No database changes
-- No new dependencies added
-- All content is hardcoded JSX (no markdown parser, no CMS)
-- Existing layout/responsiveness unaffected
-- Works on mobile and desktop
-- Works on direct URL load and refresh (standard React Router)
+## What This Does NOT Change
+
+- No wallet logic changes
+- No game engine changes
+- No UI changes
+- The auto-forfeit path (server-to-server via `game-session-get`) continues to work because it uses the service role key
+- Manual forfeit by the actual player continues to work because their session token matches their wallet
+
+## Testing Plan
+
+1. After deploying, attempt to call `forfeit-game` with a mismatched wallet -- should return `IDENTITY_MISMATCH`
+2. Verify normal forfeit still works (player forfeits their own game)
+3. Verify auto-forfeit (3 strikes timeout) still works via `game-session-get`
+4. Verify `finish_game_session` rejects winner-setting when no moves exist
 
