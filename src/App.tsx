@@ -41,6 +41,8 @@ import Leaderboard from "./pages/Leaderboard";
 import MatchShareCard from "./pages/MatchShareCard";
 import AgeConfirmation from "./components/AgeConfirmation";
 import DebugJoinRoom from "./pages/DebugJoinRoom";
+import HelpCenter from "./pages/HelpCenter";
+import HelpArticle from "./pages/HelpArticle";
 import DebugHUD from "./components/DebugHUD";
 import { isDebugEnabled } from "@/lib/debugLog";
 
@@ -108,6 +110,8 @@ const AppContent = () => {
           <Route path="/play-ai/ludo" element={<LudoAI />} />
           <Route path="/game-rules" element={<GameRules />} />
           <Route path="/support" element={<Support />} />
+          <Route path="/help" element={<HelpCenter />} />
+          <Route path="/help/:slug" element={<HelpArticle />} />
           <Route path="/privacy-policy" element={<PrivacyPolicy />} />
           <Route path="/terms-of-service" element={<TermsOfService />} />
           <Route path="/match/:roomPda" element={<MatchShareCard />} />
