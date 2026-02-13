@@ -1,69 +1,52 @@
 
 
-# Wire Session Token to Edge Function Calls
+# Lock Down `finalize_receipts` Table (RLS-Only Fix)
 
-## The Gap
+## Current State
 
-The identity hardening in `submit-move` (and other edge functions) checks for a 64-character hex session token in the `Authorization` header. However, the client (`useDurableGameSync.ts`) uses `supabase.functions.invoke()` which only sends the **anon key** (a JWT) -- so the identity check is never triggered.
+The `finalize_receipts` table has a permissive SELECT policy `using (true)`, meaning any anonymous client can read all settlement transaction signatures and room PDAs. This leaks internal settlement data.
 
-The session token IS stored in `localStorage` as `session_token_{roomPda}`, but it's never attached to the edge function calls.
+## Why This Is Safe to Change
 
-## Fix
+The frontend **never reads `finalize_receipts` directly**. All client-side receipt checks go through:
+- `game-session-get` edge function (uses service role key, bypasses RLS)
+- `isRoomFinalized()` in `finalizeGame.ts` calls `game-session-get`, not the table
 
-Pass the session token as a **custom header** (not replacing the Authorization header, which Supabase needs for routing). The edge function already handles this -- the token regex check (`/^[0-9a-f]{64}$/`) will match.
+Edge functions (`forfeit-game`, `settle-game`, `settle-draw`) write to the table using service role, so they are also unaffected by RLS changes.
 
-### Option: Use a custom header instead
+## Change
 
-Since the `Authorization` header is controlled by the Supabase client (and contains the anon key), we should use a dedicated custom header like `x-session-token` and update both the client and all hardened edge functions to read from it.
+**Single migration** -- replace the permissive public-read policy with a restrictive one:
 
-### Changes
+```sql
+-- Drop the overly permissive public read policy
+DROP POLICY IF EXISTS "public read receipts" ON finalize_receipts;
 
-**1. Update `useDurableGameSync.ts`** -- pass session token as custom header
-
-In the `submitMove` function, read the session token from localStorage and pass it:
-
-```
-const sessionToken = localStorage.getItem(`session_token_${roomPda}`);
-
-const { data, error } = await supabase.functions.invoke("submit-move", {
-  headers: sessionToken ? { "x-session-token": sessionToken } : undefined,
-  body: { roomPda, wallet, moveData, clientMoveId },
-});
+-- New policy: only room participants can read their own receipts
+CREATE POLICY "participants_read_receipts"
+ON finalize_receipts FOR SELECT
+USING (false);
 ```
 
-**2. Update all 4 hardened edge functions** to read from `x-session-token` header instead of (or in addition to) `Authorization`
+We use `USING (false)` because:
+1. No client-side code reads this table directly (confirmed by search)
+2. All legitimate reads go through edge functions using the service role (which bypasses RLS entirely)
+3. There is no `auth.uid()` in this app (wallet-based identity, no Supabase Auth) so a participant-join policy would have no way to identify the requester
 
-In `submit-move`, `forfeit-game`, `recover-funds`, `game-session-set-settings`, `set-manual-starter`:
-
-```
-// Read session token from dedicated header
-const sessionToken = req.headers.get("x-session-token");
-if (sessionToken && sessionToken.length === 64 && /^[0-9a-f]{64}$/.test(sessionToken)) {
-  // ... existing identity verification logic using sessionToken
-}
-```
-
-**3. Update client-side callers** for other edge functions
-
-Search for all `supabase.functions.invoke("forfeit-game")`, `invoke("recover-funds")`, etc. and wire the session token header the same way.
+This is the same pattern already used for `settlement_logs`, `player_sessions`, `session_nonces`, and `game_moves`.
 
 ## Files Changed
 
 | File | Change |
 |------|--------|
-| `src/hooks/useDurableGameSync.ts` | Read `session_token_{roomPda}` from localStorage, pass as `x-session-token` header |
-| `supabase/functions/submit-move/index.ts` | Read token from `x-session-token` header instead of Authorization |
-| `supabase/functions/forfeit-game/index.ts` | Same header change |
-| `supabase/functions/recover-funds/index.ts` | Same header change |
-| `supabase/functions/game-session-set-settings/index.ts` | Same header change |
-| `supabase/functions/set-manual-starter/index.ts` | Same header change |
-| Client callers for forfeit/recover/settings | Add `x-session-token` header to invoke calls |
+| New migration SQL | Drop `public read receipts`, create `participants_read_receipts` with `USING (false)` |
 
-## Risk
+**Zero frontend changes required.**
 
-Low -- all edge functions still fall through gracefully if no session token is provided. The custom header approach avoids interfering with Supabase's own Authorization header. Existing gameplay is unaffected because the body wallet is still sent as a fallback.
+## What Will NOT Break
 
-## Testing
-
-After this change, the edge function logs should show the session verification path being hit during normal gameplay, confirming the identity guard is actually active.
+- Edge functions (service role) bypass RLS -- all writes and reads from `game-session-get`, `forfeit-game`, `settle-game`, `settle-draw` continue working
+- `isRoomFinalized()` calls `game-session-get` edge function, not the table directly
+- `record_match_result` RPC runs as SECURITY DEFINER, bypasses RLS
+- No client-side code queries `finalize_receipts` directly (verified by codebase search)
 
