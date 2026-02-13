@@ -23,6 +23,9 @@ import { validatePublicKey, getRoomPda } from "@/lib/solana-utils";
 import { supabase } from "@/integrations/supabase/client";
 import { isWalletInAppBrowser } from "@/lib/walletBrowserDetection";
 import { toast } from "sonner";
+import { useRoomRealtimeAlert } from "@/hooks/useRoomRealtimeAlert";
+import { AudioManager } from "@/lib/AudioManager";
+import { showBrowserNotification } from "@/lib/pushNotifications";
 
 // Presence feature disabled until program supports ping_room
 // const CREATOR_TIMEOUT_SECS = 60;
@@ -490,6 +493,20 @@ export default function Room() {
     
     prevStatusRef.current = currentStatus;
   }, [room, roomPdaParam, navigate, gameName]);
+
+  // Realtime alert: instant "opponent joined" via DB subscription (supplements polling)
+  useRoomRealtimeAlert({
+    roomPda: roomPdaParam ?? null,
+    enabled: !!room && isOpenStatus(room.status),
+    onOpponentJoined: () => {
+      if (hasNavigatedRef.current) return;
+      hasNavigatedRef.current = true;
+      AudioManager.playPlayerJoined();
+      showBrowserNotification("🎮 Opponent Joined!", `Your ${gameName} match is ready!`);
+      toast.success("Game is starting!", { description: `${gameName} match is ready. Entering game...` });
+      navigate(`/play/${roomPdaParam}`, { replace: true });
+    },
+  });
 
   // Note: Active room polling is now centralized in useSolanaRooms
   // This page only CONSUMES activeRoom - it doesn't trigger fetches

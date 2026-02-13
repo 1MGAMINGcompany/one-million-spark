@@ -10,6 +10,7 @@ import { RoomStatus, isOpenStatus } from "@/lib/solana-program";
 import { toast } from "@/hooks/use-toast";
 import { AudioManager } from "@/lib/AudioManager";
 import { showBrowserNotification } from "@/lib/pushNotifications";
+import { useRoomRealtimeAlert } from "@/hooks/useRoomRealtimeAlert";
 
 // REMOVED: GAME_ROUTES - game type comes from on-chain data via /play/:pda, not URL
 
@@ -67,6 +68,20 @@ export function GlobalActiveRoomBanner() {
 
     previousStatusRef.current = currentStatus;
   }, [activeRoom, navigate]);
+
+  // Realtime alert: instant "opponent joined" via DB subscription (supplements polling)
+  useRoomRealtimeAlert({
+    roomPda: activeRoom?.pda ?? null,
+    enabled: !!activeRoom && isOpenStatus(activeRoom.status),
+    onOpponentJoined: () => {
+      if (hasNavigatedRef.current) return;
+      hasNavigatedRef.current = true;
+      AudioManager.playPlayerJoined();
+      showBrowserNotification("🎮 Opponent Joined!", `Your ${activeRoom?.gameTypeName} game is ready to start!`);
+      toast({ title: `🎮 ${t("gameBanner.opponentJoined")}`, description: t("gameBanner.navigateToRoom", { game: activeRoom?.gameTypeName }) });
+      navigate(`/play/${activeRoom?.pda}`);
+    },
+  });
 
   // Don't show banner if no active room or not connected
   if (!connected || !activeRoom) {
