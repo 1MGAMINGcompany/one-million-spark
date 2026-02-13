@@ -1434,6 +1434,9 @@ const BackgammonGame = () => {
         const nextWallet = moveMsg.nextTurnWallet || address;
         const alreadySameTurnWR = isSameWallet(nextWallet, currentTurnWallet);
         if (nextWallet) {
+          if (!alreadySameTurnWR) {
+            diceRolledThisTurnRef.current = false;
+          }
           setCurrentTurnWallet(nextWallet);
           const nextRole = isSameWallet(nextWallet, roomPlayersRef.current[0]) ? "player" : "ai";
           setCurrentPlayer(nextRole);
