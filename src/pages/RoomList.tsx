@@ -35,6 +35,7 @@ import { ResolveRoomModal } from "@/components/ResolveRoomModal";
 import { UnresolvedRoomModal } from "@/components/UnresolvedRoomModal";
 
 import { BUILD_VERSION } from "@/lib/buildVersion";
+import { useRoomRealtimeAlert } from "@/hooks/useRoomRealtimeAlert";
 
 export default function RoomList() {
   const navigate = useNavigate();
@@ -170,6 +171,20 @@ export default function RoomList() {
     
     prevStatusRef.current = currentStatus;
   }, [activeRoom, address, toast, navigate]);
+
+  // Realtime alert: instant "opponent joined" via DB subscription (supplements polling)
+  useRoomRealtimeAlert({
+    roomPda: activeRoom?.pda ?? null,
+    enabled: !!activeRoom && isOpenStatus(activeRoom.status),
+    onOpponentJoined: () => {
+      if (hasNavigatedRef.current) return;
+      hasNavigatedRef.current = true;
+      AudioManager.playPlayerJoined();
+      showBrowserNotification("🎮 Opponent Joined!", `Your ${activeRoom?.gameTypeName} match is ready!`, { requireInteraction: true });
+      toast({ title: "🎮 Opponent joined — your game is ready!", description: `Your ${activeRoom?.gameTypeName} match is starting. Enter now!` });
+      navigate(`/play/${activeRoom?.pda}`);
+    },
+  });
 
   // Feature flag disabled - show coming soon
   if (!SOLANA_ENABLED) {

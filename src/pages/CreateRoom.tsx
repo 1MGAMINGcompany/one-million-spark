@@ -41,6 +41,7 @@ import { AudioManager } from "@/lib/AudioManager";
 import { showBrowserNotification } from "@/lib/pushNotifications";
 import { parseRematchParams, lamportsToSol, RematchPayload, solToLamports } from "@/lib/rematchPayload";
 import { supabase } from "@/integrations/supabase/client";
+import { useRoomRealtimeAlert } from "@/hooks/useRoomRealtimeAlert";
 
 // Game type mapping from string to number
 const GAME_TYPE_MAP: Record<string, string> = {
@@ -193,6 +194,20 @@ export default function CreateRoom() {
     
     prevStatusRef.current = currentStatus;
   }, [activeRoom, address, toast, navigate]);
+
+  // Realtime alert: instant "opponent joined" via DB subscription (supplements polling)
+  useRoomRealtimeAlert({
+    roomPda: activeRoom?.pda ?? null,
+    enabled: !!activeRoom && isOpenStatus(activeRoom.status),
+    onOpponentJoined: () => {
+      if (hasNavigatedRef.current) return;
+      hasNavigatedRef.current = true;
+      AudioManager.playPlayerJoined();
+      showBrowserNotification("🎮 Opponent Joined!", `Your ${activeRoom?.gameTypeName} match is ready!`, { requireInteraction: true });
+      toast({ title: `🎮 ${t("gameBanner.opponentJoined")}`, description: `${activeRoom?.gameTypeName} - ${t("gameBanner.enterGame")}!` });
+      navigate(`/room/${activeRoom?.pda}`);
+    },
+  });
   
   // Manual balance refresh
   const handleRefreshBalance = useCallback(async () => {
