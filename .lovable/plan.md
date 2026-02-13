@@ -1,109 +1,101 @@
 
 
-# CRITICAL FIX: Forfeit-Game Identity Spoofing Exploit
+# Hardening All Edge Functions with Session-Based Identity
 
-## The Problem
+## Current Security Status
 
-An attacker (wallet `4nQha4dV`) exploited your game twice by calling the `forfeit-game` edge function with YOUR wallet address as the `forfeitingWallet`. The function has **no caller identity verification** -- it trusts whatever wallet address is sent in the request body.
+After the forfeit-game patch, here is the status of every state-changing edge function:
 
-This is a critical vulnerability: anyone can forfeit anyone else's game and steal their SOL.
+| Function | Status | Risk | Issue |
+|---|---|---|---|
+| forfeit-game | PATCHED | - | Identity check + 30s cooldown added |
+| submit-move | VULNERABLE | HIGH | Trusts `wallet` from request body -- attacker could submit moves as another player |
+| settle-game | SAFE | - | Derives winner from on-chain data + game_state, no body wallet trusted for identity |
+| settle-draw | SAFE | - | Uses only on-chain room data, no body wallet for identity |
+| recover-funds | LOW RISK | LOW | `callerWallet` from body only controls who receives a cancel_room unsigned tx -- actual on-chain tx still requires wallet signature |
+| game-session-set-settings | LOW RISK | LOW | `creatorWallet` compared against DB player1_wallet, and only works pre-game. No funds at risk |
+| set-manual-starter | LOW RISK | LOW | `callerWallet` checked against DB participants. Only affects who goes first, pre-game only |
+| ranked-accept | SAFE | - | Validation-only stub, no DB writes |
 
-## Evidence
+## What Needs Fixing
 
-Both games (DxHGKhY1 and JDpWu962) show the same pattern:
-- Opponent joins, game ends within 13-15 seconds
-- Zero game moves recorded
-- Your wallet listed as `forfeiting_wallet` in settlement logs
-- Opponent received the payout
+### Priority 1: submit-move (HIGH risk)
 
-## Fix: Two Changes Required
+This is the only remaining critical vulnerability. The edge function accepts `wallet` from the request body and passes it directly to the `submit_game_move` RPC. An attacker could:
+- Submit moves on behalf of another player
+- Manipulate game state to force a win
 
-### Fix 1: Add `requireSession()` identity check to `forfeit-game` edge function
+The RPC does check `current_turn_wallet`, but an attacker could time their call during the victim's turn to submit a bad move.
 
-**File:** `supabase/functions/forfeit-game/index.ts`
+**Fix:** Add session token verification identical to the forfeit-game pattern. The client already sends an Authorization header via the Supabase client (the anon key). We add a check: if a session token is provided, derive the wallet from `player_sessions` and reject mismatches.
 
-The edge function must verify that the caller's session token matches the `forfeitingWallet` they claim to be forfeiting for. The caller can only forfeit THEIR OWN game, not someone else's.
+### Priority 2: recover-funds, game-session-set-settings, set-manual-starter (LOW risk)
 
-Add at the top of the request handler (after body parsing):
+These are lower priority because:
+- `recover-funds`: The callerWallet is only used to check if they're the creator for cancel_room, and the actual cancel requires the user's wallet to sign the Solana transaction client-side
+- `game-session-set-settings`: Only works before game starts, compares against DB, no funds at risk
+- `set-manual-starter`: Only affects first-move order, pre-game only, validated against DB participants
+
+Adding session checks to these would add defense-in-depth but is not exploitable for fund theft.
+
+## Implementation Plan
+
+### Step 1: Harden submit-move edge function
+
+Add the same identity verification pattern used in forfeit-game:
 
 ```text
-// SECURITY: Derive caller wallet from session token
-// The forfeitingWallet in the body MUST match the authenticated caller
+// After parsing body, before calling RPC:
 const authHeader = req.headers.get("Authorization");
 if (authHeader) {
   const token = authHeader.replace("Bearer ", "");
-  const { data: sessionRow } = await supabase
-    .from("player_sessions")
-    .select("wallet")
-    .eq("session_token", token)
-    .eq("room_pda", roomPda)
-    .eq("revoked", false)
-    .maybeSingle();
+  // Skip if it's the anon key (not a session token)
+  if (token.length === 64) {  // Session tokens are 64-char hex
+    const { data: sessionRow } = await supabase
+      .from("player_sessions")
+      .select("wallet")
+      .eq("session_token", token)
+      .eq("room_pda", roomPda)
+      .eq("revoked", false)
+      .maybeSingle();
 
-  if (sessionRow && sessionRow.wallet !== forfeitingWallet) {
-    // BLOCKED: Caller is trying to forfeit someone else
-    return json200({ success: false, error: "IDENTITY_MISMATCH" });
+    if (sessionRow && sessionRow.wallet !== wallet) {
+      return error response: IDENTITY_MISMATCH
+    }
+    // If session found, override wallet with verified one
+    if (sessionRow) {
+      wallet = sessionRow.wallet;
+    }
   }
 }
 ```
 
-**Exception:** Server-to-server calls (from `game-session-get` auto-forfeit) use the service role key in the Authorization header, which bypasses this check. These are trusted internal calls.
+**Key design choice:** When a valid session token is found, we OVERRIDE the body wallet with the session-derived wallet. This makes the body wallet irrelevant for identity.
 
-### Fix 2: Protect `finish_game_session` from participant manipulation
+### Step 2 (Defense-in-depth): Add session checks to lower-risk functions
 
-**Database migration:**
-
-The `finish_game_session` RPC currently allows any participant to set `winner_wallet`. Add a guard: only allow setting `winner_wallet` if the session's `status_int` is still 2 (active) AND there's evidence of a completed game (moves exist in `game_moves`).
-
-```sql
--- Only allow winner_wallet to be set if game has actual moves
-IF p_winner_wallet IS NOT NULL THEN
-  IF NOT EXISTS (
-    SELECT 1 FROM game_moves WHERE room_pda = p_room_pda LIMIT 1
-  ) THEN
-    RAISE EXCEPTION 'Cannot set winner without game moves';
-  END IF;
-END IF;
-```
-
-### Fix 3: Add minimum game duration guard to `forfeit-game`
-
-Prevent forfeits within the first 30 seconds of a game starting. If a game just started, no one should be forfeiting yet.
-
-```text
-// In forfeit-game edge function, after fetching game session:
-const session = await supabase.from("game_sessions")
-  .select("turn_started_at, status_int")
-  .eq("room_pda", roomPda)
-  .single();
-
-if (session.data) {
-  const gameAgeSeconds = (Date.now() - new Date(session.data.turn_started_at).getTime()) / 1000;
-  if (gameAgeSeconds < 30 && session.data.status_int === 2) {
-    return json200({ success: false, error: "GAME_TOO_NEW", details: "Cannot forfeit within 30 seconds of game start" });
-  }
-}
-```
+Apply the same pattern to `recover-funds`, `game-session-set-settings`, and `set-manual-starter`. These don't put funds at direct risk, but closing them prevents any future exploitation if the game logic changes.
 
 ## Files Changed
 
 | File | Change | Risk |
-|------|--------|------|
-| `supabase/functions/forfeit-game/index.ts` | Add session-based identity verification + minimum game age guard | Low -- additive check, existing auto-forfeit path (service role) unaffected |
-| Database migration | Add move-existence guard to `finish_game_session` | Low -- only blocks setting winner when no moves exist |
+|---|---|---|
+| supabase/functions/submit-move/index.ts | Add session identity verification, override wallet from session | Low -- additive check, falls through gracefully if no session token |
+| supabase/functions/recover-funds/index.ts | Add session identity verification for callerWallet | Very low -- existing on-chain signature requirement unchanged |
+| supabase/functions/game-session-set-settings/index.ts | Add session identity verification for creatorWallet | Very low -- existing DB check unchanged |
+| supabase/functions/set-manual-starter/index.ts | Add session identity verification for callerWallet | Very low -- existing DB participant check unchanged |
 
-## What This Does NOT Change
+## What Will NOT Break
 
-- No wallet logic changes
-- No game engine changes
-- No UI changes
-- The auto-forfeit path (server-to-server via `game-session-get`) continues to work because it uses the service role key
-- Manual forfeit by the actual player continues to work because their session token matches their wallet
+- All functions fall through gracefully if no session token is present (backward compatible)
+- The Supabase client sends the anon key as Authorization by default -- this is not a 64-char hex string, so it won't trigger the session check
+- Server-to-server calls use the service role key, which is also not a session token
+- The `submit_game_move` RPC's existing `current_turn_wallet` check remains as a second layer of defense
+- settle-game, settle-draw, and ranked-accept are NOT modified (already safe)
 
-## Testing Plan
+## Testing
 
-1. After deploying, attempt to call `forfeit-game` with a mismatched wallet -- should return `IDENTITY_MISMATCH`
-2. Verify normal forfeit still works (player forfeits their own game)
-3. Verify auto-forfeit (3 strikes timeout) still works via `game-session-get`
-4. Verify `finish_game_session` rejects winner-setting when no moves exist
+1. Play a normal ranked game end-to-end -- moves should submit normally
+2. Verify forfeit still works for the actual player
+3. Attempt to call submit-move with a wallet that doesn't match the session -- should get IDENTITY_MISMATCH
 
