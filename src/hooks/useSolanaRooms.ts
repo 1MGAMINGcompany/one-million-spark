@@ -343,22 +343,25 @@ export function useSolanaRooms() {
            const sessions = resp.rows as Array<{ room_pda: string; turn_time_seconds: number | null; mode: string | null }>;
            console.log("[RoomList] Edge function returned", sessions.length, "sessions");
            
-           const turnTimeMap = new Map<string, number>();
-           for (const s of sessions) {
-             if (s.turn_time_seconds != null && s.turn_time_seconds > 0) {
-               turnTimeMap.set(s.room_pda, s.turn_time_seconds);
-             }
-           }
-           
-           let enrichedCount = 0;
-           for (const room of fetchedRooms) {
-             const dbTurnTime = turnTimeMap.get(room.pda);
-             if (dbTurnTime !== undefined) {
-               room.turnTimeSec = dbTurnTime;
-               enrichedCount++;
-             }
-           }
-           console.log("[RoomList] Enriched", enrichedCount, "of", fetchedRooms.length, "rooms with turn time");
+            const enrichMap = new Map<string, { turnTime: number | null; mode: string | null }>();
+            for (const s of sessions) {
+              enrichMap.set(s.room_pda, { turnTime: s.turn_time_seconds, mode: s.mode });
+            }
+            
+            let enrichedCount = 0;
+            for (const room of fetchedRooms) {
+              const dbData = enrichMap.get(room.pda);
+              if (dbData) {
+                if (dbData.turnTime != null && dbData.turnTime > 0) {
+                  room.turnTimeSec = dbData.turnTime;
+                }
+                if (dbData.mode === 'casual' || dbData.mode === 'ranked') {
+                  room.mode = dbData.mode;
+                }
+                enrichedCount++;
+              }
+            }
+            console.log("[RoomList] Enriched", enrichedCount, "of", fetchedRooms.length, "rooms with DB data");
          } else {
            console.log("[RoomList] No sessions from edge function");
          }

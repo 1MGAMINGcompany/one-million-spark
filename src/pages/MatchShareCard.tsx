@@ -32,13 +32,9 @@ export default function MatchShareCard() {
     if (!roomPda) return;
     document.title = "Match Result — 1M Gaming";
 
-    // Reset OG tags on unmount
+    // Capture original OG tags for cleanup
     const origTitle = document.querySelector('meta[property="og:title"]')?.getAttribute("content") || "";
     const origDesc = document.querySelector('meta[property="og:description"]')?.getAttribute("content") || "";
-    return () => {
-      document.querySelector('meta[property="og:title"]')?.setAttribute("content", origTitle);
-      document.querySelector('meta[property="og:description"]')?.setAttribute("content", origDesc);
-    };
 
     (async () => {
       // Try match_share_cards first
@@ -84,6 +80,12 @@ export default function MatchShareCard() {
       }
       setLoading(false);
     })();
+
+    // Reset OG tags on unmount
+    return () => {
+      document.querySelector('meta[property="og:title"]')?.setAttribute("content", origTitle);
+      document.querySelector('meta[property="og:description"]')?.setAttribute("content", origDesc);
+    };
   }, [roomPda]);
 
   if (loading) {

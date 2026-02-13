@@ -440,7 +440,7 @@ export default function RoomList() {
                       </span>
                       {/* Mode Badge - smaller on mobile */}
                       {(() => {
-                        const isRanked = room.entryFeeSol > 0;
+                        const isRanked = room.mode === 'ranked' || (!room.mode && room.entryFeeSol > 0);
                         return (
                           <span className={`text-xs px-1.5 sm:px-2 py-0.5 rounded-full border flex items-center gap-0.5 sm:gap-1 shrink-0 ${
                             isRanked 
