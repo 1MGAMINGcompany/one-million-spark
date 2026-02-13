@@ -126,6 +126,17 @@ export default function CreateRoom() {
     }
   }, [gameType]);
 
+  // Auto-default maxPlayers for Ludo vs other games
+  useEffect(() => {
+    if (gameType === "5") {
+      // Default Ludo to 4 players (unless rematch overrides)
+      if (!isRematch) setMaxPlayers("4");
+    } else {
+      // All other games are 2 players
+      setMaxPlayers("2");
+    }
+  }, [gameType, isRematch]);
+
   // Check if signing is disabled (preview domain)
   const signingDisabled = useSigningDisabled();
   
@@ -348,6 +359,8 @@ export default function CreateRoom() {
                 turnTimeSeconds: authoritativeTurnTime,
                 mode: gameMode,
                 creatorWallet: address,
+                gameType: Object.entries(GAME_TYPE_MAP).find(([_, v]) => v === gameType)?.[0] || "chess",
+                maxPlayers: parseInt(maxPlayers),
               },
             }
           );
@@ -583,6 +596,26 @@ export default function CreateRoom() {
               </SelectContent>
             </Select>
           </div>
+
+          {/* Player Count - Only for Ludo */}
+          {gameType === "5" && (
+            <div className="space-y-1.5">
+              <Label className="text-sm">Number of Players</Label>
+              <Select value={maxPlayers} onValueChange={setMaxPlayers}>
+                <SelectTrigger className="h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="2">2 Players</SelectItem>
+                  <SelectItem value="3">3 Players</SelectItem>
+                  <SelectItem value="4">4 Players</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Ludo supports 2-4 players. 3+ player games use elimination rules.
+              </p>
+            </div>
+          )}
 
           {/* Entry Fee - Styled based on mode */}
           <div className="space-y-1.5">
