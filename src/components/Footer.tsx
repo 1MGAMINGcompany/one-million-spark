@@ -18,6 +18,7 @@ const Footer = () => {
     { to: "/terms-of-service", labelKey: "footer.termsOfService" },
     { to: "/support", labelKey: "footer.support" },
     { to: "/privacy-policy", labelKey: "footer.privacyPolicy" },
+    { to: "/help", labelKey: "footer.helpGuides" },
   ];
 
   return (
