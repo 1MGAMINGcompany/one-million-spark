@@ -32,6 +32,14 @@ export default function MatchShareCard() {
     if (!roomPda) return;
     document.title = "Match Result — 1M Gaming";
 
+    // Reset OG tags on unmount
+    const origTitle = document.querySelector('meta[property="og:title"]')?.getAttribute("content") || "";
+    const origDesc = document.querySelector('meta[property="og:description"]')?.getAttribute("content") || "";
+    return () => {
+      document.querySelector('meta[property="og:title"]')?.setAttribute("content", origTitle);
+      document.querySelector('meta[property="og:description"]')?.setAttribute("content", origDesc);
+    };
+
     (async () => {
       // Try match_share_cards first
       const { data, error: err } = await supabase
@@ -43,6 +51,10 @@ export default function MatchShareCard() {
       if (data) {
         setMatch(data);
         setLoading(false);
+        // Dynamic OG tags for match share
+        const gt = (data.game_type || "").replace(/\b\w/g, (c: string) => c.toUpperCase());
+        document.querySelector('meta[property="og:title"]')?.setAttribute("content", `Victory — ${gt} | 1M Gaming`);
+        document.querySelector('meta[property="og:description"]')?.setAttribute("content", `Match result on 1M Gaming. Play skill-based games on Solana.`);
         return;
       }
 
