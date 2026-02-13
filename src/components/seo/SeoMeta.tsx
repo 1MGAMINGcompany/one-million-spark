@@ -19,7 +19,10 @@ export function useSeoMeta({ title, description, path, ogType = "website", ogIma
   const location = useLocation();
 
   useEffect(() => {
-    const canonicalUrl = `${SITE_URL}${path ?? location.pathname}`;
+    const rawPath = (path ?? location.pathname) || "/";
+    const normalizedPath =
+      rawPath !== "/" && rawPath.endsWith("/") ? rawPath.slice(0, -1) : rawPath;
+    const canonicalUrl = `${SITE_URL}${normalizedPath}`;
     const image = ogImage || `${SITE_URL}/images/og-logo.png`;
 
     document.title = title;
@@ -57,6 +60,9 @@ export function useSeoMeta({ title, description, path, ogType = "website", ogIma
     setMeta("name", "twitter:title", title);
     setMeta("name", "twitter:description", description);
     setMeta("name", "twitter:image", image);
+
+    // Site-level
+    setMeta("property", "og:site_name", "1M Gaming");
   }, [title, description, path, ogType, ogImage, location.pathname]);
 }
 
