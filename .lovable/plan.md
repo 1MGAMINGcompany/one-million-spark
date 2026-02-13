@@ -1,111 +1,65 @@
 
-# Ludo Player Count Selector (2, 3, or 4 Players)
 
-## What We're Adding
-When you select Ludo as the game type in the Create Room form (for casual, ranked, or private modes), a new dropdown appears letting you choose 2, 3, or 4 players. This value flows through to the on-chain room creation, the database session, and all downstream systems (turn timer, forfeit, elimination).
+# Fix Three Pre-Existing Bugs
 
-## Current State
-- The `maxPlayers` state already exists in `CreateRoom.tsx` (line 83), defaulting to `"2"`
-- It's already passed to `createRoom()` (line 306) and flows to the on-chain instruction
-- **BUT** there is no UI dropdown to change it -- it's always "2"
-- The `game-session-set-settings` edge function hardcodes `game_type: "backgammon"` (line 156) and never sets `max_players`
+These bugs existed before our Ludo changes. None were introduced by the player count selector.
 
-## Changes
+## Bug 1: MatchShareCard Loading Forever
 
-### 1. `src/pages/CreateRoom.tsx` -- Add Player Count Dropdown for Ludo
+**Cause**: In `MatchShareCard.tsx` line 38, a `return` statement (cleanup function) executes before the async data fetch on line 43. The fetch is unreachable dead code.
 
-Show a "Number of Players" dropdown **only when Ludo is selected** (`gameType === "5"`). Options: 2, 3, or 4 players.
+**Fix**: Move the cleanup `return` to the end of the useEffect, after the async IIFE.
 
-- Auto-set `maxPlayers` to `"4"` when Ludo is selected (most common)
-- Auto-reset to `"2"` when switching away from Ludo
-- Pass `gameType` name to the edge function so it persists correctly
+### File: `src/pages/MatchShareCard.tsx`
 
-### 2. `supabase/functions/game-session-set-settings/index.ts` -- Accept gameType and maxPlayers
+Restructure the useEffect so the async fetch runs, and cleanup is returned at the end.
 
-Currently this edge function:
-- Hardcodes `game_type: "backgammon"` on insert (line 156)
-- Never sets `max_players`
+---
 
-We'll update it to:
-- Accept `gameType` and `maxPlayers` from the request body
-- Validate `gameType` against a whitelist (`chess`, `backgammon`, `checkers`, `dominos`, `ludo`)
-- Set `max_players` in both insert and update paths
-- Default `max_players` to 2 for non-Ludo games
+## Bug 2: Ranked/Casual Mode Mismatch on Room List
 
-### 3. Prize Pool Display Fix
+**Cause**: Room list infers mode from `entryFeeSol > 0` instead of using the DB `mode` field. The `game-sessions-list` edge function already returns `mode` -- it's just not mapped.
 
-The prize pool calculation already uses `parseInt(maxPlayers)` (line 705), so it will automatically show the correct total (e.g., 0.01 SOL x 4 players = 0.04 SOL).
+**Fix**: Map `mode` from enrichment data onto room objects, use it for the badge.
+
+### File: `src/pages/RoomList.tsx`
+
+- Add `mode` to the enrichment mapping
+- Change badge logic to use `room.mode === 'ranked'` with fallback to stake inference
+
+---
+
+## Bug 3: Zombie Rooms Never Expire
+
+**Cause**: Rooms created before the `waiting_started_at` feature have NULL values, so the 120-second timeout never triggers.
+
+**Fix**: One-time database cleanup to cancel stale rooms (older than 24 hours, no opponent joined). Also backfill `waiting_started_at` from `created_at` in the timeout RPC as a fallback (this already exists in the `maybe_apply_waiting_timeout` function -- it backfills from `created_at` -- but the function only runs during `game-session-get` polling, and nobody polls dead rooms).
+
+### Database migration
+
+```sql
+UPDATE game_sessions
+SET status = 'cancelled', status_int = 5, game_over_at = now(), updated_at = now()
+WHERE status_int IN (1, 2)
+  AND created_at < now() - interval '24 hours'
+  AND (player2_wallet IS NULL OR winner_wallet IS NULL);
+```
+
+---
 
 ## Files Changed
 
 | File | Change |
 |------|--------|
-| `src/pages/CreateRoom.tsx` | Add player count dropdown for Ludo, auto-default logic, pass gameType/maxPlayers to edge function |
-| `supabase/functions/game-session-set-settings/index.ts` | Accept and persist `gameType` + `maxPlayers` fields |
+| `src/pages/MatchShareCard.tsx` | Move cleanup return to end of useEffect so fetch is reachable |
+| `src/pages/RoomList.tsx` | Map `mode` from enrichment data; use DB mode for badge |
+| Database | One-time cleanup of zombie rooms older than 24 hours |
 
-## Technical Details
+## Room Expiry Reference
 
-### CreateRoom.tsx UI Addition (after the Game Type selector, ~line 585)
+| Scenario | Timeout |
+|----------|---------|
+| Waiting room (1 participant) | 120 seconds after `waiting_started_at` |
+| Active game turn timeout | 3 missed turns triggers auto-forfeit |
+| Rooms with NULL `waiting_started_at` | Never (the bug -- fixed by cleanup) |
 
-```tsx
-{/* Player Count - Only for Ludo */}
-{gameType === "5" && (
-  <div className="space-y-1.5">
-    <Label className="text-sm">Number of Players</Label>
-    <Select value={maxPlayers} onValueChange={setMaxPlayers}>
-      <SelectTrigger className="h-9">
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value="2">2 Players</SelectItem>
-        <SelectItem value="3">3 Players</SelectItem>
-        <SelectItem value="4">4 Players</SelectItem>
-      </SelectContent>
-    </Select>
-    <p className="text-xs text-muted-foreground">
-      Ludo supports 2-4 players. 3+ player games use elimination rules.
-    </p>
-  </div>
-)}
-```
-
-### Auto-default logic (new useEffect)
-
-```tsx
-useEffect(() => {
-  if (gameType === "5") {
-    // Default Ludo to 4 players (unless rematch overrides)
-    if (!isRematch) setMaxPlayers("4");
-  } else {
-    // All other games are 2 players
-    setMaxPlayers("2");
-  }
-}, [gameType, isRematch]);
-```
-
-### Edge Function Update -- game-session-set-settings
-
-Accept two new optional fields in the request body:
-- `gameType` (string) -- validated against whitelist
-- `maxPlayers` (number) -- validated 2-4
-
-Both the insert and update paths will include these fields:
-
-```typescript
-// In the insert path (new session):
-game_type: validGameType,  // Instead of hardcoded "backgammon"
-max_players: validMaxPlayers,  // Instead of default 2
-
-// In the update path (existing session):
-game_type: validGameType,
-max_players: validMaxPlayers,
-```
-
-### Downstream Compatibility
-
-These systems already handle `max_players > 2` correctly:
-- **Turn timer** (`useTurnTimer`): Uses `turn_time_seconds` from DB, player-count agnostic
-- **Forfeit** (`forfeit-game`): Checks `max_players` to decide FORFEIT vs ELIMINATE
-- **Turn timeout** (`maybe_apply_turn_timeout`): Skips eliminated players, uses `participants` array
-- **Settlement** (`settle-game`): Reads `max_players` from on-chain data
-- **Room activation** (`maybe_activate_game_session`): Uses `max_players` to determine required count
