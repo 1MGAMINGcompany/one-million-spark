@@ -11,7 +11,7 @@ import bs58 from "npm:bs58@5.0.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-session-token",
 };
 
 function json200(body: Record<string, unknown>) {
@@ -260,13 +260,13 @@ Deno.serve(async (req: Request) => {
     // ══════════════════════════════════════════════════════════════
     const authHeader = req.headers.get("Authorization");
     const isServiceRoleCall = authHeader === `Bearer ${supabaseServiceKey}`;
+    const sessionToken = req.headers.get("x-session-token");
 
-    if (authHeader && !isServiceRoleCall) {
-      const token = authHeader.replace("Bearer ", "");
+    if (sessionToken && /^[0-9a-f]{64}$/.test(sessionToken) && !isServiceRoleCall) {
       const { data: sessionRow } = await supabase
         .from("player_sessions")
         .select("wallet")
-        .eq("session_token", token)
+        .eq("session_token", sessionToken)
         .eq("room_pda", roomPda)
         .eq("revoked", false)
         .maybeSingle();

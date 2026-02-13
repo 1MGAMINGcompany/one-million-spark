@@ -3,7 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-session-token",
 };
 
 /**
@@ -39,17 +39,15 @@ Deno.serve(async (req: Request) => {
     }
 
     // ── Session-based identity verification ──
-    // If a valid session token is present, derive wallet from DB and override body wallet.
+    // Read session token from dedicated header (not Authorization, which carries the anon key)
     let wallet = bodyWallet;
-    const authHeader = req.headers.get("Authorization");
-    if (authHeader) {
-      const token = authHeader.replace("Bearer ", "");
-      // Session tokens are 64-char hex strings; skip anon/service keys
-      if (token.length === 64 && /^[0-9a-f]{64}$/.test(token)) {
+    const sessionToken = req.headers.get("x-session-token");
+    if (sessionToken && sessionToken.length === 64 && /^[0-9a-f]{64}$/.test(sessionToken)) {
+      {
         const { data: sessionRow } = await supabase
           .from("player_sessions")
           .select("wallet")
-          .eq("session_token", token)
+          .eq("session_token", sessionToken)
           .eq("room_pda", roomPda)
           .eq("revoked", false)
           .maybeSingle();

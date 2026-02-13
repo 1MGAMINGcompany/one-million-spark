@@ -1042,7 +1042,9 @@ export function useSolanaRooms() {
       // Import supabase client dynamically to avoid circular dependency
       const { supabase } = await import("@/integrations/supabase/client");
       
+      const sessionToken = localStorage.getItem(`session_token_${roomPda}`);
       const { data, error } = await supabase.functions.invoke('forfeit-game', {
+        headers: sessionToken ? { "x-session-token": sessionToken } : undefined,
         body: {
           roomPda,
           forfeitingWallet: publicKey.toBase58(),
