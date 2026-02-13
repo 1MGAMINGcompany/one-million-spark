@@ -51,6 +51,20 @@ serve(async (req) => {
     const turnTimeSecondsRaw = payload?.turnTimeSeconds;
     const mode = payload?.mode as Mode;
     const creatorWallet = payload?.creatorWallet;
+    const rawGameType = payload?.gameType;
+    const rawMaxPlayers = payload?.maxPlayers;
+
+    // Validate and normalize gameType
+    const VALID_GAME_TYPES = ["chess", "backgammon", "checkers", "dominos", "ludo"];
+    const validGameType = typeof rawGameType === "string" && VALID_GAME_TYPES.includes(rawGameType.toLowerCase())
+      ? rawGameType.toLowerCase()
+      : null;
+
+    // Validate and normalize maxPlayers (2-4)
+    const parsedMaxPlayers = Number(rawMaxPlayers);
+    const validMaxPlayers = Number.isFinite(parsedMaxPlayers) && parsedMaxPlayers >= 2 && parsedMaxPlayers <= 4
+      ? parsedMaxPlayers
+      : 2;
 
     // Validate required fields
     if (!roomPda || typeof roomPda !== "string") {
@@ -131,6 +145,8 @@ serve(async (req) => {
         .update({
           turn_time_seconds: turnTimeSeconds,
           mode,
+          ...(validGameType ? { game_type: validGameType } : {}),
+          max_players: validMaxPlayers,
         })
         .eq("room_pda", roomPda);
 
@@ -153,11 +169,12 @@ serve(async (req) => {
         .insert({
           room_pda: roomPda,
           player1_wallet: creatorWallet || "",
-          game_type: "backgammon", // Default, will be updated when game starts
+          game_type: validGameType || "backgammon",
           game_state: {},
           status: "waiting",
           mode,
           turn_time_seconds: turnTimeSeconds,
+          max_players: validMaxPlayers,
         });
 
       if (insertErr) {
@@ -169,6 +186,8 @@ serve(async (req) => {
             .update({
               turn_time_seconds: turnTimeSeconds,
               mode,
+              ...(validGameType ? { game_type: validGameType } : {}),
+              max_players: validMaxPlayers,
             })
             .eq("room_pda", roomPda);
 
