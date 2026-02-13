@@ -1,90 +1,58 @@
 
 
-# Fix: Match Share Card "MATCH NOT FOUND" + Missing Data Population
+# HD Social Media Sharing with New Pyramid Logo
 
-## Problem
-When you win a game and share the link, opening it on another device shows "MATCH NOT FOUND". This happens because:
+## What We're Doing
+Adding your crisp HD pyramid logo as the image that appears when anyone shares 1MGaming.com on Instagram, X (Twitter), WhatsApp, or any social platform. Currently the preview is blurry because it uses a tiny app icon.
 
-1. The share link points to `/match/:roomPda` which queries the `match_share_cards` table
-2. The `settle-game` backend function (which runs when a game ends) **never inserts a row** into `match_share_cards`
-3. The table exists but is never populated automatically -- only a handful of manually-inserted test rows exist
+## Changes
 
-## Solution
+### 1. Add the HD logo to the project
+Copy your uploaded pyramid image to `public/images/og-logo.png` so social media crawlers can access it directly.
 
-### 1. Populate `match_share_cards` in the `settle-game` backend function
+### 2. Update `index.html` meta tags
+Replace the current blurry `og:image` with the new HD logo using absolute URLs (required by social platforms). Add Twitter/X large card support so previews are big and crisp instead of tiny thumbnails.
 
-After the on-chain settlement succeeds and the match/profile data is recorded (around line 970), add a new step that inserts a row into `match_share_cards` with all the data the share card needs:
+New tags:
+- `og:image` -- absolute URL to HD logo
+- `og:image:width` / `og:image:height` -- dimensions for platforms
+- `og:site_name` -- "1M Gaming"
+- `twitter:card` -- `summary_large_image` for large preview on X
+- `twitter:image` -- same HD logo
+- `twitter:title` / `twitter:description` -- brand messaging
 
-- `room_pda` -- from the request
-- `game_type` -- from the game session
-- `mode` -- from the request (casual/ranked/private)
-- `winner_wallet` -- resolved winner
-- `loser_wallet` -- the other player(s)
-- `win_reason` -- from the settlement reason (gameover, resign, timeout, forfeit)
-- `stake_lamports` -- from on-chain room data
-- `winner_payout_lamports` -- calculated as `pot * 0.95`
-- `fee_lamports` -- calculated as `pot * 0.05`
-- `tx_signature` -- the settlement transaction signature
-- `finished_at` -- current timestamp
-
-This insert uses `ON CONFLICT (room_pda) DO NOTHING` for idempotency.
-
-### 2. Improve the `MatchShareCard.tsx` fallback
-
-If the `match_share_cards` row doesn't exist (for older games), fall back to querying the `matches` table which IS populated. This way even games settled before this fix will show a card (with slightly less data).
-
-### 3. Map win reasons properly
-
-Map the settle-game `reason` parameter to human-readable win reasons:
-- `"gameover"` becomes `"checkmate"` / `"all_pieces_borne_off"` / etc. based on game type
-- `"resign"` becomes `"forfeit"`
-- `"timeout"` becomes `"timeout"`
+### 3. Update `MatchShareCard.tsx` dynamic OG tags
+When someone shares a match result link (`/match/:roomPda`), dynamically update the OG meta tags so the preview shows the 1M Gaming branding with match context.
 
 ## Files Changed
 
-- `supabase/functions/settle-game/index.ts` -- Add `match_share_cards` insert after successful settlement (around line 970)
-- `src/pages/MatchShareCard.tsx` -- Add fallback query to `matches` table when `match_share_cards` has no row
+| File | Change |
+|------|--------|
+| `public/images/og-logo.png` | New -- HD pyramid logo copied from upload |
+| `index.html` | Updated OG + Twitter Card meta tags with absolute URLs to HD image |
+| `src/pages/MatchShareCard.tsx` | Add dynamic meta tag updates for match share links |
 
 ## Technical Details
 
-### settle-game insert (after line 970):
+### index.html meta tag updates (replacing lines 8-11):
 
-```typescript
-// Step 4: Insert match_share_card for brag link
-try {
-  const potLamports = Number(roomData.stakeLamports) * roomData.maxPlayers;
-  const feeLamports = Math.floor(potLamports * 0.05);
-  const payoutLamports = potLamports - feeLamports;
-  const loserWallet = playersOnChain.find(p => p !== winnerWallet) || null;
+```html
+<meta property="og:title" content="1M Gaming | Premium Skill Gaming Platform" />
+<meta property="og:description" content="Where strategy becomes WEALTH. Premium skill gaming platform on Solana." />
+<meta property="og:type" content="website" />
+<meta property="og:url" content="https://one-million-spark.lovable.app" />
+<meta property="og:image" content="https://one-million-spark.lovable.app/images/og-logo.png" />
+<meta property="og:image:width" content="1024" />
+<meta property="og:image:height" content="1024" />
+<meta property="og:site_name" content="1M Gaming" />
 
-  await supabase.from("match_share_cards").upsert({
-    room_pda: roomPda,
-    game_type: normalizeGameType(gameType),
-    mode: mode || "casual",
-    winner_wallet: winnerWallet,
-    loser_wallet: loserWallet,
-    win_reason: reason === "resign" ? "forfeit" : reason || "gameover",
-    stake_lamports: Number(roomData.stakeLamports),
-    winner_payout_lamports: payoutLamports,
-    fee_lamports: feeLamports,
-    tx_signature: signature,
-    finished_at: new Date().toISOString(),
-  }, { onConflict: "room_pda", ignoreDuplicates: true });
-} catch (shareErr) {
-  console.warn("[settle-game] match_share_cards insert failed (non-fatal):", shareErr);
-}
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="1M Gaming | Premium Skill Gaming Platform" />
+<meta name="twitter:description" content="Where strategy becomes WEALTH. Skill-based gaming on Solana." />
+<meta name="twitter:image" content="https://one-million-spark.lovable.app/images/og-logo.png" />
 ```
 
-### MatchShareCard.tsx fallback:
+### MatchShareCard.tsx dynamic tags:
 
-If the primary query returns no data, try:
-```typescript
-const { data: fallback } = await supabase
-  .from("matches")
-  .select("*")
-  .eq("room_pda", roomPda)
-  .single();
-```
-
-Then map the `matches` columns to the same shape the card expects.
+Add a `useEffect` that updates `og:title` to include match result context (e.g., "Victory - Backgammon | 1M Gaming") when the match data loads.
 
