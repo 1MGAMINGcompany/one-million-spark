@@ -252,6 +252,77 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    // ══════════════════════════════════════════════════════════════
+    // SECURITY FIX 1: Identity verification — prevent wallet spoofing
+    // Server-to-server calls (auto-forfeit from game-session-get) use the
+    // service role key, which we trust. Client calls use a session token
+    // from player_sessions, and the wallet MUST match forfeitingWallet.
+    // ══════════════════════════════════════════════════════════════
+    const authHeader = req.headers.get("Authorization");
+    const isServiceRoleCall = authHeader === `Bearer ${supabaseServiceKey}`;
+
+    if (authHeader && !isServiceRoleCall) {
+      const token = authHeader.replace("Bearer ", "");
+      const { data: sessionRow } = await supabase
+        .from("player_sessions")
+        .select("wallet")
+        .eq("session_token", token)
+        .eq("room_pda", roomPda)
+        .eq("revoked", false)
+        .maybeSingle();
+
+      if (sessionRow && sessionRow.wallet !== forfeitingWallet) {
+        console.error("[forfeit-game] 🚫 IDENTITY_MISMATCH — caller tried to forfeit another player", {
+          requestId,
+          callerWallet: sessionRow.wallet,
+          claimedForfeit: forfeitingWallet,
+          roomPda,
+        });
+        await logSettlement(supabase, {
+          room_pda: roomPda,
+          action: "forfeit",
+          success: false,
+          forfeiting_wallet: forfeitingWallet,
+          error_message: `IDENTITY_MISMATCH: session wallet ${sessionRow.wallet} != body ${forfeitingWallet}`,
+        });
+        return json200({ success: false, error: "IDENTITY_MISMATCH" });
+      }
+      console.log("[forfeit-game] ✅ Identity verified via session token", {
+        requestId,
+        wallet: sessionRow?.wallet ?? "no-session-found",
+      });
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // SECURITY FIX 3: Minimum game duration guard (30 seconds)
+    // Prevents instant-forfeit exploits right after joining.
+    // Skipped for server-to-server auto-forfeit (timeout mode).
+    // ══════════════════════════════════════════════════════════════
+    if (!isServiceRoleCall && body?.mode !== "timeout") {
+      const { data: sessionCheck } = await supabase
+        .from("game_sessions")
+        .select("turn_started_at, status_int, created_at")
+        .eq("room_pda", roomPda)
+        .maybeSingle();
+
+      if (sessionCheck && sessionCheck.status_int === 2 && sessionCheck.turn_started_at) {
+        const gameAgeMs = Date.now() - new Date(sessionCheck.turn_started_at).getTime();
+        const gameAgeSec = gameAgeMs / 1000;
+        if (gameAgeSec < 30) {
+          console.warn("[forfeit-game] 🚫 GAME_TOO_NEW — forfeit blocked", {
+            requestId,
+            gameAgeSec: Math.round(gameAgeSec),
+            roomPda,
+          });
+          return json200({
+            success: false,
+            error: "GAME_TOO_NEW",
+            details: `Cannot forfeit within 30 seconds of game start (${Math.round(gameAgeSec)}s elapsed)`,
+          });
+        }
+      }
+    }
+
     // Idempotency: Check if forfeit already processed (use service role client to bypass RLS)
     const { data: existingSettlement } = await supabase
       .from("settlement_logs")
