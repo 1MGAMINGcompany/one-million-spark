@@ -1,125 +1,111 @@
 
-
-# Instant "Opponent Joined" Notification via Realtime Database Subscription
-
-## Current Behavior
-When a creator is waiting for an opponent, the app polls on-chain data every **5 seconds** to detect status changes. This means:
-- Up to 5 seconds of delay before "Opponent Joined!" appears
-- Wallet in-app browsers often miss the Solana WebSocket updates entirely
-- No push notification when the app is backgrounded
+# Ludo Player Count Selector (2, 3, or 4 Players)
 
 ## What We're Adding
+When you select Ludo as the game type in the Create Room form (for casual, ranked, or private modes), a new dropdown appears letting you choose 2, 3, or 4 players. This value flows through to the on-chain room creation, the database session, and all downstream systems (turn timer, forfeit, elimination).
 
-### Layer 1: Instant In-App Notification (Supabase Realtime)
+## Current State
+- The `maxPlayers` state already exists in `CreateRoom.tsx` (line 83), defaulting to `"2"`
+- It's already passed to `createRoom()` (line 306) and flows to the on-chain instruction
+- **BUT** there is no UI dropdown to change it -- it's always "2"
+- The `game-session-set-settings` edge function hardcodes `game_type: "backgammon"` (line 156) and never sets `max_players`
 
-The `game_sessions` table already has realtime enabled (`ALTER PUBLICATION supabase_realtime ADD TABLE public.game_sessions` exists in migrations). We just need to subscribe to it.
+## Changes
 
-**New hook: `src/hooks/useRoomRealtimeAlert.ts`**
+### 1. `src/pages/CreateRoom.tsx` -- Add Player Count Dropdown for Ludo
 
-A lightweight hook that:
-- Subscribes to `postgres_changes` on `game_sessions` filtered by `room_pda`
-- Detects `status_int` changing from 1 (waiting) to 2 (active) -- meaning opponent joined
-- Fires a callback immediately (no polling delay)
-- Auto-cleans up on unmount
+Show a "Number of Players" dropdown **only when Ludo is selected** (`gameType === "5"`). Options: 2, 3, or 4 players.
 
-**Integration points** -- add the hook to these pages where creators wait:
-- `src/pages/Room.tsx` -- the room lobby where creators wait
-- `src/pages/CreateRoom.tsx` -- has an active room banner section
-- `src/pages/RoomList.tsx` -- shows active rooms
-- `src/components/GlobalActiveRoomBanner.tsx` -- the floating banner
+- Auto-set `maxPlayers` to `"4"` when Ludo is selected (most common)
+- Auto-reset to `"2"` when switching away from Ludo
+- Pass `gameType` name to the edge function so it persists correctly
 
-When the realtime event fires, it triggers the same flow that currently happens on poll: sound, toast, browser notification, and navigate to `/play/:pda`.
+### 2. `supabase/functions/game-session-set-settings/index.ts` -- Accept gameType and maxPlayers
 
-### Layer 2: Browser Push (Service Worker)
+Currently this edge function:
+- Hardcodes `game_type: "backgammon"` on insert (line 156)
+- Never sets `max_players`
 
-The app already has a PWA manifest (`site.webmanifest`) and `showBrowserNotification()` which uses the Notification API. This already works when the tab is open but not focused. For true background push (app fully closed), a service worker is needed -- but that's a separate, larger effort. The current `showBrowserNotification` with `requireInteraction: true` already covers the "tab open but not focused" case.
+We'll update it to:
+- Accept `gameType` and `maxPlayers` from the request body
+- Validate `gameType` against a whitelist (`chess`, `backgammon`, `checkers`, `dominos`, `ludo`)
+- Set `max_players` in both insert and update paths
+- Default `max_players` to 2 for non-Ludo games
+
+### 3. Prize Pool Display Fix
+
+The prize pool calculation already uses `parseInt(maxPlayers)` (line 705), so it will automatically show the correct total (e.g., 0.01 SOL x 4 players = 0.04 SOL).
 
 ## Files Changed
 
 | File | Change |
 |------|--------|
-| `src/hooks/useRoomRealtimeAlert.ts` | **New** -- realtime subscription hook |
-| `src/pages/Room.tsx` | Add `useRoomRealtimeAlert` for instant opponent detection |
-| `src/pages/CreateRoom.tsx` | Add `useRoomRealtimeAlert` to supplement polling |
-| `src/pages/RoomList.tsx` | Add `useRoomRealtimeAlert` to supplement polling |
-| `src/components/GlobalActiveRoomBanner.tsx` | Add `useRoomRealtimeAlert` to supplement polling |
+| `src/pages/CreateRoom.tsx` | Add player count dropdown for Ludo, auto-default logic, pass gameType/maxPlayers to edge function |
+| `supabase/functions/game-session-set-settings/index.ts` | Accept and persist `gameType` + `maxPlayers` fields |
 
 ## Technical Details
 
-### New Hook: `useRoomRealtimeAlert.ts`
+### CreateRoom.tsx UI Addition (after the Game Type selector, ~line 585)
 
-```typescript
-import { useEffect, useRef } from "react";
-import { supabase } from "@/integrations/supabase/client";
-
-interface UseRoomRealtimeAlertOptions {
-  roomPda: string | null;
-  enabled?: boolean;
-  onOpponentJoined: (session: any) => void;
-}
-
-export function useRoomRealtimeAlert({
-  roomPda,
-  enabled = true,
-  onOpponentJoined,
-}: UseRoomRealtimeAlertOptions) {
-  const firedRef = useRef(false);
-
-  useEffect(() => {
-    if (!roomPda || !enabled) return;
-    firedRef.current = false;
-
-    const channel = supabase
-      .channel(`room-alert-${roomPda}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "game_sessions",
-          filter: `room_pda=eq.${roomPda}`,
-        },
-        (payload) => {
-          const newRow = payload.new as any;
-          const oldRow = payload.old as any;
-
-          // Detect waiting -> active transition
-          if (
-            !firedRef.current &&
-            oldRow?.status_int === 1 &&
-            newRow?.status_int === 2
-          ) {
-            firedRef.current = true;
-            onOpponentJoined(newRow);
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [roomPda, enabled, onOpponentJoined]);
-}
+```tsx
+{/* Player Count - Only for Ludo */}
+{gameType === "5" && (
+  <div className="space-y-1.5">
+    <Label className="text-sm">Number of Players</Label>
+    <Select value={maxPlayers} onValueChange={setMaxPlayers}>
+      <SelectTrigger className="h-9">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="2">2 Players</SelectItem>
+        <SelectItem value="3">3 Players</SelectItem>
+        <SelectItem value="4">4 Players</SelectItem>
+      </SelectContent>
+    </Select>
+    <p className="text-xs text-muted-foreground">
+      Ludo supports 2-4 players. 3+ player games use elimination rules.
+    </p>
+  </div>
+)}
 ```
 
-### Integration in Room.tsx, CreateRoom.tsx, RoomList.tsx, GlobalActiveRoomBanner.tsx
+### Auto-default logic (new useEffect)
 
-Each page already has "opponent joined" handling (sound + toast + navigate). We add the hook pointing to the same handler, so the realtime event triggers the exact same UX -- just instantly instead of after a 5-second poll cycle.
-
-```typescript
-// Example in Room.tsx
-useRoomRealtimeAlert({
-  roomPda: activeRoom?.pda ?? null,
-  enabled: !!activeRoom && isOpenStatus(activeRoom.status),
-  onOpponentJoined: () => {
-    // Same logic already in the polling handler:
-    AudioManager.playPlayerJoined();
-    showBrowserNotification("Opponent Joined!", "Your game is ready!");
-    toast({ title: "Opponent joined!" });
-    navigate(`/play/${activeRoom.pda}`);
-  },
-});
+```tsx
+useEffect(() => {
+  if (gameType === "5") {
+    // Default Ludo to 4 players (unless rematch overrides)
+    if (!isRematch) setMaxPlayers("4");
+  } else {
+    // All other games are 2 players
+    setMaxPlayers("2");
+  }
+}, [gameType, isRematch]);
 ```
 
-The existing polling continues as a fallback (in case realtime misses an event), but the realtime subscription will fire first in nearly all cases, cutting the notification delay from ~5 seconds to under 500ms.
+### Edge Function Update -- game-session-set-settings
+
+Accept two new optional fields in the request body:
+- `gameType` (string) -- validated against whitelist
+- `maxPlayers` (number) -- validated 2-4
+
+Both the insert and update paths will include these fields:
+
+```typescript
+// In the insert path (new session):
+game_type: validGameType,  // Instead of hardcoded "backgammon"
+max_players: validMaxPlayers,  // Instead of default 2
+
+// In the update path (existing session):
+game_type: validGameType,
+max_players: validMaxPlayers,
+```
+
+### Downstream Compatibility
+
+These systems already handle `max_players > 2` correctly:
+- **Turn timer** (`useTurnTimer`): Uses `turn_time_seconds` from DB, player-count agnostic
+- **Forfeit** (`forfeit-game`): Checks `max_players` to decide FORFEIT vs ELIMINATE
+- **Turn timeout** (`maybe_apply_turn_timeout`): Skips eliminated players, uses `participants` array
+- **Settlement** (`settle-game`): Reads `max_players` from on-chain data
+- **Room activation** (`maybe_activate_game_session`): Uses `max_players` to determine required count
