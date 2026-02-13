@@ -27,15 +27,48 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const { roomPda, wallet, moveData, clientMoveId } = await req.json();
+    const { roomPda, wallet: bodyWallet, moveData, clientMoveId } = await req.json();
 
     // Basic field validation
-    if (!roomPda || !wallet || !moveData) {
+    if (!roomPda || !bodyWallet || !moveData) {
       console.error("[submit-move] Missing required fields");
       return new Response(
         JSON.stringify({ success: false, error: "missing_fields" }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+    }
+
+    // ── Session-based identity verification ──
+    // If a valid session token is present, derive wallet from DB and override body wallet.
+    let wallet = bodyWallet;
+    const authHeader = req.headers.get("Authorization");
+    if (authHeader) {
+      const token = authHeader.replace("Bearer ", "");
+      // Session tokens are 64-char hex strings; skip anon/service keys
+      if (token.length === 64 && /^[0-9a-f]{64}$/.test(token)) {
+        const { data: sessionRow } = await supabase
+          .from("player_sessions")
+          .select("wallet")
+          .eq("session_token", token)
+          .eq("room_pda", roomPda)
+          .eq("revoked", false)
+          .maybeSingle();
+
+        if (sessionRow) {
+          if (sessionRow.wallet !== bodyWallet) {
+            console.warn("[submit-move] IDENTITY_MISMATCH", {
+              sessionWallet: sessionRow.wallet.slice(0, 8),
+              bodyWallet: bodyWallet.slice(0, 8),
+            });
+            return new Response(
+              JSON.stringify({ success: false, error: "IDENTITY_MISMATCH" }),
+              { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          }
+          // Override with verified wallet
+          wallet = sessionRow.wallet;
+        }
+      }
     }
 
     // Log snapshot for debugging

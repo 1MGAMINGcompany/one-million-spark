@@ -50,7 +50,7 @@ serve(async (req) => {
     const roomPda = payload?.roomPda;
     const turnTimeSecondsRaw = payload?.turnTimeSeconds;
     const mode = payload?.mode as Mode;
-    const creatorWallet = payload?.creatorWallet;
+    let creatorWallet = payload?.creatorWallet;
     const rawGameType = payload?.gameType;
     const rawMaxPlayers = payload?.maxPlayers;
 
@@ -84,13 +84,6 @@ serve(async (req) => {
       return json(400, { ok: false, error: "creatorWallet_required" });
     }
 
-    console.log("[game-session-set-settings] Processing request:", {
-      roomPda: roomPda.slice(0, 8),
-      creatorWallet: creatorWallet.slice(0, 8),
-      turnTimeSeconds,
-      mode,
-    });
-
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
@@ -101,6 +94,36 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, serviceRoleKey, {
       auth: { persistSession: false },
+    });
+
+    // ── Session-based identity verification ──
+    const authHeader = req.headers.get("Authorization");
+    if (authHeader) {
+      const token = authHeader.replace("Bearer ", "");
+      if (token.length === 64 && /^[0-9a-f]{64}$/.test(token)) {
+        const { data: sessionRow } = await supabase
+          .from("player_sessions")
+          .select("wallet")
+          .eq("session_token", token)
+          .eq("room_pda", roomPda)
+          .eq("revoked", false)
+          .maybeSingle();
+
+        if (sessionRow) {
+          if (sessionRow.wallet !== creatorWallet) {
+            console.warn("[game-session-set-settings] IDENTITY_MISMATCH");
+            return json(403, { ok: false, error: "IDENTITY_MISMATCH" });
+          }
+          creatorWallet = sessionRow.wallet;
+        }
+      }
+    }
+
+    console.log("[game-session-set-settings] Processing request:", {
+      roomPda: roomPda.slice(0, 8),
+      creatorWallet: creatorWallet.slice(0, 8),
+      turnTimeSeconds,
+      mode,
     });
 
     // Fetch session to check if it exists

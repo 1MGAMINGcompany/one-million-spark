@@ -167,9 +167,9 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const { roomPda, callerWallet }: RecoverRequest = await req.json();
+    const { roomPda, callerWallet: bodyCallerWallet }: RecoverRequest = await req.json();
 
-    if (!roomPda || !callerWallet) {
+    if (!roomPda || !bodyCallerWallet) {
       return new Response(
         JSON.stringify({ error: "Missing roomPda or callerWallet" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -185,12 +185,39 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    console.log(`[recover-funds] Recovery request for room ${roomPda} by ${callerWallet}`);
-
     // Initialize clients
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
+
+    // ── Session-based identity verification ──
+    let callerWallet = bodyCallerWallet;
+    const authHeader = req.headers.get("Authorization");
+    if (authHeader) {
+      const token = authHeader.replace("Bearer ", "");
+      if (token.length === 64 && /^[0-9a-f]{64}$/.test(token)) {
+        const { data: sessionRow } = await supabase
+          .from("player_sessions")
+          .select("wallet")
+          .eq("session_token", token)
+          .eq("room_pda", roomPda)
+          .eq("revoked", false)
+          .maybeSingle();
+
+        if (sessionRow) {
+          if (sessionRow.wallet !== bodyCallerWallet) {
+            console.warn("[recover-funds] IDENTITY_MISMATCH");
+            return new Response(
+              JSON.stringify({ status: "error", message: "IDENTITY_MISMATCH" }),
+              { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          }
+          callerWallet = sessionRow.wallet;
+        }
+      }
+    }
+
+    console.log(`[recover-funds] Recovery request for room ${roomPda} by ${callerWallet}`);
 
     const rpcUrl = Deno.env.get("VITE_SOLANA_RPC_URL") || "https://api.mainnet-beta.solana.com";
     const connection = new Connection(rpcUrl, "confirmed");

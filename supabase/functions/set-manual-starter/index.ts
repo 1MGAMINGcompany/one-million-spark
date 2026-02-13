@@ -13,15 +13,9 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const { roomPda, starterWallet, callerWallet } = await req.json();
+    const { roomPda, starterWallet, callerWallet: bodyCallerWallet } = await req.json();
     
-    console.log("[set-manual-starter] Request:", { 
-      roomPda: roomPda?.slice(0, 12), 
-      starterWallet: starterWallet?.slice(0, 12), 
-      callerWallet: callerWallet?.slice(0, 12) 
-    });
-    
-    if (!roomPda || !starterWallet || !callerWallet) {
+    if (!roomPda || !starterWallet || !bodyCallerWallet) {
       return new Response(
         JSON.stringify({ error: "Missing required params: roomPda, starterWallet, callerWallet" }), 
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -32,6 +26,39 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
+
+    // ── Session-based identity verification ──
+    let callerWallet = bodyCallerWallet;
+    const authHeader = req.headers.get("Authorization");
+    if (authHeader) {
+      const token = authHeader.replace("Bearer ", "");
+      if (token.length === 64 && /^[0-9a-f]{64}$/.test(token)) {
+        const { data: sessionRow } = await supabase
+          .from("player_sessions")
+          .select("wallet")
+          .eq("session_token", token)
+          .eq("room_pda", roomPda)
+          .eq("revoked", false)
+          .maybeSingle();
+
+        if (sessionRow) {
+          if (sessionRow.wallet !== bodyCallerWallet) {
+            console.warn("[set-manual-starter] IDENTITY_MISMATCH");
+            return new Response(
+              JSON.stringify({ error: "IDENTITY_MISMATCH" }),
+              { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+          }
+          callerWallet = sessionRow.wallet;
+        }
+      }
+    }
+
+    console.log("[set-manual-starter] Request:", { 
+      roomPda: roomPda?.slice(0, 12), 
+      starterWallet: starterWallet?.slice(0, 12), 
+      callerWallet: callerWallet?.slice(0, 12) 
+    });
 
     // Fetch game session to verify caller is a participant
     const { data: session, error: fetchErr } = await supabase
