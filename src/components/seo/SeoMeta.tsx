@@ -1,24 +1,28 @@
 import { useEffect } from "react";
+import { useLocation } from "react-router-dom";
 
 const SITE_URL = "https://1mgaming.com";
 
 interface SeoMetaProps {
   title: string;
   description: string;
-  path: string;
+  path?: string;
   ogType?: string;
   ogImage?: string;
 }
 
 /**
  * Sets document.title, meta description, canonical, OG + Twitter tags.
- * Safe for Vite SPA — no external deps.
+ * Canonical and og:url are derived from the current React Router location.
  */
 export function useSeoMeta({ title, description, path, ogType = "website", ogImage }: SeoMetaProps) {
+  const location = useLocation();
+
   useEffect(() => {
-    document.title = title;
-    const url = `${SITE_URL}${path}`;
+    const canonicalUrl = `${SITE_URL}${path ?? location.pathname}`;
     const image = ogImage || `${SITE_URL}/images/og-logo.png`;
+
+    document.title = title;
 
     const setMeta = (attr: string, key: string, content: string) => {
       let el = document.querySelector(`meta[${attr}="${key}"]`) as HTMLMetaElement | null;
@@ -30,23 +34,21 @@ export function useSeoMeta({ title, description, path, ogType = "website", ogIma
       el.setAttribute("content", content);
     };
 
-    const setLink = (rel: string, href: string) => {
-      let el = document.querySelector(`link[rel="${rel}"]`) as HTMLLinkElement | null;
-      if (!el) {
-        el = document.createElement("link");
-        el.setAttribute("rel", rel);
-        document.head.appendChild(el);
-      }
-      el.setAttribute("href", href);
-    };
+    // Canonical link
+    let link = document.querySelector("link[rel='canonical']") as HTMLLinkElement | null;
+    if (!link) {
+      link = document.createElement("link");
+      link.setAttribute("rel", "canonical");
+      document.head.appendChild(link);
+    }
+    link.setAttribute("href", canonicalUrl);
 
     setMeta("name", "description", description);
-    setLink("canonical", url);
 
     // OG
     setMeta("property", "og:title", title);
     setMeta("property", "og:description", description);
-    setMeta("property", "og:url", url);
+    setMeta("property", "og:url", canonicalUrl);
     setMeta("property", "og:type", ogType);
     setMeta("property", "og:image", image);
 
@@ -55,7 +57,7 @@ export function useSeoMeta({ title, description, path, ogType = "website", ogIma
     setMeta("name", "twitter:title", title);
     setMeta("name", "twitter:description", description);
     setMeta("name", "twitter:image", image);
-  }, [title, description, path, ogType, ogImage]);
+  }, [title, description, path, ogType, ogImage, location.pathname]);
 }
 
 export default useSeoMeta;
