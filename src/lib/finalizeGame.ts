@@ -170,7 +170,9 @@ async function finalizeViaEdgeFunction(
   });
   
   try {
+    const sessionToken = localStorage.getItem(`session_token_${roomPda}`);
     const { data, error } = await supabase.functions.invoke('forfeit-game', {
+      headers: sessionToken ? { "x-session-token": sessionToken } : undefined,
       body: {
         roomPda,
         forfeitingWallet: loserWallet,

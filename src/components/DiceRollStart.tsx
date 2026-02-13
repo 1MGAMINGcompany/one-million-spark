@@ -309,7 +309,9 @@ export function DiceRollStart({
     
     try {
       // Call edge function to safely set starter (validates caller is participant)
+      const sessionToken = localStorage.getItem(`session_token_${roomPda}`);
       const { error: fnError } = await supabase.functions.invoke('set-manual-starter', {
+        headers: sessionToken ? { "x-session-token": sessionToken } : undefined,
         body: { roomPda, starterWallet, callerWallet: myWallet }
       });
       

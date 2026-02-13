@@ -23,7 +23,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
+    "authorization, x-client-info, apikey, content-type, x-session-token",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
@@ -97,14 +97,13 @@ serve(async (req) => {
     });
 
     // ── Session-based identity verification ──
-    const authHeader = req.headers.get("Authorization");
-    if (authHeader) {
-      const token = authHeader.replace("Bearer ", "");
-      if (token.length === 64 && /^[0-9a-f]{64}$/.test(token)) {
+    const sessionToken = req.headers.get("x-session-token");
+    if (sessionToken && sessionToken.length === 64 && /^[0-9a-f]{64}$/.test(sessionToken)) {
+      {
         const { data: sessionRow } = await supabase
           .from("player_sessions")
           .select("wallet")
-          .eq("session_token", token)
+          .eq("session_token", sessionToken)
           .eq("room_pda", roomPda)
           .eq("revoked", false)
           .maybeSingle();

@@ -61,7 +61,9 @@ export function RecoverFundsButton({ roomPda, onRecovered, className }: RecoverF
     setResult(null);
 
     try {
+      const sessionToken = localStorage.getItem(`session_token_${roomPda}`);
       const { data, error } = await supabase.functions.invoke("recover-funds", {
+        headers: sessionToken ? { "x-session-token": sessionToken } : undefined,
         body: {
           roomPda,
           callerWallet: publicKey.toBase58(),

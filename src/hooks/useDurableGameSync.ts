@@ -124,14 +124,16 @@ export function useDurableGameSync({
         clientMoveId: clientMoveId.slice(0, 8),
       });
       
+      // Attach session token for identity verification
+      const sessionToken = localStorage.getItem(`session_token_${roomPda}`);
+      
       const { data, error } = await supabase.functions.invoke("submit-move", {
+        headers: sessionToken ? { "x-session-token": sessionToken } : undefined,
         body: {
           roomPda,
           wallet,
           moveData,
           clientMoveId,
-          // NO turnNumber - server assigns
-          // NO prevHash - server computes chain
         },
       });
 
