@@ -105,6 +105,7 @@ export interface RoomDisplay {
   winner: string | null;
   createdAt: Date;
   prizePoolSol: number;
+  mode?: 'casual' | 'ranked'; // DB-sourced mode from enrichment
 }
 
 // ============================================
