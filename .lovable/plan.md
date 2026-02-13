@@ -1,101 +1,69 @@
 
 
-# Hardening All Edge Functions with Session-Based Identity
+# Wire Session Token to Edge Function Calls
 
-## Current Security Status
+## The Gap
 
-After the forfeit-game patch, here is the status of every state-changing edge function:
+The identity hardening in `submit-move` (and other edge functions) checks for a 64-character hex session token in the `Authorization` header. However, the client (`useDurableGameSync.ts`) uses `supabase.functions.invoke()` which only sends the **anon key** (a JWT) -- so the identity check is never triggered.
 
-| Function | Status | Risk | Issue |
-|---|---|---|---|
-| forfeit-game | PATCHED | - | Identity check + 30s cooldown added |
-| submit-move | VULNERABLE | HIGH | Trusts `wallet` from request body -- attacker could submit moves as another player |
-| settle-game | SAFE | - | Derives winner from on-chain data + game_state, no body wallet trusted for identity |
-| settle-draw | SAFE | - | Uses only on-chain room data, no body wallet for identity |
-| recover-funds | LOW RISK | LOW | `callerWallet` from body only controls who receives a cancel_room unsigned tx -- actual on-chain tx still requires wallet signature |
-| game-session-set-settings | LOW RISK | LOW | `creatorWallet` compared against DB player1_wallet, and only works pre-game. No funds at risk |
-| set-manual-starter | LOW RISK | LOW | `callerWallet` checked against DB participants. Only affects who goes first, pre-game only |
-| ranked-accept | SAFE | - | Validation-only stub, no DB writes |
+The session token IS stored in `localStorage` as `session_token_{roomPda}`, but it's never attached to the edge function calls.
 
-## What Needs Fixing
+## Fix
 
-### Priority 1: submit-move (HIGH risk)
+Pass the session token as a **custom header** (not replacing the Authorization header, which Supabase needs for routing). The edge function already handles this -- the token regex check (`/^[0-9a-f]{64}$/`) will match.
 
-This is the only remaining critical vulnerability. The edge function accepts `wallet` from the request body and passes it directly to the `submit_game_move` RPC. An attacker could:
-- Submit moves on behalf of another player
-- Manipulate game state to force a win
+### Option: Use a custom header instead
 
-The RPC does check `current_turn_wallet`, but an attacker could time their call during the victim's turn to submit a bad move.
+Since the `Authorization` header is controlled by the Supabase client (and contains the anon key), we should use a dedicated custom header like `x-session-token` and update both the client and all hardened edge functions to read from it.
 
-**Fix:** Add session token verification identical to the forfeit-game pattern. The client already sends an Authorization header via the Supabase client (the anon key). We add a check: if a session token is provided, derive the wallet from `player_sessions` and reject mismatches.
+### Changes
 
-### Priority 2: recover-funds, game-session-set-settings, set-manual-starter (LOW risk)
+**1. Update `useDurableGameSync.ts`** -- pass session token as custom header
 
-These are lower priority because:
-- `recover-funds`: The callerWallet is only used to check if they're the creator for cancel_room, and the actual cancel requires the user's wallet to sign the Solana transaction client-side
-- `game-session-set-settings`: Only works before game starts, compares against DB, no funds at risk
-- `set-manual-starter`: Only affects first-move order, pre-game only, validated against DB participants
+In the `submitMove` function, read the session token from localStorage and pass it:
 
-Adding session checks to these would add defense-in-depth but is not exploitable for fund theft.
+```
+const sessionToken = localStorage.getItem(`session_token_${roomPda}`);
 
-## Implementation Plan
+const { data, error } = await supabase.functions.invoke("submit-move", {
+  headers: sessionToken ? { "x-session-token": sessionToken } : undefined,
+  body: { roomPda, wallet, moveData, clientMoveId },
+});
+```
 
-### Step 1: Harden submit-move edge function
+**2. Update all 4 hardened edge functions** to read from `x-session-token` header instead of (or in addition to) `Authorization`
 
-Add the same identity verification pattern used in forfeit-game:
+In `submit-move`, `forfeit-game`, `recover-funds`, `game-session-set-settings`, `set-manual-starter`:
 
-```text
-// After parsing body, before calling RPC:
-const authHeader = req.headers.get("Authorization");
-if (authHeader) {
-  const token = authHeader.replace("Bearer ", "");
-  // Skip if it's the anon key (not a session token)
-  if (token.length === 64) {  // Session tokens are 64-char hex
-    const { data: sessionRow } = await supabase
-      .from("player_sessions")
-      .select("wallet")
-      .eq("session_token", token)
-      .eq("room_pda", roomPda)
-      .eq("revoked", false)
-      .maybeSingle();
-
-    if (sessionRow && sessionRow.wallet !== wallet) {
-      return error response: IDENTITY_MISMATCH
-    }
-    // If session found, override wallet with verified one
-    if (sessionRow) {
-      wallet = sessionRow.wallet;
-    }
-  }
+```
+// Read session token from dedicated header
+const sessionToken = req.headers.get("x-session-token");
+if (sessionToken && sessionToken.length === 64 && /^[0-9a-f]{64}$/.test(sessionToken)) {
+  // ... existing identity verification logic using sessionToken
 }
 ```
 
-**Key design choice:** When a valid session token is found, we OVERRIDE the body wallet with the session-derived wallet. This makes the body wallet irrelevant for identity.
+**3. Update client-side callers** for other edge functions
 
-### Step 2 (Defense-in-depth): Add session checks to lower-risk functions
-
-Apply the same pattern to `recover-funds`, `game-session-set-settings`, and `set-manual-starter`. These don't put funds at direct risk, but closing them prevents any future exploitation if the game logic changes.
+Search for all `supabase.functions.invoke("forfeit-game")`, `invoke("recover-funds")`, etc. and wire the session token header the same way.
 
 ## Files Changed
 
-| File | Change | Risk |
-|---|---|---|
-| supabase/functions/submit-move/index.ts | Add session identity verification, override wallet from session | Low -- additive check, falls through gracefully if no session token |
-| supabase/functions/recover-funds/index.ts | Add session identity verification for callerWallet | Very low -- existing on-chain signature requirement unchanged |
-| supabase/functions/game-session-set-settings/index.ts | Add session identity verification for creatorWallet | Very low -- existing DB check unchanged |
-| supabase/functions/set-manual-starter/index.ts | Add session identity verification for callerWallet | Very low -- existing DB participant check unchanged |
+| File | Change |
+|------|--------|
+| `src/hooks/useDurableGameSync.ts` | Read `session_token_{roomPda}` from localStorage, pass as `x-session-token` header |
+| `supabase/functions/submit-move/index.ts` | Read token from `x-session-token` header instead of Authorization |
+| `supabase/functions/forfeit-game/index.ts` | Same header change |
+| `supabase/functions/recover-funds/index.ts` | Same header change |
+| `supabase/functions/game-session-set-settings/index.ts` | Same header change |
+| `supabase/functions/set-manual-starter/index.ts` | Same header change |
+| Client callers for forfeit/recover/settings | Add `x-session-token` header to invoke calls |
 
-## What Will NOT Break
+## Risk
 
-- All functions fall through gracefully if no session token is present (backward compatible)
-- The Supabase client sends the anon key as Authorization by default -- this is not a 64-char hex string, so it won't trigger the session check
-- Server-to-server calls use the service role key, which is also not a session token
-- The `submit_game_move` RPC's existing `current_turn_wallet` check remains as a second layer of defense
-- settle-game, settle-draw, and ranked-accept are NOT modified (already safe)
+Low -- all edge functions still fall through gracefully if no session token is provided. The custom header approach avoids interfering with Supabase's own Authorization header. Existing gameplay is unaffected because the body wallet is still sent as a fallback.
 
 ## Testing
 
-1. Play a normal ranked game end-to-end -- moves should submit normally
-2. Verify forfeit still works for the actual player
-3. Attempt to call submit-move with a wallet that doesn't match the session -- should get IDENTITY_MISMATCH
+After this change, the edge function logs should show the session verification path being hit during normal gameplay, confirming the identity guard is actually active.
 
