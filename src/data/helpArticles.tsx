@@ -444,4 +444,88 @@ export const helpArticles: HelpArticleData[] = [
       </article>
     ),
   },
+  {
+    slug: "server-enforced-turn-timeouts-supabase-solana",
+    title: "Server-Enforced Turn Timeouts with Supabase + Solana (1MGaming Engineering Notes)",
+    metaDescription: "How 1MGaming built server-enforced turn timeouts using Supabase RPCs and Solana settlement to prevent stalling and ensure fair play in multiplayer games.",
+    keywords: ["turn timeout Solana", "Supabase RPC gaming", "server-side timeout enforcement", "auto forfeit blockchain"],
+    cardDescription: "Engineering deep-dive: how we enforce turn timeouts server-side with Supabase RPC + Solana settlement.",
+    content: () => (
+      <article className="prose prose-invert max-w-none">
+        <h1 className="text-3xl md:text-4xl font-bold text-primary mb-6">Server-Enforced Turn Timeouts with Supabase + Solana</h1>
+
+        <p className="text-foreground/80 text-lg leading-relaxed">
+          When you build a real-money multiplayer game, turn timers are not a nice-to-have — they are critical infrastructure. A player who closes their browser, loses connectivity, or simply walks away should not be able to hold their opponent hostage indefinitely. At 1MGAMING, we learned this the hard way and built a server-authoritative timeout system that works even when both clients are offline.
+        </p>
+
+        <h2 className="text-2xl font-semibold text-primary/90 mt-10 mb-4">The Problem: Client-Only Timers Fail</h2>
+        <p className="text-foreground/70 leading-relaxed">
+          Our first implementation used client-side countdown timers. When a player's clock hit zero, their browser would send a "timeout" event to the server. This worked in testing but failed catastrophically in production for one simple reason: if the active player closes their tab, there is no client left to fire the timeout event.
+        </p>
+        <p className="text-foreground/70 leading-relaxed">
+          Mobile made things worse. iOS aggressively suspends background tabs, and Android kills WebSocket connections after a few minutes of inactivity. A player could switch to another app, and their opponent would stare at a frozen board with a timer that never reaches zero. With real SOL on the line, this was unacceptable.
+        </p>
+        <p className="text-foreground/70 leading-relaxed">
+          We also considered having the opponent's client enforce the timeout, but this opens the door to cheating. A malicious client could send fake timeout events or manipulate timestamps. For a platform where money is at stake, the server must be the single source of truth.
+        </p>
+
+        <h2 className="text-2xl font-semibold text-primary/90 mt-10 mb-4">The Solution: Database-Authoritative Timeout RPC</h2>
+        <p className="text-foreground/70 leading-relaxed">
+          We moved all timeout logic into a PostgreSQL RPC function called <code>maybe_apply_turn_timeout</code>. This function runs inside the database itself — no client involvement needed. Here is what it does:
+        </p>
+        <ol className="list-decimal list-inside space-y-3 text-foreground/70">
+          <li><strong>Check expiry:</strong> Compare <code>turn_started_at + turn_time_seconds</code> against <code>now()</code>. If the deadline has not passed, exit immediately.</li>
+          <li><strong>Record a timeout move:</strong> Insert a <code>turn_timeout</code> entry into the <code>game_moves</code> table with the stalling player's wallet. This creates an auditable on-chain-compatible record.</li>
+          <li><strong>Increment strikes:</strong> Each player has a strike counter. A timeout adds one strike. The counter resets to zero whenever the player makes a legitimate move (dice roll, piece move, turn end).</li>
+          <li><strong>Advance the turn:</strong> Update <code>current_turn_wallet</code> and reset <code>turn_started_at</code> so the opponent can continue playing.</li>
+          <li><strong>Check for auto-forfeit:</strong> If a player accumulates 3 consecutive strikes, the RPC returns <code>action: "auto_forfeit"</code> and marks the game as over. In Ludo (3–4 players), 3 strikes trigger elimination instead of a full forfeit.</li>
+        </ol>
+        <p className="text-foreground/70 leading-relaxed">
+          The function uses <code>FOR UPDATE</code> row locking to prevent race conditions. Two polling clients hitting the RPC simultaneously will not double-apply a timeout — only the first call succeeds, and the second sees the already-advanced turn.
+        </p>
+
+        <h2 className="text-2xl font-semibold text-primary/90 mt-10 mb-4">Server-Side Polling: The Safety Net</h2>
+        <p className="text-foreground/70 leading-relaxed">
+          The RPC exists, but something still needs to call it. We cannot rely on either player's browser being open. Our solution: the <code>game-session-get</code> edge function — which clients already poll every few seconds to fetch game state — also calls <code>maybe_apply_turn_timeout</code> for any active match (<code>status_int = 2</code>).
+        </p>
+        <p className="text-foreground/70 leading-relaxed">
+          This means timeout enforcement piggybacks on existing polling infrastructure. When either player's client fetches the game state, the server checks if a timeout should fire. If both players are offline, the next poll from either side catches up. There is no dedicated cron job or separate service — the enforcement is embedded in the read path.
+        </p>
+        <p className="text-foreground/70 leading-relaxed">
+          We added a safety guard: a timeout will not fire if the most recent move in <code>game_moves</code> is less than 2 seconds old. This prevents edge cases where a player submits a move at the exact deadline and gets unfairly penalized due to network latency.
+        </p>
+
+        <h2 className="text-2xl font-semibold text-primary/90 mt-10 mb-4">Auto-Settlement on Solana</h2>
+        <p className="text-foreground/70 leading-relaxed">
+          When the RPC returns <code>action: "auto_forfeit"</code>, the frontend triggers the same settlement flow as a normal game-over: the winner's payout is calculated, a Solana transaction is built, and funds move from the game vault to the winner's wallet. The forfeiting player's SOL goes to the opponent, minus the platform fee.
+        </p>
+        <p className="text-foreground/70 leading-relaxed">
+          Because the timeout and forfeit are recorded in <code>game_moves</code>, any dispute can be resolved by replaying the move chain. Every timeout event includes a timestamp, the stalling wallet, and the strike count at that moment. This creates a transparent, verifiable audit trail.
+        </p>
+
+        <h2 className="text-2xl font-semibold text-primary/90 mt-10 mb-4">What We Learned</h2>
+        <ul className="list-disc list-inside space-y-3 text-foreground/70">
+          <li><strong>Never trust the client for enforcement.</strong> Clients are great for displaying countdowns and creating urgency, but the actual deadline must be checked server-side. A client-side timer is a UX feature, not a security feature.</li>
+          <li><strong>Piggyback on existing infrastructure.</strong> Adding a dedicated timeout service would have meant another thing to monitor, scale, and debug. By embedding the check in the polling endpoint, we got enforcement for free with zero additional operational overhead.</li>
+          <li><strong>Consecutive strikes, not cumulative.</strong> Penalizing total timeouts across a match would punish players who reconnect and continue playing. The consecutive model rewards recovery — if you come back and make a move, your slate is wiped clean.</li>
+          <li><strong>Row-level locking matters.</strong> Without <code>FOR UPDATE</code>, we saw duplicate timeout moves during load testing when two polling requests arrived simultaneously. PostgreSQL's locking primitives are essential for correctness in concurrent systems.</li>
+          <li><strong>The 2-second grace period saves real disputes.</strong> Network latency between a client submitting a move and the database recording it can be 500ms–2s. The grace period eliminated a class of "I moved in time but got penalized" complaints.</li>
+        </ul>
+
+        <h2 className="text-2xl font-semibold text-primary/90 mt-10 mb-4">Try It Yourself</h2>
+        <p className="text-foreground/70 leading-relaxed">
+          You can experience the timeout system firsthand by creating a match on <Link to="/" className="text-primary hover:text-primary/80">1MGAMING</Link>. Connect your <Link to="/help/connect-phantom-wallet-1mgaming" className="text-primary hover:text-primary/80">Phantom</Link>, <Link to="/help/connect-solflare-wallet-1mgaming" className="text-primary hover:text-primary/80">Solflare</Link>, or <Link to="/help/connect-backpack-wallet-1mgaming" className="text-primary hover:text-primary/80">Backpack</Link> wallet and start a game. If your opponent stalls, the server handles it — no action needed from you.
+        </p>
+
+        <div className="mt-10 pt-6 border-t border-border">
+          <p className="text-foreground/60 text-sm mb-2">
+            Also published on: <a href="https://dev.to/" target="_blank" rel="noopener noreferrer" className="text-primary hover:text-primary/80">Dev.to</a> (link will be updated)
+          </p>
+          <p className="text-foreground/60 text-sm">
+            Related guides: <Link to="/help" className="text-primary hover:text-primary/80">Help Center</Link> · <Link to="/help/connect-phantom-wallet-1mgaming" className="text-primary hover:text-primary/80">Connect Phantom Wallet</Link> · <Link to="/help/solana-skill-games-not-luck" className="text-primary hover:text-primary/80">Skill Games — Skill Not Luck</Link>
+          </p>
+        </div>
+      </article>
+    ),
+  },
 ];
