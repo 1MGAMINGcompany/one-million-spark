@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 
-const SITE_URL = "https://one-million-spark.lovable.app";
+const SITE_URL = "https://1mgaming.com";
 
 interface SeoMetaProps {
   title: string;

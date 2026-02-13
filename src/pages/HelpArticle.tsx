@@ -15,7 +15,7 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 
-const SITE_URL = "https://one-million-spark.lovable.app";
+const SITE_URL = "https://1mgaming.com";
 
 const HelpArticle = () => {
   const { slug } = useParams<{ slug: string }>();
