@@ -30,6 +30,7 @@ import { useTurnTimer, DEFAULT_RANKED_TURN_TIME } from "@/hooks/useTurnTimer";
 import { useStartRoll } from "@/hooks/useStartRoll";
 import { useTxLock } from "@/contexts/TxLockContext";
 import { useDurableGameSync, GameMove } from "@/hooks/useDurableGameSync";
+import { useAutoSettlement } from "@/hooks/useAutoSettlement";
 import { DiceRollStart } from "@/components/DiceRollStart";
 import TurnStatusHeader from "@/components/TurnStatusHeader";
 import TurnHistoryDrawer from "@/components/TurnHistoryDrawer";
@@ -235,6 +236,7 @@ const BackgammonGame = () => {
   useEffect(() => { currentPlayerRef.current = currentPlayer; }, [currentPlayer]);
   useEffect(() => { myRoleRef.current = myRole; }, [myRole]);
   useEffect(() => { currentTurnWalletRef.current = currentTurnWallet; }, [currentTurnWallet]);
+  const diceRolledThisTurnRef = useRef(false);
   
   // Ref for forfeit function (set after useForfeit hook)
   const forfeitFnRef = useRef<(() => Promise<void>) | null>(null);
@@ -343,6 +345,8 @@ const BackgammonGame = () => {
       setGameStatus(t('game.matchEnded') || "Match ended - verifying result...");
     })();
   }, [gameOver, roomPda, address, t, play]);
+
+  
 
   // === EDGE FUNCTION HEALTH PROBE (DIAGNOSTIC ONLY) ===
   useEffect(() => {
@@ -462,6 +466,14 @@ const BackgammonGame = () => {
   // Room mode hook - fetches from DB for Player 2 who doesn't have localStorage data
   // Must be called before any effects that use roomMode
   const { mode: roomMode, isRanked: isRankedGame, isLoaded: modeLoaded } = useRoomMode(roomPda);
+
+  // === AUTO-SETTLEMENT (on-chain payout when game ends) ===
+  const autoSettlement = useAutoSettlement({
+    roomPda,
+    winner: winnerWallet,
+    reason: "gameover",
+    isRanked: isRankedGame,
+  });
 
   const { loadSession: loadBackgammonSession, saveSession: saveBackgammonSession, finishSession: finishBackgammonSession } = useGameSessionPersistence({
     roomPda: roomPda,
@@ -887,6 +899,7 @@ const BackgammonGame = () => {
             }
           }
           
+          diceRolledThisTurnRef.current = false;
           setCurrentTurnWallet(freshTurnWallet);
           // Reset timeout debounce since turn actually changed
           timeoutFiredRef.current = false;
@@ -894,10 +907,8 @@ const BackgammonGame = () => {
           // FIX: Explicitly reset the turn timer when polling detects turn change
           turnTimer.resetTimer();
           
-          // Only clear dice if the player hasn't already rolled for their new turn
-          // (polling can fire after the player already rolled, causing double-roll prompt)
-          const pollingTurnToMe = isSameWallet(freshTurnWallet, address);
-          if (!pollingTurnToMe || dice.length === 0) {
+          // Only clear dice if we haven't rolled this turn yet
+          if (!diceRolledThisTurnRef.current) {
             setDice([]);
             setRemainingMoves([]);
           }
@@ -1427,8 +1438,8 @@ const BackgammonGame = () => {
           const nextRole = isSameWallet(nextWallet, roomPlayersRef.current[0]) ? "player" : "ai";
           setCurrentPlayer(nextRole);
         }
-        // Only clear dice if turn actually changed (prevent clearing after player already rolled)
-        if (!alreadySameTurnWR || dice.length === 0) {
+        // Only clear dice if we haven't rolled this turn yet
+        if (!diceRolledThisTurnRef.current) {
           setDice([]);
           setRemainingMoves([]);
         }
@@ -1669,6 +1680,7 @@ const BackgammonGame = () => {
     play('backgammon_dice');
     setDice(newDice);
     setRemainingMoves(moves);
+    diceRolledThisTurnRef.current = true;
     
     // Send to opponent via WebRTC (fast path)
     const moveMsg: BackgammonMoveMessage = {
@@ -2813,7 +2825,7 @@ const BackgammonGame = () => {
           onExit={() => navigate("/room-list")}
           result={gameResultInfo ? `${formatResultType(gameResultInfo.resultType).label} (${formatResultType(gameResultInfo.resultType).multiplier})` : undefined}
           roomPda={roomPda}
-          isStaked={false}
+          isStaked={isRankedGame && (stakeLamports ?? 0) > 0}
         />
       )}
       
