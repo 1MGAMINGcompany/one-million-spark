@@ -6,7 +6,7 @@ import { useSeoMeta } from "@/components/seo/SeoMeta";
 import JsonLd from "@/components/seo/JsonLd";
 import PlatformStatus from "@/components/seo/PlatformStatus";
 
-const SITE_URL = "https://one-million-spark.lovable.app";
+const SITE_URL = "https://1mgaming.com";
 
 const walletSlugs = [
   "connect-phantom-wallet-1mgaming",
