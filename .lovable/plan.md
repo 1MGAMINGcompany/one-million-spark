@@ -1,58 +1,125 @@
 
 
-# HD Social Media Sharing with New Pyramid Logo
+# Instant "Opponent Joined" Notification via Realtime Database Subscription
 
-## What We're Doing
-Adding your crisp HD pyramid logo as the image that appears when anyone shares 1MGaming.com on Instagram, X (Twitter), WhatsApp, or any social platform. Currently the preview is blurry because it uses a tiny app icon.
+## Current Behavior
+When a creator is waiting for an opponent, the app polls on-chain data every **5 seconds** to detect status changes. This means:
+- Up to 5 seconds of delay before "Opponent Joined!" appears
+- Wallet in-app browsers often miss the Solana WebSocket updates entirely
+- No push notification when the app is backgrounded
 
-## Changes
+## What We're Adding
 
-### 1. Add the HD logo to the project
-Copy your uploaded pyramid image to `public/images/og-logo.png` so social media crawlers can access it directly.
+### Layer 1: Instant In-App Notification (Supabase Realtime)
 
-### 2. Update `index.html` meta tags
-Replace the current blurry `og:image` with the new HD logo using absolute URLs (required by social platforms). Add Twitter/X large card support so previews are big and crisp instead of tiny thumbnails.
+The `game_sessions` table already has realtime enabled (`ALTER PUBLICATION supabase_realtime ADD TABLE public.game_sessions` exists in migrations). We just need to subscribe to it.
 
-New tags:
-- `og:image` -- absolute URL to HD logo
-- `og:image:width` / `og:image:height` -- dimensions for platforms
-- `og:site_name` -- "1M Gaming"
-- `twitter:card` -- `summary_large_image` for large preview on X
-- `twitter:image` -- same HD logo
-- `twitter:title` / `twitter:description` -- brand messaging
+**New hook: `src/hooks/useRoomRealtimeAlert.ts`**
 
-### 3. Update `MatchShareCard.tsx` dynamic OG tags
-When someone shares a match result link (`/match/:roomPda`), dynamically update the OG meta tags so the preview shows the 1M Gaming branding with match context.
+A lightweight hook that:
+- Subscribes to `postgres_changes` on `game_sessions` filtered by `room_pda`
+- Detects `status_int` changing from 1 (waiting) to 2 (active) -- meaning opponent joined
+- Fires a callback immediately (no polling delay)
+- Auto-cleans up on unmount
+
+**Integration points** -- add the hook to these pages where creators wait:
+- `src/pages/Room.tsx` -- the room lobby where creators wait
+- `src/pages/CreateRoom.tsx` -- has an active room banner section
+- `src/pages/RoomList.tsx` -- shows active rooms
+- `src/components/GlobalActiveRoomBanner.tsx` -- the floating banner
+
+When the realtime event fires, it triggers the same flow that currently happens on poll: sound, toast, browser notification, and navigate to `/play/:pda`.
+
+### Layer 2: Browser Push (Service Worker)
+
+The app already has a PWA manifest (`site.webmanifest`) and `showBrowserNotification()` which uses the Notification API. This already works when the tab is open but not focused. For true background push (app fully closed), a service worker is needed -- but that's a separate, larger effort. The current `showBrowserNotification` with `requireInteraction: true` already covers the "tab open but not focused" case.
 
 ## Files Changed
 
 | File | Change |
 |------|--------|
-| `public/images/og-logo.png` | New -- HD pyramid logo copied from upload |
-| `index.html` | Updated OG + Twitter Card meta tags with absolute URLs to HD image |
-| `src/pages/MatchShareCard.tsx` | Add dynamic meta tag updates for match share links |
+| `src/hooks/useRoomRealtimeAlert.ts` | **New** -- realtime subscription hook |
+| `src/pages/Room.tsx` | Add `useRoomRealtimeAlert` for instant opponent detection |
+| `src/pages/CreateRoom.tsx` | Add `useRoomRealtimeAlert` to supplement polling |
+| `src/pages/RoomList.tsx` | Add `useRoomRealtimeAlert` to supplement polling |
+| `src/components/GlobalActiveRoomBanner.tsx` | Add `useRoomRealtimeAlert` to supplement polling |
 
 ## Technical Details
 
-### index.html meta tag updates (replacing lines 8-11):
+### New Hook: `useRoomRealtimeAlert.ts`
 
-```html
-<meta property="og:title" content="1M Gaming | Premium Skill Gaming Platform" />
-<meta property="og:description" content="Where strategy becomes WEALTH. Premium skill gaming platform on Solana." />
-<meta property="og:type" content="website" />
-<meta property="og:url" content="https://one-million-spark.lovable.app" />
-<meta property="og:image" content="https://one-million-spark.lovable.app/images/og-logo.png" />
-<meta property="og:image:width" content="1024" />
-<meta property="og:image:height" content="1024" />
-<meta property="og:site_name" content="1M Gaming" />
+```typescript
+import { useEffect, useRef } from "react";
+import { supabase } from "@/integrations/supabase/client";
 
-<meta name="twitter:card" content="summary_large_image" />
-<meta name="twitter:title" content="1M Gaming | Premium Skill Gaming Platform" />
-<meta name="twitter:description" content="Where strategy becomes WEALTH. Skill-based gaming on Solana." />
-<meta name="twitter:image" content="https://one-million-spark.lovable.app/images/og-logo.png" />
+interface UseRoomRealtimeAlertOptions {
+  roomPda: string | null;
+  enabled?: boolean;
+  onOpponentJoined: (session: any) => void;
+}
+
+export function useRoomRealtimeAlert({
+  roomPda,
+  enabled = true,
+  onOpponentJoined,
+}: UseRoomRealtimeAlertOptions) {
+  const firedRef = useRef(false);
+
+  useEffect(() => {
+    if (!roomPda || !enabled) return;
+    firedRef.current = false;
+
+    const channel = supabase
+      .channel(`room-alert-${roomPda}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "game_sessions",
+          filter: `room_pda=eq.${roomPda}`,
+        },
+        (payload) => {
+          const newRow = payload.new as any;
+          const oldRow = payload.old as any;
+
+          // Detect waiting -> active transition
+          if (
+            !firedRef.current &&
+            oldRow?.status_int === 1 &&
+            newRow?.status_int === 2
+          ) {
+            firedRef.current = true;
+            onOpponentJoined(newRow);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [roomPda, enabled, onOpponentJoined]);
+}
 ```
 
-### MatchShareCard.tsx dynamic tags:
+### Integration in Room.tsx, CreateRoom.tsx, RoomList.tsx, GlobalActiveRoomBanner.tsx
 
-Add a `useEffect` that updates `og:title` to include match result context (e.g., "Victory - Backgammon | 1M Gaming") when the match data loads.
+Each page already has "opponent joined" handling (sound + toast + navigate). We add the hook pointing to the same handler, so the realtime event triggers the exact same UX -- just instantly instead of after a 5-second poll cycle.
 
+```typescript
+// Example in Room.tsx
+useRoomRealtimeAlert({
+  roomPda: activeRoom?.pda ?? null,
+  enabled: !!activeRoom && isOpenStatus(activeRoom.status),
+  onOpponentJoined: () => {
+    // Same logic already in the polling handler:
+    AudioManager.playPlayerJoined();
+    showBrowserNotification("Opponent Joined!", "Your game is ready!");
+    toast({ title: "Opponent joined!" });
+    navigate(`/play/${activeRoom.pda}`);
+  },
+});
+```
+
+The existing polling continues as a fallback (in case realtime misses an event), but the realtime subscription will fire first in nearly all cases, cutting the notification delay from ~5 seconds to under 500ms.
