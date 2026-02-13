@@ -1,52 +1,91 @@
 
 
-# Lock Down `finalize_receipts` Table (RLS-Only Fix)
+# Fix Double-Roll Bug + Share Page Not Loading
 
-## Current State
+## Problem 1: Double-Roll Dice Bug (Backgammon)
 
-The `finalize_receipts` table has a permissive SELECT policy `using (true)`, meaning any anonymous client can read all settlement transaction signatures and room PDAs. This leaks internal settlement data.
+**Root cause:** When you roll the dice, your roll sets `dice` state. But polling (every 5 seconds) and WebRTC sync fire almost immediately after, and the guards at lines 899-903 and 1430-1432 use `dice.length` from stale React state (due to batching). This means the sync clears your dice right after you rolled, forcing you to roll again.
 
-## Why This Is Safe to Change
+**Fix:** Add a `useRef` called `diceRolledThisTurnRef` that is set to `true` in `rollDice()` and reset to `false` only when the turn wallet genuinely changes. The polling and WebRTC sync handlers will check this ref (which is always current, unlike state) before clearing dice.
 
-The frontend **never reads `finalize_receipts` directly**. All client-side receipt checks go through:
-- `game-session-get` edge function (uses service role key, bypasses RLS)
-- `isRoomFinalized()` in `finalizeGame.ts` calls `game-session-get`, not the table
+### Changes in `src/pages/BackgammonGame.tsx`:
 
-Edge functions (`forfeit-game`, `settle-game`, `settle-draw`) write to the table using service role, so they are also unaffected by RLS changes.
+1. Add a new ref near the other refs (around line 237):
+   ```ts
+   const diceRolledThisTurnRef = useRef(false);
+   ```
 
-## Change
+2. In `rollDice()` (line 1670), set the ref to true right after `setDice(newDice)`:
+   ```ts
+   diceRolledThisTurnRef.current = true;
+   ```
 
-**Single migration** -- replace the permissive public-read policy with a restrictive one:
+3. In the polling turn-change handler (lines 897-903), use the ref guard:
+   ```ts
+   // Only clear dice if we haven't rolled this turn yet
+   if (!diceRolledThisTurnRef.current) {
+     setDice([]);
+     setRemainingMoves([]);
+   }
+   ```
 
-```sql
--- Drop the overly permissive public read policy
-DROP POLICY IF EXISTS "public read receipts" ON finalize_receipts;
+4. In the WebRTC `turn_end` handler (lines 1430-1434), same ref guard:
+   ```ts
+   if (!diceRolledThisTurnRef.current) {
+     setDice([]);
+     setRemainingMoves([]);
+   }
+   ```
 
--- New policy: only room participants can read their own receipts
-CREATE POLICY "participants_read_receipts"
-ON finalize_receipts FOR SELECT
-USING (false);
-```
+5. Reset the ref when the turn genuinely changes (line 890, where `setCurrentTurnWallet(freshTurnWallet)` is called):
+   ```ts
+   diceRolledThisTurnRef.current = false;
+   setCurrentTurnWallet(freshTurnWallet);
+   ```
 
-We use `USING (false)` because:
-1. No client-side code reads this table directly (confirmed by search)
-2. All legitimate reads go through edge functions using the service role (which bypasses RLS entirely)
-3. There is no `auth.uid()` in this app (wallet-based identity, no Supabase Auth) so a participant-join policy would have no way to identify the requester
+---
 
-This is the same pattern already used for `settlement_logs`, `player_sessions`, `session_nonces`, and `game_moves`.
+## Problem 2: Share Page Not Loading
 
-## Files Changed
+**Root cause:** BackgammonGame passes `isStaked={false}` to `GameEndScreen` (line 2816), and it does NOT use `useAutoSettlement`. This means:
+- `GameEndScreen` skips all settlement logic (because `isStaked` is false)
+- No `settle-game` edge function is called
+- `match_share_cards` is never populated
+- The `/match/:roomPda` share page shows "Match not found"
+
+**Fix:** Add `useAutoSettlement` to BackgammonGame and pass correct `isStaked` prop.
+
+### Changes in `src/pages/BackgammonGame.tsx`:
+
+1. Add import (near line 32):
+   ```ts
+   import { useAutoSettlement } from "@/hooks/useAutoSettlement";
+   ```
+
+2. Add the hook after the outcome resolver (around line 346), using `winnerWallet` state:
+   ```ts
+   const autoSettlement = useAutoSettlement({
+     roomPda,
+     winner: winnerWallet,
+     reason: "gameover",
+     isRanked: isRankedGame,
+   });
+   ```
+
+3. Fix the `isStaked` prop on `GameEndScreen` (line 2816):
+   ```tsx
+   isStaked={isRankedGame && stakeLamports > 0}
+   ```
+
+---
+
+## Summary
 
 | File | Change |
 |------|--------|
-| New migration SQL | Drop `public read receipts`, create `participants_read_receipts` with `USING (false)` |
+| `src/pages/BackgammonGame.tsx` | Add `diceRolledThisTurnRef` to prevent polling/WebRTC from clearing dice after a roll |
+| `src/pages/BackgammonGame.tsx` | Add `useAutoSettlement` hook to trigger settlement when game ends |
+| `src/pages/BackgammonGame.tsx` | Fix `isStaked` prop to reflect actual ranked/staked status |
 
-**Zero frontend changes required.**
-
-## What Will NOT Break
-
-- Edge functions (service role) bypass RLS -- all writes and reads from `game-session-get`, `forfeit-game`, `settle-game`, `settle-draw` continue working
-- `isRoomFinalized()` calls `game-session-get` edge function, not the table directly
-- `record_match_result` RPC runs as SECURITY DEFINER, bypasses RLS
-- No client-side code queries `finalize_receipts` directly (verified by codebase search)
+No database changes needed. No edge function changes needed.
 
