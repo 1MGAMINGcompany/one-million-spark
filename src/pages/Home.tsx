@@ -197,6 +197,23 @@ const Home = () => {
           </div>
         </div>
       </section>
+      {/* Legal Clarification Section */}
+      <section className="relative z-10 py-16 px-4">
+        <div className="max-w-3xl mx-auto text-center">
+          <h2 className="text-2xl font-display font-semibold text-foreground mb-4">
+            Skill-Based Competitive Gaming Platform
+          </h2>
+          <p className="text-muted-foreground leading-relaxed text-sm">
+            1MGAMING is a skill-based competitive platform where players compete
+            in strategy games such as chess, backgammon, checkers, dominos, and
+            ludo. Outcomes are determined by player decisions and skill — not
+            random number generators. 1MGAMING does not operate as a casino and
+            does not offer games of chance. Users are responsible for ensuring
+            compliance with their local laws before participating.
+          </p>
+        </div>
+      </section>
+
       <MobileAppPrompt />
     </div>
   );

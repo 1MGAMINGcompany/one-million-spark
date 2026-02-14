@@ -114,6 +114,7 @@ const AppContent = () => {
           <Route path="/help/:slug" element={<HelpArticle />} />
           <Route path="/privacy-policy" element={<PrivacyPolicy />} />
           <Route path="/terms-of-service" element={<TermsOfService />} />
+          <Route path="/terms" element={<Navigate to="/terms-of-service" replace />} />
           <Route path="/match/:roomPda" element={<MatchShareCard />} />
           <Route path="/player/:wallet" element={<PlayerProfile />} />
           <Route path="/leaderboard/:game" element={<Leaderboard />} />
