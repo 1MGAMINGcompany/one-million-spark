@@ -77,6 +77,13 @@ const TermsOfService = () => {
                   permitted under their local laws. By using the platform, users
                   represent that they are legally allowed to participate.
                 </p>
+                <p className="text-muted-foreground leading-relaxed mt-3">
+                  Users are solely responsible for ensuring that participation
+                  in skill-based competitions involving digital assets is lawful
+                  in their jurisdiction. 1MGAMING does not make representations
+                  regarding the legality of participation in any specific
+                  country, state, or territory.
+                </p>
               </div>
             </div>
           </section>
