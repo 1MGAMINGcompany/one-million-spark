@@ -74,6 +74,7 @@ export function useSolanaRooms() {
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const isFetchingActiveRoomRef = useRef(false);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const createRoomInFlightRef = useRef(false);
 
   // Memoized blocking room: first unresolved room from activeRooms, fallback to activeRoom
   const blockingRoom = useMemo(() => {
@@ -405,6 +406,13 @@ export function useSolanaRooms() {
       return null;
     }
 
+    // Prevent duplicate createRoom calls (React StrictMode / rapid clicks)
+    if (createRoomInFlightRef.current) {
+      console.warn("[CreateRoom] Already in flight, blocking duplicate call");
+      return null;
+    }
+    createRoomInFlightRef.current = true;
+
     // Check for existing active room
     const existingRoom = await fetchUserActiveRoom();
     if (existingRoom) {
@@ -663,6 +671,7 @@ export function useSolanaRooms() {
       return null;
     } finally {
       setTxPending(false);
+      createRoomInFlightRef.current = false;
     }
   }, [publicKey, connected, connection, sendVersionedTx, toast, fetchRooms, fetchUserActiveRoom]);
 
