@@ -262,7 +262,13 @@ Deno.serve(async (req: Request) => {
     const isServiceRoleCall = authHeader === `Bearer ${supabaseServiceKey}`;
     const sessionToken = req.headers.get("x-session-token");
 
-    if (sessionToken && /^[0-9a-f]{64}$/.test(sessionToken) && !isServiceRoleCall) {
+    if (!isServiceRoleCall) {
+      // CLIENT CALL: session token is MANDATORY
+      if (!sessionToken || !/^[0-9a-f]{64}$/.test(sessionToken)) {
+        console.error("[forfeit-game] 🚫 MISSING_SESSION", { requestId, roomPda });
+        return json200({ success: false, error: "MISSING_SESSION" });
+      }
+
       const { data: sessionRow } = await supabase
         .from("player_sessions")
         .select("wallet")
@@ -271,7 +277,12 @@ Deno.serve(async (req: Request) => {
         .eq("revoked", false)
         .maybeSingle();
 
-      if (sessionRow && sessionRow.wallet !== forfeitingWallet) {
+      if (!sessionRow) {
+        console.error("[forfeit-game] 🚫 INVALID_SESSION", { requestId, roomPda });
+        return json200({ success: false, error: "INVALID_SESSION" });
+      }
+
+      if (sessionRow.wallet !== forfeitingWallet) {
         console.error("[forfeit-game] 🚫 IDENTITY_MISMATCH — caller tried to forfeit another player", {
           requestId,
           callerWallet: sessionRow.wallet,
@@ -287,9 +298,10 @@ Deno.serve(async (req: Request) => {
         });
         return json200({ success: false, error: "IDENTITY_MISMATCH" });
       }
+
       console.log("[forfeit-game] ✅ Identity verified via session token", {
         requestId,
-        wallet: sessionRow?.wallet ?? "no-session-found",
+        wallet: sessionRow.wallet,
       });
     }
 
