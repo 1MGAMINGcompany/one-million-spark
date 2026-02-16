@@ -51,6 +51,36 @@ serve(async (req) => {
 
     let session = session1;
 
+    // Server-side waiting-room timeout enforcement (auto-cancel after 120s with no opponent)
+    if (session && session.status_int === 1) {
+      try {
+        const { data: waitingRes, error: waitingErr } = await supabase.rpc(
+          "maybe_apply_waiting_timeout",
+          { p_room_pda: roomPda }
+        );
+
+        if (waitingErr) {
+          console.warn("[game-session-get] maybe_apply_waiting_timeout error (non-fatal):", waitingErr);
+        }
+
+        if (waitingRes?.applied) {
+          console.log("[game-session-get] Waiting timeout applied:", waitingRes);
+          // Re-fetch session with updated status
+          const { data: session2, error: session2Err } = await supabase
+            .from("game_sessions")
+            .select("*")
+            .eq("room_pda", roomPda)
+            .maybeSingle();
+
+          if (!session2Err && session2) {
+            session = session2;
+          }
+        }
+      } catch (e) {
+        console.warn("[game-session-get] maybe_apply_waiting_timeout exception (non-fatal):", e);
+      }
+    }
+
     // Server-side timeout enforcement for active games
     if (session && session.status_int === 2) {
       try {
