@@ -2,13 +2,14 @@ import { useState, useEffect, useCallback } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useWallet } from "@solana/wallet-adapter-react";
-import { Home, Wallet, PlusCircle, LayoutList, Menu, X, Coins, Volume2, VolumeX, Bell, BellOff, Trophy, User } from "lucide-react";
+import { Home, Wallet, PlusCircle, LayoutList, Menu, X, Coins, Volume2, VolumeX, Bell, BellOff, Trophy, User, ChevronDown } from "lucide-react";
 import { WalletButton } from "./WalletButton";
 import { PrivyLoginButton } from "./PrivyLoginButton";
 import BrandLogo from "./BrandLogo";
 import LanguageSelector from "./LanguageSelector";
 import { useSound } from "@/contexts/SoundContext";
 import { requestNotificationPermission } from "@/lib/pushNotifications";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import type { LucideIcon } from "lucide-react";
 
 interface NavItem {
@@ -146,7 +147,16 @@ const Navbar = () => {
             </button>
             
             <PrivyLoginButton />
-            <WalletButton />
+            <Collapsible>
+              <CollapsibleTrigger className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors">
+                <Wallet size={14} />
+                <span>External Wallet</span>
+                <ChevronDown size={12} />
+              </CollapsibleTrigger>
+              <CollapsibleContent className="absolute right-0 top-full mt-1 bg-background border border-border rounded-lg shadow-lg p-2 z-50">
+                <WalletButton />
+              </CollapsibleContent>
+            </Collapsible>
           </div>
 
           {/* Mobile Menu Button */}
@@ -239,10 +249,17 @@ const Navbar = () => {
                 <PrivyLoginButton />
               </div>
               
-              {/* Wallet Button (Mobile) */}
-              <div className="pt-2">
-                <WalletButton />
-              </div>
+              {/* External Wallet - Collapsible Advanced (Mobile) */}
+              <Collapsible>
+                <CollapsibleTrigger className="flex items-center gap-2 px-4 py-3 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors w-full">
+                  <Wallet size={16} />
+                  <span>Advanced: Connect External Wallet</span>
+                  <ChevronDown size={12} className="ml-auto" />
+                </CollapsibleTrigger>
+                <CollapsibleContent className="px-4 pt-2">
+                  <WalletButton />
+                </CollapsibleContent>
+              </Collapsible>
             </div>
           </div>
         )}
