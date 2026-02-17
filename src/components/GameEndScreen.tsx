@@ -335,16 +335,15 @@ export function GameEndScreen({
   const isPayoutConfirmed = finalizeState === 'success' || isAlreadySettled;
   
   const getResultText = () => {
-    if (isPending) return 'Resolving outcome...';
-    if (isDraw) return 'Draw';
+    if (isPending) return t('gameEnd.resolvingOutcome');
+    if (isDraw) return t('game.draw');
     if (isWinner) {
-      // For staked games, show pending until payout confirmed
       if (isStaked && !isPayoutConfirmed && !checkingRoomStatus) {
-        return 'Awaiting Payout...';
+        return t('gameEnd.awaitingPayout');
       }
-      return 'You Won!';
+      return t('gameEnd.youWon');
     }
-    return 'You Lost';
+    return t('gameEnd.youLost');
   };
 
   const getResultColor = () => {
@@ -399,8 +398,8 @@ export function GameEndScreen({
           <div className="text-center space-y-2">
             <h2 className="text-sm uppercase tracking-wider text-muted-foreground">
               {isStaked && !isPayoutConfirmed && !checkingRoomStatus 
-                ? 'Settling On-Chain...' 
-                : 'Match Complete'}
+                ? t('gameEnd.settlingOnChain')
+                : t('gameEnd.matchComplete')}
             </h2>
             <h1 className={`text-3xl font-bold ${getResultColor()}`}>
               {getResultText()}
@@ -415,9 +414,9 @@ export function GameEndScreen({
           {/* Winner Info */}
           {!isDraw && winner && winner !== 'draw' && (
             <div className="bg-muted/30 rounded-lg p-4 text-center">
-              <p className="text-sm text-muted-foreground mb-1">Winner</p>
+              <p className="text-sm text-muted-foreground mb-1">{t('gameEnd.winner')}</p>
               {winner === myAddress ? (
-                <p className="font-mono text-primary font-medium">You</p>
+                <p className="font-mono text-primary font-medium">{t('gameEnd.you')}</p>
               ) : (
                 <WalletLink wallet={winner} className="text-foreground" />
               )}
@@ -450,7 +449,7 @@ export function GameEndScreen({
             return (
               <div className="bg-muted/30 border border-primary/20 rounded-lg p-4 space-y-3">
                 <p className="text-sm font-semibold text-center">
-                  {isWinner ? '🏆 Brag About Your Win' : '📊 Share Match'}
+                  {isWinner ? t('gameEnd.bragWin') : t('gameEnd.shareMatch')}
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <a
@@ -469,7 +468,7 @@ export function GameEndScreen({
                     className="inline-flex items-center justify-center gap-2 rounded-lg font-semibold text-sm min-h-[48px] px-4 bg-foreground text-background hover:opacity-90 transition-colors"
                   >
                     <svg viewBox="0 0 24 24" className="w-[18px] h-[18px] fill-current"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
-                    Share on X
+                    {t('gameEnd.shareOnX')}
                   </a>
                   <a
                     href={`mailto:?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(shareMsg)}`}
@@ -483,7 +482,7 @@ export function GameEndScreen({
                     className="inline-flex items-center justify-center gap-2 rounded-lg font-semibold text-sm min-h-[48px] px-4 border border-border bg-secondary hover:bg-secondary/80 text-secondary-foreground transition-colors"
                   >
                     {linkCopied ? <Check size={18} className="text-green-500" /> : <Copy size={18} />}
-                    {linkCopied ? 'Copied!' : hasMatchLink ? 'Copy Link' : 'Copy Message'}
+                    {linkCopied ? t('common.copied') : hasMatchLink ? t('gameEnd.copyLink') : t('gameEnd.copyMessage')}
                   </button>
                 </div>
               </div>
@@ -492,7 +491,7 @@ export function GameEndScreen({
 
           {/* Players List */}
           <div className="space-y-2">
-            <p className="text-xs uppercase tracking-wider text-muted-foreground">Players</p>
+            <p className="text-xs uppercase tracking-wider text-muted-foreground">{t('gameEnd.players')}</p>
             <div className="space-y-1">
               {players.map((player) => {
                 const isMe = player.address === myAddress;
@@ -512,7 +511,7 @@ export function GameEndScreen({
                         />
                       )}
                       {isMe ? (
-                        <span className="font-mono text-sm text-primary font-medium">You</span>
+                        <span className="font-mono text-sm text-primary font-medium">{t('gameEnd.you')}</span>
                       ) : (
                         <WalletLink wallet={player.address} className="text-sm" />
                       )}
@@ -544,35 +543,35 @@ export function GameEndScreen({
                 {/* Payout Summary - Show before wallet interaction (only when idle) */}
                 {payoutInfo && finalizeState === 'idle' && !isAlreadySettled && (
                   <div className="bg-muted/40 border border-border/50 rounded-lg p-4 space-y-2">
-                    <p className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">
-                      Payout Summary
+                     <p className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">
+                       {t('gameEnd.payoutSummary')}
                     </p>
                     <div className="space-y-1 text-sm">
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">Total Pot:</span>
+                        <span className="text-muted-foreground">{t('gameEnd.totalPot')}</span>
                         <span className="font-mono text-foreground">{payoutInfo.pot.toFixed(4)} SOL</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">Platform Fee (5%):</span>
+                        <span className="text-muted-foreground">{t('gameEnd.platformFee')}</span>
                         <span className="font-mono text-muted-foreground">{payoutInfo.fee.toFixed(4)} SOL</span>
                       </div>
                       <div className="flex justify-between border-t border-border/30 pt-1">
-                        <span className="text-primary font-medium">Winner Receives:</span>
+                        <span className="text-primary font-medium">{t('gameEnd.winnerReceives')}</span>
                         <span className="font-mono text-primary font-semibold">{payoutInfo.winnerPayout.toFixed(4)} SOL</span>
                       </div>
                     </div>
-                    <p className="text-xs text-muted-foreground text-center pt-1">
-                      Funds are paid directly on-chain when finalized.
-                    </p>
+                     <p className="text-xs text-muted-foreground text-center pt-1">
+                       {t('gameEnd.fundsOnChain')}
+                     </p>
                   </div>
                 )}
 
                 {/* Pre-transaction informational notice */}
                 {finalizeState === 'idle' && !isAlreadySettled && !checkingRoomStatus && (
-                  <p className="text-xs text-muted-foreground text-center">
-                    You're about to settle this game on-chain.<br />
-                    This will distribute the pot and cannot be undone.
-                  </p>
+                   <p className="text-xs text-muted-foreground text-center">
+                     {t('gameEnd.settleNotice')}<br />
+                     {t('gameEnd.cannotBeUndone')}
+                   </p>
                 )}
 
                 {/* Success State - Payout Complete */}
@@ -580,16 +579,16 @@ export function GameEndScreen({
                   <div className="bg-emerald-500/20 border border-emerald-500/50 rounded-lg p-4 space-y-3">
                     <div className="flex items-center justify-center gap-2">
                       <CheckCircle size={24} className="text-emerald-400" />
-                      <p className="text-emerald-400 font-semibold text-lg">Payout Complete</p>
+                      <p className="text-emerald-400 font-semibold text-lg">{t('gameEnd.payoutComplete')}</p>
                     </div>
                     <div className="space-y-1 text-sm">
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">Winner:</span>
+                        <span className="text-muted-foreground">{t('gameEnd.winner')}:</span>
                         <span className="font-mono text-foreground">{winner ? shortenAddress(winner) : '—'}</span>
                       </div>
                       {payoutInfo && (
                         <div className="flex justify-between">
-                          <span className="text-muted-foreground">Amount Received:</span>
+                          <span className="text-muted-foreground">{t('gameEnd.amountReceived')}</span>
                           <span className="font-mono text-emerald-400 font-semibold">{payoutInfo.winnerPayout.toFixed(4)} SOL</span>
                         </div>
                       )}
@@ -601,13 +600,13 @@ export function GameEndScreen({
                         rel="noopener noreferrer"
                         className="flex items-center justify-center gap-1.5 text-xs text-primary hover:text-primary/80 transition-colors"
                       >
-                        <ExternalLink size={12} />
-                        View transaction on Solana Explorer
+                         <ExternalLink size={12} />
+                         {t('gameEnd.viewTransaction')}
                       </a>
                     )}
                     {/* Trust note */}
-                    <p className="text-[10px] text-muted-foreground text-center pt-1 border-t border-emerald-500/20">
-                      Payout executed on-chain via finalize_room. Funds sent directly to winner's wallet.
+                     <p className="text-[10px] text-muted-foreground text-center pt-1 border-t border-emerald-500/20">
+                       {t('gameEnd.payoutNote')}
                     </p>
                   </div>
                 )}
@@ -616,7 +615,7 @@ export function GameEndScreen({
                 {isAlreadySettled && finalizeState !== 'success' && (
                   <div className="bg-emerald-500/20 border border-emerald-500/50 rounded-lg p-4 text-center flex items-center justify-center gap-2">
                     <CheckCircle size={20} className="text-emerald-400" />
-                    <p className="text-emerald-400 font-semibold">Already Settled</p>
+                    <p className="text-emerald-400 font-semibold">{t('gameEnd.alreadySettled')}</p>
                   </div>
                 )}
 
@@ -627,7 +626,7 @@ export function GameEndScreen({
                     className="w-full gap-2 bg-amber-600/70 text-white font-semibold py-6"
                   >
                     <Loader2 size={20} className="animate-spin" />
-                    Finalizing…
+                    {t('gameEnd.finalizing')}
                   </Button>
                 )}
 
@@ -639,7 +638,7 @@ export function GameEndScreen({
                     className="w-full gap-2 bg-amber-600 hover:bg-amber-700 text-white font-semibold py-6"
                   >
                     <CheckCircle size={20} />
-                    {checkingRoomStatus ? 'Checking status…' : 'Settle Payout'}
+                    {checkingRoomStatus ? t('gameEnd.checkingStatus') : t('gameEnd.settlePayout')}
                   </Button>
                 )}
 
@@ -651,7 +650,7 @@ export function GameEndScreen({
                     className="w-full gap-2 bg-amber-600 hover:bg-amber-700 text-white font-semibold py-6"
                   >
                     <RefreshCw size={20} />
-                    Retry Settlement
+                    {t('gameEnd.retrySettlement')}
                   </Button>
                 )}
               </>
@@ -670,7 +669,7 @@ export function GameEndScreen({
                       className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors mx-auto"
                     >
                       {showErrorDetails ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                      Details
+                       {t('gameEnd.details')}
                     </button>
                     {showErrorDetails && (
                       <pre className="text-xs text-muted-foreground bg-muted/50 rounded p-2 overflow-x-auto max-h-24 overflow-y-auto">
@@ -685,8 +684,8 @@ export function GameEndScreen({
             {/* Rematch Options - Only for staked games */}
             {isStaked && roomPda && stakeLamports > 0 && (
               <div className="bg-muted/30 border border-border/50 rounded-lg p-4 space-y-3">
-                <p className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">
-                  Rematch
+                 <p className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">
+                   {t('gameEnd.rematch')}
                 </p>
                 
                 {/* Same Stake Button */}
@@ -695,7 +694,7 @@ export function GameEndScreen({
                   className="w-full gap-2 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold py-5"
                 >
                   <RefreshCw size={18} />
-                  Same Stake ({lamportsToSol(stakeLamports).toFixed(4)} SOL)
+                  {t('gameEnd.sameStake')} ({lamportsToSol(stakeLamports).toFixed(4)} SOL)
                 </Button>
                 
                 {/* Double Up Button */}
@@ -705,7 +704,7 @@ export function GameEndScreen({
                   className="w-full gap-2 font-semibold py-5"
                 >
                   <RefreshCw size={18} />
-                  Double Up ({lamportsToSol(stakeLamports * 2).toFixed(4)} SOL)
+                  {t('gameEnd.doubleUp')} ({lamportsToSol(stakeLamports * 2).toFixed(4)} SOL)
                 </Button>
                 
                 {/* Custom Stake Section */}
@@ -716,7 +715,7 @@ export function GameEndScreen({
                     className="w-full gap-2 border-border/50 py-5"
                   >
                     <RefreshCw size={18} />
-                    Custom Stake
+                     {t('gameEnd.customStake')}
                   </Button>
                 ) : (
                   <div className="flex gap-2 items-center">
@@ -724,7 +723,7 @@ export function GameEndScreen({
                       type="number"
                       step="0.001"
                       min="0.001"
-                      placeholder="Enter SOL"
+                      placeholder={t('gameEnd.enterSol')}
                       value={customStakeSol}
                       onChange={(e) => setCustomStakeSol(e.target.value)}
                       className="flex-1 bg-background border border-border rounded px-3 py-3 text-sm font-mono"
@@ -735,7 +734,7 @@ export function GameEndScreen({
                       disabled={!customStakeSol || parseFloat(customStakeSol) <= 0}
                       className="px-6 py-3"
                     >
-                      Go
+                       {t('gameEnd.go')}
                     </Button>
                   </div>
                 )}
@@ -750,7 +749,7 @@ export function GameEndScreen({
               >
                 <div className="absolute inset-0 bg-gradient-to-r from-primary/0 via-primary-foreground/10 to-primary/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
                 <RefreshCw size={20} className="group-hover:rotate-180 transition-transform duration-500" />
-                Rematch
+                 {t('gameEnd.rematch')}
               </Button>
             )}
 
@@ -763,7 +762,7 @@ export function GameEndScreen({
                   className="flex-1 gap-2 border-border/50"
                 >
                   <BarChart2 size={16} />
-                  Stats
+                   {t('gameEnd.stats')}
                 </Button>
               )}
               {onFavorite && (
@@ -773,7 +772,7 @@ export function GameEndScreen({
                   className="flex-1 gap-2 border-border/50"
                 >
                   <Star size={16} />
-                  Favorite
+                   {t('gameEnd.favorite')}
                 </Button>
               )}
               <Button 
@@ -782,14 +781,14 @@ export function GameEndScreen({
                 className="flex-1 gap-2 border-border/50"
               >
                 <LogOut size={16} />
-                Exit
+                 {t('gameEnd.exit')}
               </Button>
             </div>
           </div>
 
           {/* Legal Text */}
-          <p className="text-xs text-center text-muted-foreground">
-            Rematch creates a new game with new terms. Both players must accept and sign again.
+           <p className="text-xs text-center text-muted-foreground">
+             {t('gameEnd.rematchLegal')}
           </p>
         </div>
       </Card>

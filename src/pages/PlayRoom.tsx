@@ -7,6 +7,7 @@
  */
 
 import { useEffect, useState, useCallback, lazy, Suspense } from "react";
+import { useTranslation } from "react-i18next";
 import { useParams, useNavigate } from "react-router-dom";
 import { useConnection } from "@solana/wallet-adapter-react";
 import { PublicKey } from "@solana/web3.js";
@@ -49,6 +50,7 @@ export default function PlayRoom() {
   const { roomPda: roomPdaParam } = useParams<{ roomPda: string }>();
   const navigate = useNavigate();
   const { connection } = useConnection();
+  const { t } = useTranslation();
   
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -148,19 +150,19 @@ export default function PlayRoom() {
             <AlertTriangle className="h-12 w-12 text-amber-500 mx-auto mb-4" />
             <h3 className="text-xl font-semibold mb-2">{error}</h3>
             <p className="text-muted-foreground mb-6">
-              The room link may be invalid or the room no longer exists.
+              {t("playRoom.roomLinkInvalid")}
             </p>
             <div className="flex gap-3 justify-center flex-wrap">
               <Button variant="outline" onClick={handleRetry}>
                 <RefreshCw className="h-4 w-4 mr-2" />
-                Retry
+                {t("playRoom.retry")}
               </Button>
               <Button variant="outline" onClick={() => navigate(-1)}>
                 <ArrowLeft className="h-4 w-4 mr-2" />
-                Go Back
+                {t("playRoom.goBack")}
               </Button>
               <Button onClick={() => navigate("/room-list")}>
-                Browse Rooms
+                {t("playRoom.browseRooms")}
               </Button>
             </div>
           </CardContent>
@@ -176,17 +178,17 @@ export default function PlayRoom() {
         <Card className="border-border/50 bg-card/80 backdrop-blur">
           <CardContent className="text-center py-12">
             <AlertTriangle className="h-12 w-12 text-amber-500 mx-auto mb-4" />
-            <h3 className="text-xl font-semibold mb-2">Room not found</h3>
+            <h3 className="text-xl font-semibold mb-2">{t("playRoom.roomNotFound")}</h3>
             <p className="text-muted-foreground mb-6">
-              Room data could not be loaded. This may be a timing issue.
+              {t("playRoom.roomLoadFailed")}
             </p>
             <div className="flex gap-3 justify-center flex-wrap">
               <Button variant="outline" onClick={handleRetry}>
                 <RefreshCw className="h-4 w-4 mr-2" />
-                Retry
+                {t("playRoom.retry")}
               </Button>
               <Button onClick={() => navigate("/room-list")}>
-                Browse Rooms
+                {t("playRoom.browseRooms")}
               </Button>
             </div>
           </CardContent>
@@ -205,12 +207,12 @@ export default function PlayRoom() {
         <Card className="border-border/50 bg-card/80 backdrop-blur">
           <CardContent className="text-center py-12">
             <AlertTriangle className="h-12 w-12 text-amber-500 mx-auto mb-4" />
-            <h3 className="text-xl font-semibold mb-2">Unknown Game Type</h3>
+            <h3 className="text-xl font-semibold mb-2">{t("playRoom.unknownGameType")}</h3>
             <p className="text-muted-foreground mb-6">
-              Game type {roomData.gameType} is not supported.
+              {t("playRoom.gameTypeNotSupported", { type: roomData.gameType })}
             </p>
             <Button onClick={() => navigate("/room-list")}>
-              Back to Room List
+              {t("playRoom.backToRoomList")}
             </Button>
           </CardContent>
         </Card>

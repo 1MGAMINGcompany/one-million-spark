@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { supabase } from "@/integrations/supabase/client";
 import { Trophy, Gamepad2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -24,6 +25,7 @@ function formatWinReason(reason: string): string {
 
 export default function MatchShareCard() {
   const { roomPda } = useParams<{ roomPda: string }>();
+  const { t } = useTranslation();
   const [match, setMatch] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -32,12 +34,10 @@ export default function MatchShareCard() {
     if (!roomPda) return;
     document.title = "Match Result — 1M Gaming";
 
-    // Capture original OG tags for cleanup
     const origTitle = document.querySelector('meta[property="og:title"]')?.getAttribute("content") || "";
     const origDesc = document.querySelector('meta[property="og:description"]')?.getAttribute("content") || "";
 
     (async () => {
-      // Try match_share_cards first
       const { data, error: err } = await supabase
         .from("match_share_cards")
         .select("*")
@@ -47,14 +47,12 @@ export default function MatchShareCard() {
       if (data) {
         setMatch(data);
         setLoading(false);
-        // Dynamic OG tags for match share
         const gt = (data.game_type || "").replace(/\b\w/g, (c: string) => c.toUpperCase());
         document.querySelector('meta[property="og:title"]')?.setAttribute("content", `Victory — ${gt} | 1M Gaming`);
         document.querySelector('meta[property="og:description"]')?.setAttribute("content", `Match result on 1M Gaming. Play skill-based games on Solana.`);
         return;
       }
 
-      // Fallback: query matches table for older games
       const { data: fallback } = await supabase
         .from("matches")
         .select("*")
@@ -81,7 +79,6 @@ export default function MatchShareCard() {
       setLoading(false);
     })();
 
-    // Reset OG tags on unmount
     return () => {
       document.querySelector('meta[property="og:title"]')?.setAttribute("content", origTitle);
       document.querySelector('meta[property="og:description"]')?.setAttribute("content", origDesc);
@@ -91,7 +88,7 @@ export default function MatchShareCard() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="animate-pulse text-muted-foreground">Loading match…</div>
+        <div className="animate-pulse text-muted-foreground">{t("matchShare.loadingMatch")}</div>
       </div>
     );
   }
@@ -99,9 +96,9 @@ export default function MatchShareCard() {
   if (error || !match) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-background gap-4">
-        <p className="text-muted-foreground">Match not found</p>
+        <p className="text-muted-foreground">{t("matchShare.matchNotFound")}</p>
         <Link to="/">
-          <Button variant="gold">Go Home</Button>
+          <Button variant="gold">{t("matchShare.goHome")}</Button>
         </Link>
       </div>
     );
@@ -114,7 +111,6 @@ export default function MatchShareCard() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <div className="w-full max-w-md rounded-2xl overflow-hidden border border-border bg-card shadow-gold">
-        {/* Banner */}
         <img
           src="/images/1m-banner-backgmmn.jpeg"
           alt="1M Gaming"
@@ -123,7 +119,6 @@ export default function MatchShareCard() {
         />
 
         <div className="flex flex-col items-center px-6 pb-8 -mt-10 relative">
-          {/* Logo */}
           <div className="w-20 h-20 rounded-full overflow-hidden border-4 border-card shadow-gold-lg z-10">
             <img
               src="/images/1m-logo.jpeg"
@@ -132,7 +127,6 @@ export default function MatchShareCard() {
             />
           </div>
 
-          {/* Brand text */}
           <h1
             className="mt-3 text-2xl font-display font-bold tracking-wider"
             style={{
@@ -146,32 +140,28 @@ export default function MatchShareCard() {
             1M GAMING
           </h1>
 
-          {/* Game type badge */}
           <span className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-primary/20 border border-primary/40 px-4 py-1 text-xs font-bold tracking-widest text-primary">
             <Gamepad2 className="h-3.5 w-3.5" />
             {gameType}
           </span>
 
-          {/* Victory heading */}
           <div className="mt-5 flex items-center gap-2">
             <Trophy className="h-6 w-6 text-primary" />
             <span className="text-xl font-display font-bold text-foreground tracking-wide">
-              VICTORY
+              {t("matchShare.victory")}
             </span>
           </div>
 
-          {/* Winner wallet */}
           {match.winner_wallet && (
             <p className="mt-2 font-mono text-sm text-muted-foreground">
               {shortenWallet(match.winner_wallet)}
             </p>
           )}
 
-          {/* Stats row */}
           <div className="mt-5 grid grid-cols-2 gap-4 w-full">
             <div className="flex flex-col items-center rounded-xl bg-secondary/50 border border-border p-3">
               <span className="text-xs text-muted-foreground uppercase tracking-wider">
-                SOL Won
+                {t("matchShare.solWon")}
               </span>
               <span className="text-lg font-bold text-primary mt-1">
                 {solWon}
@@ -179,7 +169,7 @@ export default function MatchShareCard() {
             </div>
             <div className="flex flex-col items-center rounded-xl bg-secondary/50 border border-border p-3">
               <span className="text-xs text-muted-foreground uppercase tracking-wider">
-                Win Reason
+                {t("matchShare.winReason")}
               </span>
               <span className="text-lg font-bold text-foreground mt-1 text-center leading-tight">
                 {winReason}
@@ -187,16 +177,14 @@ export default function MatchShareCard() {
             </div>
           </div>
 
-          {/* CTA */}
           <Link to="/" className="w-full mt-6">
             <Button variant="gold" size="lg" className="w-full text-base">
-              Play Now on 1MGaming.com
+              {t("matchShare.playNow")}
             </Button>
           </Link>
 
-          {/* Footer */}
           <p className="mt-4 text-xs text-muted-foreground/60 tracking-wide">
-            Skill-Based Games on Solana
+            {t("matchShare.skillBasedOnSolana")}
           </p>
         </div>
       </div>

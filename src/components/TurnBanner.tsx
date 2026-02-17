@@ -1,4 +1,5 @@
 import React, { memo, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { Crown } from "lucide-react";
 
@@ -22,6 +23,7 @@ export const TurnBanner = memo(function TurnBanner({
   className,
 }: TurnBannerProps) {
   const [show, setShow] = useState(false);
+  const { t } = useTranslation();
 
   useEffect(() => {
     if (isVisible) {
@@ -47,7 +49,7 @@ export const TurnBanner = memo(function TurnBanner({
     >
       <div className="flex items-center gap-2">
         <Crown className="w-4 h-4 text-primary-foreground" />
-        <p className="font-semibold text-primary-foreground text-sm">Your Turn!</p>
+        <p className="font-semibold text-primary-foreground text-sm">{t("turnBanner.yourTurn")}</p>
       </div>
     </div>
   );

@@ -193,6 +193,7 @@ const MentionPicker = ({
   myWallet?: string;
   onSelect: (tag: string) => void;
 }) => {
+  const { t } = useTranslation();
   const otherPlayers = players.filter(
     (p) => p.wallet.toLowerCase() !== myWallet?.toLowerCase()
   );
@@ -207,7 +208,7 @@ const MentionPicker = ({
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-48 p-2" side="top" align="start">
-        <p className="text-xs text-muted-foreground mb-2 px-1">Tag player</p>
+        <p className="text-xs text-muted-foreground mb-2 px-1">{t("chat.tagPlayer")}</p>
         <div className="space-y-1">
           {otherPlayers.map((player) => (
             <button
@@ -332,6 +333,7 @@ const ChatInput = ({
 
 // Messages list component
 const MessagesList = ({ chat }: { chat: GameChatReturn }) => {
+  const { t } = useTranslation();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
   // Scroll to bottom on new messages
@@ -352,8 +354,8 @@ const MessagesList = ({ chat }: { chat: GameChatReturn }) => {
       {chat.messages.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-full py-8 text-muted-foreground">
           <MessageCircle className="w-8 h-8 mb-2 opacity-50" />
-          <p className="text-sm">No messages</p>
-          <p className="text-xs">Say hello!</p>
+          <p className="text-sm">{t("chat.noMessages")}</p>
+          <p className="text-xs">{t("chat.sayHello")}</p>
         </div>
       ) : (
         <div className="space-y-1">
@@ -375,6 +377,7 @@ const MessagesList = ({ chat }: { chat: GameChatReturn }) => {
 
 // Desktop panel component
 const DesktopChatPanel = ({ chat }: { chat: GameChatReturn }) => {
+  const { t } = useTranslation();
   const [copied, setCopied] = useState<string | null>(null);
   
   const handleSend = useCallback(() => {
@@ -394,7 +397,7 @@ const DesktopChatPanel = ({ chat }: { chat: GameChatReturn }) => {
           <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-muted/30">
             <div className="flex items-center gap-2">
               <MessageCircle className="w-4 h-4 text-primary" />
-              <span className="font-medium text-sm">Chat</span>
+              <span className="font-medium text-sm">{t("chat.chat")}</span>
               <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
                 {chat.players.length}
               </span>

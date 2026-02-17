@@ -1,10 +1,8 @@
 /**
  * DrawRefundError - Shows a clear error message when draw refund fails
- * 
- * This is displayed when the settle-draw edge function fails, especially
- * when the refund_draw instruction is not yet deployed on-chain.
  */
 
+import { useTranslation } from "react-i18next";
 import { AlertTriangle, ExternalLink, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -15,6 +13,8 @@ interface DrawRefundErrorProps {
 }
 
 export function DrawRefundError({ error, onRetry, isRetrying }: DrawRefundErrorProps) {
+  const { t } = useTranslation();
+  
   const isInstructionMissing = 
     error.toLowerCase().includes("not enabled") ||
     error.toLowerCase().includes("instruction not") ||
@@ -25,10 +25,10 @@ export function DrawRefundError({ error, onRetry, isRetrying }: DrawRefundErrorP
       <div className="flex items-start gap-3">
         <AlertTriangle className="text-amber-400 flex-shrink-0 mt-0.5" size={20} />
         <div className="space-y-1">
-          <h4 className="font-semibold text-amber-400">Draw Refund Issue</h4>
+          <h4 className="font-semibold text-amber-400">{t("drawRefund.title")}</h4>
           <p className="text-sm text-muted-foreground">
             {isInstructionMissing
-              ? "Draw refund is not enabled yet. The on-chain program may need to be updated."
+              ? t("drawRefund.notEnabled")
               : error}
           </p>
         </div>
@@ -37,15 +37,14 @@ export function DrawRefundError({ error, onRetry, isRetrying }: DrawRefundErrorP
       {isInstructionMissing && (
         <div className="bg-muted/30 rounded p-3 text-xs text-muted-foreground space-y-2">
           <p>
-            <strong>What this means:</strong> The on-chain program doesn't have a refund_draw 
-            instruction yet. Your funds are safe in the vault.
+            <strong>{t("drawRefund.whatThisMeans")}</strong>
           </p>
           <p>
-            <strong>What you can do:</strong>
+            <strong>{t("drawRefund.whatYouCanDo")}</strong>
           </p>
           <ul className="list-disc list-inside space-y-1 ml-2">
-            <li>Contact support to manually process the refund</li>
-            <li>Wait for the program update and try again later</li>
+            <li>{t("drawRefund.contactSupport")}</li>
+            <li>{t("drawRefund.waitForUpdate")}</li>
           </ul>
         </div>
       )}
@@ -60,7 +59,7 @@ export function DrawRefundError({ error, onRetry, isRetrying }: DrawRefundErrorP
             className="gap-2 border-amber-500/50 text-amber-400 hover:bg-amber-500/20"
           >
             <RefreshCw size={14} className={isRetrying ? "animate-spin" : ""} />
-            {isRetrying ? "Retrying..." : "Try Again"}
+            {isRetrying ? t("drawRefund.retrying") : t("drawRefund.tryAgain")}
           </Button>
         )}
 
@@ -76,7 +75,7 @@ export function DrawRefundError({ error, onRetry, isRetrying }: DrawRefundErrorP
             rel="noopener noreferrer"
           >
             <ExternalLink size={14} />
-            Contact Support
+            {t("drawRefund.contactSupportBtn")}
           </a>
         </Button>
       </div>
