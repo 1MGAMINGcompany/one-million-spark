@@ -85,29 +85,33 @@ const ChessPiece = ({
     ),
     n: (
       <g>
-        {/* Horse head - distinctive silhouette with mane, ears, and muzzle */}
+        {/* Horse silhouette — arched neck, pointed ears, defined muzzle */}
         <path 
-          d="M30 72 L32 55 L28 48 Q26 38 32 30 Q36 22 42 18 L44 12 L48 18 Q52 14 56 16 L58 12 L62 18 Q72 22 74 35 Q75 42 70 48 L72 52 Q74 56 70 58 L65 55 Q60 60 55 58 L50 62 L48 72 Z" 
+          d="M38 75 L36 58 Q34 48 36 40 Q38 32 44 26 L46 20 Q48 16 50 14 L52 16 L54 12 L56 18 Q60 20 62 24 Q66 30 66 38 Q66 44 64 48 L68 50 Q72 52 72 56 Q72 60 68 60 L64 58 Q62 62 58 64 L54 66 L52 75 Z"
           fill={isWhite ? "url(#ivoryGradient)" : "url(#obsidianGradient)"} 
           stroke={isWhite ? "url(#darkGoldGradient)" : "url(#obsidianTrim)"} 
           strokeWidth="2.5"
+          strokeLinejoin="round"
         />
-        {/* Mane detail */}
+        {/* Mane flowing down the neck */}
         <path 
-          d="M44 18 Q40 28 42 38 M48 18 Q46 26 48 34 M52 16 Q52 24 54 30" 
+          d="M46 20 Q42 28 40 38 M50 16 Q48 24 47 32 M54 14 Q54 22 54 28" 
           stroke={isWhite ? "url(#darkGoldGradient)" : "url(#obsidianTrim)"} 
-          strokeWidth="1.5" 
+          strokeWidth="1.8" 
           fill="none"
           strokeLinecap="round"
         />
         {/* Nostril */}
-        <ellipse cx="68" cy="50" rx="2" ry="3" fill={isWhite ? "hsl(35 50% 45%)" : "hsl(220 15% 25%)"}/>
-        {/* Eye - larger and more visible */}
-        <ellipse cx="56" cy="32" rx="4" ry="5" fill={isWhite ? "hsl(35 60% 25%)" : "hsl(45 90% 50%)"}/>
-        <circle cx="55" cy="31" r="1.5" fill={isWhite ? "hsl(45 30% 90%)" : "hsl(45 93% 80%)"}/>
+        <ellipse cx="68" cy="54" rx="2" ry="2.5" fill={isWhite ? "hsl(35 50% 45%)" : "hsl(220 15% 25%)"}/>
+        {/* Eye */}
+        <ellipse cx="58" cy="34" rx="3.5" ry="4.5" fill={isWhite ? "hsl(35 60% 25%)" : "hsl(45 90% 50%)"}/>
+        <circle cx="57" cy="33" r="1.5" fill={isWhite ? "hsl(45 30% 90%)" : "hsl(45 93% 80%)"}/>
+        {/* Ear tips */}
+        <path d="M50 14 L49 10 L52 13" fill={isWhite ? "url(#ivoryGradient)" : "url(#obsidianGradient)"} stroke={isWhite ? "url(#darkGoldGradient)" : "url(#obsidianTrim)"} strokeWidth="1.5"/>
+        <path d="M54 12 L55 8 L57 12" fill={isWhite ? "url(#ivoryGradient)" : "url(#obsidianGradient)"} stroke={isWhite ? "url(#darkGoldGradient)" : "url(#obsidianTrim)"} strokeWidth="1.5"/>
         {/* Base */}
-        <ellipse cx="50" cy="82" rx="26" ry="8" fill={isWhite ? "url(#ivoryGradient)" : "url(#obsidianGradient)"} stroke={isWhite ? "url(#darkGoldGradient)" : "url(#obsidianTrim)"} strokeWidth="2.5"/>
-        <rect x="28" y="72" width="44" height="10" rx="3" fill={isWhite ? "url(#ivoryGradient)" : "url(#obsidianGradient)"} stroke={isWhite ? "url(#darkGoldGradient)" : "url(#obsidianTrim)"} strokeWidth="2.5"/>
+        <ellipse cx="46" cy="82" rx="22" ry="8" fill={isWhite ? "url(#ivoryGradient)" : "url(#obsidianGradient)"} stroke={isWhite ? "url(#darkGoldGradient)" : "url(#obsidianTrim)"} strokeWidth="2.5"/>
+        <rect x="28" y="72" width="38" height="10" rx="3" fill={isWhite ? "url(#ivoryGradient)" : "url(#obsidianGradient)"} stroke={isWhite ? "url(#darkGoldGradient)" : "url(#obsidianTrim)"} strokeWidth="2.5"/>
       </g>
     ),
     p: (
