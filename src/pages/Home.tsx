@@ -8,6 +8,7 @@ import PyramidLogo from "@/components/PyramidLogo";
 import { MobileAppPrompt } from "@/components/MobileAppPrompt";
 import { usePrivySolBalance } from "@/hooks/usePrivySolBalance";
 import { AddSolCard } from "@/components/AddSolCard";
+import { WelcomeIntroModal } from "@/components/WelcomeIntroModal";
 
 const Home = () => {
   const { t } = useTranslation();
@@ -26,6 +27,7 @@ const Home = () => {
 
   return (
     <div className="min-h-screen">
+      <WelcomeIntroModal isAuthenticated={isPrivyUser} />
       {/* Hero Section */}
       <section className="relative min-h-[90vh] flex items-center overflow-hidden">
         {/* Background Effects */}
