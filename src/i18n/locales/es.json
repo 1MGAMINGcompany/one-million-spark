@@ -690,7 +690,7 @@
     "walletLoginNotConfigured": "Inicio con billetera no configurado",
     "disconnect": "Desconectar",
     "loginToPlay": "Inicia sesión para jugar",
-    "loginToPlayDesc": "Inicia sesión con Google, Apple o correo electrónico para empezar.",
+    "loginToPlayDesc": "Inicia sesión con Google, X o correo electrónico para empezar.",
     "orUseExternal": "O conectar una billetera externa",
     "browseWithoutWallet": "Puedes explorar salas sin billetera. Solo necesitas una billetera para jugar."
   },

@@ -536,7 +536,7 @@
     "walletLoginNotConfigured": "Login portafoglio non configurato",
     "disconnect": "Disconnetti",
     "loginToPlay": "Accedi per giocare",
-    "loginToPlayDesc": "Accedi con Google, Apple o e-mail per iniziare.",
+    "loginToPlayDesc": "Accedi con Google, X o e-mail per iniziare.",
     "orUseExternal": "Oppure collega un portafoglio esterno",
     "browseWithoutWallet": "Puoi esplorare le stanze senza portafoglio. Serve solo per giocare."
   },
