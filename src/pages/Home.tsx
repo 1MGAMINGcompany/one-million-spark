@@ -6,9 +6,15 @@ import FeaturedGameCard from "@/components/FeaturedGameCard";
 import { ChessIcon, DominoIcon, BackgammonIcon, CheckersIcon, LudoIcon } from "@/components/GameIcons";
 import PyramidLogo from "@/components/PyramidLogo";
 import { MobileAppPrompt } from "@/components/MobileAppPrompt";
+import { usePrivySolBalance } from "@/hooks/usePrivySolBalance";
+import { AddSolCard } from "@/components/AddSolCard";
 
 const Home = () => {
   const { t } = useTranslation();
+  const { isPrivyUser, walletAddress, balanceSol, isLowBalance } = usePrivySolBalance();
+
+  // Show funding card for Privy users with low/zero balance
+  const showFundingCard = isPrivyUser && isLowBalance && walletAddress;
 
   const featuredGames = [
     { name: t("games.chess"), tagline: t("games.chessTagline"), path: "/create-room", icon: <ChessIcon /> },
@@ -67,45 +73,52 @@ const Home = () => {
                 {t("hero.mainTagline")}
               </p>
 
-              {/* CTA Buttons */}
-              <div className="flex flex-col gap-4 mt-4">
-                <Button asChild size="lg" variant="gold" className="group text-lg h-14 px-8 transition-all">
-                  <Link to="/play-ai" className="flex items-center gap-2">
-                    <Bot className="w-5 h-5 group-hover:drop-shadow-[0_0_6px_hsl(45_93%_54%_/_0.6)] transition-all" />
-                    {t("home.playAiFree")}
-                  </Link>
-                </Button>
-                <div className="flex flex-col sm:flex-row gap-4">
-                  <Button asChild size="lg" variant="gold" className="group text-lg h-14 px-8 flex-1 transition-all">
-                    <Link to="/create-room" className="flex items-center gap-2">
-                      <Swords className="w-5 h-5 group-hover:drop-shadow-[0_0_6px_hsl(45_93%_54%_/_0.6)] transition-all" />
-                      {t("home.createGameRoom")}
-                    </Link>
-                  </Button>
-                  <Button asChild size="lg" variant="outline" className="group text-lg h-14 px-8 flex-1 border-primary/30 hover:border-primary/50 transition-all">
-                    <Link to="/room-list" className="flex items-center gap-2">
-                      <Users className="w-5 h-5 text-primary group-hover:drop-shadow-[0_0_6px_hsl(45_93%_54%_/_0.6)] transition-all" />
-                      {t("home.viewPublicRooms")}
-                    </Link>
-                  </Button>
-                </div>
-              </div>
+              {/* Zero-balance funding card for Privy users */}
+              {showFundingCard ? (
+                <AddSolCard walletAddress={walletAddress} balanceSol={balanceSol} />
+              ) : (
+                <>
+                  {/* CTA Buttons */}
+                  <div className="flex flex-col gap-4 mt-4">
+                    <Button asChild size="lg" variant="gold" className="group text-lg h-14 px-8 transition-all">
+                      <Link to="/play-ai" className="flex items-center gap-2">
+                        <Bot className="w-5 h-5 group-hover:drop-shadow-[0_0_6px_hsl(45_93%_54%_/_0.6)] transition-all" />
+                        {t("home.playAiFree")}
+                      </Link>
+                    </Button>
+                    <div className="flex flex-col sm:flex-row gap-4">
+                      <Button asChild size="lg" variant="gold" className="group text-lg h-14 px-8 flex-1 transition-all">
+                        <Link to="/create-room" className="flex items-center gap-2">
+                          <Swords className="w-5 h-5 group-hover:drop-shadow-[0_0_6px_hsl(45_93%_54%_/_0.6)] transition-all" />
+                          {t("home.createGameRoom")}
+                        </Link>
+                      </Button>
+                      <Button asChild size="lg" variant="outline" className="group text-lg h-14 px-8 flex-1 border-primary/30 hover:border-primary/50 transition-all">
+                        <Link to="/room-list" className="flex items-center gap-2">
+                          <Users className="w-5 h-5 text-primary group-hover:drop-shadow-[0_0_6px_hsl(45_93%_54%_/_0.6)] transition-all" />
+                          {t("home.viewPublicRooms")}
+                        </Link>
+                      </Button>
+                    </div>
+                  </div>
 
-              {/* Stats/Trust indicators */}
-              <div className="flex flex-wrap justify-center lg:justify-start gap-6 mt-6 text-sm text-muted-foreground">
-                <div className="flex items-center gap-2">
-                  <Shield className="w-4 h-4 text-primary" />
-                  <span>{t("home.secureFair")}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Zap className="w-4 h-4 text-primary" />
-                  <span>{t("home.instantMatches")}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Trophy className="w-4 h-4 text-primary" />
-                  <span>{t("home.skillBasedOnly")}</span>
-                </div>
-              </div>
+                  {/* Stats/Trust indicators */}
+                  <div className="flex flex-wrap justify-center lg:justify-start gap-6 mt-6 text-sm text-muted-foreground">
+                    <div className="flex items-center gap-2">
+                      <Shield className="w-4 h-4 text-primary" />
+                      <span>{t("home.secureFair")}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Zap className="w-4 h-4 text-primary" />
+                      <span>{t("home.instantMatches")}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Trophy className="w-4 h-4 text-primary" />
+                      <span>{t("home.skillBasedOnly")}</span>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Right Side - Decorative Pyramid Panel */}
