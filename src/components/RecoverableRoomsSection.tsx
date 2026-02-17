@@ -4,6 +4,7 @@
  */
 
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { AlertTriangle, Loader2, RefreshCw, Gamepad2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -41,6 +42,7 @@ function formatTimeAgo(dateString: string): string {
 }
 
 export function RecoverableRoomsSection({ wallet }: RecoverableRoomsSectionProps) {
+  const { t } = useTranslation();
   const [rooms, setRooms] = useState<RecoverableRoom[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -87,7 +89,7 @@ export function RecoverableRoomsSection({ wallet }: RecoverableRoomsSectionProps
         <CardContent className="py-8">
           <div className="flex items-center justify-center gap-3 text-muted-foreground">
             <Loader2 className="h-5 w-5 animate-spin" />
-            <span>Checking for stuck rooms…</span>
+            <span>{t("recoverableRooms.checkingStuck")}</span>
           </div>
         </CardContent>
       </Card>
@@ -104,7 +106,7 @@ export function RecoverableRoomsSection({ wallet }: RecoverableRoomsSectionProps
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2 text-amber-400">
             <AlertTriangle className="h-5 w-5" />
-            Stuck Rooms
+            {t("recoverableRooms.stuckRooms")}
           </CardTitle>
           <Button
             variant="ghost"
@@ -117,7 +119,7 @@ export function RecoverableRoomsSection({ wallet }: RecoverableRoomsSectionProps
           </Button>
         </div>
         <p className="text-sm text-muted-foreground">
-          These rooms may have stuck funds. You can attempt recovery below.
+          {t("recoverableRooms.stuckFundsDesc")}
         </p>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -142,9 +144,9 @@ export function RecoverableRoomsSection({ wallet }: RecoverableRoomsSectionProps
                   {shortenPda(room.room_pda)}
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Role: <span className="text-foreground">{isCreator ? 'Creator' : 'Joiner'}</span>
+                  {t("recoverableRooms.role")} <span className="text-foreground">{isCreator ? t("recoverableRooms.creator") : t("recoverableRooms.joiner")}</span>
                   {!hasOpponent && isCreator && (
-                    <span className="text-amber-400 ml-2">(awaiting opponent)</span>
+                    <span className="text-amber-400 ml-2">{t("recoverableRooms.awaitingOpponent")}</span>
                   )}
                 </p>
               </div>

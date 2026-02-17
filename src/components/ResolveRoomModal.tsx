@@ -241,32 +241,32 @@ export function ResolveRoomModal({
 
         <div className="py-4 space-y-3">
           <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">Room ID:</span>
+            <span className="text-muted-foreground">{t("resolveRoom.roomId")}</span>
             <span className="font-mono">#{roomData.roomId}</span>
           </div>
           <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">Game:</span>
+            <span className="text-muted-foreground">{t("resolveRoom.game")}</span>
             <span className="capitalize">{roomData.gameType}</span>
           </div>
           <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">Players:</span>
+            <span className="text-muted-foreground">{t("resolveRoom.players")}</span>
             <span>{playerCount}</span>
           </div>
           <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">Status:</span>
+            <span className="text-muted-foreground">{t("resolveRoom.status")}</span>
             <span>
               {isFinished
-                ? "Finished"
+                ? t("resolveRoom.finished")
                 : isCancelled
-                ? "Cancelled"
+                ? t("resolveRoom.cancelled")
                 : playerCount >= 2
-                ? "In Progress"
-                : "Waiting"}
+                ? t("resolveRoom.inProgress")
+                : t("resolveRoom.waiting")}
             </span>
           </div>
           {roomData.stakeLamports > 0 && (
             <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Stake:</span>
+              <span className="text-muted-foreground">{t("resolveRoom.stake")}</span>
               <span>{(roomData.stakeLamports / 1e9).toFixed(4)} SOL</span>
             </div>
           )}
@@ -274,8 +274,7 @@ export function ResolveRoomModal({
 
         {action === "forfeit" && (
           <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-3 text-sm text-destructive">
-            <strong>Warning:</strong> Forfeiting means you lose and your opponent wins the pot.
-            This cannot be undone.
+            <strong>{t("resolveRoom.forfeitWarning")}</strong>
           </div>
         )}
 

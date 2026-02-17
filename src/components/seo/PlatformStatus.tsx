@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { CheckCircle } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 
@@ -10,38 +11,42 @@ const games = [
   { name: "Ludo", live: true },
 ];
 
-const PlatformStatus = () => (
-  <Card className="mt-12">
-    <CardHeader>
-      <CardTitle className="text-lg">Platform Status</CardTitle>
-    </CardHeader>
-    <CardContent className="space-y-4">
-      <div>
-        <p className="text-sm font-medium text-foreground/80 mb-2">Supported Wallets</p>
-        <div className="flex flex-wrap gap-3">
-          {wallets.map((w) => (
-            <span key={w} className="inline-flex items-center gap-1.5 text-sm text-foreground/70">
-              <CheckCircle className="w-4 h-4 text-green-500" /> {w}
-            </span>
-          ))}
+const PlatformStatus = () => {
+  const { t } = useTranslation();
+  
+  return (
+    <Card className="mt-12">
+      <CardHeader>
+        <CardTitle className="text-lg">{t("platformStatus.title")}</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div>
+          <p className="text-sm font-medium text-foreground/80 mb-2">{t("platformStatus.supportedWallets")}</p>
+          <div className="flex flex-wrap gap-3">
+            {wallets.map((w) => (
+              <span key={w} className="inline-flex items-center gap-1.5 text-sm text-foreground/70">
+                <CheckCircle className="w-4 h-4 text-green-500" /> {w}
+              </span>
+            ))}
+          </div>
         </div>
-      </div>
-      <div>
-        <p className="text-sm font-medium text-foreground/80 mb-2">Live Games</p>
-        <div className="flex flex-wrap gap-3">
-          {games.map((g) => (
-            <span key={g.name} className="inline-flex items-center gap-1.5 text-sm text-foreground/70">
-              <CheckCircle className={`w-4 h-4 ${g.live ? "text-green-500" : "text-muted-foreground"}`} />
-              {g.name}
-            </span>
-          ))}
+        <div>
+          <p className="text-sm font-medium text-foreground/80 mb-2">{t("platformStatus.liveGames")}</p>
+          <div className="flex flex-wrap gap-3">
+            {games.map((g) => (
+              <span key={g.name} className="inline-flex items-center gap-1.5 text-sm text-foreground/70">
+                <CheckCircle className={`w-4 h-4 ${g.live ? "text-green-500" : "text-muted-foreground"}`} />
+                {g.name}
+              </span>
+            ))}
+          </div>
         </div>
-      </div>
-      <p className="text-xs text-foreground/50">
-        1MGAMING is 100% skill-based — no RNG, no house edge on game outcomes. All settlements happen on the Solana blockchain.
-      </p>
-    </CardContent>
-  </Card>
-);
+        <p className="text-xs text-foreground/50">
+          {t("platformStatus.disclaimer")}
+        </p>
+      </CardContent>
+    </Card>
+  );
+};
 
 export default PlatformStatus;
