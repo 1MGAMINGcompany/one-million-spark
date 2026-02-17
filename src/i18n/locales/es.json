@@ -200,7 +200,7 @@
     "description": "Por favor conecta tu billetera para usar esta función.",
     "hint": "Haz clic en \"Conectar Billetera\" en la esquina superior derecha.",
     "feesTitle": "Tarifas del Juego",
-    "feesDescription": "Todas las tarifas de entrada se pagan en USDT en la red Polygon. ¡Nosotros cubrimos todos los costos de gas!"
+    "feesDescription": "Todas las tarifas de entrada se pagan en SOL en la red Solana."
   },
   "gameAI": {
     "backToTemple": "Volver al Templo",
@@ -925,10 +925,10 @@
     "cryptoTitle": "Política de Criptomonedas",
     "cryptoText": "1M Gaming no compra, vende ni intercambia criptomonedas. Somos una plataforma de juegos, no un exchange de cripto.",
     "cryptoPoint1": "No cambiamos moneda fiduciaria por criptomonedas",
-    "cryptoPoint2": "Todas las transacciones usan USDT en la red Polygon",
-    "cryptoPoint3": "Los jugadores deben adquirir USDT independientemente a través de exchanges autorizados",
-    "gasFeesTitle": "Comisiones de Gas",
-    "gasFeesText": "1M Gaming cubre todas las comisiones de gas de blockchain para transacciones de juego. Solo pagas tu cuota de entrada al juego – nosotros nos encargamos del resto. Esto asegura una experiencia de juego fluida sin costos ocultos.",
+    "cryptoPoint2": "Todas las transacciones usan SOL en la red Solana",
+    "cryptoPoint3": "Los jugadores deben adquirir SOL independientemente a través de exchanges autorizados",
+    "gasFeesTitle": "Comisiones de Red",
+    "gasFeesText": "Las comisiones de red de Solana son mínimas (típicamente menos de $0.01 por transacción). Pagas la cuota de entrada más una pequeña comisión de red por cada acción de juego.",
     "fairPlayTitle": "Compromiso de Juego Limpio",
     "fairPlayText": "Todos los juegos usan lógica verificable en cadena con aleatoriedad de compromiso-revelación para juegos como Ludo, Backgammon y Dominó. Los estados del juego se almacenan en la blockchain para transparencia y resolución de disputas.",
     "noticeTitle": "Aviso Importante",
