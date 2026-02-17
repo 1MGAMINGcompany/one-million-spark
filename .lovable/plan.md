@@ -1,54 +1,70 @@
 
 
-# Fix: "Buy with Card" Button Does Nothing
+# Fix: "Buy with Card" Button Does Nothing (Root Cause Found)
 
-## Root Cause
+## Problem
 
-The `fundWallet()` call uses the wrong options format. The code currently passes:
+Two bugs prevent the Buy with Card button from working:
 
-```text
-options: { chain: "solana:mainnet", amount: "0.05" }
+1. **`usePrivySolBalance.ts` missing App ID fallback**: Line 6 uses `import.meta.env.VITE_PRIVY_APP_ID` without the hardcoded fallback that every other file has. Since the env var is not set in the build, this hook returns early with `isPrivyUser: false` and `walletAddress: null`. The Add Funds page then thinks the user is NOT a Privy user and calls `login()` instead of `fundWallet()`, producing the "already logged in" error.
+
+2. **Privy console warning about missing Solana connectors**: The PrivyProvider config enables Solana embedded wallets but does not configure `externalWallets.solana.connectors`. This produces the console warning. However, adding `externalWallets` previously caused an `onMount` crash, so the safe fix is to explicitly set `externalWallets: { solana: { connectors: [] } }` or skip it entirely if it triggers the crash again.
+
+## Changes
+
+### 1. `src/hooks/usePrivySolBalance.ts` (line 6) -- Critical Fix
+
+Add the hardcoded fallback to match all other files:
+
+```
+// Before:
+const PRIVY_APP_ID = import.meta.env.VITE_PRIVY_APP_ID;
+
+// After:
+const PRIVY_APP_ID = import.meta.env.VITE_PRIVY_APP_ID || "cmlq6g2dn00760cl2djbh9dfy";
 ```
 
-But the Privy SDK expects:
+This single change will make `isPrivyUser` return `true` for logged-in users, which means `handleBuyOrLogin` will correctly call `fundWallet()` instead of `login()`.
 
-```text
-options: { cluster: { name: "mainnet-beta" }, amount: "0.05" }
+### 2. `src/pages/AddFunds.tsx` (line 44-50) -- Guard against double-login
+
+Add a check for `authenticated` before calling `login()` to prevent the "already logged in" error as a safety net:
+
+```typescript
+const handleBuyOrLogin = async () => {
+  if (isPrivyUser && walletAddress) {
+    await handleBuyWithCard();
+  } else if (authenticated) {
+    // User is logged in but wallet not detected yet -- try fundWallet with fallback
+    toast.info("Loading your wallet... please try again in a moment.");
+  } else {
+    login();
+  }
+};
 ```
 
-The incorrect `chain` property is silently ignored, causing `fundWallet` to fail without any visible error (the catch block only does `console.warn`).
+This requires importing `usePrivy` to get the `authenticated` flag.
 
-This affects BOTH the `AddSolCard.tsx` button AND the `AddFunds.tsx` button -- they both have the same bug.
+### 3. `src/components/PrivyProviderWrapper.tsx` -- Suppress Solana connectors warning
 
-## Fix
+Attempt to add `externalWallets: { solana: { connectors: [] } }` to the PrivyProvider config. If this causes the `onMount` crash (as noted in project history), revert and leave the warning as cosmetic-only.
 
-### 1. `src/components/AddSolCard.tsx` (line ~40)
-
-Change the `fundWallet` call options from:
-```text
-options: { chain: "solana:mainnet", amount: "0.05" }
-```
-to:
-```text
-options: { cluster: { name: "mainnet-beta" }, amount: "0.05" }
-```
-
-### 2. `src/pages/AddFunds.tsx` (line ~29)
-
-Same fix -- change `chain: "solana:mainnet"` to `cluster: { name: "mainnet-beta" }`.
-
-### 3. Add user-visible error feedback
-
-Both files currently swallow errors with `console.warn`. Add a `toast.error()` so if the funding modal still fails to open, the user sees a message instead of nothing happening.
-
-## Files Changed
+## Impact
 
 | File | Change |
 |------|--------|
-| `src/components/AddSolCard.tsx` | Fix `fundWallet` options format, add toast on error |
-| `src/pages/AddFunds.tsx` | Fix `fundWallet` options format, add toast on error |
+| `src/hooks/usePrivySolBalance.ts` | Add fallback App ID (1 line) |
+| `src/pages/AddFunds.tsx` | Guard `login()` call with `authenticated` check |
+| `src/components/PrivyProviderWrapper.tsx` | Add empty Solana connectors array (if safe) |
 
-## Important Note
+## Why This Fixes It
 
-The Privy funding modal may still not open on the Lovable preview domain -- it only works on your whitelisted production domain (1mgaming.com). But with this fix, clicking the button on production will correctly open the Privy card payment modal.
+The root cause chain is:
+1. `VITE_PRIVY_APP_ID` env var is empty in the build
+2. `usePrivySolBalance` returns `isPrivyUser: false`
+3. `handleBuyOrLogin` calls `login()` instead of `fundWallet()`
+4. Privy SDK throws "already logged in" error
+5. Button appears to do nothing
+
+After fix: `isPrivyUser` will be `true`, `walletAddress` will be populated, and clicking "Buy with Card" will correctly call `fundWallet()`.
 
