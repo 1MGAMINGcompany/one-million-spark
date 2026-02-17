@@ -203,6 +203,20 @@ export function useDurableGameSync({
             dbg("durable.submit.timeout_early", {});
             return false;
             
+          case "already_rolled":
+            // Backgammon double-roll guard: server rejected because dice already rolled this turn
+            // Silently ignore - dice state will be restored from DB by polling/reconnect
+            console.warn("[DurableSync] Already rolled this turn (server guard)");
+            dbg("durable.submit.already_rolled", { wallet: wallet.slice(0, 8) });
+            return false;
+            
+          case "game_already_finished":
+          case "game_finished":
+            // Game is over - silently ignore, UI will catch up via polling
+            console.warn("[DurableSync] Game already finished");
+            dbg("durable.submit.game_finished", {});
+            return false;
+            
           case "missing_client_move_id":
             // This should never happen if client code is correct
             console.error("[DurableSync] Missing clientMoveId for ranked game - this is a bug!");
