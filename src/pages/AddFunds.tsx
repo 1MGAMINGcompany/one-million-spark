@@ -6,6 +6,7 @@ import { Wallet, CreditCard, Gamepad2, Link2, CheckCircle2, ExternalLink, Refres
 import { Button } from "@/components/ui/button";
 import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import { useFundWallet } from "@privy-io/react-auth/solana";
 import { useLogin } from "@privy-io/react-auth";
@@ -23,6 +24,7 @@ const AddFunds = () => {
   const handleBuyWithCard = async () => {
     if (!walletAddress) return;
     try {
+      console.log("[AddFunds] calling fundWallet for", walletAddress);
       await fundWallet({
         address: walletAddress,
         options: {
@@ -30,8 +32,12 @@ const AddFunds = () => {
           amount: "0.05",
         },
       });
-    } catch (e) {
-      console.warn("[AddFunds] fundWallet dismissed or failed:", e);
+      console.log("[AddFunds] fundWallet resolved");
+    } catch (e: any) {
+      console.error("[AddFunds] fundWallet error:", e);
+      if (e?.message !== "CLOSED_MODAL" && e?.message !== "User closed modal") {
+        toast.error("Could not open payment. Please try again.");
+      }
     }
   };
 

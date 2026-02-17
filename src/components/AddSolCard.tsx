@@ -32,6 +32,7 @@ export function AddSolCard({ walletAddress, balanceSol }: AddSolCardProps) {
 
   const handleBuyWithCard = async () => {
     try {
+      console.log("[AddSolCard] calling fundWallet for", walletAddress);
       await fundWallet({
         address: walletAddress,
         options: {
@@ -39,8 +40,12 @@ export function AddSolCard({ walletAddress, balanceSol }: AddSolCardProps) {
           amount: "0.05",
         },
       });
-    } catch (e) {
-      console.warn("[AddSolCard] fundWallet dismissed or failed:", e);
+      console.log("[AddSolCard] fundWallet resolved");
+    } catch (e: any) {
+      console.error("[AddSolCard] fundWallet error:", e);
+      if (e?.message !== "CLOSED_MODAL" && e?.message !== "User closed modal") {
+        toast.error("Could not open payment. Please try again.");
+      }
     }
   };
 
