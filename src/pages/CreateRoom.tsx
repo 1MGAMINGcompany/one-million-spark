@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { usePrivySolBalance } from "@/hooks/usePrivySolBalance";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { PublicKey } from "@solana/web3.js";
@@ -302,9 +303,18 @@ export default function CreateRoom() {
     
     if (entryFeeNum > currentBalance) {
       toast({
-        title: t("createRoom.insufficientBalance"),
-        description: t("createRoom.insufficientBalanceDesc", { need: entryFeeNum, have: currentBalance.toFixed(4) }),
+        title: t("addSol.insufficientTitle"),
+        description: t("addSol.insufficientForRoom", { need: entryFeeNum, have: currentBalance.toFixed(4) }),
         variant: "destructive",
+        action: (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => navigate("/add-funds")}
+          >
+            {t("addSol.addFundsNow")}
+          </Button>
+        ),
       });
       return;
     }
