@@ -40,6 +40,7 @@ export default defineConfig(({ mode }) => ({
       '@solana/wallet-adapter-react-ui',
       '@solana/wallet-adapter-base',
       '@solana/web3.js',
+      '@solana-program/memo',
       'react',
       'react-dom',
     ],
