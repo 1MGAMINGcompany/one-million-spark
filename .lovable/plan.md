@@ -1,48 +1,54 @@
 
 
-# Fix: Make "Buy with Card" Button Always Visible on Add Funds Page
+# Fix: "Buy with Card" Button Does Nothing
 
-## Problem
+## Root Cause
 
-The Add Funds page has two render paths:
-- **Privy branch** (`isPrivyUser && walletAddress`): Shows the AddSolCard which HAS the "Buy with Card" button
-- **Default branch** (everyone else): Shows informational steps about wallets and payment methods but NO actionable button
-
-When the Privy wallet address loads slowly, or on certain mobile webviews, the user lands on the default branch and sees no way to buy -- just text about payment methods with no actual button to click.
-
-## Solution
-
-Add a large, prominent "Buy with Card" button to the **default (non-Privy) view** in the Step 2 section of `AddFunds.tsx`. The button behavior:
-- If the user has a Privy wallet (`isPrivyUser && walletAddress`): calls `fundWallet()` directly
-- If not logged in: calls Privy `login()` to prompt signup first, then the page re-renders with the Privy view
-
-Also add a standalone "Buy with Card" button near the TOP of the default view (above the steps) so it's immediately visible without scrolling.
-
-## File Changes
-
-### `src/pages/AddFunds.tsx`
-
-1. Import `useLogin` from `@privy-io/react-auth`
-2. Create a `handleBuyOrLogin` function that either calls `fundWallet` (if Privy wallet exists) or `login()` (if not authenticated)
-3. Add a prominent "Buy with Card" button at the top of the default view, right after the SOL price display
-4. Add the same button inside the Step 2 section, after the payment method badges (replacing the dead-end text)
-5. Both buttons are large (size="lg"), full-width, with the CreditCard icon -- impossible to miss
-
-### What the user sees (both logged in and logged out):
+The `fundWallet()` call uses the wrong options format. The code currently passes:
 
 ```text
-  ADD FUNDS
-  Adding funds is easy!
-
-  SOL Price: $85.08
-
-  [====  Buy with Card  ====]   <-- NEW: always visible, top of page
-  Credit Card | Apple Pay | Google Pay
-
-  --- Step 1: Get a Wallet ---
-  ...
-  --- Step 2: Buy SOL ---
-  [====  Buy with Card  ====]   <-- NEW: also here in the step
+options: { chain: "solana:mainnet", amount: "0.05" }
 ```
 
-If not logged in, clicking the button prompts Privy login. After login, the page re-renders with the Privy view showing AddSolCard with balance and the same button.
+But the Privy SDK expects:
+
+```text
+options: { cluster: { name: "mainnet-beta" }, amount: "0.05" }
+```
+
+The incorrect `chain` property is silently ignored, causing `fundWallet` to fail without any visible error (the catch block only does `console.warn`).
+
+This affects BOTH the `AddSolCard.tsx` button AND the `AddFunds.tsx` button -- they both have the same bug.
+
+## Fix
+
+### 1. `src/components/AddSolCard.tsx` (line ~40)
+
+Change the `fundWallet` call options from:
+```text
+options: { chain: "solana:mainnet", amount: "0.05" }
+```
+to:
+```text
+options: { cluster: { name: "mainnet-beta" }, amount: "0.05" }
+```
+
+### 2. `src/pages/AddFunds.tsx` (line ~29)
+
+Same fix -- change `chain: "solana:mainnet"` to `cluster: { name: "mainnet-beta" }`.
+
+### 3. Add user-visible error feedback
+
+Both files currently swallow errors with `console.warn`. Add a `toast.error()` so if the funding modal still fails to open, the user sees a message instead of nothing happening.
+
+## Files Changed
+
+| File | Change |
+|------|--------|
+| `src/components/AddSolCard.tsx` | Fix `fundWallet` options format, add toast on error |
+| `src/pages/AddFunds.tsx` | Fix `fundWallet` options format, add toast on error |
+
+## Important Note
+
+The Privy funding modal may still not open on the Lovable preview domain -- it only works on your whitelisted production domain (1mgaming.com). But with this fix, clicking the button on production will correctly open the Privy card payment modal.
+
