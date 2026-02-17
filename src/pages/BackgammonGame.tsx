@@ -899,7 +899,6 @@ const BackgammonGame = () => {
             }
           }
           
-          diceRolledThisTurnRef.current = false;
           setCurrentTurnWallet(freshTurnWallet);
           // Reset timeout debounce since turn actually changed
           timeoutFiredRef.current = false;
@@ -907,21 +906,48 @@ const BackgammonGame = () => {
           // FIX: Explicitly reset the turn timer when polling detects turn change
           turnTimer.resetTimer();
           
-          // Only clear dice if we haven't rolled this turn yet
-          if (!diceRolledThisTurnRef.current) {
+          // Determine if it's now my turn
+          const turnToMe = isSameWallet(freshTurnWallet, address);
+          
+          if (turnToMe) {
+            // It's my turn after reconnect/polling - check DB for existing dice roll
+            try {
+              const { data: movesData } = await supabase.functions.invoke("get-moves", {
+                body: { roomPda },
+              });
+              const lastMove = movesData?.moves?.at(-1);
+              if (lastMove?.move_data?.type === 'dice_roll' && isSameWallet(lastMove.wallet, freshTurnWallet)) {
+                // Restore dice from DB instead of clearing
+                const restoredDice = lastMove.move_data.dice || [];
+                const restoredRemaining = lastMove.move_data.remainingMoves || restoredDice;
+                console.log("[BackgammonGame] Restoring dice from DB on reconnect:", restoredDice);
+                setDice(restoredDice);
+                setRemainingMoves(restoredRemaining);
+                diceRolledThisTurnRef.current = true;
+                setGameStatus("Your turn - Make your moves!");
+              } else {
+                // No dice roll found for this turn - clear and let player roll
+                diceRolledThisTurnRef.current = false;
+                setDice([]);
+                setRemainingMoves([]);
+                setGameStatus("Your turn - Roll the dice!");
+              }
+            } catch (err) {
+              console.warn("[BackgammonGame] Failed to restore dice from DB:", err);
+              diceRolledThisTurnRef.current = false;
+              setDice([]);
+              setRemainingMoves([]);
+              setGameStatus("Your turn - Roll the dice!");
+            }
+          } else {
+            // Opponent's turn - always clear dice and reset ref
+            diceRolledThisTurnRef.current = false;
             setDice([]);
             setRemainingMoves([]);
+            setGameStatus("Opponent's turn");
           }
           setSelectedPoint(null);
           setValidMoves([]);
-          
-          // Update game status
-          const turnToMe = isSameWallet(freshTurnWallet, address);
-          if (turnToMe) {
-            setGameStatus("Your turn - Roll the dice!");
-          } else {
-            setGameStatus("Opponent's turn");
-          }
         }
         
         // Also track turn_started_at for debounce reset
@@ -952,17 +978,44 @@ const BackgammonGame = () => {
         // Force immediate sync
         supabase.functions.invoke("game-session-get", {
           body: { roomPda },
-        }).then(({ data }) => {
+        }).then(async ({ data }) => {
           const dbTurnWallet = data?.session?.current_turn_wallet;
           if (dbTurnWallet && dbTurnWallet !== currentTurnWallet) {
             console.log("[BackgammonGame] Visibility poll detected turn change");
             setCurrentTurnWallet(dbTurnWallet);
-            setDice([]);
-            setRemainingMoves([]);
+            const isNowMyTurn = isSameWallet(dbTurnWallet, address);
+            if (isNowMyTurn) {
+              // Restore dice from DB if already rolled this turn
+              try {
+                const { data: movesData } = await supabase.functions.invoke("get-moves", {
+                  body: { roomPda },
+                });
+                const lastMove = movesData?.moves?.at(-1);
+                if (lastMove?.move_data?.type === 'dice_roll' && isSameWallet(lastMove.wallet, dbTurnWallet)) {
+                  setDice(lastMove.move_data.dice || []);
+                  setRemainingMoves(lastMove.move_data.remainingMoves || lastMove.move_data.dice || []);
+                  diceRolledThisTurnRef.current = true;
+                  setGameStatus("Your turn - Make your moves!");
+                } else {
+                  diceRolledThisTurnRef.current = false;
+                  setDice([]);
+                  setRemainingMoves([]);
+                  setGameStatus("Your turn - Roll the dice!");
+                }
+              } catch {
+                diceRolledThisTurnRef.current = false;
+                setDice([]);
+                setRemainingMoves([]);
+                setGameStatus("Your turn - Roll the dice!");
+              }
+            } else {
+              diceRolledThisTurnRef.current = false;
+              setDice([]);
+              setRemainingMoves([]);
+              setGameStatus("Opponent's turn");
+            }
             setSelectedPoint(null);
             setValidMoves([]);
-            const isNowMyTurn = isSameWallet(dbTurnWallet, address);
-            setGameStatus(isNowMyTurn ? "Your turn - Roll the dice!" : "Opponent's turn");
             timeoutFiredRef.current = false;
           }
         }).catch(err => {
