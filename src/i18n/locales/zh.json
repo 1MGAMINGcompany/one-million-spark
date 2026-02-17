@@ -514,7 +514,13 @@
     "openWalletApp": "打开{{wallet}}应用",
     "alreadyInWallet": "我已经在{{wallet}}中",
     "copySite": "复制1mgaming.com",
-    "copyPage": "复制页面链接"
+    "copyPage": "复制页面链接",
+    "externalWallet": "外部钱包",
+    "advancedConnectExternal": "高级：连接外部钱包",
+    "alreadyHavePhantom": "已经有Phantom了？在这里连接。",
+    "continue": "继续",
+    "walletLoginNotConfigured": "钱包登录未配置",
+    "disconnect": "断开连接"
   },
   "common": {
     "loading": "加载中...",
@@ -749,5 +755,39 @@
     "forfeit": "弃权",
     "timeoutForfeit": "超时 = 自动弃权",
     "rulesAcceptedNote": "两位玩家在比赛开始前已接受这些规则。奖励在链上执行。"
+  },
+  "addSol": {
+    "title": "添加SOL开始游戏",
+    "subtitle": "您的钱包已准备好。添加SOL参加技能比赛。",
+    "balance": "余额：{{balance}} SOL",
+    "tooltipWalletCreated": "您的钱包已自动创建",
+    "tooltipAddSol": "添加SOL参加技能比赛",
+    "tooltipBalanceUpdates": "余额自动更新",
+    "fundingOptions": "充值选项",
+    "sendSol": "从任何钱包发送SOL",
+    "sendSolDesc": "复制您的地址或扫描二维码发送SOL。",
+    "buySolPhantom": "在Phantom中购买SOL",
+    "buyInPhantom": "在Phantom中购买",
+    "transferExchange": "从交易所转账",
+    "exchangeStep1": "前往您的交易所（Coinbase、Binance等）",
+    "exchangeStep2": "提取SOL",
+    "exchangeStep3": "粘贴您的钱包地址",
+    "exchangeStep4": "选择Solana网络",
+    "exchangeStep5": "确认转账",
+    "waitingForSol": "等待SOL中…",
+    "balanceRefreshNote": "余额每10秒刷新一次。",
+    "funded": "已充值——开始游戏吧！"
+  },
+  "welcomeIntro": {
+    "title": "欢迎来到",
+    "brand": "1M Gaming",
+    "walletReady": "钱包已准备",
+    "walletReadyDesc": "您的钱包已自动创建。",
+    "addSol": "添加SOL",
+    "addSolDesc": "为您的钱包充值以参加比赛。",
+    "joinMatch": "加入比赛",
+    "joinMatchDesc": "玩国际象棋、双陆棋、多米诺骨牌等。",
+    "gotIt": "知道了",
+    "dontShowAgain": "不再显示"
   }
 }

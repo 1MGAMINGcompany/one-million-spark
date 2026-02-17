@@ -16,6 +16,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 
 interface AddSolCardProps {
   walletAddress: string;
@@ -23,6 +24,7 @@ interface AddSolCardProps {
 }
 
 export function AddSolCard({ walletAddress, balanceSol }: AddSolCardProps) {
+  const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
   const prevBalanceRef = useRef<number | null>(null);
 
@@ -43,7 +45,7 @@ export function AddSolCard({ walletAddress, balanceSol }: AddSolCardProps) {
       balanceSol !== null &&
       balanceSol > 0.01
     ) {
-      toast.success("You're funded — let's play! 🎉", { duration: 3000 });
+      toast.success(t("addSol.funded") + " 🎉", { duration: 3000 });
 
       // Dynamic import for bundle size
       import("canvas-confetti").then((mod) => {
@@ -58,7 +60,7 @@ export function AddSolCard({ walletAddress, balanceSol }: AddSolCardProps) {
         });
       });
     }
-  }, [balanceSol]);
+  }, [balanceSol, t]);
 
   const isWaiting = balanceSol === null || balanceSol <= 0.01;
 
@@ -77,7 +79,7 @@ export function AddSolCard({ walletAddress, balanceSol }: AddSolCardProps) {
 
             <div className="flex items-center justify-center gap-1.5">
               <h2 className="text-xl font-display font-semibold text-foreground">
-                Add SOL to Start Playing
+                {t("addSol.title")}
               </h2>
               <TooltipProvider delayDuration={200}>
                 <Tooltip>
@@ -90,20 +92,20 @@ export function AddSolCard({ walletAddress, balanceSol }: AddSolCardProps) {
                     side="bottom"
                     className="max-w-[220px] bg-background border-primary/30 text-foreground text-xs space-y-1 p-3"
                   >
-                    <p>• Your wallet is created automatically</p>
-                    <p>• Add SOL to enter skill matches</p>
-                    <p>• Balance updates automatically</p>
+                    <p>• {t("addSol.tooltipWalletCreated")}</p>
+                    <p>• {t("addSol.tooltipAddSol")}</p>
+                    <p>• {t("addSol.tooltipBalanceUpdates")}</p>
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
             </div>
 
             <p className="text-sm text-muted-foreground">
-              Your wallet is ready. Add SOL to enter skill matches.
+              {t("addSol.subtitle")}
             </p>
             {balanceSol !== null && (
               <p className="text-xs text-muted-foreground/70 font-mono">
-                Balance: {balanceSol.toFixed(4)} SOL
+                {t("addSol.balance", { balance: balanceSol.toFixed(4) })}
               </p>
             )}
           </div>
@@ -134,7 +136,7 @@ export function AddSolCard({ walletAddress, balanceSol }: AddSolCardProps) {
           <div className="flex items-center gap-3">
             <div className="h-px flex-1 bg-border" />
             <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
-              Funding Options
+              {t("addSol.fundingOptions")}
             </span>
             <div className="h-px flex-1 bg-border" />
           </div>
@@ -144,11 +146,11 @@ export function AddSolCard({ walletAddress, balanceSol }: AddSolCardProps) {
             <div className="flex items-center gap-2">
               <ArrowDownToLine className="w-4 h-4 text-primary" />
               <h3 className="text-sm font-semibold text-foreground">
-                Send SOL from any wallet
+                {t("addSol.sendSol")}
               </h3>
             </div>
             <p className="text-xs text-muted-foreground pl-6">
-              Copy your address or scan the QR code to send SOL.
+              {t("addSol.sendSolDesc")}
             </p>
           </div>
 
@@ -157,7 +159,7 @@ export function AddSolCard({ walletAddress, balanceSol }: AddSolCardProps) {
             <div className="flex items-center gap-2">
               <CreditCard className="w-4 h-4 text-primary" />
               <h3 className="text-sm font-semibold text-foreground">
-                Buy SOL in Phantom
+                {t("addSol.buySolPhantom")}
               </h3>
             </div>
             <Button
@@ -172,7 +174,7 @@ export function AddSolCard({ walletAddress, balanceSol }: AddSolCardProps) {
                 rel="noopener noreferrer"
                 className="flex items-center gap-2"
               >
-                Buy in Phantom
+                {t("addSol.buyInPhantom")}
                 <ExternalLink className="w-3.5 h-3.5" />
               </a>
             </Button>
@@ -185,16 +187,16 @@ export function AddSolCard({ walletAddress, balanceSol }: AddSolCardProps) {
                 <AccordionTrigger className="py-2 hover:no-underline">
                   <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
                     <ExternalLink className="w-4 h-4 text-primary" />
-                    Transfer from an exchange
+                    {t("addSol.transferExchange")}
                   </div>
                 </AccordionTrigger>
                 <AccordionContent>
                   <ol className="space-y-2 pl-6 text-xs text-muted-foreground list-decimal list-outside">
-                    <li>Go to your exchange (Coinbase, Binance, etc.)</li>
-                    <li>Withdraw SOL</li>
-                    <li>Paste your wallet address</li>
-                    <li>Select <span className="font-semibold text-foreground">Solana</span> network</li>
-                    <li>Confirm transfer</li>
+                    <li>{t("addSol.exchangeStep1")}</li>
+                    <li>{t("addSol.exchangeStep2")}</li>
+                    <li>{t("addSol.exchangeStep3")}</li>
+                    <li>{t("addSol.exchangeStep4")}</li>
+                    <li>{t("addSol.exchangeStep5")}</li>
                   </ol>
                 </AccordionContent>
               </AccordionItem>
@@ -207,11 +209,11 @@ export function AddSolCard({ walletAddress, balanceSol }: AddSolCardProps) {
               <div className="flex items-center gap-2">
                 <span className="sol-waiting-dot" />
                 <span className="text-sm text-muted-foreground font-medium">
-                  Waiting for SOL…
+                  {t("addSol.waitingForSol")}
                 </span>
               </div>
               <p className="text-[11px] text-muted-foreground/60">
-                Balance refreshes every 10 seconds.
+                {t("addSol.balanceRefreshNote")}
               </p>
             </div>
           )}

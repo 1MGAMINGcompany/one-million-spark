@@ -514,7 +514,13 @@
     "openWalletApp": "فتح تطبيق {{wallet}}",
     "alreadyInWallet": "أنا بالفعل في {{wallet}}",
     "copySite": "نسخ 1mgaming.com",
-    "copyPage": "نسخ رابط الصفحة"
+    "copyPage": "نسخ رابط الصفحة",
+    "externalWallet": "محفظة خارجية",
+    "advancedConnectExternal": "متقدم: توصيل محفظة خارجية",
+    "alreadyHavePhantom": "هل لديك Phantom بالفعل؟ قم بتوصيله هنا.",
+    "continue": "متابعة",
+    "walletLoginNotConfigured": "تسجيل الدخول بالمحفظة غير مهيأ",
+    "disconnect": "قطع الاتصال"
   },
   "common": {
     "loading": "جارٍ التحميل...",
@@ -749,5 +755,39 @@
     "forfeit": "الانسحاب",
     "timeoutForfeit": "انتهاء الوقت = انسحاب تلقائي",
     "rulesAcceptedNote": "قبل كلا اللاعبين هذه القواعد قبل بدء المباراة. يتم تنفيذ المدفوعات على السلسلة."
+  },
+  "addSol": {
+    "title": "أضف SOL لبدء اللعب",
+    "subtitle": "محفظتك جاهزة. أضف SOL للدخول في مباريات المهارة.",
+    "balance": "الرصيد: {{balance}} SOL",
+    "tooltipWalletCreated": "يتم إنشاء محفظتك تلقائياً",
+    "tooltipAddSol": "أضف SOL للدخول في مباريات المهارة",
+    "tooltipBalanceUpdates": "يتم تحديث الرصيد تلقائياً",
+    "fundingOptions": "خيارات التمويل",
+    "sendSol": "إرسال SOL من أي محفظة",
+    "sendSolDesc": "انسخ عنوانك أو امسح رمز QR لإرسال SOL.",
+    "buySolPhantom": "شراء SOL في Phantom",
+    "buyInPhantom": "شراء في Phantom",
+    "transferExchange": "تحويل من منصة تداول",
+    "exchangeStep1": "اذهب إلى منصة التداول الخاصة بك (Coinbase، Binance، إلخ)",
+    "exchangeStep2": "اسحب SOL",
+    "exchangeStep3": "الصق عنوان محفظتك",
+    "exchangeStep4": "اختر شبكة Solana",
+    "exchangeStep5": "أكد التحويل",
+    "waitingForSol": "في انتظار SOL…",
+    "balanceRefreshNote": "يتم تحديث الرصيد كل 10 ثوانٍ.",
+    "funded": "أنت ممول — هيا نلعب!"
+  },
+  "welcomeIntro": {
+    "title": "مرحباً بك في",
+    "brand": "1M Gaming",
+    "walletReady": "المحفظة جاهزة",
+    "walletReadyDesc": "تم إنشاء محفظتك تلقائياً.",
+    "addSol": "إضافة SOL",
+    "addSolDesc": "موّل محفظتك للدخول في المباريات.",
+    "joinMatch": "الانضمام إلى مباراة",
+    "joinMatchDesc": "العب الشطرنج والطاولة والدومينو والمزيد.",
+    "gotIt": "فهمت",
+    "dontShowAgain": "لا تعرض مرة أخرى"
   }
 }
