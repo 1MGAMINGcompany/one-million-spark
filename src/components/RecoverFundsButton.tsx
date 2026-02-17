@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, Loader2, RefreshCw } from "lucide-react";
-import { useWallet, useConnection } from "@solana/wallet-adapter-react";
+import { useWallet } from "@/hooks/useWallet";
+import { useConnection } from "@solana/wallet-adapter-react";
 import { Transaction } from "@solana/web3.js";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
