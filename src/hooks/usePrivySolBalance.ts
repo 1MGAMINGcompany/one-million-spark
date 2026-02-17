@@ -3,7 +3,7 @@ import { usePrivy } from "@privy-io/react-auth";
 import { solanaRpcRead } from "@/lib/solanaReadProxy";
 import { LAMPORTS_PER_SOL } from "@/lib/solana-config";
 
-const PRIVY_APP_ID = import.meta.env.VITE_PRIVY_APP_ID;
+const PRIVY_APP_ID = import.meta.env.VITE_PRIVY_APP_ID || "cmlq6g2dn00760cl2djbh9dfy";
 const POLL_INTERVAL_MS = 10_000;
 const LOW_BALANCE_THRESHOLD = 0.01;
 
