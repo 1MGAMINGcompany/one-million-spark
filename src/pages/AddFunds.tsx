@@ -1,4 +1,5 @@
 import { useWallet } from "@/hooks/useWallet";
+import { usePrivy } from "@privy-io/react-auth";
 import { useSolPrice } from "@/hooks/useSolPrice";
 import { usePrivySolBalance } from "@/hooks/usePrivySolBalance";
 import { AddSolCard } from "@/components/AddSolCard";
@@ -41,9 +42,13 @@ const AddFunds = () => {
     }
   };
 
+  const { authenticated } = usePrivy();
+
   const handleBuyOrLogin = async () => {
     if (isPrivyUser && walletAddress) {
       await handleBuyWithCard();
+    } else if (authenticated) {
+      toast.info("Loading your wallet... please try again in a moment.");
     } else {
       login();
     }
