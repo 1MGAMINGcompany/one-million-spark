@@ -153,7 +153,8 @@ const Navbar = () => {
                 <span>External Wallet</span>
                 <ChevronDown size={12} />
               </CollapsibleTrigger>
-              <CollapsibleContent className="absolute right-0 top-full mt-1 bg-background border border-border rounded-lg shadow-lg p-2 z-50">
+              <CollapsibleContent className="absolute right-0 top-full mt-1 bg-background border border-border rounded-lg shadow-lg p-3 z-50 space-y-2">
+                <p className="text-[11px] text-muted-foreground">Already have Phantom? Connect it here.</p>
                 <WalletButton />
               </CollapsibleContent>
             </Collapsible>
@@ -256,7 +257,8 @@ const Navbar = () => {
                   <span>Advanced: Connect External Wallet</span>
                   <ChevronDown size={12} className="ml-auto" />
                 </CollapsibleTrigger>
-                <CollapsibleContent className="px-4 pt-2">
+                <CollapsibleContent className="px-4 pt-2 space-y-2">
+                  <p className="text-[11px] text-muted-foreground">Already have Phantom? Connect it here.</p>
                   <WalletButton />
                 </CollapsibleContent>
               </Collapsible>

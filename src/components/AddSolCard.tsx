@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { QRCodeSVG } from "qrcode.react";
-import { Copy, Check, ExternalLink, ChevronDown, Wallet, ArrowDownToLine, CreditCard } from "lucide-react";
+import { Copy, Check, ExternalLink, ArrowDownToLine, CreditCard, Wallet, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -9,6 +9,13 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { toast } from "sonner";
 
 interface AddSolCardProps {
   walletAddress: string;
@@ -17,6 +24,7 @@ interface AddSolCardProps {
 
 export function AddSolCard({ walletAddress, balanceSol }: AddSolCardProps) {
   const [copied, setCopied] = useState(false);
+  const prevBalanceRef = useRef<number | null>(null);
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(walletAddress);
@@ -24,18 +32,72 @@ export function AddSolCard({ walletAddress, balanceSol }: AddSolCardProps) {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  // Confetti + toast on balance transition from <=0.01 to >0.01
+  useEffect(() => {
+    const prev = prevBalanceRef.current;
+    prevBalanceRef.current = balanceSol;
+
+    if (
+      prev !== null &&
+      prev <= 0.01 &&
+      balanceSol !== null &&
+      balanceSol > 0.01
+    ) {
+      toast.success("You're funded — let's play! 🎉", { duration: 3000 });
+
+      // Dynamic import for bundle size
+      import("canvas-confetti").then((mod) => {
+        const confetti = mod.default;
+        confetti({
+          particleCount: 60,
+          spread: 55,
+          origin: { y: 0.6 },
+          colors: ["#D4AF37", "#F5D061", "#C49B2A", "#FFD700"],
+          disableForReducedMotion: true,
+          ticks: 40,
+        });
+      });
+    }
+  }, [balanceSol]);
+
+  const isWaiting = balanceSol === null || balanceSol <= 0.01;
+
   return (
     <div className="flex items-center justify-center px-4 py-12">
       <Card className="w-full max-w-md border-border/60 bg-card/90 backdrop-blur-sm shadow-lg">
         <CardContent className="p-6 space-y-6">
           {/* Header */}
           <div className="text-center space-y-2">
-            <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-primary/10 border border-primary/20 mx-auto mb-2">
-              <Wallet className="w-6 h-6 text-primary" />
+            {/* Animated SOL coin icon */}
+            <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-primary/10 border border-primary/20 mx-auto mb-2 sol-coin-float">
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary via-gold-light to-primary flex items-center justify-center shadow-gold-glow">
+                <span className="text-background font-bold text-sm font-display">S</span>
+              </div>
             </div>
-            <h2 className="text-xl font-display font-semibold text-foreground">
-              Add SOL to Start Playing
-            </h2>
+
+            <div className="flex items-center justify-center gap-1.5">
+              <h2 className="text-xl font-display font-semibold text-foreground">
+                Add SOL to Start Playing
+              </h2>
+              <TooltipProvider delayDuration={200}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button className="text-muted-foreground hover:text-primary transition-colors" aria-label="How it works">
+                      <Info className="w-4 h-4" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent
+                    side="bottom"
+                    className="max-w-[220px] bg-background border-primary/30 text-foreground text-xs space-y-1 p-3"
+                  >
+                    <p>• Your wallet is created automatically</p>
+                    <p>• Add SOL to enter skill matches</p>
+                    <p>• Balance updates automatically</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
+
             <p className="text-sm text-muted-foreground">
               Your wallet is ready. Add SOL to enter skill matches.
             </p>
@@ -139,10 +201,20 @@ export function AddSolCard({ walletAddress, balanceSol }: AddSolCardProps) {
             </Accordion>
           </div>
 
-          {/* Auto-refresh hint */}
-          <p className="text-center text-[11px] text-muted-foreground/60">
-            Balance refreshes automatically every 10 seconds
-          </p>
+          {/* Waiting for SOL pulse */}
+          {isWaiting && (
+            <div className="flex flex-col items-center gap-1.5 pt-2">
+              <div className="flex items-center gap-2">
+                <span className="sol-waiting-dot" />
+                <span className="text-sm text-muted-foreground font-medium">
+                  Waiting for SOL…
+                </span>
+              </div>
+              <p className="text-[11px] text-muted-foreground/60">
+                Balance refreshes every 10 seconds.
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
