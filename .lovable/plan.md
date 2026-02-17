@@ -1,78 +1,116 @@
 
 
-# Fix: Privy Wallet Can't Create Rooms (Transaction Signing Bridge)
+# Add "Buy with Card" Using Privy's Built-In Funding (No Registration Needed)
 
-## The Problem
+## The Good News
 
-When you're logged in via Privy (Google/Apple/Email), the app correctly shows you as "connected" on the UI. But when you click "Create Room", the underlying `useSolanaRooms` hook fails because it gets `publicKey` and `sendTransaction` directly from `@solana/wallet-adapter-react` -- which knows nothing about your Privy embedded wallet.
+Privy already includes a built-in fiat on-ramp that works under **Privy's merchant account** -- you do NOT need to register your company with MoonPay, Coinbase, or anyone else. You just:
 
-In short: the UI gate was fixed, but the transaction-signing layer still only talks to external wallets.
+1. Go to the **Privy Dashboard** (dashboard.privy.io) -> your app -> **Funding** tab
+2. Enable **"Card"** (this enables credit/debit card, Apple Pay, Google Pay)
+3. Optionally enable **"Coinbase"** (transfer from Coinbase account)
+4. Set default chain to **Solana** and a default amount (e.g. 0.05 SOL)
+5. Save
 
-## The Fix
+That's it on the Privy side. Then we add a single button in the app.
 
-Bridge the Privy embedded wallet's signing capabilities into the unified `useWallet` hook so that `useSolanaRooms` (and all other hooks/pages that need to sign transactions) can work with either wallet type transparently.
+## What We Build
 
-### Step 1: Enhance `useWallet` hook to expose Privy transaction methods
+### Step 1: Add a "Buy with Card" button to AddSolCard
 
-**File: `src/hooks/useWallet.ts`**
+**File: `src/components/AddSolCard.tsx`**
 
-- Import `useWallets` and `useSignAndSendTransaction` from `@privy-io/react-auth/solana`
-- When Privy is active and no external wallet is connected, construct a `PublicKey` from the Privy address
-- Create a `sendTransaction` wrapper that uses Privy's `signAndSendTransaction` for Privy users
-- Expose these as `publicKey` and `sendTransaction` in the returned object so downstream code works without changes
+- Import `useFundWallet` from `@privy-io/react-auth/solana`
+- Add a big, prominent **"Buy with Card"** button at the TOP of the card (before the QR code)
+- When clicked, call `fundWallet({ address: walletAddress })` -- Privy opens its own modal with card payment, Apple Pay, Google Pay options
+- The user pays, SOL arrives in their wallet, the existing balance polling detects it, confetti fires
+- Move the QR code and "send SOL" instructions into a collapsible "Already have SOL?" section below
 
-Key additions to the return value:
-- `publicKey`: Falls back to Privy wallet PublicKey when external wallet isn't connected
-- `sendTransaction`: Falls back to Privy's `signAndSendTransaction` when external wallet isn't connected
-- `isPrivyWallet`: Boolean flag so callers can know which path is active (useful for debug logging)
+The user experience becomes:
+```
++----------------------------------+
+|     Add Balance to Play          |
+|                                  |
+|  [  Buy with Card / Apple Pay  ] |  <-- One big button, Privy handles the rest
+|                                  |
+|  v Already have crypto? (expand) |
+|    [QR code] [wallet address]    |
++----------------------------------+
+```
 
-### Step 2: Update `useSolanaRooms.tsx` to use the unified hook
+### Step 2: Add "Buy with Card" to AddFunds page
 
-**File: `src/hooks/useSolanaRooms.tsx`**
+**File: `src/pages/AddFunds.tsx`**
 
-- Change `import { useWallet } from "@solana/wallet-adapter-react"` to `import { useWallet } from "@/hooks/useWallet"`
-- Keep `useConnection` from `@solana/wallet-adapter-react` (connection is the same regardless)
-- The `publicKey`, `sendTransaction`, `connected`, and `wallet` references will now automatically work for both Privy and external wallets
+- For Privy users: add the same `fundWallet` button prominently at the top
+- Keep the AddSolCard below for reference
+- Replace crypto-heavy language with "Add balance with your card"
 
-### Step 3: Update other critical files that directly import from wallet-adapter
+### Step 3: Add quick-fund nudge on CreateRoom insufficient balance
 
-These files also use `useWallet` from `@solana/wallet-adapter-react` and need updating to use the unified hook:
+**File: `src/pages/CreateRoom.tsx`**
 
-- `src/hooks/useSolanaNetwork.ts` -- balance fetching uses `publicKey`
-- `src/components/GlobalActiveRoomBanner.tsx` -- checks `publicKey` for active room display
-- `src/components/Navbar.tsx` -- checks wallet state for UI display
-- `src/pages/Room.tsx` -- uses wallet for room interactions and transactions
-- `src/pages/DebugJoinRoom.tsx` -- uses wallet for debug join flow
-- `src/components/WalletButton.tsx` -- shows wallet status/address
-- `src/components/RecoverFundsButton.tsx` -- needs wallet for fund recovery transactions
+- When a user tries to create a room but has insufficient SOL, instead of just a toast, show a dialog with a "Add Funds Now" button that calls `fundWallet` directly
+- This keeps them in the flow -- they fund, then immediately create the room
 
-Each file: change `import { useWallet } from "@solana/wallet-adapter-react"` to `import { useWallet } from "@/hooks/useWallet"`, keeping `useConnection` imports from the adapter as-is.
+### Step 4: Simplify language across the app
+
+**Files: `src/i18n/locales/en.json` (and other locale files)**
+
+Key label changes:
+- "Add SOL" -> "Add Balance"  
+- "Buy SOL in Phantom" -> "Buy with Card" (as the primary option)
+- "Wallet address" -> kept only in the advanced/collapsible section
+- "Entry Fee (SOL)" -> show USD first: "$2.50 (~0.017 SOL)"
+- "Waiting for SOL..." -> "Waiting for payment..."
 
 ## Technical Details
 
-### useWallet.ts -- Privy Transaction Bridge
+### The `useFundWallet` Hook
 
 ```text
-useWallet()
-  |
-  +-- External wallet connected? --> Use @solana/wallet-adapter publicKey + sendTransaction
-  |
-  +-- Privy authenticated? --> Construct PublicKey from Privy address
-                               Use Privy signAndSendTransaction as sendTransaction
-                               
-Return shape stays identical -- downstream code doesn't change.
+import { useFundWallet } from '@privy-io/react-auth/solana';
+
+const { fundWallet } = useFundWallet();
+
+// Call when user clicks "Buy with Card"
+await fundWallet({
+  address: walletAddress,    // Privy embedded wallet address
+  options: {
+    cluster: { name: 'mainnet-beta' }
+  }
+});
 ```
 
-The Privy `sendTransaction` wrapper will:
-1. Get the Privy wallet from `useWallets()` (from `@privy-io/react-auth/solana`)
-2. Serialize the transaction to bytes
-3. Call `signAndSendTransaction({ transaction: bytes, wallet: privyWallet })`
-4. Return the signature (matching the same interface as the adapter's `sendTransaction`)
+- Privy opens its own modal overlay
+- User sees card payment / Apple Pay / Google Pay options
+- MoonPay or Coinbase processes the payment under Privy's account
+- SOL arrives in the user's wallet (may take 1-5 minutes)
+- Our existing balance polling in `usePrivySolBalance` detects the new balance and triggers confetti
 
-### What Does NOT Change
-- No game logic, timers, room state, Supabase functions, or on-chain program changes
-- External wallet flow is completely untouched (it's the primary path when available)
-- ConnectWalletGate internals stay the same
-- The Privy provider configuration stays the same
-- No new dependencies needed (`@privy-io/react-auth/solana` is already available in the installed package)
+### What You Need to Do in Privy Dashboard (Before This Works)
+
+1. Go to **dashboard.privy.io** -> Select your app
+2. Go to **Funding** settings
+3. Enable **"Pay with card"** (and optionally "Transfer from Coinbase")
+4. Set default chain to **Solana**
+5. Set a default funding amount (e.g., 0.05 SOL)
+6. Save
+
+No API keys, no merchant registration, no company paperwork.
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| `src/components/AddSolCard.tsx` | Add `fundWallet` button as primary action, move QR to collapsible |
+| `src/pages/AddFunds.tsx` | Add fund button for Privy users at top |
+| `src/pages/CreateRoom.tsx` | Add "Add Funds Now" dialog on insufficient balance |
+| `src/i18n/locales/en.json` | Friendlier labels (Add Balance, Buy with Card, etc.) |
+
+### No Backend Changes
+
+- No database changes
+- No edge functions
+- No new dependencies (useFundWallet is already in the installed `@privy-io/react-auth` package)
 
