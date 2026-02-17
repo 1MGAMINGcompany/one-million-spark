@@ -521,9 +521,13 @@
     "externalWallet": "Portefeuille Externe",
     "advancedConnectExternal": "Avancé : Connecter un Portefeuille Externe",
     "alreadyHavePhantom": "Vous avez déjà Phantom ? Connectez-le ici.",
-    "continue": "Continuer",
+    "continue": "Se connecter / S'inscrire",
     "walletLoginNotConfigured": "Connexion portefeuille non configurée",
-    "disconnect": "Déconnecter"
+    "disconnect": "Déconnecter",
+    "loginToPlay": "Connectez-vous pour jouer",
+    "loginToPlayDesc": "Connectez-vous avec Google, Apple ou e-mail pour commencer.",
+    "orUseExternal": "Ou connecter un portefeuille externe",
+    "browseWithoutWallet": "Vous pouvez parcourir les salles sans portefeuille. Vous n'avez besoin d'un portefeuille que pour jouer."
   },
   "common": {
     "loading": "Chargement...",

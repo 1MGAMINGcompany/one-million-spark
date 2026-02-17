@@ -651,9 +651,13 @@
     "externalWallet": "Billetera Externa",
     "advancedConnectExternal": "Avanzado: Conectar Billetera Externa",
     "alreadyHavePhantom": "¿Ya tienes Phantom? Conéctalo aquí.",
-    "continue": "Continuar",
+    "continue": "Iniciar sesión / Registrarse",
     "walletLoginNotConfigured": "Inicio con billetera no configurado",
-    "disconnect": "Desconectar"
+    "disconnect": "Desconectar",
+    "loginToPlay": "Inicia sesión para jugar",
+    "loginToPlayDesc": "Inicia sesión con Google, Apple o correo electrónico para empezar.",
+    "orUseExternal": "O conectar una billetera externa",
+    "browseWithoutWallet": "Puedes explorar salas sin billetera. Solo necesitas una billetera para jugar."
   },
   "common": {
     "loading": "Cargando...",

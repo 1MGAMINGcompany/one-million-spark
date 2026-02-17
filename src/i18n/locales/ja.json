@@ -544,9 +544,13 @@
     "externalWallet": "外部ウォレット",
     "advancedConnectExternal": "上級：外部ウォレットを接続",
     "alreadyHavePhantom": "Phantomをお持ちですか？ここで接続してください。",
-    "continue": "続行",
+    "continue": "ログイン / 新規登録",
     "walletLoginNotConfigured": "ウォレットログインが未設定です",
-    "disconnect": "切断"
+    "disconnect": "切断",
+    "loginToPlay": "ログインしてプレイ",
+    "loginToPlayDesc": "Google、Apple、またはメールでサインインして始めましょう。",
+    "orUseExternal": "または外部ウォレットを接続",
+    "browseWithoutWallet": "ウォレットなしでルームを閲覧できます。プレイにはウォレットが必要です。"
   },
   "common": {
     "loading": "読み込み中...",

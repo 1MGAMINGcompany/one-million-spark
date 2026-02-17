@@ -1,14 +1,18 @@
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { Construction, Wallet } from "lucide-react";
+import { Construction, Wallet, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useWallet } from "@/hooks/useWallet";
+import { useTranslation } from "react-i18next";
 import { ConnectWalletGate } from "@/components/ConnectWalletGate";
+import { PrivyLoginButton } from "@/components/PrivyLoginButton";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 export default function JoinRoom() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { isConnected, address } = useWallet();
+  const { t } = useTranslation();
 
   const roomIdParam = searchParams.get("roomId");
 
@@ -18,14 +22,20 @@ export default function JoinRoom() {
         <Card className="max-w-md w-full border-border/50 bg-card/80 backdrop-blur">
           <CardContent className="pt-6 text-center space-y-4">
             <Wallet className="h-12 w-12 text-primary mx-auto" />
-            <h2 className="text-xl font-cinzel">Connect to Join</h2>
+            <h2 className="text-xl font-cinzel">{t("wallet.loginToPlay")}</h2>
             <p className="text-muted-foreground text-sm">
-              Connect your Solana wallet to join room {roomIdParam && `#${roomIdParam}`} and compete for SOL prizes.
+              {t("wallet.loginToPlayDesc")}
             </p>
-            <ConnectWalletGate />
-            <p className="text-xs text-muted-foreground pt-2">
-              You can browse rooms without a wallet. You only need a wallet to play.
-            </p>
+            <PrivyLoginButton />
+            <Collapsible>
+              <CollapsibleTrigger className="flex items-center justify-center gap-1 w-full text-xs text-muted-foreground hover:text-primary transition-colors pt-2">
+                <ChevronDown size={14} />
+                {t("wallet.orUseExternal")}
+              </CollapsibleTrigger>
+              <CollapsibleContent className="pt-3">
+                <ConnectWalletGate />
+              </CollapsibleContent>
+            </Collapsible>
           </CardContent>
         </Card>
       </div>

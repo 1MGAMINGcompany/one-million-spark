@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { usePrivy } from "@privy-io/react-auth";
 import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import {
   Dialog,
@@ -8,9 +9,10 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Wallet, Info, Eye } from "lucide-react";
+import { Wallet, Info, Eye, ChevronDown } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { HowToConnectSolModal } from "./HowToConnectSolModal";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 interface WalletGateModalProps {
   isOpen: boolean;
@@ -22,14 +24,20 @@ interface WalletGateModalProps {
 export function WalletGateModal({ 
   isOpen, 
   onClose,
-  title = "Connect a Solana Wallet to Play",
-  description = "A Solana wallet is required to join games and compete for prizes."
+  title,
+  description,
 }: WalletGateModalProps) {
   const { setVisible } = useWalletModal();
+  const { login } = usePrivy();
   const { t } = useTranslation();
   const [showHelp, setShowHelp] = useState(false);
 
-  const handleConnectWallet = () => {
+  const handlePrivyLogin = () => {
+    onClose();
+    login();
+  };
+
+  const handleExternalWallet = () => {
     onClose();
     setVisible(true);
   };
@@ -43,23 +51,42 @@ export function WalletGateModal({
               <Wallet className="text-primary" size={32} />
             </div>
             <DialogTitle className="text-xl font-cinzel text-center">
-              {title}
+              {title || t("wallet.loginToPlay")}
             </DialogTitle>
             <DialogDescription className="text-center text-muted-foreground">
-              {description}
+              {description || t("wallet.loginToPlayDesc")}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 pt-2">
-            {/* Connect Wallet Button */}
+            {/* Primary: Privy Login */}
             <Button 
-              onClick={handleConnectWallet}
+              onClick={handlePrivyLogin}
               className="w-full"
               size="lg"
             >
               <Wallet className="mr-2" size={18} />
-              Connect Wallet
+              {t("wallet.continue")}
             </Button>
+
+            {/* Secondary: External wallet */}
+            <Collapsible>
+              <CollapsibleTrigger className="flex items-center justify-center gap-1 w-full text-xs text-muted-foreground hover:text-primary transition-colors">
+                <ChevronDown size={14} />
+                {t("wallet.orUseExternal")}
+              </CollapsibleTrigger>
+              <CollapsibleContent className="pt-3">
+                <Button 
+                  onClick={handleExternalWallet}
+                  variant="outline"
+                  className="w-full"
+                  size="lg"
+                >
+                  <Wallet className="mr-2" size={18} />
+                  {t("wallet.connect")}
+                </Button>
+              </CollapsibleContent>
+            </Collapsible>
 
             {/* How to Connect Link */}
             <button
@@ -73,7 +100,7 @@ export function WalletGateModal({
             {/* Browse Note */}
             <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground/70 pt-2 border-t border-border/30">
               <Eye size={12} />
-              <span>You can browse rooms without a wallet. You only need a wallet to play.</span>
+              <span>{t("wallet.browseWithoutWallet")}</span>
             </div>
           </div>
         </DialogContent>

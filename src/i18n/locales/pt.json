@@ -521,9 +521,13 @@
     "externalWallet": "Carteira Externa",
     "advancedConnectExternal": "Avançado: Conectar Carteira Externa",
     "alreadyHavePhantom": "Já tem Phantom? Conecte aqui.",
-    "continue": "Continuar",
+    "continue": "Entrar / Cadastrar",
     "walletLoginNotConfigured": "Login de carteira não configurado",
-    "disconnect": "Desconectar"
+    "disconnect": "Desconectar",
+    "loginToPlay": "Entre para jogar",
+    "loginToPlayDesc": "Faça login com Google, Apple ou e-mail para começar.",
+    "orUseExternal": "Ou conectar uma carteira externa",
+    "browseWithoutWallet": "Você pode navegar pelas salas sem carteira. Só precisa de carteira para jogar."
   },
   "common": {
     "loading": "Carregando...",
