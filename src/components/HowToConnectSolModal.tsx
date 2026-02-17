@@ -12,6 +12,7 @@ import {
   DrawerTitle,
 } from "@/components/ui/drawer";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useTranslation } from "react-i18next";
 import { 
   Wallet, 
   CreditCard,
@@ -27,48 +28,34 @@ interface HowToConnectSolModalProps {
 }
 
 const WALLETS = [
-  {
-    name: "Phantom",
-    icon: "👻",
-    url: "https://phantom.app/",
-    recommended: true,
-  },
-  {
-    name: "Solflare",
-    icon: "🔆",
-    url: "https://solflare.com/",
-    recommended: false,
-  },
-  {
-    name: "Backpack",
-    icon: "🎒",
-    url: "https://backpack.app/",
-    recommended: false,
-  },
+  { name: "Phantom", icon: "👻", url: "https://phantom.app/", recommended: true },
+  { name: "Solflare", icon: "🔆", url: "https://solflare.com/", recommended: false },
+  { name: "Backpack", icon: "🎒", url: "https://backpack.app/", recommended: false },
 ];
 
 export function HowToConnectSolModal({ isOpen, onClose }: HowToConnectSolModalProps) {
   const isMobile = useIsMobile();
+  const { t } = useTranslation();
 
   const content = (
     <div className="space-y-5 pb-4">
       {/* How Easy It Is - Visual Flow */}
       <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-primary/10 rounded-xl p-4 border border-primary/20">
-        <p className="text-center text-sm text-muted-foreground mb-3">It's this easy:</p>
+        <p className="text-center text-sm text-muted-foreground mb-3">{t("howToConnect.itsThisEasy")}</p>
         <div className="flex items-center justify-center gap-2 text-lg">
           <div className="flex flex-col items-center">
             <span className="text-2xl">🔗</span>
-            <span className="text-xs text-muted-foreground mt-1">Connect</span>
+            <span className="text-xs text-muted-foreground mt-1">{t("howToConnect.stepConnect")}</span>
           </div>
           <ArrowRight className="text-primary" size={16} />
           <div className="flex flex-col items-center">
             <span className="text-2xl">💳</span>
-            <span className="text-xs text-muted-foreground mt-1">Buy</span>
+            <span className="text-xs text-muted-foreground mt-1">{t("howToConnect.stepBuy")}</span>
           </div>
           <ArrowRight className="text-primary" size={16} />
           <div className="flex flex-col items-center">
             <span className="text-2xl">🎮</span>
-            <span className="text-xs text-muted-foreground mt-1">Play!</span>
+            <span className="text-xs text-muted-foreground mt-1">{t("howToConnect.stepPlay")}</span>
           </div>
         </div>
       </div>
@@ -79,10 +66,10 @@ export function HowToConnectSolModal({ isOpen, onClose }: HowToConnectSolModalPr
           <div className="w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-bold">1</div>
           <h3 className="text-sm font-semibold flex items-center gap-2">
             <Wallet size={16} className="text-primary" />
-            Get a Wallet
+            {t("howToConnect.getWallet")}
           </h3>
         </div>
-        <p className="text-xs text-muted-foreground pl-8">Free to install, takes 30 seconds! 🚀</p>
+        <p className="text-xs text-muted-foreground pl-8">{t("howToConnect.freeInstall")} 🚀</p>
         <div className="space-y-2 pl-8">
           {WALLETS.map((wallet) => (
             <a
@@ -97,7 +84,7 @@ export function HowToConnectSolModal({ isOpen, onClose }: HowToConnectSolModalPr
                 <span className="font-medium text-sm">{wallet.name}</span>
                 {wallet.recommended && (
                   <span className="text-[10px] bg-primary/20 text-primary px-1.5 py-0.5 rounded-full">
-                    Popular
+                    {t("howToConnect.popular")}
                   </span>
                 )}
               </div>
@@ -113,7 +100,7 @@ export function HowToConnectSolModal({ isOpen, onClose }: HowToConnectSolModalPr
           <div className="w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-bold">2</div>
           <h3 className="text-sm font-semibold flex items-center gap-2">
             <CreditCard size={16} className="text-primary" />
-            Buy SOL in Your Wallet
+            {t("howToConnect.buySolInWallet")}
           </h3>
         </div>
         
@@ -121,11 +108,11 @@ export function HowToConnectSolModal({ isOpen, onClose }: HowToConnectSolModalPr
           {/* No Exchanges Badge */}
           <div className="inline-flex items-center gap-1.5 bg-green-500/20 text-green-400 px-2.5 py-1 rounded-full text-xs font-medium">
             <Sparkles size={12} />
-            No exchanges needed!
+            {t("howToConnect.noExchanges")}
           </div>
 
           <p className="text-xs text-muted-foreground">
-            Buy SOL with card or Apple Pay directly in Phantom, Solflare, or Backpack.
+            {t("howToConnect.buySolDesc")}
           </p>
 
           {/* Payment Methods */}
@@ -133,11 +120,11 @@ export function HowToConnectSolModal({ isOpen, onClose }: HowToConnectSolModalPr
             <span className="text-lg">💳</span>
             <span className="text-lg">🍎</span>
             <span className="text-lg">🅿️</span>
-            <span className="text-xs">Credit Card • Apple Pay • Google Pay</span>
+            <span className="text-xs">{t("howToConnect.paymentMethods")}</span>
           </div>
 
           <p className="text-[11px] text-muted-foreground/70">
-            Or transfer from another wallet if you already have SOL
+            {t("howToConnect.orTransfer")}
           </p>
         </div>
       </div>
@@ -146,10 +133,10 @@ export function HowToConnectSolModal({ isOpen, onClose }: HowToConnectSolModalPr
       <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-3">
         <h3 className="text-xs font-semibold text-destructive flex items-center gap-2 mb-1.5">
           <Shield size={14} />
-          Stay Safe
+          {t("howToConnect.staySafe")}
         </h3>
         <p className="text-[11px] text-muted-foreground">
-          Never share your seed phrase. 1M GAMING will never ask for it.
+          {t("howToConnect.neverShareSeed")}
         </p>
       </div>
     </div>
@@ -162,7 +149,7 @@ export function HowToConnectSolModal({ isOpen, onClose }: HowToConnectSolModalPr
           <DrawerHeader className="pb-2">
             <DrawerTitle className="flex items-center gap-2 text-lg font-cinzel">
               <Sparkles className="text-primary" size={20} />
-              Getting Started
+              {t("howToConnect.title")}
             </DrawerTitle>
           </DrawerHeader>
           <div className="px-4 max-h-[70vh] overflow-y-auto">
@@ -179,10 +166,10 @@ export function HowToConnectSolModal({ isOpen, onClose }: HowToConnectSolModalPr
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-lg font-cinzel">
             <Sparkles className="text-primary" size={20} />
-            Getting Started
+            {t("howToConnect.title")}
           </DialogTitle>
           <DialogDescription className="text-sm text-muted-foreground">
-            Step-by-step guide to set up your Solana wallet and add funds
+            {t("howToConnect.description")}
           </DialogDescription>
         </DialogHeader>
         <div className="max-h-[60vh] overflow-y-auto pr-2">
