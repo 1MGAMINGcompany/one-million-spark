@@ -361,38 +361,8 @@ export function WalletButton() {
     });
   }, [isMobile, isInWalletBrowser, wallets.length, sortedWallets.length]);
 
-  // Auto-connect polling for wallet browser environments
-  // Polls for injected provider for up to 3 seconds (wallets inject async)
-  useEffect(() => {
-    if (connected || connecting) return;
-    if (!isMobile) return;
-
-    let attempts = 0;
-    const maxAttempts = 15; // 15 x 200ms = 3 seconds
-
-    const interval = setInterval(() => {
-      attempts++;
-      const win = window as any;
-      const hasProvider = win.solana || win.phantom?.solana || win.solflare;
-
-      if (hasProvider) {
-        clearInterval(interval);
-        const installed = wallets.find(w => w.readyState === 'Installed');
-        if (installed && !connected) {
-          console.log("[WalletAutoConnect] Provider detected, connecting via", installed.adapter.name);
-          select(installed.adapter.name);
-          connect().catch(err => console.warn("[WalletAutoConnect] Failed:", err));
-        }
-      }
-
-      if (attempts >= maxAttempts) {
-        clearInterval(interval);
-      }
-    }, 200);
-
-    return () => clearInterval(interval);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Run once on mount
+  // Auto-connect polling DISABLED - external wallets require explicit user action
+  // Users must click "Connect External Wallet" in the Advanced section
 
   // Log wallet state changes for debugging
   useEffect(() => {
