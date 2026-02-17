@@ -1,103 +1,109 @@
 
 
-# Fix Wallet Buttons + Add Full i18n for All New UI Strings
+# Fix All "Connect Wallet" Buttons to Use Privy + Improve Button Copy
 
 ## Problem
-1. Multiple hardcoded English strings were introduced in recent UI changes (AddSolCard, WelcomeIntroModal, Navbar external wallet text, PrivyLoginButton) -- none of them use `useTranslation()` or i18n keys.
-2. The ConnectWalletGate still has mobile auto-connect polling that contradicts the "no auto-connect" requirement.
-3. All 10 locale files (en, es, fr, de, ar, zh, it, ja, hi, pt) need the new translation keys.
 
-## Changes
+There are two separate issues:
 
-### 1. Add new i18n keys to `en.json`
-Add a new `"addSol"` block and `"welcomeIntro"` block to the English locale:
+1. **Wrong wallet flow on gated pages**: When you tap "Create Game Room" (or join a room) on mobile without being logged in, the app shows the old `ConnectWalletGate` component -- which opens Phantom/Solflare deep links. It should instead trigger the Privy login (Google, Apple, Email). This happens because these pages check `isConnected` from the `useWallet()` hook, which only checks the **external** Solana wallet adapter, not Privy authentication.
 
+2. **"Continue" button is vague**: The Privy login button just says "Continue" which doesn't explain what it does. Similar apps (Tensor, Magic Eden, Jupiter) use labels like "Log in" or "Sign in with Google/Email" to make it clear.
+
+## What Changes
+
+### 1. Update `useWallet` hook to include Privy users
+
+**File: `src/hooks/useWallet.ts`**
+
+The `useWallet` hook currently only checks `@solana/wallet-adapter-react`. It needs to also check if the user is authenticated via Privy with an embedded Solana wallet. If either is connected, `isConnected` should be `true` and `address` should return the appropriate wallet address.
+
+- Import `usePrivy` from `@privy-io/react-auth`
+- Extract Privy Solana wallet address from `user.linkedAccounts`
+- Return Privy address as fallback when external wallet is not connected
+- Privy-authenticated users are considered "connected"
+
+### 2. Replace `ConnectWalletGate` with Privy login on gated pages
+
+**Files: `src/pages/CreateRoom.tsx`, `src/pages/JoinRoom.tsx`**
+
+When a user is not connected, these pages currently show `ConnectWalletGate` (external wallet picker). Instead, they should show a `PrivyLoginButton` as the primary action, with the external wallet option available as a secondary/advanced option below.
+
+- Replace `<ConnectWalletGate />` with `<PrivyLoginButton />` as the primary CTA
+- Add a small collapsible "Advanced: Use external wallet" section below with the existing `ConnectWalletGate`
+- Update hardcoded English text to use i18n keys
+
+### 3. Fix `WalletGateModal` to use Privy login
+
+**File: `src/components/WalletGateModal.tsx`**
+
+This modal (used in Room.tsx) currently opens the Solana wallet adapter modal via `setVisible(true)`. It should instead trigger `login()` from Privy as the primary action.
+
+- Import `usePrivy` and call `login()` as the primary action
+- Keep external wallet connect as secondary option
+- Replace hardcoded English strings with i18n keys
+
+### 4. Fix `WalletRequired` component
+
+**File: `src/components/WalletRequired.tsx`**
+
+This component (used in RoomList.tsx) shows a static "connect wallet" message with no action button. Add a `PrivyLoginButton` as the CTA.
+
+- Add `PrivyLoginButton` import and render it
+- Replace hardcoded English strings with i18n keys
+
+### 5. Change "Continue" to "Log in / Sign up" 
+
+**Files: `src/components/PrivyLoginButton.tsx`, all locale files**
+
+The "Continue" label is vague. Change it to "Log in / Sign up" which is clearer and matches industry patterns (Tensor uses "Sign In", Magic Eden uses "Log In").
+
+- Change the `wallet.continue` i18n key from "Continue" to "Log in / Sign up"
+- Update all 10 locale files with proper translations
+
+### 6. Add missing i18n keys
+
+**Files: all locale files**
+
+Add translations for new strings used in the updated gated pages:
+- `createRoom.connectWalletDesc` equivalent for Privy context
+- `wallet.orUseExternal` -- "Or connect an external wallet"
+- Updated `wallet.continue` -- "Log in / Sign up"
+
+## Technical Details
+
+### useWallet.ts changes
+```typescript
+// Add Privy awareness
+import { usePrivy } from "@privy-io/react-auth";
+
+// Inside hook:
+const { authenticated, user } = usePrivy();
+const privyWallet = user?.linkedAccounts?.find(a => a.type === "wallet" && a.chainType === "solana");
+const privyAddress = privyWallet?.address;
+
+// Return combined state:
+const isConnected = connected || (authenticated && !!privyAddress);
+const address = publicKey?.toBase58() ?? privyAddress ?? null;
 ```
-"addSol": {
-  "title": "Add SOL to Start Playing",
-  "subtitle": "Your wallet is ready. Add SOL to enter skill matches.",
-  "balance": "Balance: {{balance}} SOL",
-  "tooltipWalletCreated": "Your wallet is created automatically",
-  "tooltipAddSol": "Add SOL to enter skill matches",
-  "tooltipBalanceUpdates": "Balance updates automatically",
-  "fundingOptions": "Funding Options",
-  "sendSol": "Send SOL from any wallet",
-  "sendSolDesc": "Copy your address or scan the QR code to send SOL.",
-  "buySolPhantom": "Buy SOL in Phantom",
-  "buyInPhantom": "Buy in Phantom",
-  "transferExchange": "Transfer from an exchange",
-  "exchangeStep1": "Go to your exchange (Coinbase, Binance, etc.)",
-  "exchangeStep2": "Withdraw SOL",
-  "exchangeStep3": "Paste your wallet address",
-  "exchangeStep4": "Select Solana network",
-  "exchangeStep5": "Confirm transfer",
-  "waitingForSol": "Waiting for SOL...",
-  "balanceRefreshNote": "Balance refreshes every 10 seconds.",
-  "funded": "You're funded -- let's play!"
-},
-"welcomeIntro": {
-  "title": "Welcome to",
-  "brand": "1M Gaming",
-  "walletReady": "Wallet ready",
-  "walletReadyDesc": "Your wallet was created automatically.",
-  "addSol": "Add SOL",
-  "addSolDesc": "Fund your wallet to enter matches.",
-  "joinMatch": "Join a match",
-  "joinMatchDesc": "Play chess, backgammon, dominos & more.",
-  "gotIt": "Got it",
-  "dontShowAgain": "Don't show again"
-},
-"wallet": {
-  ... (existing keys stay),
-  "externalWallet": "External Wallet",
-  "advancedConnectExternal": "Advanced: Connect External Wallet",
-  "alreadyHavePhantom": "Already have Phantom? Connect it here.",
-  "continue": "Continue",
-  "walletLoginNotConfigured": "Wallet login not configured"
-}
+
+This is wrapped with a guard for PRIVY_APP_ID similar to usePrivySolBalance.
+
+### CreateRoom.tsx gate section
+```
+[Wallet Icon]
+"Log in to Create a Room"
+"Sign in with Google, Apple, or Email to get started."
+[PrivyLoginButton]  <-- primary
+[Collapsible: "Or connect an external wallet" -> ConnectWalletGate]
 ```
 
-### 2. Add translations to all 9 non-English locale files
-Add properly translated versions of the above keys to: es, fr, de, ar, zh, it, ja, hi, pt.
-
-### 3. Update `AddSolCard.tsx` to use i18n
-- Import `useTranslation`
-- Replace all 15+ hardcoded English strings with `t("addSol.xxx")` calls
-
-### 4. Update `WelcomeIntroModal.tsx` to use i18n
-- Import `useTranslation`
-- Replace all hardcoded strings with `t("welcomeIntro.xxx")` calls
-
-### 5. Update `PrivyLoginButton.tsx` to use i18n
-- Import `useTranslation`
-- Replace "Continue", "Disconnect", "Wallet login not configured" with i18n keys
-
-### 6. Update `Navbar.tsx` to use i18n for external wallet strings
-- Replace hardcoded "External Wallet", "Advanced: Connect External Wallet", "Already have Phantom? Connect it here." with `t()` calls
-
-### 7. Remove auto-connect polling from `ConnectWalletGate.tsx`
-- Remove the `useEffect` (lines 94-124) that polls for injected wallet providers on mobile and auto-connects
-- This aligns with the requirement that external wallets must NOT auto-connect
-
-## Files Modified
-- `src/i18n/locales/en.json` -- new keys
-- `src/i18n/locales/es.json` -- translations
-- `src/i18n/locales/fr.json` -- translations
-- `src/i18n/locales/de.json` -- translations
-- `src/i18n/locales/ar.json` -- translations
-- `src/i18n/locales/zh.json` -- translations
-- `src/i18n/locales/it.json` -- translations
-- `src/i18n/locales/ja.json` -- translations
-- `src/i18n/locales/hi.json` -- translations
-- `src/i18n/locales/pt.json` -- translations
-- `src/components/AddSolCard.tsx` -- use `t()` for all strings
-- `src/components/WelcomeIntroModal.tsx` -- use `t()` for all strings
-- `src/components/PrivyLoginButton.tsx` -- use `t()` for all strings
-- `src/components/Navbar.tsx` -- use `t()` for external wallet section
-- `src/components/ConnectWalletGate.tsx` -- remove auto-connect polling
+### Button label change
+"Continue" becomes "Log in / Sign up" in all languages.
 
 ## What Does NOT Change
 - No game logic, timers, room logic, Supabase functions, or Solana program code
-- ConnectWalletGate connect buttons and deep links remain fully functional
-- WalletButton internals unchanged
-- Privy login flow unchanged
+- External wallet connection flow (ConnectWalletGate internals) stays identical
+- Privy provider configuration unchanged
+- No changes to how wallet addresses are used downstream in game/room logic
+
