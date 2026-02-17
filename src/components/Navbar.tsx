@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { Home, Wallet, PlusCircle, LayoutList, Menu, X, Coins, Volume2, VolumeX, Bell, BellOff, Trophy, User } from "lucide-react";
 import { WalletButton } from "./WalletButton";
+import { PrivyLoginButton } from "./PrivyLoginButton";
 import BrandLogo from "./BrandLogo";
 import LanguageSelector from "./LanguageSelector";
 import { useSound } from "@/contexts/SoundContext";
@@ -144,6 +145,7 @@ const Navbar = () => {
               {notificationsEnabled ? <Bell size={20} /> : <BellOff size={20} />}
             </button>
             
+            <PrivyLoginButton />
             <WalletButton />
           </div>
 
@@ -231,6 +233,11 @@ const Navbar = () => {
                   <span>{t("nav.myProfile")}</span>
                 </Link>
               )}
+              
+              {/* Privy Login (Mobile) */}
+              <div className="pt-2">
+                <PrivyLoginButton />
+              </div>
               
               {/* Wallet Button (Mobile) */}
               <div className="pt-2">
