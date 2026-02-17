@@ -27,11 +27,6 @@ export function PrivyProviderWrapper({ children }: PrivyProviderWrapperProps) {
             createOnLogin: "users-without-wallets",
           },
         },
-        externalWallets: {
-          solana: {
-            connectors: [] as any,
-          },
-        },
       }}
     >
       {children}
