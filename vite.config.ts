@@ -52,6 +52,11 @@ export default defineConfig(({ mode }) => ({
   build: {
     rollupOptions: {
       external: ['usb', 'node-hid'],
+      onwarn(warning, warn) {
+        // Suppress Privy's /*#__PURE__*/ annotation warnings
+        if (warning.code === 'INVALID_ANNOTATION' && warning.message?.includes('#__PURE__')) return;
+        warn(warning);
+      },
       output: {
         // Add hash to all chunks for cache busting
         entryFileNames: `assets/[name]-[hash].js`,
