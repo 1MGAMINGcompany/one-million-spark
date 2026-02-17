@@ -1,7 +1,7 @@
 import { ReactNode } from "react";
 import { PrivyProvider } from "@privy-io/react-auth";
 
-const PRIVY_APP_ID = import.meta.env.VITE_PRIVY_APP_ID;
+const PRIVY_APP_ID = import.meta.env.VITE_PRIVY_APP_ID || "cmlq6g2dn00760cl2djbh9dfy";
 
 interface PrivyProviderWrapperProps {
   children: ReactNode;
