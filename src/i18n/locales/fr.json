@@ -517,7 +517,13 @@
     "openWalletApp": "Ouvrir l'app {{wallet}}",
     "alreadyInWallet": "Je suis déjà dans {{wallet}}",
     "copySite": "Copier 1mgaming.com",
-    "copyPage": "Copier le lien de la page"
+    "copyPage": "Copier le lien de la page",
+    "externalWallet": "Portefeuille Externe",
+    "advancedConnectExternal": "Avancé : Connecter un Portefeuille Externe",
+    "alreadyHavePhantom": "Vous avez déjà Phantom ? Connectez-le ici.",
+    "continue": "Continuer",
+    "walletLoginNotConfigured": "Connexion portefeuille non configurée",
+    "disconnect": "Déconnecter"
   },
   "common": {
     "loading": "Chargement...",
@@ -772,5 +778,39 @@
     "forfeit": "Forfait",
     "timeoutForfeit": "Temps écoulé = forfait automatique",
     "rulesAcceptedNote": "Les deux joueurs ont accepté ces règles avant le début du match. Les paiements sont exécutés sur la blockchain."
+  },
+  "addSol": {
+    "title": "Ajoutez du SOL pour Commencer à Jouer",
+    "subtitle": "Votre portefeuille est prêt. Ajoutez du SOL pour participer aux matchs de compétence.",
+    "balance": "Solde : {{balance}} SOL",
+    "tooltipWalletCreated": "Votre portefeuille est créé automatiquement",
+    "tooltipAddSol": "Ajoutez du SOL pour participer aux matchs",
+    "tooltipBalanceUpdates": "Le solde se met à jour automatiquement",
+    "fundingOptions": "Options de Financement",
+    "sendSol": "Envoyer du SOL depuis n'importe quel portefeuille",
+    "sendSolDesc": "Copiez votre adresse ou scannez le code QR pour envoyer du SOL.",
+    "buySolPhantom": "Acheter du SOL sur Phantom",
+    "buyInPhantom": "Acheter sur Phantom",
+    "transferExchange": "Transférer depuis un exchange",
+    "exchangeStep1": "Allez sur votre exchange (Coinbase, Binance, etc.)",
+    "exchangeStep2": "Retirez du SOL",
+    "exchangeStep3": "Collez votre adresse de portefeuille",
+    "exchangeStep4": "Sélectionnez le réseau Solana",
+    "exchangeStep5": "Confirmez le transfert",
+    "waitingForSol": "En attente de SOL…",
+    "balanceRefreshNote": "Le solde se rafraîchit toutes les 10 secondes.",
+    "funded": "Vous êtes financé — jouons !"
+  },
+  "welcomeIntro": {
+    "title": "Bienvenue sur",
+    "brand": "1M Gaming",
+    "walletReady": "Portefeuille prêt",
+    "walletReadyDesc": "Votre portefeuille a été créé automatiquement.",
+    "addSol": "Ajouter du SOL",
+    "addSolDesc": "Financez votre portefeuille pour participer aux matchs.",
+    "joinMatch": "Rejoindre un match",
+    "joinMatchDesc": "Jouez aux échecs, backgammon, dominos et plus.",
+    "gotIt": "Compris",
+    "dontShowAgain": "Ne plus afficher"
   }
 }

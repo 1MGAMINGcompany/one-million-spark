@@ -1,15 +1,17 @@
 import { usePrivy } from "@privy-io/react-auth";
 import { Button } from "@/components/ui/button";
 import { LogOut, Wallet } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 const PRIVY_APP_ID = import.meta.env.VITE_PRIVY_APP_ID || "cmlq6g2dn00760cl2djbh9dfy";
 
 export function PrivyLoginButton() {
-  // If Privy is not configured, show a small banner
+  const { t } = useTranslation();
+
   if (!PRIVY_APP_ID) {
     return (
       <div className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
-        Wallet login not configured
+        {t("wallet.walletLoginNotConfigured")}
       </div>
     );
   }
@@ -18,13 +20,13 @@ export function PrivyLoginButton() {
 }
 
 function PrivyLoginButtonInner() {
+  const { t } = useTranslation();
   const { ready, authenticated, login, logout, user } = usePrivy();
 
   if (!ready) {
     return null;
   }
 
-  // Get the Solana embedded wallet address if available
   const solanaWallet = user?.linkedAccounts?.find(
     (a: any) => a.type === "wallet" && a.chainType === "solana"
   ) as any;
@@ -46,7 +48,7 @@ function PrivyLoginButtonInner() {
           size="icon"
           onClick={logout}
           className="h-8 w-8 text-muted-foreground hover:text-destructive"
-          title="Disconnect"
+          title={t("wallet.disconnect")}
         >
           <LogOut size={16} />
         </Button>
@@ -61,7 +63,7 @@ function PrivyLoginButtonInner() {
       className="bg-primary text-primary-foreground hover:bg-primary/90 gap-2"
     >
       <Wallet size={16} />
-      Continue
+      {t("wallet.continue")}
     </Button>
   );
 }

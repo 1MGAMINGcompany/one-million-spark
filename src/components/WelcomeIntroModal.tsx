@@ -9,6 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Wallet, Coins, Swords } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 const LS_KEY = "intro_seen";
 
@@ -17,6 +18,7 @@ interface WelcomeIntroModalProps {
 }
 
 export function WelcomeIntroModal({ isAuthenticated }: WelcomeIntroModalProps) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [dontShow, setDontShow] = useState(false);
 
@@ -24,9 +26,8 @@ export function WelcomeIntroModal({ isAuthenticated }: WelcomeIntroModalProps) {
     if (!isAuthenticated) return;
     const seen = localStorage.getItem(LS_KEY);
     if (!seen) {
-      // Small delay so login UI settles first
-      const t = setTimeout(() => setOpen(true), 600);
-      return () => clearTimeout(t);
+      const timer = setTimeout(() => setOpen(true), 600);
+      return () => clearTimeout(timer);
     }
   }, [isAuthenticated]);
 
@@ -38,9 +39,9 @@ export function WelcomeIntroModal({ isAuthenticated }: WelcomeIntroModalProps) {
   };
 
   const steps = [
-    { icon: Wallet, label: "Wallet ready", desc: "Your wallet was created automatically." },
-    { icon: Coins, label: "Add SOL", desc: "Fund your wallet to enter matches." },
-    { icon: Swords, label: "Join a match", desc: "Play chess, backgammon, dominos & more." },
+    { icon: Wallet, label: t("welcomeIntro.walletReady"), desc: t("welcomeIntro.walletReadyDesc") },
+    { icon: Coins, label: t("welcomeIntro.addSol"), desc: t("welcomeIntro.addSolDesc") },
+    { icon: Swords, label: t("welcomeIntro.joinMatch"), desc: t("welcomeIntro.joinMatchDesc") },
   ];
 
   return (
@@ -48,8 +49,8 @@ export function WelcomeIntroModal({ isAuthenticated }: WelcomeIntroModalProps) {
       <DialogContent className="sm:max-w-md border-primary/20">
         <DialogHeader>
           <DialogTitle className="text-center text-2xl font-display">
-            Welcome to{" "}
-            <span className="text-primary">1M Gaming</span>
+            {t("welcomeIntro.title")}{" "}
+            <span className="text-primary">{t("welcomeIntro.brand")}</span>
           </DialogTitle>
         </DialogHeader>
 
@@ -71,7 +72,7 @@ export function WelcomeIntroModal({ isAuthenticated }: WelcomeIntroModalProps) {
 
         <DialogFooter className="flex-col gap-3 sm:flex-col">
           <Button variant="gold" className="w-full" onClick={handleDismiss}>
-            Got it
+            {t("welcomeIntro.gotIt")}
           </Button>
           <label className="flex items-center gap-2 cursor-pointer justify-center">
             <Checkbox
@@ -80,7 +81,7 @@ export function WelcomeIntroModal({ isAuthenticated }: WelcomeIntroModalProps) {
               className="border-muted-foreground/40"
             />
             <span className="text-xs text-muted-foreground select-none">
-              Don't show again
+              {t("welcomeIntro.dontShowAgain")}
             </span>
           </label>
         </DialogFooter>

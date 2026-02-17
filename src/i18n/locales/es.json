@@ -647,7 +647,13 @@
     "openWalletApp": "Abrir app {{wallet}}",
     "alreadyInWallet": "Ya estoy en {{wallet}}",
     "copySite": "Copiar 1mgaming.com",
-    "copyPage": "Copiar enlace de la página"
+    "copyPage": "Copiar enlace de la página",
+    "externalWallet": "Billetera Externa",
+    "advancedConnectExternal": "Avanzado: Conectar Billetera Externa",
+    "alreadyHavePhantom": "¿Ya tienes Phantom? Conéctalo aquí.",
+    "continue": "Continuar",
+    "walletLoginNotConfigured": "Inicio con billetera no configurado",
+    "disconnect": "Desconectar"
   },
   "common": {
     "loading": "Cargando...",
@@ -899,5 +905,39 @@
     "forfeit": "Abandono",
     "timeoutForfeit": "Tiempo agotado = abandono automático",
     "rulesAcceptedNote": "Ambos jugadores aceptaron estas reglas antes del inicio del partido. Los pagos se ejecutan en la cadena."
+  },
+  "addSol": {
+    "title": "Añade SOL para Empezar a Jugar",
+    "subtitle": "Tu billetera está lista. Añade SOL para entrar en partidas de habilidad.",
+    "balance": "Saldo: {{balance}} SOL",
+    "tooltipWalletCreated": "Tu billetera se crea automáticamente",
+    "tooltipAddSol": "Añade SOL para entrar en partidas de habilidad",
+    "tooltipBalanceUpdates": "El saldo se actualiza automáticamente",
+    "fundingOptions": "Opciones de Financiación",
+    "sendSol": "Enviar SOL desde cualquier billetera",
+    "sendSolDesc": "Copia tu dirección o escanea el código QR para enviar SOL.",
+    "buySolPhantom": "Comprar SOL en Phantom",
+    "buyInPhantom": "Comprar en Phantom",
+    "transferExchange": "Transferir desde un exchange",
+    "exchangeStep1": "Ve a tu exchange (Coinbase, Binance, etc.)",
+    "exchangeStep2": "Retira SOL",
+    "exchangeStep3": "Pega tu dirección de billetera",
+    "exchangeStep4": "Selecciona la red Solana",
+    "exchangeStep5": "Confirma la transferencia",
+    "waitingForSol": "Esperando SOL…",
+    "balanceRefreshNote": "El saldo se actualiza cada 10 segundos.",
+    "funded": "¡Estás financiado — a jugar!"
+  },
+  "welcomeIntro": {
+    "title": "Bienvenido a",
+    "brand": "1M Gaming",
+    "walletReady": "Billetera lista",
+    "walletReadyDesc": "Tu billetera fue creada automáticamente.",
+    "addSol": "Añadir SOL",
+    "addSolDesc": "Financia tu billetera para entrar en partidas.",
+    "joinMatch": "Unirse a una partida",
+    "joinMatchDesc": "Juega ajedrez, backgammon, dominó y más.",
+    "gotIt": "Entendido",
+    "dontShowAgain": "No mostrar de nuevo"
   }
 }

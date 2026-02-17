@@ -540,7 +540,13 @@
     "openWalletApp": "{{wallet}}アプリを開く",
     "alreadyInWallet": "すでに{{wallet}}内です",
     "copySite": "1mgaming.comをコピー",
-    "copyPage": "ページリンクをコピー"
+    "copyPage": "ページリンクをコピー",
+    "externalWallet": "外部ウォレット",
+    "advancedConnectExternal": "上級：外部ウォレットを接続",
+    "alreadyHavePhantom": "Phantomをお持ちですか？ここで接続してください。",
+    "continue": "続行",
+    "walletLoginNotConfigured": "ウォレットログインが未設定です",
+    "disconnect": "切断"
   },
   "common": {
     "loading": "読み込み中...",
@@ -769,5 +775,39 @@
     "forfeit": "棄権",
     "timeoutForfeit": "タイムアウト = 自動棄権",
     "rulesAcceptedNote": "両プレイヤーはマッチ開始前にこれらのルールに同意しました。支払いはオンチェーンで実行されます。"
+  },
+  "addSol": {
+    "title": "SOLを追加してプレイ開始",
+    "subtitle": "ウォレットの準備ができました。スキルマッチに参加するにはSOLを追加してください。",
+    "balance": "残高：{{balance}} SOL",
+    "tooltipWalletCreated": "ウォレットは自動的に作成されます",
+    "tooltipAddSol": "スキルマッチに参加するにはSOLを追加",
+    "tooltipBalanceUpdates": "残高は自動的に更新されます",
+    "fundingOptions": "入金オプション",
+    "sendSol": "任意のウォレットからSOLを送信",
+    "sendSolDesc": "アドレスをコピーするかQRコードをスキャンしてSOLを送信してください。",
+    "buySolPhantom": "PhantomでSOLを購入",
+    "buyInPhantom": "Phantomで購入",
+    "transferExchange": "取引所から送金",
+    "exchangeStep1": "取引所にアクセス（Coinbase、Binanceなど）",
+    "exchangeStep2": "SOLを出金",
+    "exchangeStep3": "ウォレットアドレスを貼り付け",
+    "exchangeStep4": "Solanaネットワークを選択",
+    "exchangeStep5": "送金を確認",
+    "waitingForSol": "SOLを待っています…",
+    "balanceRefreshNote": "残高は10秒ごとに更新されます。",
+    "funded": "入金完了 — さあプレイしましょう！"
+  },
+  "welcomeIntro": {
+    "title": "ようこそ",
+    "brand": "1M Gaming",
+    "walletReady": "ウォレット準備完了",
+    "walletReadyDesc": "ウォレットは自動的に作成されました。",
+    "addSol": "SOLを追加",
+    "addSolDesc": "マッチに参加するためにウォレットに入金してください。",
+    "joinMatch": "マッチに参加",
+    "joinMatchDesc": "チェス、バックギャモン、ドミノなどをプレイ。",
+    "gotIt": "了解",
+    "dontShowAgain": "もう表示しない"
   }
 }

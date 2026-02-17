@@ -91,37 +91,7 @@ export function ConnectWalletGate({ className }: ConnectWalletGateProps) {
   const isIOS = getIsIOS();
   const isInWalletBrowser = getIsInWalletBrowser();
 
-  // Auto-connect polling for wallet browser environments
-  useEffect(() => {
-    if (connected || connecting) return;
-    if (!isMobile) return;
-
-    let attempts = 0;
-    const maxAttempts = 15; // 15 x 200ms = 3 seconds
-
-    const interval = setInterval(() => {
-      attempts++;
-      const win = window as any;
-      const hasProvider = win.solana || win.phantom?.solana || win.solflare;
-
-      if (hasProvider) {
-        clearInterval(interval);
-        const installed = wallets.find(w => w.readyState === 'Installed');
-        if (installed && !connected) {
-          console.log("[WalletAutoConnect] Gate: Provider detected, connecting via", installed.adapter.name);
-          select(installed.adapter.name);
-          connect().catch(err => console.warn("[WalletAutoConnect] Gate: Failed:", err));
-        }
-      }
-
-      if (attempts >= maxAttempts) {
-        clearInterval(interval);
-      }
-    }, 200);
-
-    return () => clearInterval(interval);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // Auto-connect polling removed — external wallets must NOT auto-connect
 
   // Check if MWA is available (Android only)
   const hasMWA = isAndroid && wallets.some(w => 

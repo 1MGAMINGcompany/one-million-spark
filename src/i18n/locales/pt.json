@@ -517,7 +517,13 @@
     "openWalletApp": "Abrir app {{wallet}}",
     "alreadyInWallet": "Já estou no {{wallet}}",
     "copySite": "Copiar 1mgaming.com",
-    "copyPage": "Copiar link da página"
+    "copyPage": "Copiar link da página",
+    "externalWallet": "Carteira Externa",
+    "advancedConnectExternal": "Avançado: Conectar Carteira Externa",
+    "alreadyHavePhantom": "Já tem Phantom? Conecte aqui.",
+    "continue": "Continuar",
+    "walletLoginNotConfigured": "Login de carteira não configurado",
+    "disconnect": "Desconectar"
   },
   "common": {
     "loading": "Carregando...",
@@ -772,5 +778,39 @@
     "forfeit": "Desistência",
     "timeoutForfeit": "Tempo esgotado = desistência automática",
     "rulesAcceptedNote": "Ambos os jogadores aceitaram estas regras antes do início da partida. Os pagamentos são executados on-chain."
+  },
+  "addSol": {
+    "title": "Adicione SOL para Começar a Jogar",
+    "subtitle": "Sua carteira está pronta. Adicione SOL para entrar em partidas de habilidade.",
+    "balance": "Saldo: {{balance}} SOL",
+    "tooltipWalletCreated": "Sua carteira é criada automaticamente",
+    "tooltipAddSol": "Adicione SOL para entrar em partidas de habilidade",
+    "tooltipBalanceUpdates": "O saldo é atualizado automaticamente",
+    "fundingOptions": "Opções de Financiamento",
+    "sendSol": "Enviar SOL de qualquer carteira",
+    "sendSolDesc": "Copie seu endereço ou escaneie o código QR para enviar SOL.",
+    "buySolPhantom": "Comprar SOL no Phantom",
+    "buyInPhantom": "Comprar no Phantom",
+    "transferExchange": "Transferir de uma exchange",
+    "exchangeStep1": "Vá para sua exchange (Coinbase, Binance, etc.)",
+    "exchangeStep2": "Saque SOL",
+    "exchangeStep3": "Cole o endereço da sua carteira",
+    "exchangeStep4": "Selecione a rede Solana",
+    "exchangeStep5": "Confirme a transferência",
+    "waitingForSol": "Aguardando SOL…",
+    "balanceRefreshNote": "O saldo é atualizado a cada 10 segundos.",
+    "funded": "Você está financiado — vamos jogar!"
+  },
+  "welcomeIntro": {
+    "title": "Bem-vindo ao",
+    "brand": "1M Gaming",
+    "walletReady": "Carteira pronta",
+    "walletReadyDesc": "Sua carteira foi criada automaticamente.",
+    "addSol": "Adicionar SOL",
+    "addSolDesc": "Financie sua carteira para entrar em partidas.",
+    "joinMatch": "Entrar em uma partida",
+    "joinMatchDesc": "Jogue xadrez, gamão, dominó e mais.",
+    "gotIt": "Entendi",
+    "dontShowAgain": "Não mostrar novamente"
   }
 }

@@ -514,7 +514,13 @@
     "openWalletApp": "Apri app {{wallet}}",
     "alreadyInWallet": "Sono già in {{wallet}}",
     "copySite": "Copia 1mgaming.com",
-    "copyPage": "Copia link della pagina"
+    "copyPage": "Copia link della pagina",
+    "externalWallet": "Portafoglio Esterno",
+    "advancedConnectExternal": "Avanzato: Collega Portafoglio Esterno",
+    "alreadyHavePhantom": "Hai già Phantom? Collegalo qui.",
+    "continue": "Continua",
+    "walletLoginNotConfigured": "Login portafoglio non configurato",
+    "disconnect": "Disconnetti"
   },
   "common": {
     "loading": "Caricamento...",
@@ -749,5 +755,39 @@
     "forfeit": "Abbandono",
     "timeoutForfeit": "Tempo scaduto = abbandono automatico",
     "rulesAcceptedNote": "Entrambi i giocatori hanno accettato queste regole prima dell'inizio della partita. I pagamenti vengono eseguiti on-chain."
+  },
+  "addSol": {
+    "title": "Aggiungi SOL per Iniziare a Giocare",
+    "subtitle": "Il tuo portafoglio è pronto. Aggiungi SOL per partecipare alle partite di abilità.",
+    "balance": "Saldo: {{balance}} SOL",
+    "tooltipWalletCreated": "Il tuo portafoglio viene creato automaticamente",
+    "tooltipAddSol": "Aggiungi SOL per partecipare alle partite",
+    "tooltipBalanceUpdates": "Il saldo si aggiorna automaticamente",
+    "fundingOptions": "Opzioni di Finanziamento",
+    "sendSol": "Invia SOL da qualsiasi portafoglio",
+    "sendSolDesc": "Copia il tuo indirizzo o scansiona il codice QR per inviare SOL.",
+    "buySolPhantom": "Acquista SOL su Phantom",
+    "buyInPhantom": "Acquista su Phantom",
+    "transferExchange": "Trasferisci da un exchange",
+    "exchangeStep1": "Vai al tuo exchange (Coinbase, Binance, ecc.)",
+    "exchangeStep2": "Preleva SOL",
+    "exchangeStep3": "Incolla il tuo indirizzo portafoglio",
+    "exchangeStep4": "Seleziona la rete Solana",
+    "exchangeStep5": "Conferma il trasferimento",
+    "waitingForSol": "In attesa di SOL…",
+    "balanceRefreshNote": "Il saldo si aggiorna ogni 10 secondi.",
+    "funded": "Sei finanziato — giochiamo!"
+  },
+  "welcomeIntro": {
+    "title": "Benvenuto su",
+    "brand": "1M Gaming",
+    "walletReady": "Portafoglio pronto",
+    "walletReadyDesc": "Il tuo portafoglio è stato creato automaticamente.",
+    "addSol": "Aggiungi SOL",
+    "addSolDesc": "Finanzia il tuo portafoglio per partecipare alle partite.",
+    "joinMatch": "Unisciti a una partita",
+    "joinMatchDesc": "Gioca a scacchi, backgammon, domino e altro.",
+    "gotIt": "Capito",
+    "dontShowAgain": "Non mostrare più"
   }
 }

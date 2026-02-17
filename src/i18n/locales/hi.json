@@ -527,7 +527,13 @@
     "openWalletApp": "{{wallet}} ऐप खोलें",
     "alreadyInWallet": "मैं पहले से {{wallet}} में हूं",
     "copySite": "1mgaming.com कॉपी करें",
-    "copyPage": "पेज लिंक कॉपी करें"
+    "copyPage": "पेज लिंक कॉपी करें",
+    "externalWallet": "बाहरी वॉलेट",
+    "advancedConnectExternal": "उन्नत: बाहरी वॉलेट कनेक्ट करें",
+    "alreadyHavePhantom": "क्या आपके पास पहले से Phantom है? इसे यहां कनेक्ट करें।",
+    "continue": "जारी रखें",
+    "walletLoginNotConfigured": "वॉलेट लॉगिन कॉन्फ़िगर नहीं है",
+    "disconnect": "डिस्कनेक्ट"
   },
   "common": {
     "loading": "लोड हो रहा है...",
@@ -762,5 +768,39 @@
     "forfeit": "हार मानना",
     "timeoutForfeit": "समय समाप्त = स्वचालित हार",
     "rulesAcceptedNote": "दोनों खिलाड़ियों ने मैच शुरू होने से पहले इन नियमों को स्वीकार किया। भुगतान ऑन-चेन निष्पादित होते हैं।"
+  },
+  "addSol": {
+    "title": "खेलना शुरू करने के लिए SOL जोड़ें",
+    "subtitle": "आपका वॉलेट तैयार है। स्किल मैच में प्रवेश के लिए SOL जोड़ें।",
+    "balance": "शेष: {{balance}} SOL",
+    "tooltipWalletCreated": "आपका वॉलेट स्वचालित रूप से बनाया गया है",
+    "tooltipAddSol": "स्किल मैच में प्रवेश के लिए SOL जोड़ें",
+    "tooltipBalanceUpdates": "शेष राशि स्वचालित रूप से अपडेट होती है",
+    "fundingOptions": "फंडिंग विकल्प",
+    "sendSol": "किसी भी वॉलेट से SOL भेजें",
+    "sendSolDesc": "SOL भेजने के लिए अपना पता कॉपी करें या QR कोड स्कैन करें।",
+    "buySolPhantom": "Phantom में SOL खरीदें",
+    "buyInPhantom": "Phantom में खरीदें",
+    "transferExchange": "एक्सचेंज से ट्रांसफर करें",
+    "exchangeStep1": "अपने एक्सचेंज पर जाएं (Coinbase, Binance, आदि)",
+    "exchangeStep2": "SOL निकालें",
+    "exchangeStep3": "अपना वॉलेट पता पेस्ट करें",
+    "exchangeStep4": "Solana नेटवर्क चुनें",
+    "exchangeStep5": "ट्रांसफर की पुष्टि करें",
+    "waitingForSol": "SOL की प्रतीक्षा में…",
+    "balanceRefreshNote": "शेष हर 10 सेकंड में रिफ्रेश होता है।",
+    "funded": "आप फंडेड हैं — चलो खेलते हैं!"
+  },
+  "welcomeIntro": {
+    "title": "आपका स्वागत है",
+    "brand": "1M Gaming",
+    "walletReady": "वॉलेट तैयार",
+    "walletReadyDesc": "आपका वॉलेट स्वचालित रूप से बनाया गया था।",
+    "addSol": "SOL जोड़ें",
+    "addSolDesc": "मैच में प्रवेश के लिए अपने वॉलेट में फंड जोड़ें।",
+    "joinMatch": "मैच में शामिल हों",
+    "joinMatchDesc": "शतरंज, बैकगैमन, डोमिनो और अधिक खेलें।",
+    "gotIt": "समझ गया",
+    "dontShowAgain": "फिर से न दिखाएं"
   }
 }

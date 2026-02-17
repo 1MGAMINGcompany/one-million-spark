@@ -150,11 +150,11 @@ const Navbar = () => {
             <Collapsible>
               <CollapsibleTrigger className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors">
                 <Wallet size={14} />
-                <span>External Wallet</span>
+                <span>{t("wallet.externalWallet")}</span>
                 <ChevronDown size={12} />
               </CollapsibleTrigger>
               <CollapsibleContent className="absolute right-0 top-full mt-1 bg-background border border-border rounded-lg shadow-lg p-3 z-50 space-y-2">
-                <p className="text-[11px] text-muted-foreground">Already have Phantom? Connect it here.</p>
+                <p className="text-[11px] text-muted-foreground">{t("wallet.alreadyHavePhantom")}</p>
                 <WalletButton />
               </CollapsibleContent>
             </Collapsible>
@@ -254,11 +254,11 @@ const Navbar = () => {
               <Collapsible>
                 <CollapsibleTrigger className="flex items-center gap-2 px-4 py-3 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors w-full">
                   <Wallet size={16} />
-                  <span>Advanced: Connect External Wallet</span>
+                  <span>{t("wallet.advancedConnectExternal")}</span>
                   <ChevronDown size={12} className="ml-auto" />
                 </CollapsibleTrigger>
                 <CollapsibleContent className="px-4 pt-2 space-y-2">
-                  <p className="text-[11px] text-muted-foreground">Already have Phantom? Connect it here.</p>
+                  <p className="text-[11px] text-muted-foreground">{t("wallet.alreadyHavePhantom")}</p>
                   <WalletButton />
                 </CollapsibleContent>
               </Collapsible>
