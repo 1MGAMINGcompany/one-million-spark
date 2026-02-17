@@ -1,109 +1,78 @@
 
 
-# Fix All "Connect Wallet" Buttons to Use Privy + Improve Button Copy
+# Fix: Privy Wallet Can't Create Rooms (Transaction Signing Bridge)
 
-## Problem
+## The Problem
 
-There are two separate issues:
+When you're logged in via Privy (Google/Apple/Email), the app correctly shows you as "connected" on the UI. But when you click "Create Room", the underlying `useSolanaRooms` hook fails because it gets `publicKey` and `sendTransaction` directly from `@solana/wallet-adapter-react` -- which knows nothing about your Privy embedded wallet.
 
-1. **Wrong wallet flow on gated pages**: When you tap "Create Game Room" (or join a room) on mobile without being logged in, the app shows the old `ConnectWalletGate` component -- which opens Phantom/Solflare deep links. It should instead trigger the Privy login (Google, Apple, Email). This happens because these pages check `isConnected` from the `useWallet()` hook, which only checks the **external** Solana wallet adapter, not Privy authentication.
+In short: the UI gate was fixed, but the transaction-signing layer still only talks to external wallets.
 
-2. **"Continue" button is vague**: The Privy login button just says "Continue" which doesn't explain what it does. Similar apps (Tensor, Magic Eden, Jupiter) use labels like "Log in" or "Sign in with Google/Email" to make it clear.
+## The Fix
 
-## What Changes
+Bridge the Privy embedded wallet's signing capabilities into the unified `useWallet` hook so that `useSolanaRooms` (and all other hooks/pages that need to sign transactions) can work with either wallet type transparently.
 
-### 1. Update `useWallet` hook to include Privy users
+### Step 1: Enhance `useWallet` hook to expose Privy transaction methods
 
 **File: `src/hooks/useWallet.ts`**
 
-The `useWallet` hook currently only checks `@solana/wallet-adapter-react`. It needs to also check if the user is authenticated via Privy with an embedded Solana wallet. If either is connected, `isConnected` should be `true` and `address` should return the appropriate wallet address.
+- Import `useWallets` and `useSignAndSendTransaction` from `@privy-io/react-auth/solana`
+- When Privy is active and no external wallet is connected, construct a `PublicKey` from the Privy address
+- Create a `sendTransaction` wrapper that uses Privy's `signAndSendTransaction` for Privy users
+- Expose these as `publicKey` and `sendTransaction` in the returned object so downstream code works without changes
 
-- Import `usePrivy` from `@privy-io/react-auth`
-- Extract Privy Solana wallet address from `user.linkedAccounts`
-- Return Privy address as fallback when external wallet is not connected
-- Privy-authenticated users are considered "connected"
+Key additions to the return value:
+- `publicKey`: Falls back to Privy wallet PublicKey when external wallet isn't connected
+- `sendTransaction`: Falls back to Privy's `signAndSendTransaction` when external wallet isn't connected
+- `isPrivyWallet`: Boolean flag so callers can know which path is active (useful for debug logging)
 
-### 2. Replace `ConnectWalletGate` with Privy login on gated pages
+### Step 2: Update `useSolanaRooms.tsx` to use the unified hook
 
-**Files: `src/pages/CreateRoom.tsx`, `src/pages/JoinRoom.tsx`**
+**File: `src/hooks/useSolanaRooms.tsx`**
 
-When a user is not connected, these pages currently show `ConnectWalletGate` (external wallet picker). Instead, they should show a `PrivyLoginButton` as the primary action, with the external wallet option available as a secondary/advanced option below.
+- Change `import { useWallet } from "@solana/wallet-adapter-react"` to `import { useWallet } from "@/hooks/useWallet"`
+- Keep `useConnection` from `@solana/wallet-adapter-react` (connection is the same regardless)
+- The `publicKey`, `sendTransaction`, `connected`, and `wallet` references will now automatically work for both Privy and external wallets
 
-- Replace `<ConnectWalletGate />` with `<PrivyLoginButton />` as the primary CTA
-- Add a small collapsible "Advanced: Use external wallet" section below with the existing `ConnectWalletGate`
-- Update hardcoded English text to use i18n keys
+### Step 3: Update other critical files that directly import from wallet-adapter
 
-### 3. Fix `WalletGateModal` to use Privy login
+These files also use `useWallet` from `@solana/wallet-adapter-react` and need updating to use the unified hook:
 
-**File: `src/components/WalletGateModal.tsx`**
+- `src/hooks/useSolanaNetwork.ts` -- balance fetching uses `publicKey`
+- `src/components/GlobalActiveRoomBanner.tsx` -- checks `publicKey` for active room display
+- `src/components/Navbar.tsx` -- checks wallet state for UI display
+- `src/pages/Room.tsx` -- uses wallet for room interactions and transactions
+- `src/pages/DebugJoinRoom.tsx` -- uses wallet for debug join flow
+- `src/components/WalletButton.tsx` -- shows wallet status/address
+- `src/components/RecoverFundsButton.tsx` -- needs wallet for fund recovery transactions
 
-This modal (used in Room.tsx) currently opens the Solana wallet adapter modal via `setVisible(true)`. It should instead trigger `login()` from Privy as the primary action.
-
-- Import `usePrivy` and call `login()` as the primary action
-- Keep external wallet connect as secondary option
-- Replace hardcoded English strings with i18n keys
-
-### 4. Fix `WalletRequired` component
-
-**File: `src/components/WalletRequired.tsx`**
-
-This component (used in RoomList.tsx) shows a static "connect wallet" message with no action button. Add a `PrivyLoginButton` as the CTA.
-
-- Add `PrivyLoginButton` import and render it
-- Replace hardcoded English strings with i18n keys
-
-### 5. Change "Continue" to "Log in / Sign up" 
-
-**Files: `src/components/PrivyLoginButton.tsx`, all locale files**
-
-The "Continue" label is vague. Change it to "Log in / Sign up" which is clearer and matches industry patterns (Tensor uses "Sign In", Magic Eden uses "Log In").
-
-- Change the `wallet.continue` i18n key from "Continue" to "Log in / Sign up"
-- Update all 10 locale files with proper translations
-
-### 6. Add missing i18n keys
-
-**Files: all locale files**
-
-Add translations for new strings used in the updated gated pages:
-- `createRoom.connectWalletDesc` equivalent for Privy context
-- `wallet.orUseExternal` -- "Or connect an external wallet"
-- Updated `wallet.continue` -- "Log in / Sign up"
+Each file: change `import { useWallet } from "@solana/wallet-adapter-react"` to `import { useWallet } from "@/hooks/useWallet"`, keeping `useConnection` imports from the adapter as-is.
 
 ## Technical Details
 
-### useWallet.ts changes
-```typescript
-// Add Privy awareness
-import { usePrivy } from "@privy-io/react-auth";
+### useWallet.ts -- Privy Transaction Bridge
 
-// Inside hook:
-const { authenticated, user } = usePrivy();
-const privyWallet = user?.linkedAccounts?.find(a => a.type === "wallet" && a.chainType === "solana");
-const privyAddress = privyWallet?.address;
-
-// Return combined state:
-const isConnected = connected || (authenticated && !!privyAddress);
-const address = publicKey?.toBase58() ?? privyAddress ?? null;
+```text
+useWallet()
+  |
+  +-- External wallet connected? --> Use @solana/wallet-adapter publicKey + sendTransaction
+  |
+  +-- Privy authenticated? --> Construct PublicKey from Privy address
+                               Use Privy signAndSendTransaction as sendTransaction
+                               
+Return shape stays identical -- downstream code doesn't change.
 ```
 
-This is wrapped with a guard for PRIVY_APP_ID similar to usePrivySolBalance.
+The Privy `sendTransaction` wrapper will:
+1. Get the Privy wallet from `useWallets()` (from `@privy-io/react-auth/solana`)
+2. Serialize the transaction to bytes
+3. Call `signAndSendTransaction({ transaction: bytes, wallet: privyWallet })`
+4. Return the signature (matching the same interface as the adapter's `sendTransaction`)
 
-### CreateRoom.tsx gate section
-```
-[Wallet Icon]
-"Log in to Create a Room"
-"Sign in with Google, Apple, or Email to get started."
-[PrivyLoginButton]  <-- primary
-[Collapsible: "Or connect an external wallet" -> ConnectWalletGate]
-```
-
-### Button label change
-"Continue" becomes "Log in / Sign up" in all languages.
-
-## What Does NOT Change
-- No game logic, timers, room logic, Supabase functions, or Solana program code
-- External wallet connection flow (ConnectWalletGate internals) stays identical
-- Privy provider configuration unchanged
-- No changes to how wallet addresses are used downstream in game/room logic
+### What Does NOT Change
+- No game logic, timers, room state, Supabase functions, or on-chain program changes
+- External wallet flow is completely untouched (it's the primary path when available)
+- ConnectWalletGate internals stay the same
+- The Privy provider configuration stays the same
+- No new dependencies needed (`@privy-io/react-auth/solana` is already available in the installed package)
 
