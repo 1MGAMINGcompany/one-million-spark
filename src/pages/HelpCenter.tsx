@@ -97,7 +97,7 @@ const HelpCenter = () => {
 
       <ArticleGrid title="Wallet Guides" articles={walletArticles} />
       <ArticleGrid title="Skill Games" articles={skillArticles} />
-      <ArticleGrid title="Engineering" articles={engineeringArticles} />
+      {/* Engineering section hidden intentionally */}
 
       <PlatformStatus />
 
