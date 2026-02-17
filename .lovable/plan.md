@@ -1,64 +1,103 @@
 
 
-# Make Privy the Default Login, External Wallets as Advanced Option
+# Fix Wallet Buttons + Add Full i18n for All New UI Strings
 
 ## Problem
-Both the Privy embedded wallet and the Phantom browser extension wallet are showing simultaneously in the navbar. External wallets auto-connect on page load, creating a confusing dual-wallet experience.
+1. Multiple hardcoded English strings were introduced in recent UI changes (AddSolCard, WelcomeIntroModal, Navbar external wallet text, PrivyLoginButton) -- none of them use `useTranslation()` or i18n keys.
+2. The ConnectWalletGate still has mobile auto-connect polling that contradicts the "no auto-connect" requirement.
+3. All 10 locale files (en, es, fr, de, ar, zh, it, ja, hi, pt) need the new translation keys.
 
 ## Changes
 
-### 1. Disable External Wallet Auto-Connect
-**File: `src/components/SolanaProvider.tsx`**
-- Change `autoConnect={true}` to `autoConnect={false}`
-- This prevents Phantom/Solflare/Backpack from reconnecting automatically on page load
+### 1. Add new i18n keys to `en.json`
+Add a new `"addSol"` block and `"welcomeIntro"` block to the English locale:
 
-### 2. Remove Mobile Auto-Connect Polling
-**File: `src/components/WalletButton.tsx`**
-- Remove or disable the auto-connect polling logic (lines 366-395) that tries to detect and auto-connect injected wallet providers on mobile
-- External wallets should only connect when the user explicitly clicks the connect button
-
-### 3. Restructure Navbar Wallet Display
-**File: `src/components/Navbar.tsx`**
-- Make `PrivyLoginButton` the primary and prominent login element
-- Move `WalletButton` (external wallets) into a collapsible "Advanced" section using the Collapsible component from Radix UI
-- The collapsible section is collapsed by default with a small "Advanced: External Wallet" toggle
-- When a Privy user is authenticated, the external wallet section remains available but de-emphasized
-- On mobile, same pattern: Privy first, external wallet in collapsed Advanced section
-
-### 4. Update WalletButton to Not Show as Primary
-**File: `src/components/WalletButton.tsx`**
-- When an external wallet is connected, it will only appear inside the Advanced section (not as the primary wallet display in the navbar)
-- The connected state UI (address chip + balance + disconnect) stays the same but is contained within the collapsible
-
-## Technical Details
-
-### SolanaProvider.tsx
 ```
-autoConnect={false}  // was true
+"addSol": {
+  "title": "Add SOL to Start Playing",
+  "subtitle": "Your wallet is ready. Add SOL to enter skill matches.",
+  "balance": "Balance: {{balance}} SOL",
+  "tooltipWalletCreated": "Your wallet is created automatically",
+  "tooltipAddSol": "Add SOL to enter skill matches",
+  "tooltipBalanceUpdates": "Balance updates automatically",
+  "fundingOptions": "Funding Options",
+  "sendSol": "Send SOL from any wallet",
+  "sendSolDesc": "Copy your address or scan the QR code to send SOL.",
+  "buySolPhantom": "Buy SOL in Phantom",
+  "buyInPhantom": "Buy in Phantom",
+  "transferExchange": "Transfer from an exchange",
+  "exchangeStep1": "Go to your exchange (Coinbase, Binance, etc.)",
+  "exchangeStep2": "Withdraw SOL",
+  "exchangeStep3": "Paste your wallet address",
+  "exchangeStep4": "Select Solana network",
+  "exchangeStep5": "Confirm transfer",
+  "waitingForSol": "Waiting for SOL...",
+  "balanceRefreshNote": "Balance refreshes every 10 seconds.",
+  "funded": "You're funded -- let's play!"
+},
+"welcomeIntro": {
+  "title": "Welcome to",
+  "brand": "1M Gaming",
+  "walletReady": "Wallet ready",
+  "walletReadyDesc": "Your wallet was created automatically.",
+  "addSol": "Add SOL",
+  "addSolDesc": "Fund your wallet to enter matches.",
+  "joinMatch": "Join a match",
+  "joinMatchDesc": "Play chess, backgammon, dominos & more.",
+  "gotIt": "Got it",
+  "dontShowAgain": "Don't show again"
+},
+"wallet": {
+  ... (existing keys stay),
+  "externalWallet": "External Wallet",
+  "advancedConnectExternal": "Advanced: Connect External Wallet",
+  "alreadyHavePhantom": "Already have Phantom? Connect it here.",
+  "continue": "Continue",
+  "walletLoginNotConfigured": "Wallet login not configured"
+}
 ```
 
-### WalletButton.tsx - Remove auto-connect polling
-The useEffect at lines 366-395 that polls for injected providers and auto-connects will be removed.
+### 2. Add translations to all 9 non-English locale files
+Add properly translated versions of the above keys to: es, fr, de, ar, zh, it, ja, hi, pt.
 
-### Navbar.tsx - Layout change
-Desktop layout becomes:
-```
-[Nav Items] [Sound] [Bell] [PrivyLoginButton] [Collapsible: "External Wallet" -> WalletButton]
-```
+### 3. Update `AddSolCard.tsx` to use i18n
+- Import `useTranslation`
+- Replace all 15+ hardcoded English strings with `t("addSol.xxx")` calls
 
-Mobile layout becomes:
-```
-[Nav Items]
-[Privy Login]
-[Collapsible: "Advanced: Connect External Wallet" -> WalletButton]
-```
+### 4. Update `WelcomeIntroModal.tsx` to use i18n
+- Import `useTranslation`
+- Replace all hardcoded strings with `t("welcomeIntro.xxx")` calls
 
-The collapsible uses the existing `@radix-ui/react-collapsible` package already installed.
+### 5. Update `PrivyLoginButton.tsx` to use i18n
+- Import `useTranslation`
+- Replace "Continue", "Disconnect", "Wallet login not configured" with i18n keys
+
+### 6. Update `Navbar.tsx` to use i18n for external wallet strings
+- Replace hardcoded "External Wallet", "Advanced: Connect External Wallet", "Already have Phantom? Connect it here." with `t()` calls
+
+### 7. Remove auto-connect polling from `ConnectWalletGate.tsx`
+- Remove the `useEffect` (lines 94-124) that polls for injected wallet providers on mobile and auto-connects
+- This aligns with the requirement that external wallets must NOT auto-connect
+
+## Files Modified
+- `src/i18n/locales/en.json` -- new keys
+- `src/i18n/locales/es.json` -- translations
+- `src/i18n/locales/fr.json` -- translations
+- `src/i18n/locales/de.json` -- translations
+- `src/i18n/locales/ar.json` -- translations
+- `src/i18n/locales/zh.json` -- translations
+- `src/i18n/locales/it.json` -- translations
+- `src/i18n/locales/ja.json` -- translations
+- `src/i18n/locales/hi.json` -- translations
+- `src/i18n/locales/pt.json` -- translations
+- `src/components/AddSolCard.tsx` -- use `t()` for all strings
+- `src/components/WelcomeIntroModal.tsx` -- use `t()` for all strings
+- `src/components/PrivyLoginButton.tsx` -- use `t()` for all strings
+- `src/components/Navbar.tsx` -- use `t()` for external wallet section
+- `src/components/ConnectWalletGate.tsx` -- remove auto-connect polling
 
 ## What Does NOT Change
-- No game logic, timers, or session token changes
-- No Solana program code changes
-- No Supabase function changes
-- External wallets still fully work when explicitly connected
-- The WalletButton component internals (connect flow, deep links, etc.) remain intact
-
+- No game logic, timers, room logic, Supabase functions, or Solana program code
+- ConnectWalletGate connect buttons and deep links remain fully functional
+- WalletButton internals unchanged
+- Privy login flow unchanged
