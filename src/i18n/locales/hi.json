@@ -531,9 +531,13 @@
     "externalWallet": "बाहरी वॉलेट",
     "advancedConnectExternal": "उन्नत: बाहरी वॉलेट कनेक्ट करें",
     "alreadyHavePhantom": "क्या आपके पास पहले से Phantom है? इसे यहां कनेक्ट करें।",
-    "continue": "जारी रखें",
+    "continue": "लॉगिन / साइन अप",
     "walletLoginNotConfigured": "वॉलेट लॉगिन कॉन्फ़िगर नहीं है",
-    "disconnect": "डिस्कनेक्ट"
+    "disconnect": "डिस्कनेक्ट",
+    "loginToPlay": "खेलने के लिए लॉगिन करें",
+    "loginToPlayDesc": "शुरू करने के लिए Google, Apple या ईमेल से साइन इन करें।",
+    "orUseExternal": "या बाहरी वॉलेट कनेक्ट करें",
+    "browseWithoutWallet": "आप बिना वॉलेट के कमरे ब्राउज़ कर सकते हैं। खेलने के लिए ही वॉलेट चाहिए।"
   },
   "common": {
     "loading": "लोड हो रहा है...",

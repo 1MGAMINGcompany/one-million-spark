@@ -26,10 +26,12 @@ import { useSound } from "@/contexts/SoundContext";
 import { useSolPrice } from "@/hooks/useSolPrice";
 import { useSolanaRooms } from "@/hooks/useSolanaRooms";
 import { useSolanaNetwork } from "@/hooks/useSolanaNetwork";
-import { Wallet, Loader2, AlertCircle, RefreshCw, RefreshCcw, Info } from "lucide-react";
+import { Wallet, Loader2, AlertCircle, RefreshCw, RefreshCcw, Info, ChevronDown } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { GameType, RoomStatus, isOpenStatus, type RoomDisplay } from "@/lib/solana-program";
 import { ConnectWalletGate } from "@/components/ConnectWalletGate";
+import { PrivyLoginButton } from "@/components/PrivyLoginButton";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { TxDebugPanel } from "@/components/TxDebugPanel";
 
 import { PreviewDomainBanner, useSigningDisabled } from "@/components/PreviewDomainBanner";
@@ -446,11 +448,20 @@ export default function CreateRoom() {
         <Card className="max-w-sm w-full border-border/50 bg-card/80 backdrop-blur">
           <CardContent className="pt-6 text-center space-y-4">
             <Wallet className="h-12 w-12 text-primary mx-auto" />
-            <h2 className="text-xl font-cinzel">{t("createRoom.connectWallet")}</h2>
+            <h2 className="text-xl font-cinzel">{t("wallet.loginToPlay")}</h2>
             <p className="text-muted-foreground text-sm">
-              {t("createRoom.connectWalletDesc")}
+              {t("wallet.loginToPlayDesc")}
             </p>
-            <ConnectWalletGate />
+            <PrivyLoginButton />
+            <Collapsible>
+              <CollapsibleTrigger className="flex items-center justify-center gap-1 w-full text-xs text-muted-foreground hover:text-primary transition-colors pt-2">
+                <ChevronDown size={14} />
+                {t("wallet.orUseExternal")}
+              </CollapsibleTrigger>
+              <CollapsibleContent className="pt-3">
+                <ConnectWalletGate />
+              </CollapsibleContent>
+            </Collapsible>
             <p className="text-xs text-muted-foreground pt-2">
               {t("createRoom.noFundsMoved")}
             </p>

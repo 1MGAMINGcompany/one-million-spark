@@ -604,9 +604,13 @@
     "externalWallet": "External Wallet",
     "advancedConnectExternal": "Advanced: Connect External Wallet",
     "alreadyHavePhantom": "Already have Phantom? Connect it here.",
-    "continue": "Continue",
+    "continue": "Log in / Sign up",
     "walletLoginNotConfigured": "Wallet login not configured",
-    "disconnect": "Disconnect"
+    "disconnect": "Disconnect",
+    "loginToPlay": "Log in to Play",
+    "loginToPlayDesc": "Sign in with Google, Apple, or Email to get started.",
+    "orUseExternal": "Or connect an external wallet",
+    "browseWithoutWallet": "You can browse rooms without a wallet. You only need a wallet to play."
   },
   "addSol": {
     "title": "Add SOL to Start Playing",

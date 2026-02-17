@@ -518,9 +518,13 @@
     "externalWallet": "محفظة خارجية",
     "advancedConnectExternal": "متقدم: توصيل محفظة خارجية",
     "alreadyHavePhantom": "هل لديك Phantom بالفعل؟ قم بتوصيله هنا.",
-    "continue": "متابعة",
+    "continue": "تسجيل الدخول / إنشاء حساب",
     "walletLoginNotConfigured": "تسجيل الدخول بالمحفظة غير مهيأ",
-    "disconnect": "قطع الاتصال"
+    "disconnect": "قطع الاتصال",
+    "loginToPlay": "سجّل الدخول للعب",
+    "loginToPlayDesc": "سجّل الدخول باستخدام Google أو Apple أو البريد الإلكتروني للبدء.",
+    "orUseExternal": "أو اتصل بمحفظة خارجية",
+    "browseWithoutWallet": "يمكنك تصفح الغرف بدون محفظة. تحتاج محفظة فقط للعب."
   },
   "common": {
     "loading": "جارٍ التحميل...",
