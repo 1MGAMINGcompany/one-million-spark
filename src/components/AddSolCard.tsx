@@ -1,22 +1,16 @@
 import { useState, useEffect, useRef } from "react";
 import { QRCodeSVG } from "qrcode.react";
-import { Copy, Check, ExternalLink, ArrowDownToLine, CreditCard, Wallet, Info } from "lucide-react";
+import { Copy, Check, CreditCard, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
+import { useFundWallet } from "@privy-io/react-auth/solana";
 
 interface AddSolCardProps {
   walletAddress: string;
@@ -26,12 +20,28 @@ interface AddSolCardProps {
 export function AddSolCard({ walletAddress, balanceSol }: AddSolCardProps) {
   const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const prevBalanceRef = useRef<number | null>(null);
+  const { fundWallet } = useFundWallet();
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(walletAddress);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleBuyWithCard = async () => {
+    try {
+      await fundWallet({
+        address: walletAddress,
+        options: {
+          chain: "solana:mainnet",
+          amount: "0.05",
+        },
+      });
+    } catch (e) {
+      console.warn("[AddSolCard] fundWallet dismissed or failed:", e);
+    }
   };
 
   // Confetti + toast on balance transition from <=0.01 to >0.01
@@ -47,7 +57,6 @@ export function AddSolCard({ walletAddress, balanceSol }: AddSolCardProps) {
     ) {
       toast.success(t("addSol.funded") + " 🎉", { duration: 3000 });
 
-      // Dynamic import for bundle size
       import("canvas-confetti").then((mod) => {
         const confetti = mod.default;
         confetti({
@@ -70,36 +79,15 @@ export function AddSolCard({ walletAddress, balanceSol }: AddSolCardProps) {
         <CardContent className="p-6 space-y-6">
           {/* Header */}
           <div className="text-center space-y-2">
-            {/* Animated SOL coin icon */}
             <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-primary/10 border border-primary/20 mx-auto mb-2 sol-coin-float">
               <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary via-gold-light to-primary flex items-center justify-center shadow-gold-glow">
                 <span className="text-background font-bold text-sm font-display">S</span>
               </div>
             </div>
 
-            <div className="flex items-center justify-center gap-1.5">
-              <h2 className="text-xl font-display font-semibold text-foreground">
-                {t("addSol.title")}
-              </h2>
-              <TooltipProvider delayDuration={200}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button className="text-muted-foreground hover:text-primary transition-colors" aria-label="How it works">
-                      <Info className="w-4 h-4" />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent
-                    side="bottom"
-                    className="max-w-[220px] bg-background border-primary/30 text-foreground text-xs space-y-1 p-3"
-                  >
-                    <p>• {t("addSol.tooltipWalletCreated")}</p>
-                    <p>• {t("addSol.tooltipAddSol")}</p>
-                    <p>• {t("addSol.tooltipBalanceUpdates")}</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            </div>
-
+            <h2 className="text-xl font-display font-semibold text-foreground">
+              {t("addSol.title")}
+            </h2>
             <p className="text-sm text-muted-foreground">
               {t("addSol.subtitle")}
             </p>
@@ -110,106 +98,26 @@ export function AddSolCard({ walletAddress, balanceSol }: AddSolCardProps) {
             )}
           </div>
 
-          {/* QR Code + Address */}
-          <div className="flex flex-col items-center gap-4">
-            <div className="p-3 bg-white rounded-xl">
-              <QRCodeSVG value={walletAddress} size={160} level="M" />
-            </div>
-            <div className="w-full">
-              <button
-                onClick={handleCopy}
-                className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg bg-secondary border border-border hover:border-primary/30 transition-colors group"
-              >
-                <span className="flex-1 text-xs font-mono text-foreground truncate text-left">
-                  {walletAddress}
-                </span>
-                {copied ? (
-                  <Check className="w-4 h-4 text-green-500 shrink-0" />
-                ) : (
-                  <Copy className="w-4 h-4 text-muted-foreground group-hover:text-primary shrink-0 transition-colors" />
-                )}
-              </button>
-            </div>
-          </div>
+          {/* PRIMARY: Buy with Card */}
+          <Button
+            onClick={handleBuyWithCard}
+            size="lg"
+            className="w-full text-base font-semibold gap-2"
+          >
+            <CreditCard className="w-5 h-5" />
+            {t("addSol.buyWithCard")}
+          </Button>
+          <p className="text-xs text-center text-muted-foreground -mt-3">
+            {t("addSol.cardPaymentMethods")}
+          </p>
 
-          {/* Divider */}
-          <div className="flex items-center gap-3">
-            <div className="h-px flex-1 bg-border" />
-            <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
-              {t("addSol.fundingOptions")}
-            </span>
-            <div className="h-px flex-1 bg-border" />
-          </div>
-
-          {/* Option 1 — Send SOL */}
-          <div className="space-y-1.5">
-            <div className="flex items-center gap-2">
-              <ArrowDownToLine className="w-4 h-4 text-primary" />
-              <h3 className="text-sm font-semibold text-foreground">
-                {t("addSol.sendSol")}
-              </h3>
-            </div>
-            <p className="text-xs text-muted-foreground pl-6">
-              {t("addSol.sendSolDesc")}
-            </p>
-          </div>
-
-          {/* Option 2 — Buy in Phantom */}
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <CreditCard className="w-4 h-4 text-primary" />
-              <h3 className="text-sm font-semibold text-foreground">
-                {t("addSol.buySolPhantom")}
-              </h3>
-            </div>
-            <Button
-              asChild
-              variant="outline"
-              size="sm"
-              className="w-full border-primary/30 hover:border-primary/50"
-            >
-              <a
-                href="https://phantom.app/"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2"
-              >
-                {t("addSol.buyInPhantom")}
-                <ExternalLink className="w-3.5 h-3.5" />
-              </a>
-            </Button>
-          </div>
-
-          {/* Option 3 — Transfer from exchange */}
-          <div className="space-y-1.5">
-            <Accordion type="single" collapsible>
-              <AccordionItem value="exchange" className="border-border/50">
-                <AccordionTrigger className="py-2 hover:no-underline">
-                  <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                    <ExternalLink className="w-4 h-4 text-primary" />
-                    {t("addSol.transferExchange")}
-                  </div>
-                </AccordionTrigger>
-                <AccordionContent>
-                  <ol className="space-y-2 pl-6 text-xs text-muted-foreground list-decimal list-outside">
-                    <li>{t("addSol.exchangeStep1")}</li>
-                    <li>{t("addSol.exchangeStep2")}</li>
-                    <li>{t("addSol.exchangeStep3")}</li>
-                    <li>{t("addSol.exchangeStep4")}</li>
-                    <li>{t("addSol.exchangeStep5")}</li>
-                  </ol>
-                </AccordionContent>
-              </AccordionItem>
-            </Accordion>
-          </div>
-
-          {/* Waiting for SOL pulse */}
+          {/* Waiting for payment pulse */}
           {isWaiting && (
-            <div className="flex flex-col items-center gap-1.5 pt-2">
+            <div className="flex flex-col items-center gap-1.5 pt-1">
               <div className="flex items-center gap-2">
                 <span className="sol-waiting-dot" />
                 <span className="text-sm text-muted-foreground font-medium">
-                  {t("addSol.waitingForSol")}
+                  {t("addSol.waitingForPayment")}
                 </span>
               </div>
               <p className="text-[11px] text-muted-foreground/60">
@@ -217,6 +125,38 @@ export function AddSolCard({ walletAddress, balanceSol }: AddSolCardProps) {
               </p>
             </div>
           )}
+
+          {/* ADVANCED: Already have crypto? */}
+          <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
+            <CollapsibleTrigger className="w-full flex items-center justify-center gap-1.5 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
+              <span>{t("addSol.alreadyHaveCrypto")}</span>
+              <ChevronDown className={`w-4 h-4 transition-transform ${advancedOpen ? "rotate-180" : ""}`} />
+            </CollapsibleTrigger>
+            <CollapsibleContent className="space-y-4 pt-2">
+              {/* QR Code + Address */}
+              <div className="flex flex-col items-center gap-3">
+                <div className="p-3 bg-white rounded-xl">
+                  <QRCodeSVG value={walletAddress} size={140} level="M" />
+                </div>
+                <button
+                  onClick={handleCopy}
+                  className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg bg-secondary border border-border hover:border-primary/30 transition-colors group"
+                >
+                  <span className="flex-1 text-xs font-mono text-foreground truncate text-left">
+                    {walletAddress}
+                  </span>
+                  {copied ? (
+                    <Check className="w-4 h-4 text-green-500 shrink-0" />
+                  ) : (
+                    <Copy className="w-4 h-4 text-muted-foreground group-hover:text-primary shrink-0 transition-colors" />
+                  )}
+                </button>
+                <p className="text-xs text-muted-foreground text-center">
+                  {t("addSol.sendSolDesc")}
+                </p>
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
         </CardContent>
       </Card>
     </div>

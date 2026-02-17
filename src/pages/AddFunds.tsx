@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import { useFundWallet } from "@privy-io/react-auth/solana";
 
 const AddFunds = () => {
   const { t } = useTranslation();
@@ -15,8 +16,24 @@ const AddFunds = () => {
   const { price, loading, refetch } = useSolPrice();
   const navigate = useNavigate();
   const { isPrivyUser, walletAddress, balanceSol } = usePrivySolBalance();
+  const { fundWallet } = useFundWallet();
 
-  // Privy users with embedded wallets get the simplified AddSolCard
+  const handleBuyWithCard = async () => {
+    if (!walletAddress) return;
+    try {
+      await fundWallet({
+        address: walletAddress,
+        options: {
+          chain: "solana:mainnet",
+          amount: "0.05",
+        },
+      });
+    } catch (e) {
+      console.warn("[AddFunds] fundWallet dismissed or failed:", e);
+    }
+  };
+
+  // Privy users with embedded wallets get the simplified view
   if (isPrivyUser && walletAddress) {
     return (
       <div className="min-h-screen bg-background py-12 px-4">
