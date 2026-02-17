@@ -10,6 +10,8 @@ import {
   TransactionMessage,
 } from "@solana/web3.js";
 import { useToast } from "@/hooks/use-toast";
+import { ToastAction } from "@/components/ui/toast";
+import { useTranslation } from "react-i18next";
 import { buildTxDebugInfo } from "@/components/TxDebugPanel";
 import { normalizeSignature, isBlockingRoom } from "@/lib/solana-utils";
 import { isRoomArchived, archiveRoom } from "@/lib/roomArchive";
@@ -56,6 +58,7 @@ export function useSolanaRooms() {
   const { connection } = useConnection();
   const { publicKey, sendTransaction, connected, wallet } = useWallet();
   const { toast } = useToast();
+  const { t } = useTranslation();
   
   // Get the wallet adapter for mobile compatibility
   const adapter = wallet?.adapter as any;
@@ -563,9 +566,14 @@ export function useSolanaRooms() {
       // Handle insufficient balance error
       if (err?.message === "INSUFFICIENT_BALANCE") {
         toast({
-          title: "Insufficient SOL",
-          description: "You don't have enough SOL to create this room. Add funds and try again.",
+          title: t("addSol.insufficientTitle", "Not Enough SOL"),
+          description: t("addSol.insufficientDesc", "You need more SOL to continue. Go to Add Funds to top up your wallet."),
           variant: "destructive",
+          action: (
+            <ToastAction altText={t("addSol.goToAddFunds", "Add Funds")} onClick={() => window.location.assign("/add-funds")}>
+              {t("addSol.goToAddFunds", "Add Funds")}
+            </ToastAction>
+          ),
         });
         return null;
       }
@@ -837,9 +845,14 @@ export function useSolanaRooms() {
       // Handle insufficient balance error
       if (err?.message === "INSUFFICIENT_BALANCE") {
         toast({
-          title: "Insufficient SOL",
-          description: "You don't have enough SOL to join this room. Add funds and try again.",
+          title: t("addSol.insufficientTitle", "Not Enough SOL"),
+          description: t("addSol.insufficientDesc", "You need more SOL to continue. Go to Add Funds to top up your wallet."),
           variant: "destructive",
+          action: (
+            <ToastAction altText={t("addSol.goToAddFunds", "Add Funds")} onClick={() => window.location.assign("/add-funds")}>
+              {t("addSol.goToAddFunds", "Add Funds")}
+            </ToastAction>
+          ),
         });
         return { ok: false, reason: "INSUFFICIENT_BALANCE" };
       }
@@ -881,9 +894,14 @@ export function useSolanaRooms() {
       // Check for insufficient funds for rent
       if (errorMsg.includes("insufficientfundsforrent") || errorMsg.includes("insufficient funds for rent")) {
         toast({
-          title: "Insufficient SOL",
-          description: "Add more SOL to cover stake + rent (~0.003 SOL extra needed)",
+          title: t("addSol.insufficientTitle", "Not Enough SOL"),
+          description: t("addSol.insufficientRent", "You need a bit more SOL to cover the network fee (~0.003 SOL extra)."),
           variant: "destructive",
+          action: (
+            <ToastAction altText={t("addSol.goToAddFunds", "Add Funds")} onClick={() => window.location.assign("/add-funds")}>
+              {t("addSol.goToAddFunds", "Add Funds")}
+            </ToastAction>
+          ),
         });
         return { ok: false, reason: "INSUFFICIENT_FUNDS" };
       }
