@@ -594,7 +594,7 @@
     "walletLoginNotConfigured": "Wallet login not configured",
     "disconnect": "Disconnect",
     "loginToPlay": "Log in to Play",
-    "loginToPlayDesc": "Sign in with Google, Apple, or Email to get started.",
+    "loginToPlayDesc": "Sign in with Google, X, or Email to get started.",
     "orUseExternal": "Or connect an external wallet",
     "browseWithoutWallet": "You can browse rooms without a wallet. You only need a wallet to play."
   },

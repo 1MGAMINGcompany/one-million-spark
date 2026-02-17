@@ -534,7 +534,7 @@
     "walletLoginNotConfigured": "钱包登录未配置",
     "disconnect": "断开连接",
     "loginToPlay": "登录以开始游戏",
-    "loginToPlayDesc": "使用 Google、Apple 或电子邮件登录即可开始。",
+    "loginToPlayDesc": "使用 Google、X 或电子邮件登录即可开始。",
     "orUseExternal": "或连接外部钱包",
     "browseWithoutWallet": "您可以在没有钱包的情况下浏览房间。只有在游戏时才需要钱包。"
   },

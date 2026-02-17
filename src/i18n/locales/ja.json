@@ -583,7 +583,7 @@
     "walletLoginNotConfigured": "ウォレットログインが未設定です",
     "disconnect": "切断",
     "loginToPlay": "ログインしてプレイ",
-    "loginToPlayDesc": "Google、Apple、またはメールでサインインして始めましょう。",
+    "loginToPlayDesc": "Google、X、またはメールでサインインして始めましょう。",
     "orUseExternal": "または外部ウォレットを接続",
     "browseWithoutWallet": "ウォレットなしでルームを閲覧できます。プレイにはウォレットが必要です。"
   },
