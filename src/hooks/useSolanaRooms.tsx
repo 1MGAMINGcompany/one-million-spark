@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
-import { useConnection, useWallet } from "@solana/wallet-adapter-react";
+import { useConnection } from "@solana/wallet-adapter-react";
+import { useWallet } from "@/hooks/useWallet";
 import { 
   PublicKey, 
   LAMPORTS_PER_SOL, 

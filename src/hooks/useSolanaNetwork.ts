@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from "react";
-import { useConnection, useWallet } from "@solana/wallet-adapter-react";
+import { useConnection } from "@solana/wallet-adapter-react";
+import { useWallet } from "@/hooks/useWallet";
 import { LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { MAINNET_GENESIS_HASH } from "@/lib/solana-config";
 
