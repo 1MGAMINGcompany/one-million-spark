@@ -8,6 +8,7 @@ import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useFundWallet } from "@privy-io/react-auth/solana";
+import { useLogin } from "@privy-io/react-auth";
 
 const AddFunds = () => {
   const { t } = useTranslation();
@@ -17,6 +18,7 @@ const AddFunds = () => {
   const navigate = useNavigate();
   const { isPrivyUser, walletAddress, balanceSol } = usePrivySolBalance();
   const { fundWallet } = useFundWallet();
+  const { login } = useLogin();
 
   const handleBuyWithCard = async () => {
     if (!walletAddress) return;
@@ -30,6 +32,14 @@ const AddFunds = () => {
       });
     } catch (e) {
       console.warn("[AddFunds] fundWallet dismissed or failed:", e);
+    }
+  };
+
+  const handleBuyOrLogin = async () => {
+    if (isPrivyUser && walletAddress) {
+      await handleBuyWithCard();
+    } else {
+      login();
     }
   };
 
@@ -94,6 +104,17 @@ const AddFunds = () => {
                 (~{price ? (0.5 / price).toFixed(4) : "0.004"} SOL)
               </span>
             </div>
+          </div>
+
+          {/* Buy with Card - Top CTA */}
+          <div className="mt-5">
+            <Button onClick={handleBuyOrLogin} size="lg" variant="gold" className="w-full text-lg">
+              <CreditCard className="mr-2 h-5 w-5" />
+              Buy with Card
+            </Button>
+            <p className="text-xs text-muted-foreground mt-2 text-center">
+              Credit Card · Apple Pay · Google Pay
+            </p>
           </div>
         </div>
 
@@ -207,7 +228,12 @@ const AddFunds = () => {
                   </span>
                 </div>
 
-                <p className="text-xs text-muted-foreground">
+                <Button onClick={handleBuyOrLogin} size="lg" variant="gold" className="w-full text-lg">
+                  <CreditCard className="mr-2 h-5 w-5" />
+                  Buy with Card
+                </Button>
+
+                <p className="text-xs text-muted-foreground mt-3">
                   {t("addFunds.alreadyHaveSol")}
                 </p>
 
