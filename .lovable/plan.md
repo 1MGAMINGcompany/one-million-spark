@@ -1,86 +1,64 @@
 
 
-## Fix: Prevent "Roll Dice Again" After Connection Drop
+# Make Privy the Default Login, External Wallets as Advanced Option
 
-### Problem
-When `4aTbb`'s connection dropped mid-turn, the reconnect handler cleared the dice state, showing the "Roll Dice" button again. The player re-rolled, getting different dice values. This happened twice in the same game (turns 12-13 and 22-23). This corrupts the game state because the original moves based on the first roll become orphaned.
+## Problem
+Both the Privy embedded wallet and the Phantom browser extension wallet are showing simultaneously in the navbar. External wallets auto-connect on page load, creating a confusing dual-wallet experience.
 
-### Root Cause (Two Missing Guards)
+## Changes
 
-1. **Server**: `submit_game_move` has no backgammon-specific guard against a second `dice_roll` in the same turn. Chess/Checkers/Dominos auto-flip turns so this can't happen, but Backgammon allows multi-move turns.
+### 1. Disable External Wallet Auto-Connect
+**File: `src/components/SolanaProvider.tsx`**
+- Change `autoConnect={true}` to `autoConnect={false}`
+- This prevents Phantom/Solflare/Backpack from reconnecting automatically on page load
 
-2. **Client**: The polling reconnect handler (line 902) sets `diceRolledThisTurnRef.current = false` then immediately checks it (line 911) to decide whether to clear dice. This always evaluates to "clear dice" -- a logic error.
+### 2. Remove Mobile Auto-Connect Polling
+**File: `src/components/WalletButton.tsx`**
+- Remove or disable the auto-connect polling logic (lines 366-395) that tries to detect and auto-connect injected wallet providers on mobile
+- External wallets should only connect when the user explicitly clicks the connect button
 
-### Fix 1: Server-Side Double Roll Guard (Database Migration)
+### 3. Restructure Navbar Wallet Display
+**File: `src/components/Navbar.tsx`**
+- Make `PrivyLoginButton` the primary and prominent login element
+- Move `WalletButton` (external wallets) into a collapsible "Advanced" section using the Collapsible component from Radix UI
+- The collapsible section is collapsed by default with a small "Advanced: External Wallet" toggle
+- When a Privy user is authenticated, the external wallet section remains available but de-emphasized
+- On mobile, same pattern: Privy first, external wallet in collapsed Advanced section
 
-Add a guard in `submit_game_move` for backgammon `dice_roll` type moves. Before inserting, check if the last move for this room by the current turn wallet is already a `dice_roll` with no `turn_end` since:
+### 4. Update WalletButton to Not Show as Primary
+**File: `src/components/WalletButton.tsx`**
+- When an external wallet is connected, it will only appear inside the Advanced section (not as the primary wallet display in the navbar)
+- The connected state UI (address chip + balance + disconnect) stays the same but is contained within the collapsible
 
-```sql
--- Inside submit_game_move, after the existing turn_already_ended check:
--- Backgammon double-roll guard: reject second dice_roll in same turn
-IF v_move_type = 'dice_roll'
-   AND (v_game_type_lower = 'backgammon' OR v_session.game_type = '3')
-THEN
-  IF EXISTS (
-    SELECT 1 FROM game_moves
-    WHERE room_pda = p_room_pda
-      AND wallet = p_wallet
-      AND (move_data->>'type') = 'dice_roll'
-      AND turn_number > COALESCE(
-        (SELECT MAX(turn_number) FROM game_moves
-         WHERE room_pda = p_room_pda
-           AND (move_data->>'type') = 'turn_end'),
-        0
-      )
-  ) THEN
-    RETURN jsonb_build_object('success', false, 'error', 'already_rolled');
-  END IF;
-END IF;
+## Technical Details
+
+### SolanaProvider.tsx
+```
+autoConnect={false}  // was true
 ```
 
-This ensures the server never accepts a second dice roll in the same backgammon turn, regardless of client state.
+### WalletButton.tsx - Remove auto-connect polling
+The useEffect at lines 366-395 that polls for injected providers and auto-connects will be removed.
 
-### Fix 2: Client-Side Reconnect Dice Restoration (BackgammonGame.tsx)
+### Navbar.tsx - Layout change
+Desktop layout becomes:
+```
+[Nav Items] [Sound] [Bell] [PrivyLoginButton] [Collapsible: "External Wallet" -> WalletButton]
+```
 
-**2a. Fix the ref reset logic bug (line 902/911):**
+Mobile layout becomes:
+```
+[Nav Items]
+[Privy Login]
+[Collapsible: "Advanced: Connect External Wallet" -> WalletButton]
+```
 
-Currently at line 902, `diceRolledThisTurnRef.current` is set to `false`, then at line 911 it checks `if (!diceRolledThisTurnRef.current)` which is always true. The ref reset should happen AFTER the dice clearing decision, not before.
+The collapsible uses the existing `@radix-ui/react-collapsible` package already installed.
 
-Move the `diceRolledThisTurnRef.current = false` to AFTER the dice clearing block, and only if the turn actually changed away from the player.
+## What Does NOT Change
+- No game logic, timers, or session token changes
+- No Solana program code changes
+- No Supabase function changes
+- External wallets still fully work when explicitly connected
+- The WalletButton component internals (connect flow, deep links, etc.) remain intact
 
-**2b. On reconnect, restore dice from DB instead of clearing:**
-
-When polling detects it's still the same player's turn, fetch the last move. If it's a `dice_roll`, restore those dice values instead of clearing them. This prevents the "Roll Dice" button from reappearing.
-
-In the polling handler (~line 860-925), when the turn wallet hasn't changed but we're reconnecting:
-- Query the last move for this room
-- If the last move is `dice_roll` by the current turn wallet, restore `dice` and `remainingMoves` from that move's data
-- Set `diceRolledThisTurnRef.current = true`
-
-**2c. Handle `already_rolled` response silently:**
-
-In the `persistMove` / durable sync error handling, when the server returns `already_rolled`, don't show an error toast. Instead, silently refresh the dice state from the server's accepted roll.
-
-### Fix 3: WebRTC Reconnect Handler (same pattern, line ~1444)
-
-Apply the same `diceRolledThisTurnRef` guard fix to the WebRTC `turn_end` handler to prevent clearing dice that were already rolled.
-
-### What Does NOT Change
-- `rollDice` function itself (its `dice.length > 0` guard is correct)
-- On-chain logic
-- Other game types (Chess, Checkers, Dominos auto-flip turns so this can't happen)
-- Ludo (uses separate engine)
-- Settlement / forfeit logic
-
-### Files Modified
-1. **Database migration** -- Update `submit_game_move` with backgammon double-roll guard
-2. **src/pages/BackgammonGame.tsx** -- Fix reconnect dice restoration and ref reset ordering
-
-### Verification Checklist
-1. Play a backgammon game, simulate connection drop mid-turn (toggle airplane mode), verify dice are NOT cleared on reconnect
-2. Verify server rejects a second `dice_roll` with `already_rolled` (test via curl or intentional double-submit)
-3. Verify normal gameplay flow still works: roll -> move -> end turn -> opponent rolls
-4. Verify `already_rolled` response does NOT show error toast to user
-
-### Match Card Note
-The match card for this room exists at the URL you shared but was NOT found in the `match_share_cards` database table. This suggests the match card page may be rendering data from `game_sessions` + `settlement_logs` directly rather than from `match_share_cards`. This is a separate investigation if needed.
