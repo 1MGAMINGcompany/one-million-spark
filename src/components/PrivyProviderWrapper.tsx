@@ -21,7 +21,7 @@ export function PrivyProviderWrapper({ children }: PrivyProviderWrapperProps) {
           walletChainType: "solana-only",
           showWalletLoginFirst: false,
         },
-        loginMethods: ["email", "google", "apple"],
+        loginMethods: ["email", "google", "twitter"],
         embeddedWallets: {
           solana: {
             createOnLogin: "users-without-wallets",
