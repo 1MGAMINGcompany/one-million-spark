@@ -794,7 +794,11 @@
     "exchangeStep5": "Conferma il trasferimento",
     "waitingForSol": "In attesa di SOL…",
     "balanceRefreshNote": "Il saldo si aggiorna ogni 10 secondi.",
-    "funded": "Sei finanziato — giochiamo!"
+    "funded": "Sei finanziato — giochiamo!",
+    "insufficientTitle": "SOL Insufficiente",
+    "insufficientDesc": "Hai bisogno di più SOL per continuare. Vai su Aggiungi Fondi per ricaricare il portafoglio.",
+    "goToAddFunds": "Aggiungi Fondi",
+    "insufficientRent": "Hai bisogno di un po' più di SOL per coprire la commissione di rete (~0,003 SOL extra)."
   },
   "welcomeIntro": {
     "title": "Benvenuto su",
