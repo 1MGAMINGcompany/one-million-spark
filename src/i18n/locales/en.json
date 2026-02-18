@@ -597,7 +597,8 @@
     "loginToPlay": "Log in to Play",
     "loginToPlayDesc": "Sign in with Google, X, or Email to get started.",
     "orUseExternal": "Or connect an external wallet",
-    "browseWithoutWallet": "You can browse rooms without a wallet. You only need a wallet to play."
+    "browseWithoutWallet": "You can browse rooms without a wallet. You only need a wallet to play.",
+    "alreadyHaveWallet": "Already have a wallet? Connect Phantom / Solflare / Backpack"
   },
   "addSol": {
     "title": "Add Balance to Play",

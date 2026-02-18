@@ -565,7 +565,8 @@
     "loginToPlay": "Connectez-vous pour jouer",
     "loginToPlayDesc": "Connectez-vous avec Google, X ou e-mail pour commencer.",
     "orUseExternal": "Ou connecter un portefeuille externe",
-    "browseWithoutWallet": "Vous pouvez parcourir les salles sans portefeuille. Vous n'avez besoin d'un portefeuille que pour jouer."
+    "browseWithoutWallet": "Vous pouvez parcourir les salles sans portefeuille. Vous n'avez besoin d'un portefeuille que pour jouer.",
+    "alreadyHaveWallet": "Vous avez déjà un portefeuille ? Connectez Phantom / Solflare / Backpack"
   },
   "common": {
     "loading": "Chargement...",

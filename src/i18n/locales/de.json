@@ -565,7 +565,8 @@
     "loginToPlay": "Anmelden zum Spielen",
     "loginToPlayDesc": "Melden Sie sich mit Google, X oder E-Mail an, um loszulegen.",
     "orUseExternal": "Oder externes Wallet verbinden",
-    "browseWithoutWallet": "Sie können Räume ohne Wallet durchsuchen. Sie benötigen ein Wallet nur zum Spielen."
+    "browseWithoutWallet": "Sie können Räume ohne Wallet durchsuchen. Sie benötigen ein Wallet nur zum Spielen.",
+    "alreadyHaveWallet": "Schon ein Wallet? Verbinde Phantom / Solflare / Backpack"
   },
   "common": {
     "loading": "Laden...",

@@ -5,9 +5,11 @@ import { PublicKey } from "@solana/web3.js";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { ArrowLeft, Zap, Bot, Search, Loader2, Users, Copy, Check } from "lucide-react";
+import { ArrowLeft, Zap, Bot, Search, Loader2, Users, Copy, Check, Wallet } from "lucide-react";
 import { ChessIcon, DominoIcon, BackgammonIcon, CheckersIcon, LudoIcon } from "@/components/GameIcons";
 import { PrivyLoginButton } from "@/components/PrivyLoginButton";
+import { ConnectWalletGate } from "@/components/ConnectWalletGate";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useWallet } from "@/hooks/useWallet";
 import { useSolanaRooms } from "@/hooks/useSolanaRooms";
 import { useRoomRealtimeAlert } from "@/hooks/useRoomRealtimeAlert";
@@ -71,6 +73,7 @@ export default function QuickMatch() {
   const [isWorking, setIsWorking] = useState(false);
   const [ludoPlayerCount, setLudoPlayerCount] = useState<number>(2);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [walletOpen, setWalletOpen] = useState(false);
 
   const hasNavigatedRef = useRef(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -391,6 +394,17 @@ export default function QuickMatch() {
             <div className="text-center space-y-3">
               <p className="text-sm text-muted-foreground">{t("quickMatch.connectFirst")}</p>
               <PrivyLoginButton />
+              <Collapsible open={walletOpen} onOpenChange={setWalletOpen}>
+                <CollapsibleTrigger asChild>
+                  <button className="mt-2 w-full inline-flex items-center justify-center gap-2 rounded-lg border border-primary/40 px-4 py-2.5 text-xs font-medium text-muted-foreground hover:text-primary hover:border-primary transition-all duration-200">
+                    <Wallet size={14} />
+                    {t("wallet.alreadyHaveWallet")}
+                  </button>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="pt-3">
+                  <ConnectWalletGate />
+                </CollapsibleContent>
+              </Collapsible>
             </div>
           ) : (
             <Button
