@@ -856,5 +856,22 @@
     "emailLoseSubject": "我刚在 1M GAMING 玩了{{game}}",
     "emailWinBody": "我玩{{game}}赢了 {{amount}} SOL！\n看看：{{link}}",
     "emailLoseBody": "刚在 1M GAMING 玩了{{game}}。\n比赛链接：{{link}}"
+  },
+  "quickMatch": {
+    "title": "快速匹配",
+    "selectGame": "选择游戏",
+    "selectStake": "选择赌注",
+    "free": "免费",
+    "findMatch": "寻找对手",
+    "searching": "正在搜索对手...",
+    "matchFound": "找到对手了！",
+    "noOpponent": "暂未找到对手",
+    "keepSearching": "继续搜索",
+    "playAI": "对战AI（免费）",
+    "cancel": "取消",
+    "connectFirst": "登录以开始游戏",
+    "creatingRoom": "正在创建房间...",
+    "joiningRoom": "正在加入比赛...",
+    "secondsLeft": "{{seconds}}秒"
   }
 }

@@ -913,5 +913,22 @@
     "emailLoseSubject": "Je viens de jouer à {{game}} sur 1M GAMING",
     "emailWinBody": "J'ai gagné {{amount}} SOL en jouant à {{game}} !\nRegarde : {{link}}",
     "emailLoseBody": "Je viens de jouer à {{game}} sur 1M GAMING.\nLien du match : {{link}}"
+  },
+  "quickMatch": {
+    "title": "Match Rapide",
+    "selectGame": "Choisir le Jeu",
+    "selectStake": "Choisir la Mise",
+    "free": "Gratuit",
+    "findMatch": "Trouver un Match",
+    "searching": "Recherche d'un adversaire...",
+    "matchFound": "Match trouvé !",
+    "noOpponent": "Aucun adversaire trouvé pour l'instant",
+    "keepSearching": "Continuer à Chercher",
+    "playAI": "Jouer contre l'IA (Gratuit)",
+    "cancel": "Annuler",
+    "connectFirst": "Connectez-vous pour jouer",
+    "creatingRoom": "Création de la salle...",
+    "joiningRoom": "Rejoint le match...",
+    "secondsLeft": "{{seconds}}s"
   }
 }

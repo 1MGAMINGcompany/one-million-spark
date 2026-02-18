@@ -859,5 +859,22 @@
     "emailLoseSubject": "لعبت للتو {{game}} على 1M GAMING",
     "emailWinBody": "ربحت {{amount}} SOL بلعب {{game}}!\nشاهد: {{link}}",
     "emailLoseBody": "لعبت للتو {{game}} على 1M GAMING.\nرابط المباراة: {{link}}"
+  },
+  "quickMatch": {
+    "title": "مباراة سريعة",
+    "selectGame": "اختر اللعبة",
+    "selectStake": "اختر الرهان",
+    "free": "مجاني",
+    "findMatch": "ابحث عن مباراة",
+    "searching": "جاري البحث عن خصم...",
+    "matchFound": "تم العثور على مباراة!",
+    "noOpponent": "لم يتم العثور على خصم بعد",
+    "keepSearching": "استمر في البحث",
+    "playAI": "العب ضد الذكاء الاصطناعي (مجاني)",
+    "cancel": "إلغاء",
+    "connectFirst": "سجل دخولك للعب",
+    "creatingRoom": "جاري إنشاء الغرفة...",
+    "joiningRoom": "جاري الانضمام...",
+    "secondsLeft": "{{seconds}}ث"
   }
 }
