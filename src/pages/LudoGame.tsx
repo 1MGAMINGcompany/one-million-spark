@@ -5,7 +5,7 @@ import { GameErrorBoundary } from "@/components/GameErrorBoundary";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, RotateCcw, Music, Music2, Volume2, VolumeX, Users, Wifi, WifiOff, RefreshCw, LogOut } from "lucide-react";
+import { ArrowLeft, RotateCcw, Music, Music2, Volume2, VolumeX, Users, Wifi, WifiOff, RefreshCw, LogOut, Loader2 } from "lucide-react";
 import { ForfeitConfirmDialog } from "@/components/ForfeitConfirmDialog";
 import { LeaveMatchModal, MatchState } from "@/components/LeaveMatchModal";
 import { useForfeit } from "@/hooks/useForfeit";
@@ -22,6 +22,7 @@ import { useTurnTimer, DEFAULT_RANKED_TURN_TIME } from "@/hooks/useTurnTimer";
 import { useStartRoll } from "@/hooks/useStartRoll";
 import { useTxLock } from "@/contexts/TxLockContext";
 import { useDurableGameSync, GameMove } from "@/hooks/useDurableGameSync";
+import { useAutoSettlement } from "@/hooks/useAutoSettlement";
 import { DiceRollStart } from "@/components/DiceRollStart";
 import LudoBoard from "@/components/ludo/LudoBoard";
 import EgyptianDice from "@/components/ludo/EgyptianDice";
@@ -653,6 +654,32 @@ const LudoGame = () => {
     return winnerIndex >= 0 ? (roomPlayers[winnerIndex] || null) : null;
   }, [gameOver, players, roomPlayers]);
 
+  // Auto-settlement hook - triggers settle-game edge function when game ends
+  const autoSettlement = useAutoSettlement({
+    roomPda,
+    winner: winnerAddress,
+    reason: "gameover",
+    isRanked: isRankedGame,
+  });
+
+  // Show toast when settlement completes
+  useEffect(() => {
+    if (autoSettlement.result?.success && autoSettlement.result.signature) {
+      toast({
+        title: "On-chain settlement complete",
+        description: `Tx: ${autoSettlement.result.signature.slice(0, 8)}...`,
+      });
+    } else if (autoSettlement.result && !autoSettlement.result.success && autoSettlement.result.error) {
+      if (!autoSettlement.result.alreadySettled && !autoSettlement.result.alreadyClosed) {
+        toast({
+          title: "Settlement issue",
+          description: autoSettlement.result.error,
+          variant: "destructive",
+        });
+      }
+    }
+  }, [autoSettlement.result]);
+
   // Players for GameEndScreen
   const gameEndPlayers = useMemo(() => {
     return turnPlayers.map(tp => ({
@@ -1233,8 +1260,19 @@ const LudoGame = () => {
           onRematch={() => rematch.openRematchModal()}
           onExit={() => navigate("/room-list")}
           roomPda={roomPda}
-          isStaked={false}
+          isStaked={isRankedGame}
         />
+      )}
+
+      {/* Settlement status overlay - show while settling */}
+      {autoSettlement.isSettling && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-[60] flex items-center justify-center">
+          <div className="bg-card border border-primary/30 rounded-xl p-6 text-center space-y-4">
+            <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto" />
+            <p className="text-lg font-semibold">Settling on-chain...</p>
+            <p className="text-sm text-muted-foreground">Finalizing payout and closing room</p>
+          </div>
+        </div>
       )}
 
       {/* Player Status Footer */}
