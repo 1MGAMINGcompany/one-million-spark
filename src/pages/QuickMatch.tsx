@@ -33,6 +33,7 @@ import { showBrowserNotification } from "@/lib/pushNotifications";
 import { requestNotificationPermission } from "@/lib/pushNotifications";
 import { supabase } from "@/integrations/supabase/client";
 import { solToLamports } from "@/lib/rematchPayload";
+import { LiveActivityIndicator } from "@/components/LiveActivityIndicator";
 import { buildInviteLink } from "@/lib/invite";
 
 type Phase = "selecting" | "searching" | "timeout";
@@ -601,6 +602,11 @@ export default function QuickMatch() {
               )}
             </Button>
           )}
+
+          {/* Live Activity */}
+          <div className="mt-4">
+            <LiveActivityIndicator />
+          </div>
         </div>
       )}
 
