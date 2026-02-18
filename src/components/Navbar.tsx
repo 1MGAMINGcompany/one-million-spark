@@ -2,7 +2,9 @@ import { useState, useEffect, useCallback } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useWallet } from "@/hooks/useWallet";
-import { Home, Wallet, PlusCircle, LayoutList, Menu, X, Coins, Volume2, VolumeX, Bell, BellOff, Trophy, User, ChevronDown } from "lucide-react";
+import { usePrivy } from "@privy-io/react-auth";
+import { usePrivySolBalance } from "@/hooks/usePrivySolBalance";
+import { Home, Wallet, PlusCircle, LayoutList, Menu, X, Coins, Volume2, VolumeX, Bell, BellOff, Trophy, User, ChevronDown, LogOut } from "lucide-react";
 import { WalletButton } from "./WalletButton";
 import { PrivyLoginButton } from "./PrivyLoginButton";
 import BrandLogo from "./BrandLogo";
@@ -10,6 +12,7 @@ import LanguageSelector from "./LanguageSelector";
 import { useSound } from "@/contexts/SoundContext";
 import { requestNotificationPermission } from "@/lib/pushNotifications";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Skeleton } from "@/components/ui/skeleton";
 import type { LucideIcon } from "lucide-react";
 
 interface NavItem {
@@ -31,6 +34,12 @@ const Navbar = () => {
   const { t, i18n } = useTranslation();
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const { connected, publicKey } = useWallet();
+  const { authenticated, logout } = usePrivy();
+  const { isPrivyUser, walletAddress, balanceSol, loading: balanceLoading } = usePrivySolBalance();
+
+  const shortAddress = walletAddress
+    ? `${walletAddress.slice(0, 4)}...${walletAddress.slice(-4)}`
+    : null;
 
   // Check notification permission on mount (safe for wallet webviews)
   useEffect(() => {
@@ -174,40 +183,95 @@ const Navbar = () => {
         {isOpen && (
           <div className="md:hidden py-4 border-t border-border">
             <div className="flex flex-col gap-2">
-              {navItems.map((item) => {
-                const Icon = item.icon;
-                const isActive = location.pathname === item.path;
-                return (
-                  <Link
-                    key={item.path}
-                    to={item.path}
-                    onClick={() => { setIsOpen(false); handleNavClick(); }}
-                    className={`group flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 ${
-                      isActive
-                        ? "bg-primary text-primary-foreground shadow-gold"
-                        : "text-muted-foreground hover:text-foreground hover:bg-secondary border border-transparent hover:border-primary/30"
-                    }`}
-                  >
-                    <Icon 
-                      size={20} 
-                      className={`transition-all duration-200 ${
-                        isActive 
-                          ? "text-primary-foreground" 
-                          : "text-primary/70 group-hover:text-primary"
+
+              {/* ── Account Card ── */}
+              {isPrivyUser && shortAddress ? (
+                <div className="rounded-xl border border-primary/30 bg-secondary/60 p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Wallet size={14} className="text-primary" />
+                    <span className="text-xs text-muted-foreground">{t("wallet.signedInAs")}</span>
+                    <span className="font-mono text-xs text-foreground">{shortAddress}</span>
+                  </div>
+
+                  {/* Balance chip */}
+                  <div className="flex items-center gap-2">
+                    <Coins size={14} className="text-primary" />
+                    {balanceLoading ? (
+                      <Skeleton className="h-4 w-20" />
+                    ) : (
+                      <span className="text-sm font-semibold text-foreground">
+                        {balanceSol !== null ? `${balanceSol.toFixed(4)} SOL` : "—"}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Action buttons */}
+                  <div className="flex items-center gap-2">
+                    <Link
+                      to="/add-funds"
+                      onClick={() => { setIsOpen(false); handleNavClick(); }}
+                      className="flex-1 text-center text-xs font-medium py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                    >
+                      {t("nav.addFunds")}
+                    </Link>
+                    <Link
+                      to={`/player/${walletAddress}`}
+                      onClick={() => { setIsOpen(false); handleNavClick(); }}
+                      className="flex-1 text-center text-xs font-medium py-2 rounded-lg border border-border text-foreground hover:bg-secondary transition-colors"
+                    >
+                      {t("nav.myProfile")}
+                    </Link>
+                    <button
+                      onClick={() => { logout(); setIsOpen(false); }}
+                      className="p-2 rounded-lg text-muted-foreground hover:text-destructive hover:bg-secondary transition-colors"
+                      title={t("wallet.disconnect")}
+                    >
+                      <LogOut size={16} />
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="px-1 pt-1 pb-2">
+                  <PrivyLoginButton />
+                </div>
+              )}
+
+              {/* ── Nav Links (mobile excludes Add Funds — it's in the card) ── */}
+              {navItems
+                .filter((item) => item.path !== "/add-funds")
+                .map((item) => {
+                  const Icon = item.icon;
+                  const isActive = location.pathname === item.path;
+                  return (
+                    <Link
+                      key={item.path}
+                      to={item.path}
+                      onClick={() => { setIsOpen(false); handleNavClick(); }}
+                      className={`group flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 ${
+                        isActive
+                          ? "bg-primary text-primary-foreground shadow-gold"
+                          : "text-muted-foreground hover:text-foreground hover:bg-secondary border border-transparent hover:border-primary/30"
                       }`}
-                    />
-                    <span>{t(item.labelKey)}</span>
-                  </Link>
-                );
-              })}
+                    >
+                      <Icon 
+                        size={20} 
+                        className={`transition-all duration-200 ${
+                          isActive 
+                            ? "text-primary-foreground" 
+                            : "text-primary/70 group-hover:text-primary"
+                        }`}
+                      />
+                      <span>{t(item.labelKey)}</span>
+                    </Link>
+                  );
+                })}
               
-              {/* Language Selector (Mobile) */}
+              {/* ── Toggles ── */}
               <div className="flex items-center gap-3 px-4 py-3">
                 <LanguageSelector />
                 <span className="text-sm text-muted-foreground">{t("common.language")}</span>
               </div>
               
-              {/* Sound Toggle (Mobile) */}
               <button
                 onClick={handleToggleSound}
                 className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 ${
@@ -220,7 +284,6 @@ const Navbar = () => {
                 <span>{soundEnabled ? t("nav.soundOn") : t("nav.soundOff")}</span>
               </button>
               
-              {/* Notification Toggle (Mobile) */}
               <button
                 onClick={handleToggleNotifications}
                 className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 ${
@@ -232,25 +295,8 @@ const Navbar = () => {
                 {notificationsEnabled ? <Bell size={20} /> : <BellOff size={20} />}
                 <span>{notificationsEnabled ? "Notifications On" : "Notifications Off"}</span>
               </button>
-              
-              {/* My Profile (Mobile - only when connected) */}
-              {connected && publicKey && (
-                <Link
-                  to={`/player/${publicKey.toBase58()}`}
-                  onClick={() => { setIsOpen(false); handleNavClick(); }}
-                  className="group flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 text-muted-foreground hover:text-foreground hover:bg-secondary border border-transparent hover:border-primary/30"
-                >
-                  <User size={20} className="text-primary/70 group-hover:text-primary" />
-                  <span>{t("nav.myProfile")}</span>
-                </Link>
-              )}
-              
-              {/* Privy Login (Mobile) */}
-              <div className="pt-2">
-                <PrivyLoginButton />
-              </div>
-              
-              {/* External Wallet - Collapsible Advanced (Mobile) */}
+
+              {/* ── Advanced: External Wallet ── */}
               <Collapsible>
                 <CollapsibleTrigger className="flex items-center gap-2 px-4 py-3 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors w-full">
                   <Wallet size={16} />

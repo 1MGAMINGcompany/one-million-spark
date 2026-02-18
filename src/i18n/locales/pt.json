@@ -480,6 +480,7 @@
     "opponentsTurn": "Vez do oponente"
   },
   "wallet": {
+    "signedInAs": "Conectado como",
     "connect": "Selecionar Carteira",
     "disconnect": "Desconectar",
     "wrongNetwork": "Rede Incorreta",

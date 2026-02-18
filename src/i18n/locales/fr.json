@@ -480,6 +480,7 @@
     "opponentsTurn": "Tour de l'adversaire"
   },
   "wallet": {
+    "signedInAs": "Connecté en tant que",
     "connect": "Sélectionner le Portefeuille",
     "disconnect": "Déconnecter",
     "wrongNetwork": "Mauvais Réseau",

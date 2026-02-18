@@ -503,6 +503,7 @@
     "opponentsTurn": "相手の番"
   },
   "wallet": {
+    "signedInAs": "ログイン中",
     "connect": "ウォレットを選択",
     "disconnect": "切断",
     "wrongNetwork": "間違ったネットワーク",

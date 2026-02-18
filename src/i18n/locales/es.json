@@ -610,6 +610,7 @@
     "opponentsTurn": "Turno del oponente"
   },
   "wallet": {
+    "signedInAs": "Conectado como",
     "connect": "Seleccionar Billetera",
     "disconnect": "Desconectar",
     "wrongNetwork": "Red Incorrecta",
