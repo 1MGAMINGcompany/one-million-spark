@@ -1163,7 +1163,10 @@
     "gameStarting": "Game is starting!",
     "gameStartingDesc": "{{game}} match is ready. Entering game...",
     "newRoomCreated": "New room created!",
-    "loading": "Loading..."
+    "loading": "Loading...",
+    "onlyCreatorClose": "Only the room creator can close the room",
+    "canOnlyCloseFinished": "Room can only be closed after the game has finished",
+    "roomClosedRent": "Room closed! Rent reclaimed."
   },
   "leaderboard": {
     "title": "{{game}} Leaderboard",
