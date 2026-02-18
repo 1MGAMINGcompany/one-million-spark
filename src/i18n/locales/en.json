@@ -1432,6 +1432,12 @@
     "waitingForPlayers": "Waiting for players: {{current}} / {{total}}",
     "switchTo2Players": "Switch to 2 Players (faster)",
     "copyInviteLink": "Copy Invite Link",
-    "linkCopied": "Link copied!"
+    "linkCopied": "Link copied!",
+    "recoverFunds": "Cancel & Recover Funds",
+    "recoveringFunds": "Recovering funds...",
+    "fundsRecovered": "Room cancelled! Funds returned to your wallet.",
+    "recoverConfirmTitle": "Cancel Room & Recover Funds",
+    "recoverConfirmDesc": "This will cancel the room and return your stake of {{amount}} SOL to your wallet. You will need to sign a transaction.",
+    "confirmSign": "Confirm & Sign"
   }
 }
