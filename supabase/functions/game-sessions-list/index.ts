@@ -31,11 +31,11 @@ serve(async (req) => {
     console.log('[game-sessions-list] Request type:', type)
 
     if (type === 'active') {
-      // Include both 'active' AND 'waiting' sessions for room list enrichment
+      // Include active, waiting, cancelled, and finished sessions for room list enrichment + filtering
       const { data, error } = await supabase
         .from('game_sessions')
         .select('room_pda, game_type, status, player1_wallet, player2_wallet, current_turn_wallet, created_at, updated_at, mode, turn_time_seconds')
-        .in('status', ['active', 'waiting'])
+        .in('status', ['active', 'waiting', 'cancelled', 'finished', 'void'])
         .order('updated_at', { ascending: false })
         .limit(500) // Prevent unbounded results
 
