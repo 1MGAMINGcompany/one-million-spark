@@ -2,12 +2,13 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import DominoTile3D from "@/components/DominoTile3D";
 import { useSound } from "@/contexts/SoundContext";
+import { useTranslation } from "react-i18next";
 
 interface DominoFirstPlayerProps {
   onComplete: (playerStarts: boolean, startingTile: [number, number] | null) => void;
   playerName?: string;
   opponentName?: string;
-  seed?: number; // Deterministic seed for tile shuffle
+  seed?: number;
 }
 
 // All doubles in descending order
@@ -75,10 +76,11 @@ function findHighestPipTile(hand: [number, number][]): [number, number] {
 
 export function DominoFirstPlayer({ 
   onComplete, 
-  playerName = "You", 
-  opponentName = "Opponent",
+  playerName,
+  opponentName,
   seed = Date.now()
 }: DominoFirstPlayerProps) {
+  const { t } = useTranslation();
   const { play } = useSound();
   const [phase, setPhase] = useState<"intro" | "revealing" | "result">("intro");
   const [playerHand, setPlayerHand] = useState<[number, number][]>([]);
@@ -89,8 +91,10 @@ export function DominoFirstPlayer({
   const [winningTile, setWinningTile] = useState<[number, number] | null>(null);
   const [tiebreaker, setTiebreaker] = useState(false);
 
+  const displayPlayerName = playerName || t('common.you');
+  const displayOpponentName = opponentName || t('game.opponent');
+
   useEffect(() => {
-    // Generate hands from seed
     const { playerHand: ph, opponentHand: oh } = generateHands(seed);
     setPlayerHand(ph);
     setOpponentHand(oh);
@@ -100,7 +104,6 @@ export function DominoFirstPlayer({
     play("domino_shuffle");
     setPhase("revealing");
 
-    // Find doubles
     const pDouble = findHighestDouble(playerHand);
     const oDouble = findHighestDouble(opponentHand);
 
@@ -110,13 +113,11 @@ export function DominoFirstPlayer({
       play("domino_place");
 
       setTimeout(() => {
-        // Determine winner
         let result: "player" | "opponent";
         let tile: [number, number];
         let usedTiebreaker = false;
 
         if (pDouble && oDouble) {
-          // Both have doubles - higher wins
           if (pDouble[0] > oDouble[0]) {
             result = "player";
             tile = pDouble;
@@ -124,20 +125,16 @@ export function DominoFirstPlayer({
             result = "opponent";
             tile = oDouble;
           } else {
-            // Same double (shouldn't happen with proper shuffle)
             result = "player";
             tile = pDouble;
           }
         } else if (pDouble && !oDouble) {
-          // Only player has double
           result = "player";
           tile = pDouble;
         } else if (!pDouble && oDouble) {
-          // Only opponent has double
           result = "opponent";
           tile = oDouble;
         } else {
-          // Neither has double - use highest pip count
           usedTiebreaker = true;
           const pHighest = findHighestPipTile(playerHand);
           const oHighest = findHighestPipTile(opponentHand);
@@ -170,23 +167,23 @@ export function DominoFirstPlayer({
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
       <div className="bg-card border border-primary/30 rounded-2xl p-8 max-w-lg w-full text-center space-y-6 shadow-2xl">
         <h2 className="text-2xl font-cinzel text-primary">
-          {phase === "intro" && "Determine First Player"}
-          {phase === "revealing" && "Checking Doubles..."}
-          {phase === "result" && (winner === "player" ? `${playerName} Go First!` : `${opponentName} Goes First`)}
+          {phase === "intro" && t('dominoFirst.determineFirst')}
+          {phase === "revealing" && t('dominoFirst.checkingDoubles')}
+          {phase === "result" && (winner === "player" 
+            ? t('dominoFirst.goFirst', { player: displayPlayerName })
+            : t('dominoFirst.goesFirst', { player: displayOpponentName }))}
         </h2>
 
         <p className="text-muted-foreground text-sm">
-          {phase === "intro" && "According to Dominos rules, the player with the highest double goes first."}
-          {phase === "revealing" && "Revealing highest doubles from each hand..."}
-          {phase === "result" && !tiebreaker && "Highest double determines the starting player."}
-          {phase === "result" && tiebreaker && "No doubles found - highest pip count wins."}
+          {phase === "intro" && t('dominoFirst.rulesDesc')}
+          {phase === "revealing" && t('dominoFirst.revealingDoubles')}
+          {phase === "result" && !tiebreaker && t('dominoFirst.highestDoubleWins')}
+          {phase === "result" && tiebreaker && t('dominoFirst.highestPipWins')}
         </p>
 
-        {/* Display area */}
         <div className="flex justify-center gap-8 py-4">
-          {/* Player's double */}
           <div className="text-center space-y-2">
-            <p className="text-sm font-medium text-foreground">{playerName}</p>
+            <p className="text-sm font-medium text-foreground">{displayPlayerName}</p>
             <div className={`transition-all duration-500 ${phase === "intro" ? "opacity-0 scale-75" : "opacity-100 scale-100"}`}>
               {playerDouble ? (
                 <div className={`${winner === "player" ? "ring-2 ring-green-500 rounded-lg" : ""}`}>
@@ -194,20 +191,18 @@ export function DominoFirstPlayer({
                 </div>
               ) : phase !== "intro" ? (
                 <div className="w-16 h-32 flex items-center justify-center border-2 border-dashed border-muted-foreground/30 rounded-lg">
-                  <span className="text-muted-foreground text-xs">No Double</span>
+                  <span className="text-muted-foreground text-xs">{t('dominoFirst.noDouble')}</span>
                 </div>
               ) : null}
             </div>
           </div>
 
-          {/* VS */}
           <div className="flex items-center">
             <span className="text-primary font-bold text-xl">VS</span>
           </div>
 
-          {/* Opponent's double */}
           <div className="text-center space-y-2">
-            <p className="text-sm font-medium text-foreground">{opponentName}</p>
+            <p className="text-sm font-medium text-foreground">{displayOpponentName}</p>
             <div className={`transition-all duration-500 ${phase === "intro" ? "opacity-0 scale-75" : "opacity-100 scale-100"}`}>
               {opponentDouble ? (
                 <div className={`${winner === "opponent" ? "ring-2 ring-green-500 rounded-lg" : ""}`}>
@@ -215,31 +210,29 @@ export function DominoFirstPlayer({
                 </div>
               ) : phase !== "intro" ? (
                 <div className="w-16 h-32 flex items-center justify-center border-2 border-dashed border-muted-foreground/30 rounded-lg">
-                  <span className="text-muted-foreground text-xs">No Double</span>
+                  <span className="text-muted-foreground text-xs">{t('dominoFirst.noDouble')}</span>
                 </div>
               ) : null}
             </div>
           </div>
         </div>
 
-        {/* Result message */}
         {phase === "result" && winningTile && (
           <p className={`text-lg font-semibold ${winner === "player" ? "text-green-500" : "text-amber-500"}`}>
             {!tiebreaker 
-              ? `[${winningTile[0]}|${winningTile[1]}] is the highest double!`
-              : `[${winningTile[0]}|${winningTile[1]}] has the highest pip count!`
+              ? t('dominoFirst.highestDouble', { left: winningTile[0], right: winningTile[1] })
+              : t('dominoFirst.highestPip', { left: winningTile[0], right: winningTile[1] })
             }
           </p>
         )}
 
-        {/* Action button */}
         {phase === "intro" && (
           <Button 
             onClick={handleReveal}
             className="w-full bg-gradient-to-r from-primary to-amber-600 hover:from-primary/90 hover:to-amber-600/90"
             size="lg"
           >
-            Reveal Doubles
+            {t('dominoFirst.revealDoubles')}
           </Button>
         )}
 
@@ -249,7 +242,7 @@ export function DominoFirstPlayer({
             className="w-full"
             size="lg"
           >
-            Continue to Game
+            {t('dominoFirst.continueToGame')}
           </Button>
         )}
       </div>

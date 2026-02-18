@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Shield, Clock, AlertTriangle, Coins, Users, Loader2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 interface JoinRulesModalProps {
   open: boolean;
@@ -32,7 +33,8 @@ export function JoinRulesModal({
   isRanked,
   isLoading = false,
 }: JoinRulesModalProps) {
-  const feeSol = stakeSol * 2 * 0.05; // 5% of total pot
+  const { t } = useTranslation();
+  const feeSol = stakeSol * 2 * 0.05;
   const potSol = stakeSol * 2;
   const payoutSol = potSol - feeSol;
 
@@ -44,10 +46,10 @@ export function JoinRulesModal({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-xl">
             <Users className="h-5 w-5 text-primary" />
-            Join {gameName} Match
+            {t('joinRules.joinMatch', { game: gameName })}
           </DialogTitle>
           <DialogDescription>
-            Review the game rules before joining this {isRanked ? 'ranked' : 'casual'} match.
+            {t('joinRules.reviewRules', { mode: isRanked ? t('createRoom.gameModeRanked') : t('createRoom.gameModeCasual') })}
           </DialogDescription>
         </DialogHeader>
 
@@ -56,22 +58,22 @@ export function JoinRulesModal({
           <div className="rounded-lg border bg-card p-4 space-y-2">
             <div className="flex items-center gap-2 text-sm font-medium">
               <Coins className="h-4 w-4 text-amber-500" />
-              Stakes & Payout
+              {t('joinRules.stakesPayout')}
             </div>
             {stakeSol > 0 ? (
               <div className="grid grid-cols-2 gap-2 text-sm">
-                <div className="text-muted-foreground">Your stake:</div>
+                <div className="text-muted-foreground">{t('joinRules.yourStake')}</div>
                 <div className="font-mono font-medium">{stakeSol.toFixed(4)} SOL</div>
-                <div className="text-muted-foreground">Total pot:</div>
+                <div className="text-muted-foreground">{t('joinRules.totalPot')}</div>
                 <div className="font-mono font-medium">{potSol.toFixed(4)} SOL</div>
-                <div className="text-muted-foreground">Platform fee (5%):</div>
+                <div className="text-muted-foreground">{t('joinRules.platformFee')}</div>
                 <div className="font-mono text-muted-foreground">-{feeSol.toFixed(4)} SOL</div>
-                <div className="text-muted-foreground">Winner payout:</div>
+                <div className="text-muted-foreground">{t('joinRules.winnerPayout')}</div>
                 <div className="font-mono font-medium text-emerald-500">{payoutSol.toFixed(4)} SOL</div>
               </div>
             ) : (
               <p className="text-sm text-muted-foreground">
-                This is a free casual game with no stake.
+                {t('joinRules.freeGame')}
               </p>
             )}
           </div>
@@ -80,13 +82,13 @@ export function JoinRulesModal({
           <div className="rounded-lg border bg-card p-4 space-y-2">
             <div className="flex items-center gap-2 text-sm font-medium">
               <Shield className="h-4 w-4 text-blue-500" />
-              Fair Play Rules
+              {t('joinRules.fairPlay')}
             </div>
             <ul className="text-sm text-muted-foreground space-y-1">
-              <li>• Starting player is determined by dice roll</li>
-              <li>• Both players see the same game state</li>
-              <li>• Moves are final once confirmed</li>
-              <li>• Game results are settled on-chain</li>
+              <li>• {t('joinRules.diceStart')}</li>
+              <li>• {t('joinRules.sameState')}</li>
+              <li>• {t('joinRules.movesFinal')}</li>
+              <li>• {t('joinRules.onChain')}</li>
             </ul>
           </div>
 
@@ -95,10 +97,10 @@ export function JoinRulesModal({
             <div className="rounded-lg border bg-card p-4 space-y-2">
               <div className="flex items-center gap-2 text-sm font-medium">
                 <Clock className="h-4 w-4 text-primary" />
-                Turn Timer
+                {t('joinRules.turnTimer')}
               </div>
               <p className="text-sm text-muted-foreground">
-                Ranked matches have a turn timer. Exceeding it results in automatic forfeit.
+                {t('joinRules.turnTimerDesc')}
               </p>
             </div>
           )}
@@ -107,12 +109,12 @@ export function JoinRulesModal({
           <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 space-y-2">
             <div className="flex items-center gap-2 text-sm font-medium text-amber-600">
               <AlertTriangle className="h-4 w-4" />
-              Forfeit Policy
+              {t('joinRules.forfeitPolicy')}
             </div>
             <p className="text-sm text-amber-600/80">
               {stakeSol > 0 
-                ? "Leaving mid-game, disconnecting, or extended inactivity results in automatic forfeit. Your stake will be awarded to your opponent."
-                : "Leaving mid-game or disconnecting will result in a loss."
+                ? t('joinRules.forfeitStaked')
+                : t('joinRules.forfeitFree')
               }
             </p>
           </div>
@@ -120,8 +122,7 @@ export function JoinRulesModal({
           {/* Confirmation Notice */}
           <div className="rounded-lg border border-primary/30 bg-primary/5 p-3">
             <p className="text-xs text-muted-foreground">
-              By clicking "Join & Stake", you agree to these rules and confirm you will stake{" "}
-              <span className="font-medium text-foreground">{stakeSol.toFixed(4)} SOL</span> to enter this match.
+              {t('joinRules.confirmNotice', { stake: stakeSol.toFixed(4) })}
             </p>
           </div>
         </div>
@@ -133,7 +134,7 @@ export function JoinRulesModal({
             disabled={isLoading}
             className="flex-1"
           >
-            Cancel
+            {t('joinRules.cancel')}
           </Button>
           <Button
             variant="gold"
@@ -144,12 +145,12 @@ export function JoinRulesModal({
             {isLoading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Joining...
+                {t('joinRules.joining')}
               </>
             ) : stakeSol > 0 ? (
-              `Join & Stake ${stakeSol.toFixed(4)} SOL`
+              t('joinRules.joinAndStake', { stake: stakeSol.toFixed(4) })
             ) : (
-              "Join Game"
+              t('joinRules.joinGame')
             )}
           </Button>
         </div>
