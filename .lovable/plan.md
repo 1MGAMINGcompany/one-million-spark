@@ -1,101 +1,113 @@
 
 
-# Premium Mobile Menu Redesign (Privy-first)
+# Quick Match Feature
 
 ## Overview
 
-Restructure the mobile hamburger menu to be clean, wallet-clutter-free, and Privy-first. The menu will have a premium "Account Card" at the top when signed in, followed by navigation links, then toggles, and finally a collapsed Advanced section for external wallets.
+Add a "Quick Match" button that simplifies the matchmaking flow: pick a game, pick a stake, tap one button. The system first searches for an existing open room that matches criteria. If found, auto-navigate to join it. If not, create a new room and wait up to 60 seconds with a searching UI. After timeout, offer fallback options.
 
-## Layout (top to bottom)
+## User Flow
 
 ```text
-+-------------------------------------+
-| ACCOUNT CARD (if signed in)         |
-|   "Signed in as" 4aTb...93Ks       |
-|   Balance: 1.234 SOL               |
-|   [Add Funds]  [My Profile] [Out]  |
-+-------------------------------------+
-| --- OR if not signed in ---         |
-|   [Continue]  (Privy login button)  |
-+-------------------------------------+
-| Home                                |
-| Create Room                         |
-| Room List                           |
-| Leaderboard                         |
-| Language: [selector]                |
-+-------------------------------------+
-| Sound toggle                        |
-| Notifications toggle                |
-+-------------------------------------+
-| v Advanced: External Wallet         |
-|   (collapsed by default)            |
-|   Helper text + WalletButton        |
-+-------------------------------------+
+1. User taps "Quick Match" (from Home or Room List)
+2. Quick Match page appears:
+   - Pick game (Chess/Dominos/Backgammon/Checkers/Ludo)
+   - Pick stake preset (Free / 0.01 / 0.05 / 0.1 SOL)
+   - Tap "Find Match"
+3. System searches existing open rooms matching game + stake
+   - If match found --> navigate to /room/:pda (join flow)
+   - If no match --> create a new room, show searching screen
+4. Searching screen (60s countdown):
+   - Animated "Searching for opponent..." with timer
+   - If opponent joins (via realtime/polling) --> navigate to /play/:pda
+   - If 60s expires --> show 3 options:
+     a) "Keep Searching" (reset timer, keep waiting)
+     b) "Play vs AI (Free)" (navigate to /play-ai)
+     c) "Cancel" (navigate back)
 ```
 
-## Changes
+## Files to Create
 
-### 1. `src/components/Navbar.tsx` -- Rewrite mobile menu section (lines 174-266)
+### 1. `src/pages/QuickMatch.tsx` -- New page (main feature)
 
-**Account Card (signed in)**:
-- Import `usePrivy` from `@privy-io/react-auth` and `usePrivySolBalance` hook
-- When Privy authenticated with a Solana wallet address:
-  - Show a styled card with gold border accent at the top of the mobile menu
-  - "Signed in as" label + shortened wallet address (font-mono)
-  - Balance chip showing SOL amount from `usePrivySolBalance` (with loading skeleton)
-  - Three action buttons in a row: "Add Funds" (Link to /add-funds, closes menu), "My Profile" (Link to /player/:address, closes menu), "Disconnect" (calls Privy logout)
-- When not authenticated:
-  - Show the Privy login button (which already says "Continue" per existing translations)
+**State machine with 3 phases:**
+- `selecting` -- Game + stake picker UI
+- `searching` -- Looking for opponent (countdown timer)  
+- `timeout` -- 60s expired, show fallback options
 
-**Navigation links**:
-- Remove "Add Funds" from `navItems` since it is now in the Account Card (only in mobile; desktop keeps it)
-- Mobile nav items: Home, Create Room, Room List, Leaderboard
-- Keep existing active-state styling
+**Selecting phase:**
+- 5 game cards (reuse GameIcons components)
+- 4 stake preset buttons: Free, 0.01, 0.05, 0.1 SOL
+- "Find Match" gold CTA button
+- Requires wallet connection (show PrivyLoginButton if not)
 
-**Toggles section**:
-- Language selector row
-- Sound toggle row  
-- Notifications toggle row
-- (Same as current, just positioned after nav links)
+**Searching phase:**
+- Calls `fetchRooms()` from `useSolanaRooms` to get current open rooms
+- Filters for matching `gameType` + `entryFeeSol` (with small tolerance for SOL amounts)
+- If match found: navigate to `/room/:pda`
+- If no match: call `createRoom()` to create a new public room, then wait
+- Shows animated searching indicator + 60s countdown
+- Uses `useRoomRealtimeAlert` for instant opponent detection
+- Uses `activeRoom` polling (already 5s interval) as fallback
 
-**Advanced section**:
-- Keep existing Collapsible with "Advanced: Connect External Wallet"
-- Keep WalletButton inside
-- No changes to external wallet logic
+**Timeout phase:**
+- "No opponent found yet" message
+- Three buttons: Keep Searching, Play vs AI, Cancel
 
-### 2. `src/i18n/locales/*.json` -- Add new translation keys (all 10 locales)
+### 2. `src/i18n/locales/*.json` -- Add quickMatch translation keys (all 10 locales)
 
-Add to the `wallet` section:
-- `"signedInAs"`: "Signed in as"
-- `"addFunds"`: "Add Funds" (reuse existing `nav.addFunds` where possible)
+New `quickMatch` section:
+- `title`: "Quick Match"
+- `selectGame`: "Select Game"
+- `selectStake`: "Select Stake"  
+- `free`: "Free"
+- `findMatch`: "Find Match"
+- `searching`: "Searching for opponent..."
+- `matchFound`: "Match found!"
+- `noOpponent`: "No opponent found yet"
+- `keepSearching`: "Keep Searching"
+- `playAI`: "Play vs AI (Free)"
+- `cancel`: "Cancel"
+- `connectFirst`: "Sign in to play"
 
-These are minimal additions since most keys already exist (`wallet.disconnect`, `nav.myProfile`, `wallet.continue`).
+## Files to Modify
 
-### 3. Desktop menu -- No structural changes
+### 3. `src/App.tsx` -- Add route
 
-The desktop menu stays exactly as-is. Only the mobile `{isOpen && ...}` block changes.
+Add `/quick-match` route pointing to the new QuickMatch page.
+
+### 4. `src/pages/Home.tsx` -- Add Quick Match CTA button
+
+Add a prominent "Quick Match" button in the hero CTA area, positioned as the primary action above "Create Game Room" and "View Public Rooms". Uses the `Zap` icon for speed/instant feel.
+
+### 5. `src/pages/RoomList.tsx` -- Add Quick Match button in header
+
+Add a "Quick Match" button next to the existing "Create Room" button in the Room List header.
 
 ## Technical Details
 
-- `usePrivySolBalance()` is already available and provides `isPrivyUser`, `walletAddress`, `balanceSol`, `loading`
-- `usePrivy()` provides `authenticated`, `logout`, `login`
-- The Account Card uses existing Tailwind classes: `bg-secondary`, `border-primary/30`, gold accents via `text-primary`
-- The "Add Funds" link in the Account Card replaces the nav item for mobile only; desktop `navItems` array is unchanged
-- Mobile navItems will be filtered to exclude `/add-funds` path
+- **Room matching logic**: Filter `rooms` array from `useSolanaRooms` by `gameType` number and `entryFeeSol` equality (for free: `=== 0`, for paid: within 0.001 SOL tolerance)
+- **Room creation**: Reuse `createRoom()` from `useSolanaRooms` hook with the same flow as CreateRoom page (including `record_acceptance`, `game-session-set-settings` edge function calls)
+- **Opponent detection**: Reuse existing `useRoomRealtimeAlert` hook + `activeRoom` polling from `useSolanaRooms`
+- **No new backend changes**: Uses existing room creation/joining infrastructure
+- **Blocking room check**: Uses `hookBlockingRoom` from `useSolanaRooms` same as CreateRoom/RoomList
 
-## Files Modified
+## Layout on Mobile
 
-| File | Change |
-|------|--------|
-| `src/components/Navbar.tsx` | Rewrite mobile menu: Account Card at top, reorder sections, import usePrivy + usePrivySolBalance |
-| `src/i18n/locales/en.json` | Add `wallet.signedInAs` |
-| `src/i18n/locales/es.json` | Add `wallet.signedInAs` (Spanish) |
-| `src/i18n/locales/ar.json` | Add `wallet.signedInAs` (Arabic) |
-| `src/i18n/locales/pt.json` | Add `wallet.signedInAs` (Portuguese) |
-| `src/i18n/locales/fr.json` | Add `wallet.signedInAs` (French) |
-| `src/i18n/locales/de.json` | Add `wallet.signedInAs` (German) |
-| `src/i18n/locales/zh.json` | Add `wallet.signedInAs` (Chinese) |
-| `src/i18n/locales/it.json` | Add `wallet.signedInAs` (Italian) |
-| `src/i18n/locales/ja.json` | Add `wallet.signedInAs` (Japanese) |
-| `src/i18n/locales/hi.json` | Add `wallet.signedInAs` (Hindi) |
+```text
++----------------------------------+
+|  [back]  Quick Match             |
++----------------------------------+
+|                                  |
+|  Select Game                     |
+|  [Chess] [Dominos] [Backgammon]  |
+|  [Checkers]  [Ludo]              |
+|                                  |
+|  Select Stake                    |
+|  [Free] [0.01] [0.05] [0.1]     |
+|                                  |
+|  [====  Find Match  ====]       |
+|                                  |
++----------------------------------+
+```
 
