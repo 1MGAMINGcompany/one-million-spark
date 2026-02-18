@@ -47,3 +47,6 @@ verify_jwt = false
 
 [functions.free-match]
 verify_jwt = false
+
+[functions.live-stats]
+verify_jwt = false

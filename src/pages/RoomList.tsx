@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from "react";
+import { LiveActivityIndicator } from "@/components/LiveActivityIndicator";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 // PublicKey import removed - we use room.pda directly as the unique identifier
@@ -285,6 +286,11 @@ export default function RoomList() {
             {t("createRoom.createRoom")}
           </Button>
         </div>
+      </div>
+
+      {/* Live Activity Indicator */}
+      <div className="mb-6">
+        <LiveActivityIndicator />
       </div>
 
       {/* Active Game Banner handled by GlobalActiveRoomBanner in App.tsx */}

@@ -9,6 +9,7 @@ import { MobileAppPrompt } from "@/components/MobileAppPrompt";
 import { usePrivySolBalance } from "@/hooks/usePrivySolBalance";
 import { AddSolCard } from "@/components/AddSolCard";
 import { WelcomeIntroModal } from "@/components/WelcomeIntroModal";
+import { LiveActivityIndicator } from "@/components/LiveActivityIndicator";
 
 const Home = () => {
   const { t } = useTranslation();
@@ -124,6 +125,11 @@ const Home = () => {
                       <Trophy className="w-4 h-4 text-primary" />
                       <span>{t("home.skillBasedOnly")}</span>
                     </div>
+                  </div>
+
+                  {/* Live Activity */}
+                  <div className="mt-4">
+                    <LiveActivityIndicator />
                   </div>
                 </>
               )}

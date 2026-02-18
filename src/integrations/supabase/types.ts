@@ -527,6 +527,21 @@ export type Database = {
         }
         Relationships: []
       }
+      presence_heartbeats: {
+        Row: {
+          last_seen: string
+          session_id: string
+        }
+        Insert: {
+          last_seen?: string
+          session_id: string
+        }
+        Update: {
+          last_seen?: string
+          session_id?: string
+        }
+        Relationships: []
+      }
       ratings: {
         Row: {
           game_type: string
