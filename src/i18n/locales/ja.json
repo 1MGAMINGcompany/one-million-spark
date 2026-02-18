@@ -588,7 +588,8 @@
     "loginToPlay": "ログインしてプレイ",
     "loginToPlayDesc": "Google、X、またはメールでサインインして始めましょう。",
     "orUseExternal": "または外部ウォレットを接続",
-    "browseWithoutWallet": "ウォレットなしでルームを閲覧できます。プレイにはウォレットが必要です。"
+    "browseWithoutWallet": "ウォレットなしでルームを閲覧できます。プレイにはウォレットが必要です。",
+    "alreadyHaveWallet": "ウォレットをお持ちですか？Phantom / Solflare / Backpack を接続"
   },
   "common": {
     "loading": "読み込み中...",

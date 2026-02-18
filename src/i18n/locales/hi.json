@@ -575,7 +575,8 @@
     "loginToPlay": "खेलने के लिए लॉगिन करें",
     "loginToPlayDesc": "शुरू करने के लिए Google, X या ईमेल से साइन इन करें।",
     "orUseExternal": "या बाहरी वॉलेट कनेक्ट करें",
-    "browseWithoutWallet": "आप बिना वॉलेट के कमरे ब्राउज़ कर सकते हैं। खेलने के लिए ही वॉलेट चाहिए।"
+    "browseWithoutWallet": "आप बिना वॉलेट के कमरे ब्राउज़ कर सकते हैं। खेलने के लिए ही वॉलेट चाहिए।",
+    "alreadyHaveWallet": "पहले से वॉलेट है? Phantom / Solflare / Backpack कनेक्ट करें"
   },
   "common": {
     "loading": "लोड हो रहा है...",

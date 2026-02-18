@@ -542,7 +542,8 @@
     "loginToPlay": "سجّل الدخول للعب",
     "loginToPlayDesc": "سجّل الدخول باستخدام Google أو X أو البريد الإلكتروني للبدء.",
     "orUseExternal": "أو اتصل بمحفظة خارجية",
-    "browseWithoutWallet": "يمكنك تصفح الغرف بدون محفظة. تحتاج محفظة فقط للعب."
+    "browseWithoutWallet": "يمكنك تصفح الغرف بدون محفظة. تحتاج محفظة فقط للعب.",
+    "alreadyHaveWallet": "لديك محفظة بالفعل؟ اتصل بـ Phantom / Solflare / Backpack"
   },
   "common": {
     "loading": "جارٍ التحميل...",

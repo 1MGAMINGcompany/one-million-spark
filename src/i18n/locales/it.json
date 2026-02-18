@@ -541,7 +541,8 @@
     "loginToPlay": "Accedi per giocare",
     "loginToPlayDesc": "Accedi con Google, X o e-mail per iniziare.",
     "orUseExternal": "Oppure collega un portafoglio esterno",
-    "browseWithoutWallet": "Puoi esplorare le stanze senza portafoglio. Serve solo per giocare."
+    "browseWithoutWallet": "Puoi esplorare le stanze senza portafoglio. Serve solo per giocare.",
+    "alreadyHaveWallet": "Hai già un portafoglio? Collega Phantom / Solflare / Backpack"
   },
   "common": {
     "loading": "Caricamento...",

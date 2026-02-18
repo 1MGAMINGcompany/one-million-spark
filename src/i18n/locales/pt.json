@@ -565,7 +565,8 @@
     "loginToPlay": "Entre para jogar",
     "loginToPlayDesc": "Faça login com Google, X ou e-mail para começar.",
     "orUseExternal": "Ou conectar uma carteira externa",
-    "browseWithoutWallet": "Você pode navegar pelas salas sem carteira. Só precisa de carteira para jogar."
+    "browseWithoutWallet": "Você pode navegar pelas salas sem carteira. Só precisa de carteira para jogar.",
+    "alreadyHaveWallet": "Já tem carteira? Conecte Phantom / Solflare / Backpack"
   },
   "common": {
     "loading": "Carregando...",
