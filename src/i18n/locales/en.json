@@ -1420,6 +1420,11 @@
     "connectFirst": "Sign in to play",
     "creatingRoom": "Creating room...",
     "joiningRoom": "Joining match...",
-    "secondsLeft": "{{seconds}}s"
+    "secondsLeft": "{{seconds}}s",
+    "opponentJoined": "Opponent Joined!",
+    "matchReady": "Your {{game}} match is ready!",
+    "letsGo": "{{game}} — Let's go!",
+    "error": "Error",
+    "somethingWrong": "Something went wrong"
   }
 }

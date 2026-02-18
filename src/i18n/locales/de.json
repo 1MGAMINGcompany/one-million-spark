@@ -929,6 +929,11 @@
     "connectFirst": "Anmelden zum Spielen",
     "creatingRoom": "Raum wird erstellt...",
     "joiningRoom": "Spiel beitreten...",
-    "secondsLeft": "{{seconds}}s"
+    "secondsLeft": "{{seconds}}s",
+    "opponentJoined": "Gegner gefunden!",
+    "matchReady": "Dein {{game}}-Match ist bereit!",
+    "letsGo": "{{game}} — Los geht's!",
+    "error": "Fehler",
+    "somethingWrong": "Etwas ist schiefgelaufen"
   }
 }

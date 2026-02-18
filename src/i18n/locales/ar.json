@@ -875,6 +875,11 @@
     "connectFirst": "سجل دخولك للعب",
     "creatingRoom": "جاري إنشاء الغرفة...",
     "joiningRoom": "جاري الانضمام...",
-    "secondsLeft": "{{seconds}}ث"
+    "secondsLeft": "{{seconds}}ث",
+    "opponentJoined": "انضم الخصم!",
+    "matchReady": "مباراة {{game}} جاهزة!",
+    "letsGo": "{{game}} — هيا بنا!",
+    "error": "خطأ",
+    "somethingWrong": "حدث خطأ"
   }
 }

@@ -1150,6 +1150,11 @@
     "connectFirst": "Inicia sesión para jugar",
     "creatingRoom": "Creando sala...",
     "joiningRoom": "Uniéndose a partida...",
-    "secondsLeft": "{{seconds}}s"
+    "secondsLeft": "{{seconds}}s",
+    "opponentJoined": "¡Oponente encontrado!",
+    "matchReady": "¡Tu partida de {{game}} está lista!",
+    "letsGo": "{{game}} — ¡Vamos!",
+    "error": "Error",
+    "somethingWrong": "Algo salió mal"
   }
 }

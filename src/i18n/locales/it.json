@@ -885,6 +885,11 @@
     "connectFirst": "Accedi per giocare",
     "creatingRoom": "Creazione stanza...",
     "joiningRoom": "Ingresso nella partita...",
-    "secondsLeft": "{{seconds}}s"
+    "secondsLeft": "{{seconds}}s",
+    "opponentJoined": "Avversario trovato!",
+    "matchReady": "La tua partita di {{game}} è pronta!",
+    "letsGo": "{{game}} — Andiamo!",
+    "error": "Errore",
+    "somethingWrong": "Qualcosa è andato storto"
   }
 }
