@@ -1,113 +1,85 @@
 
 
-# Quick Match Feature
+# Fix Quick Match: Translations + Stale Rooms Bug
 
-## Overview
+## Problems Found
 
-Add a "Quick Match" button that simplifies the matchmaking flow: pick a game, pick a stake, tap one button. The system first searches for an existing open room that matches criteria. If found, auto-navigate to join it. If not, create a new room and wait up to 60 seconds with a searching UI. After timeout, offer fallback options.
+### 1. Hardcoded English strings (5 instances)
+Several user-facing strings in QuickMatch.tsx are not going through the translation system.
 
-## User Flow
+### 2. Game names not translated
+`selectedGameName` uses the hardcoded `label` field from `GAME_OPTIONS` (e.g. "Chess") instead of the translated `t("games.chess")` key. Non-English users see English game names.
 
-```text
-1. User taps "Quick Match" (from Home or Room List)
-2. Quick Match page appears:
-   - Pick game (Chess/Dominos/Backgammon/Checkers/Ludo)
-   - Pick stake preset (Free / 0.01 / 0.05 / 0.1 SOL)
-   - Tap "Find Match"
-3. System searches existing open rooms matching game + stake
-   - If match found --> navigate to /room/:pda (join flow)
-   - If no match --> create a new room, show searching screen
-4. Searching screen (60s countdown):
-   - Animated "Searching for opponent..." with timer
-   - If opponent joins (via realtime/polling) --> navigate to /play/:pda
-   - If 60s expires --> show 3 options:
-     a) "Keep Searching" (reset timer, keep waiting)
-     b) "Play vs AI (Free)" (navigate to /play-ai)
-     c) "Cancel" (navigate back)
-```
+### 3. Stale rooms bug (functional issue)
+In `handleFindMatch`, `fetchRooms()` is called, but the `rooms` state variable used on the next line still holds the *previous* value (React state doesn't update mid-function). The match search always runs against stale data, meaning it may miss a room that just appeared or try to match against a room that no longer exists.
 
-## Files to Create
+### 4. Unused import
+`isOpenStatus` is imported but never referenced.
 
-### 1. `src/pages/QuickMatch.tsx` -- New page (main feature)
+## Changes
 
-**State machine with 3 phases:**
-- `selecting` -- Game + stake picker UI
-- `searching` -- Looking for opponent (countdown timer)  
-- `timeout` -- 60s expired, show fallback options
+### File: `src/pages/QuickMatch.tsx`
 
-**Selecting phase:**
-- 5 game cards (reuse GameIcons components)
-- 4 stake preset buttons: Free, 0.01, 0.05, 0.1 SOL
-- "Find Match" gold CTA button
-- Requires wallet connection (show PrivyLoginButton if not)
-
-**Searching phase:**
-- Calls `fetchRooms()` from `useSolanaRooms` to get current open rooms
-- Filters for matching `gameType` + `entryFeeSol` (with small tolerance for SOL amounts)
-- If match found: navigate to `/room/:pda`
-- If no match: call `createRoom()` to create a new public room, then wait
-- Shows animated searching indicator + 60s countdown
-- Uses `useRoomRealtimeAlert` for instant opponent detection
-- Uses `activeRoom` polling (already 5s interval) as fallback
-
-**Timeout phase:**
-- "No opponent found yet" message
-- Three buttons: Keep Searching, Play vs AI, Cancel
-
-### 2. `src/i18n/locales/*.json` -- Add quickMatch translation keys (all 10 locales)
-
-New `quickMatch` section:
-- `title`: "Quick Match"
-- `selectGame`: "Select Game"
-- `selectStake`: "Select Stake"  
-- `free`: "Free"
-- `findMatch`: "Find Match"
-- `searching`: "Searching for opponent..."
-- `matchFound`: "Match found!"
-- `noOpponent`: "No opponent found yet"
-- `keepSearching`: "Keep Searching"
-- `playAI`: "Play vs AI (Free)"
-- `cancel`: "Cancel"
-- `connectFirst`: "Sign in to play"
-
-## Files to Modify
-
-### 3. `src/App.tsx` -- Add route
-
-Add `/quick-match` route pointing to the new QuickMatch page.
-
-### 4. `src/pages/Home.tsx` -- Add Quick Match CTA button
-
-Add a prominent "Quick Match" button in the hero CTA area, positioned as the primary action above "Create Game Room" and "View Public Rooms". Uses the `Zap` icon for speed/instant feel.
-
-### 5. `src/pages/RoomList.tsx` -- Add Quick Match button in header
-
-Add a "Quick Match" button next to the existing "Create Room" button in the Room List header.
-
-## Technical Details
-
-- **Room matching logic**: Filter `rooms` array from `useSolanaRooms` by `gameType` number and `entryFeeSol` equality (for free: `=== 0`, for paid: within 0.001 SOL tolerance)
-- **Room creation**: Reuse `createRoom()` from `useSolanaRooms` hook with the same flow as CreateRoom page (including `record_acceptance`, `game-session-set-settings` edge function calls)
-- **Opponent detection**: Reuse existing `useRoomRealtimeAlert` hook + `activeRoom` polling from `useSolanaRooms`
-- **No new backend changes**: Uses existing room creation/joining infrastructure
-- **Blocking room check**: Uses `hookBlockingRoom` from `useSolanaRooms` same as CreateRoom/RoomList
-
-## Layout on Mobile
+**A. Fix stale rooms bug**
+- Change `fetchRooms()` to return the fresh rooms array directly (or use a ref)
+- Since `fetchRooms` from `useSolanaRooms` updates state but doesn't return data, the fix is to search using a `roomsRef` that's kept in sync, or better: call `fetchRooms()`, then use a small timeout/await pattern. The cleanest approach: store `rooms` in a ref that's always current, and read from the ref after `await fetchRooms()`.
 
 ```text
-+----------------------------------+
-|  [back]  Quick Match             |
-+----------------------------------+
-|                                  |
-|  Select Game                     |
-|  [Chess] [Dominos] [Backgammon]  |
-|  [Checkers]  [Ludo]              |
-|                                  |
-|  Select Stake                    |
-|  [Free] [0.01] [0.05] [0.1]     |
-|                                  |
-|  [====  Find Match  ====]       |
-|                                  |
-+----------------------------------+
+const roomsRef = useRef(rooms);
+roomsRef.current = rooms;
+
+// In handleFindMatch, after fetchRooms():
+await fetchRooms();
+// Small delay to let state settle, then read from ref
+await new Promise(r => setTimeout(r, 100));
+const currentRooms = roomsRef.current;
+const match = currentRooms.find(...)
 ```
+
+**B. Translate hardcoded strings**
+
+Add missing keys to all 10 locale files:
+- `quickMatch.opponentJoined`: "Opponent Joined!" (for browser notification title)
+- `quickMatch.matchReady`: "Your {{game}} match is ready!" (notification body)
+- `quickMatch.letsGo`: "{{game}} -- Let's go!" (toast description)
+- `quickMatch.error`: "Error"
+- `quickMatch.somethingWrong`: "Something went wrong"
+
+Replace hardcoded strings in the component:
+- Line 112: use `t("quickMatch.opponentJoined")` and `t("quickMatch.matchReady", { game: translatedGameName })`
+- Line 115: use `t("quickMatch.letsGo", { game: translatedGameName })`
+- Line 230: use `t("quickMatch.error")`
+- Line 231: use `t("quickMatch.somethingWrong")`
+
+**C. Translate game names**
+
+Replace usage of `selectedGameName` (hardcoded English) with a translated version:
+```text
+const translatedGameName = t(`games.${selectedGameKey}`);
+```
+
+Use `translatedGameName` everywhere `selectedGameName` was used in user-facing text. Keep `selectedGameKey` for the edge function call (which needs the English key).
+
+**D. Remove unused import**
+
+Remove `isOpenStatus` from the import line.
+
+### Files: All 10 locale JSON files
+
+Add 3 new keys to the `quickMatch` section in each:
+
+| Key | en | es | ar | pt | fr | de | zh | it | ja | hi |
+|---|---|---|---|---|---|---|---|---|---|---|
+| opponentJoined | Opponent Joined! | Oponente encontrado! | انضم الخصم! | Oponente encontrado! | Adversaire trouve! | Gegner gefunden! | 对手加入! | Avversario trovato! | 対戦相手が参加! | प्रतिद्वंद्वी मिला! |
+| matchReady | Your {{game}} match is ready! | Tu partida de {{game}} esta lista! | مباراة {{game}} جاهزة! | Sua partida de {{game}} esta pronta! | Votre match de {{game}} est pret! | Dein {{game}}-Match ist bereit! | 你的{{game}}比赛准备好了! | La tua partita di {{game}} e pronta! | {{game}}の対戦準備完了! | आपका {{game}} मैच तैयार है! |
+| letsGo | {{game}} -- Let's go! | {{game}} -- Vamos! | {{game}} -- هيا بنا! | {{game}} -- Vamos! | {{game}} -- C'est parti! | {{game}} -- Los geht's! | {{game}} -- 开始吧! | {{game}} -- Andiamo! | {{game}} -- 始めよう! | {{game}} -- चलो शुरू करें! |
+| error | Error | Error | خطأ | Erro | Erreur | Fehler | 错误 | Errore | エラー | त्रुटि |
+| somethingWrong | Something went wrong | Algo salio mal | حدث خطأ | Algo deu errado | Une erreur est survenue | Etwas ist schiefgelaufen | 出错了 | Qualcosa e andato storto | エラーが発生しました | कुछ गलत हो गया |
+
+## Files Modified
+
+| File | Change |
+|---|---|
+| `src/pages/QuickMatch.tsx` | Fix stale rooms ref, translate all hardcoded strings, translate game names, remove unused import |
+| `src/i18n/locales/*.json` (10 files) | Add 5 new keys to `quickMatch` section |
 
