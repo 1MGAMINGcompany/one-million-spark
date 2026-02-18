@@ -17,6 +17,7 @@ const walletSlugs = [
 const skillSlugs = [
   "solana-skill-games-not-luck",
   "play-real-money-chess-solana",
+  "ludo-skill-or-luck-competitive-strategy",
 ];
 const engineeringSlugs = [
   "server-enforced-turn-timeouts-supabase-solana",
