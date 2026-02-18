@@ -177,6 +177,12 @@ export default function QuickMatch() {
       return;
     }
 
+    // FREE MATCH: route directly to AI — no on-chain logic needed
+    if (selectedStake === 0) {
+      navigate(`/play-ai/${selectedGameKey}?difficulty=medium`);
+      return;
+    }
+
     setIsWorking(true);
     hasNavigatedRef.current = false;
 
