@@ -5,6 +5,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { ArrowLeft, Trophy, Loader2, Crown, Medal, Award, Target, TrendingUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -72,6 +73,7 @@ const VALID_GAMES = ['chess', 'dominos', 'backgammon', 'checkers', 'ludo'];
 export default function Leaderboard() {
   const { game } = useParams<{ game: string }>();
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const { isConnected, address: connectedWallet } = useWallet();
   
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
@@ -181,7 +183,7 @@ export default function Leaderboard() {
       <div className="container max-w-3xl py-8 px-4">
         <div className="flex items-center justify-center py-16">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          <span className="ml-3 text-muted-foreground">Loading leaderboard…</span>
+          <span className="ml-3 text-muted-foreground">{t("leaderboard.loadingLeaderboard")}</span>
         </div>
       </div>
     );
@@ -191,14 +193,14 @@ export default function Leaderboard() {
     return (
       <div className="container max-w-3xl py-8 px-4">
         <Button variant="ghost" size="sm" className="mb-4" onClick={() => navigate(-1)}>
-          <ArrowLeft className="mr-2 h-4 w-4" /> Back
+          <ArrowLeft className="mr-2 h-4 w-4" /> {t("leaderboard.back")}
         </Button>
         <Card className="border-border/50 bg-card/80 backdrop-blur">
           <CardContent className="text-center py-12">
             <Trophy className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-50" />
-            <h3 className="text-xl font-semibold mb-2">{error || 'Invalid game'}</h3>
+            <h3 className="text-xl font-semibold mb-2">{error || t("leaderboard.invalidGame")}</h3>
             <p className="text-muted-foreground mb-4">
-              Choose a valid game type to view the leaderboard.
+              {t("leaderboard.chooseGame")}
             </p>
             <div className="flex flex-wrap justify-center gap-2">
               {VALID_GAMES.map((g) => (
@@ -220,7 +222,7 @@ export default function Leaderboard() {
   return (
     <div className="container max-w-3xl py-8 px-4">
       <Button variant="ghost" size="sm" className="mb-4" onClick={() => navigate(-1)}>
-        <ArrowLeft className="mr-2 h-4 w-4" /> Back
+        <ArrowLeft className="mr-2 h-4 w-4" /> {t("leaderboard.back")}
       </Button>
 
       {/* Your Rank Summary */}
@@ -234,7 +236,7 @@ export default function Leaderboard() {
                     <Target className="h-6 w-6 text-primary" />
                   </div>
                   <div>
-                    <p className="text-sm text-muted-foreground">Your Rating</p>
+                    <p className="text-sm text-muted-foreground">{t("leaderboard.yourRating")}</p>
                     <div className="flex items-center gap-2">
                       <span className="text-2xl font-bold">{userRating.rating}</span>
                       <span className={`text-sm font-semibold ${userRank.color}`}>
@@ -245,9 +247,9 @@ export default function Leaderboard() {
                 </div>
                 
                 <div className="text-right">
-                  <p className="text-sm text-muted-foreground">Your Rank</p>
+                  <p className="text-sm text-muted-foreground">{t("leaderboard.yourRank")}</p>
                   <p className="text-xl font-bold">
-                    #{userGlobalRank} <span className="text-sm font-normal text-muted-foreground">of {totalPlayers}</span>
+                    #{userGlobalRank} <span className="text-sm font-normal text-muted-foreground">{t("leaderboard.of")} {totalPlayers}</span>
                   </p>
                 </div>
                 
@@ -255,12 +257,12 @@ export default function Leaderboard() {
                   <div className="w-full pt-3 border-t border-border/30">
                     <div className="flex items-center gap-2 text-sm">
                       <TrendingUp className="h-4 w-4 text-emerald-400" />
-                      <span className="text-muted-foreground">Next Target:</span>
+                      <span className="text-muted-foreground">{t("leaderboard.nextTarget")}</span>
                       <span className="text-foreground font-medium">
                         #{nextTarget.targetRank}
                       </span>
                       <span className="text-emerald-400 font-medium">
-                        (need +{nextTarget.pointsNeeded} pts)
+                        ({t("leaderboard.need", { points: nextTarget.pointsNeeded })})
                       </span>
                     </div>
                   </div>
@@ -272,9 +274,9 @@ export default function Leaderboard() {
                   <Target className="h-6 w-6 text-muted-foreground" />
                 </div>
                 <div>
-                  <p className="text-foreground font-medium">Unrated</p>
+                  <p className="text-foreground font-medium">{t("leaderboard.unrated")}</p>
                   <p className="text-sm text-muted-foreground">
-                    Win a ranked {capitalize(gameType)} match to join the leaderboard
+                    {t("leaderboard.winRankedToJoin", { game: capitalize(gameType) })}
                   </p>
                 </div>
               </div>
@@ -289,10 +291,10 @@ export default function Leaderboard() {
             <div>
               <CardTitle className="text-2xl flex items-center gap-2">
                 <Trophy className="h-6 w-6 text-primary" />
-                {capitalize(gameType)} Leaderboard
+                {t("leaderboard.title", { game: capitalize(gameType) })}
               </CardTitle>
               <p className="text-sm text-muted-foreground mt-1">
-                Top 50 ranked players
+                {t("leaderboard.top50")}
               </p>
             </div>
             
@@ -317,9 +319,9 @@ export default function Leaderboard() {
           {entries.length === 0 ? (
             <div className="text-center py-12">
               <Trophy className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-50" />
-              <h3 className="text-lg font-semibold mb-2">No ranked players yet</h3>
+              <h3 className="text-lg font-semibold mb-2">{t("leaderboard.noPlayers")}</h3>
               <p className="text-muted-foreground">
-                Be the first to play a ranked {capitalize(gameType)} match!
+                {t("leaderboard.beFirst", { game: capitalize(gameType) })}
               </p>
             </div>
           ) : (
@@ -327,9 +329,9 @@ export default function Leaderboard() {
               {/* Header row */}
               <div className="grid grid-cols-12 gap-2 px-4 py-3 text-xs uppercase tracking-wider text-muted-foreground font-semibold bg-muted/30">
                 <div className="col-span-1">#</div>
-                <div className="col-span-4">Player</div>
-                <div className="col-span-3">Rating</div>
-                <div className="col-span-4 text-right">Record</div>
+                <div className="col-span-4">{t("leaderboard.player")}</div>
+                <div className="col-span-3">{t("leaderboard.rating")}</div>
+                <div className="col-span-4 text-right">{t("leaderboard.record")}</div>
               </div>
               
               {/* Entries */}
@@ -367,7 +369,7 @@ export default function Leaderboard() {
                       </Link>
                       {isYou && (
                         <span className="text-xs px-1.5 py-0.5 rounded bg-primary/20 text-primary font-medium">
-                          You
+                          {t("leaderboard.you")}
                         </span>
                       )}
                     </div>
@@ -393,7 +395,7 @@ export default function Leaderboard() {
                         <span className="text-red-400">{entry.losses}</span>
                       </span>
                       <p className="text-xs text-muted-foreground">
-                        {entry.games} game{entry.games !== 1 ? 's' : ''}
+                        {entry.games === 1 ? t("leaderboard.games", { count: 1 }) : t("leaderboard.gamesPlural", { count: entry.games })}
                       </p>
                     </div>
                   </div>

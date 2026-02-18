@@ -380,15 +380,15 @@ export default function CreateRoom() {
           if (settingsErr) {
             console.error("[TurnTimer] Failed to persist session settings:", settingsErr);
             toast({
-              title: "Settings Error",
-              description: "Failed to save game settings. Turn timer may default to 60s.",
+              title: t("createRoomExtra.settingsError"),
+              description: t("createRoomExtra.settingsErrorDesc"),
               variant: "destructive",
             });
           } else if (data?.ok === false) {
             console.error("[TurnTimer] Edge function rejected:", data?.error);
             toast({
-              title: "Settings Error",
-              description: `Failed to save settings: ${data?.error ?? "Unknown error"}`,
+              title: t("createRoomExtra.settingsError"),
+              description: t("createRoomExtra.settingsErrorUnknown", { error: data?.error ?? "Unknown error" }),
               variant: "destructive",
             });
           } else {
@@ -401,8 +401,8 @@ export default function CreateRoom() {
         } catch (e) {
           console.error("[TurnTimer] Unexpected error persisting session settings:", e);
           toast({
-            title: "Settings Error",
-            description: "Unexpected error saving settings. Turn timer may default to 60s.",
+            title: t("createRoomExtra.settingsError"),
+            description: t("createRoomExtra.settingsErrorDesc"),
             variant: "destructive",
           });
         }
@@ -621,19 +621,19 @@ export default function CreateRoom() {
           {/* Player Count - Only for Ludo */}
           {gameType === "5" && (
             <div className="space-y-1.5">
-              <Label className="text-sm">Number of Players</Label>
+              <Label className="text-sm">{t("createRoomExtra.numberOfPlayers")}</Label>
               <Select value={maxPlayers} onValueChange={setMaxPlayers}>
                 <SelectTrigger className="h-9">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="2">2 Players</SelectItem>
-                  <SelectItem value="3">3 Players</SelectItem>
-                  <SelectItem value="4">4 Players</SelectItem>
+                  <SelectItem value="2">{t("createRoomExtra.playersCount", { count: 2 })}</SelectItem>
+                  <SelectItem value="3">{t("createRoomExtra.playersCount", { count: 3 })}</SelectItem>
+                  <SelectItem value="4">{t("createRoomExtra.playersCount", { count: 4 })}</SelectItem>
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">
-                Ludo supports 2-4 players. 3+ player games use elimination rules.
+                {t("createRoomExtra.ludoPlayersDesc")}
               </p>
             </div>
           )}
@@ -684,10 +684,10 @@ export default function CreateRoom() {
               <SelectContent>
                 {/* 10s Blitz NOT available for Backgammon (3) and Ludo (5) - complex multi-action turns */}
                 {gameType !== "3" && gameType !== "5" && (
-                  <SelectItem value="10">10s (Blitz)</SelectItem>
+                  <SelectItem value="10">{t("createRoomExtra.blitz")}</SelectItem>
                 )}
-                <SelectItem value="30">30s (Standard)</SelectItem>
-                <SelectItem value="60">60s (Relaxed)</SelectItem>
+                <SelectItem value="30">{t("createRoomExtra.standard")}</SelectItem>
+                <SelectItem value="60">{t("createRoomExtra.relaxed")}</SelectItem>
                 <SelectItem value="0">{t("createRoom.unlimited")}</SelectItem>
               </SelectContent>
             </Select>
