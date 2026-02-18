@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { useTranslation } from "react-i18next";
 import pyramidLogo from "@/assets/1m-pyramid-logo-hd.png";
 import GoldConfettiExplosion from "@/components/GoldConfettiExplosion";
 
@@ -53,6 +54,7 @@ export function ShareResultCard({
   open, onClose, isWinner, gameType, winnerWallet, loserWallet, myWallet,
   solWonLamports, solLostLamports, finishedAt, roomPda, totalGamesWon, totalSolWon,
 }: ShareResultCardProps) {
+  const { t } = useTranslation();
   const cardRef = useRef<HTMLDivElement>(null);
   const [copied, setCopied] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -71,17 +73,17 @@ export function ShareResultCard({
   const matchLink = roomPda ? `${window.location.origin}/match/${roomPda}` : "https://1mgaming.com";
 
   const xText = isWinner
-    ? `Just won ${solAmount} SOL playing ${gameLabel} on @1MGaming 🎯\nSkill > Luck.\n${matchLink}`
-    : `Just played ${gameLabel} on @1MGaming 🎮\nGood game.\n${matchLink}`;
+    ? t('shareCard.xWinText', { amount: solAmount, game: gameLabel, link: matchLink })
+    : t('shareCard.xLoseText', { game: gameLabel, link: matchLink });
   const waText = isWinner
-    ? `Just finished a match on 1MGaming. Won ${solAmount} SOL!\nJoin me: ${matchLink}`
-    : `Just played ${gameLabel} on 1MGaming. Good game!\n${matchLink}`;
+    ? t('shareCard.waWinText', { amount: solAmount, link: matchLink })
+    : t('shareCard.waLoseText', { game: gameLabel, link: matchLink });
   const emailSubject = isWinner
-    ? `I just won playing ${gameLabel} on 1MGaming!`
-    : `I just played ${gameLabel} on 1MGaming`;
+    ? t('shareCard.emailWinSubject', { game: gameLabel })
+    : t('shareCard.emailLoseSubject', { game: gameLabel });
   const emailBody = isWinner
-    ? `I won ${solAmount} SOL playing ${gameLabel}!\nCheck it out: ${matchLink}`
-    : `Just played ${gameLabel} on 1MGaming.\nMatch link: ${matchLink}`;
+    ? t('shareCard.emailWinBody', { amount: solAmount, game: gameLabel, link: matchLink })
+    : t('shareCard.emailLoseBody', { game: gameLabel, link: matchLink });
 
   const handleDownload = useCallback(async () => {
     if (!cardRef.current || exporting) return;
@@ -171,9 +173,9 @@ export function ShareResultCard({
                   backgroundClip: "text",
                 }}
               >
-                {isWinner ? "VICTORY" : "GOOD GAME"}
+                {isWinner ? t('shareCard.victory') : t('shareCard.goodGame')}
               </h2>
-              <p className={`text-xs tracking-widest uppercase ${mutedFg}`}>Match Complete</p>
+              <p className={`text-xs tracking-widest uppercase ${mutedFg}`}>{t('shareCard.matchComplete')}</p>
             </div>
 
             <span className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1 text-xs font-bold tracking-widest ${
@@ -186,26 +188,26 @@ export function ShareResultCard({
             {/* Stats */}
             <div className="grid grid-cols-2 gap-3 w-full">
               <div className={`flex flex-col items-center rounded-xl border p-3 ${statBg}`}>
-                <span className={`text-[10px] uppercase tracking-wider ${mutedFg}`}>Result</span>
+                <span className={`text-[10px] uppercase tracking-wider ${mutedFg}`}>{t('shareCard.result')}</span>
                 <span className={`text-lg font-bold mt-1 ${isWinner ? "text-primary" : "text-destructive"}`}>
-                  {isWinner ? "WIN" : "LOSS"}
+                  {isWinner ? t('shareCard.win') : t('shareCard.loss')}
                 </span>
               </div>
               {showSol && (
                 <div className={`flex flex-col items-center rounded-xl border p-3 ${statBg}`}>
-                  <span className={`text-[10px] uppercase tracking-wider ${mutedFg}`}>{isWinner ? "SOL Won" : "SOL Staked"}</span>
+                  <span className={`text-[10px] uppercase tracking-wider ${mutedFg}`}>{isWinner ? t('shareCard.solWon') : t('shareCard.solStaked')}</span>
                   <span className={`text-lg font-bold mt-1 ${isWinner ? "text-primary" : mutedFg}`}>{solAmount}</span>
                 </div>
               )}
               {showTotalGames && totalGamesWon != null && (
                 <div className={`flex flex-col items-center rounded-xl border p-3 ${statBg}`}>
-                  <span className={`text-[10px] uppercase tracking-wider ${mutedFg}`}>Games Won</span>
+                  <span className={`text-[10px] uppercase tracking-wider ${mutedFg}`}>{t('shareCard.gamesWon')}</span>
                   <span className={`text-lg font-bold mt-1 ${fg}`}>{totalGamesWon}</span>
                 </div>
               )}
               {showTotalSol && totalSolWon != null && (
                 <div className={`flex flex-col items-center rounded-xl border p-3 ${statBg}`}>
-                  <span className={`text-[10px] uppercase tracking-wider ${mutedFg}`}>Total SOL Won</span>
+                  <span className={`text-[10px] uppercase tracking-wider ${mutedFg}`}>{t('shareCard.totalSolWon')}</span>
                   <span className="text-lg font-bold mt-1 text-primary">{totalSolWon.toFixed(3)}</span>
                 </div>
               )}
@@ -218,7 +220,7 @@ export function ShareResultCard({
             )}
 
             {showOpponent && opponentWallet && (
-              <p className={`text-xs ${mutedFg}`}>vs {shortenWallet(opponentWallet)}</p>
+              <p className={`text-xs ${mutedFg}`}>{t('shareCard.vs')} {shortenWallet(opponentWallet)}</p>
             )}
 
             <div className="w-full pt-3 border-t border-border/30 flex items-center justify-between">
@@ -242,25 +244,25 @@ export function ShareResultCard({
 
         {/* ═══ CUSTOMIZATION ═══ */}
         <div className="rounded-xl border border-border bg-card p-4 space-y-3">
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Customize Your Share Card</p>
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('shareCard.customize')}</p>
           <div className="grid grid-cols-2 gap-x-4 gap-y-2.5">
-            <ToggleRow label="Wallet address" checked={showWallet} onChange={setShowWallet} />
-            {showWallet && <ToggleRow label="Full address" checked={showFullAddress} onChange={setShowFullAddress} />}
-            <ToggleRow label="SOL amount" checked={showSol} onChange={setShowSol} />
-            <ToggleRow label="Total games won" checked={showTotalGames} onChange={setShowTotalGames} />
-            <ToggleRow label="Total SOL won" checked={showTotalSol} onChange={setShowTotalSol} />
-            <ToggleRow label="Show opponent" checked={showOpponent} onChange={setShowOpponent} />
-            <ToggleRow label="Timestamp" checked={showTimestamp} onChange={setShowTimestamp} />
-            <ToggleRow label="Dark theme" checked={darkTheme} onChange={setDarkTheme} />
+            <ToggleRow label={t('shareCard.walletAddress')} checked={showWallet} onChange={setShowWallet} />
+            {showWallet && <ToggleRow label={t('shareCard.fullAddress')} checked={showFullAddress} onChange={setShowFullAddress} />}
+            <ToggleRow label={t('shareCard.solAmount')} checked={showSol} onChange={setShowSol} />
+            <ToggleRow label={t('shareCard.totalGamesWon')} checked={showTotalGames} onChange={setShowTotalGames} />
+            <ToggleRow label={t('shareCard.totalSolWonToggle')} checked={showTotalSol} onChange={setShowTotalSol} />
+            <ToggleRow label={t('shareCard.showOpponent')} checked={showOpponent} onChange={setShowOpponent} />
+            <ToggleRow label={t('shareCard.timestamp')} checked={showTimestamp} onChange={setShowTimestamp} />
+            <ToggleRow label={t('shareCard.darkTheme')} checked={darkTheme} onChange={setDarkTheme} />
           </div>
-          <p className="text-[10px] text-muted-foreground/60 text-center pt-1">Control what you share. Your privacy, your stats.</p>
+          <p className="text-[10px] text-muted-foreground/60 text-center pt-1">{t('shareCard.privacyNote')}</p>
         </div>
 
         {/* ═══ EXPORT BUTTONS ═══ */}
         <div className="space-y-2">
           <Button variant="gold" size="lg" className="w-full text-base gap-2" onClick={handleDownload} disabled={exporting}>
             <Download className="h-5 w-5" />
-            {exporting ? "Generating…" : "Download Image"}
+            {exporting ? t('shareCard.generating') : t('shareCard.downloadImage')}
           </Button>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             <a
@@ -269,7 +271,7 @@ export function ShareResultCard({
               className="inline-flex items-center justify-center gap-2 rounded-lg font-semibold text-sm min-h-[44px] px-3 bg-foreground text-background hover:opacity-90 transition-colors"
             >
               <svg viewBox="0 0 24 24" className="w-4 h-4 fill-current"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
-              Share on X
+              {t('shareCard.shareOnX')}
             </a>
             <a
               href={`https://wa.me/?text=${encodeURIComponent(waText)}`}
@@ -277,21 +279,21 @@ export function ShareResultCard({
               className="inline-flex items-center justify-center gap-2 rounded-lg font-semibold text-sm min-h-[44px] px-3 bg-green-600 hover:bg-green-700 text-white transition-colors"
             >
               <MessageCircle className="h-4 w-4" />
-              WhatsApp
+              {t('shareCard.whatsapp')}
             </a>
             <a
               href={`mailto:?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(emailBody)}`}
               className="inline-flex items-center justify-center gap-2 rounded-lg font-semibold text-sm min-h-[44px] px-3 border border-border bg-secondary hover:bg-secondary/80 text-secondary-foreground transition-colors"
             >
               <Mail className="h-4 w-4" />
-              Email
+              {t('shareCard.email')}
             </a>
             <button
               onClick={handleCopy}
               className="inline-flex items-center justify-center gap-2 rounded-lg font-semibold text-sm min-h-[44px] px-3 border border-border bg-secondary hover:bg-secondary/80 text-secondary-foreground transition-colors"
             >
               {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
-              {copied ? "Copied" : "Copy"}
+              {copied ? t('shareCard.copied') : t('shareCard.copy')}
             </button>
           </div>
         </div>
