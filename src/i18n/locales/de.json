@@ -941,6 +941,12 @@
     "waitingForPlayers": "Warte auf Spieler: {{current}} / {{total}}",
     "switchTo2Players": "Auf 2 Spieler wechseln (schneller)",
     "copyInviteLink": "Einladungslink kopieren",
-    "linkCopied": "Link kopiert!"
+    "linkCopied": "Link kopiert!",
+    "recoverFunds": "Abbrechen & Geld zurückfordern",
+    "recoveringFunds": "Geld wird zurückgefordert...",
+    "fundsRecovered": "Raum abgebrochen! Geld wurde an Ihre Wallet zurückgegeben.",
+    "recoverConfirmTitle": "Raum abbrechen & Geld zurückfordern",
+    "recoverConfirmDesc": "Dies wird den Raum abbrechen und Ihren Einsatz von {{amount}} SOL an Ihre Wallet zurückgeben. Sie müssen eine Transaktion signieren.",
+    "confirmSign": "Bestätigen & Signieren"
   }
 }

@@ -884,6 +884,12 @@
     "waitingForPlayers": "等待玩家：{{current}} / {{total}}",
     "switchTo2Players": "切换到2人（更快）",
     "copyInviteLink": "复制邀请链接",
-    "linkCopied": "链接已复制！"
+    "linkCopied": "链接已复制！",
+    "recoverFunds": "取消并收回资金",
+    "recoveringFunds": "正在收回资金...",
+    "fundsRecovered": "房间已取消！资金已退回您的钱包。",
+    "recoverConfirmTitle": "取消房间并收回资金",
+    "recoverConfirmDesc": "这将取消房间并将您 {{amount}} SOL 的质押退回您的钱包。您需要签署一笔交易。",
+    "confirmSign": "确认并签名"
   }
 }

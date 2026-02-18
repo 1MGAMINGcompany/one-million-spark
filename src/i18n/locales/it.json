@@ -897,6 +897,12 @@
     "waitingForPlayers": "In attesa dei giocatori: {{current}} / {{total}}",
     "switchTo2Players": "Passa a 2 giocatori (più veloce)",
     "copyInviteLink": "Copia link di invito",
-    "linkCopied": "Link copiato!"
+    "linkCopied": "Link copiato!",
+    "recoverFunds": "Annulla e recupera fondi",
+    "recoveringFunds": "Recupero fondi in corso...",
+    "fundsRecovered": "Stanza annullata! Fondi restituiti al tuo portafoglio.",
+    "recoverConfirmTitle": "Annulla stanza e recupera fondi",
+    "recoverConfirmDesc": "Questo annullerà la stanza e restituirà la tua puntata di {{amount}} SOL al tuo portafoglio. Dovrai firmare una transazione.",
+    "confirmSign": "Conferma e firma"
   }
 }

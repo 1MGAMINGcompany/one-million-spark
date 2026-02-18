@@ -887,6 +887,12 @@
     "waitingForPlayers": "في انتظار اللاعبين: {{current}} / {{total}}",
     "switchTo2Players": "التبديل إلى لاعبين (أسرع)",
     "copyInviteLink": "نسخ رابط الدعوة",
-    "linkCopied": "تم نسخ الرابط!"
+    "linkCopied": "تم نسخ الرابط!",
+    "recoverFunds": "إلغاء واسترداد الأموال",
+    "recoveringFunds": "جاري استرداد الأموال...",
+    "fundsRecovered": "تم إلغاء الغرفة! تم إرجاع الأموال إلى محفظتك.",
+    "recoverConfirmTitle": "إلغاء الغرفة واسترداد الأموال",
+    "recoverConfirmDesc": "سيتم إلغاء الغرفة وإرجاع حصتك البالغة {{amount}} SOL إلى محفظتك. ستحتاج إلى توقيع معاملة.",
+    "confirmSign": "تأكيد وتوقيع"
   }
 }

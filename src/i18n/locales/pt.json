@@ -941,6 +941,12 @@
     "waitingForPlayers": "Aguardando jogadores: {{current}} / {{total}}",
     "switchTo2Players": "Mudar para 2 jogadores (mais rápido)",
     "copyInviteLink": "Copiar link de convite",
-    "linkCopied": "Link copiado!"
+    "linkCopied": "Link copiado!",
+    "recoverFunds": "Cancelar e recuperar fundos",
+    "recoveringFunds": "Recuperando fundos...",
+    "fundsRecovered": "Sala cancelada! Fundos devolvidos à sua carteira.",
+    "recoverConfirmTitle": "Cancelar sala e recuperar fundos",
+    "recoverConfirmDesc": "Isso cancelará a sala e devolverá sua aposta de {{amount}} SOL para sua carteira. Você precisará assinar uma transação.",
+    "confirmSign": "Confirmar e assinar"
   }
 }

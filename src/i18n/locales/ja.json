@@ -938,6 +938,12 @@
     "waitingForPlayers": "プレイヤー待機中：{{current}} / {{total}}",
     "switchTo2Players": "2人に切り替え（より速い）",
     "copyInviteLink": "招待リンクをコピー",
-    "linkCopied": "リンクをコピーしました！"
+    "linkCopied": "リンクをコピーしました！",
+    "recoverFunds": "キャンセルして資金を回収",
+    "recoveringFunds": "資金を回収中...",
+    "fundsRecovered": "ルームがキャンセルされました！資金がウォレットに返金されました。",
+    "recoverConfirmTitle": "ルームをキャンセルして資金を回収",
+    "recoverConfirmDesc": "ルームをキャンセルし、{{amount}} SOLのステークをウォレットに返金します。トランザクションに署名する必要があります。",
+    "confirmSign": "確認して署名"
   }
 }

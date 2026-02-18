@@ -1,15 +1,27 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { PublicKey } from "@solana/web3.js";
+import { PublicKey, Transaction } from "@solana/web3.js";
+import { useConnection } from "@solana/wallet-adapter-react";
+import bs58 from "bs58";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { ArrowLeft, Zap, Bot, Search, Loader2, Users, Copy, Check, Wallet } from "lucide-react";
+import { ArrowLeft, Zap, Bot, Search, Loader2, Users, Copy, Check, Wallet, AlertTriangle } from "lucide-react";
 import { ChessIcon, DominoIcon, BackgammonIcon, CheckersIcon, LudoIcon } from "@/components/GameIcons";
 import { PrivyLoginButton } from "@/components/PrivyLoginButton";
 import { ConnectWalletGate } from "@/components/ConnectWalletGate";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useWallet } from "@/hooks/useWallet";
 import { useSolanaRooms } from "@/hooks/useSolanaRooms";
 import { useRoomRealtimeAlert } from "@/hooks/useRoomRealtimeAlert";
@@ -55,7 +67,8 @@ export default function QuickMatch() {
   const navigate = useNavigate();
   const { t } = useTranslation();
   const { toast } = useToast();
-  const { isConnected, address } = useWallet();
+  const { isConnected, address, publicKey, signTransaction } = useWallet();
+  const { connection } = useConnection();
   const {
     rooms,
     fetchRooms,
@@ -74,6 +87,10 @@ export default function QuickMatch() {
   const [ludoPlayerCount, setLudoPlayerCount] = useState<number>(2);
   const [linkCopied, setLinkCopied] = useState(false);
   const [walletOpen, setWalletOpen] = useState(false);
+  const [showRecoverDialog, setShowRecoverDialog] = useState(false);
+  const [recoverPendingTx, setRecoverPendingTx] = useState<string | null>(null);
+  const [recoverStakeAmount, setRecoverStakeAmount] = useState<string | null>(null);
+  const [isRecovering, setIsRecovering] = useState(false);
 
   const hasNavigatedRef = useRef(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -302,6 +319,85 @@ export default function QuickMatch() {
     setTimeout(() => setLinkCopied(false), 2000);
   };
 
+  // ── Cancel with fund recovery ──
+  const handleCancel = useCallback(async () => {
+    // Free games or no room created: just navigate away
+    if (selectedStake === 0 || !createdRoomPda || !publicKey) {
+      navigate(-1);
+      return;
+    }
+
+    setIsRecovering(true);
+    try {
+      const sessionToken = localStorage.getItem(`session_token_${createdRoomPda}`);
+      const { data, error } = await supabase.functions.invoke("recover-funds", {
+        headers: sessionToken ? { "x-session-token": sessionToken } : undefined,
+        body: {
+          roomPda: createdRoomPda,
+          callerWallet: publicKey.toBase58(),
+        },
+      });
+
+      if (error) throw error;
+
+      switch (data.status) {
+        case "can_cancel":
+          setRecoverPendingTx(data.unsignedTx);
+          setRecoverStakeAmount(data.stakeAmount);
+          setShowRecoverDialog(true);
+          break;
+        case "already_resolved":
+          toast({ title: data.message });
+          navigate(-1);
+          break;
+        case "force_settled":
+          toast({ title: t("quickMatch.fundsRecovered") });
+          navigate(-1);
+          break;
+        default:
+          toast({ title: data.message || t("quickMatch.error"), variant: "destructive" });
+          navigate(-1);
+      }
+    } catch (e: any) {
+      console.error("[QuickMatch] Recovery check failed:", e);
+      toast({ title: e.message || t("quickMatch.error"), variant: "destructive" });
+      navigate(-1);
+    } finally {
+      setIsRecovering(false);
+    }
+  }, [selectedStake, createdRoomPda, publicKey, navigate, toast, t]);
+
+  const executeRecoverAndLeave = useCallback(async () => {
+    if (!recoverPendingTx || !signTransaction || !publicKey) return;
+
+    setShowRecoverDialog(false);
+    setIsRecovering(true);
+    try {
+      const txBuffer = bs58.decode(recoverPendingTx);
+      const transaction = Transaction.from(txBuffer);
+      const signedTx = await signTransaction(transaction);
+
+      const signature = await connection.sendRawTransaction(signedTx.serialize(), {
+        skipPreflight: false,
+        preflightCommitment: "confirmed",
+      });
+
+      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+      await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, "confirmed");
+
+      toast({ title: t("quickMatch.fundsRecovered") });
+      setRecoverPendingTx(null);
+      navigate(-1);
+    } catch (e: any) {
+      console.error("[QuickMatch] Cancel tx failed:", e);
+      toast({ title: e.message || t("quickMatch.error"), variant: "destructive" });
+    } finally {
+      setIsRecovering(false);
+    }
+  }, [recoverPendingTx, signTransaction, publicKey, connection, navigate, toast, t]);
+
+  const formatSol = (lamports: string) => (parseInt(lamports) / 1_000_000_000).toFixed(4);
+
   // ── Render ──
   return (
     <div className="container max-w-lg py-8 px-4">
@@ -496,8 +592,10 @@ export default function QuickMatch() {
           )}
 
           {/* Cancel button */}
-          <Button variant="ghost" onClick={() => navigate(-1)}>
-            {t("quickMatch.cancel")}
+          <Button variant="ghost" onClick={handleCancel} disabled={isRecovering}>
+            {isRecovering ? (
+              <><Loader2 className="h-4 w-4 animate-spin mr-2" />{t("quickMatch.recoveringFunds")}</>
+            ) : selectedStake > 0 ? t("quickMatch.recoverFunds") : t("quickMatch.cancel")}
           </Button>
         </div>
       )}
@@ -523,12 +621,43 @@ export default function QuickMatch() {
               <Bot className="h-4 w-4" />
               {t("quickMatch.playAI")}
             </Button>
-            <Button variant="ghost" size="lg" className="w-full" onClick={() => navigate(-1)}>
-              {t("quickMatch.cancel")}
+            <Button variant="ghost" size="lg" className="w-full" onClick={handleCancel} disabled={isRecovering}>
+              {isRecovering ? (
+                <><Loader2 className="h-4 w-4 animate-spin mr-2" />{t("quickMatch.recoveringFunds")}</>
+              ) : selectedStake > 0 ? t("quickMatch.recoverFunds") : t("quickMatch.cancel")}
             </Button>
           </div>
         </div>
       )}
+
+      {/* Recovery confirmation dialog */}
+      <AlertDialog open={showRecoverDialog} onOpenChange={setShowRecoverDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-yellow-500" />
+              {t("quickMatch.recoverConfirmTitle")}
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2">
+                <p>
+                  {t("quickMatch.recoverConfirmDesc", {
+                    amount: recoverStakeAmount ? formatSol(recoverStakeAmount) : selectedStake.toString(),
+                  })}
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setRecoverPendingTx(null)}>
+              {t("quickMatch.cancel")}
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={executeRecoverAndLeave}>
+              {t("quickMatch.confirmSign")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
