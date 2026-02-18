@@ -312,7 +312,9 @@
     "roomList": "Lista de Salas",
     "wallet": "Billetera",
     "soundOn": "Sonido ACTIVADO",
-    "soundOff": "Sonido DESACTIVADO"
+    "soundOff": "Sonido DESACTIVADO",
+    "leaderboard": "Clasificación",
+    "myProfile": "Mi Perfil"
   },
   "hero": {
     "badge": "JUEGOS DE HABILIDAD PREMIUM",
@@ -808,7 +810,9 @@
     "gameRules": "Reglas del Juego",
     "termsOfService": "Términos de Servicio",
     "support": "Soporte",
-    "privacyPolicy": "Política de Privacidad"
+    "privacyPolicy": "Política de Privacidad",
+    "legalAndSupport": "Legal y Soporte",
+    "helpGuides": "Ayuda y Guías"
   },
   "gameRules": {
     "title": "Reglas del Juego",

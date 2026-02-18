@@ -200,7 +200,9 @@
     "roomList": "Lista Stanze",
     "wallet": "Portafoglio",
     "soundOn": "Suono ATTIVO",
-    "soundOff": "Suono DISATTIVO"
+    "soundOff": "Suono DISATTIVO",
+    "leaderboard": "Classifica",
+    "myProfile": "Il Mio Profilo"
   },
   "hero": {
     "badge": "GIOCHI DI ABILITÀ PREMIUM",
@@ -578,7 +580,9 @@
     "gameRules": "Regole del Gioco",
     "termsOfService": "Termini di Servizio",
     "support": "Supporto",
-    "privacyPolicy": "Informativa sulla Privacy"
+    "privacyPolicy": "Informativa sulla Privacy",
+    "legalAndSupport": "Legale e Supporto",
+    "helpGuides": "Aiuto e Guide"
   },
   "gameRules": {
     "title": "Regole del Gioco",

@@ -203,7 +203,9 @@
     "roomList": "Raumliste",
     "wallet": "Wallet",
     "soundOn": "Ton AN",
-    "soundOff": "Ton AUS"
+    "soundOff": "Ton AUS",
+    "leaderboard": "Rangliste",
+    "myProfile": "Mein Profil"
   },
   "hero": {
     "badge": "PREMIUM-GESCHICKLICHKEITSSPIELE",
@@ -681,7 +683,9 @@
     "gameRules": "Spielregeln",
     "termsOfService": "Nutzungsbedingungen",
     "support": "Support",
-    "privacyPolicy": "Datenschutzrichtlinie"
+    "privacyPolicy": "Datenschutzrichtlinie",
+    "legalAndSupport": "Rechtliches & Support",
+    "helpGuides": "Hilfe & Anleitungen"
   },
   "gameRules": {
     "title": "Spielregeln",

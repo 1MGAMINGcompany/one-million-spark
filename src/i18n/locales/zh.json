@@ -200,7 +200,9 @@
     "roomList": "房间列表",
     "wallet": "钱包",
     "soundOn": "声音开启",
-    "soundOff": "声音关闭"
+    "soundOff": "声音关闭",
+    "leaderboard": "排行榜",
+    "myProfile": "我的资料"
   },
   "hero": {
     "badge": "高端技能游戏",
@@ -576,7 +578,9 @@
     "gameRules": "游戏规则",
     "termsOfService": "服务条款",
     "support": "支持",
-    "privacyPolicy": "隐私政策"
+    "privacyPolicy": "隐私政策",
+    "legalAndSupport": "法律与支持",
+    "helpGuides": "帮助与指南"
   },
   "gameRules": {
     "title": "游戏规则",

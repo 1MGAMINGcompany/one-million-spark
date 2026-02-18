@@ -200,7 +200,9 @@
     "roomList": "قائمة الغرف",
     "wallet": "المحفظة",
     "soundOn": "الصوت مفعّل",
-    "soundOff": "الصوت معطّل"
+    "soundOff": "الصوت معطّل",
+    "leaderboard": "لوحة المتصدرين",
+    "myProfile": "ملفي الشخصي"
   },
   "hero": {
     "badge": "ألعاب مهارة فاخرة",
@@ -579,7 +581,9 @@
     "gameRules": "قواعد اللعبة",
     "termsOfService": "شروط الخدمة",
     "support": "الدعم",
-    "privacyPolicy": "سياسة الخصوصية"
+    "privacyPolicy": "سياسة الخصوصية",
+    "legalAndSupport": "القانونية والدعم",
+    "helpGuides": "المساعدة والأدلة"
   },
   "gameRules": {
     "title": "قواعد اللعبة",

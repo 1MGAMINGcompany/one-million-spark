@@ -203,7 +203,9 @@
     "roomList": "Liste des Salles",
     "wallet": "Portefeuille",
     "soundOn": "Son ACTIVÉ",
-    "soundOff": "Son DÉSACTIVÉ"
+    "soundOff": "Son DÉSACTIVÉ",
+    "leaderboard": "Classement",
+    "myProfile": "Mon Profil"
   },
   "hero": {
     "badge": "JEUX D'ADRESSE PREMIUM",
@@ -681,7 +683,9 @@
     "gameRules": "Règles du Jeu",
     "termsOfService": "Conditions d'Utilisation",
     "support": "Support",
-    "privacyPolicy": "Politique de Confidentialité"
+    "privacyPolicy": "Politique de Confidentialité",
+    "legalAndSupport": "Juridique et Support",
+    "helpGuides": "Aide et Guides"
   },
   "gameRules": {
     "title": "Règles du Jeu",
