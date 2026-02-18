@@ -944,6 +944,9 @@
     "fundsRecovered": "ルームがキャンセルされました！資金がウォレットに返金されました。",
     "recoverConfirmTitle": "ルームをキャンセルして資金を回収",
     "recoverConfirmDesc": "ルームをキャンセルし、{{amount}} SOLのステークをウォレットに返金します。トランザクションに署名する必要があります。",
-    "confirmSign": "確認して署名"
+    "confirmSign": "確認して署名",
+    "freeMatchCreated": "無料ルームを作成しました！対戦相手を待っています...",
+    "freeMatchJoined": "対戦相手が見つかりました！ゲーム開始...",
+    "freeCancelled": "無料マッチがキャンセルされました。"
   }
 }

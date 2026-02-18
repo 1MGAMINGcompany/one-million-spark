@@ -947,6 +947,9 @@
     "fundsRecovered": "Raum abgebrochen! Geld wurde an Ihre Wallet zurückgegeben.",
     "recoverConfirmTitle": "Raum abbrechen & Geld zurückfordern",
     "recoverConfirmDesc": "Dies wird den Raum abbrechen und Ihren Einsatz von {{amount}} SOL an Ihre Wallet zurückgeben. Sie müssen eine Transaktion signieren.",
-    "confirmSign": "Bestätigen & Signieren"
+    "confirmSign": "Bestätigen & Signieren",
+    "freeMatchCreated": "Kostenloser Raum erstellt! Warte auf Gegner...",
+    "freeMatchJoined": "Gegner gefunden! Spiel startet...",
+    "freeCancelled": "Kostenloses Match abgebrochen."
   }
 }

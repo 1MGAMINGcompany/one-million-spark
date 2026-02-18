@@ -251,7 +251,8 @@ export function useAutoSettlement({
     // Only settle for ranked games
     if (!isRanked) return;
     
-    // Need a winner and room
+    // Skip settlement for free rooms (DB-only, no on-chain funds)
+    if (roomPda?.startsWith("free-")) return;
     if (!winner || !roomPda) return;
     
     // Skip if already settling

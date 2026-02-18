@@ -1438,6 +1438,9 @@
     "fundsRecovered": "Room cancelled! Funds returned to your wallet.",
     "recoverConfirmTitle": "Cancel Room & Recover Funds",
     "recoverConfirmDesc": "This will cancel the room and return your stake of {{amount}} SOL to your wallet. You will need to sign a transaction.",
-    "confirmSign": "Confirm & Sign"
+    "confirmSign": "Confirm & Sign",
+    "freeMatchCreated": "Free room created! Waiting for opponent...",
+    "freeMatchJoined": "Opponent found! Starting game...",
+    "freeCancelled": "Free match cancelled."
   }
 }

@@ -313,8 +313,34 @@ const DominosGame = () => {
     
     async function fetchRoomPlayers() {
       if (!roomPda || !address || !mounted) return;
-      
-      // Don't keep polling once we have both players
+
+      // FREE ROOM: fetch players from DB, skip on-chain
+      if (roomPda.startsWith("free-")) {
+        try {
+          const { data } = await supabase.functions.invoke("game-session-get", {
+            body: { roomPda },
+          });
+          if (data?.session) {
+            const s = data.session;
+            const players = s.participants?.filter((p: string) => p && p !== "") || [];
+            if (players.length >= 2) {
+              setRoomPlayers(players);
+              setStakeLamports(0);
+              setEntryFeeSol(0);
+              const myIndex = players.findIndex((p: string) => isSameWallet(p, address));
+              setAmIPlayer1(myIndex === 0);
+              console.log("[DominosGame] Free room players:", players);
+              setLoadingRoom(false);
+              if (interval) clearInterval(interval);
+              return;
+            }
+          }
+        } catch (err) {
+          console.error("[DominosGame] Free room fetch error:", err);
+        }
+        setLoadingRoom(false);
+        return;
+      }
       if (roomPlayers.length >= 2) {
         if (interval) clearInterval(interval);
         return;

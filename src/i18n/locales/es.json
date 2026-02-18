@@ -1168,6 +1168,9 @@
     "fundsRecovered": "¡Sala cancelada! Fondos devueltos a tu billetera.",
     "recoverConfirmTitle": "Cancelar sala y recuperar fondos",
     "recoverConfirmDesc": "Esto cancelará la sala y devolverá tu apuesta de {{amount}} SOL a tu billetera. Necesitarás firmar una transacción.",
-    "confirmSign": "Confirmar y firmar"
+    "confirmSign": "Confirmar y firmar",
+    "freeMatchCreated": "¡Sala gratuita creada! Esperando oponente...",
+    "freeMatchJoined": "¡Oponente encontrado! Iniciando juego...",
+    "freeCancelled": "Partida gratuita cancelada."
   }
 }

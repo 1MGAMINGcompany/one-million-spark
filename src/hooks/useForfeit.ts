@@ -179,6 +179,30 @@ export function useForfeit({
       return;
     }
     
+    // FREE ROOM: DB-only forfeit — no on-chain settlement
+    if (roomPda?.startsWith("free-")) {
+      executingRef.current = true;
+      exitedRef.current = false;
+      setIsForfeiting(true);
+      try {
+        if (roomPda && myWallet) {
+          const { supabase } = await import("@/integrations/supabase/client");
+          const { error: rpcErr } = await supabase.rpc("finish_game_session", {
+            p_room_pda: roomPda,
+            p_winner_wallet: opponentWallet,
+            p_caller_wallet: myWallet,
+          });
+          if (rpcErr) console.warn("[useForfeit] Free forfeit DB error:", rpcErr);
+        }
+        toast({ title: t("forfeit.success", "Game forfeited") });
+      } finally {
+        forceExit();
+        setIsForfeiting(false);
+        executingRef.current = false;
+      }
+      return;
+    }
+    
     executingRef.current = true;
     exitedRef.current = false; // Reset for new forfeit attempt
     setIsForfeiting(true);

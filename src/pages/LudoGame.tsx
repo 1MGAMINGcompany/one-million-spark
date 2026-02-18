@@ -103,16 +103,41 @@ const LudoGame = () => {
   // Fetch real player order from on-chain room account for multiplayer games
   useEffect(() => {
     if (!address || !roomPda) {
-      // No room PDA = AI mode, use simulated players
       if (address && !roomPda) {
         const simulatedPlayers = [
-          address, // Gold - human player
+          address,
           `ai-ruby-${roomId}`,
           `ai-emerald-${roomId}`,
           `ai-sapphire-${roomId}`,
         ];
         setRoomPlayers(simulatedPlayers);
       }
+      return;
+    }
+
+    // FREE ROOM: fetch players from DB, skip on-chain
+    if (roomPda.startsWith("free-")) {
+      (async () => {
+        try {
+          const { data } = await supabase.functions.invoke("game-session-get", {
+            body: { roomPda },
+          });
+          if (data?.session) {
+            const s = data.session;
+            const players = s.participants?.filter((p: string) => p && p !== "") || [];
+            if (players.length >= 2) {
+              setRoomPlayers(players);
+              setStakeLamports(0);
+              setEntryFeeSol(0);
+              console.log("[LudoGame] Free room players:", players);
+              return;
+            }
+          }
+        } catch (err) {
+          console.error("[LudoGame] Free room fetch error:", err);
+        }
+        setRoomPlayers([address, `waiting-${roomPda.slice(0, 8)}`]);
+      })();
       return;
     }
 
@@ -125,12 +150,9 @@ const LudoGame = () => {
         if (accountInfo?.data) {
           const parsed = parseRoomAccount(accountInfo.data as Buffer);
           if (parsed && parsed.players.length >= 2) {
-            // Real player order from on-chain: creator at index 0, joiner at index 1
-            // For Ludo, we support 2-4 players but start with 2
             const realPlayers = parsed.players.map(p => p.toBase58());
             setRoomPlayers(realPlayers);
             
-            // Extract entry fee from on-chain (CRITICAL - Guardrail A: canonical stake)
             if (parsed.entryFee !== undefined) {
               setStakeLamports(parsed.entryFee);
               setEntryFeeSol(parsed.entryFee / 1_000_000_000);
@@ -141,12 +163,10 @@ const LudoGame = () => {
           }
         }
         
-        // Fallback if on-chain data not available yet (room still forming)
         console.log("[LudoGame] Room not ready, using placeholder");
         setRoomPlayers([address, `waiting-${roomPda.slice(0, 8)}`]);
       } catch (err) {
         console.error("[LudoGame] Failed to fetch room players:", err);
-        // Fallback on error
         setRoomPlayers([address, `error-${roomPda.slice(0, 8)}`]);
       }
     };

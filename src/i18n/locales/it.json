@@ -903,6 +903,9 @@
     "fundsRecovered": "Stanza annullata! Fondi restituiti al tuo portafoglio.",
     "recoverConfirmTitle": "Annulla stanza e recupera fondi",
     "recoverConfirmDesc": "Questo annullerà la stanza e restituirà la tua puntata di {{amount}} SOL al tuo portafoglio. Dovrai firmare una transazione.",
-    "confirmSign": "Conferma e firma"
+    "confirmSign": "Conferma e firma",
+    "freeMatchCreated": "Stanza gratuita creata! In attesa dell'avversario...",
+    "freeMatchJoined": "Avversario trovato! Avvio del gioco...",
+    "freeCancelled": "Partita gratuita annullata."
   }
 }
