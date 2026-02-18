@@ -1,76 +1,101 @@
 
 
-# Fix: Stale Rooms Showing in Room List
+# Premium Mobile Menu Redesign (Privy-first)
 
-## Problem
+## Overview
 
-The Room List fetches rooms directly from the **Solana blockchain**. When a room is cancelled in the database (after 120s with no opponent), the on-chain account still exists with status "Open". The database cancellation (`maybe_apply_waiting_timeout`) is DB-only -- it does NOT execute the on-chain `cancel_room` transaction because that requires your wallet signature.
+Restructure the mobile hamburger menu to be clean, wallet-clutter-free, and Privy-first. The menu will have a premium "Account Card" at the top when signed in, followed by navigation links, then toggles, and finally a collapsed Advanced section for external wallets.
 
-There is also **no age filter** in the room list code, so rooms from yesterday (or older) still appear.
-
-## Solution
-
-Add a **15-minute age filter** on the client side when displaying rooms in the Room List, and cross-reference the database's cancelled sessions to exclude stale rooms.
-
-### Changes
-
-### 1. Add age filter to `fetchOpenPublicRooms` enrichment in `src/hooks/useSolanaRooms.tsx`
-
-After the rooms are fetched from chain and enriched with DB data, filter out:
-- Rooms whose DB session status is `cancelled` or `finished`
-- Rooms older than 15 minutes (using `created_at` from the DB enrichment data)
-
-This requires expanding the `game-sessions-list` edge function response to include `status` and `created_at` (already returned but not fully used in the filter).
-
-In `fetchRooms()` (around line 340-380 in `useSolanaRooms.tsx`):
-- Build a Set of room PDAs that are cancelled/finished in the DB
-- After enrichment, filter out rooms whose PDA is in the cancelled set
-- Add a 15-minute age cutoff: rooms with a `created_at` older than 15 minutes are hidden
-
-### 2. Update the enrichment map in `useSolanaRooms.tsx`
-
-Currently the enrichment map only stores `turnTime` and `mode`. Expand it to also store `status` and `created_at` from the edge function response, so we can filter stale/cancelled rooms.
+## Layout (top to bottom)
 
 ```text
-enrichMap: { turnTime, mode } --> { turnTime, mode, status, createdAt }
++-------------------------------------+
+| ACCOUNT CARD (if signed in)         |
+|   "Signed in as" 4aTb...93Ks       |
+|   Balance: 1.234 SOL               |
+|   [Add Funds]  [My Profile] [Out]  |
++-------------------------------------+
+| --- OR if not signed in ---         |
+|   [Continue]  (Privy login button)  |
++-------------------------------------+
+| Home                                |
+| Create Room                         |
+| Room List                           |
+| Leaderboard                         |
+| Language: [selector]                |
++-------------------------------------+
+| Sound toggle                        |
+| Notifications toggle                |
++-------------------------------------+
+| v Advanced: External Wallet         |
+|   (collapsed by default)            |
+|   Helper text + WalletButton        |
++-------------------------------------+
 ```
 
-### 3. Apply the filter after enrichment
+## Changes
 
-```text
-// After enrichment loop, before sorting:
-const ROOM_MAX_AGE_MS = 15 * 60 * 1000; // 15 minutes
-const now = Date.now();
+### 1. `src/components/Navbar.tsx` -- Rewrite mobile menu section (lines 174-266)
 
-filteredRooms = fetchedRooms.filter(room => {
-  const dbData = enrichMap.get(room.pda);
-  
-  // If DB says cancelled/finished/void, hide it
-  if (dbData?.status && ['cancelled', 'finished', 'void'].includes(dbData.status)) {
-    return false;
-  }
-  
-  // Age filter: hide rooms older than 15 minutes
-  if (dbData?.createdAt) {
-    const ageMs = now - new Date(dbData.createdAt).getTime();
-    if (ageMs > ROOM_MAX_AGE_MS) return false;
-  }
-  
-  return true;
-});
-```
+**Account Card (signed in)**:
+- Import `usePrivy` from `@privy-io/react-auth` and `usePrivySolBalance` hook
+- When Privy authenticated with a Solana wallet address:
+  - Show a styled card with gold border accent at the top of the mobile menu
+  - "Signed in as" label + shortened wallet address (font-mono)
+  - Balance chip showing SOL amount from `usePrivySolBalance` (with loading skeleton)
+  - Three action buttons in a row: "Add Funds" (Link to /add-funds, closes menu), "My Profile" (Link to /player/:address, closes menu), "Disconnect" (calls Privy logout)
+- When not authenticated:
+  - Show the Privy login button (which already says "Continue" per existing translations)
 
-### 4. For your 2 existing stale rooms
+**Navigation links**:
+- Remove "Add Funds" from `navItems` since it is now in the Account Card (only in mobile; desktop keeps it)
+- Mobile nav items: Home, Create Room, Room List, Leaderboard
+- Keep existing active-state styling
 
-Once the filter is in place, they will automatically disappear from the list. To also reclaim the SOL locked in those rooms, you can use the "Recover Funds" button on the Recoverable Rooms section (visible when you connect your wallet on the Room List page), which triggers the on-chain `cancel_room` transaction.
+**Toggles section**:
+- Language selector row
+- Sound toggle row  
+- Notifications toggle row
+- (Same as current, just positioned after nav links)
+
+**Advanced section**:
+- Keep existing Collapsible with "Advanced: Connect External Wallet"
+- Keep WalletButton inside
+- No changes to external wallet logic
+
+### 2. `src/i18n/locales/*.json` -- Add new translation keys (all 10 locales)
+
+Add to the `wallet` section:
+- `"signedInAs"`: "Signed in as"
+- `"addFunds"`: "Add Funds" (reuse existing `nav.addFunds` where possible)
+
+These are minimal additions since most keys already exist (`wallet.disconnect`, `nav.myProfile`, `wallet.continue`).
+
+### 3. Desktop menu -- No structural changes
+
+The desktop menu stays exactly as-is. Only the mobile `{isOpen && ...}` block changes.
+
+## Technical Details
+
+- `usePrivySolBalance()` is already available and provides `isPrivyUser`, `walletAddress`, `balanceSol`, `loading`
+- `usePrivy()` provides `authenticated`, `logout`, `login`
+- The Account Card uses existing Tailwind classes: `bg-secondary`, `border-primary/30`, gold accents via `text-primary`
+- The "Add Funds" link in the Account Card replaces the nav item for mobile only; desktop `navItems` array is unchanged
+- Mobile navItems will be filtered to exclude `/add-funds` path
 
 ## Files Modified
 
 | File | Change |
 |------|--------|
-| `src/hooks/useSolanaRooms.tsx` | Expand enrichment map, add age + status filter after enrichment |
-
-## No Backend Changes
-
-The edge function `game-sessions-list` already returns `status` and `created_at` in its response. No DB or edge function changes needed.
+| `src/components/Navbar.tsx` | Rewrite mobile menu: Account Card at top, reorder sections, import usePrivy + usePrivySolBalance |
+| `src/i18n/locales/en.json` | Add `wallet.signedInAs` |
+| `src/i18n/locales/es.json` | Add `wallet.signedInAs` (Spanish) |
+| `src/i18n/locales/ar.json` | Add `wallet.signedInAs` (Arabic) |
+| `src/i18n/locales/pt.json` | Add `wallet.signedInAs` (Portuguese) |
+| `src/i18n/locales/fr.json` | Add `wallet.signedInAs` (French) |
+| `src/i18n/locales/de.json` | Add `wallet.signedInAs` (German) |
+| `src/i18n/locales/zh.json` | Add `wallet.signedInAs` (Chinese) |
+| `src/i18n/locales/it.json` | Add `wallet.signedInAs` (Italian) |
+| `src/i18n/locales/ja.json` | Add `wallet.signedInAs` (Japanese) |
+| `src/i18n/locales/hi.json` | Add `wallet.signedInAs` (Hindi) |
 
