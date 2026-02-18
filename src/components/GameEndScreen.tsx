@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Trophy, RefreshCw, BarChart2, Star, LogOut, Wallet, ChevronDown, ChevronUp, CheckCircle, ExternalLink, Loader2, Copy, Check, MessageCircle, Mail } from 'lucide-react';
+import { Trophy, RefreshCw, BarChart2, Star, LogOut, Wallet, ChevronDown, ChevronUp, CheckCircle, ExternalLink, Loader2, Copy, Check, MessageCircle, Mail, Share2 } from 'lucide-react';
+import { ShareResultCard } from '@/components/ShareResultCard';
 import GoldConfettiExplosion from '@/components/GoldConfettiExplosion';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -188,6 +189,7 @@ export function GameEndScreen({
   // Rematch state
   const [customStakeSol, setCustomStakeSol] = useState<string>('');
   const [showCustomInput, setShowCustomInput] = useState(false);
+  const [showShareCard, setShowShareCard] = useState(false);
   
   const isPending = winner == null || winner === DEFAULT_PUBKEY;
   const isWinner = !isPending && winner === myAddress;
@@ -423,71 +425,17 @@ export function GameEndScreen({
             </div>
           )}
 
-          {/* Share Match Section - Show for ALL completed games */}
-          {!isPending && (() => {
-            const gameLabel = gameType ? ` ${gameType}` : '';
-            const hasMatchLink = !!roomPda;
-            const matchLink = hasMatchLink ? `${window.location.origin}/match/${roomPda}` : '';
-            const winnerMsg = hasMatchLink
-              ? `I just won${gameLabel} on 1MGAMING 🔥 Check the match: ${matchLink}`
-              : `I just won${gameLabel} on 1MGAMING 🔥`;
-            const loserMsg = hasMatchLink
-              ? `Just played${gameLabel} on 1MGAMING — check the match: ${matchLink}`
-              : `Just played${gameLabel} on 1MGAMING 🎮`;
-            const shareMsg = isWinner ? winnerMsg : loserMsg;
-            const emailSubject = isWinner ? `I won${gameLabel} on 1MGAMING!` : `Check out this${gameLabel} match on 1MGAMING`;
-
-            const handleCopyLink = async () => {
-              const textToCopy = hasMatchLink ? matchLink : shareMsg;
-              try {
-                await navigator.clipboard.writeText(textToCopy);
-                setLinkCopied(true);
-                setTimeout(() => setLinkCopied(false), 2000);
-              } catch { /* fallback: ignore */ }
-            };
-
-            return (
-              <div className="bg-muted/30 border border-primary/20 rounded-lg p-4 space-y-3">
-                <p className="text-sm font-semibold text-center">
-                  {isWinner ? t('gameEnd.bragWin') : t('gameEnd.shareMatch')}
-                </p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <a
-                    href={`https://wa.me/?text=${encodeURIComponent(shareMsg)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center justify-center gap-2 rounded-lg font-semibold text-sm min-h-[48px] px-4 bg-green-600 hover:bg-green-700 text-white transition-colors"
-                  >
-                    <MessageCircle size={18} />
-                    WhatsApp
-                  </a>
-                  <a
-                    href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(shareMsg)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center justify-center gap-2 rounded-lg font-semibold text-sm min-h-[48px] px-4 bg-foreground text-background hover:opacity-90 transition-colors"
-                  >
-                    <svg viewBox="0 0 24 24" className="w-[18px] h-[18px] fill-current"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
-                    {t('gameEnd.shareOnX')}
-                  </a>
-                  <a
-                    href={`mailto:?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(shareMsg)}`}
-                    className="inline-flex items-center justify-center gap-2 rounded-lg font-semibold text-sm min-h-[48px] px-4 border border-border bg-secondary hover:bg-secondary/80 text-secondary-foreground transition-colors"
-                  >
-                    <Mail size={18} />
-                    Email
-                  </a>
-                  <button
-                    onClick={handleCopyLink}
-                    className="inline-flex items-center justify-center gap-2 rounded-lg font-semibold text-sm min-h-[48px] px-4 border border-border bg-secondary hover:bg-secondary/80 text-secondary-foreground transition-colors"
-                  >
-                    {linkCopied ? <Check size={18} className="text-green-500" /> : <Copy size={18} />}
-                    {linkCopied ? t('common.copied') : hasMatchLink ? t('gameEnd.copyLink') : t('gameEnd.copyMessage')}
-                  </button>
-                </div>
-              </div>
-            );
-          })()}
+          {/* Share Result Card Button */}
+          {!isPending && (
+            <Button
+              variant="gold"
+              className="w-full gap-2"
+              onClick={() => setShowShareCard(true)}
+            >
+              <Share2 size={18} />
+              {isWinner ? t('gameEnd.bragWin') : t('gameEnd.shareMatch')}
+            </Button>
+          )}
 
           {/* Players List */}
           <div className="space-y-2">
@@ -792,6 +740,21 @@ export function GameEndScreen({
           </p>
         </div>
       </Card>
+
+      {/* Premium Share Result Card Modal */}
+      <ShareResultCard
+        open={showShareCard}
+        onClose={() => setShowShareCard(false)}
+        isWinner={isWinner}
+        gameType={gameType}
+        winnerWallet={winner}
+        loserWallet={players.find(p => p.address !== winner)?.address || null}
+        myWallet={myAddress}
+        solWonLamports={payoutInfo ? Math.round(payoutInfo.winnerPayout * LAMPORTS_PER_SOL) : 0}
+        solLostLamports={stakeLamports}
+        finishedAt={new Date().toISOString()}
+        roomPda={roomPda}
+      />
     </div>
   );
 }
