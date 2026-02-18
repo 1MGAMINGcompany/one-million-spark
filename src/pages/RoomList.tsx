@@ -14,7 +14,7 @@ import {
   AlertTriangle,
   Coins,
   Clock,
-  
+  Zap,
   Trophy,
   Gamepad,
   Settings2
@@ -241,6 +241,15 @@ export default function RoomList() {
           </p>
         </div>
         <div className="flex gap-2">
+          <Button
+            variant="gold"
+            size="sm"
+            onClick={() => navigate("/quick-match")}
+            className="gap-1"
+          >
+            <Zap className="h-4 w-4" />
+            {t("quickMatch.title")}
+          </Button>
           <Button 
             variant="outline" 
             size="icon"
@@ -254,7 +263,6 @@ export default function RoomList() {
           </Button>
           <Button 
             onClick={() => {
-              // Smart blocking: use pre-computed blockingRoom from hook
               console.log("[RoomList] Create clicked, blockingRoom:", hookBlockingRoom?.pda?.slice(0, 8));
               if (hookBlockingRoom) {
                 console.log("[RoomList] BLOCKED - showing modal");

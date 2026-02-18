@@ -913,5 +913,22 @@
     "emailLoseSubject": "Ich habe gerade {{game}} auf 1M GAMING gespielt",
     "emailWinBody": "Ich habe {{amount}} SOL beim {{game}} gewonnen!\nSchau es dir an: {{link}}",
     "emailLoseBody": "Gerade {{game}} auf 1M GAMING gespielt.\nMatch-Link: {{link}}"
+  },
+  "quickMatch": {
+    "title": "Schnelles Spiel",
+    "selectGame": "Spiel Wählen",
+    "selectStake": "Einsatz Wählen",
+    "free": "Kostenlos",
+    "findMatch": "Spiel Finden",
+    "searching": "Suche nach Gegner...",
+    "matchFound": "Spiel gefunden!",
+    "noOpponent": "Noch kein Gegner gefunden",
+    "keepSearching": "Weiter Suchen",
+    "playAI": "Gegen KI Spielen (Kostenlos)",
+    "cancel": "Abbrechen",
+    "connectFirst": "Anmelden zum Spielen",
+    "creatingRoom": "Raum wird erstellt...",
+    "joiningRoom": "Spiel beitreten...",
+    "secondsLeft": "{{seconds}}s"
   }
 }

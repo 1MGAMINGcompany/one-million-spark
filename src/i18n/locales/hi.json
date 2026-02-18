@@ -903,5 +903,22 @@
     "emailLoseSubject": "मैंने अभी 1M GAMING पर {{game}} खेला",
     "emailWinBody": "मैंने {{game}} खेलकर {{amount}} SOL जीता!\nदेखें: {{link}}",
     "emailLoseBody": "अभी 1M GAMING पर {{game}} खेला।\nमैच लिंक: {{link}}"
+  },
+  "quickMatch": {
+    "title": "क्विक मैच",
+    "selectGame": "गेम चुनें",
+    "selectStake": "दांव चुनें",
+    "free": "मुफ़्त",
+    "findMatch": "मैच खोजें",
+    "searching": "प्रतिद्वंद्वी खोज रहे हैं...",
+    "matchFound": "मैच मिल गया!",
+    "noOpponent": "अभी तक कोई प्रतिद्वंद्वी नहीं मिला",
+    "keepSearching": "खोजते रहें",
+    "playAI": "AI के विरुद्ध खेलें (मुफ़्त)",
+    "cancel": "रद्द करें",
+    "connectFirst": "खेलने के लिए साइन इन करें",
+    "creatingRoom": "कमरा बना रहे हैं...",
+    "joiningRoom": "मैच में शामिल हो रहे हैं...",
+    "secondsLeft": "{{seconds}}से"
   }
 }

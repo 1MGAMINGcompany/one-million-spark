@@ -910,5 +910,22 @@
     "emailLoseSubject": "1M GAMING で{{game}}をプレイしました",
     "emailWinBody": "{{game}}で {{amount}} SOL 獲得！\nチェック：{{link}}",
     "emailLoseBody": "1M GAMING で{{game}}をプレイ。\n試合リンク：{{link}}"
+  },
+  "quickMatch": {
+    "title": "クイックマッチ",
+    "selectGame": "ゲームを選択",
+    "selectStake": "ステークを選択",
+    "free": "無料",
+    "findMatch": "マッチを探す",
+    "searching": "対戦相手を検索中...",
+    "matchFound": "マッチが見つかりました！",
+    "noOpponent": "まだ対戦相手が見つかりません",
+    "keepSearching": "検索を続ける",
+    "playAI": "AI対戦（無料）",
+    "cancel": "キャンセル",
+    "connectFirst": "プレイするにはログイン",
+    "creatingRoom": "ルームを作成中...",
+    "joiningRoom": "マッチに参加中...",
+    "secondsLeft": "{{seconds}}秒"
   }
 }

@@ -26,6 +26,7 @@ import RoomRouter from "./pages/RoomRouter";
 import PlayRoom from "./pages/PlayRoom";
 import { GameRedirect } from "./components/GameRedirect";
 import PlayAILobby from "./pages/PlayAILobby";
+import QuickMatch from "./pages/QuickMatch";
 import ChessAI from "./pages/ChessAI";
 import DominosAI from "./pages/DominosAI";
 import BackgammonAI from "./pages/BackgammonAI";
@@ -104,6 +105,7 @@ const AppContent = () => {
           {/* Legacy routes redirect to canonical /room/:pda - slug is IGNORED */}
           <Route path="/game/:slug/:roomPda" element={<GameRedirect />} />
           <Route path="/play-ai" element={<PlayAILobby />} />
+          <Route path="/quick-match" element={<QuickMatch />} />
           <Route path="/play-ai/chess" element={<ChessAI />} />
           <Route path="/play-ai/dominos" element={<DominosAI />} />
           <Route path="/play-ai/backgammon" element={<BackgammonAI />} />

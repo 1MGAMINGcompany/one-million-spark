@@ -1404,5 +1404,22 @@
     "emailLoseSubject": "I just played {{game}} on 1M GAMING",
     "emailWinBody": "I won {{amount}} SOL playing {{game}}!\nCheck it out: {{link}}",
     "emailLoseBody": "Just played {{game}} on 1M GAMING.\nMatch link: {{link}}"
+  },
+  "quickMatch": {
+    "title": "Quick Match",
+    "selectGame": "Select Game",
+    "selectStake": "Select Stake",
+    "free": "Free",
+    "findMatch": "Find Match",
+    "searching": "Searching for opponent...",
+    "matchFound": "Match found!",
+    "noOpponent": "No opponent found yet",
+    "keepSearching": "Keep Searching",
+    "playAI": "Play vs AI (Free)",
+    "cancel": "Cancel",
+    "connectFirst": "Sign in to play",
+    "creatingRoom": "Creating room...",
+    "joiningRoom": "Joining match...",
+    "secondsLeft": "{{seconds}}s"
   }
 }
