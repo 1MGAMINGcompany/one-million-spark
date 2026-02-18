@@ -203,7 +203,9 @@
     "roomList": "Lista de Salas",
     "wallet": "Carteira",
     "soundOn": "Som LIGADO",
-    "soundOff": "Som DESLIGADO"
+    "soundOff": "Som DESLIGADO",
+    "leaderboard": "Classificação",
+    "myProfile": "Meu Perfil"
   },
   "hero": {
     "badge": "JOGOS DE HABILIDADE PREMIUM",
@@ -681,7 +683,9 @@
     "gameRules": "Regras do Jogo",
     "termsOfService": "Termos de Serviço",
     "support": "Suporte",
-    "privacyPolicy": "Política de Privacidade"
+    "privacyPolicy": "Política de Privacidade",
+    "legalAndSupport": "Legal e Suporte",
+    "helpGuides": "Ajuda e Guias"
   },
   "gameRules": {
     "title": "Regras do Jogo",

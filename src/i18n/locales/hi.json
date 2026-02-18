@@ -213,7 +213,9 @@
     "roomList": "रूम सूची",
     "wallet": "वॉलेट",
     "soundOn": "ध्वनि चालू",
-    "soundOff": "ध्वनि बंद"
+    "soundOff": "ध्वनि बंद",
+    "leaderboard": "लीडरबोर्ड",
+    "myProfile": "मेरी प्रोफ़ाइल"
   },
   "hero": {
     "badge": "प्रीमियम स्किल गेमिंग",
@@ -612,7 +614,9 @@
     "gameRules": "खेल के नियम",
     "termsOfService": "सेवा की शर्तें",
     "support": "सहायता",
-    "privacyPolicy": "गोपनीयता नीति"
+    "privacyPolicy": "गोपनीयता नीति",
+    "legalAndSupport": "कानूनी और सहायता",
+    "helpGuides": "सहायता और गाइड"
   },
   "gameRules": {
     "title": "खेल के नियम",

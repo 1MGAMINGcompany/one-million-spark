@@ -200,7 +200,9 @@
     "roomList": "ルーム一覧",
     "wallet": "ウォレット",
     "soundOn": "サウンドON",
-    "soundOff": "サウンドOFF"
+    "soundOff": "サウンドOFF",
+    "leaderboard": "ランキング",
+    "myProfile": "マイプロフィール"
   },
   "common": {
     "loading": "読み込み中...",
@@ -619,7 +621,9 @@
     "gameRules": "ゲームルール",
     "termsOfService": "利用規約",
     "support": "サポート",
-    "privacyPolicy": "プライバシーポリシー"
+    "privacyPolicy": "プライバシーポリシー",
+    "legalAndSupport": "法的情報とサポート",
+    "helpGuides": "ヘルプとガイド"
   },
   "gameRules": {
     "title": "ゲームルール",
