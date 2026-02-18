@@ -6,6 +6,7 @@ import { SoundToggle } from "@/components/SoundToggle";
 import DominoTile3D, { DominoTileBack } from "@/components/DominoTile3D";
 import { useSound } from "@/contexts/SoundContext";
 import { useTranslation } from "react-i18next";
+import { usePresenceHeartbeat } from "@/hooks/usePresenceHeartbeat";
 import GoldConfettiExplosion from "@/components/GoldConfettiExplosion";
 
 type Difficulty = "easy" | "medium" | "hard";
@@ -44,6 +45,7 @@ const shuffle = <T,>(array: T[]): T[] => {
 
 const DominosAI = () => {
   const { t } = useTranslation();
+  usePresenceHeartbeat();
   const [searchParams] = useSearchParams();
   const { play } = useSound();
   const rawDifficulty = searchParams.get("difficulty");

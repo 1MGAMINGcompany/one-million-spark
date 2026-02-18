@@ -5,6 +5,7 @@ import { ArrowLeft, RotateCcw, Trophy, Gem, Star } from "lucide-react";
 import { SoundToggle } from "@/components/SoundToggle";
 import { useSound } from "@/contexts/SoundContext";
 import { useTranslation } from "react-i18next";
+import { usePresenceHeartbeat } from "@/hooks/usePresenceHeartbeat";
 
 type Difficulty = "easy" | "medium" | "hard";
 type Player = "gold" | "obsidian";
@@ -54,6 +55,7 @@ const initializeBoard = (): (Piece | null)[][] => {
 
 const CheckersAI = () => {
   const { t } = useTranslation();
+  usePresenceHeartbeat();
   const [searchParams] = useSearchParams();
   const difficulty = (searchParams.get("difficulty") as Difficulty) || "medium";
   const { play } = useSound();

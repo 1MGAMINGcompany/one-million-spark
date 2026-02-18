@@ -8,6 +8,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { usePresenceHeartbeat } from "@/hooks/usePresenceHeartbeat";
 import { ArrowLeft, RotateCcw, Music, Music2, Volume2, VolumeX } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useSound } from "@/contexts/SoundContext";
@@ -24,6 +25,7 @@ import TurnIndicator from "@/components/ludo/TurnIndicator";
 
 const LudoAI = () => {
   const { t } = useTranslation();
+  usePresenceHeartbeat();
   const [searchParams] = useSearchParams();
   const difficulty = (searchParams.get("difficulty") as Difficulty) || "medium";
   const { play, soundEnabled, toggleSound } = useSound();

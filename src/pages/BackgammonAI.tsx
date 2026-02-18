@@ -8,6 +8,7 @@ import { Dice3D, CheckerStack } from "@/components/BackgammonPieces";
 import { BackgammonCheckerAnimation, useCheckerAnimation } from "@/components/BackgammonCheckerAnimation";
 import GoldConfettiExplosion from "@/components/GoldConfettiExplosion";
 import { cn } from "@/lib/utils";
+import { usePresenceHeartbeat } from "@/hooks/usePresenceHeartbeat";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useSound } from "@/contexts/SoundContext";
 import { useTranslation } from "react-i18next";
@@ -86,6 +87,7 @@ const formatResultType = (resultType: GameResultType | null): { label: string; m
 
 const BackgammonAI = () => {
   const { t } = useTranslation();
+  usePresenceHeartbeat();
   const [searchParams] = useSearchParams();
   const isMobile = useIsMobile();
   const { play } = useSound();
