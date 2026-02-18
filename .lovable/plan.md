@@ -1,69 +1,83 @@
 
 
-# Add "Already have a wallet?" Button to Quick Match
+# Fix Cancel Buttons to Prompt Fund Recovery
 
-## Overview
+## Problem
 
-Add a small, sleek secondary button below the Privy login button on the Quick Match page. When tapped, it expands to reveal the existing `ConnectWalletGate` wallet picker (Phantom / Solflare / Backpack).
+When a user creates a staked Quick Match room and presses "Cancel" (during searching or after timeout), `navigate(-1)` fires but nothing visible happens -- the user's SOL stays locked in the on-chain vault with no way to get it back from this screen.
+
+## Solution
+
+Replace the simple `navigate(-1)` cancel behavior with a recovery flow:
+
+1. **Free games (stake = 0)**: Cancel navigates back immediately (no funds to recover).
+2. **Staked games (stake > 0)**: Cancel triggers the existing `RecoverFundsButton` logic -- calls the `recover-funds` edge function, shows a confirmation dialog with the stake amount, user signs the cancel transaction, funds are returned, then navigates away.
 
 ## Changes
 
 ### File: `src/pages/QuickMatch.tsx`
 
-**1. Add import** for `ConnectWalletGate`, `Collapsible`, `CollapsibleContent`, `CollapsibleTrigger`, and `Wallet` icon.
+1. **Import** `RecoverFundsButton` component (no -- actually we'll inline the recover logic to keep UX seamless, reusing the same edge function pattern from `RecoverFundsButton`).
 
-**2. Add a ref** to control the Collapsible open state: `const [walletOpen, setWalletOpen] = useState(false)`.
+   Actually, the simplest approach: for staked games, replace the cancel buttons with the existing `RecoverFundsButton` component, styled to match (ghost variant, full width). For free games, keep `navigate(-1)`.
 
-**3. Update the not-connected CTA block** (lines 390-394) to add the secondary button:
+   Better approach for cleaner UX: Add a `handleCancel` function that:
+   - If `selectedStake === 0` or no `createdRoomPda`: just `navigate(-1)`
+   - If staked + room created: call `recover-funds` edge function, show the `AlertDialog` confirmation, sign tx, then navigate away
 
-```
-{!isConnected ? (
-  <div className="text-center space-y-3">
-    <p className="text-sm text-muted-foreground">{t("quickMatch.connectFirst")}</p>
-    <PrivyLoginButton />
-    
-    {/* Secondary: external wallet */}
-    <Collapsible open={walletOpen} onOpenChange={setWalletOpen}>
-      <CollapsibleTrigger asChild>
-        <button className="mt-2 w-full inline-flex items-center justify-center gap-2 
-          rounded-lg border border-primary/40 px-4 py-2.5 text-xs font-medium 
-          text-muted-foreground hover:text-primary hover:border-primary 
-          transition-all duration-200">
-          <Wallet size={14} />
-          {t("wallet.alreadyHaveWallet")}
-        </button>
-      </CollapsibleTrigger>
-      <CollapsibleContent className="pt-3">
-        <ConnectWalletGate />
-      </CollapsibleContent>
-    </Collapsible>
-  </div>
-) : ( ... )}
-```
+2. **Add state**: `showRecoverDialog` (boolean), `recoverPendingTx` (string | null), `recoverStakeAmount` (string | null), `isRecovering` (boolean)
 
-The button uses an outline style with gold/primary border, small text, and a wallet icon -- visually subordinate to the primary Privy button.
+3. **Add `handleCancel` function**:
+   - For free games or no room: `navigate(-1)`
+   - For staked games: invoke `recover-funds` edge function with `roomPda` and `callerWallet`
+   - On `can_cancel` response: show confirmation dialog
+   - On `already_resolved`: toast and navigate away
+   - On error: show toast, still allow navigate away
 
-### File: `src/i18n/locales/en.json` (and all 9 other locale files)
+4. **Add `executeRecoverAndLeave` function**:
+   - Deserialize unsigned tx from edge function response
+   - User signs transaction
+   - Send and confirm on-chain
+   - Toast success, navigate away
 
-Add one new key under the `wallet` section:
+5. **Add AlertDialog** for recovery confirmation (reuse exact pattern from `RecoverFundsButton`)
+
+6. **Update both cancel buttons** (searching phase + timeout phase) to call `handleCancel` instead of `navigate(-1)`
+
+7. **Add imports**: `AlertDialog`, `AlertDialogAction`, `AlertDialogCancel`, `AlertDialogContent`, `AlertDialogDescription`, `AlertDialogFooter`, `AlertDialogHeader`, `AlertDialogTitle` from UI components. Also `useConnection` from `@solana/wallet-adapter-react`, `Transaction` from `@solana/web3.js`, `bs58`.
+
+### Localization (all 10 locale files)
+
+Add new keys under `quickMatch`:
 
 | Key | English |
 |-----|---------|
-| `wallet.alreadyHaveWallet` | `"Already have a wallet? Connect Phantom / Solflare / Backpack"` |
+| `recoverFunds` | "Cancel & Recover Funds" |
+| `recoveringFunds` | "Recovering funds..." |
+| `fundsRecovered` | "Room cancelled! Funds returned to your wallet." |
+| `recoverConfirmTitle` | "Cancel Room & Recover Funds" |
+| `recoverConfirmDesc` | "This will cancel the room and return your stake of {{amount}} SOL to your wallet. You will need to sign a transaction." |
+| `confirmSign` | "Confirm & Sign" |
 
-Translations for all 10 locales.
+## Technical Details
 
-## What This Does NOT Touch
-
-- No game logic, matchmaking, timers, or Solana program changes
-- No changes to `ConnectWalletGate` internals
-- No auto-connect behavior (user must explicitly select a wallet)
-- No changes to the connected state UI (Find Match button)
+- The `recover-funds` edge function already handles the `can_cancel` flow for waiting rooms with 1 participant -- which is exactly the Quick Match scenario (creator waiting, no opponent joined)
+- The unsigned transaction is returned as a base58-encoded `Transaction`, deserialized, signed by the user, then sent on-chain
+- For free games, no on-chain vault exists so we just navigate away
+- This does NOT touch any game logic, settlement, forfeits, or timers
 
 ## Files Modified
 
 | File | Change |
 |------|--------|
-| `src/pages/QuickMatch.tsx` | Add wallet collapsible with styled button in not-connected state |
-| `src/i18n/locales/*.json` (10 files) | Add `wallet.alreadyHaveWallet` key |
-
+| `src/pages/QuickMatch.tsx` | Add recover flow, AlertDialog, handleCancel function |
+| `src/i18n/locales/en.json` | Add 6 new quickMatch keys |
+| `src/i18n/locales/es.json` | Add 6 new quickMatch keys |
+| `src/i18n/locales/ar.json` | Add 6 new quickMatch keys |
+| `src/i18n/locales/pt.json` | Add 6 new quickMatch keys |
+| `src/i18n/locales/fr.json` | Add 6 new quickMatch keys |
+| `src/i18n/locales/de.json` | Add 6 new quickMatch keys |
+| `src/i18n/locales/zh.json` | Add 6 new quickMatch keys |
+| `src/i18n/locales/it.json` | Add 6 new quickMatch keys |
+| `src/i18n/locales/ja.json` | Add 6 new quickMatch keys |
+| `src/i18n/locales/hi.json` | Add 6 new quickMatch keys |
