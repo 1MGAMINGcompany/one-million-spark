@@ -7,7 +7,7 @@ import { Chess, Square, PieceSymbol, Color } from "chess.js";
 import { ChessBoardPremium } from "@/components/ChessBoardPremium";
 import { useCaptureAnimations } from "@/components/CaptureAnimationLayer";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, RotateCcw, Gem, Star, Flag, Users, Wifi, WifiOff, LogOut } from "lucide-react";
+import { ArrowLeft, RotateCcw, Gem, Star, Flag, Users, Wifi, WifiOff, LogOut, Loader2 } from "lucide-react";
 import { ForfeitConfirmDialog } from "@/components/ForfeitConfirmDialog";
 import { LeaveMatchModal, MatchState } from "@/components/LeaveMatchModal";
 import { useForfeit } from "@/hooks/useForfeit";
@@ -25,6 +25,7 @@ import { useRankedReadyGate } from "@/hooks/useRankedReadyGate";
 import { useStartRoll } from "@/hooks/useStartRoll";
 import { useTurnTimer, DEFAULT_RANKED_TURN_TIME } from "@/hooks/useTurnTimer";
 import { useDurableGameSync, GameMove } from "@/hooks/useDurableGameSync";
+import { useAutoSettlement } from "@/hooks/useAutoSettlement";
 import TurnStatusHeader from "@/components/TurnStatusHeader";
 import TurnHistoryDrawer from "@/components/TurnHistoryDrawer";
 import NotificationToggle from "@/components/NotificationToggle";
@@ -726,6 +727,33 @@ const ChessGame = () => {
     return getOpponentWallet(roomPlayers, address);
   }, [winnerWallet, gameOver, gameStatus, address, roomPlayers]);
 
+  // Auto-settlement hook - triggers settle-game edge function when game ends
+  // Winner wallet is determined server-side from game_sessions.game_state
+  const autoSettlement = useAutoSettlement({
+    roomPda,
+    winner: winnerAddress,
+    reason: "gameover",
+    isRanked: isRankedGame,
+  });
+
+  // Show toast when settlement completes
+  useEffect(() => {
+    if (autoSettlement.result?.success && autoSettlement.result.signature) {
+      toast({
+        title: "On-chain settlement complete",
+        description: `Tx: ${autoSettlement.result.signature.slice(0, 8)}...`,
+      });
+    } else if (autoSettlement.result && !autoSettlement.result.success && autoSettlement.result.error) {
+      if (!autoSettlement.result.alreadySettled && !autoSettlement.result.alreadyClosed) {
+        toast({
+          title: "Settlement issue",
+          description: autoSettlement.result.error,
+          variant: "destructive",
+        });
+      }
+    }
+  }, [autoSettlement.result]);
+
   // Players for GameEndScreen
   const gameEndPlayers = useMemo(() => {
     return turnPlayers.map(tp => ({
@@ -1392,8 +1420,19 @@ const ChessGame = () => {
           onExit={() => navigate("/room-list")}
           result={gameStatus.includes("Checkmate") ? "Checkmate" : gameStatus.includes("Stalemate") ? "Stalemate" : undefined}
           roomPda={roomPda}
-          isStaked={false}
+          isStaked={isRankedGame}
         />
+      )}
+
+      {/* Settlement status overlay - show while settling */}
+      {autoSettlement.isSettling && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-[60] flex items-center justify-center">
+          <div className="bg-card border border-primary/30 rounded-xl p-6 text-center space-y-4">
+            <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto" />
+            <p className="text-lg font-semibold">Settling on-chain...</p>
+            <p className="text-sm text-muted-foreground">Finalizing payout and closing room</p>
+          </div>
+        </div>
       )}
 
       {/* Rematch Modal */}
