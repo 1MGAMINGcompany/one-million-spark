@@ -10,6 +10,7 @@ const categoryMap: Record<string, string> = {
   "compare-solana-wallets-gaming": "wallet",
   "solana-skill-games-not-luck": "skill",
   "play-real-money-chess-solana": "skill",
+  "ludo-skill-or-luck-competitive-strategy": "skill",
   "server-enforced-turn-timeouts-supabase-solana": "engineering",
 };
 

@@ -445,6 +445,100 @@ export const helpArticles: HelpArticleData[] = [
     ),
   },
   {
+    slug: "ludo-skill-or-luck-competitive-strategy",
+    title: "Is Ludo a Game of Skill or Luck? The Strategy Behind Competitive Ludo",
+    metaDescription: "Is Ludo really just luck? Discover why competitive Ludo is a skill-based strategy game involving probability, positioning, and tactical decisions.",
+    keywords: ["is ludo skill or luck", "competitive ludo strategy", "ludo probability", "ludo tactics", "skill-based ludo", "ludo board control"],
+    cardDescription: "Discover why competitive Ludo is a skill-based strategy game involving probability, positioning, and tactical decisions.",
+    content: () => (
+      <article className="prose prose-invert max-w-none">
+        <h1 className="text-3xl md:text-4xl font-bold text-primary mb-6">Is Ludo a Game of Skill or Luck? The Strategy Behind Competitive Ludo</h1>
+
+        <p className="text-foreground/80 text-lg leading-relaxed">
+          At first glance, Ludo may appear to be a simple dice game. But competitive Ludo players understand something deeper — the outcome is heavily influenced by decision-making, risk management, and strategic positioning.
+        </p>
+        <p className="text-foreground/70 leading-relaxed">
+          While dice rolls introduce probability, the player controls how that probability is used. In competitive formats, long-term results consistently favor skilled players.
+        </p>
+
+        <h2 className="text-2xl font-semibold text-primary/90 mt-10 mb-4">The Role of Probability</h2>
+        <p className="text-foreground/70 leading-relaxed">
+          Every dice roll creates multiple possible outcomes. Skilled players:
+        </p>
+        <ul className="list-disc list-inside space-y-2 text-foreground/70">
+          <li>Calculate safe vs aggressive moves</li>
+          <li>Evaluate risk vs reward</li>
+          <li>Anticipate opponent positioning</li>
+          <li>Control board tempo</li>
+        </ul>
+        <p className="text-foreground/70 leading-relaxed">
+          Winning is not about a single roll — it is about maximizing advantage across dozens of decisions.
+        </p>
+
+        <h2 className="text-2xl font-semibold text-primary/90 mt-10 mb-4">Strategic Positioning</h2>
+        <p className="text-foreground/70 leading-relaxed">
+          In competitive Ludo:
+        </p>
+        <ul className="list-disc list-inside space-y-2 text-foreground/70">
+          <li>Blocking opponents matters</li>
+          <li>Timing piece releases is critical</li>
+          <li>Safe zones must be used intentionally</li>
+          <li>Sacrificing short-term gain for long-term control wins games</li>
+        </ul>
+        <p className="text-foreground/70 leading-relaxed">
+          Top players do not move randomly. Every piece placement is deliberate.
+        </p>
+
+        <h2 className="text-2xl font-semibold text-primary/90 mt-10 mb-4">Psychological Play</h2>
+        <p className="text-foreground/70 leading-relaxed">
+          Ludo is also a mind game. Experienced players:
+        </p>
+        <ul className="list-disc list-inside space-y-2 text-foreground/70">
+          <li>Force opponents into bad trades</li>
+          <li>Apply pressure at key board moments</li>
+          <li>Manipulate tempo</li>
+          <li>Punish predictable behavior</li>
+        </ul>
+        <p className="text-foreground/70 leading-relaxed">
+          This separates casual play from competitive play.
+        </p>
+
+        <h2 className="text-2xl font-semibold text-primary/90 mt-10 mb-4">Luck vs Long-Term Skill</h2>
+        <p className="text-foreground/70 leading-relaxed">
+          Short-term outcomes may feel random. But over 50 or 100 games, skilled players consistently outperform beginners. That is the definition of a skill-based game.
+        </p>
+
+        <h2 className="text-2xl font-semibold text-primary/90 mt-10 mb-4">Competitive Online Ludo</h2>
+        <p className="text-foreground/70 leading-relaxed">
+          Modern online Ludo platforms have evolved the game into:
+        </p>
+        <ul className="list-disc list-inside space-y-2 text-foreground/70">
+          <li>Multiplayer competitive matches</li>
+          <li>Timed turns</li>
+          <li>Structured strategy formats</li>
+          <li>Skill-based competitive environments</li>
+        </ul>
+        <p className="text-foreground/70 leading-relaxed">
+          Players who study strategy, probability, and board control have measurable advantages.
+        </p>
+
+        <h2 className="text-2xl font-semibold text-primary/90 mt-10 mb-4">Final Thoughts</h2>
+        <p className="text-foreground/70 leading-relaxed">
+          Ludo is more than a casual board game. It is a probability management challenge, a positioning strategy battle, and a psychological contest. For players seeking competitive depth, Ludo offers far more than chance.
+        </p>
+        <p className="text-foreground/70 leading-relaxed">
+          Ready to test your skills? Connect your wallet and play competitive Ludo for real SOL on <Link to="/" className="text-primary hover:text-primary/80">1MGAMING</Link>.
+        </p>
+
+        <div className="mt-10 pt-6 border-t border-border">
+          <p className="text-foreground/60 text-sm">
+            Related guides: <Link to="/help/solana-skill-games-not-luck" className="text-primary hover:text-primary/80">Solana Skill Games — Skill Not Luck</Link> · <Link to="/help/play-real-money-chess-solana" className="text-primary hover:text-primary/80">Play Real Money Chess on Solana</Link>
+          </p>
+        </div>
+      </article>
+    ),
+  },
+  {
     slug: "server-enforced-turn-timeouts-supabase-solana",
     title: "Server-Enforced Turn Timeouts with Supabase + Solana (1MGaming Engineering Notes)",
     metaDescription: "How 1MGaming built server-enforced turn timeouts using Supabase RPCs and Solana settlement to prevent stalling and ensure fair play in multiplayer games.",
