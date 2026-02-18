@@ -1,48 +1,43 @@
 
 
-# Count AI Players in "Browsing Now" (Heartbeat Only)
+# Fix: Let Players Play AI While Waiting for Opponents
 
-## Overview
-Extract the heartbeat logic from `useLiveStats` into a standalone `usePresenceHeartbeat` hook, then add it to all AI game pages. The indicator widget stays only on Home, Quick Match, and Room List -- no UI changes on AI pages.
+## Problem
+The "play AI while waiting" flow already works mechanically -- GlobalActiveRoomBanner (in App.tsx) shows on AI pages and auto-redirects when an opponent joins. However, the `maybe_apply_waiting_timeout` database function cancels rooms after **120 seconds**, so the room disappears from discovery before anyone can realistically find it. This is the same issue identified in the previous conversation.
 
-## Changes
+## What Similar Apps Do
+- **Chess.com / Lichess**: Queue stays active for 5-15+ minutes. Players can do puzzles, play bots, or browse freely. A persistent banner or popup fires when a match is found.
+- **Backgammon Galaxy**: Persistent background queue with notification bar, no short timeout.
 
-### 1. New hook: `src/hooks/usePresenceHeartbeat.ts`
-A lightweight hook that only sends heartbeats (no stats fetching, no state). It reuses the same `getSessionId()` pattern and calls the existing `live-stats` edge function with `action: "heartbeat"`.
+The common pattern: long-lived queue + background notification. 1M Gaming already has the notification/redirect part; it just needs the timeout fix.
 
-- On mount: sends heartbeat immediately
-- Every 30 seconds: sends heartbeat
-- On unmount: clears interval
-- No UI return value, no state
+## Single Change Required
 
-### 2. Refactor `useLiveStats` to use `usePresenceHeartbeat`
-Remove the duplicate heartbeat logic from `useLiveStats` and have it call `usePresenceHeartbeat()` internally. This keeps the stats-fetching behavior unchanged while sharing the same session ID and heartbeat mechanism.
+### Database Migration: Increase waiting timeout from 120s to 900s (15 minutes)
 
-### 3. Add `usePresenceHeartbeat()` to AI pages
-Import and call the hook in these 6 pages (one line each, no UI rendered):
+Update the `maybe_apply_waiting_timeout` function to change one variable:
 
-- `src/pages/PlayAILobby.tsx` -- the /play-ai lobby
-- `src/pages/ChessAI.tsx`
-- `src/pages/DominosAI.tsx`
-- `src/pages/BackgammonAI.tsx`
-- `src/pages/CheckersAI.tsx`
-- `src/pages/LudoAI.tsx`
+```sql
+-- Before
+v_waiting_timeout_seconds INTEGER := 120;
 
-### What does NOT change
-- No game logic, timers, matchmaking, Solana, or RPC changes
-- No edge function changes (same `live-stats` endpoint)
-- No database changes
-- LiveActivityIndicator stays only on Home, Quick Match, Room List
-- No new dependencies
-
-## Technical Detail
-
-```text
-usePresenceHeartbeat()          -- new, heartbeat-only hook
-  |
-  +-- used by useLiveStats()   -- existing, adds stats polling
-  +-- used by AI pages         -- new, silent heartbeat only
+-- After  
+v_waiting_timeout_seconds INTEGER := 900;
 ```
 
-The shared `getSessionId()` function ensures the same session ID is used regardless of which hook runs first, so navigating from Home to an AI page won't create a duplicate presence entry.
+This aligns with:
+- The client-side `ROOM_MAX_AGE_MS` (15 minutes) used by room list filtering
+- The `cleanup-stale-rooms` cron job (also 15 minutes)
+
+### What Already Works (No Changes Needed)
+- **GlobalActiveRoomBanner**: Mounted globally in App.tsx, visible on AI game pages, shows "Waiting for opponent" with game info
+- **Auto-redirect**: When opponent joins (detected via polling + realtime subscription), plays a sound, shows a notification, and navigates to `/play/:pda`
+- **Browser notification**: Fires even if the tab is backgrounded
+- **Heartbeat tracking**: AI pages already send presence heartbeats (implemented in previous task)
+
+### Risk Assessment
+- **Low risk**: Only affects how long a solo waiting room stays discoverable
+- Players can still manually cancel anytime
+- On-chain room already stays open until explicitly cancelled
+- No game logic, settlement, or fund flow changes
 
