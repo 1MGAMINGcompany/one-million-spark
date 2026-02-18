@@ -44,11 +44,11 @@ export const NotificationToggle = memo(function NotificationToggle({
   showLabel = true,
   className,
 }: NotificationToggleProps) {
+  const { t } = useTranslation();
   const [showIOSDialog, setShowIOSDialog] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
   const handleToggle = useCallback(async () => {
-    // If on iOS and not PWA, show installation dialog
     if (isIOS() && !isPWA() && !enabled) {
       setShowIOSDialog(true);
       return;
@@ -78,10 +78,10 @@ export const NotificationToggle = memo(function NotificationToggle({
             isLoading && "opacity-50 cursor-not-allowed",
             className
           )}
-          title={enabled ? "Turn notifications enabled" : "Turn notifications disabled"}
+          title={enabled ? t('notifications.notifyWhenTurn') : t('notifications.allowNotifications')}
         >
           <Icon className="w-3.5 h-3.5" />
-          {showLabel && <span>{enabled ? "On" : "Off"}</span>}
+          {showLabel && <span>{enabled ? t('notifications.on') : t('notifications.off')}</span>}
         </button>
         <IOSInstallDialog open={showIOSDialog} onOpenChange={setShowIOSDialog} />
       </>
@@ -100,7 +100,7 @@ export const NotificationToggle = memo(function NotificationToggle({
         >
           <Icon className="w-4 h-4" />
           {showLabel && (
-            <span>{enabled ? "Notifications On" : "Enable Notifications"}</span>
+            <span>{enabled ? t('notifications.notificationsOn') : t('notifications.enableNotifications')}</span>
           )}
         </Button>
         <IOSInstallDialog open={showIOSDialog} onOpenChange={setShowIOSDialog} />
@@ -108,7 +108,6 @@ export const NotificationToggle = memo(function NotificationToggle({
     );
   }
 
-  // Default: switch variant
   return (
     <>
       <div
@@ -127,13 +126,13 @@ export const NotificationToggle = memo(function NotificationToggle({
             <Icon className="w-5 h-5" />
           </div>
           <div>
-            <p className="font-medium text-sm">Turn Notifications</p>
+            <p className="font-medium text-sm">{t('notifications.turnNotifications')}</p>
             <p className="text-xs text-muted-foreground">
               {enabled
-                ? "You'll be notified when it's your turn"
+                ? t('notifications.notifyWhenTurn')
                 : hasPermission
-                ? "Get notified when it's your turn"
-                : "Allow notifications to get turn alerts"}
+                ? t('notifications.getTurnAlerts')
+                : t('notifications.allowNotifications')}
             </p>
           </div>
         </div>

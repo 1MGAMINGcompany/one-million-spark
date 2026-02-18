@@ -5,6 +5,7 @@
 
 import { Button } from "@/components/ui/button";
 import { RefreshCw, RotateCcw } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import type { MoveErrorType } from "@/hooks/useSubmitMove";
 
 interface MoveErrorOverlayProps {
@@ -18,6 +19,8 @@ export function MoveErrorOverlay({
   onReReady,
   isResyncing = false 
 }: MoveErrorOverlayProps) {
+  const { t } = useTranslation();
+
   if (!errorType) return null;
 
   return (
@@ -29,9 +32,9 @@ export function MoveErrorOverlay({
               <RotateCcw className="h-6 w-6 text-amber-500" />
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-foreground">Session Reset</h3>
+              <h3 className="text-lg font-semibold text-foreground">{t('moveError.sessionReset')}</h3>
               <p className="mt-1 text-sm text-muted-foreground">
-                Session reset for safety. Tap Re-Ready to continue.
+                {t('moveError.sessionResetDesc')}
               </p>
             </div>
             <Button 
@@ -39,7 +42,7 @@ export function MoveErrorOverlay({
               className="w-full"
               size="lg"
             >
-              Re-Ready
+              {t('moveError.reReady')}
             </Button>
           </div>
         )}
@@ -50,9 +53,9 @@ export function MoveErrorOverlay({
               <RefreshCw className={`h-6 w-6 text-blue-500 ${isResyncing ? "animate-spin" : ""}`} />
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-foreground">Out of Sync</h3>
+              <h3 className="text-lg font-semibold text-foreground">{t('moveError.outOfSync')}</h3>
               <p className="mt-1 text-sm text-muted-foreground">
-                {isResyncing ? "Resyncing game state…" : "Reconnecting to game…"}
+                {isResyncing ? t('moveError.resyncing') : t('moveError.reconnecting')}
               </p>
             </div>
           </div>
@@ -64,9 +67,9 @@ export function MoveErrorOverlay({
               <RefreshCw className={`h-6 w-6 text-purple-500 ${isResyncing ? "animate-spin" : ""}`} />
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-foreground">Move Conflict Detected</h3>
+              <h3 className="text-lg font-semibold text-foreground">{t('moveError.moveConflict')}</h3>
               <p className="mt-1 text-sm text-muted-foreground">
-                {isResyncing ? "Resolving conflict…" : "Getting latest game state…"}
+                {isResyncing ? t('moveError.resolvingConflict') : t('moveError.gettingLatest')}
               </p>
             </div>
           </div>
