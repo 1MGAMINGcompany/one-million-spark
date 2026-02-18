@@ -456,6 +456,7 @@
     "opponentsTurn": "Turno dell'avversario"
   },
   "wallet": {
+    "signedInAs": "Connesso come",
     "connect": "Seleziona Portafoglio",
     "disconnect": "Disconnetti",
     "wrongNetwork": "Rete Errata",

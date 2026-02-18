@@ -490,6 +490,7 @@
     "opponentsTurn": "प्रतिद्वंद्वी की बारी"
   },
   "wallet": {
+    "signedInAs": "के रूप में लॉगिन",
     "connect": "वॉलेट चुनें",
     "disconnect": "डिस्कनेक्ट करें",
     "wrongNetwork": "गलत नेटवर्क",

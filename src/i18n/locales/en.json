@@ -492,6 +492,7 @@
     "footerNote": "All training sessions are completely free. Master your craft at your own pace."
   },
   "wallet": {
+    "signedInAs": "Signed in as",
     "connect": "Select Wallet",
     "disconnect": "Disconnect",
     "wrongNetwork": "Wrong Network",

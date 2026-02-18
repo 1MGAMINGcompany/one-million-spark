@@ -457,6 +457,7 @@
     "opponentsTurn": "دور الخصم"
   },
   "wallet": {
+    "signedInAs": "مسجل الدخول كـ",
     "connect": "اختر المحفظة",
     "disconnect": "قطع الاتصال",
     "wrongNetwork": "شبكة خاطئة",

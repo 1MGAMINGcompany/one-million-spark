@@ -480,6 +480,7 @@
     "opponentsTurn": "Gegner ist am Zug"
   },
   "wallet": {
+    "signedInAs": "Angemeldet als",
     "connect": "Wallet auswählen",
     "disconnect": "Trennen",
     "wrongNetwork": "Falsches Netzwerk",
