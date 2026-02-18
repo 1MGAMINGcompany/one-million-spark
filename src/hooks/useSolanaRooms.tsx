@@ -345,28 +345,55 @@ export function useSolanaRooms() {
          if (edgeError) {
            console.warn("[RoomList] Edge function error:", edgeError.message);
          } else if (resp?.rows && resp.rows.length > 0) {
-           const sessions = resp.rows as Array<{ room_pda: string; turn_time_seconds: number | null; mode: string | null }>;
-           console.log("[RoomList] Edge function returned", sessions.length, "sessions");
-           
-            const enrichMap = new Map<string, { turnTime: number | null; mode: string | null }>();
-            for (const s of sessions) {
-              enrichMap.set(s.room_pda, { turnTime: s.turn_time_seconds, mode: s.mode });
-            }
+          const sessions = resp.rows as Array<{ room_pda: string; turn_time_seconds: number | null; mode: string | null; status: string | null; created_at: string | null }>;
+            console.log("[RoomList] Edge function returned", sessions.length, "sessions");
             
-            let enrichedCount = 0;
-            for (const room of fetchedRooms) {
-              const dbData = enrichMap.get(room.pda);
-              if (dbData) {
-                if (dbData.turnTime != null && dbData.turnTime > 0) {
-                  room.turnTimeSec = dbData.turnTime;
-                }
-                if (dbData.mode === 'casual' || dbData.mode === 'ranked') {
-                  room.mode = dbData.mode;
-                }
-                enrichedCount++;
-              }
-            }
-            console.log("[RoomList] Enriched", enrichedCount, "of", fetchedRooms.length, "rooms with DB data");
+             const enrichMap = new Map<string, { turnTime: number | null; mode: string | null; status: string | null; createdAt: string | null }>();
+             for (const s of sessions) {
+               enrichMap.set(s.room_pda, { turnTime: s.turn_time_seconds, mode: s.mode, status: s.status, createdAt: s.created_at });
+             }
+             
+             let enrichedCount = 0;
+             for (const room of fetchedRooms) {
+               const dbData = enrichMap.get(room.pda);
+               if (dbData) {
+                 if (dbData.turnTime != null && dbData.turnTime > 0) {
+                   room.turnTimeSec = dbData.turnTime;
+                 }
+                 if (dbData.mode === 'casual' || dbData.mode === 'ranked') {
+                   room.mode = dbData.mode;
+                 }
+                 enrichedCount++;
+               }
+             }
+             console.log("[RoomList] Enriched", enrichedCount, "of", fetchedRooms.length, "rooms with DB data");
+
+             // Filter out stale/cancelled rooms
+             const ROOM_MAX_AGE_MS = 15 * 60 * 1000; // 15 minutes
+             const now = Date.now();
+             const preFilterCount = fetchedRooms.length;
+
+             const filteredRooms = fetchedRooms.filter(room => {
+               const dbData = enrichMap.get(room.pda);
+
+               // If DB says cancelled/finished/void, hide it
+               if (dbData?.status && ['cancelled', 'finished', 'void'].includes(dbData.status)) {
+                 return false;
+               }
+
+               // Age filter: hide rooms older than 15 minutes
+               if (dbData?.createdAt) {
+                 const ageMs = now - new Date(dbData.createdAt).getTime();
+                 if (ageMs > ROOM_MAX_AGE_MS) return false;
+               }
+
+               return true;
+             });
+
+             // Replace fetchedRooms content with filtered results
+             fetchedRooms.length = 0;
+             fetchedRooms.push(...filteredRooms);
+             console.log("[RoomList] Filtered stale rooms:", preFilterCount, "→", fetchedRooms.length);
          } else {
            console.log("[RoomList] No sessions from edge function");
          }
