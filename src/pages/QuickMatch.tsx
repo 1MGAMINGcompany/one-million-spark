@@ -12,7 +12,7 @@ import { useWallet } from "@/hooks/useWallet";
 import { useSolanaRooms } from "@/hooks/useSolanaRooms";
 import { useRoomRealtimeAlert } from "@/hooks/useRoomRealtimeAlert";
 import { useToast } from "@/hooks/use-toast";
-import { GameType, isOpenStatus } from "@/lib/solana-program";
+import { GameType } from "@/lib/solana-program";
 import { getRoomPda } from "@/lib/solana-utils";
 import { AudioManager } from "@/lib/AudioManager";
 import { showBrowserNotification } from "@/lib/pushNotifications";
@@ -70,12 +70,13 @@ export default function QuickMatch() {
 
   const hasNavigatedRef = useRef(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const roomsRef = useRef(rooms);
+  roomsRef.current = rooms;
 
-  // Game name for the selected game type
-  const selectedGameName =
-    GAME_OPTIONS.find((g) => g.type === selectedGame)?.label ?? "Game";
+  // Game key + translated name
   const selectedGameKey =
     GAME_OPTIONS.find((g) => g.type === selectedGame)?.key ?? "chess";
+  const translatedGameName = t(`games.${selectedGameKey}`);
 
   // ── Countdown timer ──
   useEffect(() => {
@@ -109,10 +110,10 @@ export default function QuickMatch() {
       if (hasNavigatedRef.current) return;
       hasNavigatedRef.current = true;
       AudioManager.playPlayerJoined();
-      showBrowserNotification("🎮 Opponent Joined!", `Your ${selectedGameName} match is ready!`, {
+      showBrowserNotification(`🎮 ${t("quickMatch.opponentJoined")}`, t("quickMatch.matchReady", { game: translatedGameName }), {
         requireInteraction: true,
       });
-      toast({ title: t("quickMatch.matchFound"), description: `${selectedGameName} — Let's go!` });
+      toast({ title: t("quickMatch.matchFound"), description: t("quickMatch.letsGo", { game: translatedGameName }) });
       navigate(`/play/${createdRoomPda}`);
     },
   });
@@ -129,7 +130,7 @@ export default function QuickMatch() {
       toast({ title: t("quickMatch.matchFound") });
       navigate(`/play/${createdRoomPda}`);
     }
-  }, [activeRoom, createdRoomPda, phase, navigate, toast, t, selectedGameName]);
+  }, [activeRoom, createdRoomPda, phase, navigate, toast, t]);
 
   // ── Find Match handler ──
   const handleFindMatch = useCallback(async () => {
@@ -150,11 +151,13 @@ export default function QuickMatch() {
     hasNavigatedRef.current = false;
 
     try {
-      // 1. Fetch latest rooms
+      // 1. Fetch latest rooms & wait for state to settle
       await fetchRooms();
+      await new Promise((r) => setTimeout(r, 150));
+      const currentRooms = roomsRef.current;
 
       // 2. Search for matching open room (not ours)
-      const match = rooms.find((r) => {
+      const match = currentRooms.find((r) => {
         if (r.creator === address) return false; // skip own rooms
         if (r.gameType !== selectedGame) return false;
         // Stake matching
@@ -227,8 +230,8 @@ export default function QuickMatch() {
     } catch (err: any) {
       console.error("[QuickMatch] Error:", err);
       toast({
-        title: "Error",
-        description: err?.message || "Something went wrong",
+        title: t("quickMatch.error"),
+        description: err?.message || t("quickMatch.somethingWrong"),
         variant: "destructive",
       });
     } finally {
@@ -378,7 +381,7 @@ export default function QuickMatch() {
           <Card className="w-full max-w-xs">
             <CardContent className="p-4 text-center">
               <p className="text-sm text-muted-foreground">
-                {selectedGameName} •{" "}
+                {translatedGameName} •{" "}
                 {selectedStake === 0 ? t("quickMatch.free") : `${selectedStake} SOL`}
               </p>
             </CardContent>

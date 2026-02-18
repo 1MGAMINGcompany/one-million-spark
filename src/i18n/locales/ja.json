@@ -926,6 +926,11 @@
     "connectFirst": "プレイするにはログイン",
     "creatingRoom": "ルームを作成中...",
     "joiningRoom": "マッチに参加中...",
-    "secondsLeft": "{{seconds}}秒"
+    "secondsLeft": "{{seconds}}秒",
+    "opponentJoined": "対戦相手が参加！",
+    "matchReady": "{{game}}の対戦準備完了！",
+    "letsGo": "{{game}} — 始めよう！",
+    "error": "エラー",
+    "somethingWrong": "エラーが発生しました"
   }
 }

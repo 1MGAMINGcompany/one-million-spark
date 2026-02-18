@@ -919,6 +919,11 @@
     "connectFirst": "खेलने के लिए साइन इन करें",
     "creatingRoom": "कमरा बना रहे हैं...",
     "joiningRoom": "मैच में शामिल हो रहे हैं...",
-    "secondsLeft": "{{seconds}}से"
+    "secondsLeft": "{{seconds}}से",
+    "opponentJoined": "प्रतिद्वंद्वी मिला!",
+    "matchReady": "आपका {{game}} मैच तैयार है!",
+    "letsGo": "{{game}} — चलो शुरू करें!",
+    "error": "त्रुटि",
+    "somethingWrong": "कुछ गलत हो गया"
   }
 }
