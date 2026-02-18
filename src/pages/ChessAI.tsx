@@ -8,6 +8,7 @@ import { ArrowLeft, RotateCcw, Gem, Star } from "lucide-react";
 import { SoundToggle } from "@/components/SoundToggle";
 import { useSound } from "@/contexts/SoundContext";
 import { useTranslation } from "react-i18next";
+import { usePresenceHeartbeat } from "@/hooks/usePresenceHeartbeat";
 import { createChessAI, type ChessAI as ChessAIType, type Difficulty } from "@/lib/chessEngine/localChessAI";
 
 // Helper to convert UCI move (e.g., "e2e4") to from/to squares
@@ -80,6 +81,7 @@ const AnimationToggle = ({
 
 const ChessAI = () => {
   const { t } = useTranslation();
+  usePresenceHeartbeat();
   const [searchParams] = useSearchParams();
   const { play } = useSound();
   const rawDifficulty = searchParams.get("difficulty");
