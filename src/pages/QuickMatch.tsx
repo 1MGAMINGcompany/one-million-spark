@@ -5,7 +5,7 @@ import { PublicKey } from "@solana/web3.js";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { ArrowLeft, Zap, Bot, Search, Loader2 } from "lucide-react";
+import { ArrowLeft, Zap, Bot, Search, Loader2, Users, Copy, Check } from "lucide-react";
 import { ChessIcon, DominoIcon, BackgammonIcon, CheckersIcon, LudoIcon } from "@/components/GameIcons";
 import { PrivyLoginButton } from "@/components/PrivyLoginButton";
 import { useWallet } from "@/hooks/useWallet";
@@ -19,6 +19,7 @@ import { showBrowserNotification } from "@/lib/pushNotifications";
 import { requestNotificationPermission } from "@/lib/pushNotifications";
 import { supabase } from "@/integrations/supabase/client";
 import { solToLamports } from "@/lib/rematchPayload";
+import { buildInviteLink } from "@/lib/invite";
 
 type Phase = "selecting" | "searching" | "timeout";
 
@@ -45,6 +46,7 @@ const STAKE_PRESETS = [
   { label: "0.1", value: 0.1 },
 ];
 
+const LUDO_PLAYER_OPTIONS = [2, 3, 4];
 const SEARCH_TIMEOUT_SEC = 60;
 
 export default function QuickMatch() {
@@ -67,16 +69,26 @@ export default function QuickMatch() {
   const [secondsLeft, setSecondsLeft] = useState(SEARCH_TIMEOUT_SEC);
   const [createdRoomPda, setCreatedRoomPda] = useState<string | null>(null);
   const [isWorking, setIsWorking] = useState(false);
+  const [ludoPlayerCount, setLudoPlayerCount] = useState<number>(2);
+  const [linkCopied, setLinkCopied] = useState(false);
 
   const hasNavigatedRef = useRef(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const roomsRef = useRef(rooms);
   roomsRef.current = rooms;
 
-  // Game key + translated name
+  // Derived values
+  const isLudo = selectedGame === GameType.Ludo;
+  const effectiveMaxPlayers = isLudo ? ludoPlayerCount : 2;
+  const isMultiPlayerLudo = isLudo && ludoPlayerCount > 2;
   const selectedGameKey =
     GAME_OPTIONS.find((g) => g.type === selectedGame)?.key ?? "chess";
   const translatedGameName = t(`games.${selectedGameKey}`);
+
+  // Reset ludoPlayerCount when switching away from Ludo
+  useEffect(() => {
+    if (!isLudo) setLudoPlayerCount(2);
+  }, [isLudo]);
 
   // ── Countdown timer ──
   useEffect(() => {
@@ -123,7 +135,6 @@ export default function QuickMatch() {
     if (phase !== "searching" || !createdRoomPda || hasNavigatedRef.current) return;
     if (!activeRoom) return;
 
-    // If activeRoom PDA matches ours and it became Started (status 2), opponent joined
     if (activeRoom.pda === createdRoomPda && activeRoom.status === 2) {
       hasNavigatedRef.current = true;
       AudioManager.playPlayerJoined();
@@ -137,7 +148,6 @@ export default function QuickMatch() {
     if (!isConnected || !address) return;
     if (isWorking || txPending) return;
 
-    // Block if user has unresolved room
     if (hookBlockingRoom) {
       toast({
         title: t("createRoom.activeRoomExists"),
@@ -158,15 +168,16 @@ export default function QuickMatch() {
 
       // 2. Search for matching open room (not ours)
       const match = currentRooms.find((r) => {
-        if (r.creator === address) return false; // skip own rooms
+        if (r.creator === address) return false;
         if (r.gameType !== selectedGame) return false;
+        // For Ludo, also match on maxPlayers
+        if (isLudo && r.maxPlayers !== ludoPlayerCount) return false;
         // Stake matching
         if (selectedStake === 0) return r.entryFeeSol === 0;
         return Math.abs(r.entryFeeSol - selectedStake) < 0.001;
       });
 
       if (match) {
-        // Found an existing room — navigate to join flow
         toast({ title: t("quickMatch.matchFound") });
         navigate(`/room/${match.pda}`);
         return;
@@ -174,12 +185,11 @@ export default function QuickMatch() {
 
       // 3. No match — create a new public room
       const mode = selectedStake > 0 ? "ranked" : "casual";
-      const maxPlayers = selectedGame === GameType.Ludo ? 4 : 2;
 
       const roomId = await createRoom(
         selectedGame,
         selectedStake,
-        maxPlayers,
+        effectiveMaxPlayers,
         mode as "casual" | "ranked"
       );
 
@@ -188,7 +198,6 @@ export default function QuickMatch() {
         return;
       }
 
-      // Derive room PDA
       const creatorPubkey = new PublicKey(address);
       const roomPda = getRoomPda(creatorPubkey, roomId);
       const roomPdaStr = roomPda.toBase58();
@@ -204,14 +213,13 @@ export default function QuickMatch() {
             mode,
             creatorWallet: address,
             gameType: selectedGameKey,
-            maxPlayers,
+            maxPlayers: effectiveMaxPlayers,
           },
         });
       } catch (e) {
         console.warn("[QuickMatch] settings persist error (non-fatal):", e);
       }
 
-      // Record creator acceptance (redundant safety — createRoom already does it)
       try {
         await supabase.rpc("record_acceptance", {
           p_room_pda: roomPdaStr,
@@ -238,26 +246,57 @@ export default function QuickMatch() {
       setIsWorking(false);
     }
   }, [
-    isConnected,
-    address,
-    isWorking,
-    txPending,
-    hookBlockingRoom,
-    rooms,
-    selectedGame,
-    selectedStake,
-    selectedGameKey,
-    fetchRooms,
-    createRoom,
-    navigate,
-    toast,
-    t,
+    isConnected, address, isWorking, txPending, hookBlockingRoom,
+    rooms, selectedGame, selectedStake, selectedGameKey,
+    isLudo, ludoPlayerCount, effectiveMaxPlayers,
+    fetchRooms, createRoom, navigate, toast, t,
   ]);
 
-  // ── Keep Searching ──
-  const handleKeepSearching = () => {
+  // ── Keep Searching (fixes audit issue: re-checks rooms) ──
+  const handleKeepSearching = useCallback(async () => {
     hasNavigatedRef.current = false;
+
+    // Re-check for matching rooms before restarting timer
+    try {
+      await fetchRooms();
+      await new Promise((r) => setTimeout(r, 150));
+      const currentRooms = roomsRef.current;
+
+      const match = currentRooms.find((r) => {
+        if (r.creator === address) return false;
+        if (r.gameType !== selectedGame) return false;
+        if (isLudo && r.maxPlayers !== ludoPlayerCount) return false;
+        if (selectedStake === 0) return r.entryFeeSol === 0;
+        return Math.abs(r.entryFeeSol - selectedStake) < 0.001;
+      });
+
+      if (match) {
+        toast({ title: t("quickMatch.matchFound") });
+        navigate(`/room/${match.pda}`);
+        return;
+      }
+    } catch (e) {
+      console.warn("[QuickMatch] re-search error (non-fatal):", e);
+    }
+
     setPhase("searching");
+  }, [address, selectedGame, selectedStake, isLudo, ludoPlayerCount, fetchRooms, navigate, toast, t]);
+
+  // ── Switch to 2 Players ──
+  const handleSwitchTo2Players = () => {
+    setLudoPlayerCount(2);
+    setCreatedRoomPda(null);
+    setPhase("selecting");
+  };
+
+  // ── Copy invite link ──
+  const handleCopyInvite = async () => {
+    if (!createdRoomPda) return;
+    const link = buildInviteLink({ roomId: createdRoomPda });
+    await navigator.clipboard.writeText(link);
+    setLinkCopied(true);
+    toast({ title: t("quickMatch.linkCopied") });
+    setTimeout(() => setLinkCopied(false), 2000);
   };
 
   // ── Render ──
@@ -299,6 +338,31 @@ export default function QuickMatch() {
               ))}
             </div>
           </div>
+
+          {/* Ludo Player Count Selector */}
+          {isLudo && (
+            <div>
+              <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">
+                {t("quickMatch.selectPlayers")}
+              </h2>
+              <div className="grid grid-cols-3 gap-3">
+                {LUDO_PLAYER_OPTIONS.map((count) => (
+                  <button
+                    key={count}
+                    onClick={() => setLudoPlayerCount(count)}
+                    className={`py-3 px-2 rounded-xl border text-center font-semibold transition-all duration-200 flex items-center justify-center gap-2 ${
+                      ludoPlayerCount === count
+                        ? "border-primary bg-primary/10 text-primary shadow-gold"
+                        : "border-border bg-card text-foreground hover:border-primary/30"
+                    }`}
+                  >
+                    <Users className="h-4 w-4" />
+                    {t("quickMatch.players", { count })}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Stake Selection */}
           <div>
@@ -362,7 +426,11 @@ export default function QuickMatch() {
           <div className="text-center space-y-2">
             <div className="flex items-center justify-center gap-2">
               <Search className="h-5 w-5 text-primary animate-pulse" />
-              <p className="text-lg font-semibold text-foreground">{t("quickMatch.searching")}</p>
+              <p className="text-lg font-semibold text-foreground">
+                {isMultiPlayerLudo
+                  ? t("quickMatch.waitingForPlayers", { current: 1, total: ludoPlayerCount })
+                  : t("quickMatch.searching")}
+              </p>
             </div>
             <p className="text-3xl font-display font-bold text-primary">
               {t("quickMatch.secondsLeft", { seconds: secondsLeft })}
@@ -381,11 +449,37 @@ export default function QuickMatch() {
           <Card className="w-full max-w-xs">
             <CardContent className="p-4 text-center">
               <p className="text-sm text-muted-foreground">
-                {translatedGameName} •{" "}
+                {translatedGameName}
+                {isLudo && ` • ${t("quickMatch.players", { count: ludoPlayerCount })}`}
+                {" • "}
                 {selectedStake === 0 ? t("quickMatch.free") : `${selectedStake} SOL`}
               </p>
             </CardContent>
           </Card>
+
+          {/* Multi-player Ludo actions */}
+          {isMultiPlayerLudo && (
+            <div className="flex flex-col gap-2 w-full max-w-xs">
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full gap-2"
+                onClick={handleCopyInvite}
+              >
+                {linkCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                {linkCopied ? t("quickMatch.linkCopied") : t("quickMatch.copyInviteLink")}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full gap-2"
+                onClick={handleSwitchTo2Players}
+              >
+                <Users className="h-4 w-4" />
+                {t("quickMatch.switchTo2Players")}
+              </Button>
+            </div>
+          )}
 
           {/* Cancel button */}
           <Button variant="ghost" onClick={() => navigate(-1)}>

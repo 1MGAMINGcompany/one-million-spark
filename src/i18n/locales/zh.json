@@ -877,6 +877,12 @@
     "matchReady": "你的{{game}}比赛准备好了！",
     "letsGo": "{{game}} — 开始吧！",
     "error": "错误",
-    "somethingWrong": "出错了"
+    "somethingWrong": "出错了",
+    "selectPlayers": "玩家人数",
+    "players": "{{count}} 名玩家",
+    "waitingForPlayers": "等待玩家：{{current}} / {{total}}",
+    "switchTo2Players": "切换到2人（更快）",
+    "copyInviteLink": "复制邀请链接",
+    "linkCopied": "链接已复制！"
   }
 }

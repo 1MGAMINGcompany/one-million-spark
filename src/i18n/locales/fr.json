@@ -934,6 +934,12 @@
     "matchReady": "Votre match de {{game}} est prêt !",
     "letsGo": "{{game}} — C'est parti !",
     "error": "Erreur",
-    "somethingWrong": "Une erreur est survenue"
+    "somethingWrong": "Une erreur est survenue",
+    "selectPlayers": "Nombre de joueurs",
+    "players": "{{count}} Joueurs",
+    "waitingForPlayers": "En attente de joueurs : {{current}} / {{total}}",
+    "switchTo2Players": "Passer à 2 joueurs (plus rapide)",
+    "copyInviteLink": "Copier le lien d'invitation",
+    "linkCopied": "Lien copié !"
   }
 }

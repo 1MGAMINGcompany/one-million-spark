@@ -934,6 +934,12 @@
     "matchReady": "Sua partida de {{game}} está pronta!",
     "letsGo": "{{game}} — Vamos!",
     "error": "Erro",
-    "somethingWrong": "Algo deu errado"
+    "somethingWrong": "Algo deu errado",
+    "selectPlayers": "Número de Jogadores",
+    "players": "{{count}} Jogadores",
+    "waitingForPlayers": "Aguardando jogadores: {{current}} / {{total}}",
+    "switchTo2Players": "Mudar para 2 jogadores (mais rápido)",
+    "copyInviteLink": "Copiar link de convite",
+    "linkCopied": "Link copiado!"
   }
 }

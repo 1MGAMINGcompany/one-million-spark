@@ -880,6 +880,12 @@
     "matchReady": "مباراة {{game}} جاهزة!",
     "letsGo": "{{game}} — هيا بنا!",
     "error": "خطأ",
-    "somethingWrong": "حدث خطأ"
+    "somethingWrong": "حدث خطأ",
+    "selectPlayers": "عدد اللاعبين",
+    "players": "{{count}} لاعبين",
+    "waitingForPlayers": "في انتظار اللاعبين: {{current}} / {{total}}",
+    "switchTo2Players": "التبديل إلى لاعبين (أسرع)",
+    "copyInviteLink": "نسخ رابط الدعوة",
+    "linkCopied": "تم نسخ الرابط!"
   }
 }
