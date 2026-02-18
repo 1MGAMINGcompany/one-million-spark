@@ -12,6 +12,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useConnection } from "@solana/wallet-adapter-react";
 import { PublicKey } from "@solana/web3.js";
 import { parseRoomAccount, GameType, RoomStatus, isOpenStatus, GAME_TYPE_NAMES } from "@/lib/solana-program";
+import { supabase } from "@/integrations/supabase/client";
 import { validatePublicKey } from "@/lib/solana-utils";
 import { Loader2, AlertTriangle, ArrowLeft, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -71,7 +72,59 @@ export default function PlayRoom() {
         return;
       }
 
-      // Validate PDA
+      // ── FREE ROOM: fetch from DB, skip on-chain ──
+      const isFreeRoom = roomPdaParam.startsWith("free-");
+
+      if (isFreeRoom) {
+        try {
+          setLoading(true);
+          setError(null);
+
+          const { data, error: fnErr } = await supabase.functions.invoke("game-session-get", {
+            body: { roomPda: roomPdaParam },
+          });
+
+          if (fnErr || !data?.session) {
+            setError("Room not found");
+            setLoading(false);
+            return;
+          }
+
+          const session = data.session;
+
+          // Map DB game_type string to GameType enum
+          const gameTypeMap: Record<string, GameType> = {
+            chess: GameType.Chess,
+            dominos: GameType.Dominos,
+            backgammon: GameType.Backgammon,
+            checkers: GameType.Checkers,
+            ludo: GameType.Ludo,
+          };
+          const gameType = gameTypeMap[session.game_type] ?? GameType.Chess;
+
+          // If not active, redirect to lobby
+          if (session.status !== "active") {
+            navigate(`/room/${roomPdaParam}`, { replace: true });
+            return;
+          }
+
+          setRoomData({
+            gameType,
+            status: session.status_int,
+            playerCount: session.participants?.length ?? 0,
+            maxPlayers: session.max_players,
+            roomId: 0,
+          });
+        } catch (e: any) {
+          console.error("[PlayRoom] Free room fetch error:", e);
+          setError(e?.message ?? "Failed to load room");
+        } finally {
+          setLoading(false);
+        }
+        return;
+      }
+
+      // ── PAID ROOM: on-chain fetch (existing logic) ──
       const validPda = validatePublicKey(roomPdaParam);
       if (!validPda) {
         setError("Invalid room link");
@@ -93,7 +146,6 @@ export default function PlayRoom() {
           return;
         }
 
-        // Parse room data to get gameType
         const data = Buffer.from(accountInfo.data);
         const parsed = parseRoomAccount(data);
 
@@ -111,7 +163,6 @@ export default function PlayRoom() {
           playerCount: parsed.playerCount,
         });
 
-        // Check if room is in progress
         if (parsed.status !== RoomStatus.Started) {
           console.log("[PlayRoom] Room not in progress, redirecting to lobby");
           navigate(`/room/${roomPdaParam}`, { replace: true });

@@ -161,8 +161,34 @@ const ChessGame = () => {
   useEffect(() => {
     if (!address || !roomPda) return;
 
+    // FREE ROOM: fetch players from DB, skip on-chain
+    if (roomPda.startsWith("free-")) {
+      (async () => {
+        try {
+          const { data } = await supabase.functions.invoke("game-session-get", {
+            body: { roomPda },
+          });
+          if (data?.session) {
+            const s = data.session;
+            const players = s.participants?.filter((p: string) => p && p !== "") || [];
+            if (players.length >= 2) {
+              setRoomPlayers(players);
+              setStakeLamports(0);
+              setEntryFeeSol(0);
+              console.log("[ChessGame] Free room players:", players);
+              return;
+            }
+          }
+        } catch (err) {
+          console.error("[ChessGame] Free room fetch error:", err);
+        }
+        setRoomPlayers([address, `waiting-${roomPda.slice(0, 8)}`]);
+      })();
+      return;
+    }
+
     let pollCount = 0;
-    const MAX_POLLS = 30; // 30 seconds max wait
+    const MAX_POLLS = 30;
     let pollInterval: NodeJS.Timeout | null = null;
 
     const fetchRoomPlayers = async (): Promise<boolean> => {
@@ -174,11 +200,9 @@ const ChessGame = () => {
         if (accountInfo?.data) {
           const parsed = parseRoomAccount(accountInfo.data as Buffer);
           if (parsed) {
-            // Get raw player addresses from on-chain
             const p1 = parsed.players?.[0]?.toBase58();
             const p2 = parsed.players?.[1]?.toBase58();
             
-            // Normalize: replace default pubkey (empty slot) with waiting- placeholder
             const normalizedPlayers = [
               p1,
               p2 === DEFAULT_SOLANA_PUBKEY ? `waiting-${roomPda.slice(0, 8)}` : p2,
@@ -186,38 +210,30 @@ const ChessGame = () => {
             
             setRoomPlayers(normalizedPlayers);
             
-            // Extract entry fee from on-chain (CRITICAL for correct modal display)
-            // Guardrail A: Store canonical lamports directly from on-chain
             if (parsed.entryFee !== undefined) {
               setStakeLamports(parsed.entryFee);
               setEntryFeeSol(parsed.entryFee / 1_000_000_000);
             }
             
-            // Note: myColor is set by start roll, NOT by on-chain position
-            // On-chain index only affects who is player1/player2, dice roll determines who is white
             console.log("[ChessGame] On-chain players:", normalizedPlayers, "Entry fee:", parsed.entryFee);
             
-            // ✅ Only stop polling when room truly has 2 real players
             if (parsed.playerCount >= 2 && p2 && p2 !== DEFAULT_SOLANA_PUBKEY) {
-              return true; // Stop polling
+              return true;
             }
-            return false; // Continue polling
+            return false;
           }
         }
         
-        // Room not ready yet (waiting for second player)
         console.log("[ChessGame] Waiting for second player... (poll", pollCount + 1, "/", MAX_POLLS, ")");
-        return false; // Continue polling
+        return false;
       } catch (err) {
         console.error("[ChessGame] Failed to fetch room players:", err);
-        return false; // Continue polling on error
+        return false;
       }
     };
 
-    // Initial fetch
     fetchRoomPlayers().then(success => {
       if (!success) {
-        // Start polling if room not ready
         pollInterval = setInterval(async () => {
           pollCount++;
           const success = await fetchRoomPlayers();
@@ -226,11 +242,9 @@ const ChessGame = () => {
               clearInterval(pollInterval);
               pollInterval = null;
             }
-            // If max polls reached without 2 players, set waiting state
             if (!success && pollCount >= MAX_POLLS) {
               console.log("[ChessGame] Max polls reached, still waiting for opponent");
               setRoomPlayers([address, `waiting-${roomPda.slice(0, 8)}`]);
-              // Note: myColor is set by start roll, not here
             }
           }
         }, 1000);

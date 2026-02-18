@@ -150,6 +150,38 @@ const CheckersGame = () => {
   useEffect(() => {
     if (!address || !roomPda) return;
 
+    // FREE ROOM: fetch players from DB, skip on-chain
+    if (roomPda.startsWith("free-")) {
+      (async () => {
+        try {
+          const { data } = await supabase.functions.invoke("game-session-get", {
+            body: { roomPda },
+          });
+          if (data?.session) {
+            const s = data.session;
+            const players = s.participants?.filter((p: string) => p && p !== "") || [];
+            if (players.length >= 2) {
+              setRoomPlayers(players);
+              setStakeLamports(0);
+              setEntryFeeSol(0);
+              const myIndex = players.findIndex((p: string) => isSameWallet(p, address));
+              const color = myIndex === 0 ? "gold" : "obsidian";
+              setMyColor(color);
+              setFlipped(color === "obsidian");
+              console.log("[CheckersGame] Free room players:", players);
+              return;
+            }
+          }
+        } catch (err) {
+          console.error("[CheckersGame] Free room fetch error:", err);
+        }
+        setRoomPlayers([address, `waiting-${roomPda.slice(0, 8)}`]);
+        setMyColor("gold");
+        setFlipped(false);
+      })();
+      return;
+    }
+
     const fetchRoomPlayers = async () => {
       try {
         const connection = new Connection(getSolanaEndpoint(), "confirmed");
@@ -159,35 +191,29 @@ const CheckersGame = () => {
         if (accountInfo?.data) {
           const parsed = parseRoomAccount(accountInfo.data as Buffer);
           if (parsed && parsed.players.length >= 2) {
-            // Real player order from on-chain: creator at index 0, joiner at index 1
             const realPlayers = parsed.players.map(p => p.toBase58());
             setRoomPlayers(realPlayers);
             
-            // Extract entry fee from on-chain (CRITICAL - Guardrail A: canonical stake)
             if (parsed.entryFee !== undefined) {
               setStakeLamports(parsed.entryFee);
               setEntryFeeSol(parsed.entryFee / 1_000_000_000);
             }
             
-            // Determine my color based on on-chain position (fallback before dice roll)
-            // Note: For ranked games, start roll determines who plays first
             const myIndex = realPlayers.findIndex(p => isSameWallet(p, address));
             const color = myIndex === 0 ? "gold" : "obsidian";
             setMyColor(color);
-            setFlipped(color === "obsidian"); // Flip board for obsidian player
+            setFlipped(color === "obsidian");
             console.log("[CheckersGame] On-chain players:", realPlayers, "Initial color:", color, "Entry fee:", parsed.entryFee);
             return;
           }
         }
         
-        // Fallback if on-chain data not available yet (room still forming)
         console.log("[CheckersGame] Room not ready, using placeholder");
         setRoomPlayers([address, `waiting-${roomPda.slice(0, 8)}`]);
         setMyColor("gold");
         setFlipped(false);
       } catch (err) {
         console.error("[CheckersGame] Failed to fetch room players:", err);
-        // Fallback on error
         setRoomPlayers([address, `error-${roomPda.slice(0, 8)}`]);
         setMyColor("gold");
         setFlipped(false);

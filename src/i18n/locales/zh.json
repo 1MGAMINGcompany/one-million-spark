@@ -890,6 +890,9 @@
     "fundsRecovered": "房间已取消！资金已退回您的钱包。",
     "recoverConfirmTitle": "取消房间并收回资金",
     "recoverConfirmDesc": "这将取消房间并将您 {{amount}} SOL 的质押退回您的钱包。您需要签署一笔交易。",
-    "confirmSign": "确认并签名"
+    "confirmSign": "确认并签名",
+    "freeMatchCreated": "免费房间已创建！等待对手...",
+    "freeMatchJoined": "找到对手！开始游戏...",
+    "freeCancelled": "免费比赛已取消。"
   }
 }

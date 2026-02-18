@@ -163,6 +163,34 @@ export default function QuickMatch() {
     }
   }, [activeRoom, createdRoomPda, phase, navigate, toast, t]);
 
+  // ── Free room polling: detect opponent join via DB ──
+  useEffect(() => {
+    if (phase !== "searching" || !createdRoomPda || hasNavigatedRef.current) return;
+    if (!createdRoomPda.startsWith("free-")) return;
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const { data, error } = await supabase.functions.invoke("free-match", {
+          body: { action: "check", roomPda: createdRoomPda },
+        });
+        if (error || !data?.session) return;
+
+        if (data.session.status === "active" && data.session.player2_wallet) {
+          if (hasNavigatedRef.current) return;
+          hasNavigatedRef.current = true;
+          clearInterval(pollInterval);
+          AudioManager.playPlayerJoined();
+          toast({ title: t("quickMatch.freeMatchJoined") });
+          navigate(`/play/${createdRoomPda}`);
+        }
+      } catch (e) {
+        console.warn("[QuickMatch] Free poll error:", e);
+      }
+    }, 3000);
+
+    return () => clearInterval(pollInterval);
+  }, [phase, createdRoomPda, navigate, toast, t]);
+
   // ── Find Match handler ──
   const handleFindMatch = useCallback(async () => {
     if (!isConnected || !address) return;
@@ -177,9 +205,36 @@ export default function QuickMatch() {
       return;
     }
 
-    // FREE MATCH: route directly to AI — no on-chain logic needed
+    // FREE MATCH: DB-only matchmaking against real opponents
     if (selectedStake === 0) {
-      navigate(`/play-ai/${selectedGameKey}?difficulty=medium`);
+      setIsWorking(true);
+      hasNavigatedRef.current = false;
+      try {
+        const { data, error } = await supabase.functions.invoke("free-match", {
+          body: {
+            action: "find_or_create",
+            gameType: selectedGameKey,
+            wallet: address,
+            maxPlayers: effectiveMaxPlayers,
+          },
+        });
+        if (error) throw error;
+
+        if (data.status === "joined") {
+          toast({ title: t("quickMatch.freeMatchJoined") });
+          navigate(`/play/${data.roomPda}`);
+        } else if (data.status === "created") {
+          setCreatedRoomPda(data.roomPda);
+          requestNotificationPermission();
+          setPhase("searching");
+          toast({ title: t("quickMatch.freeMatchCreated") });
+        }
+      } catch (err: any) {
+        console.error("[QuickMatch] Free match error:", err);
+        toast({ title: t("quickMatch.error"), description: err?.message, variant: "destructive" });
+      } finally {
+        setIsWorking(false);
+      }
       return;
     }
 
@@ -327,8 +382,25 @@ export default function QuickMatch() {
 
   // ── Cancel with fund recovery ──
   const handleCancel = useCallback(async () => {
-    // Free games or no room created: just navigate away
-    if (selectedStake === 0 || !createdRoomPda || !publicKey) {
+    // Free games: cancel via DB, navigate away
+    if (selectedStake === 0) {
+      if (createdRoomPda?.startsWith("free-") && address) {
+        try {
+          await supabase.functions.invoke("free-match", {
+            body: { action: "cancel", roomPda: createdRoomPda, wallet: address },
+          });
+          toast({ title: t("quickMatch.freeCancelled") });
+        } catch (e) {
+          console.warn("[QuickMatch] Free cancel error:", e);
+        }
+      }
+      setCreatedRoomPda(null);
+      setPhase("selecting");
+      navigate(-1);
+      return;
+    }
+
+    if (!createdRoomPda || !publicKey) {
       navigate(-1);
       return;
     }

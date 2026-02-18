@@ -947,6 +947,9 @@
     "fundsRecovered": "Salle annulée ! Fonds retournés à votre portefeuille.",
     "recoverConfirmTitle": "Annuler la salle et récupérer les fonds",
     "recoverConfirmDesc": "Cela annulera la salle et retournera votre mise de {{amount}} SOL à votre portefeuille. Vous devrez signer une transaction.",
-    "confirmSign": "Confirmer et signer"
+    "confirmSign": "Confirmer et signer",
+    "freeMatchCreated": "Salle gratuite créée ! En attente d'un adversaire...",
+    "freeMatchJoined": "Adversaire trouvé ! Lancement du jeu...",
+    "freeCancelled": "Match gratuit annulé."
   }
 }
