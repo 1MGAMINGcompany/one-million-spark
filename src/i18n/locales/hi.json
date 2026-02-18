@@ -924,6 +924,12 @@
     "matchReady": "आपका {{game}} मैच तैयार है!",
     "letsGo": "{{game}} — चलो शुरू करें!",
     "error": "त्रुटि",
-    "somethingWrong": "कुछ गलत हो गया"
+    "somethingWrong": "कुछ गलत हो गया",
+    "selectPlayers": "खिलाड़ियों की संख्या",
+    "players": "{{count}} खिलाड़ी",
+    "waitingForPlayers": "खिलाड़ियों की प्रतीक्षा: {{current}} / {{total}}",
+    "switchTo2Players": "2 खिलाड़ियों पर स्विच करें (तेज़)",
+    "copyInviteLink": "आमंत्रण लिंक कॉपी करें",
+    "linkCopied": "लिंक कॉपी हो गया!"
   }
 }

@@ -931,6 +931,12 @@
     "matchReady": "{{game}}の対戦準備完了！",
     "letsGo": "{{game}} — 始めよう！",
     "error": "エラー",
-    "somethingWrong": "エラーが発生しました"
+    "somethingWrong": "エラーが発生しました",
+    "selectPlayers": "プレイヤー数",
+    "players": "{{count}} プレイヤー",
+    "waitingForPlayers": "プレイヤー待機中：{{current}} / {{total}}",
+    "switchTo2Players": "2人に切り替え（より速い）",
+    "copyInviteLink": "招待リンクをコピー",
+    "linkCopied": "リンクをコピーしました！"
   }
 }
