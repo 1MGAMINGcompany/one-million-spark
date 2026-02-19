@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo, useEffect } from "react";
+import { PostGamePrompt } from "@/components/PostGamePrompt";
 import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, RotateCcw, Gem, Star } from "lucide-react";
@@ -617,6 +618,7 @@ const DominosAI = () => {
                   >
                     {gameStatus}
                   </p>
+                  {gameOver && <PostGamePrompt gameType="dominos" />}
                 </div>
               </div>
 

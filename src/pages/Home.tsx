@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
-import { Swords, Users, Bot, Trophy, Gem, Star, Shield, Zap } from "lucide-react";
+import { Swords, Users, Bot, Trophy, Gem, Star, Shield, Zap, Play } from "lucide-react";
 import FeaturedGameCard from "@/components/FeaturedGameCard";
 import { ChessIcon, DominoIcon, BackgammonIcon, CheckersIcon, LudoIcon } from "@/components/GameIcons";
 import PyramidLogo from "@/components/PyramidLogo";
@@ -11,9 +11,24 @@ import { AddSolCard } from "@/components/AddSolCard";
 import { WelcomeIntroModal } from "@/components/WelcomeIntroModal";
 import { LiveActivityIndicator } from "@/components/LiveActivityIndicator";
 
+/** Rotate featured instant-play game */
+const INSTANT_GAMES = [
+  { path: "/play-ai/backgammon?difficulty=medium", label: "Backgammon" },
+  { path: "/play-ai/chess?difficulty=medium", label: "Chess" },
+  { path: "/play-ai/checkers?difficulty=medium", label: "Checkers" },
+  { path: "/play-ai/dominos?difficulty=medium", label: "Dominos" },
+  { path: "/play-ai/ludo?difficulty=medium", label: "Ludo" },
+];
+
+function getInstantGame() {
+  const idx = Math.floor(Date.now() / 86_400_000) % INSTANT_GAMES.length;
+  return INSTANT_GAMES[idx];
+}
+
 const Home = () => {
   const { t } = useTranslation();
   const { isPrivyUser, walletAddress, balanceSol, isLowBalance } = usePrivySolBalance();
+  const instantGame = getInstantGame();
 
   // Show funding card for Privy users with low/zero balance
   const showFundingCard = isPrivyUser && isLowBalance && walletAddress;
@@ -29,8 +44,8 @@ const Home = () => {
   return (
     <div className="min-h-screen">
       <WelcomeIntroModal isAuthenticated={isPrivyUser} />
-      {/* Hero Section */}
-      <section className="relative min-h-[90vh] flex items-center overflow-hidden">
+      {/* Hero Section — Mobile-first, compact */}
+      <section className="relative min-h-[70vh] lg:min-h-[90vh] flex items-center overflow-hidden">
         {/* Background Effects */}
         <div className="absolute inset-0 bg-gradient-to-br from-background via-background to-midnight-light" />
         <div className="absolute inset-0 opacity-30">
@@ -38,13 +53,12 @@ const Home = () => {
           <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-accent/10 rounded-full blur-3xl" />
         </div>
 
-        <div className="relative z-10 w-full max-w-7xl mx-auto px-4 py-12 lg:py-0">
-          <div className="grid lg:grid-cols-2 gap-12 lg:gap-8 items-center">
+        <div className="relative z-10 w-full max-w-7xl mx-auto px-4 py-8 lg:py-0">
+          <div className="grid lg:grid-cols-2 gap-8 lg:gap-8 items-center">
             {/* Left Side - Content */}
-            <div className="flex flex-col gap-6 text-center lg:text-left">
-              {/* Premium Tagline Block */}
-              <div className="flex flex-col items-center lg:items-start gap-4">
-                {/* Badge with Pyramid Logo */}
+            <div className="flex flex-col gap-4 text-center lg:text-left">
+              {/* Badge */}
+              <div className="flex justify-center lg:justify-start">
                 <div className="relative">
                   <div className="absolute inset-0 -m-4 bg-primary/15 blur-xl rounded-full" />
                   <div className="relative inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/30">
@@ -54,25 +68,16 @@ const Home = () => {
                     </span>
                   </div>
                 </div>
-
-                {/* Tagline with Shimmer */}
-                <div className="relative text-center lg:text-left">
-                  <div className="absolute inset-0 -m-2 bg-primary/10 blur-lg rounded-lg" />
-                  <p className="relative text-lg md:text-xl font-display tracking-wide bg-gradient-to-r from-primary via-gold-light to-accent bg-clip-text text-transparent">
-                    "{t("hero.tagline")}{" "}
-                    <span className="wealth-shimmer inline-block font-bold">{t("hero.wealth")}</span>."
-                  </p>
-                </div>
               </div>
 
-              {/* Main Heading - Brand name stays in English */}
+              {/* Main Heading */}
               <h1 className="text-5xl md:text-6xl lg:text-7xl font-display font-bold tracking-wide">
                 <span className="text-foreground">1M</span>{" "}
                 <span className="text-primary">GAMING</span>
               </h1>
 
               {/* Subheading */}
-              <p className="text-xl md:text-2xl font-semibold tracking-wide leading-relaxed text-center lg:text-left premium-shimmer premium-fade-in">
+              <p className="text-lg md:text-2xl font-semibold tracking-wide leading-relaxed text-center lg:text-left premium-shimmer premium-fade-in">
                 {t("hero.mainTagline")}
               </p>
 
@@ -81,62 +86,76 @@ const Home = () => {
                 <AddSolCard walletAddress={walletAddress} balanceSol={balanceSol} />
               ) : (
                 <>
-                  {/* CTA Buttons */}
-                  <div className="flex flex-col gap-4 mt-4">
-                    <Button asChild size="lg" variant="gold" className="group text-lg h-14 px-8 transition-all">
+                  {/* PRIMARY CTA: Play Now — instant AI game, no login */}
+                  <div className="flex flex-col gap-3 mt-2">
+                    <Button asChild size="lg" variant="gold" className="group text-xl h-16 px-8 transition-all animate-pulse-gold">
+                      <Link to={instantGame.path} className="flex items-center gap-3">
+                        <Play className="w-6 h-6 fill-current group-hover:drop-shadow-[0_0_8px_hsl(45_93%_54%_/_0.6)] transition-all" />
+                        {t("home.playNow", "Play Now — Free")}
+                      </Link>
+                    </Button>
+                    <p className="text-xs text-muted-foreground text-center lg:text-left">
+                      {t("home.noLoginNeeded", "No login or wallet needed · Instant game vs AI")}
+                    </p>
+                  </div>
+
+                  {/* SECONDARY CTAs */}
+                  <div className="flex flex-col sm:flex-row gap-3 mt-2">
+                    <Button asChild size="lg" variant="outline" className="group text-base h-12 px-6 flex-1 border-primary/30 hover:border-primary/50 transition-all">
                       <Link to="/quick-match" className="flex items-center gap-2">
-                        <Zap className="w-5 h-5 group-hover:drop-shadow-[0_0_6px_hsl(45_93%_54%_/_0.6)] transition-all" />
+                        <Zap className="w-5 h-5 text-primary group-hover:drop-shadow-[0_0_6px_hsl(45_93%_54%_/_0.6)] transition-all" />
                         {t("quickMatch.title")}
                       </Link>
                     </Button>
-                    <Button asChild size="lg" variant="gold" className="group text-lg h-14 px-8 transition-all">
+                    <Button asChild size="lg" variant="outline" className="group text-base h-12 px-6 flex-1 border-primary/30 hover:border-primary/50 transition-all">
                       <Link to="/play-ai" className="flex items-center gap-2">
-                        <Bot className="w-5 h-5 group-hover:drop-shadow-[0_0_6px_hsl(45_93%_54%_/_0.6)] transition-all" />
+                        <Bot className="w-5 h-5 text-primary group-hover:drop-shadow-[0_0_6px_hsl(45_93%_54%_/_0.6)] transition-all" />
                         {t("home.playAiFree")}
                       </Link>
                     </Button>
-                    <div className="flex flex-col sm:flex-row gap-4">
-                      <Button asChild size="lg" variant="outline" className="group text-lg h-14 px-8 flex-1 border-primary/30 hover:border-primary/50 transition-all">
-                        <Link to="/create-room" className="flex items-center gap-2">
-                          <Swords className="w-5 h-5 text-primary group-hover:drop-shadow-[0_0_6px_hsl(45_93%_54%_/_0.6)] transition-all" />
-                          {t("home.createGameRoom")}
-                        </Link>
-                      </Button>
-                      <Button asChild size="lg" variant="outline" className="group text-lg h-14 px-8 flex-1 border-primary/30 hover:border-primary/50 transition-all">
-                        <Link to="/room-list" className="flex items-center gap-2">
-                          <Users className="w-5 h-5 text-primary group-hover:drop-shadow-[0_0_6px_hsl(45_93%_54%_/_0.6)] transition-all" />
-                          {t("home.viewPublicRooms")}
-                        </Link>
-                      </Button>
-                    </div>
                   </div>
 
-                  {/* Stats/Trust indicators */}
-                  <div className="flex flex-wrap justify-center lg:justify-start gap-6 mt-6 text-sm text-muted-foreground">
-                    <div className="flex items-center gap-2">
-                      <Shield className="w-4 h-4 text-primary" />
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <Button asChild size="lg" variant="ghost" className="group text-sm h-10 px-4 flex-1 transition-all">
+                      <Link to="/create-room" className="flex items-center gap-2">
+                        <Swords className="w-4 h-4 text-primary" />
+                        {t("home.createGameRoom")}
+                      </Link>
+                    </Button>
+                    <Button asChild size="lg" variant="ghost" className="group text-sm h-10 px-4 flex-1 transition-all">
+                      <Link to="/room-list" className="flex items-center gap-2">
+                        <Users className="w-4 h-4 text-primary" />
+                        {t("home.viewPublicRooms")}
+                      </Link>
+                    </Button>
+                  </div>
+
+                  {/* Live Activity — social proof */}
+                  <div className="mt-2">
+                    <LiveActivityIndicator />
+                  </div>
+
+                  {/* Trust indicators */}
+                  <div className="flex flex-wrap justify-center lg:justify-start gap-4 text-xs text-muted-foreground">
+                    <div className="flex items-center gap-1.5">
+                      <Shield className="w-3.5 h-3.5 text-primary" />
                       <span>{t("home.secureFair")}</span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Zap className="w-4 h-4 text-primary" />
+                    <div className="flex items-center gap-1.5">
+                      <Zap className="w-3.5 h-3.5 text-primary" />
                       <span>{t("home.instantMatches")}</span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Trophy className="w-4 h-4 text-primary" />
+                    <div className="flex items-center gap-1.5">
+                      <Trophy className="w-3.5 h-3.5 text-primary" />
                       <span>{t("home.skillBasedOnly")}</span>
                     </div>
-                  </div>
-
-                  {/* Live Activity */}
-                  <div className="mt-4">
-                    <LiveActivityIndicator />
                   </div>
                 </>
               )}
             </div>
 
-            {/* Right Side - Decorative Pyramid Panel */}
-            <div className="flex justify-center lg:justify-end">
+            {/* Right Side - Decorative Pyramid Panel (hidden on mobile to save space) */}
+            <div className="hidden lg:flex justify-center lg:justify-end">
               <div className="relative w-full max-w-md lg:max-w-lg aspect-square">
                 <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-accent/10 to-transparent rounded-3xl blur-2xl" />
                 

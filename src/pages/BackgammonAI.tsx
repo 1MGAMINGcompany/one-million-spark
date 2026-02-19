@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
+import { PostGamePrompt } from "@/components/PostGamePrompt";
 import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, RotateCcw, RotateCw, Gem, Star, Trophy } from "lucide-react";
@@ -1040,6 +1041,7 @@ const BackgammonAI = () => {
                     </span>
                   </div>
                 )}
+                {gameOver && <PostGamePrompt gameType="backgammon" />}
                 {remainingMoves.length > 0 && currentPlayer === "player" && (
                   <p className="text-[10px] text-muted-foreground mt-0.5">
                     {t('gameAI.movesLeft')}: {remainingMoves.join(", ")}
