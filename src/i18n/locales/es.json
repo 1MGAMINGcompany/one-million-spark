@@ -330,7 +330,12 @@
     "instantMatches": "Partidas Instantáneas",
     "skillBasedOnly": "Solo Habilidad",
     "featuredGames": "Juegos Destacados",
-    "decentralized": "100% Descentralizado · Solo Habilidad · Impulsado por Cripto"
+    "decentralized": "100% Descentralizado · Solo Habilidad · Impulsado por Cripto",
+    "createRoomSub": "Compite por SOL · Basado en habilidad",
+    "viewRoomsSub": "Cuota en SOL · Basado en habilidad",
+    "quickMatchSub": "Partida rápida · Premio en SOL",
+    "playForSol": "Jugar por SOL",
+    "skillBasedMatch": "Partida de habilidad"
   },
   "games": {
     "chess": "Ajedrez",

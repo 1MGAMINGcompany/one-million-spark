@@ -221,7 +221,12 @@
     "instantMatches": "Parties Instantanées",
     "skillBasedOnly": "Compétence Pure",
     "featuredGames": "Jeux Vedettes",
-    "decentralized": "100% Décentralisé · Compétence Pure · Propulsé par Crypto"
+    "decentralized": "100% Décentralisé · Compétence Pure · Propulsé par Crypto",
+    "createRoomSub": "Compétez pour SOL · Basé sur l'habileté",
+    "viewRoomsSub": "Frais en SOL · Basé sur l'habileté",
+    "quickMatchSub": "Partie rapide · Cagnotte SOL",
+    "playForSol": "Jouer pour SOL",
+    "skillBasedMatch": "Partie de compétence"
   },
   "games": {
     "chess": "Échecs",

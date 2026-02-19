@@ -218,7 +218,12 @@
     "instantMatches": "مباريات فورية",
     "skillBasedOnly": "مهارة فقط",
     "featuredGames": "الألعاب المميزة",
-    "decentralized": "100% لامركزي · مهارة فقط · مدعوم بالعملات الرقمية"
+    "decentralized": "100% لامركزي · مهارة فقط · مدعوم بالعملات الرقمية",
+    "createRoomSub": "تنافس على SOL · قائم على المهارة",
+    "viewRoomsSub": "رسوم الدخول بـ SOL · مهارة فقط",
+    "quickMatchSub": "مباراة فورية · جائزة SOL",
+    "playForSol": "العب مقابل SOL",
+    "skillBasedMatch": "مباراة مهارة"
   },
   "games": {
     "chess": "شطرنج",

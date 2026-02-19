@@ -319,7 +319,12 @@
     "instantMatches": "Instant Matches",
     "skillBasedOnly": "Skill-Based Only",
     "featuredGames": "Featured Games",
-    "decentralized": "100% Decentralized · Skill-Only · Crypto-Powered"
+    "decentralized": "100% Decentralized · Skill-Only · Crypto-Powered",
+    "createRoomSub": "Compete for SOL · Skill-based",
+    "viewRoomsSub": "Entry fee in SOL · Skill-based",
+    "quickMatchSub": "Instant match · SOL prize pool",
+    "playForSol": "Play for SOL",
+    "skillBasedMatch": "Skill-based match"
   },
   "games": {
     "chess": "Chess",

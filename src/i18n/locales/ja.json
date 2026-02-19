@@ -244,7 +244,12 @@
     "instantMatches": "即時マッチング",
     "skillBasedOnly": "スキルのみ",
     "featuredGames": "注目のゲーム",
-    "decentralized": "100%分散型 · スキルのみ · 暗号資産対応"
+    "decentralized": "100%分散型 · スキルのみ · 暗号資産対応",
+    "createRoomSub": "SOLをかけて競う · スキル勝負",
+    "viewRoomsSub": "SOL参加費 · スキル勝負",
+    "quickMatchSub": "即時マッチ · SOL賞金",
+    "playForSol": "SOLをかけてプレイ",
+    "skillBasedMatch": "スキル勝負"
   },
   "games": {
     "chess": "チェス",
