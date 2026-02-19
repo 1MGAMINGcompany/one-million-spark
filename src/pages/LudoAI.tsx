@@ -6,7 +6,6 @@
  */
 
 import { useState, useCallback, useEffect, useRef } from "react";
-import { PostGamePrompt } from "@/components/PostGamePrompt";
 import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { usePresenceHeartbeat } from "@/hooks/usePresenceHeartbeat";
@@ -308,7 +307,6 @@ const LudoAI = () => {
             >
               Play Again
             </Button>
-            <PostGamePrompt gameType="ludo" />
           </div>
         )}
 

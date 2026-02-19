@@ -1,5 +1,4 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
-import { PostGamePrompt } from "@/components/PostGamePrompt";
 import { Link, useSearchParams } from "react-router-dom";
 import { Chess, Square, Move, PieceSymbol } from "chess.js";
 import { ChessBoardPremium } from "@/components/ChessBoardPremium";
@@ -534,7 +533,6 @@ const ChessAI = () => {
                   {game.isCheck() && !gameOver && (
                     <p className="text-sm text-red-400/80 mt-1 font-medium animate-pulse">⚠ {t('game.check')}</p>
                   )}
-                  {gameOver && <PostGamePrompt gameType="chess" />}
                 </div>
               </div>
             </div>

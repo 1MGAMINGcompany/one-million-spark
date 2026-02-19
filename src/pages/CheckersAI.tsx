@@ -1,5 +1,4 @@
 import { useState, useCallback, useEffect, useRef } from "react";
-import { PostGamePrompt } from "@/components/PostGamePrompt";
 import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, RotateCcw, Trophy, Gem, Star } from "lucide-react";
@@ -533,14 +532,11 @@ const CheckersAI = () => {
         {/* Status */}
         <div className="text-center mb-4">
           {gameOver ? (
-            <div>
-              <div className="flex items-center justify-center gap-2 text-xl font-display">
-                <Trophy className="w-6 h-6 text-primary" />
-                <span className="text-primary">
-                  {gameOver === "gold" ? t('gameAI.youWin') : gameOver === "obsidian" ? t('gameAI.youLose') : t('gameAI.draw')}
-                </span>
-              </div>
-              <PostGamePrompt gameType="checkers" />
+            <div className="flex items-center justify-center gap-2 text-xl font-display">
+              <Trophy className="w-6 h-6 text-primary" />
+              <span className="text-primary">
+                {gameOver === "gold" ? t('gameAI.youWin') : gameOver === "obsidian" ? t('gameAI.youLose') : t('gameAI.draw')}
+              </span>
             </div>
           ) : (
             <p className="text-muted-foreground">
