@@ -231,7 +231,12 @@
     "instantMatches": "तत्काल मैच",
     "skillBasedOnly": "केवल कौशल आधारित",
     "featuredGames": "फीचर्ड गेम्स",
-    "decentralized": "100% विकेंद्रीकृत · केवल कौशल · क्रिप्टो संचालित"
+    "decentralized": "100% विकेंद्रीकृत · केवल कौशल · क्रिप्टो संचालित",
+    "createRoomSub": "SOL के लिए प्रतिस्पर्धा · कौशल आधारित",
+    "viewRoomsSub": "SOL में प्रवेश शुल्क · कौशल आधारित",
+    "quickMatchSub": "तुरंत मैच · SOL पुरस्कार",
+    "playForSol": "SOL के लिए खेलें",
+    "skillBasedMatch": "कौशल आधारित मैच"
   },
   "games": {
     "chess": "शतरंज",

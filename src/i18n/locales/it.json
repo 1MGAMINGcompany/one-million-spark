@@ -218,7 +218,12 @@
     "instantMatches": "Partite Istantanee",
     "skillBasedOnly": "Solo Abilità",
     "featuredGames": "Giochi in Evidenza",
-    "decentralized": "100% Decentralizzato · Solo Abilità · Alimentato da Crypto"
+    "decentralized": "100% Decentralizzato · Solo Abilità · Alimentato da Crypto",
+    "createRoomSub": "Gareggia per SOL · Basato su abilità",
+    "viewRoomsSub": "Quota in SOL · Basato su abilità",
+    "quickMatchSub": "Partita immediata · Montepremi SOL",
+    "playForSol": "Gioca per SOL",
+    "skillBasedMatch": "Partita di abilità"
   },
   "games": {
     "chess": "Scacchi",

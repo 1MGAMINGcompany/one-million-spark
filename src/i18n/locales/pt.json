@@ -221,7 +221,12 @@
     "instantMatches": "Partidas Instantâneas",
     "skillBasedOnly": "Apenas Habilidade",
     "featuredGames": "Jogos em Destaque",
-    "decentralized": "100% Descentralizado · Apenas Habilidade · Movido a Cripto"
+    "decentralized": "100% Descentralizado · Apenas Habilidade · Movido a Cripto",
+    "createRoomSub": "Compita por SOL · Baseado em habilidade",
+    "viewRoomsSub": "Taxa em SOL · Baseado em habilidade",
+    "quickMatchSub": "Partida rápida · Prêmio em SOL",
+    "playForSol": "Jogar por SOL",
+    "skillBasedMatch": "Partida de habilidade"
   },
   "games": {
     "chess": "Xadrez",

@@ -281,9 +281,13 @@ export default function RoomList() {
                   ? t("roomList.resolveFirst")
                   : undefined
             }
+            className="flex flex-col items-center h-auto py-2 px-4"
           >
-            <Plus className="h-4 w-4 mr-2" />
-            {t("createRoom.createRoom")}
+            <span className="flex items-center gap-1">
+              <Plus className="h-4 w-4" />
+              {t("createRoom.createRoom")}
+            </span>
+            <span className="text-[10px] font-normal opacity-70 tracking-wide">{t("home.createRoomSub")}</span>
           </Button>
         </div>
       </div>

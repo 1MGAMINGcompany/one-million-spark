@@ -221,7 +221,12 @@
     "instantMatches": "Sofortige Matches",
     "skillBasedOnly": "Nur Geschicklichkeit",
     "featuredGames": "Ausgewählte Spiele",
-    "decentralized": "100% Dezentral · Nur Geschicklichkeit · Krypto-Betrieben"
+    "decentralized": "100% Dezentral · Nur Geschicklichkeit · Krypto-Betrieben",
+    "createRoomSub": "Um SOL spielen · Geschicklichkeit",
+    "viewRoomsSub": "Eintritt in SOL · Geschicklichkeit",
+    "quickMatchSub": "Sofortiges Match · SOL-Preispool",
+    "playForSol": "Für SOL spielen",
+    "skillBasedMatch": "Geschicklichkeitsspiel"
   },
   "games": {
     "chess": "Schach",

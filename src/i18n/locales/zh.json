@@ -218,7 +218,12 @@
     "instantMatches": "即时匹配",
     "skillBasedOnly": "纯技术较量",
     "featuredGames": "精选游戏",
-    "decentralized": "100%去中心化 · 纯技术较量 · 加密驱动"
+    "decentralized": "100%去中心化 · 纯技术较量 · 加密驱动",
+    "createRoomSub": "竞争SOL · 技术对决",
+    "viewRoomsSub": "SOL入场费 · 技术对决",
+    "quickMatchSub": "即时对局 · SOL奖池",
+    "playForSol": "竞争SOL",
+    "skillBasedMatch": "技术对决"
   },
   "games": {
     "chess": "国际象棋",
