@@ -8,7 +8,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { usePresenceHeartbeat } from "@/hooks/usePresenceHeartbeat";
+import { useAIGameTracker } from "@/hooks/useAIGameTracker";
 import { ArrowLeft, RotateCcw, Music, Music2, Volume2, VolumeX } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useSound } from "@/contexts/SoundContext";
@@ -25,9 +25,9 @@ import TurnIndicator from "@/components/ludo/TurnIndicator";
 
 const LudoAI = () => {
   const { t } = useTranslation();
-  usePresenceHeartbeat();
   const [searchParams] = useSearchParams();
   const difficulty = (searchParams.get("difficulty") as Difficulty) || "medium";
+  const { recordWin, recordLoss } = useAIGameTracker("ludo", difficulty);
   const { play, soundEnabled, toggleSound } = useSound();
 
   const [musicEnabled, setMusicEnabled] = useState(true);
@@ -106,12 +106,14 @@ const LudoAI = () => {
     onGameOver: (winnerColor) => {
       if (winnerColor === 'gold') {
         play("ludo_win");
+        recordWin();
         toast({
           title: t("ludo.youWin", "You Win! 🎉"),
           description: t("ludo.congratulations", "Congratulations!"),
         });
       } else {
         play("ludo_lose");
+        recordLoss();
         toast({
           title: t("ludo.gameOver", "Game Over"),
           description: t("ludo.aiWins", "AI Wins! Better luck next time."),

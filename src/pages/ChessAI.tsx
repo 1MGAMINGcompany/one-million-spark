@@ -8,7 +8,7 @@ import { ArrowLeft, RotateCcw, Gem, Star } from "lucide-react";
 import { SoundToggle } from "@/components/SoundToggle";
 import { useSound } from "@/contexts/SoundContext";
 import { useTranslation } from "react-i18next";
-import { usePresenceHeartbeat } from "@/hooks/usePresenceHeartbeat";
+import { useAIGameTracker } from "@/hooks/useAIGameTracker";
 import { createChessAI, type ChessAI as ChessAIType, type Difficulty } from "@/lib/chessEngine/localChessAI";
 
 // Helper to convert UCI move (e.g., "e2e4") to from/to squares
@@ -81,7 +81,6 @@ const AnimationToggle = ({
 
 const ChessAI = () => {
   const { t } = useTranslation();
-  usePresenceHeartbeat();
   const [searchParams] = useSearchParams();
   const { play } = useSound();
   const rawDifficulty = searchParams.get("difficulty");
@@ -90,6 +89,7 @@ const ChessAI = () => {
       ? rawDifficulty
       : "easy";
 
+  const { recordWin, recordLoss } = useAIGameTracker("chess", difficulty);
   const [game, setGame] = useState(new Chess());
   const [gameStatus, setGameStatus] = useState<string>("");
   const [moveHistory, setMoveHistory] = useState<string[]>([]);
@@ -152,6 +152,7 @@ const ChessAI = () => {
       setGameStatus(winner);
       setGameOver(true);
       play(isPlayerWin ? 'chess_win' : 'chess_lose');
+      if (isPlayerWin) recordWin(); else recordLoss();
       return true;
     }
     if (currentGame.isStalemate()) {
