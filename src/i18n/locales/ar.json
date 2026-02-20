@@ -928,5 +928,11 @@
       "dominos": "الدومينو",
       "ludo": "لودو"
     }
+  },
+  "liveStats": {
+    "browsingNow": "يتصفحون الآن",
+    "roomsWaiting": "غرف بانتظار",
+    "visitsToday": "زوار اليوم",
+    "beTheFirst": "كن أول من يبدأ مباراة."
   }
 }

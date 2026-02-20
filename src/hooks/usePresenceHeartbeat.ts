@@ -2,10 +2,10 @@ import { useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
 export function getSessionId(): string {
-  let id = sessionStorage.getItem("live_session_id");
+  let id = localStorage.getItem("live_session_id");
   if (!id) {
     id = crypto.randomUUID();
-    sessionStorage.setItem("live_session_id", id);
+    localStorage.setItem("live_session_id", id);
   }
   return id;
 }

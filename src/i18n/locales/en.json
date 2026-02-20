@@ -1473,5 +1473,11 @@
       "dominos": "Dominos",
       "ludo": "Ludo"
     }
+  },
+  "liveStats": {
+    "browsingNow": "browsing now",
+    "roomsWaiting": "rooms waiting",
+    "visitsToday": "visitors today",
+    "beTheFirst": "Be the first to start a match."
   }
 }

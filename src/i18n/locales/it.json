@@ -938,5 +938,11 @@
       "dominos": "Domino",
       "ludo": "Ludo"
     }
+  },
+  "liveStats": {
+    "browsingNow": "navigano ora",
+    "roomsWaiting": "stanze in attesa",
+    "visitsToday": "visitatori oggi",
+    "beTheFirst": "Sii il primo a giocare."
   }
 }

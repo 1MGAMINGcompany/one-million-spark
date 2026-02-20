@@ -982,5 +982,11 @@
       "dominos": "Dominos",
       "ludo": "Ludo"
     }
+  },
+  "liveStats": {
+    "browsingNow": "en ligne maintenant",
+    "roomsWaiting": "salles en attente",
+    "visitsToday": "visiteurs aujourd'hui",
+    "beTheFirst": "Soyez le premier à jouer."
   }
 }
