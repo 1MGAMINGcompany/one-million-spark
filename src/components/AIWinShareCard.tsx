@@ -36,7 +36,7 @@ function formatDuration(seconds: number): string {
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
-const SITE_URL = "https://one-million-spark.lovable.app";
+const SITE_URL = "https://www.1mgaming.com";
 
 export default function AIWinShareCard({
   open,
@@ -284,7 +284,7 @@ export default function AIWinShareCard({
               className="text-[10px] tracking-wider"
               style={{ color: "hsl(45 93% 54% / 0.3)" }}
             >
-              one-million-spark.lovable.app
+              www.1mgaming.com
             </p>
           </div>
         </div>
