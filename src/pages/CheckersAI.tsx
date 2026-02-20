@@ -454,6 +454,14 @@ const CheckersAI = () => {
       if (result) {
         setGameOver(result);
         play(result === 'gold' ? 'checkers_win' : 'checkers_lose');
+        if (result === 'gold') {
+          const dur = getDuration();
+          recordWin();
+          setWinDuration(dur);
+          setShowShareCard(true);
+        } else if (result === 'obsidian') {
+          recordLoss();
+        }
       } else {
         setCurrentPlayer("gold");
       }
@@ -494,6 +502,14 @@ const CheckersAI = () => {
       if (result) {
         setGameOver(result);
         play(result === 'gold' ? 'checkers_win' : 'checkers_lose');
+        if (result === 'gold') {
+          const dur = getDuration();
+          recordWin();
+          setWinDuration(dur);
+          setShowShareCard(true);
+        } else if (result === 'obsidian') {
+          recordLoss();
+        }
       } else {
         setCurrentPlayer("gold");
       }
