@@ -21,13 +21,6 @@ export interface AIWinShareCardProps {
   durationSeconds: number;
 }
 
-const GAME_LABELS: Record<string, string> = {
-  chess: "Chess",
-  checkers: "Checkers",
-  backgammon: "Backgammon",
-  dominos: "Dominos",
-  ludo: "Ludo",
-};
 
 const GameIconMap: Record<string, React.ComponentType<{ className?: string }>> = {
   chess: ChessIcon,
@@ -57,7 +50,7 @@ export default function AIWinShareCard({
   const [downloading, setDownloading] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const gameLabel = GAME_LABELS[game] ?? game;
+  const gameLabel = t(`aiWinCard.gameNames.${game}`, { defaultValue: game });
   const diffLabel =
     difficulty === "easy"
       ? t("playAi.easy")

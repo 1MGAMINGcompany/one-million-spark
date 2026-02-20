@@ -971,6 +971,13 @@
     "waText": "1M GAMINGでAIに勝ちました！無料でプレイ：{{link}}",
     "close": "閉じる",
     "playAgain": "もう一度プレイ",
-    "tagline": "スキル > 運"
+    "tagline": "スキル > 運",
+    "gameNames": {
+      "chess": "チェス",
+      "checkers": "チェッカーズ",
+      "backgammon": "バックギャモン",
+      "dominos": "ドミノ",
+      "ludo": "すごろく"
+    }
   }
 }

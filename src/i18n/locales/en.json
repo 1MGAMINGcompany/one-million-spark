@@ -1465,6 +1465,13 @@
     "waText": "I just beat the AI on 1M GAMING! Play free: {{link}}",
     "close": "Close",
     "playAgain": "Play Again",
-    "tagline": "SKILL > LUCK"
+    "tagline": "SKILL > LUCK",
+    "gameNames": {
+      "chess": "Chess",
+      "checkers": "Checkers",
+      "backgammon": "Backgammon",
+      "dominos": "Dominos",
+      "ludo": "Ludo"
+    }
   }
 }

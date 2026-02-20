@@ -974,6 +974,13 @@
     "waText": "Ich habe die KI auf 1M GAMING besiegt! Spiel kostenlos: {{link}}",
     "close": "Schließen",
     "playAgain": "Nochmal spielen",
-    "tagline": "KÖNNEN > GLÜCK"
+    "tagline": "KÖNNEN > GLÜCK",
+    "gameNames": {
+      "chess": "Schach",
+      "checkers": "Dame",
+      "backgammon": "Backgammon",
+      "dominos": "Domino",
+      "ludo": "Ludo"
+    }
   }
 }
