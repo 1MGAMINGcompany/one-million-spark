@@ -957,10 +957,11 @@
     "freeMatchJoined": "Oponente encontrado! Iniciando jogo...",
     "freeCancelled": "Partida gratuita cancelada.",
     "playAIWhileWaiting": "Entediado esperando? Jogue {{game}} vs IA de graça — sua sala continua aberta!",
-    "playAIWhileWaitingBtn": "Jogar vs IA (nova aba) →",
+    "playAIWhileWaitingBtn": "Jogar vs IA →",
+    "backToMatchmaking": "Voltar ao matchmaking",
     "shareLink": "Compartilhar link da sala",
     "shareOrCopy": "Copie ou compartilhe o link da sua sala",
-    "roomStillOpen": "✅ Sua sala ainda fica aberta por 15 min!",
+    "roomStillOpen": "Sua sala ainda fica aberta por 15 min!",
     "roomStillOpenDesc": "Qualquer pessoa procurando {{game}} ainda pode entrar! Abra a lista de salas para compartilhar o link.",
     "viewRoomList": "Ver lista de salas",
     "waitingNote": "Sua sala está ao vivo 🟢"
