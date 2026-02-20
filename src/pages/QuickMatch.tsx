@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { ArrowLeft, Zap, Bot, Search, Loader2, Users, Copy, Check, Wallet, AlertTriangle, Share2, MapPin } from "lucide-react";
+import QuickMatchAIGame from "@/components/QuickMatchAIGame";
 import { ChessIcon, DominoIcon, BackgammonIcon, CheckersIcon, LudoIcon } from "@/components/GameIcons";
 import { PrivyLoginButton } from "@/components/PrivyLoginButton";
 import { ConnectWalletGate } from "@/components/ConnectWalletGate";
@@ -104,30 +105,7 @@ export default function QuickMatch() {
   const roomsRef = useRef(rooms);
   roomsRef.current = rooms;
 
-  // ── Restore pending free room from sessionStorage (on mount, after "Play vs AI") ──
-  useEffect(() => {
-    const stored = sessionStorage.getItem("quickmatch_pending_room");
-    if (!stored) return;
-    try {
-      const { roomPda, gameKey, stake, savedAt } = JSON.parse(stored);
-      const ageMs = Date.now() - savedAt;
-      if (ageMs > 15 * 60 * 1000) {
-        sessionStorage.removeItem("quickmatch_pending_room");
-        return;
-      }
-      sessionStorage.removeItem("quickmatch_pending_room");
-      const gameOption = GAME_OPTIONS.find((g) => g.key === gameKey);
-      if (gameOption) setSelectedGame(gameOption.type);
-      if (typeof stake === "number") setSelectedStake(stake);
-      setCreatedRoomPda(roomPda);
-      hasNavigatedRef.current = false;
-      setPhase("searching");
-      toast({ title: "👋 Welcome back!", description: "Still searching for an opponent…" });
-    } catch {
-      sessionStorage.removeItem("quickmatch_pending_room");
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const [showAIGame, setShowAIGame] = useState(false);
 
   // Derived values
   const isLudo = selectedGame === GameType.Ludo;
@@ -428,12 +406,12 @@ export default function QuickMatch() {
       }
       setCreatedRoomPda(null);
       setPhase("selecting");
-      navigate(-1);
+      navigate('/room-list');
       return;
     }
 
     if (!createdRoomPda || !publicKey) {
-      navigate(-1);
+      navigate('/room-list');
       return;
     }
 
@@ -458,20 +436,20 @@ export default function QuickMatch() {
           break;
         case "already_resolved":
           toast({ title: data.message });
-          navigate(-1);
+          navigate('/room-list');
           break;
         case "force_settled":
           toast({ title: t("quickMatch.fundsRecovered") });
-          navigate(-1);
+          navigate('/room-list');
           break;
         default:
           toast({ title: data.message || t("quickMatch.error"), variant: "destructive" });
-          navigate(-1);
+          navigate('/room-list');
       }
     } catch (e: any) {
       console.error("[QuickMatch] Recovery check failed:", e);
       toast({ title: e.message || t("quickMatch.error"), variant: "destructive" });
-      navigate(-1);
+      navigate('/room-list');
     } finally {
       setIsRecovering(false);
     }
@@ -497,7 +475,7 @@ export default function QuickMatch() {
 
       toast({ title: t("quickMatch.fundsRecovered") });
       setRecoverPendingTx(null);
-      navigate(-1);
+      navigate('/room-list');
     } catch (e: any) {
       console.error("[QuickMatch] Cancel tx failed:", e);
       toast({ title: e.message || t("quickMatch.error"), variant: "destructive" });
@@ -513,7 +491,7 @@ export default function QuickMatch() {
     <div className="container max-w-lg py-8 px-4">
       {/* Header */}
       <div className="flex items-center gap-3 mb-8">
-        <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
+        <Button variant="ghost" size="icon" onClick={() => navigate('/room-list')}>
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div className="flex items-center gap-2">
@@ -699,18 +677,7 @@ export default function QuickMatch() {
                     variant="outline"
                     size="sm"
                     className="mt-2 w-full gap-2 text-xs"
-                    onClick={() => {
-                      // Store room state so we can recover it when user presses back
-                      if (createdRoomPda) {
-                        sessionStorage.setItem("quickmatch_pending_room", JSON.stringify({
-                          roomPda: createdRoomPda,
-                          gameKey: selectedGameKey,
-                          stake: selectedStake,
-                          savedAt: Date.now(),
-                        }));
-                      }
-                      navigate(`/play-ai/${selectedGameKey}`);
-                    }}
+                    onClick={() => setShowAIGame(true)}
                   >
                     <Bot className="h-3 w-3" />
                     {t("quickMatch.playAIWhileWaitingBtn")}
@@ -797,17 +764,7 @@ export default function QuickMatch() {
               variant="outline"
               size="lg"
               className="w-full gap-2"
-              onClick={() => {
-                if (createdRoomPda) {
-                  sessionStorage.setItem("quickmatch_pending_room", JSON.stringify({
-                    roomPda: createdRoomPda,
-                    gameKey: selectedGameKey,
-                    stake: selectedStake,
-                    savedAt: Date.now(),
-                  }));
-                }
-                navigate(`/play-ai/${selectedGameKey}`);
-              }}
+              onClick={() => setShowAIGame(true)}
             >
               <Bot className="h-4 w-4" />
               {t("quickMatch.playAI")}
@@ -849,6 +806,28 @@ export default function QuickMatch() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* ── AI Game Full-Screen Overlay ── */}
+      {showAIGame && (
+        <div className="fixed inset-0 z-50 bg-background overflow-y-auto">
+          {/* Sticky header with back button and timer */}
+          <div className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b border-primary/20 px-4 py-3 flex items-center gap-3">
+            <Button variant="ghost" size="sm" onClick={() => setShowAIGame(false)}>
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              {t("quickMatch.backToMatchmaking", "Back to Matchmaking")}
+            </Button>
+            <span className="text-sm text-muted-foreground">
+              {translatedGameName} • AI Practice
+            </span>
+            {phase === "searching" && (
+              <span className="ml-auto text-sm font-mono text-primary">
+                {formatTime(secondsLeft)}
+              </span>
+            )}
+          </div>
+          <QuickMatchAIGame gameKey={selectedGameKey as "chess" | "dominos" | "backgammon" | "checkers" | "ludo"} />
+        </div>
+      )}
     </div>
   );
 }
