@@ -13,7 +13,11 @@ const LanguageSelector = () => {
   const { i18n } = useTranslation();
   const [open, setOpen] = useState(false);
 
-  const currentLang = languages.find(l => l.code === i18n.language) || languages[0];
+  // Match exact code first, then base code (e.g. "hi-IN" → "hi")
+  const currentLang =
+    languages.find(l => l.code === i18n.language) ||
+    languages.find(l => i18n.language.startsWith(l.code)) ||
+    languages[0];
 
   const handleLanguageChange = (code: LanguageCode) => {
     i18n.changeLanguage(code);

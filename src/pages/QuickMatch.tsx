@@ -39,11 +39,11 @@ import { buildInviteLink } from "@/lib/invite";
 type Phase = "selecting" | "searching" | "timeout";
 
 const GAME_OPTIONS = [
-  { type: GameType.Chess, key: "chess", label: "Chess" },
-  { type: GameType.Dominos, key: "dominos", label: "Dominos" },
-  { type: GameType.Backgammon, key: "backgammon", label: "Backgammon" },
-  { type: GameType.Checkers, key: "checkers", label: "Checkers" },
-  { type: GameType.Ludo, key: "ludo", label: "Ludo" },
+  { type: GameType.Chess, key: "chess" },
+  { type: GameType.Dominos, key: "dominos" },
+  { type: GameType.Backgammon, key: "backgammon" },
+  { type: GameType.Checkers, key: "checkers" },
+  { type: GameType.Ludo, key: "ludo" },
 ];
 
 const GAME_ICONS: Record<number, React.ReactNode> = {
