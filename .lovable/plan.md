@@ -1,46 +1,51 @@
 
-# Fix: Replace Lovable Preview URL with www.1mgaming.com in AI Win Share Card
+# Fix: Visitors Today Count Drops Mid-Day
 
-## What's Wrong
+## Root Cause
 
-The screenshot shows two places where the wrong URL appears when a user shares an AI victory on WhatsApp:
+The "visitors today" count drops because the garbage collection (GC) logic in the `live-stats` edge function deletes ALL presence heartbeat rows older than 15 minutes — including today's visitors who simply left the site.
 
-1. **The share message body** (all languages): Shows `https://one-million-spark.lovable.app` — this is the URL users send to friends
-2. **The watermark at the bottom of the card image**: Shows `one-million-spark.lovable.app` — this is baked into the downloaded PNG
-
-Both originate from a single constant in `src/components/AIWinShareCard.tsx` line 39:
-```typescript
-const SITE_URL = "https://one-million-spark.lovable.app";
+**Broken code (line 141-143 in `supabase/functions/live-stats/index.ts`):**
+```ts
+const gcCutoff = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+await supabase.from("presence_heartbeats").delete().lt("last_seen", gcCutoff);
 ```
 
-And a hardcoded string on line 287:
+This permanently removes any session not seen in the last 15 minutes. Since "visitors today" is counted by querying `presence_heartbeats` for rows with `first_seen_date = today`, deleted rows disappear from the count permanently.
+
+**Example of what happened:**
+- 09:00 — User A visits → count = 1
+- 09:30 — User A leaves (tab closed, no heartbeat for 15+ min)
+- 09:31 — Next `stats` call triggers GC → User A's row deleted → count = 0
+
+## The Fix: One Line
+
+Add a second filter to the GC delete so it only removes rows from **previous days**, never today's:
+
+```ts
+// BEFORE (broken):
+await supabase.from("presence_heartbeats").delete().lt("last_seen", gcCutoff);
+
+// AFTER (fixed):
+await supabase
+  .from("presence_heartbeats")
+  .delete()
+  .lt("last_seen", gcCutoff)
+  .lt("first_seen_date", todayDate);  // ← only deletes past-day stale sessions
 ```
-one-million-spark.lovable.app
-```
 
-## Why Only One File Needs Changing
+`todayDate` is already computed earlier in the same code block (`"YYYY-MM-DD"` string), so no new variables are needed.
 
-The i18n share templates in all 10 locales use `{{link}}` as a template variable:
-- Hindi: `"मैंने 1M GAMING पर AI को हरा दिया! मुफ्त में खेलें: {{link}}"`
-- All other languages follow the same pattern
+## What Changes
 
-So changing `SITE_URL` to `https://www.1mgaming.com` automatically fixes the share text in Arabic, Chinese, French, German, Hindi, Italian, Japanese, Portuguese, and Spanish — no i18n file changes needed.
+| File | Change |
+|------|--------|
+| `supabase/functions/live-stats/index.ts` | Add `.lt("first_seen_date", todayDate)` to GC delete query (1 line) |
 
-All other files in the project already correctly use `https://1mgaming.com` (HelpCenter, HelpArticle, SeoMeta, MobileWalletRedirect, etc.). Only `AIWinShareCard.tsx` has the stale preview URL.
+## Behaviour After Fix
 
-## Scope: One File, Two Lines
-
-**File:** `src/components/AIWinShareCard.tsx`
-
-| Line | Before | After |
-|------|--------|-------|
-| 39 | `const SITE_URL = "https://one-million-spark.lovable.app";` | `const SITE_URL = "https://www.1mgaming.com";` |
-| 287 | `one-million-spark.lovable.app` | `www.1mgaming.com` |
-
-## Result After Fix
-
-- WhatsApp messages will share: `https://www.1mgaming.com`
-- X (Twitter) tweet links will show: `https://www.1mgaming.com`
-- The downloaded PNG card watermark will read: `www.1mgaming.com`
-- All 10 language share templates automatically updated (no i18n changes needed)
-- Works for all 5 AI game types: Chess, Checkers, Backgammon, Dominos, Ludo
+- Users who visited today and left will stay in the `presence_heartbeats` table until midnight
+- The "visitors today" count only ever goes **up** throughout the day — never down
+- "Browsing now" (last 10 min) is unaffected and still reflects live users accurately
+- The table still gets cleaned of old multi-day stale sessions to prevent unbounded growth
+- No schema changes, no new tables — purely a logic fix in the edge function
