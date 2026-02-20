@@ -18,7 +18,6 @@ export function PrivyProviderWrapper({ children }: PrivyProviderWrapperProps) {
       appId={PRIVY_APP_ID}
       config={{
         appearance: {
-          walletChainType: "solana-only",
           showWalletLoginFirst: false,
         },
         loginMethods: ["email", "google", "twitter"],
