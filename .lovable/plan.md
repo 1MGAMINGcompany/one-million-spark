@@ -1,67 +1,74 @@
 
 
-## Bug: "Invalid Room Link" on Free Room Rejoin
+## Full Website Audit Report and Fix Plan
 
-### Root Cause
+### 1. QuickMatch AI Overlay — PASS
+The overlay implementation is correct:
+- `showAIGame` state toggles a fixed z-50 overlay (lines 810-830)
+- Both "Play vs AI" buttons (searching phase line 680, timeout phase line 767) call `setShowAIGame(true)` — no navigation away
+- "Back to Matchmaking" button dismisses the overlay with `setShowAIGame(false)`
+- Timer stays visible in the overlay header when phase is "searching"
+- All `navigate(-1)` calls have been successfully removed (confirmed by search — zero matches)
+- `backToMatchmaking` key is present in all 10 locale files
 
-The navigation chain for rejoining a free room in "waiting" status goes through three components, but one of them has no awareness of free rooms:
+### 2. Free Room Rejoin — PASS
+Room.tsx now has:
+- `isFreeRoom` guard (line 145)
+- PDA validation skip for `free-` prefix (lines 154-158)
+- DB session hydration for free rooms (lines 206-226)
+- `fetchRoom` early return for free rooms (line 294)
+- Realtime subscription skip for free rooms (line 437)
 
-```text
-RoomList "Rejoin" click
-  --> /play/free-xxxxxxxx  (PlayRoom.tsx)
-  --> PlayRoom sees status="waiting", redirects to /room/free-xxxxxxxx
-  --> Room.tsx calls validatePublicKey("free-xxxxxxxx")
-  --> FAILS -- not a valid Solana public key
-  --> Shows "INVALID ROOM LINK"
-```
+### 3. Chat Panel — PASS
+GameChatPanel is integrated in all 5 multiplayer game pages (Chess, Dominos, Backgammon, Checkers, Ludo). It uses a Sheet component (slide-in drawer) that can be opened/closed via a message icon button.
 
-`PlayRoom.tsx` and `RoomRouter.tsx` both have `if (roomPdaParam.startsWith("free-"))` early-return guards that skip the Solana public key validation. `Room.tsx` does not -- it runs `validatePublicKey()` on every room PDA unconditionally (line 151), which naturally rejects the `free-` prefix synthetic IDs.
+### 4. Translations — PASS
+All recent keys (`backToMatchmaking`, `playAIWhileWaitingBtn`) are present across all 10 locales (en, es, fr, de, zh, pt, hi, ja, ar, it).
 
-### Fix
+---
 
-Add the same `free-` prefix guard to `Room.tsx`. When a free room is detected, fetch its session from the database instead of trying to validate it as a Solana public key. This mirrors the exact pattern already used in `PlayRoom.tsx` and `RoomRouter.tsx`.
+### 5. "Download App" Button — BUG FOUND
+
+**Root cause**: The `MobileAppPrompt` component's "Download" button does absolutely nothing. It calls `e.preventDefault()` and then `handleDismiss()` — it just closes the prompt. There is a `// TODO: Replace with actual app store links` comment in the code.
+
+The project has a `site.webmanifest` configured for PWA but **no PWA service worker** is set up (`vite-plugin-pwa` is not installed, and no `beforeinstallprompt` event handling exists anywhere in the codebase). This means the browser's "Add to Home Screen" prompt is never captured.
+
+**Fix**: Rewrite `MobileAppPrompt` to use the browser's native PWA install prompt (`beforeinstallprompt` event). This captures the install event, stores it, and triggers it when the user clicks "Download". On iOS Safari (which doesn't support `beforeinstallprompt`), show manual instructions ("Tap Share then Add to Home Screen").
+
+**File: `src/components/MobileAppPrompt.tsx`**
+
+Changes:
+- Add a `useEffect` that listens for the `beforeinstallprompt` event and stores the deferred prompt
+- On "Download" click, call `deferredPrompt.prompt()` to trigger the native browser install dialog
+- On iOS (no `beforeinstallprompt` support), show a tooltip/toast with manual instructions: "Tap the Share button, then 'Add to Home Screen'"
+- Add `appinstalled` event listener to auto-dismiss after successful install
+- Localize the text using `t()` calls with new translation keys
+
+**New translation keys (all 10 locale files)**:
+- `mobilePrompt.getTheApp` — "Get the App"
+- `mobilePrompt.downloadDesc` — "Install 1M Gaming for the best experience"
+- `mobilePrompt.install` — "Install"
+- `mobilePrompt.iosInstructions` — "Tap the Share button, then 'Add to Home Screen'"
 
 ---
 
-### Technical Details
+### Files to Change
 
-**File: `src/pages/Room.tsx`**
-
-In the PDA validation `useEffect` (lines 145-158), add a `free-` prefix check before `validatePublicKey`:
-
-```tsx
-useEffect(() => {
-  if (!roomPdaParam) {
-    setPdaError("No room specified");
-    return;
-  }
-
-  // Free rooms use synthetic IDs, not Solana public keys
-  if (roomPdaParam.startsWith("free-")) {
-    setPdaError(null); // Valid free room format
-    return;
-  }
-
-  const validPda = validatePublicKey(roomPdaParam);
-  if (!validPda) {
-    setPdaError("Invalid room link");
-    console.error("[Room] Invalid PDA param:", roomPdaParam);
-  } else {
-    setPdaError(null);
-  }
-}, [roomPdaParam]);
-```
-
-Additionally, audit the rest of `Room.tsx` for any other places that assume the PDA is a valid Solana public key (e.g., `new PublicKey(roomPdaParam)`, on-chain account fetches) and wrap those in `!roomPdaParam.startsWith("free-")` guards, using the database session data instead for free rooms.
-
-The `RoomList.tsx` "Rejoin" button (line 450) navigates to `/play/free-xxx`. For waiting free rooms, `PlayRoom.tsx` redirects to `/room/free-xxx`, which is where the fix is needed. No changes to `RoomList.tsx` or `PlayRoom.tsx` are required.
-
----
+| File | Action | What |
+|---|---|---|
+| `src/components/MobileAppPrompt.tsx` | Modify | Implement `beforeinstallprompt` PWA install flow with iOS fallback |
+| `src/i18n/locales/en.json` | Modify | Add 4 new `mobilePrompt.*` keys |
+| `src/i18n/locales/ar.json` | Modify | Add 4 translated keys |
+| `src/i18n/locales/es.json` | Modify | Add 4 translated keys |
+| `src/i18n/locales/fr.json` | Modify | Add 4 translated keys |
+| `src/i18n/locales/de.json` | Modify | Add 4 translated keys |
+| `src/i18n/locales/zh.json` | Modify | Add 4 translated keys |
+| `src/i18n/locales/pt.json` | Modify | Add 4 translated keys |
+| `src/i18n/locales/hi.json` | Modify | Add 4 translated keys |
+| `src/i18n/locales/ja.json` | Modify | Add 4 translated keys |
+| `src/i18n/locales/it.json` | Modify | Add 4 translated keys |
 
 ### Summary
 
-| File | Change |
-|---|---|
-| `src/pages/Room.tsx` | Add `free-` prefix guard to skip Solana PDA validation and use DB session data for free rooms |
+Everything else passes the audit. The only actionable bug is the non-functional "Download App" button, which needs the `beforeinstallprompt` PWA install flow plus iOS Safari fallback instructions.
 
-This is a single-file fix that follows the exact same pattern already established in `PlayRoom.tsx` and `RoomRouter.tsx`.
