@@ -1,5 +1,6 @@
 // App Root
 import { useEffect } from "react";
+import { usePresenceHeartbeat } from "@/hooks/usePresenceHeartbeat";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -82,6 +83,9 @@ function useVisualViewportHeight() {
 const AppContent = () => {
   const location = useLocation();
   useVisualViewportHeight();
+  // Global presence heartbeat — fires for every visitor on every page.
+  // AI game pages augment this with useAIGameTracker (same session_id, richer metadata).
+  usePresenceHeartbeat();
   
   // Hide footer on game/play routes to maximize vertical space
   const hideFooter = location.pathname.startsWith('/play/') || 

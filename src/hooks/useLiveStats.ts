@@ -1,13 +1,10 @@
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { usePresenceHeartbeat } from "./usePresenceHeartbeat";
 
 export function useLiveStats() {
   const [browsing, setBrowsing] = useState(0);
   const [roomsWaiting, setRoomsWaiting] = useState(0);
   const [loading, setLoading] = useState(true);
-
-  usePresenceHeartbeat();
 
   const fetchStats = useCallback(async () => {
     try {

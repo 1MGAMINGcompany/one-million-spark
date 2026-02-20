@@ -5,13 +5,11 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, Play, Gem, Star } from "lucide-react";
 import { ChessIcon, DominoIcon, BackgammonIcon, CheckersIcon, LudoIcon } from "@/components/GameIcons";
 import { useSound } from "@/contexts/SoundContext";
-import { usePresenceHeartbeat } from "@/hooks/usePresenceHeartbeat";
 
 type Difficulty = "easy" | "medium" | "hard";
 
 const PlayAILobby = () => {
   const { play } = useSound();
-  usePresenceHeartbeat("play-ai-lobby");
   const { t } = useTranslation();
   const navigate = useNavigate();
   
