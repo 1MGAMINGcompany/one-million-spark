@@ -8,6 +8,7 @@ import { useSound } from "@/contexts/SoundContext";
 import { useTranslation } from "react-i18next";
 import { useAIGameTracker } from "@/hooks/useAIGameTracker";
 import GoldConfettiExplosion from "@/components/GoldConfettiExplosion";
+import AIWinShareCard from "@/components/AIWinShareCard";
 
 type Difficulty = "easy" | "medium" | "hard";
 
@@ -52,7 +53,9 @@ const DominosAI = () => {
     rawDifficulty === "easy" || rawDifficulty === "medium" || rawDifficulty === "hard"
       ? rawDifficulty
       : "easy";
-  const { recordWin, recordLoss } = useAIGameTracker("dominos", difficulty);
+  const { recordWin, recordLoss, getDuration } = useAIGameTracker("dominos", difficulty);
+  const [showShareCard, setShowShareCard] = useState(false);
+  const [winDuration, setWinDuration] = useState(0);
 
   const [chain, setChain] = useState<PlacedDomino[]>([]);
   const [playerHand, setPlayerHand] = useState<Domino[]>([]);
@@ -134,7 +137,10 @@ const DominosAI = () => {
       setGameStatus(t('gameAI.youWin'));
       setGameOver(true);
       play('domino_win');
+      const domDur = getDuration();
       recordWin();
+      setWinDuration(domDur);
+      setShowShareCard(true);
       return true;
     }
     if (aHand.length === 0) {
@@ -163,7 +169,10 @@ const DominosAI = () => {
       if (playerPips < aiPips) {
         setGameStatus(t('gameAI.gameBlocked') + " - " + t('gameAI.youWin') + " (" + t('gameAI.fewerPips') + ")");
         play('domino_win');
+        const domDur2 = getDuration();
         recordWin();
+        setWinDuration(domDur2);
+        setShowShareCard(true);
       } else if (aiPips < playerPips) {
         setGameStatus(t('gameAI.gameBlocked') + " - " + t('gameAI.youLose') + " (" + t('gameAI.morePips') + ")");
         play('domino_lose');
@@ -759,6 +768,13 @@ const DominosAI = () => {
           </div>
         </div>
       </div>
+      <AIWinShareCard
+        open={showShareCard}
+        onClose={() => setShowShareCard(false)}
+        game="dominos"
+        difficulty={difficulty}
+        durationSeconds={winDuration}
+      />
     </div>
   );
 };

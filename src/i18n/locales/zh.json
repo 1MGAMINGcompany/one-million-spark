@@ -899,5 +899,24 @@
     "freeMatchCreated": "免费房间已创建！等待对手...",
     "freeMatchJoined": "找到对手！开始游戏...",
     "freeCancelled": "免费比赛已取消。"
+  },
+  "aiWinCard": {
+    "victory": "胜利",
+    "skillConfirmed": "技术得到验证",
+    "youBeatAI": "你击败了AI",
+    "difficulty": "难度",
+    "timePlayed": "用时",
+    "shareTitle": "分享你的胜利",
+    "downloadImage": "保存图片",
+    "generating": "生成中...",
+    "shareOnX": "在X上分享",
+    "whatsapp": "WhatsApp",
+    "copy": "复制",
+    "copied": "已复制！",
+    "xText": "刚刚在{{difficulty}}难度下击败了{{game}}的AI！免费游玩——无需钱包。\n🎮 {{link}}",
+    "waText": "我在1M GAMING击败了AI！免费玩：{{link}}",
+    "close": "关闭",
+    "playAgain": "再玩一次",
+    "tagline": "技术 > 运气"
   }
 }

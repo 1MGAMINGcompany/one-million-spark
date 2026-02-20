@@ -6,6 +6,7 @@ import { SoundToggle } from "@/components/SoundToggle";
 import { useSound } from "@/contexts/SoundContext";
 import { useTranslation } from "react-i18next";
 import { useAIGameTracker } from "@/hooks/useAIGameTracker";
+import AIWinShareCard from "@/components/AIWinShareCard";
 
 type Difficulty = "easy" | "medium" | "hard";
 type Player = "gold" | "obsidian";
@@ -57,7 +58,7 @@ const CheckersAI = () => {
   const { t } = useTranslation();
   const [searchParams] = useSearchParams();
   const difficulty = (searchParams.get("difficulty") as Difficulty) || "medium";
-  const { recordWin, recordLoss } = useAIGameTracker("checkers", difficulty);
+  const { recordWin, recordLoss, getDuration } = useAIGameTracker("checkers", difficulty);
   const { play } = useSound();
   
   const [board, setBoard] = useState<(Piece | null)[][]>(initializeBoard);
@@ -68,6 +69,8 @@ const CheckersAI = () => {
   const [isAiThinking, setIsAiThinking] = useState(false);
   const [chainCapture, setChainCapture] = useState<Position | null>(null);
   const [aiChainPos, setAiChainPos] = useState<Position | null>(null); // For AI chain captures
+  const [showShareCard, setShowShareCard] = useState(false);
+  const [winDuration, setWinDuration] = useState(0);
   
   // Use ref to always have access to latest board state
   const boardRef = useRef(board);
@@ -314,12 +317,19 @@ const CheckersAI = () => {
           
           const result = checkGameOver(newBoard);
           if (result) {
-            setGameOver(result);
-            play(result === 'gold' ? 'checkers_win' : 'checkers_lose');
-            if (result === 'gold') recordWin(); else if (result === 'obsidian') recordLoss();
-          } else {
-            setCurrentPlayer("obsidian");
+          setGameOver(result);
+          play(result === 'gold' ? 'checkers_win' : 'checkers_lose');
+          if (result === 'gold') {
+            const dur = getDuration();
+            recordWin();
+            setWinDuration(dur);
+            setShowShareCard(true);
+          } else if (result === 'obsidian') {
+            recordLoss();
           }
+        } else {
+          setCurrentPlayer("obsidian");
+        }
         }
       }
       return;
@@ -404,7 +414,10 @@ const CheckersAI = () => {
       if (!move) {
         setGameOver("gold");
         play('checkers_win');
+        const dur2 = getDuration();
         recordWin();
+        setWinDuration(dur2);
+        setShowShareCard(true);
         setIsAiThinking(false);
         return;
       }
@@ -608,6 +621,13 @@ const CheckersAI = () => {
         <Gem className="w-4 h-4 text-primary/40" />
         <Star className="w-3 h-3 text-primary/40 fill-primary/20" />
       </div>
+      <AIWinShareCard
+        open={showShareCard}
+        onClose={() => setShowShareCard(false)}
+        game="checkers"
+        difficulty={difficulty}
+        durationSeconds={winDuration}
+      />
     </div>
   );
 };

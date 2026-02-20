@@ -912,5 +912,24 @@
     "freeMatchCreated": "Stanza gratuita creata! In attesa dell'avversario...",
     "freeMatchJoined": "Avversario trovato! Avvio del gioco...",
     "freeCancelled": "Partita gratuita annullata."
+  },
+  "aiWinCard": {
+    "victory": "VITTORIA",
+    "skillConfirmed": "ABILITÀ CONFERMATA",
+    "youBeatAI": "Hai battuto l'IA",
+    "difficulty": "Difficoltà",
+    "timePlayed": "Tempo",
+    "shareTitle": "Condividi la tua vittoria",
+    "downloadImage": "Salva immagine",
+    "generating": "Generazione...",
+    "shareOnX": "Condividi su X",
+    "whatsapp": "WhatsApp",
+    "copy": "Copia",
+    "copied": "Copiato!",
+    "xText": "Ho appena battuto l'IA a {{game}} con difficoltà {{difficulty}}! Gratis — senza portafoglio.\n🎮 {{link}}",
+    "waText": "Ho battuto l'IA su 1M GAMING! Gioca gratis: {{link}}",
+    "close": "Chiudi",
+    "playAgain": "Gioca ancora",
+    "tagline": "ABILITÀ > FORTUNA"
   }
 }

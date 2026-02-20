@@ -1177,5 +1177,24 @@
     "freeMatchCreated": "¡Sala gratuita creada! Esperando oponente...",
     "freeMatchJoined": "¡Oponente encontrado! Iniciando juego...",
     "freeCancelled": "Partida gratuita cancelada."
+  },
+  "aiWinCard": {
+    "victory": "VICTORIA",
+    "skillConfirmed": "HABILIDAD CONFIRMADA",
+    "youBeatAI": "Venciste a la IA",
+    "difficulty": "Dificultad",
+    "timePlayed": "Tiempo",
+    "shareTitle": "Comparte tu victoria",
+    "downloadImage": "Guardar imagen",
+    "generating": "Generando...",
+    "shareOnX": "Compartir en X",
+    "whatsapp": "WhatsApp",
+    "copy": "Copiar",
+    "copied": "¡Copiado!",
+    "xText": "¡Acabo de vencer a la IA en {{game}} con dificultad {{difficulty}}! Gratis — sin billetera.\n🎮 {{link}}",
+    "waText": "¡Vencí a la IA en 1M GAMING! Juega gratis: {{link}}",
+    "close": "Cerrar",
+    "playAgain": "Jugar de nuevo",
+    "tagline": "HABILIDAD > SUERTE"
   }
 }

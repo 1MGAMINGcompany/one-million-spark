@@ -49,7 +49,7 @@ i18n
       escapeValue: false,
     },
     detection: {
-      order: ['localStorage', 'navigator', 'htmlTag'],
+      order: ['navigator', 'localStorage', 'htmlTag'],
       caches: ['localStorage'],
       lookupLocalStorage: '1m-gaming-language',
     },

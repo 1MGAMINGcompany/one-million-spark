@@ -12,6 +12,7 @@ import { useAIGameTracker } from "@/hooks/useAIGameTracker";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useSound } from "@/contexts/SoundContext";
 import { useTranslation } from "react-i18next";
+import AIWinShareCard from "@/components/AIWinShareCard";
 import {
   type Player,
   type GameState,
@@ -90,8 +91,10 @@ const BackgammonAI = () => {
   const [searchParams] = useSearchParams();
   const isMobile = useIsMobile();
   const difficulty = (searchParams.get("difficulty") as Difficulty) || "medium";
-  const { recordWin, recordLoss } = useAIGameTracker("backgammon", difficulty);
+  const { recordWin, recordLoss, getDuration } = useAIGameTracker("backgammon", difficulty);
   const { play } = useSound();
+  const [showShareCard, setShowShareCard] = useState(false);
+  const [winDuration, setWinDuration] = useState(0);
 
   const [gameState, setGameState] = useState<GameState>({
     points: getInitialBoard(),
@@ -239,7 +242,10 @@ const BackgammonAI = () => {
       setGameStatus(`${t('gameAI.youWin')} ${resultDisplay.label}`);
       setGameOver(true);
       play('chess_win');
+      const bgDur = getDuration();
       recordWin();
+      setWinDuration(bgDur);
+      setShowShareCard(true);
     } else if (newRemaining.length === 0) {
       setGameStatus(t('gameAI.aiTurn'));
       setCurrentPlayer("ai");
@@ -1347,6 +1353,13 @@ const BackgammonAI = () => {
           </div>
         )}
       </div>
+      <AIWinShareCard
+        open={showShareCard}
+        onClose={() => setShowShareCard(false)}
+        game="backgammon"
+        difficulty={difficulty}
+        durationSeconds={winDuration}
+      />
     </div>
   );
 };

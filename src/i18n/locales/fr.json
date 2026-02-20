@@ -956,5 +956,24 @@
     "freeMatchCreated": "Salle gratuite créée ! En attente d'un adversaire...",
     "freeMatchJoined": "Adversaire trouvé ! Lancement du jeu...",
     "freeCancelled": "Match gratuit annulé."
+  },
+  "aiWinCard": {
+    "victory": "VICTOIRE",
+    "skillConfirmed": "COMPÉTENCE CONFIRMÉE",
+    "youBeatAI": "Vous avez battu l'IA",
+    "difficulty": "Difficulté",
+    "timePlayed": "Temps",
+    "shareTitle": "Partagez votre victoire",
+    "downloadImage": "Sauvegarder l'image",
+    "generating": "Génération...",
+    "shareOnX": "Partager sur X",
+    "whatsapp": "WhatsApp",
+    "copy": "Copier",
+    "copied": "Copié !",
+    "xText": "Viens de battre l'IA à {{game}} en difficulté {{difficulty}} ! Gratuit — sans portefeuille.\n🎮 {{link}}",
+    "waText": "J'ai battu l'IA sur 1M GAMING ! Jouez gratuitement : {{link}}",
+    "close": "Fermer",
+    "playAgain": "Rejouer",
+    "tagline": "COMPÉTENCE > CHANCE"
   }
 }
