@@ -1,78 +1,51 @@
 
-# Full Game Flow Audit — All Fixes
+# Reorder Games: Ludo → Dominos → Chess → Backgammon → Checkers
 
-## What Was Audited
+## Target Order
+**Ludo, Dominos, Chess, Backgammon, Checkers**
 
-All 10 game entry points: 5 AI games (Chess, Backgammon, Dominos, Ludo, Checkers) and 5 multiplayer "Play for SOL" games (Chess, Backgammon, Dominos, Ludo, Checkers).
+## Every Location That Shows Game Order
 
-The share card and game-over flows are mostly correct. Four concrete bugs remain.
-
----
-
-## Bug 1 — CheckersGame: Missing `isRematch` prop on GameEndScreen
-
-**Impact:** The RivalryWidget (win streak tracker showing "5-game win streak vs opponent") never appears in Checkers rematches, unlike the other 4 games.
-
-**Root cause:** `CheckersGame.tsx` line 1491 calls `<GameEndScreen>` without `isRematch`. The variable exists in the component — it comes from `rematch.checkRematchInvite(roomId)` at line 693 — but is never passed down.
-
-**Fix:** Add `isRematch={isRematch}` to the GameEndScreen call in `CheckersGame.tsx`. The `isRematch` variable needs to be lifted out of the `useEffect` into component scope (currently it's a block-scoped const inside the effect).
+There are 6 files with game ordering that all need to be updated consistently:
 
 ---
 
-## Bug 2 — CheckersGame: `isStaked` doesn't cover casual-SOL games
+### 1. `src/pages/Home.tsx` — Featured game cards (lines 21–27)
+Currently: Chess, Dominos, Backgammon, Checkers, Ludo
+Fix: Reorder the `featuredGames` array entries.
 
-**Impact:** A player who creates a casual room with a SOL stake (e.g. 0.1 SOL casual mode) will NOT see the on-chain finalization UI in `GameEndScreen`. The share card will show 0 SOL even though they played for real money.
+### 2. `src/pages/PlayAILobby.tsx` — AI game cards (lines 16–52)
+Currently: Chess, Dominos, Backgammon, Checkers, Ludo
+Fix: Reorder the `aiGames` array entries. Also update the default `selectedDifficulties` keys — they use the `key` string which stays the same, order of the object doesn't matter, but the array rendering does.
 
-**Root cause:** `CheckersGame.tsx` line 1500 passes `isStaked={isRankedGame}`. But casual-mode games can also have a stake (`entryFeeSol > 0`). Compare with `DominosGame.tsx` which correctly passes `isStaked={isRankedGame || entryFeeSol > 0}` and `BackgammonGame.tsx` which passes `isStaked={isRankedGame && (stakeLamports ?? 0) > 0}`.
+### 3. `src/pages/QuickMatch.tsx` — Quick match game selector (lines 41–55)
+Currently: Chess, Dominos, Backgammon, Checkers, Ludo
+Fix: Reorder the `GAME_OPTIONS` array. Also update `selectedGame` default from `GameType.Chess` to `GameType.Ludo` (line 83) so the first game highlighted is Ludo.
 
-**Fix:** Change `isStaked={isRankedGame}` to `isStaked={isRankedGame || entryFeeSol > 0}` in `CheckersGame.tsx`.
+### 4. `src/pages/CreateRoom.tsx` — Game type dropdown (lines 611–616)
+Currently: Chess, Dominos, Backgammon, Checkers, Ludo
+Fix: Reorder the `<SelectItem>` elements. Also update the default `gameType` state from `"1"` (Chess) to `"5"` (Ludo) on line 84 so the room creation page opens on Ludo by default.
 
----
+### 5. `src/pages/GameRules.tsx` — Game rules accordion (lines 8–14)
+Currently: Chess, Checkers, Backgammon, Ludo, Dominos
+Fix: Reorder the `games` array entries to Ludo, Dominos, Chess, Backgammon, Checkers.
 
-## Bug 3 — ShareResultCard: SOL toggle shown even when no SOL was staked
-
-**Impact:** In a truly free casual game (0 SOL), the share card shows a "SOL Won: 0.000" or "SOL Staked: 0.000" stat box, which is misleading and unprofessional.
-
-**Root cause:** `ShareResultCard.tsx` line 196 renders the SOL stat box whenever `showSol` is true, regardless of whether any SOL is actually involved. The "SOL Amount" toggle in the customization panel also appears for free games.
-
-**Clarification on user's point:** The user is correct — casual games CAN be played for real SOL. The fix is NOT to hide SOL based on `isRanked`. Instead, hide the SOL stat box and toggle only when BOTH `solWonLamports` and `solLostLamports` are 0 (truly no SOL at stake). When there IS SOL in a casual game, `GameEndScreen` fetches on-chain payout data and passes it correctly, so the amount will display.
-
-**Fix:** In `ShareResultCard.tsx`:
-- Derive `hasSolStake = (solWonLamports || 0) > 0 || (solLostLamports || 0) > 0`
-- Only render the SOL stat box when `showSol && hasSolStake`
-- Only render the "SOL Amount" toggle in the customization panel when `hasSolStake`
-- Default `showSol` state to `true` but it only matters when `hasSolStake` is true
-
----
-
-## Bug 4 — LudoAI: 2 hardcoded English strings not translated
-
-**Impact:** Players using Japanese, Arabic, French, etc. see English text in the middle of a translated UI when playing Ludo vs AI.
-
-**Root cause:** `LudoAI.tsx` lines 334–343 have two hardcoded strings:
-- `"Select a token to move"` — shown when player has legal moves to pick from
-- `"No moves available. Passing turn..."` — shown when player has no legal moves
-
-**Fix:** Replace with `t()` calls using inline fallback defaults. The locale keys `ludo.selectToken` and `ludo.noMovesAI` already exist in all 10 language files — confirmed from previous audits.
+### 6. `src/pages/Leaderboard.tsx` — Game tabs (line 71)
+Currently: `['chess', 'dominos', 'backgammon', 'checkers', 'ludo']`
+Fix: Change to `['ludo', 'dominos', 'chess', 'backgammon', 'checkers']`. Also update the default leaderboard route in `src/components/Navbar.tsx` from `/leaderboard/chess` to `/leaderboard/ludo` (line 89) so the nav link opens on Ludo's board.
 
 ---
 
-## Complete Fix Table
+## Complete File Change Summary
 
-| # | File | Line | Issue | Fix |
-|---|------|------|-------|-----|
-| 1 | `src/pages/CheckersGame.tsx` | 691-699 | `isRematch` only exists inside `useEffect` scope | Lift `isRematch` to component state (`useState(false)`) |
-| 1 | `src/pages/CheckersGame.tsx` | 1491 | Missing `isRematch={isRematch}` on GameEndScreen | Add the prop |
-| 2 | `src/pages/CheckersGame.tsx` | 1500 | `isStaked={isRankedGame}` misses casual+SOL games | Change to `isStaked={isRankedGame \|\| entryFeeSol > 0}` |
-| 3 | `src/components/ShareResultCard.tsx` | 63, 196, 251 | SOL row shows "0.000" for truly free games | Add `hasSolStake` guard; hide row and toggle when no SOL |
-| 4 | `src/pages/LudoAI.tsx` | 334, 340 | Hardcoded English strings | Replace with `t("ludo.selectToken")` / `t("ludo.noMovesAI")` |
+| File | What changes |
+|------|-------------|
+| `src/pages/Home.tsx` | Reorder `featuredGames` array: Ludo, Dominos, Chess, Backgammon, Checkers |
+| `src/pages/PlayAILobby.tsx` | Reorder `aiGames` array: Ludo, Dominos, Chess, Backgammon, Checkers |
+| `src/pages/QuickMatch.tsx` | Reorder `GAME_OPTIONS` array + default selected game → Ludo |
+| `src/pages/CreateRoom.tsx` | Reorder Select dropdown items + default game state → Ludo ("5") |
+| `src/pages/GameRules.tsx` | Reorder `games` array: Ludo, Dominos, Chess, Backgammon, Checkers |
+| `src/pages/Leaderboard.tsx` | Reorder `VALID_GAMES` array: ludo, dominos, chess, backgammon, checkers |
+| `src/components/Navbar.tsx` | Update leaderboard nav link from `/leaderboard/chess` → `/leaderboard/ludo` |
 
----
-
-## What Is Already Correct (Confirmed During Audit)
-
-- All 5 AI games fire `recordWin()`, `recordLoss()`, and `setShowShareCard(true)` on every game-over path (player move, chain capture, and AI move)
-- All 5 multiplayer games show `GameEndScreen` with a share button for both winner and loser
-- The `GameEndScreen` fetches on-chain payout data via `connection.getAccountInfo()` and passes it to `ShareResultCard` as `solWonLamports`
-- The home page game cards now show translated "Play for SOL" and "Play vs AI Free" buttons in all 10 languages
-- Chess, Backgammon, Ludo, and Dominos multiplayer games correctly pass `isRematch` to their GameEndScreen
+No database changes needed — game type IDs (1–5) are fixed on-chain and are not reordered. Only the visual display order changes.
