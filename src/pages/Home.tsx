@@ -19,11 +19,11 @@ const Home = () => {
   const showFundingCard = isPrivyUser && isLowBalance && walletAddress;
 
   const featuredGames = [
-    { name: t("games.chess"), tagline: t("games.chessTagline"), path: "/create-room", icon: <ChessIcon /> },
-    { name: t("games.dominos"), tagline: t("games.dominosTagline"), path: "/create-room", icon: <DominoIcon /> },
-    { name: t("games.backgammon"), tagline: t("games.backgammonTagline"), path: "/create-room", icon: <BackgammonIcon /> },
-    { name: t("games.checkers"), tagline: t("games.checkersTagline"), path: "/create-room", icon: <CheckersIcon /> },
-    { name: t("games.ludo"), tagline: t("games.ludoTagline"), path: "/create-room", icon: <LudoIcon /> },
+    { name: t("games.chess"), tagline: t("games.chessTagline"), path: "/create-room", aiPath: "/play-ai/chess", icon: <ChessIcon /> },
+    { name: t("games.dominos"), tagline: t("games.dominosTagline"), path: "/create-room", aiPath: "/play-ai/dominos", icon: <DominoIcon /> },
+    { name: t("games.backgammon"), tagline: t("games.backgammonTagline"), path: "/create-room", aiPath: "/play-ai/backgammon", icon: <BackgammonIcon /> },
+    { name: t("games.checkers"), tagline: t("games.checkersTagline"), path: "/create-room", aiPath: "/play-ai/checkers", icon: <CheckersIcon /> },
+    { name: t("games.ludo"), tagline: t("games.ludoTagline"), path: "/create-room", aiPath: "/play-ai/ludo", icon: <LudoIcon /> },
   ];
 
   return (
@@ -227,6 +227,7 @@ const Home = () => {
                 name={game.name}
                 tagline={game.tagline}
                 path={game.path}
+                aiPath={game.aiPath}
                 icon={game.icon}
               />
             ))}
