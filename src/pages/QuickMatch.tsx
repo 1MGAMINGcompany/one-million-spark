@@ -39,11 +39,11 @@ import { buildInviteLink } from "@/lib/invite";
 type Phase = "selecting" | "searching" | "timeout";
 
 const GAME_OPTIONS = [
-  { type: GameType.Chess, key: "chess" },
+  { type: GameType.Ludo, key: "ludo" },
   { type: GameType.Dominos, key: "dominos" },
+  { type: GameType.Chess, key: "chess" },
   { type: GameType.Backgammon, key: "backgammon" },
   { type: GameType.Checkers, key: "checkers" },
-  { type: GameType.Ludo, key: "ludo" },
 ];
 
 const GAME_ICONS: Record<number, React.ReactNode> = {
@@ -80,7 +80,7 @@ export default function QuickMatch() {
   } = useSolanaRooms();
 
   const [phase, setPhase] = useState<Phase>("selecting");
-  const [selectedGame, setSelectedGame] = useState<GameType>(GameType.Chess);
+  const [selectedGame, setSelectedGame] = useState<GameType>(GameType.Ludo);
   const [selectedStake, setSelectedStake] = useState<number>(0);
   const [secondsLeft, setSecondsLeft] = useState(SEARCH_TIMEOUT_SEC);
   const [createdRoomPda, setCreatedRoomPda] = useState<string | null>(null);

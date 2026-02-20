@@ -15,11 +15,11 @@ const PlayAILobby = () => {
   
   const aiGames = [
     { 
-      name: t("games.chess"), 
-      key: "Chess",
-      icon: <ChessIcon className="w-24 h-24 md:w-28 md:h-28" />,
-      path: "/play-ai/chess", 
-      description: t("games.chessDesc"),
+      name: t("games.ludo"), 
+      key: "Ludo",
+      icon: <LudoIcon className="w-24 h-24 md:w-28 md:h-28" />,
+      path: "/play-ai/ludo", 
+      description: t("games.ludoDesc"),
     },
     { 
       name: t("games.dominos"), 
@@ -27,6 +27,13 @@ const PlayAILobby = () => {
       icon: <DominoIcon className="w-24 h-24 md:w-28 md:h-28" />,
       path: "/play-ai/dominos", 
       description: t("games.dominosDesc"),
+    },
+    { 
+      name: t("games.chess"), 
+      key: "Chess",
+      icon: <ChessIcon className="w-24 h-24 md:w-28 md:h-28" />,
+      path: "/play-ai/chess", 
+      description: t("games.chessDesc"),
     },
     { 
       name: t("games.backgammon"), 
@@ -41,13 +48,6 @@ const PlayAILobby = () => {
       icon: <CheckersIcon className="w-24 h-24 md:w-28 md:h-28" />,
       path: "/play-ai/checkers", 
       description: t("games.checkersDesc"),
-    },
-    { 
-      name: t("games.ludo"), 
-      key: "Ludo",
-      icon: <LudoIcon className="w-24 h-24 md:w-28 md:h-28" />,
-      path: "/play-ai/ludo", 
-      description: t("games.ludoDesc"),
     },
   ];
 

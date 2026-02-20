@@ -86,7 +86,7 @@ const Navbar = () => {
     { path: "/add-funds", labelKey: "nav.addFunds", icon: Coins },
     { path: "/create-room", labelKey: "nav.createRoom", icon: PlusCircle },
     { path: "/room-list", labelKey: "nav.roomList", icon: LayoutList },
-    { path: "/leaderboard/chess", labelKey: "nav.leaderboard", icon: Trophy },
+    { path: "/leaderboard/ludo", labelKey: "nav.leaderboard", icon: Trophy },
   ];
 
   return (
