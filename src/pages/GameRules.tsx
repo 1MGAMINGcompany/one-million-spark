@@ -6,11 +6,11 @@ const GameRules = () => {
   const { t } = useTranslation();
 
   const games = [
-    { id: "chess", nameKey: "gameRules.chess", rulesKey: "gameRules.chessRules" },
-    { id: "checkers", nameKey: "gameRules.checkers", rulesKey: "gameRules.checkersRules" },
-    { id: "backgammon", nameKey: "gameRules.backgammon", rulesKey: "gameRules.backgammonRules" },
     { id: "ludo", nameKey: "gameRules.ludo", rulesKey: "gameRules.ludoRules" },
     { id: "dominos", nameKey: "gameRules.dominos", rulesKey: "gameRules.dominosRules" },
+    { id: "chess", nameKey: "gameRules.chess", rulesKey: "gameRules.chessRules" },
+    { id: "backgammon", nameKey: "gameRules.backgammon", rulesKey: "gameRules.backgammonRules" },
+    { id: "checkers", nameKey: "gameRules.checkers", rulesKey: "gameRules.checkersRules" },
   ];
 
   return (

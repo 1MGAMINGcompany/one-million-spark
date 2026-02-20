@@ -81,7 +81,7 @@ export default function CreateRoom() {
   const rematchData = parseRematchParams(searchParams);
   const isRematch = !!rematchData;
 
-  const [gameType, setGameType] = useState<string>("1"); // Chess
+  const [gameType, setGameType] = useState<string>("5"); // Ludo
   const [entryFee, setEntryFee] = useState<string>("0"); // Default to 0 for casual
   const [maxPlayers, setMaxPlayers] = useState<string>("2");
   const [turnTime, setTurnTime] = useState<string>("30");
@@ -609,11 +609,11 @@ export default function CreateRoom() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="1">{t("games.chess")}</SelectItem>
+                <SelectItem value="5">{t("games.ludo")}</SelectItem>
                 <SelectItem value="2">{t("games.dominos")}</SelectItem>
+                <SelectItem value="1">{t("games.chess")}</SelectItem>
                 <SelectItem value="3">{t("games.backgammon")}</SelectItem>
                 <SelectItem value="4">{t("games.checkers")}</SelectItem>
-                <SelectItem value="5">{t("games.ludo")}</SelectItem>
               </SelectContent>
             </Select>
           </div>

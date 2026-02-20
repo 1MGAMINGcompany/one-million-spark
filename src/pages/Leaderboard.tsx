@@ -68,7 +68,7 @@ function capitalize(str: string): string {
 }
 
 // Valid game types
-const VALID_GAMES = ['chess', 'dominos', 'backgammon', 'checkers', 'ludo'];
+const VALID_GAMES = ['ludo', 'dominos', 'chess', 'backgammon', 'checkers'];
 
 export default function Leaderboard() {
   const { game } = useParams<{ game: string }>();
