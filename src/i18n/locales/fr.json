@@ -997,5 +997,11 @@
     "roomsWaiting": "salles en attente",
     "visitsToday": "visiteurs aujourd'hui",
     "beTheFirst": "Soyez le premier à jouer."
+  },
+  "mobilePrompt": {
+    "getTheApp": "Obtenir l'App",
+    "downloadDesc": "Installez 1M Gaming pour la meilleure expérience",
+    "install": "Installer",
+    "iosInstructions": "Appuyez sur le bouton Partager, puis 'Sur l'écran d'accueil'"
   }
 }

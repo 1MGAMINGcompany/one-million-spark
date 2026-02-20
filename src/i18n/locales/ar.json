@@ -943,5 +943,11 @@
     "roomsWaiting": "غرف بانتظار",
     "visitsToday": "زوار اليوم",
     "beTheFirst": "كن أول من يبدأ مباراة."
+  },
+  "mobilePrompt": {
+    "getTheApp": "احصل على التطبيق",
+    "downloadDesc": "ثبّت 1M Gaming لأفضل تجربة",
+    "install": "تثبيت",
+    "iosInstructions": "اضغط على زر المشاركة، ثم 'إضافة إلى الشاشة الرئيسية'"
   }
 }

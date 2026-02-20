@@ -1488,5 +1488,11 @@
     "roomsWaiting": "rooms waiting",
     "visitsToday": "visitors today",
     "beTheFirst": "Be the first to start a match."
+  },
+  "mobilePrompt": {
+    "getTheApp": "Get the App",
+    "downloadDesc": "Install 1M Gaming for the best experience",
+    "install": "Install",
+    "iosInstructions": "Tap the Share button, then 'Add to Home Screen'"
   }
 }

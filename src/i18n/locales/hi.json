@@ -987,5 +987,11 @@
     "roomsWaiting": "कमरे प्रतीक्षा में",
     "visitsToday": "आज के आगंतुक",
     "beTheFirst": "पहले खेल शुरू करें।"
+  },
+  "mobilePrompt": {
+    "getTheApp": "ऐप डाउनलोड करें",
+    "downloadDesc": "सर्वोत्तम अनुभव के लिए 1M Gaming इंस्टॉल करें",
+    "install": "इंस्टॉल",
+    "iosInstructions": "शेयर बटन दबाएं, फिर 'होम स्क्रीन पर जोड़ें' चुनें"
   }
 }

@@ -940,5 +940,11 @@
     "roomsWaiting": "等待中的房间",
     "visitsToday": "今日访客",
     "beTheFirst": "成为第一个开始比赛的人。"
+  },
+  "mobilePrompt": {
+    "getTheApp": "获取应用",
+    "downloadDesc": "安装 1M Gaming 获得最佳体验",
+    "install": "安装",
+    "iosInstructions": "点击分享按钮，然后选择'添加到主屏幕'"
   }
 }
