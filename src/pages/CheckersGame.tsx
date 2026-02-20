@@ -686,12 +686,14 @@ const CheckersGame = () => {
   // Rematch acceptance modal state
   const [showAcceptModal, setShowAcceptModal] = useState(false);
   const [rematchInviteData, setRematchInviteData] = useState<any>(null);
+  const [isRematch, setIsRematch] = useState(false);
 
   // Check for rematch invite on mount
   useEffect(() => {
     if (roomId) {
-      const { isRematch, data } = rematch.checkRematchInvite(roomId);
-      if (isRematch && data) {
+      const { isRematch: rematchDetected, data } = rematch.checkRematchInvite(roomId);
+      if (rematchDetected && data) {
+        setIsRematch(true);
         setRematchInviteData(data);
         setShowAcceptModal(true);
       }
@@ -1497,7 +1499,8 @@ const CheckersGame = () => {
           onRematch={() => rematch.openRematchModal()}
           onExit={() => navigate("/room-list")}
           roomPda={roomPda}
-          isStaked={isRankedGame}
+          isStaked={isRankedGame || entryFeeSol > 0}
+          isRematch={isRematch}
         />
       )}
 

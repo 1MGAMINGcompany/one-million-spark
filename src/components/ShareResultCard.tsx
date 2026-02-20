@@ -60,6 +60,7 @@ export function ShareResultCard({
   const [exporting, setExporting] = useState(false);
   const [showWallet, setShowWallet] = useState(true);
   const [showFullAddress, setShowFullAddress] = useState(false);
+  const hasSolStake = (solWonLamports || 0) > 0 || (solLostLamports || 0) > 0;
   const [showSol, setShowSol] = useState(true);
   const [showTotalGames, setShowTotalGames] = useState(false);
   const [showTotalSol, setShowTotalSol] = useState(false);
@@ -193,7 +194,7 @@ export function ShareResultCard({
                   {isWinner ? t('shareCard.win') : t('shareCard.loss')}
                 </span>
               </div>
-              {showSol && (
+              {showSol && hasSolStake && (
                 <div className={`flex flex-col items-center rounded-xl border p-3 ${statBg}`}>
                   <span className={`text-[10px] uppercase tracking-wider ${mutedFg}`}>{isWinner ? t('shareCard.solWon') : t('shareCard.solStaked')}</span>
                   <span className={`text-lg font-bold mt-1 ${isWinner ? "text-primary" : mutedFg}`}>{solAmount}</span>
@@ -248,7 +249,7 @@ export function ShareResultCard({
           <div className="grid grid-cols-2 gap-x-4 gap-y-2.5">
             <ToggleRow label={t('shareCard.walletAddress')} checked={showWallet} onChange={setShowWallet} />
             {showWallet && <ToggleRow label={t('shareCard.fullAddress')} checked={showFullAddress} onChange={setShowFullAddress} />}
-            <ToggleRow label={t('shareCard.solAmount')} checked={showSol} onChange={setShowSol} />
+            {hasSolStake && <ToggleRow label={t('shareCard.solAmount')} checked={showSol} onChange={setShowSol} />}
             <ToggleRow label={t('shareCard.totalGamesWon')} checked={showTotalGames} onChange={setShowTotalGames} />
             <ToggleRow label={t('shareCard.totalSolWonToggle')} checked={showTotalSol} onChange={setShowTotalSol} />
             <ToggleRow label={t('shareCard.showOpponent')} checked={showOpponent} onChange={setShowOpponent} />
