@@ -6,7 +6,7 @@ import { SoundToggle } from "@/components/SoundToggle";
 import DominoTile3D, { DominoTileBack } from "@/components/DominoTile3D";
 import { useSound } from "@/contexts/SoundContext";
 import { useTranslation } from "react-i18next";
-import { usePresenceHeartbeat } from "@/hooks/usePresenceHeartbeat";
+import { useAIGameTracker } from "@/hooks/useAIGameTracker";
 import GoldConfettiExplosion from "@/components/GoldConfettiExplosion";
 
 type Difficulty = "easy" | "medium" | "hard";
@@ -45,7 +45,6 @@ const shuffle = <T,>(array: T[]): T[] => {
 
 const DominosAI = () => {
   const { t } = useTranslation();
-  usePresenceHeartbeat();
   const [searchParams] = useSearchParams();
   const { play } = useSound();
   const rawDifficulty = searchParams.get("difficulty");
@@ -53,6 +52,7 @@ const DominosAI = () => {
     rawDifficulty === "easy" || rawDifficulty === "medium" || rawDifficulty === "hard"
       ? rawDifficulty
       : "easy";
+  const { recordWin, recordLoss } = useAIGameTracker("dominos", difficulty);
 
   const [chain, setChain] = useState<PlacedDomino[]>([]);
   const [playerHand, setPlayerHand] = useState<Domino[]>([]);
@@ -134,12 +134,14 @@ const DominosAI = () => {
       setGameStatus(t('gameAI.youWin'));
       setGameOver(true);
       play('domino_win');
+      recordWin();
       return true;
     }
     if (aHand.length === 0) {
       setGameStatus(t('gameAI.youLose'));
       setGameOver(true);
       play('domino_lose');
+      recordLoss();
       return true;
     }
     
@@ -161,9 +163,11 @@ const DominosAI = () => {
       if (playerPips < aiPips) {
         setGameStatus(t('gameAI.gameBlocked') + " - " + t('gameAI.youWin') + " (" + t('gameAI.fewerPips') + ")");
         play('domino_win');
+        recordWin();
       } else if (aiPips < playerPips) {
         setGameStatus(t('gameAI.gameBlocked') + " - " + t('gameAI.youLose') + " (" + t('gameAI.morePips') + ")");
         play('domino_lose');
+        recordLoss();
       } else {
         setGameStatus(t('gameAI.gameBlocked') + " - " + t('gameAI.draw'));
       }
@@ -172,7 +176,7 @@ const DominosAI = () => {
     }
     
     return false;
-  }, [canPlay, play, t]);
+  }, [canPlay, play, t, recordWin, recordLoss]);
 
   // Play a domino
   const playDomino = useCallback((domino: Domino, side: "left" | "right", isPlayer: boolean) => {

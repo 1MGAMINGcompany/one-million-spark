@@ -8,7 +8,7 @@ import { Dice3D, CheckerStack } from "@/components/BackgammonPieces";
 import { BackgammonCheckerAnimation, useCheckerAnimation } from "@/components/BackgammonCheckerAnimation";
 import GoldConfettiExplosion from "@/components/GoldConfettiExplosion";
 import { cn } from "@/lib/utils";
-import { usePresenceHeartbeat } from "@/hooks/usePresenceHeartbeat";
+import { useAIGameTracker } from "@/hooks/useAIGameTracker";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useSound } from "@/contexts/SoundContext";
 import { useTranslation } from "react-i18next";
@@ -87,15 +87,11 @@ const formatResultType = (resultType: GameResultType | null): { label: string; m
 
 const BackgammonAI = () => {
   const { t } = useTranslation();
-  usePresenceHeartbeat();
   const [searchParams] = useSearchParams();
   const isMobile = useIsMobile();
+  const difficulty = (searchParams.get("difficulty") as Difficulty) || "medium";
+  const { recordWin, recordLoss } = useAIGameTracker("backgammon", difficulty);
   const { play } = useSound();
-  const rawDifficulty = searchParams.get("difficulty");
-  const difficulty: Difficulty =
-    rawDifficulty === "easy" || rawDifficulty === "medium" || rawDifficulty === "hard"
-      ? rawDifficulty
-      : "easy";
 
   const [gameState, setGameState] = useState<GameState>({
     points: getInitialBoard(),
@@ -243,6 +239,7 @@ const BackgammonAI = () => {
       setGameStatus(`${t('gameAI.youWin')} ${resultDisplay.label}`);
       setGameOver(true);
       play('chess_win');
+      recordWin();
     } else if (newRemaining.length === 0) {
       setGameStatus(t('gameAI.aiTurn'));
       setCurrentPlayer("ai");
@@ -455,6 +452,7 @@ const BackgammonAI = () => {
         setGameStatus(`${t('gameAI.youLose')} - ${resultDisplay.label}`);
         setGameOver(true);
         play('chess_lose');
+        recordLoss();
       } else {
         setCurrentPlayer("player");
         setGameStatus(t('gameAI.yourTurnRoll'));

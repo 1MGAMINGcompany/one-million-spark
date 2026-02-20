@@ -12,13 +12,14 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { action, sessionId } = await req.json();
+    const { action, sessionId, page, game, difficulty, event, duration_seconds } = await req.json();
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
+    // ── HEARTBEAT ──────────────────────────────────────────────────────────────
     if (action === "heartbeat") {
       if (!sessionId || typeof sessionId !== "string" || sessionId.length > 64) {
         return new Response(JSON.stringify({ error: "invalid session_id" }), {
@@ -29,7 +30,15 @@ Deno.serve(async (req) => {
 
       const { error } = await supabase
         .from("presence_heartbeats")
-        .upsert({ session_id: sessionId, last_seen: new Date().toISOString() }, { onConflict: "session_id" });
+        .upsert(
+          {
+            session_id: sessionId,
+            last_seen: new Date().toISOString(),
+            page: page ?? null,
+            game: game ?? null,
+          },
+          { onConflict: "session_id" }
+        );
 
       if (error) throw error;
 
@@ -38,35 +47,88 @@ Deno.serve(async (req) => {
       });
     }
 
+    // ── TRACK AI EVENT ─────────────────────────────────────────────────────────
+    if (action === "track_ai_event") {
+      const VALID_GAMES = ["chess", "checkers", "backgammon", "dominos", "ludo"];
+      const VALID_EVENTS = ["game_started", "game_won", "game_lost", "game_abandoned"];
+      const VALID_DIFFICULTIES = ["easy", "medium", "hard"];
+
+      if (
+        !sessionId || typeof sessionId !== "string" || sessionId.length > 64 ||
+        !VALID_GAMES.includes(game) ||
+        !VALID_EVENTS.includes(event) ||
+        !VALID_DIFFICULTIES.includes(difficulty)
+      ) {
+        return new Response(JSON.stringify({ error: "invalid payload" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const { error } = await supabase.from("ai_game_events").insert({
+        session_id: sessionId,
+        game,
+        difficulty,
+        event,
+        duration_seconds: typeof duration_seconds === "number" ? duration_seconds : null,
+      });
+
+      if (error) throw error;
+
+      return new Response(JSON.stringify({ ok: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // ── STATS ──────────────────────────────────────────────────────────────────
     if (action === "stats") {
-      // Count browsing (heartbeats in last 2 minutes)
       const twoMinAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+
+      // Total browsing (all heartbeats in last 2 min)
       const { count: browsing, error: e1 } = await supabase
         .from("presence_heartbeats")
         .select("*", { count: "exact", head: true })
         .gte("last_seen", twoMinAgo);
-
       if (e1) throw e1;
 
-      // Count rooms waiting (status_int = 1, created in last 15 min)
+      // Active AI players (heartbeats with a game column set)
+      const { count: playingAI, error: e2 } = await supabase
+        .from("presence_heartbeats")
+        .select("*", { count: "exact", head: true })
+        .not("game", "is", null)
+        .gte("last_seen", twoMinAgo);
+      if (e2) throw e2;
+
+      // Rooms waiting (status_int = 1, created in last 15 min)
       const fifteenMinAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString();
-      const { count: roomsWaiting, error: e2 } = await supabase
+      const { count: roomsWaiting, error: e3 } = await supabase
         .from("game_sessions")
         .select("*", { count: "exact", head: true })
         .eq("status_int", 1)
         .gte("created_at", fifteenMinAgo);
+      if (e3) throw e3;
 
-      if (e2) throw e2;
+      // AI games started today
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      const { count: aiGamesToday, error: e4 } = await supabase
+        .from("ai_game_events")
+        .select("*", { count: "exact", head: true })
+        .eq("event", "game_started")
+        .gte("created_at", todayStart.toISOString());
+      if (e4) throw e4;
 
       // Garbage collect old heartbeats (older than 5 min)
       const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
-      await supabase
-        .from("presence_heartbeats")
-        .delete()
-        .lt("last_seen", fiveMinAgo);
+      await supabase.from("presence_heartbeats").delete().lt("last_seen", fiveMinAgo);
 
       return new Response(
-        JSON.stringify({ browsing: browsing ?? 0, roomsWaiting: roomsWaiting ?? 0 }),
+        JSON.stringify({
+          browsing: browsing ?? 0,
+          roomsWaiting: roomsWaiting ?? 0,
+          playingAI: playingAI ?? 0,
+          aiGamesToday: aiGamesToday ?? 0,
+        }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }

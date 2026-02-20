@@ -14,6 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_game_events: {
+        Row: {
+          created_at: string
+          difficulty: string
+          duration_seconds: number | null
+          event: string
+          game: string
+          id: string
+          session_id: string
+        }
+        Insert: {
+          created_at?: string
+          difficulty: string
+          duration_seconds?: number | null
+          event: string
+          game: string
+          id?: string
+          session_id: string
+        }
+        Update: {
+          created_at?: string
+          difficulty?: string
+          duration_seconds?: number | null
+          event?: string
+          game?: string
+          id?: string
+          session_id?: string
+        }
+        Relationships: []
+      }
       client_errors: {
         Row: {
           build_version: string | null
@@ -529,15 +559,21 @@ export type Database = {
       }
       presence_heartbeats: {
         Row: {
+          game: string | null
           last_seen: string
+          page: string | null
           session_id: string
         }
         Insert: {
+          game?: string | null
           last_seen?: string
+          page?: string | null
           session_id: string
         }
         Update: {
+          game?: string | null
           last_seen?: string
+          page?: string | null
           session_id?: string
         }
         Relationships: []

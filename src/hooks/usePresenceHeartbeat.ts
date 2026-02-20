@@ -10,14 +10,19 @@ export function getSessionId(): string {
   return id;
 }
 
-export function usePresenceHeartbeat() {
+export function usePresenceHeartbeat(page?: string, game?: string) {
   const sessionId = useRef(getSessionId());
 
   useEffect(() => {
     const send = async () => {
       try {
         await supabase.functions.invoke("live-stats", {
-          body: { action: "heartbeat", sessionId: sessionId.current },
+          body: {
+            action: "heartbeat",
+            sessionId: sessionId.current,
+            page: page ?? null,
+            game: game ?? null,
+          },
         });
       } catch {
         // silent
@@ -27,5 +32,6 @@ export function usePresenceHeartbeat() {
     send();
     const iv = setInterval(send, 30_000);
     return () => clearInterval(iv);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 }

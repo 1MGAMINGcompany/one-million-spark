@@ -11,7 +11,7 @@ type Difficulty = "easy" | "medium" | "hard";
 
 const PlayAILobby = () => {
   const { play } = useSound();
-  usePresenceHeartbeat();
+  usePresenceHeartbeat("play-ai-lobby");
   const { t } = useTranslation();
   const navigate = useNavigate();
   
