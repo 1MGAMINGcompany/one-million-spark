@@ -159,7 +159,7 @@ const App = () => (
                     <PyramidLoader />
                     <GoldenParticles />
                     <AgeConfirmation />
-                    <BrowserRouter>
+                    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
                       <GlobalBackgroundMusic />
                       <AppContent />
                     </BrowserRouter>
