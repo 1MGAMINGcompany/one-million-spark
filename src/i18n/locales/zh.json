@@ -898,7 +898,15 @@
     "confirmSign": "确认并签名",
     "freeMatchCreated": "免费房间已创建！等待对手...",
     "freeMatchJoined": "找到对手！开始游戏...",
-    "freeCancelled": "免费比赛已取消。"
+    "freeCancelled": "免费比赛已取消。",
+    "playAIWhileWaiting": "等待无聊？免费和AI玩{{game}}——你的房间保持开放！",
+    "playAIWhileWaitingBtn": "对战AI（新标签页）→",
+    "shareLink": "分享房间链接",
+    "shareOrCopy": "复制或分享你的房间链接",
+    "roomStillOpen": "✅ 你的房间还开放15分钟！",
+    "roomStillOpenDesc": "任何寻找{{game}}对局的人都可以加入你！打开房间列表分享链接。",
+    "viewRoomList": "查看房间列表",
+    "waitingNote": "你的房间正在直播中 🟢"
   },
   "aiWinCard": {
     "victory": "胜利",

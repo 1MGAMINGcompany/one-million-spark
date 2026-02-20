@@ -955,7 +955,15 @@
     "confirmSign": "Bestätigen & Signieren",
     "freeMatchCreated": "Kostenloser Raum erstellt! Warte auf Gegner...",
     "freeMatchJoined": "Gegner gefunden! Spiel startet...",
-    "freeCancelled": "Kostenloses Match abgebrochen."
+    "freeCancelled": "Kostenloses Match abgebrochen.",
+    "playAIWhileWaiting": "Gelangweilt beim Warten? {{game}} kostenlos gegen KI spielen — dein Raum bleibt offen!",
+    "playAIWhileWaitingBtn": "Gegen KI spielen (neuer Tab) →",
+    "shareLink": "Raumlink teilen",
+    "shareOrCopy": "Deinen Raumlink kopieren oder teilen",
+    "roomStillOpen": "✅ Dein Raum ist noch 15 Min. offen!",
+    "roomStillOpenDesc": "Jeder, der ein {{game}}-Spiel sucht, kann dir noch beitreten! Öffne die Raumliste zum Teilen.",
+    "viewRoomList": "Raumliste anzeigen",
+    "waitingNote": "Dein Raum ist aktiv 🟢"
   },
   "aiWinCard": {
     "victory": "SIEG",

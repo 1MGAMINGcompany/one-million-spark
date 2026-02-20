@@ -955,7 +955,15 @@
     "confirmSign": "Confirmer et signer",
     "freeMatchCreated": "Salle gratuite créée ! En attente d'un adversaire...",
     "freeMatchJoined": "Adversaire trouvé ! Lancement du jeu...",
-    "freeCancelled": "Match gratuit annulé."
+    "freeCancelled": "Match gratuit annulé.",
+    "playAIWhileWaiting": "L'attente est longue ? Jouez {{game}} contre l'IA gratuitement — votre salle reste ouverte !",
+    "playAIWhileWaitingBtn": "Jouer vs IA (nouvel onglet) →",
+    "shareLink": "Partager le lien de la salle",
+    "shareOrCopy": "Copiez ou partagez votre lien",
+    "roomStillOpen": "✅ Votre salle est encore ouverte 15 min !",
+    "roomStillOpenDesc": "Toute personne cherchant un match de {{game}} peut encore vous rejoindre ! Ouvrez la liste des salles pour partager le lien.",
+    "viewRoomList": "Voir la liste des salles",
+    "waitingNote": "Votre salle est en ligne 🟢"
   },
   "aiWinCard": {
     "victory": "VICTOIRE",

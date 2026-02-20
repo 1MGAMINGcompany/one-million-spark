@@ -7,7 +7,7 @@ import bs58 from "bs58";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { ArrowLeft, Zap, Bot, Search, Loader2, Users, Copy, Check, Wallet, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Zap, Bot, Search, Loader2, Users, Copy, Check, Wallet, AlertTriangle, Share2, ExternalLink, MapPin } from "lucide-react";
 import { ChessIcon, DominoIcon, BackgammonIcon, CheckersIcon, LudoIcon } from "@/components/GameIcons";
 import { PrivyLoginButton } from "@/components/PrivyLoginButton";
 import { ConnectWalletGate } from "@/components/ConnectWalletGate";
@@ -62,7 +62,13 @@ const STAKE_PRESETS = [
 ];
 
 const LUDO_PLAYER_OPTIONS = [2, 3, 4];
-const SEARCH_TIMEOUT_SEC = 60;
+const SEARCH_TIMEOUT_SEC = 300;
+
+const formatTime = (secs: number) => {
+  const m = Math.floor(secs / 60);
+  const s = secs % 60;
+  return `${m}:${s.toString().padStart(2, "0")}`;
+};
 
 export default function QuickMatch() {
   const navigate = useNavigate();
@@ -612,7 +618,7 @@ export default function QuickMatch() {
 
       {/* ── SEARCHING PHASE ── */}
       {phase === "searching" && (
-        <div className="flex flex-col items-center justify-center gap-8 py-12">
+        <div className="flex flex-col items-center justify-center gap-6 py-8">
           {/* Animated game icon */}
           <div className="w-20 h-20 animate-pulse">{GAME_ICONS[selectedGame]}</div>
 
@@ -627,7 +633,7 @@ export default function QuickMatch() {
               </p>
             </div>
             <p className="text-3xl font-display font-bold text-primary">
-              {t("quickMatch.secondsLeft", { seconds: secondsLeft })}
+              {formatTime(secondsLeft)}
             </p>
           </div>
 
@@ -637,6 +643,10 @@ export default function QuickMatch() {
               value={((SEARCH_TIMEOUT_SEC - secondsLeft) / SEARCH_TIMEOUT_SEC) * 100}
               className="h-2"
             />
+            <p className="text-xs text-emerald-500 mt-1.5 flex items-center gap-1">
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              {t("quickMatch.waitingNote")}
+            </p>
           </div>
 
           {/* Stake info */}
@@ -651,18 +661,42 @@ export default function QuickMatch() {
             </CardContent>
           </Card>
 
-          {/* Multi-player Ludo actions */}
-          {isMultiPlayerLudo && (
-            <div className="flex flex-col gap-2 w-full max-w-xs">
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full gap-2"
-                onClick={handleCopyInvite}
-              >
-                {linkCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                {linkCopied ? t("quickMatch.linkCopied") : t("quickMatch.copyInviteLink")}
-              </Button>
+          {/* Play vs AI while you wait card */}
+          <Card className="w-full max-w-xs border-primary/20 bg-primary/5">
+            <CardContent className="p-4">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 flex-shrink-0">{GAME_ICONS[selectedGame]}</div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-foreground leading-snug">
+                    {t("quickMatch.playAIWhileWaiting", { game: translatedGameName })}
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-2 w-full gap-2 text-xs"
+                    onClick={() => window.open(`/play-ai/${selectedGameKey}`, "_blank")}
+                  >
+                    <ExternalLink className="h-3 w-3" />
+                    {t("quickMatch.playAIWhileWaitingBtn")}
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Share room link — visible for ALL game types */}
+          <div className="w-full max-w-xs flex flex-col gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full gap-2"
+              onClick={handleCopyInvite}
+            >
+              {linkCopied ? <Check className="h-4 w-4 text-emerald-500" /> : <Share2 className="h-4 w-4" />}
+              {linkCopied ? t("quickMatch.linkCopied") : t("quickMatch.shareLink")}
+            </Button>
+            {/* Multi-player Ludo extra: switch to 2 players */}
+            {isMultiPlayerLudo && (
               <Button
                 variant="ghost"
                 size="sm"
@@ -672,8 +706,8 @@ export default function QuickMatch() {
                 <Users className="h-4 w-4" />
                 {t("quickMatch.switchTo2Players")}
               </Button>
-            </div>
-          )}
+            )}
+          </div>
 
           {/* Cancel button */}
           <Button variant="ghost" onClick={handleCancel} disabled={isRecovering}>
@@ -696,11 +730,38 @@ export default function QuickMatch() {
               <Search className="h-4 w-4" />
               {t("quickMatch.keepSearching")}
             </Button>
+
+            {/* Room still open info box */}
+            <Card className="border-emerald-500/30 bg-emerald-500/5">
+              <CardContent className="p-4">
+                <div className="flex items-start gap-2">
+                  <span className="text-lg">✅</span>
+                  <div>
+                    <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+                      {t("quickMatch.roomStillOpen")}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {t("quickMatch.roomStillOpenDesc", { game: translatedGameName })}
+                    </p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mt-2 w-full gap-2 text-xs border-emerald-500/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10"
+                      onClick={() => navigate("/room-list")}
+                    >
+                      <MapPin className="h-3 w-3" />
+                      {t("quickMatch.viewRoomList")}
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
             <Button
               variant="outline"
               size="lg"
               className="w-full gap-2"
-              onClick={() => navigate("/play-ai")}
+              onClick={() => window.open(`/play-ai/${selectedGameKey}`, "_blank")}
             >
               <Bot className="h-4 w-4" />
               {t("quickMatch.playAI")}

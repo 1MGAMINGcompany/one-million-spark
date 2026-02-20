@@ -952,7 +952,15 @@
     "confirmSign": "確認して署名",
     "freeMatchCreated": "無料ルームを作成しました！対戦相手を待っています...",
     "freeMatchJoined": "対戦相手が見つかりました！ゲーム開始...",
-    "freeCancelled": "無料マッチがキャンセルされました。"
+    "freeCancelled": "無料マッチがキャンセルされました。",
+    "playAIWhileWaiting": "待ち時間が退屈？{{game}}をAIと無料でプレイ — ルームはそのまま開いています！",
+    "playAIWhileWaitingBtn": "AIと対戦（新タブ）→",
+    "shareLink": "ルームリンクをシェア",
+    "shareOrCopy": "ルームリンクをコピーまたはシェアする",
+    "roomStillOpen": "✅ ルームはまだ15分間開いています！",
+    "roomStillOpenDesc": "{{game}}を探している人はまだあなたに参加できます！ルームリストを開いてリンクをシェアしましょう。",
+    "viewRoomList": "ルーム一覧を見る",
+    "waitingNote": "ルームはライブ中 🟢"
   },
   "aiWinCard": {
     "victory": "勝利",
