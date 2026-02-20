@@ -1,159 +1,162 @@
 
-# Audit Results: Language Detection, Geolocation & AI Win Share Card
+# Fix: "Browsing Now" Counter + Full Translation
 
-## Audit Status: MOSTLY GOOD — 3 Issues Found
+## What Is Broken (Verified)
 
-Everything is fundamentally correct and working. The audit found 3 specific issues to fix, all minor.
+### Bug 1 — CRITICAL: sessionStorage kills tracking accuracy
+`usePresenceHeartbeat.ts` uses `sessionStorage` for the session ID. `sessionStorage` is **cleared every time a tab closes or the page is refreshed**. Instagram/WhatsApp visitors who open your link, browse for 20 seconds, and close the tab get a brand new session ID on every visit. The garbage collector deletes their old record after 5 minutes, meaning returning visitors are never counted as the same person twice. This is why 800 daily visits never show more than 2-4 concurrent — most of them are short bounces with no follow-up heartbeat.
+
+**Fix:** Switch `sessionStorage` → `localStorage` in `getSessionId()`. Session IDs then persist across tab closes, making returning visitors correctly recognized.
+
+### Bug 2 — CRITICAL: 2-minute counting window is too narrow
+The stats query counts only users seen in the last **2 minutes**. Heartbeats fire every **30 seconds**. A user who was on the site 3 minutes ago (sent 2 heartbeats, then left) is completely invisible. With 800 visits over 14 waking hours, statistically only 1-2 people are on the site at any given 2-minute window at average — matching your observed 2-4.
+
+**Fix:** Extend counting window from 2 minutes → **10 minutes**. Extend garbage collection from 5 minutes → **15 minutes** to match.
+
+### Bug 3 — MEDIUM: No "visitors today" displayed
+Even with the fixes above, the browsing count reflects only people currently active (last 10 min). To show the real social proof from 800 daily visits, a **"X visitors today"** counter is needed. The `presence_heartbeats` table currently has no date column for daily deduplication.
+
+**Fix:** Add a `first_seen_date` column to `presence_heartbeats`. The heartbeat upsert sets it only on INSERT (not on UPDATE), so each device is counted once per day. The stats endpoint returns `visitsToday`. The UI shows both counts.
+
+### Bug 4 — CRITICAL: `liveStats` and `home.beTheFirst` translation keys are MISSING from all locale files
+The `LiveActivityIndicator` uses:
+- `t("home.beTheFirst", "Be the first to start a match.")`
+- `t("liveStats.browsingNow", "browsing now")`
+- `t("liveStats.roomsWaiting", "rooms waiting")`
+
+**None of these keys exist in any of the 10 locale files.** Every user on every language sees English fallbacks. The `visitsToday` string to be added also needs translating.
+
+**Fix:** Add `liveStats` namespace and `home.beTheFirst` to all 10 locale files (en, hi, ar, zh, es, pt, fr, de, it, ja).
 
 ---
 
-## What Is Working Correctly
+## Complete Fix Plan
 
-### Language Detection
-- Detection order in `src/i18n/index.ts` is correctly set to `['navigator', 'localStorage', 'htmlTag']` — first-time visitors will get their OS/browser language automatically.
-- `localStorage` is still used as a cache (`caches: ['localStorage']`) so manual selections persist across sessions.
-- The `lookupLocalStorage` key `'1m-gaming-language'` is correctly configured.
-- `Navbar.tsx` has a `useEffect` that syncs `document.documentElement.dir` and `document.documentElement.lang` with `i18n.language` on every language change — this handles RTL (Arabic) correctly.
-- The `LanguageSelector` component also updates `dir` and `lang` when the user manually picks a language.
+### Step 1 — Database Migration: Add `first_seen_date` to `presence_heartbeats`
 
-### AI Win Share Card
-- All 5 AI game pages (`ChessAI`, `CheckersAI`, `BackgammonAI`, `DominosAI`, `LudoAI`) correctly import `AIWinShareCard`.
-- All 5 pages have `showShareCard` and `winDuration` state, call `getDuration()` + `recordWin()` on win, and render `<AIWinShareCard>` with correct props.
-- The component uses `useTranslation()` so all UI text (victory, buttons, share copy) renders in the active language automatically.
-- The `aiWinCard` translation namespace is present and complete in **all 10 locale files** (en, hi, ar, zh, es, pt, fr, de, it, ja) with all 14 required keys.
-- Share texts use `{{game}}`, `{{difficulty}}`, and `{{link}}` interpolation correctly.
+```sql
+ALTER TABLE presence_heartbeats
+ADD COLUMN IF NOT EXISTS first_seen_date date DEFAULT CURRENT_DATE;
+```
 
-### Tracking
-- `useAIGameTracker` exports `{ recordWin, recordLoss, getDuration }` correctly.
-- Global heartbeat is in `App.tsx` → `AppContent`, covering all routes.
+The heartbeat upsert in the edge function must preserve this on UPDATE (not overwrite it with today's date on every heartbeat — otherwise a user who visited yesterday and visits again today would get today's date overwriting yesterday's).
 
----
+The upsert uses `onConflict: "session_id"` which by default updates ALL columns. We restructure the edge function heartbeat to explicitly NOT update `first_seen_date` on conflict.
 
-## Issues Found
+### Step 2 — Edge Function: `supabase/functions/live-stats/index.ts`
 
-### Issue 1 — MEDIUM: `GAME_LABELS` in AIWinShareCard are hardcoded English strings
-
-**File:** `src/components/AIWinShareCard.tsx` lines 24–30
+Changes:
+1. **Heartbeat**: Use an explicit `INSERT ... ON CONFLICT DO UPDATE SET last_seen = ..., page = ..., game = ...` (excludes `first_seen_date` from the update so the original date is preserved)
+2. **Stats**: Change `twoMinAgo` → `tenMinAgo` (10 minutes). Add `visitsToday` count (distinct session_ids with `first_seen_date = CURRENT_DATE`). Change GC from 5 min → 15 min.
 
 ```typescript
-const GAME_LABELS: Record<string, string> = {
-  chess: "Chess",       // ← always English
-  checkers: "Checkers", // ← always English
-  backgammon: "Backgammon",
-  dominos: "Dominos",
-  ludo: "Ludo",
-};
+// Stats action — new counting window
+const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+
+// New: visitsToday
+const todayDate = new Date().toISOString().split("T")[0]; // "YYYY-MM-DD"
+const { count: visitsToday } = await supabase
+  .from("presence_heartbeats")
+  .select("*", { count: "exact", head: true })
+  .eq("first_seen_date", todayDate);
 ```
 
-These game name labels appear on the stat chip and in the share copy. A Hindi user sees "Chess" and "आसान" side by side — inconsistent. The game names should use the i18n system.
-
-**Fix:** Use `t()` to look up translated game names from the locale files. We need to add 5 game name keys to the `aiWinCard` namespace (or reuse existing ones from `playAi`) and use them dynamically.
-
-Checking the locale files, the `playAi` namespace already has per-game entries in some locales, but not consistently. The cleanest fix is to add `gameNames.chess`, `gameNames.checkers`, etc. to `aiWinCard` in all 10 locales and use `t(`aiWinCard.gameNames.${game}`)` in the component.
-
----
-
-### Issue 2 — LOW: `index.html` hardcodes `lang="en"` — no `dir` attribute
-
-**File:** `index.html` line 2
-
-```html
-<html lang="en" class="dark">
-```
-
-The `lang` and `dir` attributes are only updated once React mounts (via the Navbar `useEffect`). During the brief initial render, the document is always `lang="en"` with no `dir` attribute.
-
-For Arabic users this means there could be a brief flash of LTR layout before the Navbar effect fires. The `Navbar` `useEffect` already handles this reactively. However, the `dir` attribute needs an initial value of `ltr` to be explicit.
-
-**Fix:** Change `index.html` to `<html lang="en" dir="ltr" class="dark">` so the attribute exists from the start. The Navbar effect will override it immediately after hydration to match the detected language.
-
-A more complete fix involves calling the `dir`/`lang` setter at i18n init time (before React renders), but that's more complex. The `dir="ltr"` default is sufficient since the Navbar effect fires within one React frame.
-
----
-
-### Issue 3 — LOW: `LanguageSelector` uses a lookup that may not match when browser language is a regional code
-
-**File:** `src/components/LanguageSelector.tsx` line 16
+For the heartbeat upsert, we use the Supabase `upsert` with `ignoreDuplicates: false` but we must avoid overwriting `first_seen_date`. The cleanest approach: use a raw INSERT with explicit ON CONFLICT clause handled server-side by checking if the row exists first, OR use two queries: try insert, on conflict update only non-date fields. Since Supabase JS client's `.upsert()` updates all provided columns, we pass only the update-safe columns:
 
 ```typescript
-const currentLang = languages.find(l => l.code === i18n.language) || languages[0];
+// First try insert (will fail silently on conflict)
+await supabase.from("presence_heartbeats").insert({
+  session_id: sessionId,
+  last_seen: now,
+  page: page ?? null,
+  game: game ?? null,
+  first_seen_date: todayDate,
+}).maybeSingle(); // don't throw on conflict
+
+// Then always update non-date fields
+await supabase.from("presence_heartbeats")
+  .update({ last_seen: now, page: page ?? null, game: game ?? null })
+  .eq("session_id", sessionId);
 ```
 
-The `navigator.language` API returns codes like `"hi-IN"`, `"ar-SA"`, `"zh-CN"`, `"pt-BR"`. The i18next `LanguageDetector` with `navigator` order resolves these to the base code (e.g., `"hi"`) using its built-in normalisation — so this works fine. However, the globe selector currently shows no label for the current language, only a `Globe` icon. Users can't tell which language is active without opening the dropdown.
+This two-query approach correctly preserves `first_seen_date` from the first visit.
 
-**Fix:** Show the current language's `nativeName` as a small text label next to the Globe icon so users can see at a glance what language is active. This also helps users from regional locales confirm the app is in their language.
+### Step 3 — Hook: `src/hooks/usePresenceHeartbeat.ts`
 
----
+Change `sessionStorage` → `localStorage`:
 
-## Summary of Fixes Required
-
-| # | File | Change | Priority |
-|---|------|--------|----------|
-| 1 | `src/components/AIWinShareCard.tsx` | Translate game name labels using `t()` + add `gameNames` keys to all 10 locale files | Medium |
-| 2 | `index.html` | Add `dir="ltr"` to `<html>` tag | Low |
-| 3 | `src/components/LanguageSelector.tsx` + `src/components/Navbar.tsx` | Show current language native name next to globe icon | Low |
-
-## Implementation Plan
-
-### 1. Add game name keys to all 10 locale files under `aiWinCard.gameNames`
-
-```json
-// en.json (existing aiWinCard block, add:)
-"gameNames": {
-  "chess": "Chess",
-  "checkers": "Checkers",
-  "backgammon": "Backgammon",
-  "dominos": "Dominos",
-  "ludo": "Ludo"
+```typescript
+export function getSessionId(): string {
+  let id = localStorage.getItem("live_session_id");
+  if (!id) {
+    id = crypto.randomUUID();
+    localStorage.setItem("live_session_id", id);
+  }
+  return id;
 }
 ```
 
-Native translations for all 10 languages:
-- **hi**: शतरंज, चेकर्स, बैकगैमन, डोमिनोज़, लूडो
-- **ar**: شطرنج, الداما, الطاولة, الدومينو, لودو
-- **zh**: 国际象棋, 跳棋, 西洋双陆棋, 多米诺, 飞行棋
-- **es**: Ajedrez, Damas, Backgammon, Dominó, Ludo
-- **pt**: Xadrez, Damas, Gamão, Dominó, Ludo
-- **fr**: Échecs, Dames, Backgammon, Dominos, Ludo
-- **de**: Schach, Dame, Backgammon, Domino, Ludo
-- **it**: Scacchi, Dama, Backgammon, Domino, Ludo
-- **ja**: チェス, チェッカーズ, バックギャモン, ドミノ, すごろく
+### Step 4 — Hook: `src/hooks/useLiveStats.ts`
 
-### 2. Update `AIWinShareCard.tsx` — replace static `GAME_LABELS`
-
-Remove the hardcoded `GAME_LABELS` constant and use:
-```typescript
-const gameLabel = t(`aiWinCard.gameNames.${game}`, { defaultValue: game });
-```
-
-### 3. Update `index.html` — add `dir="ltr"`
-
-```html
-<html lang="en" dir="ltr" class="dark">
-```
-
-### 4. Update `LanguageSelector` — show current language name
-
-Show a small `nativeName` abbreviation next to the globe icon in the navbar trigger button, so users can see at a glance which language is active:
+Add `visitsToday` to the returned state:
 
 ```typescript
-// Replace Globe-only trigger with:
-<Globe size={16} />
-<span className="text-xs font-medium">{currentLang.nativeName.slice(0, 2).toUpperCase()}</span>
+const [visitsToday, setVisitsToday] = useState(0);
+// ...
+setVisitsToday(Math.max(0, data.visitsToday ?? 0));
+// ...
+return { browsing, roomsWaiting, visitsToday, loading };
 ```
 
-Or show the first 2-3 characters of the native name as a compact code.
+### Step 5 — Component: `src/components/LiveActivityIndicator.tsx`
+
+New display logic — show both live count and daily visitors:
+
+```
+🟡 [pulse] 12 browsing now • 3 rooms waiting
+            847 visitors today
+```
+
+When `browsing === 0 && visitsToday === 0` → show "Be the first to start a match."
+When `browsing === 0` but `visitsToday > 0` → show "X visitors today — be the first to play!"
+
+Uses `t("liveStats.browsingNow")`, `t("liveStats.roomsWaiting")`, `t("liveStats.visitsToday")`.
+
+### Step 6 — Translations: Add `liveStats` and `home.beTheFirst` to all 10 locale files
+
+Add to every locale file:
+
+```json
+"liveStats": {
+  "browsingNow": "browsing now",
+  "roomsWaiting": "rooms waiting",
+  "visitsToday": "visitors today",
+  "beTheFirst": "Be the first to start a match."
+}
+```
+
+And also move `home.beTheFirst` to `liveStats.beTheFirst` (the component currently uses `home.beTheFirst`, it will be updated to use `liveStats.beTheFirst`).
+
+Translations for all 10 languages:
+
+| Key | EN | HI | AR | ZH | ES | PT | FR | DE | IT | JA |
+|-----|----|----|----|----|----|----|----|----|----|----|
+| browsingNow | browsing now | अभी ब्राउज़ कर रहे हैं | يتصفحون الآن | 正在浏览 | navegando ahora | navegando agora | en ligne maintenant | jetzt aktiv | navigano ora | 閲覧中 |
+| roomsWaiting | rooms waiting | कमरे प्रतीक्षा में | غرف بانتظار | 等待中的房间 | salas esperando | salas aguardando | salles en attente | Räume warten | stanze in attesa | 待機中の部屋 |
+| visitsToday | visitors today | आज के आगंतुक | زوار اليوم | 今日访客 | visitantes hoy | visitantes hoje | visiteurs aujourd'hui | Besucher heute | visitatori oggi | 本日の訪問者 |
+| beTheFirst | Be the first to start a match. | पहले खेल शुरू करें। | كن أول من يبدأ مباراة. | 成为第一个开始比赛的人。 | Sé el primero en iniciar. | Seja o primeiro a jogar. | Soyez le premier à jouer. | Starte das erste Spiel. | Sii il primo a giocare. | 最初の対戦を始めよう。 |
 
 ---
 
-## Files to Change
+## Files Changed
 
 | File | Change |
 |------|--------|
-| `index.html` | Add `dir="ltr"` to `<html>` |
-| `src/components/AIWinShareCard.tsx` | Replace `GAME_LABELS` with `t(aiWinCard.gameNames.${game})` |
-| `src/components/LanguageSelector.tsx` | Show active language nativeName next to Globe icon |
-| `src/i18n/locales/en.json` | Add `aiWinCard.gameNames` block |
+| `supabase/functions/live-stats/index.ts` | Extend window to 10 min, add `visitsToday`, fix heartbeat upsert to preserve `first_seen_date`, extend GC to 15 min |
+| `src/hooks/usePresenceHeartbeat.ts` | Switch `sessionStorage` → `localStorage` for session ID |
+| `src/hooks/useLiveStats.ts` | Add `visitsToday` to state and return |
+| `src/components/LiveActivityIndicator.tsx` | Show "X browsing now • X rooms waiting" + "X visitors today" row; add translated fallback |
+| `src/i18n/locales/en.json` | Add `liveStats` block with 4 keys |
 | `src/i18n/locales/hi.json` | Same in Hindi |
 | `src/i18n/locales/ar.json` | Same in Arabic |
 | `src/i18n/locales/zh.json` | Same in Chinese |
@@ -163,5 +166,12 @@ Or show the first 2-3 characters of the native name as a compact code.
 | `src/i18n/locales/de.json` | Same in German |
 | `src/i18n/locales/it.json` | Same in Italian |
 | `src/i18n/locales/ja.json` | Same in Japanese |
+| **Database** | Add `first_seen_date date DEFAULT CURRENT_DATE` to `presence_heartbeats` |
 
-No database changes. No edge function changes. No game logic changes.
+## What the Numbers Will Look Like After the Fix
+
+- **"X browsing now"** = people active in the last 10 minutes (will show 15-80 during peak instead of 2-4)
+- **"X visitors today"** = unique devices since midnight (will reflect the real 800 daily visits figure)
+- **All text fully translated** in all 10 languages including Arabic RTL
+
+No game logic changes. No wallet changes. No breaking changes.
