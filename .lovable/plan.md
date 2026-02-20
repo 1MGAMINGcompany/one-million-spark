@@ -1,86 +1,97 @@
 
-## Status Report: What Works vs. What Still Needs Fixing
+## The Problem
 
-This is a read-only audit of the current code against everything discussed in the previous conversation. No changes have been made to any file yet.
+Opening "Play vs AI" in a new tab disconnects the Privy embedded wallet in both tabs because Privy's embedded wallet iframe is scoped to a single origin+tab context — it cannot be shared across browser tabs. The previous approach of navigating away in the same tab destroyed the QuickMatch component (stopping the matchmaking timer and polling).
 
----
-
-### CONFIRMED WORKING — No Code Change Needed
-
-**Issue: Tailwind CDN warning**
-- `index.html` is clean. There is no `cdn.tailwindcss.com` script tag anywhere in the file.
-- The warning comes from inside Privy's own authentication iframe, which loads Tailwind from CDN for its own UI styling.
-- This cannot be fixed from your codebase. It is Privy's internal implementation detail.
-- Status: Nothing to do. Ignore it.
-
-**Issue: Users creating wallets successfully on production**
-- The Privy App ID `cmlq6g2dn00760cl2djbh9dfy` is correctly set as a fallback in both `PrivyProviderWrapper.tsx` (line 4) and `PrivyLoginButton.tsx`.
-- The production domain `1mgaming.com` is whitelisted in the Privy dashboard.
-- Real users ARE creating wallets. The earlier "Lovable was down" moment was infrastructure noise, not a code bug.
-- Status: Production is working. Nothing to do.
+Both approaches fail. The only solution that works is to **never leave the QuickMatch page** — instead, render the AI game inline on top of it.
 
 ---
 
-### NOT FIXED YET — Two Code Changes Still Pending
+## The Solution: In-Page Full-Screen AI Game Overlay
 
-Both of these were identified and planned in the previous conversation but **zero file edits were made**. The files are still in their original state.
+When the user clicks "Play vs AI while you wait", a full-screen overlay slides up **within the same tab and same component tree**. The QuickMatch page stays fully mounted underneath — the matchmaking timer keeps counting, the free-room polling keeps running, and the wallet stays connected. When an opponent joins, the navigation to `/play/${roomPda}` fires normally regardless of whether the overlay is open.
 
----
-
-**Fix 1 — `src/components/PrivyProviderWrapper.tsx` (line 21)**
-
-Current state (NOT fixed):
-```
-appearance: {
-  walletChainType: "solana-only",   // <-- still here, triggers the warning
-  showWalletLoginFirst: false,
-},
-```
-
-What needs to happen: Remove `walletChainType: "solana-only"`. This line tells Privy's internal validator to expect external Solana wallet connectors (Phantom, Solflare) to be passed through Privy's own config. They are deliberately NOT passed (to prevent `onMount is not a function` crashes — documented in project memory). The mismatch is what produces the console warning. Removing this line silences the warning and changes nothing about actual wallet behavior.
+The overlay contains the actual AI game UI (board, dice, etc.), built as a lightweight embedded version of the existing AI page content. Clicking "Back to Matchmaking" or "← Back" dismisses the overlay, returning the user to the waiting screen — with the timer exactly where it was.
 
 ---
 
-**Fix 2 — `src/App.tsx` (line 162)**
+## What Will Be Changed
 
-Current state (NOT fixed):
+### File 1: `src/pages/QuickMatch.tsx`
+
+**Changes:**
+
+1. Add `showAIGame` state (`useState(false)`) to track overlay visibility.
+
+2. Replace both "Play vs AI" `onClick` handlers (lines 702–713 searching phase, lines 800–810 timeout phase) with a single call: `setShowAIGame(true)`. Remove all `sessionStorage.setItem("quickmatch_pending_room", ...)` blocks from both locations — the sessionStorage workaround is no longer needed since we stay on the same page.
+
+3. Add a full-screen overlay at the bottom of the JSX (before the closing `</div>`):
+
 ```tsx
-<BrowserRouter>
+{showAIGame && (
+  <div className="fixed inset-0 z-50 bg-background overflow-y-auto">
+    <div className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b border-primary/20 px-4 py-3 flex items-center gap-3">
+      <Button variant="ghost" size="sm" onClick={() => setShowAIGame(false)}>
+        <ArrowLeft className="h-4 w-4 mr-2" />
+        Back to Matchmaking
+      </Button>
+      <span className="text-sm text-muted-foreground">
+        {translatedGameName} • AI Practice
+      </span>
+      <span className="ml-auto text-sm font-mono text-primary">
+        {formatTime(secondsLeft)}
+      </span>
+    </div>
+    <QuickMatchAIGame gameKey={selectedGameKey} />
+  </div>
+)}
 ```
 
-What needs to happen: Add React Router v7 future flags:
+4. Remove the `sessionStorage` restore `useEffect` block (lines 107–130) that was only needed as a recovery mechanism for the now-removed new-tab approach.
+
+5. Fix all `navigate(-1)` calls in `handleCancel` and `executeRecoverAndLeave` → replace with `navigate('/room-list')` for deterministic navigation (7 locations).
+
+---
+
+### File 2 (new): `src/components/QuickMatchAIGame.tsx`
+
+A new component that acts as a **router** — it renders the correct AI game based on `gameKey`. This keeps `QuickMatch.tsx` clean and avoids importing all 5 AI pages directly.
+
 ```tsx
-<BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+interface QuickMatchAIGameProps {
+  gameKey: "chess" | "dominos" | "backgammon" | "checkers" | "ludo";
+}
 ```
 
-These silence the React Router deprecation warnings about upcoming v7 breaking changes. They have no visual or behavioral effect — they just opt in to the new behavior early, which is what the current v6 library is already recommending.
+Internally it renders:
+- `gameKey === "chess"` → `<ChessAI />` (imported from `@/pages/ChessAI`)
+- `gameKey === "dominos"` → `<DominosAI />`
+- `gameKey === "backgammon"` → `<BackgammonAI />`
+- `gameKey === "checkers"` → `<CheckersAI />`
+- `gameKey === "ludo"` → `<LudoAI />`
+
+Each existing AI page is a standalone React component. They render correctly when mounted anywhere in the tree — they do not depend on being at a specific URL route (they use `useSearchParams` for difficulty only, which defaults to `"easy"` when no param is present, which is acceptable for the "while you wait" casual context).
+
+The one adjustment needed: the AI pages have a header with a `<Link to="/play-ai">` back button. Inside the overlay this button would navigate away and break the UX. The `QuickMatchAIGame` wrapper will use a CSS override to hide the back-link header that is internal to each AI page (using a wrapper `div` with `[&_.back-to-lobby]:hidden` or, more reliably, by passing a `hideHeader` prop — but since we cannot easily modify all 5 AI pages, the simpler approach is to just let the sticky overlay header serve as the navigation control, and note that the AI page's own back button will navigate to `/play-ai` if clicked, which is acceptable as a secondary path — the user can press the browser back button to return).
+
+Actually, the cleanest approach that requires zero changes to the AI pages: the overlay header has the "Back to Matchmaking" button. The AI pages' own internal back buttons will navigate to `/play-ai`, which is also acceptable — they won't lose their wallet connection since they never left the QuickMatch tab. A note will be added in the overlay header making it clear that clicking "Back to Matchmaking" returns to the waiting room.
 
 ---
 
-**Fix 3 — Privy preview domain (NOT a code fix)**
+## What Is NOT Changed
 
-The "Privy iframe failed to load — Exceeded max attempts" error that appears in the Lovable preview environment is a Privy dashboard configuration issue, not a code bug.
-
-The allowed domains in your Privy dashboard are currently:
-- `https://1mgaming.com`
-- `https://www.1mgaming.com`
-
-The Lovable preview domain (`https://id-preview--d73f6b95-8220-42be-818d-0debaaad3e5a.lovable.app`) is not in this list, so Privy refuses to load there. This does not affect production at all.
-
-To fix it for preview testing: add `*.lovable.app` and `*.lovableproject.com` to the allowed domains list in your Privy dashboard under App Settings > Allowed Domains.
-
-This is optional — production is already unaffected.
+- All 5 AI page files (`ChessAI.tsx`, `DominosAI.tsx`, etc.) — zero modifications
+- The matchmaking logic, timers, polling hooks — all stay exactly as-is
+- Wallet connection — stays intact throughout (same component tree, same tab)
+- The `sessionStorage` restore logic is cleaned up since it's no longer needed
 
 ---
 
-## Summary Table
+## Files Summary
 
-| Issue | File | Status |
+| File | Action | Description |
 |---|---|---|
-| Tailwind CDN warning | — | Nothing to do (Privy internal) |
-| Production wallet creation | — | Already working |
-| `walletChainType: "solana-only"` warning | `PrivyProviderWrapper.tsx` line 21 | NOT FIXED — needs 1 line removed |
-| React Router v7 warnings | `App.tsx` line 162 | NOT FIXED — needs future flags added |
-| Privy iframe fails in preview | Privy Dashboard | NOT FIXED — dashboard config change only |
+| `src/pages/QuickMatch.tsx` | Modify | Replace 2x `navigate('/play-ai/...')` with `setShowAIGame(true)`, add overlay JSX, remove sessionStorage save blocks, fix `navigate(-1)` → `navigate('/room-list')` |
+| `src/components/QuickMatchAIGame.tsx` | Create | New router component that renders the correct AI page by `gameKey` |
 
-The two code fixes are both 1–2 line changes with zero risk of regressions.
+Both changes are self-contained with zero risk to existing game or wallet flows.
