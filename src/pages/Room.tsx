@@ -141,10 +141,19 @@ export default function Room() {
   const signingDisabled = useSigningDisabled();
   
   
+  // Detect free room (DB-only, no Solana PDA)
+  const isFreeRoom = roomPdaParam?.startsWith("free-") ?? false;
+
   // Validate PDA param on mount
   useEffect(() => {
     if (!roomPdaParam) {
       setPdaError("No room specified");
+      return;
+    }
+    
+    // Free rooms use synthetic IDs, not Solana public keys
+    if (roomPdaParam.startsWith("free-")) {
+      setPdaError(null);
       return;
     }
     
@@ -192,6 +201,29 @@ export default function Room() {
           }
           console.log("[RoomMode] DB mode:", session.mode);
           setRoomModeLoaded(true);
+
+          // For free rooms, populate room state from DB session (no on-chain data)
+          if (isFreeRoom && session) {
+            const GAME_TYPE_MAP: Record<string, number> = {
+              chess: 1, dominos: 2, backgammon: 3, checkers: 4, ludo: 5,
+            };
+            setRoom({
+              gameType: GAME_TYPE_MAP[session.game_type] ?? 0,
+              maxPlayers: session.max_players ?? 2,
+              playerCount: session.participants?.length ?? 1,
+              status: session.status === "waiting" ? RoomStatus.Open
+                    : session.status === "active" ? RoomStatus.Started
+                    : session.status === "finished" ? RoomStatus.Finished
+                    : RoomStatus.Open,
+              stakeLamports: 0n,
+              players: session.participants ?? [],
+              creator: { toBase58: () => session.player1_wallet },
+              winner: session.winner_wallet ?? null,
+              roomId: roomPdaParam,
+              isPrivate: false,
+            });
+            setLoading(false);
+          }
         } else if (modeFetchAttempts < MAX_MODE_RETRIES) {
           // Retry - game_session might not be created yet
           console.log("[RoomMode] No game_session found, retry", modeFetchAttempts + 1);
@@ -260,6 +292,8 @@ export default function Room() {
   const fetchRoom = useCallback(
     async (opts?: { silent?: boolean }) => {
       if (!roomPdaParam) return;
+      // Free rooms have no on-chain account — skip RPC entirely
+      if (roomPdaParam.startsWith("free-")) return;
 
       const silent = opts?.silent === true;
       const now = Date.now();
@@ -399,9 +433,10 @@ export default function Room() {
     fetchRoom();
   }, [roomPdaParam, fetchRoom]);
 
-  // Real-time subscription to room changes
+  // Real-time subscription to room changes (on-chain only, skip for free rooms)
   useEffect(() => {
     if (!roomPdaParam) return;
+    if (roomPdaParam.startsWith("free-")) return;
 
     let subId: number | null = null;
 
