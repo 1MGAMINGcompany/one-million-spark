@@ -2,7 +2,6 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { LiveActivityIndicator } from "@/components/LiveActivityIndicator";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-// PublicKey import removed - we use room.pda directly as the unique identifier
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -18,25 +17,59 @@ import {
   Zap,
   Trophy,
   Gamepad,
-  Settings2
+  Settings2,
+  Loader2,
 } from "lucide-react";
 import { useWallet } from "@/hooks/useWallet";
-import { WalletRequired } from "@/components/WalletRequired";
 import { useSolanaRooms } from "@/hooks/useSolanaRooms";
-import { SOLANA_ENABLED, getSolanaCluster, formatSol, getSolanaEndpoint } from "@/lib/solana-config";
-import { GameType, RoomStatus, PROGRAM_ID, isOpenStatus, RoomDisplay, isActiveStatus } from "@/lib/solana-program";
-// STEP 7: getRoomMode removed - use stake-based detection for room list
+import { SOLANA_ENABLED, getSolanaCluster, getSolanaEndpoint } from "@/lib/solana-config";
+import { GameType, RoomStatus, isOpenStatus, RoomDisplay, isActiveStatus } from "@/lib/solana-program";
 import { isBlockingRoom } from "@/lib/solana-utils";
-// ActiveGameBanner removed - using GlobalActiveRoomBanner from App.tsx instead
 import { useToast } from "@/hooks/use-toast";
 import { AudioManager } from "@/lib/AudioManager";
 import { showBrowserNotification } from "@/lib/pushNotifications";
-// getRoomPda import removed - we use activeRoom.pda directly
 import { ResolveRoomModal } from "@/components/ResolveRoomModal";
 import { UnresolvedRoomModal } from "@/components/UnresolvedRoomModal";
-
+import { supabase } from "@/integrations/supabase/client";
 import { BUILD_VERSION } from "@/lib/buildVersion";
 import { useRoomRealtimeAlert } from "@/hooks/useRoomRealtimeAlert";
+
+interface FreeRoom {
+  room_pda: string;
+  game_type: string;
+  status: string;
+  player1_wallet: string;
+  player2_wallet: string | null;
+  created_at: string;
+  max_players: number;
+  mode: string;
+}
+
+const FREE_GAME_ICONS: Record<string, string> = {
+  chess: "♟️",
+  dominos: "🁡",
+  backgammon: "🎲",
+  checkers: "⚫",
+  ludo: "🎯",
+};
+
+const FREE_GAME_NAMES: Record<string, string> = {
+  chess: "Chess",
+  dominos: "Dominos",
+  backgammon: "Backgammon",
+  checkers: "Checkers",
+  ludo: "Ludo",
+};
+
+function timeAgo(dateStr: string): string {
+  const secs = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+  if (secs < 60) return `${secs}s ago`;
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return `${mins}m ago`;
+  return `${Math.floor(mins / 60)}h ago`;
+}
+
+
 
 export default function RoomList() {
   const navigate = useNavigate();
@@ -56,6 +89,11 @@ export default function RoomList() {
   // On-chain active rooms (filtered from all rooms)
   const [myOnChainRooms, setMyOnChainRooms] = useState<RoomDisplay[]>([]);
   
+  // Free rooms from DB
+  const [freeRooms, setFreeRooms] = useState<FreeRoom[]>([]);
+  const [joiningFreeRoom, setJoiningFreeRoom] = useState<string | null>(null);
+  const [cancellingFreeRoom, setCancellingFreeRoom] = useState<string | null>(null);
+
   // Resolve modal state
   const [resolveModalOpen, setResolveModalOpen] = useState(false);
   const [selectedRoomForResolve, setSelectedRoomForResolve] = useState<RoomDisplay | null>(null);
@@ -113,6 +151,64 @@ export default function RoomList() {
     return () => clearInterval(interval);
   }, [isConnected, address, findMyActiveGameSessions]);
 
+  // Poll free rooms from DB every 10 seconds (visible to everyone, no wallet required)
+  useEffect(() => {
+    const fetchFreeRooms = async () => {
+      try {
+        const { data, error } = await supabase.functions.invoke("game-sessions-list", {
+          body: { type: "free_rooms_public" },
+        });
+        if (!error && data?.rows) {
+          setFreeRooms(data.rows);
+        }
+      } catch (e) {
+        console.warn("[RoomList] free rooms fetch error:", e);
+      }
+    };
+    fetchFreeRooms();
+    const interval = setInterval(fetchFreeRooms, 10000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Join a specific free room
+  const handleJoinFreeRoom = useCallback(async (roomPda: string) => {
+    if (!isConnected || !address) {
+      toast({ title: "Connect wallet to join", variant: "destructive" });
+      return;
+    }
+    setJoiningFreeRoom(roomPda);
+    try {
+      const { data, error } = await supabase.functions.invoke("free-match", {
+        body: { action: "join_specific", roomPda, wallet: address },
+      });
+      if (error) throw error;
+      if (data.status === "joined" || data.status === "rejoined") {
+        navigate(`/play/${roomPda}`);
+      }
+    } catch (e: any) {
+      toast({ title: e.message || "Failed to join room", variant: "destructive" });
+    } finally {
+      setJoiningFreeRoom(null);
+    }
+  }, [isConnected, address, navigate, toast]);
+
+  // Cancel own waiting free room
+  const handleCancelFreeRoom = useCallback(async (roomPda: string) => {
+    if (!address) return;
+    setCancellingFreeRoom(roomPda);
+    try {
+      await supabase.functions.invoke("free-match", {
+        body: { action: "cancel", roomPda, wallet: address },
+      });
+      setFreeRooms((prev) => prev.filter((r) => r.room_pda !== roomPda));
+      toast({ title: "Room cancelled" });
+    } catch (e: any) {
+      toast({ title: e.message || "Failed to cancel room", variant: "destructive" });
+    } finally {
+      setCancellingFreeRoom(null);
+    }
+  }, [address, toast]);
+
   // Filter on-chain rooms where this wallet is a player and room is active
   useEffect(() => {
     if (!address || rooms.length === 0) {
@@ -134,6 +230,7 @@ export default function RoomList() {
 
   // Note: Active room polling is now centralized in useSolanaRooms
   // Pages only CONSUME activeRoom - they don't trigger fetches
+
 
   // Detect status change: Created -> Started and redirect
   useEffect(() => {
@@ -298,6 +395,92 @@ export default function RoomList() {
       </div>
 
       {/* Active Game Banner handled by GlobalActiveRoomBanner in App.tsx */}
+
+      {/* ── FREE ROOMS SECTION ── */}
+      {freeRooms.length > 0 && (
+        <Card className="mb-6 border-emerald-500/30 bg-emerald-500/5">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <span>🆓</span>
+              Free Rooms
+              <span className="text-xs bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full ml-1 font-normal">
+                {freeRooms.length} waiting
+              </span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {freeRooms.map((room) => {
+              const isMyRoom = address && room.player1_wallet === address;
+              const isJoining = joiningFreeRoom === room.room_pda;
+              const isCancelling = cancellingFreeRoom === room.room_pda;
+              const gameName = FREE_GAME_NAMES[room.game_type] || room.game_type;
+              const gameIcon = FREE_GAME_ICONS[room.game_type] || "🎮";
+              return (
+                <div
+                  key={room.room_pda}
+                  className="flex items-center justify-between p-3 bg-background/60 rounded-lg border border-emerald-500/20"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl">{gameIcon}</span>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-medium">{gameName}</p>
+                        <span className="text-xs bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-1.5 py-0.5 rounded-full">
+                          FREE
+                        </span>
+                        {isMyRoom && (
+                          <span className="text-xs bg-primary/20 text-primary border border-primary/30 px-1.5 py-0.5 rounded-full">
+                            🟢 Your Room
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        <Users className="h-3 w-3 inline mr-1" />
+                        1/{room.max_players} · {timeAgo(room.created_at)}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 shrink-0">
+                    {isMyRoom ? (
+                      <>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 text-xs"
+                          onClick={() => navigate(`/play/${room.room_pda}`)}
+                        >
+                          Rejoin
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="text-destructive hover:bg-destructive/10 text-xs"
+                          disabled={isCancelling}
+                          onClick={() => handleCancelFreeRoom(room.room_pda)}
+                        >
+                          {isCancelling ? <Loader2 className="h-3 w-3 animate-spin" /> : "Cancel"}
+                        </Button>
+                      </>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 text-xs"
+                        disabled={isJoining || !isConnected}
+                        onClick={() => handleJoinFreeRoom(room.room_pda)}
+                        title={!isConnected ? "Connect wallet to join" : undefined}
+                      >
+                        {isJoining ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
+                        {isJoining ? "Joining…" : "Join Free"}
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
+      )}
 
       {/* My Active Games Section - Show ALL rooms for this wallet */}
       {isConnected && myOnChainRooms.length > 0 && (
