@@ -7,7 +7,7 @@ import bs58 from "bs58";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { ArrowLeft, Zap, Bot, Search, Loader2, Users, Copy, Check, Wallet, AlertTriangle, Share2, ExternalLink, MapPin } from "lucide-react";
+import { ArrowLeft, Zap, Bot, Search, Loader2, Users, Copy, Check, Wallet, AlertTriangle, Share2, MapPin } from "lucide-react";
 import { ChessIcon, DominoIcon, BackgammonIcon, CheckersIcon, LudoIcon } from "@/components/GameIcons";
 import { PrivyLoginButton } from "@/components/PrivyLoginButton";
 import { ConnectWalletGate } from "@/components/ConnectWalletGate";
@@ -103,6 +103,31 @@ export default function QuickMatch() {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const roomsRef = useRef(rooms);
   roomsRef.current = rooms;
+
+  // ── Restore pending free room from sessionStorage (on mount, after "Play vs AI") ──
+  useEffect(() => {
+    const stored = sessionStorage.getItem("quickmatch_pending_room");
+    if (!stored) return;
+    try {
+      const { roomPda, gameKey, stake, savedAt } = JSON.parse(stored);
+      const ageMs = Date.now() - savedAt;
+      if (ageMs > 15 * 60 * 1000) {
+        sessionStorage.removeItem("quickmatch_pending_room");
+        return;
+      }
+      sessionStorage.removeItem("quickmatch_pending_room");
+      const gameOption = GAME_OPTIONS.find((g) => g.key === gameKey);
+      if (gameOption) setSelectedGame(gameOption.type);
+      if (typeof stake === "number") setSelectedStake(stake);
+      setCreatedRoomPda(roomPda);
+      hasNavigatedRef.current = false;
+      setPhase("searching");
+      toast({ title: "👋 Welcome back!", description: "Still searching for an opponent…" });
+    } catch {
+      sessionStorage.removeItem("quickmatch_pending_room");
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Derived values
   const isLudo = selectedGame === GameType.Ludo;
@@ -674,9 +699,20 @@ export default function QuickMatch() {
                     variant="outline"
                     size="sm"
                     className="mt-2 w-full gap-2 text-xs"
-                    onClick={() => window.open(`/play-ai/${selectedGameKey}`, "_blank")}
+                    onClick={() => {
+                      // Store room state so we can recover it when user presses back
+                      if (createdRoomPda) {
+                        sessionStorage.setItem("quickmatch_pending_room", JSON.stringify({
+                          roomPda: createdRoomPda,
+                          gameKey: selectedGameKey,
+                          stake: selectedStake,
+                          savedAt: Date.now(),
+                        }));
+                      }
+                      navigate(`/play-ai/${selectedGameKey}`);
+                    }}
                   >
-                    <ExternalLink className="h-3 w-3" />
+                    <Bot className="h-3 w-3" />
                     {t("quickMatch.playAIWhileWaitingBtn")}
                   </Button>
                 </div>
@@ -761,7 +797,17 @@ export default function QuickMatch() {
               variant="outline"
               size="lg"
               className="w-full gap-2"
-              onClick={() => window.open(`/play-ai/${selectedGameKey}`, "_blank")}
+              onClick={() => {
+                if (createdRoomPda) {
+                  sessionStorage.setItem("quickmatch_pending_room", JSON.stringify({
+                    roomPda: createdRoomPda,
+                    gameKey: selectedGameKey,
+                    stake: selectedStake,
+                    savedAt: Date.now(),
+                  }));
+                }
+                navigate(`/play-ai/${selectedGameKey}`);
+              }}
             >
               <Bot className="h-4 w-4" />
               {t("quickMatch.playAI")}

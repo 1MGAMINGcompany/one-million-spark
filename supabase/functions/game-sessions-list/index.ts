@@ -54,6 +54,32 @@ serve(async (req) => {
       })
     }
 
+    if (type === 'free_rooms_public') {
+      const fifteenMinAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString()
+      const { data, error } = await supabase
+        .from('game_sessions')
+        .select('room_pda, game_type, status, player1_wallet, player2_wallet, created_at, max_players, mode')
+        .eq('mode', 'free')
+        .eq('status', 'waiting')
+        .gte('created_at', fifteenMinAgo)
+        .order('created_at', { ascending: false })
+        .limit(50)
+
+      if (error) {
+        console.error('[game-sessions-list] free_rooms_public error:', error)
+        return new Response(JSON.stringify({ error: error.message }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        })
+      }
+
+      console.log('[game-sessions-list] ✅ Found', data?.length || 0, 'public free rooms')
+      return new Response(JSON.stringify({ ok: true, rows: data }), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      })
+    }
+
     if (type === 'recoverable_for_wallet') {
       const wallet = body.wallet
       if (!wallet || typeof wallet !== 'string') {
@@ -65,11 +91,15 @@ serve(async (req) => {
 
       console.log('[game-sessions-list] Fetching recoverable for wallet:', wallet.slice(0, 8))
 
+      // Include 'waiting' free rooms so own waiting room is visible after reconnect
+      const fifteenMinAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString()
       const { data, error } = await supabase
         .from('game_sessions')
         .select('room_pda, game_type, status, player1_wallet, player2_wallet, current_turn_wallet, created_at, updated_at, mode, turn_time_seconds')
-        .eq('status', 'active')
-        .or(`player1_wallet.eq.${wallet},player2_wallet.eq.${wallet}`)
+        .or(
+          `and(status.eq.active,or(player1_wallet.eq.${wallet},player2_wallet.eq.${wallet})),` +
+          `and(status.eq.waiting,mode.eq.free,player1_wallet.eq.${wallet},created_at.gte.${fifteenMinAgo})`
+        )
         .order('updated_at', { ascending: false })
 
       if (error) {

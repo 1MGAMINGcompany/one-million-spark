@@ -234,6 +234,86 @@ serve(async (req) => {
       })
     }
 
+    // ── join_specific ──
+    if (action === 'join_specific') {
+      const { roomPda, wallet } = body
+
+      if (!roomPda || !wallet) {
+        return new Response(JSON.stringify({ error: 'missing roomPda or wallet' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
+      const { data: room, error: fetchErr } = await supabase
+        .from('game_sessions')
+        .select('*')
+        .eq('room_pda', roomPda)
+        .maybeSingle()
+
+      if (fetchErr || !room) {
+        return new Response(JSON.stringify({ error: 'Room not found' }), {
+          status: 404,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
+      if (room.status !== 'waiting') {
+        return new Response(JSON.stringify({ error: 'Room no longer available', status: room.status }), {
+          status: 409,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
+      if (room.player1_wallet === wallet) {
+        // Already the creator — just return joined so they can rejoin
+        return new Response(JSON.stringify({ status: 'rejoined', roomPda }), {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
+      if (room.player2_wallet === wallet) {
+        return new Response(JSON.stringify({ status: 'joined', roomPda }), {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
+      const { error: joinErr } = await supabase
+        .from('game_sessions')
+        .update({
+          player2_wallet: wallet,
+          participants: [room.player1_wallet, wallet],
+          status: 'active',
+          status_int: 2,
+          current_turn_wallet: room.player1_wallet,
+          starting_player_wallet: room.player1_wallet,
+          p1_ready: true,
+          p2_ready: true,
+          start_roll_finalized: true,
+          turn_started_at: new Date().toISOString(),
+          waiting_started_at: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('room_pda', roomPda)
+        .eq('status', 'waiting')
+
+      if (joinErr) {
+        console.error('[free-match] join_specific error:', joinErr)
+        return new Response(JSON.stringify({ error: joinErr.message }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
+      console.log('[free-match] join_specific succeeded:', roomPda.slice(0, 16))
+      return new Response(JSON.stringify({ status: 'joined', roomPda }), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
     return new Response(JSON.stringify({ error: 'Unknown action' }), {
       status: 400,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
