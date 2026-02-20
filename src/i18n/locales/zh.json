@@ -925,5 +925,11 @@
       "dominos": "多米诺",
       "ludo": "飞行棋"
     }
+  },
+  "liveStats": {
+    "browsingNow": "正在浏览",
+    "roomsWaiting": "等待中的房间",
+    "visitsToday": "今日访客",
+    "beTheFirst": "成为第一个开始比赛的人。"
   }
 }

@@ -28,17 +28,24 @@ Deno.serve(async (req) => {
         });
       }
 
+      const now = new Date().toISOString();
+      const todayDate = now.split("T")[0]; // "YYYY-MM-DD"
+
+      // Step 1: Try INSERT — sets first_seen_date on the very first visit
+      // Will silently fail (no error thrown) if session_id already exists
+      await supabase.from("presence_heartbeats").insert({
+        session_id: sessionId,
+        last_seen: now,
+        page: page ?? null,
+        game: game ?? null,
+        first_seen_date: todayDate,
+      });
+
+      // Step 2: Always UPDATE non-date fields — preserves first_seen_date
       const { error } = await supabase
         .from("presence_heartbeats")
-        .upsert(
-          {
-            session_id: sessionId,
-            last_seen: new Date().toISOString(),
-            page: page ?? null,
-            game: game ?? null,
-          },
-          { onConflict: "session_id" }
-        );
+        .update({ last_seen: now, page: page ?? null, game: game ?? null })
+        .eq("session_id", sessionId);
 
       if (error) throw error;
 
@@ -82,21 +89,23 @@ Deno.serve(async (req) => {
 
     // ── STATS ──────────────────────────────────────────────────────────────────
     if (action === "stats") {
-      const twoMinAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+      // Extended to 10 minutes for a more accurate "browsing now" count
+      const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+      const todayDate = new Date().toISOString().split("T")[0]; // "YYYY-MM-DD"
 
-      // Total browsing (all heartbeats in last 2 min)
+      // Total browsing (all heartbeats in last 10 min)
       const { count: browsing, error: e1 } = await supabase
         .from("presence_heartbeats")
         .select("*", { count: "exact", head: true })
-        .gte("last_seen", twoMinAgo);
+        .gte("last_seen", tenMinAgo);
       if (e1) throw e1;
 
-      // Active AI players (heartbeats with a game column set)
+      // Active AI players (heartbeats with a game column set, last 10 min)
       const { count: playingAI, error: e2 } = await supabase
         .from("presence_heartbeats")
         .select("*", { count: "exact", head: true })
         .not("game", "is", null)
-        .gte("last_seen", twoMinAgo);
+        .gte("last_seen", tenMinAgo);
       if (e2) throw e2;
 
       // Rooms waiting (status_int = 1, created in last 15 min)
@@ -108,19 +117,26 @@ Deno.serve(async (req) => {
         .gte("created_at", fifteenMinAgo);
       if (e3) throw e3;
 
+      // Unique visitors today (distinct sessions with first_seen_date = today)
+      const { count: visitsToday, error: e4 } = await supabase
+        .from("presence_heartbeats")
+        .select("*", { count: "exact", head: true })
+        .eq("first_seen_date", todayDate);
+      if (e4) throw e4;
+
       // AI games started today
       const todayStart = new Date();
       todayStart.setHours(0, 0, 0, 0);
-      const { count: aiGamesToday, error: e4 } = await supabase
+      const { count: aiGamesToday, error: e5 } = await supabase
         .from("ai_game_events")
         .select("*", { count: "exact", head: true })
         .eq("event", "game_started")
         .gte("created_at", todayStart.toISOString());
-      if (e4) throw e4;
+      if (e5) throw e5;
 
-      // Garbage collect old heartbeats (older than 5 min)
-      const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
-      await supabase.from("presence_heartbeats").delete().lt("last_seen", fiveMinAgo);
+      // Garbage collect old heartbeats (older than 15 min)
+      const gcCutoff = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+      await supabase.from("presence_heartbeats").delete().lt("last_seen", gcCutoff);
 
       return new Response(
         JSON.stringify({
@@ -128,6 +144,7 @@ Deno.serve(async (req) => {
           roomsWaiting: roomsWaiting ?? 0,
           playingAI: playingAI ?? 0,
           aiGamesToday: aiGamesToday ?? 0,
+          visitsToday: visitsToday ?? 0,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );

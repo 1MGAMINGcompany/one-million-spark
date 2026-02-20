@@ -559,18 +559,21 @@ export type Database = {
       }
       presence_heartbeats: {
         Row: {
+          first_seen_date: string | null
           game: string | null
           last_seen: string
           page: string | null
           session_id: string
         }
         Insert: {
+          first_seen_date?: string | null
           game?: string | null
           last_seen?: string
           page?: string | null
           session_id: string
         }
         Update: {
+          first_seen_date?: string | null
           game?: string | null
           last_seen?: string
           page?: string | null

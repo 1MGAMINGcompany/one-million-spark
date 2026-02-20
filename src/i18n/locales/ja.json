@@ -979,5 +979,11 @@
       "dominos": "ドミノ",
       "ludo": "すごろく"
     }
+  },
+  "liveStats": {
+    "browsingNow": "閲覧中",
+    "roomsWaiting": "待機中の部屋",
+    "visitsToday": "本日の訪問者",
+    "beTheFirst": "最初の対戦を始めよう。"
   }
 }

@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 export function useLiveStats() {
   const [browsing, setBrowsing] = useState(0);
   const [roomsWaiting, setRoomsWaiting] = useState(0);
+  const [visitsToday, setVisitsToday] = useState(0);
   const [loading, setLoading] = useState(true);
 
   const fetchStats = useCallback(async () => {
@@ -14,6 +15,7 @@ export function useLiveStats() {
       if (!error && data) {
         setBrowsing(Math.max(0, data.browsing ?? 0));
         setRoomsWaiting(Math.max(0, data.roomsWaiting ?? 0));
+        setVisitsToday(Math.max(0, data.visitsToday ?? 0));
       }
     } catch {
       // silent
@@ -28,5 +30,5 @@ export function useLiveStats() {
     return () => clearInterval(st);
   }, [fetchStats]);
 
-  return { browsing, roomsWaiting, loading };
+  return { browsing, roomsWaiting, visitsToday, loading };
 }
