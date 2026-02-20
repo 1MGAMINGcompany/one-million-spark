@@ -44,7 +44,11 @@ Deno.serve(async (req) => {
       // Step 2: Always UPDATE non-date fields — preserves first_seen_date
       const { error } = await supabase
         .from("presence_heartbeats")
-        .update({ last_seen: now, page: page ?? null, game: game ?? null })
+        .update({
+          last_seen: now,
+          ...(page != null ? { page } : {}),
+          ...(game != null ? { game } : {}),
+        })
         .eq("session_id", sessionId);
 
       if (error) throw error;

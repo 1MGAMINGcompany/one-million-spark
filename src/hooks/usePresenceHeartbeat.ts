@@ -32,6 +32,5 @@ export function usePresenceHeartbeat(page?: string, game?: string) {
     send();
     const iv = setInterval(send, 30_000);
     return () => clearInterval(iv);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [page, game]);
 }

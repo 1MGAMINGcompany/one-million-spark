@@ -85,7 +85,16 @@ const AppContent = () => {
   useVisualViewportHeight();
   // Global presence heartbeat — fires for every visitor on every page.
   // AI game pages augment this with useAIGameTracker (same session_id, richer metadata).
-  usePresenceHeartbeat();
+  const page = location.pathname === "/"
+    ? "home"
+    : location.pathname.startsWith("/play-ai/")
+    ? location.pathname.replace("/play-ai/", "ai-")
+    : location.pathname.startsWith("/play/")
+    ? "multiplayer"
+    : location.pathname.startsWith("/room/")
+    ? "room"
+    : location.pathname.replace("/", "") || "home";
+  usePresenceHeartbeat(page);
   
   // Hide footer on game/play routes to maximize vertical space
   const hideFooter = location.pathname.startsWith('/play/') || 

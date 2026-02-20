@@ -180,7 +180,7 @@ const ChessAI = () => {
       play('chess_check');
     }
     return false;
-  }, [play]);
+  }, [play, recordWin, recordLoss, getDuration, t]);
 
   // Fallback to random move if Stockfish fails
   const getRandomMove = useCallback((currentGame: Chess): Move | null => {
