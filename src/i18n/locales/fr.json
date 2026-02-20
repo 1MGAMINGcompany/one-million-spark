@@ -974,6 +974,13 @@
     "waText": "J'ai battu l'IA sur 1M GAMING ! Jouez gratuitement : {{link}}",
     "close": "Fermer",
     "playAgain": "Rejouer",
-    "tagline": "COMPÉTENCE > CHANCE"
+    "tagline": "COMPÉTENCE > CHANCE",
+    "gameNames": {
+      "chess": "Échecs",
+      "checkers": "Dames",
+      "backgammon": "Backgammon",
+      "dominos": "Dominos",
+      "ludo": "Ludo"
+    }
   }
 }

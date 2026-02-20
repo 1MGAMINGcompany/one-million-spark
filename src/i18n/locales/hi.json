@@ -964,6 +964,13 @@
     "waText": "मैंने 1M GAMING पर AI को हरा दिया! मुफ्त में खेलें: {{link}}",
     "close": "बंद करें",
     "playAgain": "फिर खेलें",
-    "tagline": "कौशल > किस्मत"
+    "tagline": "कौशल > किस्मत",
+    "gameNames": {
+      "chess": "शतरंज",
+      "checkers": "चेकर्स",
+      "backgammon": "बैकगैमन",
+      "dominos": "डोमिनोज़",
+      "ludo": "लूडो"
+    }
   }
 }

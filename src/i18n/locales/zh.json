@@ -917,6 +917,13 @@
     "waText": "我在1M GAMING击败了AI！免费玩：{{link}}",
     "close": "关闭",
     "playAgain": "再玩一次",
-    "tagline": "技术 > 运气"
+    "tagline": "技术 > 运气",
+    "gameNames": {
+      "chess": "国际象棋",
+      "checkers": "跳棋",
+      "backgammon": "西洋双陆棋",
+      "dominos": "多米诺",
+      "ludo": "飞行棋"
+    }
   }
 }

@@ -28,10 +28,13 @@ const LanguageSelector = () => {
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
         <button
-          className="p-2 rounded-lg transition-all duration-200 text-primary hover:text-primary/80 hover:bg-secondary"
+          className="flex items-center gap-1 px-2 py-1.5 rounded-lg transition-all duration-200 text-primary hover:text-primary/80 hover:bg-secondary"
           aria-label="Select language"
         >
-          <Globe size={20} />
+          <Globe size={16} />
+          <span className="text-[11px] font-semibold tracking-wide uppercase leading-none">
+            {currentLang.code.toUpperCase()}
+          </span>
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-48 bg-card border-border">

@@ -920,6 +920,13 @@
     "waText": "لقد هزمت الذكاء الاصطناعي في 1M GAMING! العب مجانًا: {{link}}",
     "close": "إغلاق",
     "playAgain": "العب مجددًا",
-    "tagline": "المهارة > الحظ"
+    "tagline": "المهارة > الحظ",
+    "gameNames": {
+      "chess": "شطرنج",
+      "checkers": "الداما",
+      "backgammon": "الطاولة",
+      "dominos": "الدومينو",
+      "ludo": "لودو"
+    }
   }
 }

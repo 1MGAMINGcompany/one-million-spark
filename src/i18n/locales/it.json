@@ -930,6 +930,13 @@
     "waText": "Ho battuto l'IA su 1M GAMING! Gioca gratis: {{link}}",
     "close": "Chiudi",
     "playAgain": "Gioca ancora",
-    "tagline": "ABILITÀ > FORTUNA"
+    "tagline": "ABILITÀ > FORTUNA",
+    "gameNames": {
+      "chess": "Scacchi",
+      "checkers": "Dama",
+      "backgammon": "Backgammon",
+      "dominos": "Domino",
+      "ludo": "Ludo"
+    }
   }
 }

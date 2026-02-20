@@ -1195,6 +1195,13 @@
     "waText": "¡Vencí a la IA en 1M GAMING! Juega gratis: {{link}}",
     "close": "Cerrar",
     "playAgain": "Jugar de nuevo",
-    "tagline": "HABILIDAD > SUERTE"
+    "tagline": "HABILIDAD > SUERTE",
+    "gameNames": {
+      "chess": "Ajedrez",
+      "checkers": "Damas",
+      "backgammon": "Backgammon",
+      "dominos": "Dominó",
+      "ludo": "Ludo"
+    }
   }
 }
