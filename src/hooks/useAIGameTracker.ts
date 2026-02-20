@@ -74,19 +74,24 @@ export function useAIGameTracker(game: AIGame, difficulty: string) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const getDuration = useCallback(
+    () => Math.round((Date.now() - startTime.current) / 1000),
+    []
+  );
+
   const recordWin = useCallback(() => {
     if (outcomeRecorded.current) return;
     outcomeRecorded.current = true;
-    const duration_seconds = Math.round((Date.now() - startTime.current) / 1000);
+    const duration_seconds = getDuration();
     trackAIEvent(sessionId.current, game, difficulty, "game_won", duration_seconds);
-  }, [game, difficulty]);
+  }, [game, difficulty, getDuration]);
 
   const recordLoss = useCallback(() => {
     if (outcomeRecorded.current) return;
     outcomeRecorded.current = true;
-    const duration_seconds = Math.round((Date.now() - startTime.current) / 1000);
+    const duration_seconds = getDuration();
     trackAIEvent(sessionId.current, game, difficulty, "game_lost", duration_seconds);
-  }, [game, difficulty]);
+  }, [game, difficulty, getDuration]);
 
-  return { recordWin, recordLoss };
+  return { recordWin, recordLoss, getDuration };
 }

@@ -956,5 +956,24 @@
     "freeMatchCreated": "Kostenloser Raum erstellt! Warte auf Gegner...",
     "freeMatchJoined": "Gegner gefunden! Spiel startet...",
     "freeCancelled": "Kostenloses Match abgebrochen."
+  },
+  "aiWinCard": {
+    "victory": "SIEG",
+    "skillConfirmed": "KÖNNEN BEWIESEN",
+    "youBeatAI": "Du hast die KI besiegt",
+    "difficulty": "Schwierigkeit",
+    "timePlayed": "Zeit",
+    "shareTitle": "Teile deinen Sieg",
+    "downloadImage": "Bild speichern",
+    "generating": "Wird erstellt...",
+    "shareOnX": "Auf X teilen",
+    "whatsapp": "WhatsApp",
+    "copy": "Kopieren",
+    "copied": "Kopiert!",
+    "xText": "Habe die KI in {{game}} auf Schwierigkeit {{difficulty}} besiegt! Kostenlos — kein Wallet nötig.\n🎮 {{link}}",
+    "waText": "Ich habe die KI auf 1M GAMING besiegt! Spiel kostenlos: {{link}}",
+    "close": "Schließen",
+    "playAgain": "Nochmal spielen",
+    "tagline": "KÖNNEN > GLÜCK"
   }
 }

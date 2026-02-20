@@ -14,6 +14,7 @@ import { toast } from "@/hooks/use-toast";
 import { useSound } from "@/contexts/SoundContext";
 import { useTranslation } from "react-i18next";
 import GoldConfettiExplosion from "@/components/GoldConfettiExplosion";
+import AIWinShareCard from "@/components/AIWinShareCard";
 
 import { useLudoGame } from "@/hooks/useLudoGame";
 import { useLudoStepAnimation } from "@/hooks/useLudoStepAnimation";
@@ -27,8 +28,10 @@ const LudoAI = () => {
   const { t } = useTranslation();
   const [searchParams] = useSearchParams();
   const difficulty = (searchParams.get("difficulty") as Difficulty) || "medium";
-  const { recordWin, recordLoss } = useAIGameTracker("ludo", difficulty);
+  const { recordWin, recordLoss, getDuration } = useAIGameTracker("ludo", difficulty);
   const { play, soundEnabled, toggleSound } = useSound();
+  const [showShareCard, setShowShareCard] = useState(false);
+  const [winDuration, setWinDuration] = useState(0);
 
   const [musicEnabled, setMusicEnabled] = useState(true);
   const musicRef = useRef<HTMLAudioElement | null>(null);
@@ -106,7 +109,10 @@ const LudoAI = () => {
     onGameOver: (winnerColor) => {
       if (winnerColor === 'gold') {
         play("ludo_win");
+        const ludoDur = getDuration();
         recordWin();
+        setWinDuration(ludoDur);
+        setShowShareCard(true);
         toast({
           title: t("ludo.youWin", "You Win! 🎉"),
           description: t("ludo.congratulations", "Congratulations!"),
@@ -370,6 +376,13 @@ const LudoAI = () => {
           })}
         </div>
       </div>
+      <AIWinShareCard
+        open={showShareCard}
+        onClose={() => setShowShareCard(false)}
+        game="ludo"
+        difficulty={difficulty}
+        durationSeconds={winDuration}
+      />
     </div>
   );
 };

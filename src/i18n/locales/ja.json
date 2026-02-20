@@ -953,5 +953,24 @@
     "freeMatchCreated": "無料ルームを作成しました！対戦相手を待っています...",
     "freeMatchJoined": "対戦相手が見つかりました！ゲーム開始...",
     "freeCancelled": "無料マッチがキャンセルされました。"
+  },
+  "aiWinCard": {
+    "victory": "勝利",
+    "skillConfirmed": "スキル確認済み",
+    "youBeatAI": "AIに勝利しました",
+    "difficulty": "難易度",
+    "timePlayed": "プレイ時間",
+    "shareTitle": "勝利をシェア",
+    "downloadImage": "画像を保存",
+    "generating": "生成中...",
+    "shareOnX": "Xでシェア",
+    "whatsapp": "WhatsApp",
+    "copy": "コピー",
+    "copied": "コピーしました！",
+    "xText": "{{game}}でAIを{{difficulty}}難易度で倒した！無料プレイ — ウォレット不要。\n🎮 {{link}}",
+    "waText": "1M GAMINGでAIに勝ちました！無料でプレイ：{{link}}",
+    "close": "閉じる",
+    "playAgain": "もう一度プレイ",
+    "tagline": "スキル > 運"
   }
 }

@@ -10,6 +10,7 @@ import { useSound } from "@/contexts/SoundContext";
 import { useTranslation } from "react-i18next";
 import { useAIGameTracker } from "@/hooks/useAIGameTracker";
 import { createChessAI, type ChessAI as ChessAIType, type Difficulty } from "@/lib/chessEngine/localChessAI";
+import AIWinShareCard from "@/components/AIWinShareCard";
 
 // Helper to convert UCI move (e.g., "e2e4") to from/to squares
 const parseUCIMove = (uciMove: string): { from: Square; to: Square; promotion?: string } | null => {
@@ -89,13 +90,15 @@ const ChessAI = () => {
       ? rawDifficulty
       : "easy";
 
-  const { recordWin, recordLoss } = useAIGameTracker("chess", difficulty);
+  const { recordWin, recordLoss, getDuration } = useAIGameTracker("chess", difficulty);
   const [game, setGame] = useState(new Chess());
   const [gameStatus, setGameStatus] = useState<string>("");
   const [moveHistory, setMoveHistory] = useState<string[]>([]);
   const [isThinking, setIsThinking] = useState(false);
   const [gameOver, setGameOver] = useState(false);
   const [animationsEnabled, setAnimationsEnabled] = useState(true);
+  const [showShareCard, setShowShareCard] = useState(false);
+  const [winDuration, setWinDuration] = useState(0);
   
   // Stockfish AI instance
   const aiRef = useRef<ChessAIType | null>(null);
@@ -152,7 +155,14 @@ const ChessAI = () => {
       setGameStatus(winner);
       setGameOver(true);
       play(isPlayerWin ? 'chess_win' : 'chess_lose');
-      if (isPlayerWin) recordWin(); else recordLoss();
+      if (isPlayerWin) {
+        const dur = getDuration();
+        recordWin();
+        setWinDuration(dur);
+        setShowShareCard(true);
+      } else {
+        recordLoss();
+      }
       return true;
     }
     if (currentGame.isStalemate()) {
@@ -648,6 +658,13 @@ const ChessAI = () => {
           </div>
         </div>
       </div>
+      <AIWinShareCard
+        open={showShareCard}
+        onClose={() => setShowShareCard(false)}
+        game="chess"
+        difficulty={difficulty}
+        durationSeconds={winDuration}
+      />
     </div>
   );
 };
