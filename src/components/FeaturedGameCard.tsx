@@ -1,15 +1,19 @@
 import { Link } from "react-router-dom";
 import { useSound } from "@/contexts/SoundContext";
 import { useCallback, useRef } from "react";
+import { useTranslation } from "react-i18next";
+import { Bot } from "lucide-react";
 
 interface FeaturedGameCardProps {
   name: string;
   tagline: string;
   path: string;
+  aiPath: string;
   icon: React.ReactNode;
 }
 
-const FeaturedGameCard = ({ name, tagline, path, icon }: FeaturedGameCardProps) => {
+const FeaturedGameCard = ({ name, tagline, path, aiPath, icon }: FeaturedGameCardProps) => {
+  const { t } = useTranslation();
   const { play } = useSound();
   const hasPlayedRef = useRef(false);
 
@@ -104,13 +108,25 @@ const FeaturedGameCard = ({ name, tagline, path, icon }: FeaturedGameCardProps) 
                       <path d="M12 2L2 22h20L12 2zm0 4.5L18.5 20h-13L12 6.5z"/>
                     </svg>
                     <span className="font-display font-semibold text-background tracking-wide">
-                      Play for SOL
+                      {t("home.playForSol")}
                     </span>
                   </div>
                   <span className="text-xs text-background/70 font-normal tracking-wide">
-                    Skill-based match
+                    {t("home.skillBasedMatch")}
                   </span>
                 </div>
+              </div>
+            </button>
+          </Link>
+
+          {/* Play vs AI Free Button */}
+          <Link to={aiPath} className="w-full">
+            <button className="relative w-full group/ai border border-primary/40 hover:border-primary/70 rounded-xl px-6 py-2.5 transition-all duration-200 hover:bg-primary/10">
+              <div className="flex items-center justify-center gap-2">
+                <Bot className="w-4 h-4 text-primary" />
+                <span className="font-display font-medium text-primary tracking-wide text-sm">
+                  {t("home.playAiFree")}
+                </span>
               </div>
             </button>
           </Link>
