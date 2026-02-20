@@ -994,5 +994,11 @@
     "roomsWaiting": "待機中の部屋",
     "visitsToday": "本日の訪問者",
     "beTheFirst": "最初の対戦を始めよう。"
+  },
+  "mobilePrompt": {
+    "getTheApp": "アプリを入手",
+    "downloadDesc": "最高の体験のために1M Gamingをインストール",
+    "install": "インストール",
+    "iosInstructions": "共有ボタンをタップし、「ホーム画面に追加」を選択"
   }
 }
