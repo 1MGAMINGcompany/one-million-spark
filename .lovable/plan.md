@@ -1,64 +1,110 @@
 
-# Fix: Translate "Play for SOL" Button + Add "Play vs AI Free" Button on Home Game Cards
+# Fix: Share Card Not Showing After Winning Checkers (and Full Audit of All AI Games)
 
-## What's Broken
+## Root Cause Identified
 
-The `FeaturedGameCard` component has two hardcoded English strings that are never translated:
-- `"Play for SOL"` — the translation key `home.playForSol` already exists in all 10 languages but is never used
-- `"Skill-based match"` — the translation key `home.skillBasedMatch` also exists in all 10 languages but is never used
+The previous fix only patched the **player's move handler**. But there are two more game-over paths in CheckersAI that were completely missed — both inside the **AI's own move handlers**. When a player wins because the AI moves itself into a losing position (no pieces left), the game ends through the AI's handler, not the player's. Those paths call `setGameOver` and play the win sound correctly, but **never call `recordWin()` or `setShowShareCard(true)`**.
 
-There is also **no "Play vs AI Free" button** on the home page game cards. Users who scroll down to the featured games section have no direct path to practice — they must navigate to `/play-ai` and then pick a game a second time.
+### The Two Missing Paths in CheckersAI.tsx
 
-## What Changes
+**Path A — AI regular move ends the game (lines 453-460):**
+```typescript
+const result = checkGameOver(newBoard);
+if (result) {
+  setGameOver(result);
+  play(result === 'gold' ? 'checkers_win' : 'checkers_lose');
+  // ❌ NO recordWin, NO setShowShareCard here
+} else {
+  setCurrentPlayer("gold");
+}
+```
 
-### 1. `src/components/FeaturedGameCard.tsx`
+**Path B — AI chain capture ends the game (lines 491-500):**
+```typescript
+const result = checkGameOver(boardRef.current);
+if (result) {
+  setGameOver(result);
+  play(result === 'gold' ? 'checkers_win' : 'checkers_lose');
+  // ❌ NO recordWin, NO setShowShareCard here
+} else {
+  setCurrentPlayer("gold");
+}
+```
 
-- Add `useTranslation` hook
-- Replace hardcoded `"Play for SOL"` → `{t("home.playForSol")}`
-- Replace hardcoded `"Skill-based match"` → `{t("home.skillBasedMatch")}`
-- Add a new `aiPath` prop to the interface
-- Add a second button below the gold "Play for SOL" button — a simpler outlined "Play vs AI Free" button that links to `aiPath`
-- This button uses the already-translated `home.playAiFree` key (exists in all 10 locales)
+This explains exactly why the user's win wasn't tracked or shown — the game ended on the **AI's turn** (the AI's last move removed its own ability to move), which goes through Path A or B above.
 
-### 2. `src/pages/Home.tsx`
+### Full Game-Over Map (All Paths in CheckersAI)
 
-- Add `aiPath` to each game in the `featuredGames` array, mapping to the correct AI route:
+| Path | Where | Player Wins tracked? | Player Loss tracked? | Share card? |
+|------|--------|---------------------|---------------------|-------------|
+| Player chain capture ends game | Line 318-333 | ✅ | ✅ | ✅ |
+| Player normal move ends game | Line 367-381 | ✅ | ✅ | ✅ |
+| AI has no moves (initial) | Line 422-430 | ✅ | — | ✅ |
+| **AI regular move ends game** | **Line 453-460** | **❌** | **❌** | **❌** |
+| **AI chain capture ends game** | **Line 491-500** | **❌** | **❌** | **❌** |
 
-| Game | aiPath |
-|------|--------|
-| Chess | `/play-ai/chess` |
-| Dominos | `/play-ai/dominos` |
-| Backgammon | `/play-ai/backgammon` |
-| Checkers | `/play-ai/checkers` |
-| Ludo | `/play-ai/ludo` |
+### Other AI Games — Status
 
-- Pass `aiPath` down to `<FeaturedGameCard />` for each game
+- **ChessAI.tsx** — Uses a single `checkGameOver()` function called from both player and AI paths. Share card is correctly wired. ✅ OK
+- **BackgammonAI.tsx** — Already correct. ✅ OK
+- **DominosAI.tsx** — Already correct. ✅ OK
+- **LudoAI.tsx** — Already correct. ✅ OK
 
-### No locale file changes needed
+Only CheckersAI has the remaining gap.
 
-All three translation keys already exist in all 10 languages:
-- `home.playForSol` — ✅ all 10 locales
-- `home.skillBasedMatch` — ✅ all 10 locales  
-- `home.playAiFree` — ✅ all 10 locales (e.g. Japanese: `"AI対戦（無料）"`, Arabic: `"العب ضد الذكاء الاصطناعي (مجاناً)"`)
+## The Fix
 
-## Visual Result (per game card)
+Patch both missing paths in `CheckersAI.tsx` to match the pattern already used in the working paths:
 
-```text
-┌─────────────────────────────┐
-│       [Game Icon]           │
-│       Game Name             │
-│       tagline               │
-│                             │
-│  [🔶 Play for SOL       ]   │  ← gold button, now translated
-│     Skill-based match       │  ← subtitle, now translated
-│                             │
-│  [  Play vs AI Free    ]    │  ← NEW outlined button, translated
-└─────────────────────────────┘
+**Path A fix (after AI regular move):**
+```typescript
+const result = checkGameOver(newBoard);
+if (result) {
+  setGameOver(result);
+  play(result === 'gold' ? 'checkers_win' : 'checkers_lose');
+  // ADD:
+  if (result === 'gold') {
+    const dur = getDuration();
+    recordWin();
+    setWinDuration(dur);
+    setShowShareCard(true);
+  } else if (result === 'obsidian') {
+    recordLoss();
+  }
+} else {
+  setCurrentPlayer("gold");
+}
+```
+
+**Path B fix (after AI chain capture):**
+```typescript
+const result = checkGameOver(boardRef.current);
+if (result) {
+  setGameOver(result);
+  play(result === 'gold' ? 'checkers_win' : 'checkers_lose');
+  // ADD:
+  if (result === 'gold') {
+    const dur = getDuration();
+    recordWin();
+    setWinDuration(dur);
+    setShowShareCard(true);
+  } else if (result === 'obsidian') {
+    recordLoss();
+  }
+} else {
+  setCurrentPlayer("gold");
+}
 ```
 
 ## Files to Change
 
-| File | What changes |
-|------|-------------|
-| `src/components/FeaturedGameCard.tsx` | Add `useTranslation`, use `t()` for both button texts, add `aiPath` prop, add second AI button |
-| `src/pages/Home.tsx` | Add `aiPath` to each game entry, pass it to `FeaturedGameCard` |
+| File | Lines | Change |
+|------|-------|--------|
+| `src/pages/CheckersAI.tsx` | 453-460 | Add `recordWin`/`recordLoss`/`setShowShareCard` to AI regular move game-over path |
+| `src/pages/CheckersAI.tsx` | 491-500 | Add `recordWin`/`recordLoss`/`setShowShareCard` to AI chain capture game-over path |
+
+Also need to add `getDuration`, `recordWin`, `recordLoss`, `setWinDuration`, `setShowShareCard` to the dependency arrays of both `useEffect` hooks that contain these paths.
+
+## Why This Wasn't Caught Before
+
+The original fix specifically targeted `handleSquareClick` — the player's interaction handler. But checkers can end on the AI's turn: if the AI captures the player's last piece, or if the player's last move forces the AI into a dead-end that the AI then confirms by moving — all of those end via the AI's `useEffect`. The session replay confirms the game ended while piece counts were dropping, which is consistent with the AI making the final capture.
