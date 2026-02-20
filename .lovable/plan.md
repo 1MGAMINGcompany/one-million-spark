@@ -1,209 +1,174 @@
 
-# QuickMatch Waiting Screen — Full Enhancement
+# Fix: Same-Tab Navigation + Free Rooms in Room List
 
-## What the User Asked For
-Three features on the searching/waiting screen:
-1. **Play vs AI while you wait** — fun mini-CTA to jump into an AI game without losing the room
-2. **Room stays listed** — clear, friendly messaging that the room lives in the Room List for 15 minutes even after the 5-minute UI countdown
-3. **Share room link with a friend** — a share button visible during the searching phase (for all game types, not just multi-player Ludo)
-4. **Extend the countdown timer from 60s to 5 minutes** (as previously planned)
-5. **Good translations across all 10 languages**
+## The Two Problems (Root Cause Analysis)
+
+### Problem 1 — Wallet Disconnects When "Play vs AI" Opens
+
+The current code uses `window.open('/play-ai/${selectedGameKey}', '_blank')` in TWO places:
+- Line 677: "Play vs AI while waiting" card in the searching phase
+- Line 764: "Play vs AI" button on the timeout screen
+
+**Why this breaks wallets:** On mobile (Solflare, Phantom in-app browser, PWA mode), `window.open` either fails silently, triggers a full page reload in the same window, or opens a new context that loses the Privy session iframe. For external wallets (Solflare browser), opening a new tab in the same app context causes the wallet extension to reassign its active session. The result is both tabs see a disconnected wallet.
+
+**For the PWA download case:** A PWA running in standalone mode has no concept of "open new tab" — `window.open` often just navigates the current page, destroying the QuickMatch listener and the user loses their room.
+
+**The fix:** Replace both `window.open` calls with same-tab `navigate()`. But we need to preserve the user's room state so they can get back. This is done by storing the room PDA in `sessionStorage` before navigating, and reading it back when they return.
+
+### Problem 2 — Free Rooms Never Appear in Room List
+
+**Why:** `RoomList.tsx` uses `useSolanaRooms()` → `fetchOpenPublicRooms()` which only reads **on-chain Solana accounts**. Free rooms (`free-UUID`) have zero on-chain footprint — they only exist in the database. They are invisible to the Room List entirely.
+
+Additionally, `findMyActiveGameSessions()` in `useSolanaRooms.tsx` calls the `game-sessions-list` edge function with `type: "recoverable_for_wallet"` — but that query filters by `status = 'active'` only. A **waiting** free room (created but no opponent yet) has `status = 'waiting'`, so after a wallet reconnect, your own room is also invisible.
 
 ---
 
-## Current State (Confirmed by Code Audit)
+## Complete Fix Plan
 
-| What | Where | Current State |
-|---|---|---|
-| Countdown timer | `QuickMatch.tsx` line 65 | `SEARCH_TIMEOUT_SEC = 60` (60 seconds) |
-| Searching phase UI | `QuickMatch.tsx` lines 613–684 | Only shows game icon, countdown, progress bar, stake info, and cancel. No share, no Play AI |
-| Share/copy link | Lines 654–676 | Only appears for multi-player Ludo (3–4 players), hidden for all 2-player games |
-| Timeout screen | Lines 687–714 | Has "Keep Searching" and "Play vs AI" buttons — but they're on the WRONG screen (timeout, not waiting) |
-| AI game paths | `App.tsx` | `/play-ai/ludo`, `/play-ai/chess`, `/play-ai/dominos`, `/play-ai/backgammon`, `/play-ai/checkers` |
-| i18n `quickMatch` section | All 10 locale files | Has 29 keys, all complete — new keys must be added to all 10 files |
+### Fix 1 — Same-Tab Navigation for "Play vs AI"
 
----
+**File: `src/pages/QuickMatch.tsx`**
 
-## What Changes
-
-### 1. Extend the timer from 60s → 300s with mm:ss display
-
-`SEARCH_TIMEOUT_SEC` changes from `60` to `300`.
-
-The countdown display currently shows `"{{seconds}}s"`. At 300s, "300s" looks cold and mechanical. The display becomes a `mm:ss` format: "4:59 → 0:01", rendered inline in the component using a format helper, no new i18n key needed for the timer format itself.
-
-### 2. Searching screen: Share Invite Link (all game types)
-
-Move the copy invite link button from "only multi-player Ludo" to **always visible during searching phase** — before cancel.
-
-The link is `buildInviteLink({ roomId: createdRoomPda })`. For free rooms (`free-XXXX`), the canonical room link is already used correctly in `WaitingForOpponentPanel` — same here.
-
-The share button becomes a WhatsApp-friendly share if `navigator.share` is available (mobile), or clipboard copy otherwise.
-
-### 3. Searching screen: "Play vs AI while you wait" mini-card
-
-A compact, clearly labeled card below the progress bar. It shows:
-- The same game icon (so it feels relevant)
-- Text: "Bored waiting? Play {{game}} vs AI for free — your room stays open!"  
-- A button: "Play {{game}} vs AI →"
-
-This uses `navigate()` to open the AI page in the SAME tab. When the opponent joins, the realtime alert fires `navigate(/play/${createdRoomPda})` — but if the user is already on the AI page, they won't see it. So the Play AI button opens a **new tab** (`window.open`), so the QuickMatch page stays alive in the background, the realtime listener keeps running, and the user gets a browser notification when the opponent joins.
-
-The path mapping for "Play vs AI" uses the `selectedGameKey`:
-
-```text
-ludo      → /play-ai/ludo
-dominos   → /play-ai/dominos
-chess     → /play-ai/chess
-backgammon→ /play-ai/backgammon
-checkers  → /play-ai/checkers
+**Step A — Before navigating, save room to sessionStorage:**
+```ts
+sessionStorage.setItem('quickmatch_pending_room', JSON.stringify({
+  roomPda: createdRoomPda,
+  gameKey: selectedGameKey,
+  stake: selectedStake,
+  savedAt: Date.now(),
+}));
+navigate(`/play-ai/${selectedGameKey}`);
 ```
 
-### 4. "Room stays in Room List" messaging — on the timeout screen
+**Step B — On component mount, restore from sessionStorage:**
+Add a `useEffect` on mount that reads `quickmatch_pending_room`. If found AND the saved time is within 15 minutes AND we're in "selecting" phase, it:
+1. Restores `createdRoomPda`
+2. Sets phase back to `"searching"` 
+3. Clears the sessionStorage key (consumed)
+4. Shows a toast: "Welcome back! Still searching for an opponent..."
 
-When the 5-minute UI countdown reaches 0 and the timeout screen shows, add clear friendly text:
+This means when the user presses Back from the AI game, they land on QuickMatch, the component mounts, sees the stored room, and instantly resumes the searching phase — wallet still connected, realtime listener still working, no reconnection needed.
 
-> "Your room is still open in the Room List for up to 15 minutes. Anyone can still find and join you!"
+**Step C — Replace both `window.open` calls with `navigate()`:**
+- Line 677: `window.open('/play-ai/${selectedGameKey}', '_blank')` → `navigate('/play-ai/${selectedGameKey}')`
+- Line 764: same replacement
 
-And a "View Room List" button that navigates to `/room-list` (so friends can also manually join).
+**Step D — Add a "← Back to my room" breadcrumb on the AI pages (optional safety net):**
+Not required for the fix, but nice. The sessionStorage key acts as the signal — if it exists when the user opens an AI page, the AI page could show a small "← You have a room waiting" banner. This is optional and low priority.
 
-This is the correct place for this message — the **timeout screen** is when users think the room has died and they need reassurance.
+### Fix 2 — Free Rooms in Room List
 
-### 5. New i18n keys (added to all 10 locale files)
+**Part A — Fix `game-sessions-list` edge function**
 
-New keys needed in the `quickMatch` section:
+**File: `supabase/functions/game-sessions-list/index.ts`**
 
-```json
-"playAIWhileWaiting": "Play {{game}} vs AI — your room stays open!",
-"playAIWhileWaitingBtn": "Play vs AI (New Tab)",
-"shareLink": "Share Room Link",
-"shareOrCopy": "Copy or share your room link",
-"roomStillOpen": "Your room is still listed for 15 min",
-"roomStillOpenDesc": "Anyone searching for a {{game}} match can still join you! Open the Room List to share the link.",
-"viewRoomList": "View Room List",
-"timeLeft": "{{min}}:{{sec}}",
-"waitingNote": "Waiting... your room is live 🟢"
+Add a new request type `free_rooms_public`:
+```ts
+if (type === 'free_rooms_public') {
+  // All waiting free rooms created in the last 15 minutes
+  const fifteenMinAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString()
+  const { data, error } = await supabase
+    .from('game_sessions')
+    .select('room_pda, game_type, status, player1_wallet, player2_wallet, created_at, max_players, mode')
+    .eq('mode', 'free')
+    .eq('status', 'waiting')
+    .gte('created_at', fifteenMinAgo)
+    .order('created_at', { ascending: false })
+    .limit(50)
+  // return data
+}
 ```
 
-These 9 new keys × 10 locales = 90 translations. The plan is to write all of them with proper native-language translations (not machine-translated placeholders):
+Also fix the `recoverable_for_wallet` query to include `waiting` free rooms — change `.eq('status', 'active')` to `.in('status', ['active', 'waiting'])` so a user's own waiting free room shows up after a reconnect.
 
-- **en** — English (source)
-- **hi** — Hindi (largest audience: India)
-- **ar** — Arabic (RTL)
-- **es** — Spanish
-- **fr** — French
-- **de** — German
-- **pt** — Portuguese
-- **zh** — Chinese (Simplified)
-- **it** — Italian
-- **ja** — Japanese
+**Part B — Add "Free Rooms" section to `RoomList.tsx`**
 
----
+**File: `src/pages/RoomList.tsx`**
 
-## Exact File Changes
+Add a new state: `freeRooms` (array of free waiting rooms), and fetch it every 10 seconds (alongside the existing `myActiveSessions` fetch). No wallet required to VIEW; wallet required to JOIN.
 
-### `src/pages/QuickMatch.tsx`
+The new section renders **above** the on-chain room list with:
+- Header: "🆓 Free Rooms" with a count badge
+- Each room card shows: game icon, game name, "FREE" badge in green, player count (1/2), "Created X min ago"
+- If the user's wallet matches `player1_wallet`: show "Your Room 🟢" badge + "Rejoin" + "Cancel" buttons
+- Otherwise: show a "Join Free" button that calls `free-match` with `action: "find_or_create"` for that specific game type
 
-1. **Line 65**: `SEARCH_TIMEOUT_SEC = 60` → `SEARCH_TIMEOUT_SEC = 300`
-2. **Add `formatTime` helper** near the top of the component:
-   ```ts
-   const formatTime = (secs: number) => {
-     const m = Math.floor(secs / 60);
-     const s = secs % 60;
-     return `${m}:${s.toString().padStart(2, "0")}`;
-   };
-   ```
-3. **Searching phase** (lines 613–684): Update to add 3 new elements:
-   - Timer display: change `{t("quickMatch.secondsLeft", { seconds: secondsLeft })}` → `{formatTime(secondsLeft)}`
-   - "Room still open" note below the progress bar: small green dot + `t("quickMatch.waitingNote")`
-   - **Share link card**: copy/share button (visible for ALL game types, not just multi-player Ludo) — replaces the Ludo-only section with a universal one that works for everyone
-   - **Play vs AI card**: card with game icon, description line, and "Play vs AI (New Tab)" button using `window.open(`/play-ai/${selectedGameKey}`, "_blank")`
-4. **Timeout phase** (lines 687–714): Add below the "Keep Searching" button:
-   - `t("quickMatch.roomStillOpenDesc")` info box
-   - "View Room List" button → `navigate("/room-list")`
+**Part C — Add `join_specific` action to `free-match` edge function**
 
-### `src/i18n/locales/en.json` (and 9 other locale files)
+**File: `supabase/functions/free-match/index.ts`**
 
-Add 9 new keys to the `quickMatch` section. Written professionally, fun, and simple — no jargon.
-
----
-
-## What the Searching Screen Will Look Like
-
-```text
-╔════════════════════════════════╗
-║  [Ludo icon — pulsing]         ║
-║                                ║
-║  🔍 Searching for opponent...  ║
-║       4:32  ← mm:ss countdown  ║
-║                                ║
-║  [═══════════          ]       ║
-║  🟢 Your room is live          ║
-║                                ║
-║  Ludo • Free                   ║
-║                                ║
-║ ┌──────────────────────────┐  ║
-║ │ 🎮 Play Ludo vs AI       │  ║
-║ │ Your room stays open!    │  ║
-║ │ [Play vs AI (New Tab) →] │  ║
-║ └──────────────────────────┘  ║
-║                                ║
-║ [🔗 Share Room Link]  ← always ║
-║                                ║
-║      [Cancel]                  ║
-╚════════════════════════════════╝
+When a user clicks "Join Free" on a specific room in the Room List, we need to join that exact room (not a random one). Add a `join_specific` action:
+```ts
+if (action === 'join_specific') {
+  const { roomPda, wallet } = body
+  // Fetch the specific room
+  // Verify it's still waiting and user isn't already in it
+  // Join it exactly like the existing join logic
+  // Return { status: 'joined', roomPda }
+}
 ```
 
-## What the Timeout Screen Will Look Like
-
-```text
-╔════════════════════════════════╗
-║  [Ludo icon — dim]             ║
-║                                ║
-║  No opponent found yet         ║
-║                                ║
-║  [🔍 Keep Searching]           ║
-║                                ║
-║ ┌──────────────────────────┐  ║
-║ │ ✅ Room still open!      │  ║
-║ │ Your room is in the Room │  ║
-║ │ List for up to 15 min.   │  ║
-║ │ [View Room List →]       │  ║
-║ └──────────────────────────┘  ║
-║                                ║
-║  [🤖 Play vs AI (Free)]        ║
-║  [Cancel / Recover Funds]      ║
-╚════════════════════════════════╝
-```
+After joining via `join_specific`, navigate the user directly to `/play/${roomPda}`.
 
 ---
 
-## Why Open AI in a New Tab?
-
-The `useRoomRealtimeAlert` hook is alive in `QuickMatch.tsx`. If the user navigates away (same tab), the subscription dies and they miss the opponent joining. Opening the AI game in a **new tab** means:
-- QuickMatch page stays alive in tab 1
-- AI game plays in tab 2
-- Browser notification fires when opponent joins
-- User clicks notification → goes back to tab 1 → navigated to the game
-
-This is the same pattern used by gaming platforms like Chess.com and Wordle when they suggest other activities while waiting.
-
----
-
-## Files Touched
+## Files Changed
 
 | File | Change |
 |---|---|
-| `src/pages/QuickMatch.tsx` | Timer extended to 300s; mm:ss format; share button universalized; Play AI card added; timeout screen gets room-still-open box |
-| `src/i18n/locales/en.json` | 9 new keys in `quickMatch` section |
-| `src/i18n/locales/hi.json` | Same 9 keys in Hindi |
-| `src/i18n/locales/ar.json` | Same 9 keys in Arabic |
-| `src/i18n/locales/es.json` | Same 9 keys in Spanish |
-| `src/i18n/locales/fr.json` | Same 9 keys in French |
-| `src/i18n/locales/de.json` | Same 9 keys in German |
-| `src/i18n/locales/pt.json` | Same 9 keys in Portuguese |
-| `src/i18n/locales/zh.json` | Same 9 keys in Chinese |
-| `src/i18n/locales/it.json` | Same 9 keys in Italian |
-| `src/i18n/locales/ja.json` | Same 9 keys in Japanese |
+| `src/pages/QuickMatch.tsx` | Replace `window.open` with same-tab `navigate()`; add mount-time sessionStorage restore; store room in sessionStorage before AI navigation |
+| `supabase/functions/game-sessions-list/index.ts` | Add `free_rooms_public` type; fix `recoverable_for_wallet` to include `waiting` status |
+| `supabase/functions/free-match/index.ts` | Add `join_specific` action |
+| `src/pages/RoomList.tsx` | Add Free Rooms section with 10s polling, own-room detection, Rejoin/Cancel/Join Free buttons |
 
-No database changes. No new edge functions. No new routes.
+No database schema changes. No new routes. No new dependencies.
+
+---
+
+## What the Room List Will Look Like
+
+```text
+╔══════════════════════════════════════════════╗
+║  🆓 FREE ROOMS  (3 waiting)                  ║
+╠══════════════════════════════════════════════╣
+║  🎯 Ludo  │ FREE  │ 1/2 players              ║
+║  Created 2 min ago                           ║
+║                               [Join Free]    ║
+╠══════════════════════════════════════════════╣
+║  🁡 Dominos  │ FREE  │ 1/2  🟢 Your Room     ║
+║  Waiting for opponent...                     ║
+║         [Rejoin]          [Cancel]           ║
+╠══════════════════════════════════════════════╣
+║  ♟️ Chess  │ FREE  │ 1/2 players              ║
+║  Created 7 min ago                           ║
+║                               [Join Free]    ║
+╚══════════════════════════════════════════════╝
+```
+
+---
+
+## What the "Play vs AI" Flow Looks Like Now
+
+```text
+Before (broken):
+QuickMatch (searching) → window.open → New Tab
+  Tab 1: Wallet disconnects ❌
+  Tab 2: New session, also disconnected ❌
+
+After (fixed):
+QuickMatch (searching) → sessionStorage.setItem(roomPda) → navigate('/play-ai/dominos')
+  Same tab: Wallet stays connected ✅
+  User presses Back → QuickMatch mounts → reads sessionStorage → resumes searching ✅
+  Opponent joins → realtime fires → navigate('/play/free-xxx') ✅
+```
+
+---
+
+## Why No New Tab Is Correct for PWA + Mobile
+
+In PWA standalone mode and in-app wallet browsers:
+- `window.open` either fails silently or replaces the current page
+- Multiple contexts share a single wallet session — splitting them causes disconnects
+- "Back" navigation in the same tab is the standard mobile pattern
+
+Chess.com and similar apps navigate same-tab with a "← Back to queue" button — not a new tab.
