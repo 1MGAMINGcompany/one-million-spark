@@ -1176,7 +1176,15 @@
     "confirmSign": "Confirmar y firmar",
     "freeMatchCreated": "¡Sala gratuita creada! Esperando oponente...",
     "freeMatchJoined": "¡Oponente encontrado! Iniciando juego...",
-    "freeCancelled": "Partida gratuita cancelada."
+    "freeCancelled": "Partida gratuita cancelada.",
+    "playAIWhileWaiting": "¿Aburrido esperando? Juega {{game}} vs IA gratis — ¡tu sala sigue abierta!",
+    "playAIWhileWaitingBtn": "Jugar vs IA (nueva pestaña) →",
+    "shareLink": "Compartir enlace de sala",
+    "shareOrCopy": "Copia o comparte el enlace de tu sala",
+    "roomStillOpen": "✅ ¡Tu sala sigue abierta 15 min!",
+    "roomStillOpenDesc": "¡Cualquiera que busque {{game}} aún puede unirse! Abre la lista de salas para compartir el enlace.",
+    "viewRoomList": "Ver lista de salas",
+    "waitingNote": "Tu sala está en vivo 🟢"
   },
   "aiWinCard": {
     "victory": "VICTORIA",

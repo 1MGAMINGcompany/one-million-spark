@@ -1446,7 +1446,15 @@
     "confirmSign": "Confirm & Sign",
     "freeMatchCreated": "Free room created! Waiting for opponent...",
     "freeMatchJoined": "Opponent found! Starting game...",
-    "freeCancelled": "Free match cancelled."
+    "freeCancelled": "Free match cancelled.",
+    "playAIWhileWaiting": "Bored waiting? Play {{game}} vs AI for free — your room stays open!",
+    "playAIWhileWaitingBtn": "Play vs AI (New Tab) →",
+    "shareLink": "Share Room Link",
+    "shareOrCopy": "Copy or share your room link",
+    "roomStillOpen": "✅ Your room is still open for 15 min!",
+    "roomStillOpenDesc": "Anyone searching for a {{game}} match can still join you. Open the Room List to share the link.",
+    "viewRoomList": "View Room List",
+    "waitingNote": "Your room is live 🟢"
   },
   "aiWinCard": {
     "victory": "VICTORY",
