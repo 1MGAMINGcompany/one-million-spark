@@ -1,97 +1,67 @@
 
-## The Problem
 
-Opening "Play vs AI" in a new tab disconnects the Privy embedded wallet in both tabs because Privy's embedded wallet iframe is scoped to a single origin+tab context — it cannot be shared across browser tabs. The previous approach of navigating away in the same tab destroyed the QuickMatch component (stopping the matchmaking timer and polling).
+## Bug: "Invalid Room Link" on Free Room Rejoin
 
-Both approaches fail. The only solution that works is to **never leave the QuickMatch page** — instead, render the AI game inline on top of it.
+### Root Cause
 
----
+The navigation chain for rejoining a free room in "waiting" status goes through three components, but one of them has no awareness of free rooms:
 
-## The Solution: In-Page Full-Screen AI Game Overlay
-
-When the user clicks "Play vs AI while you wait", a full-screen overlay slides up **within the same tab and same component tree**. The QuickMatch page stays fully mounted underneath — the matchmaking timer keeps counting, the free-room polling keeps running, and the wallet stays connected. When an opponent joins, the navigation to `/play/${roomPda}` fires normally regardless of whether the overlay is open.
-
-The overlay contains the actual AI game UI (board, dice, etc.), built as a lightweight embedded version of the existing AI page content. Clicking "Back to Matchmaking" or "← Back" dismisses the overlay, returning the user to the waiting screen — with the timer exactly where it was.
-
----
-
-## What Will Be Changed
-
-### File 1: `src/pages/QuickMatch.tsx`
-
-**Changes:**
-
-1. Add `showAIGame` state (`useState(false)`) to track overlay visibility.
-
-2. Replace both "Play vs AI" `onClick` handlers (lines 702–713 searching phase, lines 800–810 timeout phase) with a single call: `setShowAIGame(true)`. Remove all `sessionStorage.setItem("quickmatch_pending_room", ...)` blocks from both locations — the sessionStorage workaround is no longer needed since we stay on the same page.
-
-3. Add a full-screen overlay at the bottom of the JSX (before the closing `</div>`):
-
-```tsx
-{showAIGame && (
-  <div className="fixed inset-0 z-50 bg-background overflow-y-auto">
-    <div className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b border-primary/20 px-4 py-3 flex items-center gap-3">
-      <Button variant="ghost" size="sm" onClick={() => setShowAIGame(false)}>
-        <ArrowLeft className="h-4 w-4 mr-2" />
-        Back to Matchmaking
-      </Button>
-      <span className="text-sm text-muted-foreground">
-        {translatedGameName} • AI Practice
-      </span>
-      <span className="ml-auto text-sm font-mono text-primary">
-        {formatTime(secondsLeft)}
-      </span>
-    </div>
-    <QuickMatchAIGame gameKey={selectedGameKey} />
-  </div>
-)}
+```text
+RoomList "Rejoin" click
+  --> /play/free-xxxxxxxx  (PlayRoom.tsx)
+  --> PlayRoom sees status="waiting", redirects to /room/free-xxxxxxxx
+  --> Room.tsx calls validatePublicKey("free-xxxxxxxx")
+  --> FAILS -- not a valid Solana public key
+  --> Shows "INVALID ROOM LINK"
 ```
 
-4. Remove the `sessionStorage` restore `useEffect` block (lines 107–130) that was only needed as a recovery mechanism for the now-removed new-tab approach.
+`PlayRoom.tsx` and `RoomRouter.tsx` both have `if (roomPdaParam.startsWith("free-"))` early-return guards that skip the Solana public key validation. `Room.tsx` does not -- it runs `validatePublicKey()` on every room PDA unconditionally (line 151), which naturally rejects the `free-` prefix synthetic IDs.
 
-5. Fix all `navigate(-1)` calls in `handleCancel` and `executeRecoverAndLeave` → replace with `navigate('/room-list')` for deterministic navigation (7 locations).
+### Fix
+
+Add the same `free-` prefix guard to `Room.tsx`. When a free room is detected, fetch its session from the database instead of trying to validate it as a Solana public key. This mirrors the exact pattern already used in `PlayRoom.tsx` and `RoomRouter.tsx`.
 
 ---
 
-### File 2 (new): `src/components/QuickMatchAIGame.tsx`
+### Technical Details
 
-A new component that acts as a **router** — it renders the correct AI game based on `gameKey`. This keeps `QuickMatch.tsx` clean and avoids importing all 5 AI pages directly.
+**File: `src/pages/Room.tsx`**
+
+In the PDA validation `useEffect` (lines 145-158), add a `free-` prefix check before `validatePublicKey`:
 
 ```tsx
-interface QuickMatchAIGameProps {
-  gameKey: "chess" | "dominos" | "backgammon" | "checkers" | "ludo";
-}
+useEffect(() => {
+  if (!roomPdaParam) {
+    setPdaError("No room specified");
+    return;
+  }
+
+  // Free rooms use synthetic IDs, not Solana public keys
+  if (roomPdaParam.startsWith("free-")) {
+    setPdaError(null); // Valid free room format
+    return;
+  }
+
+  const validPda = validatePublicKey(roomPdaParam);
+  if (!validPda) {
+    setPdaError("Invalid room link");
+    console.error("[Room] Invalid PDA param:", roomPdaParam);
+  } else {
+    setPdaError(null);
+  }
+}, [roomPdaParam]);
 ```
 
-Internally it renders:
-- `gameKey === "chess"` → `<ChessAI />` (imported from `@/pages/ChessAI`)
-- `gameKey === "dominos"` → `<DominosAI />`
-- `gameKey === "backgammon"` → `<BackgammonAI />`
-- `gameKey === "checkers"` → `<CheckersAI />`
-- `gameKey === "ludo"` → `<LudoAI />`
+Additionally, audit the rest of `Room.tsx` for any other places that assume the PDA is a valid Solana public key (e.g., `new PublicKey(roomPdaParam)`, on-chain account fetches) and wrap those in `!roomPdaParam.startsWith("free-")` guards, using the database session data instead for free rooms.
 
-Each existing AI page is a standalone React component. They render correctly when mounted anywhere in the tree — they do not depend on being at a specific URL route (they use `useSearchParams` for difficulty only, which defaults to `"easy"` when no param is present, which is acceptable for the "while you wait" casual context).
-
-The one adjustment needed: the AI pages have a header with a `<Link to="/play-ai">` back button. Inside the overlay this button would navigate away and break the UX. The `QuickMatchAIGame` wrapper will use a CSS override to hide the back-link header that is internal to each AI page (using a wrapper `div` with `[&_.back-to-lobby]:hidden` or, more reliably, by passing a `hideHeader` prop — but since we cannot easily modify all 5 AI pages, the simpler approach is to just let the sticky overlay header serve as the navigation control, and note that the AI page's own back button will navigate to `/play-ai` if clicked, which is acceptable as a secondary path — the user can press the browser back button to return).
-
-Actually, the cleanest approach that requires zero changes to the AI pages: the overlay header has the "Back to Matchmaking" button. The AI pages' own internal back buttons will navigate to `/play-ai`, which is also acceptable — they won't lose their wallet connection since they never left the QuickMatch tab. A note will be added in the overlay header making it clear that clicking "Back to Matchmaking" returns to the waiting room.
+The `RoomList.tsx` "Rejoin" button (line 450) navigates to `/play/free-xxx`. For waiting free rooms, `PlayRoom.tsx` redirects to `/room/free-xxx`, which is where the fix is needed. No changes to `RoomList.tsx` or `PlayRoom.tsx` are required.
 
 ---
 
-## What Is NOT Changed
+### Summary
 
-- All 5 AI page files (`ChessAI.tsx`, `DominosAI.tsx`, etc.) — zero modifications
-- The matchmaking logic, timers, polling hooks — all stay exactly as-is
-- Wallet connection — stays intact throughout (same component tree, same tab)
-- The `sessionStorage` restore logic is cleaned up since it's no longer needed
+| File | Change |
+|---|---|
+| `src/pages/Room.tsx` | Add `free-` prefix guard to skip Solana PDA validation and use DB session data for free rooms |
 
----
-
-## Files Summary
-
-| File | Action | Description |
-|---|---|---|
-| `src/pages/QuickMatch.tsx` | Modify | Replace 2x `navigate('/play-ai/...')` with `setShowAIGame(true)`, add overlay JSX, remove sessionStorage save blocks, fix `navigate(-1)` → `navigate('/room-list')` |
-| `src/components/QuickMatchAIGame.tsx` | Create | New router component that renders the correct AI page by `gameKey` |
-
-Both changes are self-contained with zero risk to existing game or wallet flows.
+This is a single-file fix that follows the exact same pattern already established in `PlayRoom.tsx` and `RoomRouter.tsx`.
