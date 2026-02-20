@@ -1,110 +1,78 @@
 
-# Fix: Share Card Not Showing After Winning Checkers (and Full Audit of All AI Games)
+# Full Game Flow Audit — All Fixes
 
-## Root Cause Identified
+## What Was Audited
 
-The previous fix only patched the **player's move handler**. But there are two more game-over paths in CheckersAI that were completely missed — both inside the **AI's own move handlers**. When a player wins because the AI moves itself into a losing position (no pieces left), the game ends through the AI's handler, not the player's. Those paths call `setGameOver` and play the win sound correctly, but **never call `recordWin()` or `setShowShareCard(true)`**.
+All 10 game entry points: 5 AI games (Chess, Backgammon, Dominos, Ludo, Checkers) and 5 multiplayer "Play for SOL" games (Chess, Backgammon, Dominos, Ludo, Checkers).
 
-### The Two Missing Paths in CheckersAI.tsx
+The share card and game-over flows are mostly correct. Four concrete bugs remain.
 
-**Path A — AI regular move ends the game (lines 453-460):**
-```typescript
-const result = checkGameOver(newBoard);
-if (result) {
-  setGameOver(result);
-  play(result === 'gold' ? 'checkers_win' : 'checkers_lose');
-  // ❌ NO recordWin, NO setShowShareCard here
-} else {
-  setCurrentPlayer("gold");
-}
-```
+---
 
-**Path B — AI chain capture ends the game (lines 491-500):**
-```typescript
-const result = checkGameOver(boardRef.current);
-if (result) {
-  setGameOver(result);
-  play(result === 'gold' ? 'checkers_win' : 'checkers_lose');
-  // ❌ NO recordWin, NO setShowShareCard here
-} else {
-  setCurrentPlayer("gold");
-}
-```
+## Bug 1 — CheckersGame: Missing `isRematch` prop on GameEndScreen
 
-This explains exactly why the user's win wasn't tracked or shown — the game ended on the **AI's turn** (the AI's last move removed its own ability to move), which goes through Path A or B above.
+**Impact:** The RivalryWidget (win streak tracker showing "5-game win streak vs opponent") never appears in Checkers rematches, unlike the other 4 games.
 
-### Full Game-Over Map (All Paths in CheckersAI)
+**Root cause:** `CheckersGame.tsx` line 1491 calls `<GameEndScreen>` without `isRematch`. The variable exists in the component — it comes from `rematch.checkRematchInvite(roomId)` at line 693 — but is never passed down.
 
-| Path | Where | Player Wins tracked? | Player Loss tracked? | Share card? |
-|------|--------|---------------------|---------------------|-------------|
-| Player chain capture ends game | Line 318-333 | ✅ | ✅ | ✅ |
-| Player normal move ends game | Line 367-381 | ✅ | ✅ | ✅ |
-| AI has no moves (initial) | Line 422-430 | ✅ | — | ✅ |
-| **AI regular move ends game** | **Line 453-460** | **❌** | **❌** | **❌** |
-| **AI chain capture ends game** | **Line 491-500** | **❌** | **❌** | **❌** |
+**Fix:** Add `isRematch={isRematch}` to the GameEndScreen call in `CheckersGame.tsx`. The `isRematch` variable needs to be lifted out of the `useEffect` into component scope (currently it's a block-scoped const inside the effect).
 
-### Other AI Games — Status
+---
 
-- **ChessAI.tsx** — Uses a single `checkGameOver()` function called from both player and AI paths. Share card is correctly wired. ✅ OK
-- **BackgammonAI.tsx** — Already correct. ✅ OK
-- **DominosAI.tsx** — Already correct. ✅ OK
-- **LudoAI.tsx** — Already correct. ✅ OK
+## Bug 2 — CheckersGame: `isStaked` doesn't cover casual-SOL games
 
-Only CheckersAI has the remaining gap.
+**Impact:** A player who creates a casual room with a SOL stake (e.g. 0.1 SOL casual mode) will NOT see the on-chain finalization UI in `GameEndScreen`. The share card will show 0 SOL even though they played for real money.
 
-## The Fix
+**Root cause:** `CheckersGame.tsx` line 1500 passes `isStaked={isRankedGame}`. But casual-mode games can also have a stake (`entryFeeSol > 0`). Compare with `DominosGame.tsx` which correctly passes `isStaked={isRankedGame || entryFeeSol > 0}` and `BackgammonGame.tsx` which passes `isStaked={isRankedGame && (stakeLamports ?? 0) > 0}`.
 
-Patch both missing paths in `CheckersAI.tsx` to match the pattern already used in the working paths:
+**Fix:** Change `isStaked={isRankedGame}` to `isStaked={isRankedGame || entryFeeSol > 0}` in `CheckersGame.tsx`.
 
-**Path A fix (after AI regular move):**
-```typescript
-const result = checkGameOver(newBoard);
-if (result) {
-  setGameOver(result);
-  play(result === 'gold' ? 'checkers_win' : 'checkers_lose');
-  // ADD:
-  if (result === 'gold') {
-    const dur = getDuration();
-    recordWin();
-    setWinDuration(dur);
-    setShowShareCard(true);
-  } else if (result === 'obsidian') {
-    recordLoss();
-  }
-} else {
-  setCurrentPlayer("gold");
-}
-```
+---
 
-**Path B fix (after AI chain capture):**
-```typescript
-const result = checkGameOver(boardRef.current);
-if (result) {
-  setGameOver(result);
-  play(result === 'gold' ? 'checkers_win' : 'checkers_lose');
-  // ADD:
-  if (result === 'gold') {
-    const dur = getDuration();
-    recordWin();
-    setWinDuration(dur);
-    setShowShareCard(true);
-  } else if (result === 'obsidian') {
-    recordLoss();
-  }
-} else {
-  setCurrentPlayer("gold");
-}
-```
+## Bug 3 — ShareResultCard: SOL toggle shown even when no SOL was staked
 
-## Files to Change
+**Impact:** In a truly free casual game (0 SOL), the share card shows a "SOL Won: 0.000" or "SOL Staked: 0.000" stat box, which is misleading and unprofessional.
 
-| File | Lines | Change |
-|------|-------|--------|
-| `src/pages/CheckersAI.tsx` | 453-460 | Add `recordWin`/`recordLoss`/`setShowShareCard` to AI regular move game-over path |
-| `src/pages/CheckersAI.tsx` | 491-500 | Add `recordWin`/`recordLoss`/`setShowShareCard` to AI chain capture game-over path |
+**Root cause:** `ShareResultCard.tsx` line 196 renders the SOL stat box whenever `showSol` is true, regardless of whether any SOL is actually involved. The "SOL Amount" toggle in the customization panel also appears for free games.
 
-Also need to add `getDuration`, `recordWin`, `recordLoss`, `setWinDuration`, `setShowShareCard` to the dependency arrays of both `useEffect` hooks that contain these paths.
+**Clarification on user's point:** The user is correct — casual games CAN be played for real SOL. The fix is NOT to hide SOL based on `isRanked`. Instead, hide the SOL stat box and toggle only when BOTH `solWonLamports` and `solLostLamports` are 0 (truly no SOL at stake). When there IS SOL in a casual game, `GameEndScreen` fetches on-chain payout data and passes it correctly, so the amount will display.
 
-## Why This Wasn't Caught Before
+**Fix:** In `ShareResultCard.tsx`:
+- Derive `hasSolStake = (solWonLamports || 0) > 0 || (solLostLamports || 0) > 0`
+- Only render the SOL stat box when `showSol && hasSolStake`
+- Only render the "SOL Amount" toggle in the customization panel when `hasSolStake`
+- Default `showSol` state to `true` but it only matters when `hasSolStake` is true
 
-The original fix specifically targeted `handleSquareClick` — the player's interaction handler. But checkers can end on the AI's turn: if the AI captures the player's last piece, or if the player's last move forces the AI into a dead-end that the AI then confirms by moving — all of those end via the AI's `useEffect`. The session replay confirms the game ended while piece counts were dropping, which is consistent with the AI making the final capture.
+---
+
+## Bug 4 — LudoAI: 2 hardcoded English strings not translated
+
+**Impact:** Players using Japanese, Arabic, French, etc. see English text in the middle of a translated UI when playing Ludo vs AI.
+
+**Root cause:** `LudoAI.tsx` lines 334–343 have two hardcoded strings:
+- `"Select a token to move"` — shown when player has legal moves to pick from
+- `"No moves available. Passing turn..."` — shown when player has no legal moves
+
+**Fix:** Replace with `t()` calls using inline fallback defaults. The locale keys `ludo.selectToken` and `ludo.noMovesAI` already exist in all 10 language files — confirmed from previous audits.
+
+---
+
+## Complete Fix Table
+
+| # | File | Line | Issue | Fix |
+|---|------|------|-------|-----|
+| 1 | `src/pages/CheckersGame.tsx` | 691-699 | `isRematch` only exists inside `useEffect` scope | Lift `isRematch` to component state (`useState(false)`) |
+| 1 | `src/pages/CheckersGame.tsx` | 1491 | Missing `isRematch={isRematch}` on GameEndScreen | Add the prop |
+| 2 | `src/pages/CheckersGame.tsx` | 1500 | `isStaked={isRankedGame}` misses casual+SOL games | Change to `isStaked={isRankedGame \|\| entryFeeSol > 0}` |
+| 3 | `src/components/ShareResultCard.tsx` | 63, 196, 251 | SOL row shows "0.000" for truly free games | Add `hasSolStake` guard; hide row and toggle when no SOL |
+| 4 | `src/pages/LudoAI.tsx` | 334, 340 | Hardcoded English strings | Replace with `t("ludo.selectToken")` / `t("ludo.noMovesAI")` |
+
+---
+
+## What Is Already Correct (Confirmed During Audit)
+
+- All 5 AI games fire `recordWin()`, `recordLoss()`, and `setShowShareCard(true)` on every game-over path (player move, chain capture, and AI move)
+- All 5 multiplayer games show `GameEndScreen` with a share button for both winner and loser
+- The `GameEndScreen` fetches on-chain payout data via `connection.getAccountInfo()` and passes it to `ShareResultCard` as `solWonLamports`
+- The home page game cards now show translated "Play for SOL" and "Play vs AI Free" buttons in all 10 languages
+- Chess, Backgammon, Ludo, and Dominos multiplayer games correctly pass `isRematch` to their GameEndScreen
