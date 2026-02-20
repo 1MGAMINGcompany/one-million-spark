@@ -332,13 +332,13 @@ const LudoAI = () => {
 
         {!isGameOver && !currentPlayer.isAI && phase === 'ROLLED' && gameState.legalMoves.length > 0 && (
           <p className="text-amber-200 text-sm">
-            Select a token to move
+            {t('ludo.selectToken', 'Select a token to move')}
           </p>
         )}
 
         {!isGameOver && !currentPlayer.isAI && phase === 'ROLLED' && gameState.legalMoves.length === 0 && (
           <p className="text-amber-300/70 text-sm">
-            No moves available. Passing turn...
+            {t('ludo.noMovesAI', 'No moves available. Passing turn...')}
           </p>
         )}
       </div>
