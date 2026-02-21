@@ -922,6 +922,21 @@
     "viewRoomList": "Vedi lista stanze",
     "waitingNote": "La tua stanza è live 🟢"
   },
+  "quickPlay": {
+    "guest": "Ospite",
+    "editName": "Modifica nome",
+    "findOpponent": "Trova Avversario",
+    "rejoining": "Riconnessione alla partita...",
+    "leaveMatch": "Lasciare la partita?",
+    "leaveMatchDesc": "Perderai questa partita gratuita. Sei sicuro?",
+    "confirmLeave": "Sì, esci",
+    "leftMatch": "Hai lasciato la partita.",
+    "noLoginNeeded": "Nessun accesso richiesto",
+    "playForSol": "Gioca per SOL",
+    "requiresWallet": "Richiede portafoglio",
+    "mode": "Modalità",
+    "yourName": "Il Tuo Nome"
+  },
   "aiWinCard": {
     "victory": "VITTORIA",
     "skillConfirmed": "ABILITÀ CONFERMATA",

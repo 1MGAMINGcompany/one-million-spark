@@ -909,6 +909,21 @@
     "viewRoomList": "查看房间列表",
     "waitingNote": "你的房间正在直播中 🟢"
   },
+  "quickPlay": {
+    "guest": "访客",
+    "editName": "编辑名称",
+    "findOpponent": "寻找对手",
+    "rejoining": "正在重新连接到你的比赛...",
+    "leaveMatch": "离开比赛？",
+    "leaveMatchDesc": "你将放弃这场免费比赛。确定吗？",
+    "confirmLeave": "是的，离开",
+    "leftMatch": "你已离开比赛。",
+    "noLoginNeeded": "无需登录",
+    "playForSol": "用SOL对战",
+    "requiresWallet": "需要钱包",
+    "mode": "模式",
+    "yourName": "你的名字"
+  },
   "aiWinCard": {
     "victory": "胜利",
     "skillConfirmed": "技术得到验证",

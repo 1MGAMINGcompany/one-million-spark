@@ -10,6 +10,7 @@ import { PublicKey } from '@solana/web3.js';
 import { finalizeGame, isRoomFinalized } from '@/lib/finalizeGame';
 import { useSound } from '@/contexts/SoundContext';
 import { supabase } from '@/integrations/supabase/client';
+import { clearActiveRoom } from '@/lib/anonIdentity';
 import { RivalryWidget } from '@/components/RivalryWidget';
 import { WalletLink } from '@/components/WalletLink';
 import { DrawSettlementDebug } from '@/components/DrawSettlementDebug';
@@ -168,6 +169,9 @@ export function GameEndScreen({
   const { connection } = useConnection();
   const { publicKey, sendTransaction } = useWallet();
   const { play } = useSound();
+
+  // Clear active free room on game end
+  useEffect(() => { clearActiveRoom(); }, []);
   
   const [finalizeState, setFinalizeState] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [finalizeError, setFinalizeError] = useState<string | null>(null);

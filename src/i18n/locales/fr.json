@@ -966,6 +966,21 @@
     "viewRoomList": "Voir la liste des salles",
     "waitingNote": "Votre salle est en ligne 🟢"
   },
+  "quickPlay": {
+    "guest": "Invité",
+    "editName": "Modifier le nom",
+    "findOpponent": "Trouver un Adversaire",
+    "rejoining": "Reconnexion à votre partie...",
+    "leaveMatch": "Quitter la partie ?",
+    "leaveMatchDesc": "Vous perdrez cette partie gratuite. Êtes-vous sûr ?",
+    "confirmLeave": "Oui, quitter",
+    "leftMatch": "Vous avez quitté la partie.",
+    "noLoginNeeded": "Pas de connexion requise",
+    "playForSol": "Jouer pour du SOL",
+    "requiresWallet": "Portefeuille requis",
+    "mode": "Mode",
+    "yourName": "Votre Nom"
+  },
   "aiWinCard": {
     "victory": "VICTOIRE",
     "skillConfirmed": "COMPÉTENCE CONFIRMÉE",

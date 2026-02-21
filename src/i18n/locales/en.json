@@ -1457,6 +1457,21 @@
     "viewRoomList": "View Room List",
     "waitingNote": "Your room is live 🟢"
   },
+  "quickPlay": {
+    "guest": "Guest",
+    "editName": "Edit name",
+    "findOpponent": "Find Opponent",
+    "rejoining": "Rejoining your match...",
+    "leaveMatch": "Leave match?",
+    "leaveMatchDesc": "You will forfeit this free game. Are you sure?",
+    "confirmLeave": "Yes, leave",
+    "leftMatch": "You left the match.",
+    "noLoginNeeded": "No sign-in needed",
+    "playForSol": "Play for SOL",
+    "requiresWallet": "Requires wallet",
+    "mode": "Mode",
+    "yourName": "Your Name"
+  },
   "aiWinCard": {
     "victory": "VICTORY",
     "skillConfirmed": "SKILL CONFIRMED",
