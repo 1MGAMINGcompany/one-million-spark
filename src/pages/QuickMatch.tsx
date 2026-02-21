@@ -7,7 +7,8 @@ import bs58 from "bs58";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { ArrowLeft, Zap, Bot, Search, Loader2, Users, Copy, Check, Wallet, AlertTriangle, Share2, MapPin } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { ArrowLeft, Zap, Bot, Search, Loader2, Users, Copy, Check, Wallet, AlertTriangle, Share2, MapPin, Pencil } from "lucide-react";
 import QuickMatchAIGame from "@/components/QuickMatchAIGame";
 import { ChessIcon, DominoIcon, BackgammonIcon, CheckersIcon, LudoIcon } from "@/components/GameIcons";
 import { PrivyLoginButton } from "@/components/PrivyLoginButton";
@@ -36,8 +37,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { solToLamports } from "@/lib/rematchPayload";
 import { LiveActivityIndicator } from "@/components/LiveActivityIndicator";
 import { buildInviteLink } from "@/lib/invite";
+import { getAnonId, getDisplayName, setDisplayName, setActiveRoom, getActiveRoom, clearActiveRoom } from "@/lib/anonIdentity";
 
 type Phase = "selecting" | "searching" | "timeout";
+type MatchMode = "free" | "sol";
 
 const GAME_OPTIONS = [
   { type: GameType.Ludo, key: "ludo" },
@@ -56,7 +59,6 @@ const GAME_ICONS: Record<number, React.ReactNode> = {
 };
 
 const STAKE_PRESETS = [
-  { label: "free", value: 0 },
   { label: "0.01", value: 0.01 },
   { label: "0.05", value: 0.05 },
   { label: "0.1", value: 0.1 },
@@ -87,8 +89,9 @@ export default function QuickMatch() {
   } = useSolanaRooms();
 
   const [phase, setPhase] = useState<Phase>("selecting");
+  const [matchMode, setMatchMode] = useState<MatchMode>("free");
   const [selectedGame, setSelectedGame] = useState<GameType>(GameType.Ludo);
-  const [selectedStake, setSelectedStake] = useState<number>(0);
+  const [selectedStake, setSelectedStake] = useState<number>(0.01);
   const [secondsLeft, setSecondsLeft] = useState(SEARCH_TIMEOUT_SEC);
   const [createdRoomPda, setCreatedRoomPda] = useState<string | null>(null);
   const [isWorking, setIsWorking] = useState(false);
@@ -100,6 +103,10 @@ export default function QuickMatch() {
   const [recoverStakeAmount, setRecoverStakeAmount] = useState<string | null>(null);
   const [isRecovering, setIsRecovering] = useState(false);
 
+  // Guest name editing
+  const [guestName, setGuestName] = useState(getDisplayName());
+  const [editingName, setEditingName] = useState(false);
+
   const hasNavigatedRef = useRef(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const roomsRef = useRef(rooms);
@@ -108,6 +115,8 @@ export default function QuickMatch() {
   const [showAIGame, setShowAIGame] = useState(false);
 
   // Derived values
+  const isFreeMode = matchMode === "free";
+  const effectiveStake = isFreeMode ? 0 : selectedStake;
   const isLudo = selectedGame === GameType.Ludo;
   const effectiveMaxPlayers = isLudo ? ludoPlayerCount : 2;
   const isMultiPlayerLudo = isLudo && ludoPlayerCount > 2;
@@ -119,6 +128,42 @@ export default function QuickMatch() {
   useEffect(() => {
     if (!isLudo) setLudoPlayerCount(2);
   }, [isLudo]);
+
+  // ── Auto-rejoin check on mount ──
+  useEffect(() => {
+    const activeRoomPda = getActiveRoom();
+    if (!activeRoomPda || !activeRoomPda.startsWith("free-")) return;
+
+    const checkRejoin = async () => {
+      try {
+        const { data, error } = await supabase.functions.invoke("free-match", {
+          body: { action: "check", roomPda: activeRoomPda },
+        });
+        if (error || !data?.session) {
+          clearActiveRoom();
+          return;
+        }
+
+        const anonId = getAnonId();
+        const session = data.session;
+
+        if (session.status === "active" && 
+            (session.player1_wallet === anonId || session.player2_wallet === anonId)) {
+          toast({ title: t("quickPlay.rejoining") });
+          navigate(`/play/${activeRoomPda}`);
+          return;
+        }
+
+        // Room cancelled/expired/finished
+        if (session.status !== "waiting" && session.status !== "active") {
+          clearActiveRoom();
+        }
+      } catch {
+        clearActiveRoom();
+      }
+    };
+    checkRejoin();
+  }, [navigate, toast, t]);
 
   // ── Countdown timer ──
   useEffect(() => {
@@ -144,10 +189,10 @@ export default function QuickMatch() {
     };
   }, [phase]);
 
-  // ── Realtime alert for opponent joining ──
+  // ── Realtime alert for opponent joining (paid rooms only) ──
   useRoomRealtimeAlert({
     roomPda: createdRoomPda,
-    enabled: phase === "searching" && !!createdRoomPda,
+    enabled: phase === "searching" && !!createdRoomPda && !createdRoomPda.startsWith("free-"),
     onOpponentJoined: () => {
       if (hasNavigatedRef.current) return;
       hasNavigatedRef.current = true;
@@ -160,9 +205,10 @@ export default function QuickMatch() {
     },
   });
 
-  // ── Polling fallback: detect opponent join via activeRoom ──
+  // ── Polling fallback: detect opponent join via activeRoom (paid) ──
   useEffect(() => {
     if (phase !== "searching" || !createdRoomPda || hasNavigatedRef.current) return;
+    if (createdRoomPda.startsWith("free-")) return;
     if (!activeRoom) return;
 
     if (activeRoom.pda === createdRoomPda && activeRoom.status === 2) {
@@ -203,37 +249,33 @@ export default function QuickMatch() {
 
   // ── Find Match handler ──
   const handleFindMatch = useCallback(async () => {
-    if (!isConnected || !address) return;
     if (isWorking || txPending) return;
 
-    if (hookBlockingRoom) {
-      toast({
-        title: t("createRoom.activeRoomExists"),
-        description: t("createRoom.cancelExistingRoom"),
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // FREE MATCH: DB-only matchmaking against real opponents
-    if (selectedStake === 0) {
+    // FREE MATCH: DB-only matchmaking — no login required
+    if (isFreeMode) {
       setIsWorking(true);
       hasNavigatedRef.current = false;
+      const playerId = address || getAnonId(); // Use wallet if connected, else anon ID
+      const displayName = address ? undefined : getDisplayName();
       try {
         const { data, error } = await supabase.functions.invoke("free-match", {
           body: {
             action: "find_or_create",
             gameType: selectedGameKey,
-            wallet: address,
+            playerId,
+            wallet: address || undefined, // backward compat
+            displayName,
             maxPlayers: effectiveMaxPlayers,
           },
         });
         if (error) throw error;
 
         if (data.status === "joined") {
+          setActiveRoom(data.roomPda);
           toast({ title: t("quickMatch.freeMatchJoined") });
           navigate(`/play/${data.roomPda}`);
         } else if (data.status === "created") {
+          setActiveRoom(data.roomPda);
           setCreatedRoomPda(data.roomPda);
           requestNotificationPermission();
           setPhase("searching");
@@ -245,6 +287,18 @@ export default function QuickMatch() {
       } finally {
         setIsWorking(false);
       }
+      return;
+    }
+
+    // PAID MATCH: requires wallet
+    if (!isConnected || !address) return;
+
+    if (hookBlockingRoom) {
+      toast({
+        title: t("createRoom.activeRoomExists"),
+        description: t("createRoom.cancelExistingRoom"),
+        variant: "destructive",
+      });
       return;
     }
 
@@ -261,10 +315,7 @@ export default function QuickMatch() {
       const match = currentRooms.find((r) => {
         if (r.creator === address) return false;
         if (r.gameType !== selectedGame) return false;
-        // For Ludo, also match on maxPlayers
         if (isLudo && r.maxPlayers !== ludoPlayerCount) return false;
-        // Stake matching
-        if (selectedStake === 0) return r.entryFeeSol === 0;
         return Math.abs(r.entryFeeSol - selectedStake) < 0.001;
       });
 
@@ -275,7 +326,7 @@ export default function QuickMatch() {
       }
 
       // 3. No match — create a new public room
-      const mode = selectedStake > 0 ? "ranked" : "casual";
+      const mode = "ranked";
 
       const roomId = await createRoom(
         selectedGame,
@@ -295,7 +346,7 @@ export default function QuickMatch() {
       setCreatedRoomPda(roomPdaStr);
 
       // Persist settings via edge function
-      const turnTimeSeconds = mode === "ranked" ? 30 : 0;
+      const turnTimeSeconds = 30;
       try {
         await supabase.functions.invoke("game-session-set-settings", {
           body: {
@@ -337,7 +388,7 @@ export default function QuickMatch() {
       setIsWorking(false);
     }
   }, [
-    isConnected, address, isWorking, txPending, hookBlockingRoom,
+    isConnected, address, isWorking, txPending, hookBlockingRoom, isFreeMode,
     rooms, selectedGame, selectedStake, selectedGameKey,
     isLudo, ludoPlayerCount, effectiveMaxPlayers,
     fetchRooms, createRoom, navigate, toast, t,
@@ -347,31 +398,31 @@ export default function QuickMatch() {
   const handleKeepSearching = useCallback(async () => {
     hasNavigatedRef.current = false;
 
-    // Re-check for matching rooms before restarting timer
-    try {
-      await fetchRooms();
-      await new Promise((r) => setTimeout(r, 150));
-      const currentRooms = roomsRef.current;
+    if (!isFreeMode) {
+      try {
+        await fetchRooms();
+        await new Promise((r) => setTimeout(r, 150));
+        const currentRooms = roomsRef.current;
 
-      const match = currentRooms.find((r) => {
-        if (r.creator === address) return false;
-        if (r.gameType !== selectedGame) return false;
-        if (isLudo && r.maxPlayers !== ludoPlayerCount) return false;
-        if (selectedStake === 0) return r.entryFeeSol === 0;
-        return Math.abs(r.entryFeeSol - selectedStake) < 0.001;
-      });
+        const match = currentRooms.find((r) => {
+          if (r.creator === address) return false;
+          if (r.gameType !== selectedGame) return false;
+          if (isLudo && r.maxPlayers !== ludoPlayerCount) return false;
+          return Math.abs(r.entryFeeSol - selectedStake) < 0.001;
+        });
 
-      if (match) {
-        toast({ title: t("quickMatch.matchFound") });
-        navigate(`/room/${match.pda}`);
-        return;
+        if (match) {
+          toast({ title: t("quickMatch.matchFound") });
+          navigate(`/room/${match.pda}`);
+          return;
+        }
+      } catch (e) {
+        console.warn("[QuickMatch] re-search error (non-fatal):", e);
       }
-    } catch (e) {
-      console.warn("[QuickMatch] re-search error (non-fatal):", e);
     }
 
     setPhase("searching");
-  }, [address, selectedGame, selectedStake, isLudo, ludoPlayerCount, fetchRooms, navigate, toast, t]);
+  }, [address, selectedGame, selectedStake, isLudo, ludoPlayerCount, isFreeMode, fetchRooms, navigate, toast, t]);
 
   // ── Switch to 2 Players ──
   const handleSwitchTo2Players = () => {
@@ -390,20 +441,22 @@ export default function QuickMatch() {
     setTimeout(() => setLinkCopied(false), 2000);
   };
 
-  // ── Cancel with fund recovery ──
+  // ── Cancel ──
   const handleCancel = useCallback(async () => {
     // Free games: cancel via DB, navigate away
-    if (selectedStake === 0) {
-      if (createdRoomPda?.startsWith("free-") && address) {
+    if (isFreeMode) {
+      if (createdRoomPda?.startsWith("free-")) {
+        const playerId = address || getAnonId();
         try {
           await supabase.functions.invoke("free-match", {
-            body: { action: "cancel", roomPda: createdRoomPda, wallet: address },
+            body: { action: "cancel", roomPda: createdRoomPda, playerId, wallet: address || undefined },
           });
           toast({ title: t("quickMatch.freeCancelled") });
         } catch (e) {
           console.warn("[QuickMatch] Free cancel error:", e);
         }
       }
+      clearActiveRoom();
       setCreatedRoomPda(null);
       setPhase("selecting");
       navigate('/room-list');
@@ -453,7 +506,7 @@ export default function QuickMatch() {
     } finally {
       setIsRecovering(false);
     }
-  }, [selectedStake, createdRoomPda, publicKey, navigate, toast, t]);
+  }, [isFreeMode, createdRoomPda, publicKey, address, navigate, toast, t]);
 
   const executeRecoverAndLeave = useCallback(async () => {
     if (!recoverPendingTx || !signTransaction || !publicKey) return;
@@ -485,6 +538,12 @@ export default function QuickMatch() {
   }, [recoverPendingTx, signTransaction, publicKey, connection, navigate, toast, t]);
 
   const formatSol = (lamports: string) => (parseInt(lamports) / 1_000_000_000).toFixed(4);
+
+  // ── Save edited name ──
+  const handleSaveName = () => {
+    setDisplayName(guestName);
+    setEditingName(false);
+  };
 
   // ── Render ──
   return (
@@ -551,30 +610,123 @@ export default function QuickMatch() {
             </div>
           )}
 
-          {/* Stake Selection */}
+          {/* Mode Selection: Free vs Play for SOL */}
           <div>
             <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">
-              {t("quickMatch.selectStake")}
+              {t("quickPlay.mode") || "Mode"}
             </h2>
-            <div className="grid grid-cols-4 gap-3">
-              {STAKE_PRESETS.map((s) => (
-                <button
-                  key={s.value}
-                  onClick={() => setSelectedStake(s.value)}
-                  className={`py-3 px-2 rounded-xl border text-center font-semibold transition-all duration-200 ${
-                    selectedStake === s.value
-                      ? "border-primary bg-primary/10 text-primary shadow-gold"
-                      : "border-border bg-card text-foreground hover:border-primary/30"
-                  }`}
-                >
-                  {s.value === 0 ? t("quickMatch.free") : `${s.label} SOL`}
-                </button>
-              ))}
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => setMatchMode("free")}
+                className={`py-4 px-3 rounded-xl border text-center font-semibold transition-all duration-200 ${
+                  isFreeMode
+                    ? "border-primary bg-primary/10 text-primary shadow-gold"
+                    : "border-border bg-card text-foreground hover:border-primary/30"
+                }`}
+              >
+                <Zap className="h-5 w-5 mx-auto mb-1" />
+                <span className="text-sm">{t("quickMatch.free")}</span>
+                <p className="text-[10px] text-muted-foreground mt-1">{t("quickPlay.noLoginNeeded")}</p>
+              </button>
+              <button
+                onClick={() => setMatchMode("sol")}
+                className={`py-4 px-3 rounded-xl border text-center font-semibold transition-all duration-200 ${
+                  !isFreeMode
+                    ? "border-primary bg-primary/10 text-primary shadow-gold"
+                    : "border-border bg-card text-foreground hover:border-primary/30"
+                }`}
+              >
+                <Wallet className="h-5 w-5 mx-auto mb-1" />
+                <span className="text-sm">{t("quickPlay.playForSol")}</span>
+                <p className="text-[10px] text-muted-foreground mt-1">{t("quickPlay.requiresWallet")}</p>
+              </button>
             </div>
           </div>
 
+          {/* SOL Stake Selection (only when sol mode) */}
+          {!isFreeMode && (
+            <div>
+              <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">
+                {t("quickMatch.selectStake")}
+              </h2>
+              <div className="grid grid-cols-3 gap-3">
+                {STAKE_PRESETS.map((s) => (
+                  <button
+                    key={s.value}
+                    onClick={() => setSelectedStake(s.value)}
+                    className={`py-3 px-2 rounded-xl border text-center font-semibold transition-all duration-200 ${
+                      selectedStake === s.value
+                        ? "border-primary bg-primary/10 text-primary shadow-gold"
+                        : "border-border bg-card text-foreground hover:border-primary/30"
+                    }`}
+                  >
+                    {`${s.label} SOL`}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Guest Name (free mode, not logged in) */}
+          {isFreeMode && !isConnected && (
+            <div>
+              <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+                {t("quickPlay.yourName")}
+              </h2>
+              <div className="flex items-center gap-2">
+                {editingName ? (
+                  <>
+                    <Input
+                      value={guestName}
+                      onChange={(e) => setGuestName(e.target.value)}
+                      maxLength={20}
+                      className="flex-1"
+                      autoFocus
+                      onKeyDown={(e) => e.key === "Enter" && handleSaveName()}
+                    />
+                    <Button size="sm" onClick={handleSaveName}>
+                      <Check className="h-4 w-4" />
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-foreground font-medium">{guestName}</span>
+                    <button
+                      onClick={() => setEditingName(true)}
+                      className="text-muted-foreground hover:text-primary transition-colors"
+                      title={t("quickPlay.editName")}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* CTA */}
-          {!isConnected ? (
+          {isFreeMode ? (
+            // Free mode: no login required
+            <Button
+              variant="gold"
+              size="lg"
+              className="w-full h-14 text-lg gap-2"
+              onClick={handleFindMatch}
+              disabled={isWorking}
+            >
+              {isWorking ? (
+                <>
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  {t("quickMatch.creatingRoom")}
+                </>
+              ) : (
+                <>
+                  <Search className="h-5 w-5" />
+                  {t("quickPlay.findOpponent")}
+                </>
+              )}
+            </Button>
+          ) : !isConnected ? (
             <div className="text-center space-y-3">
               <p className="text-sm text-muted-foreground">{t("quickMatch.connectFirst")}</p>
               <PrivyLoginButton />
@@ -659,7 +811,7 @@ export default function QuickMatch() {
                 {translatedGameName}
                 {isLudo && ` • ${t("quickMatch.players", { count: ludoPlayerCount })}`}
                 {" • "}
-                {selectedStake === 0 ? t("quickMatch.free") : `${selectedStake} SOL`}
+                {isFreeMode ? t("quickMatch.free") : `${selectedStake} SOL`}
               </p>
             </CardContent>
           </Card>
@@ -687,7 +839,7 @@ export default function QuickMatch() {
             </CardContent>
           </Card>
 
-          {/* Share room link — visible for ALL game types */}
+          {/* Share room link */}
           <div className="w-full max-w-xs flex flex-col gap-2">
             <Button
               variant="outline"
@@ -698,7 +850,6 @@ export default function QuickMatch() {
               {linkCopied ? <Check className="h-4 w-4 text-emerald-500" /> : <Share2 className="h-4 w-4" />}
               {linkCopied ? t("quickMatch.linkCopied") : t("quickMatch.shareLink")}
             </Button>
-            {/* Multi-player Ludo extra: switch to 2 players */}
             {isMultiPlayerLudo && (
               <Button
                 variant="ghost"
@@ -716,7 +867,7 @@ export default function QuickMatch() {
           <Button variant="ghost" onClick={handleCancel} disabled={isRecovering}>
             {isRecovering ? (
               <><Loader2 className="h-4 w-4 animate-spin mr-2" />{t("quickMatch.recoveringFunds")}</>
-            ) : selectedStake > 0 ? t("quickMatch.recoverFunds") : t("quickMatch.cancel")}
+            ) : !isFreeMode ? t("quickMatch.recoverFunds") : t("quickMatch.cancel")}
           </Button>
         </div>
       )}
@@ -734,7 +885,6 @@ export default function QuickMatch() {
               {t("quickMatch.keepSearching")}
             </Button>
 
-            {/* Room still open info box */}
             <Card className="border-emerald-500/30 bg-emerald-500/5">
               <CardContent className="p-4">
                 <div className="flex items-start gap-2">
@@ -772,7 +922,7 @@ export default function QuickMatch() {
             <Button variant="ghost" size="lg" className="w-full" onClick={handleCancel} disabled={isRecovering}>
               {isRecovering ? (
                 <><Loader2 className="h-4 w-4 animate-spin mr-2" />{t("quickMatch.recoveringFunds")}</>
-              ) : selectedStake > 0 ? t("quickMatch.recoverFunds") : t("quickMatch.cancel")}
+              ) : !isFreeMode ? t("quickMatch.recoverFunds") : t("quickMatch.cancel")}
             </Button>
           </div>
         </div>
@@ -810,7 +960,6 @@ export default function QuickMatch() {
       {/* ── AI Game Full-Screen Overlay ── */}
       {showAIGame && (
         <div className="fixed inset-0 z-50 bg-background overflow-y-auto">
-          {/* Sticky header with back button and timer */}
           <div className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b border-primary/20 px-4 py-3 flex items-center gap-3">
             <Button variant="ghost" size="sm" onClick={() => setShowAIGame(false)}>
               <ArrowLeft className="h-4 w-4 mr-2" />

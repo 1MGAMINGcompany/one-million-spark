@@ -1187,6 +1187,21 @@
     "viewRoomList": "Ver lista de salas",
     "waitingNote": "Tu sala está en vivo 🟢"
   },
+  "quickPlay": {
+    "guest": "Invitado",
+    "editName": "Editar nombre",
+    "findOpponent": "Buscar Oponente",
+    "rejoining": "Reconectando a tu partida...",
+    "leaveMatch": "¿Salir de la partida?",
+    "leaveMatchDesc": "Perderás esta partida gratuita. ¿Estás seguro?",
+    "confirmLeave": "Sí, salir",
+    "leftMatch": "Saliste de la partida.",
+    "noLoginNeeded": "Sin inicio de sesión",
+    "playForSol": "Jugar por SOL",
+    "requiresWallet": "Requiere billetera",
+    "mode": "Modo",
+    "yourName": "Tu Nombre"
+  },
   "aiWinCard": {
     "victory": "VICTORIA",
     "skillConfirmed": "HABILIDAD CONFIRMADA",

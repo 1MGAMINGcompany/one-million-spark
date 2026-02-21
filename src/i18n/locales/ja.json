@@ -963,6 +963,21 @@
     "viewRoomList": "ルーム一覧を見る",
     "waitingNote": "ルームはライブ中 🟢"
   },
+  "quickPlay": {
+    "guest": "ゲスト",
+    "editName": "名前を編集",
+    "findOpponent": "対戦相手を探す",
+    "rejoining": "試合に再接続中...",
+    "leaveMatch": "試合を離れますか？",
+    "leaveMatchDesc": "この無料試合を放棄します。よろしいですか？",
+    "confirmLeave": "はい、離れる",
+    "leftMatch": "試合を離れました。",
+    "noLoginNeeded": "ログイン不要",
+    "playForSol": "SOLで対戦",
+    "requiresWallet": "ウォレットが必要",
+    "mode": "モード",
+    "yourName": "あなたの名前"
+  },
   "aiWinCard": {
     "victory": "勝利",
     "skillConfirmed": "スキル確認済み",

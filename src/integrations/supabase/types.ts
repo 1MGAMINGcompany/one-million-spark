@@ -228,6 +228,7 @@ export type Database = {
         Row: {
           created_at: string
           current_turn_wallet: string | null
+          display_names: Json | null
           eliminated_players: string[] | null
           game_over_at: string | null
           game_state: Json
@@ -258,6 +259,7 @@ export type Database = {
         Insert: {
           created_at?: string
           current_turn_wallet?: string | null
+          display_names?: Json | null
           eliminated_players?: string[] | null
           game_over_at?: string | null
           game_state?: Json
@@ -288,6 +290,7 @@ export type Database = {
         Update: {
           created_at?: string
           current_turn_wallet?: string | null
+          display_names?: Json | null
           eliminated_players?: string[] | null
           game_over_at?: string | null
           game_state?: Json

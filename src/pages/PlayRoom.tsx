@@ -6,7 +6,7 @@
  * This permanently fixes "Dominos card opens Backgammon" bug.
  */
 
-import { useEffect, useState, useCallback, lazy, Suspense } from "react";
+import { useEffect, useState, useCallback, lazy, Suspense, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useParams, useNavigate } from "react-router-dom";
 import { useConnection } from "@solana/wallet-adapter-react";
@@ -17,6 +17,8 @@ import { validatePublicKey } from "@/lib/solana-utils";
 import { Loader2, AlertTriangle, ArrowLeft, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { FreeGameExitButton } from "@/components/FreeGameExitButton";
+import { clearActiveRoom } from "@/lib/anonIdentity";
 
 // Lazy load game components for better performance
 const ChessGame = lazy(() => import("./ChessGame"));
@@ -272,10 +274,15 @@ export default function PlayRoom() {
   }
 
   // Render the correct game component based on on-chain gameType
+  const isFreeRoom = roomPdaParam?.startsWith("free-") ?? false;
+
   return (
-    <Suspense fallback={<GameLoading gameName={gameName} />}>
-      <GameComponent />
-    </Suspense>
+    <>
+      {isFreeRoom && <FreeGameExitButton roomPda={roomPdaParam!} status="active" />}
+      <Suspense fallback={<GameLoading gameName={gameName} />}>
+        <GameComponent />
+      </Suspense>
+    </>
   );
 }
 
