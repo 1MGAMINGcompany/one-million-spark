@@ -955,7 +955,7 @@
   "liveStats": {
     "browsingNow": "正在浏览",
     "roomsWaiting": "等待中的房间",
-    "visitsToday": "今日访客",
+    "visitsToday": "过去24小时访客",
     "beTheFirst": "成为第一个开始比赛的人。"
   },
   "mobilePrompt": {

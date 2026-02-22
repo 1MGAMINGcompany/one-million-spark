@@ -958,7 +958,7 @@
   "liveStats": {
     "browsingNow": "يتصفحون الآن",
     "roomsWaiting": "غرف بانتظار",
-    "visitsToday": "زوار اليوم",
+    "visitsToday": "زوار آخر 24 ساعة",
     "beTheFirst": "كن أول من يبدأ مباراة."
   },
   "mobilePrompt": {

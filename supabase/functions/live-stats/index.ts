@@ -121,11 +121,12 @@ Deno.serve(async (req) => {
         .gte("created_at", fifteenMinAgo);
       if (e3) throw e3;
 
-      // Unique visitors today (distinct sessions with first_seen_date = today)
+      // Unique visitors in last 24 hours
+      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
       const { count: visitsToday, error: e4 } = await supabase
         .from("presence_heartbeats")
         .select("*", { count: "exact", head: true })
-        .eq("first_seen_date", todayDate);
+        .gte("last_seen", twentyFourHoursAgo);
       if (e4) throw e4;
 
       // AI games started today

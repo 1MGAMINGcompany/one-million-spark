@@ -1503,7 +1503,7 @@
   "liveStats": {
     "browsingNow": "browsing now",
     "roomsWaiting": "rooms waiting",
-    "visitsToday": "visitors today",
+    "visitsToday": "visitors in the last 24h",
     "beTheFirst": "Be the first to start a match."
   },
   "mobilePrompt": {
