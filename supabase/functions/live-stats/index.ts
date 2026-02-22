@@ -160,6 +160,44 @@ Deno.serve(async (req) => {
       );
     }
 
+    // ── TRACK MONKEY (AI Helper analytics) ─────────────────────────────────
+    if (action === "track_monkey") {
+      const VALID_EVENTS = [
+        "bubble_open", "welcome_shown", "welcome_action",
+        "mode_selected", "message_sent", "chat_cleared",
+        "share_tapped", "chip_tapped",
+      ];
+
+      const monkeyEvent = event as string;
+      const context = (page as string) || "unknown";
+      const metadata = (difficulty as string) || null; // reuse field for metadata
+      const monkeyLang = (game as string) || "en";     // reuse field for lang
+
+      if (
+        !sessionId || typeof sessionId !== "string" || sessionId.length > 64 ||
+        !VALID_EVENTS.includes(monkeyEvent)
+      ) {
+        return new Response(JSON.stringify({ error: "invalid monkey payload" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const { error } = await supabase.from("monkey_analytics").insert({
+        session_id: sessionId,
+        event: monkeyEvent,
+        context,
+        metadata,
+        lang: monkeyLang,
+      });
+
+      if (error) throw error;
+
+      return new Response(JSON.stringify({ ok: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     return new Response(JSON.stringify({ error: "unknown action" }), {
       status: 400,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
