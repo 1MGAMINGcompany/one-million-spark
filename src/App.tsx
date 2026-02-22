@@ -47,6 +47,7 @@ import DebugJoinRoom from "./pages/DebugJoinRoom";
 import HelpCenter from "./pages/HelpCenter";
 import HelpArticle from "./pages/HelpArticle";
 import DebugHUD from "./components/DebugHUD";
+import AIAgentHelperOverlay from "./components/AIAgentHelperOverlay";
 import { isDebugEnabled } from "@/lib/debugLog";
 
 // DEV-ONLY: Import to auto-run config check on app load
@@ -139,6 +140,7 @@ const AppContent = () => {
         </Routes>
       </main>
       {!hideFooter && <Footer />}
+      <AIAgentHelperOverlay />
       {isDebugEnabled() && <DebugHUD />}
     </div>
   );

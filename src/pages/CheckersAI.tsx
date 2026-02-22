@@ -288,6 +288,17 @@ const CheckersAI = () => {
     return null;
   }, [getAllMoves]);
 
+  // Publish context for AI helper overlay
+  useEffect(() => {
+    (window as any).__AI_HELPER_CONTEXT__ = {
+      gameType: "checkers",
+      moveHistory: [],
+      position: JSON.stringify(board.map(row => row.map(p => p ? `${p.player[0]}${p.type[0]}` : "."))),
+      turn: currentPlayer,
+    };
+    return () => { delete (window as any).__AI_HELPER_CONTEXT__; };
+  }, [board, currentPlayer]);
+
   // Handle piece selection and moves
   const handleSquareClick = (row: number, col: number) => {
     if (gameOver || isAiThinking || currentPlayer !== "gold") return;
