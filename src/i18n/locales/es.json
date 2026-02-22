@@ -1233,7 +1233,7 @@
   "liveStats": {
     "browsingNow": "navegando ahora",
     "roomsWaiting": "salas esperando",
-    "visitsToday": "visitantes hoy",
+    "visitsToday": "visitantes en las últimas 24h",
     "beTheFirst": "Sé el primero en iniciar."
   },
   "mobilePrompt": {

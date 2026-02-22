@@ -1002,7 +1002,7 @@
   "liveStats": {
     "browsingNow": "अभी ब्राउज़ कर रहे हैं",
     "roomsWaiting": "कमरे प्रतीक्षा में",
-    "visitsToday": "आज के आगंतुक",
+    "visitsToday": "पिछले 24 घंटों के आगंतुक",
     "beTheFirst": "पहले खेल शुरू करें।"
   },
   "mobilePrompt": {

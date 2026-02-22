@@ -968,7 +968,7 @@
   "liveStats": {
     "browsingNow": "navigano ora",
     "roomsWaiting": "stanze in attesa",
-    "visitsToday": "visitatori oggi",
+    "visitsToday": "visitatori nelle ultime 24h",
     "beTheFirst": "Sii il primo a giocare."
   },
   "mobilePrompt": {

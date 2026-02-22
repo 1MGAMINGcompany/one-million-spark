@@ -1012,7 +1012,7 @@
   "liveStats": {
     "browsingNow": "en ligne maintenant",
     "roomsWaiting": "salles en attente",
-    "visitsToday": "visiteurs aujourd'hui",
+    "visitsToday": "visiteurs ces dernières 24h",
     "beTheFirst": "Soyez le premier à jouer."
   },
   "mobilePrompt": {
