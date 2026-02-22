@@ -315,7 +315,7 @@ export default function QuickMatch() {
           toast({ title: t("quickMatch.freeMatchJoined") });
           navigate(`/play/${data.roomPda}`);
         } else if (data.status === "already_has_room") {
-          // Player already has an active free room — redirect to it
+          // Player already has an active free room — show banner with options
           setActiveRoom(data.roomPda);
           setCreatedRoomPda(data.roomPda);
           setExistingFreeRoom({
@@ -327,8 +327,8 @@ export default function QuickMatch() {
             toast({ title: t("quickPlay.rejoining") });
             navigate(`/play/${data.roomPda}`);
           } else {
-            setPhase("searching");
-            toast({ title: t("quickPlay.activeRoomExists"), description: t("quickPlay.cancelOrRejoin") });
+            // Stay on selecting phase but show the active room banner prominently
+            toast({ title: t("quickPlay.activeRoomExists"), description: t("quickPlay.cancelOrRejoin"), variant: "destructive" });
           }
         } else if (data.status === "waiting_for_more") {
           // Multi-player room (Ludo 3/4): joined but not full yet
@@ -626,6 +626,55 @@ export default function QuickMatch() {
       {/* ── SELECTING PHASE ── */}
       {phase === "selecting" && (
         <div className="space-y-8">
+          {/* Active Free Room Banner */}
+          {existingFreeRoom && (existingFreeRoom.status === "waiting" || existingFreeRoom.status === "active") && (
+            <Card className="border-amber-500/50 bg-amber-500/10">
+              <CardContent className="p-4">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="h-5 w-5 text-amber-500 mt-0.5 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-amber-600 dark:text-amber-400">
+                      {t("quickPlay.activeRoomExists")}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {existingFreeRoom.gameType ? t(`games.${existingFreeRoom.gameType}`) : ""} • {existingFreeRoom.status === "active" ? t("gameBanner.gameReady") : t("gameBanner.waitingForOpponent")}
+                    </p>
+                    <div className="flex gap-2 mt-3">
+                      {existingFreeRoom.status === "active" ? (
+                        <Button size="sm" onClick={() => navigate(`/play/${existingFreeRoom.roomPda}`)}>
+                          {t("gameBanner.play")}
+                        </Button>
+                      ) : (
+                        <Button size="sm" onClick={() => {
+                          setCreatedRoomPda(existingFreeRoom.roomPda);
+                          setPhase("searching");
+                        }}>
+                          {t("quickMatch.keepSearching")}
+                        </Button>
+                      )}
+                      <Button size="sm" variant="destructive" onClick={async () => {
+                        const playerId = address || getAnonId();
+                        try {
+                          await supabase.functions.invoke("free-match", {
+                            body: { action: "cancel", roomPda: existingFreeRoom.roomPda, playerId, wallet: address || undefined },
+                          });
+                          toast({ title: t("quickMatch.freeCancelled") });
+                        } catch (e) {
+                          console.warn("[QuickMatch] cancel error:", e);
+                        }
+                        clearActiveRoom();
+                        setExistingFreeRoom(null);
+                        setCreatedRoomPda(null);
+                      }}>
+                        {t("quickMatch.cancel")}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Game Selection */}
           <div>
             <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">
