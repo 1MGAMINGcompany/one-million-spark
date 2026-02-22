@@ -294,6 +294,7 @@ export default function AIAgentHelperOverlay() {
 
   // Drag state
   const dragRef = useRef<{ startX: number; startY: number; startPosX: number; startPosY: number; dragging: boolean }>({ startX: 0, startY: 0, startPosX: 0, startPosY: 0, dragging: false });
+  
 
   // Persist chat
   useEffect(() => {
@@ -336,7 +337,7 @@ export default function AIAgentHelperOverlay() {
   // Drag handlers
   const onPointerDown = useCallback((e: React.PointerEvent) => {
     dragRef.current = { startX: e.clientX, startY: e.clientY, startPosX: pos.x, startPosY: pos.y, dragging: false };
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
   }, [pos]);
 
   const onPointerMove = useCallback((e: React.PointerEvent) => {
@@ -349,7 +350,9 @@ export default function AIAgentHelperOverlay() {
     }
   }, []);
 
-  const onPointerUp = useCallback(() => {
+  const onPointerUp = useCallback((e: React.PointerEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
     const d = dragRef.current;
     if (d.dragging) {
       const vw = window.innerWidth;
@@ -362,7 +365,7 @@ export default function AIAgentHelperOverlay() {
       trackMonkey("bubble_open", pageContext, lang);
     }
     dragRef.current.dragging = false;
-  }, [pos, location.pathname]);
+  }, [pos, location.pathname, pageContext, lang]);
 
   // Send message
   const sendMessage = useCallback(async (text: string) => {
@@ -452,10 +455,12 @@ export default function AIAgentHelperOverlay() {
     ? ["chipRules", "chipOptions", "chipImprove", "chipWrong"]
     : ["chipNavHelp", "chipWalletHelp", "chipGameTypes", "chipFreePlay"];
 
-  // Show welcome menu when: no mode selected, no messages, not on AI route
+   // Show welcome menu when: no mode selected, no messages, not on AI route
   const showWelcomeMenu = !helperMode && messages.length === 0 && !isAIRoute;
   // Show AI mode picker when: no mode, no messages, on AI route
   const showAIModePicker = !helperMode && messages.length === 0 && isAIRoute;
+  // Show chat UI (input + chips) when mode is set or messages exist
+  const showChatUI = helperMode || messages.length > 0;
 
   return (
     <>
@@ -465,6 +470,7 @@ export default function AIAgentHelperOverlay() {
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
+          
           style={{
             position: "fixed",
             left: pos.x,
@@ -478,17 +484,19 @@ export default function AIAgentHelperOverlay() {
           className="select-none"
         >
           <div
-            className="rounded-full overflow-hidden border-2 border-primary shadow-lg transition-shadow duration-300 bg-background/80"
+            className="rounded-full overflow-hidden border-2 border-primary shadow-lg transition-shadow duration-300"
             style={{
               width: BUBBLE_SIZE,
               height: BUBBLE_SIZE,
               boxShadow: `0 0 18px 5px ${glowColor}`,
+              background: "linear-gradient(135deg, #2a2a1e 0%, #1a1a0e 100%)",
             }}
           >
             <img
               src={monkeyImages[bubbleState]}
               alt="AI Helper"
-              className="w-full h-full object-contain p-0.5"
+              className="w-full h-full object-contain p-0.5 rounded-full pointer-events-none"
+              style={{ mixBlendMode: "multiply", backgroundColor: "rgba(250,204,21,0.15)" }}
               draggable={false}
             />
           </div>
@@ -512,8 +520,8 @@ export default function AIAgentHelperOverlay() {
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-primary/20">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full overflow-hidden border border-primary bg-background/80">
-                  <img src={monkeyHappy} alt="" className="w-full h-full object-contain p-0.5" />
+                <div className="w-10 h-10 rounded-full overflow-hidden border border-primary" style={{ background: "rgba(250,204,21,0.15)" }}>
+                  <img src={monkeyHappy} alt="" className="w-full h-full object-contain p-0.5" style={{ mixBlendMode: "multiply" }} />
                 </div>
                 <div>
                   <h3 className="font-bold text-foreground text-sm">{t(lang, "title")}</h3>
@@ -532,8 +540,8 @@ export default function AIAgentHelperOverlay() {
                 <div className="space-y-4">
                   <div className="bg-muted/50 rounded-lg p-4 text-sm text-foreground">
                     <div className="flex items-center gap-3 mb-3">
-                      <div className="w-12 h-12 rounded-full overflow-hidden border border-primary bg-background/80 shrink-0">
-                        <img src={monkeyHappy} alt="" className="w-full h-full object-contain" />
+                      <div className="w-12 h-12 rounded-full overflow-hidden border border-primary shrink-0" style={{ background: "rgba(250,204,21,0.15)" }}>
+                        <img src={monkeyHappy} alt="" className="w-full h-full object-contain" style={{ mixBlendMode: "multiply" }} />
                       </div>
                       <div>
                         <p className="font-semibold">{t(lang, "welcomeGreeting")}</p>
@@ -626,7 +634,7 @@ export default function AIAgentHelperOverlay() {
             </div>
 
             {/* Quick chips */}
-            {(helperMode || messages.length > 0) && !isStreaming && (
+            {showChatUI && !isStreaming && (
               <div className="px-4 py-2 flex gap-2 overflow-x-auto border-t border-border/50">
                 {quickChips.map((key) => (
                   <button
