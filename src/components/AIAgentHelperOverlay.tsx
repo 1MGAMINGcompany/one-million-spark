@@ -302,13 +302,12 @@ export default function AIAgentHelperOverlay() {
     return () => { window.removeEventListener("resize", handler); window.removeEventListener("orientationchange", handler); };
   }, [isMultiplayer, location.pathname]);
 
-  // ─── HOLD+DRAG: Hold 300ms to start drag, tap to open ───
+  // ─── TAP to open, HOLD to drag ───
   const onPointerDown = useCallback((e: React.PointerEvent) => {
     const el = e.currentTarget as HTMLElement;
     el.setPointerCapture(e.pointerId);
     dragRef.current = { startX: e.clientX, startY: e.clientY, startPosX: pos.x, startPosY: pos.y, holding: false, dragging: false };
 
-    // Start hold timer
     holdTimerRef.current = setTimeout(() => {
       dragRef.current.holding = true;
     }, HOLD_DELAY);
@@ -318,22 +317,22 @@ export default function AIAgentHelperOverlay() {
     const d = dragRef.current;
     const dx = e.clientX - d.startX;
     const dy = e.clientY - d.startY;
+    const dist = Math.abs(dx) + Math.abs(dy);
 
-    // If moved before hold timer → cancel hold (it's a tap)
-    if (!d.holding && Math.abs(dx) + Math.abs(dy) > 5 && holdTimerRef.current) {
-      // Small movement before hold: cancel the hold timer, it's still a tap
-      // But if they've already been holding, allow drag
+    // If finger moved significantly before hold timer fired, cancel hold (it's a sloppy tap)
+    if (!d.holding && dist > 10 && holdTimerRef.current) {
+      clearTimeout(holdTimerRef.current);
+      holdTimerRef.current = null;
     }
 
-    // Only allow dragging if holding
-    if (d.holding) {
+    // Only drag if hold threshold was reached
+    if (d.holding && dist > 5) {
       d.dragging = true;
       setPos({ x: d.startPosX + dx, y: d.startPosY + dy });
     }
   }, []);
 
-  const onPointerUp = useCallback((e: React.PointerEvent) => {
-    // Clear hold timer
+  const onPointerUp = useCallback(() => {
     if (holdTimerRef.current) {
       clearTimeout(holdTimerRef.current);
       holdTimerRef.current = null;
@@ -341,18 +340,16 @@ export default function AIAgentHelperOverlay() {
 
     const d = dragRef.current;
     if (d.dragging) {
-      // End drag: snap to edge
+      // Snap to nearest edge
       const vw = window.innerWidth; const vh = window.innerHeight;
       const zones = getNoGoZones(location.pathname, vw, vh);
-      const newPos = clampToSafe(pos.x, pos.y, BUBBLE_SIZE, vw, vh, zones);
-      setPos(newPos);
+      setPos(clampToSafe(pos.x, pos.y, BUBBLE_SIZE, vw, vh, zones));
     } else {
-      // TAP — open the sheet
+      // Quick tap → open
       setSheetOpen(true);
       trackMonkey("bubble_open", pageContext, lang);
     }
-    dragRef.current.holding = false;
-    dragRef.current.dragging = false;
+    dragRef.current = { ...d, holding: false, dragging: false };
   }, [pos, location.pathname, pageContext, lang]);
 
   // Get board context for AI routes
@@ -492,10 +489,10 @@ export default function AIAgentHelperOverlay() {
               background: "#ffffff",
             }}
           >
-            <img
+             <img
               src={monkeyImages[bubbleState]}
               alt="Money – AI Helper"
-              className="w-full h-full object-cover rounded-full pointer-events-none"
+              className="w-full h-full object-contain rounded-full pointer-events-none"
               draggable={false}
             />
           </div>
