@@ -1,5 +1,5 @@
 /**
- * AIAgentHelperOverlay — Global AI helper mascot
+ * AIAgentHelperOverlay — Global AI helper mascot "Money"
  *
  * Visible on ALL routes EXCEPT:
  *   /play/:roomPda  (multiplayer games vs real users)
@@ -8,7 +8,8 @@
  * On /play-ai/* routes → coaching mode (strategy, game context)
  * Everywhere else     → general help (rules, wallet, platform)
  *
- * First-time visitors get an auto-opening welcome with quick-action menu.
+ * First-time visitors get a simple greeting from Money.
+ * Subsequent opens show "How can I assist you?" with quick-action menu.
  */
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
@@ -37,13 +38,17 @@ const monkeyImages: Record<BubbleState, string> = {
 // ─── i18n dictionary (inline, fallback English) ───
 const dict: Record<string, Record<string, string>> = {
   en: {
-    title: "1MGAMING Helper",
+    title: "Money – AI Helper",
     subtitleAI: "Practice vs AI",
     subtitleGeneral: "How can I help?",
     slogan: "With Strategy and Intelligence We Create WEALTH",
-    welcomeGreeting: "Hey there! 👋 I'm your 1MGAMING helper monkey! I'm here to help you navigate the app and become a master player.",
-    welcomeClose: "Tap any option below, or close me and tap the monkey bubble anytime you need help!",
-    // Welcome quick-action items
+    // First-time welcome (simple)
+    welcomeGreeting: "Hello! I am Money, your AI helper. Do you want me to help you?",
+    welcomeYes: "Yes, help me!",
+    welcomeNo: "No thanks",
+    // Subsequent opens
+    assistGreeting: "How can I assist you?",
+    // Quick-action items (shown after first visit or after "Yes")
     qAppHelp: "Help me navigate the app",
     qGameRules: "Explain game rules",
     qPlayAI: "How does Play vs AI work?",
@@ -65,21 +70,20 @@ const dict: Record<string, Record<string, string>> = {
     chipImprove: "How to improve",
     chipWrong: "What did I do wrong?",
     noContext: "I can help more if I can see the moves — try again after making a move.",
-    // General quick chips
     chipNavHelp: "How do I get started?",
     chipWalletHelp: "How do I connect my wallet?",
     chipGameTypes: "What games can I play?",
     chipFreePlay: "Can I play for free?",
   },
-  es: { title: "1MGAMING Ayudante", subtitleAI: "Práctica vs IA", subtitleGeneral: "¿Cómo puedo ayudarte?", slogan: "Con Estrategia e Inteligencia Creamos RIQUEZA", welcomeGreeting: "¡Hola! 👋 ¡Soy tu mono ayudante de 1MGAMING! Estoy aquí para ayudarte.", welcomeClose: "¡Toca cualquier opción o ciérrame y toca la burbuja del mono cuando necesites ayuda!", qAppHelp: "Ayúdame a navegar", qGameRules: "Explica las reglas", qPlayAI: "¿Cómo funciona Jugar vs IA?", qWallet: "Wallet y fondos", qPlayFriends: "Jugar con amigos", qHowItWorks: "¿Cómo funciona todo?", intro: "¿Quieres coaching estratégico o aprender reglas?", introClose: "Siempre puedes cerrarme y tocar el mono.", strategy: "Coaching estratégico", rules: "Aprender reglas", friend: "Ayuda rápida", thinking: "Pensando...", placeholder: "Pregúntame...", clear: "Borrar", share: "Compartir", chipRules: "Reglas", chipOptions: "Opciones", chipImprove: "Mejorar", chipWrong: "¿Qué hice mal?", noContext: "Puedo ayudar más si veo las jugadas.", chipNavHelp: "¿Cómo empiezo?", chipWalletHelp: "¿Cómo conecto wallet?", chipGameTypes: "¿Qué juegos hay?", chipFreePlay: "¿Puedo jugar gratis?" },
-  fr: { title: "1MGAMING Assistant", subtitleAI: "Entraînement vs IA", subtitleGeneral: "Comment puis-je aider ?", slogan: "Avec Stratégie et Intelligence Nous Créons la RICHESSE", welcomeGreeting: "Salut ! 👋 Je suis ton assistant singe 1MGAMING ! Je suis là pour t'aider.", welcomeClose: "Touche une option ou ferme-moi et touche la bulle du singe quand tu veux !", qAppHelp: "Aide-moi à naviguer", qGameRules: "Explique les règles", qPlayAI: "Comment fonctionne Jouer vs IA ?", qWallet: "Portefeuille et fonds", qPlayFriends: "Jouer avec des amis", qHowItWorks: "Comment ça marche ?", intro: "Coaching stratégique ou apprendre les règles ?", introClose: "Tu peux me fermer et toucher le singe.", strategy: "Coaching stratégique", rules: "Apprendre les règles", friend: "Aide rapide", thinking: "Réflexion...", placeholder: "Demande-moi...", clear: "Effacer", share: "Partager", chipRules: "Règles", chipOptions: "Options", chipImprove: "Améliorer", chipWrong: "Qu'ai-je fait de mal ?", noContext: "Je peux mieux aider si je vois les coups.", chipNavHelp: "Comment commencer ?", chipWalletHelp: "Comment connecter wallet ?", chipGameTypes: "Quels jeux ?", chipFreePlay: "Jouer gratuitement ?" },
-  de: { title: "1MGAMING Helfer", subtitleAI: "Training vs KI", subtitleGeneral: "Wie kann ich helfen?", slogan: "Mit Strategie und Intelligenz schaffen wir REICHTUM", welcomeGreeting: "Hey! 👋 Ich bin dein 1MGAMING Helfer-Affe! Ich helfe dir gerne.", welcomeClose: "Tippe auf eine Option oder schließe mich und tippe auf die Affenblase!", qAppHelp: "Hilf mir beim Navigieren", qGameRules: "Spielregeln erklären", qPlayAI: "Wie funktioniert Spielen vs KI?", qWallet: "Wallet & Guthaben", qPlayFriends: "Mit Freunden spielen", qHowItWorks: "Wie funktioniert alles?", intro: "Strategiecoaching oder Regeln lernen?", introClose: "Du kannst mich schließen und den Affen antippen.", strategy: "Strategiecoaching", rules: "Regeln lernen", friend: "Schnelle Hilfe", thinking: "Denke nach...", placeholder: "Frag mich...", clear: "Löschen", share: "Teilen", chipRules: "Regeln", chipOptions: "Optionen", chipImprove: "Verbessern", chipWrong: "Was war falsch?", noContext: "Ich kann besser helfen, wenn ich die Züge sehe.", chipNavHelp: "Wie starte ich?", chipWalletHelp: "Wallet verbinden?", chipGameTypes: "Welche Spiele?", chipFreePlay: "Kostenlos spielen?" },
-  pt: { title: "1MGAMING Ajudante", subtitleAI: "Prática vs IA", subtitleGeneral: "Como posso ajudar?", slogan: "Com Estratégia e Inteligência Criamos RIQUEZA", welcomeGreeting: "Olá! 👋 Sou seu macaco ajudante da 1MGAMING! Estou aqui para ajudar.", welcomeClose: "Toque em uma opção ou feche e toque na bolha do macaco!", qAppHelp: "Ajude-me a navegar", qGameRules: "Explique as regras", qPlayAI: "Como funciona Jogar vs IA?", qWallet: "Carteira e fundos", qPlayFriends: "Jogar com amigos", qHowItWorks: "Como tudo funciona?", intro: "Coaching estratégico ou aprender regras?", introClose: "Pode me fechar e tocar no macaco.", strategy: "Coaching estratégico", rules: "Aprender regras", friend: "Ajuda rápida", thinking: "Pensando...", placeholder: "Pergunte...", clear: "Limpar", share: "Compartilhar", chipRules: "Regras", chipOptions: "Opções", chipImprove: "Melhorar", chipWrong: "O que errei?", noContext: "Posso ajudar mais se vir as jogadas.", chipNavHelp: "Como começar?", chipWalletHelp: "Conectar carteira?", chipGameTypes: "Quais jogos?", chipFreePlay: "Jogar grátis?" },
-  ar: { title: "مساعد 1MGAMING", subtitleAI: "تدريب ضد الذكاء الاصطناعي", subtitleGeneral: "كيف يمكنني مساعدتك؟", slogan: "بالاستراتيجية والذكاء نصنع الثروة", welcomeGreeting: "مرحباً! 👋 أنا قرد المساعدة في 1MGAMING!", welcomeClose: "اضغط على خيار أو أغلقني واضغط على فقاعة القرد!", qAppHelp: "ساعدني في التنقل", qGameRules: "اشرح القواعد", qPlayAI: "كيف يعمل اللعب ضد الذكاء؟", qWallet: "المحفظة والأموال", qPlayFriends: "العب مع الأصدقاء", qHowItWorks: "كيف يعمل كل شيء؟", intro: "تدريب استراتيجي أم تعلم القواعد؟", introClose: "يمكنك إغلاقي والنقر على القرد.", strategy: "تدريب استراتيجي", rules: "تعلم القواعد", friend: "مساعدة سريعة", thinking: "أفكر...", placeholder: "اسألني...", clear: "مسح", share: "مشاركة", chipRules: "القواعد", chipOptions: "الخيارات", chipImprove: "التحسن", chipWrong: "ماذا فعلت خطأ؟", noContext: "يمكنني المساعدة أكثر إذا رأيت الحركات.", chipNavHelp: "كيف أبدأ؟", chipWalletHelp: "ربط المحفظة؟", chipGameTypes: "ما الألعاب؟", chipFreePlay: "اللعب مجاناً؟" },
-  zh: { title: "1MGAMING 助手", subtitleAI: "AI练习", subtitleGeneral: "需要帮助吗？", slogan: "以策略和智慧创造财富", welcomeGreeting: "嗨！👋 我是你的1MGAMING助手猴子！", welcomeClose: "点击选项或关闭我，需要时点击猴子气泡！", qAppHelp: "帮我导航", qGameRules: "解释规则", qPlayAI: "AI对战怎么玩？", qWallet: "钱包和充值", qPlayFriends: "和朋友玩", qHowItWorks: "一切怎么运作？", intro: "策略指导还是学习规则？", introClose: "可以关闭我，需要时点击猴子。", strategy: "策略指导", rules: "学习规则", friend: "快速帮助", thinking: "思考中...", placeholder: "问我...", clear: "清除", share: "分享", chipRules: "规则", chipOptions: "选项", chipImprove: "如何提高", chipWrong: "我哪里做错了？", noContext: "如果我能看到棋步我能帮更多。", chipNavHelp: "怎么开始？", chipWalletHelp: "连接钱包？", chipGameTypes: "有什么游戏？", chipFreePlay: "免费玩？" },
-  it: { title: "1MGAMING Assistente", subtitleAI: "Allenamento vs IA", subtitleGeneral: "Come posso aiutarti?", slogan: "Con Strategia e Intelligenza Creiamo RICCHEZZA", welcomeGreeting: "Ciao! 👋 Sono la tua scimmia assistente 1MGAMING!", welcomeClose: "Tocca un'opzione o chiudimi e tocca la bolla della scimmia!", qAppHelp: "Aiutami a navigare", qGameRules: "Spiega le regole", qPlayAI: "Come funziona Gioca vs IA?", qWallet: "Wallet e fondi", qPlayFriends: "Gioca con amici", qHowItWorks: "Come funziona tutto?", intro: "Coaching strategico o imparare le regole?", introClose: "Puoi chiudermi e toccare la scimmia.", strategy: "Coaching strategico", rules: "Impara le regole", friend: "Aiuto veloce", thinking: "Sto pensando...", placeholder: "Chiedimi...", clear: "Cancella", share: "Condividi", chipRules: "Regole", chipOptions: "Opzioni", chipImprove: "Migliorare", chipWrong: "Cosa ho sbagliato?", noContext: "Posso aiutare di più se vedo le mosse.", chipNavHelp: "Come inizio?", chipWalletHelp: "Connettere wallet?", chipGameTypes: "Quali giochi?", chipFreePlay: "Giocare gratis?" },
-  ja: { title: "1MGAMING ヘルパー", subtitleAI: "AI練習", subtitleGeneral: "お手伝いしましょうか？", slogan: "戦略と知性で富を創造する", welcomeGreeting: "こんにちは！👋 1MGAMINGヘルパーモンキーです！", welcomeClose: "オプションをタップするか、閉じてモンキーバブルをタップ！", qAppHelp: "ナビゲーションを手伝って", qGameRules: "ルールを説明して", qPlayAI: "AI対戦の仕組みは？", qWallet: "ウォレットと資金", qPlayFriends: "友達と遊ぶ", qHowItWorks: "全体の仕組みは？", intro: "戦略コーチングかルール学習か？", introClose: "閉じてモンキーをタップしてください。", strategy: "戦略コーチング", rules: "ルールを学ぶ", friend: "クイックヘルプ", thinking: "考え中...", placeholder: "何でも聞いて...", clear: "消去", share: "共有", chipRules: "ルール", chipOptions: "オプション", chipImprove: "改善方法", chipWrong: "何が悪かった？", noContext: "手を見れればもっと助けられます。", chipNavHelp: "始め方は？", chipWalletHelp: "ウォレット接続？", chipGameTypes: "どんなゲーム？", chipFreePlay: "無料で遊べる？" },
-  hi: { title: "1MGAMING सहायक", subtitleAI: "AI अभ्यास", subtitleGeneral: "मैं कैसे मदद करूँ?", slogan: "रणनीति और बुद्धि से हम संपत्ति बनाते हैं", welcomeGreeting: "नमस्ते! 👋 मैं आपका 1MGAMING सहायक बंदर हूँ!", welcomeClose: "किसी विकल्प पर टैप करें या मुझे बंद करके बंदर बुलबुले पर टैप करें!", qAppHelp: "ऐप नेविगेट करने में मदद करें", qGameRules: "गेम के नियम बताएँ", qPlayAI: "AI के खिलाफ कैसे खेलें?", qWallet: "वॉलेट और फंड", qPlayFriends: "दोस्तों के साथ खेलें", qHowItWorks: "सब कैसे काम करता है?", intro: "रणनीति कोचिंग या नियम सीखना?", introClose: "मुझे बंद करें और बंदर को टैप करें।", strategy: "रणनीति कोचिंग", rules: "नियम सीखें", friend: "त्वरित मदद", thinking: "सोच रहा हूँ...", placeholder: "कुछ भी पूछें...", clear: "साफ़ करें", share: "शेयर", chipRules: "नियम", chipOptions: "विकल्प", chipImprove: "कैसे सुधारें", chipWrong: "क्या गलत किया?", noContext: "चालें देख सकूँ तो ज़्यादा मदद कर सकता हूँ।", chipNavHelp: "कैसे शुरू करूँ?", chipWalletHelp: "वॉलेट कनेक्ट?", chipGameTypes: "कौन से गेम?", chipFreePlay: "मुफ्त में खेलें?" },
+  es: { title: "Money – Ayudante IA", subtitleAI: "Práctica vs IA", subtitleGeneral: "¿Cómo puedo ayudarte?", slogan: "Con Estrategia e Inteligencia Creamos RIQUEZA", welcomeGreeting: "¡Hola! Soy Money, tu ayudante de IA. ¿Quieres que te ayude?", welcomeYes: "¡Sí, ayúdame!", welcomeNo: "No gracias", assistGreeting: "¿En qué puedo ayudarte?", qAppHelp: "Ayúdame a navegar", qGameRules: "Explica las reglas", qPlayAI: "¿Cómo funciona Jugar vs IA?", qWallet: "Wallet y fondos", qPlayFriends: "Jugar con amigos", qHowItWorks: "¿Cómo funciona todo?", intro: "¿Quieres coaching estratégico o aprender reglas?", introClose: "Siempre puedes cerrarme y tocar al mono.", strategy: "Coaching estratégico", rules: "Aprender reglas", friend: "Ayuda rápida", thinking: "Pensando...", placeholder: "Pregúntame...", clear: "Borrar", share: "Compartir", chipRules: "Reglas", chipOptions: "Opciones", chipImprove: "Mejorar", chipWrong: "¿Qué hice mal?", noContext: "Puedo ayudar más si veo las jugadas.", chipNavHelp: "¿Cómo empiezo?", chipWalletHelp: "¿Cómo conecto wallet?", chipGameTypes: "¿Qué juegos hay?", chipFreePlay: "¿Puedo jugar gratis?" },
+  fr: { title: "Money – Assistant IA", subtitleAI: "Entraînement vs IA", subtitleGeneral: "Comment puis-je aider ?", slogan: "Avec Stratégie et Intelligence Nous Créons la RICHESSE", welcomeGreeting: "Bonjour ! Je suis Money, votre assistant IA. Voulez-vous que je vous aide ?", welcomeYes: "Oui, aidez-moi !", welcomeNo: "Non merci", assistGreeting: "Comment puis-je vous aider ?", qAppHelp: "Aide-moi à naviguer", qGameRules: "Explique les règles", qPlayAI: "Comment fonctionne Jouer vs IA ?", qWallet: "Portefeuille et fonds", qPlayFriends: "Jouer avec des amis", qHowItWorks: "Comment ça marche ?", intro: "Coaching stratégique ou apprendre les règles ?", introClose: "Tu peux me fermer et toucher le singe.", strategy: "Coaching stratégique", rules: "Apprendre les règles", friend: "Aide rapide", thinking: "Réflexion...", placeholder: "Demande-moi...", clear: "Effacer", share: "Partager", chipRules: "Règles", chipOptions: "Options", chipImprove: "Améliorer", chipWrong: "Qu'ai-je fait de mal ?", noContext: "Je peux mieux aider si je vois les coups.", chipNavHelp: "Comment commencer ?", chipWalletHelp: "Comment connecter wallet ?", chipGameTypes: "Quels jeux ?", chipFreePlay: "Jouer gratuitement ?" },
+  de: { title: "Money – KI-Helfer", subtitleAI: "Training vs KI", subtitleGeneral: "Wie kann ich helfen?", slogan: "Mit Strategie und Intelligenz schaffen wir REICHTUM", welcomeGreeting: "Hallo! Ich bin Money, dein KI-Helfer. Soll ich dir helfen?", welcomeYes: "Ja, hilf mir!", welcomeNo: "Nein danke", assistGreeting: "Wie kann ich dir helfen?", qAppHelp: "Hilf mir beim Navigieren", qGameRules: "Spielregeln erklären", qPlayAI: "Wie funktioniert Spielen vs KI?", qWallet: "Wallet & Guthaben", qPlayFriends: "Mit Freunden spielen", qHowItWorks: "Wie funktioniert alles?", intro: "Strategiecoaching oder Regeln lernen?", introClose: "Du kannst mich schließen und den Affen antippen.", strategy: "Strategiecoaching", rules: "Regeln lernen", friend: "Schnelle Hilfe", thinking: "Denke nach...", placeholder: "Frag mich...", clear: "Löschen", share: "Teilen", chipRules: "Regeln", chipOptions: "Optionen", chipImprove: "Verbessern", chipWrong: "Was war falsch?", noContext: "Ich kann besser helfen, wenn ich die Züge sehe.", chipNavHelp: "Wie starte ich?", chipWalletHelp: "Wallet verbinden?", chipGameTypes: "Welche Spiele?", chipFreePlay: "Kostenlos spielen?" },
+  pt: { title: "Money – Ajudante IA", subtitleAI: "Prática vs IA", subtitleGeneral: "Como posso ajudar?", slogan: "Com Estratégia e Inteligência Criamos RIQUEZA", welcomeGreeting: "Olá! Sou o Money, seu ajudante de IA. Quer que eu te ajude?", welcomeYes: "Sim, me ajude!", welcomeNo: "Não obrigado", assistGreeting: "Como posso te ajudar?", qAppHelp: "Ajude-me a navegar", qGameRules: "Explique as regras", qPlayAI: "Como funciona Jogar vs IA?", qWallet: "Carteira e fundos", qPlayFriends: "Jogar com amigos", qHowItWorks: "Como tudo funciona?", intro: "Coaching estratégico ou aprender regras?", introClose: "Pode me fechar e tocar no macaco.", strategy: "Coaching estratégico", rules: "Aprender regras", friend: "Ajuda rápida", thinking: "Pensando...", placeholder: "Pergunte...", clear: "Limpar", share: "Compartilhar", chipRules: "Regras", chipOptions: "Opções", chipImprove: "Melhorar", chipWrong: "O que errei?", noContext: "Posso ajudar mais se vir as jogadas.", chipNavHelp: "Como começar?", chipWalletHelp: "Conectar carteira?", chipGameTypes: "Quais jogos?", chipFreePlay: "Jogar grátis?" },
+  ar: { title: "Money – مساعد الذكاء", subtitleAI: "تدريب ضد الذكاء الاصطناعي", subtitleGeneral: "كيف يمكنني مساعدتك؟", slogan: "بالاستراتيجية والذكاء نصنع الثروة", welcomeGreeting: "مرحباً! أنا Money، مساعدك الذكي. هل تريدني أن أساعدك؟", welcomeYes: "نعم، ساعدني!", welcomeNo: "لا شكراً", assistGreeting: "كيف يمكنني مساعدتك؟", qAppHelp: "ساعدني في التنقل", qGameRules: "اشرح القواعد", qPlayAI: "كيف يعمل اللعب ضد الذكاء؟", qWallet: "المحفظة والأموال", qPlayFriends: "العب مع الأصدقاء", qHowItWorks: "كيف يعمل كل شيء؟", intro: "تدريب استراتيجي أم تعلم القواعد؟", introClose: "يمكنك إغلاقي والنقر على القرد.", strategy: "تدريب استراتيجي", rules: "تعلم القواعد", friend: "مساعدة سريعة", thinking: "أفكر...", placeholder: "اسألني...", clear: "مسح", share: "مشاركة", chipRules: "القواعد", chipOptions: "الخيارات", chipImprove: "التحسن", chipWrong: "ماذا فعلت خطأ؟", noContext: "يمكنني المساعدة أكثر إذا رأيت الحركات.", chipNavHelp: "كيف أبدأ؟", chipWalletHelp: "ربط المحفظة؟", chipGameTypes: "ما الألعاب؟", chipFreePlay: "اللعب مجاناً؟" },
+  zh: { title: "Money – AI助手", subtitleAI: "AI练习", subtitleGeneral: "需要帮助吗？", slogan: "以策略和智慧创造财富", welcomeGreeting: "你好！我是Money，你的AI助手。需要我帮助你吗？", welcomeYes: "好的，帮帮我！", welcomeNo: "不用了谢谢", assistGreeting: "我能帮你什么？", qAppHelp: "帮我导航", qGameRules: "解释规则", qPlayAI: "AI对战怎么玩？", qWallet: "钱包和充值", qPlayFriends: "和朋友玩", qHowItWorks: "一切怎么运作？", intro: "策略指导还是学习规则？", introClose: "可以关闭我，需要时点击猴子。", strategy: "策略指导", rules: "学习规则", friend: "快速帮助", thinking: "思考中...", placeholder: "问我...", clear: "清除", share: "分享", chipRules: "规则", chipOptions: "选项", chipImprove: "如何提高", chipWrong: "我哪里做错了？", noContext: "如果我能看到棋步我能帮更多。", chipNavHelp: "怎么开始？", chipWalletHelp: "连接钱包？", chipGameTypes: "有什么游戏？", chipFreePlay: "免费玩？" },
+  it: { title: "Money – Assistente IA", subtitleAI: "Allenamento vs IA", subtitleGeneral: "Come posso aiutarti?", slogan: "Con Strategia e Intelligenza Creiamo RICCHEZZA", welcomeGreeting: "Ciao! Sono Money, il tuo assistente IA. Vuoi che ti aiuti?", welcomeYes: "Sì, aiutami!", welcomeNo: "No grazie", assistGreeting: "Come posso aiutarti?", qAppHelp: "Aiutami a navigare", qGameRules: "Spiega le regole", qPlayAI: "Come funziona Gioca vs IA?", qWallet: "Wallet e fondi", qPlayFriends: "Gioca con amici", qHowItWorks: "Come funziona tutto?", intro: "Coaching strategico o imparare le regole?", introClose: "Puoi chiudermi e toccare la scimmia.", strategy: "Coaching strategico", rules: "Impara le regole", friend: "Aiuto veloce", thinking: "Sto pensando...", placeholder: "Chiedimi...", clear: "Cancella", share: "Condividi", chipRules: "Regole", chipOptions: "Opzioni", chipImprove: "Migliorare", chipWrong: "Cosa ho sbagliato?", noContext: "Posso aiutare di più se vedo le mosse.", chipNavHelp: "Come inizio?", chipWalletHelp: "Connettere wallet?", chipGameTypes: "Quali giochi?", chipFreePlay: "Giocare gratis?" },
+  ja: { title: "Money – AIヘルパー", subtitleAI: "AI練習", subtitleGeneral: "お手伝いしましょうか？", slogan: "戦略と知性で富を創造する", welcomeGreeting: "こんにちは！私はMoney、あなたのAIヘルパーです。お手伝いしましょうか？", welcomeYes: "はい、お願いします！", welcomeNo: "いいえ、結構です", assistGreeting: "何かお手伝いできますか？", qAppHelp: "ナビゲーションを手伝って", qGameRules: "ルールを説明して", qPlayAI: "AI対戦の仕組みは？", qWallet: "ウォレットと資金", qPlayFriends: "友達と遊ぶ", qHowItWorks: "全体の仕組みは？", intro: "戦略コーチングかルール学習か？", introClose: "閉じてモンキーをタップしてください。", strategy: "戦略コーチング", rules: "ルールを学ぶ", friend: "クイックヘルプ", thinking: "考え中...", placeholder: "何でも聞いて...", clear: "消去", share: "共有", chipRules: "ルール", chipOptions: "オプション", chipImprove: "改善方法", chipWrong: "何が悪かった？", noContext: "手を見れればもっと助けられます。", chipNavHelp: "始め方は？", chipWalletHelp: "ウォレット接続？", chipGameTypes: "どんなゲーム？", chipFreePlay: "無料で遊べる？" },
+  hi: { title: "Money – AI सहायक", subtitleAI: "AI अभ्यास", subtitleGeneral: "मैं कैसे मदद करूँ?", slogan: "रणनीति और बुद्धि से हम संपत्ति बनाते हैं", welcomeGreeting: "नमस्ते! मैं Money हूँ, आपका AI सहायक। क्या आप चाहते हैं कि मैं आपकी मदद करूँ?", welcomeYes: "हाँ, मदद करो!", welcomeNo: "नहीं धन्यवाद", assistGreeting: "मैं आपकी कैसे मदद कर सकता हूँ?", qAppHelp: "ऐप नेविगेट करने में मदद करें", qGameRules: "गेम के नियम बताएँ", qPlayAI: "AI के खिलाफ कैसे खेलें?", qWallet: "वॉलेट और फंड", qPlayFriends: "दोस्तों के साथ खेलें", qHowItWorks: "सब कैसे काम करता है?", intro: "रणनीति कोचिंग या नियम सीखना?", introClose: "मुझे बंद करें और बंदर को टैप करें।", strategy: "रणनीति कोचिंग", rules: "नियम सीखें", friend: "त्वरित मदद", thinking: "सोच रहा हूँ...", placeholder: "कुछ भी पूछें...", clear: "साफ़ करें", share: "शेयर", chipRules: "नियम", chipOptions: "विकल्प", chipImprove: "कैसे सुधारें", chipWrong: "क्या गलत किया?", noContext: "चालें देख सकूँ तो ज़्यादा मदद कर सकता हूँ।", chipNavHelp: "कैसे शुरू करूँ?", chipWalletHelp: "वॉलेट कनेक्ट?", chipGameTypes: "कौन से गेम?", chipFreePlay: "मुफ्त में खेलें?" },
 };
 
 function t(lang: string, key: string): string {
@@ -144,11 +148,11 @@ async function generateShareImage(text: string): Promise<Blob | null> {
     ctx.fillStyle = "#FACC15";
     ctx.font = "bold 48px sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText("🐵 1MGAMING", 540, 120);
+    ctx.fillText("🐵 Money – 1MGAMING", 540, 120);
 
     ctx.fillStyle = "#aaa";
     ctx.font = "24px sans-serif";
-    ctx.fillText("AI Coach Insight", 540, 170);
+    ctx.fillText("AI Helper Insight", 540, 170);
 
     ctx.fillStyle = "#ffffff";
     ctx.font = "28px sans-serif";
@@ -185,7 +189,7 @@ async function generateShareImage(text: string): Promise<Blob | null> {
   }
 }
 
-// ─── Quick-action menu items for welcome screen ───
+// ─── Quick-action menu items ───
 const WELCOME_ACTIONS = [
   { key: "qAppHelp", icon: HelpCircle },
   { key: "qGameRules", icon: BookOpen },
@@ -220,15 +224,15 @@ function trackMonkey(event: string, context: string, lang: string, metadata?: st
 }
 
 // ─── Main Component ───
-const BUBBLE_SIZE = 60;
+const BUBBLE_SIZE = 64;
 const FIRST_VISIT_KEY = "aihelper-welcomed";
+const SESSION_OPENED_KEY = "aihelper-session-opened";
 
 export default function AIAgentHelperOverlay() {
   const location = useLocation();
   const { i18n } = useTranslation();
   const lang = i18n.language?.slice(0, 2) || "en";
 
-  // NEVER render on multiplayer routes
   const isMultiplayer = isMultiplayerRoute(location.pathname);
   const isAIRoute = isAIGameRoute(location.pathname);
 
@@ -237,7 +241,6 @@ export default function AIAgentHelperOverlay() {
     return location.pathname.replace("/play-ai/", "").split("?")[0] || "chess";
   }, [location.pathname, isAIRoute]);
 
-  // Page context for analytics
   const pageContext = useMemo(() => {
     if (isAIRoute) return `ai-${gameType}`;
     const p = location.pathname;
@@ -245,14 +248,20 @@ export default function AIAgentHelperOverlay() {
     return p.replace(/^\//, "").split("/")[0] || "home";
   }, [location.pathname, isAIRoute, gameType]);
 
-  // First-time visit detection
+  // First-time visit detection (persists forever)
   const [isFirstVisit] = useState(() => {
     try { return !localStorage.getItem(FIRST_VISIT_KEY); } catch { return true; }
+  });
+
+  // Session-opened tracks whether user has opened Money this browser session
+  const [hasOpenedThisSession, setHasOpenedThisSession] = useState(() => {
+    try { return !!sessionStorage.getItem(SESSION_OPENED_KEY); } catch { return false; }
   });
 
   // State
   const [sheetOpen, setSheetOpen] = useState(false);
   const [bubbleState, setBubbleState] = useState<BubbleState>("idle");
+  const [welcomeAccepted, setWelcomeAccepted] = useState(false);
   const [helperMode, setHelperMode] = useState<HelperMode | null>(() => {
     try { return (localStorage.getItem("aihelper-mode") as HelperMode) || null; } catch { return null; }
   });
@@ -273,7 +282,6 @@ export default function AIAgentHelperOverlay() {
     if (isMultiplayer) return;
     if (isFirstVisit && !welcomeTriggered.current) {
       welcomeTriggered.current = true;
-      // Small delay so the page renders first
       const timer = setTimeout(() => {
         setSheetOpen(true);
         trackMonkey("welcome_shown", pageContext, lang);
@@ -282,6 +290,14 @@ export default function AIAgentHelperOverlay() {
       return () => clearTimeout(timer);
     }
   }, [isFirstVisit, isMultiplayer]);
+
+  // Mark session as opened when sheet opens
+  useEffect(() => {
+    if (sheetOpen && !hasOpenedThisSession) {
+      setHasOpenedThisSession(true);
+      try { sessionStorage.setItem(SESSION_OPENED_KEY, "1"); } catch {}
+    }
+  }, [sheetOpen]);
 
   // Bubble position
   const [pos, setPos] = useState<{ x: number; y: number }>(() => {
@@ -294,7 +310,6 @@ export default function AIAgentHelperOverlay() {
 
   // Drag state
   const dragRef = useRef<{ startX: number; startY: number; startPosX: number; startPosY: number; dragging: boolean }>({ startX: 0, startY: 0, startPosX: 0, startPosY: 0, dragging: false });
-  
 
   // Persist chat
   useEffect(() => {
@@ -344,15 +359,13 @@ export default function AIAgentHelperOverlay() {
     const d = dragRef.current;
     const dx = e.clientX - d.startX;
     const dy = e.clientY - d.startY;
-    if (!d.dragging && Math.abs(dx) + Math.abs(dy) > 5) d.dragging = true;
+    if (!d.dragging && Math.abs(dx) + Math.abs(dy) > 8) d.dragging = true;
     if (d.dragging) {
       setPos({ x: d.startPosX + dx, y: d.startPosY + dy });
     }
   }, []);
 
   const onPointerUp = useCallback((e: React.PointerEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
     const d = dragRef.current;
     if (d.dragging) {
       const vw = window.innerWidth;
@@ -361,6 +374,7 @@ export default function AIAgentHelperOverlay() {
       const newPos = clampToSafe(pos.x, pos.y, BUBBLE_SIZE, vw, vh, zones);
       setPos(newPos);
     } else {
+      // TAP — open the sheet
       setSheetOpen(true);
       trackMonkey("bubble_open", pageContext, lang);
     }
@@ -373,7 +387,6 @@ export default function AIAgentHelperOverlay() {
     const ctx = (window as any).__AI_HELPER_CONTEXT__;
     const moveHistory = ctx?.moveHistory || [];
 
-    // Auto-set mode if not set yet
     if (!helperMode) {
       setHelperMode(isAIRoute ? "strategy" : "friend");
     }
@@ -423,6 +436,7 @@ export default function AIAgentHelperOverlay() {
   const clearChat = useCallback(() => {
     setMessages([]);
     setHelperMode(null);
+    setWelcomeAccepted(false);
     trackMonkey("chat_cleared", pageContext, lang);
     try { localStorage.removeItem("aihelper-chat"); localStorage.removeItem("aihelper-mode"); } catch {}
   }, [pageContext, lang]);
@@ -433,7 +447,7 @@ export default function AIAgentHelperOverlay() {
     if (!blob) return;
     const file = new File([blob], "1mgaming-insight.png", { type: "image/png" });
     if (navigator.share && navigator.canShare?.({ files: [file] })) {
-      navigator.share({ files: [file], title: "1MGAMING AI Coach", text: "With Strategy and Intelligence We Create WEALTH" }).catch(() => {});
+      navigator.share({ files: [file], title: "Money – 1MGAMING AI", text: "With Strategy and Intelligence We Create WEALTH" }).catch(() => {});
     } else {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -450,16 +464,18 @@ export default function AIAgentHelperOverlay() {
   const glowColor = bubbleState === "thinking" ? "rgba(250,204,21,0.6)" : bubbleState === "success" ? "rgba(34,197,94,0.5)" : bubbleState === "warning" ? "rgba(239,68,68,0.5)" : "rgba(250,204,21,0.25)";
   const subtitle = isAIRoute ? t(lang, "subtitleAI") : t(lang, "subtitleGeneral");
 
-  // Determine which quick chips to show based on context
   const quickChips = isAIRoute
     ? ["chipRules", "chipOptions", "chipImprove", "chipWrong"]
     : ["chipNavHelp", "chipWalletHelp", "chipGameTypes", "chipFreePlay"];
 
-   // Show welcome menu when: no mode selected, no messages, not on AI route
-  const showWelcomeMenu = !helperMode && messages.length === 0 && !isAIRoute;
-  // Show AI mode picker when: no mode, no messages, on AI route
+  // ── Flow logic ──
+  // First time ever & not yet accepted → simple "Hello I am Money" with Yes/No
+  const showFirstTimeWelcome = isFirstVisit && !welcomeAccepted && !helperMode && messages.length === 0 && !isAIRoute;
+  // Subsequent opens (or after accepting) → "How can I assist you?" + action menu
+  const showAssistMenu = !showFirstTimeWelcome && !helperMode && messages.length === 0 && !isAIRoute;
+  // AI mode picker
   const showAIModePicker = !helperMode && messages.length === 0 && isAIRoute;
-  // Show chat UI (input + chips) when mode is set or messages exist
+  // Chat UI visible when mode is set or messages exist
   const showChatUI = helperMode || messages.length > 0;
 
   return (
@@ -470,7 +486,6 @@ export default function AIAgentHelperOverlay() {
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
-          
           style={{
             position: "fixed",
             left: pos.x,
@@ -489,14 +504,13 @@ export default function AIAgentHelperOverlay() {
               width: BUBBLE_SIZE,
               height: BUBBLE_SIZE,
               boxShadow: `0 0 18px 5px ${glowColor}`,
-              background: "linear-gradient(135deg, #2a2a1e 0%, #1a1a0e 100%)",
+              background: "#ffffff",
             }}
           >
             <img
               src={monkeyImages[bubbleState]}
-              alt="AI Helper"
-              className="w-full h-full object-contain p-0.5 rounded-full pointer-events-none"
-              style={{ mixBlendMode: "multiply", backgroundColor: "rgba(250,204,21,0.15)" }}
+              alt="Money – AI Helper"
+              className="w-full h-full object-cover rounded-full pointer-events-none"
               draggable={false}
             />
           </div>
@@ -509,10 +523,8 @@ export default function AIAgentHelperOverlay() {
       {/* Bottom Sheet */}
       {sheetOpen && (
         <div className="fixed inset-0 z-[10000] flex flex-col justify-end" onClick={() => setSheetOpen(false)}>
-          {/* Backdrop */}
           <div className="absolute inset-0 bg-black/50" />
 
-          {/* Sheet */}
           <div
             className="relative bg-background border-t border-primary/30 rounded-t-2xl max-h-[85vh] flex flex-col animate-in slide-in-from-bottom duration-300"
             onClick={(e) => e.stopPropagation()}
@@ -520,8 +532,8 @@ export default function AIAgentHelperOverlay() {
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-primary/20">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full overflow-hidden border border-primary" style={{ background: "rgba(250,204,21,0.15)" }}>
-                  <img src={monkeyHappy} alt="" className="w-full h-full object-contain p-0.5" style={{ mixBlendMode: "multiply" }} />
+                <div className="w-10 h-10 rounded-full overflow-hidden border border-primary" style={{ background: "#ffffff" }}>
+                  <img src={monkeyHappy} alt="Money" className="w-full h-full object-cover" />
                 </div>
                 <div>
                   <h3 className="font-bold text-foreground text-sm">{t(lang, "title")}</h3>
@@ -535,31 +547,61 @@ export default function AIAgentHelperOverlay() {
 
             {/* Chat Area */}
             <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 min-h-[200px] max-h-[60vh]">
-              {/* ── Welcome menu (non-AI pages, first interaction) ── */}
-              {showWelcomeMenu && (
+              {/* ── First-time welcome (simple greeting) ── */}
+              {showFirstTimeWelcome && (
                 <div className="space-y-4">
                   <div className="bg-muted/50 rounded-lg p-4 text-sm text-foreground">
                     <div className="flex items-center gap-3 mb-3">
-                      <div className="w-12 h-12 rounded-full overflow-hidden border border-primary shrink-0" style={{ background: "rgba(250,204,21,0.15)" }}>
-                        <img src={monkeyHappy} alt="" className="w-full h-full object-contain" style={{ mixBlendMode: "multiply" }} />
+                      <div className="w-12 h-12 rounded-full overflow-hidden border border-primary shrink-0" style={{ background: "#ffffff" }}>
+                        <img src={monkeyHappy} alt="Money" className="w-full h-full object-cover" />
                       </div>
-                      <div>
-                        <p className="font-semibold">{t(lang, "welcomeGreeting")}</p>
-                      </div>
+                      <p className="font-semibold">{t(lang, "welcomeGreeting")}</p>
                     </div>
-                    <p className="text-primary font-medium text-xs italic mb-2">
+                  </div>
+                  <div className="flex gap-3 justify-center">
+                    <button
+                      onClick={() => {
+                        trackMonkey("welcome_yes", pageContext, lang);
+                        setWelcomeAccepted(true);
+                      }}
+                      className="px-5 py-2 rounded-full text-sm font-semibold bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                    >
+                      {t(lang, "welcomeYes")}
+                    </button>
+                    <button
+                      onClick={() => {
+                        trackMonkey("welcome_no", pageContext, lang);
+                        setSheetOpen(false);
+                      }}
+                      className="px-5 py-2 rounded-full text-sm font-medium border border-border text-muted-foreground hover:border-primary transition-colors"
+                    >
+                      {t(lang, "welcomeNo")}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* ── "How can I assist you?" menu (subsequent opens) ── */}
+              {showAssistMenu && (
+                <div className="space-y-4">
+                  <div className="bg-muted/50 rounded-lg p-4 text-sm text-foreground">
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="w-10 h-10 rounded-full overflow-hidden border border-primary shrink-0" style={{ background: "#ffffff" }}>
+                        <img src={monkeyHappy} alt="Money" className="w-full h-full object-cover" />
+                      </div>
+                      <p className="font-semibold">{t(lang, "assistGreeting")}</p>
+                    </div>
+                    <p className="text-primary font-medium text-xs italic">
                       "{t(lang, "slogan")}"
                     </p>
-                    <p className="text-muted-foreground text-xs">{t(lang, "welcomeClose")}</p>
                   </div>
 
-                  {/* Quick-action buttons */}
                   <div className="grid grid-cols-2 gap-2">
                     {WELCOME_ACTIONS.map(({ key, icon: Icon }) => (
                       <button
                         key={key}
                         onClick={() => {
-                          trackMonkey("welcome_action", pageContext, lang, key);
+                          trackMonkey("assist_action", pageContext, lang, key);
                           setHelperMode("friend");
                           sendMessage(t(lang, key));
                         }}
