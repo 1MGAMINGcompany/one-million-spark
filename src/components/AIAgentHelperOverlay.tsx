@@ -13,17 +13,17 @@ import monkeyThinking from "@/assets/monkey-thinking.png";
 import monkeyWarning from "@/assets/monkey-warning.png";
 import monkeySuccess from "@/assets/monkey-success.png";
 
+// ─── Types ───
+type BubbleState = "idle" | "thinking" | "warning" | "success";
+type HelperMode = "strategy" | "rules" | "friend";
+interface ChatMsg { role: "user" | "assistant"; content: string }
+
 const monkeyImages: Record<BubbleState, string> = {
   idle: monkeyIdle,
   thinking: monkeyThinking,
   warning: monkeyWarning,
   success: monkeySuccess,
 };
-
-// ─── Types ───
-type BubbleState = "idle" | "thinking" | "warning" | "success";
-type HelperMode = "strategy" | "rules" | "friend";
-interface ChatMsg { role: "user" | "assistant"; content: string }
 
 // ─── i18n dictionary (inline, fallback English) ───
 const dict: Record<string, Record<string, string>> = {
