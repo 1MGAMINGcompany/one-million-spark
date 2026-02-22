@@ -473,6 +473,36 @@ export type Database = {
         }
         Relationships: []
       }
+      monkey_analytics: {
+        Row: {
+          context: string | null
+          created_at: string
+          event: string
+          id: string
+          lang: string | null
+          metadata: string | null
+          session_id: string
+        }
+        Insert: {
+          context?: string | null
+          created_at?: string
+          event: string
+          id?: string
+          lang?: string | null
+          metadata?: string | null
+          session_id: string
+        }
+        Update: {
+          context?: string | null
+          created_at?: string
+          event?: string
+          id?: string
+          lang?: string | null
+          metadata?: string | null
+          session_id?: string
+        }
+        Relationships: []
+      }
       player_profiles: {
         Row: {
           biggest_pot_won: number

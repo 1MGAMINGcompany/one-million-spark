@@ -16,6 +16,8 @@ import { useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { X, Send, Trash2, Share2, HelpCircle, Gamepad2, Wallet, Users, BookOpen, Sparkles } from "lucide-react";
 import { streamTrustAgent } from "@/lib/trustAgentClient";
+import { supabase } from "@/integrations/supabase/client";
+import { getSessionId } from "@/hooks/usePresenceHeartbeat";
 import monkeyHappy from "@/assets/monkey-happy.png";
 import monkeyThinking from "@/assets/monkey-thinking.png";
 import monkeyWarning from "@/assets/monkey-warning.png";
@@ -201,6 +203,22 @@ function isAIGameRoute(pathname: string): boolean {
   return pathname.startsWith("/play-ai/");
 }
 
+// ─── Analytics tracker (fire-and-forget, never breaks UX) ───
+function trackMonkey(event: string, context: string, lang: string, metadata?: string) {
+  try {
+    supabase.functions.invoke("live-stats", {
+      body: {
+        action: "track_monkey",
+        sessionId: getSessionId(),
+        event,
+        page: context,
+        game: lang,
+        difficulty: metadata || null,
+      },
+    }).catch(() => {});
+  } catch {}
+}
+
 // ─── Main Component ───
 const BUBBLE_SIZE = 60;
 const FIRST_VISIT_KEY = "aihelper-welcomed";
@@ -218,6 +236,14 @@ export default function AIAgentHelperOverlay() {
     if (!isAIRoute) return "";
     return location.pathname.replace("/play-ai/", "").split("?")[0] || "chess";
   }, [location.pathname, isAIRoute]);
+
+  // Page context for analytics
+  const pageContext = useMemo(() => {
+    if (isAIRoute) return `ai-${gameType}`;
+    const p = location.pathname;
+    if (p === "/") return "home";
+    return p.replace(/^\//, "").split("/")[0] || "home";
+  }, [location.pathname, isAIRoute, gameType]);
 
   // First-time visit detection
   const [isFirstVisit] = useState(() => {
@@ -250,6 +276,7 @@ export default function AIAgentHelperOverlay() {
       // Small delay so the page renders first
       const timer = setTimeout(() => {
         setSheetOpen(true);
+        trackMonkey("welcome_shown", pageContext, lang);
         try { localStorage.setItem(FIRST_VISIT_KEY, "1"); } catch {}
       }, 1500);
       return () => clearTimeout(timer);
@@ -332,6 +359,7 @@ export default function AIAgentHelperOverlay() {
       setPos(newPos);
     } else {
       setSheetOpen(true);
+      trackMonkey("bubble_open", pageContext, lang);
     }
     dragRef.current.dragging = false;
   }, [pos, location.pathname]);
@@ -351,6 +379,7 @@ export default function AIAgentHelperOverlay() {
     setMessages((prev) => [...prev, userMsg]);
     setInput("");
     setIsStreaming(true);
+    trackMonkey("message_sent", pageContext, lang, text.trim().slice(0, 50));
     setBubbleState("thinking");
 
     let assistantSoFar = "";
@@ -391,10 +420,12 @@ export default function AIAgentHelperOverlay() {
   const clearChat = useCallback(() => {
     setMessages([]);
     setHelperMode(null);
+    trackMonkey("chat_cleared", pageContext, lang);
     try { localStorage.removeItem("aihelper-chat"); localStorage.removeItem("aihelper-mode"); } catch {}
-  }, []);
+  }, [pageContext, lang]);
 
   const shareMessage = useCallback(async (text: string) => {
+    trackMonkey("share_tapped", pageContext, lang);
     const blob = await generateShareImage(text);
     if (!blob) return;
     const file = new File([blob], "1mgaming-insight.png", { type: "image/png" });
@@ -520,6 +551,7 @@ export default function AIAgentHelperOverlay() {
                       <button
                         key={key}
                         onClick={() => {
+                          trackMonkey("welcome_action", pageContext, lang, key);
                           setHelperMode("friend");
                           sendMessage(t(lang, key));
                         }}
@@ -547,7 +579,7 @@ export default function AIAgentHelperOverlay() {
                     {(["strategy", "rules", "friend"] as HelperMode[]).map((mode) => (
                       <button
                         key={mode}
-                        onClick={() => setHelperMode(mode)}
+                        onClick={() => { trackMonkey("mode_selected", pageContext, lang, mode); setHelperMode(mode); }}
                         className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
                           mode === "strategy"
                             ? "bg-primary text-primary-foreground border-primary"
@@ -599,7 +631,7 @@ export default function AIAgentHelperOverlay() {
                 {quickChips.map((key) => (
                   <button
                     key={key}
-                    onClick={() => sendMessage(t(lang, key))}
+                    onClick={() => { trackMonkey("chip_tapped", pageContext, lang, key); sendMessage(t(lang, key)); }}
                     className="shrink-0 px-3 py-1 rounded-full text-xs border border-border bg-muted/30 text-foreground hover:border-primary transition-colors"
                   >
                     {t(lang, key)}
