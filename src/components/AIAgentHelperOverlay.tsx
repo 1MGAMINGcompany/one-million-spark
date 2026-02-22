@@ -8,7 +8,17 @@ import { useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { X, Send, Trash2, Share2 } from "lucide-react";
 import { streamTrustAgent } from "@/lib/trustAgentClient";
-import monkeyImg from "@/assets/ai-helper-monkey.jpg";
+import monkeyIdle from "@/assets/monkey-idle.png";
+import monkeyThinking from "@/assets/monkey-thinking.png";
+import monkeyWarning from "@/assets/monkey-warning.png";
+import monkeySuccess from "@/assets/monkey-success.png";
+
+const monkeyImages: Record<BubbleState, string> = {
+  idle: monkeyIdle,
+  thinking: monkeyThinking,
+  warning: monkeyWarning,
+  success: monkeySuccess,
+};
 
 // ─── Types ───
 type BubbleState = "idle" | "thinking" | "warning" | "success";
