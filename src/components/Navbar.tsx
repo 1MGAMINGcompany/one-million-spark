@@ -4,9 +4,10 @@ import { useTranslation } from "react-i18next";
 import { useWallet } from "@/hooks/useWallet";
 import { usePrivy } from "@privy-io/react-auth";
 import { usePrivySolBalance } from "@/hooks/usePrivySolBalance";
-import { Home, Wallet, PlusCircle, LayoutList, Menu, X, Coins, Volume2, VolumeX, Bell, BellOff, Trophy, User, ChevronDown, LogOut } from "lucide-react";
+import { Home, Wallet, PlusCircle, LayoutList, Menu, X, Coins, Volume2, VolumeX, Bell, BellOff, Trophy, ChevronDown, LogOut, ArrowRightLeft } from "lucide-react";
 import { WalletButton } from "./WalletButton";
 import { PrivyLoginButton } from "./PrivyLoginButton";
+import { Button } from "@/components/ui/button";
 import BrandLogo from "./BrandLogo";
 import LanguageSelector from "./LanguageSelector";
 import { useSound } from "@/contexts/SoundContext";
@@ -30,11 +31,12 @@ function getNotificationAPI(): any | null {
 const Navbar = () => {
   const location = useLocation();
   const [isOpen, setIsOpen] = useState(false);
+  const [showExternalWallet, setShowExternalWallet] = useState(false);
   const { soundEnabled, toggleSound, play } = useSound();
   const { t, i18n } = useTranslation();
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const { connected, publicKey } = useWallet();
-  const { authenticated, logout } = usePrivy();
+  const { authenticated, login, logout } = usePrivy();
   const { isPrivyUser, walletAddress, balanceSol, loading: balanceLoading } = usePrivySolBalance();
 
   const shortAddress = walletAddress
@@ -229,10 +231,50 @@ const Navbar = () => {
                       <LogOut size={16} />
                     </button>
                   </div>
+
+                  {/* Switch Wallet link */}
+                  <button
+                    onClick={() => { setShowExternalWallet(prev => !prev); }}
+                    className="flex items-center justify-center gap-1.5 w-full text-[11px] text-muted-foreground hover:text-primary transition-colors pt-1"
+                  >
+                    <ArrowRightLeft size={12} />
+                    {t("wallet.switchWallet")}
+                  </button>
+                  {showExternalWallet && (
+                    <div className="pt-1">
+                      <WalletButton />
+                    </div>
+                  )}
                 </div>
               ) : (
-                <div className="px-1 pt-1 pb-2">
-                  <PrivyLoginButton />
+                <div className="px-1 pt-1 pb-3 space-y-3">
+                  {/* Primary: Sign In (Google / Email) */}
+                  <Button
+                    onClick={() => { login(); setIsOpen(false); }}
+                    className="w-full"
+                    size="lg"
+                  >
+                    <Wallet className="mr-2" size={18} />
+                    {t("wallet.signInGoogleEmail")}
+                  </Button>
+                  <p className="text-[11px] text-muted-foreground text-center -mt-1">
+                    {t("wallet.createWalletInstantly")}
+                  </p>
+
+                  {/* Secondary: Already have a crypto wallet? */}
+                  <Button
+                    onClick={() => { setShowExternalWallet(prev => !prev); }}
+                    variant="outline"
+                    size="sm"
+                    className="w-full text-xs"
+                  >
+                    {t("wallet.alreadyHaveCryptoWallet")}
+                  </Button>
+                  {showExternalWallet && (
+                    <div className="pt-1">
+                      <WalletButton />
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -296,18 +338,6 @@ const Navbar = () => {
                 <span>{notificationsEnabled ? "Notifications On" : "Notifications Off"}</span>
               </button>
 
-              {/* ── Advanced: External Wallet ── */}
-              <Collapsible>
-                <CollapsibleTrigger className="flex items-center gap-2 px-4 py-3 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors w-full">
-                  <Wallet size={16} />
-                  <span>{t("wallet.advancedConnectExternal")}</span>
-                  <ChevronDown size={12} className="ml-auto" />
-                </CollapsibleTrigger>
-                <CollapsibleContent className="px-4 pt-2 space-y-2">
-                  <p className="text-[11px] text-muted-foreground">{t("wallet.alreadyHavePhantom")}</p>
-                  <WalletButton />
-                </CollapsibleContent>
-              </Collapsible>
             </div>
           </div>
         )}
