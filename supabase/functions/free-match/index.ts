@@ -69,33 +69,46 @@ serve(async (req) => {
       if (waiting && waiting.length > 0) {
         const room = waiting[0]
 
-        // Idempotent: if already joined by same player
-        if (room.player2_wallet === playerId) {
+        // Already joined by same player?
+        const existingParticipants: string[] = room.participants || []
+        if (existingParticipants.includes(playerId)) {
           return json({ status: 'joined', roomPda: room.room_pda })
         }
 
         // Merge display names
         const existingNames = (room.display_names as Record<string, string>) || {}
         const mergedNames = { ...existingNames, [playerId]: displayName || `Guest-${playerId.slice(-4).toUpperCase()}` }
+        const newParticipants = [...existingParticipants, playerId]
+        const isFull = newParticipants.length >= maxPlayers
 
-        // Join the room
+        // Build update payload
+        const updatePayload: Record<string, unknown> = {
+          participants: newParticipants,
+          display_names: mergedNames,
+          updated_at: new Date().toISOString(),
+        }
+
+        // For 2-player: set player2_wallet
+        if (!room.player2_wallet) {
+          updatePayload.player2_wallet = playerId
+        }
+
+        // Only activate when all slots are filled
+        if (isFull) {
+          updatePayload.status = 'active'
+          updatePayload.status_int = 2
+          updatePayload.current_turn_wallet = room.player1_wallet
+          updatePayload.starting_player_wallet = room.player1_wallet
+          updatePayload.p1_ready = true
+          updatePayload.p2_ready = true
+          updatePayload.start_roll_finalized = true
+          updatePayload.turn_started_at = new Date().toISOString()
+          updatePayload.waiting_started_at = null
+        }
+
         const { error: joinErr } = await supabase
           .from('game_sessions')
-          .update({
-            player2_wallet: playerId,
-            participants: [room.player1_wallet, playerId],
-            display_names: mergedNames,
-            status: 'active',
-            status_int: 2,
-            current_turn_wallet: room.player1_wallet,
-            starting_player_wallet: room.player1_wallet,
-            p1_ready: true,
-            p2_ready: true,
-            start_roll_finalized: true,
-            turn_started_at: new Date().toISOString(),
-            waiting_started_at: null,
-            updated_at: new Date().toISOString(),
-          })
+          .update(updatePayload)
           .eq('room_pda', room.room_pda)
           .eq('status', 'waiting')
 
@@ -104,8 +117,9 @@ serve(async (req) => {
           return json({ error: joinErr.message }, 500)
         }
 
-        console.log('[free-match] Joined existing room:', room.room_pda.slice(0, 12))
-        return json({ status: 'joined', roomPda: room.room_pda })
+        const joinStatus = isFull ? 'joined' : 'waiting_for_more'
+        console.log(`[free-match] Player joined room (${newParticipants.length}/${maxPlayers}):`, room.room_pda.slice(0, 12))
+        return json({ status: joinStatus, roomPda: room.room_pda, playersJoined: newParticipants.length, maxPlayers })
       }
 
       // No match found — create new free room
@@ -150,7 +164,7 @@ serve(async (req) => {
 
       const { data: session, error } = await supabase
         .from('game_sessions')
-        .select('status, status_int, player2_wallet, player1_wallet, participants, display_names')
+        .select('status, status_int, player1_wallet, player2_wallet, participants, display_names, max_players')
         .eq('room_pda', roomPda)
         .maybeSingle()
 
@@ -217,7 +231,7 @@ serve(async (req) => {
 
       const { data: session, error: fetchErr } = await supabase
         .from('game_sessions')
-        .select('player1_wallet, player2_wallet, status, status_int')
+        .select('player1_wallet, player2_wallet, status, status_int, participants')
         .eq('room_pda', roomPda)
         .maybeSingle()
 
@@ -225,19 +239,44 @@ serve(async (req) => {
         return json({ error: 'Room not found' }, 404)
       }
 
-      // Only allow leaving active free games
-      if (session.status !== 'active') {
-        return json({ error: 'Room not active' }, 400)
+      // Allow leaving both active and waiting rooms
+      if (session.status !== 'active' && session.status !== 'waiting') {
+        return json({ error: 'Room not active or waiting' }, 400)
       }
 
-      // Determine winner (the other player)
+      const participants: string[] = session.participants || []
+      if (!participants.includes(playerId)) {
+        return json({ error: 'Not a participant' }, 403)
+      }
+
+      // If room is waiting and player is not creator, just remove them from participants
+      if (session.status === 'waiting' && session.player1_wallet !== playerId) {
+        const newParticipants = participants.filter(p => p !== playerId)
+        const updatePayload: Record<string, unknown> = {
+          participants: newParticipants,
+          updated_at: new Date().toISOString(),
+        }
+        // Clear player2 if they were player2
+        if (session.player2_wallet === playerId) {
+          updatePayload.player2_wallet = null
+        }
+        const { error: updateErr } = await supabase
+          .from('game_sessions')
+          .update(updatePayload)
+          .eq('room_pda', roomPda)
+
+        if (updateErr) {
+          return json({ error: updateErr.message }, 500)
+        }
+        return json({ status: 'left' })
+      }
+
+      // Active game: determine winner (the other players continue, or single opponent wins)
       let winnerWallet: string | null = null
       if (session.player1_wallet === playerId) {
         winnerWallet = session.player2_wallet
       } else if (session.player2_wallet === playerId) {
         winnerWallet = session.player1_wallet
-      } else {
-        return json({ error: 'Not a participant' }, 403)
       }
 
       const { error: updateErr } = await supabase
@@ -282,35 +321,49 @@ serve(async (req) => {
         return json({ error: 'Room no longer available', status: room.status }, 409)
       }
 
-      if (room.player1_wallet === playerId) {
-        return json({ status: 'rejoined', roomPda })
+      const existingParticipants: string[] = room.participants || []
+
+      // Already a participant?
+      if (existingParticipants.includes(playerId)) {
+        return json({ status: room.player1_wallet === playerId ? 'rejoined' : 'joined', roomPda })
       }
 
-      if (room.player2_wallet === playerId) {
-        return json({ status: 'joined', roomPda })
+      // Room full?
+      if (existingParticipants.length >= room.max_players) {
+        return json({ error: 'Room is full' }, 409)
       }
 
       // Merge display names
       const existingNames = (room.display_names as Record<string, string>) || {}
       const mergedNames = { ...existingNames, [playerId]: displayName || `Guest-${playerId.slice(-4).toUpperCase()}` }
+      const newParticipants = [...existingParticipants, playerId]
+      const isFull = newParticipants.length >= room.max_players
+
+      const updatePayload: Record<string, unknown> = {
+        participants: newParticipants,
+        display_names: mergedNames,
+        updated_at: new Date().toISOString(),
+      }
+
+      if (!room.player2_wallet) {
+        updatePayload.player2_wallet = playerId
+      }
+
+      if (isFull) {
+        updatePayload.status = 'active'
+        updatePayload.status_int = 2
+        updatePayload.current_turn_wallet = room.player1_wallet
+        updatePayload.starting_player_wallet = room.player1_wallet
+        updatePayload.p1_ready = true
+        updatePayload.p2_ready = true
+        updatePayload.start_roll_finalized = true
+        updatePayload.turn_started_at = new Date().toISOString()
+        updatePayload.waiting_started_at = null
+      }
 
       const { error: joinErr } = await supabase
         .from('game_sessions')
-        .update({
-          player2_wallet: playerId,
-          participants: [room.player1_wallet, playerId],
-          display_names: mergedNames,
-          status: 'active',
-          status_int: 2,
-          current_turn_wallet: room.player1_wallet,
-          starting_player_wallet: room.player1_wallet,
-          p1_ready: true,
-          p2_ready: true,
-          start_roll_finalized: true,
-          turn_started_at: new Date().toISOString(),
-          waiting_started_at: null,
-          updated_at: new Date().toISOString(),
-        })
+        .update(updatePayload)
         .eq('room_pda', roomPda)
         .eq('status', 'waiting')
 
@@ -319,8 +372,9 @@ serve(async (req) => {
         return json({ error: joinErr.message }, 500)
       }
 
-      console.log('[free-match] join_specific succeeded:', roomPda.slice(0, 16))
-      return json({ status: 'joined', roomPda })
+      const joinStatus = isFull ? 'joined' : 'waiting_for_more'
+      console.log(`[free-match] join_specific (${newParticipants.length}/${room.max_players}):`, roomPda.slice(0, 16))
+      return json({ status: joinStatus, roomPda, playersJoined: newParticipants.length, maxPlayers: room.max_players })
     }
 
     return json({ error: 'Unknown action' }, 400)
