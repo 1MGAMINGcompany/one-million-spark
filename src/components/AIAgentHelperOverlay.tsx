@@ -9,7 +9,7 @@
  *   with board-aware coaching + skill level picker
  * Everywhere else → full bottom sheet
  *
- * Interaction: TAP to open, HOLD (300ms+) to drag.
+ * Interaction: TOUCH 500ms to open, HOLD 800ms+ to drag.
  */
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
@@ -194,7 +194,8 @@ function trackMonkey(event: string, context: string, lang: string, metadata?: st
 const BUBBLE_SIZE = 64;
 const FIRST_VISIT_KEY = "aihelper-welcomed";
 const SESSION_OPENED_KEY = "aihelper-session-opened";
-const HOLD_DELAY = 300; // ms to distinguish tap from hold
+const OPEN_DELAY = 500; // ms touch to open panel
+const DRAG_DELAY = 800; // ms hold before drag mode activates
 
 export default function AIAgentHelperOverlay() {
   const location = useLocation();
@@ -302,16 +303,34 @@ export default function AIAgentHelperOverlay() {
     return () => { window.removeEventListener("resize", handler); window.removeEventListener("orientationchange", handler); };
   }, [isMultiplayer, location.pathname]);
 
-  // ─── TAP to open, HOLD to drag ───
+  // ─── TOUCH 500ms to open, HOLD 800ms+ to drag ───
+  const openTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const onPointerDown = useCallback((e: React.PointerEvent) => {
     const el = e.currentTarget as HTMLElement;
     el.setPointerCapture(e.pointerId);
     dragRef.current = { startX: e.clientX, startY: e.clientY, startPosX: pos.x, startPosY: pos.y, holding: false, dragging: false };
 
+    // After OPEN_DELAY (500ms), open the panel
+    openTimerRef.current = setTimeout(() => {
+      openTimerRef.current = null;
+      // Only open if we haven't started dragging
+      if (!dragRef.current.dragging) {
+        setSheetOpen(true);
+        trackMonkey("bubble_open", pageContext, lang);
+      }
+    }, OPEN_DELAY);
+
+    // After DRAG_DELAY (800ms), enable drag mode
     holdTimerRef.current = setTimeout(() => {
       dragRef.current.holding = true;
-    }, HOLD_DELAY);
-  }, [pos]);
+      // Cancel open if drag mode activates
+      if (openTimerRef.current) {
+        clearTimeout(openTimerRef.current);
+        openTimerRef.current = null;
+      }
+    }, DRAG_DELAY);
+  }, [pos, pageContext, lang]);
 
   const onPointerMove = useCallback((e: React.PointerEvent) => {
     const d = dragRef.current;
@@ -319,10 +338,10 @@ export default function AIAgentHelperOverlay() {
     const dy = e.clientY - d.startY;
     const dist = Math.abs(dx) + Math.abs(dy);
 
-    // If finger moved significantly before hold timer fired, cancel hold (it's a sloppy tap)
-    if (!d.holding && dist > 10 && holdTimerRef.current) {
-      clearTimeout(holdTimerRef.current);
-      holdTimerRef.current = null;
+    // If finger moved significantly before timers, cancel both (accidental touch)
+    if (!d.holding && dist > 12) {
+      if (holdTimerRef.current) { clearTimeout(holdTimerRef.current); holdTimerRef.current = null; }
+      if (openTimerRef.current) { clearTimeout(openTimerRef.current); openTimerRef.current = null; }
     }
 
     // Only drag if hold threshold was reached
@@ -333,10 +352,8 @@ export default function AIAgentHelperOverlay() {
   }, []);
 
   const onPointerUp = useCallback(() => {
-    if (holdTimerRef.current) {
-      clearTimeout(holdTimerRef.current);
-      holdTimerRef.current = null;
-    }
+    if (holdTimerRef.current) { clearTimeout(holdTimerRef.current); holdTimerRef.current = null; }
+    if (openTimerRef.current) { clearTimeout(openTimerRef.current); openTimerRef.current = null; }
 
     const d = dragRef.current;
     if (d.dragging) {
@@ -344,13 +361,10 @@ export default function AIAgentHelperOverlay() {
       const vw = window.innerWidth; const vh = window.innerHeight;
       const zones = getNoGoZones(location.pathname, vw, vh);
       setPos(clampToSafe(pos.x, pos.y, BUBBLE_SIZE, vw, vh, zones));
-    } else {
-      // Quick tap → open
-      setSheetOpen(true);
-      trackMonkey("bubble_open", pageContext, lang);
     }
+    // No instant-tap open — opening is handled by the 500ms timer in onPointerDown
     dragRef.current = { ...d, holding: false, dragging: false };
-  }, [pos, location.pathname, pageContext, lang]);
+  }, [pos, location.pathname]);
 
   // Get board context for AI routes
   const getBoardContext = useCallback(() => {

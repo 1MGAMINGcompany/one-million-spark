@@ -34,6 +34,12 @@ if (typeof window !== "undefined") {
       reason: String(e.reason),
     });
   });
+
+
+  // Suppress native browser PWA install prompt (re-enable when ready)
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault();
+  });
 }
 
 createRoot(document.getElementById("root")!).render(
