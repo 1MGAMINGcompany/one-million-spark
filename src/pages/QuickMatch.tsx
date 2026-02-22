@@ -231,7 +231,7 @@ export default function QuickMatch() {
         });
         if (error || !data?.session) return;
 
-        if (data.session.status === "active" && data.session.player2_wallet) {
+        if (data.session.status === "active" && data.session.participants?.length >= (data.session.max_players || 2)) {
           if (hasNavigatedRef.current) return;
           hasNavigatedRef.current = true;
           clearInterval(pollInterval);
@@ -274,6 +274,13 @@ export default function QuickMatch() {
           setActiveRoom(data.roomPda);
           toast({ title: t("quickMatch.freeMatchJoined") });
           navigate(`/play/${data.roomPda}`);
+        } else if (data.status === "waiting_for_more") {
+          // Multi-player room (Ludo 3/4): joined but not full yet
+          setActiveRoom(data.roomPda);
+          setCreatedRoomPda(data.roomPda);
+          requestNotificationPermission();
+          setPhase("searching");
+          toast({ title: t("quickMatch.freeMatchCreated") });
         } else if (data.status === "created") {
           setActiveRoom(data.roomPda);
           setCreatedRoomPda(data.roomPda);
