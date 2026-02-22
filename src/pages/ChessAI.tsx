@@ -360,16 +360,22 @@ const ChessAI = () => {
     setIsThinking(false);
   }, [t]);
 
-  // Publish context for AI helper overlay
+  // Publish context for AI helper overlay (board-aware)
   useEffect(() => {
+    const fen = game.fen();
+    const turn = game.turn() === "w" ? "white" : "black";
+    const inCheck = game.isCheck();
+    const lastMoves = moveHistory.slice(-6);
+    const boardSummary = `FEN: ${fen} | Turn: ${turn}${inCheck ? ' (IN CHECK)' : ''} | Last moves: ${lastMoves.join(', ') || 'none'} | Total moves: ${moveHistory.length} | You play White (human) vs Black (AI ${difficulty})`;
     (window as any).__AI_HELPER_CONTEXT__ = {
       gameType: "chess",
       moveHistory,
-      position: game.fen(),
-      turn: game.turn() === "w" ? "white" : "black",
+      position: fen,
+      turn,
+      boardSummary,
     };
     return () => { delete (window as any).__AI_HELPER_CONTEXT__; };
-  }, [moveHistory, game]);
+  }, [moveHistory, game, difficulty]);
 
   const formattedMoves = [];
   for (let i = 0; i < moveHistory.length; i += 2) {

@@ -288,16 +288,27 @@ const CheckersAI = () => {
     return null;
   }, [getAllMoves]);
 
-  // Publish context for AI helper overlay
+  // Publish context for AI helper overlay (board-aware)
   useEffect(() => {
+    let goldNormal = 0, goldKing = 0, obsNormal = 0, obsKing = 0;
+    for (let r = 0; r < BOARD_SIZE; r++) {
+      for (let c = 0; c < BOARD_SIZE; c++) {
+        const p = board[r][c];
+        if (!p) continue;
+        if (p.player === 'gold') { p.type === 'king' ? goldKing++ : goldNormal++; }
+        else { p.type === 'king' ? obsKing++ : obsNormal++; }
+      }
+    }
+    const boardSummary = `You (gold): ${goldNormal} normal + ${goldKing} kings | AI (obsidian): ${obsNormal} normal + ${obsKing} kings | Turn: ${currentPlayer === 'gold' ? 'You' : 'AI'} | Difficulty: ${difficulty}`;
     (window as any).__AI_HELPER_CONTEXT__ = {
       gameType: "checkers",
       moveHistory: [],
       position: JSON.stringify(board.map(row => row.map(p => p ? `${p.player[0]}${p.type[0]}` : "."))),
       turn: currentPlayer,
+      boardSummary,
     };
     return () => { delete (window as any).__AI_HELPER_CONTEXT__; };
-  }, [board, currentPlayer]);
+  }, [board, currentPlayer, difficulty]);
 
   // Handle piece selection and moves
   const handleSquareClick = (row: number, col: number) => {

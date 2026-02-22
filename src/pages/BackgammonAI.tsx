@@ -488,16 +488,28 @@ const BackgammonAI = () => {
     setGameResultInfo(null);
   }, [t]);
 
-  // Publish context for AI helper overlay
+  // Publish context for AI helper overlay (board-aware)
   useEffect(() => {
+    // Build pip counts
+    let playerPip = 0, aiPip = 0;
+    for (let i = 0; i < 24; i++) {
+      const v = gameState.points[i];
+      if (v > 0) playerPip += v * (24 - i);
+      if (v < 0) aiPip += Math.abs(v) * (i + 1);
+    }
+    playerPip += gameState.bar.player * 25;
+    aiPip += gameState.bar.ai * 25;
+    const diceStr = dice.length ? `Dice: ${dice.join(',')}` : 'No dice';
+    const boardSummary = `You (player) pip=${playerPip} bar=${gameState.bar.player} off=${gameState.bearOff.player} | AI pip=${aiPip} bar=${gameState.bar.ai} off=${gameState.bearOff.ai} | ${diceStr} | Turn: ${currentPlayer} | Difficulty: ${difficulty}`;
     (window as any).__AI_HELPER_CONTEXT__ = {
       gameType: "backgammon",
-      moveHistory: [], // backgammon doesn't track SAN; provide board state
+      moveHistory: [],
       position: JSON.stringify({ points: gameState.points, bar: gameState.bar, bearOff: gameState.bearOff }),
       turn: currentPlayer,
+      boardSummary,
     };
     return () => { delete (window as any).__AI_HELPER_CONTEXT__; };
-  }, [gameState, currentPlayer]);
+  }, [gameState, currentPlayer, dice, difficulty]);
 
   // ============== DESKTOP POINT RENDERING ==============
   const renderDesktopPoint = (index: number, isTop: boolean) => {
