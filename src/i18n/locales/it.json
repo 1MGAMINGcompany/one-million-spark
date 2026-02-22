@@ -935,7 +935,9 @@
     "playForSol": "Gioca per SOL",
     "requiresWallet": "Richiede portafoglio",
     "mode": "Modalità",
-    "yourName": "Il Tuo Nome"
+    "yourName": "Il Tuo Nome",
+    "activeRoomExists": "Hai già una stanza aperta",
+    "cancelOrRejoin": "Annulla la tua stanza esistente o rientra"
   },
   "aiWinCard": {
     "victory": "VITTORIA",

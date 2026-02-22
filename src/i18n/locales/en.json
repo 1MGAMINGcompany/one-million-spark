@@ -1470,7 +1470,9 @@
     "playForSol": "Play for SOL",
     "requiresWallet": "Requires wallet",
     "mode": "Mode",
-    "yourName": "Your Name"
+    "yourName": "Your Name",
+    "activeRoomExists": "You already have an open room",
+    "cancelOrRejoin": "Cancel your existing room first or rejoin it"
   },
   "aiWinCard": {
     "victory": "VICTORY",

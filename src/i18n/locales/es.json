@@ -1200,7 +1200,9 @@
     "playForSol": "Jugar por SOL",
     "requiresWallet": "Requiere billetera",
     "mode": "Modo",
-    "yourName": "Tu Nombre"
+    "yourName": "Tu Nombre",
+    "activeRoomExists": "Ya tienes una sala abierta",
+    "cancelOrRejoin": "Cancela tu sala existente o vuelve a entrar"
   },
   "aiWinCard": {
     "victory": "VICTORIA",

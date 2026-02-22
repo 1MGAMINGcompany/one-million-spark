@@ -979,7 +979,9 @@
     "playForSol": "Um SOL spielen",
     "requiresWallet": "Wallet erforderlich",
     "mode": "Modus",
-    "yourName": "Dein Name"
+    "yourName": "Dein Name",
+    "activeRoomExists": "Du hast bereits einen offenen Raum",
+    "cancelOrRejoin": "Storniere deinen bestehenden Raum oder tritt ihm wieder bei"
   },
   "aiWinCard": {
     "victory": "SIEG",

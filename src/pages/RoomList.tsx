@@ -33,6 +33,7 @@ import { UnresolvedRoomModal } from "@/components/UnresolvedRoomModal";
 import { supabase } from "@/integrations/supabase/client";
 import { BUILD_VERSION } from "@/lib/buildVersion";
 import { useRoomRealtimeAlert } from "@/hooks/useRoomRealtimeAlert";
+import { getAnonId, getDisplayName, setActiveRoom, clearActiveRoom } from "@/lib/anonIdentity";
 
 interface FreeRoom {
   room_pda: string;
@@ -172,17 +173,17 @@ export default function RoomList() {
 
   // Join a specific free room
   const handleJoinFreeRoom = useCallback(async (roomPda: string) => {
-    if (!isConnected || !address) {
-      toast({ title: "Connect wallet to join", variant: "destructive" });
-      return;
-    }
+    // Free rooms support both wallet and anon identity
+    const playerId = address || getAnonId();
+    const displayName = address ? undefined : getDisplayName();
     setJoiningFreeRoom(roomPda);
     try {
       const { data, error } = await supabase.functions.invoke("free-match", {
-        body: { action: "join_specific", roomPda, wallet: address },
+        body: { action: "join_specific", roomPda, playerId, wallet: address || undefined, displayName },
       });
       if (error) throw error;
-      if (data.status === "joined" || data.status === "rejoined") {
+      if (data.status === "joined" || data.status === "rejoined" || data.status === "waiting_for_more") {
+        setActiveRoom(roomPda);
         navigate(`/play/${roomPda}`);
       }
     } catch (e: any) {
@@ -190,16 +191,17 @@ export default function RoomList() {
     } finally {
       setJoiningFreeRoom(null);
     }
-  }, [isConnected, address, navigate, toast]);
+  }, [address, navigate, toast]);
 
   // Cancel own waiting free room
   const handleCancelFreeRoom = useCallback(async (roomPda: string) => {
-    if (!address) return;
+    const playerId = address || getAnonId();
     setCancellingFreeRoom(roomPda);
     try {
       await supabase.functions.invoke("free-match", {
-        body: { action: "cancel", roomPda, wallet: address },
+        body: { action: "cancel", roomPda, playerId, wallet: address || undefined },
       });
+      clearActiveRoom();
       setFreeRooms((prev) => prev.filter((r) => r.room_pda !== roomPda));
       toast({ title: "Room cancelled" });
     } catch (e: any) {
@@ -410,7 +412,8 @@ export default function RoomList() {
           </CardHeader>
           <CardContent className="space-y-2">
             {freeRooms.map((room) => {
-              const isMyRoom = address && room.player1_wallet === address;
+              const anonId = getAnonId();
+              const isMyRoom = (address && room.player1_wallet === address) || room.player1_wallet === anonId;
               const isJoining = joiningFreeRoom === room.room_pda;
               const isCancelling = cancellingFreeRoom === room.room_pda;
               const gameName = FREE_GAME_NAMES[room.game_type] || room.game_type;
@@ -466,7 +469,7 @@ export default function RoomList() {
                         size="sm"
                         variant="outline"
                         className="border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 text-xs"
-                        disabled={isJoining || !isConnected}
+                        disabled={isJoining}
                         onClick={() => handleJoinFreeRoom(room.room_pda)}
                         title={!isConnected ? "Connect wallet to join" : undefined}
                       >
