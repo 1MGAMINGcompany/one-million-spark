@@ -384,7 +384,7 @@ export default function AIAgentHelperOverlay() {
             }}
           >
             <img
-              src={monkeyImg}
+              src={monkeyImages[bubbleState]}
               alt="AI Helper"
               className="w-full h-full object-cover"
               draggable={false}
@@ -411,7 +411,7 @@ export default function AIAgentHelperOverlay() {
             <div className="flex items-center justify-between px-4 py-3 border-b border-primary/20">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full overflow-hidden border border-primary">
-                  <img src={monkeyImg} alt="" className="w-full h-full object-cover" />
+                  <img src={monkeyIdle} alt="" className="w-full h-full object-cover" />
                 </div>
                 <div>
                   <h3 className="font-bold text-foreground text-sm">{t(lang, "title")}</h3>
