@@ -969,7 +969,9 @@
     "playForSol": "SOL के लिए खेलें",
     "requiresWallet": "वॉलेट आवश्यक",
     "mode": "मोड",
-    "yourName": "आपका नाम"
+    "yourName": "आपका नाम",
+    "activeRoomExists": "आपके पास पहले से एक खुला कमरा है",
+    "cancelOrRejoin": "अपना मौजूदा कमरा रद्द करें या फिर से जुड़ें"
   },
   "aiWinCard": {
     "victory": "जीत",

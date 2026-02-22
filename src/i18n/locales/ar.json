@@ -925,7 +925,9 @@
     "playForSol": "العب مقابل SOL",
     "requiresWallet": "يتطلب محفظة",
     "mode": "الوضع",
-    "yourName": "اسمك"
+    "yourName": "اسمك",
+    "activeRoomExists": "لديك غرفة مفتوحة بالفعل",
+    "cancelOrRejoin": "ألغِ غرفتك الحالية أو انضم إليها مجدداً"
   },
   "aiWinCard": {
     "victory": "انتصار",

@@ -104,9 +104,15 @@ export default function PlayRoom() {
           };
           const gameType = gameTypeMap[session.game_type] ?? GameType.Chess;
 
-          // If not active, redirect to lobby
+          // If not active: waiting rooms go back to QuickMatch (resume searching),
+          // finished/cancelled rooms go to room-list
           if (session.status !== "active") {
-            navigate(`/room/${roomPdaParam}`, { replace: true });
+            if (session.status === "waiting") {
+              navigate(`/quick-match`, { replace: true });
+            } else {
+              clearActiveRoom();
+              navigate(`/room-list`, { replace: true });
+            }
             return;
           }
 

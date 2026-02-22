@@ -129,6 +129,15 @@ export default function QuickMatch() {
     if (!isLudo) setLudoPlayerCount(2);
   }, [isLudo]);
 
+  // ── Active free room state (for blocking duplicate creation) ──
+  const [existingFreeRoom, setExistingFreeRoom] = useState<{
+    roomPda: string;
+    status: string;
+    gameType?: string;
+    participants?: string[];
+    maxPlayers?: number;
+  } | null>(null);
+
   // ── Auto-rejoin check on mount ──
   useEffect(() => {
     const activeRoomPda = getActiveRoom();
@@ -144,26 +153,47 @@ export default function QuickMatch() {
           return;
         }
 
-        const anonId = getAnonId();
+        const playerId = address || getAnonId();
         const session = data.session;
+        const isParticipant = session.participants?.includes(playerId) ||
+          session.player1_wallet === playerId || session.player2_wallet === playerId;
 
-        if (session.status === "active" && 
-            (session.player1_wallet === anonId || session.player2_wallet === anonId)) {
+        if (!isParticipant) {
+          clearActiveRoom();
+          return;
+        }
+
+        if (session.status === "active") {
+          // Game is live — go straight to it
           toast({ title: t("quickPlay.rejoining") });
           navigate(`/play/${activeRoomPda}`);
           return;
         }
 
-        // Room cancelled/expired/finished
-        if (session.status !== "waiting" && session.status !== "active") {
-          clearActiveRoom();
+        if (session.status === "waiting") {
+          // Room still waiting for opponents — store it and resume searching phase
+          setExistingFreeRoom({
+            roomPda: activeRoomPda,
+            status: session.status,
+            gameType: session.game_type,
+            participants: session.participants,
+            maxPlayers: session.max_players,
+          });
+          setCreatedRoomPda(activeRoomPda);
+          setPhase("searching");
+          hasNavigatedRef.current = false;
+          return;
         }
+
+        // Room cancelled/expired/finished — clear
+        clearActiveRoom();
+        setExistingFreeRoom(null);
       } catch {
         clearActiveRoom();
       }
     };
     checkRejoin();
-  }, [navigate, toast, t]);
+  }, [navigate, toast, t, address]);
 
   // ── Countdown timer ──
   useEffect(() => {
@@ -253,6 +283,16 @@ export default function QuickMatch() {
 
     // FREE MATCH: DB-only matchmaking — no login required
     if (isFreeMode) {
+      // Block if user already has an open free room
+      if (existingFreeRoom && (existingFreeRoom.status === "waiting" || existingFreeRoom.status === "active")) {
+        toast({
+          title: t("quickPlay.activeRoomExists"),
+          description: t("quickPlay.cancelOrRejoin"),
+          variant: "destructive",
+        });
+        return;
+      }
+
       setIsWorking(true);
       hasNavigatedRef.current = false;
       const playerId = address || getAnonId(); // Use wallet if connected, else anon ID
@@ -274,6 +314,22 @@ export default function QuickMatch() {
           setActiveRoom(data.roomPda);
           toast({ title: t("quickMatch.freeMatchJoined") });
           navigate(`/play/${data.roomPda}`);
+        } else if (data.status === "already_has_room") {
+          // Player already has an active free room — redirect to it
+          setActiveRoom(data.roomPda);
+          setCreatedRoomPda(data.roomPda);
+          setExistingFreeRoom({
+            roomPda: data.roomPda,
+            status: data.existingStatus,
+            gameType: data.existingGameType,
+          });
+          if (data.existingStatus === "active") {
+            toast({ title: t("quickPlay.rejoining") });
+            navigate(`/play/${data.roomPda}`);
+          } else {
+            setPhase("searching");
+            toast({ title: t("quickPlay.activeRoomExists"), description: t("quickPlay.cancelOrRejoin") });
+          }
         } else if (data.status === "waiting_for_more") {
           // Multi-player room (Ludo 3/4): joined but not full yet
           setActiveRoom(data.roomPda);
@@ -464,6 +520,7 @@ export default function QuickMatch() {
         }
       }
       clearActiveRoom();
+      setExistingFreeRoom(null);
       setCreatedRoomPda(null);
       setPhase("selecting");
       navigate('/room-list');

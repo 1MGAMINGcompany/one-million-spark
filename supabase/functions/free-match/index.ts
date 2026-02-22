@@ -46,6 +46,26 @@ serve(async (req) => {
         return json({ error: 'missing gameType or player identity' }, 400)
       }
 
+      // ── Prevent duplicate rooms: check if player already has an open free room ──
+      const { data: existingRooms, error: existingErr } = await supabase
+        .from('game_sessions')
+        .select('room_pda, status, game_type, participants, max_players')
+        .eq('mode', 'free')
+        .in('status', ['waiting', 'active'])
+        .contains('participants', [playerId])
+        .limit(1)
+
+      if (!existingErr && existingRooms && existingRooms.length > 0) {
+        const existing = existingRooms[0]
+        console.log('[free-match] Player already has active free room:', existing.room_pda.slice(0, 16))
+        return json({
+          status: existing.status === 'active' ? 'joined' : 'already_has_room',
+          roomPda: existing.room_pda,
+          existingGameType: existing.game_type,
+          existingStatus: existing.status,
+        })
+      }
+
       const fifteenMinAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString()
 
       // Search for existing waiting free room

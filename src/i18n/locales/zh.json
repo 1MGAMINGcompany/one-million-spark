@@ -922,7 +922,9 @@
     "playForSol": "用SOL对战",
     "requiresWallet": "需要钱包",
     "mode": "模式",
-    "yourName": "你的名字"
+    "yourName": "你的名字",
+    "activeRoomExists": "你已有一个开放的房间",
+    "cancelOrRejoin": "请先取消现有房间或重新加入"
   },
   "aiWinCard": {
     "victory": "胜利",
