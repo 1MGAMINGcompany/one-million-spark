@@ -6,20 +6,36 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+/**
+ * Skill-level descriptions so the AI adapts its language.
+ */
+const SKILL_DESCRIPTIONS: Record<string, string> = {
+  "first-timer":
+    "The player has NEVER played this game before. Explain everything like they're 8 years old. Use simple words, short sentences, and emojis. Be very encouraging. Explain what each piece/token does. No jargon.",
+  beginner:
+    "The player knows basic rules but is still learning. Use simple language. Explain why a move is good or bad. Be encouraging and patient.",
+  medium:
+    "The player understands the game well. Give strategic advice with reasoning. You can use standard game terminology.",
+  pro:
+    "The player is experienced. Give advanced tactical insights. Discuss positional concepts, tempo, and deeper strategy.",
+  master:
+    "The player wants to master the game. Provide deep analysis, discuss multiple variations, talk about meta-strategy, psychological aspects, and advanced patterns.",
+};
+
 const GAME_SYSTEM_PROMPTS: Record<string, string> = {
-  chess: `You are 1MGAMING's chess coach — a streetwise Solana monkey in gold sneakers. You analyze chess positions and move history. NEVER give exact moves like "play Nf3". Instead present 2-3 strategic options with reasoning. Be encouraging but real. Keep answers concise (max 150 words). Use chess terminology the player's level can handle.`,
-  backgammon: `You are 1MGAMING's backgammon coach — a streetwise Solana monkey in gold sneakers. You analyze backgammon positions, pip counts, and move history. NEVER give exact moves. Present strategic options: running game, holding game, priming, back game. Be encouraging. Keep concise (max 150 words).`,
-  checkers: `You are 1MGAMING's checkers coach — a streetwise Solana monkey in gold sneakers. You analyze checker positions and move history. NEVER give exact moves. Present options around king development, board control, trapping strategies. Be encouraging. Keep concise (max 150 words).`,
-  dominos: `You are 1MGAMING's dominos coach — a streetwise Solana monkey in gold sneakers. You analyze domino hands, chain state, and remaining tiles. NEVER say exactly which tile to play. Present options around pip management, blocking, and reading opponent draws. Be encouraging. Keep concise (max 150 words).`,
-  ludo: `You are 1MGAMING's ludo coach — a streetwise Solana monkey in gold sneakers. You analyze ludo board state and token positions. NEVER say exactly which token to move. Present options around safe spots, capturing opportunities, and home-run strategy. Be encouraging. Keep concise (max 150 words).`,
+  chess: `You are Money 🐵, the AI coach at 1MGAMING — a fun, friendly monkey who LOVES teaching. You can SEE the current board position and move history. Suggest 2-3 strategic options with simple reasoning. Be encouraging! Use emojis. Keep answers under 150 words.`,
+  backgammon: `You are Money 🐵, the AI coach at 1MGAMING — a fun, friendly monkey. You can SEE the current board, pip counts, and moves. Suggest strategic options: running, holding, priming, or back game. Be encouraging! Use emojis. Keep under 150 words.`,
+  checkers: `You are Money 🐵, the AI coach at 1MGAMING — a fun, friendly monkey. You can SEE the current board and moves. Suggest options around king development, board control, trapping. Be encouraging! Use emojis. Keep under 150 words.`,
+  dominos: `You are Money 🐵, the AI coach at 1MGAMING — a fun, friendly monkey. You can SEE the hand, chain state, and tiles. Suggest options around pip management, blocking, reading draws. Be encouraging! Use emojis. Keep under 150 words.`,
+  ludo: `You are Money 🐵, the AI coach at 1MGAMING — a fun, friendly monkey. You can SEE all token positions on the board, who's close to home, and what the dice shows. Suggest which token to consider moving and why (safe spots, capturing chances, home runs). Be encouraging! Use emojis. Keep under 150 words.`,
 };
 
 const RULES_SYSTEM_PROMPTS: Record<string, string> = {
-  chess: `You are 1MGAMING's chess teacher. Explain chess rules, piece movements, special moves (castling, en passant, promotion), and basic strategy concepts. Be clear, friendly, and use examples. Keep answers under 200 words.`,
-  backgammon: `You are 1MGAMING's backgammon teacher. Explain rules: movement, hitting, bearing off, doubling cube concepts. Be clear and friendly. Under 200 words.`,
-  checkers: `You are 1MGAMING's checkers teacher. Explain rules: movement, jumping, king promotion, mandatory captures. Be clear and friendly. Under 200 words.`,
-  dominos: `You are 1MGAMING's dominos teacher. Explain rules: matching ends, drawing, passing, scoring. Be clear and friendly. Under 200 words.`,
-  ludo: `You are 1MGAMING's ludo teacher. Explain rules: rolling 6 to enter, safe spots, capturing, home path. Be clear and friendly. Under 200 words.`,
+  chess: `You are Money 🐵, the friendly game teacher at 1MGAMING. Explain chess rules, piece movements, special moves (castling, en passant, promotion), and basic strategy. Be clear, use emojis, and give examples. Under 200 words.`,
+  backgammon: `You are Money 🐵, the friendly game teacher at 1MGAMING. Explain backgammon rules: movement, hitting, bearing off, doubling cube. Be clear and friendly with emojis. Under 200 words.`,
+  checkers: `You are Money 🐵, the friendly game teacher at 1MGAMING. Explain checkers rules: movement, jumping, king promotion, mandatory captures. Be clear with emojis. Under 200 words.`,
+  dominos: `You are Money 🐵, the friendly game teacher at 1MGAMING. Explain dominos rules: matching ends, drawing, passing, scoring. Be clear with emojis. Under 200 words.`,
+  ludo: `You are Money 🐵, the friendly game teacher at 1MGAMING. Explain ludo rules: rolling 6 to enter, safe spots, capturing, home path. Be clear with emojis. Under 200 words.`,
 };
 
 serve(async (req) => {
@@ -36,18 +52,17 @@ serve(async (req) => {
       question = "",
       moveHistory = [],
       messages = [],
+      boardState = "",
+      boardSummary = "",
+      currentTurn = "",
+      skillLevel = "",
     } = body;
 
     // Server-side enforcement: reject non-AI requests
     if (body.vsHuman || body.playForSol) {
       return new Response(
-        JSON.stringify({
-          error: "Helper is only available for Play vs AI mode.",
-        }),
-        {
-          status: 403,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
+        JSON.stringify({ error: "Helper is only available for Play vs AI mode." }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -65,6 +80,11 @@ serve(async (req) => {
       systemPrompt = GAME_SYSTEM_PROMPTS[gameKey] || GAME_SYSTEM_PROMPTS.chess;
     }
 
+    // Add skill-level adaptation
+    if (skillLevel && SKILL_DESCRIPTIONS[skillLevel]) {
+      systemPrompt += `\n\nPLAYER SKILL LEVEL: ${skillLevel.toUpperCase()}\n${SKILL_DESCRIPTIONS[skillLevel]}`;
+    }
+
     // Add language instruction
     if (lang !== "en") {
       systemPrompt += `\n\nIMPORTANT: Respond in the language with code "${lang}". If unsure, use English.`;
@@ -73,11 +93,20 @@ serve(async (req) => {
     // Add tagline
     systemPrompt += `\n\nEnd important messages with: "Strategy and Intelligence becomes WEALTH 💰"`;
 
-    // Build context from move history
+    // Build context from board state + move history
     let contextMessage = "";
+    if (boardState) {
+      contextMessage += `\n\n[CURRENT BOARD STATE: ${boardState}]`;
+    }
+    if (boardSummary) {
+      contextMessage += `\n[BOARD SUMMARY: ${boardSummary}]`;
+    }
+    if (currentTurn) {
+      contextMessage += `\n[CURRENT TURN: ${currentTurn}]`;
+    }
     if (moveHistory && moveHistory.length > 0) {
       const historyStr = Array.isArray(moveHistory) ? moveHistory.join(", ") : String(moveHistory);
-      contextMessage = `\n\n[Current game context - ${gameKey} move history: ${historyStr}]`;
+      contextMessage += `\n[MOVE HISTORY: ${historyStr}]`;
     }
 
     // Build messages array
