@@ -8,7 +8,17 @@ import { useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { X, Send, Trash2, Share2 } from "lucide-react";
 import { streamTrustAgent } from "@/lib/trustAgentClient";
-import monkeyImg from "@/assets/ai-helper-monkey.jpg";
+import monkeyIdle from "@/assets/monkey-idle.png";
+import monkeyThinking from "@/assets/monkey-thinking.png";
+import monkeyWarning from "@/assets/monkey-warning.png";
+import monkeySuccess from "@/assets/monkey-success.png";
+
+const monkeyImages: Record<BubbleState, string> = {
+  idle: monkeyIdle,
+  thinking: monkeyThinking,
+  warning: monkeyWarning,
+  success: monkeySuccess,
+};
 
 // ─── Types ───
 type BubbleState = "idle" | "thinking" | "warning" | "success";
@@ -374,7 +384,7 @@ export default function AIAgentHelperOverlay() {
             }}
           >
             <img
-              src={monkeyImg}
+              src={monkeyImages[bubbleState]}
               alt="AI Helper"
               className="w-full h-full object-cover"
               draggable={false}
@@ -401,7 +411,7 @@ export default function AIAgentHelperOverlay() {
             <div className="flex items-center justify-between px-4 py-3 border-b border-primary/20">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full overflow-hidden border border-primary">
-                  <img src={monkeyImg} alt="" className="w-full h-full object-cover" />
+                  <img src={monkeyIdle} alt="" className="w-full h-full object-cover" />
                 </div>
                 <div>
                   <h3 className="font-bold text-foreground text-sm">{t(lang, "title")}</h3>
