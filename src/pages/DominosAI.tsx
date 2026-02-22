@@ -438,16 +438,21 @@ const DominosAI = () => {
     );
   };
 
-  // Publish context for AI helper overlay
+  // Publish context for AI helper overlay (board-aware)
   useEffect(() => {
+    const ends = getChainEnds();
+    const handStr = playerHand.map(d => `[${d.left}|${d.right}]`).join(' ');
+    const endsStr = ends ? `Left end: ${ends.left}, Right end: ${ends.right}` : 'Empty board';
+    const boardSummary = `Your hand: ${handStr} | ${endsStr} | Chain length: ${chain.length} | AI has ${aiHand.length} tiles | Boneyard: ${boneyard.length} | Turn: ${isPlayerTurn ? 'You' : 'AI'} | Difficulty: ${difficulty}`;
     (window as any).__AI_HELPER_CONTEXT__ = {
       gameType: "dominos",
       moveHistory: chain.map(d => `[${d.flipped ? d.right : d.left}|${d.flipped ? d.left : d.right}]`),
-      position: JSON.stringify({ chainEnds: getChainEnds(), playerHandSize: playerHand.length, aiHandSize: aiHand.length }),
+      position: JSON.stringify({ chainEnds: ends, playerHand: playerHand.map(d => [d.left, d.right]), aiHandSize: aiHand.length }),
       turn: isPlayerTurn ? "player" : "ai",
+      boardSummary,
     };
     return () => { delete (window as any).__AI_HELPER_CONTEXT__; };
-  }, [chain, playerHand, aiHand, isPlayerTurn, getChainEnds]);
+  }, [chain, playerHand, aiHand, isPlayerTurn, getChainEnds, boneyard, difficulty]);
 
   return (
     <div className="min-h-screen bg-background relative overflow-hidden">
