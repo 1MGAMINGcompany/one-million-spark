@@ -5,11 +5,11 @@
  *   /play/:roomPda  (multiplayer games vs real users)
  *   /room/:roomPda  (multiplayer lobbies)
  *
- * On /play-ai/* routes → coaching mode (strategy, game context)
- * Everywhere else     → general help (rules, wallet, platform)
+ * On /play-ai/* routes → compact bottom panel (max 4 lines, scrollable)
+ *   with board-aware coaching + skill level picker
+ * Everywhere else → full bottom sheet
  *
- * First-time visitors get a simple greeting from Money.
- * Subsequent opens show "How can I assist you?" with quick-action menu.
+ * Interaction: TAP to open, HOLD (300ms+) to drag.
  */
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
@@ -19,6 +19,7 @@ import { X, Send, Trash2, Share2, HelpCircle, Gamepad2, Wallet, Users, BookOpen,
 import { streamTrustAgent } from "@/lib/trustAgentClient";
 import { supabase } from "@/integrations/supabase/client";
 import { getSessionId } from "@/hooks/usePresenceHeartbeat";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import monkeyHappy from "@/assets/monkey-happy.png";
 import monkeyThinking from "@/assets/monkey-thinking.png";
 import monkeyWarning from "@/assets/monkey-warning.png";
@@ -26,6 +27,7 @@ import monkeyWarning from "@/assets/monkey-warning.png";
 // ─── Types ───
 type BubbleState = "idle" | "thinking" | "warning" | "success";
 type HelperMode = "strategy" | "rules" | "friend";
+type SkillLevel = "first-timer" | "beginner" | "medium" | "pro" | "master";
 interface ChatMsg { role: "user" | "assistant"; content: string }
 
 const monkeyImages: Record<BubbleState, string> = {
@@ -35,27 +37,23 @@ const monkeyImages: Record<BubbleState, string> = {
   success: monkeyHappy,
 };
 
-// ─── i18n dictionary (inline, fallback English) ───
+// ─── i18n dictionary ───
 const dict: Record<string, Record<string, string>> = {
   en: {
     title: "Money – AI Helper",
     subtitleAI: "Practice vs AI",
     subtitleGeneral: "How can I help?",
     slogan: "With Strategy and Intelligence We Create WEALTH",
-    // First-time welcome (simple)
     welcomeGreeting: "Hello! I am Money, your AI helper. Do you want me to help you?",
     welcomeYes: "Yes, help me!",
     welcomeNo: "No thanks",
-    // Subsequent opens
     assistGreeting: "How can I assist you?",
-    // Quick-action items (shown after first visit or after "Yes")
     qAppHelp: "Help me navigate the app",
     qGameRules: "Explain game rules",
     qPlayAI: "How does Play vs AI work?",
     qWallet: "Wallet & adding funds",
     qPlayFriends: "Play with friends (free or SOL)",
     qHowItWorks: "How does everything work?",
-    // AI coaching context
     intro: "Do you want strategy coaching to become a master, or do you want to learn how to play this game?",
     introClose: "You can always close me and tap the monkey when you need help.",
     strategy: "Strategy coaching",
@@ -69,41 +67,44 @@ const dict: Record<string, Record<string, string>> = {
     chipOptions: "Show options",
     chipImprove: "How to improve",
     chipWrong: "What did I do wrong?",
+    chipSuggest: "Suggest a move",
     noContext: "I can help more if I can see the moves — try again after making a move.",
     chipNavHelp: "How do I get started?",
     chipWalletHelp: "How do I connect my wallet?",
     chipGameTypes: "What games can I play?",
     chipFreePlay: "Can I play for free?",
+    // Skill level
+    skillQuestion: "What's your experience level?",
+    skillFirstTimer: "🐣 First timer",
+    skillBeginner: "🌱 Beginner",
+    skillMedium: "⚡ Intermediate",
+    skillPro: "🏆 Pro",
+    skillMaster: "👑 Want to master it",
   },
-  es: { title: "Money – Ayudante IA", subtitleAI: "Práctica vs IA", subtitleGeneral: "¿Cómo puedo ayudarte?", slogan: "Con Estrategia e Inteligencia Creamos RIQUEZA", welcomeGreeting: "¡Hola! Soy Money, tu ayudante de IA. ¿Quieres que te ayude?", welcomeYes: "¡Sí, ayúdame!", welcomeNo: "No gracias", assistGreeting: "¿En qué puedo ayudarte?", qAppHelp: "Ayúdame a navegar", qGameRules: "Explica las reglas", qPlayAI: "¿Cómo funciona Jugar vs IA?", qWallet: "Wallet y fondos", qPlayFriends: "Jugar con amigos", qHowItWorks: "¿Cómo funciona todo?", intro: "¿Quieres coaching estratégico o aprender reglas?", introClose: "Siempre puedes cerrarme y tocar al mono.", strategy: "Coaching estratégico", rules: "Aprender reglas", friend: "Ayuda rápida", thinking: "Pensando...", placeholder: "Pregúntame...", clear: "Borrar", share: "Compartir", chipRules: "Reglas", chipOptions: "Opciones", chipImprove: "Mejorar", chipWrong: "¿Qué hice mal?", noContext: "Puedo ayudar más si veo las jugadas.", chipNavHelp: "¿Cómo empiezo?", chipWalletHelp: "¿Cómo conecto wallet?", chipGameTypes: "¿Qué juegos hay?", chipFreePlay: "¿Puedo jugar gratis?" },
-  fr: { title: "Money – Assistant IA", subtitleAI: "Entraînement vs IA", subtitleGeneral: "Comment puis-je aider ?", slogan: "Avec Stratégie et Intelligence Nous Créons la RICHESSE", welcomeGreeting: "Bonjour ! Je suis Money, votre assistant IA. Voulez-vous que je vous aide ?", welcomeYes: "Oui, aidez-moi !", welcomeNo: "Non merci", assistGreeting: "Comment puis-je vous aider ?", qAppHelp: "Aide-moi à naviguer", qGameRules: "Explique les règles", qPlayAI: "Comment fonctionne Jouer vs IA ?", qWallet: "Portefeuille et fonds", qPlayFriends: "Jouer avec des amis", qHowItWorks: "Comment ça marche ?", intro: "Coaching stratégique ou apprendre les règles ?", introClose: "Tu peux me fermer et toucher le singe.", strategy: "Coaching stratégique", rules: "Apprendre les règles", friend: "Aide rapide", thinking: "Réflexion...", placeholder: "Demande-moi...", clear: "Effacer", share: "Partager", chipRules: "Règles", chipOptions: "Options", chipImprove: "Améliorer", chipWrong: "Qu'ai-je fait de mal ?", noContext: "Je peux mieux aider si je vois les coups.", chipNavHelp: "Comment commencer ?", chipWalletHelp: "Comment connecter wallet ?", chipGameTypes: "Quels jeux ?", chipFreePlay: "Jouer gratuitement ?" },
-  de: { title: "Money – KI-Helfer", subtitleAI: "Training vs KI", subtitleGeneral: "Wie kann ich helfen?", slogan: "Mit Strategie und Intelligenz schaffen wir REICHTUM", welcomeGreeting: "Hallo! Ich bin Money, dein KI-Helfer. Soll ich dir helfen?", welcomeYes: "Ja, hilf mir!", welcomeNo: "Nein danke", assistGreeting: "Wie kann ich dir helfen?", qAppHelp: "Hilf mir beim Navigieren", qGameRules: "Spielregeln erklären", qPlayAI: "Wie funktioniert Spielen vs KI?", qWallet: "Wallet & Guthaben", qPlayFriends: "Mit Freunden spielen", qHowItWorks: "Wie funktioniert alles?", intro: "Strategiecoaching oder Regeln lernen?", introClose: "Du kannst mich schließen und den Affen antippen.", strategy: "Strategiecoaching", rules: "Regeln lernen", friend: "Schnelle Hilfe", thinking: "Denke nach...", placeholder: "Frag mich...", clear: "Löschen", share: "Teilen", chipRules: "Regeln", chipOptions: "Optionen", chipImprove: "Verbessern", chipWrong: "Was war falsch?", noContext: "Ich kann besser helfen, wenn ich die Züge sehe.", chipNavHelp: "Wie starte ich?", chipWalletHelp: "Wallet verbinden?", chipGameTypes: "Welche Spiele?", chipFreePlay: "Kostenlos spielen?" },
-  pt: { title: "Money – Ajudante IA", subtitleAI: "Prática vs IA", subtitleGeneral: "Como posso ajudar?", slogan: "Com Estratégia e Inteligência Criamos RIQUEZA", welcomeGreeting: "Olá! Sou o Money, seu ajudante de IA. Quer que eu te ajude?", welcomeYes: "Sim, me ajude!", welcomeNo: "Não obrigado", assistGreeting: "Como posso te ajudar?", qAppHelp: "Ajude-me a navegar", qGameRules: "Explique as regras", qPlayAI: "Como funciona Jogar vs IA?", qWallet: "Carteira e fundos", qPlayFriends: "Jogar com amigos", qHowItWorks: "Como tudo funciona?", intro: "Coaching estratégico ou aprender regras?", introClose: "Pode me fechar e tocar no macaco.", strategy: "Coaching estratégico", rules: "Aprender regras", friend: "Ajuda rápida", thinking: "Pensando...", placeholder: "Pergunte...", clear: "Limpar", share: "Compartilhar", chipRules: "Regras", chipOptions: "Opções", chipImprove: "Melhorar", chipWrong: "O que errei?", noContext: "Posso ajudar mais se vir as jogadas.", chipNavHelp: "Como começar?", chipWalletHelp: "Conectar carteira?", chipGameTypes: "Quais jogos?", chipFreePlay: "Jogar grátis?" },
-  ar: { title: "Money – مساعد الذكاء", subtitleAI: "تدريب ضد الذكاء الاصطناعي", subtitleGeneral: "كيف يمكنني مساعدتك؟", slogan: "بالاستراتيجية والذكاء نصنع الثروة", welcomeGreeting: "مرحباً! أنا Money، مساعدك الذكي. هل تريدني أن أساعدك؟", welcomeYes: "نعم، ساعدني!", welcomeNo: "لا شكراً", assistGreeting: "كيف يمكنني مساعدتك؟", qAppHelp: "ساعدني في التنقل", qGameRules: "اشرح القواعد", qPlayAI: "كيف يعمل اللعب ضد الذكاء؟", qWallet: "المحفظة والأموال", qPlayFriends: "العب مع الأصدقاء", qHowItWorks: "كيف يعمل كل شيء؟", intro: "تدريب استراتيجي أم تعلم القواعد؟", introClose: "يمكنك إغلاقي والنقر على القرد.", strategy: "تدريب استراتيجي", rules: "تعلم القواعد", friend: "مساعدة سريعة", thinking: "أفكر...", placeholder: "اسألني...", clear: "مسح", share: "مشاركة", chipRules: "القواعد", chipOptions: "الخيارات", chipImprove: "التحسن", chipWrong: "ماذا فعلت خطأ؟", noContext: "يمكنني المساعدة أكثر إذا رأيت الحركات.", chipNavHelp: "كيف أبدأ؟", chipWalletHelp: "ربط المحفظة؟", chipGameTypes: "ما الألعاب؟", chipFreePlay: "اللعب مجاناً؟" },
-  zh: { title: "Money – AI助手", subtitleAI: "AI练习", subtitleGeneral: "需要帮助吗？", slogan: "以策略和智慧创造财富", welcomeGreeting: "你好！我是Money，你的AI助手。需要我帮助你吗？", welcomeYes: "好的，帮帮我！", welcomeNo: "不用了谢谢", assistGreeting: "我能帮你什么？", qAppHelp: "帮我导航", qGameRules: "解释规则", qPlayAI: "AI对战怎么玩？", qWallet: "钱包和充值", qPlayFriends: "和朋友玩", qHowItWorks: "一切怎么运作？", intro: "策略指导还是学习规则？", introClose: "可以关闭我，需要时点击猴子。", strategy: "策略指导", rules: "学习规则", friend: "快速帮助", thinking: "思考中...", placeholder: "问我...", clear: "清除", share: "分享", chipRules: "规则", chipOptions: "选项", chipImprove: "如何提高", chipWrong: "我哪里做错了？", noContext: "如果我能看到棋步我能帮更多。", chipNavHelp: "怎么开始？", chipWalletHelp: "连接钱包？", chipGameTypes: "有什么游戏？", chipFreePlay: "免费玩？" },
-  it: { title: "Money – Assistente IA", subtitleAI: "Allenamento vs IA", subtitleGeneral: "Come posso aiutarti?", slogan: "Con Strategia e Intelligenza Creiamo RICCHEZZA", welcomeGreeting: "Ciao! Sono Money, il tuo assistente IA. Vuoi che ti aiuti?", welcomeYes: "Sì, aiutami!", welcomeNo: "No grazie", assistGreeting: "Come posso aiutarti?", qAppHelp: "Aiutami a navigare", qGameRules: "Spiega le regole", qPlayAI: "Come funziona Gioca vs IA?", qWallet: "Wallet e fondi", qPlayFriends: "Gioca con amici", qHowItWorks: "Come funziona tutto?", intro: "Coaching strategico o imparare le regole?", introClose: "Puoi chiudermi e toccare la scimmia.", strategy: "Coaching strategico", rules: "Impara le regole", friend: "Aiuto veloce", thinking: "Sto pensando...", placeholder: "Chiedimi...", clear: "Cancella", share: "Condividi", chipRules: "Regole", chipOptions: "Opzioni", chipImprove: "Migliorare", chipWrong: "Cosa ho sbagliato?", noContext: "Posso aiutare di più se vedo le mosse.", chipNavHelp: "Come inizio?", chipWalletHelp: "Connettere wallet?", chipGameTypes: "Quali giochi?", chipFreePlay: "Giocare gratis?" },
-  ja: { title: "Money – AIヘルパー", subtitleAI: "AI練習", subtitleGeneral: "お手伝いしましょうか？", slogan: "戦略と知性で富を創造する", welcomeGreeting: "こんにちは！私はMoney、あなたのAIヘルパーです。お手伝いしましょうか？", welcomeYes: "はい、お願いします！", welcomeNo: "いいえ、結構です", assistGreeting: "何かお手伝いできますか？", qAppHelp: "ナビゲーションを手伝って", qGameRules: "ルールを説明して", qPlayAI: "AI対戦の仕組みは？", qWallet: "ウォレットと資金", qPlayFriends: "友達と遊ぶ", qHowItWorks: "全体の仕組みは？", intro: "戦略コーチングかルール学習か？", introClose: "閉じてモンキーをタップしてください。", strategy: "戦略コーチング", rules: "ルールを学ぶ", friend: "クイックヘルプ", thinking: "考え中...", placeholder: "何でも聞いて...", clear: "消去", share: "共有", chipRules: "ルール", chipOptions: "オプション", chipImprove: "改善方法", chipWrong: "何が悪かった？", noContext: "手を見れればもっと助けられます。", chipNavHelp: "始め方は？", chipWalletHelp: "ウォレット接続？", chipGameTypes: "どんなゲーム？", chipFreePlay: "無料で遊べる？" },
-  hi: { title: "Money – AI सहायक", subtitleAI: "AI अभ्यास", subtitleGeneral: "मैं कैसे मदद करूँ?", slogan: "रणनीति और बुद्धि से हम संपत्ति बनाते हैं", welcomeGreeting: "नमस्ते! मैं Money हूँ, आपका AI सहायक। क्या आप चाहते हैं कि मैं आपकी मदद करूँ?", welcomeYes: "हाँ, मदद करो!", welcomeNo: "नहीं धन्यवाद", assistGreeting: "मैं आपकी कैसे मदद कर सकता हूँ?", qAppHelp: "ऐप नेविगेट करने में मदद करें", qGameRules: "गेम के नियम बताएँ", qPlayAI: "AI के खिलाफ कैसे खेलें?", qWallet: "वॉलेट और फंड", qPlayFriends: "दोस्तों के साथ खेलें", qHowItWorks: "सब कैसे काम करता है?", intro: "रणनीति कोचिंग या नियम सीखना?", introClose: "मुझे बंद करें और बंदर को टैप करें।", strategy: "रणनीति कोचिंग", rules: "नियम सीखें", friend: "त्वरित मदद", thinking: "सोच रहा हूँ...", placeholder: "कुछ भी पूछें...", clear: "साफ़ करें", share: "शेयर", chipRules: "नियम", chipOptions: "विकल्प", chipImprove: "कैसे सुधारें", chipWrong: "क्या गलत किया?", noContext: "चालें देख सकूँ तो ज़्यादा मदद कर सकता हूँ।", chipNavHelp: "कैसे शुरू करूँ?", chipWalletHelp: "वॉलेट कनेक्ट?", chipGameTypes: "कौन से गेम?", chipFreePlay: "मुफ्त में खेलें?" },
+  es: { title: "Money – Ayudante IA", subtitleAI: "Práctica vs IA", subtitleGeneral: "¿Cómo puedo ayudarte?", slogan: "Con Estrategia e Inteligencia Creamos RIQUEZA", welcomeGreeting: "¡Hola! Soy Money, tu ayudante de IA. ¿Quieres que te ayude?", welcomeYes: "¡Sí, ayúdame!", welcomeNo: "No gracias", assistGreeting: "¿En qué puedo ayudarte?", qAppHelp: "Ayúdame a navegar", qGameRules: "Explica las reglas", qPlayAI: "¿Cómo funciona Jugar vs IA?", qWallet: "Wallet y fondos", qPlayFriends: "Jugar con amigos", qHowItWorks: "¿Cómo funciona todo?", intro: "¿Quieres coaching estratégico o aprender reglas?", introClose: "Siempre puedes cerrarme y tocar al mono.", strategy: "Coaching estratégico", rules: "Aprender reglas", friend: "Ayuda rápida", thinking: "Pensando...", placeholder: "Pregúntame...", clear: "Borrar", share: "Compartir", chipRules: "Reglas", chipOptions: "Opciones", chipImprove: "Mejorar", chipWrong: "¿Qué hice mal?", chipSuggest: "Sugiere jugada", noContext: "Puedo ayudar más si veo las jugadas.", chipNavHelp: "¿Cómo empiezo?", chipWalletHelp: "¿Cómo conecto wallet?", chipGameTypes: "¿Qué juegos hay?", chipFreePlay: "¿Puedo jugar gratis?", skillQuestion: "¿Cuál es tu nivel?", skillFirstTimer: "🐣 Primera vez", skillBeginner: "🌱 Principiante", skillMedium: "⚡ Intermedio", skillPro: "🏆 Pro", skillMaster: "👑 Quiero dominar" },
+  fr: { title: "Money – Assistant IA", subtitleAI: "Entraînement vs IA", subtitleGeneral: "Comment puis-je aider ?", slogan: "Avec Stratégie et Intelligence Nous Créons la RICHESSE", welcomeGreeting: "Bonjour ! Je suis Money, votre assistant IA. Voulez-vous que je vous aide ?", welcomeYes: "Oui, aidez-moi !", welcomeNo: "Non merci", assistGreeting: "Comment puis-je vous aider ?", qAppHelp: "Aide-moi à naviguer", qGameRules: "Explique les règles", qPlayAI: "Comment fonctionne Jouer vs IA ?", qWallet: "Portefeuille et fonds", qPlayFriends: "Jouer avec des amis", qHowItWorks: "Comment ça marche ?", intro: "Coaching stratégique ou apprendre les règles ?", introClose: "Tu peux me fermer et toucher le singe.", strategy: "Coaching stratégique", rules: "Apprendre les règles", friend: "Aide rapide", thinking: "Réflexion...", placeholder: "Demande-moi...", clear: "Effacer", share: "Partager", chipRules: "Règles", chipOptions: "Options", chipImprove: "Améliorer", chipWrong: "Qu'ai-je fait de mal ?", chipSuggest: "Suggérer un coup", noContext: "Je peux mieux aider si je vois les coups.", chipNavHelp: "Comment commencer ?", chipWalletHelp: "Comment connecter wallet ?", chipGameTypes: "Quels jeux ?", chipFreePlay: "Jouer gratuitement ?", skillQuestion: "Quel est votre niveau ?", skillFirstTimer: "🐣 Première fois", skillBeginner: "🌱 Débutant", skillMedium: "⚡ Intermédiaire", skillPro: "🏆 Pro", skillMaster: "👑 Devenir maître" },
+  de: { title: "Money – KI-Helfer", subtitleAI: "Training vs KI", subtitleGeneral: "Wie kann ich helfen?", slogan: "Mit Strategie und Intelligenz schaffen wir REICHTUM", welcomeGreeting: "Hallo! Ich bin Money, dein KI-Helfer. Soll ich dir helfen?", welcomeYes: "Ja, hilf mir!", welcomeNo: "Nein danke", assistGreeting: "Wie kann ich dir helfen?", qAppHelp: "Hilf mir beim Navigieren", qGameRules: "Spielregeln erklären", qPlayAI: "Wie funktioniert Spielen vs KI?", qWallet: "Wallet & Guthaben", qPlayFriends: "Mit Freunden spielen", qHowItWorks: "Wie funktioniert alles?", intro: "Strategiecoaching oder Regeln lernen?", introClose: "Du kannst mich schließen und den Affen antippen.", strategy: "Strategiecoaching", rules: "Regeln lernen", friend: "Schnelle Hilfe", thinking: "Denke nach...", placeholder: "Frag mich...", clear: "Löschen", share: "Teilen", chipRules: "Regeln", chipOptions: "Optionen", chipImprove: "Verbessern", chipWrong: "Was war falsch?", chipSuggest: "Zug vorschlagen", noContext: "Ich kann besser helfen, wenn ich die Züge sehe.", chipNavHelp: "Wie starte ich?", chipWalletHelp: "Wallet verbinden?", chipGameTypes: "Welche Spiele?", chipFreePlay: "Kostenlos spielen?", skillQuestion: "Was ist dein Level?", skillFirstTimer: "🐣 Erstes Mal", skillBeginner: "🌱 Anfänger", skillMedium: "⚡ Mittel", skillPro: "🏆 Profi", skillMaster: "👑 Meister werden" },
+  pt: { title: "Money – Ajudante IA", subtitleAI: "Prática vs IA", subtitleGeneral: "Como posso ajudar?", slogan: "Com Estratégia e Inteligência Criamos RIQUEZA", welcomeGreeting: "Olá! Sou o Money, seu ajudante de IA. Quer que eu te ajude?", welcomeYes: "Sim, me ajude!", welcomeNo: "Não obrigado", assistGreeting: "Como posso te ajudar?", qAppHelp: "Ajude-me a navegar", qGameRules: "Explique as regras", qPlayAI: "Como funciona Jogar vs IA?", qWallet: "Carteira e fundos", qPlayFriends: "Jogar com amigos", qHowItWorks: "Como tudo funciona?", intro: "Coaching estratégico ou aprender regras?", introClose: "Pode me fechar e tocar no macaco.", strategy: "Coaching estratégico", rules: "Aprender regras", friend: "Ajuda rápida", thinking: "Pensando...", placeholder: "Pergunte...", clear: "Limpar", share: "Compartilhar", chipRules: "Regras", chipOptions: "Opções", chipImprove: "Melhorar", chipWrong: "O que errei?", chipSuggest: "Sugerir jogada", noContext: "Posso ajudar mais se vir as jogadas.", chipNavHelp: "Como começar?", chipWalletHelp: "Conectar carteira?", chipGameTypes: "Quais jogos?", chipFreePlay: "Jogar grátis?", skillQuestion: "Qual seu nível?", skillFirstTimer: "🐣 Primeira vez", skillBeginner: "🌱 Iniciante", skillMedium: "⚡ Intermediário", skillPro: "🏆 Pro", skillMaster: "👑 Quero dominar" },
+  ar: { title: "Money – مساعد الذكاء", subtitleAI: "تدريب ضد الذكاء الاصطناعي", subtitleGeneral: "كيف يمكنني مساعدتك؟", slogan: "بالاستراتيجية والذكاء نصنع الثروة", welcomeGreeting: "مرحباً! أنا Money، مساعدك الذكي. هل تريدني أن أساعدك؟", welcomeYes: "نعم، ساعدني!", welcomeNo: "لا شكراً", assistGreeting: "كيف يمكنني مساعدتك؟", qAppHelp: "ساعدني في التنقل", qGameRules: "اشرح القواعد", qPlayAI: "كيف يعمل اللعب ضد الذكاء؟", qWallet: "المحفظة والأموال", qPlayFriends: "العب مع الأصدقاء", qHowItWorks: "كيف يعمل كل شيء؟", intro: "تدريب استراتيجي أم تعلم القواعد؟", introClose: "يمكنك إغلاقي والنقر على القرد.", strategy: "تدريب استراتيجي", rules: "تعلم القواعد", friend: "مساعدة سريعة", thinking: "أفكر...", placeholder: "اسألني...", clear: "مسح", share: "مشاركة", chipRules: "القواعد", chipOptions: "الخيارات", chipImprove: "التحسن", chipWrong: "ماذا فعلت خطأ؟", chipSuggest: "اقترح حركة", noContext: "يمكنني المساعدة أكثر إذا رأيت الحركات.", chipNavHelp: "كيف أبدأ؟", chipWalletHelp: "ربط المحفظة؟", chipGameTypes: "ما الألعاب؟", chipFreePlay: "اللعب مجاناً؟", skillQuestion: "ما مستواك؟", skillFirstTimer: "🐣 أول مرة", skillBeginner: "🌱 مبتدئ", skillMedium: "⚡ متوسط", skillPro: "🏆 محترف", skillMaster: "👑 أريد الإتقان" },
+  zh: { title: "Money – AI助手", subtitleAI: "AI练习", subtitleGeneral: "需要帮助吗？", slogan: "以策略和智慧创造财富", welcomeGreeting: "你好！我是Money，你的AI助手。需要我帮助你吗？", welcomeYes: "好的，帮帮我！", welcomeNo: "不用了谢谢", assistGreeting: "我能帮你什么？", qAppHelp: "帮我导航", qGameRules: "解释规则", qPlayAI: "AI对战怎么玩？", qWallet: "钱包和充值", qPlayFriends: "和朋友玩", qHowItWorks: "一切怎么运作？", intro: "策略指导还是学习规则？", introClose: "可以关闭我，需要时点击猴子。", strategy: "策略指导", rules: "学习规则", friend: "快速帮助", thinking: "思考中...", placeholder: "问我...", clear: "清除", share: "分享", chipRules: "规则", chipOptions: "选项", chipImprove: "如何提高", chipWrong: "我哪里做错了？", chipSuggest: "建议走法", noContext: "如果我能看到棋步我能帮更多。", chipNavHelp: "怎么开始？", chipWalletHelp: "连接钱包？", chipGameTypes: "有什么游戏？", chipFreePlay: "免费玩？", skillQuestion: "你的水平？", skillFirstTimer: "🐣 第一次", skillBeginner: "🌱 初学者", skillMedium: "⚡ 中级", skillPro: "🏆 高手", skillMaster: "👑 想精通" },
+  it: { title: "Money – Assistente IA", subtitleAI: "Allenamento vs IA", subtitleGeneral: "Come posso aiutarti?", slogan: "Con Strategia e Intelligenza Creiamo RICCHEZZA", welcomeGreeting: "Ciao! Sono Money, il tuo assistente IA. Vuoi che ti aiuti?", welcomeYes: "Sì, aiutami!", welcomeNo: "No grazie", assistGreeting: "Come posso aiutarti?", qAppHelp: "Aiutami a navigare", qGameRules: "Spiega le regole", qPlayAI: "Come funziona Gioca vs IA?", qWallet: "Wallet e fondi", qPlayFriends: "Gioca con amici", qHowItWorks: "Come funziona tutto?", intro: "Coaching strategico o imparare le regole?", introClose: "Puoi chiudermi e toccare la scimmia.", strategy: "Coaching strategico", rules: "Impara le regole", friend: "Aiuto veloce", thinking: "Sto pensando...", placeholder: "Chiedimi...", clear: "Cancella", share: "Condividi", chipRules: "Regole", chipOptions: "Opzioni", chipImprove: "Migliorare", chipWrong: "Cosa ho sbagliato?", chipSuggest: "Suggerisci mossa", noContext: "Posso aiutare di più se vedo le mosse.", chipNavHelp: "Come inizio?", chipWalletHelp: "Connettere wallet?", chipGameTypes: "Quali giochi?", chipFreePlay: "Giocare gratis?", skillQuestion: "Qual è il tuo livello?", skillFirstTimer: "🐣 Prima volta", skillBeginner: "🌱 Principiante", skillMedium: "⚡ Intermedio", skillPro: "🏆 Pro", skillMaster: "👑 Voglio padroneggiare" },
+  ja: { title: "Money – AIヘルパー", subtitleAI: "AI練習", subtitleGeneral: "お手伝いしましょうか？", slogan: "戦略と知性で富を創造する", welcomeGreeting: "こんにちは！私はMoney、あなたのAIヘルパーです。お手伝いしましょうか？", welcomeYes: "はい、お願いします！", welcomeNo: "いいえ、結構です", assistGreeting: "何かお手伝いできますか？", qAppHelp: "ナビゲーションを手伝って", qGameRules: "ルールを説明して", qPlayAI: "AI対戦の仕組みは？", qWallet: "ウォレットと資金", qPlayFriends: "友達と遊ぶ", qHowItWorks: "全体の仕組みは？", intro: "戦略コーチングかルール学習か？", introClose: "閉じてモンキーをタップしてください。", strategy: "戦略コーチング", rules: "ルールを学ぶ", friend: "クイックヘルプ", thinking: "考え中...", placeholder: "何でも聞いて...", clear: "消去", share: "共有", chipRules: "ルール", chipOptions: "オプション", chipImprove: "改善方法", chipWrong: "何が悪かった？", chipSuggest: "手を提案", noContext: "手を見れればもっと助けられます。", chipNavHelp: "始め方は？", chipWalletHelp: "ウォレット接続？", chipGameTypes: "どんなゲーム？", chipFreePlay: "無料で遊べる？", skillQuestion: "あなたのレベルは？", skillFirstTimer: "🐣 初めて", skillBeginner: "🌱 初心者", skillMedium: "⚡ 中級", skillPro: "🏆 プロ", skillMaster: "👑 マスターしたい" },
+  hi: { title: "Money – AI सहायक", subtitleAI: "AI अभ्यास", subtitleGeneral: "मैं कैसे मदद करूँ?", slogan: "रणनीति और बुद्धि से हम संपत्ति बनाते हैं", welcomeGreeting: "नमस्ते! मैं Money हूँ, आपका AI सहायक। क्या आप चाहते हैं कि मैं आपकी मदद करूँ?", welcomeYes: "हाँ, मदद करो!", welcomeNo: "नहीं धन्यवाद", assistGreeting: "मैं आपकी कैसे मदद कर सकता हूँ?", qAppHelp: "ऐप नेविगेट करने में मदद करें", qGameRules: "गेम के नियम बताएँ", qPlayAI: "AI के खिलाफ कैसे खेलें?", qWallet: "वॉलेट और फंड", qPlayFriends: "दोस्तों के साथ खेलें", qHowItWorks: "सब कैसे काम करता है?", intro: "रणनीति कोचिंग या नियम सीखना?", introClose: "मुझे बंद करें और बंदर को टैप करें।", strategy: "रणनीति कोचिंग", rules: "नियम सीखें", friend: "त्वरित मदद", thinking: "सोच रहा हूँ...", placeholder: "कुछ भी पूछें...", clear: "साफ़ करें", share: "शेयर", chipRules: "नियम", chipOptions: "विकल्प", chipImprove: "कैसे सुधारें", chipWrong: "क्या गलत किया?", chipSuggest: "चाल सुझाएं", noContext: "चालें देख सकूँ तो ज़्यादा मदद कर सकता हूँ।", chipNavHelp: "कैसे शुरू करूँ?", chipWalletHelp: "वॉलेट कनेक्ट?", chipGameTypes: "कौन से गेम?", chipFreePlay: "मुफ्त में खेलें?", skillQuestion: "आपका स्तर क्या है?", skillFirstTimer: "🐣 पहली बार", skillBeginner: "🌱 शुरुआती", skillMedium: "⚡ मध्यम", skillPro: "🏆 प्रो", skillMaster: "👑 मास्टर बनना है" },
 };
 
-function t(lang: string, key: string): string {
+function tr(lang: string, key: string): string {
   return dict[lang]?.[key] || dict.en[key] || key;
 }
 
-// ─── No-go zones (percentage of viewport) ───
+// ─── No-go zones ───
 interface Rect { x: number; y: number; w: number; h: number }
 
 function getNoGoZones(pathname: string, vw: number, vh: number): Rect[] {
   const zones: Rect[] = [];
-  if (pathname.includes("chess")) {
-    zones.push({ x: vw * 0.2, y: vh * 0.85, w: vw * 0.6, h: vh * 0.15 });
-  } else if (pathname.includes("ludo")) {
-    zones.push({ x: vw * 0.25, y: vh * 0.8, w: vw * 0.5, h: vh * 0.2 });
-  } else if (pathname.includes("backgammon")) {
-    zones.push({ x: vw * 0.5, y: vh * 0.8, w: vw * 0.5, h: vh * 0.2 });
-  } else if (pathname.includes("dominos") || pathname.includes("checkers")) {
-    zones.push({ x: vw * 0.1, y: vh * 0.85, w: vw * 0.8, h: vh * 0.15 });
-  }
+  if (pathname.includes("chess")) zones.push({ x: vw * 0.2, y: vh * 0.85, w: vw * 0.6, h: vh * 0.15 });
+  else if (pathname.includes("ludo")) zones.push({ x: vw * 0.25, y: vh * 0.8, w: vw * 0.5, h: vh * 0.2 });
+  else if (pathname.includes("backgammon")) zones.push({ x: vw * 0.5, y: vh * 0.8, w: vw * 0.5, h: vh * 0.2 });
+  else if (pathname.includes("dominos") || pathname.includes("checkers")) zones.push({ x: vw * 0.1, y: vh * 0.85, w: vw * 0.8, h: vh * 0.15 });
   return zones;
 }
 
@@ -130,63 +131,28 @@ function clampToSafe(x: number, y: number, size: number, vw: number, vh: number,
 async function generateShareImage(text: string): Promise<Blob | null> {
   try {
     const canvas = document.createElement("canvas");
-    canvas.width = 1080;
-    canvas.height = 1080;
+    canvas.width = 1080; canvas.height = 1080;
     const ctx = canvas.getContext("2d");
     if (!ctx) return null;
-
     const bg = ctx.createLinearGradient(0, 0, 0, 1080);
-    bg.addColorStop(0, "#1a1a2e");
-    bg.addColorStop(1, "#0f0f23");
-    ctx.fillStyle = bg;
-    ctx.fillRect(0, 0, 1080, 1080);
-
-    ctx.strokeStyle = "#FACC15";
-    ctx.lineWidth = 4;
-    ctx.strokeRect(30, 30, 1020, 1020);
-
-    ctx.fillStyle = "#FACC15";
-    ctx.font = "bold 48px sans-serif";
-    ctx.textAlign = "center";
+    bg.addColorStop(0, "#1a1a2e"); bg.addColorStop(1, "#0f0f23");
+    ctx.fillStyle = bg; ctx.fillRect(0, 0, 1080, 1080);
+    ctx.strokeStyle = "#FACC15"; ctx.lineWidth = 4; ctx.strokeRect(30, 30, 1020, 1020);
+    ctx.fillStyle = "#FACC15"; ctx.font = "bold 48px sans-serif"; ctx.textAlign = "center";
     ctx.fillText("🐵 Money – 1MGAMING", 540, 120);
-
-    ctx.fillStyle = "#aaa";
-    ctx.font = "24px sans-serif";
-    ctx.fillText("AI Helper Insight", 540, 170);
-
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "28px sans-serif";
-    ctx.textAlign = "left";
-    const words = text.split(" ");
-    let line = "";
-    let y = 260;
-    const maxW = 940;
+    ctx.fillStyle = "#aaa"; ctx.font = "24px sans-serif"; ctx.fillText("AI Helper Insight", 540, 170);
+    ctx.fillStyle = "#ffffff"; ctx.font = "28px sans-serif"; ctx.textAlign = "left";
+    const words = text.split(" "); let line = ""; let y = 260; const maxW = 940;
     for (const word of words) {
       const test = line + word + " ";
-      if (ctx.measureText(test).width > maxW) {
-        ctx.fillText(line.trim(), 70, y);
-        line = word + " ";
-        y += 40;
-        if (y > 900) { ctx.fillText("...", 70, y); break; }
-      } else {
-        line = test;
-      }
+      if (ctx.measureText(test).width > maxW) { ctx.fillText(line.trim(), 70, y); line = word + " "; y += 40; if (y > 900) { ctx.fillText("...", 70, y); break; } } else { line = test; }
     }
     if (y <= 900) ctx.fillText(line.trim(), 70, y);
-
-    ctx.fillStyle = "#FACC15";
-    ctx.font = "italic 26px sans-serif";
-    ctx.textAlign = "center";
+    ctx.fillStyle = "#FACC15"; ctx.font = "italic 26px sans-serif"; ctx.textAlign = "center";
     ctx.fillText("With Strategy and Intelligence We Create WEALTH", 540, 980);
-
-    ctx.fillStyle = "#666";
-    ctx.font = "20px sans-serif";
-    ctx.fillText("1MGAMING.com", 540, 1040);
-
+    ctx.fillStyle = "#666"; ctx.font = "20px sans-serif"; ctx.fillText("1MGAMING.com", 540, 1040);
     return new Promise((resolve) => canvas.toBlob((b) => resolve(b), "image/png"));
-  } catch {
-    return null;
-  }
+  } catch { return null; }
 }
 
 // ─── Quick-action menu items ───
@@ -199,6 +165,14 @@ const WELCOME_ACTIONS = [
   { key: "qHowItWorks", icon: Sparkles },
 ] as const;
 
+const SKILL_LEVELS: { key: SkillLevel; labelKey: string }[] = [
+  { key: "first-timer", labelKey: "skillFirstTimer" },
+  { key: "beginner", labelKey: "skillBeginner" },
+  { key: "medium", labelKey: "skillMedium" },
+  { key: "pro", labelKey: "skillPro" },
+  { key: "master", labelKey: "skillMaster" },
+];
+
 // ─── Route helpers ───
 function isMultiplayerRoute(pathname: string): boolean {
   return pathname.startsWith("/play/") || pathname.startsWith("/room/");
@@ -207,18 +181,11 @@ function isAIGameRoute(pathname: string): boolean {
   return pathname.startsWith("/play-ai/");
 }
 
-// ─── Analytics tracker (fire-and-forget, never breaks UX) ───
+// ─── Analytics ───
 function trackMonkey(event: string, context: string, lang: string, metadata?: string) {
   try {
     supabase.functions.invoke("live-stats", {
-      body: {
-        action: "track_monkey",
-        sessionId: getSessionId(),
-        event,
-        page: context,
-        game: lang,
-        difficulty: metadata || null,
-      },
+      body: { action: "track_monkey", sessionId: getSessionId(), event, page: context, game: lang, difficulty: metadata || null },
     }).catch(() => {});
   } catch {}
 }
@@ -227,6 +194,7 @@ function trackMonkey(event: string, context: string, lang: string, metadata?: st
 const BUBBLE_SIZE = 64;
 const FIRST_VISIT_KEY = "aihelper-welcomed";
 const SESSION_OPENED_KEY = "aihelper-session-opened";
+const HOLD_DELAY = 300; // ms to distinguish tap from hold
 
 export default function AIAgentHelperOverlay() {
   const location = useLocation();
@@ -248,12 +216,12 @@ export default function AIAgentHelperOverlay() {
     return p.replace(/^\//, "").split("/")[0] || "home";
   }, [location.pathname, isAIRoute, gameType]);
 
-  // First-time visit detection (persists forever)
+  // First-time visit (persists forever)
   const [isFirstVisit] = useState(() => {
     try { return !localStorage.getItem(FIRST_VISIT_KEY); } catch { return true; }
   });
 
-  // Session-opened tracks whether user has opened Money this browser session
+  // Session tracking
   const [hasOpenedThisSession, setHasOpenedThisSession] = useState(() => {
     try { return !!sessionStorage.getItem(SESSION_OPENED_KEY); } catch { return false; }
   });
@@ -262,14 +230,14 @@ export default function AIAgentHelperOverlay() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [bubbleState, setBubbleState] = useState<BubbleState>("idle");
   const [welcomeAccepted, setWelcomeAccepted] = useState(false);
+  const [skillLevel, setSkillLevel] = useState<SkillLevel | null>(() => {
+    try { return (localStorage.getItem("aihelper-skill") as SkillLevel) || null; } catch { return null; }
+  });
   const [helperMode, setHelperMode] = useState<HelperMode | null>(() => {
     try { return (localStorage.getItem("aihelper-mode") as HelperMode) || null; } catch { return null; }
   });
   const [messages, setMessages] = useState<ChatMsg[]>(() => {
-    try {
-      const saved = localStorage.getItem("aihelper-chat");
-      return saved ? JSON.parse(saved) : [];
-    } catch { return []; }
+    try { const saved = localStorage.getItem("aihelper-chat"); return saved ? JSON.parse(saved) : []; } catch { return []; }
   });
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
@@ -277,7 +245,7 @@ export default function AIAgentHelperOverlay() {
   const inputRef = useRef<HTMLInputElement>(null);
   const welcomeTriggered = useRef(false);
 
-  // Auto-open for first-time visitors (only once)
+  // Auto-open for first-time visitors
   useEffect(() => {
     if (isMultiplayer) return;
     if (isFirstVisit && !welcomeTriggered.current) {
@@ -291,7 +259,7 @@ export default function AIAgentHelperOverlay() {
     }
   }, [isFirstVisit, isMultiplayer]);
 
-  // Mark session as opened when sheet opens
+  // Mark session opened
   useEffect(() => {
     if (sheetOpen && !hasOpenedThisSession) {
       setHasOpenedThisSession(true);
@@ -301,75 +269,80 @@ export default function AIAgentHelperOverlay() {
 
   // Bubble position
   const [pos, setPos] = useState<{ x: number; y: number }>(() => {
-    try {
-      const saved = localStorage.getItem("aihelper-pos");
-      if (saved) return JSON.parse(saved);
-    } catch {}
+    try { const saved = localStorage.getItem("aihelper-pos"); if (saved) return JSON.parse(saved); } catch {}
     return { x: typeof window !== "undefined" ? window.innerWidth - BUBBLE_SIZE - 16 : 300, y: typeof window !== "undefined" ? window.innerHeight - 200 : 400 };
   });
 
-  // Drag state
-  const dragRef = useRef<{ startX: number; startY: number; startPosX: number; startPosY: number; dragging: boolean }>({ startX: 0, startY: 0, startPosX: 0, startPosY: 0, dragging: false });
+  // Hold+drag state
+  const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dragRef = useRef<{ startX: number; startY: number; startPosX: number; startPosY: number; holding: boolean; dragging: boolean }>({
+    startX: 0, startY: 0, startPosX: 0, startPosY: 0, holding: false, dragging: false,
+  });
 
-  // Persist chat
-  useEffect(() => {
-    try { localStorage.setItem("aihelper-chat", JSON.stringify(messages)); } catch {}
-  }, [messages]);
-
-  // Persist mode
-  useEffect(() => {
-    if (helperMode) try { localStorage.setItem("aihelper-mode", helperMode); } catch {}
-  }, [helperMode]);
-
-  // Persist pos
-  useEffect(() => {
-    try { localStorage.setItem("aihelper-pos", JSON.stringify(pos)); } catch {}
-  }, [pos]);
+  // Persist chat/mode/pos/skill
+  useEffect(() => { try { localStorage.setItem("aihelper-chat", JSON.stringify(messages)); } catch {} }, [messages]);
+  useEffect(() => { if (helperMode) try { localStorage.setItem("aihelper-mode", helperMode); } catch {} }, [helperMode]);
+  useEffect(() => { try { localStorage.setItem("aihelper-pos", JSON.stringify(pos)); } catch {} }, [pos]);
+  useEffect(() => { if (skillLevel) try { localStorage.setItem("aihelper-skill", skillLevel); } catch {} }, [skillLevel]);
 
   // Scroll to bottom
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, sheetOpen]);
+  useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, sheetOpen]);
 
   // Handle no-go zones on resize
   useEffect(() => {
     if (isMultiplayer) return;
     const handler = () => {
-      const vw = window.innerWidth;
-      const vh = window.innerHeight;
+      const vw = window.innerWidth; const vh = window.innerHeight;
       const zones = getNoGoZones(location.pathname, vw, vh);
       setPos((p) => clampToSafe(p.x, p.y, BUBBLE_SIZE, vw, vh, zones));
     };
     window.addEventListener("resize", handler);
     window.addEventListener("orientationchange", handler);
     handler();
-    return () => {
-      window.removeEventListener("resize", handler);
-      window.removeEventListener("orientationchange", handler);
-    };
+    return () => { window.removeEventListener("resize", handler); window.removeEventListener("orientationchange", handler); };
   }, [isMultiplayer, location.pathname]);
 
-  // Drag handlers
+  // ─── HOLD+DRAG: Hold 300ms to start drag, tap to open ───
   const onPointerDown = useCallback((e: React.PointerEvent) => {
-    dragRef.current = { startX: e.clientX, startY: e.clientY, startPosX: pos.x, startPosY: pos.y, dragging: false };
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    const el = e.currentTarget as HTMLElement;
+    el.setPointerCapture(e.pointerId);
+    dragRef.current = { startX: e.clientX, startY: e.clientY, startPosX: pos.x, startPosY: pos.y, holding: false, dragging: false };
+
+    // Start hold timer
+    holdTimerRef.current = setTimeout(() => {
+      dragRef.current.holding = true;
+    }, HOLD_DELAY);
   }, [pos]);
 
   const onPointerMove = useCallback((e: React.PointerEvent) => {
     const d = dragRef.current;
     const dx = e.clientX - d.startX;
     const dy = e.clientY - d.startY;
-    if (!d.dragging && Math.abs(dx) + Math.abs(dy) > 8) d.dragging = true;
-    if (d.dragging) {
+
+    // If moved before hold timer → cancel hold (it's a tap)
+    if (!d.holding && Math.abs(dx) + Math.abs(dy) > 5 && holdTimerRef.current) {
+      // Small movement before hold: cancel the hold timer, it's still a tap
+      // But if they've already been holding, allow drag
+    }
+
+    // Only allow dragging if holding
+    if (d.holding) {
+      d.dragging = true;
       setPos({ x: d.startPosX + dx, y: d.startPosY + dy });
     }
   }, []);
 
   const onPointerUp = useCallback((e: React.PointerEvent) => {
+    // Clear hold timer
+    if (holdTimerRef.current) {
+      clearTimeout(holdTimerRef.current);
+      holdTimerRef.current = null;
+    }
+
     const d = dragRef.current;
     if (d.dragging) {
-      const vw = window.innerWidth;
-      const vh = window.innerHeight;
+      // End drag: snap to edge
+      const vw = window.innerWidth; const vh = window.innerHeight;
       const zones = getNoGoZones(location.pathname, vw, vh);
       const newPos = clampToSafe(pos.x, pos.y, BUBBLE_SIZE, vw, vh, zones);
       setPos(newPos);
@@ -378,14 +351,28 @@ export default function AIAgentHelperOverlay() {
       setSheetOpen(true);
       trackMonkey("bubble_open", pageContext, lang);
     }
+    dragRef.current.holding = false;
     dragRef.current.dragging = false;
   }, [pos, location.pathname, pageContext, lang]);
+
+  // Get board context for AI routes
+  const getBoardContext = useCallback(() => {
+    const ctx = (window as any).__AI_HELPER_CONTEXT__;
+    if (!ctx) return null;
+    return {
+      gameType: ctx.gameType || gameType,
+      moveHistory: ctx.moveHistory || [],
+      position: ctx.position || "",
+      turn: ctx.turn || "",
+      boardSummary: ctx.boardSummary || "",
+    };
+  }, [gameType]);
 
   // Send message
   const sendMessage = useCallback(async (text: string) => {
     if (!text.trim() || isStreaming) return;
-    const ctx = (window as any).__AI_HELPER_CONTEXT__;
-    const moveHistory = ctx?.moveHistory || [];
+    const boardCtx = getBoardContext();
+    const moveHistory = boardCtx?.moveHistory || [];
 
     if (!helperMode) {
       setHelperMode(isAIRoute ? "strategy" : "friend");
@@ -404,11 +391,14 @@ export default function AIAgentHelperOverlay() {
       payload: {
         lang,
         helperMode: helperMode || (isAIRoute ? "strategy" : "friend"),
-        gameType: ctx?.gameType || gameType || "general",
+        gameType: boardCtx?.gameType || gameType || "general",
         question: text.trim(),
         moveHistory,
         messages: [...messages, userMsg].slice(-10).map((m) => ({ role: m.role, content: m.content })),
-      },
+        // NEW: send board state + skill level
+        ...(boardCtx ? { boardState: boardCtx.position, boardSummary: boardCtx.boardSummary, currentTurn: boardCtx.turn } : {}),
+        ...(skillLevel ? { skillLevel } : {}),
+      } as any,
       onDelta: (chunk) => {
         assistantSoFar += chunk;
         setMessages((prev) => {
@@ -431,14 +421,15 @@ export default function AIAgentHelperOverlay() {
         setTimeout(() => setBubbleState("idle"), 3000);
       },
     });
-  }, [isStreaming, lang, helperMode, gameType, messages, isAIRoute]);
+  }, [isStreaming, lang, helperMode, gameType, messages, isAIRoute, skillLevel, getBoardContext]);
 
   const clearChat = useCallback(() => {
     setMessages([]);
     setHelperMode(null);
     setWelcomeAccepted(false);
+    setSkillLevel(null);
     trackMonkey("chat_cleared", pageContext, lang);
-    try { localStorage.removeItem("aihelper-chat"); localStorage.removeItem("aihelper-mode"); } catch {}
+    try { localStorage.removeItem("aihelper-chat"); localStorage.removeItem("aihelper-mode"); localStorage.removeItem("aihelper-skill"); } catch {}
   }, [pageContext, lang]);
 
   const shareMessage = useCallback(async (text: string) => {
@@ -450,32 +441,26 @@ export default function AIAgentHelperOverlay() {
       navigator.share({ files: [file], title: "Money – 1MGAMING AI", text: "With Strategy and Intelligence We Create WEALTH" }).catch(() => {});
     } else {
       const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "1mgaming-insight.png";
-      a.click();
+      const a = document.createElement("a"); a.href = url; a.download = "1mgaming-insight.png"; a.click();
       URL.revokeObjectURL(url);
     }
   }, []);
 
-  // ─── Don't render on multiplayer routes ───
   if (isMultiplayer) return null;
 
   const glowColor = bubbleState === "thinking" ? "rgba(250,204,21,0.6)" : bubbleState === "success" ? "rgba(34,197,94,0.5)" : bubbleState === "warning" ? "rgba(239,68,68,0.5)" : "rgba(250,204,21,0.25)";
-  const subtitle = isAIRoute ? t(lang, "subtitleAI") : t(lang, "subtitleGeneral");
+  const subtitle = isAIRoute ? tr(lang, "subtitleAI") : tr(lang, "subtitleGeneral");
 
   const quickChips = isAIRoute
-    ? ["chipRules", "chipOptions", "chipImprove", "chipWrong"]
+    ? ["chipRules", "chipSuggest", "chipImprove", "chipWrong"]
     : ["chipNavHelp", "chipWalletHelp", "chipGameTypes", "chipFreePlay"];
 
   // ── Flow logic ──
-  // First time ever & not yet accepted → simple "Hello I am Money" with Yes/No
   const showFirstTimeWelcome = isFirstVisit && !welcomeAccepted && !helperMode && messages.length === 0 && !isAIRoute;
-  // Subsequent opens (or after accepting) → "How can I assist you?" + action menu
   const showAssistMenu = !showFirstTimeWelcome && !helperMode && messages.length === 0 && !isAIRoute;
-  // AI mode picker
-  const showAIModePicker = !helperMode && messages.length === 0 && isAIRoute;
-  // Chat UI visible when mode is set or messages exist
+  // AI route: show skill picker first, then mode picker
+  const showSkillPicker = isAIRoute && !skillLevel && messages.length === 0;
+  const showAIModePicker = isAIRoute && skillLevel && !helperMode && messages.length === 0;
   const showChatUI = helperMode || messages.length > 0;
 
   return (
@@ -520,124 +505,124 @@ export default function AIAgentHelperOverlay() {
         </div>
       )}
 
-      {/* Bottom Sheet */}
+      {/* Panel — compact on AI routes, full sheet elsewhere */}
       {sheetOpen && (
-        <div className="fixed inset-0 z-[10000] flex flex-col justify-end" onClick={() => setSheetOpen(false)}>
-          <div className="absolute inset-0 bg-black/50" />
+        <div
+          className={`fixed z-[10000] ${isAIRoute ? "bottom-0 left-0 right-0" : "inset-0 flex flex-col justify-end"}`}
+          onClick={() => !isAIRoute && setSheetOpen(false)}
+        >
+          {/* Backdrop only on non-AI routes */}
+          {!isAIRoute && <div className="absolute inset-0 bg-black/50" />}
 
           <div
-            className="relative bg-background border-t border-primary/30 rounded-t-2xl max-h-[85vh] flex flex-col animate-in slide-in-from-bottom duration-300"
+            className={`relative bg-background border-t border-primary/30 flex flex-col animate-in slide-in-from-bottom duration-300 ${
+              isAIRoute ? "rounded-t-xl max-h-[40vh]" : "rounded-t-2xl max-h-[85vh]"
+            }`}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-primary/20">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full overflow-hidden border border-primary" style={{ background: "#ffffff" }}>
+            <div className={`flex items-center justify-between px-3 ${isAIRoute ? "py-1.5" : "py-3"} border-b border-primary/20`}>
+              <div className="flex items-center gap-2">
+                <div className={`rounded-full overflow-hidden border border-primary ${isAIRoute ? "w-7 h-7" : "w-10 h-10"}`} style={{ background: "#ffffff" }}>
                   <img src={monkeyHappy} alt="Money" className="w-full h-full object-cover" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-foreground text-sm">{t(lang, "title")}</h3>
-                  <p className="text-xs text-muted-foreground">{subtitle}</p>
+                  <h3 className={`font-bold text-foreground ${isAIRoute ? "text-xs" : "text-sm"}`}>{tr(lang, "title")}</h3>
+                  {!isAIRoute && <p className="text-xs text-muted-foreground">{subtitle}</p>}
                 </div>
               </div>
-              <button onClick={() => setSheetOpen(false)} className="p-2 hover:bg-muted rounded-full">
-                <X size={20} className="text-muted-foreground" />
+              <button onClick={() => setSheetOpen(false)} className="p-1.5 hover:bg-muted rounded-full">
+                <X size={isAIRoute ? 16 : 20} className="text-muted-foreground" />
               </button>
             </div>
 
-            {/* Chat Area */}
-            <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 min-h-[200px] max-h-[60vh]">
-              {/* ── First-time welcome (simple greeting) ── */}
+            {/* Chat Area — scrollable, compact on AI routes */}
+            <div className={`flex-1 overflow-y-auto px-3 py-2 space-y-2 ${isAIRoute ? "min-h-[60px] max-h-[20vh]" : "min-h-[200px] max-h-[60vh]"}`}>
+              {/* ── First-time welcome ── */}
               {showFirstTimeWelcome && (
-                <div className="space-y-4">
-                  <div className="bg-muted/50 rounded-lg p-4 text-sm text-foreground">
-                    <div className="flex items-center gap-3 mb-3">
-                      <div className="w-12 h-12 rounded-full overflow-hidden border border-primary shrink-0" style={{ background: "#ffffff" }}>
-                        <img src={monkeyHappy} alt="Money" className="w-full h-full object-cover" />
-                      </div>
-                      <p className="font-semibold">{t(lang, "welcomeGreeting")}</p>
-                    </div>
-                  </div>
-                  <div className="flex gap-3 justify-center">
-                    <button
-                      onClick={() => {
-                        trackMonkey("welcome_yes", pageContext, lang);
-                        setWelcomeAccepted(true);
-                      }}
-                      className="px-5 py-2 rounded-full text-sm font-semibold bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-                    >
-                      {t(lang, "welcomeYes")}
-                    </button>
-                    <button
-                      onClick={() => {
-                        trackMonkey("welcome_no", pageContext, lang);
-                        setSheetOpen(false);
-                      }}
-                      className="px-5 py-2 rounded-full text-sm font-medium border border-border text-muted-foreground hover:border-primary transition-colors"
-                    >
-                      {t(lang, "welcomeNo")}
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* ── "How can I assist you?" menu (subsequent opens) ── */}
-              {showAssistMenu && (
-                <div className="space-y-4">
-                  <div className="bg-muted/50 rounded-lg p-4 text-sm text-foreground">
+                <div className="space-y-3">
+                  <div className="bg-muted/50 rounded-lg p-3 text-sm text-foreground">
                     <div className="flex items-center gap-3 mb-2">
                       <div className="w-10 h-10 rounded-full overflow-hidden border border-primary shrink-0" style={{ background: "#ffffff" }}>
                         <img src={monkeyHappy} alt="Money" className="w-full h-full object-cover" />
                       </div>
-                      <p className="font-semibold">{t(lang, "assistGreeting")}</p>
+                      <p className="font-semibold">{tr(lang, "welcomeGreeting")}</p>
                     </div>
-                    <p className="text-primary font-medium text-xs italic">
-                      "{t(lang, "slogan")}"
-                    </p>
                   </div>
+                  <div className="flex gap-3 justify-center">
+                    <button
+                      onClick={() => { trackMonkey("welcome_yes", pageContext, lang); setWelcomeAccepted(true); }}
+                      className="px-5 py-2 rounded-full text-sm font-semibold bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                    >{tr(lang, "welcomeYes")}</button>
+                    <button
+                      onClick={() => { trackMonkey("welcome_no", pageContext, lang); setSheetOpen(false); }}
+                      className="px-5 py-2 rounded-full text-sm font-medium border border-border text-muted-foreground hover:border-primary transition-colors"
+                    >{tr(lang, "welcomeNo")}</button>
+                  </div>
+                </div>
+              )}
 
+              {/* ── "How can I assist you?" menu ── */}
+              {showAssistMenu && (
+                <div className="space-y-3">
+                  <div className="bg-muted/50 rounded-lg p-3 text-sm text-foreground">
+                    <div className="flex items-center gap-3 mb-1">
+                      <div className="w-8 h-8 rounded-full overflow-hidden border border-primary shrink-0" style={{ background: "#ffffff" }}>
+                        <img src={monkeyHappy} alt="Money" className="w-full h-full object-cover" />
+                      </div>
+                      <p className="font-semibold">{tr(lang, "assistGreeting")}</p>
+                    </div>
+                    <p className="text-primary font-medium text-xs italic">"{tr(lang, "slogan")}"</p>
+                  </div>
                   <div className="grid grid-cols-2 gap-2">
                     {WELCOME_ACTIONS.map(({ key, icon: Icon }) => (
                       <button
                         key={key}
-                        onClick={() => {
-                          trackMonkey("assist_action", pageContext, lang, key);
-                          setHelperMode("friend");
-                          sendMessage(t(lang, key));
-                        }}
-                        className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-medium border border-border bg-muted/30 text-foreground hover:border-primary hover:bg-primary/10 transition-all text-left"
+                        onClick={() => { trackMonkey("assist_action", pageContext, lang, key); setHelperMode("friend"); sendMessage(tr(lang, key)); }}
+                        className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium border border-border bg-muted/30 text-foreground hover:border-primary hover:bg-primary/10 transition-all text-left"
                       >
                         <Icon size={16} className="text-primary shrink-0" />
-                        <span>{t(lang, key)}</span>
+                        <span>{tr(lang, key)}</span>
                       </button>
                     ))}
                   </div>
                 </div>
               )}
 
-              {/* ── AI mode picker (on /play-ai/* routes) ── */}
-              {showAIModePicker && (
-                <div className="space-y-3">
-                  <div className="bg-muted/50 rounded-lg p-3 text-sm text-foreground">
-                    <p>{t(lang, "intro")}</p>
-                    <p className="mt-2 text-primary font-medium text-xs italic">
-                      "{t(lang, "slogan")}"
-                    </p>
-                    <p className="mt-2 text-muted-foreground text-xs">{t(lang, "introClose")}</p>
+              {/* ── Skill level picker (AI routes, first step) ── */}
+              {showSkillPicker && (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-foreground">{tr(lang, "skillQuestion")}</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {SKILL_LEVELS.map(({ key, labelKey }) => (
+                      <button
+                        key={key}
+                        onClick={() => {
+                          trackMonkey("skill_selected", pageContext, lang, key);
+                          setSkillLevel(key);
+                        }}
+                        className="px-3 py-1.5 rounded-full text-xs font-medium border border-border bg-muted/30 text-foreground hover:border-primary hover:bg-primary/10 transition-colors"
+                      >
+                        {tr(lang, labelKey)}
+                      </button>
+                    ))}
                   </div>
+                </div>
+              )}
+
+              {/* ── AI mode picker (after skill level) ── */}
+              {showAIModePicker && (
+                <div className="space-y-2">
+                  <p className="text-sm text-foreground">{tr(lang, "intro")}</p>
                   <div className="flex flex-wrap gap-2">
                     {(["strategy", "rules", "friend"] as HelperMode[]).map((mode) => (
                       <button
                         key={mode}
                         onClick={() => { trackMonkey("mode_selected", pageContext, lang, mode); setHelperMode(mode); }}
                         className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
-                          mode === "strategy"
-                            ? "bg-primary text-primary-foreground border-primary"
-                            : "bg-muted/50 text-foreground border-border hover:border-primary"
+                          mode === "strategy" ? "bg-primary text-primary-foreground border-primary" : "bg-muted/50 text-foreground border-border hover:border-primary"
                         }`}
-                      >
-                        {t(lang, mode)}
-                      </button>
+                      >{tr(lang, mode)}</button>
                     ))}
                   </div>
                 </div>
@@ -647,19 +632,14 @@ export default function AIAgentHelperOverlay() {
               {messages.map((msg, i) => (
                 <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
                   <div
-                    className={`max-w-[85%] rounded-xl px-3 py-2 text-sm ${
-                      msg.role === "user"
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-muted/50 text-foreground"
+                    className={`max-w-[85%] rounded-xl px-3 py-1.5 text-xs ${
+                      msg.role === "user" ? "bg-primary text-primary-foreground" : "bg-muted/50 text-foreground"
                     }`}
                   >
                     <p className="whitespace-pre-wrap">{msg.content}</p>
                     {msg.role === "assistant" && !isStreaming && (
-                      <button
-                        onClick={() => shareMessage(msg.content)}
-                        className="mt-1 flex items-center gap-1 text-xs text-muted-foreground hover:text-primary"
-                      >
-                        <Share2 size={12} /> {t(lang, "share")}
+                      <button onClick={() => shareMessage(msg.content)} className="mt-0.5 flex items-center gap-1 text-[10px] text-muted-foreground hover:text-primary">
+                        <Share2 size={10} /> {tr(lang, "share")}
                       </button>
                     )}
                   </div>
@@ -669,7 +649,7 @@ export default function AIAgentHelperOverlay() {
               {isStreaming && (
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
-                  {t(lang, "thinking")}
+                  {tr(lang, "thinking")}
                 </div>
               )}
               <div ref={chatEndRef} />
@@ -677,39 +657,33 @@ export default function AIAgentHelperOverlay() {
 
             {/* Quick chips */}
             {showChatUI && !isStreaming && (
-              <div className="px-4 py-2 flex gap-2 overflow-x-auto border-t border-border/50">
+              <div className="px-3 py-1.5 flex gap-1.5 overflow-x-auto border-t border-border/50">
                 {quickChips.map((key) => (
                   <button
                     key={key}
-                    onClick={() => { trackMonkey("chip_tapped", pageContext, lang, key); sendMessage(t(lang, key)); }}
-                    className="shrink-0 px-3 py-1 rounded-full text-xs border border-border bg-muted/30 text-foreground hover:border-primary transition-colors"
-                  >
-                    {t(lang, key)}
-                  </button>
+                    onClick={() => { trackMonkey("chip_tapped", pageContext, lang, key); sendMessage(tr(lang, key)); }}
+                    className="shrink-0 px-2.5 py-1 rounded-full text-[10px] border border-border bg-muted/30 text-foreground hover:border-primary transition-colors"
+                  >{tr(lang, key)}</button>
                 ))}
               </div>
             )}
 
             {/* Input */}
-            <div className="px-4 py-3 border-t border-border/50 flex items-center gap-2">
-              <button onClick={clearChat} className="p-2 text-muted-foreground hover:text-destructive" title={t(lang, "clear")}>
-                <Trash2 size={16} />
+            <div className={`px-3 ${isAIRoute ? "py-1.5" : "py-3"} border-t border-border/50 flex items-center gap-2`}>
+              <button onClick={clearChat} className="p-1.5 text-muted-foreground hover:text-destructive" title={tr(lang, "clear")}>
+                <Trash2 size={14} />
               </button>
               <input
                 ref={inputRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendMessage(input)}
-                placeholder={t(lang, "placeholder")}
-                className="flex-1 bg-muted/30 border border-border rounded-full px-4 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
+                placeholder={tr(lang, "placeholder")}
+                className={`flex-1 bg-muted/30 border border-border rounded-full px-3 ${isAIRoute ? "py-1 text-xs" : "py-2 text-sm"} text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary`}
                 disabled={isStreaming}
               />
-              <button
-                onClick={() => sendMessage(input)}
-                disabled={!input.trim() || isStreaming}
-                className="p-2 text-primary disabled:text-muted-foreground"
-              >
-                <Send size={18} />
+              <button onClick={() => sendMessage(input)} disabled={!input.trim() || isStreaming} className="p-1.5 text-primary disabled:text-muted-foreground">
+                <Send size={isAIRoute ? 14 : 18} />
               </button>
             </div>
           </div>

@@ -223,16 +223,32 @@ const LudoAI = () => {
     homeColumn: 55,
   }));
 
-  // Publish context for AI helper overlay
+  // Publish context for AI helper overlay (board-aware)
   useEffect(() => {
+    // Build human-readable board summary for the AI
+    const summaryParts = gameState.players.map((p) => {
+      const inBase = p.tokens.filter(t => t.state === 'BASE').length;
+      const onTrack = p.tokens.filter(t => t.state === 'TRACK').length;
+      const inHome = p.tokens.filter(t => t.state === 'HOME_PATH').length;
+      const finished = p.tokens.filter(t => t.state === 'FINISHED').length;
+      const positions = p.tokens
+        .filter(t => t.state === 'TRACK' || t.state === 'HOME_PATH')
+        .map(t => `${t.state === 'HOME_PATH' ? 'H' : ''}${t.position ?? 0}`)
+        .join(',');
+      return `${p.color}(${p.isAI ? 'AI' : 'Human'}): base=${inBase} track=${onTrack}[${positions}] homePath=${inHome} finished=${finished}`;
+    });
+    const diceInfo = diceValue ? `Dice: ${diceValue}` : 'No dice yet';
+    const boardSummary = `${summaryParts.join(' | ')} | ${diceInfo} | Turn: ${currentPlayer.color}${currentPlayer.isAI ? '(AI)' : '(You)'}`;
+
     (window as any).__AI_HELPER_CONTEXT__ = {
       gameType: "ludo",
       moveHistory: [],
       position: JSON.stringify({ players: gameState.players.map(p => ({ color: p.color, tokens: p.tokens })), current: gameState.currentPlayerIndex }),
       turn: currentPlayer.color,
+      boardSummary,
     };
     return () => { delete (window as any).__AI_HELPER_CONTEXT__; };
-  }, [gameState, currentPlayer]);
+  }, [gameState, currentPlayer, diceValue]);
 
   // ============ RENDER ============
   return (
