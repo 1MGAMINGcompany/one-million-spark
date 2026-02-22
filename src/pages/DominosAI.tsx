@@ -438,6 +438,17 @@ const DominosAI = () => {
     );
   };
 
+  // Publish context for AI helper overlay
+  useEffect(() => {
+    (window as any).__AI_HELPER_CONTEXT__ = {
+      gameType: "dominos",
+      moveHistory: chain.map(d => `[${d.flipped ? d.right : d.left}|${d.flipped ? d.left : d.right}]`),
+      position: JSON.stringify({ chainEnds: getChainEnds(), playerHandSize: playerHand.length, aiHandSize: aiHand.length }),
+      turn: isPlayerTurn ? "player" : "ai",
+    };
+    return () => { delete (window as any).__AI_HELPER_CONTEXT__; };
+  }, [chain, playerHand, aiHand, isPlayerTurn, getChainEnds]);
+
   return (
     <div className="min-h-screen bg-background relative overflow-hidden">
       {/* Gold Confetti Explosion on Win */}

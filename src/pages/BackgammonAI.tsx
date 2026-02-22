@@ -488,6 +488,17 @@ const BackgammonAI = () => {
     setGameResultInfo(null);
   }, [t]);
 
+  // Publish context for AI helper overlay
+  useEffect(() => {
+    (window as any).__AI_HELPER_CONTEXT__ = {
+      gameType: "backgammon",
+      moveHistory: [], // backgammon doesn't track SAN; provide board state
+      position: JSON.stringify({ points: gameState.points, bar: gameState.bar, bearOff: gameState.bearOff }),
+      turn: currentPlayer,
+    };
+    return () => { delete (window as any).__AI_HELPER_CONTEXT__; };
+  }, [gameState, currentPlayer]);
+
   // ============== DESKTOP POINT RENDERING ==============
   const renderDesktopPoint = (index: number, isTop: boolean) => {
     const value = gameState.points[index];

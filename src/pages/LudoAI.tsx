@@ -223,6 +223,17 @@ const LudoAI = () => {
     homeColumn: 55,
   }));
 
+  // Publish context for AI helper overlay
+  useEffect(() => {
+    (window as any).__AI_HELPER_CONTEXT__ = {
+      gameType: "ludo",
+      moveHistory: [],
+      position: JSON.stringify({ players: gameState.players.map(p => ({ color: p.color, tokens: p.tokens })), current: gameState.currentPlayerIndex }),
+      turn: currentPlayer.color,
+    };
+    return () => { delete (window as any).__AI_HELPER_CONTEXT__; };
+  }, [gameState, currentPlayer]);
+
   // ============ RENDER ============
   return (
     <div className="min-h-screen bg-gradient-to-b from-amber-950 via-amber-900 to-amber-950 pb-20">

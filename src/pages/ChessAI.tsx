@@ -360,6 +360,17 @@ const ChessAI = () => {
     setIsThinking(false);
   }, [t]);
 
+  // Publish context for AI helper overlay
+  useEffect(() => {
+    (window as any).__AI_HELPER_CONTEXT__ = {
+      gameType: "chess",
+      moveHistory,
+      position: game.fen(),
+      turn: game.turn() === "w" ? "white" : "black",
+    };
+    return () => { delete (window as any).__AI_HELPER_CONTEXT__; };
+  }, [moveHistory, game]);
+
   const formattedMoves = [];
   for (let i = 0; i < moveHistory.length; i += 2) {
     formattedMoves.push({
