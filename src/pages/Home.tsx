@@ -5,7 +5,7 @@ import { Swords, Users, Bot, Trophy, Gem, Star, Shield, Zap } from "lucide-react
 import FeaturedGameCard from "@/components/FeaturedGameCard";
 import { ChessIcon, DominoIcon, BackgammonIcon, CheckersIcon, LudoIcon } from "@/components/GameIcons";
 import PyramidLogo from "@/components/PyramidLogo";
-import { MobileAppPrompt } from "@/components/MobileAppPrompt";
+// import { MobileAppPrompt } from "@/components/MobileAppPrompt"; // Temporarily disabled
 import { usePrivySolBalance } from "@/hooks/usePrivySolBalance";
 import { AddSolCard } from "@/components/AddSolCard";
 import { WelcomeIntroModal } from "@/components/WelcomeIntroModal";
@@ -251,7 +251,7 @@ const Home = () => {
         </div>
       </section>
 
-      <MobileAppPrompt />
+      {/* <MobileAppPrompt /> — re-enable when PWA install is ready */}
     </div>
   );
 };
