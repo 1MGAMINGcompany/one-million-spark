@@ -1,74 +1,56 @@
 
 
-# Fix: Notify Opponent When Player Exits Ludo Multiplayer
+# Fix: Board Slot vs Room Index Mapping Bugs in Ludo Multiplayer
 
 ## Problem
 
-When a player exits a Ludo multiplayer game (via the leave button, back navigation, or closing the browser), the other player is never notified. They sit there waiting for a turn that will never come.
+The previous fix correctly introduced `activeSlots` to map room positions to board slots (e.g., 2-player: `[0, 2]`), but several places in `LudoGame.tsx` still use `currentPlayerIndex` (a board slot: 0 or 2) as a direct index into `roomPlayers[]` (which only has indices 0 and 1). This causes:
 
-Three exit paths are broken:
-1. **handleUILeave** (line 492): Just calls `navigate()` -- sends NO WebRTC message and NO DB update
-2. **handleConfirmForfeit** (line 448): Sends `sendPlayerEliminated` via WebRTC, but WebRTC is unreliable on mobile -- if the connection dropped, the message is lost. The `forfeitGame` backend call updates on-chain state but does NOT update `game_sessions` status.
-3. **Browser close / tab switch**: No `beforeunload` or `visibilitychange` handler -- no cleanup happens at all
+- **Winner address is wrong**: If sapphire (slot 2) wins, code tries `roomPlayers[2]` which is `undefined`
+- **Turn display is broken**: `turnPlayers[currentPlayerIndex]` looks up by board slot (2) in a filtered array that only has 2 entries
+- **Start roll starter is wrong**: Sets `currentPlayerIndex` to room index (0 or 1) instead of board slot (0 or 2)
+- **Polling fallback sets wrong turn**: Same room-index-to-slot confusion
 
-## Fix Plan
+## LudoAI Impact: NONE
 
-### 1. Update `handleUILeave` to broadcast resignation before navigating
+LudoAI uses a completely separate engine (`useLudoGame` from `src/hooks/useLudoGame.ts` + `src/lib/ludo/engine.ts`). None of the multiplayer changes touched these files. LudoAI always runs with 4 players, all using the original engine. No regression risk.
 
-**File: `src/pages/LudoGame.tsx`**
+## Bugs to Fix (all in `src/pages/LudoGame.tsx`)
 
-Before navigating away in `handleUILeave`, send a WebRTC `resign` message AND update the DB game session via `finish_game_session` RPC so the opponent's realtime subscription picks it up even if WebRTC fails.
+### Bug 1: Winner address lookup (line 831)
+**Current**: `roomPlayers[winnerIndex]` -- winnerIndex is a board slot (e.g., 2), but roomPlayers only has entries at indices 0 and 1.
+**Fix**: Map through activeSlots: `const roomIdx = activeSlots.indexOf(winnerIndex); return roomIdx >= 0 ? roomPlayers[roomIdx] : null;`
 
-```
-const handleUILeave = useCallback(async () => {
-  // Broadcast via WebRTC (best-effort)
-  sendPlayerEliminatedRef.current?.(myPlayerIndex);
-  
-  // Update DB so opponent's realtime subscription detects it
-  if (roomPda) {
-    await supabase.rpc("finish_game_session", {
-      p_room_pda: roomPda,
-      p_caller_wallet: effectivePlayerId,
-      p_winner_wallet: null, // no winner on leave
-    }).catch(() => {});
-  }
-  
-  navigate("/room-list");
-  toast({ ... });
-}, [...]);
-```
+### Bug 2: activeTurnAddress (line 788)
+**Current**: `turnPlayers[currentPlayerIndex]` -- turnPlayers is filtered (only 2 entries for 2-player), currentPlayerIndex can be 2.
+**Fix**: `turnPlayers.find(tp => tp.seatIndex === currentPlayerIndex)?.address || null`
 
-### 2. Add `beforeunload` and `visibilitychange` handlers
+### Bug 3: TurnStatusHeader activePlayer (line 1321)
+**Current**: `turnPlayers[currentPlayerIndex]` -- same filtered array vs slot index mismatch.
+**Fix**: `turnPlayers.find(tp => tp.seatIndex === currentPlayerIndex)`
 
-**File: `src/pages/LudoGame.tsx`**
+### Bug 4: Start roll starter mapping (line 393-395)
+**Current**: `setCurrentPlayerIndex(starterIndex)` where starterIndex is a roomPlayers index (0 or 1).
+**Fix**: `setCurrentPlayerIndex(activeSlots[starterIndex] ?? starterIndex)` to convert to board slot.
 
-Add a `useEffect` that listens for tab close / browser close events and sends a beacon to the DB to mark the session as abandoned. Use `navigator.sendBeacon` for reliability on page unload.
+### Bug 5: Polling fallback turn mapping (line 742-744)
+**Current**: `setCurrentPlayerIndex(dbTurnIndex)` where dbTurnIndex is a roomPlayers index.
+**Fix**: `setCurrentPlayerIndex(activeSlots[dbTurnIndex] ?? dbTurnIndex)` to convert to board slot.
 
-### 3. Add opponent disconnect detection via game_sessions realtime
-
-**File: `src/pages/LudoGame.tsx`**
-
-Subscribe to `game_sessions` changes for the current room. When `status_int` changes to 3 (finished) or 5 (cancelled) while the game is still in progress locally, show a toast: "Your opponent left the game" and end the game.
-
-This uses the existing `useRoomRealtimeAlert` pattern but watches for game-over transitions instead of waiting-to-active.
-
-### 4. Update `handleConfirmForfeit` to also update DB
-
-**File: `src/pages/LudoGame.tsx`**
-
-After the `forfeitGame` on-chain call, also call `finish_game_session` RPC to set the DB status. Currently `forfeitGame` only handles on-chain state, leaving the DB row in "active" state. The opponent's realtime subscription never fires.
+### Bug 6: "Waiting" status text (line 1372)
+**Current**: Shows opponent color name from `currentPlayer.color` -- but for 2-player, when it's player 2's turn, the color should show "Sapphire" not "Ruby".
+This is actually correct since `currentPlayer` comes from `players[currentPlayerIndex]` which uses the board slot. No fix needed.
 
 ## Files Modified
 
 | File | Changes |
 |------|---------|
-| `src/pages/LudoGame.tsx` | Fix handleUILeave to broadcast + update DB. Add beforeunload/visibilitychange handler. Add realtime subscription for opponent disconnect. Fix handleConfirmForfeit to update DB. |
+| `src/pages/LudoGame.tsx` | Fix 5 index mapping bugs (winner, activeTurnAddress, TurnStatusHeader, startRoll, polling) |
 
 ## What Does NOT Change
 
-- WebRTC infrastructure
-- On-chain forfeit/cancel logic  
-- Other game pages (Chess, Backgammon, etc. have the same issue but are out of scope for this fix -- can be done as follow-up)
-- Edge functions
-- Database schema (uses existing `finish_game_session` RPC)
-
+- LudoAI.tsx (completely separate engine, not affected)
+- useLudoEngine.ts (already correct with activeSlots)
+- LudoBoard.tsx (already correct with activePlayerIndices)
+- ludoTypes.ts (already correct)
+- Any edge functions or database schema
