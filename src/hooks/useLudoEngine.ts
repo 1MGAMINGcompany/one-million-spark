@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from "react";
-import { Player, PlayerColor, Token, initializePlayers, TRACK_SIZE, SAFE_SQUARES } from "@/components/ludo/ludoTypes";
+import { Player, PlayerColor, Token, initializePlayers, initializePlayersForCount, getActiveSlots, getNextActiveSlot, TRACK_SIZE, SAFE_SQUARES } from "@/components/ludo/ludoTypes";
 
 // ============ GAME CONSTANTS ============
 const FINISH_POSITION = 62;
@@ -32,16 +32,17 @@ export interface LudoCaptureEvent {
 
 interface UseLudoEngineOptions {
   activePlayerCount?: number; // How many players are actually in the game (2, 3, or 4). Defaults to 4.
+  isMultiplayer?: boolean; // If true, uses initializePlayersForCount with proper slot mapping
   onSoundPlay?: (sound: string) => void;
   onToast?: (title: string, description: string, variant?: "default" | "destructive") => void;
 }
 
 export function useLudoEngine(options: UseLudoEngineOptions = {}) {
-  const { activePlayerCount = 4, onSoundPlay, onToast } = options;
-  const playerMod = Math.max(2, Math.min(4, activePlayerCount)); // clamp 2-4
+  const { activePlayerCount = 4, isMultiplayer = false, onSoundPlay, onToast } = options;
+  const activeSlots = getActiveSlots(activePlayerCount);
   
   // ============ CORE STATE ============
-  const [players, setPlayers] = useState<Player[]>(() => initializePlayers());
+  const [players, setPlayers] = useState<Player[]>(() => isMultiplayer ? initializePlayersForCount(activePlayerCount) : initializePlayers());
   const [currentPlayerIndex, setCurrentPlayerIndex] = useState(0);
   const [phase, setPhase] = useState<GamePhase>('WAITING_FOR_ROLL');
   const [diceValue, setDiceValue] = useState<number | null>(null);
@@ -142,7 +143,7 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
             setConsecutiveSixes(0);
             setDiceValue(null);
             setMovableTokens([]);
-              setCurrentPlayerIndex(prev => (prev + 1) % playerMod);
+              setCurrentPlayerIndex(prev => getNextActiveSlot(prev, activeSlots));
             setTurnSignal(prev => prev + 1);
             setPhase('WAITING_FOR_ROLL');
             onRollComplete?.(finalValue, []);
@@ -169,8 +170,8 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
             if (finalValue === 6) {
               setPhase('WAITING_FOR_ROLL');
             } else {
-              setConsecutiveSixes(0);
-              setCurrentPlayerIndex(prev => (prev + 1) % playerMod);
+            setConsecutiveSixes(0);
+              setCurrentPlayerIndex(prev => getNextActiveSlot(prev, activeSlots));
               setTurnSignal(prev => prev + 1);
               setPhase('WAITING_FOR_ROLL');
             }
@@ -354,8 +355,8 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
         console.log(`[LUDO] Bonus turn! Rolled 6, ${players[playerIndex].color} goes again.`);
         setPhase('WAITING_FOR_ROLL');
       } else {
-        setConsecutiveSixes(0);
-        setCurrentPlayerIndex(prev => (prev + 1) % playerMod);
+              setConsecutiveSixes(0);
+              setCurrentPlayerIndex(prev => getNextActiveSlot(prev, activeSlots));
         setTurnSignal(prev => prev + 1);
         setPhase('WAITING_FOR_ROLL');
       }
@@ -367,7 +368,7 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
     const isBonusTurn = diceRolled === 6;
     
     if (!isBonusTurn) {
-      setCurrentPlayerIndex(prev => (prev + 1) % playerMod);
+      setCurrentPlayerIndex(prev => getNextActiveSlot(prev, activeSlots));
     }
     
     setDiceValue(null);
@@ -377,13 +378,75 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
     setPhase('WAITING_FOR_ROLL');
     
     return isBonusTurn;
-  }, [consecutiveSixes, playerMod]);
+  }, [consecutiveSixes, activeSlots]);
 
-  // Apply external move - backwards compatible stub
+  // Apply external move from opponent (via WebRTC/durable sync)
   const applyExternalMove = useCallback((move: LudoMove): boolean => {
-    console.log('[LUDO] applyExternalMove called (stub):', move);
+    console.log('[LUDO] applyExternalMove:', move);
+    
+    const { playerIndex, tokenIndex, diceValue: dice, startPosition, endPosition } = move;
+    
+    // Update token position
+    setPlayers(prev => {
+      const newPlayers = prev.map(p => ({
+        ...p,
+        tokens: p.tokens.map(t => ({ ...t }))
+      }));
+      
+      newPlayers[playerIndex].tokens[tokenIndex].position = endPosition;
+      
+      // Check for captures on main track
+      const MAIN_TRACK_END = 55;
+      if (endPosition >= 0 && endPosition <= MAIN_TRACK_END) {
+        const movingPlayer = newPlayers[playerIndex];
+        const myAbsPos = (endPosition + movingPlayer.startPosition) % TRACK_SIZE;
+        const isLandingOnSafe = SAFE_SQUARES.includes(myAbsPos);
+        
+        if (!isLandingOnSafe) {
+          newPlayers.forEach((otherPlayer, opi) => {
+            if (opi !== playerIndex) {
+              otherPlayer.tokens.forEach((otherToken, oti) => {
+                if (otherToken.position >= 0 && otherToken.position <= MAIN_TRACK_END) {
+                  const otherAbsPos = (otherToken.position + otherPlayer.startPosition) % TRACK_SIZE;
+                  if (otherAbsPos === myAbsPos) {
+                    newPlayers[opi].tokens[oti].position = -1;
+                    console.log(`[LUDO] External capture: ${movingPlayer.color} captured ${otherPlayer.color} token#${oti}`);
+                    onSoundPlay?.('ludo_capture');
+                  }
+                }
+              });
+            }
+          });
+        }
+      }
+      
+      // Check winner
+      const FINISH_POSITION = 62;
+      const winnerColor = newPlayers.find(p => p.tokens.every(t => t.position === FINISH_POSITION))?.color || null;
+      if (winnerColor) {
+        setWinner(winnerColor);
+        setPhase('GAME_OVER');
+      }
+      
+      return newPlayers;
+    });
+    
+    // Advance turn
+    setTimeout(() => {
+      setDiceValue(null);
+      if (dice === 6) {
+        // Bonus turn for the same player
+        setPhase('WAITING_FOR_ROLL');
+      } else {
+        setConsecutiveSixes(0);
+        setCurrentPlayerIndex(prev => getNextActiveSlot(prev, activeSlots));
+        setTurnSignal(prev => prev + 1);
+        setPhase('WAITING_FOR_ROLL');
+      }
+    }, 200);
+    
     return true;
-  }, []);
+  }, [activeSlots, onSoundPlay]);
 
   // Eliminate player - backwards compatible
   const eliminatePlayer = useCallback((playerIndex: number) => {
@@ -407,7 +470,7 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
       diceIntervalRef.current = null;
     }
 
-    setPlayers(initializePlayers());
+    setPlayers(isMultiplayer ? initializePlayersForCount(activePlayerCount) : initializePlayers());
     setCurrentPlayerIndex(0);
     setPhase('WAITING_FOR_ROLL');
     setDiceValue(null);

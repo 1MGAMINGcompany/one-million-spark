@@ -123,6 +123,45 @@ export const getTokenCoords = (
   return null;
 };
 
+// Slot mapping: which player indices are active for a given player count
+// 2 players: opposite corners (gold=0, sapphire=2)
+// 3 players: gold=0, ruby=1, emerald=3
+// 4 players: all four
+export function getActiveSlots(playerCount: number): number[] {
+  switch (playerCount) {
+    case 2: return [0, 2];       // Gold & Sapphire (opposite corners)
+    case 3: return [0, 1, 3];    // Gold, Ruby, Emerald
+    default: return [0, 1, 2, 3]; // All four
+  }
+}
+
+// Get next active player index (skipping inactive slots)
+export function getNextActiveSlot(current: number, activeSlots: number[]): number {
+  const idx = activeSlots.indexOf(current);
+  if (idx === -1) return activeSlots[0];
+  return activeSlots[(idx + 1) % activeSlots.length];
+}
+
+const ALL_COLORS: PlayerColor[] = ["gold", "ruby", "sapphire", "emerald"];
+
+// Initialize players for a specific player count (multiplayer)
+// All active players are marked isAI: false for multiplayer
+export function initializePlayersForCount(playerCount: number): Player[] {
+  const activeSlots = getActiveSlots(playerCount);
+  return ALL_COLORS.map((color, idx) => ({
+    color,
+    tokens: [
+      { position: -1, color, id: 0 },
+      { position: -1, color, id: 1 },
+      { position: -1, color, id: 2 },
+      { position: -1, color, id: 3 },
+    ],
+    isAI: !activeSlots.includes(idx), // Inactive slots are "AI" (phantom)
+    startPosition: PLAYER_START_POSITIONS[color],
+    homeColumn: 55,
+  }));
+}
+
 export const initializePlayers = (): Player[] => [
   {
     color: "gold",
@@ -134,7 +173,7 @@ export const initializePlayers = (): Player[] => [
     ],
     isAI: false,
     startPosition: 0,
-    homeColumn: 55, // After position 55, gold enters home column
+    homeColumn: 55,
   },
   {
     color: "ruby",
@@ -146,7 +185,7 @@ export const initializePlayers = (): Player[] => [
     ],
     isAI: true,
     startPosition: 14,
-    homeColumn: 55, // All players enter home column after position 55 (relative)
+    homeColumn: 55,
   },
   {
     color: "sapphire",
