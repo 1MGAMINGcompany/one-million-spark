@@ -194,8 +194,9 @@ function trackMonkey(event: string, context: string, lang: string, metadata?: st
 const BUBBLE_SIZE = 64;
 const FIRST_VISIT_KEY = "aihelper-welcomed";
 const SESSION_OPENED_KEY = "aihelper-session-opened";
-const OPEN_DELAY = 500; // ms touch to open panel
-const DRAG_DELAY = 800; // ms hold before drag mode activates
+const HIDDEN_KEY = "aihelper-hidden";
+const DRAG_THRESHOLD = 12; // px movement to start dragging
+const TAP_MAX_MS = 300; // max ms for a quick tap
 
 export default function AIAgentHelperOverlay() {
   const location = useLocation();
@@ -225,6 +226,11 @@ export default function AIAgentHelperOverlay() {
   // Session tracking
   const [hasOpenedThisSession, setHasOpenedThisSession] = useState(() => {
     try { return !!sessionStorage.getItem(SESSION_OPENED_KEY); } catch { return false; }
+  });
+
+  // Hidden state (persisted)
+  const [hidden, setHidden] = useState(() => {
+    try { return localStorage.getItem(HIDDEN_KEY) === "1"; } catch { return false; }
   });
 
   // State
@@ -274,10 +280,9 @@ export default function AIAgentHelperOverlay() {
     return { x: typeof window !== "undefined" ? window.innerWidth - BUBBLE_SIZE - 16 : 300, y: typeof window !== "undefined" ? window.innerHeight - 200 : 400 };
   });
 
-  // Hold+drag state
-  const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const dragRef = useRef<{ startX: number; startY: number; startPosX: number; startPosY: number; holding: boolean; dragging: boolean }>({
-    startX: 0, startY: 0, startPosX: 0, startPosY: 0, holding: false, dragging: false,
+  // Drag state (simplified: tap vs drag, no timers)
+  const dragRef = useRef<{ startX: number; startY: number; startPosX: number; startPosY: number; startTime: number; dragging: boolean }>({
+    startX: 0, startY: 0, startPosX: 0, startPosY: 0, startTime: 0, dragging: false,
   });
 
   // Persist chat/mode/pos/skill
@@ -303,68 +308,41 @@ export default function AIAgentHelperOverlay() {
     return () => { window.removeEventListener("resize", handler); window.removeEventListener("orientationchange", handler); };
   }, [isMultiplayer, location.pathname]);
 
-  // ─── TOUCH 500ms to open, HOLD 800ms+ to drag ───
-  const openTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
+  // ─── Simplified pointer: tap to open, move >12px to drag ───
   const onPointerDown = useCallback((e: React.PointerEvent) => {
     const el = e.currentTarget as HTMLElement;
     el.setPointerCapture(e.pointerId);
-    dragRef.current = { startX: e.clientX, startY: e.clientY, startPosX: pos.x, startPosY: pos.y, holding: false, dragging: false };
-
-    // After OPEN_DELAY (500ms), open the panel
-    openTimerRef.current = setTimeout(() => {
-      openTimerRef.current = null;
-      // Only open if we haven't started dragging
-      if (!dragRef.current.dragging) {
-        setSheetOpen(true);
-        trackMonkey("bubble_open", pageContext, lang);
-      }
-    }, OPEN_DELAY);
-
-    // After DRAG_DELAY (800ms), enable drag mode
-    holdTimerRef.current = setTimeout(() => {
-      dragRef.current.holding = true;
-      // Cancel open if drag mode activates
-      if (openTimerRef.current) {
-        clearTimeout(openTimerRef.current);
-        openTimerRef.current = null;
-      }
-    }, DRAG_DELAY);
-  }, [pos, pageContext, lang]);
+    dragRef.current = { startX: e.clientX, startY: e.clientY, startPosX: pos.x, startPosY: pos.y, startTime: Date.now(), dragging: false };
+  }, [pos]);
 
   const onPointerMove = useCallback((e: React.PointerEvent) => {
     const d = dragRef.current;
+    if (d.startTime === 0) return; // no active gesture
     const dx = e.clientX - d.startX;
     const dy = e.clientY - d.startY;
     const dist = Math.abs(dx) + Math.abs(dy);
 
-    // If finger moved significantly before timers, cancel both (accidental touch)
-    if (!d.holding && dist > 12) {
-      if (holdTimerRef.current) { clearTimeout(holdTimerRef.current); holdTimerRef.current = null; }
-      if (openTimerRef.current) { clearTimeout(openTimerRef.current); openTimerRef.current = null; }
-    }
-
-    // Only drag if hold threshold was reached
-    if (d.holding && dist > 5) {
+    // Once movement exceeds threshold, start dragging
+    if (dist > DRAG_THRESHOLD) {
       d.dragging = true;
       setPos({ x: d.startPosX + dx, y: d.startPosY + dy });
     }
   }, []);
 
   const onPointerUp = useCallback(() => {
-    if (holdTimerRef.current) { clearTimeout(holdTimerRef.current); holdTimerRef.current = null; }
-    if (openTimerRef.current) { clearTimeout(openTimerRef.current); openTimerRef.current = null; }
-
     const d = dragRef.current;
     if (d.dragging) {
       // Snap to nearest edge
       const vw = window.innerWidth; const vh = window.innerHeight;
       const zones = getNoGoZones(location.pathname, vw, vh);
-      setPos(clampToSafe(pos.x, pos.y, BUBBLE_SIZE, vw, vh, zones));
+      setPos((p) => clampToSafe(p.x, p.y, BUBBLE_SIZE, vw, vh, zones));
+    } else {
+      // It was a tap — open the panel
+      setSheetOpen(true);
+      trackMonkey("bubble_open", pageContext, lang);
     }
-    // No instant-tap open — opening is handled by the 500ms timer in onPointerDown
-    dragRef.current = { ...d, holding: false, dragging: false };
-  }, [pos, location.pathname]);
+    dragRef.current = { ...d, startTime: 0, dragging: false };
+  }, [location.pathname, pageContext, lang]);
 
   // Get board context for AI routes
   const getBoardContext = useCallback(() => {
@@ -457,7 +435,27 @@ export default function AIAgentHelperOverlay() {
     }
   }, []);
 
-  if (isMultiplayer) return null;
+  // Listen for "aihelper-show" event from Navbar
+  useEffect(() => {
+    const handler = () => {
+      setHidden(false);
+      try { localStorage.removeItem(HIDDEN_KEY); } catch {}
+      setSheetOpen(true);
+      trackMonkey("navbar_show", pageContext, lang);
+    };
+    window.addEventListener("aihelper-show", handler);
+    return () => window.removeEventListener("aihelper-show", handler);
+  }, [pageContext, lang]);
+
+  // Hide helper
+  const hideHelper = useCallback(() => {
+    setHidden(true);
+    setSheetOpen(false);
+    try { localStorage.setItem(HIDDEN_KEY, "1"); } catch {}
+    trackMonkey("hidden", pageContext, lang);
+  }, [pageContext, lang]);
+
+  if (isMultiplayer || hidden) return null;
 
   const glowColor = bubbleState === "thinking" ? "rgba(250,204,21,0.6)" : bubbleState === "success" ? "rgba(34,197,94,0.5)" : bubbleState === "warning" ? "rgba(239,68,68,0.5)" : "rgba(250,204,21,0.25)";
   const subtitle = isAIRoute ? tr(lang, "subtitleAI") : tr(lang, "subtitleGeneral");
@@ -542,9 +540,14 @@ export default function AIAgentHelperOverlay() {
                   {!isAIRoute && <p className="text-xs text-muted-foreground">{subtitle}</p>}
                 </div>
               </div>
-              <button onClick={() => setSheetOpen(false)} className="p-1.5 hover:bg-muted rounded-full">
-                <X size={isAIRoute ? 16 : 20} className="text-muted-foreground" />
-              </button>
+              <div className="flex items-center gap-1">
+                <button onClick={hideHelper} className="p-1.5 hover:bg-muted rounded-full" title="Hide Money">
+                  <span className="text-[10px] text-muted-foreground font-medium">Hide</span>
+                </button>
+                <button onClick={() => setSheetOpen(false)} className="p-1.5 hover:bg-muted rounded-full">
+                  <X size={isAIRoute ? 16 : 20} className="text-muted-foreground" />
+                </button>
+              </div>
             </div>
 
             {/* Chat Area — scrollable, compact on AI routes */}
