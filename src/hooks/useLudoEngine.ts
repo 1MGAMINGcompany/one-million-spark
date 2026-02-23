@@ -31,12 +31,14 @@ export interface LudoCaptureEvent {
 }
 
 interface UseLudoEngineOptions {
+  activePlayerCount?: number; // How many players are actually in the game (2, 3, or 4). Defaults to 4.
   onSoundPlay?: (sound: string) => void;
   onToast?: (title: string, description: string, variant?: "default" | "destructive") => void;
 }
 
 export function useLudoEngine(options: UseLudoEngineOptions = {}) {
-  const { onSoundPlay, onToast } = options;
+  const { activePlayerCount = 4, onSoundPlay, onToast } = options;
+  const playerMod = Math.max(2, Math.min(4, activePlayerCount)); // clamp 2-4
   
   // ============ CORE STATE ============
   const [players, setPlayers] = useState<Player[]>(() => initializePlayers());
@@ -140,7 +142,7 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
             setConsecutiveSixes(0);
             setDiceValue(null);
             setMovableTokens([]);
-            setCurrentPlayerIndex(prev => (prev + 1) % 4);
+              setCurrentPlayerIndex(prev => (prev + 1) % playerMod);
             setTurnSignal(prev => prev + 1);
             setPhase('WAITING_FOR_ROLL');
             onRollComplete?.(finalValue, []);
@@ -168,7 +170,7 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
               setPhase('WAITING_FOR_ROLL');
             } else {
               setConsecutiveSixes(0);
-              setCurrentPlayerIndex(prev => (prev + 1) % 4);
+              setCurrentPlayerIndex(prev => (prev + 1) % playerMod);
               setTurnSignal(prev => prev + 1);
               setPhase('WAITING_FOR_ROLL');
             }
@@ -353,7 +355,7 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
         setPhase('WAITING_FOR_ROLL');
       } else {
         setConsecutiveSixes(0);
-        setCurrentPlayerIndex(prev => (prev + 1) % 4);
+        setCurrentPlayerIndex(prev => (prev + 1) % playerMod);
         setTurnSignal(prev => prev + 1);
         setPhase('WAITING_FOR_ROLL');
       }
@@ -365,7 +367,7 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
     const isBonusTurn = diceRolled === 6;
     
     if (!isBonusTurn) {
-      setCurrentPlayerIndex(prev => (prev + 1) % 4);
+      setCurrentPlayerIndex(prev => (prev + 1) % playerMod);
     }
     
     setDiceValue(null);
@@ -375,7 +377,7 @@ export function useLudoEngine(options: UseLudoEngineOptions = {}) {
     setPhase('WAITING_FOR_ROLL');
     
     return isBonusTurn;
-  }, [consecutiveSixes]);
+  }, [consecutiveSixes, playerMod]);
 
   // Apply external move - backwards compatible stub
   const applyExternalMove = useCallback((move: LudoMove): boolean => {

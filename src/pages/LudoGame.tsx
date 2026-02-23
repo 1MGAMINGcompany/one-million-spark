@@ -213,6 +213,7 @@ const LudoGame = () => {
     setCurrentPlayerIndex,
     clearCaptureEvent,
   } = useLudoEngine({
+    activePlayerCount: roomPlayers.length >= 2 ? roomPlayers.length : 4,
     onSoundPlay: playSfx,
     onToast: showToast,
   });
