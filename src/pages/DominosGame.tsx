@@ -42,6 +42,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { fetchRoomByPda, getConnection } from "@/lib/solana-program";
 import { seededShuffle } from "@/lib/seedUtils";
 import { dbg, isDebugEnabled } from "@/lib/debugLog";
+import { getAnonId } from "@/lib/anonIdentity";
 
 interface Domino {
   id: number;
@@ -106,6 +107,7 @@ const DominosGame = () => {
   const { t } = useTranslation();
   const { play } = useSound();
   const { isConnected: walletConnected, address } = useWallet();
+  const isFreeRoom = roomPda?.startsWith("free-") ?? false;
 
   const [chain, setChain] = useState<PlacedDomino[]>([]);
   const [myHand, setMyHand] = useState<Domino[]>([]);
@@ -311,11 +313,12 @@ const DominosGame = () => {
     let interval: ReturnType<typeof setInterval> | null = null;
     let mounted = true;
     
+    const playerId = address || (isFreeRoom ? getAnonId() : null);
     async function fetchRoomPlayers() {
-      if (!roomPda || !address || !mounted) return;
+      if (!roomPda || !playerId || !mounted) return;
 
       // FREE ROOM: fetch players from DB, skip on-chain
-      if (roomPda.startsWith("free-")) {
+      if (isFreeRoom) {
         try {
           const { data } = await supabase.functions.invoke("game-session-get", {
             body: { roomPda },
@@ -327,7 +330,7 @@ const DominosGame = () => {
               setRoomPlayers(players);
               setStakeLamports(0);
               setEntryFeeSol(0);
-              const myIndex = players.findIndex((p: string) => isSameWallet(p, address));
+              const myIndex = players.findIndex((p: string) => isSameWallet(p, playerId));
               setAmIPlayer1(myIndex === 0);
               console.log("[DominosGame] Free room players:", players);
               setLoadingRoom(false);
@@ -1405,8 +1408,8 @@ const DominosGame = () => {
 
   const playerLegalMoves = useMemo(() => getLegalMoves(myHand), [getLegalMoves, myHand]);
 
-  // Require wallet connection
-  if (!walletConnected || !address) {
+  // Require wallet connection (skip for free rooms)
+  if (!isFreeRoom && (!walletConnected || !address)) {
     return (
       <div className="container max-w-4xl py-8 px-4">
         <Button variant="ghost" size="sm" className="mb-4" onClick={() => navigate("/room-list")}>
