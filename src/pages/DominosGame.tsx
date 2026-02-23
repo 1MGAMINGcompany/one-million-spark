@@ -495,7 +495,7 @@ const DominosGame = () => {
   // Mark session as finished when game ends
   useEffect(() => {
     if (gameOver && gameInitialized) {
-      finishSession();
+      finishSession(winnerAddress);
     }
   }, [gameOver, gameInitialized, finishSession]);
 
@@ -1733,6 +1733,7 @@ const DominosGame = () => {
           onExit={() => navigate("/room-list")}
           roomPda={roomPda}
           isStaked={isRankedGame || entryFeeSol > 0}
+          result={gameStatus}
         />
       )}
 

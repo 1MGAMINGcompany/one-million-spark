@@ -304,7 +304,7 @@ const CheckersGame = () => {
   // Finish session and archive room when game ends
   useEffect(() => {
     if (gameOver && roomPlayers.length >= 2) {
-      finishCheckersSession();
+      finishCheckersSession(winnerAddress);
     }
   }, [gameOver, roomPlayers.length, finishCheckersSession]);
 
@@ -1452,7 +1452,7 @@ const CheckersGame = () => {
               {gameOver && (
                 <div className="space-y-4">
                   <div className={`text-xl font-display font-bold ${
-                    gameOver === myColor ? "text-green-400" : "text-red-400"
+                    gameOver === "draw" ? "text-yellow-400" : gameOver === myColor ? "text-green-400" : "text-red-400"
                   }`}>
                     {gameOver === myColor ? `🎉 ${t("gameMultiplayer.youWin")}` : gameOver === "draw" ? `${t("game.draw")}!` : `${t("gameMultiplayer.youLose")}`}
                   </div>
@@ -1499,7 +1499,7 @@ const CheckersGame = () => {
         <GameEndScreen
           gameType="Checkers"
           winner={winnerAddress}
-          winnerName={gameEndPlayers.find(p => p.address === winnerAddress)?.name}
+          winnerName={winnerAddress === "draw" ? undefined : gameEndPlayers.find(p => p.address === winnerAddress)?.name}
           myAddress={address}
           players={gameEndPlayers}
           onRematch={() => rematch.openRematchModal()}
@@ -1507,6 +1507,7 @@ const CheckersGame = () => {
           roomPda={roomPda}
           isStaked={isRankedGame || entryFeeSol > 0}
           isRematch={isRematch}
+          result={gameOver === "draw" ? "Draw - No Moves Available" : undefined}
         />
       )}
 
