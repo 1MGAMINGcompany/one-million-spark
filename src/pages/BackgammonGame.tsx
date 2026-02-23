@@ -681,7 +681,7 @@ const BackgammonGame = () => {
     myWallet: effectivePlayerId,
     isRanked: isRankedGame,
     roomPlayers,
-    hasTwoRealPlayers,
+    hasTwoRealPlayers: isFreeRoom ? roomPlayers.length >= 2 : hasTwoRealPlayers,
     initialColor: myRole === "player" ? "w" : "b",
     bothReady: rankedGate.bothReady,
   });
