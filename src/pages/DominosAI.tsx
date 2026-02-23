@@ -9,6 +9,8 @@ import { useTranslation } from "react-i18next";
 import { useAIGameTracker } from "@/hooks/useAIGameTracker";
 import GoldConfettiExplosion from "@/components/GoldConfettiExplosion";
 import AIWinShareCard from "@/components/AIWinShareCard";
+import ProactiveGameTip from "@/components/ProactiveGameTip";
+import { useActiveAIGame } from "@/hooks/useActiveAIGame";
 
 type Difficulty = "easy" | "medium" | "hard";
 
@@ -66,6 +68,9 @@ const DominosAI = () => {
   const [gameOver, setGameOver] = useState(false);
   const [selectedDomino, setSelectedDomino] = useState<number | null>(null);
   const [isThinking, setIsThinking] = useState(false);
+
+  // Session continuity (must be after gameOver declaration)
+  const { clearActiveGame } = useActiveAIGame(gameOver);
 
   const difficultyLabel = useMemo(() => {
     switch (difficulty) {
@@ -456,6 +461,7 @@ const DominosAI = () => {
 
   return (
     <div className="min-h-screen bg-background relative overflow-hidden">
+      <ProactiveGameTip gameType="dominos" tip="Tap a tile from your hand to play it" />
       {/* Gold Confetti Explosion on Win */}
       <GoldConfettiExplosion 
         active={gameOver && gameStatus.includes("win")} 

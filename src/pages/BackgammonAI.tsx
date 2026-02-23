@@ -13,6 +13,8 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useSound } from "@/contexts/SoundContext";
 import { useTranslation } from "react-i18next";
 import AIWinShareCard from "@/components/AIWinShareCard";
+import ProactiveGameTip from "@/components/ProactiveGameTip";
+import { useActiveAIGame } from "@/hooks/useActiveAIGame";
 import {
   type Player,
   type GameState,
@@ -107,6 +109,10 @@ const BackgammonAI = () => {
   const [selectedPoint, setSelectedPoint] = useState<number | null>(null);
   const [gameStatus, setGameStatus] = useState("");
   const [gameOver, setGameOver] = useState(false);
+
+  // Session continuity (must be after gameOver declaration)
+  const { clearActiveGame } = useActiveAIGame(gameOver);
+
   const [isThinking, setIsThinking] = useState(false);
   const [validMoves, setValidMoves] = useState<number[]>([]);
   // Animation state for moves
@@ -778,6 +784,7 @@ const BackgammonAI = () => {
       "bg-background relative overflow-hidden",
       isMobile ? "h-screen overflow-y-hidden flex flex-col" : "min-h-screen"
     )}>
+      <ProactiveGameTip gameType="backgammon" tip="Tap the dice to roll, then tap a checker to move" />
       {/* Checker Animation Layer */}
       <BackgammonCheckerAnimation 
         animatingChecker={animatingChecker} 

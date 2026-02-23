@@ -7,6 +7,8 @@ import { useSound } from "@/contexts/SoundContext";
 import { useTranslation } from "react-i18next";
 import { useAIGameTracker } from "@/hooks/useAIGameTracker";
 import AIWinShareCard from "@/components/AIWinShareCard";
+import ProactiveGameTip from "@/components/ProactiveGameTip";
+import { useActiveAIGame } from "@/hooks/useActiveAIGame";
 
 type Difficulty = "easy" | "medium" | "hard";
 type Player = "gold" | "obsidian";
@@ -71,6 +73,9 @@ const CheckersAI = () => {
   const [aiChainPos, setAiChainPos] = useState<Position | null>(null); // For AI chain captures
   const [showShareCard, setShowShareCard] = useState(false);
   const [winDuration, setWinDuration] = useState(0);
+
+  // Session continuity
+  const { clearActiveGame } = useActiveAIGame(!!gameOver);
   
   // Use ref to always have access to latest board state
   const boardRef = useRef(board);
@@ -558,6 +563,7 @@ const CheckersAI = () => {
 
   return (
     <div className="min-h-screen bg-background pb-8">
+      <ProactiveGameTip gameType="checkers" tip="Tap a piece, then tap where to jump" />
       {/* Header */}
       <div className="relative py-8 px-4 overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-b from-midnight-light via-background to-background" />

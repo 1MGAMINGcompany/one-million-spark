@@ -156,15 +156,21 @@ async function generateShareImage(text: string): Promise<Blob | null> {
   } catch { return null; }
 }
 
-// ─── Quick-action menu items ───
+// ─── Quick-action menu items (simplified to 3) ───
 const WELCOME_ACTIONS = [
-  { key: "qAppHelp", icon: HelpCircle },
   { key: "qGameRules", icon: BookOpen },
-  { key: "qPlayAI", icon: Gamepad2 },
-  { key: "qWallet", icon: Wallet },
-  { key: "qPlayFriends", icon: Users },
   { key: "qHowItWorks", icon: Sparkles },
+  { key: "qAppHelp", icon: HelpCircle },
 ] as const;
+
+// ─── Proactive context tips per game type ───
+const GAME_TIPS: Record<string, string> = {
+  chess: "Tap a piece to see where it can move",
+  ludo: "Tap the dice to roll, then tap a piece to move",
+  checkers: "Tap a piece, then tap where to jump",
+  backgammon: "Tap the dice to roll, then tap a checker to move",
+  dominos: "Tap a tile from your hand to play it",
+};
 
 const SKILL_LEVELS: { key: SkillLevel; labelKey: string }[] = [
   { key: "first-timer", labelKey: "skillFirstTimer" },
@@ -238,7 +244,7 @@ export default function AIAgentHelperOverlay() {
   // State
   const [sheetOpen, setSheetOpen] = useState(false);
   const [bubbleState, setBubbleState] = useState<BubbleState>("idle");
-  const [welcomeAccepted, setWelcomeAccepted] = useState(false);
+  // welcomeAccepted removed — no welcome gate anymore
   const [skillLevel, setSkillLevel] = useState<SkillLevel | null>(() => {
     try { return (localStorage.getItem("aihelper-skill") as SkillLevel) || null; } catch { return null; }
   });
@@ -473,7 +479,6 @@ export default function AIAgentHelperOverlay() {
   const clearChat = useCallback(() => {
     setMessages([]);
     setHelperMode(null);
-    setWelcomeAccepted(false);
     setSkillLevel(null);
     trackMonkey("chat_cleared", pageContext, lang);
     try { localStorage.removeItem("aihelper-chat"); localStorage.removeItem("aihelper-mode"); localStorage.removeItem("aihelper-skill"); } catch {}
@@ -519,12 +524,11 @@ export default function AIAgentHelperOverlay() {
   const subtitle = isAIRoute ? tr(lang, "subtitleAI") : tr(lang, "subtitleGeneral");
 
   const quickChips = isAIRoute
-    ? ["chipRules", "chipSuggest", "chipImprove", "chipWrong"]
-    : ["chipNavHelp", "chipWalletHelp", "chipGameTypes", "chipFreePlay"];
+    ? ["chipRules", "chipSuggest"]
+    : ["chipNavHelp", "chipGameTypes"];
 
-  // ── Flow logic ──
-  const showFirstTimeWelcome = isFirstVisit && !welcomeAccepted && !helperMode && messages.length === 0 && !isAIRoute;
-  const showAssistMenu = !showFirstTimeWelcome && !helperMode && messages.length === 0 && !isAIRoute;
+  // ── Flow logic (welcome gate removed — go straight to menu) ──
+  const showAssistMenu = !helperMode && messages.length === 0 && !isAIRoute;
   // AI route: show skill picker first, then mode picker
   const showSkillPicker = isAIRoute && !skillLevel && messages.length === 0;
   const showAIModePicker = isAIRoute && skillLevel && !helperMode && messages.length === 0;
@@ -620,31 +624,7 @@ export default function AIAgentHelperOverlay() {
 
             {/* Chat Area — scrollable, compact on AI routes */}
             <div className={`flex-1 overflow-y-auto px-3 py-2 space-y-2 ${isAIRoute ? "min-h-[60px] max-h-[20vh]" : "min-h-[200px] max-h-[60vh]"}`}>
-              {/* ── First-time welcome ── */}
-              {showFirstTimeWelcome && (
-                <div className="space-y-3">
-                  <div className="bg-muted/50 rounded-lg p-3 text-sm text-foreground">
-                    <div className="flex items-center gap-3 mb-2">
-                      <div className="w-10 h-10 rounded-full overflow-hidden border border-primary shrink-0" style={{ background: "#ffffff" }}>
-                        <img src={monkeyHappy} alt="Money" className="w-full h-full object-cover" />
-                      </div>
-                      <p className="font-semibold">{tr(lang, "welcomeGreeting")}</p>
-                    </div>
-                  </div>
-                  <div className="flex gap-3 justify-center">
-                    <button
-                      onClick={() => { trackMonkey("welcome_yes", pageContext, lang); setWelcomeAccepted(true); }}
-                      className="px-5 py-2 rounded-full text-sm font-semibold bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-                    >{tr(lang, "welcomeYes")}</button>
-                    <button
-                      onClick={() => { trackMonkey("welcome_no", pageContext, lang); setSheetOpen(false); }}
-                      className="px-5 py-2 rounded-full text-sm font-medium border border-border text-muted-foreground hover:border-primary transition-colors"
-                    >{tr(lang, "welcomeNo")}</button>
-                  </div>
-                </div>
-              )}
-
-              {/* ── "How can I assist you?" menu ── */}
+              {/* ── "How can I assist you?" menu (no welcome gate) ── */}
               {showAssistMenu && (
                 <div className="space-y-3">
                   <div className="bg-muted/50 rounded-lg p-3 text-sm text-foreground">

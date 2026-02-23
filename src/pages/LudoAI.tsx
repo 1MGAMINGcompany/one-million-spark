@@ -15,6 +15,9 @@ import { useSound } from "@/contexts/SoundContext";
 import { useTranslation } from "react-i18next";
 import GoldConfettiExplosion from "@/components/GoldConfettiExplosion";
 import AIWinShareCard from "@/components/AIWinShareCard";
+import LudoOnboardingOverlay from "@/components/LudoOnboardingOverlay";
+import ProactiveGameTip from "@/components/ProactiveGameTip";
+import { useActiveAIGame } from "@/hooks/useActiveAIGame";
 
 import { useLudoGame } from "@/hooks/useLudoGame";
 import { useLudoStepAnimation } from "@/hooks/useLudoStepAnimation";
@@ -128,6 +131,9 @@ const LudoAI = () => {
       }
     },
   });
+
+  // Session continuity
+  const { clearActiveGame } = useActiveAIGame(isGameOver);
 
   // Don't auto-advance turn anymore - step animation handles it
   // Legacy: Keep animatingMove in case step animation doesn't trigger
@@ -253,6 +259,17 @@ const LudoAI = () => {
   // ============ RENDER ============
   return (
     <div className="min-h-screen bg-gradient-to-b from-amber-950 via-amber-900 to-amber-950 pb-20">
+      {/* Proactive tip for first-time visitors */}
+      <ProactiveGameTip gameType="ludo" tip="Tap the dice to roll, then tap a piece to move" />
+
+      {/* First-game onboarding overlay */}
+      <LudoOnboardingOverlay
+        phase={phase}
+        isHumanTurn={isHumanTurn}
+        hasMovableTokens={movableTokenIndices.length > 0}
+        isGameOver={isGameOver}
+      />
+
       {/* Winner confetti */}
       {winner === 'gold' && <GoldConfettiExplosion active={true} />}
 

@@ -1,7 +1,8 @@
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
-import { Swords, Users, Bot, Trophy, Gem, Star, Shield, Zap } from "lucide-react";
+import { Swords, Users, Bot, Trophy, Gem, Star, Shield, Zap, X, PlayCircle } from "lucide-react";
 import FeaturedGameCard from "@/components/FeaturedGameCard";
 import { ChessIcon, DominoIcon, BackgammonIcon, CheckersIcon, LudoIcon } from "@/components/GameIcons";
 import PyramidLogo from "@/components/PyramidLogo";
@@ -10,10 +11,14 @@ import { usePrivySolBalance } from "@/hooks/usePrivySolBalance";
 import { AddSolCard } from "@/components/AddSolCard";
 import { WelcomeIntroModal } from "@/components/WelcomeIntroModal";
 import { LiveActivityIndicator } from "@/components/LiveActivityIndicator";
+import { getActiveAIGame, dismissActiveAIGame } from "@/hooks/useActiveAIGame";
 
 const Home = () => {
   const { t } = useTranslation();
   const { isPrivyUser, walletAddress, balanceSol, isLowBalance } = usePrivySolBalance();
+
+  // Session continuity — check for abandoned AI game
+  const [activeGame, setActiveGame] = useState<string | null>(() => getActiveAIGame());
 
   // Show funding card for Privy users with low/zero balance
   const showFundingCard = isPrivyUser && isLowBalance && walletAddress;
@@ -29,6 +34,30 @@ const Home = () => {
   return (
     <div className="min-h-screen">
       <WelcomeIntroModal isAuthenticated={isPrivyUser} />
+
+      {/* Session continuity banner */}
+      {activeGame && (
+        <div className="sticky top-0 z-40 bg-primary/95 backdrop-blur-sm border-b border-primary-foreground/20">
+          <div className="max-w-7xl mx-auto px-4 py-2.5 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-primary-foreground text-sm font-medium">
+              <PlayCircle className="w-4 h-4 shrink-0" />
+              <span>You have an unfinished game</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button asChild size="sm" variant="secondary" className="h-7 text-xs px-3">
+                <Link to={activeGame}>Resume</Link>
+              </Button>
+              <button
+                onClick={() => { dismissActiveAIGame(); setActiveGame(null); }}
+                className="p-1 text-primary-foreground/70 hover:text-primary-foreground"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Hero Section */}
       <section className="relative min-h-[90vh] flex items-center overflow-hidden">
         {/* Background Effects */}
