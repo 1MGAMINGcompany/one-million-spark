@@ -1024,5 +1024,14 @@
     "downloadDesc": "Instale o 1M Gaming para a melhor experiência",
     "install": "Instalar",
     "iosInstructions": "Toque no botão Compartilhar, depois em 'Adicionar à Tela Inicial'"
+  },
+  "tips": {
+    "ludo": "Toque no dado para rolar, depois toque em uma peça para mover",
+    "chess": "Toque em uma peça para ver onde ela pode ir",
+    "checkers": "Toque em uma peça, depois toque onde pular",
+    "backgammon": "Toque no dado para rolar, depois toque em uma peça para mover",
+    "dominos": "Toque em uma peça da sua mão para jogá-la",
+    "onboardingRoll": "Role o dado!",
+    "onboardingMove": "Toque em uma peça para movê-la!"
   }
 }

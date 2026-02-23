@@ -461,7 +461,7 @@ const DominosAI = () => {
 
   return (
     <div className="min-h-screen bg-background relative overflow-hidden">
-      <ProactiveGameTip gameType="dominos" tip="Tap a tile from your hand to play it" />
+      <ProactiveGameTip gameType="dominos" tip={t('tips.dominos')} />
       {/* Gold Confetti Explosion on Win */}
       <GoldConfettiExplosion 
         active={gameOver && gameStatus.includes("win")} 

@@ -1024,5 +1024,14 @@
     "downloadDesc": "Installez 1M Gaming pour la meilleure expérience",
     "install": "Installer",
     "iosInstructions": "Appuyez sur le bouton Partager, puis 'Sur l'écran d'accueil'"
+  },
+  "tips": {
+    "ludo": "Appuyez sur le dé pour lancer, puis sur un pion pour le déplacer",
+    "chess": "Appuyez sur une pièce pour voir ses mouvements possibles",
+    "checkers": "Appuyez sur un pion, puis sur la case où sauter",
+    "backgammon": "Appuyez sur le dé pour lancer, puis sur un pion pour le déplacer",
+    "dominos": "Appuyez sur un domino de votre main pour le jouer",
+    "onboardingRoll": "Lancez le dé !",
+    "onboardingMove": "Appuyez sur un pion pour le déplacer !"
   }
 }

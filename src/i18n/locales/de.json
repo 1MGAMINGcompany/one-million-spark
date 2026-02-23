@@ -1024,5 +1024,14 @@
     "downloadDesc": "Installiere 1M Gaming für das beste Erlebnis",
     "install": "Installieren",
     "iosInstructions": "Tippe auf 'Teilen', dann 'Zum Home-Bildschirm'"
+  },
+  "tips": {
+    "ludo": "Tippe auf den Würfel zum Würfeln, dann auf eine Figur zum Ziehen",
+    "chess": "Tippe auf eine Figur, um ihre Züge zu sehen",
+    "checkers": "Tippe auf einen Stein, dann auf das Zielfeld zum Springen",
+    "backgammon": "Tippe auf den Würfel zum Würfeln, dann auf einen Stein zum Ziehen",
+    "dominos": "Tippe auf einen Stein aus deiner Hand, um ihn zu spielen",
+    "onboardingRoll": "Würfle!",
+    "onboardingMove": "Tippe auf eine Figur, um sie zu ziehen!"
   }
 }
