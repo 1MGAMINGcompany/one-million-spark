@@ -169,15 +169,15 @@ const LudoGame = () => {
         }
         
         console.log("[LudoGame] Room not ready, using placeholder");
-        setRoomPlayers([address, `waiting-${roomPda.slice(0, 8)}`]);
+        setRoomPlayers([playerId, `waiting-${roomPda.slice(0, 8)}`]);
       } catch (err) {
         console.error("[LudoGame] Failed to fetch room players:", err);
-        setRoomPlayers([address, `error-${roomPda.slice(0, 8)}`]);
+        setRoomPlayers([playerId, `error-${roomPda.slice(0, 8)}`]);
       }
     };
 
     fetchRoomPlayers();
-  }, [address, roomPda, roomId]);
+  }, [effectivePlayerId, roomPda, roomId, isFreeRoom]);
 
   // Wrapper for play function that respects sfxEnabled
   const playSfx = useCallback((sound: string) => {
@@ -256,14 +256,14 @@ const LudoGame = () => {
   const { loadSession: loadLudoSession, saveSession: saveLudoSession, finishSession: finishLudoSession } = useGameSessionPersistence({
     roomPda: roomPda,
     gameType: 'ludo',
-    enabled: roomPlayers.length >= 2 && !!address,
+    enabled: roomPlayers.length >= 2 && !!effectivePlayerId,
     onStateRestored: handleRealtimeStateRestored,
-    callerWallet: address, // Pass caller wallet for secure RPC validation
+    callerWallet: effectivePlayerId, // Pass caller wallet for secure RPC validation
   });
 
   // Load session on mount
   useEffect(() => {
-    if (roomPlayers.length >= 2 && address) {
+    if (roomPlayers.length >= 2 && effectivePlayerId) {
       loadLudoSession().then(savedState => {
         if (savedState && Object.keys(savedState).length > 0) {
           handleLudoStateRestored(savedState, true);
@@ -271,7 +271,7 @@ const LudoGame = () => {
       });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roomPlayers.length, address]);
+  }, [roomPlayers.length, effectivePlayerId]);
 
   // Save game state after each move
   useEffect(() => {
@@ -303,7 +303,7 @@ const LudoGame = () => {
 
   const rankedGate = useRankedReadyGate({
     roomPda,
-    myWallet: address,
+    myWallet: effectivePlayerId,
     isRanked: isRankedGame,
     enabled: roomPlayers.length >= 2 && modeLoaded,
   });
@@ -311,7 +311,7 @@ const LudoGame = () => {
   // Durable game sync - persists moves to DB for reliability
   const handleDurableMoveReceived = useCallback((move: GameMove) => {
     // Only apply moves from opponents (we already applied our own locally)
-    if (!isSameWallet(move.wallet, address)) {
+    if (!isSameWallet(move.wallet, effectivePlayerId)) {
       console.log("[LudoGame] Applying move from DB:", move.turn_number);
       const ludoMove = move.move_data as any;
       
@@ -322,7 +322,7 @@ const LudoGame = () => {
           const remainingPlayers = roomPlayers.filter(p => 
             isRealWallet(p) && !isSameWallet(p, ludoMove.timedOutWallet)
           );
-          if (remainingPlayers.length === 1 && isSameWallet(remainingPlayers[0], address)) {
+          if (remainingPlayers.length === 1 && isSameWallet(remainingPlayers[0], effectivePlayerId)) {
             // I win!
             toast({
               title: t('gameSession.opponentForfeited'),
@@ -345,7 +345,7 @@ const LudoGame = () => {
         // Note: Strike count reset is now handled server-side in submit_game_move RPC
       }
     }
-  }, [address, applyExternalMove, roomPlayers, roomPda, t]);
+  }, [effectivePlayerId, applyExternalMove, roomPlayers, roomPda, t]);
 
   const { submitMove: persistMove, moves: dbMoves, isLoading: isSyncLoading } = useDurableGameSync({
     roomPda: roomPda || "",
@@ -363,7 +363,7 @@ const LudoGame = () => {
   const startRoll = useStartRoll({
     roomPda,
     gameType: "ludo",
-    myWallet: address,
+    myWallet: effectivePlayerId,
     isRanked: isRankedGame,
     roomPlayers,
     hasTwoRealPlayers,
@@ -421,9 +421,9 @@ const LudoGame = () => {
 
   // Is current user the room creator? (first player in roomPlayers)
   const isCreator = useMemo(() => {
-    if (!address || roomPlayers.length === 0) return false;
-    return isSameWallet(roomPlayers[0], address);
-  }, [address, roomPlayers]);
+    if (!effectivePlayerId || roomPlayers.length === 0) return false;
+    return isSameWallet(roomPlayers[0], effectivePlayerId);
+  }, [effectivePlayerId, roomPlayers]);
 
   // Open leave modal - NEVER triggers wallet
   const handleLeaveClick = useCallback(() => {
@@ -511,7 +511,7 @@ const LudoGame = () => {
 
   // Turn timer for ranked games - calls server RPC for DB-authoritative timeout
   const handleTurnTimeout = useCallback(async () => {
-    if (gameOver || !address || !roomPda || !isActuallyMyTurn) return;
+    if (gameOver || !effectivePlayerId || !roomPda || !isActuallyMyTurn) return;
     
     try {
       const { data, error } = await supabase.rpc("maybe_apply_turn_timeout", {
@@ -552,7 +552,7 @@ const LudoGame = () => {
     } catch (err) {
       console.error("[LudoGame] Timeout exception:", err);
     }
-  }, [gameOver, address, roomPda, isActuallyMyTurn, advanceTurn, play, t]);
+  }, [gameOver, effectivePlayerId, roomPda, isActuallyMyTurn, advanceTurn, play, t]);
 
   // Use turn time from ranked gate (fetched from DB/localStorage)
   const effectiveTurnTime = rankedGate.turnTimeSeconds || DEFAULT_RANKED_TURN_TIME;
@@ -579,7 +579,7 @@ const LudoGame = () => {
         const dbStatus = data?.session?.status;
         const dbWinner = data?.session?.winner_wallet;
         if (dbStatus === "finished" && !gameOver) {
-          const iWin = isSameWallet(dbWinner, address);
+          const iWin = isSameWallet(dbWinner, effectivePlayerId);
           toast({
             title: iWin ? t("game.youWin") : t("game.youLose"),
             variant: iWin ? "default" : "destructive",
@@ -599,7 +599,7 @@ const LudoGame = () => {
                 body: { roomPda },
               });
               const lastMove = movesData?.moves?.at(-1);
-              if (lastMove?.move_data?.action === "turn_timeout" && isSameWallet(dbTurnWallet, address)) {
+              if (lastMove?.move_data?.action === "turn_timeout" && isSameWallet(dbTurnWallet, effectivePlayerId)) {
                 toast({
                   title: t("gameSession.opponentSkipped"),
                   description: `${lastMove.move_data.strikes || "?"}/3 ${t("gameSession.missedTurns")}`,
@@ -614,13 +614,13 @@ const LudoGame = () => {
     }, 5000);
 
     return () => clearInterval(pollInterval);
-  }, [roomPda, isRankedGame, gameOver, startRoll.isFinalized, address, roomPlayers, currentPlayerIndex, t]);
+  }, [roomPda, isRankedGame, gameOver, startRoll.isFinalized, effectivePlayerId, roomPlayers, currentPlayerIndex, t]);
 
   // Convert Ludo players to TurnPlayer format for notifications
   const turnPlayers: TurnPlayer[] = useMemo(() => {
     return players.map((player, index) => {
       const walletAddress = roomPlayers[index] || `player-${index}`;
-      const isHuman = isSameWallet(walletAddress, address);
+      const isHuman = isSameWallet(walletAddress, effectivePlayerId);
       
       return {
         address: walletAddress,
@@ -630,7 +630,7 @@ const LudoGame = () => {
         seatIndex: index,
       };
     });
-  }, [players, roomPlayers, address, t]);
+  }, [players, roomPlayers, effectivePlayerId, t]);
 
   // Current active player address
   const activeTurnAddress = turnPlayers[currentPlayerIndex]?.address || null;
@@ -648,7 +648,7 @@ const LudoGame = () => {
     roomId: roomId || "unknown",
     players: turnPlayers,
     activeTurnAddress,
-    myAddress: address,
+    myAddress: effectivePlayerId,
     enabled: true,
   });
 
@@ -831,6 +831,7 @@ const LudoGame = () => {
     players: roomPlayers,
     onMessage: handleWebRTCMessage,
     enabled: roomPlayers.length >= 2,
+    overrideAddress: effectivePlayerId || undefined,
   });
   
   // In wallet browsers, don't block on WebRTC - use effective connection state
@@ -855,7 +856,7 @@ const LudoGame = () => {
   // Game chat hook
   const chat = useGameChat({
     roomId: roomId || "",
-    myWallet: address,
+    myWallet: effectivePlayerId,
     players: chatPlayers,
     onSendMessage: handleChatSend,
     enabled: roomPlayers.length >= 2,
@@ -978,10 +979,10 @@ const LudoGame = () => {
     
     const success = executeMove(currentPlayerIndex, tokenIndex, currentDice, () => {
       // Record the move for turn history
-      recordPlayerMove(address || "", `Moved token to position ${endPos}`);
+      recordPlayerMove(effectivePlayerId || "", `Moved token to position ${endPos}`);
       
       // Persist move to DB for ranked games (durable sync)
-      if (isRankedGame && address) {
+      if (isRankedGame && effectivePlayerId) {
         const moveData: LudoMove = {
           playerIndex: currentPlayerIndex,
           tokenIndex,
@@ -989,7 +990,7 @@ const LudoGame = () => {
           startPosition: startPos,
           endPosition: endPos,
         };
-        persistMove(moveData, address);
+        persistMove(moveData, effectivePlayerId);
       }
       
       setDiceValue(null);
@@ -1000,7 +1001,7 @@ const LudoGame = () => {
     if (!success) {
       moveStartedRef.current = false;
     }
-  }, [isAnimating, currentPlayerIndex, myPlayerIndex, diceValue, isRolling, movableTokens, players, executeMove, advanceTurn, setDiceValue, setMovableTokens, recordPlayerMove, address, isRankedGame, persistMove]);
+  }, [isAnimating, currentPlayerIndex, myPlayerIndex, diceValue, isRolling, movableTokens, players, executeMove, advanceTurn, setDiceValue, setMovableTokens, recordPlayerMove, effectivePlayerId, isRankedGame, persistMove]);
 
   // AI turn handling (for simulated opponents)
   const aiTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -1103,7 +1104,7 @@ const LudoGame = () => {
         // Don't require bothReady here - let RulesGate handle showing the accept modal
         const shouldShowRulesGate =
           roomPlayers.length >= 2 &&
-          !!address &&
+          !!effectivePlayerId &&
           !startRoll.isFinalized;
 
         if (isDebugEnabled()) {
@@ -1111,7 +1112,7 @@ const LudoGame = () => {
             game: "ludo",
             roomPda,
             roomPlayersLen: roomPlayers.length,
-            hasAddress: !!address,
+            hasAddress: !!effectivePlayerId,
             isRankedGame,
             bothReady: rankedGate.bothReady,
             isFinalized: startRoll.isFinalized,
@@ -1124,7 +1125,7 @@ const LudoGame = () => {
         <RulesGate
           isRanked={isRankedGame}
           roomPda={roomPda}
-          myWallet={address}
+          myWallet={effectivePlayerId}
           roomPlayers={roomPlayers}
           iAmReady={rankedGate.iAmReady}
           opponentReady={rankedGate.opponentReady}
@@ -1132,7 +1133,7 @@ const LudoGame = () => {
           isSettingReady={rankedGate.isSettingReady}
           stakeLamports={stakeLamports}
           turnTimeSeconds={effectiveTurnTime}
-          opponentWallet={roomPlayers.find(p => !isSameWallet(p, address))}
+          opponentWallet={roomPlayers.find(p => !isSameWallet(p, effectivePlayerId))}
           onAcceptRules={handleAcceptRules}
           onLeave={handleUILeave}
           onOpenWalletSelector={() => {}}
@@ -1143,7 +1144,7 @@ const LudoGame = () => {
         >
           <DiceRollStart
             roomPda={roomPda || ""}
-            myWallet={address}
+            myWallet={effectivePlayerId}
             player1Wallet={roomPlayers[0]}
             player2Wallet={roomPlayers[1]}
             onComplete={startRoll.handleRollComplete}
@@ -1208,7 +1209,7 @@ const LudoGame = () => {
             isMyTurn={isActuallyMyTurn}
             activePlayer={turnPlayers[currentPlayerIndex]}
             players={turnPlayers}
-            myAddress={address}
+            myAddress={effectivePlayerId}
             remainingTime={isRankedGame ? turnTimer.remainingTime : undefined}
             showTimer={isRankedGame && canPlay}
           />
@@ -1281,7 +1282,7 @@ const LudoGame = () => {
           gameType="Ludo"
           winner={winnerAddress}
           winnerName={gameEndPlayers.find(p => p.address === winnerAddress)?.name}
-          myAddress={address}
+          myAddress={effectivePlayerId}
           players={gameEndPlayers}
           onRematch={() => rematch.openRematchModal()}
           onExit={() => navigate("/room-list")}

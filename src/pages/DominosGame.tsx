@@ -1169,9 +1169,9 @@ const DominosGame = () => {
   }, [sendChat]);
 
   // Game chat hook
-  const chat = useGameChat({
+   const chat = useGameChat({
     roomId: roomId || "",
-    myWallet: address,
+    myWallet: effectivePlayerId,
     players: chatPlayers,
     onSendMessage: handleChatSend,
     enabled: roomPlayers.length === 2,
@@ -1233,11 +1233,11 @@ const DominosGame = () => {
     sendMove(moveData);
     
     // Persist move to DB for ranked games
-    if (isRankedGame && address) {
-      persistMove(moveData, address);
+    if (isRankedGame && effectivePlayerId) {
+      persistMove(moveData, effectivePlayerId);
     }
     
-    recordPlayerMove(address || "", "played");
+    recordPlayerMove(effectivePlayerId || "", "played");
     
     // Check win
     if (newHand.length === 0) {
@@ -1249,7 +1249,7 @@ const DominosGame = () => {
       setIsMyTurn(false);
       setGameStatus("Opponent's turn");
     }
-  }, [chain, myHand, boneyard, opponentHandCount, getChainEnds, play, sendMove, recordPlayerMove, address, roomPda, isRankedGame, persistMove]);
+  }, [chain, myHand, boneyard, opponentHandCount, getChainEnds, play, sendMove, recordPlayerMove, effectivePlayerId, roomPda, isRankedGame, persistMove]);
 
   // Handle player play - halfClicked indicates which pip section was touched
   const handlePlayerPlay = useCallback((domino: Domino, halfClicked?: TileHalfClicked) => {
@@ -1339,7 +1339,7 @@ const DominosGame = () => {
       title: t('toast.drewTile'),
       description: t('toast.checkIfCanPlay'),
     });
-  }, [isMyTurn, gameOver, boneyard, myHand, chain, opponentHandCount, play, sendMove, amIPlayer1, t, address, roomPda]);
+  }, [isMyTurn, gameOver, boneyard, myHand, chain, opponentHandCount, play, sendMove, amIPlayer1, t, effectivePlayerId, roomPda]);
 
   // Handle pass
   const handlePass = useCallback(() => {
@@ -1381,14 +1381,14 @@ const DominosGame = () => {
     
     setIsMyTurn(false);
     setGameStatus("Opponent's turn");
-  }, [isMyTurn, gameOver, myHand, boneyard, chain, opponentHandCount, getLegalMoves, sendMove, address, roomPda, t]);
+  }, [isMyTurn, gameOver, myHand, boneyard, chain, opponentHandCount, getLegalMoves, sendMove, effectivePlayerId, roomPda, t]);
 
   const handleResign = useCallback(async () => {
     // 1. Send WebRTC message immediately for instant opponent UX
     sendResign();
     
     // 2. Update local UI optimistically - opponent wins, store their wallet
-    const opponentWalletAddr = getOpponentWallet(roomPlayers, address);
+    const opponentWalletAddr = getOpponentWallet(roomPlayers, effectivePlayerId);
     setWinnerWallet(opponentWalletAddr);
     setGameOver(true);
     setWinner("opponent");
@@ -1406,7 +1406,7 @@ const DominosGame = () => {
         variant: "destructive",
       });
     }
-  }, [sendResign, play, forfeit, roomPlayers, address]);
+  }, [sendResign, play, forfeit, roomPlayers, effectivePlayerId]);
 
   const playerLegalMoves = useMemo(() => getLegalMoves(myHand), [getLegalMoves, myHand]);
 
@@ -1473,7 +1473,7 @@ const DominosGame = () => {
         // Don't require bothReady here - let RulesGate handle showing the accept modal
         const shouldShowRulesGate =
           roomPlayers.length >= 2 &&
-          !!address &&
+          !!effectivePlayerId &&
           !startRoll.isFinalized;
 
         if (isDebugEnabled()) {
@@ -1481,7 +1481,7 @@ const DominosGame = () => {
             game: "dominos",
             roomPda,
             roomPlayersLen: roomPlayers.length,
-            hasAddress: !!address,
+            hasAddress: !!effectivePlayerId,
             isRankedGame,
             bothReady: rankedGate.bothReady,
             isFinalized: startRoll.isFinalized,
@@ -1494,7 +1494,7 @@ const DominosGame = () => {
         <RulesGate
           isRanked={isRankedGame}
           roomPda={roomPda}
-          myWallet={address}
+          myWallet={effectivePlayerId}
           roomPlayers={roomPlayers}
           iAmReady={rankedGate.iAmReady}
           opponentReady={rankedGate.opponentReady}
@@ -1513,7 +1513,7 @@ const DominosGame = () => {
         >
           <DiceRollStart
             roomPda={roomPda || ""}
-            myWallet={address}
+            myWallet={effectivePlayerId}
             player1Wallet={roomPlayers[0]}
             player2Wallet={roomPlayers[1]}
             onComplete={startRoll.handleRollComplete}
@@ -1579,7 +1579,7 @@ const DominosGame = () => {
               isMyTurn={isActuallyMyTurn}
               activePlayer={turnPlayers[isMyTurn ? (amIPlayer1 ? 0 : 1) : (amIPlayer1 ? 1 : 0)]}
               players={turnPlayers}
-              myAddress={address}
+              myAddress={effectivePlayerId}
               remainingTime={isRankedGame ? turnTimer.remainingTime : undefined}
               showTimer={isRankedGame && canPlayRanked}
             />
@@ -1727,7 +1727,7 @@ const DominosGame = () => {
           gameType="Dominos"
           winner={winnerAddress}
           winnerName={winnerAddress === "draw" ? undefined : gameEndPlayers.find(p => p.address === winnerAddress)?.name}
-          myAddress={address}
+          myAddress={effectivePlayerId}
           players={gameEndPlayers}
           onRematch={() => rematch.openRematchModal()}
           onExit={() => navigate("/room-list")}

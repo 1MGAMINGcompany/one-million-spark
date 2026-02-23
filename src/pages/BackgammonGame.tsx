@@ -311,7 +311,7 @@ const BackgammonGame = () => {
       console.log("[Outcome] Resolving final outcome from DB", {
         roomPda: roomPda?.slice(0, 8),
         winnerHint: winnerHintRef.current?.slice?.(0, 8),
-        myWallet: address?.slice?.(0, 8),
+        myWallet: effectivePlayerId?.slice?.(0, 8),
       });
 
       let finalWinner = await resolveWinnerFromDb();
@@ -331,7 +331,7 @@ const BackgammonGame = () => {
           setOutcomeResolving(false);
           setWinnerWallet(finalWinner);
           
-          const didIWin = address && isSameWallet(finalWinner, address);
+          const didIWin = effectivePlayerId && isSameWallet(finalWinner, effectivePlayerId);
           setGameStatus(didIWin ? t('game.youWin') || "You Win!" : t('game.youLose') || "You Lose");
           setGameResultInfo({
             winner: didIWin ? myRoleRef.current : (myRoleRef.current === "player" ? "ai" : "player"),
@@ -347,7 +347,7 @@ const BackgammonGame = () => {
       console.warn("[Outcome] Could not resolve winner. Keeping UI neutral.");
       setGameStatus(t('game.matchEnded') || "Match ended - verifying result...");
     })();
-  }, [gameOver, roomPda, address, t, play]);
+  }, [gameOver, roomPda, effectivePlayerId, t, play]);
 
   
 
@@ -415,7 +415,7 @@ const BackgammonGame = () => {
               setEntryFeeSol(parsed.entryFee / 1_000_000_000);
             }
             
-            const myIndex = realPlayers.findIndex(p => isSameWallet(p, address));
+            const myIndex = realPlayers.findIndex(p => isSameWallet(p, effectivePlayerId));
             const role = myIndex === 0 ? "player" : "ai";
             setMyRole(role);
             console.log("[BackgammonGame] On-chain players:", realPlayers, "Initial role:", role === "player" ? "gold" : "black", "Entry fee:", parsed.entryFee);
@@ -424,17 +424,17 @@ const BackgammonGame = () => {
         }
         
         console.log("[BackgammonGame] Room not ready, using placeholder");
-        setRoomPlayers([address, `waiting-${roomPda.slice(0, 8)}`]);
+        setRoomPlayers([effectivePlayerId, `waiting-${roomPda.slice(0, 8)}`]);
         setMyRole("player");
       } catch (err) {
         console.error("[BackgammonGame] Failed to fetch room players:", err);
-        setRoomPlayers([address, `error-${roomPda.slice(0, 8)}`]);
+        setRoomPlayers([effectivePlayerId, `error-${roomPda.slice(0, 8)}`]);
         setMyRole("player");
       }
     };
 
     fetchRoomPlayers();
-  }, [address, roomPda]);
+  }, [effectivePlayerId, roomPda]);
 
   // Game session persistence - track if we've shown the restored toast
   const restoredToastShownRef = useRef(false);
@@ -504,14 +504,14 @@ const BackgammonGame = () => {
   const { loadSession: loadBackgammonSession, saveSession: saveBackgammonSession, finishSession: finishBackgammonSession } = useGameSessionPersistence({
     roomPda: roomPda,
     gameType: 'backgammon',
-    enabled: roomPlayers.length >= 2 && !!address,
+    enabled: roomPlayers.length >= 2 && !!effectivePlayerId,
     onStateRestored: handleRealtimeStateRestored,
-    callerWallet: address, // Pass caller wallet for secure RPC validation
+    callerWallet: effectivePlayerId, // Pass caller wallet for secure RPC validation
   });
 
   // Load session on mount
   useEffect(() => {
-    if (roomPlayers.length >= 2 && address) {
+    if (roomPlayers.length >= 2 && effectivePlayerId) {
       loadBackgammonSession().then(savedState => {
         if (savedState && Object.keys(savedState).length > 0) {
           handleBackgammonStateRestored(savedState, true);
@@ -519,7 +519,7 @@ const BackgammonGame = () => {
       });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roomPlayers.length, address]);
+  }, [roomPlayers.length, effectivePlayerId]);
 
   // Save game state after each move
   useEffect(() => {
@@ -553,7 +553,7 @@ const BackgammonGame = () => {
 
   const rankedGate = useRankedReadyGate({
     roomPda,
-    myWallet: address,
+    myWallet: effectivePlayerId,
     isRanked: isRankedGame,
     enabled: roomPlayers.length >= 2 && modeLoaded,
   });
@@ -568,7 +568,7 @@ const BackgammonGame = () => {
   // Durable game sync - persists moves to DB for reliability
   const handleDurableMoveReceived = useCallback((move: GameMove) => {
     // Only apply moves from opponents (we already applied our own locally)
-    if (!isSameWallet(move.wallet, address)) {
+    if (!isSameWallet(move.wallet, effectivePlayerId)) {
       console.log("[BackgammonGame] Applying move from DB:", move.turn_number, move.move_data);
       const bgMove = move.move_data as BackgammonMoveMessage;
       
@@ -585,7 +585,7 @@ const BackgammonGame = () => {
       } else if (bgMove.type === "turn_end") {
         // Opponent ended their turn - WALLET-AUTHORITATIVE: use nextTurnWallet
         console.log("[BackgammonGame] Received turn_end from opponent. nextTurnWallet:", bgMove.nextTurnWallet?.slice(0, 8));
-        const nextWallet = bgMove.nextTurnWallet || address; // Fallback to me (I get the turn)
+        const nextWallet = bgMove.nextTurnWallet || effectivePlayerId; // Fallback to me (I get the turn)
         const alreadySameTurn = isSameWallet(nextWallet, currentTurnWallet);
         if (nextWallet) {
           setCurrentTurnWallet(nextWallet);
@@ -616,14 +616,14 @@ const BackgammonGame = () => {
             },
             p1Wallet: roomPlayersRef.current[0],
             p2Wallet: roomPlayersRef.current[1],
-            myWallet: address,
+            myWallet: effectivePlayerId,
           });
           
           console.log("[BackgammonGame] turn_timeout 3 strikes outcome:", {
             timedOut: move.wallet?.slice(0, 8),
             winner: outcome.winnerWallet?.slice(0, 8),
             loser: outcome.loserWallet?.slice(0, 8),
-            myWallet: address?.slice(0, 8),
+            myWallet: effectivePlayerId?.slice(0, 8),
           });
           
           // Use neutral resolving state - DB Outcome Resolver will finalize
@@ -632,7 +632,7 @@ const BackgammonGame = () => {
         }
         
         // WALLET-AUTHORITATIVE: Use nextTurnWallet (fallback to me)
-        const nextWallet = bgMove.nextTurnWallet || address;
+        const nextWallet = bgMove.nextTurnWallet || effectivePlayerId;
         if (nextWallet) {
           setCurrentTurnWallet(nextWallet);
           const nextRole = isSameWallet(nextWallet, roomPlayersRef.current[0]) ? "player" : "ai";
@@ -652,14 +652,14 @@ const BackgammonGame = () => {
           lastMove: { wallet: move.wallet, type: bgMove.type, ...bgMove, move_data: bgMove },
           p1Wallet: roomPlayersRef.current[0],
           p2Wallet: roomPlayersRef.current[1],
-          myWallet: address,
+           myWallet: effectivePlayerId,
         });
         
         console.log("[BackgammonGame] auto_forfeit outcome:", {
           actor: move.wallet?.slice(0, 8),
           winner: outcome.winnerWallet?.slice(0, 8),
           loser: outcome.loserWallet?.slice(0, 8),
-          myWallet: address?.slice(0, 8),
+           myWallet: effectivePlayerId?.slice(0, 8),
         });
         
         // Use neutral resolving state - DB Outcome Resolver will finalize
@@ -672,13 +672,13 @@ const BackgammonGame = () => {
         if (bgMove.dice) setDice(bgMove.dice);
       }
     }
-  }, [address, play, t, roomPda, enterOutcomeResolving]);
+  }, [effectivePlayerId, play, t, roomPda, enterOutcomeResolving]);
 
   // Deterministic start roll for ALL games (casual + ranked) - MUST be before durableEnabled
   const startRoll = useStartRoll({
     roomPda,
     gameType: "backgammon",
-    myWallet: address,
+    myWallet: effectivePlayerId,
     isRanked: isRankedGame,
     roomPlayers,
     hasTwoRealPlayers,
@@ -846,7 +846,7 @@ const BackgammonGame = () => {
         // If opponent is idle, try to apply timeout via server RPC
         // This allows connected players to advance the game even if opponent is offline
         const dbTurnWallet = data?.session?.current_turn_wallet;
-        const isOpponentsTurn = dbTurnWallet && !isSameWallet(dbTurnWallet, address);
+        const isOpponentsTurn = dbTurnWallet && !isSameWallet(dbTurnWallet, effectivePlayerId);
         
         if (isOpponentsTurn && data?.session?.status !== 'finished') {
           try {
@@ -900,7 +900,7 @@ const BackgammonGame = () => {
           });
           
           // Check if turn changed TO ME - need to update game state
-          const isNowMyTurn = isSameWallet(freshTurnWallet, address);
+          const isNowMyTurn = isSameWallet(freshTurnWallet, effectivePlayerId);
           
           if (isNowMyTurn) {
             // Fetch latest move to see why turn changed
@@ -933,7 +933,7 @@ const BackgammonGame = () => {
           turnTimer.resetTimer();
           
           // Determine if it's now my turn
-          const turnToMe = isSameWallet(freshTurnWallet, address);
+          const turnToMe = isSameWallet(freshTurnWallet, effectivePlayerId);
           
           if (turnToMe) {
             // It's my turn after reconnect/polling - check DB for existing dice roll
@@ -990,7 +990,7 @@ const BackgammonGame = () => {
 
     const interval = setInterval(pollTurnWallet, 5000);
     return () => clearInterval(interval);
-  }, [roomPda, isRankedGame, gameOver, startRoll.isFinalized, currentTurnWallet, turnStartedAt, address, myRole, play, t, enterOutcomeResolving]);
+  }, [roomPda, isRankedGame, gameOver, startRoll.isFinalized, currentTurnWallet, turnStartedAt, effectivePlayerId, myRole, play, t, enterOutcomeResolving]);
 
   // Visibility change handler - poll immediately when tab becomes visible
   // NOTE: Timer resume logic is in a separate effect after turnTimer is declared
@@ -1009,7 +1009,7 @@ const BackgammonGame = () => {
           if (dbTurnWallet && dbTurnWallet !== currentTurnWallet) {
             console.log("[BackgammonGame] Visibility poll detected turn change");
             setCurrentTurnWallet(dbTurnWallet);
-            const isNowMyTurn = isSameWallet(dbTurnWallet, address);
+            const isNowMyTurn = isSameWallet(dbTurnWallet, effectivePlayerId);
             if (isNowMyTurn) {
               // Restore dice from DB if already rolled this turn
               try {
@@ -1052,7 +1052,7 @@ const BackgammonGame = () => {
     
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [roomPda, isRankedGame, gameOver, currentTurnWallet, address]);
+  }, [roomPda, isRankedGame, gameOver, currentTurnWallet, effectivePlayerId]);
 
   // Update myRole and currentTurnWallet based on start roll result
   useEffect(() => {
@@ -1067,11 +1067,11 @@ const BackgammonGame = () => {
       
       setCurrentTurnWallet(startRoll.startingWallet);
       
-      const isStarter = isSameWallet(startRoll.startingWallet, address);
+      const isStarter = isSameWallet(startRoll.startingWallet, effectivePlayerId);
       setMyRole(isStarter ? "player" : "ai");
       setCurrentPlayer(isStarter ? "player" : "ai");
     }
-  }, [startRoll.isFinalized, startRoll.startingWallet, address]);
+  }, [startRoll.isFinalized, startRoll.startingWallet, effectivePlayerId]);
 
   // === MATCH COMPLETE DEBUG LOG ===
   // Logs final outcome when game ends for verification on both devices
@@ -1080,10 +1080,10 @@ const BackgammonGame = () => {
       const p1 = roomPlayers[0];
       const p2 = roomPlayers[1];
       const loserWallet = isSameWallet(winnerWallet, p1) ? p2 : p1;
-      const didIWin = isSameWallet(winnerWallet, address);
+      const didIWin = isSameWallet(winnerWallet, effectivePlayerId);
 
       console.log("[MatchComplete] Final outcome:", {
-        myWallet: address?.slice(0, 8),
+        myWallet: effectivePlayerId?.slice(0, 8),
         p1: p1?.slice(0, 8),
         p2: p2?.slice(0, 8),
         winner: winnerWallet?.slice(0, 8),
@@ -1091,7 +1091,7 @@ const BackgammonGame = () => {
         didIWin,
       });
     }
-  }, [gameOver, winnerWallet, address, roomPlayers]);
+  }, [gameOver, winnerWallet, effectivePlayerId, roomPlayers]);
 
   const handleAcceptRules = async () => {
     const result = await rankedGate.acceptRules();
@@ -1127,9 +1127,9 @@ const BackgammonGame = () => {
 
   // Is current user the room creator? (first player in roomPlayers)
   const isCreator = useMemo(() => {
-    if (!address || roomPlayers.length === 0) return false;
-    return isSameWallet(roomPlayers[0], address);
-  }, [address, roomPlayers]);
+    if (!effectivePlayerId || roomPlayers.length === 0) return false;
+    return isSameWallet(roomPlayers[0], effectivePlayerId);
+  }, [effectivePlayerId, roomPlayers]);
 
   // Open leave modal - NEVER triggers wallet
   const handleLeaveClick = useCallback(() => {
@@ -1141,16 +1141,16 @@ const BackgammonGame = () => {
 
   // Opponent wallet for forfeit - exclude placeholder wallets
   const opponentWallet = useMemo(() => {
-    if (!address || roomPlayers.length < 2) return null;
-    return roomPlayers.find(p => isRealWallet(p) && !isSameWallet(p, address)) || null;
-  }, [address, roomPlayers]);
+    if (!effectivePlayerId || roomPlayers.length < 2) return null;
+    return roomPlayers.find(p => isRealWallet(p) && !isSameWallet(p, effectivePlayerId)) || null;
+  }, [effectivePlayerId, roomPlayers]);
 
   // Block gameplay until start roll is finalized
   // Once start roll is finalized, game has started - don't gate on bothReady (fixes desync)
   const canPlay = startRoll.isFinalized;
   
   // WALLET-AUTHORITATIVE turn determination
-  const isMyTurnAuthoritative = !!address && !!currentTurnWallet && isSameWallet(currentTurnWallet, address);
+  const isMyTurnAuthoritative = !!effectivePlayerId && !!currentTurnWallet && isSameWallet(currentTurnWallet, effectivePlayerId);
   
   // Fallback to role-based for backward compatibility during transition
   const isMyTurnRaw = currentTurnWallet ? isMyTurnAuthoritative : currentPlayer === myRole;
@@ -1178,7 +1178,7 @@ const BackgammonGame = () => {
       timeoutFiredRef: timeoutFiredRef.current,
       isActuallyMyTurn,
       gameOver,
-      address: address?.slice(0, 8),
+      address: effectivePlayerId?.slice(0, 8),
       roomPda: roomPda?.slice(0, 8),
       diceLen: dice.length,
       remainingMovesLen: remainingMoves.length,
@@ -1206,11 +1206,11 @@ const BackgammonGame = () => {
       return;
     }
     
-    if (!isActuallyMyTurn || gameOver || !address || !roomPda) {
+    if (!isActuallyMyTurn || gameOver || !effectivePlayerId || !roomPda) {
       console.log("[handleTurnTimeout] Ignoring timeout - not my turn or game over", {
         isActuallyMyTurn,
         gameOver,
-        hasAddress: !!address,
+        hasAddress: !!effectivePlayerId,
         hasRoomPda: !!roomPda,
       });
       return;
@@ -1302,7 +1302,7 @@ const BackgammonGame = () => {
       console.error("[handleTurnTimeout] Exception:", err);
       timeoutFiredRef.current = false;
     }
-  }, [isActuallyMyTurn, gameOver, address, roomPda, dice, remainingMoves, isRankedGame, t, enterOutcomeResolving, durableEnabled, rankedGate.bothReady, startRoll.isFinalized, currentTurnWallet, hasTwoRealPlayers, roomPlayers]);
+  }, [isActuallyMyTurn, gameOver, effectivePlayerId, roomPda, dice, remainingMoves, isRankedGame, t, enterOutcomeResolving, durableEnabled, rankedGate.bothReady, startRoll.isFinalized, currentTurnWallet, hasTwoRealPlayers, roomPlayers]);
   
   // Turn timer for ranked games
   // FIX: Use startRoll.isFinalized as fallback for timer enable (don't depend on bothReady)
@@ -1333,7 +1333,7 @@ const BackgammonGame = () => {
   }, [roomPda, isRankedGame, gameOver, turnTimer]);
   const turnPlayers: TurnPlayer[] = useMemo(() => {
     return roomPlayers.map((playerAddress, index) => {
-      const isMe = isSameWallet(playerAddress, address);
+      const isMe = isSameWallet(playerAddress, effectivePlayerId);
       const color = index === 0 ? "gold" : "black";
       return {
         address: playerAddress,
@@ -1343,7 +1343,7 @@ const BackgammonGame = () => {
         seatIndex: index,
       };
     });
-  }, [roomPlayers, address, t]);
+  }, [roomPlayers, effectivePlayerId, t]);
 
   const activeTurnAddress = useMemo(() => {
     const turnIndex = currentPlayer === "player" ? 0 : 1;
@@ -1363,7 +1363,7 @@ const BackgammonGame = () => {
     roomId: roomId || "unknown",
     players: turnPlayers,
     activeTurnAddress,
-    myAddress: address,
+    myAddress: effectivePlayerId,
     enabled: true,
   });
 
@@ -1395,9 +1395,9 @@ const BackgammonGame = () => {
     
     // Fallback to role-based calculation for normal game endings
     if (!gameOver || !gameResultInfo?.winner) return null;
-    if (gameResultInfo.winner === myRole) return address;
-    return getOpponentWallet(roomPlayers, address);
-  }, [winnerWallet, gameOver, gameResultInfo, myRole, address, roomPlayers]);
+    if (gameResultInfo.winner === myRole) return effectivePlayerId;
+    return getOpponentWallet(roomPlayers, effectivePlayerId);
+  }, [winnerWallet, gameOver, gameResultInfo, myRole, effectivePlayerId, roomPlayers]);
 
   // Players for GameEndScreen
   const gameEndPlayers = useMemo(() => {
@@ -1510,7 +1510,7 @@ const BackgammonGame = () => {
         }
       } else if (moveMsg.type === "turn_end") {
         // WALLET-AUTHORITATIVE: Use nextTurnWallet from message
-        const nextWallet = moveMsg.nextTurnWallet || address;
+        const nextWallet = moveMsg.nextTurnWallet || effectivePlayerId;
         const alreadySameTurnWR = isSameWallet(nextWallet, currentTurnWallet);
         if (nextWallet) {
           if (!alreadySameTurnWR) {
@@ -1543,14 +1543,14 @@ const BackgammonGame = () => {
             },
             p1Wallet: roomPlayersRef.current[0],
             p2Wallet: roomPlayersRef.current[1],
-            myWallet: address, // Fallback when players not ready
+            myWallet: effectivePlayerId, // Fallback when players not ready
           });
           
           console.log("[BackgammonGame] WebRTC turn_timeout 3 strikes outcome:", {
             timedOut: (message.payload?.timedOutWallet || message.sender)?.slice(0, 8),
             winner: outcome.winnerWallet?.slice(0, 8),
             loser: outcome.loserWallet?.slice(0, 8),
-            myWallet: address?.slice(0, 8),
+            myWallet: effectivePlayerId?.slice(0, 8),
             roomPlayersLen: roomPlayersRef.current.length,
             payloadWinner: message.payload?.winnerWallet?.slice(0, 8),
           });
@@ -1559,7 +1559,7 @@ const BackgammonGame = () => {
           enterOutcomeResolving(outcome.winnerWallet);
           return;
         }
-        const nextWallet = moveMsg.nextTurnWallet || address;
+        const nextWallet = moveMsg.nextTurnWallet || effectivePlayerId;
         if (nextWallet) {
           setCurrentTurnWallet(nextWallet);
           const nextRole = isSameWallet(nextWallet, roomPlayersRef.current[0]) ? "player" : "ai";
@@ -1585,14 +1585,14 @@ const BackgammonGame = () => {
         },
         p1Wallet: roomPlayersRef.current[0],
         p2Wallet: roomPlayersRef.current[1],
-        myWallet: address, // Fallback when players not ready
+        myWallet: effectivePlayerId, // Fallback when players not ready
       });
       
       console.log("[BackgammonGame] resign outcome:", {
         forfeiting: forfeitingWallet?.slice(0, 8),
         winner: outcome.winnerWallet?.slice(0, 8),
         loser: outcome.loserWallet?.slice(0, 8),
-        myWallet: address?.slice(0, 8),
+        myWallet: effectivePlayerId?.slice(0, 8),
         roomPlayersLen: roomPlayersRef.current.length,
       });
       
@@ -1632,6 +1632,7 @@ const BackgammonGame = () => {
     players: roomPlayers,
     onMessage: handleWebRTCMessage,
     enabled: roomPlayers.length === 2,
+    overrideAddress: effectivePlayerId || undefined,
   });
   
   // In wallet browsers, don't block on WebRTC - use effective connection state
@@ -1650,7 +1651,7 @@ const BackgammonGame = () => {
   // useForfeit hook - centralized forfeit/leave logic
   const { forfeit, leave, isForfeiting, isLeaving, forfeitRef } = useForfeit({
     roomPda: roomPda || null,
-    myWallet: address || null,
+    myWallet: effectivePlayerId || null,
     opponentWallet,
     stakeLamports: stakeLamports ?? Math.floor(entryFeeSol * 1_000_000_000),
     gameType: "backgammon",
@@ -1706,7 +1707,7 @@ const BackgammonGame = () => {
   // Game chat hook
   const chat = useGameChat({
     roomId: roomId || "",
-    myWallet: address,
+    myWallet: effectivePlayerId,
     players: chatPlayers,
     onSendMessage: handleChatSend,
     enabled: roomPlayers.length === 2,
@@ -1775,8 +1776,8 @@ const BackgammonGame = () => {
     
     // CRITICAL: Persist dice_roll to DB for cross-device sync (durable path)
     // Note: Strike count reset is now handled server-side in submit_game_move RPC
-    if (isRankedGame && address) {
-      persistMove(moveMsg, address);
+    if (isRankedGame && effectivePlayerId) {
+      persistMove(moveMsg, effectivePlayerId);
     }
     
     // Check if moves available
@@ -1798,11 +1799,11 @@ const BackgammonGame = () => {
       }
       setGameStatus("Select a checker to move");
     }
-  }, [isMyTurn, dice, gameOver, gameState, myRole, play, sendMove, isRankedGame, address, persistMove, roomPda]);
+  }, [isMyTurn, dice, gameOver, gameState, myRole, play, sendMove, isRankedGame, effectivePlayerId, persistMove, roomPda]);
 
   // End turn
   const endTurn = useCallback(() => {
-    const opponentWalletAddr = getOpponentWallet(roomPlayersRef.current, address);
+    const opponentWalletAddr = getOpponentWallet(roomPlayersRef.current, effectivePlayerId);
     
     // Send via WebRTC (fast path) - include nextTurnWallet
     const moveMsg: BackgammonMoveMessage = {
@@ -1815,14 +1816,14 @@ const BackgammonGame = () => {
     
     // CRITICAL: Persist turn_end to DB for cross-device sync (durable path)
     // Include nextTurnWallet for wallet-authoritative sync
-    if (isRankedGame && address) {
+    if (isRankedGame && effectivePlayerId) {
       persistMove({ 
         type: "turn_end", 
         gameState, 
         remainingMoves: [], 
         dice: [],
         nextTurnWallet: opponentWalletAddr || undefined,
-      } as BackgammonMoveMessage & { dice: number[] }, address);
+      } as BackgammonMoveMessage & { dice: number[] }, effectivePlayerId);
     }
     
     // WALLET-AUTHORITATIVE: Set opponent as next turn (NOT toggle)
@@ -1836,7 +1837,7 @@ const BackgammonGame = () => {
     setGameStatus("Opponent's turn");
     
     // Note: Strike count reset is now handled server-side in submit_game_move RPC
-  }, [gameState, sendMove, isRankedGame, address, persistMove]);
+  }, [gameState, sendMove, isRankedGame, effectivePlayerId, persistMove]);
 
   // Handle point click
   const handlePointClick = useCallback((pointIndex: number) => {
@@ -1877,17 +1878,17 @@ const BackgammonGame = () => {
         sendMove(moveMsg);
         
         // Persist move to DB for ranked games
-        if (isRankedGame && address) {
-          persistMove(moveMsg, address);
+        if (isRankedGame && effectivePlayerId) {
+          persistMove(moveMsg, effectivePlayerId);
         }
         
-        recordPlayerMove(address || "", "Re-entered from bar");
+        recordPlayerMove(effectivePlayerId || "", "Re-entered from bar");
         
         // Check winner or end turn
         const winner = checkWinner(newState);
         if (winner) {
           // Use neutral resolving state - DB Outcome Resolver will finalize (sets gameResultInfo)
-          enterOutcomeResolving(address); // I'm the winner since I made the winning move
+          enterOutcomeResolving(effectivePlayerId); // I'm the winner since I made the winning move
         } else if (newRemaining.length === 0) {
           endTurn();
         } else {
@@ -1945,17 +1946,17 @@ const BackgammonGame = () => {
           sendMove(moveMsg);
           
           // Persist move to DB for ranked games
-          if (isRankedGame && address) {
-            persistMove(moveMsg, address);
+          if (isRankedGame && effectivePlayerId) {
+            persistMove(moveMsg, effectivePlayerId);
           }
           
-          recordPlayerMove(address || "", `Moved from ${selectedPoint + 1}`);
+          recordPlayerMove(effectivePlayerId || "", `Moved from ${selectedPoint + 1}`);
           
           // Check winner
           const winner = checkWinner(newState);
           if (winner) {
             // Use neutral resolving state - DB Outcome Resolver will finalize (sets gameResultInfo)
-            enterOutcomeResolving(address); // I'm the winner since I made the winning move
+            enterOutcomeResolving(effectivePlayerId); // I'm the winner since I made the winning move
           } else if (newRemaining.length === 0) {
             endTurn();
           } else {
@@ -1972,19 +1973,19 @@ const BackgammonGame = () => {
       setSelectedPoint(null);
       setValidMoves([]);
     }
-  }, [isMyTurn, remainingMoves, gameOver, myRole, gameState, selectedPoint, validMoves, applyMoveWithSound, sendMove, recordPlayerMove, address, endTurn, play, isRankedGame, persistMove, enterOutcomeResolving]);
+  }, [isMyTurn, remainingMoves, gameOver, myRole, gameState, selectedPoint, validMoves, applyMoveWithSound, sendMove, recordPlayerMove, effectivePlayerId, endTurn, play, isRankedGame, persistMove, enterOutcomeResolving]);
 
   const handleResign = useCallback(async () => {
     // 1. Send WebRTC message immediately for instant opponent UX
     sendResign();
     
     // 2. Update local UI optimistically - opponent wins, store their wallet
-    const opponentWalletAddr = getOpponentWallet(roomPlayers, address);
+    const opponentWalletAddr = getOpponentWallet(roomPlayers, effectivePlayerId);
     
     // Location 5: Debug log for settlement verification (already correct logic)
     console.log("[handleResign] Settlement params:", {
       winnerWallet: opponentWalletAddr?.slice(0, 8),
-      loserWallet: address?.slice(0, 8),
+      loserWallet: effectivePlayerId?.slice(0, 8),
       reason: "resign",
     });
     
@@ -2002,7 +2003,7 @@ const BackgammonGame = () => {
         variant: "destructive",
       });
     }
-  }, [sendResign, forfeit, roomPlayers, address, enterOutcomeResolving]);
+  }, [sendResign, forfeit, roomPlayers, effectivePlayerId, enterOutcomeResolving]);
 
   // Require wallet (skip for free rooms)
   if (!isFreeRoom && (!walletConnected || !address)) {
@@ -2243,7 +2244,7 @@ const BackgammonGame = () => {
         // Don't require bothReady here - let RulesGate handle showing the accept modal
         const shouldShowRulesGate =
           roomPlayers.length >= 2 &&
-          !!address &&
+          !!effectivePlayerId &&
           !startRoll.isFinalized;
 
         if (isDebugEnabled()) {
@@ -2251,7 +2252,7 @@ const BackgammonGame = () => {
             game: "backgammon",
             roomPda,
             roomPlayersLen: roomPlayers.length,
-            hasAddress: !!address,
+            hasAddress: !!effectivePlayerId,
             isRankedGame,
             bothReady: rankedGate.bothReady,
             isFinalized: startRoll.isFinalized,
@@ -2264,7 +2265,7 @@ const BackgammonGame = () => {
         <RulesGate
           isRanked={isRankedGame}
           roomPda={roomPda}
-          myWallet={address}
+          myWallet={effectivePlayerId}
           roomPlayers={roomPlayers}
           iAmReady={rankedGate.iAmReady}
           opponentReady={rankedGate.opponentReady}
@@ -2283,7 +2284,7 @@ const BackgammonGame = () => {
         >
           <DiceRollStart
             roomPda={roomPda || ""}
-            myWallet={address}
+            myWallet={effectivePlayerId}
             player1Wallet={roomPlayers[0]}
             player2Wallet={roomPlayers[1]}
             onComplete={startRoll.handleRollComplete}
@@ -2386,7 +2387,7 @@ const BackgammonGame = () => {
               isMyTurn={isActuallyMyTurn}
               activePlayer={turnPlayers[isSameWallet(currentTurnWallet, roomPlayers[0]) ? 0 : 1]}
               players={turnPlayers}
-              myAddress={address}
+              myAddress={effectivePlayerId}
               remainingTime={isRankedGame ? turnTimer.remainingTime : undefined}
               showTimer={isRankedGame && startRoll.isFinalized && !gameOver}
             />
@@ -2901,7 +2902,7 @@ const BackgammonGame = () => {
           gameType="Backgammon"
           winner={winnerAddress}
           winnerName={gameEndPlayers.find(p => p.address === winnerAddress)?.name}
-          myAddress={address}
+          myAddress={effectivePlayerId}
           players={gameEndPlayers}
           onRematch={() => rematch.openRematchModal()}
           onExit={() => navigate("/room-list")}
