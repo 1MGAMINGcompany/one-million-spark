@@ -391,11 +391,12 @@ const LudoGame = () => {
   useEffect(() => {
     if (isRankedGame && startRoll.isFinalized && startRoll.startingWallet) {
       const starterIndex = roomPlayers.findIndex(p => isSameWallet(p, startRoll.startingWallet));
-      if (starterIndex >= 0 && starterIndex !== currentPlayerIndex) {
-        setCurrentPlayerIndex(starterIndex);
+      const boardSlot = activeSlots[starterIndex] ?? starterIndex;
+      if (starterIndex >= 0 && boardSlot !== currentPlayerIndex) {
+        setCurrentPlayerIndex(boardSlot);
       }
     }
-  }, [isRankedGame, startRoll.isFinalized, startRoll.startingWallet, roomPlayers, currentPlayerIndex, setCurrentPlayerIndex]);
+  }, [isRankedGame, startRoll.isFinalized, startRoll.startingWallet, roomPlayers, currentPlayerIndex, setCurrentPlayerIndex, activeSlots]);
 
   const handleAcceptRules = async () => {
     const result = await rankedGate.acceptRules();
@@ -740,8 +741,9 @@ const LudoGame = () => {
         const dbTurnWallet = data?.session?.current_turn_wallet;
         if (dbTurnWallet) {
           const dbTurnIndex = roomPlayers.findIndex(p => isSameWallet(p, dbTurnWallet));
-          if (dbTurnIndex >= 0 && dbTurnIndex !== currentPlayerIndex) {
-            setCurrentPlayerIndex(dbTurnIndex);
+          const dbBoardSlot = activeSlots[dbTurnIndex] ?? dbTurnIndex;
+          if (dbTurnIndex >= 0 && dbBoardSlot !== currentPlayerIndex) {
+            setCurrentPlayerIndex(dbBoardSlot);
             turnTimer.resetTimer();
 
             try {
@@ -785,7 +787,7 @@ const LudoGame = () => {
   }, [players, roomPlayers, effectivePlayerId, t, activeSlots]);
 
   // Current active player address
-  const activeTurnAddress = turnPlayers[currentPlayerIndex]?.address || null;
+  const activeTurnAddress = turnPlayers.find(tp => tp.seatIndex === currentPlayerIndex)?.address || null;
 
   // Turn notification system
   const {
@@ -828,8 +830,9 @@ const LudoGame = () => {
   // Winner address for GameEndScreen
   const winnerAddress = useMemo(() => {
     if (!gameOver) return null;
-    const winnerIndex = players.findIndex(p => p.color === gameOver);
-    return winnerIndex >= 0 ? (roomPlayers[winnerIndex] || null) : null;
+    const winnerSlot = players.findIndex(p => p.color === gameOver);
+    const roomIdx = activeSlots.indexOf(winnerSlot);
+    return roomIdx >= 0 ? (roomPlayers[roomIdx] || null) : null;
   }, [gameOver, players, roomPlayers]);
 
   // Auto-settlement hook - triggers settle-game edge function when game ends
@@ -1318,7 +1321,7 @@ const LudoGame = () => {
         <div className="max-w-4xl mx-auto">
           <TurnStatusHeader
             isMyTurn={isActuallyMyTurn}
-            activePlayer={turnPlayers[currentPlayerIndex]}
+            activePlayer={turnPlayers.find(tp => tp.seatIndex === currentPlayerIndex)}
             players={turnPlayers}
             myAddress={effectivePlayerId}
             remainingTime={isRankedGame ? turnTimer.remainingTime : undefined}
