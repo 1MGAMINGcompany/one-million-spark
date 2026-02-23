@@ -27,7 +27,7 @@ import { DiceRollStart } from "@/components/DiceRollStart";
 import LudoBoard from "@/components/ludo/LudoBoard";
 import EgyptianDice from "@/components/ludo/EgyptianDice";
 import TurnIndicator from "@/components/ludo/TurnIndicator";
-import { Player, PlayerColor, initializePlayers } from "@/components/ludo/ludoTypes";
+import { Player, PlayerColor, initializePlayers, initializePlayersForCount, getActiveSlots } from "@/components/ludo/ludoTypes";
 import { useLudoEngine, LudoMove } from "@/hooks/useLudoEngine";
 import { useTurnNotifications, TurnPlayer } from "@/hooks/useTurnNotifications";
 import { useGameChat, ChatPlayer, ChatMessage } from "@/hooks/useGameChat";
@@ -214,6 +214,7 @@ const LudoGame = () => {
     clearCaptureEvent,
   } = useLudoEngine({
     activePlayerCount: roomPlayers.length >= 2 ? roomPlayers.length : 4,
+    isMultiplayer: true,
     onSoundPlay: playSfx,
     onToast: showToast,
   });
@@ -277,7 +278,8 @@ const LudoGame = () => {
   // Save game state after each move
   useEffect(() => {
     if (roomPlayers.length >= 2) {
-      const currentTurnWallet = roomPlayers[currentPlayerIndex] || roomPlayers[0];
+      const slotToRoomIdx = activeSlots.indexOf(currentPlayerIndex);
+      const currentTurnWallet = (slotToRoomIdx >= 0 ? roomPlayers[slotToRoomIdx] : roomPlayers[0]) || roomPlayers[0];
       const persisted: PersistedLudoState = {
         players,
         currentPlayerIndex,
@@ -372,12 +374,18 @@ const LudoGame = () => {
     bothReady: rankedGate.bothReady,
   });
 
-  // Find which player index the current wallet is
-  // effectivePlayerId already defined above
+  // Find which player SLOT the current wallet maps to
+  // For 2-player: roomPlayers[0] -> slot 0 (gold), roomPlayers[1] -> slot 2 (sapphire)
+  const activeSlots = useMemo(() => {
+    return getActiveSlots(roomPlayers.length >= 2 ? roomPlayers.length : 4);
+  }, [roomPlayers.length]);
+
   const myPlayerIndex = useMemo(() => {
     if (!effectivePlayerId || roomPlayers.length === 0) return -1;
-    return roomPlayers.findIndex(p => isSameWallet(p, effectivePlayerId));
-  }, [effectivePlayerId, roomPlayers]);
+    const roomIdx = roomPlayers.findIndex(p => isSameWallet(p, effectivePlayerId));
+    if (roomIdx === -1) return -1;
+    return activeSlots[roomIdx] ?? -1; // Map room position to board slot
+  }, [effectivePlayerId, roomPlayers, activeSlots]);
 
   // Update starting player based on start roll result for ranked games
   useEffect(() => {
@@ -620,18 +628,20 @@ const LudoGame = () => {
   // Convert Ludo players to TurnPlayer format for notifications
   const turnPlayers: TurnPlayer[] = useMemo(() => {
     return players.map((player, index) => {
-      const walletAddress = roomPlayers[index] || `player-${index}`;
+      // Map board slot index to room player index
+      const roomIdx = activeSlots.indexOf(index);
+      const walletAddress = roomIdx >= 0 ? (roomPlayers[roomIdx] || `player-${index}`) : `inactive-${index}`;
       const isHuman = isSameWallet(walletAddress, effectivePlayerId);
       
       return {
         address: walletAddress,
         name: isHuman ? t('common.you') : `${player.color.charAt(0).toUpperCase() + player.color.slice(1)} ${t('game.player')}`,
         color: player.color,
-        status: player.tokens.every(t => t.position === 62) ? "finished" : "active" as const,
+        status: (player.tokens.every(t => t.position === 62) ? "finished" : "active") as "finished" | "active",
         seatIndex: index,
       };
-    });
-  }, [players, roomPlayers, effectivePlayerId, t]);
+    }).filter((_, index) => activeSlots.includes(index)); // Only include active players
+  }, [players, roomPlayers, effectivePlayerId, t, activeSlots]);
 
   // Current active player address
   const activeTurnAddress = turnPlayers[currentPlayerIndex]?.address || null;
@@ -1025,67 +1035,19 @@ const LudoGame = () => {
       return;
     }
     
-    // Skip phantom player slots (indices beyond actual room players in 2-player games)
-    if (roomPlayers.length > 0 && currentPlayerIndex >= roomPlayers.length) {
-      // Auto-advance past empty slots immediately
-      advanceTurn(0);
+    // Check if this slot belongs to a real multiplayer opponent
+    // activeSlots maps room positions to board slots, so check if currentPlayerIndex is in activeSlots
+    const isRealOpponentSlot = activeSlots.includes(currentPlayerIndex);
+    
+    // If this is a real opponent's slot, do NOT auto-play -- wait for their move via sync
+    if (isRealOpponentSlot) {
       return;
     }
     
-    // Wait for clean state (no dice, not rolling, not animating)
-    if (diceValue !== null || isRolling || isAnimating) {
-      return;
-    }
-    
-    // Create a unique key for this turn state - include turnSignal to differentiate bonus turns
-    const turnKey = `${currentPlayerIndex}-${turnSignal}`;
-    if (lastProcessedAiTurnRef.current === turnKey) {
-      return;
-    }
-    
-    const delay = 800;
-    aiTimeoutRef.current = setTimeout(() => {
-      // Mark this turn as being processed
-      lastProcessedAiTurnRef.current = turnKey;
-      
-      rollDice((dice, movable) => {
-        console.log(`[LUDO MULTI] AI ${currentPlayer.color} rolled ${dice}, movable: [${movable.join(', ')}]`);
-        
-        if (movable.length === 0) {
-          aiAdvanceTimeoutRef.current = setTimeout(() => {
-            setDiceValue(null);
-            advanceTurn(dice);
-          }, 1000);
-        } else {
-          const capturedDice = dice;
-          setMovableTokens([]);
-          
-          aiMoveTimeoutRef.current = setTimeout(() => {
-            // Simple AI: random token selection
-            const chosenToken = movable[Math.floor(Math.random() * movable.length)];
-            
-            executeMove(currentPlayerIndex, chosenToken, capturedDice, () => {
-              const token = players[currentPlayerIndex].tokens[chosenToken];
-              const endPos = token.position === -1 ? 0 : token.position + capturedDice;
-              recordPlayerMove(roomPlayers[currentPlayerIndex] || "", `Moved to position ${endPos}`);
-              
-              setDiceValue(null);
-              aiAdvanceTimeoutRef.current = setTimeout(() => {
-                advanceTurn(capturedDice);
-              }, 200);
-            });
-          }, 600);
-        }
-      });
-    }, delay);
-    
-    return () => {
-      if (aiTimeoutRef.current) {
-        clearTimeout(aiTimeoutRef.current);
-        aiTimeoutRef.current = null;
-      }
-    };
-  }, [currentPlayerIndex, myPlayerIndex, currentPlayer?.color, gameOver, diceValue, isRolling, isAnimating, players, rollDice, executeMove, advanceTurn, setDiceValue, setMovableTokens, turnSignal, recordPlayerMove, roomPlayers]);
+    // This is a phantom/inactive slot -- skip it immediately
+    advanceTurn(0);
+    return;
+  }, [currentPlayerIndex, myPlayerIndex, gameOver, activeSlots, advanceTurn]);
 
   // Require wallet connection (skip for free rooms)
   if (!isFreeRoom && (!walletConnected || !address)) {
@@ -1186,7 +1148,7 @@ const LudoGame = () => {
                 Ludo - Room #{roomId}
               </h1>
               <p className="text-xs text-muted-foreground">
-                4-Player Multiplayer
+                {roomPlayers.length >= 2 ? roomPlayers.length : 4}-Player Multiplayer
               </p>
             </div>
           </div>
@@ -1244,6 +1206,7 @@ const LudoGame = () => {
           captureEvent={captureEvent}
           onCaptureAnimationComplete={clearCaptureEvent}
           eliminatedPlayers={eliminatedPlayers}
+          activePlayerIndices={activeSlots}
         />
       </div>
 
@@ -1321,18 +1284,21 @@ const LudoGame = () => {
       {/* Player Status Footer */}
       <div className="flex-shrink-0 py-2 px-4">
         <div className="max-w-4xl mx-auto flex justify-center gap-6 text-xs text-muted-foreground">
-          {players.map((player, idx) => (
+          {players.filter((_, idx) => activeSlots.includes(idx)).map((player, filteredIdx) => {
+            const realIdx = activeSlots[filteredIdx];
+            return (
             <div key={player.color} className="flex items-center gap-1">
               <span className="capitalize font-medium" style={{ 
                 color: player.color === 'gold' ? '#FFD700' : 
                        player.color === 'ruby' ? '#E74C3C' : 
                        player.color === 'emerald' ? '#2ECC71' : '#3498DB' 
               }}>
-                {idx === myPlayerIndex ? "You" : player.color}:
+                {realIdx === myPlayerIndex ? "You" : player.color}:
               </span>
               <span>{player.tokens.filter(t => t.position === 62).length}/4</span>
             </div>
-          ))}
+            );
+          })}
         </div>
       </div>
       

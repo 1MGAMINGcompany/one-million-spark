@@ -34,6 +34,7 @@ interface LudoBoardProps {
   captureEvent?: CaptureEvent | null;
   onCaptureAnimationComplete?: () => void;
   eliminatedPlayers?: Set<number>;
+  activePlayerIndices?: number[]; // Which player indices are active (e.g., [0, 2] for 2-player)
 }
 
 // Color configuration
@@ -272,6 +273,7 @@ const LudoBoard = memo(({
   captureEvent,
   onCaptureAnimationComplete,
   eliminatedPlayers = new Set(),
+  activePlayerIndices,
 }: LudoBoardProps) => {
   const boardRef = useRef<HTMLDivElement>(null);
   const [boardSize, setBoardSize] = useState(0);
@@ -536,6 +538,8 @@ const LudoBoard = memo(({
     const tokens: JSX.Element[] = [];
     
     players.forEach((player, playerIndex) => {
+      // Skip inactive players entirely
+      if (activePlayerIndices && !activePlayerIndices.includes(playerIndex)) return;
       const isPlayerEliminated = eliminatedPlayers.has(playerIndex);
       
       player.tokens.forEach((token, tokenIndex) => {
@@ -590,10 +594,18 @@ const LudoBoard = memo(({
         {/* Home bases */}
         {boardSize > 0 && (
           <>
-            <HomeBase color="gold" startRow={0} startCol={0} isEliminated={eliminatedPlayers.has(0)} />
-            <HomeBase color="ruby" startRow={0} startCol={9} isEliminated={eliminatedPlayers.has(1)} />
-            <HomeBase color="sapphire" startRow={9} startCol={9} isEliminated={eliminatedPlayers.has(3)} />
-            <HomeBase color="emerald" startRow={9} startCol={0} isEliminated={eliminatedPlayers.has(2)} />
+            {(!activePlayerIndices || activePlayerIndices.includes(0)) && (
+              <HomeBase color="gold" startRow={0} startCol={0} isEliminated={eliminatedPlayers.has(0)} />
+            )}
+            {(!activePlayerIndices || activePlayerIndices.includes(1)) && (
+              <HomeBase color="ruby" startRow={0} startCol={9} isEliminated={eliminatedPlayers.has(1)} />
+            )}
+            {(!activePlayerIndices || activePlayerIndices.includes(2)) && (
+              <HomeBase color="sapphire" startRow={9} startCol={9} isEliminated={eliminatedPlayers.has(2)} />
+            )}
+            {(!activePlayerIndices || activePlayerIndices.includes(3)) && (
+              <HomeBase color="emerald" startRow={9} startCol={0} isEliminated={eliminatedPlayers.has(3)} />
+            )}
           </>
         )}
         
