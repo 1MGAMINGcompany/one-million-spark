@@ -123,7 +123,8 @@ const ChessGame = () => {
   const { t } = useTranslation();
   const { play } = useSound();
   const { isConnected: walletConnected, address } = useWallet();
-
+  const isFreeRoom = roomPda?.startsWith("free-") ?? false;
+  const effectivePlayerId = address || (isFreeRoom ? getAnonId() : null);
   const [game, setGame] = useState(new Chess());
   const [gameStatus, setGameStatus] = useState<string>(t("gameMultiplayer.waitingForOpponent"));
   const [moveHistory, setMoveHistory] = useState<string[]>([]);
@@ -159,7 +160,7 @@ const ChessGame = () => {
   useEffect(() => { animationsEnabledRef.current = animationsEnabled; }, [animationsEnabled]);
 
   // Fetch real player order from on-chain room account with polling for second player
-  const isFreeRoom = roomPda?.startsWith("free-") ?? false;
+  // isFreeRoom already defined above
   useEffect(() => {
     const playerId = address || (isFreeRoom ? getAnonId() : null);
     if (!playerId || !roomPda) return;
@@ -247,7 +248,7 @@ const ChessGame = () => {
             }
             if (!success && pollCount >= MAX_POLLS) {
               console.log("[ChessGame] Max polls reached, still waiting for opponent");
-              setRoomPlayers([address, `waiting-${roomPda.slice(0, 8)}`]);
+              setRoomPlayers([playerId, `waiting-${roomPda.slice(0, 8)}`]);
             }
           }
         }, 1000);
@@ -259,7 +260,7 @@ const ChessGame = () => {
         clearInterval(pollInterval);
       }
     };
-  }, [address, roomPda]);
+  }, [effectivePlayerId, roomPda]);
 
   // Game session persistence - track if we've shown the restored toast
   const restoredToastShownRef = useRef(false);
@@ -301,14 +302,14 @@ const ChessGame = () => {
   const { loadSession: loadChessSession, saveSession: saveChessSession, finishSession: finishChessSession } = useGameSessionPersistence({
     roomPda: roomPda,
     gameType: 'chess',
-    enabled: roomPlayers.length >= 2 && !!address,
+    enabled: roomPlayers.length >= 2 && !!effectivePlayerId,
     onStateRestored: handleRealtimeStateRestored,
-    callerWallet: address, // Pass caller wallet for secure RPC validation
+    callerWallet: effectivePlayerId, // Pass caller wallet for secure RPC validation
   });
 
   // Load session on mount
   useEffect(() => {
-    if (roomPlayers.length >= 2 && address) {
+    if (roomPlayers.length >= 2 && effectivePlayerId) {
       loadChessSession().then(savedState => {
         if (savedState && Object.keys(savedState).length > 0) {
           handleChessStateRestored(savedState, true);
@@ -316,7 +317,7 @@ const ChessGame = () => {
       });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roomPlayers.length, address]);
+  }, [roomPlayers.length, effectivePlayerId]);
 
   // Save game state after each move
   useEffect(() => {
@@ -352,7 +353,7 @@ const ChessGame = () => {
   // Durable game sync - persists moves to DB for reliability
   const handleDurableMoveReceived = useCallback((move: GameMove) => {
     // Only apply moves from opponents (we already applied our own locally)
-    if (!isSameWallet(move.wallet, address)) {
+    if (!isSameWallet(move.wallet, effectivePlayerId)) {
       console.log("[ChessGame] Applying move from DB:", move.turn_number);
       const moveData = move.move_data as any;
       
@@ -364,7 +365,7 @@ const ChessGame = () => {
         if (moveData.missedCount >= 3) {
           // Opponent forfeited by missing 3 turns
           setGameOver(true);
-          setWinnerWallet(address || null);
+          setWinnerWallet(effectivePlayerId || null);
           setGameStatus(t('gameSession.opponentForfeited'));
           play('chess_win');
           toast({
@@ -402,7 +403,7 @@ const ChessGame = () => {
         }
       }
     }
-  }, [address, roomPda, play, t]);
+  }, [effectivePlayerId, roomPda, play, t]);
 
   const { submitMove: persistMove, moves: dbMoves, isLoading: isSyncLoading } = useDurableGameSync({
     roomPda: roomPda || "",
@@ -418,7 +419,7 @@ const ChessGame = () => {
 
   const rankedGate = useRankedReadyGate({
     roomPda,
-    myWallet: address,
+    myWallet: effectivePlayerId,
     isRanked: isRankedGame,
     enabled: hasTwoRealPlayers && modeLoaded,
   });
@@ -441,18 +442,18 @@ const ChessGame = () => {
   const startRoll = useStartRoll({
     roomPda,
     gameType: "chess",
-    myWallet: address,
+    myWallet: effectivePlayerId,
     isRanked: isRankedGame,
     roomPlayers,
-    hasTwoRealPlayers,
-    initialColor: isSameWallet(roomPlayers[0], address) ? "w" : "b",
+    hasTwoRealPlayers: isFreeRoom ? roomPlayers.length >= 2 : hasTwoRealPlayers,
+    initialColor: isSameWallet(roomPlayers[0], effectivePlayerId) ? "w" : "b",
     bothReady: rankedGate.bothReady,
   });
 
   // Update myColor based on start roll result - THIS IS THE ONLY PLACE THAT SETS COLOR
   useEffect(() => {
     if (startRoll.isFinalized && startRoll.startingWallet) {
-      const isStarter = isSameWallet(startRoll.startingWallet, address);
+      const isStarter = isSameWallet(startRoll.startingWallet, effectivePlayerId);
       const newColor = isStarter ? "w" : "b";
       setMyColor(newColor);
       console.log("[ChessGame] Dice roll finalized. Starter:", startRoll.startingWallet, "My color:", newColor === "w" ? "white" : "black");
@@ -462,7 +463,7 @@ const ChessGame = () => {
         description: isStarter ? t("gameMultiplayer.playAsWhite") : t("gameMultiplayer.playAsBlack"),
       });
     }
-  }, [startRoll.isFinalized, startRoll.startingWallet, address, t]);
+  }, [startRoll.isFinalized, startRoll.startingWallet, effectivePlayerId, t]);
 
   const handleAcceptRules = async () => {
     const result = await rankedGate.acceptRules();
@@ -484,18 +485,18 @@ const ChessGame = () => {
 
   // Is current user the room creator? (first player in roomPlayers)
   const isCreator = useMemo(() => {
-    if (!address || roomPlayers.length === 0) return false;
-    return isSameWallet(roomPlayers[0], address);
-  }, [address, roomPlayers]);
+    if (!effectivePlayerId || roomPlayers.length === 0) return false;
+    return isSameWallet(roomPlayers[0], effectivePlayerId);
+  }, [effectivePlayerId, roomPlayers]);
 
   // NOTE: handleUILeave, handleCancelRoom, handleForfeitMatch are defined AFTER useForfeit hook
   // See below after useForfeit is initialized
 
   // Opponent wallet for forfeit - exclude placeholder wallets
   const opponentWallet = useMemo(() => {
-    if (!address || roomPlayers.length < 2) return null;
-    return roomPlayers.find(p => isRealWallet(p) && !isSameWallet(p, address)) || null;
-  }, [address, roomPlayers]);
+    if (!effectivePlayerId || roomPlayers.length < 2) return null;
+    return roomPlayers.find(p => isRealWallet(p) && !isSameWallet(p, effectivePlayerId)) || roomPlayers.find(p => !isSameWallet(p, effectivePlayerId)) || null;
+  }, [effectivePlayerId, roomPlayers]);
 
   // useForfeit hook - will be set up after WebRTC is available
   // Placeholder for now - actual hook is added after WebRTC initialization
@@ -514,7 +515,7 @@ const ChessGame = () => {
   
   // Override takes priority if set
   const isMyTurnOverride = turnOverrideWallet 
-    ? isSameWallet(turnOverrideWallet, address) 
+    ? isSameWallet(turnOverrideWallet, effectivePlayerId) 
     : null;
   const isActuallyMyTurn = isMyTurnOverride ?? isMyTurnFromEngine;
   
@@ -526,7 +527,7 @@ const ChessGame = () => {
 
   // Turn timer for ranked games - calls server RPC for DB-authoritative timeout
   const handleTurnTimeout = useCallback(async () => {
-    if (gameOver || !address || !roomPda || !isActuallyMyTurn) return;
+    if (gameOver || !effectivePlayerId || !roomPda || !isActuallyMyTurn) return;
     
     try {
       // Call server-side RPC - handles all timeout logic atomically
@@ -579,7 +580,7 @@ const ChessGame = () => {
     } catch (err) {
       console.error("[ChessGame] Timeout exception:", err);
     }
-  }, [gameOver, address, roomPda, isActuallyMyTurn, myColor, play, t]);
+  }, [gameOver, effectivePlayerId, roomPda, isActuallyMyTurn, myColor, play, t]);
 
   // Use turn time from ranked gate (fetched from DB/localStorage)
   const effectiveTurnTime = rankedGate.turnTimeSeconds || DEFAULT_RANKED_TURN_TIME;
@@ -609,7 +610,7 @@ const ChessGame = () => {
         if (dbStatus === "finished" && !gameOver) {
           setGameOver(true);
           setWinnerWallet(dbWinner || null);
-          const iWin = isSameWallet(dbWinner, address);
+          const iWin = isSameWallet(dbWinner, effectivePlayerId);
           setGameStatus(iWin ? t("gameMultiplayer.checkmateYouWin") : t("gameMultiplayer.checkmateYouLose"));
           play(iWin ? "chess_win" : "chess_lose");
           return;
@@ -618,7 +619,7 @@ const ChessGame = () => {
         const dbTurnWallet = data?.session?.current_turn_wallet;
         if (dbTurnWallet && turnOverrideWallet !== dbTurnWallet) {
           // Detect turn change
-          const isNowMyTurn = isSameWallet(dbTurnWallet, address);
+          const isNowMyTurn = isSameWallet(dbTurnWallet, effectivePlayerId);
           
           // Sync FEN from DB to keep engine in sync
           const dbFen = data?.session?.game_state?.fen;
@@ -657,11 +658,11 @@ const ChessGame = () => {
     }, 5000);
 
     return () => clearInterval(pollInterval);
-  }, [roomPda, isRankedGame, gameOver, startRoll.isFinalized, address, turnOverrideWallet, game, effectiveColor, t, play]);
+  }, [roomPda, isRankedGame, gameOver, startRoll.isFinalized, effectivePlayerId, turnOverrideWallet, game, effectiveColor, t, play]);
 
   const turnPlayers: TurnPlayer[] = useMemo(() => {
     return roomPlayers.map((playerAddress, index) => {
-      const isMe = isSameWallet(playerAddress, address);
+      const isMe = isSameWallet(playerAddress, effectivePlayerId);
       const color = index === 0 ? "white" : "black";
       return {
         address: playerAddress,
@@ -671,7 +672,7 @@ const ChessGame = () => {
         seatIndex: index,
       };
     });
-  }, [roomPlayers, address]);
+  }, [roomPlayers, effectivePlayerId]);
 
   // Active turn address based on chess turn
   const activeTurnAddress = useMemo(() => {
@@ -692,7 +693,7 @@ const ChessGame = () => {
     roomId: roomId || "unknown",
     players: turnPlayers,
     activeTurnAddress,
-    myAddress: address,
+    myAddress: effectivePlayerId,
     enabled: true,
   });
 
@@ -715,7 +716,7 @@ const ChessGame = () => {
   // Game chat hook
   const chat = useGameChat({
     roomId: roomId || "",
-    myWallet: address,
+    myWallet: effectivePlayerId,
     players: chatPlayers,
     onSendMessage: handleChatSend,
     enabled: roomPlayers.length === 2,
@@ -740,9 +741,9 @@ const ChessGame = () => {
     // Fallback for normal game endings
     if (!gameOver) return null;
     if (gameStatus.includes("draw") || gameStatus.includes("Stalemate")) return "draw";
-    if (gameStatus.includes("win")) return address;
-    return getOpponentWallet(roomPlayers, address);
-  }, [winnerWallet, gameOver, gameStatus, address, roomPlayers]);
+    if (gameStatus.includes("win")) return effectivePlayerId;
+    return getOpponentWallet(roomPlayers, effectivePlayerId);
+  }, [winnerWallet, gameOver, gameStatus, effectivePlayerId, roomPlayers]);
 
   // Auto-settlement hook - triggers settle-game edge function when game ends
   // Winner wallet is determined server-side from game_sessions.game_state
@@ -922,7 +923,7 @@ const ChessGame = () => {
       }
     } else if (message.type === "resign") {
       // Opponent resigned - I WIN - store MY wallet as winner
-      setWinnerWallet(address || null);
+      setWinnerWallet(effectivePlayerId || null);
       setGameStatus(t("gameMultiplayer.opponentResignedWin"));
       setGameOver(true);
       play('chess_win');
@@ -980,6 +981,7 @@ const ChessGame = () => {
     players: roomPlayers,
     onMessage: handleWebRTCMessage,
     enabled: roomPlayers.length === 2,
+    overrideAddress: effectivePlayerId || undefined,
   });
   
   // In wallet browsers, don't block on WebRTC - use effective connection state
@@ -998,7 +1000,7 @@ const ChessGame = () => {
   // useForfeit hook - centralized forfeit/leave logic with guaranteed cleanup
   const { forfeit, leave, isForfeiting, isLeaving, forfeitRef } = useForfeit({
     roomPda: roomPda || null,
-    myWallet: address || null,
+    myWallet: effectivePlayerId || null,
     opponentWallet,
     stakeLamports: stakeLamports ?? Math.floor(entryFeeSol * 1_000_000_000),
     gameType: "chess",
@@ -1147,12 +1149,12 @@ const ChessGame = () => {
       sendMove(moveData);
 
       // Persist move to DB for ranked games (durable sync)
-      if (isRankedGame && address) {
-        persistMove(moveData, address);
+      if (isRankedGame && effectivePlayerId) {
+        persistMove(moveData, effectivePlayerId);
       }
 
       // Record move for turn history
-      recordPlayerMove(address || "", move.san);
+      recordPlayerMove(effectivePlayerId || "", move.san);
 
       if (!checkGameOver(gameCopy)) {
         setGameStatus(t("gameMultiplayer.opponentsTurn"));
@@ -1162,14 +1164,14 @@ const ChessGame = () => {
     } catch {
       return false;
     }
-  }, [game, gameOver, isMyTurn, checkGameOver, animationsEnabled, triggerAnimation, play, sendMove, recordPlayerMove, address]);
+  }, [game, gameOver, isMyTurn, checkGameOver, animationsEnabled, triggerAnimation, play, sendMove, recordPlayerMove, effectivePlayerId]);
 
   const handleResign = useCallback(async () => {
     // 1. Send WebRTC message immediately for instant opponent UX
     sendResign();
     
     // 2. Update local UI optimistically - opponent wins, store their wallet
-    const opponentWalletAddr = getOpponentWallet(roomPlayers, address);
+    const opponentWalletAddr = getOpponentWallet(roomPlayers, effectivePlayerId);
     setWinnerWallet(opponentWalletAddr);
     setGameStatus(t("gameMultiplayer.youResignedLose"));
     setGameOver(true);
@@ -1186,7 +1188,7 @@ const ChessGame = () => {
         variant: "destructive",
       });
     }
-  }, [sendResign, play, t, forfeit, roomPlayers, address]);
+  }, [sendResign, play, t, forfeit, roomPlayers, effectivePlayerId]);
 
 
   const formattedMoves = [];
@@ -1283,7 +1285,7 @@ const ChessGame = () => {
               isMyTurn={isActuallyMyTurn}
               activePlayer={turnPlayers[game.turn() === "w" ? 0 : 1]}
               players={turnPlayers}
-              myAddress={address}
+              myAddress={effectivePlayerId}
               remainingTime={isRankedGame ? turnTimer.remainingTime : undefined}
               showTimer={isRankedGame && canPlay}
             />
@@ -1431,7 +1433,7 @@ const ChessGame = () => {
           gameType="Chess"
           winner={winnerAddress}
           winnerName={winnerAddress === "draw" ? undefined : gameEndPlayers.find(p => p.address === winnerAddress)?.name}
-          myAddress={address}
+          myAddress={effectivePlayerId}
           players={gameEndPlayers}
           onRematch={() => rematch.openRematchModal()}
           onExit={() => navigate("/room-list")}
@@ -1475,7 +1477,7 @@ const ChessGame = () => {
         // Don't require bothReady here - let RulesGate handle showing the accept modal
         const shouldShowRulesGate =
           roomPlayers.length >= 2 &&
-          !!address &&
+          !!effectivePlayerId &&
           !startRoll.isFinalized;
 
         if (isDebugEnabled()) {
@@ -1496,7 +1498,7 @@ const ChessGame = () => {
         <RulesGate
           isRanked={isRankedGame}
           roomPda={roomPda}
-          myWallet={address}
+          myWallet={effectivePlayerId}
           roomPlayers={roomPlayers}
           iAmReady={rankedGate.iAmReady}
           opponentReady={rankedGate.opponentReady}
@@ -1504,7 +1506,7 @@ const ChessGame = () => {
           isSettingReady={rankedGate.isSettingReady}
           stakeLamports={stakeLamports}
           turnTimeSeconds={effectiveTurnTime}
-          opponentWallet={roomPlayers.find(p => isRealWallet(p) && !isSameWallet(p, address))}
+          opponentWallet={roomPlayers.find(p => isRealWallet(p) && !isSameWallet(p, effectivePlayerId)) || roomPlayers.find(p => !isSameWallet(p, effectivePlayerId))}
           onAcceptRules={handleAcceptRules}
           onLeave={handleLeaveClick}
           isDataLoaded={isDataLoaded}
@@ -1515,7 +1517,7 @@ const ChessGame = () => {
           {/* DiceRollStart - rendered based on shouldShowDice, not showDiceRoll */}
           <DiceRollStart
             roomPda={roomPda || ""}
-            myWallet={address}
+            myWallet={effectivePlayerId}
             player1Wallet={roomPlayers[0]}
             player2Wallet={roomPlayers[1]}
             onComplete={startRoll.handleRollComplete}

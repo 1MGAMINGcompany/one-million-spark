@@ -179,6 +179,8 @@ const BackgammonGame = () => {
   const isMobile = useIsMobile();
   const { play } = useSound();
   const { isConnected: walletConnected, address } = useWallet();
+  const isFreeRoom = roomPda?.startsWith("free-") ?? false;
+  const effectivePlayerId = address || (isFreeRoom ? getAnonId() : null);
 
   // Game state
   const [gameState, setGameState] = useState<GameState>({
@@ -364,7 +366,7 @@ const BackgammonGame = () => {
   }, []);
 
   // Fetch real player order from on-chain room account
-  const isFreeRoom = roomPda?.startsWith("free-") ?? false;
+  // isFreeRoom already defined above
   useEffect(() => {
     const playerId = address || (isFreeRoom ? getAnonId() : null);
     if (!playerId || !roomPda) return;

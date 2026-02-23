@@ -108,6 +108,7 @@ const DominosGame = () => {
   const { play } = useSound();
   const { isConnected: walletConnected, address } = useWallet();
   const isFreeRoom = roomPda?.startsWith("free-") ?? false;
+  const effectivePlayerId = address || (isFreeRoom ? getAnonId() : null);
 
   const [chain, setChain] = useState<PlacedDomino[]>([]);
   const [myHand, setMyHand] = useState<Domino[]>([]);
@@ -257,9 +258,9 @@ const DominosGame = () => {
   const { loadSession, saveSession, finishSession } = useGameSessionPersistence({
     roomPda,
     gameType: 'dominos',
-    enabled: roomPlayers.length >= 2 && !!address,
+    enabled: roomPlayers.length >= 2 && !!effectivePlayerId,
     onStateRestored: handleRealtimeStateRestored,
-    callerWallet: address, // Pass caller wallet for secure RPC validation
+    callerWallet: effectivePlayerId, // Pass caller wallet for secure RPC validation
   });
 
   // Track drawn tiles for each player
@@ -295,7 +296,7 @@ const DominosGame = () => {
   const saveGameState = useCallback(() => {
     if (!gameInitialized || !roomPlayers.length) return;
     
-    const currentTurnWallet = isMyTurn ? address : roomPlayers.find(p => !isSameWallet(p, address));
+    const currentTurnWallet = isMyTurn ? effectivePlayerId : roomPlayers.find(p => !isSameWallet(p, effectivePlayerId));
     const persisted = createPersistedState();
     
     saveSession(
@@ -306,14 +307,14 @@ const DominosGame = () => {
       gameOver ? 'finished' : 'active',
       roomMode
     );
-  }, [gameInitialized, roomPlayers, isMyTurn, address, createPersistedState, saveSession, gameOver, roomMode]);
+  }, [gameInitialized, roomPlayers, isMyTurn, effectivePlayerId, createPersistedState, saveSession, gameOver, roomMode]);
 
   // Fetch REAL players from on-chain room account
   useEffect(() => {
     let interval: ReturnType<typeof setInterval> | null = null;
     let mounted = true;
     
-    const playerId = address || (isFreeRoom ? getAnonId() : null);
+    const playerId = effectivePlayerId;
     async function fetchRoomPlayers() {
       if (!roomPda || !playerId || !mounted) return;
 
@@ -389,7 +390,7 @@ const DominosGame = () => {
         
         // Determine if I'm player 1 based on on-chain order
         const myIndex = realPlayers.findIndex(p => 
-          isSameWallet(p, address)
+          isSameWallet(p, effectivePlayerId)
         );
         
         if (myIndex === -1) {
@@ -427,7 +428,7 @@ const DominosGame = () => {
       mounted = false;
       if (interval) clearInterval(interval);
     };
-  }, [roomPda, address, roomPlayers.length]);
+  }, [roomPda, effectivePlayerId, roomPlayers.length]);
 
   // Initialize game with DETERMINISTIC shuffle using roomPda as seed
   // First try to restore from saved session
@@ -500,7 +501,7 @@ const DominosGame = () => {
 
   const rankedGate = useRankedReadyGate({
     roomPda,
-    myWallet: address,
+    myWallet: effectivePlayerId,
     isRanked: isRankedGame,
     enabled: roomPlayers.length >= 2 && modeLoaded,
   });
@@ -508,7 +509,7 @@ const DominosGame = () => {
   // Durable game sync - persists moves to DB for reliability
   const handleDurableMoveReceived = useCallback((move: GameMove) => {
     // Only apply moves from opponents (we already applied our own locally)
-    if (!isSameWallet(move.wallet, address)) {
+    if (!isSameWallet(move.wallet, effectivePlayerId)) {
       console.log("[DominosGame] Applying move from DB:", move.turn_number);
       const dominoMove = move.move_data as DominoMove;
       
@@ -520,7 +521,7 @@ const DominosGame = () => {
         if (dominoMove.missedCount && dominoMove.missedCount >= 3) {
           setGameOver(true);
           setWinner("me");
-          setWinnerWallet(address || null);
+          setWinnerWallet(effectivePlayerId || null);
           setGameStatus(t('game.youWin') + " - opponent timed out");
           play('domino/win');
           return;
@@ -544,7 +545,7 @@ const DominosGame = () => {
         setIsMyTurn(true);
       }
     }
-  }, [address, opponentHandCount, play, t]);
+  }, [effectivePlayerId, opponentHandCount, play, t]);
 
   const { submitMove: persistMove, moves: dbMoves, isLoading: isSyncLoading } = useDurableGameSync({
     roomPda: roomPda || "",
@@ -562,10 +563,10 @@ const DominosGame = () => {
   const startRoll = useStartRoll({
     roomPda,
     gameType: "dominos",
-    myWallet: address,
+    myWallet: effectivePlayerId,
     isRanked: isRankedGame,
     roomPlayers,
-    hasTwoRealPlayers,
+    hasTwoRealPlayers: isFreeRoom ? roomPlayers.length >= 2 : hasTwoRealPlayers,
     initialColor: amIPlayer1 ? "w" : "b",
     bothReady: rankedGate.bothReady,
   });
@@ -573,11 +574,11 @@ const DominosGame = () => {
   // Update turn based on start roll result for ranked games
   useEffect(() => {
     if (isRankedGame && startRoll.isFinalized && startRoll.startingWallet && gameInitialized) {
-      const isStarter = isSameWallet(startRoll.startingWallet, address);
+      const isStarter = isSameWallet(startRoll.startingWallet, effectivePlayerId);
       setIsMyTurn(isStarter);
       setGameStatus(isStarter ? t('game.yourTurn') : t('game.opponentsTurn'));
     }
-  }, [isRankedGame, startRoll.isFinalized, startRoll.startingWallet, address, gameInitialized, t]);
+  }, [isRankedGame, startRoll.isFinalized, startRoll.startingWallet, effectivePlayerId, gameInitialized, t]);
 
   const handleAcceptRulesModal = async () => {
     const result = await rankedGate.acceptRules();
@@ -611,9 +612,9 @@ const DominosGame = () => {
   // Is current user the room creator? (first player in roomPlayers)
   // Is current user the room creator? (first player in roomPlayers)
   const isCreator = useMemo(() => {
-    if (!address || roomPlayers.length === 0) return false;
-    return isSameWallet(roomPlayers[0], address);
-  }, [address, roomPlayers]);
+    if (!effectivePlayerId || roomPlayers.length === 0) return false;
+    return isSameWallet(roomPlayers[0], effectivePlayerId);
+  }, [effectivePlayerId, roomPlayers]);
 
   // Open leave modal - NEVER triggers wallet
   const handleLeaveClick = useCallback(() => {
@@ -625,9 +626,9 @@ const DominosGame = () => {
 
   // Opponent wallet for forfeit - exclude placeholder wallets
   const opponentWallet = useMemo(() => {
-    if (!address || roomPlayers.length < 2) return null;
-    return roomPlayers.find(p => isRealWallet(p) && !isSameWallet(p, address)) || null;
-  }, [address, roomPlayers]);
+    if (!effectivePlayerId || roomPlayers.length < 2) return null;
+    return roomPlayers.find(p => !isSameWallet(p, effectivePlayerId)) || null;
+  }, [effectivePlayerId, roomPlayers]);
 
   // Block gameplay until start roll is finalized (for ranked games, also need rules accepted)
   const canPlayRanked = startRoll.isFinalized && (!isRankedGame || rankedGate.bothReady);
@@ -644,7 +645,7 @@ const DominosGame = () => {
 
   // Turn timer for ranked games - calls server RPC for DB-authoritative timeout
   const handleTurnTimeout = useCallback(async () => {
-    if (!isActuallyMyTurn || gameOver || !address || !roomPda) return;
+    if (!isActuallyMyTurn || gameOver || !effectivePlayerId || !roomPda) return;
     
     try {
       const { data, error } = await supabase.rpc("maybe_apply_turn_timeout", {
@@ -691,7 +692,7 @@ const DominosGame = () => {
     } catch (err) {
       console.error("[DominosGame] Timeout exception:", err);
     }
-  }, [isActuallyMyTurn, gameOver, address, roomPda, play, t]);
+  }, [isActuallyMyTurn, gameOver, effectivePlayerId, roomPda, play, t]);
 
   // Use turn time from ranked gate (fetched from DB/localStorage)
   const effectiveTurnTime = rankedGate.turnTimeSeconds || DEFAULT_RANKED_TURN_TIME;
@@ -718,7 +719,7 @@ const DominosGame = () => {
         const dbStatus = data?.session?.status;
         const dbWinner = data?.session?.winner_wallet;
         if (dbStatus === "finished" && !gameOver) {
-          const iWin = isSameWallet(dbWinner, address);
+          const iWin = isSameWallet(dbWinner, effectivePlayerId);
           setGameOver(true);
           setWinner(iWin ? "me" : "opponent");
           setWinnerWallet(dbWinner || null);
@@ -729,7 +730,7 @@ const DominosGame = () => {
 
         const dbTurnWallet = data?.session?.current_turn_wallet;
         if (dbTurnWallet) {
-          const isNowMyTurn = isSameWallet(dbTurnWallet, address);
+          const isNowMyTurn = isSameWallet(dbTurnWallet, effectivePlayerId);
           if (isNowMyTurn !== isMyTurn) {
             setIsMyTurn(isNowMyTurn);
             setGameStatus(isNowMyTurn ? t("game.yourTurn") : t("game.opponentsTurn"));
@@ -755,12 +756,12 @@ const DominosGame = () => {
     }, 5000);
 
     return () => clearInterval(pollInterval);
-  }, [roomPda, isRankedGame, gameOver, startRoll.isFinalized, address, isMyTurn, t, play]);
+  }, [roomPda, isRankedGame, gameOver, startRoll.isFinalized, effectivePlayerId, isMyTurn, t, play]);
 
   // Turn notification players
   const turnPlayers: TurnPlayer[] = useMemo(() => {
     return roomPlayers.map((playerAddress, index) => {
-      const isMe = isSameWallet(playerAddress, address);
+      const isMe = isSameWallet(playerAddress, effectivePlayerId);
       return {
         address: playerAddress,
         name: isMe ? "You" : `Player ${index + 1}`,
@@ -769,7 +770,7 @@ const DominosGame = () => {
         seatIndex: index,
       };
     });
-  }, [roomPlayers, address]);
+  }, [roomPlayers, effectivePlayerId]);
 
   const activeTurnAddress = useMemo(() => {
     const turnIndex = isMyTurn ? (amIPlayer1 ? 0 : 1) : (amIPlayer1 ? 1 : 0);
@@ -788,7 +789,7 @@ const DominosGame = () => {
     roomId: roomId || "unknown",
     players: turnPlayers,
     activeTurnAddress,
-    myAddress: address,
+    myAddress: effectivePlayerId,
     enabled: true,
   });
 
@@ -821,10 +822,10 @@ const DominosGame = () => {
     // Fallback for normal game endings
     if (!gameOver) return null;
     if (winner === "draw") return "draw";
-    if (winner === "me") return address;
-    if (winner === "opponent") return getOpponentWallet(roomPlayers, address);
+    if (winner === "me") return effectivePlayerId;
+    if (winner === "opponent") return getOpponentWallet(roomPlayers, effectivePlayerId);
     return null;
-  }, [winnerWallet, gameOver, winner, address, roomPlayers]);
+  }, [winnerWallet, gameOver, winner, effectivePlayerId, roomPlayers]);
 
   // Auto-settlement hook - triggers settle-game edge function when game ends
   const autoSettlement = useAutoSettlement({
@@ -1047,7 +1048,7 @@ const DominosGame = () => {
       }
     } else if (message.type === "resign") {
       // Opponent resigned - I WIN - store MY wallet as winner
-      setWinnerWallet(address || null);
+      setWinnerWallet(effectivePlayerId || null);
       setGameOver(true);
       setWinner("me");
       setGameStatus("Opponent resigned - You win!");
@@ -1092,12 +1093,13 @@ const DominosGame = () => {
     players: roomPlayers,
     onMessage: handleWebRTCMessage,
     enabled: roomPlayers.length === 2,
+    overrideAddress: effectivePlayerId || undefined,
   });
 
   // useForfeit hook - centralized forfeit/leave logic
   const { forfeit, leave, isForfeiting, isLeaving, forfeitRef } = useForfeit({
     roomPda: roomPda || null,
-    myWallet: address || null,
+    myWallet: effectivePlayerId || null,
     opponentWallet,
     stakeLamports: stakeLamports ?? Math.floor(entryFeeSol * 1_000_000_000),
     gameType: "dominos",
@@ -1409,7 +1411,7 @@ const DominosGame = () => {
   const playerLegalMoves = useMemo(() => getLegalMoves(myHand), [getLegalMoves, myHand]);
 
   // Require wallet connection (skip for free rooms)
-  if (!isFreeRoom && (!walletConnected || !address)) {
+  if (!isFreeRoom && (!walletConnected || !effectivePlayerId)) {
     return (
       <div className="container max-w-4xl py-8 px-4">
         <Button variant="ghost" size="sm" className="mb-4" onClick={() => navigate("/room-list")}>
