@@ -1,123 +1,82 @@
 
+# Fix Ludo Multiplayer: Layout and Dice Issues
 
-# Audit: Free Games Anonymous Play -- Remaining Issues
+## Problems Identified
 
-## Status: Partially Fixed, Several Critical Gaps Remain
+1. **Dice positioned above/over the board**: In `LudoGame.tsx`, the dice panel uses `absolute bottom-4 left-4` positioning inside a `flex-1 relative` container. This causes it to float over the board. In contrast, `LudoAI.tsx` uses simple vertical flow layout: board first, then dice below with `mt-6`.
 
-The wallet gate bypass and player-fetch logic were correctly added to all 5 game pages. However, many downstream uses of `address` throughout the game pages were NOT updated to fall back to `getAnonId()` for free rooms. This means anonymous players can now SEE the game board but will encounter broken behavior when trying to actually play.
+2. **Dice rolling forever**: When `myPlayerIndex` is -1 (players not yet loaded) or when there are only 2 human players in a 4-slot game, the AI turn effect (lines 1021-1080) treats ALL non-human slots as AI and continuously fires dice rolls for them. In a free 2-player game, slots 2 and 3 have no real players but the engine still cycles through all 4 player indices.
 
----
-
-## Issues Found
-
-### 1. WebRTC Sync Uses Raw `address` (All Games)
-
-`useWebRTCSync` internally calls `useWallet()` and uses `address` as `localAddress`. For anonymous players, `address` is null/empty, which means:
-- WebRTC connection never establishes (`localAddress` is empty)
-- `sendMove()`, `sendResign()`, `sendChat()` all fail silently
-- Move communication between players is completely broken
-
-**Fix:** Each game page should pass the effective player ID into WebRTC (or use Realtime-only mode for free rooms). The simplest fix is to make free rooms always use Realtime-only sync (which already works via Supabase channels without needing a wallet address as identity).
-
-### 2. Chess: Color/Turn Detection Uses `address` Directly
-
-In `ChessGame.tsx`, about 15 places use `isSameWallet(..., address)` for:
-- Determining `myColor` (line 455)
-- `isCreator` (line 487-488)
-- `opponentWallet` (line 496-497)
-- Turn override detection (line 517)
-- Win/loss detection (line 612)
-- Turn player mapping (line 664)
-- Resign forfeit wallet (via `useForfeit` line 1001: `myWallet: address || null`)
-
-When `address` is null, all of these evaluate incorrectly.
-
-### 3. Backgammon: On-Chain Fallback Uses `address` (line 416)
-
-After the free room fetch block, the on-chain fallback at line 416 does:
-```typescript
-const myIndex = realPlayers.findIndex(p => isSameWallet(p, address));
-```
-This is fine because the on-chain path is only reached for non-free rooms. However, there are many other places in BackgammonGame.tsx that use `address` directly for turn detection, move submission, etc. that would break for free room anonymous players.
-
-### 4. Checkers: Same Pattern as Chess (line 205)
-
-Uses `address` for seat/color assignment in the on-chain path. The free room path correctly uses `playerId`, but downstream turn detection, forfeit, and move submission still reference `address`.
-
-### 5. Dominos: Same Pattern
-
-Uses `address` in move submission callbacks, turn detection, and resign logic.
-
-### 6. Ludo: Best Implemented
-
-Ludo already has `effectivePlayerId = address || (isFreeRoom ? getAnonId() : null)` and uses it for `myPlayerIndex`. This is the correct pattern but may still have gaps in move submission and forfeit.
-
-### 7. `useForfeit` Gets `address || null` (All Games)
-
-All games pass `myWallet: address || null` to `useForfeit`. For anonymous players, this is null, so forfeit will fail with "Missing: wallet" error.
-
-### 8. `useStartRoll` Checks `isRealWallet()` (line 82)
-
-The hook skips session creation if players aren't "real wallets". Anonymous UUIDs will fail this check. However, for free rooms the session is already created by the `free-match` edge function, so this may be a non-issue if the hook is bypassed for free games.
-
----
+3. **Player labels showing "game.player"**: The TurnStatusHeader and player display show raw keys like "Gold game.player" instead of proper names -- a translation key issue.
 
 ## Fix Plan
 
-### A. Create a shared helper: `useEffectivePlayerId` or compute it inline
+### File: `src/pages/LudoGame.tsx`
 
-Each game page needs a stable effective player ID:
-```typescript
-const effectivePlayerId = address || (isFreeRoom ? getAnonId() : null);
+**Change 1 -- Restructure layout to match LudoAI**
+
+Replace the current game area layout (lines ~1219-1277):
+- Remove the `flex-1 relative` wrapper with absolutely-positioned dice
+- Use LudoAI's vertical flow: Turn indicator at top, board centered, dice below the board
+- Keep the board inside a centered container with `px-4 flex justify-center`
+- Put dice and controls in a `mt-6 flex flex-col items-center gap-4` below the board (same as LudoAI)
+- Move audio controls inline with dice area
+- Remove the `bg-card/90 backdrop-blur-sm` floating card wrapper around dice
+
+Before (broken):
+```
+<div class="flex-1 flex items-center justify-center relative">
+  <LudoBoard ... />
+  <div class="absolute bottom-4 left-4">  <-- OVERLAPS BOARD
+    <TurnIndicator />
+    <EgyptianDice />
+  </div>
+</div>
 ```
 
-### B. Replace `address` with `effectivePlayerId` in all game pages
+After (matching LudoAI):
+```
+<div class="px-4 mb-4">
+  <TurnIndicator />
+</div>
+<div class="px-4 flex justify-center">
+  <LudoBoard ... />
+</div>
+<div class="mt-6 flex flex-col items-center gap-4">
+  <EgyptianDice />
+  <audio controls>
+</div>
+```
 
-For each of the 5 game files, replace every downstream use of `address` that determines player identity with `effectivePlayerId`. Key locations:
+**Change 2 -- Fix AI turn effect for 2-player free games**
 
-- `isSameWallet(x, address)` calls for turn/color/win detection
-- `useForfeit({ myWallet: address })` 
-- `opponentWallet` computation
-- `sendMove` wallet parameter
-- `recordPlayerMove` calls
-- Turn player mapping
+The AI turn effect fires for every `currentPlayerIndex !== myPlayerIndex`. In a 2-player free game with players at indices 0 and 1, indices 2 and 3 are "phantom" players with no tokens but the engine still cycles to them, triggering infinite AI rolls.
 
-### C. Fix WebRTC for free rooms
+Fix: Add a guard to the AI effect -- only trigger for player indices that exist in `roomPlayers`. If `currentPlayerIndex >= roomPlayers.length`, auto-skip that turn immediately instead of trying to roll dice.
 
-Two options:
-1. **Simple**: Skip WebRTC entirely for free rooms and use Realtime-only (Supabase channels). Pass `effectivePlayerId` as the channel identity.
-2. **Complex**: Thread `effectivePlayerId` into `useWebRTCSync` as an override.
+```typescript
+// In the AI turn effect (~line 1021):
+// Skip phantom player slots (indices beyond actual room players)
+if (currentPlayerIndex >= roomPlayers.length) {
+  // Auto-advance past empty slots
+  advanceTurn(0);
+  return;
+}
+```
 
-Option 1 is simpler and more reliable since free rooms are already DB-based.
+**Change 3 -- Background styling to match LudoAI**
 
-### D. Update `useStartRoll` guard
+Update the outer container to use LudoAI's Egyptian theme background:
+```
+bg-gradient-to-b from-amber-950 via-amber-900 to-amber-950 pb-20
+```
+instead of the current generic `bg-background`.
 
-Add a bypass for free rooms so it doesn't try to validate "real wallets" or create sessions (the `free-match` edge function handles session creation).
+## Technical Details
 
-### E. Update `useForfeit` for free rooms
-
-Pass `effectivePlayerId` instead of `address` for `myWallet`. The free-room forfeit path in `useForfeit` (line 186-195) already handles DB-only cleanup, so this should work with anon IDs.
-
----
-
-## Priority Order
-
-1. **Chess + Ludo** (most tested games) -- fix all `address` references
-2. **Checkers + Backgammon + Dominos** -- same pattern
-3. **WebRTC bypass for free rooms** -- use Realtime-only
-4. **useStartRoll guard** -- skip for free rooms
-5. **useForfeit** -- pass effectivePlayerId
-
----
-
-## Files to Modify
-
-| File | Changes |
-|------|---------|
-| `src/pages/ChessGame.tsx` | ~15 `address` references to `effectivePlayerId` |
-| `src/pages/BackgammonGame.tsx` | ~15+ `address` references |
-| `src/pages/CheckersGame.tsx` | ~10 `address` references |
-| `src/pages/DominosGame.tsx` | ~10 `address` references |
-| `src/pages/LudoGame.tsx` | Mostly done, verify remaining gaps |
-| `src/hooks/useWebRTCSync.ts` | Accept optional `overrideAddress` prop, or skip for free rooms at call site |
-
+- Only `src/pages/LudoGame.tsx` needs changes
+- `LudoAI.tsx` is NOT touched (as requested)
+- `LudoBoard.tsx` component is unchanged -- it works correctly in both versions
+- The `EgyptianDice` component is unchanged
+- The fix ensures the multiplayer board renders identically to the AI version's visual layout
+- The AI turn guard prevents dice from rolling for non-existent player slots in 2-player games
