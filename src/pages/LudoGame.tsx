@@ -1024,6 +1024,13 @@ const LudoGame = () => {
       return;
     }
     
+    // Skip phantom player slots (indices beyond actual room players in 2-player games)
+    if (roomPlayers.length > 0 && currentPlayerIndex >= roomPlayers.length) {
+      // Auto-advance past empty slots immediately
+      advanceTurn(0);
+      return;
+    }
+    
     // Wait for clean state (no dice, not rolling, not animating)
     if (diceValue !== null || isRolling || isAnimating) {
       return;
@@ -1098,7 +1105,7 @@ const LudoGame = () => {
   return (
     <GameErrorBoundary>
     <InAppBrowserRecovery roomPda={roomPda || ""} onResubscribeRealtime={resubscribeRealtime} bypassOverlay={true}>
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="min-h-screen bg-gradient-to-b from-amber-950 via-amber-900 to-amber-950 flex flex-col pb-20">
       {/* RulesGate + DiceRollStart - RulesGate handles accept modal internally */}
       {(() => {
         // Don't require bothReady here - let RulesGate handle showing the accept modal
@@ -1216,63 +1223,71 @@ const LudoGame = () => {
         </div>
       </div>
 
-      {/* Game Area */}
-      <div className="flex-1 flex items-center justify-center p-2 md:p-4 relative">
-        <div className="w-full max-w-4xl flex flex-col items-center justify-center gap-4">
-          {/* Game Board */}
-          <LudoBoard
-            players={players}
-            currentPlayerIndex={currentPlayerIndex}
-            movableTokens={isAnimating ? [] : (currentPlayerIndex !== myPlayerIndex ? [] : movableTokens)}
-            onTokenClick={handleTokenClick}
-            captureEvent={captureEvent}
-            onCaptureAnimationComplete={clearCaptureEvent}
-            eliminatedPlayers={eliminatedPlayers}
-          />
-        </div>
+      {/* Turn indicator */}
+      <div className="px-4 mb-4">
+        <TurnIndicator
+          currentPlayer={currentPlayer.color}
+          isAI={currentPlayerIndex !== myPlayerIndex}
+          isGameOver={!!gameOver}
+          winner={gameOver}
+        />
+      </div>
 
-        {/* Dice Controls - Bottom Left */}
-        <div className="absolute bottom-4 left-4 flex flex-col items-center gap-2 bg-card/90 backdrop-blur-sm rounded-lg p-3 border border-primary/30 shadow-lg">
-          <TurnIndicator
-            currentPlayer={currentPlayer.color}
-            isAI={currentPlayerIndex !== myPlayerIndex}
-            isGameOver={!!gameOver}
-            winner={gameOver}
-          />
-          <EgyptianDice
-            value={diceValue}
-            isRolling={isRolling}
-            onRoll={handleRollDice}
-            disabled={isRolling || diceValue !== null || !!gameOver || isAnimating || currentPlayerIndex !== myPlayerIndex}
-            showRollButton={currentPlayerIndex === myPlayerIndex && !gameOver && diceValue === null && !isAnimating}
-          />
-          {currentPlayerIndex === myPlayerIndex && movableTokens.length > 0 && (
-            <p className="text-xs text-muted-foreground text-center max-w-[100px]">
-              Tap a glowing token
-            </p>
-          )}
-          
-          {/* Audio Controls */}
-          <div className="flex gap-2 mt-1">
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={toggleMusic}
-              className="w-7 h-7 border-primary/30"
-              title={musicEnabled ? "Disable Music" : "Enable Music"}
-            >
-              {musicEnabled ? <Music size={12} /> : <Music2 size={12} />}
-            </Button>
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={toggleSfx}
-              className="w-7 h-7 border-primary/30"
-              title={sfxEnabled ? "Disable SFX" : "Enable SFX"}
-            >
-              {sfxEnabled ? <Volume2 size={12} /> : <VolumeX size={12} />}
-            </Button>
-          </div>
+      {/* Game board */}
+      <div className="px-4 flex justify-center">
+        <LudoBoard
+          players={players}
+          currentPlayerIndex={currentPlayerIndex}
+          movableTokens={isAnimating ? [] : (currentPlayerIndex !== myPlayerIndex ? [] : movableTokens)}
+          onTokenClick={handleTokenClick}
+          captureEvent={captureEvent}
+          onCaptureAnimationComplete={clearCaptureEvent}
+          eliminatedPlayers={eliminatedPlayers}
+        />
+      </div>
+
+      {/* Dice and controls */}
+      <div className="mt-6 flex flex-col items-center gap-4">
+        <EgyptianDice
+          value={diceValue}
+          isRolling={isRolling}
+          onRoll={handleRollDice}
+          disabled={isRolling || diceValue !== null || !!gameOver || isAnimating || currentPlayerIndex !== myPlayerIndex}
+          showRollButton={currentPlayerIndex === myPlayerIndex && !gameOver && diceValue === null && !isAnimating}
+        />
+        
+        {currentPlayerIndex === myPlayerIndex && movableTokens.length > 0 && (
+          <p className="text-xs text-amber-200 text-center">
+            Tap a glowing token to move
+          </p>
+        )}
+
+        {currentPlayerIndex !== myPlayerIndex && !gameOver && (
+          <p className="text-amber-300/70 text-sm animate-pulse">
+            {currentPlayer.color.charAt(0).toUpperCase() + currentPlayer.color.slice(1)} is playing...
+          </p>
+        )}
+
+        {/* Audio Controls */}
+        <div className="flex gap-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={toggleMusic}
+            className="text-amber-200 hover:bg-amber-800/50"
+            title={musicEnabled ? "Disable Music" : "Enable Music"}
+          >
+            {musicEnabled ? <Music className="h-5 w-5" /> : <Music2 className="h-5 w-5" />}
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={toggleSfx}
+            className="text-amber-200 hover:bg-amber-800/50"
+            title={sfxEnabled ? "Disable SFX" : "Enable SFX"}
+          >
+            {sfxEnabled ? <Volume2 className="h-5 w-5" /> : <VolumeX className="h-5 w-5" />}
+          </Button>
         </div>
       </div>
 
