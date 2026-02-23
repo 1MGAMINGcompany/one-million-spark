@@ -784,7 +784,7 @@ const BackgammonAI = () => {
       "bg-background relative overflow-hidden",
       isMobile ? "h-screen overflow-y-hidden flex flex-col" : "min-h-screen"
     )}>
-      <ProactiveGameTip gameType="backgammon" tip="Tap the dice to roll, then tap a checker to move" />
+      <ProactiveGameTip gameType="backgammon" tip={t('tips.backgammon')} />
       {/* Checker Animation Layer */}
       <BackgammonCheckerAnimation 
         animatingChecker={animatingChecker} 

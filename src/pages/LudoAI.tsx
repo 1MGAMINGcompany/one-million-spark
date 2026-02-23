@@ -260,7 +260,7 @@ const LudoAI = () => {
   return (
     <div className="min-h-screen bg-gradient-to-b from-amber-950 via-amber-900 to-amber-950 pb-20">
       {/* Proactive tip for first-time visitors */}
-      <ProactiveGameTip gameType="ludo" tip="Tap the dice to roll, then tap a piece to move" />
+      <ProactiveGameTip gameType="ludo" tip={t('tips.ludo')} />
 
       {/* First-game onboarding overlay */}
       <LudoOnboardingOverlay

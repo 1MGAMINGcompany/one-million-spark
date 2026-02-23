@@ -393,7 +393,7 @@ const ChessAI = () => {
 
   return (
     <div className="min-h-screen bg-background relative overflow-hidden">
-      <ProactiveGameTip gameType="chess" tip="Tap a piece to see where it can move" />
+      <ProactiveGameTip gameType="chess" tip={t('tips.chess')} />
       {/* Background with pyramid pattern */}
       <div className="absolute inset-0 bg-gradient-to-b from-midnight-light via-background to-background" />
       <div 

@@ -1515,5 +1515,14 @@
     "downloadDesc": "Install 1M Gaming for the best experience",
     "install": "Install",
     "iosInstructions": "Tap the Share button, then 'Add to Home Screen'"
+  },
+  "tips": {
+    "ludo": "Tap the dice to roll, then tap a piece to move",
+    "chess": "Tap a piece to see where it can move",
+    "checkers": "Tap a piece, then tap where to jump",
+    "backgammon": "Tap the dice to roll, then tap a checker to move",
+    "dominos": "Tap a tile from your hand to play it",
+    "onboardingRoll": "Roll the dice!",
+    "onboardingMove": "Tap a piece to move it!"
   }
 }

@@ -967,5 +967,14 @@
     "downloadDesc": "安装 1M Gaming 获得最佳体验",
     "install": "安装",
     "iosInstructions": "点击分享按钮，然后选择'添加到主屏幕'"
+  },
+  "tips": {
+    "ludo": "点击骰子掷骰，然后点击棋子移动",
+    "chess": "点击棋子查看可移动位置",
+    "checkers": "点击棋子，然后点击跳跃目标",
+    "backgammon": "点击骰子掷骰，然后点击棋子移动",
+    "dominos": "点击手中的牌来出牌",
+    "onboardingRoll": "掷骰子！",
+    "onboardingMove": "点击棋子来移动！"
   }
 }

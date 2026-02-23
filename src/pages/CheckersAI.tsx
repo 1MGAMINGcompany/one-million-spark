@@ -563,7 +563,7 @@ const CheckersAI = () => {
 
   return (
     <div className="min-h-screen bg-background pb-8">
-      <ProactiveGameTip gameType="checkers" tip="Tap a piece, then tap where to jump" />
+      <ProactiveGameTip gameType="checkers" tip={t('tips.checkers')} />
       {/* Header */}
       <div className="relative py-8 px-4 overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-b from-midnight-light via-background to-background" />
