@@ -49,6 +49,7 @@ import { parseRoomAccount } from "@/lib/solana-program";
 import { getSolanaEndpoint } from "@/lib/solana-config";
 import { dbg, isDebugEnabled } from "@/lib/debugLog";
 import { supabase } from "@/integrations/supabase/client";
+import { getAnonId } from "@/lib/anonIdentity";
 import {
   type Player,
   type GameState,
@@ -363,12 +364,14 @@ const BackgammonGame = () => {
   }, []);
 
   // Fetch real player order from on-chain room account
+  const isFreeRoom = roomPda?.startsWith("free-") ?? false;
   useEffect(() => {
-    if (!address || !roomPda) return;
+    const playerId = address || (isFreeRoom ? getAnonId() : null);
+    if (!playerId || !roomPda) return;
 
     const fetchRoomPlayers = async () => {
       // FREE ROOM: fetch players from DB, skip on-chain
-      if (roomPda.startsWith("free-")) {
+      if (isFreeRoom) {
         try {
           const { data } = await supabase.functions.invoke("game-session-get", {
             body: { roomPda },
@@ -380,7 +383,7 @@ const BackgammonGame = () => {
               setRoomPlayers(players);
               setStakeLamports(0);
               setEntryFeeSol(0);
-              const myIndex = players.findIndex((p: string) => isSameWallet(p, address));
+              const myIndex = players.findIndex((p: string) => isSameWallet(p, playerId));
               setMyRole(myIndex === 0 ? "player" : "ai");
               console.log("[BackgammonGame] Free room players:", players);
               return;
@@ -389,7 +392,7 @@ const BackgammonGame = () => {
         } catch (err) {
           console.error("[BackgammonGame] Free room fetch error:", err);
         }
-        setRoomPlayers([address, `waiting-${roomPda.slice(0, 8)}`]);
+        setRoomPlayers([playerId, `waiting-${roomPda.slice(0, 8)}`]);
         setMyRole("player");
         return;
       }
@@ -1999,8 +2002,8 @@ const BackgammonGame = () => {
     }
   }, [sendResign, forfeit, roomPlayers, address, enterOutcomeResolving]);
 
-  // Require wallet
-  if (!walletConnected || !address) {
+  // Require wallet (skip for free rooms)
+  if (!isFreeRoom && (!walletConnected || !address)) {
     return (
       <div className="container max-w-4xl py-8 px-4">
         <Button variant="ghost" size="sm" className="mb-4" onClick={() => navigate("/room-list")}>

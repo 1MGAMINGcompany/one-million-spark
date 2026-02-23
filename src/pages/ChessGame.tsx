@@ -47,6 +47,7 @@ import { parseRoomAccount } from "@/lib/solana-program";
 import { getSolanaEndpoint } from "@/lib/solana-config";
 import { useTxLock } from "@/contexts/TxLockContext";
 import { dbg, isDebugEnabled } from "@/lib/debugLog";
+import { getAnonId } from "@/lib/anonIdentity";
 
 // Persisted chess game state
 interface PersistedChessState {
@@ -158,11 +159,13 @@ const ChessGame = () => {
   useEffect(() => { animationsEnabledRef.current = animationsEnabled; }, [animationsEnabled]);
 
   // Fetch real player order from on-chain room account with polling for second player
+  const isFreeRoom = roomPda?.startsWith("free-") ?? false;
   useEffect(() => {
-    if (!address || !roomPda) return;
+    const playerId = address || (isFreeRoom ? getAnonId() : null);
+    if (!playerId || !roomPda) return;
 
     // FREE ROOM: fetch players from DB, skip on-chain
-    if (roomPda.startsWith("free-")) {
+    if (isFreeRoom) {
       (async () => {
         try {
           const { data } = await supabase.functions.invoke("game-session-get", {
@@ -182,7 +185,7 @@ const ChessGame = () => {
         } catch (err) {
           console.error("[ChessGame] Free room fetch error:", err);
         }
-        setRoomPlayers([address, `waiting-${roomPda.slice(0, 8)}`]);
+        setRoomPlayers([playerId, `waiting-${roomPda.slice(0, 8)}`]);
       })();
       return;
     }
@@ -1195,8 +1198,8 @@ const ChessGame = () => {
     });
   }
 
-  // Require wallet connection
-  if (!walletConnected || !address) {
+  // Require wallet connection (skip for free rooms)
+  if (!isFreeRoom && (!walletConnected || !address)) {
     return (
       <div className="container max-w-4xl py-8 px-4">
         <Button variant="ghost" size="sm" className="mb-4" onClick={() => navigate("/room-list")}>

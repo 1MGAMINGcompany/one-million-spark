@@ -47,6 +47,7 @@ import { dbg, isDebugEnabled } from "@/lib/debugLog";
 import { PublicKey, Connection } from "@solana/web3.js";
 import { parseRoomAccount } from "@/lib/solana-program";
 import { getSolanaEndpoint } from "@/lib/solana-config";
+import { getAnonId } from "@/lib/anonIdentity";
 
 // Persisted ludo game state
 interface PersistedLudoState {
@@ -101,11 +102,13 @@ const LudoGame = () => {
   useEffect(() => { roomPlayersRef.current = roomPlayers; }, [roomPlayers]);
   
   // Fetch real player order from on-chain room account for multiplayer games
+  const isFreeRoom = roomPda?.startsWith("free-") ?? false;
   useEffect(() => {
-    if (!address || !roomPda) {
-      if (address && !roomPda) {
+    const playerId = address || (isFreeRoom ? getAnonId() : null);
+    if (!playerId || !roomPda) {
+      if (playerId && !roomPda) {
         const simulatedPlayers = [
-          address,
+          playerId,
           `ai-ruby-${roomId}`,
           `ai-emerald-${roomId}`,
           `ai-sapphire-${roomId}`,
@@ -116,7 +119,7 @@ const LudoGame = () => {
     }
 
     // FREE ROOM: fetch players from DB, skip on-chain
-    if (roomPda.startsWith("free-")) {
+    if (isFreeRoom) {
       (async () => {
         try {
           const { data } = await supabase.functions.invoke("game-session-get", {
@@ -136,7 +139,7 @@ const LudoGame = () => {
         } catch (err) {
           console.error("[LudoGame] Free room fetch error:", err);
         }
-        setRoomPlayers([address, `waiting-${roomPda.slice(0, 8)}`]);
+        setRoomPlayers([playerId, `waiting-${roomPda.slice(0, 8)}`]);
       })();
       return;
     }
@@ -367,10 +370,11 @@ const LudoGame = () => {
   });
 
   // Find which player index the current wallet is
+  const effectivePlayerId = address || (isFreeRoom ? getAnonId() : null);
   const myPlayerIndex = useMemo(() => {
-    if (!address || roomPlayers.length === 0) return -1;
-    return roomPlayers.findIndex(p => isSameWallet(p, address));
-  }, [address, roomPlayers]);
+    if (!effectivePlayerId || roomPlayers.length === 0) return -1;
+    return roomPlayers.findIndex(p => isSameWallet(p, effectivePlayerId));
+  }, [effectivePlayerId, roomPlayers]);
 
   // Update starting player based on start roll result for ranked games
   useEffect(() => {
@@ -1072,8 +1076,8 @@ const LudoGame = () => {
     };
   }, [currentPlayerIndex, myPlayerIndex, currentPlayer?.color, gameOver, diceValue, isRolling, isAnimating, players, rollDice, executeMove, advanceTurn, setDiceValue, setMovableTokens, turnSignal, recordPlayerMove, roomPlayers]);
 
-  // Require wallet connection
-  if (!walletConnected || !address) {
+  // Require wallet connection (skip for free rooms)
+  if (!isFreeRoom && (!walletConnected || !address)) {
     return (
       <div className="container max-w-4xl py-8 px-4">
         <Button variant="ghost" size="sm" className="mb-4" onClick={() => navigate("/room-list")}>
