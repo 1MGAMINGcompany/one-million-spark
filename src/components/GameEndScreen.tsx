@@ -492,8 +492,30 @@ export function GameEndScreen({
             {/* Finalize Payout Button - Only for staked games */}
             {showFinalizeButton && (
               <>
-                {/* Payout Summary - Show before wallet interaction (only when idle) */}
-                {payoutInfo && finalizeState === 'idle' && !isAlreadySettled && (
+                {/* Draw Refund Info - Show for draws instead of payout summary */}
+                {isDraw && payoutInfo && finalizeState === 'idle' && !isAlreadySettled && (
+                  <div className="bg-muted/40 border border-border/50 rounded-lg p-4 space-y-2">
+                     <p className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">
+                       {t('gameEnd.drawRefundTitle', 'Draw — Refund')}
+                    </p>
+                    <div className="space-y-1 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">{t('gameEnd.drawReason', 'Reason')}:</span>
+                        <span className="font-mono text-foreground">{result || t('game.draw')}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">{t('gameEnd.yourStake', 'Your Stake')}:</span>
+                        <span className="font-mono text-foreground">{(payoutInfo.pot / 2).toFixed(4)} SOL</span>
+                      </div>
+                    </div>
+                     <p className="text-xs text-muted-foreground text-center pt-1">
+                       {t('gameEnd.drawRefund', 'Your SOL is being returned to your wallet.')}
+                    </p>
+                  </div>
+                )}
+
+                {/* Payout Summary - Show before wallet interaction (only when idle, non-draw) */}
+                {!isDraw && payoutInfo && finalizeState === 'idle' && !isAlreadySettled && (
                   <div className="bg-muted/40 border border-border/50 rounded-lg p-4 space-y-2">
                      <p className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">
                        {t('gameEnd.payoutSummary')}
@@ -514,7 +536,7 @@ export function GameEndScreen({
                     </div>
                      <p className="text-xs text-muted-foreground text-center pt-1">
                        {t('gameEnd.fundsOnChain')}
-                     </p>
+                    </p>
                   </div>
                 )}
 

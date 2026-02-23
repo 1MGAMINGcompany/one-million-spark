@@ -42,6 +42,10 @@
     "checkmate": "Checkmate!",
     "stalemate": "Stalemate",
     "draw": "Draw",
+    "drawStalemate": "Draw - Stalemate",
+    "drawThreefold": "Draw - Threefold Repetition",
+    "drawInsufficientMaterial": "Draw - Insufficient Material",
+    "draw50Move": "Draw - 50-Move Rule",
     "check": "Check!",
     "white": "White",
     "black": "Black",
@@ -1375,7 +1379,11 @@
     "stats": "Stats",
     "favorite": "Favorite",
     "exit": "Exit",
-  "rematchLegal": "Rematch creates a new game with new terms. Both players must accept and sign again."
+    "rematchLegal": "Rematch creates a new game with new terms. Both players must accept and sign again.",
+    "drawRefundTitle": "Draw — Refund",
+    "drawReason": "Reason",
+    "yourStake": "Your Stake",
+    "drawRefund": "Your SOL is being returned to your wallet."
   },
   "shareCard": {
     "victory": "VICTORY",

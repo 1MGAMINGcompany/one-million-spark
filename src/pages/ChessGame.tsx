@@ -343,9 +343,9 @@ const ChessGame = () => {
   // Finish session and archive room when game ends
   useEffect(() => {
     if (gameOver && roomPlayers.length >= 2) {
-      finishChessSession();
+      finishChessSession(winnerWallet);
     }
-  }, [gameOver, roomPlayers.length, finishChessSession]);
+  }, [gameOver, roomPlayers.length, finishChessSession, winnerWallet]);
 
   // Capture animations hook
   const { animations, triggerAnimation, handleAnimationComplete } = useCaptureAnimations(animationsEnabled);
@@ -740,8 +740,8 @@ const ChessGame = () => {
     
     // Fallback for normal game endings
     if (!gameOver) return null;
-    if (gameStatus.includes("draw") || gameStatus.includes("Stalemate")) return "draw";
-    if (gameStatus.includes("win")) return effectivePlayerId;
+    if (gameStatus.toLowerCase().includes("draw") || gameStatus.toLowerCase().includes("stalemate")) return "draw";
+    if (gameStatus.toLowerCase().includes("win")) return effectivePlayerId;
     return getOpponentWallet(roomPlayers, effectivePlayerId);
   }, [winnerWallet, gameOver, gameStatus, effectivePlayerId, roomPlayers]);
 
@@ -849,16 +849,36 @@ const ChessGame = () => {
       const winner = isPlayerWin ? t("gameMultiplayer.checkmateYouWin") : t("gameMultiplayer.checkmateYouLose");
       setGameStatus(winner);
       setGameOver(true);
+      // Record winner wallet for DB persistence and settlement
+      const winnerAddr = isPlayerWin
+        ? effectivePlayerId
+        : getOpponentWallet(roomPlayersRef.current, effectivePlayerId);
+      setWinnerWallet(winnerAddr || null);
       play(isPlayerWin ? 'chess_win' : 'chess_lose');
       return true;
     }
+    // Check specific draw reasons BEFORE generic isDraw()
     if (currentGame.isStalemate()) {
-      setGameStatus(t("gameMultiplayer.drawStalemate"));
+      setGameStatus(t("game.drawStalemate", "Draw - Stalemate"));
+      setWinnerWallet("draw");
+      setGameOver(true);
+      return true;
+    }
+    if (currentGame.isThreefoldRepetition()) {
+      setGameStatus(t("game.drawThreefold", "Draw - Threefold Repetition"));
+      setWinnerWallet("draw");
+      setGameOver(true);
+      return true;
+    }
+    if (currentGame.isInsufficientMaterial()) {
+      setGameStatus(t("game.drawInsufficientMaterial", "Draw - Insufficient Material"));
+      setWinnerWallet("draw");
       setGameOver(true);
       return true;
     }
     if (currentGame.isDraw()) {
-      setGameStatus(t("game.draw"));
+      setGameStatus(t("game.draw50Move", "Draw - 50-Move Rule"));
+      setWinnerWallet("draw");
       setGameOver(true);
       return true;
     }
@@ -866,7 +886,7 @@ const ChessGame = () => {
       play('chess_check');
     }
     return false;
-  }, [myColor, play, t]);
+  }, [myColor, play, t, effectivePlayerId]);
 
   const handleWebRTCMessage = useCallback((message: GameMessage) => {
     console.log("[ChessGame] Received message:", message.type);
