@@ -367,7 +367,7 @@ const LudoGame = () => {
     myWallet: effectivePlayerId,
     isRanked: isRankedGame,
     roomPlayers,
-    hasTwoRealPlayers,
+    hasTwoRealPlayers: isFreeRoom ? roomPlayers.length >= 2 : hasTwoRealPlayers,
     initialColor: "w", // Ludo doesn't use w/b, but we need a value
     bothReady: rankedGate.bothReady,
   });
