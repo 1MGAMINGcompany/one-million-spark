@@ -1,129 +1,68 @@
 
 
-# Fix Chess Draw Handling + Winner Recording
+# Fix Draw Handling in Checkers and Dominos
 
-## Issues Found
+## Summary
 
-### 1. CRITICAL: Draw shows "You Lose" instead of "Draw"
-**Root cause:** In `ChessGame.tsx` line 743, the `winnerAddress` memo checks `gameStatus.includes("draw")` (lowercase), but the translated text is `"Draw"` (capital D). JavaScript `includes()` is case-sensitive, so `"Draw".includes("draw")` returns `false`. The logic falls through to `getOpponentWallet()`, making the GameEndScreen think you lost.
-
-### 2. No draw reason shown (50-move rule, threefold repetition, etc.)
-**Root cause:** In `checkGameOverInline` (line 860), when `isDraw()` triggers, it just sets `t("game.draw")` = "Draw" with no explanation. chess.js can differentiate between `isThreefoldRepetition()`, `isInsufficientMaterial()`, and the 50-move rule, but the code doesn't check.
-
-### 3. Winner wallet not saved to DB on checkmate
-**Root cause:** `finishChessSession()` (line 344-348) calls `finish_game_session` RPC without passing `p_winner_wallet`. The winner is never recorded in the database, preventing settlement and share card generation.
-
-### 4. Draw end screen shows payout info instead of refund info
-The `GameEndScreen` shows winner payout math even for draws. For draws, it should show "Your SOL is being returned to you."
-
-### 5. No match_share_card generated for draws
-The auto-settlement triggers `settle-draw`, but no share card is created for the draw result.
-
-### 6. Missed turns shows 1 for both players
-Both players have `missed_turns: 1`. This could be legitimate (each player ran one turn timer down) or a timing issue with the polling interval. The timer logic looks correct -- this is likely genuine.
+Apply the same draw handling fixes from Chess to Checkers and Dominos: pass winner wallet to `finishSession`, show draw-specific UI in GameEndScreen, and add draw reason text.
 
 ---
 
-## Plan
+## Changes
 
-### File 1: `src/pages/ChessGame.tsx`
+### File 1: `src/pages/CheckersGame.tsx`
 
-**A. Fix winnerAddress draw detection (line 743)**
-Change case-sensitive string check to case-insensitive:
+**A. Pass winnerWallet to finishCheckersSession (line 307)**
+Currently calls `finishCheckersSession()` with no arguments. Change to pass the winner wallet address so the DB records who won (or "draw"):
 ```
-gameStatus.toLowerCase().includes("draw") || gameStatus.toLowerCase().includes("stalemate")
-```
-
-**B. Add draw reason detection (lines 855-864)**
-Replace the generic draw checks with specific reason detection:
-```
-if (currentGame.isStalemate()) {
-  setGameStatus("Draw - Stalemate");
-  setWinnerWallet("draw");
-  ...
-}
-if (currentGame.isThreefoldRepetition()) {
-  setGameStatus("Draw - Threefold Repetition");
-  setWinnerWallet("draw");
-  ...
-}
-if (currentGame.isInsufficientMaterial()) {
-  setGameStatus("Draw - Insufficient Material");
-  setWinnerWallet("draw");
-  ...
-}
-if (currentGame.isDraw()) {
-  setGameStatus("Draw - 50-Move Rule");
-  setWinnerWallet("draw");
-  ...
-}
+finishCheckersSession(winnerAddress);
 ```
 
-**C. Set winnerWallet on checkmate (line 846-854)**
-When checkmate is detected, set `winnerWallet` to the actual winner's wallet address so it gets saved to DB and triggers settlement:
+**B. Fix draw color in game status text (line 1454-1457)**
+The draw case shows `text-red-400` (loss color) because `gameOver === "draw"` doesn't match `myColor`. Add draw check:
 ```
-const winnerAddr = isPlayerWin ? effectivePlayerId : getOpponentWallet(roomPlayers, effectivePlayerId);
-setWinnerWallet(winnerAddr || null);
-```
-
-**D. Pass winner to finishChessSession (lines 344-348)**
-Update the `finishSession` call to pass `winnerAddress` so the DB records the winner:
-```
-finishChessSession(winnerAddress);
+gameOver === "draw" ? "text-yellow-400" : gameOver === myColor ? "text-green-400" : "text-red-400"
 ```
 
-### File 2: `src/hooks/useGameSessionPersistence.ts`
+**C. Pass `result` prop to GameEndScreen (line 1499-1510)**
+Add a `result` prop with the draw reason so GameEndScreen can show "Draw - No Moves Available" or the specific reason.
 
-**A. Accept winner parameter in finishSession**
-Update `finishSession` to accept an optional `winnerWallet` parameter and pass it to the RPC:
+**D. Fix winnerName for draws (line 1502)**
+Currently `winnerName` lookup will fail for draws since "draw" isn't a player address. Guard it like Dominos does:
 ```
-const finishSession = async (winnerWallet?: string | null) => {
-  await supabase.rpc('finish_game_session', {
-    p_room_pda: roomPda,
-    p_caller_wallet: callerWallet || null,
-    p_winner_wallet: winnerWallet || null,
-  });
-};
+winnerName={winnerAddress === "draw" ? undefined : gameEndPlayers.find(...)}
 ```
+
+### File 2: `src/pages/DominosGame.tsx`
+
+**A. Pass winnerWallet to finishSession (line 498)**
+Currently calls `finishSession()` with no arguments. Change to:
+```
+finishSession(winnerAddress);
+```
+
+**B. Add draw reason to game status (lines 1044-1045, 1192-1194)**
+Change "Game blocked - Draw!" to a more descriptive status that includes the reason (pip comparison). The `gameStatus` is used as the `result` prop.
+
+**C. Pass `result` prop to GameEndScreen (line 1726-1736)**
+Add `result={gameStatus}` so the draw reason appears in the end screen.
 
 ### File 3: `src/components/GameEndScreen.tsx`
 
-**A. Show draw-specific UI instead of win/loss payout**
-When `isDraw` is true:
-- Show "DRAW" header with the draw reason (from `result` prop)
-- Show "Your SOL is being returned" instead of winner payout summary
-- Hide "Winner" section
-- Adjust share button text for draws
-
-**B. Show refund status for draws**
-Replace payout math with refund info when `isDraw`:
-```
-"Your stake of X.XXXX SOL is being refunded to your wallet."
-```
-
-### File 4: `src/i18n/locales/en.json`
-
-Add new translation keys:
-- `game.drawThreefold`: "Draw - Threefold Repetition"
-- `game.drawInsufficientMaterial`: "Draw - Insufficient Material"  
-- `game.draw50Move`: "Draw - 50-Move Rule"
-- `gameEnd.drawRefund`: "Your stake is being returned to your wallet"
-- `gameEnd.drawResult`: "Draw"
-- `gameEnd.drawReason`: "Reason"
+No additional changes needed -- the draw-specific UI (refund messaging, "DRAW" header) was already implemented in the Chess fix. The `result` prop will show the draw reason. Just need to make sure the game pages pass it.
 
 ---
 
-## Files Modified
+## Technical Details
 
 | File | Change |
 |------|--------|
-| `src/pages/ChessGame.tsx` | Fix draw detection, add draw reasons, set winner on checkmate, pass winner to finish |
-| `src/hooks/useGameSessionPersistence.ts` | Accept winner param in finishSession |
-| `src/components/GameEndScreen.tsx` | Draw-specific UI with refund messaging |
-| `src/i18n/locales/en.json` | Add draw reason translation keys |
+| `src/pages/CheckersGame.tsx` | Pass winner to finishSession, fix draw styling, pass result prop, guard winnerName for draws |
+| `src/pages/DominosGame.tsx` | Pass winner to finishSession, pass result prop to GameEndScreen |
 
 ## What Does NOT Change
-- Settlement edge functions (settle-game, settle-draw) -- unchanged
-- Other game pages (backgammon, checkers, dominos, ludo) -- unchanged (but would benefit from same fix later)
-- Navbar/dropdown -- untouched
+- GameEndScreen component (already fixed for draws in Chess PR)
+- useGameSessionPersistence hook (already accepts winnerWallet param from Chess PR)
+- Settlement edge functions
+- Backgammon and Ludo (no draw states)
 
