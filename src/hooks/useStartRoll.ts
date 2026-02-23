@@ -71,15 +71,21 @@ export function useStartRoll(options: UseStartRollOptions): UseStartRollResult {
   // Create game session when both players connect (still needed for game state)
   // The updated ensure_game_session RPC now sets p1_ready, p2_ready, start_roll_finalized,
   // current_turn_wallet, and turn_started_at when both players are present
+  // Free rooms use anon IDs which aren't "real wallets" - treat them as valid
+  const isFreeRoom = roomPda?.startsWith("free-") ?? false;
+  const effectiveHasTwoPlayers = isFreeRoom 
+    ? (roomPlayers.length >= 2 && roomPlayers[0] && roomPlayers[1])
+    : hasTwoRealPlayers;
+
   useEffect(() => {
-    if (!roomPda || !hasTwoRealPlayers || sessionCreatedRef.current) return;
+    if (!roomPda || !effectiveHasTwoPlayers || sessionCreatedRef.current) return;
     if (roomPlayers.length < 2) return;
     
     const player1 = roomPlayers[0];
     const player2 = roomPlayers[1];
     
-    // Only create sessions with real wallets
-    if (!isRealWallet(player1) || !isRealWallet(player2)) return;
+    // Only create sessions with real wallets (skip check for free rooms - anon IDs are valid)
+    if (!isFreeRoom && (!isRealWallet(player1) || !isRealWallet(player2))) return;
 
     const createSession = async () => {
       setIsCreatingSession(true);
@@ -98,7 +104,7 @@ export function useStartRoll(options: UseStartRollOptions): UseStartRollResult {
     };
 
     createSession();
-  }, [roomPda, gameType, hasTwoRealPlayers, roomPlayers, isRanked]);
+  }, [roomPda, gameType, effectiveHasTwoPlayers, roomPlayers, isRanked, isFreeRoom]);
 
   // NO-OP handlers (dice roll is gone)
   const handleRollComplete = useCallback(() => {

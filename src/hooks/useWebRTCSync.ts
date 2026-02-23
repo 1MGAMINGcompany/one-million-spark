@@ -18,6 +18,8 @@ interface UseWebRTCSyncOptions {
   players: string[];
   onMessage?: (message: GameMessage) => void;
   enabled?: boolean;
+  /** Override the wallet address used for identity (e.g. anon ID for free rooms) */
+  overrideAddress?: string;
 }
 
 export function useWebRTCSync({
@@ -25,8 +27,10 @@ export function useWebRTCSync({
   players,
   onMessage,
   enabled = true,
+  overrideAddress,
 }: UseWebRTCSyncOptions) {
-  const { address } = useWallet();
+  const { address: walletAddress } = useWallet();
+  const address = overrideAddress || walletAddress;
   const { toast } = useToast();
   const { play } = useSound();
   

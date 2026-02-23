@@ -111,6 +111,8 @@ const CheckersGame = () => {
   const { t } = useTranslation();
   const { play } = useSound();
   const { isConnected: walletConnected, address } = useWallet();
+  const isFreeRoom = roomPda?.startsWith("free-") ?? false;
+  const effectivePlayerId = address || (isFreeRoom ? getAnonId() : null);
 
   const [board, setBoard] = useState<(Piece | null)[][]>(initializeBoard);
   const [selectedPiece, setSelectedPiece] = useState<Position | null>(null);
@@ -148,7 +150,7 @@ const CheckersGame = () => {
   useEffect(() => { myColorRef.current = myColor; }, [myColor]);
 
   // Fetch real player order from on-chain room account
-  const isFreeRoom = roomPda?.startsWith("free-") ?? false;
+  // isFreeRoom already defined above
   useEffect(() => {
     const playerId = address || (isFreeRoom ? getAnonId() : null);
     if (!playerId || !roomPda) return;
@@ -202,7 +204,7 @@ const CheckersGame = () => {
               setEntryFeeSol(parsed.entryFee / 1_000_000_000);
             }
             
-            const myIndex = realPlayers.findIndex(p => isSameWallet(p, address));
+            const myIndex = realPlayers.findIndex(p => isSameWallet(p, effectivePlayerId));
             const color = myIndex === 0 ? "gold" : "obsidian";
             setMyColor(color);
             setFlipped(color === "obsidian");
@@ -212,19 +214,19 @@ const CheckersGame = () => {
         }
         
         console.log("[CheckersGame] Room not ready, using placeholder");
-        setRoomPlayers([address, `waiting-${roomPda.slice(0, 8)}`]);
+        setRoomPlayers([effectivePlayerId!, `waiting-${roomPda.slice(0, 8)}`]);
         setMyColor("gold");
         setFlipped(false);
       } catch (err) {
         console.error("[CheckersGame] Failed to fetch room players:", err);
-        setRoomPlayers([address, `error-${roomPda.slice(0, 8)}`]);
+        setRoomPlayers([effectivePlayerId!, `error-${roomPda.slice(0, 8)}`]);
         setMyColor("gold");
         setFlipped(false);
       }
     };
 
     fetchRoomPlayers();
-  }, [address, roomPda]);
+  }, [effectivePlayerId, roomPda]);
 
   // Game session persistence - track if we've shown the restored toast
   const restoredToastShownRef = useRef(false);
@@ -262,14 +264,14 @@ const CheckersGame = () => {
   const { loadSession: loadCheckersSession, saveSession: saveCheckersSession, finishSession: finishCheckersSession } = useGameSessionPersistence({
     roomPda: roomPda,
     gameType: 'checkers',
-    enabled: roomPlayers.length >= 2 && !!address,
+    enabled: roomPlayers.length >= 2 && !!effectivePlayerId,
     onStateRestored: handleRealtimeStateRestored,
-    callerWallet: address, // Pass caller wallet for secure RPC validation
+    callerWallet: effectivePlayerId,
   });
 
   // Load session on mount
   useEffect(() => {
-    if (roomPlayers.length >= 2 && address) {
+    if (roomPlayers.length >= 2 && effectivePlayerId) {
       loadCheckersSession().then(savedState => {
         if (savedState && Object.keys(savedState).length > 0) {
           handleCheckersStateRestored(savedState, true);
@@ -277,7 +279,7 @@ const CheckersGame = () => {
       });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roomPlayers.length, address]);
+  }, [roomPlayers.length, effectivePlayerId]);
 
   // Save game state after each move
   useEffect(() => {
@@ -308,7 +310,7 @@ const CheckersGame = () => {
 
   const rankedGate = useRankedReadyGate({
     roomPda,
-    myWallet: address,
+    myWallet: effectivePlayerId,
     isRanked: isRankedGame,
     enabled: roomPlayers.length >= 2 && modeLoaded,
   });
@@ -316,7 +318,7 @@ const CheckersGame = () => {
   // Durable game sync - persists moves to DB for reliability
   const handleDurableMoveReceived = useCallback((move: GameMove) => {
     // Only apply moves from opponents (we already applied our own locally)
-    if (!isSameWallet(move.wallet, address)) {
+    if (!isSameWallet(move.wallet, effectivePlayerId)) {
       console.log("[CheckersGame] Applying move from DB:", move.turn_number);
       const moveData = move.move_data as any;
       
@@ -328,7 +330,7 @@ const CheckersGame = () => {
         if (moveData.missedCount >= 3) {
           // Opponent forfeited by missing 3 turns
           setGameOver(myColor);
-          setWinnerWallet(address || null);
+          setWinnerWallet(effectivePlayerId || null);
           play('checkers_win');
           toast({
             title: t('gameSession.opponentForfeited'),
@@ -353,7 +355,7 @@ const CheckersGame = () => {
         // Note: Strike count reset is now handled server-side in submit_game_move RPC
       }
     }
-  }, [address, myColor, roomPda, play, t]);
+  }, [effectivePlayerId, myColor, roomPda, play, t]);
 
   const { submitMove: persistMove, moves: dbMoves, isLoading: isSyncLoading } = useDurableGameSync({
     roomPda: roomPda || "",
@@ -371,10 +373,10 @@ const CheckersGame = () => {
   const startRoll = useStartRoll({
     roomPda,
     gameType: "checkers",
-    myWallet: address,
+    myWallet: effectivePlayerId,
     isRanked: isRankedGame,
     roomPlayers,
-    hasTwoRealPlayers,
+    hasTwoRealPlayers: isFreeRoom ? roomPlayers.length >= 2 : hasTwoRealPlayers,
     initialColor: myColor === "gold" ? "w" : "b",
     bothReady: rankedGate.bothReady,
   });
@@ -382,11 +384,11 @@ const CheckersGame = () => {
   // Update myColor based on start roll result for ranked games
   useEffect(() => {
     if (isRankedGame && startRoll.isFinalized && startRoll.startingWallet) {
-      const isStarter = isSameWallet(startRoll.startingWallet, address);
+      const isStarter = isSameWallet(startRoll.startingWallet, effectivePlayerId);
       setMyColor(isStarter ? "gold" : "obsidian");
-      setFlipped(!isStarter); // Flip board for non-starter
+      setFlipped(!isStarter);
     }
-  }, [isRankedGame, startRoll.isFinalized, startRoll.startingWallet, address]);
+  }, [isRankedGame, startRoll.isFinalized, startRoll.startingWallet, effectivePlayerId]);
 
   const handleAcceptRules = async () => {
     const result = await rankedGate.acceptRules();
@@ -422,9 +424,9 @@ const CheckersGame = () => {
 
   // Is current user the room creator? (first player in roomPlayers)
   const isCreator = useMemo(() => {
-    if (!address || roomPlayers.length === 0) return false;
-    return isSameWallet(roomPlayers[0], address);
-  }, [address, roomPlayers]);
+    if (!effectivePlayerId || roomPlayers.length === 0) return false;
+    return isSameWallet(roomPlayers[0], effectivePlayerId);
+  }, [effectivePlayerId, roomPlayers]);
 
   // Open leave modal - NEVER triggers wallet
   const handleLeaveClick = useCallback(() => {
@@ -436,9 +438,9 @@ const CheckersGame = () => {
 
   // Opponent wallet for forfeit - exclude placeholder wallets
   const opponentWallet = useMemo(() => {
-    if (!address || roomPlayers.length < 2) return null;
-    return roomPlayers.find(p => isRealWallet(p) && !isSameWallet(p, address)) || null;
-  }, [address, roomPlayers]);
+    if (!effectivePlayerId || roomPlayers.length < 2) return null;
+    return roomPlayers.find(p => !isSameWallet(p, effectivePlayerId)) || null;
+  }, [effectivePlayerId, roomPlayers]);
 
   // Block gameplay until start roll is finalized (for ranked games, also need rules accepted)
   const canPlay = startRoll.isFinalized && (!isRankedGame || rankedGate.bothReady);
@@ -451,7 +453,7 @@ const CheckersGame = () => {
   
   // Override takes priority if set
   const isMyTurnOverride = turnOverrideWallet 
-    ? isSameWallet(turnOverrideWallet, address) 
+    ? isSameWallet(turnOverrideWallet, effectivePlayerId) 
     : null;
   const isActuallyMyTurn = isMyTurnOverride ?? isActuallyMyTurnRaw;
   
@@ -463,7 +465,7 @@ const CheckersGame = () => {
 
   // Turn timer for ranked games - calls server RPC for DB-authoritative timeout
   const handleTurnTimeout = useCallback(async () => {
-    if (gameOver || !address || !roomPda || !isActuallyMyTurn) return;
+    if (gameOver || !effectivePlayerId || !roomPda || !isActuallyMyTurn) return;
     
     try {
       // Call server-side RPC - handles all timeout logic atomically
@@ -515,7 +517,7 @@ const CheckersGame = () => {
     } catch (err) {
       console.error("[CheckersGame] Timeout exception:", err);
     }
-  }, [gameOver, address, roomPda, isActuallyMyTurn, myColor, play, t]);
+  }, [gameOver, effectivePlayerId, roomPda, isActuallyMyTurn, myColor, play, t]);
 
   // effectiveTurnTime already defined above in isDataLoaded block
   
@@ -541,7 +543,7 @@ const CheckersGame = () => {
         const dbStatus = data?.session?.status;
         const dbWinner = data?.session?.winner_wallet;
         if (dbStatus === "finished" && !gameOver) {
-          const iWin = isSameWallet(dbWinner, address);
+          const iWin = isSameWallet(dbWinner, effectivePlayerId);
           setGameOver(iWin ? (myColor === "gold" ? "obsidian" : "gold") : myColor);
           setWinnerWallet(dbWinner || null);
           play(iWin ? "checkers_win" : "checkers_lose");
@@ -550,7 +552,7 @@ const CheckersGame = () => {
 
         const dbTurnWallet = data?.session?.current_turn_wallet;
         if (dbTurnWallet && turnOverrideWallet !== dbTurnWallet) {
-          const isNowMyTurn = isSameWallet(dbTurnWallet, address);
+          const isNowMyTurn = isSameWallet(dbTurnWallet, effectivePlayerId);
           const engineSaysMyTurn = currentPlayer === myColor;
           if (isNowMyTurn !== engineSaysMyTurn) {
             setTurnOverrideWallet(dbTurnWallet);
@@ -578,12 +580,12 @@ const CheckersGame = () => {
     }, 5000);
 
     return () => clearInterval(pollInterval);
-  }, [roomPda, isRankedGame, gameOver, startRoll.isFinalized, address, turnOverrideWallet, currentPlayer, myColor, t, play]);
+  }, [roomPda, isRankedGame, gameOver, startRoll.isFinalized, effectivePlayerId, turnOverrideWallet, currentPlayer, myColor, t, play]);
 
   // Turn notification players
   const turnPlayers: TurnPlayer[] = useMemo(() => {
     return roomPlayers.map((playerAddress, index) => {
-      const isMe = isSameWallet(playerAddress, address);
+      const isMe = isSameWallet(playerAddress, effectivePlayerId);
       const color = index === 0 ? "gold" : "obsidian";
       return {
         address: playerAddress,
@@ -593,7 +595,7 @@ const CheckersGame = () => {
         seatIndex: index,
       };
     });
-  }, [roomPlayers, address]);
+  }, [roomPlayers, effectivePlayerId]);
 
   const activeTurnAddress = useMemo(() => {
     const turnIndex = currentPlayer === "gold" ? 0 : 1;
@@ -612,7 +614,7 @@ const CheckersGame = () => {
     roomId: roomId || "unknown",
     players: turnPlayers,
     activeTurnAddress,
-    myAddress: address,
+    myAddress: effectivePlayerId,
     enabled: true,
   });
 
@@ -645,9 +647,9 @@ const CheckersGame = () => {
     // Fallback for normal game endings
     if (!gameOver) return null;
     if (gameOver === "draw") return "draw";
-    if (gameOver === myColor) return address;
-    return getOpponentWallet(roomPlayers, address);
-  }, [winnerWallet, gameOver, myColor, address, roomPlayers]);
+    if (gameOver === myColor) return effectivePlayerId;
+    return getOpponentWallet(roomPlayers, effectivePlayerId);
+  }, [winnerWallet, gameOver, myColor, effectivePlayerId, roomPlayers]);
 
   // Auto-settlement hook - triggers settle-game edge function when game ends
   // Winner wallet is now determined server-side from game_sessions.game_state.gameOver
@@ -926,7 +928,7 @@ const CheckersGame = () => {
       }
     } else if (message.type === "resign") {
       // Opponent resigned - I WIN - store MY wallet as winner
-      setWinnerWallet(address || null);
+      setWinnerWallet(effectivePlayerId || null);
       setGameOver(myColorRef.current);
       chatRef.current?.addSystemMessage(t("gameMultiplayer.opponentResigned"));
       play('checkers_win');
@@ -967,6 +969,7 @@ const CheckersGame = () => {
     players: roomPlayers,
     onMessage: handleWebRTCMessage,
     enabled: roomPlayers.length === 2,
+    overrideAddress: effectivePlayerId || undefined,
   });
   
   // In wallet browsers, don't block on WebRTC - use effective connection state
@@ -985,7 +988,7 @@ const CheckersGame = () => {
   // useForfeit hook - centralized forfeit/leave logic
   const { forfeit, leave, isForfeiting, isLeaving, forfeitRef } = useForfeit({
     roomPda: roomPda || null,
-    myWallet: address || null,
+    myWallet: effectivePlayerId || null,
     opponentWallet,
     stakeLamports: stakeLamports ?? Math.floor(entryFeeSol * 1_000_000_000),
     gameType: "checkers",
@@ -1041,7 +1044,7 @@ const CheckersGame = () => {
   // Game chat hook
   const chat = useGameChat({
     roomId: roomId || "",
-    myWallet: address,
+    myWallet: effectivePlayerId,
     players: chatPlayers,
     onSendMessage: handleChatSend,
     enabled: roomPlayers.length === 2,
@@ -1090,11 +1093,11 @@ const CheckersGame = () => {
           sendMove(moveData);
           
           // Persist move to DB for ranked games (durable sync)
-          if (isRankedGame && address) {
-            persistMove(moveData, address);
+          if (isRankedGame && effectivePlayerId) {
+            persistMove(moveData, effectivePlayerId);
           }
           
-          recordPlayerMove(address || "", "capture");
+          recordPlayerMove(effectivePlayerId || "", "capture");
           
           setChainCapture(null);
           setSelectedPiece(null);

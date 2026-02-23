@@ -67,6 +67,8 @@ const LudoGame = () => {
   const { t } = useTranslation();
   const { play } = useSound();
   const { isConnected: walletConnected, address } = useWallet();
+  const isFreeRoom = roomPda?.startsWith("free-") ?? false;
+  const effectivePlayerId = address || (isFreeRoom ? getAnonId() : null);
 
   const [musicEnabled, setMusicEnabled] = useState(true); // Auto-start music
   const [sfxEnabled, setSfxEnabled] = useState(true);
@@ -102,7 +104,7 @@ const LudoGame = () => {
   useEffect(() => { roomPlayersRef.current = roomPlayers; }, [roomPlayers]);
   
   // Fetch real player order from on-chain room account for multiplayer games
-  const isFreeRoom = roomPda?.startsWith("free-") ?? false;
+  // isFreeRoom already defined above
   useEffect(() => {
     const playerId = address || (isFreeRoom ? getAnonId() : null);
     if (!playerId || !roomPda) {
@@ -370,7 +372,7 @@ const LudoGame = () => {
   });
 
   // Find which player index the current wallet is
-  const effectivePlayerId = address || (isFreeRoom ? getAnonId() : null);
+  // effectivePlayerId already defined above
   const myPlayerIndex = useMemo(() => {
     if (!effectivePlayerId || roomPlayers.length === 0) return -1;
     return roomPlayers.findIndex(p => isSameWallet(p, effectivePlayerId));
