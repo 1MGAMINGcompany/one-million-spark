@@ -1,116 +1,104 @@
 
 
-# Optimize Money AI Coaching for Retention
+# Streamline Money AI Helper for Retention
 
 ## Overview
 
-Update the Money AI agent's personality, system prompts, and client-side coaching logic to produce calmer, shorter, more professional responses that encourage game completion and reduce abandonment.
+Five targeted changes to reduce friction, teach new users how to play, and bring them back to abandoned games. Based on analytics showing 96% drop-off between welcome popup and actual message sent.
 
 ## Changes
 
-### 1. Edge Function: Rewrite System Prompts (`supabase/functions/trust-agent/index.ts`)
+### 1. Remove Welcome Gate -- Tap Bubble = Instant Chat
 
-**Personality overhaul** -- replace all `Money 🐵` references and playful tone with a disciplined coaching identity:
+**Problem**: First-time visitors see "Do you want help?" with Yes/No buttons. 50%+ drop off at this step.
 
-- `GAME_SYSTEM_PROMPTS` -- new format per game:
-  ```
-  "You are Money, the strategy coach at 1MGAMING. You can see the board and moves.
-   Tone: calm, focused, strategic, encouraging but neutral. Never exaggerated.
-   Max 2 short paragraphs, 2-3 sentences each. 1 emoji max (optional).
-   Money speaks like a disciplined strategy coach, not an entertainer."
-  ```
+**Solution**: Remove the `showFirstTimeWelcome` flow entirely. When the bubble is tapped (or auto-opened for first-timers), go straight to either the assist menu (non-AI routes) or the skill picker (AI routes). No "Do you want me to help you?" question.
 
-- `RULES_SYSTEM_PROMPTS` -- same tone shift, remove monkey emoji and "game teacher" framing.
+- Remove the `welcomeAccepted` state and the `showFirstTimeWelcome` conditional block (lines 624-645)
+- Update flow logic so `showAssistMenu` no longer depends on `welcomeAccepted`
+- Keep the first-visit auto-open behavior (1.5s delay) but skip the welcome gate
+- Remove `welcomeGreeting`, `welcomeYes`, `welcomeNo` from all 10 language dictionaries (cleanup)
 
-- `PLATFORM_FACTS` -- update the "STRICT RULES FOR YOU" section:
-  - Replace "Be friendly. Use emojis sparingly (1-2 per message)" with "Be calm and composed. 1 emoji max, optional. No hype language. No cartoon behavior."
-  - Add: "Money speaks like a disciplined strategy coach, not an entertainer."
+### 2. Proactive Context Tip on First AI Game Visit
 
-- `SKILL_DESCRIPTIONS` -- rewrite to match new tone:
-  - `first-timer`: "Extremely simple vocabulary. One concept at a time. Calm encouragement."
-  - `beginner`: "Explain why a move helps or weakens position. Keep it brief."
-  - `medium`: "Tactical hints with brief reasoning. Use game terminology."
-  - `pro`: "Concise tactical insights. No hand-holding."
-  - `master`: "Deeper pattern recognition language. Positional concepts. Still concise."
+**Problem**: Users land on AI game pages and don't know what to do. No guidance unless they open the helper.
 
-**Retention coaching injection** -- add a new `COACHING_RULES` block appended to system prompt when in strategy/rules mode on AI routes:
+**Solution**: Add a floating toast-style tip that auto-appears 2 seconds after landing on any `/play-ai/*` route for the first time per game type. Disappears after 5 seconds. No interaction required.
 
-```
-COACHING BEHAVIOR:
-- If few moves played (early game): give one simple actionable tip. Examples: "Control the center." "Develop pieces before attacking."
-- If the player makes a weak move: NEVER say "mistake" or "blunder." Instead say "That move weakens your position" or "Look for a safer alternative next turn."
-- If the player makes a good move: reinforce pattern recognition. "Good control of space." "You're improving your structure."
-- If the player seems idle or frustrated: "Take a moment. There's still a strong position here." "Focus on one piece at a time."
-- After game ends with a loss: "Review the turning point and try again."
-- After game ends with a win: "You applied discipline. Repeat that."
-- NEVER mention money, rewards, or SOL in coaching responses.
-- NEVER overwhelm with long analysis.
-```
+- Add a new component section rendered outside the bubble/panel -- a small pill overlay near the bottom of the screen
+- Game-specific tips stored in a simple map:
+  - chess: "Tap a piece to see where it can move"
+  - ludo: "Tap the dice to roll, then tap a piece to move"
+  - checkers: "Tap a piece, then tap where to jump"
+  - backgammon: "Tap the dice to roll, then tap a checker to move"
+  - dominos: "Tap a tile from your hand to play it"
+- Persist shown tips in localStorage (`aihelper-tip-shown-{game}`) so each tip shows only once ever
+- Animate in from bottom, auto-dismiss after 5 seconds, tap to dismiss early
 
-**New fields accepted in payload**: `moveCount` (number), `gamePhase` ("opening" | "mid" | "end" | "complete"), `gameResult` ("win" | "loss" | ""). These will be sent from the client to help the edge function inject phase-appropriate coaching context into the user message.
+### 3. Simplify Quick Menu to 3 Options
 
-Add contextual injection before the user's question:
-```typescript
-if (gamePhase === "opening" || (moveCount && moveCount <= 4)) {
-  contextMessage += "\n[GAME PHASE: Early game. Give one simple actionable opening tip.]";
-}
-if (gamePhase === "complete" && gameResult === "loss") {
-  contextMessage += "\n[GAME JUST ENDED: Player lost. Encourage review and retry.]";
-}
-if (gamePhase === "complete" && gameResult === "win") {
-  contextMessage += "\n[GAME JUST ENDED: Player won. Reinforce discipline.]";
-}
-```
+**Problem**: 6-button grid is overwhelming on mobile. Analytics show only 10 users used quick actions.
 
-### 2. Client: Send Coaching Context (`src/components/AIAgentHelperOverlay.tsx`)
+**Solution**: Reduce `WELCOME_ACTIONS` from 6 to 3:
+- "How to play" (rules -- highest intent)
+- "Strategy tip" (most relevant for retention)
+- "How does it work?" (catch-all)
 
-Update `getBoardContext()` to also read `moveCount`, `gamePhase`, and `gameResult` from `window.__AI_HELPER_CONTEXT__`.
+Remove: `qWallet`, `qPlayFriends`, `qPlayAI` (these are navigation questions users can type).
 
-Update `sendMessage()` payload to include these new fields.
+For AI routes, reduce quick chips from 4 to 2:
+- "How to play" (`chipRules`)
+- "Suggest a move" (`chipSuggest`)
 
-### 3. Client: Anti-Rage-Quit Nudge (`src/components/AIAgentHelperOverlay.tsx`)
+Remove: `chipImprove`, `chipWrong` (too similar, rarely used).
 
-Add a `useEffect` on AI game routes that:
-- Tracks idle time (no user interaction for 20+ seconds while the panel is closed)
-- After 20s idle, auto-opens the panel with a calm nudge message injected as an assistant message: "Take a moment. There's still a strong position here."
-- Only triggers once per session (use a ref flag)
-- Resets the idle timer on any `pointerdown` or `keydown` event
+### 4. First-Game Ludo Onboarding Arrows
 
-### 4. Client: Post-Game Completion Message (`src/components/AIAgentHelperOverlay.tsx`)
+**Problem**: Ludo has 75% abandonment. Users don't know the basic flow: roll dice, then tap a piece.
 
-Add a `useEffect` that watches `window.__AI_HELPER_CONTEXT__.gameResult`:
-- On `"win"`: inject assistant message "You applied discipline. Repeat that."
-- On `"loss"`: inject assistant message "Review the turning point and try again."
-- Only triggers once per game result change
+**Solution**: Add a lightweight onboarding overlay to `LudoAI.tsx` that shows on the user's very first Ludo AI game:
 
-### 5. Trust Agent Client: Pass New Fields (`src/lib/trustAgentClient.ts`)
+- Step 1: Arrow pointing at dice with label "Roll the dice" -- appears when phase is `WAITING_ROLL` and it's the human's first turn
+- Step 2: After rolling, arrow pointing at a movable token with label "Tap a piece to move it"
+- After step 2 completes, mark onboarding done in localStorage (`ludo-onboarding-done`)
+- Simple CSS-only arrows (no complex animation library needed)
+- Semi-transparent backdrop behind arrows to draw focus
 
-Update `TrustAgentPayload` interface to include optional fields:
-```typescript
-moveCount?: number;
-gamePhase?: string;
-gameResult?: string;
-```
+### 5. Session Continuity -- Return to Abandoned AI Game
 
-No other changes to the streaming logic.
+**Problem**: Users leave mid-game and return to the home page with no way back.
 
-### 6. Share Image Branding Update
+**Solution**: Save the current AI game route in localStorage when entering an AI game page. On app load at `/`, check if there's an unfinished game and show a small banner: "You have an unfinished game. Continue?" with Resume/Dismiss buttons.
 
-In `generateShareImage()` inside `AIAgentHelperOverlay.tsx`, change the header text from "Money - 1MGAMING" (remove the monkey emoji from the canvas text).
+- In each AI game page (or via a shared hook), write `localStorage.setItem("active-ai-game", "/play-ai/ludo?difficulty=medium")` on mount, and remove it on game over or reset
+- In `Home.tsx`, read `active-ai-game` from localStorage on mount. If present, show a banner at top with a "Continue" link and a dismiss button
+- Dismiss clears the localStorage key
+- Simple, no database changes needed
 
-## Files Modified
+## Technical Details
 
-| File | Change |
-|------|--------|
-| `supabase/functions/trust-agent/index.ts` | Rewrite all system prompts, skill descriptions, platform facts tone. Add coaching rules block. Accept and use `moveCount`, `gamePhase`, `gameResult`. |
-| `src/components/AIAgentHelperOverlay.tsx` | Pass new context fields. Add idle-nudge effect. Add post-game message effect. Remove monkey emoji from share image. |
-| `src/lib/trustAgentClient.ts` | Add `moveCount`, `gamePhase`, `gameResult` to `TrustAgentPayload` type. |
+### Files Modified
 
-## What Does NOT Change
+| File | Changes |
+|------|---------|
+| `src/components/AIAgentHelperOverlay.tsx` | Remove welcome gate flow. Add proactive tip overlay. Reduce quick menu to 3 items. Reduce AI chips to 2. |
+| `src/pages/LudoAI.tsx` | Add first-game onboarding overlay with step arrows |
+| `src/pages/Home.tsx` | Add session continuity banner for abandoned AI games |
+| `src/pages/ChessAI.tsx` | Add `active-ai-game` localStorage write/clear |
+| `src/pages/BackgammonAI.tsx` | Add `active-ai-game` localStorage write/clear |
+| `src/pages/CheckersAI.tsx` | Add `active-ai-game` localStorage write/clear |
+| `src/pages/DominosAI.tsx` | Add `active-ai-game` localStorage write/clear |
 
-- No changes to multiplayer logic, settlement, guardrails, or streaming infrastructure
-- No changes to hallucination prevention (PLATFORM_FACTS constraints remain)
-- No changes to the monkey mascot images or bubble UI mechanics
-- No changes to game engines or AI game pages
-- No changes to i18n dictionary structure (only the backend prompts change tone)
+### No New Dependencies
+
+All changes use existing React primitives, CSS animations, and localStorage. No new packages needed.
+
+### What Does NOT Change
+
+- No multiplayer logic changes
+- No backend/database changes
+- No edge function changes
+- No settlement or wallet logic changes
+- Money bubble drag/position mechanics unchanged
+- Streaming chat system unchanged
 
