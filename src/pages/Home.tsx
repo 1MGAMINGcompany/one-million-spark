@@ -106,12 +106,13 @@ const Home = () => {
               </p>
 
               {/* Zero-balance funding card for Privy users */}
-              {showFundingCard ? (
+              {/* Funding hint for Privy users with zero balance */}
+              {showFundingCard && (
                 <AddSolCard walletAddress={walletAddress} balanceSol={balanceSol} />
-              ) : (
-                <>
-                  {/* CTA Buttons */}
-                  <div className="flex flex-col gap-4 mt-4">
+              )}
+
+              {/* CTA Buttons — always visible */}
+              <div className="flex flex-col gap-4 mt-4">
                     <Button asChild size="lg" variant="gold" className="group text-lg h-auto py-3 px-8 transition-all">
                       <Link to="/quick-match" className="flex flex-col items-center gap-0.5">
                         <span className="flex items-center gap-2">
@@ -149,8 +150,8 @@ const Home = () => {
                     </div>
                   </div>
 
-                  {/* Stats/Trust indicators */}
-                  <div className="flex flex-wrap justify-center lg:justify-start gap-6 mt-6 text-sm text-muted-foreground">
+              {/* Stats/Trust indicators */}
+              <div className="flex flex-wrap justify-center lg:justify-start gap-6 mt-6 text-sm text-muted-foreground">
                     <div className="flex items-center gap-2">
                       <Shield className="w-4 h-4 text-primary" />
                       <span>{t("home.secureFair")}</span>
@@ -165,12 +166,10 @@ const Home = () => {
                     </div>
                   </div>
 
-                  {/* Live Activity */}
-                  <div className="mt-4">
+              {/* Live Activity */}
+              <div className="mt-4">
                     <LiveActivityIndicator />
                   </div>
-                </>
-              )}
             </div>
 
             {/* Right Side - Decorative Pyramid Panel */}
