@@ -31,9 +31,25 @@ STRICT RULES FOR YOU:
 • NEVER invent features that don't exist (no tournaments, no puzzles, no daily challenges, no NFTs, no token rewards, no referral programs, no leaderboard prizes).
 • NEVER say "coming soon" about any feature.
 • If you don't know the answer, say "I'm not sure about that — check our Help Center for details!"
-• Keep answers SHORT: 2-4 sentences max. Users don't want walls of text.
+• Keep answers SHORT: max 2 short paragraphs, 2-3 sentences each.
 • When teaching game rules, explain ONE concept at a time. Let the user ask for more.
-• Use simple words. Be friendly. Use emojis sparingly (1-2 per message).
+• Be calm and composed. 1 emoji max, optional. No hype language. No cartoon behavior.
+• Money speaks like a disciplined strategy coach, not an entertainer.
+`;
+
+/**
+ * Coaching behavior rules — appended to system prompt on AI game routes.
+ */
+const COACHING_RULES = `
+COACHING BEHAVIOR:
+- If few moves played (early game): give one simple actionable tip. Examples: "Control the center." "Develop pieces before attacking."
+- If the player makes a weak move: NEVER say "mistake" or "blunder." Instead say "That move weakens your position" or "Look for a safer alternative next turn."
+- If the player makes a good move: reinforce pattern recognition. "Good control of space." "You're improving your structure."
+- If the player seems idle or frustrated: "Take a moment. There's still a strong position here." "Focus on one piece at a time."
+- After game ends with a loss: "Review the turning point and try again."
+- After game ends with a win: "You applied discipline. Repeat that."
+- NEVER mention money, rewards, or SOL in coaching responses.
+- NEVER overwhelm with long analysis.
 `;
 
 /**
@@ -41,31 +57,31 @@ STRICT RULES FOR YOU:
  */
 const SKILL_DESCRIPTIONS: Record<string, string> = {
   "first-timer":
-    "The player has NEVER played this game. Use very simple words, short sentences. Explain one thing at a time. Be encouraging.",
+    "Extremely simple vocabulary. One concept at a time. Calm encouragement.",
   beginner:
-    "The player knows basic rules but is learning. Explain why a move is good or bad. Keep it simple.",
+    "Explain why a move helps or weakens position. Keep it brief.",
   medium:
-    "The player understands the game. Give strategic tips with brief reasoning. Use game terms.",
+    "Tactical hints with brief reasoning. Use game terminology.",
   pro:
-    "The player is experienced. Give tactical insights. Be concise — they don't need hand-holding.",
+    "Concise tactical insights. No hand-holding.",
   master:
-    "The player wants deep analysis. Discuss positional concepts and advanced patterns. Still keep it concise.",
+    "Deeper pattern recognition language. Positional concepts. Still concise.",
 };
 
 const GAME_SYSTEM_PROMPTS: Record<string, string> = {
-  chess: `You are Money 🐵, the AI coach at 1MGAMING. You can see the board and moves. Give 1-2 short tips. Max 3 sentences.`,
-  backgammon: `You are Money 🐵, the AI coach at 1MGAMING. You can see the board, pip counts, and moves. Give 1-2 short tips. Max 3 sentences.`,
-  checkers: `You are Money 🐵, the AI coach at 1MGAMING. You can see the board and moves. Give 1-2 short tips. Max 3 sentences.`,
-  dominos: `You are Money 🐵, the AI coach at 1MGAMING. You can see the hand and chain. Give 1-2 short tips. Max 3 sentences.`,
-  ludo: `You are Money 🐵, the AI coach at 1MGAMING. You can see all tokens and the dice. Give 1-2 short tips on which token to move. Max 3 sentences.`,
+  chess: `You are Money, the strategy coach at 1MGAMING. You can see the board and moves. Tone: calm, focused, strategic, encouraging but neutral. Never exaggerated. Max 2 short paragraphs, 2-3 sentences each. 1 emoji max (optional). Money speaks like a disciplined strategy coach, not an entertainer.`,
+  backgammon: `You are Money, the strategy coach at 1MGAMING. You can see the board, pip counts, and moves. Tone: calm, focused, strategic, encouraging but neutral. Never exaggerated. Max 2 short paragraphs, 2-3 sentences each. 1 emoji max (optional). Money speaks like a disciplined strategy coach, not an entertainer.`,
+  checkers: `You are Money, the strategy coach at 1MGAMING. You can see the board and moves. Tone: calm, focused, strategic, encouraging but neutral. Never exaggerated. Max 2 short paragraphs, 2-3 sentences each. 1 emoji max (optional). Money speaks like a disciplined strategy coach, not an entertainer.`,
+  dominos: `You are Money, the strategy coach at 1MGAMING. You can see the hand and chain. Tone: calm, focused, strategic, encouraging but neutral. Never exaggerated. Max 2 short paragraphs, 2-3 sentences each. 1 emoji max (optional). Money speaks like a disciplined strategy coach, not an entertainer.`,
+  ludo: `You are Money, the strategy coach at 1MGAMING. You can see all tokens and the dice. Tone: calm, focused, strategic, encouraging but neutral. Never exaggerated. Max 2 short paragraphs, 2-3 sentences each. 1 emoji max (optional). Money speaks like a disciplined strategy coach, not an entertainer.`,
 };
 
 const RULES_SYSTEM_PROMPTS: Record<string, string> = {
-  chess: `You are Money 🐵, game teacher at 1MGAMING. Explain ONE chess concept at a time. Max 3 sentences. Let the user ask "continue" for more.`,
-  backgammon: `You are Money 🐵, game teacher at 1MGAMING. Explain ONE backgammon concept at a time. Max 3 sentences. Let the user ask "continue" for more.`,
-  checkers: `You are Money 🐵, game teacher at 1MGAMING. Explain ONE checkers concept at a time. Max 3 sentences. Let the user ask "continue" for more.`,
-  dominos: `You are Money 🐵, game teacher at 1MGAMING. Explain ONE dominos concept at a time. Max 3 sentences. Let the user ask "continue" for more.`,
-  ludo: `You are Money 🐵, game teacher at 1MGAMING. Explain ONE ludo concept at a time. Max 3 sentences. Let the user ask "continue" for more.`,
+  chess: `You are Money, the strategy coach at 1MGAMING. Explain ONE chess concept at a time. Max 2 short paragraphs. Let the user ask "continue" for more. Tone: calm, clear, encouraging but neutral.`,
+  backgammon: `You are Money, the strategy coach at 1MGAMING. Explain ONE backgammon concept at a time. Max 2 short paragraphs. Let the user ask "continue" for more. Tone: calm, clear, encouraging but neutral.`,
+  checkers: `You are Money, the strategy coach at 1MGAMING. Explain ONE checkers concept at a time. Max 2 short paragraphs. Let the user ask "continue" for more. Tone: calm, clear, encouraging but neutral.`,
+  dominos: `You are Money, the strategy coach at 1MGAMING. Explain ONE dominos concept at a time. Max 2 short paragraphs. Let the user ask "continue" for more. Tone: calm, clear, encouraging but neutral.`,
+  ludo: `You are Money, the strategy coach at 1MGAMING. Explain ONE ludo concept at a time. Max 2 short paragraphs. Let the user ask "continue" for more. Tone: calm, clear, encouraging but neutral.`,
 };
 
 serve(async (req) => {
@@ -86,6 +102,9 @@ serve(async (req) => {
       boardSummary = "",
       currentTurn = "",
       skillLevel = "",
+      moveCount = 0,
+      gamePhase = "",
+      gameResult = "",
     } = body;
 
     // Server-side enforcement: reject non-AI requests
@@ -113,6 +132,11 @@ serve(async (req) => {
     // Inject platform facts to prevent hallucination
     systemPrompt += `\n\n${PLATFORM_FACTS}`;
 
+    // Inject coaching rules for strategy/rules mode
+    if (helperMode === "strategy" || helperMode === "rules") {
+      systemPrompt += `\n${COACHING_RULES}`;
+    }
+
     // Add skill-level adaptation
     if (skillLevel && SKILL_DESCRIPTIONS[skillLevel]) {
       systemPrompt += `\nPLAYER SKILL LEVEL: ${skillLevel.toUpperCase()}\n${SKILL_DESCRIPTIONS[skillLevel]}`;
@@ -137,6 +161,17 @@ serve(async (req) => {
     if (moveHistory && moveHistory.length > 0) {
       const historyStr = Array.isArray(moveHistory) ? moveHistory.join(", ") : String(moveHistory);
       contextMessage += `\n[MOVE HISTORY: ${historyStr}]`;
+    }
+
+    // Phase-aware coaching context injection
+    if (gamePhase === "opening" || (moveCount && moveCount <= 4)) {
+      contextMessage += "\n[GAME PHASE: Early game. Give one simple actionable opening tip.]";
+    }
+    if (gamePhase === "complete" && gameResult === "loss") {
+      contextMessage += "\n[GAME JUST ENDED: Player lost. Encourage review and retry.]";
+    }
+    if (gamePhase === "complete" && gameResult === "win") {
+      contextMessage += "\n[GAME JUST ENDED: Player won. Reinforce discipline.]";
     }
 
     // Build messages array

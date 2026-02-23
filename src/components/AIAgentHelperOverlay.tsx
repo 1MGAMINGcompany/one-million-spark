@@ -140,7 +140,7 @@ async function generateShareImage(text: string): Promise<Blob | null> {
     ctx.fillStyle = bg; ctx.fillRect(0, 0, 1080, 1080);
     ctx.strokeStyle = "#FACC15"; ctx.lineWidth = 4; ctx.strokeRect(30, 30, 1020, 1020);
     ctx.fillStyle = "#FACC15"; ctx.font = "bold 48px sans-serif"; ctx.textAlign = "center";
-    ctx.fillText("🐵 Money – 1MGAMING", 540, 120);
+    ctx.fillText("Money – 1MGAMING", 540, 120);
     ctx.fillStyle = "#aaa"; ctx.font = "24px sans-serif"; ctx.fillText("AI Helper Insight", 540, 170);
     ctx.fillStyle = "#ffffff"; ctx.font = "28px sans-serif"; ctx.textAlign = "left";
     const words = text.split(" "); let line = ""; let y = 260; const maxW = 940;
@@ -310,6 +310,55 @@ export default function AIAgentHelperOverlay() {
     return () => { window.removeEventListener("resize", handler); window.removeEventListener("orientationchange", handler); };
   }, [isMultiplayer, location.pathname]);
 
+  // ─── Anti-rage-quit idle nudge (AI routes only, once per session) ───
+  const idleNudgeFired = useRef(false);
+  useEffect(() => {
+    if (!isAIRoute || idleNudgeFired.current) return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const resetTimer = () => {
+      if (timer) clearTimeout(timer);
+      if (idleNudgeFired.current) return;
+      timer = setTimeout(() => {
+        if (sheetOpen || idleNudgeFired.current) return;
+        idleNudgeFired.current = true;
+        setMessages((prev) => [...prev, { role: "assistant", content: "Take a moment. There's still a strong position here." }]);
+        setSheetOpen(true);
+        trackMonkey("idle_nudge", pageContext, lang);
+      }, 20000);
+    };
+
+    resetTimer();
+    window.addEventListener("pointerdown", resetTimer);
+    window.addEventListener("keydown", resetTimer);
+    return () => {
+      if (timer) clearTimeout(timer);
+      window.removeEventListener("pointerdown", resetTimer);
+      window.removeEventListener("keydown", resetTimer);
+    };
+  }, [isAIRoute, sheetOpen, pageContext, lang]);
+
+  // ─── Post-game completion message ───
+  const lastGameResult = useRef<string>("");
+  useEffect(() => {
+    if (!isAIRoute) return;
+    const check = () => {
+      const ctx = (window as any).__AI_HELPER_CONTEXT__;
+      const result = ctx?.gameResult || "";
+      if (result && result !== lastGameResult.current) {
+        lastGameResult.current = result;
+        if (result === "win") {
+          setMessages((prev) => [...prev, { role: "assistant", content: "You applied discipline. Repeat that." }]);
+        } else if (result === "loss") {
+          setMessages((prev) => [...prev, { role: "assistant", content: "Review the turning point and try again." }]);
+        }
+        setSheetOpen(true);
+      }
+    };
+    const interval = setInterval(check, 2000);
+    return () => clearInterval(interval);
+  }, [isAIRoute]);
+
   // ─── Simplified pointer: tap to open, move >12px to drag ───
   const onPointerDown = useCallback((e: React.PointerEvent) => {
     const el = e.currentTarget as HTMLElement;
@@ -356,6 +405,9 @@ export default function AIAgentHelperOverlay() {
       position: ctx.position || "",
       turn: ctx.turn || "",
       boardSummary: ctx.boardSummary || "",
+      moveCount: ctx.moveCount || 0,
+      gamePhase: ctx.gamePhase || "",
+      gameResult: ctx.gameResult || "",
     };
   }, [gameType]);
 
@@ -386,9 +438,13 @@ export default function AIAgentHelperOverlay() {
         question: text.trim(),
         moveHistory,
         messages: [...messages, userMsg].slice(-10).map((m) => ({ role: m.role, content: m.content })),
-        // NEW: send board state + skill level
+        // Board state + skill level
         ...(boardCtx ? { boardState: boardCtx.position, boardSummary: boardCtx.boardSummary, currentTurn: boardCtx.turn } : {}),
         ...(skillLevel ? { skillLevel } : {}),
+        // Coaching context
+        ...(boardCtx?.moveCount ? { moveCount: boardCtx.moveCount } : {}),
+        ...(boardCtx?.gamePhase ? { gamePhase: boardCtx.gamePhase } : {}),
+        ...(boardCtx?.gameResult ? { gameResult: boardCtx.gameResult } : {}),
       } as any,
       onDelta: (chunk) => {
         assistantSoFar += chunk;
