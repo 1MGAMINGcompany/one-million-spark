@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import { useWallet } from "@/hooks/useWallet";
 import { usePrivy } from "@privy-io/react-auth";
 import { usePrivySolBalance } from "@/hooks/usePrivySolBalance";
-import { Home, Wallet, PlusCircle, LayoutList, Menu, X, Coins, Volume2, VolumeX, Bell, BellOff, Trophy, ChevronDown, LogOut, ArrowRightLeft } from "lucide-react";
+import { Home, Wallet, PlusCircle, LayoutList, Menu, X, Coins, Volume2, VolumeX, Bell, BellOff, Trophy, ChevronDown, LogOut, ArrowRightLeft, Sparkles } from "lucide-react";
 import { WalletButton } from "./WalletButton";
 import { PrivyLoginButton } from "./PrivyLoginButton";
 import { Button } from "@/components/ui/button";
@@ -155,6 +155,16 @@ const Navbar = () => {
               title={notificationsEnabled ? "Notifications on" : "Enable notifications"}
             >
               {notificationsEnabled ? <Bell size={20} /> : <BellOff size={20} />}
+            </button>
+
+            {/* Money AI Helper Button */}
+            <button
+              onClick={() => { play('ui_click'); window.dispatchEvent(new Event("aihelper-show")); }}
+              className="p-2 rounded-lg text-primary hover:text-primary/80 hover:bg-secondary transition-all duration-200 drop-shadow-[0_0_6px_hsl(45_93%_54%_/_0.3)]"
+              aria-label="Money AI Helper"
+              title="Money AI Helper"
+            >
+              <Sparkles size={20} />
             </button>
             
             <PrivyLoginButton />
@@ -336,6 +346,15 @@ const Navbar = () => {
               >
                 {notificationsEnabled ? <Bell size={20} /> : <BellOff size={20} />}
                 <span>{notificationsEnabled ? "Notifications On" : "Notifications Off"}</span>
+              </button>
+
+              {/* Money AI Helper */}
+              <button
+                onClick={() => { play('ui_click'); setIsOpen(false); window.dispatchEvent(new Event("aihelper-show")); }}
+                className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-primary hover:bg-secondary transition-all duration-200"
+              >
+                <Sparkles size={20} />
+                <span>Money AI Helper</span>
               </button>
 
             </div>
