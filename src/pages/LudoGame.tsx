@@ -456,8 +456,22 @@ const LudoGame = () => {
     // Broadcast elimination to other players via WebRTC
     sendPlayerEliminatedRef.current?.(myPlayerIndex);
     
-    // Then notify the backend
+    // Then notify the backend (on-chain)
     const result = await forfeitGame(roomPda);
+    
+    // Also update DB game_sessions so opponent's realtime subscription fires
+    if (effectivePlayerId) {
+      try {
+        await supabase.rpc("finish_game_session", {
+          p_room_pda: roomPda,
+          p_caller_wallet: effectivePlayerId,
+          p_winner_wallet: null,
+        });
+      } catch (err) {
+        console.warn("[Forfeit] finish_game_session failed:", err);
+      }
+    }
+    
     setIsForfeitLoading(false);
     
     if (result.ok) {
@@ -467,7 +481,7 @@ const LudoGame = () => {
     } else {
       toast({ title: t('common.error'), description: result.reason, variant: "destructive" });
     }
-  }, [roomPda, myPlayerIndex, eliminatePlayer, forfeitGame, navigate, t]);
+  }, [roomPda, myPlayerIndex, eliminatePlayer, forfeitGame, navigate, t, effectivePlayerId]);
 
   // Block gameplay until start roll is finalized (for ranked games, also need rules accepted)
   const canPlay = startRoll.isFinalized && (!isRankedGame || rankedGate.bothReady);
@@ -488,12 +502,31 @@ const LudoGame = () => {
 
   // ========== Leave/Forfeit handlers ==========
   
-  // UI-only leave handler - NO wallet calls
-  const handleUILeave = useCallback(() => {
-    console.log("[LeaveMatch] UI exit only");
+  // UI leave handler - broadcasts resignation + updates DB before navigating
+  const handleUILeave = useCallback(async () => {
+    console.log("[LeaveMatch] Broadcasting exit before navigating");
+    
+    // Best-effort WebRTC broadcast
+    if (myPlayerIndex >= 0) {
+      sendPlayerEliminatedRef.current?.(myPlayerIndex);
+    }
+    
+    // Update DB so opponent's realtime subscription detects the exit
+    if (roomPda && effectivePlayerId) {
+      try {
+        await supabase.rpc("finish_game_session", {
+          p_room_pda: roomPda,
+          p_caller_wallet: effectivePlayerId,
+          p_winner_wallet: null,
+        });
+      } catch (err) {
+        console.warn("[LeaveMatch] finish_game_session failed:", err);
+      }
+    }
+    
     navigate("/room-list");
     toast({ title: t("forfeit.leftRoom"), description: t("forfeit.returnedToLobby") });
-  }, [navigate, t]);
+  }, [navigate, t, roomPda, effectivePlayerId, myPlayerIndex]);
 
   // On-chain: Cancel room and get refund (creator only)
   const handleCancelRoom = useCallback(async () => {
@@ -518,7 +551,115 @@ const LudoGame = () => {
     await handleConfirmForfeit();
   }, [handleConfirmForfeit]);
 
-  // Turn timer for ranked games - calls server RPC for DB-authoritative timeout
+  // ========== Browser close / tab switch cleanup ==========
+  useEffect(() => {
+    if (!roomPda || !effectivePlayerId || gameOver) return;
+
+    const finishUrl = `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/rpc/finish_game_session`;
+    const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+
+    const sendBeacon = () => {
+      const body = JSON.stringify({
+        p_room_pda: roomPda,
+        p_caller_wallet: effectivePlayerId,
+        p_winner_wallet: null,
+      });
+      // sendBeacon is reliable on page unload
+      navigator.sendBeacon?.(
+        finishUrl,
+        new Blob([body], { type: "application/json" })
+      );
+      // Note: sendBeacon doesn't support custom headers, so we also try fetch
+    };
+
+    const handleBeforeUnload = () => {
+      console.log("[LeaveMatch] beforeunload - sending beacon");
+      sendBeacon();
+      // Also try fetch with keepalive as fallback (supports auth headers)
+      try {
+        fetch(finishUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "apikey": anonKey,
+            "Authorization": `Bearer ${anonKey}`,
+          },
+          body: JSON.stringify({
+            p_room_pda: roomPda,
+            p_caller_wallet: effectivePlayerId,
+            p_winner_wallet: null,
+          }),
+          keepalive: true,
+        });
+      } catch {}
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        console.log("[LeaveMatch] visibilitychange hidden - sending beacon");
+        handleBeforeUnload();
+      }
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [roomPda, effectivePlayerId, gameOver]);
+
+  // ========== Realtime disconnect detection ==========
+  // Subscribe to game_sessions for this room. When status_int changes to
+  // finished (3) or cancelled (5) while the game is still active locally,
+  // notify the user that the opponent left.
+  const opponentLeftHandledRef = useRef(false);
+  useEffect(() => {
+    if (!roomPda || gameOver) return;
+    opponentLeftHandledRef.current = false;
+
+    const channel = supabase
+      .channel(`ludo-disconnect-${roomPda}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "game_sessions",
+          filter: `room_pda=eq.${roomPda}`,
+        },
+        (payload) => {
+          const newRow = payload.new as any;
+          const oldRow = payload.old as any;
+
+          // Detect active → finished/cancelled while we haven't ended locally
+          if (
+            !opponentLeftHandledRef.current &&
+            oldRow?.status_int === 2 &&
+            (newRow?.status_int === 3 || newRow?.status_int === 5)
+          ) {
+            // Check if the winner is us, or if no winner (opponent just left)
+            const winnerIsMe = newRow?.winner_wallet && isSameWallet(newRow.winner_wallet, effectivePlayerId);
+            if (!winnerIsMe) {
+              opponentLeftHandledRef.current = true;
+              console.log("[RealtimeDisconnect] Opponent left the game");
+              toast({
+                title: "Opponent left",
+                description: "Your opponent has left the game.",
+                variant: "destructive",
+              });
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [roomPda, gameOver, effectivePlayerId]);
+
   const handleTurnTimeout = useCallback(async () => {
     if (gameOver || !effectivePlayerId || !roomPda || !isActuallyMyTurn) return;
     
