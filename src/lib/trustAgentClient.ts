@@ -12,6 +12,9 @@ export interface TrustAgentPayload {
   question: string;
   moveHistory?: any[];
   messages?: { role: string; content: string }[];
+  moveCount?: number;
+  gamePhase?: string;
+  gameResult?: string;
 }
 
 /**
