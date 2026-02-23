@@ -1,63 +1,123 @@
 
-# Fix: Free Games Requiring Wallet Connection
 
-## Problem
+# Audit: Free Games Anonymous Play -- Remaining Issues
 
-When an anonymous player (no wallet) joins a free game, all 5 game pages block them with a "Connect Wallet to Play" screen. Two bugs cause this:
+## Status: Partially Fixed, Several Critical Gaps Remain
 
-1. **Hard wallet gate in render**: Every game page (Ludo, Chess, Dominos, Backgammon, Checkers) has a check like `if (!walletConnected || !address) return <ConnectWallet />` that blocks the entire game UI for anonymous players.
+The wallet gate bypass and player-fetch logic were correctly added to all 5 game pages. However, many downstream uses of `address` throughout the game pages were NOT updated to fall back to `getAnonId()` for free rooms. This means anonymous players can now SEE the game board but will encounter broken behavior when trying to actually play.
 
-2. **Player fetch skipped**: The `useEffect` that loads room participants has `if (!address || !roomPda) return` as the first line, so when `address` is null (anonymous), the free room DB fetch at `roomPda.startsWith("free-")` is never reached. Players array stays empty.
+---
 
-## Root Cause
+## Issues Found
 
-The free matchmaking system (`QuickMatch.tsx`) correctly uses `getAnonId()` as the player identity when no wallet is connected. But the game pages still assume a wallet is always required.
+### 1. WebRTC Sync Uses Raw `address` (All Games)
 
-## Fix (5 files)
+`useWebRTCSync` internally calls `useWallet()` and uses `address` as `localAddress`. For anonymous players, `address` is null/empty, which means:
+- WebRTC connection never establishes (`localAddress` is empty)
+- `sendMove()`, `sendResign()`, `sendChat()` all fail silently
+- Move communication between players is completely broken
 
-### All game pages: LudoGame, ChessGame, DominosGame, BackgammonGame, CheckersGame
+**Fix:** Each game page should pass the effective player ID into WebRTC (or use Realtime-only mode for free rooms). The simplest fix is to make free rooms always use Realtime-only sync (which already works via Supabase channels without needing a wallet address as identity).
 
-For each file, two changes:
+### 2. Chess: Color/Turn Detection Uses `address` Directly
 
-**Change 1 - Skip wallet gate for free rooms:**
+In `ChessGame.tsx`, about 15 places use `isSameWallet(..., address)` for:
+- Determining `myColor` (line 455)
+- `isCreator` (line 487-488)
+- `opponentWallet` (line 496-497)
+- Turn override detection (line 517)
+- Win/loss detection (line 612)
+- Turn player mapping (line 664)
+- Resign forfeit wallet (via `useForfeit` line 1001: `myWallet: address || null`)
 
-Replace:
+When `address` is null, all of these evaluate incorrectly.
+
+### 3. Backgammon: On-Chain Fallback Uses `address` (line 416)
+
+After the free room fetch block, the on-chain fallback at line 416 does:
 ```typescript
-if (!walletConnected || !address) {
-  return <ConnectWalletScreen />;
-}
+const myIndex = realPlayers.findIndex(p => isSameWallet(p, address));
+```
+This is fine because the on-chain path is only reached for non-free rooms. However, there are many other places in BackgammonGame.tsx that use `address` directly for turn detection, move submission, etc. that would break for free room anonymous players.
+
+### 4. Checkers: Same Pattern as Chess (line 205)
+
+Uses `address` for seat/color assignment in the on-chain path. The free room path correctly uses `playerId`, but downstream turn detection, forfeit, and move submission still reference `address`.
+
+### 5. Dominos: Same Pattern
+
+Uses `address` in move submission callbacks, turn detection, and resign logic.
+
+### 6. Ludo: Best Implemented
+
+Ludo already has `effectivePlayerId = address || (isFreeRoom ? getAnonId() : null)` and uses it for `myPlayerIndex`. This is the correct pattern but may still have gaps in move submission and forfeit.
+
+### 7. `useForfeit` Gets `address || null` (All Games)
+
+All games pass `myWallet: address || null` to `useForfeit`. For anonymous players, this is null, so forfeit will fail with "Missing: wallet" error.
+
+### 8. `useStartRoll` Checks `isRealWallet()` (line 82)
+
+The hook skips session creation if players aren't "real wallets". Anonymous UUIDs will fail this check. However, for free rooms the session is already created by the `free-match` edge function, so this may be a non-issue if the hook is bypassed for free games.
+
+---
+
+## Fix Plan
+
+### A. Create a shared helper: `useEffectivePlayerId` or compute it inline
+
+Each game page needs a stable effective player ID:
+```typescript
+const effectivePlayerId = address || (isFreeRoom ? getAnonId() : null);
 ```
 
-With:
-```typescript
-const isFreeRoom = roomPda?.startsWith("free-") ?? false;
-if (!isFreeRoom && (!walletConnected || !address)) {
-  return <ConnectWalletScreen />;
-}
-```
+### B. Replace `address` with `effectivePlayerId` in all game pages
 
-**Change 2 - Allow anonymous player fetch for free rooms:**
+For each of the 5 game files, replace every downstream use of `address` that determines player identity with `effectivePlayerId`. Key locations:
 
-Replace:
-```typescript
-if (!address || !roomPda) return;
-```
+- `isSameWallet(x, address)` calls for turn/color/win detection
+- `useForfeit({ myWallet: address })` 
+- `opponentWallet` computation
+- `sendMove` wallet parameter
+- `recordPlayerMove` calls
+- Turn player mapping
 
-With logic that uses `getAnonId()` as the player identity for free rooms when no wallet is connected:
-```typescript
-const playerId = address || (roomPda?.startsWith("free-") ? getAnonId() : null);
-if (!playerId || !roomPda) return;
-```
+### C. Fix WebRTC for free rooms
 
-Then use `playerId` instead of `address` in the free room fetch block.
+Two options:
+1. **Simple**: Skip WebRTC entirely for free rooms and use Realtime-only (Supabase channels). Pass `effectivePlayerId` as the channel identity.
+2. **Complex**: Thread `effectivePlayerId` into `useWebRTCSync` as an override.
 
-**Change 3 - Use anon identity throughout the game page:**
+Option 1 is simpler and more reliable since free rooms are already DB-based.
 
-Where `address` is used to determine "my player" (e.g., `myPlayerIndex`, turn detection), substitute with `address || getAnonId()` when in a free room, so the game correctly identifies the anonymous player.
+### D. Update `useStartRoll` guard
 
-## Technical Details
+Add a bypass for free rooms so it doesn't try to validate "real wallets" or create sessions (the `free-match` edge function handles session creation).
 
-- `getAnonId()` from `src/lib/anonIdentity.ts` returns a persistent UUID from localStorage -- the same ID used during matchmaking
-- The `free-match` edge function already stores this anon ID as the participant, so the DB session will match
-- No database or edge function changes needed -- only the game page render guards and player fetch logic
-- The `RulesGate` component already bypasses for non-ranked games (`if (!isRanked) return children`), so no changes needed there
+### E. Update `useForfeit` for free rooms
+
+Pass `effectivePlayerId` instead of `address` for `myWallet`. The free-room forfeit path in `useForfeit` (line 186-195) already handles DB-only cleanup, so this should work with anon IDs.
+
+---
+
+## Priority Order
+
+1. **Chess + Ludo** (most tested games) -- fix all `address` references
+2. **Checkers + Backgammon + Dominos** -- same pattern
+3. **WebRTC bypass for free rooms** -- use Realtime-only
+4. **useStartRoll guard** -- skip for free rooms
+5. **useForfeit** -- pass effectivePlayerId
+
+---
+
+## Files to Modify
+
+| File | Changes |
+|------|---------|
+| `src/pages/ChessGame.tsx` | ~15 `address` references to `effectivePlayerId` |
+| `src/pages/BackgammonGame.tsx` | ~15+ `address` references |
+| `src/pages/CheckersGame.tsx` | ~10 `address` references |
+| `src/pages/DominosGame.tsx` | ~10 `address` references |
+| `src/pages/LudoGame.tsx` | Mostly done, verify remaining gaps |
+| `src/hooks/useWebRTCSync.ts` | Accept optional `overrideAddress` prop, or skip for free rooms at call site |
+
