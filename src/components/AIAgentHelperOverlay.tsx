@@ -16,6 +16,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { X, Send, Trash2, Share2, HelpCircle, Gamepad2, Wallet, Users, BookOpen, Sparkles } from "lucide-react";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { streamTrustAgent } from "@/lib/trustAgentClient";
 import { supabase } from "@/integrations/supabase/client";
 import { getSessionId } from "@/hooks/usePresenceHeartbeat";
@@ -202,6 +203,7 @@ export default function AIAgentHelperOverlay() {
   const location = useLocation();
   const { i18n } = useTranslation();
   const lang = i18n.language?.slice(0, 2) || "en";
+  const isMobile = useIsMobile();
 
   const isMultiplayer = isMultiplayerRoute(location.pathname);
   const isAIRoute = isAIGameRoute(location.pathname);
@@ -514,18 +516,28 @@ export default function AIAgentHelperOverlay() {
         </div>
       )}
 
-      {/* Panel — compact on AI routes, full sheet elsewhere */}
+      {/* Panel — compact on AI routes, popover on desktop, bottom sheet on mobile */}
       {sheetOpen && (
         <div
-          className={`fixed z-[10000] ${isAIRoute ? "bottom-0 left-0 right-0" : "inset-0 flex flex-col justify-end"}`}
-          onClick={() => !isAIRoute && setSheetOpen(false)}
+          className={`fixed z-[10000] ${
+            isAIRoute
+              ? "bottom-0 left-0 right-0"
+              : isMobile
+                ? "inset-0 flex flex-col justify-end"
+                : "bottom-4 right-4"
+          }`}
+          onClick={() => isMobile && !isAIRoute && setSheetOpen(false)}
         >
-          {/* Backdrop only on non-AI routes */}
-          {!isAIRoute && <div className="absolute inset-0 bg-black/50" />}
+          {/* Backdrop only on mobile non-AI routes */}
+          {!isAIRoute && isMobile && <div className="absolute inset-0 bg-black/50" />}
 
           <div
-            className={`relative bg-background border-t border-primary/30 flex flex-col animate-in slide-in-from-bottom duration-300 ${
-              isAIRoute ? "rounded-t-xl max-h-[40vh]" : "rounded-t-2xl max-h-[85vh]"
+            className={`relative bg-background flex flex-col animate-in slide-in-from-bottom duration-300 ${
+              isAIRoute
+                ? "rounded-t-xl max-h-[40vh] border-t border-primary/30"
+                : isMobile
+                  ? "rounded-t-2xl max-h-[85vh] border-t border-primary/30"
+                  : "w-[380px] max-h-[520px] rounded-xl border border-primary/30 shadow-2xl"
             }`}
             onClick={(e) => e.stopPropagation()}
           >
