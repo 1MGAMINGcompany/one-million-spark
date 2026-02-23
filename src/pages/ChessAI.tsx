@@ -11,6 +11,8 @@ import { useTranslation } from "react-i18next";
 import { useAIGameTracker } from "@/hooks/useAIGameTracker";
 import { createChessAI, type ChessAI as ChessAIType, type Difficulty } from "@/lib/chessEngine/localChessAI";
 import AIWinShareCard from "@/components/AIWinShareCard";
+import ProactiveGameTip from "@/components/ProactiveGameTip";
+import { useActiveAIGame } from "@/hooks/useActiveAIGame";
 
 // Helper to convert UCI move (e.g., "e2e4") to from/to squares
 const parseUCIMove = (uciMove: string): { from: Square; to: Square; promotion?: string } | null => {
@@ -99,6 +101,9 @@ const ChessAI = () => {
   const [animationsEnabled, setAnimationsEnabled] = useState(true);
   const [showShareCard, setShowShareCard] = useState(false);
   const [winDuration, setWinDuration] = useState(0);
+  
+  // Session continuity
+  const { clearActiveGame } = useActiveAIGame(gameOver);
   
   // Stockfish AI instance
   const aiRef = useRef<ChessAIType | null>(null);
@@ -388,6 +393,7 @@ const ChessAI = () => {
 
   return (
     <div className="min-h-screen bg-background relative overflow-hidden">
+      <ProactiveGameTip gameType="chess" tip="Tap a piece to see where it can move" />
       {/* Background with pyramid pattern */}
       <div className="absolute inset-0 bg-gradient-to-b from-midnight-light via-background to-background" />
       <div 
