@@ -1,54 +1,61 @@
 
-# Upgrade Share Result Card to Premium Quality
+
+# Reorganize Homepage CTA Layout & Update Button Labels
 
 ## Overview
-Redesign the ranked game share card (`ShareResultCard`) to be a luxurious, high-quality card that players will be proud to share. Also wire up the player's lifetime stats (total SOL won, total games won) so they actually appear on the card.
-
-## Current Issues
-- The card uses basic styling -- flat colors, simple layout
-- `totalGamesWon` and `totalSolWon` props exist but are never passed from `GameEndScreen`
-- No game-specific icon on the card
-- Missing the premium "1M Gaming" branding feel from the logo reference
+Restructure the homepage call-to-action buttons so "Play Free" is the most prominent top action, reorder the remaining buttons, and change "Enter Training" to "Play Free" on the AI lobby page.
 
 ## Changes
 
-### 1. GameEndScreen -- Fetch and pass player stats
-**File: `src/components/GameEndScreen.tsx`**
+### 1. Homepage CTA reorder (`src/pages/Home.tsx`, lines 115-151)
 
-- On mount, query the `player_profiles` table for the current player's wallet to get `wins` and `total_sol_won`
-- Pass these values as `totalGamesWon` and `totalSolWon` to `ShareResultCard`
+Replace the current button stack with the new hierarchy:
 
-### 2. ShareResultCard -- Premium redesign
-**File: `src/components/ShareResultCard.tsx`**
+**PRIMARY** (top, biggest, gold variant):
+- "Play Free" button linking to `/play-ai`
+- Subtext: "Practice first. No SOL required."
+- Uses `Bot` icon
 
-Visual upgrades:
-- Add the PyramidLogo component at the top with a floating/pulsing glow animation
-- Add golden gradient header bar with "1M GAMING" branding text
-- Corner accent marks (like the AI card) for a luxurious framed feel
-- Animated scan line at the top edge
-- Grid background pattern with subtle gold lines
-- Larger, bolder victory/loss text with gradient gold styling
-- Game-specific icon from GameIcons (Chess, Checkers, etc.)
-- Ankh dividers between sections
-- Stats displayed in premium bordered chips with gold accents
-- SOL amounts shown prominently with a Solana-style accent
-- "SKILL > LUCK" tagline with golden gradient
-- www.1mgaming.com watermark at the bottom
-- Better dark/light theme contrast
+**SECONDARY** (below, gold variant but slightly less prominent):
+- "Quick Match (Win SOL)" button linking to `/quick-match`
+- Subtext: "Play real opponents. Winner takes the SOL pool."
+- Uses `Zap` icon
 
-New customization toggles (keeping existing ones):
-- All existing toggles remain (wallet, full address, SOL amount, total games, total SOL, opponent, timestamp, dark theme)
-- Total Games Won and Total SOL Won toggles now default to ON (since data will be available)
+**TERTIARY** (side-by-side outline buttons, same as current):
+- "Create Room" linking to `/create-room`
+- "View Public Rooms" linking to `/room-list`
 
-Export improvements:
-- Card renders at 1080x1080 for crisp social media sharing
-- Keep all existing share buttons (X, WhatsApp, Email, Copy)
+### 2. PlayAILobby button text (`src/pages/PlayAILobby.tsx`, line 242)
 
-### 3. No database changes needed
-The `player_profiles` table already has all required fields (`wins`, `total_sol_won`).
+Change `{t("playAi.enterTraining")}` to `{t("playAi.playFree")}` (new i18n key).
 
-### Summary of files changed
+### 3. i18n updates (all 10 locale files)
+
+- Add `playAi.playFree` key (e.g. EN: "Play Free", ES: "Jugar Gratis", etc.)
+- Add `home.playFreeSub` key (EN: "Practice first. No SOL required.")
+- Add `home.quickMatchWinSol` key (EN: "Quick Match (Win SOL)")
+- Add `home.quickMatchWinSolSub` key (EN: "Play real opponents. Winner takes the SOL pool.")
+- Update `home.playAiFree` to "Play Free" (shorter label)
+
+### 4. FeaturedGameCard -- swap button order (`src/components/FeaturedGameCard.tsx`)
+
+Move the "Play vs AI Free" button above the "Play for SOL" button and update its label to "Play Free" to match the new hierarchy. The SOL button becomes secondary below it.
+
+## Files changed
+
 | File | Change |
 |------|--------|
-| `src/components/GameEndScreen.tsx` | Fetch player stats, pass to ShareResultCard |
-| `src/components/ShareResultCard.tsx` | Premium visual redesign with animations, icons, branding |
+| `src/pages/Home.tsx` | Reorder CTA buttons: Play Free on top, Quick Match second |
+| `src/pages/PlayAILobby.tsx` | Change button text from enterTraining to playFree |
+| `src/components/FeaturedGameCard.tsx` | Swap button order, Play Free on top |
+| `src/i18n/locales/en.json` | Add new keys, update labels |
+| `src/i18n/locales/es.json` | Add translated keys |
+| `src/i18n/locales/fr.json` | Add translated keys |
+| `src/i18n/locales/de.json` | Add translated keys |
+| `src/i18n/locales/pt.json` | Add translated keys |
+| `src/i18n/locales/it.json` | Add translated keys |
+| `src/i18n/locales/ar.json` | Add translated keys |
+| `src/i18n/locales/hi.json` | Add translated keys |
+| `src/i18n/locales/ja.json` | Add translated keys |
+| `src/i18n/locales/zh.json` | Add translated keys |
+
