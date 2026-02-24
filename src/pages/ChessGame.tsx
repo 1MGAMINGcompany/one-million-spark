@@ -364,7 +364,8 @@ const ChessGame = () => {
         
         if (moveData.missedCount >= 3) {
           // Opponent forfeited by missing 3 turns
-          setGameOver(true);
+           setGameOver(true);
+           showEndScreenImmediately();
           setWinnerWallet(effectivePlayerId || null);
           setGameStatus(t('gameSession.opponentForfeited'));
           play('chess_win');
@@ -506,6 +507,18 @@ const ChessGame = () => {
 
   // Use startRoll.myColor as source of truth when finalized
   const effectiveColor = startRoll.isFinalized ? startRoll.myColor : myColor;
+
+  // Ref so callbacks always read the latest effectiveColor
+  const effectiveColorRef = useRef(effectiveColor);
+  useEffect(() => { effectiveColorRef.current = effectiveColor; }, [effectiveColor]);
+
+  // Victory announcement state (3-second overlay before GameEndScreen)
+  const [victoryAnnouncement, setVictoryAnnouncement] = useState<string | null>(null);
+  const [showEndScreen, setShowEndScreen] = useState(false);
+  const victoryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Cleanup victory timeout on unmount
+  useEffect(() => () => { if (victoryTimeoutRef.current) clearTimeout(victoryTimeoutRef.current); }, []);
   
   // Turn override for skip functionality (when opponent times out, we get another turn)
   const [turnOverrideWallet, setTurnOverrideWallet] = useState<string | null>(null);
@@ -560,7 +573,8 @@ const ChessGame = () => {
           });
           
           forfeitFnRef.current?.();
-          setGameOver(true);
+           setGameOver(true);
+           showEndScreenImmediately();
           setWinnerWallet(result.winnerWallet || null);
           setGameStatus(myColor === 'w' ? t('game.black') + " wins" : t('game.white') + " wins");
           play('chess_lose');
@@ -608,7 +622,8 @@ const ChessGame = () => {
         const dbStatus = data?.session?.status;
         const dbWinner = data?.session?.winner_wallet;
         if (dbStatus === "finished" && !gameOver) {
-          setGameOver(true);
+           setGameOver(true);
+           showEndScreenImmediately();
           setWinnerWallet(dbWinner || null);
           const iWin = isSameWallet(dbWinner, effectivePlayerId);
           setGameStatus(iWin ? t("gameMultiplayer.checkmateYouWin") : t("gameMultiplayer.checkmateYouLose"));
@@ -842,19 +857,37 @@ const ChessGame = () => {
   useEffect(() => { chatRef.current = chat; }, [chat]);
   useEffect(() => { recordPlayerMoveRef.current = recordPlayerMove; }, [recordPlayerMove]);
 
+  // Helper to trigger victory announcement (3s overlay then end screen)
+  const triggerVictoryAnnouncement = useCallback((message: string) => {
+    setVictoryAnnouncement(message);
+    if (victoryTimeoutRef.current) clearTimeout(victoryTimeoutRef.current);
+    victoryTimeoutRef.current = setTimeout(() => {
+      setVictoryAnnouncement(null);
+      setShowEndScreen(true);
+    }, 3000);
+  }, []);
+
+  // Helper to show end screen immediately (draws, forfeits, resigns)
+  const showEndScreenImmediately = useCallback(() => {
+    setShowEndScreen(true);
+  }, []);
+
   // Inline checkGameOver logic for stable callback (avoids circular dependency)
   const checkGameOverInline = useCallback((currentGame: Chess) => {
     if (currentGame.isCheckmate()) {
-      const isPlayerWin = currentGame.turn() !== myColor;
+      const myCol = effectiveColorRef.current;
+      const isPlayerWin = currentGame.turn() !== myCol;
       const winner = isPlayerWin ? t("gameMultiplayer.checkmateYouWin") : t("gameMultiplayer.checkmateYouLose");
       setGameStatus(winner);
       setGameOver(true);
-      // Record winner wallet for DB persistence and settlement
       const winnerAddr = isPlayerWin
         ? effectivePlayerId
         : getOpponentWallet(roomPlayersRef.current, effectivePlayerId);
       setWinnerWallet(winnerAddr || null);
       play(isPlayerWin ? 'chess_win' : 'chess_lose');
+      // Victory announcement: which color won
+      const winningColor = currentGame.turn() === 'w' ? 'Black' : 'White';
+      triggerVictoryAnnouncement(`${winningColor} won by checkmate!`);
       return true;
     }
     // Check specific draw reasons BEFORE generic isDraw()
@@ -862,31 +895,35 @@ const ChessGame = () => {
       setGameStatus(t("game.drawStalemate", "Draw - Stalemate"));
       setWinnerWallet("draw");
       setGameOver(true);
+      showEndScreenImmediately();
       return true;
     }
     if (currentGame.isThreefoldRepetition()) {
       setGameStatus(t("game.drawThreefold", "Draw - Threefold Repetition"));
       setWinnerWallet("draw");
       setGameOver(true);
+      showEndScreenImmediately();
       return true;
     }
     if (currentGame.isInsufficientMaterial()) {
       setGameStatus(t("game.drawInsufficientMaterial", "Draw - Insufficient Material"));
       setWinnerWallet("draw");
       setGameOver(true);
+      showEndScreenImmediately();
       return true;
     }
     if (currentGame.isDraw()) {
       setGameStatus(t("game.draw50Move", "Draw - 50-Move Rule"));
       setWinnerWallet("draw");
       setGameOver(true);
+      showEndScreenImmediately();
       return true;
     }
     if (currentGame.isCheck()) {
       play('chess_check');
     }
     return false;
-  }, [myColor, play, t, effectivePlayerId]);
+  }, [play, t, effectivePlayerId, triggerVictoryAnnouncement, showEndScreenImmediately]);
 
   const handleWebRTCMessage = useCallback((message: GameMessage) => {
     console.log("[ChessGame] Received message:", message.type);
@@ -945,7 +982,8 @@ const ChessGame = () => {
       // Opponent resigned - I WIN - store MY wallet as winner
       setWinnerWallet(effectivePlayerId || null);
       setGameStatus(t("gameMultiplayer.opponentResignedWin"));
-      setGameOver(true);
+       setGameOver(true);
+       showEndScreenImmediately();
       play('chess_win');
       chatRef.current.addSystemMessage(t("gameMultiplayer.opponentResigned"));
       toast({
@@ -1098,28 +1136,39 @@ const ChessGame = () => {
 
   const checkGameOver = useCallback((currentGame: Chess) => {
     if (currentGame.isCheckmate()) {
-      const isPlayerWin = currentGame.turn() !== myColor;
+      const myCol = effectiveColorRef.current;
+      const isPlayerWin = currentGame.turn() !== myCol;
       const winner = isPlayerWin ? t("gameMultiplayer.checkmateYouWin") : t("gameMultiplayer.checkmateYouLose");
       setGameStatus(winner);
       setGameOver(true);
+      const winnerAddr = isPlayerWin
+        ? effectivePlayerId
+        : getOpponentWallet(roomPlayersRef.current, effectivePlayerId);
+      setWinnerWallet(winnerAddr || null);
       play(isPlayerWin ? 'chess_win' : 'chess_lose');
+      const winningColor = currentGame.turn() === 'w' ? 'Black' : 'White';
+      triggerVictoryAnnouncement(`${winningColor} won by checkmate!`);
       return true;
     }
     if (currentGame.isStalemate()) {
       setGameStatus(t("gameMultiplayer.drawStalemate"));
+      setWinnerWallet("draw");
       setGameOver(true);
+      showEndScreenImmediately();
       return true;
     }
     if (currentGame.isDraw()) {
       setGameStatus(t("game.draw"));
+      setWinnerWallet("draw");
       setGameOver(true);
+      showEndScreenImmediately();
       return true;
     }
     if (currentGame.isCheck()) {
       play('chess_check');
     }
     return false;
-  }, [myColor, play]);
+  }, [play, t, effectivePlayerId, triggerVictoryAnnouncement, showEndScreenImmediately]);
 
   const handleMove = useCallback((from: Square, to: Square): boolean => {
     if (gameOver || !isMyTurn) return false;
@@ -1194,7 +1243,8 @@ const ChessGame = () => {
     const opponentWalletAddr = getOpponentWallet(roomPlayers, effectivePlayerId);
     setWinnerWallet(opponentWalletAddr);
     setGameStatus(t("gameMultiplayer.youResignedLose"));
-    setGameOver(true);
+     setGameOver(true);
+     showEndScreenImmediately();
     play('chess_lose');
     
     // 3. CRITICAL: Trigger on-chain settlement via edge function
@@ -1447,8 +1497,22 @@ const ChessGame = () => {
       <GameChatPanel chat={chat} />
 
 
+      {/* Victory Announcement Overlay (3 seconds before end screen) */}
+      {victoryAnnouncement && (
+        <div className="fixed inset-0 bg-background/70 backdrop-blur-sm z-50 flex items-center justify-center">
+          <div
+            className="text-center animate-in zoom-in-75 duration-500"
+          >
+            <p className="text-3xl md:text-5xl font-bold text-primary drop-shadow-[0_0_24px_hsl(45_93%_54%_/_0.6)]"
+               style={{ fontFamily: "'Cinzel', serif" }}>
+              {victoryAnnouncement}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Game End Screen */}
-      {gameOver && (
+      {showEndScreen && (
         <GameEndScreen
           gameType="Chess"
           winner={winnerAddress}
