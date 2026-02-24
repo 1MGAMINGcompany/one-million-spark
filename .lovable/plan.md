@@ -1,39 +1,62 @@
 
 
-# Fix Chess Ranked Win/Loss Detection + Victory Announcement
+# Fix Similar Issues in Checkers Ranked Game
 
-## Bug Root Cause
+## Analysis of All Games
 
-Both `checkGameOver` (line 1101) and `checkGameOverInline` (line 848) determine win/loss using `myColor`, but the actual source of truth is `effectiveColor` (derived from `startRoll.myColor`). Since creator always starts now (no dice roll), `myColor` can be stale -- causing both players to see "lost."
+After reviewing all ranked game files, here's the risk assessment:
 
-Additionally, `checkGameOver` never calls `setWinnerWallet(...)`, so the fallback `winnerAddress` logic (line 737-746) tries string-matching on `gameStatus`, which is fragile.
+| Game | Win Detection | myColor Risk | Missing winnerWallet | Needs Fix? |
+|------|--------------|-------------|---------------------|------------|
+| Chess | Fixed in previous change | Fixed | Fixed | Done |
+| Checkers | `result === myColor` after checkGameOver | YES - same stale closure risk | YES - not set on normal win | YES |
+| Backgammon | Centralized DB Outcome Resolver | No - uses DB as source of truth | No - resolver sets it | No |
+| Dominos | player1/player2 + DB polling | Low - uses amIPlayer1 boolean | Handled via winner state | No |
+| Ludo | PlayerColor index-based | Low - uses myPlayerIndex | Handled via engine | No |
 
-## Changes (single file: `src/pages/ChessGame.tsx`)
+**Only Checkers has the same bugs as Chess.** Backgammon already uses a robust DB-based outcome resolver. Dominos and Ludo use different patterns that don't suffer from stale `myColor`.
 
-### Fix 1: Use effectiveColor in both checkGameOver functions
+## Changes (single file: `src/pages/CheckersGame.tsx`)
 
-- Add `effectiveColorRef` (a ref tracking `effectiveColor`) so callbacks always have the current value
-- Update `checkGameOverInline` (line 848): replace `myColor` with `effectiveColorRef.current`
-- Update `checkGameOver` (line 1101): replace `myColor` with `effectiveColorRef.current`
+### Fix 1: Use a ref for myColor in win detection
 
-### Fix 2: Set winnerWallet in checkGameOver
+The `checkGameOver` function itself is fine (returns "gold" or "obsidian" objectively), but the comparison `result === myColor` at lines 1109, 1165, and 924 can use a stale `myColor`. A `myColorRef` already exists (line 148) and is kept in sync -- but the inline handler at lines 1109 and 1165 uses `myColor` directly instead of `myColorRef.current`.
 
-- Add `setWinnerWallet(winnerAddr)` in `checkGameOver` (the same logic already in `checkGameOverInline`)
-- Add `setWinnerWallet("draw")` for draw/stalemate cases in `checkGameOver`
+- Line 1109: Change `result === myColor` to `result === myColorRef.current`
+- Line 1165: Change `result === myColor` to `result === myColorRef.current`
 
-### Fix 3: 3-second victory announcement overlay
+### Fix 2: Set winnerWallet on normal game-over
 
-- Add two states: `victoryAnnouncement` (string or null) and `showEndScreen` (boolean)
-- When checkmate is detected (in both checkGameOver functions), set `victoryAnnouncement` to "White won by checkmate!" or "Black won by checkmate!" based on which side delivered mate
-- Start a 3-second timeout that clears the announcement and sets `showEndScreen = true`
-- Render a centered golden overlay with the announcement text during those 3 seconds
-- Gate the `GameEndScreen` on `showEndScreen` instead of `gameOver`
-- For draws/stalemates/forfeits, show end screen immediately (no delay)
+Lines 1107-1109 and 1162-1165 detect game over but never call `setWinnerWallet(...)`. This means the `winnerAddress` memo (line 643) falls back to the `gameOver === myColor` path, which can be wrong if `myColor` is stale.
 
-### Victory Announcement UI
+After `setGameOver(result)` at lines 1108 and 1164, add:
+```
+const winAddr = result === myColorRef.current
+  ? effectivePlayerId
+  : getOpponentWallet(roomPlayersRef.current, effectivePlayerId);
+setWinnerWallet(winAddr || null);
+```
 
-A fixed overlay (z-50) with semi-transparent dark backdrop showing:
-- Large golden text: "White won by checkmate!" or "Black won by checkmate!"
-- Subtle scale-in animation
-- Auto-dismisses after 3 seconds, then GameEndScreen appears
+Same fix for the WebRTC handler at line 922-925 (already uses `myColorRef` but doesn't set `winnerWallet`).
+
+### Fix 3: Add victory announcement (matching Chess)
+
+Same 3-second overlay pattern as Chess:
+- Add `victoryAnnouncement` and `showEndScreen` states
+- On game over (not draw/forfeit), show "Gold wins!" or "Obsidian wins!" for 3 seconds
+- Gate `GameEndScreen` on `showEndScreen` instead of `gameOver`
+- Draws/resigns show end screen immediately
+
+### Summary
+
+| Location | Change |
+|----------|--------|
+| Lines 1108-1109 | Add `setWinnerWallet`, use `myColorRef.current` |
+| Lines 1163-1165 | Add `setWinnerWallet`, use `myColorRef.current` |
+| Lines 922-925 | Add `setWinnerWallet` for WebRTC received game-over |
+| New states | `victoryAnnouncement`, `showEndScreen` |
+| GameEndScreen gate | Change from `gameOver` to `showEndScreen` |
+| New JSX | Victory announcement overlay (golden text, 3s auto-dismiss) |
+
+No changes needed for Backgammon, Dominos, or Ludo.
 
