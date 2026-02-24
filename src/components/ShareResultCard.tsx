@@ -1,12 +1,13 @@
 import { useState, useRef, useCallback } from "react";
 import {
-  Gamepad2,
   Download,
   Copy,
   Check,
   Mail,
   MessageCircle,
   X,
+  Trophy,
+  Swords,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -31,6 +32,34 @@ function formatTimestamp(ts: string | null): string {
   return new Date(ts).toLocaleDateString(undefined, {
     month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit",
   });
+}
+
+/** Game-specific icon for the card */
+function GameIcon({ gameType, size = 28 }: { gameType: string; size?: number }) {
+  const gt = (gameType || "").toLowerCase();
+  const style = { width: size, height: size };
+  
+  if (gt.includes("chess")) return <span style={style} className="text-2xl leading-none flex items-center justify-center">♚</span>;
+  if (gt.includes("checker")) return <span style={style} className="text-2xl leading-none flex items-center justify-center">⛀</span>;
+  if (gt.includes("backgammon")) return <span style={style} className="text-2xl leading-none flex items-center justify-center">🎲</span>;
+  if (gt.includes("domino")) return <span style={style} className="text-2xl leading-none flex items-center justify-center">🁣</span>;
+  if (gt.includes("ludo")) return <span style={style} className="text-2xl leading-none flex items-center justify-center">🎯</span>;
+  return <Swords style={style} />;
+}
+
+/** Ankh-style divider */
+function AnkhDivider({ dark }: { dark: boolean }) {
+  return (
+    <div className="flex items-center gap-3 w-full">
+      <div className="flex-1 h-px" style={{ background: dark ? "hsl(45 50% 25%)" : "hsl(45 40% 70%)" }} />
+      <span style={{ 
+        color: dark ? "hsl(45 60% 45%)" : "hsl(35 70% 40%)", 
+        fontSize: 14,
+        lineHeight: 1,
+      }}>☥</span>
+      <div className="flex-1 h-px" style={{ background: dark ? "hsl(45 50% 25%)" : "hsl(45 40% 70%)" }} />
+    </div>
+  );
 }
 
 export interface ShareResultCardProps {
@@ -62,8 +91,8 @@ export function ShareResultCard({
   const [showFullAddress, setShowFullAddress] = useState(false);
   const hasSolStake = (solWonLamports || 0) > 0 || (solLostLamports || 0) > 0;
   const [showSol, setShowSol] = useState(true);
-  const [showTotalGames, setShowTotalGames] = useState(false);
-  const [showTotalSol, setShowTotalSol] = useState(false);
+  const [showTotalGames, setShowTotalGames] = useState(true);
+  const [showTotalSol, setShowTotalSol] = useState(true);
   const [showOpponent, setShowOpponent] = useState(false);
   const [showTimestamp, setShowTimestamp] = useState(true);
   const [darkTheme, setDarkTheme] = useState(true);
@@ -116,15 +145,18 @@ export function ShareResultCard({
 
   if (!open) return null;
 
-  const bg = darkTheme ? "bg-[hsl(222,47%,6%)]" : "bg-white";
-  const fg = darkTheme ? "text-[hsl(45,29%,97%)]" : "text-[hsl(222,47%,12%)]";
-  const mutedFg = darkTheme ? "text-[hsl(45,15%,65%)]" : "text-[hsl(222,20%,50%)]";
-  const cardBg = darkTheme
-    ? "bg-[hsl(222,40%,10%)] border-[hsl(45,50%,25%)]"
-    : "bg-[hsl(0,0%,96%)] border-[hsl(45,50%,60%)]";
-  const statBg = darkTheme
-    ? "bg-[hsl(222,30%,14%)] border-[hsl(45,50%,20%)]"
-    : "bg-[hsl(0,0%,93%)] border-[hsl(45,40%,70%)]";
+  // Theme colors
+  const bgColor = darkTheme ? "hsl(222 47% 6%)" : "hsl(0 0% 100%)";
+  const cardBgColor = darkTheme ? "hsl(222 40% 8%)" : "hsl(0 0% 97%)";
+  const borderColor = darkTheme ? "hsl(45 50% 20%)" : "hsl(45 40% 65%)";
+  const fgColor = darkTheme ? "hsl(45 29% 97%)" : "hsl(222 47% 12%)";
+  const mutedColor = darkTheme ? "hsl(45 15% 55%)" : "hsl(222 20% 50%)";
+  const statBgColor = darkTheme ? "hsl(222 30% 12%)" : "hsl(40 30% 94%)";
+  const statBorderColor = darkTheme ? "hsl(45 40% 18%)" : "hsl(45 35% 72%)";
+  const gridLineColor = darkTheme ? "hsl(45 30% 12%)" : "hsl(45 20% 88%)";
+  const accentGold = isWinner
+    ? "linear-gradient(135deg, #FCE68A 0%, #FACC15 50%, #AB8215 100%)"
+    : darkTheme ? "linear-gradient(135deg, #94a3b8, #64748b)" : "linear-gradient(135deg, #334155, #475569)";
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-background/95 backdrop-blur-sm p-4 overflow-auto">
@@ -139,107 +171,207 @@ export function ShareResultCard({
           <X className="h-5 w-5" />
         </button>
 
-        {/* ═══ SHARE CARD (capturable) ═══ */}
+        {/* ═══ PREMIUM SHARE CARD (capturable at 1080x1080) ═══ */}
         <div
           ref={cardRef}
-          className={`rounded-2xl border overflow-hidden ${cardBg} transition-colors duration-300`}
+          className="rounded-2xl overflow-hidden relative"
           style={{
+            background: cardBgColor,
+            border: `1.5px solid ${borderColor}`,
             boxShadow: isWinner
-              ? "0 0 40px hsl(45 93% 54% / 0.2), 0 8px 30px -4px hsl(45 93% 54% / 0.35)"
-              : "0 4px 20px -4px hsl(222 47% 0% / 0.5)",
+              ? "0 0 60px hsl(45 93% 54% / 0.15), 0 0 120px hsl(45 93% 54% / 0.05), 0 8px 30px -4px hsl(45 93% 54% / 0.35)"
+              : "0 4px 30px -4px hsl(222 47% 0% / 0.6)",
           }}
         >
-          {/* Gold accent bar */}
+          {/* Grid background pattern */}
+          <div className="absolute inset-0 pointer-events-none" style={{
+            backgroundImage: `linear-gradient(${gridLineColor} 1px, transparent 1px), linear-gradient(90deg, ${gridLineColor} 1px, transparent 1px)`,
+            backgroundSize: "40px 40px",
+            opacity: 0.4,
+          }} />
+
+          {/* Animated scan line */}
+          <div className="absolute top-0 left-0 right-0 h-px overflow-hidden">
+            <div 
+              className="h-full animate-shimmer"
+              style={{
+                background: "linear-gradient(90deg, transparent, hsl(45 93% 54% / 0.6), transparent)",
+                backgroundSize: "200% 100%",
+              }}
+            />
+          </div>
+
+          {/* Corner accent marks */}
+          {[
+            { top: 8, left: 8 },
+            { top: 8, right: 8 },
+            { bottom: 8, left: 8 },
+            { bottom: 8, right: 8 },
+          ].map((pos, i) => (
+            <div key={i} className="absolute w-4 h-4 pointer-events-none" style={{
+              ...pos as any,
+              borderTop: (pos.top !== undefined) ? `1.5px solid hsl(45 60% 45%)` : undefined,
+              borderBottom: (pos.bottom !== undefined) ? `1.5px solid hsl(45 60% 45%)` : undefined,
+              borderLeft: (pos.left !== undefined) ? `1.5px solid hsl(45 60% 45%)` : undefined,
+              borderRight: (pos.right !== undefined) ? `1.5px solid hsl(45 60% 45%)` : undefined,
+            }} />
+          ))}
+
+          {/* Gold accent bar at top */}
           <div
-            className="h-1.5 w-full"
+            className="h-1 w-full relative z-10"
             style={{
               background: isWinner
-                ? "linear-gradient(90deg, hsl(45 93% 54%), hsl(35 80% 50%), hsl(45 90% 65%))"
-                : "linear-gradient(90deg, hsl(222 30% 30%), hsl(222 30% 20%))",
+                ? "linear-gradient(90deg, hsl(35 80% 35%), hsl(45 93% 54%), hsl(45 90% 65%), hsl(45 93% 54%), hsl(35 80% 35%))"
+                : "linear-gradient(90deg, hsl(222 30% 20%), hsl(222 30% 35%), hsl(222 30% 20%))",
             }}
           />
 
-          <div className="flex flex-col items-center px-6 py-8 space-y-5">
-            <img src={pyramidLogo} alt="1M Gaming" className="w-16 h-16 object-contain" />
-
-            <div className="text-center space-y-1">
-              <h2
-                className="text-3xl font-display font-bold tracking-wider"
-                style={{
-                  background: isWinner
-                    ? "linear-gradient(135deg, #FCE68A 0%, #FACC15 50%, #AB8215 100%)"
-                    : darkTheme ? "linear-gradient(135deg, #94a3b8, #64748b)" : "linear-gradient(135deg, #334155, #475569)",
-                  WebkitBackgroundClip: "text",
-                  WebkitTextFillColor: "transparent",
-                  backgroundClip: "text",
-                }}
-              >
-                {isWinner ? t('shareCard.victory') : t('shareCard.goodGame')}
-              </h2>
-              <p className={`text-xs tracking-widest uppercase ${mutedFg}`}>{t('shareCard.matchComplete')}</p>
+          <div className="flex flex-col items-center px-8 py-8 space-y-5 relative z-10">
+            {/* Pyramid logo with glow */}
+            <div className="relative">
+              <div className="absolute inset-0 rounded-full animate-pulse-gold" style={{
+                background: "radial-gradient(circle, hsl(45 93% 54% / 0.3) 0%, transparent 70%)",
+                filter: "blur(12px)",
+                transform: "scale(1.8)",
+              }} />
+              <img src={pyramidLogo} alt="1M Gaming" className="w-16 h-16 object-contain relative z-10" />
             </div>
 
-            <span className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1 text-xs font-bold tracking-widest ${
-              darkTheme ? "bg-primary/20 border border-primary/40 text-primary" : "bg-[hsl(45,80%,90%)] border border-[hsl(45,60%,60%)] text-[hsl(35,80%,30%)]"
-            }`}>
-              <Gamepad2 className="h-3.5 w-3.5" />
-              {gameLabel.toUpperCase()}
-            </span>
+            {/* 1M GAMING branding */}
+            <h3
+              className="text-sm font-display font-bold tracking-[0.3em] uppercase"
+              style={{
+                background: "linear-gradient(135deg, #FCE68A 0%, #FACC15 50%, #AB8215 100%)",
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+                backgroundClip: "text",
+              }}
+            >
+              1M GAMING
+            </h3>
 
-            {/* Stats */}
-            <div className="grid grid-cols-2 gap-3 w-full">
-              <div className={`flex flex-col items-center rounded-xl border p-3 ${statBg}`}>
-                <span className={`text-[10px] uppercase tracking-wider ${mutedFg}`}>{t('shareCard.result')}</span>
-                <span className={`text-lg font-bold mt-1 ${isWinner ? "text-primary" : "text-destructive"}`}>
-                  {isWinner ? t('shareCard.win') : t('shareCard.loss')}
-                </span>
+            <AnkhDivider dark={darkTheme} />
+
+            {/* Victory / Loss text */}
+            <div className="text-center space-y-2">
+              <div className="flex items-center justify-center gap-3">
+                {isWinner && <Trophy className="h-7 w-7" style={{ color: "hsl(45 93% 54%)" }} />}
+                <h2
+                  className="text-4xl font-display font-bold tracking-wider"
+                  style={{
+                    background: accentGold,
+                    WebkitBackgroundClip: "text",
+                    WebkitTextFillColor: "transparent",
+                    backgroundClip: "text",
+                    filter: isWinner ? "drop-shadow(0 0 8px hsl(45 93% 54% / 0.3))" : undefined,
+                  }}
+                >
+                  {isWinner ? t('shareCard.victory') : t('shareCard.goodGame')}
+                </h2>
+                {isWinner && <Trophy className="h-7 w-7" style={{ color: "hsl(45 93% 54%)" }} />}
               </div>
+              <p style={{ color: mutedColor, fontSize: 11, letterSpacing: "0.15em" }} className="uppercase">
+                {t('shareCard.matchComplete')}
+              </p>
+            </div>
+
+            {/* Game badge with icon */}
+            <div className="inline-flex items-center gap-2 rounded-full px-5 py-1.5"
+              style={{
+                background: darkTheme ? "hsl(222 30% 14%)" : "hsl(45 40% 93%)",
+                border: `1px solid ${statBorderColor}`,
+              }}
+            >
+              <GameIcon gameType={gameType} size={18} />
+              <span style={{ color: "hsl(45 93% 54%)", fontSize: 11, fontWeight: 700, letterSpacing: "0.2em" }}>
+                {gameLabel.toUpperCase()}
+              </span>
+            </div>
+
+            <AnkhDivider dark={darkTheme} />
+
+            {/* Stats grid */}
+            <div className="grid grid-cols-2 gap-3 w-full">
+              {/* Result */}
+              <StatChip
+                label={t('shareCard.result')}
+                value={isWinner ? t('shareCard.win') : t('shareCard.loss')}
+                valueColor={isWinner ? "hsl(45 93% 54%)" : "hsl(0 70% 55%)"}
+                bg={statBgColor} border={statBorderColor} muted={mutedColor}
+                highlight={isWinner}
+              />
+              {/* SOL this game */}
               {showSol && hasSolStake && (
-                <div className={`flex flex-col items-center rounded-xl border p-3 ${statBg}`}>
-                  <span className={`text-[10px] uppercase tracking-wider ${mutedFg}`}>{isWinner ? t('shareCard.solWon') : t('shareCard.solStaked')}</span>
-                  <span className={`text-lg font-bold mt-1 ${isWinner ? "text-primary" : mutedFg}`}>{solAmount}</span>
-                </div>
+                <StatChip
+                  label={isWinner ? t('shareCard.solWon') : t('shareCard.solStaked')}
+                  value={`◎ ${solAmount}`}
+                  valueColor={isWinner ? "hsl(45 93% 54%)" : mutedColor}
+                  bg={statBgColor} border={statBorderColor} muted={mutedColor}
+                  highlight={isWinner}
+                />
               )}
+              {/* Total games won */}
               {showTotalGames && totalGamesWon != null && (
-                <div className={`flex flex-col items-center rounded-xl border p-3 ${statBg}`}>
-                  <span className={`text-[10px] uppercase tracking-wider ${mutedFg}`}>{t('shareCard.gamesWon')}</span>
-                  <span className={`text-lg font-bold mt-1 ${fg}`}>{totalGamesWon}</span>
-                </div>
+                <StatChip
+                  label={t('shareCard.gamesWon')}
+                  value={String(totalGamesWon)}
+                  valueColor={fgColor}
+                  bg={statBgColor} border={statBorderColor} muted={mutedColor}
+                />
               )}
+              {/* Total SOL won lifetime */}
               {showTotalSol && totalSolWon != null && (
-                <div className={`flex flex-col items-center rounded-xl border p-3 ${statBg}`}>
-                  <span className={`text-[10px] uppercase tracking-wider ${mutedFg}`}>{t('shareCard.totalSolWon')}</span>
-                  <span className="text-lg font-bold mt-1 text-primary">{totalSolWon.toFixed(3)}</span>
-                </div>
+                <StatChip
+                  label={t('shareCard.totalSolWon')}
+                  value={`◎ ${totalSolWon.toFixed(3)}`}
+                  valueColor="hsl(45 93% 54%)"
+                  bg={statBgColor} border={statBorderColor} muted={mutedColor}
+                  highlight
+                />
               )}
             </div>
 
+            {/* Wallet address */}
             {showWallet && myWallet && (
-              <p className={`font-mono text-sm ${mutedFg}`}>
+              <p style={{ color: mutedColor, fontFamily: "monospace", fontSize: 13 }}>
                 {showFullAddress ? myWallet : shortenWallet(myWallet)}
               </p>
             )}
 
+            {/* Opponent */}
             {showOpponent && opponentWallet && (
-              <p className={`text-xs ${mutedFg}`}>{t('shareCard.vs')} {shortenWallet(opponentWallet)}</p>
+              <p style={{ color: mutedColor, fontSize: 11 }}>
+                {t('shareCard.vs')} {shortenWallet(opponentWallet)}
+              </p>
             )}
 
-            <div className="w-full pt-3 border-t border-border/30 flex items-center justify-between">
+            <AnkhDivider dark={darkTheme} />
+
+            {/* Footer */}
+            <div className="w-full flex items-center justify-between">
               {showTimestamp && finishedAt && (
-                <span className={`text-[10px] ${mutedFg}`}>{formatTimestamp(finishedAt)}</span>
+                <span style={{ color: mutedColor, fontSize: 10 }}>{formatTimestamp(finishedAt)}</span>
               )}
               <span
-                className="text-[10px] font-bold tracking-widest ml-auto"
+                className="ml-auto font-display font-bold"
                 style={{
-                  background: "linear-gradient(135deg, #FCE68A, #FACC15)",
+                  background: "linear-gradient(135deg, #FCE68A, #FACC15, #AB8215)",
                   WebkitBackgroundClip: "text",
                   WebkitTextFillColor: "transparent",
                   backgroundClip: "text",
+                  fontSize: 11,
+                  letterSpacing: "0.15em",
                 }}
               >
                 SKILL &gt; LUCK
               </span>
             </div>
+
+            {/* Website watermark */}
+            <p style={{ color: darkTheme ? "hsl(45 20% 30%)" : "hsl(45 20% 75%)", fontSize: 9, letterSpacing: "0.2em" }}>
+              www.1mgaming.com
+            </p>
           </div>
         </div>
 
@@ -299,6 +431,34 @@ export function ShareResultCard({
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Premium stat chip */
+function StatChip({ label, value, valueColor, bg, border, muted, highlight }: {
+  label: string; value: string; valueColor: string; bg: string; border: string; muted: string; highlight?: boolean;
+}) {
+  return (
+    <div
+      className="flex flex-col items-center rounded-xl p-3 relative overflow-hidden"
+      style={{
+        background: bg,
+        border: `1px solid ${border}`,
+        boxShadow: highlight ? "0 0 12px hsl(45 93% 54% / 0.08)" : undefined,
+      }}
+    >
+      {highlight && (
+        <div className="absolute inset-0 pointer-events-none" style={{
+          background: "radial-gradient(ellipse at center, hsl(45 93% 54% / 0.04) 0%, transparent 70%)",
+        }} />
+      )}
+      <span style={{ color: muted, fontSize: 9, letterSpacing: "0.15em", textTransform: "uppercase", fontWeight: 600 }}>
+        {label}
+      </span>
+      <span style={{ color: valueColor, fontSize: 20, fontWeight: 700, marginTop: 4, fontFamily: "'Cinzel', serif" }}>
+        {value}
+      </span>
     </div>
   );
 }

@@ -195,6 +195,23 @@ export function GameEndScreen({
   const [showCustomInput, setShowCustomInput] = useState(false);
   const [showShareCard, setShowShareCard] = useState(false);
   
+  // Player lifetime stats for share card
+  const [playerStats, setPlayerStats] = useState<{ wins: number; totalSolWon: number } | null>(null);
+  
+  useEffect(() => {
+    if (!myAddress) return;
+    supabase
+      .from("player_profiles")
+      .select("wins, total_sol_won")
+      .eq("wallet", myAddress)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data) {
+          setPlayerStats({ wins: data.wins, totalSolWon: Number(data.total_sol_won) });
+        }
+      });
+  }, [myAddress]);
+  
   const isPending = winner == null || winner === DEFAULT_PUBKEY;
   const isWinner = !isPending && winner === myAddress;
   const isDraw = winner === 'draw';
@@ -780,6 +797,8 @@ export function GameEndScreen({
         solLostLamports={stakeLamports}
         finishedAt={new Date().toISOString()}
         roomPda={roomPda}
+        totalGamesWon={playerStats?.wins}
+        totalSolWon={playerStats?.totalSolWon}
       />
     </div>
   );
