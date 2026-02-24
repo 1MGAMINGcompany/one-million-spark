@@ -133,14 +133,12 @@ export const TurnStatusHeader = memo(function TurnStatusHeader({
       </div>
 
       {/* My Turn Badge - Only shown when it's user's turn */}
-      {isMyTurn && (
-        <div className="flex justify-center">
+      <div className={cn("flex justify-center", !isMyTurn && "opacity-0 pointer-events-none")}>
           <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-gradient-to-r from-primary/30 to-yellow-500/30 border border-primary/50 rounded-full shadow-[0_0_15px_rgba(250,204,21,0.25)] animate-pulse">
             <Crown className="w-4 h-4 text-primary" />
             <span className="text-sm font-semibold text-primary">{t('game.myTurn')}</span>
           </div>
-        </div>
-      )}
+      </div>
 
       {/* Player Status Row */}
       <div className="flex items-center justify-center gap-2 flex-wrap">
