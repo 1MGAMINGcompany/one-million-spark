@@ -121,6 +121,23 @@ const CheckersGame = () => {
   const [gameOver, setGameOver] = useState<Player | "draw" | null>(null);
   const [winnerWallet, setWinnerWallet] = useState<string | null>(null); // Direct wallet address of winner
   const [chainCapture, setChainCapture] = useState<Position | null>(null);
+  const [victoryAnnouncement, setVictoryAnnouncement] = useState<string | null>(null);
+  const [showEndScreen, setShowEndScreen] = useState(false);
+
+  // Victory announcement helpers
+  const victoryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const triggerVictoryAnnouncement = useCallback((winnerLabel: string) => {
+    setVictoryAnnouncement(`${winnerLabel} wins!`);
+    victoryTimeoutRef.current = setTimeout(() => {
+      setVictoryAnnouncement(null);
+      setShowEndScreen(true);
+    }, 3000);
+  }, []);
+  const showEndScreenImmediately = useCallback(() => {
+    setVictoryAnnouncement(null);
+    setShowEndScreen(true);
+  }, []);
+  useEffect(() => () => { if (victoryTimeoutRef.current) clearTimeout(victoryTimeoutRef.current); }, []);
 
   const boardRef = useRef(board);
   boardRef.current = board;
@@ -332,6 +349,7 @@ const CheckersGame = () => {
           setGameOver(myColor);
           setWinnerWallet(effectivePlayerId || null);
           play('checkers_win');
+          showEndScreenImmediately();
           toast({
             title: t('gameSession.opponentForfeited'),
             description: t('gameSession.youWin'),
@@ -501,6 +519,7 @@ const CheckersGame = () => {
           setGameOver(myColor === "gold" ? "obsidian" : "gold");
           setWinnerWallet(result.winnerWallet || null);
           play('checkers_lose');
+          showEndScreenImmediately();
           
         } else if (result.action === "turn_timeout" && result.nextTurnWallet) {
           // Turn skipped - update local state from server
@@ -547,6 +566,7 @@ const CheckersGame = () => {
           setGameOver(iWin ? (myColor === "gold" ? "obsidian" : "gold") : myColor);
           setWinnerWallet(dbWinner || null);
           play(iWin ? "checkers_win" : "checkers_lose");
+          showEndScreenImmediately();
           return;
         }
 
@@ -921,8 +941,14 @@ const CheckersGame = () => {
       const result = checkGameOverRef.current(moveData.board);
       if (result) {
         setGameOver(result);
-        chatRef.current?.addSystemMessage(result === myColorRef.current ? t("gameMultiplayer.youWin") : t("gameMultiplayer.opponentWins"));
-        play(result === myColorRef.current ? 'checkers_win' : 'checkers_lose');
+        const iWon = result === myColorRef.current;
+        const winAddr = iWon
+          ? effectivePlayerId
+          : getOpponentWallet(roomPlayersRef.current, effectivePlayerId);
+        setWinnerWallet(winAddr || null);
+        chatRef.current?.addSystemMessage(iWon ? t("gameMultiplayer.youWin") : t("gameMultiplayer.opponentWins"));
+        play(iWon ? 'checkers_win' : 'checkers_lose');
+        triggerVictoryAnnouncement(result === "gold" ? "Gold" : "Obsidian");
       } else {
         setCurrentPlayer(moveData.player === "gold" ? "obsidian" : "gold");
       }
@@ -932,6 +958,7 @@ const CheckersGame = () => {
       setGameOver(myColorRef.current);
       chatRef.current?.addSystemMessage(t("gameMultiplayer.opponentResigned"));
       play('checkers_win');
+      showEndScreenImmediately();
       toast({
         title: t("gameMultiplayer.victory"),
         description: t("gameMultiplayer.opponentResignedVictory"),
@@ -1106,7 +1133,13 @@ const CheckersGame = () => {
           const result = checkGameOver(newBoard);
           if (result) {
             setGameOver(result);
-            play(result === myColor ? 'checkers_win' : 'checkers_lose');
+            const iWon = result === myColorRef.current;
+            const winAddr = iWon
+              ? effectivePlayerId
+              : getOpponentWallet(roomPlayersRef.current, effectivePlayerId);
+            setWinnerWallet(winAddr || null);
+            play(iWon ? 'checkers_win' : 'checkers_lose');
+            triggerVictoryAnnouncement(result === "gold" ? "Gold" : "Obsidian");
           } else {
             setCurrentPlayer(myColor === "gold" ? "obsidian" : "gold");
           }
@@ -1162,7 +1195,13 @@ const CheckersGame = () => {
         const result = checkGameOver(newBoard);
         if (result) {
           setGameOver(result);
-          play(result === myColor ? 'checkers_win' : 'checkers_lose');
+          const iWon = result === myColorRef.current;
+          const winAddr = iWon
+            ? effectivePlayerId
+            : getOpponentWallet(roomPlayersRef.current, effectivePlayerId);
+          setWinnerWallet(winAddr || null);
+          play(iWon ? 'checkers_win' : 'checkers_lose');
+          triggerVictoryAnnouncement(result === "gold" ? "Gold" : "Obsidian");
         } else {
           setCurrentPlayer(myColor === "gold" ? "obsidian" : "gold");
         }
@@ -1200,6 +1239,7 @@ const CheckersGame = () => {
     setWinnerWallet(opponentWalletAddr);
     setGameOver(myColor === "gold" ? "obsidian" : "gold");
     play('checkers_lose');
+    showEndScreenImmediately();
     
     // 3. CRITICAL: Trigger on-chain settlement via edge function
     try {
@@ -1494,8 +1534,37 @@ const CheckersGame = () => {
         turnTimeSeconds={effectiveTurnTime}
       />
 
+      {/* Victory Announcement Overlay */}
+      {victoryAnnouncement && (
+        <div className="fixed inset-0 bg-background/70 backdrop-blur-sm z-[55] flex items-center justify-center pointer-events-none">
+          <div
+            className="text-center"
+            style={{ animation: 'victoryScaleIn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards' }}
+          >
+            <h2
+              className="text-4xl sm:text-5xl font-display font-bold tracking-wide"
+              style={{
+                background: 'linear-gradient(135deg, hsl(45 93% 54%), hsl(35 80% 50%))',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                filter: 'drop-shadow(0 0 20px hsl(45 93% 54% / 0.5))',
+              }}
+            >
+              {victoryAnnouncement}
+            </h2>
+          </div>
+        </div>
+      )}
+
+      <style>{`
+        @keyframes victoryScaleIn {
+          0% { transform: scale(0.5); opacity: 0; }
+          100% { transform: scale(1); opacity: 1; }
+        }
+      `}</style>
+
       {/* Game End Screen */}
-      {gameOver && (
+      {showEndScreen && (
         <GameEndScreen
           gameType="Checkers"
           winner={winnerAddress}
