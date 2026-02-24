@@ -128,7 +128,7 @@ const Home = () => {
                           <Zap className="w-5 h-5 group-hover:drop-shadow-[0_0_6px_hsl(45_93%_54%_/_0.6)] transition-all" />
                           {t("home.quickMatchWinSol")}
                         </span>
-                        <span className="text-xs font-normal text-background/70 tracking-wide">{t("home.quickMatchWinSolSub")}</span>
+                        <span className="text-xs font-normal text-primary-foreground tracking-wide">{t("home.quickMatchWinSolSub")}</span>
                       </Link>
                     </Button>
                     <div className="flex flex-col sm:flex-row gap-4">
