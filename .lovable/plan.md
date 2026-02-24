@@ -1,66 +1,68 @@
 
 
-# Improve Money (AI Agent) -- with Two Tweaks Applied
+# Improve Money Nudge + Add Auto-Open Sheet for Home
 
 ## Overview
-Five UX improvements to Money's behavior (all UI/routing, no game logic or backend changes). Two tweaks from the original plan are incorporated:
-- "Play Free" buttons navigate to `/play-ai` (the AI lobby), not a specific game
-- The PvP toast button simply dismisses -- no navigation, no disruption
+Three changes: (1) replace the nudge pill with action buttons, (2) add an auto-open mini sheet on Home for first-time/returning visitors, (3) keep PvP blocking unchanged.
 
-## A. Proactive Nudge on Key Pages
+## 1. Replace Nudge Pill (lines 645-664)
 
-In `AIAgentHelperOverlay.tsx`, add a small floating pill near the Money bubble on `/`, `/quick-match`, `/add-funds`, `/room-list`:
-- Triggers after 3 seconds OR first scroll/click (whichever first)
-- Text: "Need help? Tap Money" with a "Got it" dismiss button
-- On dismiss, store timestamp in localStorage (`aihelper-nudge-dismissed`); suppress for 24 hours
-- Skip if Money panel is already open or hidden
+Replace the current "Need help? Tap Money" + "Got it" pill with two buttons and an X dismiss:
 
-## B. Replace Welcome Greeting with 1-Line Onboarding
+- **"Play Free Now"** button (primary styled) -- navigates to `/play-ai`, dismisses nudge
+- **"Ask Money"** button (secondary/outline) -- opens Money panel (`setSheetOpen(true)`), dismisses nudge
+- **X close button** -- dismisses with 24h cooldown (same `aihelper-nudge-dismissed` localStorage key)
+- Tapping outside also dismisses (add a click-away handler)
+- Remove the "Got it" button entirely
 
-Replace the current `showAssistMenu` greeting block (lines 628-651) with:
-- One line: "Want to start with a free game or play for real SOL?"
-- Two navigation buttons: **Play Free** (goes to `/play-ai`) and **Quick Match** (goes to `/quick-match`)
-- Keep the 3 quick-action buttons below unchanged
+Add i18n keys across all 10 locales:
+- `nudgePlayFree`: "Play Free Now"
+- `nudgeAskMoney`: "Ask Money"
 
-## C. "How does everything work?" -- 3-Step Micro Card
+Update `nudgeText` to remove or keep as fallback; the pill now shows two buttons instead of text + "Got it".
 
-Intercept `qHowItWorks` tap locally instead of sending to AI:
-- 3 numbered steps (no paragraphs):
-  1. Play free to learn
-  2. Add SOL to your wallet
-  3. Quick Match to play real opponents
-- 3 navigation buttons: **Play Free** (`/play-ai`), **Add Funds** (`/add-funds`), **Quick Match** (`/quick-match`)
+## 2. Auto-Open Mini Sheet on Home (new feature)
 
-## D. Improved Wallet Help (Short)
+On `/` only, after 6 seconds, auto-open a small bottom sheet (not the full Money chat panel):
 
-Intercept `qWallet` tap locally:
-- 2 lines: "Your wallet address is ready. Fund it to play for real SOL."
-- 2 buttons: **Copy My Address** (clipboard) and **Go to Add Funds** (`/add-funds`)
-- Falls back to AI response if no wallet connected
+- **Condition**: Home page only, not already dismissed in 24h (`aihelper-autosheet-dismissed` localStorage key), Money panel not already open, user hasn't clicked any CTA yet
+- **Content**: One line + two buttons (reuses existing `onboardingPrompt`, `btnPlayFree`, `btnQuickMatch` keys)
+- **Dismiss**: X button or clicking outside stores timestamp, suppresses for 24h
+- **Implementation**: New state `showAutoSheet` + a `useEffect` with 6s timer on `/`. Renders as a small fixed bottom card (not the full Money panel). Track a `ctaClicked` ref that flips true on any link click to `/play-ai` or `/quick-match` within the page -- if true, skip the auto-sheet.
 
-## E. Money Disabled in PvP Matches (Toast Only)
+Add i18n key: (none needed -- reuses `onboardingPrompt`, `btnPlayFree`, `btnQuickMatch`)
 
-Current behavior: Money returns `null` when `isMultiplayer` is true (line 521). Enhancement:
-- Keep Money completely hidden on `/play/` and `/room/` routes (unchanged)
-- When Navbar dispatches `aihelper-show` on a multiplayer route, show a Sonner toast:
-  - Text: "Money is not available in real matches to keep games fair."
-  - Button: **"Got it"** -- simply dismisses the toast (no navigation, no disruption)
+## 3. PvP Routes -- No Changes
 
-## i18n Keys Added (all 10 locales)
+The existing PvP blocking logic (lines 564-586 and line 628) remains exactly as-is. Money returns `null` on multiplayer routes and shows a toast if triggered via navbar.
 
-- `onboardingPrompt`, `btnPlayFree`, `btnQuickMatch`
-- `howStep1`, `howStep2`, `howStep3`
-- `walletHelpLine`, `btnCopyAddress`, `btnAddFunds`
-- `pvpBlocked`, `btnGotIt`
-- `nudgeText`, `nudgeDismiss`
+## Technical Details
 
-## Files Changed
+### File: `src/components/AIAgentHelperOverlay.tsx`
 
-| File | Change |
-|------|--------|
-| `src/components/AIAgentHelperOverlay.tsx` | Nudge system (A), onboarding rewrite (B), intercept "how it works" + wallet help (C, D), PvP toast (E), new i18n keys in `dict` |
+**Constants to add:**
+```text
+const AUTOSHEET_KEY = "aihelper-autosheet-dismissed";
+```
 
-## What is NOT touched
+**New i18n keys (all 10 locales):**
+- `nudgePlayFree` / `nudgeAskMoney`
+
+**New state:**
+- `showAutoSheet` (boolean) -- controlled by a 6s timer on Home
+
+**Nudge pill rewrite (lines 645-664):**
+Replace the single-line pill with a compact card containing "Play Free Now" + "Ask Money" + X button. Add a click-outside dismiss using `onPointerDown` on a backdrop or `useEffect` with document click listener.
+
+**Auto-sheet (new JSX block after the nudge pill):**
+Small fixed bottom card with rounded top corners, minimal height (~120px), showing the onboarding prompt line and two buttons. Only renders when `showAutoSheet && !sheetOpen && location.pathname === "/"`.
+
+**CTA click detection:**
+Listen for clicks on links going to `/play-ai` or `/quick-match` on the Home page. If detected before the 6s timer fires, cancel the auto-sheet. Use a ref `ctaClickedRef` set via a capturing click listener.
+
+### What is NOT touched
 - No game logic, matchmaking, timers, settlement, or Solana program changes
 - No edge functions, database, or backend changes
 - No changes to Navbar, game pages, or any other components
+- PvP blocking behavior unchanged
+
