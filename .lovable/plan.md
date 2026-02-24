@@ -1,28 +1,37 @@
 
 
-# Make "Play Free" Text Bigger
+# Add `first_seen_at` Timestamp for Dwell-Time Analytics
 
-## Change
-Make the "PLAY FREE" text on the primary homepage button larger and bolder, while keeping the button dimensions the same.
+## Overview
+Add a precise timestamp column to `presence_heartbeats` so we can calculate exactly how long visitors stay. Only the analytics pipeline is touched -- no UI, no game logic, no other tables.
 
-## Technical Details
+## Changes
 
-**File: `src/pages/Home.tsx` (line 118-121)**
+### 1. Database migration
+Add a `first_seen_at` column (timestamptz, default `now()`) to the `presence_heartbeats` table. Backfill existing rows using their `last_seen` value as a reasonable approximation.
 
-Change the inner text span from:
+```sql
+ALTER TABLE presence_heartbeats
+  ADD COLUMN IF NOT EXISTS first_seen_at timestamptz DEFAULT now();
+
+UPDATE presence_heartbeats
+  SET first_seen_at = last_seen
+  WHERE first_seen_at IS NULL;
 ```
-text-lg (current, ~18px)
-```
-to:
-```
-text-2xl md:text-3xl font-bold tracking-wide (~24-30px)
-```
 
-Also bump the Bot icon from `w-5 h-5` to `w-7 h-7` so it scales with the larger text.
+### 2. Edge function update (`supabase/functions/live-stats/index.ts`)
 
-The button container (`py-4 px-8`) stays unchanged -- only the inner text gets bigger.
+**Heartbeat action** -- set `first_seen_at` only on the initial INSERT (already the case via DEFAULT). The subsequent UPDATE step already skips it since it only touches `last_seen`, `page`, `game`. No change needed there.
+
+**Stats action** -- add a new metric `avgDwellSeconds`: average of `last_seen - first_seen_at` for sessions seen in the last 10 minutes. This tells us how long current visitors have been around.
+
+### 3. Nothing else
+No UI components, no game logic, no other edge functions, no i18n files are modified.
+
+## Files changed
 
 | File | Change |
 |------|--------|
-| `src/pages/Home.tsx` | Increase "Play Free" text size to `text-2xl md:text-3xl font-bold` and icon to `w-7 h-7` |
+| Migration (SQL) | Add `first_seen_at` column, backfill |
+| `supabase/functions/live-stats/index.ts` | Include `first_seen_at` in INSERT; add `avgDwellSeconds` to stats response |
 
