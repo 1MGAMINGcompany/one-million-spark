@@ -30,9 +30,14 @@ if (typeof window !== "undefined") {
   });
 
   window.addEventListener("unhandledrejection", (e) => {
-    dbg("unhandledrejection", {
-      reason: String(e.reason),
-    });
+    const msg = String(e.reason);
+    // Suppress MetaMask auto-connect failures — not our wallet stack
+    if (msg.includes("MetaMask")) {
+      e.preventDefault();
+      console.info("[1MGAMING] Suppressed MetaMask rejection:", msg);
+      return;
+    }
+    dbg("unhandledrejection", { reason: msg });
   });
 
 
