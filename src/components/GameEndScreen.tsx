@@ -258,6 +258,25 @@ export function GameEndScreen({
             fee: fee / LAMPORTS_PER_SOL,
             winnerPayout: winnerPayout / LAMPORTS_PER_SOL,
           });
+        } else {
+          // Fallback: on-chain account closed after settlement, use DB
+          const { data: matchRow } = await supabase
+            .from("matches")
+            .select("stake_lamports, max_players")
+            .eq("room_pda", roomPda)
+            .maybeSingle();
+          
+          if (matchRow && matchRow.stake_lamports > 0) {
+            const pot = matchRow.stake_lamports * (matchRow.max_players || 2);
+            const fee = Math.floor(pot * FEE_BPS / 10_000);
+            const winnerPayout = pot - fee;
+            setStakeLamports(matchRow.stake_lamports);
+            setPayoutInfo({
+              pot: pot / LAMPORTS_PER_SOL,
+              fee: fee / LAMPORTS_PER_SOL,
+              winnerPayout: winnerPayout / LAMPORTS_PER_SOL,
+            });
+          }
         }
       } catch (err) {
         console.warn('Failed to check room status:', err);

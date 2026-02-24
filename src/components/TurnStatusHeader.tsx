@@ -78,7 +78,7 @@ export const TurnStatusHeader = memo(function TurnStatusHeader({
       {/* Main Turn Status */}
       <div
         className={cn(
-          "flex items-center justify-between rounded-lg border px-4 py-3 transition-all duration-300",
+          "flex items-center justify-between rounded-lg border px-4 py-3 transition-colors duration-300 min-h-[56px]",
           isMyTurn
             ? "bg-primary/20 border-primary/50 shadow-[0_0_20px_rgba(250,204,21,0.15)]"
             : bgColorClass
@@ -89,7 +89,7 @@ export const TurnStatusHeader = memo(function TurnStatusHeader({
             <>
               <div className="relative">
                 <Crown className="w-6 h-6 text-primary animate-pulse" />
-                <div className="absolute inset-0 bg-primary/30 rounded-full blur-md animate-ping" />
+                <div className="absolute inset-0 bg-primary/30 rounded-full blur-md" />
               </div>
               <div>
                 <span className="text-lg font-semibold text-primary">{t('game.yourTurn')}</span>
