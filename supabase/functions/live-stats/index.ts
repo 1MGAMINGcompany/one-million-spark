@@ -183,6 +183,10 @@ Deno.serve(async (req) => {
         "bubble_open", "welcome_shown", "welcome_action",
         "mode_selected", "message_sent", "chat_cleared",
         "share_tapped", "chip_tapped",
+        "nudge_dismissed", "nudge_play_free", "nudge_ask_money",
+        "autosheet_shown", "autosheet_dismissed", "autosheet_play_free", "autosheet_quick_match",
+        "idle_nudge", "pvp_blocked_toast", "navbar_show", "hidden",
+        "assist_action", "wallet_copied",
       ];
 
       const monkeyEvent = event as string;
