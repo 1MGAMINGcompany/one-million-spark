@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import { useWallet } from "@/hooks/useWallet";
 import { usePrivy } from "@privy-io/react-auth";
 import { usePrivySolBalance } from "@/hooks/usePrivySolBalance";
-import { Home, Wallet, PlusCircle, LayoutList, Menu, X, Coins, Volume2, VolumeX, Bell, BellOff, Trophy, ChevronDown, LogOut, ArrowRightLeft, Sparkles } from "lucide-react";
+import { Home, Wallet, PlusCircle, LayoutList, Menu, X, Coins, Volume2, VolumeX, Bell, BellOff, Trophy, ChevronDown, LogOut, ArrowRightLeft, Sparkles, User } from "lucide-react";
 import { WalletButton } from "./WalletButton";
 import { PrivyLoginButton } from "./PrivyLoginButton";
 import { Button } from "@/components/ui/button";
@@ -166,6 +166,19 @@ const Navbar = () => {
             >
               <Sparkles size={20} />
             </button>
+
+            {/* My Profile Button (desktop) */}
+            {isPrivyUser && walletAddress && (
+              <Link
+                to={`/player/${walletAddress}`}
+                onClick={handleNavClick}
+                className="p-2 rounded-lg text-primary hover:text-primary/80 hover:bg-secondary transition-all duration-200 drop-shadow-[0_0_6px_hsl(45_93%_54%_/_0.3)]"
+                aria-label={t("nav.myProfile")}
+                title={t("nav.myProfile")}
+              >
+                <User size={20} />
+              </Link>
+            )}
             
             <PrivyLoginButton />
             <Collapsible>
