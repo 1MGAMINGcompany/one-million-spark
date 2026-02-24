@@ -1,40 +1,53 @@
 
 
-# Add "My Profile" Button to Desktop Navbar
+# Money's First-Game Tutorial for Ludo AI
 
-## What changes
+## Overview
 
-When a user is signed in, a small profile/avatar button will appear in the desktop navbar (next to the existing sound, notification, and AI helper icons). Clicking it navigates to `/player/{walletAddress}`. This mirrors the "My Profile" link already available in the mobile menu.
+Replace the current basic `LudoOnboardingOverlay` with a richer, multi-step tutorial featuring Money (the AI monkey assistant) in a speech-cloud bubble that points toward the relevant UI element. Each step has a small "x" close button so users can dismiss at any time. Shows only on the user's very first AI Ludo game (localStorage).
 
-## Technical details
+## Tutorial Steps
 
-### File: `src/components/Navbar.tsx`
+| Step | Trigger | Message | Points toward |
+|------|---------|---------|---------------|
+| 1 | Game starts, human turn, `WAITING_ROLL` | "Press here to roll the dice!" | Dice area (bottom) |
+| 2 | After rolling, no 6 (no movable tokens) | "You need a 6 to get a piece out! AI's turn now." | Board center |
+| 3 | AI is playing | "Now it's AI's turn to play..." | Turn indicator (top) |
+| 4 | Human rolls a 6, has movable tokens | "You rolled a 6! Tap the glowing piece to move it." | Board / highlighted tokens |
+| 5 | After moving with a 6 (bonus roll) | "Great! Because you rolled a 6, you get to roll again!" | Dice area |
+| 6 | Tutorial complete | Auto-dismiss, set localStorage flag |
 
-1. Import `User` icon from `lucide-react` (add to existing import).
-2. In the desktop navigation section (around line 159, after the AI Helper button and before `<PrivyLoginButton />`), add a conditional block:
-   - Only render when `isPrivyUser && walletAddress` is truthy.
-   - Render a `<Link to={/player/${walletAddress}}>` styled as an icon button matching the existing sound/notification toggle style.
-   - Use the `User` icon (size 20) with the same gold glow styling.
-   - Include a tooltip or title attribute: "My Profile".
-3. Also add a "Sign Out" icon button (using `LogOut` icon, already imported) next to the profile button for desktop parity with mobile, OR keep it minimal with just the profile link.
+Steps adapt to what actually happens in the game -- if the user rolls a 6 on their first try, steps 2-3 are skipped.
 
-### Minimal diff (lines ~159-169 area)
+## Visual Design
 
-After the Sparkles/AI helper button and before `<PrivyLoginButton />`, insert:
+- A floating "cloud" speech bubble (white/cream with soft shadow, tail/arrow pointing toward the target area)
+- Money's monkey image (from `/images/monkey-idle.png`) displayed at full size inside the cloud (left side)
+- Message text on the right side of Money
+- Small "x" button in the top-right corner of the cloud
+- Subtle entrance animation (scale-in + fade-in)
+- No dark backdrop overlay (unlike current implementation) -- just the floating cloud so gameplay stays visible
 
-```tsx
-{isPrivyUser && walletAddress && (
-  <Link
-    to={`/player/${walletAddress}`}
-    onClick={handleNavClick}
-    className="p-2 rounded-lg text-primary hover:text-primary/80 hover:bg-secondary transition-all duration-200 drop-shadow-[0_0_6px_hsl(45_93%_54%_/_0.3)]"
-    aria-label="My Profile"
-    title="My Profile"
-  >
-    <User size={20} />
-  </Link>
-)}
-```
+## Technical Details
 
-No new files, no database changes, no edge function changes. Single file edit.
+### File: `src/components/LudoOnboardingOverlay.tsx` (rewrite)
+
+- Expand from 2 steps to a state machine tracking ~6 contextual steps
+- New props needed from `LudoAI.tsx`:
+  - `diceValue: number | null` -- to detect if user rolled a 6
+  - `phase` (already passed)
+  - `isHumanTurn` (already passed)
+  - `hasMovableTokens` (already passed)
+  - `isGameOver` (already passed)
+  - `currentPlayerIsAI: boolean` -- to show "AI is thinking" step
+- State machine transitions based on game phase changes
+- Each step renders Money's image + message in a positioned cloud
+- Cloud position varies per step: bottom-center (for dice), top-center (for turn indicator), mid-center (for board)
+- localStorage key remains `ludo-onboarding-done`
+
+### File: `src/pages/LudoAI.tsx` (minor update)
+
+- Pass additional props to `LudoOnboardingOverlay`: `diceValue`, `currentPlayerIsAI`
+
+### No new dependencies, no database changes, no edge functions
 
