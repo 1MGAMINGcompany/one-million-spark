@@ -214,7 +214,7 @@
     "mainTagline": "DE 1 $ À 1 MILLION $ GRÂCE À LA STRATÉGIE ET L'INTELLIGENCE"
   },
   "home": {
-    "playAiFree": "Jouer contre l'IA (Gratuit)",
+    "playAiFree": "Jouer Gratuitement",
     "createGameRoom": "Créer une Salle de Jeu",
     "viewPublicRooms": "Voir les Salles Publiques",
     "secureFair": "Sécurisé et Équitable",
@@ -226,7 +226,10 @@
     "viewRoomsSub": "Frais en SOL · Basé sur l'habileté",
     "quickMatchSub": "Partie rapide · Cagnotte SOL",
     "playForSol": "Jouer pour SOL",
-    "skillBasedMatch": "Partie de compétence"
+    "skillBasedMatch": "Partie de compétence",
+    "playFreeSub": "Entraînez-vous d'abord. Pas de SOL requis.",
+    "quickMatchWinSol": "Match Rapide (Gagner SOL)",
+    "quickMatchWinSolSub": "Affrontez de vrais adversaires. Le gagnant remporte la cagnotte."
   },
   "games": {
     "chess": "Échecs",
@@ -380,6 +383,7 @@
     "medium": "MOYEN",
     "hard": "DIFFICILE",
     "enterTraining": "Commencer l'Entraînement",
+    "playFree": "Jouer Gratuitement",
     "footerNote": "Toutes les sessions d'entraînement sont entièrement gratuites. Maîtrisez votre art à votre rythme."
   },
   "game": {

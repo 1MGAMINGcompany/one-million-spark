@@ -211,7 +211,7 @@
     "mainTagline": "凭借策略与智慧，从1美元赢到100万美元"
   },
   "home": {
-    "playAiFree": "对战AI（免费）",
+    "playAiFree": "免费游戏",
     "createGameRoom": "创建游戏房间",
     "viewPublicRooms": "查看公开房间",
     "secureFair": "安全公正",
@@ -223,7 +223,10 @@
     "viewRoomsSub": "SOL入场费 · 技术对决",
     "quickMatchSub": "即时对局 · SOL奖池",
     "playForSol": "竞争SOL",
-    "skillBasedMatch": "技术对决"
+    "skillBasedMatch": "技术对决",
+    "playFreeSub": "先练习。无需SOL。",
+    "quickMatchWinSol": "快速匹配（赢取SOL）",
+    "quickMatchWinSolSub": "与真实对手对战。赢家获得奖池。"
   },
   "games": {
     "chess": "国际象棋",
@@ -354,6 +357,7 @@
     "medium": "中等",
     "hard": "困难",
     "enterTraining": "开始训练",
+    "playFree": "免费游戏",
     "footerNote": "所有训练课程完全免费。按照自己的节奏精进技艺。"
   },
   "game": {

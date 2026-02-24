@@ -214,7 +214,7 @@
     "mainTagline": "DE $1 A $1 MILHÃO COM ESTRATÉGIA E INTELIGÊNCIA"
   },
   "home": {
-    "playAiFree": "Jogar vs IA (Grátis)",
+    "playAiFree": "Jogar Grátis",
     "createGameRoom": "Criar Sala de Jogo",
     "viewPublicRooms": "Ver Salas Públicas",
     "secureFair": "Seguro e Justo",
@@ -226,7 +226,10 @@
     "viewRoomsSub": "Taxa em SOL · Baseado em habilidade",
     "quickMatchSub": "Partida rápida · Prêmio em SOL",
     "playForSol": "Jogar por SOL",
-    "skillBasedMatch": "Partida de habilidade"
+    "skillBasedMatch": "Partida de habilidade",
+    "playFreeSub": "Pratique primeiro. Sem SOL necessário.",
+    "quickMatchWinSol": "Partida Rápida (Ganhar SOL)",
+    "quickMatchWinSolSub": "Jogue contra oponentes reais. O vencedor leva o prêmio."
   },
   "games": {
     "chess": "Xadrez",
@@ -380,6 +383,7 @@
     "medium": "MÉDIO",
     "hard": "DIFÍCIL",
     "enterTraining": "Iniciar Treino",
+    "playFree": "Jogar Grátis",
     "footerNote": "Todas as sessões de treino são completamente gratuitas. Domine sua técnica no seu próprio ritmo."
   },
   "game": {

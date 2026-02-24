@@ -211,7 +211,7 @@
     "mainTagline": "DA 1$ A 1 MILIONE DI DOLLARI CON STRATEGIA E INTELLIGENZA"
   },
   "home": {
-    "playAiFree": "Gioca vs IA (Gratis)",
+    "playAiFree": "Gioca Gratis",
     "createGameRoom": "Crea Stanza di Gioco",
     "viewPublicRooms": "Vedi Stanze Pubbliche",
     "secureFair": "Sicuro e Giusto",
@@ -223,7 +223,10 @@
     "viewRoomsSub": "Quota in SOL · Basato su abilità",
     "quickMatchSub": "Partita immediata · Montepremi SOL",
     "playForSol": "Gioca per SOL",
-    "skillBasedMatch": "Partita di abilità"
+    "skillBasedMatch": "Partita di abilità",
+    "playFreeSub": "Prima allenati. Nessun SOL richiesto.",
+    "quickMatchWinSol": "Partita Rapida (Vinci SOL)",
+    "quickMatchWinSolSub": "Gioca contro avversari reali. Il vincitore prende il montepremi."
   },
   "games": {
     "chess": "Scacchi",
@@ -356,6 +359,7 @@
     "medium": "MEDIO",
     "hard": "DIFFICILE",
     "enterTraining": "Inizia Allenamento",
+    "playFree": "Gioca Gratis",
     "footerNote": "Tutte le sessioni di allenamento sono completamente gratuite. Perfeziona la tua tecnica al tuo ritmo."
   },
   "game": {

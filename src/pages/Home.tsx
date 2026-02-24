@@ -113,19 +113,22 @@ const Home = () => {
 
               {/* CTA Buttons — always visible */}
               <div className="flex flex-col gap-4 mt-4">
+                    <Button asChild size="lg" variant="gold" className="group text-lg h-auto py-4 px-8 transition-all shadow-[0_0_20px_-4px_hsl(45_93%_54%_/_0.4)]">
+                      <Link to="/play-ai" className="flex flex-col items-center gap-0.5">
+                        <span className="flex items-center gap-2">
+                          <Bot className="w-5 h-5 group-hover:drop-shadow-[0_0_6px_hsl(45_93%_54%_/_0.6)] transition-all" />
+                          {t("home.playAiFree")}
+                        </span>
+                        <span className="text-xs font-normal text-background/70 tracking-wide">{t("home.playFreeSub")}</span>
+                      </Link>
+                    </Button>
                     <Button asChild size="lg" variant="gold" className="group text-lg h-auto py-3 px-8 transition-all">
                       <Link to="/quick-match" className="flex flex-col items-center gap-0.5">
                         <span className="flex items-center gap-2">
                           <Zap className="w-5 h-5 group-hover:drop-shadow-[0_0_6px_hsl(45_93%_54%_/_0.6)] transition-all" />
-                          {t("quickMatch.title")}
+                          {t("home.quickMatchWinSol")}
                         </span>
-                        <span className="text-xs font-normal text-background/70 tracking-wide">{t("home.quickMatchSub")}</span>
-                      </Link>
-                    </Button>
-                    <Button asChild size="lg" variant="gold" className="group text-lg h-14 px-8 transition-all">
-                      <Link to="/play-ai" className="flex items-center gap-2">
-                        <Bot className="w-5 h-5 group-hover:drop-shadow-[0_0_6px_hsl(45_93%_54%_/_0.6)] transition-all" />
-                        {t("home.playAiFree")}
+                        <span className="text-xs font-normal text-background/70 tracking-wide">{t("home.quickMatchWinSolSub")}</span>
                       </Link>
                     </Button>
                     <div className="flex flex-col sm:flex-row gap-4">

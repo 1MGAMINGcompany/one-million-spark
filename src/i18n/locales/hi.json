@@ -224,7 +224,7 @@
     "mainTagline": "$1 से $1 मिलियन तक रणनीति और बुद्धिमत्ता के साथ"
   },
   "home": {
-    "playAiFree": "AI के खिलाफ खेलें (मुफ्त)",
+    "playAiFree": "मुफ्त खेलें",
     "createGameRoom": "गेम रूम बनाएं",
     "viewPublicRooms": "सार्वजनिक रूम देखें",
     "secureFair": "सुरक्षित और निष्पक्ष",
@@ -236,7 +236,10 @@
     "viewRoomsSub": "SOL में प्रवेश शुल्क · कौशल आधारित",
     "quickMatchSub": "तुरंत मैच · SOL पुरस्कार",
     "playForSol": "SOL के लिए खेलें",
-    "skillBasedMatch": "कौशल आधारित मैच"
+    "skillBasedMatch": "कौशल आधारित मैच",
+    "playFreeSub": "पहले अभ्यास करें। SOL की जरूरत नहीं।",
+    "quickMatchWinSol": "त्वरित मैच (SOL जीतें)",
+    "quickMatchWinSolSub": "असली प्रतिद्वंद्वियों के खिलाफ खेलें। विजेता पुरस्कार ले जाता है।"
   },
   "games": {
     "chess": "शतरंज",
@@ -390,6 +393,7 @@
     "medium": "मध्यम",
     "hard": "कठिन",
     "enterTraining": "प्रशिक्षण शुरू करें",
+    "playFree": "मुफ्त खेलें",
     "footerNote": "सभी प्रशिक्षण सत्र पूरी तरह मुफ्त हैं। अपनी गति से कौशल निखारें।"
   },
   "game": {

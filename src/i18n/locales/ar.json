@@ -211,7 +211,7 @@
     "mainTagline": "من دولار واحد إلى مليون دولار بالاستراتيجية والذكاء"
   },
   "home": {
-    "playAiFree": "العب ضد الذكاء الاصطناعي (مجاناً)",
+    "playAiFree": "العب مجاناً",
     "createGameRoom": "إنشاء غرفة لعب",
     "viewPublicRooms": "عرض الغرف العامة",
     "secureFair": "آمن وعادل",
@@ -223,7 +223,10 @@
     "viewRoomsSub": "رسوم الدخول بـ SOL · مهارة فقط",
     "quickMatchSub": "مباراة فورية · جائزة SOL",
     "playForSol": "العب مقابل SOL",
-    "skillBasedMatch": "مباراة مهارة"
+    "skillBasedMatch": "مباراة مهارة",
+    "playFreeSub": "تدرب أولاً. لا حاجة لـ SOL.",
+    "quickMatchWinSol": "مباراة سريعة (اربح SOL)",
+    "quickMatchWinSolSub": "العب ضد خصوم حقيقيين. الفائز يأخذ الجائزة."
   },
   "games": {
     "chess": "شطرنج",
@@ -357,6 +360,7 @@
     "medium": "متوسط",
     "hard": "صعب",
     "enterTraining": "ابدأ التدريب",
+    "playFree": "العب مجاناً",
     "footerNote": "جميع جلسات التدريب مجانية تماماً. أتقن مهاراتك بالسرعة التي تناسبك."
   },
   "game": {

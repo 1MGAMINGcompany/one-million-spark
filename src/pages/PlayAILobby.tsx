@@ -239,7 +239,7 @@ const PlayAILobby = () => {
                     onClick={() => handlePlay(game)}
                   >
                     <Play size={18} className="group-hover/btn:drop-shadow-[0_0_6px_hsl(45_93%_54%_/_0.6)] transition-all" />
-                    {t("playAi.enterTraining")}
+                    {t("playAi.playFree")}
                   </Button>
 
                   <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-1/2 h-px bg-gradient-to-r from-transparent via-primary/30 to-transparent" />
