@@ -180,7 +180,7 @@ export default function LudoOnboardingOverlay({
         )}
 
         {/* Cloud bubble */}
-        <div className="relative bg-amber-50 rounded-2xl shadow-xl border border-amber-200/60 px-3 py-3 max-w-[320px] flex items-center gap-3">
+        <div className="relative bg-amber-50 rounded-2xl shadow-xl border border-amber-200/60 px-2.5 py-2 max-w-[260px] flex items-center gap-3">
           {/* Close button */}
           <button
             onClick={dismiss}
@@ -191,7 +191,7 @@ export default function LudoOnboardingOverlay({
           </button>
 
           {/* Money image */}
-          <div className="flex-shrink-0 w-14 h-14 rounded-xl overflow-hidden bg-amber-100">
+          <div className="flex-shrink-0 w-10 h-10 rounded-xl overflow-hidden bg-amber-100">
             <img
               src="/images/monkey-idle.png"
               alt="Money"

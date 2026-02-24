@@ -20,10 +20,10 @@ interface Props {
 }
 
 const STEP_CONFIG: Record<Exclude<Step, "DONE">, {
-  position: "bottom" | "top" | "center";
+  position: "bottom" | "bottom-high" | "top" | "center";
   arrowDirection: "down" | "up" | "none";
 }> = {
-  ROLL_DICE:      { position: "bottom", arrowDirection: "down" },
+  ROLL_DICE:      { position: "bottom-high", arrowDirection: "down" },
   SELECT_CHECKER: { position: "center", arrowDirection: "none" },
   MOVE_TO:        { position: "center", arrowDirection: "none" },
   AI_TURN:        { position: "top", arrowDirection: "up" },
@@ -106,6 +106,7 @@ export default function BackgammonOnboardingOverlay({ currentPlayer, isThinking,
 
   const positionClass =
     config.position === "bottom" ? "bottom-28 left-1/2 -translate-x-1/2" :
+    config.position === "bottom-high" ? "bottom-36 left-1/2 -translate-x-1/2" :
     config.position === "top" ? "top-28 left-1/2 -translate-x-1/2" :
     "top-1/3 left-1/2 -translate-x-1/2";
 
@@ -117,11 +118,11 @@ export default function BackgammonOnboardingOverlay({ currentPlayer, isThinking,
             <div className="w-0 h-0 border-l-[10px] border-r-[10px] border-b-[10px] border-l-transparent border-r-transparent border-b-amber-50" />
           </div>
         )}
-        <div className="relative bg-amber-50 rounded-2xl shadow-xl border border-amber-200/60 px-3 py-3 max-w-[320px] flex items-center gap-3">
+        <div className="relative bg-amber-50 rounded-2xl shadow-xl border border-amber-200/60 px-2.5 py-2 max-w-[260px] flex items-center gap-3">
           <button onClick={dismiss} className="absolute top-1.5 right-1.5 p-0.5 rounded-full text-amber-400 hover:text-amber-600 hover:bg-amber-100 transition-colors" aria-label="Close tutorial">
             <X size={14} />
           </button>
-          <div className="flex-shrink-0 w-14 h-14 rounded-xl overflow-hidden bg-amber-100">
+          <div className="flex-shrink-0 w-10 h-10 rounded-xl overflow-hidden bg-amber-100">
             <img src="/images/monkey-idle.png" alt="Money" className="w-full h-full object-contain" />
           </div>
           <p className="text-sm font-medium text-amber-900 pr-4 leading-snug">{message}</p>
