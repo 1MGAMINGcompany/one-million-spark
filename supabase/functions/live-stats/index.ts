@@ -39,6 +39,7 @@ Deno.serve(async (req) => {
         page: page ?? null,
         game: game ?? null,
         first_seen_date: todayDate,
+        first_seen_at: now,
       });
 
       // Step 2: Always UPDATE non-date fields — preserves first_seen_date
@@ -139,6 +140,23 @@ Deno.serve(async (req) => {
         .gte("created_at", todayStart.toISOString());
       if (e5) throw e5;
 
+      // Average dwell time for currently active sessions (last 10 min)
+      const { data: dwellRows, error: e6 } = await supabase
+        .from("presence_heartbeats")
+        .select("first_seen_at, last_seen")
+        .gte("last_seen", tenMinAgo)
+        .not("first_seen_at", "is", null);
+      if (e6) throw e6;
+
+      let avgDwellSeconds = 0;
+      if (dwellRows && dwellRows.length > 0) {
+        const totalSeconds = dwellRows.reduce((sum: number, r: any) => {
+          const diff = (new Date(r.last_seen).getTime() - new Date(r.first_seen_at).getTime()) / 1000;
+          return sum + Math.max(0, diff);
+        }, 0);
+        avgDwellSeconds = Math.round(totalSeconds / dwellRows.length);
+      }
+
       // Garbage collect heartbeats older than 25 hours (keeps full 24h rolling window intact).
       const gcCutoff = new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString();
       await supabase
@@ -153,6 +171,7 @@ Deno.serve(async (req) => {
           playingAI: playingAI ?? 0,
           aiGamesToday: aiGamesToday ?? 0,
           visitsToday: visitsToday ?? 0,
+          avgDwellSeconds,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
