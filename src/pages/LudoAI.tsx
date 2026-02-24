@@ -268,6 +268,8 @@ const LudoAI = () => {
         isHumanTurn={isHumanTurn}
         hasMovableTokens={movableTokenIndices.length > 0}
         isGameOver={isGameOver}
+        diceValue={diceValue}
+        currentPlayerIsAI={currentPlayer.isAI}
       />
 
       {/* Winner confetti */}
