@@ -316,7 +316,7 @@
     "mainTagline": "FROM $1 TO $1 MILLION WITH STRATEGY AND INTELLIGENCE"
   },
   "home": {
-    "playAiFree": "Play vs AI (Free)",
+    "playAiFree": "Play Free",
     "createGameRoom": "Create Game Room",
     "viewPublicRooms": "View Public Rooms",
     "secureFair": "Secure & Fair",
@@ -328,7 +328,10 @@
     "viewRoomsSub": "Entry fee in SOL · Skill-based",
     "quickMatchSub": "Instant match · SOL prize pool",
     "playForSol": "Play for SOL",
-    "skillBasedMatch": "Skill-based match"
+    "skillBasedMatch": "Skill-based match",
+    "playFreeSub": "Practice first. No SOL required.",
+    "quickMatchWinSol": "Quick Match (Win SOL)",
+    "quickMatchWinSolSub": "Play real opponents. Winner takes the SOL pool."
   },
   "games": {
     "chess": "Chess",
@@ -498,6 +501,7 @@
     "medium": "MEDIUM",
     "hard": "HARD",
     "enterTraining": "Enter Training",
+    "playFree": "Play Free",
     "footerNote": "All training sessions are completely free. Master your craft at your own pace."
   },
   "wallet": {

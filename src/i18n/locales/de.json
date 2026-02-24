@@ -214,7 +214,7 @@
     "mainTagline": "VON 1 $ ZU 1 MILLION $ MIT STRATEGIE UND INTELLIGENZ"
   },
   "home": {
-    "playAiFree": "Gegen KI spielen (Kostenlos)",
+    "playAiFree": "Kostenlos Spielen",
     "createGameRoom": "Spielraum erstellen",
     "viewPublicRooms": "Öffentliche Räume anzeigen",
     "secureFair": "Sicher & Fair",
@@ -226,7 +226,10 @@
     "viewRoomsSub": "Eintritt in SOL · Geschicklichkeit",
     "quickMatchSub": "Sofortiges Match · SOL-Preispool",
     "playForSol": "Für SOL spielen",
-    "skillBasedMatch": "Geschicklichkeitsspiel"
+    "skillBasedMatch": "Geschicklichkeitsspiel",
+    "playFreeSub": "Erst üben. Kein SOL erforderlich.",
+    "quickMatchWinSol": "Schnelles Match (SOL gewinnen)",
+    "quickMatchWinSolSub": "Gegen echte Gegner spielen. Der Gewinner nimmt den SOL-Pool."
   },
   "games": {
     "chess": "Schach",
@@ -380,6 +383,7 @@
     "medium": "MITTEL",
     "hard": "SCHWER",
     "enterTraining": "Training beginnen",
+    "playFree": "Kostenlos Spielen",
     "footerNote": "Alle Trainingseinheiten sind völlig kostenlos. Meistern Sie Ihr Handwerk in Ihrem eigenen Tempo."
   },
   "game": {

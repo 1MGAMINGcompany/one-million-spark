@@ -93,39 +93,38 @@ const FeaturedGameCard = ({ name, tagline, path, aiPath, icon }: FeaturedGameCar
             </p>
           </div>
 
-          {/* 3D Gold Button */}
-          <Link to={path} className="w-full mt-2">
+          {/* Play Free Button - Primary */}
+          <Link to={aiPath} className="w-full mt-2">
             <button className="relative w-full group/btn">
               {/* Button glow */}
               <div className="absolute inset-0 bg-gradient-to-r from-primary via-gold-light to-primary rounded-xl blur opacity-0 group-hover/btn:opacity-75 transition-opacity duration-300" />
               
               {/* Button body */}
               <div className="relative bg-gradient-to-b from-primary via-primary to-gold-dark rounded-xl px-6 py-3 border border-gold-light/30 shadow-[inset_0_1px_0_0_hsl(45_93%_70%/0.5),0_4px_12px_-2px_hsl(45_93%_30%/0.5)] transform transition-all duration-200 group-hover/btn:shadow-[inset_0_1px_0_0_hsl(45_93%_70%/0.5),0_6px_20px_-2px_hsl(45_93%_54%/0.6)] group-hover/btn:-translate-y-0.5">
-                <div className="flex flex-col items-center gap-0.5">
-                  <div className="flex items-center gap-2">
-                    {/* Pyramid icon */}
-                    <svg className="w-4 h-4 text-background" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M12 2L2 22h20L12 2zm0 4.5L18.5 20h-13L12 6.5z"/>
-                    </svg>
-                    <span className="font-display font-semibold text-background tracking-wide">
-                      {t("home.playForSol")}
-                    </span>
-                  </div>
-                  <span className="text-xs text-background/70 font-normal tracking-wide">
-                    {t("home.skillBasedMatch")}
+                <div className="flex items-center justify-center gap-2">
+                  <Bot className="w-4 h-4 text-background" />
+                  <span className="font-display font-semibold text-background tracking-wide">
+                    {t("home.playAiFree")}
                   </span>
                 </div>
               </div>
             </button>
           </Link>
 
-          {/* Play vs AI Free Button */}
-          <Link to={aiPath} className="w-full">
-            <button className="relative w-full group/ai border border-primary/40 hover:border-primary/70 rounded-xl px-6 py-2.5 transition-all duration-200 hover:bg-primary/10">
-              <div className="flex items-center justify-center gap-2">
-                <Bot className="w-4 h-4 text-primary" />
-                <span className="font-display font-medium text-primary tracking-wide text-sm">
-                  {t("home.playAiFree")}
+          {/* Play for SOL Button - Secondary */}
+          <Link to={path} className="w-full">
+            <button className="relative w-full group/sol border border-primary/40 hover:border-primary/70 rounded-xl px-6 py-2.5 transition-all duration-200 hover:bg-primary/10">
+              <div className="flex flex-col items-center gap-0.5">
+                <div className="flex items-center gap-2">
+                  <svg className="w-4 h-4 text-primary" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2L2 22h20L12 2zm0 4.5L18.5 20h-13L12 6.5z"/>
+                  </svg>
+                  <span className="font-display font-medium text-primary tracking-wide text-sm">
+                    {t("home.playForSol")}
+                  </span>
+                </div>
+                <span className="text-xs text-primary/60 font-normal tracking-wide">
+                  {t("home.skillBasedMatch")}
                 </span>
               </div>
             </button>

@@ -237,7 +237,7 @@
     "mainTagline": "戦略と知性で1ドルから100万ドルへ"
   },
   "home": {
-    "playAiFree": "AI対戦（無料）",
+    "playAiFree": "無料でプレイ",
     "createGameRoom": "ゲームルーム作成",
     "viewPublicRooms": "公開ルームを見る",
     "secureFair": "安全＆公正",
@@ -249,7 +249,10 @@
     "viewRoomsSub": "SOL参加費 · スキル勝負",
     "quickMatchSub": "即時マッチ · SOL賞金",
     "playForSol": "SOLをかけてプレイ",
-    "skillBasedMatch": "スキル勝負"
+    "skillBasedMatch": "スキル勝負",
+    "playFreeSub": "まず練習。SOL不要。",
+    "quickMatchWinSol": "クイックマッチ（SOLを獲得）",
+    "quickMatchWinSolSub": "実際の対戦相手とプレイ。勝者が賞金プールを獲得。"
   },
   "games": {
     "chess": "チェス",
@@ -403,6 +406,7 @@
     "medium": "ミディアム",
     "hard": "ハード",
     "enterTraining": "トレーニング開始",
+    "playFree": "無料でプレイ",
     "footerNote": "すべてのトレーニングセッションは完全無料です。自分のペースで技術を磨きましょう。"
   },
   "game": {
