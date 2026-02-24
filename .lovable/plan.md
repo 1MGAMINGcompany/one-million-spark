@@ -1,37 +1,24 @@
 
 
-# Add `first_seen_at` Timestamp for Dwell-Time Analytics
+# Make Quick Match Subtext Match Main Button Text Color
 
-## Overview
-Add a precise timestamp column to `presence_heartbeats` so we can calculate exactly how long visitors stay. Only the analytics pipeline is touched -- no UI, no game logic, no other tables.
+## What changes
+One small styling change on the Quick Match button's subtext line ("Play real opponents. Winner takes the SOL pool.").
 
-## Changes
+## Why
+The subtext is currently dimmed (`text-background/70`), making it hard to read. By matching the color to the main "Quick Match (Win SOL)" text, users immediately understand this is the real-opponents button.
 
-### 1. Database migration
-Add a `first_seen_at` column (timestamptz, default `now()`) to the `presence_heartbeats` table. Backfill existing rows using their `last_seen` value as a reasonable approximation.
+## Technical detail
 
-```sql
-ALTER TABLE presence_heartbeats
-  ADD COLUMN IF NOT EXISTS first_seen_at timestamptz DEFAULT now();
+**File:** `src/pages/Home.tsx`, line 131
 
-UPDATE presence_heartbeats
-  SET first_seen_at = last_seen
-  WHERE first_seen_at IS NULL;
-```
+Change the subtext class from:
+`text-xs font-normal text-background/70 tracking-wide`
 
-### 2. Edge function update (`supabase/functions/live-stats/index.ts`)
+To:
+`text-xs font-normal text-primary-foreground tracking-wide`
 
-**Heartbeat action** -- set `first_seen_at` only on the initial INSERT (already the case via DEFAULT). The subsequent UPDATE step already skips it since it only touches `last_seen`, `page`, `game`. No change needed there.
+This gives the subtext the same color as the main button label, making "Play real opponents. Winner takes the SOL pool." fully visible and prominent.
 
-**Stats action** -- add a new metric `avgDwellSeconds`: average of `last_seen - first_seen_at` for sessions seen in the last 10 minutes. This tells us how long current visitors have been around.
-
-### 3. Nothing else
-No UI components, no game logic, no other edge functions, no i18n files are modified.
-
-## Files changed
-
-| File | Change |
-|------|--------|
-| Migration (SQL) | Add `first_seen_at` column, backfill |
-| `supabase/functions/live-stats/index.ts` | Include `first_seen_at` in INSERT; add `avgDwellSeconds` to stats response |
+No other files or components are touched.
 
