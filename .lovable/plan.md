@@ -1,62 +1,54 @@
 
+# Upgrade Share Result Card to Premium Quality
 
-# Fix Similar Issues in Checkers Ranked Game
+## Overview
+Redesign the ranked game share card (`ShareResultCard`) to be a luxurious, high-quality card that players will be proud to share. Also wire up the player's lifetime stats (total SOL won, total games won) so they actually appear on the card.
 
-## Analysis of All Games
+## Current Issues
+- The card uses basic styling -- flat colors, simple layout
+- `totalGamesWon` and `totalSolWon` props exist but are never passed from `GameEndScreen`
+- No game-specific icon on the card
+- Missing the premium "1M Gaming" branding feel from the logo reference
 
-After reviewing all ranked game files, here's the risk assessment:
+## Changes
 
-| Game | Win Detection | myColor Risk | Missing winnerWallet | Needs Fix? |
-|------|--------------|-------------|---------------------|------------|
-| Chess | Fixed in previous change | Fixed | Fixed | Done |
-| Checkers | `result === myColor` after checkGameOver | YES - same stale closure risk | YES - not set on normal win | YES |
-| Backgammon | Centralized DB Outcome Resolver | No - uses DB as source of truth | No - resolver sets it | No |
-| Dominos | player1/player2 + DB polling | Low - uses amIPlayer1 boolean | Handled via winner state | No |
-| Ludo | PlayerColor index-based | Low - uses myPlayerIndex | Handled via engine | No |
+### 1. GameEndScreen -- Fetch and pass player stats
+**File: `src/components/GameEndScreen.tsx`**
 
-**Only Checkers has the same bugs as Chess.** Backgammon already uses a robust DB-based outcome resolver. Dominos and Ludo use different patterns that don't suffer from stale `myColor`.
+- On mount, query the `player_profiles` table for the current player's wallet to get `wins` and `total_sol_won`
+- Pass these values as `totalGamesWon` and `totalSolWon` to `ShareResultCard`
 
-## Changes (single file: `src/pages/CheckersGame.tsx`)
+### 2. ShareResultCard -- Premium redesign
+**File: `src/components/ShareResultCard.tsx`**
 
-### Fix 1: Use a ref for myColor in win detection
+Visual upgrades:
+- Add the PyramidLogo component at the top with a floating/pulsing glow animation
+- Add golden gradient header bar with "1M GAMING" branding text
+- Corner accent marks (like the AI card) for a luxurious framed feel
+- Animated scan line at the top edge
+- Grid background pattern with subtle gold lines
+- Larger, bolder victory/loss text with gradient gold styling
+- Game-specific icon from GameIcons (Chess, Checkers, etc.)
+- Ankh dividers between sections
+- Stats displayed in premium bordered chips with gold accents
+- SOL amounts shown prominently with a Solana-style accent
+- "SKILL > LUCK" tagline with golden gradient
+- www.1mgaming.com watermark at the bottom
+- Better dark/light theme contrast
 
-The `checkGameOver` function itself is fine (returns "gold" or "obsidian" objectively), but the comparison `result === myColor` at lines 1109, 1165, and 924 can use a stale `myColor`. A `myColorRef` already exists (line 148) and is kept in sync -- but the inline handler at lines 1109 and 1165 uses `myColor` directly instead of `myColorRef.current`.
+New customization toggles (keeping existing ones):
+- All existing toggles remain (wallet, full address, SOL amount, total games, total SOL, opponent, timestamp, dark theme)
+- Total Games Won and Total SOL Won toggles now default to ON (since data will be available)
 
-- Line 1109: Change `result === myColor` to `result === myColorRef.current`
-- Line 1165: Change `result === myColor` to `result === myColorRef.current`
+Export improvements:
+- Card renders at 1080x1080 for crisp social media sharing
+- Keep all existing share buttons (X, WhatsApp, Email, Copy)
 
-### Fix 2: Set winnerWallet on normal game-over
+### 3. No database changes needed
+The `player_profiles` table already has all required fields (`wins`, `total_sol_won`).
 
-Lines 1107-1109 and 1162-1165 detect game over but never call `setWinnerWallet(...)`. This means the `winnerAddress` memo (line 643) falls back to the `gameOver === myColor` path, which can be wrong if `myColor` is stale.
-
-After `setGameOver(result)` at lines 1108 and 1164, add:
-```
-const winAddr = result === myColorRef.current
-  ? effectivePlayerId
-  : getOpponentWallet(roomPlayersRef.current, effectivePlayerId);
-setWinnerWallet(winAddr || null);
-```
-
-Same fix for the WebRTC handler at line 922-925 (already uses `myColorRef` but doesn't set `winnerWallet`).
-
-### Fix 3: Add victory announcement (matching Chess)
-
-Same 3-second overlay pattern as Chess:
-- Add `victoryAnnouncement` and `showEndScreen` states
-- On game over (not draw/forfeit), show "Gold wins!" or "Obsidian wins!" for 3 seconds
-- Gate `GameEndScreen` on `showEndScreen` instead of `gameOver`
-- Draws/resigns show end screen immediately
-
-### Summary
-
-| Location | Change |
-|----------|--------|
-| Lines 1108-1109 | Add `setWinnerWallet`, use `myColorRef.current` |
-| Lines 1163-1165 | Add `setWinnerWallet`, use `myColorRef.current` |
-| Lines 922-925 | Add `setWinnerWallet` for WebRTC received game-over |
-| New states | `victoryAnnouncement`, `showEndScreen` |
-| GameEndScreen gate | Change from `gameOver` to `showEndScreen` |
-| New JSX | Victory announcement overlay (golden text, 3s auto-dismiss) |
-
-No changes needed for Backgammon, Dominos, or Ludo.
-
+### Summary of files changed
+| File | Change |
+|------|--------|
+| `src/components/GameEndScreen.tsx` | Fetch player stats, pass to ShareResultCard |
+| `src/components/ShareResultCard.tsx` | Premium visual redesign with animations, icons, branding |
