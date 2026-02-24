@@ -12,6 +12,7 @@ import { useAIGameTracker } from "@/hooks/useAIGameTracker";
 import { createChessAI, type ChessAI as ChessAIType, type Difficulty } from "@/lib/chessEngine/localChessAI";
 import AIWinShareCard from "@/components/AIWinShareCard";
 import ProactiveGameTip from "@/components/ProactiveGameTip";
+import ChessOnboardingOverlay from "@/components/ChessOnboardingOverlay";
 import { useActiveAIGame } from "@/hooks/useActiveAIGame";
 
 // Helper to convert UCI move (e.g., "e2e4") to from/to squares
@@ -394,6 +395,12 @@ const ChessAI = () => {
   return (
     <div className="min-h-screen bg-background relative overflow-hidden">
       <ProactiveGameTip gameType="chess" tip={t('tips.chess')} />
+      <ChessOnboardingOverlay
+        isPlayerTurn={game.turn() === 'w'}
+        isThinking={isThinking}
+        gameOver={gameOver}
+        moveCount={moveHistory.length}
+      />
       {/* Background with pyramid pattern */}
       <div className="absolute inset-0 bg-gradient-to-b from-midnight-light via-background to-background" />
       <div 

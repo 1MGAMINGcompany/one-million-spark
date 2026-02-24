@@ -8,6 +8,7 @@ import { useTranslation } from "react-i18next";
 import { useAIGameTracker } from "@/hooks/useAIGameTracker";
 import AIWinShareCard from "@/components/AIWinShareCard";
 import ProactiveGameTip from "@/components/ProactiveGameTip";
+import CheckersOnboardingOverlay from "@/components/CheckersOnboardingOverlay";
 import { useActiveAIGame } from "@/hooks/useActiveAIGame";
 
 type Difficulty = "easy" | "medium" | "hard";
@@ -73,6 +74,7 @@ const CheckersAI = () => {
   const [aiChainPos, setAiChainPos] = useState<Position | null>(null); // For AI chain captures
   const [showShareCard, setShowShareCard] = useState(false);
   const [winDuration, setWinDuration] = useState(0);
+  const [moveCount, setMoveCount] = useState(0);
 
   // Session continuity
   const { clearActiveGame } = useActiveAIGame(!!gameOver);
@@ -356,6 +358,7 @@ const CheckersAI = () => {
           }
         } else {
           setCurrentPlayer("obsidian");
+          setMoveCount(c => c + 1);
         }
         }
       }
@@ -405,6 +408,7 @@ const CheckersAI = () => {
           }
         } else {
           setCurrentPlayer("obsidian");
+          setMoveCount(c => c + 1);
         }
         return;
       }
@@ -564,6 +568,14 @@ const CheckersAI = () => {
   return (
     <div className="min-h-screen bg-background pb-8">
       <ProactiveGameTip gameType="checkers" tip={t('tips.checkers')} />
+      <CheckersOnboardingOverlay
+        currentPlayer={currentPlayer}
+        isAiThinking={isAiThinking}
+        gameOver={!!gameOver}
+        selectedPiece={!!selectedPiece}
+        hasCaptures={playerHasCaptures(board, "gold")}
+        moveCount={moveCount}
+      />
       {/* Header */}
       <div className="relative py-8 px-4 overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-b from-midnight-light via-background to-background" />
