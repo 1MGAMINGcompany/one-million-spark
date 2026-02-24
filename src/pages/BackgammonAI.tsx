@@ -14,6 +14,7 @@ import { useSound } from "@/contexts/SoundContext";
 import { useTranslation } from "react-i18next";
 import AIWinShareCard from "@/components/AIWinShareCard";
 import ProactiveGameTip from "@/components/ProactiveGameTip";
+import BackgammonOnboardingOverlay from "@/components/BackgammonOnboardingOverlay";
 import { useActiveAIGame } from "@/hooks/useActiveAIGame";
 import {
   type Player,
@@ -785,6 +786,14 @@ const BackgammonAI = () => {
       isMobile ? "h-screen overflow-y-hidden flex flex-col" : "min-h-screen"
     )}>
       <ProactiveGameTip gameType="backgammon" tip={t('tips.backgammon')} />
+      <BackgammonOnboardingOverlay
+        currentPlayer={currentPlayer}
+        isThinking={isThinking}
+        gameOver={gameOver}
+        hasDice={dice.length > 0}
+        hasSelectedPoint={selectedPoint !== null}
+        hasRemainingMoves={remainingMoves.length > 0}
+      />
       {/* Checker Animation Layer */}
       <BackgammonCheckerAnimation 
         animatingChecker={animatingChecker} 

@@ -10,6 +10,7 @@ import { useAIGameTracker } from "@/hooks/useAIGameTracker";
 import GoldConfettiExplosion from "@/components/GoldConfettiExplosion";
 import AIWinShareCard from "@/components/AIWinShareCard";
 import ProactiveGameTip from "@/components/ProactiveGameTip";
+import DominosOnboardingOverlay from "@/components/DominosOnboardingOverlay";
 import { useActiveAIGame } from "@/hooks/useActiveAIGame";
 
 type Difficulty = "easy" | "medium" | "hard";
@@ -68,6 +69,7 @@ const DominosAI = () => {
   const [gameOver, setGameOver] = useState(false);
   const [selectedDomino, setSelectedDomino] = useState<number | null>(null);
   const [isThinking, setIsThinking] = useState(false);
+  const [playerTurnCount, setPlayerTurnCount] = useState(0);
 
   // Session continuity (must be after gameOver declaration)
   const { clearActiveGame } = useActiveAIGame(gameOver);
@@ -253,6 +255,7 @@ const DominosAI = () => {
     
     setSelectedDomino(null);
     setIsPlayerTurn(false);
+    setPlayerTurnCount(c => c + 1);
   }, [isPlayerTurn, gameOver, isThinking, canPlay, chain.length, playDomino, selectedDomino]);
 
   // Player draws from boneyard
@@ -462,6 +465,15 @@ const DominosAI = () => {
   return (
     <div className="min-h-screen bg-background relative overflow-hidden">
       <ProactiveGameTip gameType="dominos" tip={t('tips.dominos')} />
+      <DominosOnboardingOverlay
+        isPlayerTurn={isPlayerTurn}
+        isThinking={isThinking}
+        gameOver={gameOver}
+        chainLength={chain.length}
+        hasLegalMoves={canPlayerPlay}
+        boneyardCount={boneyard.length}
+        playerTurnCount={playerTurnCount}
+      />
       {/* Gold Confetti Explosion on Win */}
       <GoldConfettiExplosion 
         active={gameOver && gameStatus.includes("win")} 
