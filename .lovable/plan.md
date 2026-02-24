@@ -1,27 +1,39 @@
 
 
-# Fix Onboarding Overlay Size and Backgammon Positioning
+# Fix Chess Ranked Win/Loss Detection + Victory Announcement
 
-## Problem
-1. In Backgammon, the "Roll Dice" tutorial cloud (positioned at `bottom-28`) covers the dice button on desktop
-2. All game overlays use `max-w-[320px]` and a `w-14 h-14` monkey image, making the cloud larger than needed
+## Bug Root Cause
 
-## Changes
+Both `checkGameOver` (line 1101) and `checkGameOverInline` (line 848) determine win/loss using `myColor`, but the actual source of truth is `effectiveColor` (derived from `startRoll.myColor`). Since creator always starts now (no dice roll), `myColor` can be stale -- causing both players to see "lost."
 
-### All 5 overlay files (same UI changes)
-Files: `BackgammonOnboardingOverlay.tsx`, `ChessOnboardingOverlay.tsx`, `CheckersOnboardingOverlay.tsx`, `DominosOnboardingOverlay.tsx`, `LudoOnboardingOverlay.tsx`
+Additionally, `checkGameOver` never calls `setWinnerWallet(...)`, so the fallback `winnerAddress` logic (line 737-746) tries string-matching on `gameStatus`, which is fragile.
 
-- Reduce cloud max-width from `max-w-[320px]` to `max-w-[260px]`
-- Shrink monkey image from `w-14 h-14` to `w-10 h-10`
-- Keep `text-sm` font size unchanged
-- Reduce inner padding from `px-3 py-3` to `px-2.5 py-2`
+## Changes (single file: `src/pages/ChessGame.tsx`)
 
-### Backgammon-specific fix
-File: `BackgammonOnboardingOverlay.tsx`
+### Fix 1: Use effectiveColor in both checkGameOver functions
 
-- Move the ROLL_DICE step position from `bottom-28` to `bottom-36` so it sits above the dice area instead of covering it
-- This gives more clearance for the dice button on desktop
+- Add `effectiveColorRef` (a ref tracking `effectiveColor`) so callbacks always have the current value
+- Update `checkGameOverInline` (line 848): replace `myColor` with `effectiveColorRef.current`
+- Update `checkGameOver` (line 1101): replace `myColor` with `effectiveColorRef.current`
 
-## No logic changes
-Only CSS class adjustments -- no state machine or prop changes needed.
+### Fix 2: Set winnerWallet in checkGameOver
+
+- Add `setWinnerWallet(winnerAddr)` in `checkGameOver` (the same logic already in `checkGameOverInline`)
+- Add `setWinnerWallet("draw")` for draw/stalemate cases in `checkGameOver`
+
+### Fix 3: 3-second victory announcement overlay
+
+- Add two states: `victoryAnnouncement` (string or null) and `showEndScreen` (boolean)
+- When checkmate is detected (in both checkGameOver functions), set `victoryAnnouncement` to "White won by checkmate!" or "Black won by checkmate!" based on which side delivered mate
+- Start a 3-second timeout that clears the announcement and sets `showEndScreen = true`
+- Render a centered golden overlay with the announcement text during those 3 seconds
+- Gate the `GameEndScreen` on `showEndScreen` instead of `gameOver`
+- For draws/stalemates/forfeits, show end screen immediately (no delay)
+
+### Victory Announcement UI
+
+A fixed overlay (z-50) with semi-transparent dark backdrop showing:
+- Large golden text: "White won by checkmate!" or "Black won by checkmate!"
+- Subtle scale-in animation
+- Auto-dismisses after 3 seconds, then GameEndScreen appears
 
