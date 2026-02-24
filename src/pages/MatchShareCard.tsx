@@ -13,8 +13,9 @@ function shortenWallet(addr: string): string {
 }
 
 function formatSol(lamports: number | null): string {
-  if (!lamports) return "0";
-  return (lamports / LAMPORTS_PER_SOL).toFixed(3);
+  if (!lamports || lamports <= 0) return "0";
+  const sol = lamports / LAMPORTS_PER_SOL;
+  return sol < 0.001 ? sol.toFixed(4) : sol.toFixed(3);
 }
 
 function formatWinReason(reason: string): string {
