@@ -139,14 +139,12 @@ Deno.serve(async (req) => {
         .gte("created_at", todayStart.toISOString());
       if (e5) throw e5;
 
-      // Garbage collect old heartbeats (older than 15 min) — but ONLY from previous days.
-      // Today's rows must be preserved so "visitors today" count never drops mid-day.
-      const gcCutoff = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+      // Garbage collect heartbeats older than 25 hours (keeps full 24h rolling window intact).
+      const gcCutoff = new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString();
       await supabase
         .from("presence_heartbeats")
         .delete()
-        .lt("last_seen", gcCutoff)
-        .lt("first_seen_date", todayDate); // only deletes past-day stale sessions
+        .lt("last_seen", gcCutoff);
 
       return new Response(
         JSON.stringify({
