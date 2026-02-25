@@ -53,8 +53,9 @@ import { getAnonId } from "@/lib/anonIdentity";
 interface PersistedChessState {
   fen: string;
   moveHistory: string[];
-  gameOver: boolean;
+  gameOver: boolean | string;
   gameStatus: string;
+  winnerSeat?: number;
 }
 
 // Animation Toggle Component
@@ -273,7 +274,7 @@ const ChessGame = () => {
       const restoredGame = new Chess(persisted.fen);
       setGame(restoredGame);
       setMoveHistory(persisted.moveHistory || []);
-      setGameOver(persisted.gameOver || false);
+      setGameOver(!!persisted.gameOver);
       if (persisted.gameStatus) {
         setGameStatus(persisted.gameStatus);
       }
@@ -323,11 +324,23 @@ const ChessGame = () => {
   useEffect(() => {
     if (roomPlayers.length >= 2 && moveHistory.length > 0) {
       const currentTurnWallet = game.turn() === 'w' ? roomPlayers[0] : roomPlayers[1];
+      // Save gameOver as color string for settle-game compatibility
+      const effectiveColor = myColor;
+      const winnerColor = gameOver
+        ? (winnerWallet === 'draw' ? 'draw'
+           : winnerWallet === effectivePlayerId
+             ? (effectiveColor === 'w' ? 'white' : 'black')
+             : winnerWallet
+               ? (effectiveColor === 'w' ? 'black' : 'white')
+               : true)
+        : false;
+
       const persisted: PersistedChessState = {
         fen: game.fen(),
         moveHistory,
-        gameOver,
+        gameOver: winnerColor || gameOver,
         gameStatus,
+        winnerSeat: winnerColor === 'white' ? 0 : winnerColor === 'black' ? 1 : undefined,
       };
       saveChessSession(
         persisted,
@@ -1399,7 +1412,7 @@ const ChessGame = () => {
 
               {/* Status Bar */}
               <div 
-                className={`relative overflow-hidden rounded-lg border transition-all duration-300 ${
+                className={`relative overflow-hidden rounded-lg border transition-colors duration-300 ${
                   gameOver 
                     ? gameStatus.includes("win") 
                       ? "bg-green-500/10 border-green-500/30" 

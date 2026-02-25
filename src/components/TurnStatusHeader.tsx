@@ -152,7 +152,7 @@ export const TurnStatusHeader = memo(function TurnStatusHeader({
             <div
               key={player.address}
               className={cn(
-                "flex items-center gap-1.5 px-2 py-1 rounded-md text-xs transition-all",
+                "flex items-center gap-1.5 px-2 py-1 rounded-md text-xs transition-colors",
                 isActive && "bg-muted/50 ring-1 ring-primary/50",
                 player.status === "finished" && "opacity-50",
                 player.status === "disconnected" && "opacity-30"
