@@ -1,133 +1,146 @@
 
-# Fix: Settlement Error + Mobile Board Movement
+# Fix: Wrong SOL Amount on Share Card + Settlement Error Display
 
-## Issue 1: "Cannot resolve winner seat: No winnerSeat or gameOver found in game_state"
+## Summary
 
-### Root Cause
+Three issues found from the test. The board stability is confirmed working.
 
-The `settle-game` edge function determines the winner by reading `game_state.winnerSeat` or `game_state.gameOver` from the `game_sessions` table. However, chess saves its `game_state` as:
-
-```text
-{
-  fen: "...",
-  moveHistory: [...],
-  gameOver: true,       // <-- boolean, not a color string
-  gameStatus: "Checkmate - You win!"
-}
-```
-
-The `resolveWinnerSeat()` function at line 96-138 of `settle-game/index.ts`:
-- Priority 1: Looks for `winnerSeat` as a number (0-3) -- chess never sets this
-- Priority 2: Looks for `gameOver` as a **string** like "white", "black", or "0", "1" -- chess sets it as `true` (boolean)
-- Result: Falls through to "No winnerSeat or gameOver found" error
-
-The `game_sessions.winner_wallet` column IS set correctly by the `finish_game_session` RPC, but `settle-game` never reads it as a fallback.
-
-### Fix
-
-Two changes needed (belt-and-suspenders approach):
-
-**A. Edge function (`settle-game/index.ts`)**: Add a Priority 0 fallback -- before checking `game_state`, check if `game_sessions.winner_wallet` is already set (which it is for chess forfeit/checkmate). If so, find that wallet's seat index in the on-chain `players[]` array and use it directly.
-
-Modify the query at line 483-487 to also select `winner_wallet`:
-```text
-.select("game_state, game_type, winner_wallet")
-```
-
-Then add a check before `resolveWinnerSeat`: if `sessionRow.winner_wallet` exists, find it in `playersOnChain` to get the seat index directly, bypassing `resolveWinnerSeat` entirely.
-
-**B. Client-side (`ChessGame.tsx`)**: When saving game state, include a `gameOver` field as a color string (e.g., "white" or "black") instead of a boolean. This ensures future settlement calls work even without the edge function fallback.
-
-In the `saveSession` call around line 326-339, change the persisted state to include `gameOver` as a winning color string when applicable:
-```text
-gameOver: gameOver 
-  ? (winnerWallet === 'draw' ? 'draw' 
-     : winnerWallet === effectivePlayerId ? (effectiveColor === 'w' ? 'white' : 'black')
-     : (effectiveColor === 'w' ? 'black' : 'white'))
-  : false,
-```
-
-Also add `winnerSeat` as a numeric field (0 for white, 1 for black) for direct resolution.
-
-## Issue 2: Mobile Screen Still Moving During Turns
+## Issue 1: Share Card Shows "807,039,453.67 SOL" (Critical)
 
 ### Root Cause
 
-The `TurnStatusHeader` fixes (opacity-0, min-h, transition-colors) are applied. However, there are two remaining sources of layout shift in `ChessGame.tsx`:
+The `parseRoomData` function in `GameEndScreen.tsx` has **incorrect byte offsets** for reading the on-chain Room account.
 
-1. **Status Bar (line 1402)**: Uses `transition-all duration-300` which animates height/padding changes when the resign button appears/disappears (`{!gameOver && ...}` at line 1414).
+The actual Room struct from the IDL:
+```text
+Offset  Field
+------  -----
+0       discriminator (8 bytes)
+8       room_id (u64, 8 bytes)
+16      creator (pubkey, 32 bytes)
+48      game_type (u8, 1 byte)
+49      max_players (u8, 1 byte)
+50      player_count (u8, 1 byte)
+51      status (u8, 1 byte)
+52      stake_lamports (u64, 8 bytes)  <-- CORRECT offset
+60      winner (pubkey, 32 bytes)
+92      players (4 x pubkey, 128 bytes)
+```
 
-2. **Player status dots (TurnStatusHeader line 155)**: Each player dot uses `transition-all` which can cause micro-shifts when `ring-1 ring-primary/50` toggles on/off for the active player.
+The current code assumes:
+```text
+ENTRY_FEE_OFFSET = 8 + 32 + 32 = 72  <-- WRONG (20 bytes too late)
+STATUS_OFFSET = 80                     <-- WRONG
+WINNER_OFFSET = 81                     <-- WRONG
+```
+
+Because the code reads at offset 72, it interprets random bytes from the middle of the `winner` pubkey as the `stake_lamports` value, producing a garbage number like 807,039,453,670,000,000 lamports. When divided by LAMPORTS_PER_SOL, that becomes 807,039,453.67 -- exactly what the user saw.
 
 ### Fix
 
-**A. `ChessGame.tsx` line 1402**: Change `transition-all` to `transition-colors` on the status bar.
+Update `parseRoomData` in `src/components/GameEndScreen.tsx` to use the correct offsets:
 
-**B. `TurnStatusHeader.tsx` line 155**: Change `transition-all` to `transition-colors` on player status row items.
+```text
+ROOM_ID_OFFSET   = 8
+CREATOR_OFFSET   = 16
+GAME_TYPE_OFFSET = 48
+MAX_PLAYERS_OFF  = 49
+PLAYER_COUNT_OFF = 50
+STATUS_OFFSET    = 51
+STAKE_OFFSET     = 52
+WINNER_OFFSET    = 60
+```
+
+Also extract `max_players` from the account instead of hardcoding to 2, and `player_count` for additional safety.
+
+## Issue 2: "Settlement Issue" Error Displayed Despite Successful Settlement
+
+### Root Cause
+
+When the user forfeits from desktop, `forfeit-game` calls `settle-game` server-side. Simultaneously, the mobile client's `useAutoSettlement` hook detects the game-over and also calls `settle-game`. This creates a race condition:
+
+1. First call: `submit_result` succeeds, vault drained, `close_room` succeeds
+2. Second call: `submit_result` fails with "AccountNotInitialized" because vault is already empty
+
+The second call's error is displayed to the user even though settlement was fully completed.
+
+### Fix
+
+In `settle-game/index.ts`, catch the specific `AccountNotInitialized` (error 0xbc4 / 3012) error during `submit_result` and check if the room is already in Finished status (status=3). If so, treat it as an idempotent success rather than an error.
+
+Add error handling around the `submit_result` transaction at line 883-896. If the error contains "AccountNotInitialized" or "0xbc4", re-fetch the room account. If the room is now status=3 (Finished), return success with `alreadySettled: true`.
+
+## Issue 3: Board Stability
+
+Confirmed working -- the mobile board no longer shifts between turns.
 
 ---
 
 ## Technical Details
 
-### File: `supabase/functions/settle-game/index.ts`
+### File: `src/components/GameEndScreen.tsx` (lines 122-148)
 
-1. At line 483-487, change the select to include `winner_wallet`:
-```text
-.select("game_state, game_type, winner_wallet")
-```
+Replace the `parseRoomData` function with correct offsets from the IDL:
 
-2. After line 498, before calling `resolveWinnerSeat`, add a winner_wallet fallback:
 ```text
-// Priority 0: If winner_wallet is already set in DB, resolve seat from on-chain players
-if (sessionRow.winner_wallet) {
-  const walletIndex = playersOnChain.indexOf(sessionRow.winner_wallet);
-  if (walletIndex >= 0) {
-    console.log("[settle-game] Winner resolved from DB winner_wallet:", {
-      wallet: sessionRow.winner_wallet.slice(0, 12),
-      seatIndex: walletIndex,
-    });
-    // Skip resolveWinnerSeat -- jump directly to seat-based settlement
-    // (use walletIndex as seatIndex)
+function parseRoomData(data: Buffer): RoomPayoutInfo {
+  try {
+    // Room account layout from IDL:
+    // 8 discriminator + 8 room_id + 32 creator + 1 game_type + 1 max_players + 1 player_count + 1 status + 8 stake_lamports + 32 winner + 128 players
+    const STATUS_OFFSET = 8 + 8 + 32 + 1 + 1 + 1; // = 51
+    const STAKE_OFFSET = STATUS_OFFSET + 1;          // = 52
+    const WINNER_OFFSET = STAKE_OFFSET + 8;           // = 60
+    const MAX_PLAYERS_OFFSET = 8 + 8 + 32 + 1;       // = 49
+    const PLAYER_COUNT_OFFSET = MAX_PLAYERS_OFFSET + 1; // = 50
+
+    const status = data[STATUS_OFFSET];
+    const stakeLamports = Number(data.readBigUInt64LE(STAKE_OFFSET));
+    const maxPlayers = data[MAX_PLAYERS_OFFSET] || 2;
+    const winnerBytes = data.slice(WINNER_OFFSET, WINNER_OFFSET + 32);
+    const winnerPubkey = new PublicKey(winnerBytes).toBase58();
+
+    const isFinished = status === 2 || status === 3;
+    const winnerSet = winnerPubkey !== DEFAULT_PUBKEY;
+
+    return {
+      isSettled: isFinished || winnerSet,
+      onChainWinner: winnerSet ? winnerPubkey : null,
+      stakeLamports,
+      maxPlayers,
+    };
+  } catch {
+    return { isSettled: false, onChainWinner: null, stakeLamports: 0, maxPlayers: 2 };
   }
 }
 ```
 
-This requires restructuring lines 504-514 to use the DB-derived seat as a fallback when `resolveWinnerSeat` fails.
+### File: `supabase/functions/settle-game/index.ts` (lines 883-896)
 
-### File: `src/pages/ChessGame.tsx`
+Wrap the `sendRawTransaction` call in a try-catch that detects the "AccountNotInitialized" vault error. If caught, re-fetch the room account to check if it's already settled (status 3). If yes, proceed to DB recording and return success:
 
-1. Lines 326-331 -- Update `PersistedChessState` saved to include a color-based `gameOver`:
 ```text
-const winnerColor = winnerWallet === 'draw' ? 'draw'
-  : winnerWallet === effectivePlayerId 
-    ? (effectiveColor === 'w' ? 'white' : 'black')
-    : winnerWallet 
-      ? (effectiveColor === 'w' ? 'black' : 'white')
-      : false;
-
-const persisted: PersistedChessState = {
-  fen: game.fen(),
-  moveHistory,
-  gameOver: winnerColor || gameOver,
-  gameStatus,
-  winnerSeat: winnerColor === 'white' ? 0 : winnerColor === 'black' ? 1 : undefined,
-};
-```
-
-2. Line 1402 -- Change `transition-all` to `transition-colors`:
-```text
-className={`relative overflow-hidden rounded-lg border transition-colors duration-300 ${
-```
-
-### File: `src/components/TurnStatusHeader.tsx`
-
-Line 155 -- Change `transition-all` to `transition-colors`:
-```text
-"flex items-center gap-1.5 px-2 py-1 rounded-md text-xs transition-colors",
+try {
+  signature = await connection.sendRawTransaction(tx.serialize(), { ... });
+  // ... confirm ...
+} catch (txErr) {
+  const errMsg = String(txErr.message || txErr);
+  // If vault is already drained (another settle-game won the race), check if room is now Finished
+  if (errMsg.includes("AccountNotInitialized") || errMsg.includes("0xbc4")) {
+    const roomInfoRetry = await connection.getAccountInfo(roomPdaKey, "confirmed");
+    if (roomInfoRetry?.data) {
+      const retryData = parseRoomAccount(roomInfoRetry.data);
+      if (retryData.status === 3) {
+        // Room was settled by a concurrent call -- treat as idempotent success
+        return json200({ success: true, alreadySettled: true, ... });
+      }
+    }
+  }
+  throw txErr; // re-throw if not the race condition case
+}
 ```
 
 ### What is NOT touched
 - No database migrations
-- No game logic changes (checkmate detection, move validation, etc.)
-- No board sizing or layout restructuring
-- No changes to other games (checkers, backgammon, etc. already use color-based gameOver)
+- No game logic or move validation changes
+- No board layout changes
+- No changes to other game types
