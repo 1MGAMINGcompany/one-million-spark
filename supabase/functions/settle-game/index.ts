@@ -482,7 +482,7 @@ Deno.serve(async (req: Request) => {
     // ─────────────────────────────────────────────────────────────
     const { data: sessionRow, error: sessionError } = await supabase
       .from("game_sessions")
-      .select("game_state, game_type")
+      .select("game_state, game_type, winner_wallet")
       .eq("room_pda", roomPda)
       .single();
 
@@ -500,20 +500,54 @@ Deno.serve(async (req: Request) => {
 
     // ─────────────────────────────────────────────────────────────
     // STEP 3: RESOLVE WINNER SEAT FROM GAME STATE
+    // Priority 0: Use DB winner_wallet if already set (chess sets this via finish_game_session)
     // ─────────────────────────────────────────────────────────────
-    const seatResult = resolveWinnerSeat(gameState, gameType);
+    let seatIndex: number;
+    let source: string;
+    let rawValue: string | number;
 
-    if ("error" in seatResult) {
-      console.error("[settle-game] Cannot resolve winner seat:", seatResult.error);
-      return json200({
-        success: false,
-        error: `Cannot resolve winner seat: ${seatResult.error}`,
-        roomPda,
-        gameState,
-      });
+    const dbWinnerWallet = (sessionRow as any).winner_wallet as string | null;
+    if (dbWinnerWallet) {
+      const walletIndex = playersOnChain.indexOf(dbWinnerWallet);
+      if (walletIndex >= 0) {
+        seatIndex = walletIndex;
+        source = "dbWinnerWallet";
+        rawValue = dbWinnerWallet;
+        console.log("[settle-game] Winner resolved from DB winner_wallet:", {
+          wallet: dbWinnerWallet.slice(0, 12),
+          seatIndex: walletIndex,
+        });
+      } else {
+        console.warn("[settle-game] DB winner_wallet not found in on-chain players, falling back to game_state");
+        const seatResult = resolveWinnerSeat(gameState, gameType);
+        if ("error" in seatResult) {
+          console.error("[settle-game] Cannot resolve winner seat:", seatResult.error);
+          return json200({
+            success: false,
+            error: `Cannot resolve winner seat: ${seatResult.error}`,
+            roomPda,
+            gameState,
+          });
+        }
+        seatIndex = seatResult.seatIndex;
+        source = seatResult.source;
+        rawValue = seatResult.rawValue;
+      }
+    } else {
+      const seatResult = resolveWinnerSeat(gameState, gameType);
+      if ("error" in seatResult) {
+        console.error("[settle-game] Cannot resolve winner seat:", seatResult.error);
+        return json200({
+          success: false,
+          error: `Cannot resolve winner seat: ${seatResult.error}`,
+          roomPda,
+          gameState,
+        });
+      }
+      seatIndex = seatResult.seatIndex;
+      source = seatResult.source;
+      rawValue = seatResult.rawValue;
     }
-
-    const { seatIndex, source, rawValue } = seatResult;
 
     console.log("[settle-game] 🎯 Winner seat resolved:", {
       seatIndex,
