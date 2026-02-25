@@ -782,21 +782,13 @@ const ChessGame = () => {
     isRanked: isRankedGame,
   });
 
-  // Show toast when settlement completes
+  // Log settlement result silently — no user-facing toast (GameEndScreen has recovery UI)
   useEffect(() => {
-    if (autoSettlement.result?.success && autoSettlement.result.signature) {
-      toast({
-        title: "On-chain settlement complete",
-        description: `Tx: ${autoSettlement.result.signature.slice(0, 8)}...`,
-      });
-    } else if (autoSettlement.result && !autoSettlement.result.success && autoSettlement.result.error) {
-      if (!autoSettlement.result.alreadySettled && !autoSettlement.result.alreadyClosed) {
-        toast({
-          title: "Settlement issue",
-          description: autoSettlement.result.error,
-          variant: "destructive",
-        });
-      }
+    if (!autoSettlement.result) return;
+    if (autoSettlement.result.success) {
+      console.log("[ChessGame] Settlement complete:", autoSettlement.result.signature || "already settled");
+    } else if (autoSettlement.result.error) {
+      console.warn("[ChessGame] Settlement issue (silent):", autoSettlement.result.error);
     }
   }, [autoSettlement.result]);
 
@@ -872,12 +864,15 @@ const ChessGame = () => {
 
   // Helper to trigger victory announcement (3s overlay then end screen)
   const triggerVictoryAnnouncement = useCallback((message: string) => {
-    setVictoryAnnouncement(message);
     if (victoryTimeoutRef.current) clearTimeout(victoryTimeoutRef.current);
+    // Small delay so the board renders the checkmate position first
+    setTimeout(() => {
+      setVictoryAnnouncement(message);
+    }, 500);
     victoryTimeoutRef.current = setTimeout(() => {
       setVictoryAnnouncement(null);
       setShowEndScreen(true);
-    }, 3000);
+    }, 3500); // 500ms delay + 3s display
   }, []);
 
   // Helper to show end screen immediately (draws, forfeits, resigns)
@@ -900,7 +895,7 @@ const ChessGame = () => {
       play(isPlayerWin ? 'chess_win' : 'chess_lose');
       // Victory announcement: which color won
       const winningColor = currentGame.turn() === 'w' ? 'Black' : 'White';
-      triggerVictoryAnnouncement(`${winningColor} won by checkmate!`);
+      triggerVictoryAnnouncement(`${winningColor} wins!`);
       return true;
     }
     // Check specific draw reasons BEFORE generic isDraw()
@@ -1160,7 +1155,7 @@ const ChessGame = () => {
       setWinnerWallet(winnerAddr || null);
       play(isPlayerWin ? 'chess_win' : 'chess_lose');
       const winningColor = currentGame.turn() === 'w' ? 'Black' : 'White';
-      triggerVictoryAnnouncement(`${winningColor} won by checkmate!`);
+      triggerVictoryAnnouncement(`${winningColor} wins!`);
       return true;
     }
     if (currentGame.isStalemate()) {
@@ -1510,13 +1505,15 @@ const ChessGame = () => {
       <GameChatPanel chat={chat} />
 
 
-      {/* Victory Announcement Overlay (3 seconds before end screen) */}
+      {/* Victory Announcement Overlay (3 seconds, board visible behind) */}
       {victoryAnnouncement && (
-        <div className="fixed inset-0 bg-background/70 backdrop-blur-sm z-50 flex items-center justify-center">
-          <div
-            className="text-center animate-in zoom-in-75 duration-500"
-          >
-            <p className="text-3xl md:text-5xl font-bold text-primary drop-shadow-[0_0_24px_hsl(45_93%_54%_/_0.6)]"
+        <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
+          <div className="text-center animate-in zoom-in-75 duration-500 bg-background/90 border-2 border-primary rounded-xl px-8 py-6 shadow-[0_0_60px_-10px_hsl(45_93%_54%_/_0.8)]">
+            <p className="text-5xl md:text-7xl font-black text-primary drop-shadow-[0_0_32px_hsl(45_93%_54%_/_0.7)] tracking-wider"
+               style={{ fontFamily: "'Cinzel', serif" }}>
+              CHECKMATE
+            </p>
+            <p className="text-xl md:text-3xl font-semibold text-foreground/80 mt-3"
                style={{ fontFamily: "'Cinzel', serif" }}>
               {victoryAnnouncement}
             </p>
