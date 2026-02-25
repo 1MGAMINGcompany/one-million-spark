@@ -121,26 +121,27 @@ interface RoomPayoutInfo {
  */
 function parseRoomData(data: Buffer): RoomPayoutInfo {
   try {
-    const ENTRY_FEE_OFFSET = 8 + 32 + 32; // = 72
-    const STATUS_OFFSET = ENTRY_FEE_OFFSET + 8; // = 80
-    const WINNER_OFFSET = STATUS_OFFSET + 1; // = 81
-    
-    // Read entry_fee as 64-bit little-endian
-    const stakeLamports = Number(data.readBigUInt64LE(ENTRY_FEE_OFFSET));
-    
+    // Room account layout from IDL:
+    // 8 discriminator + 8 room_id + 32 creator + 1 game_type + 1 max_players + 1 player_count + 1 status + 8 stake_lamports + 32 winner + 128 players
+    const MAX_PLAYERS_OFFSET = 8 + 8 + 32 + 1; // = 49
+    const STATUS_OFFSET = 8 + 8 + 32 + 1 + 1 + 1; // = 51
+    const STAKE_OFFSET = STATUS_OFFSET + 1;          // = 52
+    const WINNER_OFFSET = STAKE_OFFSET + 8;           // = 60
+
     const status = data[STATUS_OFFSET];
+    const stakeLamports = Number(data.readBigUInt64LE(STAKE_OFFSET));
+    const maxPlayers = data[MAX_PLAYERS_OFFSET] || 2;
     const winnerBytes = data.slice(WINNER_OFFSET, WINNER_OFFSET + 32);
     const winnerPubkey = new PublicKey(winnerBytes).toBase58();
-    
-    // Status 2 = Finished, or winner is set (not default pubkey)
-    const isFinished = status === 2;
+
+    const isFinished = status === 2 || status === 3;
     const winnerSet = winnerPubkey !== DEFAULT_PUBKEY;
-    
+
     return {
       isSettled: isFinished || winnerSet,
       onChainWinner: winnerSet ? winnerPubkey : null,
       stakeLamports,
-      maxPlayers: 2, // Currently 2-player games
+      maxPlayers,
     };
   } catch {
     return { isSettled: false, onChainWinner: null, stakeLamports: 0, maxPlayers: 2 };

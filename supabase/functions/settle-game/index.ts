@@ -880,23 +880,55 @@ Deno.serve(async (req: Request) => {
 
       console.log("[settle-game] Sending submit_result...");
 
-      const signature = await connection.sendRawTransaction(tx.serialize(), {
-        skipPreflight: false,
-        preflightCommitment: "confirmed",
-      });
+      let signature: string;
+      try {
+        signature = await connection.sendRawTransaction(tx.serialize(), {
+          skipPreflight: false,
+          preflightCommitment: "confirmed",
+        });
 
-      console.log("[settle-game] Sent:", signature);
+        console.log("[settle-game] Sent:", signature);
 
-      const confirmation = await connection.confirmTransaction(
-        { signature, blockhash, lastValidBlockHeight },
-        "confirmed",
-      );
+        const confirmation = await connection.confirmTransaction(
+          { signature, blockhash, lastValidBlockHeight },
+          "confirmed",
+        );
 
-      if (confirmation.value.err) {
-        throw new Error(`Transaction failed: ${JSON.stringify(confirmation.value.err)}`);
+        if (confirmation.value.err) {
+          throw new Error(`Transaction failed: ${JSON.stringify(confirmation.value.err)}`);
+        }
+
+        console.log("[settle-game] ✅ submit_result confirmed:", signature);
+      } catch (txErr: any) {
+        const errMsg = String(txErr?.message || txErr);
+        // Race condition: vault already drained by a concurrent settle-game call
+        if (errMsg.includes("AccountNotInitialized") || errMsg.includes("0xbc4") || errMsg.includes("3012")) {
+          console.warn("[settle-game] submit_result failed with AccountNotInitialized, checking if already settled...");
+          const roomInfoRetry = await connection.getAccountInfo(roomPdaKey, "confirmed");
+          if (roomInfoRetry?.data) {
+            const retryData = parseRoomAccount(new Uint8Array(roomInfoRetry.data));
+            if (retryData && retryData.status === 3) {
+              console.log("[settle-game] ✅ Room already settled by concurrent call (status=3), treating as idempotent success");
+
+              // Finish session (best effort)
+              await supabase.rpc("finish_game_session", {
+                p_room_pda: roomPda,
+                p_caller_wallet: winnerWallet,
+              }).catch(() => {});
+
+              return json200({
+                success: true,
+                alreadySettled: true,
+                action: "settled",
+                reason,
+                winnerWallet,
+                vaultLamports,
+              });
+            }
+          }
+        }
+        throw txErr; // re-throw if not the race condition case
       }
-
-      console.log("[settle-game] ✅ submit_result confirmed:", signature);
 
       // Log success
       await logSettlement(supabase, {
