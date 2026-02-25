@@ -1,146 +1,99 @@
 
-# Fix: Wrong SOL Amount on Share Card + Settlement Error Display
 
-## Summary
+# Fix: Checkmate Board Visibility + Settlement Error Toast
 
-Three issues found from the test. The board stability is confirmed working.
+## Problem 1: Board Not Visible on Checkmate
 
-## Issue 1: Share Card Shows "807,039,453.67 SOL" (Critical)
-
-### Root Cause
-
-The `parseRoomData` function in `GameEndScreen.tsx` has **incorrect byte offsets** for reading the on-chain Room account.
-
-The actual Room struct from the IDL:
-```text
-Offset  Field
-------  -----
-0       discriminator (8 bytes)
-8       room_id (u64, 8 bytes)
-16      creator (pubkey, 32 bytes)
-48      game_type (u8, 1 byte)
-49      max_players (u8, 1 byte)
-50      player_count (u8, 1 byte)
-51      status (u8, 1 byte)
-52      stake_lamports (u64, 8 bytes)  <-- CORRECT offset
-60      winner (pubkey, 32 bytes)
-92      players (4 x pubkey, 128 bytes)
-```
-
-The current code assumes:
-```text
-ENTRY_FEE_OFFSET = 8 + 32 + 32 = 72  <-- WRONG (20 bytes too late)
-STATUS_OFFSET = 80                     <-- WRONG
-WINNER_OFFSET = 81                     <-- WRONG
-```
-
-Because the code reads at offset 72, it interprets random bytes from the middle of the `winner` pubkey as the `stake_lamports` value, producing a garbage number like 807,039,453,670,000,000 lamports. When divided by LAMPORTS_PER_SOL, that becomes 807,039,453.67 -- exactly what the user saw.
+The victory announcement overlay at line 1515 uses `fixed inset-0 bg-background/70 backdrop-blur-sm` which **completely covers and blurs the board**. When you make the checkmate move, the board state updates and the overlay appears simultaneously -- you never see the winning position.
 
 ### Fix
 
-Update `parseRoomData` in `src/components/GameEndScreen.tsx` to use the correct offsets:
+Make the overlay **transparent** so the board stays visible, and show "CHECKMATE" as a floating banner on top of the board:
 
-```text
-ROOM_ID_OFFSET   = 8
-CREATOR_OFFSET   = 16
-GAME_TYPE_OFFSET = 48
-MAX_PLAYERS_OFF  = 49
-PLAYER_COUNT_OFF = 50
-STATUS_OFFSET    = 51
-STAKE_OFFSET     = 52
-WINNER_OFFSET    = 60
+- Remove `bg-background/70 backdrop-blur-sm` from the overlay
+- Position the text as a centered banner with its own solid background (not full-screen coverage)
+- Add a 500ms delay before showing the announcement so the board renders the final move first
+- Show "CHECKMATE" prominently in large gold text, with "White wins!" / "Black wins!" as subtitle
+
+**File**: `src/pages/ChessGame.tsx`
+
+**Victory overlay (lines 1513-1525)** -- change from full-screen blurred cover to a floating banner:
+```
+{victoryAnnouncement && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
+    <div className="text-center animate-in zoom-in-75 duration-500 bg-background/90 border-2 border-primary rounded-xl px-8 py-6 shadow-[0_0_60px_-10px_hsl(45_93%_54%_/_0.8)]">
+      <p className="text-5xl md:text-7xl font-black text-primary drop-shadow-[0_0_32px_hsl(45_93%_54%_/_0.7)] tracking-wider">
+        CHECKMATE
+      </p>
+      <p className="text-xl md:text-3xl font-semibold text-foreground/80 mt-3">
+        {victoryAnnouncement}
+      </p>
+    </div>
+  </div>
+)}
 ```
 
-Also extract `max_players` from the account instead of hardcoding to 2, and `player_count` for additional safety.
+**triggerVictoryAnnouncement (line 874)** -- add 500ms delay so the board renders the move first:
+```typescript
+const triggerVictoryAnnouncement = useCallback((message: string) => {
+  if (victoryTimeoutRef.current) clearTimeout(victoryTimeoutRef.current);
+  // Small delay so the board renders the checkmate position first
+  setTimeout(() => {
+    setVictoryAnnouncement(message);
+  }, 500);
+  victoryTimeoutRef.current = setTimeout(() => {
+    setVictoryAnnouncement(null);
+    setShowEndScreen(true);
+  }, 3500); // 500ms delay + 3s display
+}, []);
+```
 
-## Issue 2: "Settlement Issue" Error Displayed Despite Successful Settlement
+**Checkmate calls (lines 902-903 and 1162-1163)** -- pass just the winner info, headline comes from the overlay:
+```typescript
+const winningColor = currentGame.turn() === 'w' ? 'Black' : 'White';
+triggerVictoryAnnouncement(`${winningColor} wins!`);
+```
 
-### Root Cause
+## Problem 2: "Settlement Issue" Red Toast
 
-When the user forfeits from desktop, `forfeit-game` calls `settle-game` server-side. Simultaneously, the mobile client's `useAutoSettlement` hook detects the game-over and also calls `settle-game`. This creates a race condition:
-
-1. First call: `submit_result` succeeds, vault drained, `close_room` succeeds
-2. Second call: `submit_result` fails with "AccountNotInitialized" because vault is already empty
-
-The second call's error is displayed to the user even though settlement was fully completed.
+Line 792-799 shows a red destructive toast for settlement errors. Even handled race conditions can trigger this, scaring users.
 
 ### Fix
 
-In `settle-game/index.ts`, catch the specific `AccountNotInitialized` (error 0xbc4 / 3012) error during `submit_result` and check if the room is already in Finished status (status=3). If so, treat it as an idempotent success rather than an error.
+Remove the red toast entirely. Log to console for debugging. The GameEndScreen already has recovery UI if settlement truly fails.
 
-Add error handling around the `submit_result` transaction at line 883-896. If the error contains "AccountNotInitialized" or "0xbc4", re-fetch the room account. If the room is now status=3 (Finished), return success with `alreadySettled: true`.
-
-## Issue 3: Board Stability
-
-Confirmed working -- the mobile board no longer shifts between turns.
-
----
-
-## Technical Details
-
-### File: `src/components/GameEndScreen.tsx` (lines 122-148)
-
-Replace the `parseRoomData` function with correct offsets from the IDL:
-
-```text
-function parseRoomData(data: Buffer): RoomPayoutInfo {
-  try {
-    // Room account layout from IDL:
-    // 8 discriminator + 8 room_id + 32 creator + 1 game_type + 1 max_players + 1 player_count + 1 status + 8 stake_lamports + 32 winner + 128 players
-    const STATUS_OFFSET = 8 + 8 + 32 + 1 + 1 + 1; // = 51
-    const STAKE_OFFSET = STATUS_OFFSET + 1;          // = 52
-    const WINNER_OFFSET = STAKE_OFFSET + 8;           // = 60
-    const MAX_PLAYERS_OFFSET = 8 + 8 + 32 + 1;       // = 49
-    const PLAYER_COUNT_OFFSET = MAX_PLAYERS_OFFSET + 1; // = 50
-
-    const status = data[STATUS_OFFSET];
-    const stakeLamports = Number(data.readBigUInt64LE(STAKE_OFFSET));
-    const maxPlayers = data[MAX_PLAYERS_OFFSET] || 2;
-    const winnerBytes = data.slice(WINNER_OFFSET, WINNER_OFFSET + 32);
-    const winnerPubkey = new PublicKey(winnerBytes).toBase58();
-
-    const isFinished = status === 2 || status === 3;
-    const winnerSet = winnerPubkey !== DEFAULT_PUBKEY;
-
-    return {
-      isSettled: isFinished || winnerSet,
-      onChainWinner: winnerSet ? winnerPubkey : null,
-      stakeLamports,
-      maxPlayers,
-    };
-  } catch {
-    return { isSettled: false, onChainWinner: null, stakeLamports: 0, maxPlayers: 2 };
+```typescript
+useEffect(() => {
+  if (!autoSettlement.result) return;
+  if (autoSettlement.result.success) {
+    console.log("[ChessGame] Settlement complete:", autoSettlement.result.signature || "already settled");
+  } else if (autoSettlement.result.error) {
+    console.warn("[ChessGame] Settlement issue (silent):", autoSettlement.result.error);
   }
-}
+}, [autoSettlement.result]);
 ```
 
-### File: `supabase/functions/settle-game/index.ts` (lines 883-896)
+## Problem 3: Mobile Profile Button (AI Overlay z-index)
 
-Wrap the `sendRawTransaction` call in a try-catch that detects the "AccountNotInitialized" vault error. If caught, re-fetch the room account to check if it's already settled (status 3). If yes, proceed to DB recording and return success:
+**File**: `src/components/AIAgentHelperOverlay.tsx`
+- Line 698: backdrop `z-[9997]` to `z-40`
+- Line 701: content `z-[9998]` to `z-[45]`
+- Line 744: backdrop `z-[9997]` to `z-40`
+- Line 745: content `z-[9998]` to `z-[45]`
 
-```text
-try {
-  signature = await connection.sendRawTransaction(tx.serialize(), { ... });
-  // ... confirm ...
-} catch (txErr) {
-  const errMsg = String(txErr.message || txErr);
-  // If vault is already drained (another settle-game won the race), check if room is now Finished
-  if (errMsg.includes("AccountNotInitialized") || errMsg.includes("0xbc4")) {
-    const roomInfoRetry = await connection.getAccountInfo(roomPdaKey, "confirmed");
-    if (roomInfoRetry?.data) {
-      const retryData = parseRoomAccount(roomInfoRetry.data);
-      if (retryData.status === 3) {
-        // Room was settled by a concurrent call -- treat as idempotent success
-        return json200({ success: true, alreadySettled: true, ... });
-      }
-    }
-  }
-  throw txErr; // re-throw if not the race condition case
-}
-```
+## Summary of Changes
+
+| File | What | Lines |
+|------|------|-------|
+| `src/pages/ChessGame.tsx` | Add 500ms delay to victory announcement so board renders first | ~874-881 |
+| `src/pages/ChessGame.tsx` | Make overlay a floating banner (board visible behind it) + "CHECKMATE" headline | ~1513-1525 |
+| `src/pages/ChessGame.tsx` | Change announcement text to just "White/Black wins!" | ~902-903, 1162-1163 |
+| `src/pages/ChessGame.tsx` | Remove red settlement toast, log silently | ~786-801 |
+| `src/components/AIAgentHelperOverlay.tsx` | Lower z-index on backdrops | ~698, 701, 744, 745 |
 
 ### What is NOT touched
-- No database migrations
-- No game logic or move validation changes
-- No board layout changes
+- No board layout or game logic changes
+- No edge function changes
+- No database changes
 - No changes to other game types
+
