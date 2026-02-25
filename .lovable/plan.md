@@ -1,105 +1,133 @@
 
-# Fix: "0 SOL" on Share Card, Missing SOL on Match Page, and Chess Board Still Moving
+# Fix: Settlement Error + Mobile Board Movement
 
-## Three Issues Identified
+## Issue 1: "Cannot resolve winner seat: No winnerSeat or gameOver found in game_state"
 
-### Issue 1: Share Card Shows "0 SOL" (In-Game)
+### Root Cause
 
-**Root Cause:** When the game ends and the user opens the Share Result Card, the `solWonLamports` prop comes from `payoutInfo` (line 796 of GameEndScreen.tsx):
+The `settle-game` edge function determines the winner by reading `game_state.winnerSeat` or `game_state.gameOver` from the `game_sessions` table. However, chess saves its `game_state` as:
+
 ```text
-solWonLamports={payoutInfo ? Math.round(payoutInfo.winnerPayout * LAMPORTS_PER_SOL) : 0}
+{
+  fen: "...",
+  moveHistory: [...],
+  gameOver: true,       // <-- boolean, not a color string
+  gameStatus: "Checkmate - You win!"
+}
 ```
 
-`payoutInfo` is computed from on-chain room account data. After settlement, the room account is often closed (rent reclaimed), so `accountInfo` returns `null`, `payoutInfo` stays `null`, and the share card receives `0`.
+The `resolveWinnerSeat()` function at line 96-138 of `settle-game/index.ts`:
+- Priority 1: Looks for `winnerSeat` as a number (0-3) -- chess never sets this
+- Priority 2: Looks for `gameOver` as a **string** like "white", "black", or "0", "1" -- chess sets it as `true` (boolean)
+- Result: Falls through to "No winnerSeat or gameOver found" error
 
-The X tweet then says "Just won 0 SOL" because the `formatSol(0)` returns "0".
+The `game_sessions.winner_wallet` column IS set correctly by the `finish_game_session` RPC, but `settle-game` never reads it as a fallback.
 
-**Fix:** Fetch stake info from the database (`matches` table) as a fallback when on-chain data is unavailable. The `matches` table already has `stake_lamports` and `max_players` for settled games.
+### Fix
 
-### Issue 2: Public Match Share Page (`/match/:roomPda`) Missing SOL
+Two changes needed (belt-and-suspenders approach):
 
-**Root Cause:** No row exists in `match_share_cards` for the given room. The fallback logic in `MatchShareCard.tsx` queries `matches` and computes the payout correctly (6.3M lamports x 2 x 0.95 = ~0.012 SOL). However, the `formatSol` function at line 19 returns "0" when `!lamports` evaluates to true -- and `0` is falsy in JavaScript. Since the computed value is non-zero (11,970,000), the public page should display correctly IF the fallback runs.
+**A. Edge function (`settle-game/index.ts`)**: Add a Priority 0 fallback -- before checking `game_state`, check if `game_sessions.winner_wallet` is already set (which it is for chess forfeit/checkmate). If so, find that wallet's seat index in the on-chain `players[]` array and use it directly.
 
-The real problem: the settlement process doesn't write a `match_share_cards` row. This means the share page always falls back to `matches`, which works but is fragile. A more robust fix would ensure the settle-game edge function writes to `match_share_cards`.
+Modify the query at line 483-487 to also select `winner_wallet`:
+```text
+.select("game_state, game_type, winner_wallet")
+```
 
-Additionally, the `formatSol` function should handle small amounts better (use `.toFixed(4)` instead of `.toFixed(3)` to show sub-0.001 SOL amounts).
+Then add a check before `resolveWinnerSeat`: if `sessionRow.winner_wallet` exists, find it in `playersOnChain` to get the seat index directly, bypassing `resolveWinnerSeat` entirely.
 
-### Issue 3: Chess Board Still Moves on Mobile
+**B. Client-side (`ChessGame.tsx`)**: When saving game state, include a `gameOver` field as a color string (e.g., "white" or "black") instead of a boolean. This ensures future settlement calls work even without the edge function fallback.
 
-**Root Cause:** The TurnStatusHeader fix (opacity-0) was applied and looks correct in the code. However, there is another source of layout shift: the `animate-pulse` class on the "My Turn" badge (line 137). On mobile, the `animate-pulse` causes the element to scale slightly, which can trigger reflows. More importantly, looking at the broader ChessGame layout, the **status bar** below the board (lines 1400-1427) has a conditional `{!gameOver && ...}` that shows/hides the resign button, and the entire status bar changes its background gradient classes based on game state.
+In the `saveSession` call around line 326-339, change the persisted state to include `gameOver` as a winning color string when applicable:
+```text
+gameOver: gameOver 
+  ? (winnerWallet === 'draw' ? 'draw' 
+     : winnerWallet === effectivePlayerId ? (effectiveColor === 'w' ? 'white' : 'black')
+     : (effectiveColor === 'w' ? 'black' : 'white'))
+  : false,
+```
 
-But the most likely culprit is actually the `TurnStatusHeader` having an `animate-pulse` on the main turn status box itself (line 83-85) -- the entire container has `shadow-[0_0_20px_rgba(...)]` that appears/disappears with `isMyTurn`, plus the `animate-pulse` and `animate-ping` effects inside. The `transition-all duration-300` on the main container (line 81) causes height/padding changes as the border styling changes between turn states.
+Also add `winnerSeat` as a numeric field (0 for white, 1 for black) for direct resolution.
 
-**Fix:** Ensure the TurnStatusHeader main container has a fixed minimum height so the transition between "my turn" and "opponent's turn" states doesn't change the overall element dimensions. Remove `animate-ping` on the blur div that causes reflow.
+## Issue 2: Mobile Screen Still Moving During Turns
+
+### Root Cause
+
+The `TurnStatusHeader` fixes (opacity-0, min-h, transition-colors) are applied. However, there are two remaining sources of layout shift in `ChessGame.tsx`:
+
+1. **Status Bar (line 1402)**: Uses `transition-all duration-300` which animates height/padding changes when the resign button appears/disappears (`{!gameOver && ...}` at line 1414).
+
+2. **Player status dots (TurnStatusHeader line 155)**: Each player dot uses `transition-all` which can cause micro-shifts when `ring-1 ring-primary/50` toggles on/off for the active player.
+
+### Fix
+
+**A. `ChessGame.tsx` line 1402**: Change `transition-all` to `transition-colors` on the status bar.
+
+**B. `TurnStatusHeader.tsx` line 155**: Change `transition-all` to `transition-colors` on player status row items.
 
 ---
 
 ## Technical Details
 
-### File: `src/components/GameEndScreen.tsx`
+### File: `supabase/functions/settle-game/index.ts`
 
-**Lines 220-271 (useEffect for room status check):** Add a fallback that queries the `matches` table via Supabase when on-chain account data is unavailable (`accountInfo` is null). Use the `stake_lamports` and `max_players` from the database to compute `payoutInfo`.
-
-Add after line 260 (after the `if (accountInfo?.data)` block):
+1. At line 483-487, change the select to include `winner_wallet`:
 ```text
-// Fallback: if on-chain account is closed (settled), get stake from matches table
-if (!accountInfo?.data) {
-  const { data: matchRow } = await supabase
-    .from("matches")
-    .select("stake_lamports, max_players")
-    .eq("room_pda", roomPda)
-    .maybeSingle();
-  
-  if (matchRow && matchRow.stake_lamports > 0) {
-    const pot = matchRow.stake_lamports * (matchRow.max_players || 2);
-    const fee = Math.floor(pot * FEE_BPS / 10_000);
-    const winnerPayout = pot - fee;
-    setStakeLamports(matchRow.stake_lamports);
-    setPayoutInfo({
-      pot: pot / LAMPORTS_PER_SOL,
-      fee: fee / LAMPORTS_PER_SOL,
-      winnerPayout: winnerPayout / LAMPORTS_PER_SOL,
+.select("game_state, game_type, winner_wallet")
+```
+
+2. After line 498, before calling `resolveWinnerSeat`, add a winner_wallet fallback:
+```text
+// Priority 0: If winner_wallet is already set in DB, resolve seat from on-chain players
+if (sessionRow.winner_wallet) {
+  const walletIndex = playersOnChain.indexOf(sessionRow.winner_wallet);
+  if (walletIndex >= 0) {
+    console.log("[settle-game] Winner resolved from DB winner_wallet:", {
+      wallet: sessionRow.winner_wallet.slice(0, 12),
+      seatIndex: walletIndex,
     });
+    // Skip resolveWinnerSeat -- jump directly to seat-based settlement
+    // (use walletIndex as seatIndex)
   }
 }
 ```
 
-### File: `src/components/ShareResultCard.tsx`
+This requires restructuring lines 504-514 to use the DB-derived seat as a fallback when `resolveWinnerSeat` fails.
 
-**Line 25-27 (formatSol):** Improve to show 4 decimal places and handle zero explicitly:
+### File: `src/pages/ChessGame.tsx`
+
+1. Lines 326-331 -- Update `PersistedChessState` saved to include a color-based `gameOver`:
 ```text
-function formatSol(lamports: number): string {
-  if (!lamports || lamports <= 0) return "0";
-  const sol = lamports / LAMPORTS_PER_SOL;
-  return sol < 0.001 ? sol.toFixed(4) : sol.toFixed(3);
-}
+const winnerColor = winnerWallet === 'draw' ? 'draw'
+  : winnerWallet === effectivePlayerId 
+    ? (effectiveColor === 'w' ? 'white' : 'black')
+    : winnerWallet 
+      ? (effectiveColor === 'w' ? 'black' : 'white')
+      : false;
+
+const persisted: PersistedChessState = {
+  fen: game.fen(),
+  moveHistory,
+  gameOver: winnerColor || gameOver,
+  gameStatus,
+  winnerSeat: winnerColor === 'white' ? 0 : winnerColor === 'black' ? 1 : undefined,
+};
 ```
 
-### File: `src/pages/MatchShareCard.tsx`
-
-**Line 19-22 (formatSol):** Same improvement as ShareResultCard -- show 4 decimal places for small amounts.
+2. Line 1402 -- Change `transition-all` to `transition-colors`:
+```text
+className={`relative overflow-hidden rounded-lg border transition-colors duration-300 ${
+```
 
 ### File: `src/components/TurnStatusHeader.tsx`
 
-**Line 80-85 (main container):** Add `min-h-[56px]` to prevent height changes during turn transitions. Remove or tone down the shadow transition that causes reflow:
+Line 155 -- Change `transition-all` to `transition-colors`:
 ```text
-className={cn(
-  "flex items-center justify-between rounded-lg border px-4 py-3 transition-colors duration-300 min-h-[56px]",
-  ...
-)}
-```
-
-Change `transition-all` to `transition-colors` so only color/background animates, not size/padding/shadow.
-
-**Line 91-92 (animate-ping div):** Remove the `animate-ping` effect on the Crown blur div, as it causes continuous reflow. Keep the `animate-pulse` on the Crown icon itself.
-
-Remove:
-```text
-<div className="absolute inset-0 bg-primary/30 rounded-full blur-md animate-ping" />
+"flex items-center gap-1.5 px-2 py-1 rounded-md text-xs transition-colors",
 ```
 
 ### What is NOT touched
-- No game logic, matchmaking, Solana program, or backend changes
-- No database migrations needed (reads from existing `matches` table)
-- No edge function changes
-- PvP blocking and settlement flow unchanged
+- No database migrations
+- No game logic changes (checkmate detection, move validation, etc.)
+- No board sizing or layout restructuring
+- No changes to other games (checkers, backgammon, etc. already use color-based gameOver)
