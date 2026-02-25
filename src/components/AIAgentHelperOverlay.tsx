@@ -695,10 +695,10 @@ export default function AIAgentHelperOverlay() {
       {showNudge && !sheetOpen && (
         <>
           {/* Click-away backdrop */}
-          <div className="fixed inset-0 z-[9997]" onClick={dismissNudge} />
+          <div className="fixed inset-0 z-40" onClick={dismissNudge} />
           <div
             ref={nudgePillRef}
-            className="fixed z-[9998] animate-in slide-in-from-bottom duration-300"
+            className="fixed z-[45] animate-in slide-in-from-bottom duration-300"
             style={{
               left: pos.x > window.innerWidth / 2 ? pos.x - 200 : pos.x + BUBBLE_SIZE + 8,
               top: pos.y + BUBBLE_SIZE / 2 - 20,
@@ -741,8 +741,8 @@ export default function AIAgentHelperOverlay() {
       {/* ─── (2) Auto-Open Mini Sheet (Home only) ─── */}
       {showAutoSheet && !sheetOpen && location.pathname === "/" && (
         <>
-          <div className="fixed inset-0 z-[9997] bg-black/30" onClick={dismissAutoSheet} />
-          <div className="fixed bottom-0 left-0 right-0 z-[9998] animate-in slide-in-from-bottom duration-300">
+          <div className="fixed inset-0 z-40 bg-black/30" onClick={dismissAutoSheet} />
+          <div className="fixed bottom-0 left-0 right-0 z-[45] animate-in slide-in-from-bottom duration-300">
             <div className="bg-card border-t border-border rounded-t-2xl px-4 py-4 shadow-2xl max-w-lg mx-auto">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
