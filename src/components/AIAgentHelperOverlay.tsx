@@ -310,7 +310,7 @@ export default function AIAgentHelperOverlay() {
       cleanup();
     };
 
-    const timer = setTimeout(fire, 3000);
+    const timer = setTimeout(fire, 2000);
     const onInteract = () => fire();
     window.addEventListener("scroll", onInteract, { once: true, passive: true });
     window.addEventListener("click", onInteract, { once: true });
@@ -330,51 +330,7 @@ export default function AIAgentHelperOverlay() {
     trackMonkey("nudge_dismissed", pageContext, lang);
   }, [pageContext, lang]);
 
-  // ─── (2) Auto-open mini sheet on Home ───
-  const [showAutoSheet, setShowAutoSheet] = useState(false);
-  const ctaClickedRef = useRef(false);
   const nudgePillRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (location.pathname !== "/" || isMultiplayer || hidden || sheetOpen) return;
-
-    // Check 24h cooldown
-    try {
-      const dismissed = localStorage.getItem(AUTOSHEET_KEY);
-      if (dismissed && Date.now() - Number(dismissed) < 24 * 60 * 60 * 1000) return;
-    } catch {}
-
-    // Listen for CTA clicks to cancel auto-sheet
-    const onCtaClick = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      const anchor = target.closest("a");
-      if (anchor) {
-        const href = anchor.getAttribute("href") || "";
-        if (href === "/play-ai" || href === "/quick-match") {
-          ctaClickedRef.current = true;
-        }
-      }
-    };
-    document.addEventListener("click", onCtaClick, true);
-
-    const timer = setTimeout(() => {
-      if (!ctaClickedRef.current && !sheetOpen) {
-        setShowAutoSheet(true);
-        trackMonkey("autosheet_shown", pageContext, lang);
-      }
-    }, 6000);
-
-    return () => {
-      clearTimeout(timer);
-      document.removeEventListener("click", onCtaClick, true);
-    };
-  }, [location.pathname, isMultiplayer, hidden, sheetOpen, pageContext, lang]);
-
-  const dismissAutoSheet = useCallback(() => {
-    setShowAutoSheet(false);
-    try { localStorage.setItem(AUTOSHEET_KEY, String(Date.now())); } catch {}
-    trackMonkey("autosheet_dismissed", pageContext, lang);
-  }, [pageContext, lang]);
 
   // Auto-open for first-time visitors
   useEffect(() => {
@@ -738,51 +694,6 @@ export default function AIAgentHelperOverlay() {
         </>
       )}
 
-      {/* ─── (2) Auto-Open Mini Sheet (Home only) ─── */}
-      {showAutoSheet && !sheetOpen && location.pathname === "/" && (
-        <>
-          <div className="fixed inset-0 z-40 bg-black/30" onClick={dismissAutoSheet} />
-          <div className="fixed bottom-0 left-0 right-0 z-[45] animate-in slide-in-from-bottom duration-300">
-            <div className="bg-card border-t border-border rounded-t-2xl px-4 py-4 shadow-2xl max-w-lg mx-auto">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-full overflow-hidden border border-primary shrink-0" style={{ background: "#ffffff" }}>
-                    <img src={monkeyHappy} alt="Money" className="w-full h-full object-cover" />
-                  </div>
-                  <p className="text-sm font-medium text-foreground">{tr(lang, "onboardingPrompt")}</p>
-                </div>
-                <button onClick={dismissAutoSheet} className="p-1.5 hover:bg-muted rounded-full">
-                  <X size={16} className="text-muted-foreground" />
-                </button>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  onClick={() => {
-                    dismissAutoSheet();
-                    navigate("/play-ai");
-                    trackMonkey("autosheet_play_free", pageContext, lang);
-                  }}
-                  className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-semibold border border-border bg-muted/50 text-foreground hover:border-primary hover:bg-primary/10 transition-all"
-                >
-                  <Gamepad2 size={16} className="text-primary" />
-                  {tr(lang, "btnPlayFree")}
-                </button>
-                <button
-                  onClick={() => {
-                    dismissAutoSheet();
-                    navigate("/quick-match");
-                    trackMonkey("autosheet_quick_match", pageContext, lang);
-                  }}
-                  className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-semibold bg-primary text-primary-foreground hover:bg-primary/90 transition-all"
-                >
-                  <Zap size={16} />
-                  {tr(lang, "btnQuickMatch")}
-                </button>
-              </div>
-            </div>
-          </div>
-        </>
-      )}
 
       {/* Floating Bubble */}
       {!sheetOpen && (
