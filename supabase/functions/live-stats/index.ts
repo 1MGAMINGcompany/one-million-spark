@@ -31,8 +31,7 @@ Deno.serve(async (req) => {
       const now = new Date().toISOString();
       const todayDate = now.split("T")[0]; // "YYYY-MM-DD"
 
-      // Step 1: Try INSERT — sets first_seen_date on the very first visit
-      // Will silently fail (no error thrown) if session_id already exists
+      // Step 1: Try INSERT for brand-new sessions (silently ignored on conflict)
       await supabase.from("presence_heartbeats").insert({
         session_id: sessionId,
         last_seen: now,
@@ -42,17 +41,28 @@ Deno.serve(async (req) => {
         first_seen_at: now,
       });
 
-      // Step 2: Always UPDATE non-date fields — preserves first_seen_date
+      // Step 2: UPDATE — always set page & game (including null) to fix sticky game bug
       const { error } = await supabase
         .from("presence_heartbeats")
         .update({
           last_seen: now,
-          ...(page != null ? { page } : {}),
-          ...(game != null ? { game } : {}),
+          page: page ?? null,
+          game: game ?? null,
         })
         .eq("session_id", sessionId);
 
       if (error) throw error;
+
+      // Step 3: Reset first_seen for returning visitors on a new day
+      // Only fires when first_seen_date is from a previous day
+      await supabase
+        .from("presence_heartbeats")
+        .update({
+          first_seen_date: todayDate,
+          first_seen_at: now,
+        })
+        .eq("session_id", sessionId)
+        .lt("first_seen_date", todayDate);
 
       return new Response(JSON.stringify({ ok: true }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
