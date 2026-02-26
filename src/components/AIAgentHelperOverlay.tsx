@@ -332,19 +332,6 @@ export default function AIAgentHelperOverlay() {
 
   const nudgePillRef = useRef<HTMLDivElement>(null);
 
-  // Auto-open for first-time visitors
-  useEffect(() => {
-    if (isMultiplayer) return;
-    if (isFirstVisit && !welcomeTriggered.current) {
-      welcomeTriggered.current = true;
-      const timer = setTimeout(() => {
-        setSheetOpen(true);
-        trackMonkey("welcome_shown", pageContext, lang);
-        try { localStorage.setItem(FIRST_VISIT_KEY, "1"); } catch {}
-      }, 1500);
-      return () => clearTimeout(timer);
-    }
-  }, [isFirstVisit, isMultiplayer]);
 
   // Mark session opened
   useEffect(() => {
