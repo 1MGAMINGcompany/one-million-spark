@@ -1,29 +1,28 @@
 
 
-# Remove Auto-Sheet Slide-Up Menu + Adjust Nudge Pill Timing
+# Remove Welcome Auto-Open Sheet for First-Time Visitors
 
-## What's Happening Now
+## The Problem
 
-When a first-time visitor arrives on the homepage:
-1. After **3 seconds**, the small "nudge pill" (two buttons next to Money) appears -- this is good, you want to keep it
-2. After **6 seconds**, a big menu slides up from the bottom ("Start with a free game or play for real SOL?") -- this is what you want removed
+When a first-time visitor arrives, three things happen in sequence:
+1. After 1.5 seconds -- the full Money chat sheet auto-opens (the "big menu sliding up") 
+2. After 2 seconds -- the nudge pill with 2 buttons appears (but hidden behind the open sheet)
+3. Previously there was also an auto-sheet at 6 seconds (already removed in last fix)
+
+You only want item #2 (the nudge pill). Items #1 and #3 should both be gone.
 
 ## Changes
 
 ### File: `src/components/AIAgentHelperOverlay.tsx`
 
-**1. Remove the auto-sheet entirely**
-- Delete the `showAutoSheet` state, the `useEffect` that triggers it after 6 seconds (lines 333-371), the `dismissAutoSheet` callback (lines 373-377), and the entire auto-sheet UI rendering block (lines 741-782)
-- This removes the big sliding menu completely
+**Remove the auto-open welcome sheet** (lines 335-347):
+Delete the `useEffect` that checks `isFirstVisit` and auto-opens the full Money sheet after 1.5 seconds. This is the code that runs `setSheetOpen(true)` on first visit.
 
-**2. Change nudge pill delay from 3s to 2s**
-- Line 313: Change `setTimeout(fire, 3000)` to `setTimeout(fire, 2000)`
-- The little bubble with "Play Free Now" and "Ask Money" will appear after 2 seconds instead of 3
+The nudge pill (2-second timer, already set to 2000ms) stays exactly as is -- that is the only thing first-time visitors will see.
 
 ### What stays the same
-- The Money floating bubble (always present)
-- The nudge pill with its two buttons (just appears 1 second sooner)
-- The full chat sheet when you tap Money
-- All other Money behavior on other pages
+- The nudge pill appears after 2 seconds with "Play Free Now" and "Ask Money" buttons
+- The Money floating bubble is always present and tappable
+- The full chat sheet opens when you tap Money manually
 - No game logic, database, or edge function changes
 
