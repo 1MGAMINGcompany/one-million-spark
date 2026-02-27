@@ -69,7 +69,6 @@ Deno.serve(async (req) => {
       if (error) throw error;
 
       // Step 3: Reset first_seen for returning visitors on a new day
-      // Only fires when first_seen_date is from a previous day
       await supabase
         .from("presence_heartbeats")
         .update({
@@ -78,6 +77,34 @@ Deno.serve(async (req) => {
         })
         .eq("session_id", sessionId)
         .lt("first_seen_date", todayDate);
+
+      return new Response(JSON.stringify({ ok: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // ── PAGE VISIT ─────────────────────────────────────────────────────────────
+    if (action === "page_visit") {
+      if (!sessionId || typeof sessionId !== "string" || sessionId.length > 64) {
+        return new Response(JSON.stringify({ error: "invalid session_id" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (!page || typeof page !== "string" || page.length > 100) {
+        return new Response(JSON.stringify({ error: "invalid page" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const { error } = await supabase.from("page_visits").insert({
+        session_id: sessionId,
+        page,
+        game: game ?? null,
+      });
+
+      if (error) throw error;
 
       return new Response(JSON.stringify({ ok: true }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -119,9 +146,7 @@ Deno.serve(async (req) => {
 
     // ── STATS ──────────────────────────────────────────────────────────────────
     if (action === "stats") {
-      // Extended to 10 minutes for a more accurate "browsing now" count
       const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
-      const todayDate = new Date().toISOString().split("T")[0]; // "YYYY-MM-DD"
 
       // Total browsing (all heartbeats in last 10 min)
       const { count: browsing, error: e1 } = await supabase
@@ -182,12 +207,33 @@ Deno.serve(async (req) => {
         avgDwellSeconds = Math.round(totalSeconds / dwellRows.length);
       }
 
-      // Garbage collect heartbeats older than 25 hours (keeps full 24h rolling window intact).
+      // Page flow data from page_visits (last 24 hours)
+      const { data: pageFlowRows, error: e7 } = await supabase
+        .from("page_visits")
+        .select("page")
+        .gte("entered_at", twentyFourHoursAgo);
+      if (e7) throw e7;
+
+      const pageFlow: Record<string, number> = {};
+      if (pageFlowRows) {
+        for (const row of pageFlowRows) {
+          pageFlow[row.page] = (pageFlow[row.page] || 0) + 1;
+        }
+      }
+
+      // GC: heartbeats older than 25 hours
       const gcCutoff = new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString();
       await supabase
         .from("presence_heartbeats")
         .delete()
         .lt("last_seen", gcCutoff);
+
+      // GC: page_visits older than 7 days
+      const pgGcCutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      await supabase
+        .from("page_visits")
+        .delete()
+        .lt("entered_at", pgGcCutoff);
 
       return new Response(
         JSON.stringify({
@@ -197,6 +243,7 @@ Deno.serve(async (req) => {
           aiGamesToday: aiGamesToday ?? 0,
           visitsToday: visitsToday ?? 0,
           avgDwellSeconds,
+          pageFlow,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
@@ -216,8 +263,8 @@ Deno.serve(async (req) => {
 
       const monkeyEvent = event as string;
       const context = (page as string) || "unknown";
-      const metadata = (difficulty as string) || null; // reuse field for metadata
-      const monkeyLang = (game as string) || "en";     // reuse field for lang
+      const metadata = (difficulty as string) || null;
+      const monkeyLang = (game as string) || "en";
 
       if (
         !sessionId || typeof sessionId !== "string" || sessionId.length > 64 ||

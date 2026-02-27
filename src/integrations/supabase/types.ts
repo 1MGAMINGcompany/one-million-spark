@@ -503,6 +503,30 @@ export type Database = {
         }
         Relationships: []
       }
+      page_visits: {
+        Row: {
+          entered_at: string
+          game: string | null
+          id: string
+          page: string
+          session_id: string
+        }
+        Insert: {
+          entered_at?: string
+          game?: string | null
+          id?: string
+          page: string
+          session_id: string
+        }
+        Update: {
+          entered_at?: string
+          game?: string | null
+          id?: string
+          page?: string
+          session_id?: string
+        }
+        Relationships: []
+      }
       player_profiles: {
         Row: {
           biggest_pot_won: number
