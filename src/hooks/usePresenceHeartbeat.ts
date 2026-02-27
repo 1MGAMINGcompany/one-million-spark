@@ -10,6 +10,13 @@ export function getSessionId(): string {
   return id;
 }
 
+function getDeviceType(): string {
+  const ua = navigator.userAgent;
+  if (/Mobi|Android/i.test(ua)) return "mobile";
+  if (/Tablet|iPad/i.test(ua)) return "tablet";
+  return "desktop";
+}
+
 export function usePresenceHeartbeat(page?: string, game?: string) {
   const sessionId = useRef(getSessionId());
 
@@ -22,6 +29,9 @@ export function usePresenceHeartbeat(page?: string, game?: string) {
             sessionId: sessionId.current,
             page: page ?? null,
             game: game ?? null,
+            lang: navigator.language?.split("-")[0] || null,
+            device: getDeviceType(),
+            referrer: document.referrer || null,
           },
         });
       } catch {

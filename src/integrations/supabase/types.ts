@@ -592,27 +592,39 @@ export type Database = {
       }
       presence_heartbeats: {
         Row: {
+          country: string | null
+          device: string | null
           first_seen_at: string | null
           first_seen_date: string | null
           game: string | null
+          lang: string | null
           last_seen: string
           page: string | null
+          referrer: string | null
           session_id: string
         }
         Insert: {
+          country?: string | null
+          device?: string | null
           first_seen_at?: string | null
           first_seen_date?: string | null
           game?: string | null
+          lang?: string | null
           last_seen?: string
           page?: string | null
+          referrer?: string | null
           session_id: string
         }
         Update: {
+          country?: string | null
+          device?: string | null
           first_seen_at?: string | null
           first_seen_date?: string | null
           game?: string | null
+          lang?: string | null
           last_seen?: string
           page?: string | null
+          referrer?: string | null
           session_id?: string
         }
         Relationships: []

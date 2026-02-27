@@ -12,7 +12,12 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { action, sessionId, page, game, difficulty, event, duration_seconds } = await req.json();
+    const { action, sessionId, page, game, difficulty, event, duration_seconds, lang, device, referrer } = await req.json();
+
+    // Geo: extract country from Cloudflare/proxy headers
+    const country = req.headers.get("cf-ipcountry")
+      || req.headers.get("x-country-code")
+      || null;
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
@@ -39,6 +44,10 @@ Deno.serve(async (req) => {
         game: game ?? null,
         first_seen_date: todayDate,
         first_seen_at: now,
+        country: country ?? null,
+        lang: lang ?? null,
+        device: device ?? null,
+        referrer: referrer ?? null,
       });
 
       // Step 2: UPDATE — always set page & game (including null) to fix sticky game bug
@@ -48,6 +57,12 @@ Deno.serve(async (req) => {
           last_seen: now,
           page: page ?? null,
           game: game ?? null,
+          // Update country on every heartbeat (may change with VPN, etc.)
+          ...(country ? { country } : {}),
+          // Only set lang/device/referrer if provided (first heartbeat sets them)
+          ...(lang ? { lang } : {}),
+          ...(device ? { device } : {}),
+          ...(referrer ? { referrer } : {}),
         })
         .eq("session_id", sessionId);
 
