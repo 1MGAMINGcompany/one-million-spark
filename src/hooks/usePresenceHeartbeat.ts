@@ -19,7 +19,24 @@ function getDeviceType(): string {
 
 export function usePresenceHeartbeat(page?: string, game?: string) {
   const sessionId = useRef(getSessionId());
+  const prevPage = useRef<string | null>(null);
 
+  // Log page visit when page changes
+  useEffect(() => {
+    if (!page || page === prevPage.current) return;
+    prevPage.current = page;
+
+    supabase.functions.invoke("live-stats", {
+      body: {
+        action: "page_visit",
+        sessionId: sessionId.current,
+        page,
+        game: game ?? null,
+      },
+    }).catch(() => {});
+  }, [page, game]);
+
+  // Regular heartbeat (unchanged)
   useEffect(() => {
     const send = async () => {
       try {
