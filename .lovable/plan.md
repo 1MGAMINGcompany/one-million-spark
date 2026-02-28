@@ -1,74 +1,38 @@
 
 
-# Fix Page Navigation Tracking: Add Visit Log
+# Enhance "Play Free" Button with Game Icons
 
-## Problem
-The current heartbeat system only stores the **last page** a user was on. When a user navigates home -> play-ai -> chess -> home, you only see "home". This is why it looks like nobody goes anywhere -- they do, but the data gets overwritten every 30 seconds.
+## What Changes
 
-The 2 non-home entries in the last 24 hours are users whose session *ended* while on those pages.
+The "Play Free" CTA button on the home page will be redesigned to:
 
-## Solution: Add a `page_visits` table
+1. **Make "PLAY FREE" text larger** -- bump from `text-2xl md:text-3xl` to `text-3xl md:text-4xl` for maximum impact
+2. **Add a row of 5 small game icons with names** underneath the subtext, showing Chess, Dominos, Backgammon, Checkers, and Ludo mini-icons with labels
 
-Instead of overwriting the `page` column, log every page change as a separate row. This gives you a complete navigation timeline for every session.
-
-### 1. New database table: `page_visits`
+## Visual Layout
 
 ```text
-page_visits
------------
-id              uuid (PK, auto)
-session_id      text (not null)
-page            text (not null)
-game            text (nullable)
-entered_at      timestamptz (default now())
++----------------------------------------------------+
+|           🤖  PLAY FREE                             |
+|        Practice first. No SOL required.             |
+|                                                     |
+|  [Chess]  [Dominos]  [Backgammon] [Checkers] [Ludo] |
+|   Chess   Dominos   Backgammon   Checkers    Ludo   |
++----------------------------------------------------+
 ```
 
-- RLS: `deny_all_clients` (same pattern as `presence_heartbeats`)
-- Garbage collection: delete rows older than 7 days (done in the stats action)
+Each game icon will be a small (w-8 h-8) version of the existing `ChessIcon`, `DominoIcon`, etc. with the game name in tiny text (text-[10px]) below it.
 
-### 2. Update `usePresenceHeartbeat` hook
+## File Changed
 
-Track the previous page in a ref. When `page` changes, fire a one-time `page_visit` action to the edge function. The regular heartbeat continues unchanged.
+**`src/pages/Home.tsx`** (single file)
 
-```text
-prevPage ref = null
-on page change:
-  -> call live-stats with action: "page_visit"
-  -> prevPage = page
-```
+- Import the 5 game icon components (already imported for the featured games section)
+- Replace the current Play Free button content with:
+  - Larger "PLAY FREE" heading (`text-3xl md:text-4xl`)
+  - Existing subtext line
+  - A flex row of 5 icon+label pairs, spaced evenly, using the existing game icon SVG components at small size
+- Game labels will use the existing `t("games.chess")` etc. translation keys
 
-### 3. Update `live-stats` edge function
+No new files, no new dependencies, no backend changes.
 
-Add a new `page_visit` action handler:
-- Validate `sessionId` and `page`
-- Insert into `page_visits` table
-- Add GC step: delete `page_visits` older than 7 days (runs on `stats` action)
-
-### 4. Update `stats` action to return page flow data
-
-Add a query to the stats action that returns page visit distribution for the last N hours, so you can see which pages users actually navigate to:
-
-```text
-SELECT page, count(*) FROM page_visits
-WHERE entered_at > now() - interval '24 hours'
-GROUP BY page ORDER BY count DESC
-```
-
-## Technical Details
-
-- The heartbeat `page` column continues to work as before (shows current page)
-- `page_visits` is append-only, giving full journey data
-- No changes to existing heartbeat logic -- this is purely additive
-- GC keeps the table from growing unbounded (7-day retention)
-- Same security model: deny all client access, service role only
-
-## What You'll See After This
-
-Instead of "293 home, 1 play-ai, 1 quick-match", you'll see something like:
-- home: 295 visits
-- play-ai: 45 visits  
-- ai-chess: 12 visits
-- quick-match: 8 visits
-- game-rules: 5 visits
-
-Every page a user touches gets logged with a timestamp, so you can also reconstruct individual user journeys.
