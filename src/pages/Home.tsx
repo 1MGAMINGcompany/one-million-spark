@@ -113,13 +113,27 @@ const Home = () => {
 
               {/* CTA Buttons — always visible */}
               <div className="flex flex-col gap-4 mt-4">
-                    <Button asChild size="lg" variant="gold" className="group text-lg h-auto py-4 px-8 transition-all shadow-[0_0_20px_-4px_hsl(45_93%_54%_/_0.4)]">
-                      <Link to="/play-ai" className="flex flex-col items-center gap-0.5">
-                        <span className="flex items-center gap-2 text-2xl md:text-3xl font-bold tracking-wide">
-                          <Bot className="w-7 h-7 group-hover:drop-shadow-[0_0_6px_hsl(45_93%_54%_/_0.6)] transition-all" />
+                    <Button asChild size="lg" variant="gold" className="group text-lg h-auto py-5 px-8 transition-all shadow-[0_0_20px_-4px_hsl(45_93%_54%_/_0.4)]">
+                      <Link to="/play-ai" className="flex flex-col items-center gap-2">
+                        <span className="flex items-center gap-2 text-3xl md:text-4xl font-bold tracking-wide">
+                          <Bot className="w-8 h-8 group-hover:drop-shadow-[0_0_6px_hsl(45_93%_54%_/_0.6)] transition-all" />
                           {t("home.playAiFree")}
                         </span>
                         <span className="text-xs font-normal text-background/70 tracking-wide">{t("home.playFreeSub")}</span>
+                        <span className="flex items-center justify-center gap-4 mt-1">
+                          {[
+                            { icon: <ChessIcon />, label: t("games.chess") },
+                            { icon: <DominoIcon />, label: t("games.dominos") },
+                            { icon: <BackgammonIcon />, label: t("games.backgammon") },
+                            { icon: <CheckersIcon />, label: t("games.checkers") },
+                            { icon: <LudoIcon />, label: t("games.ludo") },
+                          ].map((g) => (
+                            <span key={g.label} className="flex flex-col items-center gap-0.5">
+                              <span className="w-7 h-7 [&_svg]:w-7 [&_svg]:h-7">{g.icon}</span>
+                              <span className="text-[10px] font-medium text-background/60 leading-none">{g.label}</span>
+                            </span>
+                          ))}
+                        </span>
                       </Link>
                     </Button>
                     <Button asChild size="lg" variant="gold" className="group text-lg h-auto py-3 px-8 transition-all">
