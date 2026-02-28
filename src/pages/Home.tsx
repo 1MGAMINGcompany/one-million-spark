@@ -136,12 +136,13 @@ const Home = () => {
                         </span>
                       </Link>
                     </Button>
-                    <Button asChild size="lg" variant="gold" className="group text-lg h-auto py-3 px-8 transition-all">
-                      <Link to="/quick-match" className="flex flex-col items-center gap-0.5">
-                        <span className="flex items-center gap-2">
-                          <Zap className="w-5 h-5 group-hover:drop-shadow-[0_0_6px_hsl(45_93%_54%_/_0.6)] transition-all" />
+                    <Button asChild size="lg" variant="gold" className="group text-lg h-auto py-4 px-8 transition-all">
+                      <Link to="/quick-match" className="flex flex-col items-center gap-1">
+                        <span className="flex items-center gap-2 text-2xl md:text-3xl font-bold tracking-wide">
+                          <Zap className="w-7 h-7 group-hover:drop-shadow-[0_0_6px_hsl(45_93%_54%_/_0.6)] transition-all" />
                           {t("home.quickMatchWinSol")}
                         </span>
+                        <span className="text-[11px] font-medium text-background/60 tracking-widest uppercase">Crypto</span>
                         <span className="text-xs font-normal text-primary-foreground tracking-wide">{t("home.quickMatchWinSolSub")}</span>
                       </Link>
                     </Button>
