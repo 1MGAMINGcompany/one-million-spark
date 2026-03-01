@@ -95,7 +95,11 @@ const AppContent = () => {
     : location.pathname.startsWith("/room/")
     ? "room"
     : location.pathname.replace("/", "") || "home";
-  usePresenceHeartbeat(page);
+  // Extract game name from AI play routes (e.g. /play-ai/chess → chess)
+  const game = location.pathname.startsWith("/play-ai/")
+    ? location.pathname.replace("/play-ai/", "")
+    : undefined;
+  usePresenceHeartbeat(page, game);
   
   // Hide footer on game/play routes to maximize vertical space
   const hideFooter = location.pathname.startsWith('/play/') || 
