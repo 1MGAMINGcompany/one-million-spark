@@ -32,7 +32,7 @@ const Home = () => {
   ];
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen overflow-x-hidden">
       <WelcomeIntroModal isAuthenticated={isPrivyUser} />
 
       {/* Session continuity banner */}
@@ -63,8 +63,8 @@ const Home = () => {
         {/* Background Effects */}
         <div className="absolute inset-0 bg-gradient-to-br from-background via-background to-midnight-light" />
         <div className="absolute inset-0 opacity-30">
-          <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/10 rounded-full blur-3xl" />
-          <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-accent/10 rounded-full blur-3xl" />
+          <div className="absolute top-1/4 left-1/4 w-64 md:w-96 h-64 md:h-96 bg-primary/10 rounded-full blur-3xl" />
+          <div className="absolute bottom-1/4 right-1/4 w-48 md:w-80 h-48 md:h-80 bg-accent/10 rounded-full blur-3xl" />
         </div>
 
         <div className="relative z-10 w-full max-w-7xl mx-auto px-4 py-12 lg:py-0">
@@ -191,7 +191,7 @@ const Home = () => {
             </div>
 
             {/* Right Side - Decorative Pyramid Panel */}
-            <div className="flex justify-center lg:justify-end">
+            <div className="hidden lg:flex justify-center lg:justify-end">
               <div className="relative w-full max-w-md lg:max-w-lg aspect-square">
                 <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-accent/10 to-transparent rounded-3xl blur-2xl" />
                 
