@@ -311,6 +311,7 @@ const DominosAI = () => {
       
       // Choose move based on difficulty
       let chosenDomino: Domino;
+      let chosenSide: "left" | "right" = "right";
       
       switch (difficulty) {
         case "easy": {
@@ -331,36 +332,139 @@ const DominosAI = () => {
           break;
         }
         case "hard": {
-          // Prefer moves that use numbers the player might not have
-          // Simple heuristic: play tiles that match chain ends with rare numbers
+          // 3-ply lookahead with minimax
           const ends = getChainEnds();
-          if (ends) {
-            // Count occurrences of each number in AI's remaining hand
-            const aiNumbers = new Map<number, number>();
-            aiHand.forEach(d => {
-              aiNumbers.set(d.left, (aiNumbers.get(d.left) || 0) + 1);
-              aiNumbers.set(d.right, (aiNumbers.get(d.right) || 0) + 1);
-            });
+          const currentAiHand = [...aiHand];
+          
+          // Score a move by simulating future play
+          const scoreDominoMove = (
+            domino: Domino,
+            side: "left" | "right",
+            hand: Domino[],
+            chainState: PlacedDomino[],
+            depth: number,
+            isAI: boolean
+          ): number => {
+            // Simulate placing the domino
+            let flipped = false;
+            const simEnds = chainState.length > 0 ? {
+              left: chainState[0].flipped ? chainState[0].right : chainState[0].left,
+              right: chainState[chainState.length - 1].flipped ? chainState[chainState.length - 1].left : chainState[chainState.length - 1].right,
+            } : null;
             
-            // Score each legal move
-            const scored = legalMoves.map(d => {
-              const { canPlayLeft, canPlayRight } = canPlay(d);
-              let score = d.left + d.right; // Base score: pip count
-              
-              // Bonus for doubles
-              if (d.left === d.right) score += 5;
-              
-              // Prefer playing numbers we have many of
-              score += (aiNumbers.get(d.left) || 0) * 2;
-              score += (aiNumbers.get(d.right) || 0) * 2;
-              
-              return { domino: d, score, canPlayLeft, canPlayRight };
-            });
+            if (simEnds) {
+              const targetEnd = side === "left" ? simEnds.left : simEnds.right;
+              if (side === "left") {
+                flipped = domino.right !== targetEnd;
+              } else {
+                flipped = domino.left !== targetEnd;
+              }
+            }
             
-            scored.sort((a, b) => b.score - a.score);
-            chosenDomino = scored[0].domino;
-          } else {
-            chosenDomino = legalMoves[0];
+            const placed: PlacedDomino = { ...domino, flipped };
+            const newChain = side === "left" ? [placed, ...chainState] : [...chainState, placed];
+            const newHand = hand.filter(d => d.id !== domino.id);
+            
+            // Base score: empty hand is best
+            if (newHand.length === 0) return isAI ? 1000 : -1000;
+            if (depth === 0) {
+              // Heuristic evaluation
+              const pipCount = newHand.reduce((s, d) => s + d.left + d.right, 0);
+              const newEnds = {
+                left: newChain[0].flipped ? newChain[0].right : newChain[0].left,
+                right: newChain[newChain.length - 1].flipped ? newChain[newChain.length - 1].left : newChain[newChain.length - 1].right,
+              };
+              
+              // Count how many tiles in hand match the new ends
+              const matchCount = newHand.filter(d =>
+                d.left === newEnds.left || d.right === newEnds.left ||
+                d.left === newEnds.right || d.right === newEnds.right
+              ).length;
+              
+              // AI wants: low pip count, high match count
+              // Opponent wants: opposite
+              const score = -pipCount * 0.5 + matchCount * 20;
+              return isAI ? score : -score;
+            }
+            
+            // Find opponent's legal moves
+            const newEnds = {
+              left: newChain[0].flipped ? newChain[0].right : newChain[0].left,
+              right: newChain[newChain.length - 1].flipped ? newChain[newChain.length - 1].left : newChain[newChain.length - 1].right,
+            };
+            
+            // For simplicity, use player hand as a proxy for opponent
+            // (we don't know opponent's hand, so we estimate)
+            const opponentHand = isAI ? playerHand : currentAiHand;
+            const opponentLegal = opponentHand.filter(d =>
+              d.left === newEnds.left || d.right === newEnds.left ||
+              d.left === newEnds.right || d.right === newEnds.right
+            );
+            
+            if (opponentLegal.length === 0) {
+              // Opponent blocked - good for current player
+              return isAI ? 200 : -200;
+            }
+            
+            // Minimax
+            if (isAI) {
+              // Next is opponent (minimizing)
+              let minScore = Infinity;
+              for (const opp of opponentLegal) {
+                const oppLeft = opp.left === newEnds.left || opp.right === newEnds.left;
+                const oppRight = opp.left === newEnds.right || opp.right === newEnds.right;
+                if (oppLeft) {
+                  const s = scoreDominoMove(opp, "left", opponentHand, newChain, depth - 1, false);
+                  minScore = Math.min(minScore, s);
+                }
+                if (oppRight) {
+                  const s = scoreDominoMove(opp, "right", opponentHand, newChain, depth - 1, false);
+                  minScore = Math.min(minScore, s);
+                }
+              }
+              return minScore;
+            } else {
+              // Next is AI (maximizing)
+              let maxScore = -Infinity;
+              for (const aiTile of currentAiHand.filter(d => d.id !== domino.id)) {
+                const aiLeft = aiTile.left === newEnds.left || aiTile.right === newEnds.left;
+                const aiRight = aiTile.left === newEnds.right || aiTile.right === newEnds.right;
+                if (aiLeft) {
+                  const s = scoreDominoMove(aiTile, "left", currentAiHand, newChain, depth - 1, true);
+                  maxScore = Math.max(maxScore, s);
+                }
+                if (aiRight) {
+                  const s = scoreDominoMove(aiTile, "right", currentAiHand, newChain, depth - 1, true);
+                  maxScore = Math.max(maxScore, s);
+                }
+              }
+              return maxScore === -Infinity ? 0 : maxScore;
+            }
+          };
+          
+          // Evaluate all legal moves
+          let bestScore = -Infinity;
+          chosenDomino = legalMoves[0];
+          
+          for (const d of legalMoves) {
+            const { canPlayLeft, canPlayRight } = canPlay(d);
+            
+            if (canPlayLeft) {
+              const score = scoreDominoMove(d, "left", currentAiHand, [...chain], 2, true);
+              if (score > bestScore) {
+                bestScore = score;
+                chosenDomino = d;
+                chosenSide = "left";
+              }
+            }
+            if (canPlayRight) {
+              const score = scoreDominoMove(d, "right", currentAiHand, [...chain], 2, true);
+              if (score > bestScore) {
+                bestScore = score;
+                chosenDomino = d;
+                chosenSide = "right";
+              }
+            }
           }
           break;
         }
@@ -368,9 +472,14 @@ const DominosAI = () => {
           chosenDomino = legalMoves[0];
       }
       
-      // Determine which side to play on
-      const { canPlayLeft, canPlayRight } = canPlay(chosenDomino);
-      const side = canPlayLeft && !canPlayRight ? "left" : "right";
+      // Determine which side to play on (hard mode already determined this)
+      let side: "left" | "right";
+      if (difficulty === "hard") {
+        side = chosenSide;
+      } else {
+        const { canPlayLeft, canPlayRight } = canPlay(chosenDomino);
+        side = canPlayLeft && !canPlayRight ? "left" : "right";
+      }
       
       playDomino(chosenDomino, side, false);
       setIsThinking(false);
