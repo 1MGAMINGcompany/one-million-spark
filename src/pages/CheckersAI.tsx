@@ -216,28 +216,143 @@ const CheckersAI = () => {
     return newBoard;
   }, []);
 
-  // Evaluate board for AI
+  // Evaluate board for AI — improved evaluation with positional bonuses
   const evaluateBoard = useCallback((board: (Piece | null)[][]): number => {
     let score = 0;
     for (let row = 0; row < BOARD_SIZE; row++) {
       for (let col = 0; col < BOARD_SIZE; col++) {
         const piece = board[row][col];
         if (piece) {
-          const value = piece.type === "king" ? 3 : 1;
-          // Add positional bonus for advancement
+          // King value increased to 5
+          const baseValue = piece.type === "king" ? 5 : 1;
+          // Advancement bonus
           const posBonus = piece.player === "obsidian" ? row * 0.1 : (7 - row) * 0.1;
-          score += piece.player === "obsidian" ? (value + posBonus) : -(value + posBonus);
+          // Center control bonus (columns 2-5 are more valuable)
+          const centerBonus = (col >= 2 && col <= 5) ? 0.15 : 0;
+          // Back row bonus (protecting home row)
+          const backRowBonus = (piece.player === "obsidian" && row === 0) || (piece.player === "gold" && row === 7) ? 0.3 : 0;
+          
+          const totalValue = baseValue + posBonus + centerBonus + backRowBonus;
+          score += piece.player === "obsidian" ? totalValue : -totalValue;
         }
       }
     }
+    // Mobility bonus
+    const obsidianMoves = getAllMoves(board, "obsidian").length;
+    const goldMoves = getAllMoves(board, "gold").length;
+    score += (obsidianMoves - goldMoves) * 0.05;
+    
     return score;
-  }, []);
+  }, [getAllMoves]);
+
+  // Minimax with alpha-beta pruning for hard mode
+  const minimaxCheckers = useCallback((
+    board: (Piece | null)[][],
+    depth: number,
+    alpha: number,
+    beta: number,
+    isMaximizing: boolean // obsidian (AI) is maximizing
+  ): number => {
+    // Terminal check
+    const goldMoves = getAllMoves(board, "gold");
+    const obsMoves = getAllMoves(board, "obsidian");
+    
+    let goldPieces = 0, obsPieces = 0;
+    for (let r = 0; r < BOARD_SIZE; r++) {
+      for (let c = 0; c < BOARD_SIZE; c++) {
+        if (board[r][c]?.player === "gold") goldPieces++;
+        if (board[r][c]?.player === "obsidian") obsPieces++;
+      }
+    }
+    
+    if (obsPieces === 0 || obsMoves.length === 0) return -1000 - depth;
+    if (goldPieces === 0 || goldMoves.length === 0) return 1000 + depth;
+    if (depth === 0) return evaluateBoard(board);
+    
+    const moves = isMaximizing ? obsMoves : goldMoves;
+    
+    if (isMaximizing) {
+      let maxEval = -Infinity;
+      for (const move of moves) {
+        let newBoard = applyMove(board, move);
+        // Handle chain captures
+        if (move.captures && move.captures.length > 0) {
+          let chainPos = move.to;
+          let chainCaptures = getCaptures(newBoard, chainPos);
+          while (chainCaptures.length > 0) {
+            newBoard = applyMove(newBoard, chainCaptures[0]);
+            chainPos = chainCaptures[0].to;
+            chainCaptures = getCaptures(newBoard, chainPos);
+          }
+        }
+        const evalScore = minimaxCheckers(newBoard, depth - 1, alpha, beta, false);
+        maxEval = Math.max(maxEval, evalScore);
+        alpha = Math.max(alpha, evalScore);
+        if (beta <= alpha) break;
+      }
+      return maxEval;
+    } else {
+      let minEval = Infinity;
+      for (const move of moves) {
+        let newBoard = applyMove(board, move);
+        if (move.captures && move.captures.length > 0) {
+          let chainPos = move.to;
+          let chainCaptures = getCaptures(newBoard, chainPos);
+          while (chainCaptures.length > 0) {
+            newBoard = applyMove(newBoard, chainCaptures[0]);
+            chainPos = chainCaptures[0].to;
+            chainCaptures = getCaptures(newBoard, chainPos);
+          }
+        }
+        const evalScore = minimaxCheckers(newBoard, depth - 1, alpha, beta, true);
+        minEval = Math.min(minEval, evalScore);
+        beta = Math.min(beta, evalScore);
+        if (beta <= alpha) break;
+      }
+      return minEval;
+    }
+  }, [getAllMoves, applyMove, evaluateBoard, getCaptures]);
 
   // AI move selection
   const getAiMove = useCallback((board: (Piece | null)[][]): Move | null => {
     const moves = getAllMoves(board, "obsidian");
     if (moves.length === 0) return null;
+    if (moves.length === 1) return moves[0];
     
+    // Hard mode: minimax at depth 6
+    if (difficulty === "hard") {
+      let bestMove = moves[0];
+      let bestScore = -Infinity;
+      
+      // Order moves: captures first for better pruning
+      const orderedMoves = [...moves].sort((a, b) => {
+        const aCapture = a.captures ? a.captures.length : 0;
+        const bCapture = b.captures ? b.captures.length : 0;
+        return bCapture - aCapture;
+      });
+      
+      for (const move of orderedMoves) {
+        let newBoard = applyMove(board, move);
+        // Handle chain captures for the root move
+        if (move.captures && move.captures.length > 0) {
+          let chainPos = move.to;
+          let chainCaptures = getCaptures(newBoard, chainPos);
+          while (chainCaptures.length > 0) {
+            newBoard = applyMove(newBoard, chainCaptures[0]);
+            chainPos = chainCaptures[0].to;
+            chainCaptures = getCaptures(newBoard, chainPos);
+          }
+        }
+        const score = minimaxCheckers(newBoard, 5, -Infinity, Infinity, false);
+        if (score > bestScore) {
+          bestScore = score;
+          bestMove = move;
+        }
+      }
+      return bestMove;
+    }
+    
+    // Easy/Medium: original 1-ply evaluation with randomness
     let bestMove = moves[0];
     let bestScore = -Infinity;
     
@@ -245,22 +360,16 @@ const CheckersAI = () => {
       const newBoard = applyMove(board, move);
       let score = evaluateBoard(newBoard);
       
-      // Bonus for captures
       if (move.captures && move.captures.length > 0) {
         score += move.captures.length * 0.5;
       }
       
-      // Check for chain captures
       const postMoveCaptures = getCaptures(newBoard, move.to);
       if (postMoveCaptures.length > 0) {
         score += 0.3;
       }
       
-      // Add randomness based on difficulty - less randomness = smarter AI
-      // Easy: high randomness makes AI pick suboptimal moves often
-      // Medium: low randomness for competitive play
-      // Hard: no randomness, always picks best move
-      const randomness = difficulty === "easy" ? Math.random() * 2 : difficulty === "medium" ? Math.random() * 0.15 : 0;
+      const randomness = difficulty === "easy" ? Math.random() * 2 : Math.random() * 0.15;
       const adjustedScore = score + randomness;
       
       if (adjustedScore > bestScore) {
@@ -270,7 +379,7 @@ const CheckersAI = () => {
     }
     
     return bestMove;
-  }, [difficulty, getAllMoves, applyMove, evaluateBoard, getCaptures]);
+  }, [difficulty, getAllMoves, applyMove, evaluateBoard, getCaptures, minimaxCheckers]);
 
   // Check for game over
   const checkGameOver = useCallback((board: (Piece | null)[][]): Player | "draw" | null => {

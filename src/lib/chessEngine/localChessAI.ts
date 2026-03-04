@@ -68,7 +68,7 @@ const QUEEN_TABLE = [
   -20,-10,-10, -5, -5,-10,-10,-20
 ];
 
-const KING_TABLE = [
+const KING_MIDDLEGAME_TABLE = [
   -30,-40,-40,-50,-50,-40,-40,-30,
   -30,-40,-40,-50,-50,-40,-40,-30,
   -30,-40,-40,-50,-50,-40,-40,-30,
@@ -79,13 +79,25 @@ const KING_TABLE = [
   20, 30, 10,  0,  0, 10, 30, 20
 ];
 
+// Endgame king table - king should be active and centralized
+const KING_ENDGAME_TABLE = [
+  -50,-40,-30,-20,-20,-30,-40,-50,
+  -30,-20,-10,  0,  0,-10,-20,-30,
+  -30,-10, 20, 30, 30, 20,-10,-30,
+  -30,-10, 30, 40, 40, 30,-10,-30,
+  -30,-10, 30, 40, 40, 30,-10,-30,
+  -30,-10, 20, 30, 30, 20,-10,-30,
+  -30,-30,  0,  0,  0,  0,-30,-30,
+  -50,-30,-30,-30,-30,-30,-30,-50
+];
+
 const PIECE_TABLES: Record<PieceSymbol, number[]> = {
   p: PAWN_TABLE,
   n: KNIGHT_TABLE,
   b: BISHOP_TABLE,
   r: ROOK_TABLE,
   q: QUEEN_TABLE,
-  k: KING_TABLE,
+  k: KING_MIDDLEGAME_TABLE,
 };
 
 // Convert square to index (0-63)
@@ -95,13 +107,82 @@ function squareToIndex(square: Square): number {
   return rank * 8 + file;
 }
 
-// Get piece-square table value
-function getPieceSquareValue(piece: PieceSymbol, square: Square, color: Color): number {
+// Count total material (excluding kings) to detect endgame
+function countMaterial(game: Chess): number {
+  const board = game.board();
+  let material = 0;
+  for (let rank = 0; rank < 8; rank++) {
+    for (let file = 0; file < 8; file++) {
+      const piece = board[rank][file];
+      if (piece && piece.type !== 'k') {
+        material += PIECE_VALUES[piece.type];
+      }
+    }
+  }
+  return material;
+}
+
+// Get piece-square table value with endgame detection for king
+function getPieceSquareValue(piece: PieceSymbol, square: Square, color: Color, isEndgame: boolean): number {
   let index = squareToIndex(square);
   if (color === 'b') {
     index = 63 - index;
   }
+  if (piece === 'k' && isEndgame) {
+    return KING_ENDGAME_TABLE[index];
+  }
   return PIECE_TABLES[piece][index];
+}
+
+// King safety evaluation
+function evaluateKingSafety(game: Chess, color: Color): number {
+  let score = 0;
+  const board = game.board();
+  
+  // Find king position
+  let kingRank = -1, kingFile = -1;
+  for (let r = 0; r < 8; r++) {
+    for (let f = 0; f < 8; f++) {
+      const p = board[r][f];
+      if (p && p.type === 'k' && p.color === color) {
+        kingRank = r;
+        kingFile = f;
+        break;
+      }
+    }
+    if (kingRank >= 0) break;
+  }
+  
+  if (kingRank < 0) return 0;
+  
+  // Pawn shield bonus (for castled king positions)
+  const pawnDir = color === 'w' ? -1 : 1;
+  const shieldRank = kingRank + pawnDir;
+  if (shieldRank >= 0 && shieldRank < 8) {
+    for (let f = Math.max(0, kingFile - 1); f <= Math.min(7, kingFile + 1); f++) {
+      const p = board[shieldRank][f];
+      if (p && p.type === 'p' && p.color === color) {
+        score += 15; // Pawn shield bonus
+      }
+    }
+  }
+  
+  // Penalty for open files near king
+  for (let f = Math.max(0, kingFile - 1); f <= Math.min(7, kingFile + 1); f++) {
+    let hasFriendlyPawn = false;
+    for (let r = 0; r < 8; r++) {
+      const p = board[r][f];
+      if (p && p.type === 'p' && p.color === color) {
+        hasFriendlyPawn = true;
+        break;
+      }
+    }
+    if (!hasFriendlyPawn) {
+      score -= 20; // Open file near king penalty
+    }
+  }
+  
+  return score;
 }
 
 // Fast evaluate board position
@@ -114,6 +195,8 @@ function evaluate(game: Chess): number {
   }
   
   const board = game.board();
+  const totalMaterial = countMaterial(game);
+  const isEndgame = totalMaterial < 2600; // Roughly when queens are traded + some pieces
   let score = 0;
   
   for (let rank = 0; rank < 8; rank++) {
@@ -122,7 +205,7 @@ function evaluate(game: Chess): number {
       if (piece) {
         const square = (String.fromCharCode('a'.charCodeAt(0) + file) + (8 - rank)) as Square;
         const pieceValue = PIECE_VALUES[piece.type];
-        const positionValue = getPieceSquareValue(piece.type, square, piece.color);
+        const positionValue = getPieceSquareValue(piece.type, square, piece.color, isEndgame);
         const totalValue = pieceValue + positionValue;
         
         if (piece.color === 'w') {
@@ -132,6 +215,12 @@ function evaluate(game: Chess): number {
         }
       }
     }
+  }
+  
+  // King safety (only in middlegame)
+  if (!isEndgame) {
+    score += evaluateKingSafety(game, 'w');
+    score -= evaluateKingSafety(game, 'b');
   }
   
   return score;
@@ -159,15 +248,62 @@ function orderMoves(moves: Move[]): Move[] {
   });
 }
 
-// Minimax with alpha-beta pruning
+// Quiescence search - extend search on captures to avoid horizon effect
+function quiescence(
+  game: Chess,
+  alpha: number,
+  beta: number,
+  maximizingPlayer: boolean
+): number {
+  const standPat = evaluate(game);
+  
+  if (maximizingPlayer) {
+    if (standPat >= beta) return beta;
+    if (standPat > alpha) alpha = standPat;
+  } else {
+    if (standPat <= alpha) return alpha;
+    if (standPat < beta) beta = standPat;
+  }
+  
+  // Only search captures
+  const captures = orderMoves(
+    (game.moves({ verbose: true }) as Move[]).filter(m => m.captured || m.promotion)
+  );
+  
+  if (maximizingPlayer) {
+    for (const move of captures) {
+      game.move(move);
+      const score = quiescence(game, alpha, beta, false);
+      game.undo();
+      if (score > alpha) alpha = score;
+      if (alpha >= beta) break;
+    }
+    return alpha;
+  } else {
+    for (const move of captures) {
+      game.move(move);
+      const score = quiescence(game, alpha, beta, true);
+      game.undo();
+      if (score < beta) beta = score;
+      if (alpha >= beta) break;
+    }
+    return beta;
+  }
+}
+
+// Minimax with alpha-beta pruning + quiescence search
 function minimax(
   game: Chess,
   depth: number,
   alpha: number,
   beta: number,
-  maximizingPlayer: boolean
+  maximizingPlayer: boolean,
+  useQuiescence: boolean
 ): number {
   if (depth === 0 || game.isGameOver()) {
+    if (useQuiescence && depth === 0 && !game.isGameOver()) {
+      return quiescence(game, alpha, beta, maximizingPlayer);
+    }
     return evaluate(game);
   }
   
@@ -177,7 +313,7 @@ function minimax(
     let maxEval = -Infinity;
     for (const move of moves) {
       game.move(move);
-      const evalScore = minimax(game, depth - 1, alpha, beta, false);
+      const evalScore = minimax(game, depth - 1, alpha, beta, false, useQuiescence);
       game.undo();
       maxEval = Math.max(maxEval, evalScore);
       alpha = Math.max(alpha, evalScore);
@@ -188,7 +324,7 @@ function minimax(
     let minEval = Infinity;
     for (const move of moves) {
       game.move(move);
-      const evalScore = minimax(game, depth - 1, alpha, beta, true);
+      const evalScore = minimax(game, depth - 1, alpha, beta, true, useQuiescence);
       game.undo();
       minEval = Math.min(minEval, evalScore);
       beta = Math.min(beta, evalScore);
@@ -202,20 +338,24 @@ function minimax(
 interface DifficultyConfig {
   depth: number;
   randomnessFactor: number;
+  useQuiescence: boolean;
 }
 
 const DIFFICULTY_CONFIG: Record<Difficulty, DifficultyConfig> = {
   easy: {
     depth: 2,
     randomnessFactor: 0.3,
+    useQuiescence: false,
   },
   medium: {
     depth: 3,
     randomnessFactor: 0.05,
+    useQuiescence: false,
   },
   hard: {
-    depth: 4,
+    depth: 5,
     randomnessFactor: 0,
+    useQuiescence: true,
   },
 };
 
@@ -253,7 +393,7 @@ export function createChessAI(initialDifficulty: Difficulty): ChessAI {
       for (let i = 0; i < moves.length; i++) {
         const move = moves[i];
         game.move(move);
-        const score = minimax(game, config.depth - 1, -Infinity, Infinity, !isMaximizing);
+        const score = minimax(game, config.depth - 1, -Infinity, Infinity, !isMaximizing, config.useQuiescence);
         game.undo();
         moveScores.push({ move, score });
         

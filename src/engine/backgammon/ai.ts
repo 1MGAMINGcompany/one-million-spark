@@ -10,7 +10,7 @@ import type { BackgammonState, BackgammonMove } from './types';
 const DIFFICULTY_CONFIG: Record<Difficulty, { maxDepth: number; randomness: number }> = {
   'EASY': { maxDepth: 2, randomness: 60 },     // Some randomness, basic lookahead
   'MEDIUM': { maxDepth: 3, randomness: 15 },   // Less randomness, good depth
-  'HARD': { maxDepth: 4, randomness: 0 },      // No randomness, deeper search
+  'HARD': { maxDepth: 5, randomness: 0 },      // No randomness, deep search
 };
 
 const aiEngine = createAiEngine<BackgammonState, BackgammonMove>();
@@ -36,7 +36,7 @@ export async function chooseBackgammonMove(
     {
       difficulty,
       maxDepth: config.maxDepth,
-      maxMillis: 3000, // 3 second time limit
+      maxMillis: 5000, // 5 second time limit
       randomness: config.randomness,
     }
   );
