@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
+import { toPng } from "html-to-image";
 import { getOpponentWallet, isSameWallet, isRealWallet, DEFAULT_SOLANA_PUBKEY } from "@/lib/walletUtils";
 import { clearRoom } from "@/lib/missedTurns"; // Only clearRoom needed - strikes now tracked server-side
 import { GameErrorBoundary } from "@/components/GameErrorBoundary";
@@ -132,6 +133,9 @@ const ChessGame = () => {
   const [gameOver, setGameOver] = useState(false);
   const [animationsEnabled, setAnimationsEnabled] = useState(true);
   const [winnerWallet, setWinnerWallet] = useState<string | null>(null); // Direct wallet address of winner
+  const [lastMove, setLastMove] = useState<{ from: Square; to: Square } | null>(null);
+  const [boardImage, setBoardImage] = useState<string | null>(null);
+  const boardContainerRef = useRef<HTMLDivElement>(null);
 
   // Room players - in production, this comes from on-chain room data
   const [roomPlayers, setRoomPlayers] = useState<string[]>([]);
@@ -896,6 +900,17 @@ const ChessGame = () => {
       // Victory announcement: which color won
       const winningColor = currentGame.turn() === 'w' ? 'Black' : 'White';
       triggerVictoryAnnouncement(`${winningColor} wins!`);
+      // Capture board screenshot for share card
+      setTimeout(async () => {
+        if (boardContainerRef.current) {
+          try {
+            const dataUrl = await toPng(boardContainerRef.current, { cacheBust: true, pixelRatio: 2 });
+            setBoardImage(dataUrl);
+          } catch (e) {
+            console.error("Board screenshot failed:", e);
+          }
+        }
+      }, 500);
       return true;
     }
     // Check specific draw reasons BEFORE generic isDraw()
@@ -979,6 +994,7 @@ const ChessGame = () => {
           
           setGame(new Chess(gameCopy.fen()));
           setMoveHistory(gameCopy.history());
+          setLastMove({ from: move.from, to: move.to });
           recordPlayerMoveRef.current(roomPlayersRef.current[gameRef.current.turn() === "w" ? 1 : 0] || "", result.san);
           
           checkGameOverInline(gameCopy);
@@ -1214,6 +1230,7 @@ const ChessGame = () => {
       // Update local state
       setGame(new Chess(gameCopy.fen()));
       setMoveHistory(gameCopy.history());
+      setLastMove({ from, to });
 
       // Send move to opponent via WebRTC
       const moveData: ChessMove = {
@@ -1381,7 +1398,7 @@ const ChessGame = () => {
                 {/* Board Container */}
                 <div className="relative">
                   <div className="absolute -inset-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 rounded-2xl blur-xl opacity-50" />
-                  <div className="relative p-1 rounded-xl bg-gradient-to-br from-primary/40 via-primary/20 to-primary/40 shadow-[0_0_40px_-10px_hsl(45_93%_54%_/_0.4)]">
+                  <div ref={boardContainerRef} className="relative p-1 rounded-xl bg-gradient-to-br from-primary/40 via-primary/20 to-primary/40 shadow-[0_0_40px_-10px_hsl(45_93%_54%_/_0.4)]">
                     <div className="bg-gradient-to-b from-midnight-light via-background to-midnight-light rounded-lg overflow-hidden p-4">
                       <ChessBoardPremium
                         game={game}
@@ -1392,6 +1409,8 @@ const ChessGame = () => {
                         animationsEnabled={animationsEnabled}
                         flipped={effectiveColor === "b"}
                         playerColor={effectiveColor}
+                        lastMove={lastMove || undefined}
+                        isCheckmate={game.isCheckmate()}
                       />
                     </div>
                   </div>

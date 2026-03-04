@@ -1,6 +1,7 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Chess, Square, Move, PieceSymbol } from "chess.js";
+import { toPng } from "html-to-image";
 import { ChessBoardPremium } from "@/components/ChessBoardPremium";
 import { useCaptureAnimations } from "@/components/CaptureAnimationLayer";
 import { Button } from "@/components/ui/button";
@@ -102,6 +103,9 @@ const ChessAI = () => {
   const [animationsEnabled, setAnimationsEnabled] = useState(true);
   const [showShareCard, setShowShareCard] = useState(false);
   const [winDuration, setWinDuration] = useState(0);
+  const [lastMove, setLastMove] = useState<{ from: Square; to: Square } | null>(null);
+  const [boardImage, setBoardImage] = useState<string | null>(null);
+  const boardContainerRef = useRef<HTMLDivElement>(null);
   
   // Session continuity
   const { clearActiveGame } = useActiveAIGame(gameOver);
@@ -165,7 +169,18 @@ const ChessAI = () => {
         const dur = getDuration();
         recordWin();
         setWinDuration(dur);
-        setShowShareCard(true);
+        // Delay share card to show the winning move + capture board screenshot
+        setTimeout(async () => {
+          if (boardContainerRef.current) {
+            try {
+              const dataUrl = await toPng(boardContainerRef.current, { cacheBust: true, pixelRatio: 2 });
+              setBoardImage(dataUrl);
+            } catch (e) {
+              console.error("Board screenshot failed:", e);
+            }
+          }
+          setShowShareCard(true);
+        }, 2500);
       } else {
         recordLoss();
       }
@@ -287,6 +302,7 @@ const ChessAI = () => {
       
       setGame(new Chess(currentGame.fen()));
       setMoveHistory(currentGame.history());
+      setLastMove({ from: parsed.from, to: parsed.to });
       setIsThinking(false);
 
       if (!checkGameOver(currentGame)) {
@@ -347,6 +363,7 @@ const ChessAI = () => {
 
       setGame(new Chess(gameCopy.fen()));
       setMoveHistory(gameCopy.history());
+      setLastMove({ from, to });
 
       if (!checkGameOver(gameCopy)) {
         makeAIMove(gameCopy, animationsEnabled);
@@ -364,6 +381,8 @@ const ChessAI = () => {
     setGameStatus(t('gameAI.yourTurn'));
     setGameOver(false);
     setIsThinking(false);
+    setLastMove(null);
+    setBoardImage(null);
   }, [t]);
 
   // Publish context for AI helper overlay (board-aware)
@@ -486,7 +505,7 @@ const ChessAI = () => {
                 <div className="absolute -inset-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 rounded-2xl blur-xl opacity-50" />
                 
                 {/* Gold frame */}
-                <div className="relative p-1 rounded-xl bg-gradient-to-br from-primary/40 via-primary/20 to-primary/40 shadow-[0_0_40px_-10px_hsl(45_93%_54%_/_0.4)]">
+                <div ref={boardContainerRef} className="relative p-1 rounded-xl bg-gradient-to-br from-primary/40 via-primary/20 to-primary/40 shadow-[0_0_40px_-10px_hsl(45_93%_54%_/_0.4)]">
                   <div className="bg-gradient-to-b from-midnight-light via-background to-midnight-light rounded-lg overflow-hidden p-4">
                     <ChessBoardPremium
                       game={game}
@@ -495,6 +514,8 @@ const ChessAI = () => {
                       captureAnimations={animations}
                       onAnimationComplete={handleAnimationComplete}
                       animationsEnabled={animationsEnabled}
+                      lastMove={lastMove || undefined}
+                      isCheckmate={game.isCheckmate()}
                     />
                   </div>
                 </div>
@@ -694,6 +715,8 @@ const ChessAI = () => {
         game="chess"
         difficulty={difficulty}
         durationSeconds={winDuration}
+        boardImage={boardImage || undefined}
+        winningMove={moveHistory.length > 0 ? moveHistory[moveHistory.length - 1] : undefined}
       />
     </div>
   );
