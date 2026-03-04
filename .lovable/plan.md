@@ -1,63 +1,74 @@
 
 
-# Make Hard Mode Expert-Level Across All AI Games
+# Chess Winning Move on Share Cards
 
-## Current State (per game)
+## What We're Building
 
-| Game | Hard Mode AI | Weakness |
-|---|---|---|
-| **Chess** | Minimax depth 4, 0 randomness, piece-square tables | Depth 4 is ~beginner/intermediate. No endgame tables, no quiescence search. Easily beatable. |
-| **Checkers** | 1-ply lookahead (evaluates immediate move only), 0 randomness | No tree search at all. Just picks the best immediate board score. Trivially beatable. |
-| **Backgammon** | Negamax depth 4, 0 randomness, 3s time limit | Decent but evaluation function quality is key. Could go deeper. |
-| **Dominos** | Greedy heuristic (play highest pip count + numbers you hold many of) | No lookahead whatsoever. Just a scoring heuristic on the current move. |
-| **Ludo** | Priority-based (finish > capture > advance furthest > leave base) | No lookahead, no opponent awareness, no safety evaluation. |
+When a player wins at chess (AI or PvP), we'll:
+1. **Highlight the winning move** on the board with a golden glow animation
+2. **Capture a screenshot** of the board showing the winning move
+3. **Embed that board image** into both the AI Win Share Card and the PvP Share Result Card
+4. Players can then share the image with the winning position visible on social media
 
-## Plan
+## How It Works
 
-### 1. Chess — Increase depth + add quiescence search
-**File:** `src/lib/chessEngine/localChessAI.ts`
-- Increase hard depth from **4 to 5**
-- Add **quiescence search** (extend search on captures/checks at leaf nodes to avoid horizon effect — this is the single biggest improvement for chess AI quality)
-- Add **king safety bonus** to evaluation (penalize exposed king, bonus for castled king)
-- Add **endgame king table** (switch king PST when few pieces remain to encourage centralization)
-- These changes make the AI play at roughly a **1400-1600 Elo** level, which feels expert to casual players
+```text
+Checkmate detected
+  → Track lastMove {from, to}
+  → Highlight from/to squares with gold pulse on ChessBoardPremium
+  → Wait ~2s for player to see the move
+  → Use html-to-image to snapshot the board div
+  → Pass boardImage (data URL) to share card
+  → Share card renders the board snapshot in the card body
+  → Player downloads/shares image with the winning position embedded
+```
 
-### 2. Checkers — Add minimax with alpha-beta pruning
-**File:** `src/pages/CheckersAI.tsx`
-- Replace the current 1-ply evaluation with proper **minimax + alpha-beta** at depth **6** for hard mode
-- Improve evaluation: add **center control bonus**, **back row bonus** (protecting home row), **mobility score**, and increase king value from 3 to 5
-- Add move ordering (captures first) for better pruning
-- This transforms checkers from trivially beatable to genuinely challenging
+## Changes
 
-### 3. Backgammon — Increase depth + improve evaluation
-**File:** `src/engine/backgammon/ai.ts`
-- Increase hard depth from **4 to 5**, increase time limit from **3s to 5s**
-- The evaluation function in the engine likely needs improvements (blot penalty, prime detection, race evaluation) — will check and enhance `engine.ts` `evaluateState`
+### 1. ChessBoardPremium — Add last-move + checkmate highlight
+**File:** `src/components/ChessBoardPremium.tsx`
+- Add props: `lastMove?: { from: Square; to: Square }`, `isCheckmate?: boolean`
+- Render a gold overlay on `from` and `to` squares when `lastMove` is set
+- When `isCheckmate` is true, use an intensified pulsing gold animation with glow
+- CSS keyframes for the pulse effect (matches the Egyptian gold theme)
 
-### 4. Dominos — Add lookahead search
-**File:** `src/pages/DominosAI.tsx`
-- Add a **minimax-style 3-ply lookahead** for hard mode that simulates future plays
-- Improve scoring: penalize leaving the opponent with plays for numbers you can't match, bonus for emptying hand faster
-- Add **blocking strategy**: prefer plays that leave chain ends matching numbers you hold but opponent likely doesn't
+### 2. ChessAI — Track lastMove, capture board screenshot, delay share card
+**File:** `src/pages/ChessAI.tsx`
+- Add `lastMove` state, update it on every player and AI move
+- Pass `lastMove` and `isCheckmate` to `ChessBoardPremium`
+- On checkmate: delay showing the share card by ~2.5s, during which use `toPng` (already installed via `html-to-image`) to snapshot the board element
+- Pass `boardImage` data URL to `AIWinShareCard`
 
-### 5. Ludo — Add opponent awareness + safety scoring
-**File:** `src/lib/ludo/ai.ts`
-- Add **safety evaluation**: avoid landing on positions where opponents can capture you
-- Add **blocking strategy**: prefer moves that land near opponent tokens (threatening capture)
-- Add **spread vs. concentrate** logic: keep tokens spread to maximize dice utility
-- Reorder priorities: safety-aware capture > finish > strategic advance > leave base
-- Score all moves and pick the best instead of first-match priority
+### 3. ChessGame (PvP) — Same lastMove tracking + board snapshot
+**File:** `src/pages/ChessGame.tsx`
+- Add `lastMove` state, update on each move (local + WebRTC received)
+- Pass to `ChessBoardPremium`
+- On checkmate: capture board screenshot and pass to `ShareResultCard`
 
-## Summary of Changes
+### 4. AIWinShareCard — Render board snapshot for chess wins
+**File:** `src/components/AIWinShareCard.tsx`
+- Add optional prop `boardImage?: string` (data URL)
+- When provided, render the board image between the game icon and the Ankh divider
+- Styled with a gold border + rounded corners to match the card aesthetic
+- Replace the generic game icon area with the actual board position
+
+### 5. ShareResultCard — Render board snapshot for PvP chess wins
+**File:** `src/components/ShareResultCard.tsx`
+- Add optional prop `boardImage?: string`
+- When provided, render the board image in the card body
+- Only shows for chess games (other games don't have a board snapshot)
+
+### 6. Display winning move notation
+- Show the last move in algebraic notation (e.g., "Qh7#") on the share card as a small label below the board image
+- Available from `moveHistory[moveHistory.length - 1]` — already tracked in both files
+
+## Summary
 
 | File | Change |
 |---|---|
-| `src/lib/chessEngine/localChessAI.ts` | Depth 4→5, add quiescence search, king safety, endgame king table |
-| `src/pages/CheckersAI.tsx` | Add minimax alpha-beta at depth 6, improved evaluation |
-| `src/engine/backgammon/ai.ts` | Depth 4→5, time 3s→5s |
-| `src/engine/backgammon/engine.ts` | Improve `evaluateState` (blot penalty, prime bonus) |
-| `src/pages/DominosAI.tsx` | Add 3-ply lookahead for hard mode |
-| `src/lib/ludo/ai.ts` | Score-based move selection with safety + blocking |
-
-All changes are isolated to hard mode — easy and medium remain unchanged.
+| `ChessBoardPremium.tsx` | Add `lastMove` + `isCheckmate` props with gold highlight overlays |
+| `ChessAI.tsx` | Track lastMove, capture board PNG on win, delay share card 2.5s |
+| `ChessGame.tsx` | Track lastMove, capture board PNG on win |
+| `AIWinShareCard.tsx` | Add `boardImage` prop, render board snapshot in card |
+| `ShareResultCard.tsx` | Add `boardImage` prop, render board snapshot for chess |
 
