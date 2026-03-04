@@ -78,11 +78,14 @@ export interface ShareResultCardProps {
   roomPda?: string;
   totalGamesWon?: number;
   totalSolWon?: number;
+  boardImage?: string;
+  winningMove?: string;
 }
 
 export function ShareResultCard({
   open, onClose, isWinner, gameType, winnerWallet, loserWallet, myWallet,
   solWonLamports, solLostLamports, finishedAt, roomPda, totalGamesWon, totalSolWon,
+  boardImage, winningMove,
 }: ShareResultCardProps) {
   const { t } = useTranslation();
   const cardRef = useRef<HTMLDivElement>(null);
@@ -289,6 +292,38 @@ export function ShareResultCard({
                 {gameLabel.toUpperCase()}
               </span>
             </div>
+
+            {/* Board image for chess games */}
+            {boardImage && (
+              <div className="w-full flex flex-col items-center gap-2">
+                <div
+                  className="rounded-lg overflow-hidden"
+                  style={{
+                    border: `2px solid ${darkTheme ? "hsl(45 93% 54% / 0.5)" : "hsl(45 60% 45%)"}`,
+                    boxShadow: darkTheme ? "0 0 20px hsl(45 93% 54% / 0.2)" : "0 4px 12px rgba(0,0,0,0.1)",
+                    maxWidth: "85%",
+                  }}
+                >
+                  <img
+                    src={boardImage}
+                    alt="Winning chess position"
+                    className="w-full h-auto"
+                  />
+                </div>
+                {winningMove && (
+                  <div
+                    className="px-3 py-1 rounded text-xs font-bold tracking-widest uppercase font-mono"
+                    style={{
+                      border: `1px solid ${darkTheme ? "hsl(45 93% 54% / 0.4)" : "hsl(45 60% 45% / 0.5)"}`,
+                      background: darkTheme ? "hsl(45 93% 54% / 0.08)" : "hsl(45 60% 90%)",
+                      color: darkTheme ? "hsl(45 93% 70%)" : "hsl(35 70% 35%)",
+                    }}
+                  >
+                    ♚ {winningMove}
+                  </div>
+                )}
+              </div>
+            )}
 
             <AnkhDivider dark={darkTheme} />
 

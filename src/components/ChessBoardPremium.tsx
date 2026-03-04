@@ -15,6 +15,8 @@ interface ChessBoardPremiumProps {
   animationsEnabled?: boolean;
   flipped?: boolean;
   playerColor?: Color;
+  lastMove?: { from: Square; to: Square };
+  isCheckmate?: boolean;
 }
 
 const files = ["a", "b", "c", "d", "e", "f", "g", "h"];
@@ -208,7 +210,9 @@ export function ChessBoardPremium({
   onAnimationComplete,
   animationsEnabled = true,
   flipped = false,
-  playerColor = "w"
+  playerColor = "w",
+  lastMove,
+  isCheckmate = false,
 }: ChessBoardPremiumProps) {
   const [selectedSquare, setSelectedSquare] = useState<Square | null>(null);
   const [legalMoves, setLegalMoves] = useState<Square[]>([]);
@@ -300,6 +304,9 @@ export function ChessBoardPremium({
               const isLegalMove = legalMoves.includes(square);
               const isCheck = game.isCheck() && piece?.type === "k" && piece?.color === game.turn();
               const isMoving = movingPiece?.to === square;
+              const isLastMoveFrom = lastMove?.from === square;
+              const isLastMoveTo = lastMove?.to === square;
+              const isLastMoveSquare = isLastMoveFrom || isLastMoveTo;
 
               return (
                 <button
@@ -370,6 +377,47 @@ export function ChessBoardPremium({
                           boxShadow: "inset 0 0 6px 1px hsl(35 70% 25% / 0.3)",
                         }}
                       />
+                    </>
+                  )}
+
+                  {/* Last move highlight */}
+                  {isLastMoveSquare && !isCheckmate && (
+                    <div 
+                      className="absolute inset-0 pointer-events-none"
+                      style={{
+                        background: isLastMoveTo
+                          ? "hsl(45 93% 54% / 0.35)"
+                          : "hsl(45 93% 54% / 0.2)",
+                        boxShadow: isLastMoveTo
+                          ? "inset 0 0 12px 2px hsl(45 93% 54% / 0.4)"
+                          : "inset 0 0 8px 2px hsl(45 93% 54% / 0.25)",
+                      }}
+                    />
+                  )}
+
+                  {/* Checkmate winning move highlight - intensified gold pulse */}
+                  {isLastMoveSquare && isCheckmate && (
+                    <>
+                      <div 
+                        className="absolute inset-0 pointer-events-none animate-pulse-gold"
+                        style={{
+                          background: isLastMoveTo
+                            ? "hsl(45 93% 54% / 0.5)"
+                            : "hsl(45 93% 54% / 0.3)",
+                          boxShadow: isLastMoveTo
+                            ? "inset 0 0 20px 4px hsl(45 93% 54% / 0.6), 0 0 24px 4px hsl(45 93% 54% / 0.4)"
+                            : "inset 0 0 14px 3px hsl(45 93% 54% / 0.4), 0 0 16px 3px hsl(45 93% 54% / 0.25)",
+                        }}
+                      />
+                      {/* Corner gold accents on winning square */}
+                      {isLastMoveTo && (
+                        <>
+                          <div className="absolute top-0 left-0 w-3 h-3 border-t-2 border-l-2 border-primary animate-pulse pointer-events-none" />
+                          <div className="absolute top-0 right-0 w-3 h-3 border-t-2 border-r-2 border-primary animate-pulse pointer-events-none" />
+                          <div className="absolute bottom-0 left-0 w-3 h-3 border-b-2 border-l-2 border-primary animate-pulse pointer-events-none" />
+                          <div className="absolute bottom-0 right-0 w-3 h-3 border-b-2 border-r-2 border-primary animate-pulse pointer-events-none" />
+                        </>
+                      )}
                     </>
                   )}
 

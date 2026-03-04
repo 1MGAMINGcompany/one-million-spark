@@ -19,6 +19,8 @@ export interface AIWinShareCardProps {
   game: "chess" | "checkers" | "backgammon" | "dominos" | "ludo";
   difficulty: "easy" | "medium" | "hard";
   durationSeconds: number;
+  boardImage?: string;
+  winningMove?: string;
 }
 
 
@@ -44,6 +46,8 @@ export default function AIWinShareCard({
   game,
   difficulty,
   durationSeconds,
+  boardImage,
+  winningMove,
 }: AIWinShareCardProps) {
   const { t } = useTranslation();
   const cardRef = useRef<HTMLDivElement>(null);
@@ -240,10 +244,41 @@ export default function AIWinShareCard({
               ))}
             </div>
 
-            {/* Game icon */}
-            <div className="w-20 h-20">
-              <GameIcon className="w-full h-full" />
-            </div>
+            {/* Board image for chess or game icon */}
+            {boardImage ? (
+              <div className="w-full flex flex-col items-center gap-2">
+                <div
+                  className="rounded-lg overflow-hidden"
+                  style={{
+                    border: "2px solid hsl(45 93% 54% / 0.5)",
+                    boxShadow: "0 0 20px hsl(45 93% 54% / 0.2)",
+                    maxWidth: "85%",
+                  }}
+                >
+                  <img
+                    src={boardImage}
+                    alt="Winning chess position"
+                    className="w-full h-auto"
+                  />
+                </div>
+                {winningMove && (
+                  <div
+                    className="px-3 py-1 rounded text-xs font-bold tracking-widest uppercase font-mono"
+                    style={{
+                      border: "1px solid hsl(45 93% 54% / 0.4)",
+                      background: "hsl(45 93% 54% / 0.08)",
+                      color: "hsl(45 93% 70%)",
+                    }}
+                  >
+                    ♚ {winningMove}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="w-20 h-20">
+                <GameIcon className="w-full h-full" />
+              </div>
+            )}
 
             {/* Ankh divider */}
             <div
