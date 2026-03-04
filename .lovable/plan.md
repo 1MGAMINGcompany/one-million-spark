@@ -1,38 +1,63 @@
 
 
-# Fix: Home Page Not Centered on Mobile
+# Make Hard Mode Expert-Level Across All AI Games
 
-## Problem Identified
+## Current State (per game)
 
-The home page has **two root causes** making it appear off-center on certain mobile devices:
-
-1. **The decorative pyramid panel renders on mobile** -- The right-side pyramid panel (`max-w-md aspect-square` = up to 448x448px) renders below the CTA buttons on mobile. On narrow screens this large decorative block can cause subtle layout shifts and makes the page unnecessarily long, pushing content off-center visually.
-
-2. **Background blur elements are oversized** -- Two decorative blur circles (`w-96` = 384px and `w-80` = 320px) are positioned with fractional offsets (`left-1/4`, `right-1/4`). While the hero section has `overflow-hidden`, these can still affect perceived centering in some in-app browsers (Instagram, Facebook webviews) where `overflow-x: hidden` is not always respected.
-
-3. **RTL language direction** -- 47% of recent traffic is Arabic/French speakers. When the language is Arabic, `document.documentElement.dir` is set to `rtl`, which can shift layout alignment on the home page since the grid and flex containers don't account for RTL direction explicitly.
-
-## Fix Plan
-
-### 1. Hide the decorative pyramid panel on mobile
-- Add `hidden lg:flex` to the right-side pyramid panel container (line 194)
-- This removes a ~400px tall purely decorative element that adds no value on mobile and can cause alignment issues
-- The hero section becomes a single centered column on mobile
-
-### 2. Constrain background blur elements
-- Change `w-96` to `w-64 md:w-96` and `w-80` to `w-48 md:w-80` so the blur circles are smaller on mobile screens, reducing any chance of overflow
-
-### 3. Add `overflow-hidden` to the outermost page wrapper
-- Change `<div className="min-h-screen">` to `<div className="min-h-screen overflow-x-hidden">` as an extra safety net for in-app browsers
-
-These are minimal, targeted changes -- 3 lines edited in `src/pages/Home.tsx`.
-
-## Technical Details
-
-| File | Line | Change |
+| Game | Hard Mode AI | Weakness |
 |---|---|---|
-| `src/pages/Home.tsx` | 30 | Add `overflow-x-hidden` to root div |
-| `src/pages/Home.tsx` | 66 | Reduce blur circle sizes on mobile |
-| `src/pages/Home.tsx` | 67 | Reduce blur circle sizes on mobile |
-| `src/pages/Home.tsx` | 194 | Add `hidden lg:flex` to pyramid panel |
+| **Chess** | Minimax depth 4, 0 randomness, piece-square tables | Depth 4 is ~beginner/intermediate. No endgame tables, no quiescence search. Easily beatable. |
+| **Checkers** | 1-ply lookahead (evaluates immediate move only), 0 randomness | No tree search at all. Just picks the best immediate board score. Trivially beatable. |
+| **Backgammon** | Negamax depth 4, 0 randomness, 3s time limit | Decent but evaluation function quality is key. Could go deeper. |
+| **Dominos** | Greedy heuristic (play highest pip count + numbers you hold many of) | No lookahead whatsoever. Just a scoring heuristic on the current move. |
+| **Ludo** | Priority-based (finish > capture > advance furthest > leave base) | No lookahead, no opponent awareness, no safety evaluation. |
+
+## Plan
+
+### 1. Chess — Increase depth + add quiescence search
+**File:** `src/lib/chessEngine/localChessAI.ts`
+- Increase hard depth from **4 to 5**
+- Add **quiescence search** (extend search on captures/checks at leaf nodes to avoid horizon effect — this is the single biggest improvement for chess AI quality)
+- Add **king safety bonus** to evaluation (penalize exposed king, bonus for castled king)
+- Add **endgame king table** (switch king PST when few pieces remain to encourage centralization)
+- These changes make the AI play at roughly a **1400-1600 Elo** level, which feels expert to casual players
+
+### 2. Checkers — Add minimax with alpha-beta pruning
+**File:** `src/pages/CheckersAI.tsx`
+- Replace the current 1-ply evaluation with proper **minimax + alpha-beta** at depth **6** for hard mode
+- Improve evaluation: add **center control bonus**, **back row bonus** (protecting home row), **mobility score**, and increase king value from 3 to 5
+- Add move ordering (captures first) for better pruning
+- This transforms checkers from trivially beatable to genuinely challenging
+
+### 3. Backgammon — Increase depth + improve evaluation
+**File:** `src/engine/backgammon/ai.ts`
+- Increase hard depth from **4 to 5**, increase time limit from **3s to 5s**
+- The evaluation function in the engine likely needs improvements (blot penalty, prime detection, race evaluation) — will check and enhance `engine.ts` `evaluateState`
+
+### 4. Dominos — Add lookahead search
+**File:** `src/pages/DominosAI.tsx`
+- Add a **minimax-style 3-ply lookahead** for hard mode that simulates future plays
+- Improve scoring: penalize leaving the opponent with plays for numbers you can't match, bonus for emptying hand faster
+- Add **blocking strategy**: prefer plays that leave chain ends matching numbers you hold but opponent likely doesn't
+
+### 5. Ludo — Add opponent awareness + safety scoring
+**File:** `src/lib/ludo/ai.ts`
+- Add **safety evaluation**: avoid landing on positions where opponents can capture you
+- Add **blocking strategy**: prefer moves that land near opponent tokens (threatening capture)
+- Add **spread vs. concentrate** logic: keep tokens spread to maximize dice utility
+- Reorder priorities: safety-aware capture > finish > strategic advance > leave base
+- Score all moves and pick the best instead of first-match priority
+
+## Summary of Changes
+
+| File | Change |
+|---|---|
+| `src/lib/chessEngine/localChessAI.ts` | Depth 4→5, add quiescence search, king safety, endgame king table |
+| `src/pages/CheckersAI.tsx` | Add minimax alpha-beta at depth 6, improved evaluation |
+| `src/engine/backgammon/ai.ts` | Depth 4→5, time 3s→5s |
+| `src/engine/backgammon/engine.ts` | Improve `evaluateState` (blot penalty, prime bonus) |
+| `src/pages/DominosAI.tsx` | Add 3-ply lookahead for hard mode |
+| `src/lib/ludo/ai.ts` | Score-based move selection with safety + blocking |
+
+All changes are isolated to hard mode — easy and medium remain unchanged.
 
