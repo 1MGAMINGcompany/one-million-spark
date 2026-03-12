@@ -1,74 +1,55 @@
 
+Goal: Fix the mobile home hero so the top section (badge, heading, CTA buttons) is truly centered and no longer appears shifted to the right.
 
-# Chess Winning Move on Share Cards
+What I found from preview audit:
+- The issue is a horizontal overflow problem in the hero CTA block, not just button width.
+- It reproduces clearly on narrower mobile widths (especially 320px), and can still appear on 390px when effective width is reduced.
+- Main contributors are oversized/no-wrap CTA internals plus inherited button behavior, which creates right-side clipping and makes the whole hero look right-shifted.
 
-## What We're Building
+Implementation plan:
 
-When a player wins at chess (AI or PvP), we'll:
-1. **Highlight the winning move** on the board with a golden glow animation
-2. **Capture a screenshot** of the board showing the winning move
-3. **Embed that board image** into both the AI Win Share Card and the PvP Share Result Card
-4. Players can then share the image with the winning position visible on social media
+1) Stabilize hero container shrinking (prevent overflow propagation)
+- File: `src/pages/Home.tsx`
+- Add `min-w-0` to the hero left content wrapper and CTA wrapper so children can shrink correctly inside grid/flex contexts.
+- Keep `items-stretch` and full-width behavior for CTA stack.
 
-## How It Works
+2) Force CTA buttons to behave as block-width mobile elements
+- File: `src/pages/Home.tsx`
+- For all 4 hero CTA Buttons:
+  - Add `flex` (to override inline-flex behavior in this section)
+  - Add `w-full min-w-0 whitespace-normal`
+  - Reduce horizontal padding on mobile (`px-4 sm:px-8`) so content has room
+- For each inner `Link`:
+  - Keep/add `w-full min-w-0 flex flex-col items-center`
+  - Add `text-center`
 
-```text
-Checkmate detected
-  → Track lastMove {from, to}
-  → Highlight from/to squares with gold pulse on ChessBoardPremium
-  → Wait ~2s for player to see the move
-  → Use html-to-image to snapshot the board div
-  → Pass boardImage (data URL) to share card
-  → Share card renders the board snapshot in the card body
-  → Player downloads/shares image with the winning position embedded
-```
+3) Remove no-wrap pressure in CTA inner content
+- File: `src/pages/Home.tsx`
+- “Play Free” icon row:
+  - Change to `flex-wrap`
+  - Use tighter mobile gaps (`gap-2 sm:gap-4`)
+- “Quick Match” title line:
+  - Use smaller mobile text and tighter leading (`text-xl sm:text-2xl md:text-3xl leading-tight`)
+  - Keep centered layout
 
-## Changes
+4) Prevent headline overflow on small screens
+- File: `src/pages/Home.tsx`
+- Make H1 more responsive on smallest sizes:
+  - From `text-5xl ...` to `text-4xl sm:text-5xl md:text-6xl lg:text-7xl`
+- Keep branding style unchanged.
 
-### 1. ChessBoardPremium — Add last-move + checkmate highlight
-**File:** `src/components/ChessBoardPremium.tsx`
-- Add props: `lastMove?: { from: Square; to: Square }`, `isCheckmate?: boolean`
-- Render a gold overlay on `from` and `to` squares when `lastMove` is set
-- When `isCheckmate` is true, use an intensified pulsing gold animation with glow
-- CSS keyframes for the pulse effect (matches the Egyptian gold theme)
+5) Validation checklist after implementation
+- Test `/` in mobile widths: 390, 375, 320
+- Confirm these are centered and not clipped:
+  - Play Free
+  - Quick Match
+  - Create Game Room
+  - View Public Rooms
+  - Hero heading/subheading/badge
+- Verify both English and Arabic still look correct.
+- Verify section below (“Featured Games”) remains unchanged.
 
-### 2. ChessAI — Track lastMove, capture board screenshot, delay share card
-**File:** `src/pages/ChessAI.tsx`
-- Add `lastMove` state, update it on every player and AI move
-- Pass `lastMove` and `isCheckmate` to `ChessBoardPremium`
-- On checkmate: delay showing the share card by ~2.5s, during which use `toPng` (already installed via `html-to-image`) to snapshot the board element
-- Pass `boardImage` data URL to `AIWinShareCard`
-
-### 3. ChessGame (PvP) — Same lastMove tracking + board snapshot
-**File:** `src/pages/ChessGame.tsx`
-- Add `lastMove` state, update on each move (local + WebRTC received)
-- Pass to `ChessBoardPremium`
-- On checkmate: capture board screenshot and pass to `ShareResultCard`
-
-### 4. AIWinShareCard — Render board snapshot for chess wins
-**File:** `src/components/AIWinShareCard.tsx`
-- Add optional prop `boardImage?: string` (data URL)
-- When provided, render the board image between the game icon and the Ankh divider
-- Styled with a gold border + rounded corners to match the card aesthetic
-- Replace the generic game icon area with the actual board position
-
-### 5. ShareResultCard — Render board snapshot for PvP chess wins
-**File:** `src/components/ShareResultCard.tsx`
-- Add optional prop `boardImage?: string`
-- When provided, render the board image in the card body
-- Only shows for chess games (other games don't have a board snapshot)
-
-### 6. Display winning move notation
-- Show the last move in algebraic notation (e.g., "Qh7#") on the share card as a small label below the board image
-- Available from `moveHistory[moveHistory.length - 1]` — already tracked in both files
-
-## Summary
-
-| File | Change |
-|---|---|
-| `ChessBoardPremium.tsx` | Add `lastMove` + `isCheckmate` props with gold highlight overlays |
-| `ChessAI.tsx` | Track lastMove, capture board PNG on win, delay share card 2.5s |
-| `ChessGame.tsx` | Track lastMove, capture board PNG on win |
-| `AIWinShareCard.tsx` | Add `boardImage` prop, render board snapshot in card |
-| `ShareResultCard.tsx` | Add `boardImage` prop, render board snapshot for chess |
-
+Technical details:
+- This is a layout containment + wrapping fix localized to `Home.tsx`.
+- No backend changes.
+- No global button component behavior changes required (avoids regressions elsewhere).
