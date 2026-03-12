@@ -940,7 +940,7 @@ const BackgammonAI = () => {
             </div>
 
             {/* Board Container - Flexible height that fits remaining space */}
-            <div className="relative w-full flex-1 min-h-0" style={{ maxHeight: '55vh' }}>
+            <div className="relative w-full flex-1 min-h-0" style={{ maxHeight: '55vh' }} dir="ltr">
               {/* Subtle glow */}
               <div className="absolute -inset-1 bg-primary/10 rounded-xl blur-lg opacity-30" />
               
