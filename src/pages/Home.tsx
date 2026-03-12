@@ -157,7 +157,7 @@ const Home = () => {
                         </Link>
                       </Button>
                       <Button asChild size="lg" variant="outline" className="w-full group text-lg h-auto py-3 px-8 flex-1 border-primary/30 hover:border-primary/50 transition-all">
-                        <Link to="/room-list" className="flex flex-col items-center gap-0.5">
+                        <Link to="/room-list" className="w-full flex flex-col items-center gap-0.5">
                           <span className="flex items-center gap-2">
                             <Users className="w-5 h-5 text-primary group-hover:drop-shadow-[0_0_6px_hsl(45_93%_54%_/_0.6)] transition-all" />
                             {t("home.viewPublicRooms")}
