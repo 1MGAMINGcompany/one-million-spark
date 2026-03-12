@@ -113,7 +113,7 @@ const Home = () => {
 
               {/* CTA Buttons — always visible */}
               <div className="flex flex-col gap-4 mt-4">
-                    <Button asChild size="lg" variant="gold" className="group text-lg h-auto py-5 px-8 transition-all shadow-[0_0_20px_-4px_hsl(45_93%_54%_/_0.4)]">
+                    <Button asChild size="lg" variant="gold" className="w-full group text-lg h-auto py-5 px-8 transition-all shadow-[0_0_20px_-4px_hsl(45_93%_54%_/_0.4)]">
                       <Link to="/play-ai" className="flex flex-col items-center gap-2">
                         <span className="flex items-center gap-2 text-3xl md:text-4xl font-bold tracking-wide">
                           <Bot className="w-8 h-8 group-hover:drop-shadow-[0_0_6px_hsl(45_93%_54%_/_0.6)] transition-all" />
