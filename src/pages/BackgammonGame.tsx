@@ -2431,7 +2431,7 @@ const BackgammonGame = () => {
               </div>
 
               {/* Board Container - Aspect-ratio scaling to 100vw, max-height to fit viewport */}
-              <div className="relative w-full flex-1 min-h-0 overflow-hidden backgammon-mp-board">
+              <div className="relative w-full flex-1 min-h-0 overflow-hidden backgammon-mp-board" dir="ltr">
                 {/* Subtle glow */}
                 <div className="absolute -inset-1 bg-primary/10 rounded-xl blur-lg opacity-30" />
                 
