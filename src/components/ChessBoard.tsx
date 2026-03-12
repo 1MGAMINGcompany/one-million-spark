@@ -62,7 +62,7 @@ export function ChessBoard({ game, onMove, disabled = false }: ChessBoardProps) 
   };
 
   return (
-    <div className="aspect-square w-full max-w-[600px] mx-auto">
+    <div className="aspect-square w-full max-w-[600px] mx-auto" dir="ltr">
       <div className="grid grid-cols-8 border-2 border-border rounded-lg overflow-hidden">
         {ranks.map((rank, rankIndex) =>
           files.map((file, fileIndex) => {

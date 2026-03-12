@@ -2431,7 +2431,7 @@ const BackgammonGame = () => {
               </div>
 
               {/* Board Container - Aspect-ratio scaling to 100vw, max-height to fit viewport */}
-              <div className="relative w-full flex-1 min-h-0 overflow-hidden backgammon-mp-board">
+              <div className="relative w-full flex-1 min-h-0 overflow-hidden backgammon-mp-board" dir="ltr">
                 {/* Subtle glow */}
                 <div className="absolute -inset-1 bg-primary/10 rounded-xl blur-lg opacity-30" />
                 
@@ -2662,7 +2662,7 @@ const BackgammonGame = () => {
               {/* Board Column - 3 columns */}
               <div className="lg:col-span-3 space-y-3 md:space-y-4">
                 {/* Board Container with gold frame */}
-                <div className="relative">
+                <div className="relative" dir="ltr">
                   {/* Outer glow */}
                   <div className="absolute -inset-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 rounded-2xl blur-xl opacity-50" />
                   

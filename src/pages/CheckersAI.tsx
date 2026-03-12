@@ -734,7 +734,7 @@ const CheckersAI = () => {
         </div>
 
         {/* Board */}
-        <div className="aspect-square border-4 border-primary/40 rounded-lg overflow-hidden shadow-[0_0_40px_-10px_hsl(45_93%_54%_/_0.3)]">
+        <div className="aspect-square border-4 border-primary/40 rounded-lg overflow-hidden shadow-[0_0_40px_-10px_hsl(45_93%_54%_/_0.3)]" dir="ltr">
           <div className="grid grid-cols-8 grid-rows-8 h-full w-full">
             {board.map((row, rowIndex) =>
               row.map((piece, colIndex) => {
