@@ -571,7 +571,7 @@ const LudoBoard = memo(({
   };
 
   return (
-    <div className="relative w-full max-w-[75vw] sm:max-w-[85vw] md:max-w-[min(60vh,480px)] mx-auto aspect-square">
+    <div className="relative w-full max-w-[75vw] sm:max-w-[85vw] md:max-w-[min(60vh,480px)] mx-auto aspect-square" dir="ltr">
       <div 
         ref={boardRef}
         className="relative w-full h-full overflow-hidden"

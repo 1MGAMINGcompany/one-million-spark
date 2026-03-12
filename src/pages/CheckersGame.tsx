@@ -1480,7 +1480,7 @@ const CheckersGame = () => {
             {/* Board */}
             <div className="relative">
               <div className="absolute -inset-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 rounded-2xl blur-xl opacity-50" />
-              <div className="relative p-1 rounded-xl bg-gradient-to-br from-primary/40 via-primary/20 to-primary/40">
+              <div className="relative p-1 rounded-xl bg-gradient-to-br from-primary/40 via-primary/20 to-primary/40" dir="ltr">
                 <div className="bg-gradient-to-b from-midnight-light via-background to-midnight-light rounded-lg p-2">
                   {renderBoard()}
                 </div>

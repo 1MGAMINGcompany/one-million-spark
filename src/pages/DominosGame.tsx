@@ -1597,7 +1597,7 @@ const DominosGame = () => {
             </div>
 
             {/* Chain */}
-            <div className="min-h-24 p-4 rounded-xl bg-gradient-to-br from-emerald-900/30 to-emerald-950/50 border border-emerald-500/20">
+            <div className="min-h-24 p-4 rounded-xl bg-gradient-to-br from-emerald-900/30 to-emerald-950/50 border border-emerald-500/20" dir="ltr">
               {/* Chain End Indicators */}
               {chain.length > 0 && getChainEnds() && (
                 <div className="flex justify-between items-center mb-3 px-2">
