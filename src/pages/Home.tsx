@@ -112,15 +112,15 @@ const Home = () => {
               )}
 
               {/* CTA Buttons — always visible */}
-              <div className="flex flex-col items-stretch gap-4 mt-4">
-                    <Button asChild size="lg" variant="gold" className="w-full group text-lg h-auto py-5 px-8 transition-all shadow-[0_0_20px_-4px_hsl(45_93%_54%_/_0.4)]">
-                      <Link to="/play-ai" className="w-full flex flex-col items-center gap-2">
-                        <span className="flex items-center gap-2 text-3xl md:text-4xl font-bold tracking-wide">
-                          <Bot className="w-8 h-8 group-hover:drop-shadow-[0_0_6px_hsl(45_93%_54%_/_0.6)] transition-all" />
+              <div className="flex flex-col items-stretch gap-4 mt-4 min-w-0 w-full">
+                    <Button asChild size="lg" variant="gold" className="flex w-full min-w-0 whitespace-normal group text-lg h-auto py-5 px-4 sm:px-8 transition-all shadow-[0_0_20px_-4px_hsl(45_93%_54%_/_0.4)]">
+                      <Link to="/play-ai" className="w-full min-w-0 flex flex-col items-center gap-2 text-center">
+                        <span className="flex items-center gap-2 text-2xl sm:text-3xl md:text-4xl font-bold tracking-wide leading-tight">
+                          <Bot className="w-7 h-7 sm:w-8 sm:h-8 shrink-0 group-hover:drop-shadow-[0_0_6px_hsl(45_93%_54%_/_0.6)] transition-all" />
                           {t("home.playAiFree")}
                         </span>
                         <span className="text-xs font-normal text-background/70 tracking-wide">{t("home.playFreeSub")}</span>
-                        <span className="flex items-center justify-center gap-4 mt-1">
+                        <span className="flex flex-wrap items-center justify-center gap-2 sm:gap-4 mt-1">
                           {[
                             { icon: <ChessIcon />, label: t("games.chess") },
                             { icon: <DominoIcon />, label: t("games.dominos") },
@@ -136,30 +136,30 @@ const Home = () => {
                         </span>
                       </Link>
                     </Button>
-                    <Button asChild size="lg" variant="gold" className="w-full group text-lg h-auto py-4 px-8 transition-all">
-                      <Link to="/quick-match" className="w-full flex flex-col items-center gap-1">
-                        <span className="flex items-center gap-2 text-2xl md:text-3xl font-bold tracking-wide">
-                          <Zap className="w-7 h-7 group-hover:drop-shadow-[0_0_6px_hsl(45_93%_54%_/_0.6)] transition-all" />
+                    <Button asChild size="lg" variant="gold" className="flex w-full min-w-0 whitespace-normal group text-lg h-auto py-4 px-4 sm:px-8 transition-all">
+                      <Link to="/quick-match" className="w-full min-w-0 flex flex-col items-center gap-1 text-center">
+                        <span className="flex items-center gap-2 text-xl sm:text-2xl md:text-3xl font-bold tracking-wide leading-tight">
+                          <Zap className="w-6 h-6 sm:w-7 sm:h-7 shrink-0 group-hover:drop-shadow-[0_0_6px_hsl(45_93%_54%_/_0.6)] transition-all" />
                           {t("home.quickMatchWinSol")}
                         </span>
                         <span className="text-[11px] font-medium text-background/60 tracking-widest uppercase">Crypto</span>
                         <span className="text-xs font-normal text-primary-foreground tracking-wide">{t("home.quickMatchWinSolSub")}</span>
                       </Link>
                     </Button>
-                    <div className="flex flex-col sm:flex-row gap-4">
-                      <Button asChild size="lg" variant="outline" className="w-full group text-lg h-auto py-3 px-8 flex-1 border-primary/30 hover:border-primary/50 transition-all">
-                        <Link to="/create-room" className="w-full flex flex-col items-center gap-0.5">
+                    <div className="flex flex-col sm:flex-row gap-4 min-w-0">
+                      <Button asChild size="lg" variant="outline" className="flex w-full min-w-0 whitespace-normal group text-lg h-auto py-3 px-4 sm:px-8 flex-1 border-primary/30 hover:border-primary/50 transition-all">
+                        <Link to="/create-room" className="w-full min-w-0 flex flex-col items-center gap-0.5 text-center">
                           <span className="flex items-center gap-2">
-                            <Swords className="w-5 h-5 text-primary group-hover:drop-shadow-[0_0_6px_hsl(45_93%_54%_/_0.6)] transition-all" />
+                            <Swords className="w-5 h-5 shrink-0 text-primary group-hover:drop-shadow-[0_0_6px_hsl(45_93%_54%_/_0.6)] transition-all" />
                             {t("home.createGameRoom")}
                           </span>
                           <span className="text-xs font-normal text-primary/60 tracking-wide">{t("home.createRoomSub")}</span>
                         </Link>
                       </Button>
-                      <Button asChild size="lg" variant="outline" className="w-full group text-lg h-auto py-3 px-8 flex-1 border-primary/30 hover:border-primary/50 transition-all">
-                        <Link to="/room-list" className="w-full flex flex-col items-center gap-0.5">
+                      <Button asChild size="lg" variant="outline" className="flex w-full min-w-0 whitespace-normal group text-lg h-auto py-3 px-4 sm:px-8 flex-1 border-primary/30 hover:border-primary/50 transition-all">
+                        <Link to="/room-list" className="w-full min-w-0 flex flex-col items-center gap-0.5 text-center">
                           <span className="flex items-center gap-2">
-                            <Users className="w-5 h-5 text-primary group-hover:drop-shadow-[0_0_6px_hsl(45_93%_54%_/_0.6)] transition-all" />
+                            <Users className="w-5 h-5 shrink-0 text-primary group-hover:drop-shadow-[0_0_6px_hsl(45_93%_54%_/_0.6)] transition-all" />
                             {t("home.viewPublicRooms")}
                           </span>
                           <span className="text-xs font-normal text-primary/60 tracking-wide">{t("home.viewRoomsSub")}</span>
