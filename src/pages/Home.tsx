@@ -112,9 +112,9 @@ const Home = () => {
               )}
 
               {/* CTA Buttons — always visible */}
-              <div className="flex flex-col gap-4 mt-4">
+              <div className="flex flex-col items-stretch gap-4 mt-4">
                     <Button asChild size="lg" variant="gold" className="w-full group text-lg h-auto py-5 px-8 transition-all shadow-[0_0_20px_-4px_hsl(45_93%_54%_/_0.4)]">
-                      <Link to="/play-ai" className="flex flex-col items-center gap-2">
+                      <Link to="/play-ai" className="w-full flex flex-col items-center gap-2">
                         <span className="flex items-center gap-2 text-3xl md:text-4xl font-bold tracking-wide">
                           <Bot className="w-8 h-8 group-hover:drop-shadow-[0_0_6px_hsl(45_93%_54%_/_0.6)] transition-all" />
                           {t("home.playAiFree")}
@@ -137,7 +137,7 @@ const Home = () => {
                       </Link>
                     </Button>
                     <Button asChild size="lg" variant="gold" className="w-full group text-lg h-auto py-4 px-8 transition-all">
-                      <Link to="/quick-match" className="flex flex-col items-center gap-1">
+                      <Link to="/quick-match" className="w-full flex flex-col items-center gap-1">
                         <span className="flex items-center gap-2 text-2xl md:text-3xl font-bold tracking-wide">
                           <Zap className="w-7 h-7 group-hover:drop-shadow-[0_0_6px_hsl(45_93%_54%_/_0.6)] transition-all" />
                           {t("home.quickMatchWinSol")}
@@ -148,7 +148,7 @@ const Home = () => {
                     </Button>
                     <div className="flex flex-col sm:flex-row gap-4">
                       <Button asChild size="lg" variant="outline" className="w-full group text-lg h-auto py-3 px-8 flex-1 border-primary/30 hover:border-primary/50 transition-all">
-                        <Link to="/create-room" className="flex flex-col items-center gap-0.5">
+                        <Link to="/create-room" className="w-full flex flex-col items-center gap-0.5">
                           <span className="flex items-center gap-2">
                             <Swords className="w-5 h-5 text-primary group-hover:drop-shadow-[0_0_6px_hsl(45_93%_54%_/_0.6)] transition-all" />
                             {t("home.createGameRoom")}
@@ -157,7 +157,7 @@ const Home = () => {
                         </Link>
                       </Button>
                       <Button asChild size="lg" variant="outline" className="w-full group text-lg h-auto py-3 px-8 flex-1 border-primary/30 hover:border-primary/50 transition-all">
-                        <Link to="/room-list" className="flex flex-col items-center gap-0.5">
+                        <Link to="/room-list" className="w-full flex flex-col items-center gap-0.5">
                           <span className="flex items-center gap-2">
                             <Users className="w-5 h-5 text-primary group-hover:drop-shadow-[0_0_6px_hsl(45_93%_54%_/_0.6)] transition-all" />
                             {t("home.viewPublicRooms")}
