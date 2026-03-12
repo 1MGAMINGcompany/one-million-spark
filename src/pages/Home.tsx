@@ -95,7 +95,7 @@ const Home = () => {
               </div>
 
               {/* Main Heading - Brand name stays in English */}
-              <h1 className="text-5xl md:text-6xl lg:text-7xl font-display font-bold tracking-wide">
+              <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-display font-bold tracking-wide">
                 <span className="text-foreground">1M</span>{" "}
                 <span className="text-primary">GAMING</span>
               </h1>
