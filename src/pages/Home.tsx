@@ -70,7 +70,7 @@ const Home = () => {
         <div className="relative z-10 w-full max-w-7xl mx-auto px-4 py-12 lg:py-0">
           <div className="grid lg:grid-cols-2 gap-12 lg:gap-8 items-center">
             {/* Left Side - Content */}
-            <div className="flex flex-col gap-6 text-center lg:text-left">
+            <div className="flex flex-col gap-6 text-center lg:text-left min-w-0">
               {/* Premium Tagline Block */}
               <div className="flex flex-col items-center lg:items-start gap-4">
                 {/* Badge with Pyramid Logo */}
