@@ -105,7 +105,7 @@ export default function FightCard({
         {(weight || fightClass || fight.method) && (
           <div className="flex items-center gap-2 mt-1 flex-wrap">
             {weight && (
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-accent/20 text-accent-foreground">{weight}</span>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-yellow-500/15 text-yellow-300">{weight}</span>
             )}
             {fightClass && (
               <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
