@@ -981,5 +981,10 @@
     "dominos": "点击手中的牌来出牌",
     "onboardingRoll": "掷骰子！",
     "onboardingMove": "点击棋子来移动！"
+  },
+  "predictions": {
+    "title": "体育预测",
+    "badge": "预测市场",
+    "subtitle": "选择你的选手。赢取奖励。所有预测均为最终结果。"
   }
 }

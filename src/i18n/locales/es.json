@@ -1259,5 +1259,10 @@
     "dominos": "Toca una ficha de tu mano para jugarla",
     "onboardingRoll": "¡Lanza el dado!",
     "onboardingMove": "¡Toca una ficha para moverla!"
+  },
+  "predictions": {
+    "title": "Predicciones Deportivas",
+    "badge": "Mercados de Predicción",
+    "subtitle": "Elige tu luchador. Gana recompensas. Todas las predicciones son finales."
   }
 }

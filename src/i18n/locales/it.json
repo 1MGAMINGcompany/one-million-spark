@@ -994,5 +994,10 @@
     "dominos": "Tocca una tessera dalla tua mano per giocarla",
     "onboardingRoll": "Lancia il dado!",
     "onboardingMove": "Tocca una pedina per muoverla!"
+  },
+  "predictions": {
+    "title": "Previsioni Sportive",
+    "badge": "Mercati di Previsione",
+    "subtitle": "Scegli il tuo combattente. Guadagna ricompense. Tutte le previsioni sono definitive."
   }
 }

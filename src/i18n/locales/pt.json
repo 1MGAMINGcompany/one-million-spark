@@ -1038,5 +1038,10 @@
     "dominos": "Toque em uma peça da sua mão para jogá-la",
     "onboardingRoll": "Role o dado!",
     "onboardingMove": "Toque em uma peça para movê-la!"
+  },
+  "predictions": {
+    "title": "Previsões Esportivas",
+    "badge": "Mercados de Previsão",
+    "subtitle": "Escolha seu lutador. Ganhe recompensas. Todas as previsões são finais."
   }
 }

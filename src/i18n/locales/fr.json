@@ -1038,5 +1038,10 @@
     "dominos": "Appuyez sur un domino de votre main pour le jouer",
     "onboardingRoll": "Lancez le dé !",
     "onboardingMove": "Appuyez sur un pion pour le déplacer !"
+  },
+  "predictions": {
+    "title": "Prédictions Sportives",
+    "badge": "Marchés de Prédiction",
+    "subtitle": "Choisissez votre combattant. Gagnez des récompenses. Toutes les prédictions sont définitives."
   }
 }
