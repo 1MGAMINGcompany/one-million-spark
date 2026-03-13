@@ -46,6 +46,8 @@ import AgeConfirmation from "./components/AgeConfirmation";
 import DebugJoinRoom from "./pages/DebugJoinRoom";
 import HelpCenter from "./pages/HelpCenter";
 import HelpArticle from "./pages/HelpArticle";
+import FightPredictions from "./pages/FightPredictions";
+import FightPredictionAdmin from "./pages/FightPredictionAdmin";
 import DebugHUD from "./components/DebugHUD";
 import AIAgentHelperOverlay from "./components/AIAgentHelperOverlay";
 import { isDebugEnabled } from "@/lib/debugLog";
@@ -139,6 +141,8 @@ const AppContent = () => {
           <Route path="/match/:roomPda" element={<MatchShareCard />} />
           <Route path="/player/:wallet" element={<PlayerProfile />} />
           <Route path="/leaderboard/:game" element={<Leaderboard />} />
+          <Route path="/predictions" element={<FightPredictions />} />
+          <Route path="/predictions/admin" element={<FightPredictionAdmin />} />
           <Route path="/debug/join" element={isDebugEnabled() ? <DebugJoinRoom /> : <Navigate to="/" replace />} />
           <Route path="*" element={<NotFound />} />
         </Routes>

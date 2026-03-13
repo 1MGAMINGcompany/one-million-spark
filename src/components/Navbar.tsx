@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import { useWallet } from "@/hooks/useWallet";
 import { usePrivy } from "@privy-io/react-auth";
 import { usePrivySolBalance } from "@/hooks/usePrivySolBalance";
-import { Home, Wallet, PlusCircle, LayoutList, Menu, X, Coins, Volume2, VolumeX, Bell, BellOff, Trophy, ChevronDown, LogOut, ArrowRightLeft, Sparkles, User } from "lucide-react";
+import { Home, Wallet, PlusCircle, LayoutList, Menu, X, Coins, Volume2, VolumeX, Bell, BellOff, Trophy, ChevronDown, LogOut, ArrowRightLeft, Sparkles, User, Swords } from "lucide-react";
 import { WalletButton } from "./WalletButton";
 import { PrivyLoginButton } from "./PrivyLoginButton";
 import { Button } from "@/components/ui/button";
@@ -89,6 +89,7 @@ const Navbar = () => {
     { path: "/create-room", labelKey: "nav.createRoom", icon: PlusCircle },
     { path: "/room-list", labelKey: "nav.roomList", icon: LayoutList },
     { path: "/leaderboard/ludo", labelKey: "nav.leaderboard", icon: Trophy },
+    { path: "/predictions", labelKey: "Predictions", icon: Swords },
   ];
 
   return (
