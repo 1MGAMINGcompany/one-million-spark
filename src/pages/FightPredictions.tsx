@@ -157,8 +157,7 @@ export default function FightPredictions() {
       toast.success("Prediction submitted!", {
         description: `${amountSol} SOL on ${selectedPick === "fighter_a" ? selectedFight.fighter_a_name : selectedFight.fighter_b_name}`,
       });
-      setSelectedFight(null);
-      setSelectedPick(null);
+      setShowPredictionSuccess(true);
       loadFights();
       loadUserEntries();
     } catch (err: any) {
