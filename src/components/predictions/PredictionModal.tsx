@@ -142,19 +142,19 @@ export default function PredictionModal({
             <div className="bg-secondary/50 rounded-lg p-4 space-y-2">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Amount</span>
-                <span className="text-foreground font-medium">{amountNum.toFixed(4)} SOL</span>
+                <span className="text-foreground font-medium">{amountNum.toFixed(4)} SOL {formatUsd(amountNum) && <span className="text-muted-foreground/70 text-xs">{formatUsd(amountNum)}</span>}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Fee (5%)</span>
-                <span className="text-destructive font-medium">-{fee.toFixed(4)} SOL</span>
+                <span className="text-destructive font-medium">-{fee.toFixed(4)} SOL {formatUsd(fee) && <span className="text-xs opacity-70">{formatUsd(fee)}</span>}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Pool Contribution</span>
-                <span className="text-foreground font-medium">{poolContribution.toFixed(4)} SOL</span>
+                <span className="text-foreground font-medium">{poolContribution.toFixed(4)} SOL {formatUsd(poolContribution) && <span className="text-muted-foreground/70 text-xs">{formatUsd(poolContribution)}</span>}</span>
               </div>
               <div className="border-t border-border/30 pt-2 flex justify-between text-sm">
                 <span className="text-muted-foreground">Est. Reward</span>
-                <span className="text-primary font-bold">{estimatedReward.toFixed(4)} SOL</span>
+                <span className="text-primary font-bold">{estimatedReward.toFixed(4)} SOL {formatUsd(estimatedReward) && <span className="text-xs font-normal text-muted-foreground">{formatUsd(estimatedReward)}</span>}</span>
               </div>
               <p className="text-[10px] text-muted-foreground/60 mt-1">
                 *Based on current odds. Final reward depends on pool at close.
