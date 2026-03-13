@@ -1,46 +1,36 @@
+# Fight Prediction System — IMPLEMENTED
 
+## What was built
 
-# Populate Full Silvertooth Fight Night Card
+A complete fight prediction market system for 1MGAMING on Solana:
 
-## Current State
-The database has 4 fights seeded (Main Event, Co-Main, and 2 Undercards). The user provided the complete 14-fight card including a 4-man tournament.
+### Database Tables
+- `prediction_fights` — Fight events with pool tracking, status lifecycle
+- `prediction_entries` — User prediction records with shares, claim tracking
+- `prediction_admins` — Authorized admin wallets
 
-## Plan
+### Edge Functions
+- `prediction-admin` — Create fights, lock predictions, resolve winners
+- `prediction-submit` — Submit predictions with 5% fee, tx verification
+- `prediction-claim` — Claim rewards from vault after 5-min delay
+- `prediction-feed` — Live activity feed of recent predictions
 
-### 1. Update existing fights with proper titles/details
-- Update the 4 existing fights to match the new data (add weight class, proper fight numbering)
-- Main Event: Cabrera vs Leboeuf — already correct, update title to include "139 lbs — A-Class"
-- Update "Co-Main Event" (Caron vs Franco-Flores) → "Fight 9 — 147 lbs — B-Class"
-- Update "Undercard" (Deidouss vs Sidhu) → "Fight 10 — 139 lbs — B-Class"
-- Update "Undercard" (Elmoubtahil vs Perreira) → "Fight 11 — 185 lbs — B-Class"
-- Update event_name to "Silvertooth Fight Night" on all
+### Frontend Pages
+- `/predictions` — Fight cards with live odds, prediction input, live feed, claim flow
+- `/predictions/admin` — Admin panel for fight lifecycle management
 
-### 2. Insert 7 new individual fights
-- Fight 8: Lloyal Speedy vs Shady Elaisami (165 lbs, C-Class)
-- Fight 7: Hugo Lachaine vs Owen Meloche (200 lbs, C-Class)
-- Fight 4: Robin Elisabeth vs Garry Atherley (156 lbs, B-Class)
-- Fight 3: Leo Le Minh vs Luc‑Frédéric Langis (139 lbs, C-Class)
-- Fight 2: Aniss Salifi vs Ludovic Louis‑Seize (125 lbs, C-Class)
-- Fight 1: Edrick Paturel vs Karl Swennen (165 lbs, B-Class)
+### Seed Data
+Silvertooth Promotions card pre-loaded:
+- Daniel Cabrera vs Nic Leboeuf (Main Event)
+- Jacob Caron vs Kevin Franco-Flores
+- John Deidouss vs Varinder Sidhu
+- Yazane Elmoubtahil vs Derrel Perreira
 
-### 3. Insert tournament fights (Road to Tulum)
-- Semi-Final 1: Jordan Trudeau vs Christophe Groleau (156 lbs, B-Class)
-- Semi-Final 2: Rinaldo Ali vs Quentin Pignolet (156 lbs, B-Class)
-- Final: TBD vs TBD (status = "locked" until semis resolve — or leave as a placeholder that admin creates after semis)
-
-Since the tournament final depends on semi-final outcomes, I'll create the two semi-finals as open prediction markets. The final can be created by admin after semis resolve.
-
-### 4. Update frontend to show weight/class info
-- The `prediction_fights` table `title` column will carry the fight number + weight + class
-- No schema changes needed — just data updates + minor UI tweak to show the richer title info
-
-### Implementation
-All changes are **data inserts/updates** via the insert tool (no schema migration needed) plus a minor UI enhancement to display weight class badges on fight cards.
-
-**Data operations:**
-- 4 UPDATEs to existing fights (title, event_name)
-- 9 INSERTs for new fights (6 individual + 2 tournament semis + keeping room for admin to create final)
-
-**Frontend tweak:**
-- Parse title to extract weight/class for display badge on fight cards
-
+### Key Features
+- Share-based pool system with dynamic live odds
+- 5% platform fee on all predictions
+- Minimum 0.05 SOL prediction
+- Realtime pool/odds updates via Supabase channels
+- 5-minute claim delay after resolution
+- Double-claim protection
+- Admin wallet authorization
