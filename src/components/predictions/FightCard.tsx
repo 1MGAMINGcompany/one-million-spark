@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Swords, Trophy, Loader2, Flame } from "lucide-react";
+import { Swords, Trophy, Loader2 } from "lucide-react";
 import { useSolPrice } from "@/hooks/useSolPrice";
 
 const LAMPORTS = 1_000_000_000;
@@ -93,12 +93,6 @@ export default function FightCard({
 
   return (
     <Card className="bg-card border-border/50 overflow-hidden relative">
-      {isHot && (
-        <div className="absolute top-2 right-2 z-10 flex items-center gap-1 bg-destructive/20 border border-destructive/40 text-destructive rounded-full px-2 py-0.5">
-          <Flame className="w-3 h-3" />
-          <span className="text-[10px] font-bold uppercase">Hot</span>
-        </div>
-      )}
 
       {/* Header */}
       <div className="px-4 py-3 border-b border-border/30">

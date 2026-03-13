@@ -87,6 +87,8 @@ export default function FightPredictions() {
   useEffect(() => { loadFights(); loadFeed(); }, [loadFights, loadFeed]);
   useEffect(() => { loadUserEntries(); }, [loadUserEntries]);
 
+  // Realtime subscription for instant updates (may silently fail if tables
+  // are not in supabase_realtime publication — polling below is the safety net)
   useEffect(() => {
     const channel = supabase
       .channel("prediction-realtime")
@@ -97,6 +99,15 @@ export default function FightPredictions() {
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [loadFights, loadFeed, loadUserEntries, address]);
+
+  // Polling fallback: refresh fight pools every 15s so mobile / other devices
+  // always get updated data even if realtime is not working
+  useEffect(() => {
+    const interval = setInterval(() => {
+      loadFights();
+    }, 15_000);
+    return () => clearInterval(interval);
+  }, [loadFights]);
 
   // Group fights by event. If fight has event_id, use event name. Else fall back to event_name field.
   const groupedEvents = useMemo(() => {
