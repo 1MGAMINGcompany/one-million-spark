@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Swords, Trophy, Loader2, Flame } from "lucide-react";
+import { useSolPrice } from "@/hooks/useSolPrice";
 
 const LAMPORTS = 1_000_000_000;
 
@@ -48,8 +49,11 @@ export default function FightCard({
   isHot?: boolean;
   onWalletRequired?: () => void;
 }) {
+  const { formatUsd } = useSolPrice();
   const { oddsA, oddsB } = calcOdds(fight.pool_a_lamports, fight.pool_b_lamports);
   const totalPool = (fight.pool_a_lamports + fight.pool_b_lamports) / LAMPORTS;
+  const poolASol = fight.pool_a_lamports / LAMPORTS;
+  const poolBSol = fight.pool_b_lamports / LAMPORTS;
 
   const hasWinningEntries =
     fight.status === "resolved" &&
@@ -124,7 +128,8 @@ export default function FightCard({
           <div className="text-center">
             <p className="font-bold text-foreground text-sm">{fight.fighter_a_name}</p>
             <p className="text-xs text-muted-foreground mt-1">
-              {(fight.pool_a_lamports / LAMPORTS).toFixed(2)} SOL
+              {poolASol.toFixed(2)} SOL
+              {formatUsd(poolASol) && <span className="block text-[10px] text-muted-foreground/70">{formatUsd(poolASol)}</span>}
             </p>
             <p className="text-primary font-bold text-lg">{oddsA.toFixed(2)}x</p>
              {fight.status === "open" && (
@@ -154,7 +159,8 @@ export default function FightCard({
           <div className="text-center">
             <p className="font-bold text-foreground text-sm">{fight.fighter_b_name}</p>
             <p className="text-xs text-muted-foreground mt-1">
-              {(fight.pool_b_lamports / LAMPORTS).toFixed(2)} SOL
+              {poolBSol.toFixed(2)} SOL
+              {formatUsd(poolBSol) && <span className="block text-[10px] text-muted-foreground/70">{formatUsd(poolBSol)}</span>}
             </p>
             <p className="text-primary font-bold text-lg">{oddsB.toFixed(2)}x</p>
              {fight.status === "open" && (
@@ -178,7 +184,7 @@ export default function FightCard({
         {/* Total pool */}
         <div className="mt-3 pt-2 border-t border-border/30 flex items-center justify-between">
           <span className="text-[10px] text-muted-foreground">Total Pool</span>
-          <span className="text-xs font-bold text-primary">{totalPool.toFixed(2)} SOL</span>
+          <span className="text-xs font-bold text-primary">{totalPool.toFixed(2)} SOL {formatUsd(totalPool) && <span className="text-[10px] text-muted-foreground font-normal">{formatUsd(totalPool)}</span>}</span>
         </div>
 
         {/* Claim button */}

@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Loader2, CheckCircle2, Eye, Clock, Trophy, Coins } from "lucide-react";
 import { Link } from "react-router-dom";
 import type { Fight } from "./FightCard";
+import { useSolPrice } from "@/hooks/useSolPrice";
 
 const MIN_SOL = 0.05;
 const FEE_RATE = 0.05;
@@ -31,6 +32,7 @@ export default function PredictionModal({
   submitting: boolean;
   showSuccess?: boolean;
 }) {
+  const { formatUsd } = useSolPrice();
   const [amount, setAmount] = useState("");
   const amountNum = parseFloat(amount) || 0;
   const fee = amountNum * FEE_RATE;
@@ -140,19 +142,19 @@ export default function PredictionModal({
             <div className="bg-secondary/50 rounded-lg p-4 space-y-2">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Amount</span>
-                <span className="text-foreground font-medium">{amountNum.toFixed(4)} SOL</span>
+                <span className="text-foreground font-medium">{amountNum.toFixed(4)} SOL {formatUsd(amountNum) && <span className="text-muted-foreground/70 text-xs">{formatUsd(amountNum)}</span>}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Fee (5%)</span>
-                <span className="text-destructive font-medium">-{fee.toFixed(4)} SOL</span>
+                <span className="text-destructive font-medium">-{fee.toFixed(4)} SOL {formatUsd(fee) && <span className="text-xs opacity-70">{formatUsd(fee)}</span>}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Pool Contribution</span>
-                <span className="text-foreground font-medium">{poolContribution.toFixed(4)} SOL</span>
+                <span className="text-foreground font-medium">{poolContribution.toFixed(4)} SOL {formatUsd(poolContribution) && <span className="text-muted-foreground/70 text-xs">{formatUsd(poolContribution)}</span>}</span>
               </div>
               <div className="border-t border-border/30 pt-2 flex justify-between text-sm">
                 <span className="text-muted-foreground">Est. Reward</span>
-                <span className="text-primary font-bold">{estimatedReward.toFixed(4)} SOL</span>
+                <span className="text-primary font-bold">{estimatedReward.toFixed(4)} SOL {formatUsd(estimatedReward) && <span className="text-xs font-normal text-muted-foreground">{formatUsd(estimatedReward)}</span>}</span>
               </div>
               <p className="text-[10px] text-muted-foreground/60 mt-1">
                 *Based on current odds. Final reward depends on pool at close.
@@ -171,7 +173,7 @@ export default function PredictionModal({
 
           {amountNum > 0 && amountNum < MIN_SOL && (
             <p className="text-xs text-destructive text-center">
-              Minimum: {MIN_SOL} SOL
+              Minimum: {MIN_SOL} SOL {formatUsd(MIN_SOL) && <span className="text-muted-foreground">({formatUsd(MIN_SOL)})</span>}
             </p>
           )}
         </div>
