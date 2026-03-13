@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Loader2, CheckCircle2, Eye, Clock, Trophy, Coins } from "lucide-react";
 import { Link } from "react-router-dom";
 import type { Fight } from "./FightCard";
+import { useSolPrice } from "@/hooks/useSolPrice";
 
 const MIN_SOL = 0.05;
 const FEE_RATE = 0.05;
