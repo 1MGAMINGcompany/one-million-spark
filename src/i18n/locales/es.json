@@ -338,7 +338,8 @@
     "skillBasedMatch": "Partida de habilidad",
     "playFreeSub": "Practica primero. Sin SOL necesario.",
     "quickMatchWinSol": "Partida Rápida (Ganar SOL)",
-    "quickMatchWinSolSub": "Juega contra oponentes reales. El ganador se lleva el premio."
+    "quickMatchWinSolSub": "Juega contra oponentes reales. El ganador se lleva el premio.",
+    "sportPredictions": "PREDICCIONES DEPORTIVAS"
   },
   "games": {
     "chess": "Ajedrez",
@@ -1258,5 +1259,10 @@
     "dominos": "Toca una ficha de tu mano para jugarla",
     "onboardingRoll": "¡Lanza el dado!",
     "onboardingMove": "¡Toca una ficha para moverla!"
+  },
+  "predictions": {
+    "title": "Predicciones Deportivas",
+    "badge": "Mercados de Predicción",
+    "subtitle": "Elige tu luchador. Gana recompensas. Todas las predicciones son finales."
   }
 }

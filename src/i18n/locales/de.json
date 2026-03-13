@@ -229,7 +229,8 @@
     "skillBasedMatch": "Geschicklichkeitsspiel",
     "playFreeSub": "Erst üben. Kein SOL erforderlich.",
     "quickMatchWinSol": "Schnelles Match (SOL gewinnen)",
-    "quickMatchWinSolSub": "Gegen echte Gegner spielen. Der Gewinner nimmt den SOL-Pool."
+    "quickMatchWinSolSub": "Gegen echte Gegner spielen. Der Gewinner nimmt den SOL-Pool.",
+    "sportPredictions": "SPORTVORHERSAGEN"
   },
   "games": {
     "chess": "Schach",
@@ -1037,5 +1038,10 @@
     "dominos": "Tippe auf einen Stein aus deiner Hand, um ihn zu spielen",
     "onboardingRoll": "Würfle!",
     "onboardingMove": "Tippe auf eine Figur, um sie zu ziehen!"
+  },
+  "predictions": {
+    "title": "Sportvorhersagen",
+    "badge": "Vorhersagemärkte",
+    "subtitle": "Wähle deinen Kämpfer. Verdiene Belohnungen. Alle Vorhersagen sind endgültig."
   }
 }

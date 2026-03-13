@@ -229,7 +229,8 @@
     "skillBasedMatch": "Partie de compétence",
     "playFreeSub": "Entraînez-vous d'abord. Pas de SOL requis.",
     "quickMatchWinSol": "Match Rapide (Gagner SOL)",
-    "quickMatchWinSolSub": "Affrontez de vrais adversaires. Le gagnant remporte la cagnotte."
+    "quickMatchWinSolSub": "Affrontez de vrais adversaires. Le gagnant remporte la cagnotte.",
+    "sportPredictions": "PRÉDICTIONS SPORTIVES"
   },
   "games": {
     "chess": "Échecs",
@@ -1037,5 +1038,10 @@
     "dominos": "Appuyez sur un domino de votre main pour le jouer",
     "onboardingRoll": "Lancez le dé !",
     "onboardingMove": "Appuyez sur un pion pour le déplacer !"
+  },
+  "predictions": {
+    "title": "Prédictions Sportives",
+    "badge": "Marchés de Prédiction",
+    "subtitle": "Choisissez votre combattant. Gagnez des récompenses. Toutes les prédictions sont définitives."
   }
 }
