@@ -1086,6 +1086,15 @@ export type Database = {
         Args: { p_room_pda: string }
         Returns: undefined
       }
+      prediction_update_pool: {
+        Args: {
+          p_fight_id: string
+          p_pool_lamports: number
+          p_shares: number
+          p_side: string
+        }
+        Returns: undefined
+      }
       rebuild_participants: {
         Args: {
           p_existing_participants: string[]

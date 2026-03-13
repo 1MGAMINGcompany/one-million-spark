@@ -47,7 +47,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    if (!["resolved", "confirmed", "settled"].includes(fight.status)) {
+    if (!["confirmed", "settled"].includes(fight.status)) {
       return new Response(JSON.stringify({ error: "Fight not resolved yet" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
