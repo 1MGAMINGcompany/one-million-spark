@@ -423,8 +423,8 @@ export default function FightPredictionAdmin() {
   );
 }
 
-// ── Countdown Hook ──
-function useCountdown(targetIso: string | null) {
+// ── Countdown Hook ── returns { text, seconds, expired }
+function useCountdown(targetIso: string | null): { text: string | null; seconds: number | null; expired: boolean } {
   const [remaining, setRemaining] = useState<number | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -443,10 +443,11 @@ function useCountdown(targetIso: string | null) {
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
   }, [targetIso]);
 
-  if (remaining === null || remaining <= 0) return null;
+  if (remaining === null) return { text: null, seconds: null, expired: false };
+  if (remaining <= 0) return { text: null, seconds: 0, expired: true };
   const m = Math.floor(remaining / 60);
   const sec = remaining % 60;
-  return `${m}m ${sec.toString().padStart(2, "0")}s`;
+  return { text: `${m}m ${sec.toString().padStart(2, "0")}s`, seconds: remaining, expired: false };
 }
 
 // ── Per-Fight Admin Card ──
@@ -461,9 +462,25 @@ function AdminFightCard({
   onRefund: () => Promise<void>;
 }) {
   const [methodOpen, setMethodOpen] = useState(false);
+  const [autoSettled, setAutoSettled] = useState(false);
+  const autoSettleRef = useRef(false);
   const s = fight.status;
-  const countdown = useCountdown(s === "confirmed" ? fight.claims_open_at : null);
+  const { text: countdownText, expired: timerExpired } = useCountdown(s === "confirmed" ? fight.claims_open_at : null);
   const claimsOpen = fight.claims_open_at && new Date() >= new Date(fight.claims_open_at);
+
+  // Auto-settle when timer expires
+  useEffect(() => {
+    if (s === "confirmed" && timerExpired && !autoSettleRef.current && !busy) {
+      autoSettleRef.current = true;
+      console.log("[AutoSettle] Timer expired for fight", fight.id, "— auto-settling");
+      onAction("settleEvent").then(() => {
+        setAutoSettled(true);
+      }).catch((err) => {
+        console.error("[AutoSettle] Failed:", err);
+        autoSettleRef.current = false; // allow retry
+      });
+    }
+  }, [s, timerExpired, busy, fight.id, onAction]);
   const totalPoolSol = ((fight.pool_a_lamports + fight.pool_b_lamports) / LAMPORTS).toFixed(4);
 
   return (
@@ -511,14 +528,15 @@ function AdminFightCard({
       </div>
 
       {/* Countdown timer for confirmed fights */}
-      {s === "confirmed" && countdown && (
-        <div className="mb-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-2 text-center">
-          <p className="text-xs text-yellow-400 font-bold">⏱ Claims open in {countdown}</p>
+      {s === "confirmed" && countdownText && (
+        <div className="mb-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 text-center">
+          <p className="text-sm text-yellow-400 font-bold">⏱ Claims open in {countdownText}</p>
+          <p className="text-[10px] text-muted-foreground mt-1">Auto-settle will trigger when timer reaches 0</p>
         </div>
       )}
-      {s === "confirmed" && !countdown && claimsOpen && (
-        <div className="mb-3 bg-green-500/10 border border-green-500/30 rounded-lg p-2 text-center">
-          <p className="text-xs text-green-400 font-bold">✅ Claims are now open</p>
+      {s === "confirmed" && !countdownText && claimsOpen && (
+        <div className="mb-3 bg-green-500/10 border border-green-500/30 rounded-lg p-3 text-center">
+          <p className="text-sm text-green-400 font-bold">✅ Claims are now open{autoSettled ? " — auto-settled!" : ""}</p>
         </div>
       )}
 
