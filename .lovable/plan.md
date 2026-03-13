@@ -1,50 +1,29 @@
-# Fight Prediction System — Phase 1 Complete
 
-## Status Lifecycle (Final)
 
-```
-open → locked → live → result_selected → confirmed → settled
-                   └→ draw → refund_pending → refunds_processing → refunds_complete
-                   └→ cancelled
-```
+## Fix: External Wallet Button in WalletGateModal Opens Empty Modal
 
-## Architecture
+### Problem
+When clicking "Connect an external wallet" in the predictions flow, `WalletGateModal` calls `setVisible(true)` from the Solana wallet adapter's built-in modal. But `SolanaProvider` registers zero wallet adapters (`wallets = []`), so the modal opens empty/blank.
 
-### Database Tables
-- `prediction_events` — Parent event grouping (name, org, date, location, auto_resolve, is_test)
-- `prediction_fights` — Individual fights with event_id FK, weight_class, fight_class, method, refund tracking
-- `prediction_entries` — User prediction records
-- `prediction_admins` — Authorized admin wallets
+The app already has a fully functional custom wallet picker dialog inside `ConnectWalletGate.tsx` that shows Phantom, Solflare, and Backpack with icons, detection, deep links, and MWA support.
 
-### Edge Functions
-- `prediction-admin` — Full lifecycle: createEvent, approveEvent, rejectEvent, deleteTestEvent, createFight, lockPredictions, markLive, selectResult, setMethod, confirmResult, settleEvent, declareDraw, startRefunds
-- `prediction-refund-worker` — Separate refund execution for draw scenarios (idempotent, safety-guarded)
-- `prediction-submit` — Submit predictions with 5% fee
-- `prediction-claim` — Claim rewards (accepts confirmed/settled status)
-- `prediction-feed` — Live activity feed
+### Solution
+Refactor `WalletGateModal` to show the custom wallet picker dialog (from `ConnectWalletGate`) instead of the empty adapter modal.
 
-### Key Design Decisions
-1. Draw declaration is separate from refund execution (draw → refund_pending → refunds_processing → refunds_complete)
-2. `result_selected` is a real reversible status between `live` and `confirmed`
-3. `settled` means financially closed and immutable
-4. Events group fights; admin manages at event level
-5. `review_required` + `review_reason` fields ready for Phase 2 automation
+**Changes to `src/components/WalletGateModal.tsx`:**
+- Remove `useWalletModal` import and usage
+- Add local state `showWalletPicker` to control a custom wallet picker dialog
+- Import and reuse the wallet selection logic from `ConnectWalletGate` — specifically, embed the same 3-wallet picker dialog (Phantom, Solflare, Backpack) with icons, deep-link support, and detection badges
+- When user clicks "Connect External Wallet" → close the gate modal, open the wallet picker dialog with the 3 wallets
 
-### Safety Guardrails
-- Server-side status guards on all transitions
-- Red confirmation dialogs for irreversible actions (lock, confirm, settle, draw, refunds)
-- Per-claim cap: 5 SOL, daily ceiling: 50 SOL
-- 5-minute safety delay before claims open
-- Refund tracking: refund_status, refunds_started_at, refunds_completed_at
+This can be done by either:
+1. Extracting the wallet picker dialog from `ConnectWalletGate` into a shared component (e.g., `WalletPickerDialog`) and using it in both places, OR
+2. Directly embedding the wallet picker logic in `WalletGateModal`
 
-### Seed Data
-- Silvertooth Promotions event (Montreal) — linked to existing fights
-- 3 TEST events (BOXING, MMA, MUAY THAI) with 2 fights each
+**Recommended: Option 1** — Create a `WalletPickerDialog` component extracted from `ConnectWalletGate`, then use it in both `WalletGateModal` and `ConnectWalletGate` to avoid duplication.
 
----
+### Files to change
+1. **Create `src/components/WalletPickerDialog.tsx`** — Extract the wallet picker dialog (the `Dialog` with Phantom/Solflare/Backpack buttons, detection, deep links, MWA) from `ConnectWalletGate`
+2. **Update `src/components/ConnectWalletGate.tsx`** — Use the new `WalletPickerDialog` instead of inline dialog
+3. **Update `src/components/WalletGateModal.tsx`** — Replace `useWalletModal().setVisible(true)` with opening `WalletPickerDialog`
 
-## Phase 2 (Next): Event Discovery Bot
-Requires Firecrawl connector for web scraping of Tapology/BoxRec/Sherdog.
-
-## Phase 3 (Next): Auto Result Detection
-Multi-source confidence system for automated resolution.
