@@ -191,9 +191,12 @@ export default function FightCard({
           </Button>
         )}
         {hasWinningEntries && !claimsOpen && (
-          <p className="text-xs text-center text-muted-foreground mt-3">
-            Claims open shortly after resolution...
-          </p>
+          <div className="mt-3 bg-primary/10 border border-primary/20 rounded-lg p-3 text-center">
+            <p className="text-xs font-bold text-primary mb-1">🎉 You won!</p>
+            <p className="text-[11px] text-muted-foreground">
+              Your reward will be ready to claim in a few minutes. A <span className="font-bold text-foreground">Claim Reward</span> button will appear right here.
+            </p>
+          </div>
         )}
       </div>
     </Card>
