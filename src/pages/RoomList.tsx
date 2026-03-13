@@ -121,10 +121,10 @@ export default function RoomList() {
     let timer: ReturnType<typeof setTimeout>;
 
     const tick = () => {
-      console.log("[RoomList] Auto-refresh room list (5s interval)");
+      console.log("[RoomList] Auto-refresh room list (12s interval)");
       setLastFetch(new Date().toISOString());
       fetchRooms();
-      timer = setTimeout(tick, 5000);
+      timer = setTimeout(tick, 12_000);
     };
 
     tick();
