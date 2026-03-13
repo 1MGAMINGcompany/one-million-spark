@@ -1,36 +1,25 @@
-# Fight Prediction System — IMPLEMENTED
 
-## What was built
 
-A complete fight prediction market system for 1MGAMING on Solana:
+# Add Payout Safety Guardrails + Update Architecture Notes
 
-### Database Tables
-- `prediction_fights` — Fight events with pool tracking, status lifecycle
-- `prediction_entries` — User prediction records with shares, claim tracking
-- `prediction_admins` — Authorized admin wallets
+## Current State
+The `prediction-claim` edge function uses a server-side keypair (`VERIFIER_SECRET_KEY_V2`) as the payout wallet. There are no per-claim or per-period limits — the function will send any calculated reward amount without checks.
 
-### Edge Functions
-- `prediction-admin` — Create fights, lock predictions, resolve winners
-- `prediction-submit` — Submit predictions with 5% fee, tx verification
-- `prediction-claim` — Claim rewards from vault after 5-min delay
-- `prediction-feed` — Live activity feed of recent predictions
+## Plan
 
-### Frontend Pages
-- `/predictions` — Fight cards with live odds, prediction input, live feed, claim flow
-- `/predictions/admin` — Admin panel for fight lifecycle management
+### 1. Add payout guardrails to `prediction-claim/index.ts`
 
-### Seed Data
-Silvertooth Promotions card pre-loaded:
-- Daniel Cabrera vs Nic Leboeuf (Main Event)
-- Jacob Caron vs Kevin Franco-Flores
-- John Deidouss vs Varinder Sidhu
-- Yazane Elmoubtahil vs Derrel Perreira
+Add three safety checks before executing the transfer:
 
-### Key Features
-- Share-based pool system with dynamic live odds
-- 5% platform fee on all predictions
-- Minimum 0.05 SOL prediction
-- Realtime pool/odds updates via Supabase channels
-- 5-minute claim delay after resolution
-- Double-claim protection
-- Admin wallet authorization
+- **Per-claim cap**: Reject any single payout exceeding a configurable max (e.g. 5 SOL for V1). This prevents a bug or exploit from draining the wallet in one call.
+- **Balance check**: Before sending, verify the hot wallet balance is sufficient. Return a clear "insufficient vault funds" error instead of a failed transaction.
+- **Daily payout cap** (lightweight): Query `prediction_entries` for total `reward_lamports` claimed today. If it exceeds a daily ceiling (e.g. 50 SOL), block further claims and alert.
+
+### 2. Update plan.md with vault architecture notes
+
+Document the current design as **V1: Dedicated Hot Payout Wallet** with tight limits, and note the long-term target of **V2: Program-Owned / PDA-Controlled Vault** where payouts are authorized by the Anchor program via CPI, eliminating the server keypair entirely.
+
+### Files changed
+- `supabase/functions/prediction-claim/index.ts` — Add per-claim cap, balance pre-check, daily cap
+- `.lovable/plan.md` — Update vault architecture section
+
