@@ -124,7 +124,7 @@ export default function FightPredictions() {
   // Coming soon sports (not in data)
   const comingSoonSports = useMemo(() => {
     const existingSports = new Set(Object.keys(groupedEvents).map(e => parseSport(e)));
-    return ["BOXING", "MMA", "UFC"].filter(s => !existingSports.has(s));
+    return ["BOXING", "MMA", "FUTBOL"].filter(s => !existingSports.has(s));
   }, [groupedEvents]);
 
   // Submit prediction
