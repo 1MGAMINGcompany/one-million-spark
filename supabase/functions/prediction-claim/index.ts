@@ -166,9 +166,9 @@ Deno.serve(async (req) => {
     }
 
     // ── Prepare hot payout wallet ──
-    const verifierKey = Deno.env.get("VERIFIER_SECRET_KEY_V2") || Deno.env.get("VERIFIER_SECRET_KEY");
-    if (!verifierKey) {
-      return new Response(JSON.stringify({ error: "Payout wallet not configured" }), {
+    const verifier = loadPredictionVerifier();
+    if (!verifier) {
+      return new Response(JSON.stringify({ error: "Prediction payout wallet not configured" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -176,7 +176,7 @@ Deno.serve(async (req) => {
 
     const rpcUrl = Deno.env.get("SOLANA_RPC_URL") || "https://api.mainnet-beta.solana.com";
     const connection = new Connection(rpcUrl, "confirmed");
-    const vaultKeypair = Keypair.fromSecretKey(bs58.decode(verifierKey));
+    const vaultKeypair = verifier.keypair;
 
     // ── GUARDRAIL 3: Balance pre-check ──
     const vaultBalance = await connection.getBalance(vaultKeypair.publicKey);
