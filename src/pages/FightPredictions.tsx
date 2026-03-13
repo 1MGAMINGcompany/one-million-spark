@@ -13,6 +13,7 @@ import Navbar from "@/components/Navbar";
 import EventSection, { parseSport } from "@/components/predictions/EventSection";
 import PredictionModal from "@/components/predictions/PredictionModal";
 import ComingSoonCard from "@/components/predictions/ComingSoonCard";
+import { WalletGateModal } from "@/components/WalletGateModal";
 import type { Fight } from "@/components/predictions/FightCard";
 
 const LAMPORTS = 1_000_000_000;
@@ -42,6 +43,8 @@ export default function FightPredictions() {
   const [submitting, setSubmitting] = useState(false);
   const [claiming, setClaiming] = useState(false);
   const [activeSport, setActiveSport] = useState("ALL");
+  const [showWalletGate, setShowWalletGate] = useState(false);
+  const [showPredictionSuccess, setShowPredictionSuccess] = useState(false);
 
   // Load fights
   const loadFights = useCallback(async () => {
@@ -154,8 +157,7 @@ export default function FightPredictions() {
       toast.success("Prediction submitted!", {
         description: `${amountSol} SOL on ${selectedPick === "fighter_a" ? selectedFight.fighter_a_name : selectedFight.fighter_b_name}`,
       });
-      setSelectedFight(null);
-      setSelectedPick(null);
+      setShowPredictionSuccess(true);
       loadFights();
       loadUserEntries();
     } catch (err: any) {
@@ -192,7 +194,7 @@ export default function FightPredictions() {
 
   const handlePredict = (fight: Fight, pick: "fighter_a" | "fighter_b") => {
     if (!isConnected) {
-      toast.error("Connect your wallet to make predictions");
+      setShowWalletGate(true);
       return;
     }
     setSelectedFight(fight);
@@ -275,6 +277,7 @@ export default function FightPredictions() {
                 onClaim={handleClaim}
                 claiming={claiming}
                 hotFightIds={hotFightIds}
+                onWalletRequired={() => setShowWalletGate(true)}
               />
             ))}
 
@@ -358,11 +361,20 @@ export default function FightPredictions() {
         <PredictionModal
           fight={selectedFight}
           pick={selectedPick}
-          onClose={() => { setSelectedFight(null); setSelectedPick(null); }}
+          onClose={() => { setSelectedFight(null); setSelectedPick(null); setShowPredictionSuccess(false); }}
           onSubmit={handleSubmit}
           submitting={submitting}
+          showSuccess={showPredictionSuccess}
         />
       )}
+
+      {/* Wallet Gate Modal */}
+      <WalletGateModal
+        isOpen={showWalletGate}
+        onClose={() => setShowWalletGate(false)}
+        title="Connect to Predict"
+        description="You need a wallet to place predictions and earn rewards."
+      />
     </div>
   );
 }

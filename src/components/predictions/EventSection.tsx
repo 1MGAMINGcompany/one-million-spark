@@ -62,6 +62,7 @@ export default function EventSection({
   onClaim,
   claiming,
   hotFightIds,
+  onWalletRequired,
 }: {
   eventName: string;
   fights: Fight[];
@@ -71,6 +72,7 @@ export default function EventSection({
   onClaim: (fightId: string) => void;
   claiming: boolean;
   hotFightIds: Set<string>;
+  onWalletRequired?: () => void;
 }) {
   const hasOpen = fights.some(f => f.status === "open");
   const [expanded, setExpanded] = useState(hasOpen);
@@ -138,7 +140,7 @@ export default function EventSection({
           {sortedMain.length > 0 && (
             <div className="grid gap-3 sm:grid-cols-2">
               {sortedMain.map((fight) => (
-                <FightCard
+               <FightCard
                   key={fight.id}
                   fight={fight}
                   wallet={wallet}
@@ -147,6 +149,7 @@ export default function EventSection({
                   onClaim={onClaim}
                   claiming={claiming}
                   isHot={hotFightIds.has(fight.id)}
+                  onWalletRequired={onWalletRequired}
                 />
               ))}
             </div>
@@ -162,7 +165,7 @@ export default function EventSection({
                 </h3>
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
-                {sortedTournament.map((fight) => (
+                 {sortedTournament.map((fight) => (
                   <FightCard
                     key={fight.id}
                     fight={fight}
@@ -172,6 +175,7 @@ export default function EventSection({
                     onClaim={onClaim}
                     claiming={claiming}
                     isHot={hotFightIds.has(fight.id)}
+                    onWalletRequired={onWalletRequired}
                   />
                 ))}
               </div>

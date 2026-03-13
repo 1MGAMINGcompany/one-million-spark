@@ -37,6 +37,7 @@ export default function FightCard({
   onClaim,
   claiming,
   isHot,
+  onWalletRequired,
 }: {
   fight: Fight;
   onPredict: (fight: Fight, pick: "fighter_a" | "fighter_b") => void;
@@ -45,6 +46,7 @@ export default function FightCard({
   onClaim: (fightId: string) => void;
   claiming: boolean;
   isHot?: boolean;
+  onWalletRequired?: () => void;
 }) {
   const { oddsA, oddsB } = calcOdds(fight.pool_a_lamports, fight.pool_b_lamports);
   const totalPool = (fight.pool_a_lamports + fight.pool_b_lamports) / LAMPORTS;
@@ -125,12 +127,11 @@ export default function FightCard({
               {(fight.pool_a_lamports / LAMPORTS).toFixed(2)} SOL
             </p>
             <p className="text-primary font-bold text-lg">{oddsA.toFixed(2)}x</p>
-            {fight.status === "open" && (
+             {fight.status === "open" && (
               <Button
                 size="sm"
                 className="mt-2 w-full bg-primary text-primary-foreground hover:bg-primary/90 text-xs"
-                onClick={() => onPredict(fight, "fighter_a")}
-                disabled={!wallet}
+                onClick={() => wallet ? onPredict(fight, "fighter_a") : onWalletRequired?.()}
               >
                 Predict
               </Button>
@@ -156,12 +157,11 @@ export default function FightCard({
               {(fight.pool_b_lamports / LAMPORTS).toFixed(2)} SOL
             </p>
             <p className="text-primary font-bold text-lg">{oddsB.toFixed(2)}x</p>
-            {fight.status === "open" && (
+             {fight.status === "open" && (
               <Button
                 size="sm"
                 className="mt-2 w-full bg-primary text-primary-foreground hover:bg-primary/90 text-xs"
-                onClick={() => onPredict(fight, "fighter_b")}
-                disabled={!wallet}
+                onClick={() => wallet ? onPredict(fight, "fighter_b") : onWalletRequired?.()}
               >
                 Predict
               </Button>
@@ -193,9 +193,12 @@ export default function FightCard({
           </Button>
         )}
         {hasWinningEntries && !claimsOpen && (
-          <p className="text-xs text-center text-muted-foreground mt-3">
-            Claims open shortly after resolution...
-          </p>
+          <div className="mt-3 bg-primary/10 border border-primary/20 rounded-lg p-3 text-center">
+            <p className="text-xs font-bold text-primary mb-1">🎉 You won!</p>
+            <p className="text-[11px] text-muted-foreground">
+              Your reward will be ready to claim in a few minutes. A <span className="font-bold text-foreground">Claim Reward</span> button will appear right here.
+            </p>
+          </div>
         )}
       </div>
     </Card>
