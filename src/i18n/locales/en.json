@@ -331,7 +331,8 @@
     "skillBasedMatch": "Skill-based match",
     "playFreeSub": "Practice first. No SOL required.",
     "quickMatchWinSol": "Quick Match (Win SOL)",
-    "quickMatchWinSolSub": "Play real opponents. Winner takes the SOL pool."
+    "quickMatchWinSolSub": "Play real opponents. Winner takes the SOL pool.",
+    "sportPredictions": "SPORT PREDICTIONS"
   },
   "games": {
     "chess": "Chess",
