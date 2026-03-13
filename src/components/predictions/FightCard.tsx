@@ -37,6 +37,7 @@ export default function FightCard({
   onClaim,
   claiming,
   isHot,
+  onWalletRequired,
 }: {
   fight: Fight;
   onPredict: (fight: Fight, pick: "fighter_a" | "fighter_b") => void;
@@ -45,6 +46,7 @@ export default function FightCard({
   onClaim: (fightId: string) => void;
   claiming: boolean;
   isHot?: boolean;
+  onWalletRequired?: () => void;
 }) {
   const { oddsA, oddsB } = calcOdds(fight.pool_a_lamports, fight.pool_b_lamports);
   const totalPool = (fight.pool_a_lamports + fight.pool_b_lamports) / LAMPORTS;
