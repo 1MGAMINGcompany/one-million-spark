@@ -277,6 +277,7 @@ export default function FightPredictions() {
                 onClaim={handleClaim}
                 claiming={claiming}
                 hotFightIds={hotFightIds}
+                onWalletRequired={() => setShowWalletGate(true)}
               />
             ))}
 
