@@ -81,6 +81,12 @@ function FightCard({
   const claimsOpen =
     fight.claims_open_at && new Date() >= new Date(fight.claims_open_at);
 
+  // Parse title: "Fight 8 — 165 lbs — C-Class" or "Main Event — 139 lbs — A-Class"
+  const titleParts = fight.title.split(' — ');
+  const fightLabel = titleParts[0] || fight.title;
+  const weight = titleParts[1] || null;
+  const fightClass = titleParts[2] || null;
+
   return (
     <Card className="bg-card border-border/50 overflow-hidden">
       {/* Header */}
@@ -106,8 +112,26 @@ function FightCard({
           </span>
         </div>
         <h3 className="text-lg font-bold text-foreground mt-1 font-['Cinzel']">
-          {fight.title}
+          {fightLabel}
         </h3>
+        {(weight || fightClass) && (
+          <div className="flex items-center gap-2 mt-1">
+            {weight && (
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-accent/20 text-accent-foreground">
+                {weight}
+              </span>
+            )}
+            {fightClass && (
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                fightClass.startsWith('A') ? 'bg-primary/30 text-primary' :
+                fightClass.startsWith('B') ? 'bg-secondary text-secondary-foreground' :
+                'bg-muted text-muted-foreground'
+              }`}>
+                {fightClass}
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Fighters */}
