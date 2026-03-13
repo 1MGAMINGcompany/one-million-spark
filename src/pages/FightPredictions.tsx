@@ -20,7 +20,7 @@ const LAMPORTS = 1_000_000_000;
 const FEE_RATE = 0.05;
 
 // Sport categories that always show (even if no events yet)
-const ALL_SPORTS = ["ALL", "MUAY THAI", "BOXING", "MMA", "UFC"];
+const ALL_SPORTS = ["ALL", "MUAY THAI", "BOXING", "MMA", "FUTBOL"];
 
 interface FeedEntry {
   id: string;
