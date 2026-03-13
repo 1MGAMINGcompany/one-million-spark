@@ -1,59 +1,31 @@
-# Fight Prediction System — IMPLEMENTED
 
-## What was built
 
-A complete fight prediction market system for 1MGAMING on Solana:
+# New-User-Friendly Prediction Flow
 
-### Database Tables
-- `prediction_fights` — Fight events with pool tracking, status lifecycle
-- `prediction_entries` — User prediction records with shares, claim tracking
-- `prediction_admins` — Authorized admin wallets
+## Changes
 
-### Edge Functions
-- `prediction-admin` — Create fights, lock predictions, resolve winners
-- `prediction-submit` — Submit predictions with 5% fee, tx verification
-- `prediction-claim` — Claim rewards from hot payout wallet after 5-min delay
-- `prediction-feed` — Live activity feed of recent predictions
+### 1. FightCard.tsx — Open WalletGateModal instead of disabling buttons
+- Remove `disabled={!wallet}` from both Predict buttons
+- When clicked without a wallet, call a new `onWalletRequired` callback (passed from parent) which opens the existing `WalletGateModal`
+- Improve claim waiting text: replace "Claims open shortly after resolution..." with "You won! Your reward will be ready to claim in a few minutes. A **Claim Reward** button will appear right here."
 
-### Frontend Pages
-- `/predictions` — Fight cards with live odds, prediction input, live feed, claim flow
-- `/predictions/admin` — Admin panel for fight lifecycle management
+### 2. PredictionModal.tsx — Add success screen + "Need SOL?" link
+- Add a `submitted` state. After `onSubmit` succeeds, show a "What Happens Next?" screen instead of closing:
+  - Checkmark icon + "Prediction Placed!"
+  - Step 1: "Watch the fight"
+  - Step 2: "If your fighter wins, a Claim Reward button appears after a short safety buffer (~5 min)"
+  - Step 3: "Tap Claim Reward to get your SOL sent to your wallet"
+  - "Got it" dismiss button
+- Add a "Need SOL?" link below the amount input pointing to `/add-funds`
+- Parent (`FightPredictions.tsx`) passes an `onSuccess` callback to trigger this state
 
-### Seed Data
-Silvertooth Promotions card pre-loaded:
-- Daniel Cabrera vs Nic Leboeuf (Main Event)
-- Jacob Caron vs Kevin Franco-Flores
-- John Deidouss vs Varinder Sidhu
-- Yazane Elmoubtahil vs Derrel Perreira
+### 3. FightPredictions.tsx — Wire up WalletGateModal
+- Import and render `WalletGateModal` with local state `showWalletGate`
+- `handlePredict` checks `isConnected`: if false, open `WalletGateModal` instead of the prediction modal
+- After successful submission, keep the modal open in success-explainer mode instead of immediately closing + toasting
 
-### Key Features
-- Share-based pool system with dynamic live odds
-- 5% platform fee on all predictions
-- Minimum 0.05 SOL prediction
-- Realtime pool/odds updates via Supabase channels
-- 5-minute claim delay after resolution
-- Double-claim protection
-- Admin wallet authorization
+### Files changed
+- `src/components/predictions/FightCard.tsx`
+- `src/components/predictions/PredictionModal.tsx`
+- `src/pages/FightPredictions.tsx`
 
----
-
-## Vault Architecture
-
-### V1 (Current): Dedicated Hot Payout Wallet
-The payout system uses a **dedicated hot wallet** (server-side keypair) with tight programmatic safety limits:
-
-| Guardrail | Limit | Purpose |
-|-----------|-------|---------|
-| Per-claim cap | 5 SOL | Prevents single-exploit drain |
-| Daily ceiling | 50 SOL | Limits total daily exposure |
-| Balance pre-check | Required | Fails gracefully if wallet is underfunded |
-
-The hot wallet should be funded only with the amount needed for near-term payouts. It is NOT a general-purpose server keypair — it is a purpose-limited payout wallet.
-
-### V2 (Target): Program-Owned / PDA-Controlled Vault
-Long-term, payouts should be handled by the Anchor program itself:
-- Prediction pool funds held in a **PDA-controlled vault** derived from the fight ID
-- Payouts authorized via **CPI** with on-chain winner verification
-- Eliminates the need for any server-side keypair
-- Full transparency: all payouts verifiable on-chain
-- No single key can drain the vault — only the program logic controls withdrawals
