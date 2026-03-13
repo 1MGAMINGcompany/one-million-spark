@@ -614,6 +614,125 @@ export type Database = {
         }
         Relationships: []
       }
+      prediction_admins: {
+        Row: {
+          wallet: string
+        }
+        Insert: {
+          wallet: string
+        }
+        Update: {
+          wallet?: string
+        }
+        Relationships: []
+      }
+      prediction_entries: {
+        Row: {
+          amount_lamports: number
+          claimed: boolean
+          created_at: string
+          fee_lamports: number
+          fight_id: string
+          fighter_pick: string
+          id: string
+          pool_lamports: number
+          reward_lamports: number | null
+          shares: number
+          tx_signature: string | null
+          wallet: string
+        }
+        Insert: {
+          amount_lamports: number
+          claimed?: boolean
+          created_at?: string
+          fee_lamports: number
+          fight_id: string
+          fighter_pick: string
+          id?: string
+          pool_lamports: number
+          reward_lamports?: number | null
+          shares: number
+          tx_signature?: string | null
+          wallet: string
+        }
+        Update: {
+          amount_lamports?: number
+          claimed?: boolean
+          created_at?: string
+          fee_lamports?: number
+          fight_id?: string
+          fighter_pick?: string
+          id?: string
+          pool_lamports?: number
+          reward_lamports?: number | null
+          shares?: number
+          tx_signature?: string | null
+          wallet?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prediction_entries_fight_id_fkey"
+            columns: ["fight_id"]
+            isOneToOne: false
+            referencedRelation: "prediction_fights"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      prediction_fights: {
+        Row: {
+          claims_open_at: string | null
+          created_at: string
+          event_name: string
+          fighter_a_name: string
+          fighter_b_name: string
+          id: string
+          pool_a_lamports: number
+          pool_b_lamports: number
+          resolved_at: string | null
+          shares_a: number
+          shares_b: number
+          status: string
+          title: string
+          updated_at: string
+          winner: string | null
+        }
+        Insert: {
+          claims_open_at?: string | null
+          created_at?: string
+          event_name?: string
+          fighter_a_name: string
+          fighter_b_name: string
+          id?: string
+          pool_a_lamports?: number
+          pool_b_lamports?: number
+          resolved_at?: string | null
+          shares_a?: number
+          shares_b?: number
+          status?: string
+          title: string
+          updated_at?: string
+          winner?: string | null
+        }
+        Update: {
+          claims_open_at?: string | null
+          created_at?: string
+          event_name?: string
+          fighter_a_name?: string
+          fighter_b_name?: string
+          id?: string
+          pool_a_lamports?: number
+          pool_b_lamports?: number
+          resolved_at?: string | null
+          shares_a?: number
+          shares_b?: number
+          status?: string
+          title?: string
+          updated_at?: string
+          winner?: string | null
+        }
+        Relationships: []
+      }
       presence_heartbeats: {
         Row: {
           country: string | null
