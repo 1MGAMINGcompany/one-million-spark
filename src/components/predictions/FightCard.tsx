@@ -49,8 +49,11 @@ export default function FightCard({
   isHot?: boolean;
   onWalletRequired?: () => void;
 }) {
+  const { formatUsd } = useSolPrice();
   const { oddsA, oddsB } = calcOdds(fight.pool_a_lamports, fight.pool_b_lamports);
   const totalPool = (fight.pool_a_lamports + fight.pool_b_lamports) / LAMPORTS;
+  const poolASol = fight.pool_a_lamports / LAMPORTS;
+  const poolBSol = fight.pool_b_lamports / LAMPORTS;
 
   const hasWinningEntries =
     fight.status === "resolved" &&
