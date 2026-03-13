@@ -89,6 +89,7 @@ const Navbar = () => {
     { path: "/create-room", labelKey: "nav.createRoom", icon: PlusCircle },
     { path: "/room-list", labelKey: "nav.roomList", icon: LayoutList },
     { path: "/leaderboard/ludo", labelKey: "nav.leaderboard", icon: Trophy },
+    { path: "/predictions", labelKey: "Predictions", icon: Swords },
   ];
 
   return (
