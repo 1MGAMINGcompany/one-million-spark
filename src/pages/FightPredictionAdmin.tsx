@@ -473,7 +473,7 @@ function AdminFightCard({
     if (s === "confirmed" && timerExpired && !autoSettleRef.current && !busy) {
       autoSettleRef.current = true;
       console.log("[AutoSettle] Timer expired for fight", fight.id, "— auto-settling");
-      onAction("settleEvent", { fight_id: fight.id }).then(() => {
+      onAction("settleEvent").then(() => {
         setAutoSettled(true);
       }).catch((err) => {
         console.error("[AutoSettle] Failed:", err);
