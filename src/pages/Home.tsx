@@ -6,7 +6,7 @@ import { Swords, Users, Bot, Trophy, Gem, Star, Shield, Zap, X, PlayCircle } fro
 import FeaturedGameCard from "@/components/FeaturedGameCard";
 import { ChessIcon, DominoIcon, BackgammonIcon, CheckersIcon, LudoIcon } from "@/components/GameIcons";
 import PyramidLogo from "@/components/PyramidLogo";
-import predictionsHero from "@/assets/predictions-hero.jpeg";
+import predictionsFighters from "@/assets/predictions-fighters.jpeg";
 // import { MobileAppPrompt } from "@/components/MobileAppPrompt"; // Temporarily disabled
 import { usePrivySolBalance } from "@/hooks/usePrivySolBalance";
 import { AddSolCard } from "@/components/AddSolCard";
@@ -114,13 +114,10 @@ const Home = () => {
 
               {/* CTA Buttons — always visible */}
               <div className="flex flex-col items-stretch gap-4 mt-4 min-w-0 w-full">
-                    <Button asChild size="lg" variant="gold" className="relative flex w-full min-w-0 whitespace-normal group text-lg h-auto p-0 overflow-hidden transition-all shadow-[0_0_20px_-4px_hsl(45_93%_54%_/_0.4)]">
-                      <Link to="/predictions" className="w-full min-w-0 flex items-center justify-center gap-2 text-center relative">
-                        <img src={predictionsHero} alt="" className="absolute inset-0 w-full h-full object-cover object-top opacity-30" />
-                        <div className="relative flex items-center justify-center gap-2 py-4 px-4 sm:px-8">
-                          <Swords className="w-6 h-6 sm:w-7 sm:h-7 shrink-0 group-hover:drop-shadow-[0_0_6px_hsl(45_93%_54%_/_0.6)] transition-all" />
-                          <span className="text-xl sm:text-2xl md:text-3xl font-bold tracking-wide leading-tight">FIGHT PREDICTIONS</span>
-                        </div>
+                    <Button asChild size="lg" variant="gold" className="flex w-full min-w-0 whitespace-normal group text-lg h-auto py-4 px-4 sm:px-8 transition-all shadow-[0_0_20px_-4px_hsl(45_93%_54%_/_0.4)]">
+                      <Link to="/predictions" className="w-full min-w-0 flex items-center justify-between gap-2 text-center">
+                        <span className="text-xl sm:text-2xl md:text-3xl font-bold tracking-wide leading-tight">FIGHT PREDICTIONS</span>
+                        <img src={predictionsFighters} alt="" className="h-12 sm:h-14 w-auto object-contain shrink-0" />
                       </Link>
                     </Button>
                     <Button asChild size="lg" variant="gold" className="flex w-full min-w-0 whitespace-normal group text-lg h-auto py-5 px-4 sm:px-8 transition-all shadow-[0_0_20px_-4px_hsl(45_93%_54%_/_0.4)]">
