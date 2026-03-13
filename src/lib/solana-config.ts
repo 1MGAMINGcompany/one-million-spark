@@ -18,7 +18,7 @@ export const SOLANA_ENABLED = true;
 // READ operations now use solana-rpc-read edge function proxy
 // This URL remains for wallet adapter which requires direct connection for signing
 // Helius domain-locking provides secondary protection
-export const SOLANA_RPC_URL = "https://mainnet.helius-rpc.com/?api-key=44221d00-cebb-4ef8-90c6-83dacbd9001e";
+export const SOLANA_RPC_URL = "https://barbey-suiowt-fast-mainnet.helius-rpc.com";
 
 // Get current RPC endpoint (Helius mainnet only)
 export function getSolanaEndpoint(): string {
