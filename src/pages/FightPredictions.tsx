@@ -230,13 +230,13 @@ export default function FightPredictions() {
           <div className="max-w-4xl mx-auto text-center">
             <div className="inline-flex items-center gap-2 bg-primary/10 border border-primary/30 rounded-full px-4 py-1.5 mb-3 backdrop-blur-sm">
               <Swords className="w-4 h-4 text-primary" />
-              <span className="text-xs font-medium text-primary uppercase tracking-wider">Prediction Markets</span>
+              <span className="text-xs font-medium text-primary uppercase tracking-wider">{t("predictions.badge")}</span>
             </div>
             <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-foreground font-['Cinzel'] mb-2">
-              Fight Predictions
+              {t("predictions.title")}
             </h1>
             <p className="text-muted-foreground max-w-md mx-auto text-sm">
-              Pick your fighter. Earn rewards. All predictions are final.
+              {t("predictions.subtitle")}
             </p>
           </div>
         </div>
