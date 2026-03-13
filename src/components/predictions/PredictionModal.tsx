@@ -32,6 +32,7 @@ export default function PredictionModal({
   submitting: boolean;
   showSuccess?: boolean;
 }) {
+  const { formatUsd } = useSolPrice();
   const [amount, setAmount] = useState("");
   const amountNum = parseFloat(amount) || 0;
   const fee = amountNum * FEE_RATE;
