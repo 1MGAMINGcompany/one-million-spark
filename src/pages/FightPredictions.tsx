@@ -270,7 +270,7 @@ export default function FightPredictions() {
       {/* Hero */}
       <div className="relative overflow-hidden">
         {/* Hero Image */}
-        <div className="relative h-48 sm:h-64 md:h-80 w-full">
+        <div className="relative h-56 sm:h-72 md:h-96 w-full">
           <img
             src={predictionsHero}
             alt="Muay Thai fighters in the ring"
