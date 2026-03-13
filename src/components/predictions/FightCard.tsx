@@ -159,7 +159,8 @@ export default function FightCard({
           <div className="text-center">
             <p className="font-bold text-foreground text-sm">{fight.fighter_b_name}</p>
             <p className="text-xs text-muted-foreground mt-1">
-              {(fight.pool_b_lamports / LAMPORTS).toFixed(2)} SOL
+              {poolBSol.toFixed(2)} SOL
+              {formatUsd(poolBSol) && <span className="block text-[10px] text-muted-foreground/70">{formatUsd(poolBSol)}</span>}
             </p>
             <p className="text-primary font-bold text-lg">{oddsB.toFixed(2)}x</p>
              {fight.status === "open" && (
