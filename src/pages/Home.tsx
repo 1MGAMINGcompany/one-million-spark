@@ -6,7 +6,7 @@ import { Swords, Users, Bot, Trophy, Gem, Star, Shield, Zap, X, PlayCircle } fro
 import FeaturedGameCard from "@/components/FeaturedGameCard";
 import { ChessIcon, DominoIcon, BackgammonIcon, CheckersIcon, LudoIcon } from "@/components/GameIcons";
 import PyramidLogo from "@/components/PyramidLogo";
-import predictionsHero from "@/assets/predictions-hero.jpeg";
+import predictionsFighters from "@/assets/predictions-fighters.jpeg";
 // import { MobileAppPrompt } from "@/components/MobileAppPrompt"; // Temporarily disabled
 import { usePrivySolBalance } from "@/hooks/usePrivySolBalance";
 import { AddSolCard } from "@/components/AddSolCard";
