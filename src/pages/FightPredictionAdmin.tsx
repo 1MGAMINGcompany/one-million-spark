@@ -309,7 +309,7 @@ export default function FightPredictionAdmin() {
             <div className="flex gap-2 mt-3 flex-wrap">
               {event.status === "draft" && (
                 <>
-                  <Button size="sm" onClick={() => fightAction("approveEvent", "", { event_id: event.id }).then(() => callAdmin("approveEvent", { event_id: event.id }).then(loadData).catch(e => toast.error(e.message)))} disabled={busy}
+                  <Button size="sm" onClick={async () => { try { await callAdmin("approveEvent", { event_id: event.id }); toast.success("Approved"); loadData(); } catch(e:any){toast.error(e.message);} }} disabled={busy}
                     className="bg-green-500/20 text-green-400 hover:bg-green-500/30">
                     <Eye className="w-3 h-3 mr-1" /> Approve
                   </Button>
