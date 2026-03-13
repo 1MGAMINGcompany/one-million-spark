@@ -18,7 +18,7 @@ export const SOLANA_ENABLED = true;
 // READ operations now use solana-rpc-read edge function proxy
 // This URL remains for wallet adapter which requires direct connection for signing
 // Helius domain-locking provides secondary protection
-export const SOLANA_RPC_URL = "https://mainnet.helius-rpc.com/?api-key=44221d00-cebb-4ef8-90c6-83dacbd9001e";
+export const SOLANA_RPC_URL = "https://barbey-suiowt-fast-mainnet.helius-rpc.com";
 
 // Get current RPC endpoint (Helius mainnet only)
 export function getSolanaEndpoint(): string {
@@ -41,7 +41,7 @@ export const DEVNET_GENESIS_HASH = "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG
 export const TESTNET_GENESIS_HASH = "4uhcVJyU9pJkvQyS88uRDiswHXSCkY3zQawwpjk2NsNY";
 
 // Platform fee recipient on Solana
-export const PLATFORM_FEE_RECIPIENT = "HrQiwW3WZXdDC8c7wbsuBAw2nP1EVtzZyokp7xPJ6Wjx";
+export const PLATFORM_FEE_RECIPIENT = "GA4oxfEHPCjo7KTLWMyxjq2J5tEScihqvFh5rFMM88JX";
 
 // Platform fee in basis points (5% = 500 bps)
 export const PLATFORM_FEE_BPS = 500;
