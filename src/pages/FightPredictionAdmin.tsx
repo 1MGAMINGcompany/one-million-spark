@@ -51,6 +51,7 @@ interface Fight {
   review_reason: string | null;
   claims_open_at: string | null;
   confirmed_at: string | null;
+  settled_at: string | null;
 }
 
 const LAMPORTS = 1_000_000_000;
