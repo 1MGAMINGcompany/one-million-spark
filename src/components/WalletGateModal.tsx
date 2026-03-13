@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { usePrivy } from "@privy-io/react-auth";
-import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import {
   Dialog,
   DialogContent,
@@ -12,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Wallet, Info, Eye, ChevronDown } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { HowToConnectSolModal } from "./HowToConnectSolModal";
+import { WalletPickerDialog } from "./WalletPickerDialog";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 interface WalletGateModalProps {
@@ -27,10 +27,10 @@ export function WalletGateModal({
   title,
   description,
 }: WalletGateModalProps) {
-  const { setVisible } = useWalletModal();
   const { login } = usePrivy();
   const { t } = useTranslation();
   const [showHelp, setShowHelp] = useState(false);
+  const [showWalletPicker, setShowWalletPicker] = useState(false);
 
   const handlePrivyLogin = () => {
     onClose();
@@ -39,7 +39,7 @@ export function WalletGateModal({
 
   const handleExternalWallet = () => {
     onClose();
-    setVisible(true);
+    setShowWalletPicker(true);
   };
 
   return (
@@ -59,7 +59,6 @@ export function WalletGateModal({
           </DialogHeader>
 
           <div className="space-y-4 pt-2">
-            {/* Primary: Privy Login */}
             <Button 
               onClick={handlePrivyLogin}
               className="w-full"
@@ -69,7 +68,6 @@ export function WalletGateModal({
               {t("wallet.continue")}
             </Button>
 
-            {/* Secondary: External wallet */}
             <Collapsible>
               <CollapsibleTrigger className="flex items-center justify-center gap-1 w-full text-xs text-muted-foreground hover:text-primary transition-colors">
                 <ChevronDown size={14} />
@@ -88,7 +86,6 @@ export function WalletGateModal({
               </CollapsibleContent>
             </Collapsible>
 
-            {/* How to Connect Link */}
             <button
               onClick={() => setShowHelp(true)}
               className="w-full flex items-center justify-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors py-2"
@@ -97,7 +94,6 @@ export function WalletGateModal({
               {t("wallet.howToConnectSol")}
             </button>
 
-            {/* Browse Note */}
             <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground/70 pt-2 border-t border-border/30">
               <Eye size={12} />
               <span>{t("wallet.browseWithoutWallet")}</span>
@@ -105,6 +101,11 @@ export function WalletGateModal({
           </div>
         </DialogContent>
       </Dialog>
+
+      <WalletPickerDialog 
+        open={showWalletPicker} 
+        onOpenChange={setShowWalletPicker} 
+      />
 
       <HowToConnectSolModal 
         isOpen={showHelp} 
