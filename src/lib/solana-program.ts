@@ -18,7 +18,7 @@ import { solanaRpcRead, decodeAccountDataBase64 } from "./solanaReadProxy";
 export const PROGRAM_ID = new PublicKey("4nkWS2ZYPqQrRSYbXD6XW6U6VenmBiZV2TkutY3vSPHu");
 
 // Platform fee recipient (5% of prize pool)
-export const FEE_RECIPIENT = new PublicKey("3bcV9vtxeiHsXgNx4qvQbS4ZL4cMUnAg2tF3DZjtmGUj");
+export const FEE_RECIPIENT = new PublicKey("HrQiwW3WZXdDC8c7wbsuBAw2nP1EVtzZyokp7xPJ6Wjx");
 
 // Platform fee percentage (5%)
 export const PLATFORM_FEE_BPS = 500; // 5% = 500 basis points
