@@ -131,7 +131,7 @@ export default function FightCard({
 
       {/* Fighters */}
       <div className="p-4">
-        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3" dir="ltr">
           <FighterColumn
             name={fight.fighter_a_name}
             poolSol={poolASol}
