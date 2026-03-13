@@ -1,0 +1,46 @@
+import { Card } from "@/components/ui/card";
+import { Bell } from "lucide-react";
+
+const SPORT_TEASERS: Record<string, { icon: string; color: string; bgColor: string; description: string }> = {
+  BOXING: {
+    icon: "🥊",
+    color: "text-blue-400",
+    bgColor: "bg-blue-500/10",
+    description: "Championship boxing predictions coming soon.",
+  },
+  MMA: {
+    icon: "🤼",
+    color: "text-green-400",
+    bgColor: "bg-green-500/10",
+    description: "MMA fight predictions dropping soon.",
+  },
+  UFC: {
+    icon: "🏟️",
+    color: "text-purple-400",
+    bgColor: "bg-purple-500/10",
+    description: "UFC event predictions on the way.",
+  },
+};
+
+export default function ComingSoonCard({ sport }: { sport: string }) {
+  const config = SPORT_TEASERS[sport];
+  if (!config) return null;
+
+  return (
+    <Card className={`${config.bgColor} border-border/30 p-5 flex items-center gap-4`}>
+      <span className="text-3xl">{config.icon}</span>
+      <div className="flex-1">
+        <div className="flex items-center gap-2">
+          <h3 className={`text-sm font-bold ${config.color} uppercase tracking-wider`}>{sport}</h3>
+          <span className="text-[10px] font-bold bg-muted text-muted-foreground px-2 py-0.5 rounded-full">
+            COMING SOON
+          </span>
+        </div>
+        <p className="text-xs text-muted-foreground mt-1">{config.description}</p>
+      </div>
+      <div className="flex items-center gap-1 text-muted-foreground">
+        <Bell className="w-4 h-4" />
+      </div>
+    </Card>
+  );
+}
