@@ -62,6 +62,7 @@ export default function EventSection({
   onClaim,
   claiming,
   hotFightIds,
+  onWalletRequired,
 }: {
   eventName: string;
   fights: Fight[];
@@ -71,6 +72,7 @@ export default function EventSection({
   onClaim: (fightId: string) => void;
   claiming: boolean;
   hotFightIds: Set<string>;
+  onWalletRequired?: () => void;
 }) {
   const hasOpen = fights.some(f => f.status === "open");
   const [expanded, setExpanded] = useState(hasOpen);
