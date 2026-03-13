@@ -11,6 +11,7 @@ import {
 } from "@solana/web3.js";
 import Navbar from "@/components/Navbar";
 import EventSection, { parseSport } from "@/components/predictions/EventSection";
+import predictionsHero from "@/assets/predictions-hero.jpeg";
 import PredictionModal from "@/components/predictions/PredictionModal";
 import ComingSoonCard from "@/components/predictions/ComingSoonCard";
 import { WalletGateModal } from "@/components/WalletGateModal";
