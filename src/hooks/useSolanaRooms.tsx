@@ -49,8 +49,8 @@ export interface TxDebugInfo {
   txType?: 'legacy' | 'versioned';
 }
 
-// Active room polling interval (5 seconds)
-const ACTIVE_ROOM_POLL_INTERVAL = 5000;
+// Active room polling interval (12 seconds for lobby, reduces load at scale)
+const ACTIVE_ROOM_POLL_INTERVAL = 12_000;
 
 // Debounce before starting polling after wallet connects
 const POLLING_DEBOUNCE_MS = 500;
