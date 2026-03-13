@@ -141,6 +141,8 @@ const AppContent = () => {
           <Route path="/match/:roomPda" element={<MatchShareCard />} />
           <Route path="/player/:wallet" element={<PlayerProfile />} />
           <Route path="/leaderboard/:game" element={<Leaderboard />} />
+          <Route path="/predictions" element={<FightPredictions />} />
+          <Route path="/predictions/admin" element={<FightPredictionAdmin />} />
           <Route path="/debug/join" element={isDebugEnabled() ? <DebugJoinRoom /> : <Navigate to="/" replace />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
