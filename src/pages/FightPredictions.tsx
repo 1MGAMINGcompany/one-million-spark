@@ -194,7 +194,7 @@ export default function FightPredictions() {
 
   const handlePredict = (fight: Fight, pick: "fighter_a" | "fighter_b") => {
     if (!isConnected) {
-      toast.error("Connect your wallet to make predictions");
+      setShowWalletGate(true);
       return;
     }
     setSelectedFight(fight);
