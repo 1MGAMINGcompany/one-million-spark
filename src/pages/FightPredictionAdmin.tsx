@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -39,6 +39,8 @@ interface Fight {
   fighter_b_name: string;
   pool_a_lamports: number;
   pool_b_lamports: number;
+  shares_a: number;
+  shares_b: number;
   status: string;
   winner: string | null;
   event_name: string;
@@ -47,6 +49,8 @@ interface Fight {
   refund_status: string | null;
   review_required: boolean;
   review_reason: string | null;
+  claims_open_at: string | null;
+  confirmed_at: string | null;
 }
 
 const LAMPORTS = 1_000_000_000;
@@ -115,13 +119,21 @@ export default function FightPredictionAdmin() {
     })();
   }, [address]);
 
+  const [entryCounts, setEntryCounts] = useState<Record<string, number>>({});
+
   const loadData = useCallback(async () => {
-    const [eventsRes, fightsRes] = await Promise.all([
+    const [eventsRes, fightsRes, entriesRes] = await Promise.all([
       supabase.from("prediction_events").select("*").order("created_at", { ascending: false }),
       supabase.from("prediction_fights").select("*").order("created_at", { ascending: false }),
+      supabase.from("prediction_entries").select("fight_id"),
     ]);
     if (eventsRes.data) setEvents(eventsRes.data as any);
     if (fightsRes.data) setFights(fightsRes.data as any);
+    if (entriesRes.data) {
+      const counts: Record<string, number> = {};
+      entriesRes.data.forEach((e: any) => { counts[e.fight_id] = (counts[e.fight_id] || 0) + 1; });
+      setEntryCounts(counts);
+    }
   }, []);
 
   useEffect(() => { if (isAdmin) loadData(); }, [isAdmin, loadData]);
@@ -340,6 +352,7 @@ export default function FightPredictionAdmin() {
                     key={fight.id}
                     fight={fight}
                     busy={busy}
+                    entryCount={entryCounts[fight.id] || 0}
                     onAction={(action, extra) => fightAction(action, fight.id, extra)}
                     onConfirm={withConfirm}
                     onRefund={async () => {
@@ -366,6 +379,7 @@ export default function FightPredictionAdmin() {
                   key={fight.id}
                   fight={fight}
                   busy={busy}
+                  entryCount={entryCounts[fight.id] || 0}
                   onAction={(action, extra) => fightAction(action, fight.id, extra)}
                   onConfirm={withConfirm}
                   onRefund={async () => {
@@ -409,18 +423,48 @@ export default function FightPredictionAdmin() {
   );
 }
 
+// ── Countdown Hook ──
+function useCountdown(targetIso: string | null) {
+  const [remaining, setRemaining] = useState<number | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (!targetIso) { setRemaining(null); return; }
+    const target = new Date(targetIso).getTime();
+
+    const tick = () => {
+      const diff = Math.max(0, Math.floor((target - Date.now()) / 1000));
+      setRemaining(diff);
+      if (diff <= 0 && intervalRef.current) clearInterval(intervalRef.current);
+    };
+
+    tick();
+    intervalRef.current = setInterval(tick, 1000);
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+  }, [targetIso]);
+
+  if (remaining === null || remaining <= 0) return null;
+  const m = Math.floor(remaining / 60);
+  const sec = remaining % 60;
+  return `${m}m ${sec.toString().padStart(2, "0")}s`;
+}
+
 // ── Per-Fight Admin Card ──
 function AdminFightCard({
-  fight, busy, onAction, onConfirm, onRefund,
+  fight, busy, entryCount, onAction, onConfirm, onRefund,
 }: {
   fight: Fight;
   busy: boolean;
+  entryCount: number;
   onAction: (action: string, extra?: Record<string, any>) => Promise<void>;
   onConfirm: (title: string, desc: string, onConfirm: () => void, destructive?: boolean) => void;
   onRefund: () => Promise<void>;
 }) {
   const [methodOpen, setMethodOpen] = useState(false);
   const s = fight.status;
+  const countdown = useCountdown(s === "confirmed" ? fight.claims_open_at : null);
+  const claimsOpen = fight.claims_open_at && new Date() >= new Date(fight.claims_open_at);
+  const totalPoolSol = ((fight.pool_a_lamports + fight.pool_b_lamports) / LAMPORTS).toFixed(4);
 
   return (
     <div className={`bg-background/80 border border-border/30 rounded-lg p-4 ${fight.review_required ? 'ring-2 ring-yellow-500/40' : ''}`}>
@@ -432,18 +476,51 @@ function AdminFightCard({
         </div>
       )}
 
-      <div className="flex items-start justify-between mb-3">
+      <div className="flex items-start justify-between mb-2">
         <div>
           <h4 className="font-bold text-foreground text-sm">{fight.title}</h4>
           <p className="text-xs text-muted-foreground">{fight.fighter_a_name} vs {fight.fighter_b_name}</p>
-          <p className="text-xs text-muted-foreground">
-            Pool: {((fight.pool_a_lamports + fight.pool_b_lamports) / LAMPORTS).toFixed(2)} SOL
-          </p>
         </div>
         <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${STATUS_COLORS[s] || 'bg-muted text-muted-foreground'}`}>
           {s.toUpperCase().replace('_', ' ')}
         </span>
       </div>
+
+      {/* Stats bar */}
+      <div className="grid grid-cols-3 gap-2 mb-3 bg-muted/30 rounded-lg p-2">
+        <div className="text-center">
+          <p className="text-[10px] text-muted-foreground">Pool</p>
+          <p className="text-xs font-bold text-foreground">{totalPoolSol} SOL</p>
+        </div>
+        <div className="text-center">
+          <p className="text-[10px] text-muted-foreground">Predictions</p>
+          <p className="text-xs font-bold text-foreground">{entryCount}</p>
+        </div>
+        <div className="text-center">
+          <p className="text-[10px] text-muted-foreground">Claims</p>
+          <p className={`text-xs font-bold ${
+            ["confirmed", "settled"].includes(s) && claimsOpen
+              ? "text-green-400" : ["confirmed"].includes(s) && !claimsOpen
+              ? "text-yellow-400" : "text-muted-foreground"
+          }`}>
+            {["confirmed", "settled"].includes(s) && claimsOpen ? "OPEN" :
+             s === "confirmed" && !claimsOpen ? "BLOCKED" :
+             s === "settled" ? "OPEN" : "—"}
+          </p>
+        </div>
+      </div>
+
+      {/* Countdown timer for confirmed fights */}
+      {s === "confirmed" && countdown && (
+        <div className="mb-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-2 text-center">
+          <p className="text-xs text-yellow-400 font-bold">⏱ Claims open in {countdown}</p>
+        </div>
+      )}
+      {s === "confirmed" && !countdown && claimsOpen && (
+        <div className="mb-3 bg-green-500/10 border border-green-500/30 rounded-lg p-2 text-center">
+          <p className="text-xs text-green-400 font-bold">✅ Claims are now open</p>
+        </div>
+      )}
 
       {/* Sequential Action Buttons */}
       <div className="space-y-2">
