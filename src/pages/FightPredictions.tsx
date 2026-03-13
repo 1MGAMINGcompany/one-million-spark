@@ -361,11 +361,20 @@ export default function FightPredictions() {
         <PredictionModal
           fight={selectedFight}
           pick={selectedPick}
-          onClose={() => { setSelectedFight(null); setSelectedPick(null); }}
+          onClose={() => { setSelectedFight(null); setSelectedPick(null); setShowPredictionSuccess(false); }}
           onSubmit={handleSubmit}
           submitting={submitting}
+          showSuccess={showPredictionSuccess}
         />
       )}
+
+      {/* Wallet Gate Modal */}
+      <WalletGateModal
+        isOpen={showWalletGate}
+        onClose={() => setShowWalletGate(false)}
+        title="Connect to Predict"
+        description="You need a wallet to place predictions and earn rewards."
+      />
     </div>
   );
 }
