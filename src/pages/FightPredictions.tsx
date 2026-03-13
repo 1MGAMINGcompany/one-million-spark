@@ -20,7 +20,7 @@ const LAMPORTS = 1_000_000_000;
 const FEE_RATE = 0.05;
 
 // Sport categories that always show (even if no events yet)
-const ALL_SPORTS = ["ALL", "MUAY THAI", "BOXING", "MMA", "UFC"];
+const ALL_SPORTS = ["ALL", "MUAY THAI", "BOXING", "MMA", "FUTBOL"];
 
 interface FeedEntry {
   id: string;
@@ -102,7 +102,7 @@ export default function FightPredictions() {
   // Available sport tabs from actual data
   const activeSports = useMemo(() => {
     const sports = new Set(Object.keys(groupedEvents).map(e => parseSport(e)));
-    return ALL_SPORTS.filter(s => s === "ALL" || sports.has(s) || ["BOXING", "MMA", "UFC"].includes(s));
+    return ALL_SPORTS.filter(s => s === "ALL" || sports.has(s) || ["BOXING", "MMA", "FUTBOL"].includes(s));
   }, [groupedEvents]);
 
   // Filter events by sport
@@ -124,7 +124,7 @@ export default function FightPredictions() {
   // Coming soon sports (not in data)
   const comingSoonSports = useMemo(() => {
     const existingSports = new Set(Object.keys(groupedEvents).map(e => parseSport(e)));
-    return ["BOXING", "MMA", "UFC"].filter(s => !existingSports.has(s));
+    return ["BOXING", "MMA", "FUTBOL"].filter(s => !existingSports.has(s));
   }, [groupedEvents]);
 
   // Submit prediction

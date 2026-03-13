@@ -16,7 +16,7 @@ const SPORT_CONFIG: Record<string, SportConfig> = {
   "MUAY THAI": { icon: "🥊", color: "text-red-400", bgColor: "bg-red-500/10", borderColor: "border-red-500/30" },
   "BOXING": { icon: "🥊", color: "text-blue-400", bgColor: "bg-blue-500/10", borderColor: "border-blue-500/30" },
   "MMA": { icon: "🤼", color: "text-green-400", bgColor: "bg-green-500/10", borderColor: "border-green-500/30" },
-  "UFC": { icon: "🏟️", color: "text-purple-400", bgColor: "bg-purple-500/10", borderColor: "border-purple-500/30" },
+  "FUTBOL": { icon: "⚽", color: "text-yellow-400", bgColor: "bg-yellow-500/10", borderColor: "border-yellow-500/30" },
 };
 
 function parseSport(eventName: string): string {
