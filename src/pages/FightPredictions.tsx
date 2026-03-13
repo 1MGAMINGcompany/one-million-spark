@@ -274,7 +274,7 @@ export default function FightPredictions() {
           <img
             src={predictionsHero}
             alt="Muay Thai fighters in the ring"
-            className="w-full h-full object-cover object-[center_42%]"
+            className="w-full h-full object-cover object-[center_24%]"
           />
           <div className="absolute inset-0 bg-gradient-to-b from-background/30 via-background/60 to-background" />
         </div>
