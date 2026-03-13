@@ -679,59 +679,157 @@ export type Database = {
           },
         ]
       }
+      prediction_events: {
+        Row: {
+          auto_resolve: boolean
+          created_at: string
+          event_date: string | null
+          event_name: string
+          id: string
+          is_test: boolean
+          location: string | null
+          organization: string | null
+          review_reason: string | null
+          review_required: boolean
+          source: string
+          source_url: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          auto_resolve?: boolean
+          created_at?: string
+          event_date?: string | null
+          event_name: string
+          id?: string
+          is_test?: boolean
+          location?: string | null
+          organization?: string | null
+          review_reason?: string | null
+          review_required?: boolean
+          source?: string
+          source_url?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          auto_resolve?: boolean
+          created_at?: string
+          event_date?: string | null
+          event_name?: string
+          id?: string
+          is_test?: boolean
+          location?: string | null
+          organization?: string | null
+          review_reason?: string | null
+          review_required?: boolean
+          source?: string
+          source_url?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       prediction_fights: {
         Row: {
+          auto_resolve: boolean
           claims_open_at: string | null
+          confirmed_at: string | null
           created_at: string
+          event_id: string | null
           event_name: string
+          fight_class: string | null
           fighter_a_name: string
           fighter_b_name: string
           id: string
+          method: string | null
           pool_a_lamports: number
           pool_b_lamports: number
+          refund_status: string | null
+          refunds_completed_at: string | null
+          refunds_started_at: string | null
           resolved_at: string | null
+          review_reason: string | null
+          review_required: boolean
+          settled_at: string | null
           shares_a: number
           shares_b: number
+          source: string
           status: string
           title: string
           updated_at: string
+          weight_class: string | null
           winner: string | null
         }
         Insert: {
+          auto_resolve?: boolean
           claims_open_at?: string | null
+          confirmed_at?: string | null
           created_at?: string
+          event_id?: string | null
           event_name?: string
+          fight_class?: string | null
           fighter_a_name: string
           fighter_b_name: string
           id?: string
+          method?: string | null
           pool_a_lamports?: number
           pool_b_lamports?: number
+          refund_status?: string | null
+          refunds_completed_at?: string | null
+          refunds_started_at?: string | null
           resolved_at?: string | null
+          review_reason?: string | null
+          review_required?: boolean
+          settled_at?: string | null
           shares_a?: number
           shares_b?: number
+          source?: string
           status?: string
           title: string
           updated_at?: string
+          weight_class?: string | null
           winner?: string | null
         }
         Update: {
+          auto_resolve?: boolean
           claims_open_at?: string | null
+          confirmed_at?: string | null
           created_at?: string
+          event_id?: string | null
           event_name?: string
+          fight_class?: string | null
           fighter_a_name?: string
           fighter_b_name?: string
           id?: string
+          method?: string | null
           pool_a_lamports?: number
           pool_b_lamports?: number
+          refund_status?: string | null
+          refunds_completed_at?: string | null
+          refunds_started_at?: string | null
           resolved_at?: string | null
+          review_reason?: string | null
+          review_required?: boolean
+          settled_at?: string | null
           shares_a?: number
           shares_b?: number
+          source?: string
           status?: string
           title?: string
           updated_at?: string
+          weight_class?: string | null
           winner?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "prediction_fights_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "prediction_events"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       presence_heartbeats: {
         Row: {
