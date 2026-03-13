@@ -423,8 +423,8 @@ export default function FightPredictionAdmin() {
   );
 }
 
-// ── Countdown Hook ──
-function useCountdown(targetIso: string | null) {
+// ── Countdown Hook ── returns { text, seconds, expired }
+function useCountdown(targetIso: string | null): { text: string | null; seconds: number | null; expired: boolean } {
   const [remaining, setRemaining] = useState<number | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -443,10 +443,11 @@ function useCountdown(targetIso: string | null) {
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
   }, [targetIso]);
 
-  if (remaining === null || remaining <= 0) return null;
+  if (remaining === null) return { text: null, seconds: null, expired: false };
+  if (remaining <= 0) return { text: null, seconds: 0, expired: true };
   const m = Math.floor(remaining / 60);
   const sec = remaining % 60;
-  return `${m}m ${sec.toString().padStart(2, "0")}s`;
+  return { text: `${m}m ${sec.toString().padStart(2, "0")}s`, seconds: remaining, expired: false };
 }
 
 // ── Per-Fight Admin Card ──
