@@ -44,6 +44,7 @@ interface FeedEntry {
 
 export default function FightPredictions() {
   const { address, publicKey, isConnected, sendTransaction, connection } = useWallet();
+  const { t } = useTranslation();
   const [fights, setFights] = useState<Fight[]>([]);
   const [events, setEvents] = useState<PredictionEvent[]>([]);
   const [loading, setLoading] = useState(true);
