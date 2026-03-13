@@ -19,8 +19,17 @@ import type { Fight } from "@/components/predictions/FightCard";
 const LAMPORTS = 1_000_000_000;
 const FEE_RATE = 0.05;
 
-// Sport categories that always show (even if no events yet)
 const ALL_SPORTS = ["ALL", "MUAY THAI", "BOXING", "MMA", "FUTBOL"];
+
+interface PredictionEvent {
+  id: string;
+  event_name: string;
+  organization: string | null;
+  event_date: string | null;
+  location: string | null;
+  status: string;
+  is_test: boolean;
+}
 
 interface FeedEntry {
   id: string;
@@ -34,6 +43,7 @@ interface FeedEntry {
 export default function FightPredictions() {
   const { address, publicKey, isConnected, sendTransaction, connection } = useWallet();
   const [fights, setFights] = useState<Fight[]>([]);
+  const [events, setEvents] = useState<PredictionEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [feed, setFeed] = useState<FeedEntry[]>([]);
   const [showFeed, setShowFeed] = useState(true);
@@ -46,22 +56,19 @@ export default function FightPredictions() {
   const [showWalletGate, setShowWalletGate] = useState(false);
   const [showPredictionSuccess, setShowPredictionSuccess] = useState(false);
 
-  // Load fights
   const loadFights = useCallback(async () => {
-    const { data } = await supabase
-      .from("prediction_fights")
-      .select("*")
-      .order("created_at", { ascending: true });
-    if (data) setFights(data as any);
+    const [fightsRes, eventsRes] = await Promise.all([
+      supabase.from("prediction_fights").select("*").order("created_at", { ascending: true }),
+      supabase.from("prediction_events").select("*").eq("status", "approved").order("event_date", { ascending: true }),
+    ]);
+    if (fightsRes.data) setFights(fightsRes.data as any);
+    if (eventsRes.data) setEvents(eventsRes.data as any);
     setLoading(false);
   }, []);
 
   const loadUserEntries = useCallback(async () => {
     if (!address) return;
-    const { data } = await supabase
-      .from("prediction_entries")
-      .select("*")
-      .eq("wallet", address);
+    const { data } = await supabase.from("prediction_entries").select("*").eq("wallet", address);
     if (data) setUserEntries(data);
   }, [address]);
 
@@ -73,7 +80,6 @@ export default function FightPredictions() {
   useEffect(() => { loadFights(); loadFeed(); }, [loadFights, loadFeed]);
   useEffect(() => { loadUserEntries(); }, [loadUserEntries]);
 
-  // Realtime
   useEffect(() => {
     const channel = supabase
       .channel("prediction-realtime")
@@ -85,27 +91,36 @@ export default function FightPredictions() {
     return () => { supabase.removeChannel(channel); };
   }, [loadFights, loadFeed, loadUserEntries, address]);
 
-  // Group fights by event_name
+  // Group fights by event. If fight has event_id, use event name. Else fall back to event_name field.
   const groupedEvents = useMemo(() => {
-    const groups: Record<string, Fight[]> = {};
+    const eventMap = new Map(events.map(e => [e.id, e]));
+    const groups: Record<string, { event?: PredictionEvent; fights: Fight[] }> = {};
+
     fights.forEach((f) => {
-      // Normalize: Road to Tulum fights get grouped under the parent event
-      const baseEvent = f.event_name.includes("Road to Tulum")
-        ? f.event_name.replace(" — Road to Tulum", "")
-        : f.event_name;
-      if (!groups[baseEvent]) groups[baseEvent] = [];
-      groups[baseEvent].push(f);
+      let groupKey: string;
+      let event: PredictionEvent | undefined;
+
+      if (f.event_id && eventMap.has(f.event_id)) {
+        event = eventMap.get(f.event_id);
+        groupKey = event!.event_name;
+      } else {
+        const baseEvent = f.event_name.includes("Road to Tulum")
+          ? f.event_name.replace(" — Road to Tulum", "")
+          : f.event_name;
+        groupKey = baseEvent;
+      }
+
+      if (!groups[groupKey]) groups[groupKey] = { event, fights: [] };
+      groups[groupKey].fights.push(f);
     });
     return groups;
-  }, [fights]);
+  }, [fights, events]);
 
-  // Available sport tabs from actual data
   const activeSports = useMemo(() => {
     const sports = new Set(Object.keys(groupedEvents).map(e => parseSport(e)));
     return ALL_SPORTS.filter(s => s === "ALL" || sports.has(s) || ["BOXING", "MMA", "FUTBOL"].includes(s));
   }, [groupedEvents]);
 
-  // Filter events by sport
   const filteredEvents = useMemo(() => {
     if (activeSport === "ALL") return groupedEvents;
     return Object.fromEntries(
@@ -113,7 +128,6 @@ export default function FightPredictions() {
     );
   }, [groupedEvents, activeSport]);
 
-  // Hot fight IDs (top 3 by pool size)
   const hotFightIds = useMemo(() => {
     const sorted = [...fights]
       .filter(f => f.status === "open")
@@ -121,13 +135,11 @@ export default function FightPredictions() {
     return new Set(sorted.slice(0, 3).filter(f => (f.pool_a_lamports + f.pool_b_lamports) > 0).map(f => f.id));
   }, [fights]);
 
-  // Coming soon sports (not in data)
   const comingSoonSports = useMemo(() => {
     const existingSports = new Set(Object.keys(groupedEvents).map(e => parseSport(e)));
     return ["BOXING", "MMA", "FUTBOL"].filter(s => !existingSports.has(s));
   }, [groupedEvents]);
 
-  // Submit prediction
   const handleSubmit = async (amountSol: number) => {
     if (!selectedFight || !selectedPick || !publicKey || !isConnected) return;
     setSubmitting(true);
@@ -193,10 +205,7 @@ export default function FightPredictions() {
   };
 
   const handlePredict = (fight: Fight, pick: "fighter_a" | "fighter_b") => {
-    if (!isConnected) {
-      setShowWalletGate(true);
-      return;
-    }
+    if (!isConnected) { setShowWalletGate(true); return; }
     setSelectedFight(fight);
     setSelectedPick(pick);
   };
@@ -210,9 +219,7 @@ export default function FightPredictions() {
           <div className="text-center">
             <div className="inline-flex items-center gap-2 bg-primary/10 border border-primary/30 rounded-full px-4 py-1.5 mb-3">
               <Swords className="w-4 h-4 text-primary" />
-              <span className="text-xs font-medium text-primary uppercase tracking-wider">
-                Prediction Markets
-              </span>
+              <span className="text-xs font-medium text-primary uppercase tracking-wider">Prediction Markets</span>
             </div>
             <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-foreground font-['Cinzel'] mb-2">
               Fight Predictions
@@ -243,9 +250,7 @@ export default function FightPredictions() {
                 }`}
               >
                 {sport}
-                {!hasEvents && sport !== "ALL" && (
-                  <span className="ml-1 text-[8px] opacity-60">SOON</span>
-                )}
+                {!hasEvents && sport !== "ALL" && <span className="ml-1 text-[8px] opacity-60">SOON</span>}
               </button>
             );
           })}
@@ -265,12 +270,11 @@ export default function FightPredictions() {
           </div>
         ) : (
           <>
-            {/* Event sections */}
-            {Object.entries(filteredEvents).map(([eventName, eventFights]) => (
+            {Object.entries(filteredEvents).map(([eventName, group]) => (
               <EventSection
                 key={eventName}
                 eventName={eventName}
-                fights={eventFights}
+                fights={group.fights}
                 wallet={address}
                 userEntries={userEntries}
                 onPredict={handlePredict}
@@ -278,14 +282,11 @@ export default function FightPredictions() {
                 claiming={claiming}
                 hotFightIds={hotFightIds}
                 onWalletRequired={() => setShowWalletGate(true)}
+                event={group.event}
               />
             ))}
-
-            {/* Coming Soon cards */}
             {(activeSport === "ALL" || !Object.keys(groupedEvents).some(e => parseSport(e) === activeSport)) &&
-              comingSoonSports.map((sport) => (
-                <ComingSoonCard key={sport} sport={sport} />
-              ))}
+              comingSoonSports.map((sport) => <ComingSoonCard key={sport} sport={sport} />)}
           </>
         )}
 
@@ -302,7 +303,6 @@ export default function FightPredictions() {
             </div>
             {showFeed ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
           </button>
-
           {showFeed && (
             <div className="mt-2 bg-card border border-border/50 rounded-lg divide-y divide-border/20 max-h-64 overflow-y-auto">
               {feed.length === 0 ? (
@@ -343,9 +343,7 @@ export default function FightPredictions() {
                       <p className="text-xs text-muted-foreground">{f?.title || ""}</p>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm font-bold text-primary">
-                        {(entry.amount_lamports / LAMPORTS).toFixed(2)} SOL
-                      </p>
+                      <p className="text-sm font-bold text-primary">{(entry.amount_lamports / LAMPORTS).toFixed(2)} SOL</p>
                       {entry.claimed && <p className="text-xs text-green-400">✓ Claimed</p>}
                     </div>
                   </div>
@@ -356,7 +354,6 @@ export default function FightPredictions() {
         )}
       </div>
 
-      {/* Prediction Modal */}
       {selectedFight && selectedPick && (
         <PredictionModal
           fight={selectedFight}
@@ -368,7 +365,6 @@ export default function FightPredictions() {
         />
       )}
 
-      {/* Wallet Gate Modal */}
       <WalletGateModal
         isOpen={showWalletGate}
         onClose={() => setShowWalletGate(false)}
