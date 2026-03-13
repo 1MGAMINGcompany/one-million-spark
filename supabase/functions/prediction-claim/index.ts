@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import { Connection, Keypair, PublicKey, SystemProgram, Transaction, sendAndConfirmTransaction } from "@solana/web3.js";
+import { Connection, Keypair, PublicKey, SystemProgram, Transaction, sendAndConfirmTransaction, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import bs58 from "bs58";
 
 const corsHeaders = {
@@ -7,6 +7,10 @@ const corsHeaders = {
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
+
+// ── V1 Safety Guardrails ──
+const MAX_CLAIM_LAMPORTS = 5 * LAMPORTS_PER_SOL;       // 5 SOL per single claim
+const DAILY_CEILING_LAMPORTS = 50 * LAMPORTS_PER_SOL;  // 50 SOL daily total payouts
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -98,10 +102,50 @@ Deno.serve(async (req) => {
     // User reward
     const rewardLamports = Math.floor((userShares / totalWinningShares) * totalPool);
 
-    // Send SOL to winner from verifier/vault keypair
+    // ── GUARDRAIL 1: Per-claim cap ──
+    if (rewardLamports > MAX_CLAIM_LAMPORTS) {
+      return new Response(JSON.stringify({
+        error: "Claim exceeds per-claim safety limit",
+        max_sol: MAX_CLAIM_LAMPORTS / LAMPORTS_PER_SOL,
+        reward_sol: rewardLamports / LAMPORTS_PER_SOL,
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // ── GUARDRAIL 2: Daily payout ceiling ──
+    const todayStart = new Date();
+    todayStart.setUTCHours(0, 0, 0, 0);
+
+    const { data: dailyClaims, error: dcErr } = await supabase
+      .from("prediction_entries")
+      .select("reward_lamports")
+      .eq("claimed", true)
+      .not("reward_lamports", "is", null)
+      .gte("created_at", todayStart.toISOString());
+
+    if (dcErr) throw dcErr;
+
+    const dailyTotal = (dailyClaims || []).reduce(
+      (sum: number, e: any) => sum + Number(e.reward_lamports || 0), 0
+    );
+
+    if (dailyTotal + rewardLamports > DAILY_CEILING_LAMPORTS) {
+      return new Response(JSON.stringify({
+        error: "Daily payout ceiling reached. Please try again tomorrow.",
+        daily_limit_sol: DAILY_CEILING_LAMPORTS / LAMPORTS_PER_SOL,
+        already_paid_sol: dailyTotal / LAMPORTS_PER_SOL,
+      }), {
+        status: 429,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // ── Prepare hot payout wallet ──
     const verifierKey = Deno.env.get("VERIFIER_SECRET_KEY_V2") || Deno.env.get("VERIFIER_SECRET_KEY");
     if (!verifierKey) {
-      return new Response(JSON.stringify({ error: "Vault keypair not configured" }), {
+      return new Response(JSON.stringify({ error: "Payout wallet not configured" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -110,6 +154,20 @@ Deno.serve(async (req) => {
     const rpcUrl = Deno.env.get("SOLANA_RPC_URL") || "https://api.mainnet-beta.solana.com";
     const connection = new Connection(rpcUrl, "confirmed");
     const vaultKeypair = Keypair.fromSecretKey(bs58.decode(verifierKey));
+
+    // ── GUARDRAIL 3: Balance pre-check ──
+    const vaultBalance = await connection.getBalance(vaultKeypair.publicKey);
+    const minReserve = 5000; // keep ~0.000005 SOL for rent
+
+    if (vaultBalance < rewardLamports + minReserve) {
+      return new Response(JSON.stringify({
+        error: "Insufficient payout wallet funds. The team has been notified.",
+        required_sol: rewardLamports / LAMPORTS_PER_SOL,
+      }), {
+        status: 503,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     const tx = new Transaction().add(
       SystemProgram.transfer({
