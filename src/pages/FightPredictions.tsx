@@ -152,10 +152,22 @@ export default function FightPredictions() {
     setSubmitting(true);
     try {
       const amountLamports = Math.round(amountSol * LAMPORTS);
-      const vaultWallet = new PublicKey("11111111111111111111111111111111");
+      const feeLamports = Math.floor(amountLamports * FEE_RATE);
+      const poolLamports = amountLamports - feeLamports;
+
       const tx = new Transaction().add(
-        SystemProgram.transfer({ fromPubkey: publicKey, toPubkey: vaultWallet, lamports: amountLamports })
+        SystemProgram.transfer({
+          fromPubkey: publicKey,
+          toPubkey: PREDICTION_FEE_WALLET,
+          lamports: feeLamports,
+        }),
+        SystemProgram.transfer({
+          fromPubkey: publicKey,
+          toPubkey: PREDICTION_POOL_WALLET,
+          lamports: poolLamports,
+        })
       );
+
       const rpcUrl = import.meta.env.VITE_SOLANA_RPC_URL || "https://api.mainnet-beta.solana.com";
       const conn = new Connection(rpcUrl, "confirmed");
       const { blockhash, lastValidBlockHeight } = await conn.getLatestBlockhash();
@@ -166,8 +178,13 @@ export default function FightPredictions() {
 
       const { data, error } = await supabase.functions.invoke("prediction-submit", {
         body: {
-          fight_id: selectedFight.id, wallet: address, fighter_pick: selectedPick,
-          amount_lamports: amountLamports, tx_signature: signature,
+          fight_id: selectedFight.id,
+          wallet: address,
+          fighter_pick: selectedPick,
+          amount_lamports: amountLamports,
+          fee_lamports: feeLamports,
+          pool_lamports: poolLamports,
+          tx_signature: signature,
         },
       });
       if (error) throw error;
