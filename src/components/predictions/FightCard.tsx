@@ -155,12 +155,11 @@ export default function FightCard({
               {(fight.pool_b_lamports / LAMPORTS).toFixed(2)} SOL
             </p>
             <p className="text-primary font-bold text-lg">{oddsB.toFixed(2)}x</p>
-            {fight.status === "open" && (
+             {fight.status === "open" && (
               <Button
                 size="sm"
                 className="mt-2 w-full bg-primary text-primary-foreground hover:bg-primary/90 text-xs"
-                onClick={() => onPredict(fight, "fighter_b")}
-                disabled={!wallet}
+                onClick={() => wallet ? onPredict(fight, "fighter_b") : onWalletRequired?.()}
               >
                 Predict
               </Button>
