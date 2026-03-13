@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Swords, Trophy, Loader2, Flame } from "lucide-react";
+import { useSolPrice } from "@/hooks/useSolPrice";
 
 const LAMPORTS = 1_000_000_000;
 
