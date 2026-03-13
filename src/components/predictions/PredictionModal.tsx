@@ -49,9 +49,16 @@ export default function PredictionModal({
   const poolContribution = amountNum - fee;
   const fighterName = pick === "fighter_a" ? fight.fighter_a_name : fight.fighter_b_name;
 
-  const { oddsA, oddsB } = calcOdds(fight.pool_a_lamports, fight.pool_b_lamports);
-  const currentOdds = pick === "fighter_a" ? oddsA : oddsB;
-  const estimatedReward = poolContribution * currentOdds;
+  // Convert SOL pool contribution to lamports for the estimate, then back to SOL
+  const LAMPORTS = 1_000_000_000;
+  const contributionLamports = Math.round(poolContribution * LAMPORTS);
+  const estimatedRewardLamports = estimateReward(
+    fight.pool_a_lamports,
+    fight.pool_b_lamports,
+    pick,
+    contributionLamports,
+  );
+  const estimatedReward = estimatedRewardLamports / LAMPORTS;
 
   // Success explainer screen
   if (showSuccess) {
