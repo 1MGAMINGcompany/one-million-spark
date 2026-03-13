@@ -215,6 +215,8 @@ Deno.serve(async (req) => {
         reward_lamports: rewardLamports,
         reward_sol: rewardLamports / 1_000_000_000,
         signature,
+        signer_wallet: vaultKeypair.publicKey.toBase58(),
+        signer_secret_source: verifier.source,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
