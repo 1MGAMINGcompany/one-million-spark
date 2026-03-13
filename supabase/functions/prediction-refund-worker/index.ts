@@ -190,6 +190,8 @@ Deno.serve(async (req) => {
       refunded: refundedCount,
       failed: failedCount,
       failed_entries: failedEntries,
+      signer_wallet: vaultKeypair.publicKey.toBase58(),
+      signer_secret_source: verifier.source,
     });
   } catch (err) {
     return res({ error: err.message }, 500);
