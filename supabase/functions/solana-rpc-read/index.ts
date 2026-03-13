@@ -30,6 +30,27 @@ function json(res: unknown, status = 200) {
   });
 }
 
+// ── In-memory TTL cache for expensive RPC calls ──
+interface CacheEntry { data: unknown; expiresAt: number }
+const rpcCache = new Map<string, CacheEntry>();
+const RPC_CACHE_TTL_MS = 10_000; // 10 seconds
+const CACHEABLE_METHODS = new Set(["getProgramAccounts", "getMultipleAccounts"]);
+
+function getRpcCached(key: string): unknown | null {
+  const entry = rpcCache.get(key);
+  if (!entry) return null;
+  if (Date.now() > entry.expiresAt) { rpcCache.delete(key); return null; }
+  return entry.data;
+}
+
+function setRpcCache(key: string, data: unknown) {
+  rpcCache.set(key, { data, expiresAt: Date.now() + RPC_CACHE_TTL_MS });
+  if (rpcCache.size > 30) {
+    const now = Date.now();
+    for (const [k, v] of rpcCache) { if (now > v.expiresAt) rpcCache.delete(k); }
+  }
+}
+
 // Allowed origins (log unknown, can upgrade to block later)
 const ALLOWED_ORIGINS = [
   "https://1mgaming.com",
@@ -100,6 +121,18 @@ serve(async (req) => {
       return json({ ok: false, error: `Method not allowed: ${method}` }, 400);
     }
 
+    // 5. Check cache for expensive methods
+    const isCacheable = CACHEABLE_METHODS.has(method);
+    let cacheKey = "";
+    if (isCacheable) {
+      cacheKey = method + ":" + JSON.stringify(params);
+      const cached = getRpcCached(cacheKey);
+      if (cached !== null) {
+        console.log(`[solana-rpc-read] ⚡ Cache HIT for ${method}`);
+        return json(cached);
+      }
+    }
+
     const rpcPayload = {
       jsonrpc: "2.0",
       id: crypto.randomUUID(),
@@ -122,7 +155,14 @@ serve(async (req) => {
       return json({ ok: false, status: resp.status, data }, 502);
     }
 
-    return json({ ok: true, result: data?.result ?? null });
+    const result = { ok: true, result: data?.result ?? null };
+
+    // Cache successful responses for expensive methods
+    if (isCacheable) {
+      setRpcCache(cacheKey, result);
+    }
+
+    return json(result);
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : String(e);
     console.error("[solana-rpc-read] Error:", message);
