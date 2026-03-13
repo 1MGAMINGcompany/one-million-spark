@@ -20,6 +20,10 @@ import type { Fight } from "@/components/predictions/FightCard";
 
 const LAMPORTS = 1_000_000_000;
 const FEE_RATE = 0.05;
+const PREDICTION_FEE_WALLET = new PublicKey("GA4oxfEHPCjo7KTLWMyxjq2J5tEScihqvFh5rFMM88JX");
+const PREDICTION_POOL_WALLET = new PublicKey(
+  import.meta.env.VITE_PREDICTION_POOL_WALLET || "HrQiwW3WZXdDC8c7wbsuBAw2nP1EVtzZyokp7xPJ6Wjx"
+);
 
 const ALL_SPORTS = ["ALL", "MUAY THAI", "BOXING", "MMA", "FUTBOL"];
 
