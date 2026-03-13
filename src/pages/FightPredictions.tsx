@@ -43,6 +43,8 @@ export default function FightPredictions() {
   const [submitting, setSubmitting] = useState(false);
   const [claiming, setClaiming] = useState(false);
   const [activeSport, setActiveSport] = useState("ALL");
+  const [showWalletGate, setShowWalletGate] = useState(false);
+  const [showPredictionSuccess, setShowPredictionSuccess] = useState(false);
 
   // Load fights
   const loadFights = useCallback(async () => {
