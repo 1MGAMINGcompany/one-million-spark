@@ -39,6 +39,8 @@ interface Fight {
   fighter_b_name: string;
   pool_a_lamports: number;
   pool_b_lamports: number;
+  shares_a: number;
+  shares_b: number;
   status: string;
   winner: string | null;
   event_name: string;
@@ -47,6 +49,8 @@ interface Fight {
   refund_status: string | null;
   review_required: boolean;
   review_reason: string | null;
+  claims_open_at: string | null;
+  confirmed_at: string | null;
 }
 
 const LAMPORTS = 1_000_000_000;
