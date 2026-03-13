@@ -1,59 +1,50 @@
-# Fight Prediction System — IMPLEMENTED
+# Fight Prediction System — Phase 1 Complete
 
-## What was built
+## Status Lifecycle (Final)
 
-A complete fight prediction market system for 1MGAMING on Solana:
+```
+open → locked → live → result_selected → confirmed → settled
+                   └→ draw → refund_pending → refunds_processing → refunds_complete
+                   └→ cancelled
+```
+
+## Architecture
 
 ### Database Tables
-- `prediction_fights` — Fight events with pool tracking, status lifecycle
-- `prediction_entries` — User prediction records with shares, claim tracking
+- `prediction_events` — Parent event grouping (name, org, date, location, auto_resolve, is_test)
+- `prediction_fights` — Individual fights with event_id FK, weight_class, fight_class, method, refund tracking
+- `prediction_entries` — User prediction records
 - `prediction_admins` — Authorized admin wallets
 
 ### Edge Functions
-- `prediction-admin` — Create fights, lock predictions, resolve winners
-- `prediction-submit` — Submit predictions with 5% fee, tx verification
-- `prediction-claim` — Claim rewards from hot payout wallet after 5-min delay
-- `prediction-feed` — Live activity feed of recent predictions
+- `prediction-admin` — Full lifecycle: createEvent, approveEvent, rejectEvent, deleteTestEvent, createFight, lockPredictions, markLive, selectResult, setMethod, confirmResult, settleEvent, declareDraw, startRefunds
+- `prediction-refund-worker` — Separate refund execution for draw scenarios (idempotent, safety-guarded)
+- `prediction-submit` — Submit predictions with 5% fee
+- `prediction-claim` — Claim rewards (accepts confirmed/settled status)
+- `prediction-feed` — Live activity feed
 
-### Frontend Pages
-- `/predictions` — Fight cards with live odds, prediction input, live feed, claim flow
-- `/predictions/admin` — Admin panel for fight lifecycle management
+### Key Design Decisions
+1. Draw declaration is separate from refund execution (draw → refund_pending → refunds_processing → refunds_complete)
+2. `result_selected` is a real reversible status between `live` and `confirmed`
+3. `settled` means financially closed and immutable
+4. Events group fights; admin manages at event level
+5. `review_required` + `review_reason` fields ready for Phase 2 automation
+
+### Safety Guardrails
+- Server-side status guards on all transitions
+- Red confirmation dialogs for irreversible actions (lock, confirm, settle, draw, refunds)
+- Per-claim cap: 5 SOL, daily ceiling: 50 SOL
+- 5-minute safety delay before claims open
+- Refund tracking: refund_status, refunds_started_at, refunds_completed_at
 
 ### Seed Data
-Silvertooth Promotions card pre-loaded:
-- Daniel Cabrera vs Nic Leboeuf (Main Event)
-- Jacob Caron vs Kevin Franco-Flores
-- John Deidouss vs Varinder Sidhu
-- Yazane Elmoubtahil vs Derrel Perreira
-
-### Key Features
-- Share-based pool system with dynamic live odds
-- 5% platform fee on all predictions
-- Minimum 0.05 SOL prediction
-- Realtime pool/odds updates via Supabase channels
-- 5-minute claim delay after resolution
-- Double-claim protection
-- Admin wallet authorization
+- Silvertooth Promotions event (Montreal) — linked to existing fights
+- 3 TEST events (BOXING, MMA, MUAY THAI) with 2 fights each
 
 ---
 
-## Vault Architecture
+## Phase 2 (Next): Event Discovery Bot
+Requires Firecrawl connector for web scraping of Tapology/BoxRec/Sherdog.
 
-### V1 (Current): Dedicated Hot Payout Wallet
-The payout system uses a **dedicated hot wallet** (server-side keypair) with tight programmatic safety limits:
-
-| Guardrail | Limit | Purpose |
-|-----------|-------|---------|
-| Per-claim cap | 5 SOL | Prevents single-exploit drain |
-| Daily ceiling | 50 SOL | Limits total daily exposure |
-| Balance pre-check | Required | Fails gracefully if wallet is underfunded |
-
-The hot wallet should be funded only with the amount needed for near-term payouts. It is NOT a general-purpose server keypair — it is a purpose-limited payout wallet.
-
-### V2 (Target): Program-Owned / PDA-Controlled Vault
-Long-term, payouts should be handled by the Anchor program itself:
-- Prediction pool funds held in a **PDA-controlled vault** derived from the fight ID
-- Payouts authorized via **CPI** with on-chain winner verification
-- Eliminates the need for any server-side keypair
-- Full transparency: all payouts verifiable on-chain
-- No single key can drain the vault — only the program logic controls withdrawals
+## Phase 3 (Next): Auto Result Detection
+Multi-source confidence system for automated resolution.
