@@ -60,22 +60,12 @@ function extractTransfers(parsedTx: any): SolTransfer[] {
 }
 
 function loadPredictionPoolWallet(): string {
-  const keyCandidates = [
-    Deno.env.get("PREDICTION_VERIFIER_SECRET_KEY"),
-    Deno.env.get("VERIFIER_SECRET_KEY_V2"),
-    Deno.env.get("VERIFIER_SECRET_KEY"),
-  ].filter((v): v is string => !!v);
-
-  for (const raw of keyCandidates) {
-    try {
-      const keypair = Keypair.fromSecretKey(bs58.decode(raw));
-      return keypair.publicKey.toBase58();
-    } catch {
-      // Try next candidate
-    }
+  const raw = Deno.env.get("PREDICTION_VERIFIER_SECRET_KEY");
+  if (!raw) {
+    throw new Error("PREDICTION_VERIFIER_SECRET_KEY is not configured");
   }
-
-  throw new Error("Prediction payout wallet secret is not configured");
+  const keypair = Keypair.fromSecretKey(bs58.decode(raw));
+  return keypair.publicKey.toBase58();
 }
 
 Deno.serve(async (req) => {
