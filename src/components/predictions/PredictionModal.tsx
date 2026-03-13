@@ -8,13 +8,23 @@ import { useSolPrice } from "@/hooks/useSolPrice";
 const MIN_SOL = 0.05;
 const FEE_RATE = 0.05;
 
-function calcOdds(poolA: number, poolB: number) {
-  const total = poolA + poolB;
-  if (total === 0) return { oddsA: 2.0, oddsB: 2.0 };
-  return {
-    oddsA: poolA > 0 ? total / poolA : 0,
-    oddsB: poolB > 0 ? total / poolB : 0,
-  };
+/**
+ * Estimate reward by simulating what happens when the user's contribution
+ * is added to the pool. This avoids division-by-zero when the picked side
+ * has no existing pool and gives a realistic payout estimate.
+ */
+function estimateReward(
+  poolA: number,
+  poolB: number,
+  pick: "fighter_a" | "fighter_b",
+  contributionLamports: number,
+): number {
+  if (contributionLamports <= 0) return 0;
+  const pickedPool = pick === "fighter_a" ? poolA : poolB;
+  const newPickedPool = pickedPool + contributionLamports;
+  const newTotal = poolA + poolB + contributionLamports;
+  // User's share of the winning side × total pool
+  return (contributionLamports / newPickedPool) * newTotal;
 }
 
 export default function PredictionModal({
