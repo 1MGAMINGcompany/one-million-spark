@@ -229,7 +229,8 @@
     "skillBasedMatch": "Partida de habilidade",
     "playFreeSub": "Pratique primeiro. Sem SOL necessário.",
     "quickMatchWinSol": "Partida Rápida (Ganhar SOL)",
-    "quickMatchWinSolSub": "Jogue contra oponentes reais. O vencedor leva o prêmio."
+    "quickMatchWinSolSub": "Jogue contra oponentes reais. O vencedor leva o prêmio.",
+    "sportPredictions": "PREVISÕES ESPORTIVAS"
   },
   "games": {
     "chess": "Xadrez",

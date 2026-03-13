@@ -252,7 +252,8 @@
     "skillBasedMatch": "スキル勝負",
     "playFreeSub": "まず練習。SOL不要。",
     "quickMatchWinSol": "クイックマッチ（SOLを獲得）",
-    "quickMatchWinSolSub": "実際の対戦相手とプレイ。勝者が賞金プールを獲得。"
+    "quickMatchWinSolSub": "実際の対戦相手とプレイ。勝者が賞金プールを獲得。",
+    "sportPredictions": "スポーツ予測"
   },
   "games": {
     "chess": "チェス",

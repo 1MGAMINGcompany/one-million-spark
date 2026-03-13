@@ -229,7 +229,8 @@
     "skillBasedMatch": "Partie de compétence",
     "playFreeSub": "Entraînez-vous d'abord. Pas de SOL requis.",
     "quickMatchWinSol": "Match Rapide (Gagner SOL)",
-    "quickMatchWinSolSub": "Affrontez de vrais adversaires. Le gagnant remporte la cagnotte."
+    "quickMatchWinSolSub": "Affrontez de vrais adversaires. Le gagnant remporte la cagnotte.",
+    "sportPredictions": "PRÉDICTIONS SPORTIVES"
   },
   "games": {
     "chess": "Échecs",

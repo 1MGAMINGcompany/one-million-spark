@@ -226,7 +226,8 @@
     "skillBasedMatch": "技术对决",
     "playFreeSub": "先练习。无需SOL。",
     "quickMatchWinSol": "快速匹配（赢取SOL）",
-    "quickMatchWinSolSub": "与真实对手对战。赢家获得奖池。"
+    "quickMatchWinSolSub": "与真实对手对战。赢家获得奖池。",
+    "sportPredictions": "体育预测"
   },
   "games": {
     "chess": "国际象棋",

@@ -226,7 +226,8 @@
     "skillBasedMatch": "مباراة مهارة",
     "playFreeSub": "تدرب أولاً. لا حاجة لـ SOL.",
     "quickMatchWinSol": "مباراة سريعة (اربح SOL)",
-    "quickMatchWinSolSub": "العب ضد خصوم حقيقيين. الفائز يأخذ الجائزة."
+    "quickMatchWinSolSub": "العب ضد خصوم حقيقيين. الفائز يأخذ الجائزة.",
+    "sportPredictions": "التنبؤات الرياضية"
   },
   "games": {
     "chess": "شطرنج",

@@ -239,7 +239,8 @@
     "skillBasedMatch": "कौशल आधारित मैच",
     "playFreeSub": "पहले अभ्यास करें। SOL की जरूरत नहीं।",
     "quickMatchWinSol": "त्वरित मैच (SOL जीतें)",
-    "quickMatchWinSolSub": "असली प्रतिद्वंद्वियों के खिलाफ खेलें। विजेता पुरस्कार ले जाता है।"
+    "quickMatchWinSolSub": "असली प्रतिद्वंद्वियों के खिलाफ खेलें। विजेता पुरस्कार ले जाता है।",
+    "sportPredictions": "खेल भविष्यवाणियाँ"
   },
   "games": {
     "chess": "शतरंज",

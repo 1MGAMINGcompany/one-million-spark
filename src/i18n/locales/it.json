@@ -226,7 +226,8 @@
     "skillBasedMatch": "Partita di abilità",
     "playFreeSub": "Prima allenati. Nessun SOL richiesto.",
     "quickMatchWinSol": "Partita Rapida (Vinci SOL)",
-    "quickMatchWinSolSub": "Gioca contro avversari reali. Il vincitore prende il montepremi."
+    "quickMatchWinSolSub": "Gioca contro avversari reali. Il vincitore prende il montepremi.",
+    "sportPredictions": "PREVISIONI SPORTIVE"
   },
   "games": {
     "chess": "Scacchi",
