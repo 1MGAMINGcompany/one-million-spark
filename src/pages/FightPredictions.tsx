@@ -215,10 +215,18 @@ export default function FightPredictions() {
     <div className="min-h-screen bg-background">
       {/* Hero */}
       <div className="relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-b from-primary/10 via-transparent to-transparent" />
-        <div className="max-w-4xl mx-auto px-4 pt-24 pb-6 relative">
-          <div className="text-center">
-            <div className="inline-flex items-center gap-2 bg-primary/10 border border-primary/30 rounded-full px-4 py-1.5 mb-3">
+        {/* Hero Image */}
+        <div className="relative h-48 sm:h-64 md:h-80 w-full">
+          <img
+            src={predictionsHero}
+            alt="Muay Thai fighters in the ring"
+            className="w-full h-full object-cover object-top"
+          />
+          <div className="absolute inset-0 bg-gradient-to-b from-background/30 via-background/60 to-background" />
+        </div>
+        <div className="absolute bottom-0 left-0 right-0 pb-6 px-4">
+          <div className="max-w-4xl mx-auto text-center">
+            <div className="inline-flex items-center gap-2 bg-primary/10 border border-primary/30 rounded-full px-4 py-1.5 mb-3 backdrop-blur-sm">
               <Swords className="w-4 h-4 text-primary" />
               <span className="text-xs font-medium text-primary uppercase tracking-wider">Prediction Markets</span>
             </div>
