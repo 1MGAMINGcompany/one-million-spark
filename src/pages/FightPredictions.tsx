@@ -278,7 +278,7 @@ export default function FightPredictions() {
           />
           <div className="absolute inset-0 bg-gradient-to-b from-background/30 via-background/60 to-background" />
         </div>
-        <div className="absolute bottom-0 left-0 right-0 pb-6 px-4">
+        <div className="absolute bottom-0 left-0 right-0 pb-2 px-4">
           <div className="max-w-4xl mx-auto text-center">
             <div className="inline-flex items-center gap-2 bg-primary/10 border border-primary/30 rounded-full px-4 py-1.5 mb-3 backdrop-blur-sm">
               <Swords className="w-4 h-4 text-primary" />
