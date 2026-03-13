@@ -11,6 +11,29 @@ const corsHeaders = {
 const MAX_REFUND_LAMPORTS = 5 * LAMPORTS_PER_SOL;
 const DAILY_CEILING_LAMPORTS = 50 * LAMPORTS_PER_SOL;
 
+function loadPredictionVerifier() {
+  const keyCandidates = [
+    { value: Deno.env.get("PREDICTION_VERIFIER_SECRET_KEY"), source: "PREDICTION_VERIFIER_SECRET_KEY" },
+    { value: Deno.env.get("VERIFIER_SECRET_KEY_V2"), source: "VERIFIER_SECRET_KEY_V2" },
+    { value: Deno.env.get("VERIFIER_SECRET_KEY"), source: "VERIFIER_SECRET_KEY" },
+  ];
+
+  for (const candidate of keyCandidates) {
+    if (!candidate.value) continue;
+
+    try {
+      return {
+        keypair: Keypair.fromSecretKey(bs58.decode(candidate.value)),
+        source: candidate.source,
+      };
+    } catch {
+      // Try next key
+    }
+  }
+
+  return null;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
