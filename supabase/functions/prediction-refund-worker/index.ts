@@ -106,18 +106,18 @@ Deno.serve(async (req) => {
     }
 
     // Prepare payout wallet
-    const verifierKey = Deno.env.get("VERIFIER_SECRET_KEY_V2") || Deno.env.get("VERIFIER_SECRET_KEY");
-    if (!verifierKey) {
+    const verifier = loadPredictionVerifier();
+    if (!verifier) {
       await supabase
         .from("prediction_fights")
         .update({ refund_status: "failed" })
         .eq("id", fight_id);
-      return res({ error: "Payout wallet not configured" }, 500);
+      return res({ error: "Prediction payout wallet not configured" }, 500);
     }
 
     const rpcUrl = Deno.env.get("SOLANA_RPC_URL") || "https://api.mainnet-beta.solana.com";
     const connection = new Connection(rpcUrl, "confirmed");
-    const vaultKeypair = Keypair.fromSecretKey(bs58.decode(verifierKey));
+    const vaultKeypair = verifier.keypair;
 
     let refundedCount = 0;
     let failedCount = 0;
