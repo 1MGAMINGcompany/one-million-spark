@@ -165,7 +165,7 @@ export default function EventSection({
                 </h3>
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
-                {sortedTournament.map((fight) => (
+                 {sortedTournament.map((fight) => (
                   <FightCard
                     key={fight.id}
                     fight={fight}
@@ -175,6 +175,7 @@ export default function EventSection({
                     onClaim={onClaim}
                     claiming={claiming}
                     isHot={hotFightIds.has(fight.id)}
+                    onWalletRequired={onWalletRequired}
                   />
                 ))}
               </div>
