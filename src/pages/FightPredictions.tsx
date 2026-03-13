@@ -168,13 +168,33 @@ export default function FightPredictions() {
         })
       );
 
-      const rpcUrl = import.meta.env.VITE_SOLANA_RPC_URL || "https://api.mainnet-beta.solana.com";
-      const conn = new Connection(rpcUrl, "confirmed");
-      const { blockhash, lastValidBlockHeight } = await conn.getLatestBlockhash();
+      // Fetch blockhash via server-side proxy to avoid browser CORS/403 on RPC
+      const { data: bhData, error: bhError } = await supabase.functions.invoke("solana-rpc-read", {
+        body: { method: "getLatestBlockhash", params: [{ commitment: "confirmed" }] },
+      });
+      if (bhError || !bhData?.ok) throw new Error("Failed to get recent blockhash via proxy");
+      const blockhash = bhData.result.value.blockhash;
+      const lastValidBlockHeight = bhData.result.value.lastValidBlockHeight;
+
       tx.recentBlockhash = blockhash;
       tx.feePayer = publicKey;
-      const signature = await sendTransaction(tx, conn);
-      await conn.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, "confirmed");
+      const signature = await sendTransaction(tx, connection);
+      // Confirm via proxy as well
+      const confirmStart = Date.now();
+      let confirmed = false;
+      while (Date.now() - confirmStart < 60_000 && !confirmed) {
+        const { data: sigData } = await supabase.functions.invoke("solana-rpc-read", {
+          body: { method: "getSignatureStatuses", params: [[signature]] },
+        });
+        const status = sigData?.result?.value?.[0];
+        if (status?.confirmationStatus === "confirmed" || status?.confirmationStatus === "finalized") {
+          if (status.err) throw new Error("Transaction failed on-chain");
+          confirmed = true;
+        } else {
+          await new Promise(r => setTimeout(r, 2000));
+        }
+      }
+      if (!confirmed) throw new Error("Transaction confirmation timeout");
 
       const { data, error } = await supabase.functions.invoke("prediction-submit", {
         body: {
