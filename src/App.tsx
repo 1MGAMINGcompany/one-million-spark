@@ -46,6 +46,8 @@ import AgeConfirmation from "./components/AgeConfirmation";
 import DebugJoinRoom from "./pages/DebugJoinRoom";
 import HelpCenter from "./pages/HelpCenter";
 import HelpArticle from "./pages/HelpArticle";
+import FightPredictions from "./pages/FightPredictions";
+import FightPredictionAdmin from "./pages/FightPredictionAdmin";
 import DebugHUD from "./components/DebugHUD";
 import AIAgentHelperOverlay from "./components/AIAgentHelperOverlay";
 import { isDebugEnabled } from "@/lib/debugLog";

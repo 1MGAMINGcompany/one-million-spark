@@ -53,3 +53,15 @@ verify_jwt = false
 
 [functions.trust-agent]
 verify_jwt = false
+
+[functions.prediction-admin]
+verify_jwt = false
+
+[functions.prediction-submit]
+verify_jwt = false
+
+[functions.prediction-claim]
+verify_jwt = false
+
+[functions.prediction-feed]
+verify_jwt = false
