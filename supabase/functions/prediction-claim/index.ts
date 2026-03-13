@@ -12,6 +12,29 @@ const corsHeaders = {
 const MAX_CLAIM_LAMPORTS = 5 * LAMPORTS_PER_SOL;       // 5 SOL per single claim
 const DAILY_CEILING_LAMPORTS = 50 * LAMPORTS_PER_SOL;  // 50 SOL daily total payouts
 
+function loadPredictionVerifier() {
+  const keyCandidates = [
+    { value: Deno.env.get("PREDICTION_VERIFIER_SECRET_KEY"), source: "PREDICTION_VERIFIER_SECRET_KEY" },
+    { value: Deno.env.get("VERIFIER_SECRET_KEY_V2"), source: "VERIFIER_SECRET_KEY_V2" },
+    { value: Deno.env.get("VERIFIER_SECRET_KEY"), source: "VERIFIER_SECRET_KEY" },
+  ];
+
+  for (const candidate of keyCandidates) {
+    if (!candidate.value) continue;
+
+    try {
+      return {
+        keypair: Keypair.fromSecretKey(bs58.decode(candidate.value)),
+        source: candidate.source,
+      };
+    } catch {
+      // Try next key
+    }
+  }
+
+  return null;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -143,9 +166,9 @@ Deno.serve(async (req) => {
     }
 
     // ── Prepare hot payout wallet ──
-    const verifierKey = Deno.env.get("VERIFIER_SECRET_KEY_V2") || Deno.env.get("VERIFIER_SECRET_KEY");
-    if (!verifierKey) {
-      return new Response(JSON.stringify({ error: "Payout wallet not configured" }), {
+    const verifier = loadPredictionVerifier();
+    if (!verifier) {
+      return new Response(JSON.stringify({ error: "Prediction payout wallet not configured" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -153,7 +176,7 @@ Deno.serve(async (req) => {
 
     const rpcUrl = Deno.env.get("SOLANA_RPC_URL") || "https://api.mainnet-beta.solana.com";
     const connection = new Connection(rpcUrl, "confirmed");
-    const vaultKeypair = Keypair.fromSecretKey(bs58.decode(verifierKey));
+    const vaultKeypair = verifier.keypair;
 
     // ── GUARDRAIL 3: Balance pre-check ──
     const vaultBalance = await connection.getBalance(vaultKeypair.publicKey);
@@ -192,6 +215,8 @@ Deno.serve(async (req) => {
         reward_lamports: rewardLamports,
         reward_sol: rewardLamports / 1_000_000_000,
         signature,
+        signer_wallet: vaultKeypair.publicKey.toBase58(),
+        signer_secret_source: verifier.source,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

@@ -11,6 +11,29 @@ const corsHeaders = {
 const MAX_REFUND_LAMPORTS = 5 * LAMPORTS_PER_SOL;
 const DAILY_CEILING_LAMPORTS = 50 * LAMPORTS_PER_SOL;
 
+function loadPredictionVerifier() {
+  const keyCandidates = [
+    { value: Deno.env.get("PREDICTION_VERIFIER_SECRET_KEY"), source: "PREDICTION_VERIFIER_SECRET_KEY" },
+    { value: Deno.env.get("VERIFIER_SECRET_KEY_V2"), source: "VERIFIER_SECRET_KEY_V2" },
+    { value: Deno.env.get("VERIFIER_SECRET_KEY"), source: "VERIFIER_SECRET_KEY" },
+  ];
+
+  for (const candidate of keyCandidates) {
+    if (!candidate.value) continue;
+
+    try {
+      return {
+        keypair: Keypair.fromSecretKey(bs58.decode(candidate.value)),
+        source: candidate.source,
+      };
+    } catch {
+      // Try next key
+    }
+  }
+
+  return null;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -83,18 +106,18 @@ Deno.serve(async (req) => {
     }
 
     // Prepare payout wallet
-    const verifierKey = Deno.env.get("VERIFIER_SECRET_KEY_V2") || Deno.env.get("VERIFIER_SECRET_KEY");
-    if (!verifierKey) {
+    const verifier = loadPredictionVerifier();
+    if (!verifier) {
       await supabase
         .from("prediction_fights")
         .update({ refund_status: "failed" })
         .eq("id", fight_id);
-      return res({ error: "Payout wallet not configured" }, 500);
+      return res({ error: "Prediction payout wallet not configured" }, 500);
     }
 
     const rpcUrl = Deno.env.get("SOLANA_RPC_URL") || "https://api.mainnet-beta.solana.com";
     const connection = new Connection(rpcUrl, "confirmed");
-    const vaultKeypair = Keypair.fromSecretKey(bs58.decode(verifierKey));
+    const vaultKeypair = verifier.keypair;
 
     let refundedCount = 0;
     let failedCount = 0;
@@ -167,6 +190,8 @@ Deno.serve(async (req) => {
       refunded: refundedCount,
       failed: failedCount,
       failed_entries: failedEntries,
+      signer_wallet: vaultKeypair.publicKey.toBase58(),
+      signer_secret_source: verifier.source,
     });
   } catch (err) {
     return res({ error: err.message }, 500);
