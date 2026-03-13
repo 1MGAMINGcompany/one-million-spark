@@ -673,11 +673,23 @@ function AdminFightCard({
         )}
 
         {/* Terminal states */}
-        {s === "settled" && (
-          <div className="bg-primary/10 border border-primary/20 rounded-lg p-3 text-center">
-            <p className="text-xs font-bold text-primary">✅ Event settled — financially closed</p>
-          </div>
-        )}
+        {s === "settled" && (() => {
+          const wasAutoSettled = autoSettled || (
+            fight.settled_at && fight.claims_open_at &&
+            Math.abs(new Date(fight.settled_at).getTime() - new Date(fight.claims_open_at).getTime()) < 90_000
+          );
+          const settledTime = fight.settled_at ? new Date(fight.settled_at).toLocaleTimeString() : null;
+          return (
+            <div className="bg-primary/10 border border-primary/20 rounded-lg p-3 text-center space-y-1">
+              <p className="text-xs font-bold text-primary">✅ Event settled — financially closed</p>
+              {wasAutoSettled && (
+                <p className="text-[10px] text-yellow-400 font-semibold">
+                  ⚡ AUTO-SETTLED{settledTime ? ` at ${settledTime}` : ""}
+                </p>
+              )}
+            </div>
+          );
+        })()}
         {s === "refunds_complete" && (
           <div className="bg-muted/30 border border-border/30 rounded-lg p-3 text-center">
             <p className="text-xs font-bold text-muted-foreground">✅ All refunds complete</p>
