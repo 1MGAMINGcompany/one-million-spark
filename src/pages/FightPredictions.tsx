@@ -102,7 +102,7 @@ export default function FightPredictions() {
   // Available sport tabs from actual data
   const activeSports = useMemo(() => {
     const sports = new Set(Object.keys(groupedEvents).map(e => parseSport(e)));
-    return ALL_SPORTS.filter(s => s === "ALL" || sports.has(s) || ["BOXING", "MMA", "UFC"].includes(s));
+    return ALL_SPORTS.filter(s => s === "ALL" || sports.has(s) || ["BOXING", "MMA", "FUTBOL"].includes(s));
   }, [groupedEvents]);
 
   // Filter events by sport
