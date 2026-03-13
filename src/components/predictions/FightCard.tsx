@@ -184,7 +184,7 @@ export default function FightCard({
         {/* Total pool */}
         <div className="mt-3 pt-2 border-t border-border/30 flex items-center justify-between">
           <span className="text-[10px] text-muted-foreground">Total Pool</span>
-          <span className="text-xs font-bold text-primary">{totalPool.toFixed(2)} SOL</span>
+          <span className="text-xs font-bold text-primary">{totalPool.toFixed(2)} SOL {formatUsd(totalPool) && <span className="text-[10px] text-muted-foreground font-normal">{formatUsd(totalPool)}</span>}</span>
         </div>
 
         {/* Claim button */}

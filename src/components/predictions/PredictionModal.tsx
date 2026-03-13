@@ -173,7 +173,7 @@ export default function PredictionModal({
 
           {amountNum > 0 && amountNum < MIN_SOL && (
             <p className="text-xs text-destructive text-center">
-              Minimum: {MIN_SOL} SOL
+              Minimum: {MIN_SOL} SOL {formatUsd(MIN_SOL) && <span className="text-muted-foreground">({formatUsd(MIN_SOL)})</span>}
             </p>
           )}
         </div>
