@@ -462,9 +462,25 @@ function AdminFightCard({
   onRefund: () => Promise<void>;
 }) {
   const [methodOpen, setMethodOpen] = useState(false);
+  const [autoSettled, setAutoSettled] = useState(false);
+  const autoSettleRef = useRef(false);
   const s = fight.status;
-  const countdown = useCountdown(s === "confirmed" ? fight.claims_open_at : null);
+  const { text: countdownText, expired: timerExpired } = useCountdown(s === "confirmed" ? fight.claims_open_at : null);
   const claimsOpen = fight.claims_open_at && new Date() >= new Date(fight.claims_open_at);
+
+  // Auto-settle when timer expires
+  useEffect(() => {
+    if (s === "confirmed" && timerExpired && !autoSettleRef.current && !busy) {
+      autoSettleRef.current = true;
+      console.log("[AutoSettle] Timer expired for fight", fight.id, "— auto-settling");
+      onAction("settleEvent", { fight_id: fight.id }).then(() => {
+        setAutoSettled(true);
+      }).catch((err) => {
+        console.error("[AutoSettle] Failed:", err);
+        autoSettleRef.current = false; // allow retry
+      });
+    }
+  }, [s, timerExpired, busy, fight.id, onAction]);
   const totalPoolSol = ((fight.pool_a_lamports + fight.pool_b_lamports) / LAMPORTS).toFixed(4);
 
   return (
