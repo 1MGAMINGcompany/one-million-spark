@@ -427,9 +427,42 @@ export default function FightPredictionAdmin() {
           </div>
         </Card>
 
+        {/* ── Admin Filters ── */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <Filter className="w-4 h-4 text-muted-foreground shrink-0" />
+          {FILTER_TABS.map(tab => (
+            <button
+              key={tab.key}
+              onClick={() => setAdminFilter(tab.key)}
+              className={`text-xs font-bold px-3 py-1.5 rounded-full transition-colors ${
+                adminFilter === tab.key
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted/50 text-muted-foreground hover:bg-muted"
+              }`}
+            >
+              {tab.label}
+              {tab.count > 0 && (
+                <span className={`ml-1.5 ${adminFilter === tab.key ? "text-primary-foreground/70" : "text-muted-foreground/60"}`}>
+                  {tab.count}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+
         {/* ── Events List ── */}
-        <h2 className="text-lg font-bold text-foreground font-['Cinzel']">Events</h2>
-        {events.map(event => (
+        <h2 className="text-lg font-bold text-foreground font-['Cinzel']">
+          Events
+          <span className="text-sm font-normal text-muted-foreground ml-2">({filteredEvents.length})</span>
+        </h2>
+
+        {filteredEvents.length === 0 && (
+          <Card className="bg-card border-border/50 p-6 text-center">
+            <p className="text-sm text-muted-foreground">No events in this category.</p>
+          </Card>
+        )}
+
+        {filteredEvents.map(event => (
           <Card key={event.id} className={`bg-card border-border/50 p-4 ${event.is_test ? 'border-yellow-500/30' : ''}`}>
             <div className="flex items-start justify-between mb-2">
               <div>
@@ -445,24 +478,97 @@ export default function FightPredictionAdmin() {
               <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
                 event.status === 'draft' ? 'bg-muted text-muted-foreground' :
                 event.status === 'approved' ? 'bg-green-500/20 text-green-400' :
+                event.status === 'archived' ? 'bg-blue-500/20 text-blue-400' :
+                event.status === 'dismissed' ? 'bg-orange-500/20 text-orange-400' :
                 'bg-red-500/20 text-red-400'
               }`}>{event.status.toUpperCase()}</span>
             </div>
 
             <div className="flex gap-2 mt-3 flex-wrap">
+              {/* Approve / Reject for drafts */}
               {event.status === "draft" && (
                 <>
                   <Button size="sm" onClick={async () => { try { await callAdmin("approveEvent", { event_id: event.id }); toast.success("Approved"); loadData(); } catch(e:any){toast.error(e.message);} }} disabled={busy}
                     className="bg-green-500/20 text-green-400 hover:bg-green-500/30">
                     <Eye className="w-3 h-3 mr-1" /> Approve
                   </Button>
-                  <Button size="sm" variant="outline" onClick={async () => { try { await callAdmin("rejectEvent", { event_id: event.id }); toast.success("Rejected"); loadData(); } catch(e:any){toast.error(e.message);} }} disabled={busy}
-                    className="border-red-500/50 text-red-400 hover:bg-red-500/10">
-                    <Ban className="w-3 h-3 mr-1" /> Reject
+                  <Button size="sm" variant="outline" onClick={() => withConfirm(
+                    "Dismiss Event",
+                    `Dismiss "${event.event_name}"? It will be hidden from the active view but can be found under Dismissed.`,
+                    () => handleDismissEvent(event.id, event.event_name),
+                    false
+                  )} disabled={busy}
+                    className="border-orange-500/50 text-orange-400 hover:bg-orange-500/10">
+                    <EyeOff className="w-3 h-3 mr-1" /> Dismiss
                   </Button>
                 </>
               )}
-              {event.is_test && (
+
+              {/* Archive for settled/completed events */}
+              {["approved", "rejected"].includes(event.status) && eventIsFullySettled(event.id) && (
+                <Button size="sm" variant="outline" onClick={() => withConfirm(
+                  "Archive Event",
+                  `Archive "${event.event_name}"? It will be moved out of the active workflow.`,
+                  () => handleArchiveEvent(event.id, event.event_name),
+                  false
+                )} disabled={busy}
+                  className="border-blue-500/50 text-blue-400 hover:bg-blue-500/10">
+                  <Archive className="w-3 h-3 mr-1" /> Archive
+                </Button>
+              )}
+
+              {/* Archive button for approved events without active fights */}
+              {event.status === "approved" && eventFights(event.id).every(f => ["settled", "refunds_complete", "cancelled"].includes(f.status) || eventFights(event.id).length === 0) && (
+                <Button size="sm" variant="outline" onClick={() => withConfirm(
+                  "Archive Event",
+                  `Archive "${event.event_name}"? It will be moved out of the active workflow.`,
+                  () => handleArchiveEvent(event.id, event.event_name),
+                  false
+                )} disabled={busy}
+                  className="border-blue-500/50 text-blue-400 hover:bg-blue-500/10">
+                  <Archive className="w-3 h-3 mr-1" /> Archive
+                </Button>
+              )}
+
+              {/* Delete — only when no predictions exist */}
+              {!eventHasPredictions(event.id) && !["archived"].includes(event.status) && (
+                <Button size="sm" variant="outline" onClick={() => withConfirm(
+                  "Delete Event",
+                  `Permanently delete "${event.event_name}" and its fights? This cannot be undone.`,
+                  () => handleDeleteEvent(event.id, event.event_name)
+                )} disabled={busy}
+                  className="border-destructive/50 text-destructive hover:bg-destructive/10">
+                  <Trash2 className="w-3 h-3 mr-1" /> Delete
+                </Button>
+              )}
+
+              {/* For archived/dismissed: show archive info or allow delete if safe */}
+              {["archived", "dismissed"].includes(event.status) && !eventHasPredictions(event.id) && (
+                <Button size="sm" variant="outline" onClick={() => withConfirm(
+                  "Delete Event",
+                  `Permanently delete "${event.event_name}"? This cannot be undone.`,
+                  () => handleDeleteEvent(event.id, event.event_name)
+                )} disabled={busy}
+                  className="border-destructive/50 text-destructive hover:bg-destructive/10">
+                  <Trash2 className="w-3 h-3 mr-1" /> Delete
+                </Button>
+              )}
+
+              {/* For dismissed events: has predictions — offer archive instead */}
+              {["dismissed"].includes(event.status) && eventHasPredictions(event.id) && (
+                <Button size="sm" variant="outline" onClick={() => withConfirm(
+                  "Archive Event",
+                  `Cannot delete "${event.event_name}" because it has predictions. Archive instead?`,
+                  () => handleArchiveEvent(event.id, event.event_name),
+                  false
+                )} disabled={busy}
+                  className="border-blue-500/50 text-blue-400 hover:bg-blue-500/10">
+                  <Archive className="w-3 h-3 mr-1" /> Archive Instead
+                </Button>
+              )}
+
+              {/* Legacy test event delete */}
+              {event.is_test && !["archived", "dismissed"].includes(event.status) && (
                 <Button size="sm" variant="outline" disabled={busy}
                   className="border-destructive/50 text-destructive hover:bg-destructive/10"
                   onClick={() => withConfirm(
@@ -470,7 +576,7 @@ export default function FightPredictionAdmin() {
                     `Delete "${event.event_name}" and all its fights? This cannot be undone.`,
                     async () => { try { await callAdmin("deleteTestEvent", { event_id: event.id }); toast.success("Deleted"); loadData(); } catch(e:any){toast.error(e.message);} }
                   )}>
-                  <Trash2 className="w-3 h-3 mr-1" /> Delete
+                  <Trash2 className="w-3 h-3 mr-1" /> Delete Test
                 </Button>
               )}
             </div>
