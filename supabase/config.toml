@@ -68,3 +68,15 @@ verify_jwt = false
 
 [functions.prediction-refund-worker]
 verify_jwt = false
+
+[functions.prediction-schedule-worker]
+verify_jwt = false
+
+[functions.prediction-result-worker]
+verify_jwt = false
+
+[functions.prediction-settle-worker]
+verify_jwt = false
+
+[functions.prediction-auto-settle]
+verify_jwt = false
