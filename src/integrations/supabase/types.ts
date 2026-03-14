@@ -44,6 +44,104 @@ export type Database = {
         }
         Relationships: []
       }
+      automation_jobs: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          error_message: string | null
+          id: string
+          job_type: string
+          max_retries: number
+          result_payload: Json | null
+          retry_count: number
+          scheduled_at: string | null
+          started_at: string | null
+          status: string
+          target_id: string
+          target_type: string
+          updated_at: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          job_type: string
+          max_retries?: number
+          result_payload?: Json | null
+          retry_count?: number
+          scheduled_at?: string | null
+          started_at?: string | null
+          status?: string
+          target_id: string
+          target_type?: string
+          updated_at?: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          job_type?: string
+          max_retries?: number
+          result_payload?: Json | null
+          retry_count?: number
+          scheduled_at?: string | null
+          started_at?: string | null
+          status?: string
+          target_id?: string
+          target_type?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      automation_logs: {
+        Row: {
+          action: string
+          admin_wallet: string | null
+          confidence: number | null
+          created_at: string
+          details: Json | null
+          event_id: string | null
+          fight_id: string | null
+          id: string
+          job_id: string | null
+          source: string | null
+        }
+        Insert: {
+          action: string
+          admin_wallet?: string | null
+          confidence?: number | null
+          created_at?: string
+          details?: Json | null
+          event_id?: string | null
+          fight_id?: string | null
+          id?: string
+          job_id?: string | null
+          source?: string | null
+        }
+        Update: {
+          action?: string
+          admin_wallet?: string | null
+          confidence?: number | null
+          created_at?: string
+          details?: Json | null
+          event_id?: string | null
+          fight_id?: string | null
+          id?: string
+          job_id?: string | null
+          source?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automation_logs_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "automation_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_errors: {
         Row: {
           build_version: string | null
