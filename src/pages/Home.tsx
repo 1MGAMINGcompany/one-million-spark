@@ -23,9 +23,27 @@ import { WalletGateModal } from "@/components/WalletGateModal";
 const Home = () => {
   const { t } = useTranslation();
   const { isPrivyUser, walletAddress, balanceSol, isLowBalance } = usePrivySolBalance();
+  const { address, isConnected } = useWallet();
 
   // Session continuity — check for abandoned AI game
   const [activeGame, setActiveGame] = useState<string | null>(() => getActiveAIGame());
+
+  // Prediction highlights data
+  const [predFights, setPredFights] = useState<Fight[]>([]);
+  const [predEvents, setPredEvents] = useState<PredictionEvent[]>([]);
+  const [showWalletGate, setShowWalletGate] = useState(false);
+
+  useEffect(() => {
+    const load = async () => {
+      const [fightsRes, eventsRes] = await Promise.all([
+        supabase.from("prediction_fights").select("*").order("created_at", { ascending: true }),
+        supabase.from("prediction_events").select("*").eq("status", "approved").order("event_date", { ascending: true }),
+      ]);
+      if (fightsRes.data) setPredFights(fightsRes.data as any);
+      if (eventsRes.data) setPredEvents(eventsRes.data as any);
+    };
+    load();
+  }, []);
 
   // Show funding card for Privy users with low/zero balance
   const showFundingCard = isPrivyUser && isLowBalance && walletAddress;
