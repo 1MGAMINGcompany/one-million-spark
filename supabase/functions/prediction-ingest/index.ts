@@ -202,6 +202,30 @@ Deno.serve(async (req) => {
         for (const ev of events) {
           const sourceEventId = `thesportsdb_${ev.idEvent}`;
           const rawEventName = ev.strEvent || ev.strEventAlternate || "Unknown Event";
+
+          // ── Validate this is a real combat sports event ──
+          const validation = validateCombatEvent(ev, leagueName, league.sport);
+          if (!validation.valid) {
+            results.events_rejected++;
+            console.log(`[ingest] Rejected: ${rawEventName} — ${validation.reason}`);
+            // Log discarded event
+            if (!dry_run) {
+              await supabase.from("automation_logs").insert({
+                action: "event_discarded",
+                source: "thesportsdb",
+                details: {
+                  league: leagueName,
+                  raw_name: rawEventName,
+                  reason: validation.reason,
+                  source_event_id: `thesportsdb_${ev.idEvent}`,
+                  sport_reported: ev.strSport || "unknown",
+                },
+                admin_wallet: wallet,
+              });
+            }
+            continue;
+          }
+
           const eventName = normalizeEventName(rawEventName, leagueName, league.sport);
           const eventDate = ev.dateEvent
             ? new Date(`${ev.dateEvent}T${ev.strTime || "00:00:00"}Z`).toISOString()
@@ -209,6 +233,7 @@ Deno.serve(async (req) => {
           const venue = [ev.strVenue, ev.strCity, ev.strCountry].filter(Boolean).join(", ");
 
           // ── Dedupe by source_event_id ──
+          const sourceEventId = `thesportsdb_${ev.idEvent}`;
           const { data: existing } = await supabase
             .from("prediction_events")
             .select("id")
