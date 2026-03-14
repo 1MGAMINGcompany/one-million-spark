@@ -26,6 +26,7 @@ open → locked → live → result_selected → confirmed → settled
 - `prediction-claim` — Claim rewards (respects claims_enabled kill switch)
 - `prediction-feed` — Live activity feed
 - `prediction-auto-settle` — Cron auto-settle (respects automation_enabled kill switch)
+- `prediction-ingest` — TheSportsDB event discovery (UFC, Bellator, PFL, PBC, TopRank, Matchroom). Normalizes names, dedupes by source_event_id, stores as draft, extracts fighters, logs all actions. Never auto-publishes.
 
 ### Key Design Decisions
 1. Draw declaration is separate from refund execution (draw → refund_pending → refunds_processing → refunds_complete)

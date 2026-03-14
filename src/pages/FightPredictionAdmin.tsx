@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   Shield, Plus, Lock, Trophy, Loader2, Play, CheckCircle, Ban,
-  ArrowDown, Trash2, Eye, AlertTriangle, RefreshCw, Power,
+  ArrowDown, Trash2, Eye, AlertTriangle, RefreshCw, Power, Download,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useWallet } from "@/hooks/useWallet";
@@ -290,6 +290,17 @@ export default function FightPredictionAdmin() {
               </div>
             ))}
           </div>
+        </Card>
+
+        {/* ── Event Ingest ── */}
+        <Card className="bg-card border-border/50 p-4">
+          <h2 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
+            <Download className="w-4 h-4 text-primary" /> Event Ingest
+          </h2>
+          <p className="text-xs text-muted-foreground mb-3">
+            Fetch upcoming combat sports events from TheSportsDB. Events are stored as drafts — never auto-published.
+          </p>
+          <IngestPanel wallet={address!} busy={busy} onComplete={loadData} />
         </Card>
 
         {/* ── Create Event ── */}
@@ -751,6 +762,123 @@ function AdminFightCard({
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// ── Ingest Panel ──
+const INGEST_LEAGUES = ["UFC", "Bellator", "PFL", "PBC", "TopRank", "Matchroom"];
+
+function IngestPanel({ wallet, busy: parentBusy, onComplete }: { wallet: string; busy: boolean; onComplete: () => void }) {
+  const [ingestBusy, setIngestBusy] = useState(false);
+  const [dryRun, setDryRun] = useState(true);
+  const [selectedLeagues, setSelectedLeagues] = useState<string[]>([]);
+  const [lastResult, setLastResult] = useState<any>(null);
+
+  const toggleLeague = (l: string) => {
+    setSelectedLeagues(prev =>
+      prev.includes(l) ? prev.filter(x => x !== l) : [...prev, l]
+    );
+  };
+
+  const runIngest = async () => {
+    setIngestBusy(true);
+    setLastResult(null);
+    try {
+      const { data, error } = await supabase.functions.invoke("prediction-ingest", {
+        body: {
+          wallet,
+          leagues: selectedLeagues.length > 0 ? selectedLeagues : undefined,
+          dry_run: dryRun,
+        },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      setLastResult(data);
+      if (!dryRun) {
+        toast.success(`Ingested ${data.events_new} new events, ${data.fights_created} fights`);
+        onComplete();
+      } else {
+        toast.info(`Dry run: ${data.events_new} new events found`);
+      }
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setIngestBusy(false);
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap gap-1.5">
+        {INGEST_LEAGUES.map(l => (
+          <button
+            key={l}
+            onClick={() => toggleLeague(l)}
+            className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+              selectedLeagues.includes(l)
+                ? "bg-primary/20 text-primary border-primary/40"
+                : "bg-muted/30 text-muted-foreground border-border/30 hover:border-border"
+            }`}
+          >
+            {l}
+          </button>
+        ))}
+      </div>
+      <p className="text-[10px] text-muted-foreground">
+        {selectedLeagues.length === 0 ? "All leagues" : selectedLeagues.join(", ")}
+      </p>
+
+      <div className="flex items-center gap-3">
+        <label className="flex items-center gap-2 text-xs text-muted-foreground">
+          <input type="checkbox" checked={dryRun} onChange={e => setDryRun(e.target.checked)} />
+          Dry run (preview only)
+        </label>
+      </div>
+
+      <Button
+        className="w-full bg-primary text-primary-foreground"
+        onClick={runIngest}
+        disabled={ingestBusy || parentBusy}
+      >
+        {ingestBusy ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Download className="w-4 h-4 mr-2" />}
+        {dryRun ? "Preview Ingest" : "Run Ingest"}
+      </Button>
+
+      {lastResult && (
+        <div className="bg-muted/30 border border-border/30 rounded-lg p-3 text-xs space-y-1">
+          <p className="text-foreground font-medium">
+            {lastResult.dry_run || dryRun ? "🔍 Dry Run" : "✅ Ingested"}
+          </p>
+          <p className="text-muted-foreground">Found: {lastResult.events_found} · New: {lastResult.events_new} · Dupes: {lastResult.events_skipped_dupe}</p>
+          {lastResult.fights_created > 0 && (
+            <p className="text-muted-foreground">Fights created: {lastResult.fights_created}</p>
+          )}
+          {lastResult.errors?.length > 0 && (
+            <div className="mt-1">
+              <p className="text-destructive font-medium">Errors:</p>
+              {lastResult.errors.map((e: string, i: number) => (
+                <p key={i} className="text-destructive/80">{e}</p>
+              ))}
+            </div>
+          )}
+          {lastResult.details?.length > 0 && (
+            <details className="mt-1">
+              <summary className="text-muted-foreground cursor-pointer hover:text-foreground">
+                {lastResult.details.length} event(s) detail
+              </summary>
+              <div className="mt-1 space-y-1 max-h-40 overflow-y-auto">
+                {lastResult.details.map((d: any, i: number) => (
+                  <div key={i} className="text-[10px] text-muted-foreground border-t border-border/20 pt-1">
+                    <span className="text-foreground">{d.event_name}</span>
+                    {d.sport && <span className="ml-1 text-primary">({d.sport})</span>}
+                  </div>
+                ))}
+              </div>
+            </details>
+          )}
+        </div>
+      )}
     </div>
   );
 }
