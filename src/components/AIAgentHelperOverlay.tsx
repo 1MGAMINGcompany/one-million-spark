@@ -854,7 +854,36 @@ export default function AIAgentHelperOverlay() {
                 </div>
               )}
 
-              {/* ── (B) Onboarding menu — replaces old greeting ── */}
+              {/* ── Predictions help local card ── */}
+              {localCard?.type === "predictions" && (
+                <div className="space-y-3">
+                  <div className="bg-muted/50 rounded-lg p-3 space-y-2">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                      <Swords size={16} className="text-primary" />
+                      <span>{tr(lang, "predTitle")}</span>
+                    </div>
+                    <ol className="space-y-1.5 text-xs text-foreground pl-1">
+                      <li className="flex items-center gap-2"><span className="w-5 h-5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold flex items-center justify-center shrink-0">1</span>{tr(lang, "predStep1")}</li>
+                      <li className="flex items-center gap-2"><span className="w-5 h-5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold flex items-center justify-center shrink-0">2</span>{tr(lang, "predStep2")}</li>
+                      <li className="flex items-center gap-2"><span className="w-5 h-5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold flex items-center justify-center shrink-0">3</span>{tr(lang, "predStep3")}</li>
+                    </ol>
+                    <p className="text-[10px] text-muted-foreground">{tr(lang, "predFee")}</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button onClick={() => { navigate("/predictions"); setSheetOpen(false); setLocalCard(null); }} className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-all">
+                      <Swords size={14} className="shrink-0" />
+                      {tr(lang, "btnGoPredictions")}
+                    </button>
+                    <button onClick={() => { navigate("/add-funds"); setSheetOpen(false); setLocalCard(null); }} className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-border bg-muted/30 text-foreground hover:border-primary hover:bg-primary/10 transition-all">
+                      <Coins size={14} className="text-primary shrink-0" />
+                      {tr(lang, "btnAddFunds")}
+                    </button>
+                  </div>
+                  <button onClick={() => setLocalCard(null)} className="text-[10px] text-muted-foreground hover:text-foreground transition-colors w-full text-center">
+                    ← Back
+                  </button>
+                </div>
+              )
               {showAssistMenu && (
                 <div className="space-y-3">
                   <div className="bg-muted/50 rounded-lg p-3 text-sm text-foreground">
