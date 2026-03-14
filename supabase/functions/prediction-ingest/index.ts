@@ -220,7 +220,17 @@ Deno.serve(async (req) => {
           if (!validation.valid) {
             results.events_rejected++;
             console.log(`[ingest] Rejected: ${rawEventName} — ${validation.reason}`);
-            // Log discarded event
+            // Always include rejected events in details for dry-run visibility
+            results.details.push({
+              source_event_id: sourceEventId,
+              event_name: rawEventName,
+              sport: ev.strSport || "unknown",
+              league: ev.strLeague || "unknown",
+              event_date: ev.dateEvent || null,
+              rejected: true,
+              reason: validation.reason,
+            });
+            // Log discarded event to DB (non-dry-run only)
             if (!dry_run) {
               await supabase.from("automation_logs").insert({
                 action: "event_discarded",
