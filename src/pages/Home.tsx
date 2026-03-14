@@ -351,6 +351,13 @@ const Home = () => {
       </section>
 
       {/* <MobileAppPrompt /> — re-enable when PWA install is ready */}
+
+      <WalletGateModal
+        isOpen={showWalletGate}
+        onClose={() => setShowWalletGate(false)}
+        title="Connect to Predict"
+        description="You need a wallet to place predictions and earn rewards."
+      />
     </div>
   );
 };
