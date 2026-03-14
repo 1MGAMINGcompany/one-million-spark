@@ -360,6 +360,33 @@ Deno.serve(async (req) => {
       return json({ fight: data });
     }
 
+    if (action === "getSettings") {
+      const { data, error } = await supabase
+        .from("prediction_settings")
+        .select("*")
+        .eq("id", "global")
+        .single();
+      if (error) throw error;
+      return json({ settings: data });
+    }
+
+    if (action === "updateSettings") {
+      const { predictions_enabled, claims_enabled, automation_enabled } = body;
+      const updates: Record<string, any> = { updated_at: new Date().toISOString() };
+      if (typeof predictions_enabled === "boolean") updates.predictions_enabled = predictions_enabled;
+      if (typeof claims_enabled === "boolean") updates.claims_enabled = claims_enabled;
+      if (typeof automation_enabled === "boolean") updates.automation_enabled = automation_enabled;
+
+      const { data, error } = await supabase
+        .from("prediction_settings")
+        .update(updates)
+        .eq("id", "global")
+        .select()
+        .single();
+      if (error) throw error;
+      return json({ settings: data });
+    }
+
     return json({ error: "Unknown action" }, 400);
   } catch (err) {
     return new Response(JSON.stringify({ error: err.message }), {
