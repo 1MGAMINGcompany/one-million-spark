@@ -13,6 +13,12 @@ import { AddSolCard } from "@/components/AddSolCard";
 import { WelcomeIntroModal } from "@/components/WelcomeIntroModal";
 import { LiveActivityIndicator } from "@/components/LiveActivityIndicator";
 import { getActiveAIGame, dismissActiveAIGame } from "@/hooks/useActiveAIGame";
+import PredictionHighlights from "@/components/predictions/PredictionHighlights";
+import type { PredictionEvent } from "@/components/predictions/PredictionHighlights";
+import type { Fight } from "@/components/predictions/FightCard";
+import { supabase } from "@/integrations/supabase/client";
+import { useWallet } from "@/hooks/useWallet";
+import { WalletGateModal } from "@/components/WalletGateModal";
 
 const Home = () => {
   const { t } = useTranslation();
