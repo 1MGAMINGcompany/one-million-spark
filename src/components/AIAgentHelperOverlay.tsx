@@ -15,7 +15,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { X, Send, Trash2, Share2, HelpCircle, Gamepad2, Wallet, Users, BookOpen, Sparkles, Copy, Coins, Zap } from "lucide-react";
+import { X, Send, Trash2, Share2, HelpCircle, Gamepad2, Wallet, Users, BookOpen, Sparkles, Copy, Coins, Zap, Swords } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { streamTrustAgent } from "@/lib/trustAgentClient";
 import { supabase } from "@/integrations/supabase/client";
