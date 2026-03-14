@@ -282,6 +282,28 @@ const Home = () => {
         </div>
       </section>
 
+      {/* Prediction Highlights */}
+      {(predFights.length > 0) && (
+        <section className="relative z-10 py-12 px-4">
+          <div className="max-w-4xl mx-auto">
+            <div className="flex items-center justify-center gap-4 mb-6">
+              <div className="h-px flex-1 max-w-24 bg-gradient-to-r from-transparent to-border" />
+              <h2 className="text-2xl font-display font-semibold text-foreground text-center">
+                🔥 Predictions
+              </h2>
+              <div className="h-px flex-1 max-w-24 bg-gradient-to-l from-transparent to-border" />
+            </div>
+            <PredictionHighlights
+              fights={predFights}
+              events={predEvents}
+              showViewAll
+              wallet={address}
+              onWalletRequired={() => setShowWalletGate(true)}
+            />
+          </div>
+        </section>
+      )}
+
       {/* Featured Games Section */}
       <section className="relative z-10 py-20 px-4">
         <div className="max-w-5xl mx-auto relative z-10">

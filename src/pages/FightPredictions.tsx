@@ -334,6 +334,17 @@ export default function FightPredictions() {
           </div>
         ) : (
           <>
+            {/* Highlight sections: LIVE NOW / TODAY / UPCOMING */}
+            {activeSport === "ALL" && (
+              <PredictionHighlights
+                fights={fights}
+                events={events}
+                onPredict={handlePredict}
+                wallet={address}
+                onWalletRequired={() => setShowWalletGate(true)}
+              />
+            )}
+
             {Object.entries(filteredEvents).map(([eventName, group]) => (
               <EventSection
                 key={eventName}
