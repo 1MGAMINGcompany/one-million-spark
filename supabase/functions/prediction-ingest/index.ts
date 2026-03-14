@@ -81,19 +81,30 @@ function validateCombatEvent(
   expectedSport: string
 ): { valid: boolean; reason?: string } {
   const sport = (ev.strSport || "").toLowerCase();
-  const leagueInEvent = (ev.strLeague || "").toUpperCase();
+  const leagueInEvent = (ev.strLeague || "");
   const eventName = ev.strEvent || ev.strEventAlternate || "";
 
-  // 1. Sport must match expected (MMA or Fighting for MMA leagues, Boxing for boxing)
-  const validSports = expectedSport === "MMA"
-    ? ["fighting", "mma", "mixed martial arts"]
-    : ["boxing"];
-  if (!validSports.some((s) => sport.includes(s)) && sport !== "") {
+  // 1. Sport must be "Fighting" — TheSportsDB uses this for ALL combat sports
+  //    Reject anything else (soccer, basketball, etc.)
+  if (sport && sport !== "fighting") {
     return { valid: false, reason: `wrong_sport:${sport}` };
   }
 
-  // 2. For UFC leagues, league name in event must contain "UFC"
-  if (leagueName === "UFC" && !leagueInEvent.includes("UFC")) {
+  // 2. Log & verify the league returned by the API matches what we expect
+  //    For UFC: league should contain "UFC"
+  //    For PFL: league should contain "Professional Fighters League" or "PFL"
+  //    For Bellator: league should contain "Bellator"
+  //    For Boxing/TopRank: league should contain "Boxing" or "Top Rank"
+  const leagueUpper = leagueInEvent.toUpperCase();
+  const leagueChecks: Record<string, string[]> = {
+    UFC: ["UFC"],
+    Bellator: ["BELLATOR", "CHAMPIONS SERIES"],
+    PFL: ["PFL", "PROFESSIONAL FIGHTERS LEAGUE"],
+    Boxing: ["BOXING"],
+    TopRank: ["TOP RANK", "BOXING"],
+  };
+  const expectedKeywords = leagueChecks[leagueName] || [];
+  if (expectedKeywords.length > 0 && !expectedKeywords.some((kw) => leagueUpper.includes(kw))) {
     return { valid: false, reason: `league_mismatch:${leagueInEvent}` };
   }
 
