@@ -167,6 +167,7 @@ Deno.serve(async (req) => {
       events_found: number;
       events_new: number;
       events_skipped_dupe: number;
+      events_rejected: number;
       fights_created: number;
       errors: string[];
       details: any[];
@@ -174,6 +175,7 @@ Deno.serve(async (req) => {
       events_found: 0,
       events_new: 0,
       events_skipped_dupe: 0,
+      events_rejected: 0,
       fights_created: 0,
       errors: [],
       details: [],
