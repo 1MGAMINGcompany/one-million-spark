@@ -2,21 +2,26 @@ import { useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import FightCard from "./FightCard";
 import type { Fight } from "./FightCard";
+import muayThaiImg from "@/assets/muay-thai.png";
+import boxingGloveImg from "@/assets/boxing-glove.png";
+import mmaGlovesImg from "@/assets/mma-gloves.png";
+import futbolImg from "@/assets/futbol.png";
 
 const LAMPORTS = 1_000_000_000;
 
 interface SportConfig {
-  icon: string;
+  icon?: string;
+  image?: string;
   color: string;
   bgColor: string;
   borderColor: string;
 }
 
 const SPORT_CONFIG: Record<string, SportConfig> = {
-  "MUAY THAI": { icon: "🥊", color: "text-red-400", bgColor: "bg-red-500/10", borderColor: "border-red-500/30" },
-  "BOXING": { icon: "🥊", color: "text-blue-400", bgColor: "bg-blue-500/10", borderColor: "border-blue-500/30" },
-  "MMA": { icon: "🤼", color: "text-green-400", bgColor: "bg-green-500/10", borderColor: "border-green-500/30" },
-  "FUTBOL": { icon: "⚽", color: "text-yellow-400", bgColor: "bg-yellow-500/10", borderColor: "border-yellow-500/30" },
+  "MUAY THAI": { image: muayThaiImg, color: "text-red-400", bgColor: "bg-red-500/10", borderColor: "border-red-500/30" },
+  "BOXING": { image: boxingGloveImg, color: "text-blue-400", bgColor: "bg-blue-500/10", borderColor: "border-blue-500/30" },
+  "MMA": { image: mmaGlovesImg, color: "text-green-400", bgColor: "bg-green-500/10", borderColor: "border-green-500/30" },
+  "FUTBOL": { image: futbolImg, color: "text-yellow-400", bgColor: "bg-yellow-500/10", borderColor: "border-yellow-500/30" },
 };
 
 interface PredictionEvent {
@@ -109,7 +114,11 @@ export default function EventSection({
       >
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xl">{config.icon}</span>
+            {config.image ? (
+              <img src={config.image} alt={sport} className="w-6 h-6 object-contain" />
+            ) : (
+              <span className="text-xl">{config.icon}</span>
+            )}
             <span className={`text-[10px] font-bold uppercase tracking-wider ${config.color}`}>{sport}</span>
             {event?.is_test && (
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-400">TEST</span>
