@@ -34,7 +34,7 @@ interface ChatMsg { role: "user" | "assistant"; content: string }
 
 // Special assistant message type for local cards
 interface LocalCard {
-  type: "howItWorks" | "walletHelp";
+  type: "howItWorks" | "walletHelp" | "predictions";
 }
 
 const monkeyImages: Record<BubbleState, string> = {
