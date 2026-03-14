@@ -849,10 +849,14 @@ function IngestPanel({ wallet, busy: parentBusy, onComplete }: { wallet: string;
         <div className="bg-muted/30 border border-border/30 rounded-lg p-3 text-xs space-y-1">
           <p className="text-foreground font-medium">
             {lastResult.dry_run || dryRun ? "🔍 Dry Run" : "✅ Ingested"}
+            {lastResult.provider && <span className="text-muted-foreground ml-1">({lastResult.provider})</span>}
           </p>
           <p className="text-muted-foreground">Found: {lastResult.events_found} · New: {lastResult.events_new} · Dupes: {lastResult.events_skipped_dupe}</p>
-          {lastResult.fights_created > 0 && (
-            <p className="text-muted-foreground">Fights created: {lastResult.fights_created}</p>
+          {lastResult.fights_found > 0 && (
+            <p className="text-muted-foreground">Fights found: {lastResult.fights_found} · Created: {lastResult.fights_created}</p>
+          )}
+          {lastResult.fights_endpoint_available === false && lastResult.events_found > 0 && (
+            <p className="text-yellow-400 text-[10px]">⚠ Fights endpoint requires paid tier — only events imported</p>
           )}
           {lastResult.errors?.length > 0 && (
             <div className="mt-1">
@@ -862,29 +866,37 @@ function IngestPanel({ wallet, busy: parentBusy, onComplete }: { wallet: string;
               ))}
             </div>
           )}
-          {lastResult.events_rejected > 0 && (
-            <p className="text-muted-foreground">Rejected: {lastResult.events_rejected}</p>
-          )}
           {lastResult.details?.length > 0 && (
             <details className="mt-2" open>
               <summary className="text-muted-foreground cursor-pointer hover:text-foreground font-medium">
                 📋 {lastResult.details.length} event(s) details
               </summary>
-              <div className="mt-1 space-y-1.5 max-h-60 overflow-y-auto">
+              <div className="mt-1 space-y-2 max-h-80 overflow-y-auto">
                 {lastResult.details.map((d: any, i: number) => (
                   <div key={i} className="text-[10px] text-muted-foreground border-t border-border/20 pt-1.5">
-                    <div className="flex items-start gap-1">
-                      <span className={d.rejected ? "text-destructive" : "text-foreground"}>
-                        {d.rejected ? "❌" : "✅"} {d.event_name}
-                      </span>
-                    </div>
-                    <div className="ml-4 space-y-0.5">
-                      {d.sport && <p>Sport: <span className="text-primary">{d.sport}</span></p>}
-                      {d.league && <p>League: {d.league}</p>}
-                      {d.event_date && <p>Date: {d.event_date}</p>}
-                      {d.source_event_id && <p>ID: {d.source_event_id}</p>}
-                      {d.reason && <p className="text-destructive">Reason: {d.reason}</p>}
-                      {d.fights_extracted !== undefined && <p>Fights: {d.fights_extracted}</p>}
+                    <p className="text-foreground font-medium">{d.event_name}</p>
+                    <div className="ml-2 space-y-0.5">
+                      <p>League: <span className="text-primary">{d.league}</span></p>
+                      {d.event_date && <p>Date: {new Date(d.event_date).toLocaleDateString()}</p>}
+                      {d.location && <p>📍 {d.location}</p>}
+                      <p>ID: {d.source_event_id}</p>
+                      <p>Fights: <span className="text-primary font-medium">{d.fight_count ?? 0}</span></p>
+                      {d.event_status && <p>Status: {d.event_status}</p>}
+                      {d.fights_error && <p className="text-yellow-400">⚠ {d.fights_error}</p>}
+                      {d.fights?.length > 0 && (
+                        <details className="mt-1">
+                          <summary className="cursor-pointer hover:text-foreground">🥊 {d.fights.length} fight(s)</summary>
+                          <div className="ml-2 mt-0.5 space-y-0.5">
+                            {d.fights.map((f: any, fi: number) => (
+                              <p key={fi}>
+                                {f.is_main_event ? "⭐ " : ""}{f.fighter1} vs {f.fighter2}
+                                {f.weight_class && <span className="text-muted-foreground"> ({f.weight_class})</span>}
+                                {f.card_segment && <span className="text-muted-foreground ml-1">[{f.card_segment}]</span>}
+                              </p>
+                            ))}
+                          </div>
+                        </details>
+                      )}
                     </div>
                   </div>
                 ))}
