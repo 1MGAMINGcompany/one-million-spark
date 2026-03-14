@@ -1,4 +1,4 @@
-# Fight Prediction System — Phase 1 Complete
+# Fight Prediction System — Phase 2 In Progress
 
 ## Status Lifecycle (Final)
 
@@ -27,31 +27,35 @@ open → locked → live → result_selected → confirmed → settled
 - `prediction-feed` — Live activity feed
 - `prediction-auto-settle` — Cron auto-settle (respects automation_enabled kill switch)
 - `prediction-ingest` — TheSportsDB event discovery (UFC, Bellator, PFL, PBC, TopRank, Matchroom). Normalizes names, dedupes by source_event_id, stores as draft, extracts fighters, logs all actions. Never auto-publishes.
+- `prediction-schedule-worker` — Cron: locks approved events at scheduled_lock_at, marks live at scheduled_live_at. Respects global + per-event automation_paused.
+- `prediction-result-worker` — Cron: fetches results from TheSportsDB for live auto-resolve events. Requires exact source_event_id match. Records payload + confidence. Flags low-confidence (<85%) for admin review. Auto-moves high-confidence fights to result_selected (NOT confirmed).
+- `prediction-settle-worker` — Idempotent job-based settlement. Creates jobs for confirmed fights past claims_open_at. CAS guard prevents double-pickup. Retry support (max 3). Full audit trail. Replaces simple auto-settle for new fights.
 
 ### Key Design Decisions
 1. Draw declaration is separate from refund execution (draw → refund_pending → refunds_processing → refunds_complete)
 2. `result_selected` is a real reversible status between `live` and `confirmed`
 3. `settled` means financially closed and immutable
 4. Events group fights; admin manages at event level
-5. `review_required` + `review_reason` fields ready for Phase 2 automation
+5. Result worker only moves to `result_selected`, never `confirmed` — admin must confirm
+6. Settlement worker uses job table with CAS guards for exactly-once execution
+7. All workers respect both global kill switch AND per-event automation_paused flag
 
 ### Safety Guardrails
 - **Global kill switches**: predictions_enabled, claims_enabled, automation_enabled (enforced server-side)
+- **Per-event pause**: automation_paused flag stops schedule/result/settle workers for individual events
 - Server-side status guards on all transitions
 - Red confirmation dialogs for irreversible actions (lock, confirm, settle, draw, refunds)
 - Per-claim cap: 5 SOL, daily ceiling: 50 SOL
 - 5-minute safety delay before claims open
 - Refund tracking: refund_status, refunds_started_at, refunds_completed_at
 - Manual admin actions (settle, lock, etc.) always work regardless of kill switches
-
-### Seed Data
-- Silvertooth Promotions event (Montreal) — linked to existing fights
-- 3 TEST events (BOXING, MMA, MUAY THAI) with 2 fights each
+- Settlement idempotency via automation_jobs deduplication
+- CAS (Compare-And-Swap) guards on job pickup prevent double-processing
 
 ---
 
-## Phase 2 (Next): Event Discovery Bot
-Requires Firecrawl connector for web scraping of Tapology/BoxRec/Sherdog.
+## Phase 3 (Next): Cron Scheduling
+Set up pg_cron jobs for schedule-worker, result-worker, and settle-worker.
 
-## Phase 3 (Next): Auto Result Detection
-Multi-source confidence system for automated resolution.
+## Phase 4 (Next): Admin UI for Automation Monitoring
+Dashboard showing automation_jobs status, failed jobs, retry counts, audit logs.
