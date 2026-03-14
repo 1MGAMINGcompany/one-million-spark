@@ -11,11 +11,13 @@ open → locked → live → result_selected → confirmed → settled
 ## Architecture
 
 ### Database Tables
-- `prediction_events` — Parent event grouping (name, org, date, location, auto_resolve, is_test)
+- `prediction_events` — Parent event grouping + automation fields (source_provider, source_event_id, automation_status, scheduling, result detection, confidence)
 - `prediction_fights` — Individual fights with event_id FK, weight_class, fight_class, method, refund tracking
 - `prediction_entries` — User prediction records
 - `prediction_admins` — Authorized admin wallets
 - `prediction_settings` — Global kill switches (predictions_enabled, claims_enabled, automation_enabled)
+- `automation_jobs` — Scheduled/running automation tasks (job_type, target, status, retries, result_payload)
+- `automation_logs` — Immutable audit trail (action, source, confidence, admin_wallet)
 
 ### Edge Functions
 - `prediction-admin` — Full lifecycle + getSettings/updateSettings for kill switches
