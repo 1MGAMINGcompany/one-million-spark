@@ -767,7 +767,7 @@ function AdminFightCard({
 }
 
 // ── Ingest Panel ──
-const INGEST_LEAGUES = ["UFC", "Bellator", "PFL", "PBC", "TopRank", "Matchroom"];
+const INGEST_LEAGUES = ["UFC", "Bellator", "PFL", "Boxing", "TopRank"];
 
 function IngestPanel({ wallet, busy: parentBusy, onComplete }: { wallet: string; busy: boolean; onComplete: () => void }) {
   const [ingestBusy, setIngestBusy] = useState(false);
