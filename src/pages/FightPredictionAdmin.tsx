@@ -266,6 +266,32 @@ export default function FightPredictionAdmin() {
           <Shield className="w-6 h-6 text-primary" /> Prediction Admin
         </h1>
 
+        {/* ── Kill Switches ── */}
+        <Card className="bg-card border-border/50 p-4">
+          <h2 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
+            <Power className="w-4 h-4 text-destructive" /> Kill Switches
+          </h2>
+          <div className="space-y-3">
+            {([
+              { key: "predictions_enabled" as const, label: "Predictions", desc: "Allow new predictions to be submitted" },
+              { key: "claims_enabled" as const, label: "Claims", desc: "Allow winners to claim rewards" },
+              { key: "automation_enabled" as const, label: "Automation", desc: "Auto-settle confirmed fights via cron" },
+            ]).map(({ key, label, desc }) => (
+              <div key={key} className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-foreground">{label}</p>
+                  <p className="text-xs text-muted-foreground">{desc}</p>
+                </div>
+                <Switch
+                  checked={killSwitches[key]}
+                  onCheckedChange={() => toggleKillSwitch(key)}
+                  disabled={killSwitchLoading}
+                />
+              </div>
+            ))}
+          </div>
+        </Card>
+
         {/* ── Create Event ── */}
         <Card className="bg-card border-border/50 p-4">
           <h2 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
