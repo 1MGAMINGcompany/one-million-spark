@@ -636,8 +636,12 @@ export default function AIAgentHelperOverlay() {
   const glowColor = bubbleState === "thinking" ? "rgba(250,204,21,0.6)" : bubbleState === "success" ? "rgba(34,197,94,0.5)" : bubbleState === "warning" ? "rgba(239,68,68,0.5)" : "rgba(250,204,21,0.25)";
   const subtitle = isAIRoute ? tr(lang, "subtitleAI") : tr(lang, "subtitleGeneral");
 
+  const isPredictions = isPredictionsRoute(location.pathname);
+
   const quickChips = isAIRoute
     ? ["chipRules", "chipSuggest"]
+    : isPredictions
+    ? ["chipPredictions", "chipConnectWallet", "chipAddFunds"]
     : ["chipNavHelp", "chipGameTypes"];
 
   // ── Flow logic ──
