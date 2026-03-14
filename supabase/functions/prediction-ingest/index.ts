@@ -6,136 +6,66 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-// ── Supported sports on TheSportsDB ──
-// TheSportsDB uses "Fighting" as strSport for ALL combat sports (MMA + Boxing).
-// The `sport` field here is our internal category for validation/display.
-const SPORT_LEAGUES: Record<string, { id: string; sport: string }> = {
-  UFC: { id: "4443", sport: "MMA" },
-  Bellator: { id: "4467", sport: "MMA" },
-  PFL: { id: "5430", sport: "MMA" },
-  Boxing: { id: "4445", sport: "BOXING" },
-  TopRank: { id: "4875", sport: "BOXING" },
+// ── BALLDONTLIE MMA league IDs ──
+const BDL_LEAGUES: Record<string, number> = {
+  UFC: 1,
+  PFL: 2,
+  Bellator: 3,
+  ONE: 4,
 };
 
-const THESPORTSDB_BASE = "https://www.thesportsdb.com/api/v1/json/123";
+const BDL_BASE = "https://api.balldontlie.io/mma/v1";
 
-// ── Known soccer / team-sport keywords (reject these) ──
-const TEAM_SPORT_KEYWORDS = [
-  "rovers", "united", "city", "town", "athletic", "wanderers", "albion",
-  "hotspur", "orient", "wednesday", "forest", "palace", "villa", "county",
-  "rangers", "celtic", "dynamo", "sporting", "olympique", "real madrid",
-  "barcelona", "juventus", "bayern", "inter milan", "ac milan", "arsenal", "chelsea",
-  "liverpool", "everton", "burnley", "wolves", "bournemouth", "brentford",
-  "fulham", "leicester", "newcastle", "brighton", "nottingham", "luton",
-  "sheffield", "blackpool", "doncaster", "peterborough", "leyton orient",
-];
-
-// Standalone abbreviations — must be whole words (not substrings like "UFC")
-const TEAM_ABBR_PATTERN = /\b(fc|afc|sc|cf)\b/i;
-
-function looksLikeTeamName(name: string): boolean {
-  const lower = name.toLowerCase();
-  if (TEAM_ABBR_PATTERN.test(lower)) return true;
-  return TEAM_SPORT_KEYWORDS.some((kw) => lower.includes(kw));
-}
-
-function looksLikeIndividualFighter(name: string): boolean {
-  // Individual fighters: typically 2-4 words, no team keywords
-  const words = name.trim().split(/\s+/);
-  if (words.length > 5) return false; // team names or long titles
-  if (looksLikeTeamName(name)) return false;
-  return true;
-}
-
-// ── Name normalization ──
-function normalizeName(name: string): string {
-  return name
-    .trim()
-    .replace(/\s+/g, " ")
-    .replace(/[''`]/g, "'")
-    .replace(/\s+vs\.?\s+/gi, " vs ")
-    .replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
-function normalizeEventName(raw: string, league: string, sport: string): string {
-  let name = normalizeName(raw);
-  if (!name.toUpperCase().includes(league.toUpperCase())) {
-    name = `${league}: ${name}`;
-  }
-  return name;
-}
-
-function extractFighters(eventName: string): { fighterA: string; fighterB: string } | null {
-  const vsMatch = eventName.match(/(.+?)\s+vs\.?\s+(.+)/i);
-  if (!vsMatch) return null;
-  // Strip event prefix patterns: "UFC Fight Night 269 ", "UFC 312 ", "Bellator 303 ", etc.
-  let rawA = vsMatch[1];
-  rawA = rawA.replace(/^.*?:\s*/, ""); // strip "League: " prefix
-  rawA = rawA.replace(/^(?:UFC\s+(?:Fight\s+Night|on\s+ESPN|on\s+ABC)?\s*\d*\s*|Bellator\s*\d*\s*|PFL\s*\d*\s*|Top\s*Rank\s*)/i, "");
-  const fighterA = normalizeName(rawA);
-  const fighterB = normalizeName(vsMatch[2].replace(/\s*\(.*\)$/, ""));
-  if (!fighterA || !fighterB) return null;
-  // Both must look like individual fighters, not team names
-  if (!looksLikeIndividualFighter(fighterA) || !looksLikeIndividualFighter(fighterB)) {
-    return null;
-  }
-  return { fighterA, fighterB };
-}
-
-// ── Validate event is a real combat sports event ──
-function validateCombatEvent(
-  ev: any,
-  leagueName: string,
-  expectedSport: string
-): { valid: boolean; reason?: string } {
-  const sport = (ev.strSport || "").toLowerCase();
-  const leagueInEvent = (ev.strLeague || "");
-  const eventName = ev.strEvent || ev.strEventAlternate || "";
-
-  // 1. Sport must be "Fighting" — TheSportsDB uses this for ALL combat sports
-  //    Reject anything else (soccer, basketball, etc.)
-  if (sport && sport !== "fighting") {
-    return { valid: false, reason: `wrong_sport:${sport}` };
-  }
-
-  // 2. Log & verify the league returned by the API matches what we expect
-  //    For UFC: league should contain "UFC"
-  //    For PFL: league should contain "Professional Fighters League" or "PFL"
-  //    For Bellator: league should contain "Bellator"
-  //    For Boxing/TopRank: league should contain "Boxing" or "Top Rank"
-  const leagueUpper = leagueInEvent.toUpperCase();
-  const leagueChecks: Record<string, string[]> = {
-    UFC: ["UFC"],
-    Bellator: ["BELLATOR", "CHAMPIONS SERIES"],
-    PFL: ["PFL", "PROFESSIONAL FIGHTERS LEAGUE"],
-    Boxing: ["BOXING"],
-    TopRank: ["TOP RANK", "BOXING"],
-  };
-  const expectedKeywords = leagueChecks[leagueName] || [];
-  if (expectedKeywords.length > 0 && !expectedKeywords.some((kw) => leagueUpper.includes(kw))) {
-    return { valid: false, reason: `league_mismatch:${leagueInEvent}` };
-  }
-
-  // 3. Reject if event name contains team-sport keywords
-  if (looksLikeTeamName(eventName)) {
-    return { valid: false, reason: `team_name_detected:${eventName}` };
-  }
-
-  // 4. Must contain "vs" pattern with individual fighter names
-  const fighters = extractFighters(eventName);
-  if (!fighters) {
-    return { valid: false, reason: `no_fighters_detected:${eventName}` };
-  }
-
-  return { valid: true };
-}
-
-// ── Response helper ──
+// ── Helpers ──
 function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
+}
+
+function normalizeName(name: string): string {
+  return name
+    .trim()
+    .replace(/\s+/g, " ")
+    .replace(/[''`]/g, "'")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+async function bdlFetch(path: string, apiKey: string, params?: Record<string, string>) {
+  const url = new URL(`${BDL_BASE}${path}`);
+  if (params) {
+    for (const [k, v] of Object.entries(params)) {
+      url.searchParams.append(k, v);
+    }
+  }
+  console.log(`[ingest] GET ${url.toString()}`);
+  const res = await fetch(url.toString(), {
+    headers: { Authorization: apiKey },
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`BALLDONTLIE ${res.status}: ${text}`);
+  }
+  return res.json();
+}
+
+// Paginate through all results
+async function bdlFetchAll(path: string, apiKey: string, params?: Record<string, string>): Promise<any[]> {
+  const all: any[] = [];
+  let cursor: string | undefined;
+  const baseParams = { ...(params || {}), per_page: "100" };
+
+  for (let page = 0; page < 20; page++) {
+    const p = { ...baseParams };
+    if (cursor) p.cursor = cursor;
+    const data = await bdlFetch(path, apiKey, p);
+    const items = data.data || [];
+    all.push(...items);
+    if (!data.meta?.next_cursor || items.length === 0) break;
+    cursor = String(data.meta.next_cursor);
+  }
+  return all;
 }
 
 Deno.serve(async (req) => {
@@ -148,6 +78,11 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
+
+    const apiKey = Deno.env.get("BALLDONTLIE_API_KEY");
+    if (!apiKey) {
+      return json({ error: "BALLDONTLIE_API_KEY secret not configured" }, 500);
+    }
 
     const body = await req.json();
     const { wallet, leagues, dry_run } = body;
@@ -174,97 +109,54 @@ Deno.serve(async (req) => {
       return json({ error: "Automation is disabled by admin kill switch" }, 403);
     }
 
-    // ── Determine which leagues to scrape ──
+    // ── Determine target leagues ──
     const targetLeagues = leagues && Array.isArray(leagues) && leagues.length > 0
-      ? leagues.filter((l: string) => l in SPORT_LEAGUES)
-      : Object.keys(SPORT_LEAGUES);
+      ? leagues.filter((l: string) => l in BDL_LEAGUES)
+      : Object.keys(BDL_LEAGUES);
 
     if (targetLeagues.length === 0) {
       return json({ error: "No valid leagues specified" }, 400);
     }
 
-    const results: {
-      events_found: number;
-      events_new: number;
-      events_skipped_dupe: number;
-      events_rejected: number;
-      fights_created: number;
-      errors: string[];
-      details: any[];
-    } = {
+    const results = {
+      provider: "balldontlie",
       events_found: 0,
       events_new: 0,
       events_skipped_dupe: 0,
-      events_rejected: 0,
+      fights_found: 0,
       fights_created: 0,
-      errors: [],
-      details: [],
+      fights_endpoint_available: false,
+      errors: [] as string[],
+      details: [] as any[],
     };
 
+    // ── Fetch current year events for each league ──
+    const currentYear = new Date().getFullYear();
+
     for (const leagueName of targetLeagues) {
-      const league = SPORT_LEAGUES[leagueName];
+      const leagueId = BDL_LEAGUES[leagueName];
 
       try {
-        // Fetch upcoming events from TheSportsDB
-        const url = `${THESPORTSDB_BASE}/eventsnextleague.php?id=${league.id}`;
-        console.log(`[ingest] Fetching: ${url}`);
+        // Step 1: Get events from BALLDONTLIE
+        const allEvents = await bdlFetchAll("/events", apiKey, { year: String(currentYear) });
 
-        const response = await fetch(url);
-        if (!response.ok) {
-          results.errors.push(`${leagueName}: HTTP ${response.status}`);
-          continue;
-        }
+        // Filter to events matching this league
+        const leagueEvents = allEvents.filter(
+          (ev: any) => ev.league?.id === leagueId
+        );
 
-        const data = await response.json();
-        const events = data.events || [];
-        results.events_found += events.length;
+        results.events_found += leagueEvents.length;
+        console.log(`[ingest] ${leagueName}: found ${leagueEvents.length} events`);
 
-        for (const ev of events) {
-          const sourceEventId = `thesportsdb_${ev.idEvent}`;
-          const rawEventName = ev.strEvent || ev.strEventAlternate || "Unknown Event";
-
-          // ── Validate this is a real combat sports event ──
-          const validation = validateCombatEvent(ev, leagueName, league.sport);
-          if (!validation.valid) {
-            results.events_rejected++;
-            console.log(`[ingest] Rejected: ${rawEventName} — ${validation.reason}`);
-            // Always include rejected events in details for dry-run visibility
-            results.details.push({
-              source_event_id: sourceEventId,
-              event_name: rawEventName,
-              sport: ev.strSport || "unknown",
-              league: ev.strLeague || "unknown",
-              event_date: ev.dateEvent || null,
-              rejected: true,
-              reason: validation.reason,
-            });
-            // Log discarded event to DB (non-dry-run only)
-            if (!dry_run) {
-              await supabase.from("automation_logs").insert({
-                action: "event_discarded",
-                source: "thesportsdb",
-                details: {
-                  league: leagueName,
-                  raw_name: rawEventName,
-                  reason: validation.reason,
-                  source_event_id: `thesportsdb_${ev.idEvent}`,
-                  sport_reported: ev.strSport || "unknown",
-                  league_reported: ev.strLeague || "unknown",
-                },
-                admin_wallet: wallet,
-              });
-            }
-            continue;
-          }
-
-          const eventName = normalizeEventName(rawEventName, leagueName, league.sport);
-          const eventDate = ev.dateEvent
-            ? new Date(`${ev.dateEvent}T${ev.strTime || "00:00:00"}Z`).toISOString()
-            : null;
-          const venue = [ev.strVenue, ev.strCity, ev.strCountry].filter(Boolean).join(", ");
+        for (const ev of leagueEvents) {
+          const sourceEventId = `bdl_${ev.id}`;
+          const eventName = ev.name || ev.short_name || "Unknown Event";
+          const eventDate = ev.date || null;
+          const venue = [ev.venue_name, ev.venue_city, ev.venue_state, ev.venue_country]
+            .filter(Boolean)
+            .join(", ");
 
           // ── Dedupe by source_event_id ──
-          // sourceEventId already declared above
           const { data: existing } = await supabase
             .from("prediction_events")
             .select("id")
@@ -276,20 +168,56 @@ Deno.serve(async (req) => {
             continue;
           }
 
+          // ── Try to fetch full fight card ──
+          let fights: any[] = [];
+          let fightsError: string | null = null;
+          try {
+            fights = await bdlFetchAll("/fights", apiKey, { "event_ids[]": String(ev.id) });
+            results.fights_endpoint_available = true;
+            results.fights_found += fights.length;
+          } catch (fErr: any) {
+            // Fights endpoint requires ALL-STAR tier; log gracefully
+            if (fErr.message?.includes("402") || fErr.message?.includes("403") || fErr.message?.includes("401")) {
+              fightsError = "fights_endpoint_requires_paid_tier";
+              console.log(`[ingest] Fights endpoint not available (paid tier required)`);
+            } else {
+              fightsError = fErr.message;
+              console.log(`[ingest] Fights fetch error: ${fErr.message}`);
+            }
+          }
+
+          // ── Build detail record ──
+          const detail: any = {
+            source_event_id: sourceEventId,
+            event_name: eventName,
+            league: leagueName,
+            league_id: leagueId,
+            event_date: eventDate,
+            location: venue,
+            event_status: ev.status,
+            fight_count: fights.length,
+            fights_error: fightsError,
+          };
+
+          if (fights.length > 0) {
+            detail.fights = fights.map((f: any) => ({
+              fighter1: f.fighter1?.name || "TBA",
+              fighter2: f.fighter2?.name || "TBA",
+              weight_class: f.weight_class?.name || null,
+              is_main_event: f.is_main_event || false,
+              card_segment: f.card_segment || null,
+              fight_order: f.fight_order || null,
+            }));
+          }
+
           if (dry_run) {
             results.events_new++;
-            results.details.push({
-              source_event_id: sourceEventId,
-              event_name: eventName,
-              sport: league.sport,
-              event_date: eventDate,
-              location: venue,
-              dry_run: true,
-            });
+            detail.dry_run = true;
+            results.details.push(detail);
             continue;
           }
 
-          // ── Insert event as draft (never auto-published) ──
+          // ── Insert event as draft ──
           const { data: newEvent, error: insertErr } = await supabase
             .from("prediction_events")
             .insert({
@@ -297,9 +225,9 @@ Deno.serve(async (req) => {
               organization: leagueName,
               event_date: eventDate,
               location: venue || null,
-              source: "thesportsdb",
-              source_url: `https://www.thesportsdb.com/event/${ev.idEvent}`,
-              source_provider: "thesportsdb",
+              source: "balldontlie",
+              source_url: `https://mma.balldontlie.io/#events`,
+              source_provider: "balldontlie",
               source_event_id: sourceEventId,
               status: "draft",
               is_test: false,
@@ -317,27 +245,35 @@ Deno.serve(async (req) => {
 
           results.events_new++;
 
-          // ── Try to extract fights from event name ──
-          const fighters = extractFighters(rawEventName);
-          if (fighters && newEvent) {
-            const fightTitle = `${fighters.fighterA} vs ${fighters.fighterB}`;
+          // ── Create fight rows from full card ──
+          if (fights.length > 0 && newEvent) {
+            for (const fight of fights) {
+              const f1Name = normalizeName(fight.fighter1?.name || "TBA");
+              const f2Name = normalizeName(fight.fighter2?.name || "TBA");
+              if (f1Name === "Tba" && f2Name === "Tba") continue;
 
-            const { error: fightErr } = await supabase
-              .from("prediction_fights")
-              .insert({
-                title: fightTitle,
-                fighter_a_name: fighters.fighterA,
-                fighter_b_name: fighters.fighterB,
-                event_name: eventName,
-                event_id: newEvent.id,
-                source: "thesportsdb",
-                status: "open",
-              });
+              const fightTitle = `${f1Name} vs ${f2Name}`;
+              const weightClass = fight.weight_class?.name || null;
 
-            if (!fightErr) {
-              results.fights_created++;
-            } else {
-              results.errors.push(`Fight create: ${fightErr.message}`);
+              const { error: fightErr } = await supabase
+                .from("prediction_fights")
+                .insert({
+                  title: fightTitle,
+                  fighter_a_name: f1Name,
+                  fighter_b_name: f2Name,
+                  event_name: eventName,
+                  event_id: newEvent.id,
+                  source: "balldontlie",
+                  status: "open",
+                  weight_class: weightClass,
+                  fight_class: fight.is_main_event ? "A" : (fight.card_segment === "main_card" ? "B" : "C"),
+                });
+
+              if (!fightErr) {
+                results.fights_created++;
+              } else {
+                results.errors.push(`Fight create: ${fightErr.message}`);
+              }
             }
           }
 
@@ -345,25 +281,20 @@ Deno.serve(async (req) => {
           await supabase.from("automation_logs").insert({
             event_id: newEvent?.id || null,
             action: "event_discovered",
-            source: "thesportsdb",
+            source: "balldontlie",
             details: {
               league: leagueName,
-              sport: league.sport,
-              raw_name: rawEventName,
-              normalized_name: eventName,
+              league_id: leagueId,
+              raw_name: eventName,
               source_event_id: sourceEventId,
-              fighters_extracted: !!fighters,
+              fights_count: fights.length,
+              fights_error: fightsError,
             },
             admin_wallet: wallet,
           });
 
-          results.details.push({
-            event_id: newEvent?.id,
-            source_event_id: sourceEventId,
-            event_name: eventName,
-            sport: league.sport,
-            fights_extracted: fighters ? 1 : 0,
-          });
+          detail.event_id = newEvent?.id;
+          results.details.push(detail);
         }
       } catch (leagueErr) {
         const msg = leagueErr instanceof Error ? leagueErr.message : String(leagueErr);
@@ -375,24 +306,22 @@ Deno.serve(async (req) => {
     // ── Log summary ──
     await supabase.from("automation_logs").insert({
       action: "ingest_completed",
-      source: "thesportsdb",
+      source: "balldontlie",
       details: {
         leagues: targetLeagues,
         events_found: results.events_found,
         events_new: results.events_new,
         events_skipped_dupe: results.events_skipped_dupe,
-        events_rejected: results.events_rejected,
+        fights_found: results.fights_found,
         fights_created: results.fights_created,
+        fights_endpoint_available: results.fights_endpoint_available,
         errors: results.errors,
         dry_run: !!dry_run,
       },
       admin_wallet: wallet,
     });
 
-    return json({
-      success: true,
-      ...results,
-    });
+    return json({ success: true, ...results });
   } catch (err) {
     console.error("[ingest] Fatal error:", err);
     return json({ error: err instanceof Error ? err.message : String(err) }, 500);
