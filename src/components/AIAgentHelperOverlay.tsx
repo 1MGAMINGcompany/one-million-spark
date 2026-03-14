@@ -192,6 +192,7 @@ async function generateShareImage(text: string): Promise<Blob | null> {
 const WELCOME_ACTIONS = [
   { key: "qGameRules", icon: BookOpen },
   { key: "qHowItWorks", icon: Sparkles },
+  { key: "qPredictions", icon: Swords },
   { key: "qAppHelp", icon: HelpCircle },
 ] as const;
 
