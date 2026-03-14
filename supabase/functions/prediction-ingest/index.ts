@@ -233,7 +233,7 @@ Deno.serve(async (req) => {
           const venue = [ev.strVenue, ev.strCity, ev.strCountry].filter(Boolean).join(", ");
 
           // ── Dedupe by source_event_id ──
-          const sourceEventId = `thesportsdb_${ev.idEvent}`;
+          // sourceEventId already declared above
           const { data: existing } = await supabase
             .from("prediction_events")
             .select("id")
