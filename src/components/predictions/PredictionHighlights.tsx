@@ -250,6 +250,15 @@ export default function PredictionHighlights({
     return d > now;
   };
 
+  const prioritySort = (a: HighlightFight, b: HighlightFight) => {
+    const PRIORITY_NAMES = ["Josh Emmett", "Kevin Vallejos"];
+    const aIsPriority = PRIORITY_NAMES.some(n => a.fighter_a_name.includes(n) || a.fighter_b_name.includes(n));
+    const bIsPriority = PRIORITY_NAMES.some(n => b.fighter_a_name.includes(n) || b.fighter_b_name.includes(n));
+    if (aIsPriority && !bIsPriority) return -1;
+    if (!aIsPriority && bIsPriority) return 1;
+    return 0;
+  };
+
   const { liveFights, todayFights, upcomingFights } = useMemo(() => {
     const live: HighlightFight[] = [];
     const today: HighlightFight[] = [];
@@ -267,15 +276,16 @@ export default function PredictionHighlights({
         } else if (isFuture(eventDate)) {
           upcoming.push(f);
         } else {
-          // Past date but still open — show as today
           today.push(f);
         }
-      } else if (["confirmed", "result_selected", "settled"].includes(f.status)) {
-        // Don't show finished fights in highlights
       }
     });
 
-    return { liveFights: live, todayFights: today, upcomingFights: upcoming };
+    return {
+      liveFights: live.sort(prioritySort),
+      todayFights: today.sort(prioritySort),
+      upcomingFights: upcoming.sort(prioritySort),
+    };
   }, [enrichedFights, eventMap]);
 
   const handlePredict = (fight: Fight, pick: "fighter_a" | "fighter_b") => {
