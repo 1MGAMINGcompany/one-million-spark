@@ -455,6 +455,17 @@ export default function FightPredictions() {
         title="Connect to Predict"
         description="You need a wallet to place predictions and earn rewards."
       />
+
+      {SOCIAL_SHARE_ENABLED && claimShareData && (
+        <SocialShareModal
+          open={!!claimShareData}
+          onClose={() => setClaimShareData(null)}
+          variant="claim_win"
+          eventTitle={claimShareData.eventTitle}
+          solWon={claimShareData.solWon}
+          wallet={address || undefined}
+        />
+      )}
     </div>
   );
 }
