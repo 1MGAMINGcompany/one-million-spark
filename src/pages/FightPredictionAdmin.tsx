@@ -181,6 +181,24 @@ export default function FightPredictionAdmin() {
     setConfirmAction({ title, description, onConfirm, destructive });
   };
 
+  const toggleKillSwitch = async (key: "predictions_enabled" | "claims_enabled" | "automation_enabled") => {
+    setKillSwitchLoading(true);
+    try {
+      const newVal = !killSwitches[key];
+      const { data, error } = await supabase.functions.invoke("prediction-admin", {
+        body: { action: "updateSettings", wallet: address, [key]: newVal },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      setKillSwitches(prev => ({ ...prev, [key]: newVal }));
+      toast.success(`${key.replace(/_/g, " ")} → ${newVal ? "ON" : "OFF"}`);
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setKillSwitchLoading(false);
+    }
+  };
+
   // ── Event actions ──
   const handleCreateEvent = async () => {
     if (!eventName) { toast.error("Event name required"); return; }
