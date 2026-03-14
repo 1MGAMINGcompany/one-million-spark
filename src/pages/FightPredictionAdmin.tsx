@@ -83,6 +83,13 @@ export default function FightPredictionAdmin() {
   const [fights, setFights] = useState<Fight[]>([]);
   const [busy, setBusy] = useState(false);
 
+  // Kill switches
+  const [killSwitches, setKillSwitches] = useState({
+    predictions_enabled: true,
+    claims_enabled: true,
+    automation_enabled: true,
+  });
+  const [killSwitchLoading, setKillSwitchLoading] = useState(false);
   // Create event form
   const [eventName, setEventName] = useState("");
   const [eventOrg, setEventOrg] = useState("");
