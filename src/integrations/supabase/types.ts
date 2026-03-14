@@ -779,54 +779,104 @@ export type Database = {
       }
       prediction_events: {
         Row: {
+          admin_approved_at: string | null
           auto_resolve: boolean
+          automation_paused: boolean
+          automation_status: string
           created_at: string
           event_date: string | null
           event_name: string
           id: string
           is_test: boolean
+          last_automation_check_at: string | null
           location: string | null
           organization: string | null
+          requires_admin_approval: boolean
+          result_confidence: number | null
+          result_detected_at: string | null
+          result_requires_review: boolean
+          result_source_payload: Json | null
           review_reason: string | null
           review_required: boolean
+          scheduled_live_at: string | null
+          scheduled_lock_at: string | null
+          settle_job_id: string | null
           source: string
+          source_event_id: string | null
+          source_provider: string | null
           source_url: string | null
           status: string
           updated_at: string
         }
         Insert: {
+          admin_approved_at?: string | null
           auto_resolve?: boolean
+          automation_paused?: boolean
+          automation_status?: string
           created_at?: string
           event_date?: string | null
           event_name: string
           id?: string
           is_test?: boolean
+          last_automation_check_at?: string | null
           location?: string | null
           organization?: string | null
+          requires_admin_approval?: boolean
+          result_confidence?: number | null
+          result_detected_at?: string | null
+          result_requires_review?: boolean
+          result_source_payload?: Json | null
           review_reason?: string | null
           review_required?: boolean
+          scheduled_live_at?: string | null
+          scheduled_lock_at?: string | null
+          settle_job_id?: string | null
           source?: string
+          source_event_id?: string | null
+          source_provider?: string | null
           source_url?: string | null
           status?: string
           updated_at?: string
         }
         Update: {
+          admin_approved_at?: string | null
           auto_resolve?: boolean
+          automation_paused?: boolean
+          automation_status?: string
           created_at?: string
           event_date?: string | null
           event_name?: string
           id?: string
           is_test?: boolean
+          last_automation_check_at?: string | null
           location?: string | null
           organization?: string | null
+          requires_admin_approval?: boolean
+          result_confidence?: number | null
+          result_detected_at?: string | null
+          result_requires_review?: boolean
+          result_source_payload?: Json | null
           review_reason?: string | null
           review_required?: boolean
+          scheduled_live_at?: string | null
+          scheduled_lock_at?: string | null
+          settle_job_id?: string | null
           source?: string
+          source_event_id?: string | null
+          source_provider?: string | null
           source_url?: string | null
           status?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "prediction_events_settle_job_id_fkey"
+            columns: ["settle_job_id"]
+            isOneToOne: false
+            referencedRelation: "automation_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       prediction_fights: {
         Row: {
