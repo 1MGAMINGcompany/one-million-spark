@@ -13,13 +13,37 @@ import { AddSolCard } from "@/components/AddSolCard";
 import { WelcomeIntroModal } from "@/components/WelcomeIntroModal";
 import { LiveActivityIndicator } from "@/components/LiveActivityIndicator";
 import { getActiveAIGame, dismissActiveAIGame } from "@/hooks/useActiveAIGame";
+import PredictionHighlights from "@/components/predictions/PredictionHighlights";
+import type { PredictionEvent } from "@/components/predictions/PredictionHighlights";
+import type { Fight } from "@/components/predictions/FightCard";
+import { supabase } from "@/integrations/supabase/client";
+import { useWallet } from "@/hooks/useWallet";
+import { WalletGateModal } from "@/components/WalletGateModal";
 
 const Home = () => {
   const { t } = useTranslation();
   const { isPrivyUser, walletAddress, balanceSol, isLowBalance } = usePrivySolBalance();
+  const { address, isConnected } = useWallet();
 
   // Session continuity — check for abandoned AI game
   const [activeGame, setActiveGame] = useState<string | null>(() => getActiveAIGame());
+
+  // Prediction highlights data
+  const [predFights, setPredFights] = useState<Fight[]>([]);
+  const [predEvents, setPredEvents] = useState<PredictionEvent[]>([]);
+  const [showWalletGate, setShowWalletGate] = useState(false);
+
+  useEffect(() => {
+    const load = async () => {
+      const [fightsRes, eventsRes] = await Promise.all([
+        supabase.from("prediction_fights").select("*").order("created_at", { ascending: true }),
+        supabase.from("prediction_events").select("*").eq("status", "approved").order("event_date", { ascending: true }),
+      ]);
+      if (fightsRes.data) setPredFights(fightsRes.data as any);
+      if (eventsRes.data) setPredEvents(eventsRes.data as any);
+    };
+    load();
+  }, []);
 
   // Show funding card for Privy users with low/zero balance
   const showFundingCard = isPrivyUser && isLowBalance && walletAddress;
@@ -258,6 +282,28 @@ const Home = () => {
         </div>
       </section>
 
+      {/* Prediction Highlights */}
+      {(predFights.length > 0) && (
+        <section className="relative z-10 py-12 px-4">
+          <div className="max-w-4xl mx-auto">
+            <div className="flex items-center justify-center gap-4 mb-6">
+              <div className="h-px flex-1 max-w-24 bg-gradient-to-r from-transparent to-border" />
+              <h2 className="text-2xl font-display font-semibold text-foreground text-center">
+                🔥 Predictions
+              </h2>
+              <div className="h-px flex-1 max-w-24 bg-gradient-to-l from-transparent to-border" />
+            </div>
+            <PredictionHighlights
+              fights={predFights}
+              events={predEvents}
+              showViewAll
+              wallet={address}
+              onWalletRequired={() => setShowWalletGate(true)}
+            />
+          </div>
+        </section>
+      )}
+
       {/* Featured Games Section */}
       <section className="relative z-10 py-20 px-4">
         <div className="max-w-5xl mx-auto relative z-10">
@@ -305,6 +351,13 @@ const Home = () => {
       </section>
 
       {/* <MobileAppPrompt /> — re-enable when PWA install is ready */}
+
+      <WalletGateModal
+        isOpen={showWalletGate}
+        onClose={() => setShowWalletGate(false)}
+        title="Connect to Predict"
+        description="You need a wallet to place predictions and earn rewards."
+      />
     </div>
   );
 };

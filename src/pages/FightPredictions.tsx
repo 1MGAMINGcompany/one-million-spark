@@ -15,6 +15,7 @@ import EventSection, { parseSport } from "@/components/predictions/EventSection"
 import predictionsHero from "@/assets/predictions-hero.jpeg";
 import PredictionModal from "@/components/predictions/PredictionModal";
 import ComingSoonCard from "@/components/predictions/ComingSoonCard";
+import PredictionHighlights from "@/components/predictions/PredictionHighlights";
 import { WalletGateModal } from "@/components/WalletGateModal";
 import type { Fight } from "@/components/predictions/FightCard";
 
@@ -260,6 +261,7 @@ export default function FightPredictions() {
   };
 
   const handlePredict = (fight: Fight, pick: "fighter_a" | "fighter_b") => {
+    if (fight.status !== "open") return; // Block non-open fights
     if (!isConnected) { setShowWalletGate(true); return; }
     setSelectedFight(fight);
     setSelectedPick(pick);
@@ -333,6 +335,17 @@ export default function FightPredictions() {
           </div>
         ) : (
           <>
+            {/* Highlight sections: LIVE NOW / TODAY / UPCOMING */}
+            {activeSport === "ALL" && (
+              <PredictionHighlights
+                fights={fights}
+                events={events}
+                onPredict={handlePredict}
+                wallet={address}
+                onWalletRequired={() => setShowWalletGate(true)}
+              />
+            )}
+
             {Object.entries(filteredEvents).map(([eventName, group]) => (
               <EventSection
                 key={eventName}
