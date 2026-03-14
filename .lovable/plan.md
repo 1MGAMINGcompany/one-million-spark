@@ -1,50 +1,27 @@
-# Fight Prediction System — Phase 1 Complete
 
-## Status Lifecycle (Final)
 
-```
-open → locked → live → result_selected → confirmed → settled
-                   └→ draw → refund_pending → refunds_processing → refunds_complete
-                   └→ cancelled
-```
+## Plan: Remove Test Fights and Events
 
-## Architecture
+The database currently has 4 prediction events. Three are test events (`is_test = true`) that need to be removed:
 
-### Database Tables
-- `prediction_events` — Parent event grouping (name, org, date, location, auto_resolve, is_test)
-- `prediction_fights` — Individual fights with event_id FK, weight_class, fight_class, method, refund tracking
-- `prediction_entries` — User prediction records
-- `prediction_admins` — Authorized admin wallets
+1. **BOXING — TEST EVENT Weekend Boxing** (2 fights, 1 with entries)
+2. **MMA — TEST EVENT Weekend MMA** (2 fights, both with entries)
+3. **MUAY THAI — TEST EVENT Weekend Muay Thai** (2 fights, 1 with entries)
 
-### Edge Functions
-- `prediction-admin` — Full lifecycle: createEvent, approveEvent, rejectEvent, deleteTestEvent, createFight, lockPredictions, markLive, selectResult, setMethod, confirmResult, settleEvent, declareDraw, startRefunds
-- `prediction-refund-worker` — Separate refund execution for draw scenarios (idempotent, safety-guarded)
-- `prediction-submit` — Submit predictions with 5% fee
-- `prediction-claim` — Claim rewards (accepts confirmed/settled status)
-- `prediction-feed` — Live activity feed
+The **Silvertooth Promotions** event is real (`is_test = false`) and stays untouched with all 12 of its fights.
 
-### Key Design Decisions
-1. Draw declaration is separate from refund execution (draw → refund_pending → refunds_processing → refunds_complete)
-2. `result_selected` is a real reversible status between `live` and `confirmed`
-3. `settled` means financially closed and immutable
-4. Events group fights; admin manages at event level
-5. `review_required` + `review_reason` fields ready for Phase 2 automation
+### What will be deleted
 
-### Safety Guardrails
-- Server-side status guards on all transitions
-- Red confirmation dialogs for irreversible actions (lock, confirm, settle, draw, refunds)
-- Per-claim cap: 5 SOL, daily ceiling: 50 SOL
-- 5-minute safety delay before claims open
-- Refund tracking: refund_status, refunds_started_at, refunds_completed_at
+- 6 test prediction entries (across 3 settled test fights)
+- 6 test fights
+- 3 test events
 
-### Seed Data
-- Silvertooth Promotions event (Montreal) — linked to existing fights
-- 3 TEST events (BOXING, MMA, MUAY THAI) with 2 fights each
+### Steps
 
----
+1. **Database migration** — Single SQL migration that deletes in dependency order:
+   - Delete `prediction_entries` where `fight_id` belongs to test fights
+   - Delete `prediction_fights` where `event_id` belongs to test events
+   - Delete `prediction_events` where `is_test = true`
 
-## Phase 2 (Next): Event Discovery Bot
-Requires Firecrawl connector for web scraping of Tapology/BoxRec/Sherdog.
+No code changes needed — the page already queries and renders whatever is in the database, so removing the test data is sufficient.
 
-## Phase 3 (Next): Auto Result Detection
-Multi-source confidence system for automated resolution.
