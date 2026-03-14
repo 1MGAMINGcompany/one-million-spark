@@ -29,7 +29,11 @@ export default function ComingSoonCard({ sport }: { sport: string }) {
 
   return (
     <Card className={`${config.bgColor} border-border/30 p-5 flex items-center gap-4`}>
-      <span className="text-3xl">{config.icon}</span>
+      {config.image ? (
+        <img src={config.image} alt={sport} className="w-10 h-10 object-contain" />
+      ) : (
+        <span className="text-3xl">{config.icon}</span>
+      )}
       <div className="flex-1">
         <div className="flex items-center gap-2">
           <h3 className={`text-sm font-bold ${config.color} uppercase tracking-wider`}>{sport}</h3>
