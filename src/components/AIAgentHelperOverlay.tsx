@@ -883,7 +883,9 @@ export default function AIAgentHelperOverlay() {
                     ← Back
                   </button>
                 </div>
-              )
+              )}
+
+              {/* ── (B) Onboarding menu — replaces old greeting ── */}
               {showAssistMenu && (
                 <div className="space-y-3">
                   <div className="bg-muted/50 rounded-lg p-3 text-sm text-foreground">
