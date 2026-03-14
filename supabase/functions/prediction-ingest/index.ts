@@ -17,7 +17,7 @@ const SPORT_LEAGUES: Record<string, { id: string; sport: string }> = {
   TopRank: { id: "4875", sport: "BOXING" },
 };
 
-const THESPORTSDB_BASE = "https://www.thesportsdb.com/api/v1/json/3";
+const THESPORTSDB_BASE = "https://www.thesportsdb.com/api/v1/json/123";
 
 // ── Known soccer / team-sport keywords (reject these) ──
 const TEAM_SPORT_KEYWORDS = [
