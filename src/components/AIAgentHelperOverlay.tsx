@@ -224,6 +224,9 @@ function isMultiplayerRoute(pathname: string): boolean {
 function isAIGameRoute(pathname: string): boolean {
   return pathname.startsWith("/play-ai/");
 }
+function isPredictionsRoute(pathname: string): boolean {
+  return pathname === "/predictions";
+}
 
 // ─── Analytics ───
 function trackMonkey(event: string, context: string, lang: string, metadata?: string) {
