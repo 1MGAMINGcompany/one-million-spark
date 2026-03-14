@@ -918,6 +918,7 @@ export default function AIAgentHelperOverlay() {
                         key={key}
                         onClick={() => {
                           if (key === "qHowItWorks") { handleHowItWorks(); return; }
+                          if (key === "qPredictions") { handlePredictions(); return; }
                           trackMonkey("assist_action", pageContext, lang, key);
                           setHelperMode("friend");
                           sendMessage(tr(lang, key));
