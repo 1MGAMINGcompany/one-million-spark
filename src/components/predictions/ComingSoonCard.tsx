@@ -2,6 +2,7 @@ import { Card } from "@/components/ui/card";
 import { Bell } from "lucide-react";
 import boxingGlove from "@/assets/boxing-glove.png";
 import mmaGloves from "@/assets/mma-gloves.png";
+import futbolBall from "@/assets/futbol.png";
 
 const SPORT_TEASERS: Record<string, { icon?: string; image?: string; color: string; bgColor: string; description: string }> = {
   BOXING: {
@@ -16,11 +17,11 @@ const SPORT_TEASERS: Record<string, { icon?: string; image?: string; color: stri
     bgColor: "bg-green-500/10",
     description: "MMA fight predictions dropping soon.",
   },
-  UFC: {
-    icon: "🏟️",
-    color: "text-purple-400",
-    bgColor: "bg-purple-500/10",
-    description: "UFC event predictions on the way.",
+  FUTBOL: {
+    image: futbolBall,
+    color: "text-yellow-300",
+    bgColor: "bg-yellow-500/10",
+    description: "Futbol match predictions coming soon.",
   },
 };
 
