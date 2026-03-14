@@ -292,6 +292,17 @@ export default function FightPredictionAdmin() {
           </div>
         </Card>
 
+        {/* ── Event Ingest ── */}
+        <Card className="bg-card border-border/50 p-4">
+          <h2 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
+            <Download className="w-4 h-4 text-primary" /> Event Ingest
+          </h2>
+          <p className="text-xs text-muted-foreground mb-3">
+            Fetch upcoming combat sports events from TheSportsDB. Events are stored as drafts — never auto-published.
+          </p>
+          <IngestPanel wallet={address!} busy={busy} onComplete={loadData} />
+        </Card>
+
         {/* ── Create Event ── */}
         <Card className="bg-card border-border/50 p-4">
           <h2 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
