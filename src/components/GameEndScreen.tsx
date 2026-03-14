@@ -471,14 +471,27 @@ export function GameEndScreen({
 
           {/* Share Result Card Button */}
           {!isPending && (
-            <Button
-              variant="gold"
-              className="w-full gap-2"
-              onClick={() => setShowShareCard(true)}
-            >
-              <Share2 size={18} />
-              {isWinner ? t('gameEnd.bragWin') : t('gameEnd.shareMatch')}
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                variant="gold"
+                className="flex-1 gap-2"
+                onClick={() => setShowShareCard(true)}
+              >
+                <Share2 size={18} />
+                {isWinner ? t('gameEnd.bragWin') : t('gameEnd.shareMatch')}
+              </Button>
+              {SOCIAL_SHARE_ENABLED && isWinner && isPayoutConfirmed && (
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="shrink-0"
+                  onClick={() => setShowSocialShare(true)}
+                  title="Share Victory"
+                >
+                  <Share2 size={16} />
+                </Button>
+              )}
+            </div>
           )}
 
           {/* Players List */}
