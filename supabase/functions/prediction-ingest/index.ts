@@ -350,6 +350,7 @@ Deno.serve(async (req) => {
         events_found: results.events_found,
         events_new: results.events_new,
         events_skipped_dupe: results.events_skipped_dupe,
+        events_rejected: results.events_rejected,
         fights_created: results.fights_created,
         errors: results.errors,
         dry_run: !!dry_run,
