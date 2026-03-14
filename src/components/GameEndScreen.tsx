@@ -197,6 +197,7 @@ export function GameEndScreen({
   const [customStakeSol, setCustomStakeSol] = useState<string>('');
   const [showCustomInput, setShowCustomInput] = useState(false);
   const [showShareCard, setShowShareCard] = useState(false);
+  const [showSocialShare, setShowSocialShare] = useState(false);
   
   // Player lifetime stats for share card
   const [playerStats, setPlayerStats] = useState<{ wins: number; totalSolWon: number } | null>(null);
