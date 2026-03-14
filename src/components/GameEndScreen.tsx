@@ -836,6 +836,19 @@ export function GameEndScreen({
         totalGamesWon={playerStats?.wins}
         totalSolWon={playerStats?.totalSolWon}
       />
+
+      {SOCIAL_SHARE_ENABLED && (
+        <SocialShareModal
+          open={showSocialShare}
+          onClose={() => setShowSocialShare(false)}
+          variant="victory"
+          gameName={gameType}
+          solWon={payoutInfo?.winnerPayout}
+          wallet={myAddress || undefined}
+          opponentType={players.length > 2 ? `${players.length} players` : players.find(p => p.address !== myAddress)?.name}
+          streak={playerStats ? undefined : undefined}
+        />
+      )}
     </div>
   );
 }
