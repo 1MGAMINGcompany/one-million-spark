@@ -231,6 +231,7 @@ Deno.serve(async (req) => {
                   reason: validation.reason,
                   source_event_id: `thesportsdb_${ev.idEvent}`,
                   sport_reported: ev.strSport || "unknown",
+                  league_reported: ev.strLeague || "unknown",
                 },
                 admin_wallet: wallet,
               });
