@@ -18,6 +18,31 @@ const SPORT_LEAGUES: Record<string, { id: string; sport: string }> = {
 
 const THESPORTSDB_BASE = "https://www.thesportsdb.com/api/v1/json/3";
 
+// ── Known soccer / team-sport keywords (reject these) ──
+const TEAM_SPORT_KEYWORDS = [
+  "rovers", "united", "city", "town", "athletic", "wanderers", "albion",
+  "hotspur", "orient", "wednesday", "forest", "palace", "villa", "county",
+  "rangers", "celtic", "dynamo", "sporting", "olympique", "real madrid",
+  "barcelona", "juventus", "bayern", "inter", "milan", "arsenal", "chelsea",
+  "liverpool", "everton", "burnley", "wolves", "bournemouth", "brentford",
+  "fulham", "leicester", "newcastle", "brighton", "nottingham", "luton",
+  "sheffield", "blackpool", "doncaster", "peterborough", "leyton",
+  "fc", "afc", "sc", "cf",
+];
+
+function looksLikeTeamName(name: string): boolean {
+  const lower = name.toLowerCase();
+  return TEAM_SPORT_KEYWORDS.some((kw) => lower.includes(kw));
+}
+
+function looksLikeIndividualFighter(name: string): boolean {
+  // Individual fighters: typically 2-4 words, no team keywords
+  const words = name.trim().split(/\s+/);
+  if (words.length > 5) return false; // team names or long titles
+  if (looksLikeTeamName(name)) return false;
+  return true;
+}
+
 // ── Name normalization ──
 function normalizeName(name: string): string {
   return name
@@ -30,7 +55,6 @@ function normalizeName(name: string): string {
 
 function normalizeEventName(raw: string, league: string, sport: string): string {
   let name = normalizeName(raw);
-  // Remove redundant league prefix if already in name
   if (!name.toUpperCase().includes(league.toUpperCase())) {
     name = `${league}: ${name}`;
   }
@@ -38,13 +62,52 @@ function normalizeEventName(raw: string, league: string, sport: string): string 
 }
 
 function extractFighters(eventName: string): { fighterA: string; fighterB: string } | null {
-  // Match "Fighter A vs Fighter B" pattern
   const vsMatch = eventName.match(/(.+?)\s+vs\.?\s+(.+)/i);
   if (!vsMatch) return null;
-  return {
-    fighterA: normalizeName(vsMatch[1].replace(/^.*?:\s*/, "")), // Remove prefix before colon
-    fighterB: normalizeName(vsMatch[2].replace(/\s*\(.*\)$/, "")), // Remove trailing parenthetical
-  };
+  const fighterA = normalizeName(vsMatch[1].replace(/^.*?:\s*/, ""));
+  const fighterB = normalizeName(vsMatch[2].replace(/\s*\(.*\)$/, ""));
+  // Both must look like individual fighters, not team names
+  if (!looksLikeIndividualFighter(fighterA) || !looksLikeIndividualFighter(fighterB)) {
+    return null;
+  }
+  return { fighterA, fighterB };
+}
+
+// ── Validate event is a real combat sports event ──
+function validateCombatEvent(
+  ev: any,
+  leagueName: string,
+  expectedSport: string
+): { valid: boolean; reason?: string } {
+  const sport = (ev.strSport || "").toLowerCase();
+  const leagueInEvent = (ev.strLeague || "").toUpperCase();
+  const eventName = ev.strEvent || ev.strEventAlternate || "";
+
+  // 1. Sport must match expected (MMA or Fighting for MMA leagues, Boxing for boxing)
+  const validSports = expectedSport === "MMA"
+    ? ["fighting", "mma", "mixed martial arts"]
+    : ["boxing"];
+  if (!validSports.some((s) => sport.includes(s)) && sport !== "") {
+    return { valid: false, reason: `wrong_sport:${sport}` };
+  }
+
+  // 2. For UFC leagues, league name in event must contain "UFC"
+  if (leagueName === "UFC" && !leagueInEvent.includes("UFC")) {
+    return { valid: false, reason: `league_mismatch:${leagueInEvent}` };
+  }
+
+  // 3. Reject if event name contains team-sport keywords
+  if (looksLikeTeamName(eventName)) {
+    return { valid: false, reason: `team_name_detected:${eventName}` };
+  }
+
+  // 4. Must contain "vs" pattern with individual fighter names
+  const fighters = extractFighters(eventName);
+  if (!fighters) {
+    return { valid: false, reason: `no_fighters_detected:${eventName}` };
+  }
+
+  return { valid: true };
 }
 
 // ── Response helper ──
