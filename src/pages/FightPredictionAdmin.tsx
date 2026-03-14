@@ -261,6 +261,69 @@ export default function FightPredictionAdmin() {
 
   const eventFights = (eventId: string) => fights.filter(f => f.event_id === eventId);
 
+  // Compute entry counts per event for safe-delete checks
+  const eventHasPredictions = (eventId: string) => {
+    return eventFights(eventId).some(f => (entryCounts[f.id] || 0) > 0);
+  };
+
+  const eventIsFullySettled = (eventId: string) => {
+    const ef = eventFights(eventId);
+    return ef.length > 0 && ef.every(f => ["settled", "refunds_complete", "cancelled"].includes(f.status));
+  };
+
+  type AdminFilterType = "active" | "pending" | "live" | "review" | "archived" | "dismissed";
+
+  const FILTER_TABS: { key: AdminFilterType; label: string; count: number }[] = [
+    { key: "active", label: "Active", count: events.filter(e => ["approved"].includes(e.status)).length },
+    { key: "pending", label: "Pending", count: events.filter(e => e.status === "draft").length },
+    { key: "live", label: "Live", count: events.filter(e => {
+      const ef = eventFights(e.id);
+      return ef.some(f => f.status === "live");
+    }).length },
+    { key: "review", label: "Review", count: events.filter(e => {
+      const ef = eventFights(e.id);
+      return ef.some(f => f.review_required);
+    }).length },
+    { key: "archived", label: "Archived", count: events.filter(e => e.status === "archived").length },
+    { key: "dismissed", label: "Dismissed", count: events.filter(e => ["dismissed", "rejected"].includes(e.status)).length },
+  ];
+
+  const filteredEvents = events.filter(e => {
+    switch (adminFilter) {
+      case "active": return ["approved"].includes(e.status);
+      case "pending": return e.status === "draft";
+      case "live": return eventFights(e.id).some(f => f.status === "live");
+      case "review": return eventFights(e.id).some(f => f.review_required);
+      case "archived": return e.status === "archived";
+      case "dismissed": return ["dismissed", "rejected"].includes(e.status);
+      default: return true;
+    }
+  });
+
+  const handleDismissEvent = async (eventId: string, eventName: string) => {
+    try {
+      await callAdmin("dismissEvent", { event_id: eventId });
+      toast.success(`"${eventName}" dismissed`);
+      loadData();
+    } catch (e: any) { toast.error(e.message); }
+  };
+
+  const handleArchiveEvent = async (eventId: string, eventName: string) => {
+    try {
+      await callAdmin("archiveEvent", { event_id: eventId });
+      toast.success(`"${eventName}" archived`);
+      loadData();
+    } catch (e: any) { toast.error(e.message); }
+  };
+
+  const handleDeleteEvent = async (eventId: string, eventName: string) => {
+    try {
+      await callAdmin("deleteEvent", { event_id: eventId });
+      toast.success(`"${eventName}" deleted`);
+      loadData();
+    } catch (e: any) { toast.error(e.message); }
+  };
+
   return (
     <div className="min-h-screen bg-background pt-20 px-4 pb-8">
       <div className="max-w-2xl mx-auto space-y-6">
