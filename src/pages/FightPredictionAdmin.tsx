@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   Shield, Plus, Lock, Trophy, Loader2, Play, CheckCircle, Ban,
-  ArrowDown, Trash2, Eye, AlertTriangle, RefreshCw, Power,
+  ArrowDown, Trash2, Eye, AlertTriangle, RefreshCw, Power, Download,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useWallet } from "@/hooks/useWallet";
