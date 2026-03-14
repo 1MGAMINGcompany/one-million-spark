@@ -7,13 +7,14 @@ const corsHeaders = {
 };
 
 // ── Supported sports on TheSportsDB ──
+// TheSportsDB uses "Fighting" as strSport for ALL combat sports (MMA + Boxing).
+// The `sport` field here is our internal category for validation/display.
 const SPORT_LEAGUES: Record<string, { id: string; sport: string }> = {
   UFC: { id: "4443", sport: "MMA" },
-  Bellator: { id: "4444", sport: "MMA" },
-  PFL: { id: "4445", sport: "MMA" },
-  PBC: { id: "4469", sport: "BOXING" },
-  TopRank: { id: "4471", sport: "BOXING" },
-  Matchroom: { id: "4470", sport: "BOXING" },
+  Bellator: { id: "4467", sport: "MMA" },
+  PFL: { id: "5430", sport: "MMA" },
+  Boxing: { id: "4445", sport: "BOXING" },
+  TopRank: { id: "4875", sport: "BOXING" },
 };
 
 const THESPORTSDB_BASE = "https://www.thesportsdb.com/api/v1/json/3";
