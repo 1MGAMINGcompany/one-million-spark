@@ -35,6 +35,11 @@ interface PredictionEvent {
 }
 
 function parseSport(eventName: string): string {
+  const upper = eventName.toUpperCase();
+  if (upper.includes("MLS") || upper.includes("SOCCER") || upper.includes("FUTBOL")) return "FUTBOL";
+  if (upper.includes("UFC") || upper.includes("MMA")) return "MMA";
+  if (upper.includes("BOXING")) return "BOXING";
+  if (upper.includes("MUAY THAI")) return "MUAY THAI";
   const parts = eventName.split(' — ');
   return parts[0] || "OTHER";
 }
