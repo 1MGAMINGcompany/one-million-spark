@@ -387,6 +387,106 @@ Deno.serve(async (req) => {
       return json({ settings: data });
     }
 
+    // ── Event Cleanup Actions ──
+
+    if (action === "dismissEvent") {
+      const { event_id } = body;
+      if (!event_id) return json({ error: "Missing event_id" }, 400);
+
+      const { data, error } = await supabase
+        .from("prediction_events")
+        .update({ status: "dismissed", updated_at: new Date().toISOString() })
+        .eq("id", event_id)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Log the action
+      await supabase.from("automation_logs").insert({
+        action: "dismiss_event",
+        event_id,
+        admin_wallet: wallet,
+        source: "admin_manual",
+        details: { event_name: data.event_name },
+      });
+
+      return json({ event: data });
+    }
+
+    if (action === "archiveEvent") {
+      const { event_id } = body;
+      if (!event_id) return json({ error: "Missing event_id" }, 400);
+
+      const { data, error } = await supabase
+        .from("prediction_events")
+        .update({ status: "archived", updated_at: new Date().toISOString() })
+        .eq("id", event_id)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      await supabase.from("automation_logs").insert({
+        action: "archive_event",
+        event_id,
+        admin_wallet: wallet,
+        source: "admin_manual",
+        details: { event_name: data.event_name },
+      });
+
+      return json({ event: data });
+    }
+
+    if (action === "deleteEvent") {
+      const { event_id } = body;
+      if (!event_id) return json({ error: "Missing event_id" }, 400);
+
+      // Check for prediction entries on any fight under this event
+      const { data: eventFights } = await supabase
+        .from("prediction_fights")
+        .select("id")
+        .eq("event_id", event_id);
+
+      const fightIds = (eventFights || []).map((f: any) => f.id);
+
+      if (fightIds.length > 0) {
+        const { count } = await supabase
+          .from("prediction_entries")
+          .select("id", { count: "exact", head: true })
+          .in("fight_id", fightIds);
+
+        if (count && count > 0) {
+          return json({ error: "Cannot delete event with existing predictions. Use Archive instead." }, 400);
+        }
+      }
+
+      // Safe to delete - remove fights first, then event
+      if (fightIds.length > 0) {
+        await supabase.from("prediction_fights").delete().eq("event_id", event_id);
+      }
+
+      // Get event name for logging before deleting
+      const { data: evt } = await supabase
+        .from("prediction_events")
+        .select("event_name")
+        .eq("id", event_id)
+        .single();
+
+      const { error } = await supabase.from("prediction_events").delete().eq("id", event_id);
+      if (error) throw error;
+
+      await supabase.from("automation_logs").insert({
+        action: "delete_event",
+        event_id,
+        admin_wallet: wallet,
+        source: "admin_manual",
+        details: { event_name: evt?.event_name || "unknown" },
+      });
+
+      return json({ deleted: true });
+    }
+
     return json({ error: "Unknown action" }, 400);
   } catch (err) {
     return new Response(JSON.stringify({ error: err.message }), {
