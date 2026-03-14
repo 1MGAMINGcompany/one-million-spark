@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { Swords, TrendingUp, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
+import { Swords, TrendingUp, ChevronDown, ChevronUp, Loader2, Share2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useWallet } from "@/hooks/useWallet";
 import { toast } from "sonner";
@@ -17,6 +17,8 @@ import PredictionModal from "@/components/predictions/PredictionModal";
 import ComingSoonCard from "@/components/predictions/ComingSoonCard";
 import PredictionHighlights from "@/components/predictions/PredictionHighlights";
 import { WalletGateModal } from "@/components/WalletGateModal";
+import SocialShareModal from "@/components/SocialShareModal";
+import { SOCIAL_SHARE_ENABLED } from "@/lib/socialShareConfig";
 import type { Fight } from "@/components/predictions/FightCard";
 
 const LAMPORTS = 1_000_000_000;
@@ -63,6 +65,7 @@ export default function FightPredictions() {
   const [activeSport, setActiveSport] = useState("ALL");
   const [showWalletGate, setShowWalletGate] = useState(false);
   const [showPredictionSuccess, setShowPredictionSuccess] = useState(false);
+  const [claimShareData, setClaimShareData] = useState<{ eventTitle: string; solWon: number } | null>(null);
 
   const loadFights = useCallback(async () => {
     const [fightsRes, eventsRes] = await Promise.all([
@@ -245,7 +248,12 @@ export default function FightPredictions() {
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
-      toast.success("Reward claimed!", { description: `${data.reward_sol?.toFixed(4)} SOL sent` });
+      const solWon = data.reward_sol || 0;
+      toast.success("Reward claimed!", { description: `${solWon.toFixed(4)} SOL sent` });
+      const f = fights.find(f => f.id === fightId);
+      if (SOCIAL_SHARE_ENABLED) {
+        setClaimShareData({ eventTitle: f?.title || "", solWon });
+      }
       loadUserEntries();
     } catch (err: any) {
       toast.error("Claim failed", { description: err.message });
@@ -447,6 +455,17 @@ export default function FightPredictions() {
         title="Connect to Predict"
         description="You need a wallet to place predictions and earn rewards."
       />
+
+      {SOCIAL_SHARE_ENABLED && claimShareData && (
+        <SocialShareModal
+          open={!!claimShareData}
+          onClose={() => setClaimShareData(null)}
+          variant="claim_win"
+          eventTitle={claimShareData.eventTitle}
+          solWon={claimShareData.solWon}
+          wallet={address || undefined}
+        />
+      )}
     </div>
   );
 }

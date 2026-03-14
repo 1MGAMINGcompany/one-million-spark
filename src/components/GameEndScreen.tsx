@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Trophy, RefreshCw, BarChart2, Star, LogOut, Wallet, ChevronDown, ChevronUp, CheckCircle, ExternalLink, Loader2, Copy, Check, MessageCircle, Mail, Share2 } from 'lucide-react';
 import { ShareResultCard } from '@/components/ShareResultCard';
+import SocialShareModal from '@/components/SocialShareModal';
+import { SOCIAL_SHARE_ENABLED } from '@/lib/socialShareConfig';
 import GoldConfettiExplosion from '@/components/GoldConfettiExplosion';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -195,6 +197,7 @@ export function GameEndScreen({
   const [customStakeSol, setCustomStakeSol] = useState<string>('');
   const [showCustomInput, setShowCustomInput] = useState(false);
   const [showShareCard, setShowShareCard] = useState(false);
+  const [showSocialShare, setShowSocialShare] = useState(false);
   
   // Player lifetime stats for share card
   const [playerStats, setPlayerStats] = useState<{ wins: number; totalSolWon: number } | null>(null);
@@ -468,14 +471,27 @@ export function GameEndScreen({
 
           {/* Share Result Card Button */}
           {!isPending && (
-            <Button
-              variant="gold"
-              className="w-full gap-2"
-              onClick={() => setShowShareCard(true)}
-            >
-              <Share2 size={18} />
-              {isWinner ? t('gameEnd.bragWin') : t('gameEnd.shareMatch')}
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                variant="gold"
+                className="flex-1 gap-2"
+                onClick={() => setShowShareCard(true)}
+              >
+                <Share2 size={18} />
+                {isWinner ? t('gameEnd.bragWin') : t('gameEnd.shareMatch')}
+              </Button>
+              {SOCIAL_SHARE_ENABLED && isWinner && isPayoutConfirmed && (
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="shrink-0"
+                  onClick={() => setShowSocialShare(true)}
+                  title="Share Victory"
+                >
+                  <Share2 size={16} />
+                </Button>
+              )}
+            </div>
           )}
 
           {/* Players List */}
@@ -820,6 +836,19 @@ export function GameEndScreen({
         totalGamesWon={playerStats?.wins}
         totalSolWon={playerStats?.totalSolWon}
       />
+
+      {SOCIAL_SHARE_ENABLED && (
+        <SocialShareModal
+          open={showSocialShare}
+          onClose={() => setShowSocialShare(false)}
+          variant="victory"
+          gameName={gameType}
+          solWon={payoutInfo?.winnerPayout}
+          wallet={myAddress || undefined}
+          opponentType={players.length > 2 ? `${players.length} players` : players.find(p => p.address !== myAddress)?.name}
+          streak={playerStats ? undefined : undefined}
+        />
+      )}
     </div>
   );
 }
