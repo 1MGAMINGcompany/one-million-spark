@@ -15,6 +15,7 @@ import EventSection, { parseSport } from "@/components/predictions/EventSection"
 import predictionsHero from "@/assets/predictions-hero.jpeg";
 import PredictionModal from "@/components/predictions/PredictionModal";
 import ComingSoonCard from "@/components/predictions/ComingSoonCard";
+import PredictionHighlights from "@/components/predictions/PredictionHighlights";
 import { WalletGateModal } from "@/components/WalletGateModal";
 import type { Fight } from "@/components/predictions/FightCard";
 
