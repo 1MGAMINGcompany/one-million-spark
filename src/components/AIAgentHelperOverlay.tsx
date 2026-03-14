@@ -609,16 +609,20 @@ export default function AIAgentHelperOverlay() {
   // ─── (D) Intercept "Wallet help" ───
   const handleWalletHelp = useCallback(() => {
     trackMonkey("assist_action", pageContext, lang, "qWallet");
-    // Try to get wallet address from global context
     const walletAddress = (window as any).__PRIVY_WALLET_ADDRESS__ || null;
     if (!walletAddress) {
-      // No wallet — fall back to AI response
       setHelperMode("friend");
       sendMessage(tr(lang, "qWallet"));
       return;
     }
     setLocalCard({ type: "walletHelp" });
   }, [pageContext, lang, sendMessage]);
+
+  // ─── Intercept "Predictions help" ───
+  const handlePredictions = useCallback(() => {
+    trackMonkey("assist_action", pageContext, lang, "qPredictions");
+    setLocalCard({ type: "predictions" });
+  }, [pageContext, lang]);
 
   const copyWalletAddress = useCallback(async () => {
     const walletAddress = (window as any).__PRIVY_WALLET_ADDRESS__ || "";
