@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { Swords, TrendingUp, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
+import { Swords, TrendingUp, ChevronDown, ChevronUp, Loader2, Share2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useWallet } from "@/hooks/useWallet";
 import { toast } from "sonner";
@@ -17,6 +17,8 @@ import PredictionModal from "@/components/predictions/PredictionModal";
 import ComingSoonCard from "@/components/predictions/ComingSoonCard";
 import PredictionHighlights from "@/components/predictions/PredictionHighlights";
 import { WalletGateModal } from "@/components/WalletGateModal";
+import SocialShareModal from "@/components/SocialShareModal";
+import { SOCIAL_SHARE_ENABLED } from "@/lib/socialShareConfig";
 import type { Fight } from "@/components/predictions/FightCard";
 
 const LAMPORTS = 1_000_000_000;
