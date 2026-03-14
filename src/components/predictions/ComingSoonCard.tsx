@@ -1,9 +1,10 @@
 import { Card } from "@/components/ui/card";
 import { Bell } from "lucide-react";
+import boxingGlove from "@/assets/boxing-glove.png";
 
-const SPORT_TEASERS: Record<string, { icon: string; color: string; bgColor: string; description: string }> = {
+const SPORT_TEASERS: Record<string, { icon?: string; image?: string; color: string; bgColor: string; description: string }> = {
   BOXING: {
-    icon: "🥊",
+    image: boxingGlove,
     color: "text-blue-400",
     bgColor: "bg-blue-500/10",
     description: "Championship boxing predictions coming soon.",
