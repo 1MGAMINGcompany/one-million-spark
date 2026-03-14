@@ -248,7 +248,12 @@ export default function FightPredictions() {
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
-      toast.success("Reward claimed!", { description: `${data.reward_sol?.toFixed(4)} SOL sent` });
+      const solWon = data.reward_sol || 0;
+      toast.success("Reward claimed!", { description: `${solWon.toFixed(4)} SOL sent` });
+      const f = fights.find(f => f.id === fightId);
+      if (SOCIAL_SHARE_ENABLED) {
+        setClaimShareData({ eventTitle: f?.title || "", solWon });
+      }
       loadUserEntries();
     } catch (err: any) {
       toast.error("Claim failed", { description: err.message });
