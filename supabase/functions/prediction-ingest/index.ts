@@ -24,15 +24,18 @@ const TEAM_SPORT_KEYWORDS = [
   "rovers", "united", "city", "town", "athletic", "wanderers", "albion",
   "hotspur", "orient", "wednesday", "forest", "palace", "villa", "county",
   "rangers", "celtic", "dynamo", "sporting", "olympique", "real madrid",
-  "barcelona", "juventus", "bayern", "inter", "milan", "arsenal", "chelsea",
+  "barcelona", "juventus", "bayern", "inter milan", "ac milan", "arsenal", "chelsea",
   "liverpool", "everton", "burnley", "wolves", "bournemouth", "brentford",
   "fulham", "leicester", "newcastle", "brighton", "nottingham", "luton",
-  "sheffield", "blackpool", "doncaster", "peterborough", "leyton",
-  "fc", "afc", "sc", "cf",
+  "sheffield", "blackpool", "doncaster", "peterborough", "leyton orient",
 ];
+
+// Standalone abbreviations — must be whole words (not substrings like "UFC")
+const TEAM_ABBR_PATTERN = /\b(fc|afc|sc|cf)\b/i;
 
 function looksLikeTeamName(name: string): boolean {
   const lower = name.toLowerCase();
+  if (TEAM_ABBR_PATTERN.test(lower)) return true;
   return TEAM_SPORT_KEYWORDS.some((kw) => lower.includes(kw));
 }
 
