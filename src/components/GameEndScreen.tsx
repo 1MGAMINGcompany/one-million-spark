@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Trophy, RefreshCw, BarChart2, Star, LogOut, Wallet, ChevronDown, ChevronUp, CheckCircle, ExternalLink, Loader2, Copy, Check, MessageCircle, Mail, Share2 } from 'lucide-react';
 import { ShareResultCard } from '@/components/ShareResultCard';
+import SocialShareModal from '@/components/SocialShareModal';
+import { SOCIAL_SHARE_ENABLED } from '@/lib/socialShareConfig';
 import GoldConfettiExplosion from '@/components/GoldConfettiExplosion';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
