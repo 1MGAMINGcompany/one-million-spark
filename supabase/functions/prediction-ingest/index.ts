@@ -68,8 +68,13 @@ function normalizeEventName(raw: string, league: string, sport: string): string 
 function extractFighters(eventName: string): { fighterA: string; fighterB: string } | null {
   const vsMatch = eventName.match(/(.+?)\s+vs\.?\s+(.+)/i);
   if (!vsMatch) return null;
-  const fighterA = normalizeName(vsMatch[1].replace(/^.*?:\s*/, ""));
+  // Strip event prefix patterns: "UFC Fight Night 269 ", "UFC 312 ", "Bellator 303 ", etc.
+  let rawA = vsMatch[1];
+  rawA = rawA.replace(/^.*?:\s*/, ""); // strip "League: " prefix
+  rawA = rawA.replace(/^(?:UFC\s+(?:Fight\s+Night|on\s+ESPN|on\s+ABC)?\s*\d*\s*|Bellator\s*\d*\s*|PFL\s*\d*\s*|Top\s*Rank\s*)/i, "");
+  const fighterA = normalizeName(rawA);
   const fighterB = normalizeName(vsMatch[2].replace(/\s*\(.*\)$/, ""));
+  if (!fighterA || !fighterB) return null;
   // Both must look like individual fighters, not team names
   if (!looksLikeIndividualFighter(fighterA) || !looksLikeIndividualFighter(fighterB)) {
     return null;
