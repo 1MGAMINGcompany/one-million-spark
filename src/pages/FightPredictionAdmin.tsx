@@ -131,13 +131,15 @@ export default function FightPredictionAdmin() {
   const [entryCounts, setEntryCounts] = useState<Record<string, number>>({});
 
   const loadData = useCallback(async () => {
-    const [eventsRes, fightsRes, entriesRes] = await Promise.all([
+    const [eventsRes, fightsRes, entriesRes, settingsRes] = await Promise.all([
       supabase.from("prediction_events").select("*").order("created_at", { ascending: false }),
       supabase.from("prediction_fights").select("*").order("created_at", { ascending: false }),
       supabase.from("prediction_entries").select("fight_id"),
+      supabase.functions.invoke("prediction-admin", { body: { action: "getSettings", wallet: "read" } }),
     ]);
     if (eventsRes.data) setEvents(eventsRes.data as any);
     if (fightsRes.data) setFights(fightsRes.data as any);
+    if (settingsRes.data?.settings) setKillSwitches(settingsRes.data.settings);
     if (entriesRes.data) {
       const counts: Record<string, number> = {};
       entriesRes.data.forEach((e: any) => { counts[e.fight_id] = (counts[e.fight_id] || 0) + 1; });
