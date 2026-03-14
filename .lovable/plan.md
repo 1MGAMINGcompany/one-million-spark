@@ -33,11 +33,13 @@ open → locked → live → result_selected → confirmed → settled
 5. `review_required` + `review_reason` fields ready for Phase 2 automation
 
 ### Safety Guardrails
+- **Global kill switches**: predictions_enabled, claims_enabled, automation_enabled (enforced server-side)
 - Server-side status guards on all transitions
 - Red confirmation dialogs for irreversible actions (lock, confirm, settle, draw, refunds)
 - Per-claim cap: 5 SOL, daily ceiling: 50 SOL
 - 5-minute safety delay before claims open
 - Refund tracking: refund_status, refunds_started_at, refunds_completed_at
+- Manual admin actions (settle, lock, etc.) always work regardless of kill switches
 
 ### Seed Data
 - Silvertooth Promotions event (Montreal) — linked to existing fights
