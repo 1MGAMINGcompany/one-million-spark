@@ -26,7 +26,7 @@ open → locked → live → result_selected → confirmed → settled
 - `prediction-claim` — Claim rewards (respects claims_enabled kill switch)
 - `prediction-feed` — Live activity feed
 - `prediction-auto-settle` — Cron auto-settle (respects automation_enabled kill switch)
-- `prediction-ingest` — TheSportsDB event discovery (UFC, Bellator, PFL, PBC, TopRank, Matchroom). Normalizes names, dedupes by source_event_id, stores as draft, extracts fighters, logs all actions. Never auto-publishes.
+- `prediction-ingest` — BALLDONTLIE MMA API event/fight discovery (UFC, Bellator, PFL, ONE). Fetches events via `/events?year=YYYY`, full fight cards via `/fights?event_ids[]=ID`. Auth via `Authorization: API_KEY` header. Supports full card import (main_card, prelims, early_prelims segments with fight_order). Fights endpoint requires ALL-STAR tier. Dedupes by `bdl_{id}`. Stores as draft. Never auto-publishes.
 - `prediction-schedule-worker` — Cron: locks approved events at scheduled_lock_at, marks live at scheduled_live_at. Respects global + per-event automation_paused.
 - `prediction-result-worker` — Cron: fetches results from TheSportsDB for live auto-resolve events. Requires exact source_event_id match. Records payload + confidence. Flags low-confidence (<85%) for admin review. Auto-moves high-confidence fights to result_selected (NOT confirmed).
 - `prediction-settle-worker` — Idempotent job-based settlement. Creates jobs for confirmed fights past claims_open_at. CAS guard prevents double-pickup. Retry support (max 3). Full audit trail. Replaces simple auto-settle for new fights.
