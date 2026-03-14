@@ -767,7 +767,7 @@ function AdminFightCard({
 }
 
 // ── Ingest Panel ──
-const INGEST_LEAGUES = ["UFC", "Bellator", "PFL", "PBC", "TopRank", "Matchroom"];
+const INGEST_LEAGUES = ["UFC", "Bellator", "PFL", "Boxing", "TopRank"];
 
 function IngestPanel({ wallet, busy: parentBusy, onComplete }: { wallet: string; busy: boolean; onComplete: () => void }) {
   const [ingestBusy, setIngestBusy] = useState(false);
@@ -862,16 +862,30 @@ function IngestPanel({ wallet, busy: parentBusy, onComplete }: { wallet: string;
               ))}
             </div>
           )}
+          {lastResult.events_rejected > 0 && (
+            <p className="text-muted-foreground">Rejected: {lastResult.events_rejected}</p>
+          )}
           {lastResult.details?.length > 0 && (
-            <details className="mt-1">
-              <summary className="text-muted-foreground cursor-pointer hover:text-foreground">
-                {lastResult.details.length} event(s) detail
+            <details className="mt-2" open>
+              <summary className="text-muted-foreground cursor-pointer hover:text-foreground font-medium">
+                📋 {lastResult.details.length} event(s) details
               </summary>
-              <div className="mt-1 space-y-1 max-h-40 overflow-y-auto">
+              <div className="mt-1 space-y-1.5 max-h-60 overflow-y-auto">
                 {lastResult.details.map((d: any, i: number) => (
-                  <div key={i} className="text-[10px] text-muted-foreground border-t border-border/20 pt-1">
-                    <span className="text-foreground">{d.event_name}</span>
-                    {d.sport && <span className="ml-1 text-primary">({d.sport})</span>}
+                  <div key={i} className="text-[10px] text-muted-foreground border-t border-border/20 pt-1.5">
+                    <div className="flex items-start gap-1">
+                      <span className={d.rejected ? "text-destructive" : "text-foreground"}>
+                        {d.rejected ? "❌" : "✅"} {d.event_name}
+                      </span>
+                    </div>
+                    <div className="ml-4 space-y-0.5">
+                      {d.sport && <p>Sport: <span className="text-primary">{d.sport}</span></p>}
+                      {d.league && <p>League: {d.league}</p>}
+                      {d.event_date && <p>Date: {d.event_date}</p>}
+                      {d.source_event_id && <p>ID: {d.source_event_id}</p>}
+                      {d.reason && <p className="text-destructive">Reason: {d.reason}</p>}
+                      {d.fights_extracted !== undefined && <p>Fights: {d.fights_extracted}</p>}
+                    </div>
                   </div>
                 ))}
               </div>

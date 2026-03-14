@@ -17,22 +17,25 @@ const SPORT_LEAGUES: Record<string, { id: string; sport: string }> = {
   TopRank: { id: "4875", sport: "BOXING" },
 };
 
-const THESPORTSDB_BASE = "https://www.thesportsdb.com/api/v1/json/3";
+const THESPORTSDB_BASE = "https://www.thesportsdb.com/api/v1/json/123";
 
 // ── Known soccer / team-sport keywords (reject these) ──
 const TEAM_SPORT_KEYWORDS = [
   "rovers", "united", "city", "town", "athletic", "wanderers", "albion",
   "hotspur", "orient", "wednesday", "forest", "palace", "villa", "county",
   "rangers", "celtic", "dynamo", "sporting", "olympique", "real madrid",
-  "barcelona", "juventus", "bayern", "inter", "milan", "arsenal", "chelsea",
+  "barcelona", "juventus", "bayern", "inter milan", "ac milan", "arsenal", "chelsea",
   "liverpool", "everton", "burnley", "wolves", "bournemouth", "brentford",
   "fulham", "leicester", "newcastle", "brighton", "nottingham", "luton",
-  "sheffield", "blackpool", "doncaster", "peterborough", "leyton",
-  "fc", "afc", "sc", "cf",
+  "sheffield", "blackpool", "doncaster", "peterborough", "leyton orient",
 ];
+
+// Standalone abbreviations — must be whole words (not substrings like "UFC")
+const TEAM_ABBR_PATTERN = /\b(fc|afc|sc|cf)\b/i;
 
 function looksLikeTeamName(name: string): boolean {
   const lower = name.toLowerCase();
+  if (TEAM_ABBR_PATTERN.test(lower)) return true;
   return TEAM_SPORT_KEYWORDS.some((kw) => lower.includes(kw));
 }
 
@@ -65,8 +68,13 @@ function normalizeEventName(raw: string, league: string, sport: string): string 
 function extractFighters(eventName: string): { fighterA: string; fighterB: string } | null {
   const vsMatch = eventName.match(/(.+?)\s+vs\.?\s+(.+)/i);
   if (!vsMatch) return null;
-  const fighterA = normalizeName(vsMatch[1].replace(/^.*?:\s*/, ""));
+  // Strip event prefix patterns: "UFC Fight Night 269 ", "UFC 312 ", "Bellator 303 ", etc.
+  let rawA = vsMatch[1];
+  rawA = rawA.replace(/^.*?:\s*/, ""); // strip "League: " prefix
+  rawA = rawA.replace(/^(?:UFC\s+(?:Fight\s+Night|on\s+ESPN|on\s+ABC)?\s*\d*\s*|Bellator\s*\d*\s*|PFL\s*\d*\s*|Top\s*Rank\s*)/i, "");
+  const fighterA = normalizeName(rawA);
   const fighterB = normalizeName(vsMatch[2].replace(/\s*\(.*\)$/, ""));
+  if (!fighterA || !fighterB) return null;
   // Both must look like individual fighters, not team names
   if (!looksLikeIndividualFighter(fighterA) || !looksLikeIndividualFighter(fighterB)) {
     return null;
@@ -220,7 +228,17 @@ Deno.serve(async (req) => {
           if (!validation.valid) {
             results.events_rejected++;
             console.log(`[ingest] Rejected: ${rawEventName} — ${validation.reason}`);
-            // Log discarded event
+            // Always include rejected events in details for dry-run visibility
+            results.details.push({
+              source_event_id: sourceEventId,
+              event_name: rawEventName,
+              sport: ev.strSport || "unknown",
+              league: ev.strLeague || "unknown",
+              event_date: ev.dateEvent || null,
+              rejected: true,
+              reason: validation.reason,
+            });
+            // Log discarded event to DB (non-dry-run only)
             if (!dry_run) {
               await supabase.from("automation_logs").insert({
                 action: "event_discarded",
