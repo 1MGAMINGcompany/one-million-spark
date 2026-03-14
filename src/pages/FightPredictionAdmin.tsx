@@ -135,7 +135,7 @@ export default function FightPredictionAdmin() {
       supabase.from("prediction_events").select("*").order("created_at", { ascending: false }),
       supabase.from("prediction_fights").select("*").order("created_at", { ascending: false }),
       supabase.from("prediction_entries").select("fight_id"),
-      supabase.functions.invoke("prediction-admin", { body: { action: "getSettings", wallet: "read" } }),
+      supabase.functions.invoke("prediction-admin", { body: { action: "getSettings", wallet: address } }),
     ]);
     if (eventsRes.data) setEvents(eventsRes.data as any);
     if (fightsRes.data) setFights(fightsRes.data as any);
