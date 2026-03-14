@@ -213,7 +213,7 @@ const SKILL_LEVELS: { key: SkillLevel; labelKey: string }[] = [
 ];
 
 // ─── Nudge pages ───
-const NUDGE_PAGES = ["/", "/quick-match", "/add-funds", "/room-list"];
+const NUDGE_PAGES = ["/", "/quick-match", "/add-funds", "/room-list", "/predictions"];
 const NUDGE_KEY = "aihelper-nudge-dismissed";
 const AUTOSHEET_KEY = "aihelper-autosheet-dismissed";
 
