@@ -3,8 +3,15 @@ import { Bell } from "lucide-react";
 import boxingGlove from "@/assets/boxing-glove.png";
 import mmaGloves from "@/assets/mma-gloves.png";
 import futbolBall from "@/assets/futbol.png";
+import muayThai from "@/assets/muay-thai.png";
 
 const SPORT_TEASERS: Record<string, { icon?: string; image?: string; color: string; bgColor: string; description: string }> = {
+  "MUAY THAI": {
+    image: muayThai,
+    color: "text-orange-400",
+    bgColor: "bg-orange-500/10",
+    description: "Muay Thai fight predictions coming soon.",
+  },
   BOXING: {
     image: boxingGlove,
     color: "text-blue-400",
