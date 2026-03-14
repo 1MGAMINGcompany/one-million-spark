@@ -831,6 +831,30 @@ export type Database = {
           },
         ]
       }
+      prediction_settings: {
+        Row: {
+          automation_enabled: boolean
+          claims_enabled: boolean
+          id: string
+          predictions_enabled: boolean
+          updated_at: string
+        }
+        Insert: {
+          automation_enabled?: boolean
+          claims_enabled?: boolean
+          id?: string
+          predictions_enabled?: boolean
+          updated_at?: string
+        }
+        Update: {
+          automation_enabled?: boolean
+          claims_enabled?: boolean
+          id?: string
+          predictions_enabled?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
       presence_heartbeats: {
         Row: {
           country: string | null

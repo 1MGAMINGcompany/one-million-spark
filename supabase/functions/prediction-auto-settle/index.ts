@@ -25,6 +25,19 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
+    // ── Kill switch check ──
+    const { data: settings } = await supabase
+      .from("prediction_settings")
+      .select("automation_enabled")
+      .eq("id", "global")
+      .single();
+
+    if (settings && !settings.automation_enabled) {
+      return new Response(JSON.stringify({ settled: 0, message: "Automation disabled by admin" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // Find all confirmed fights where claims_open_at has passed
     const { data: fights, error: fetchErr } = await supabase
       .from("prediction_fights")

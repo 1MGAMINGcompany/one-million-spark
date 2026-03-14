@@ -90,6 +90,17 @@ Deno.serve(async (req) => {
       tx_signature,
     } = body;
 
+    // ── Kill switch check ──
+    const { data: settings } = await supabase
+      .from("prediction_settings")
+      .select("predictions_enabled")
+      .eq("id", "global")
+      .single();
+
+    if (settings && !settings.predictions_enabled) {
+      return json({ error: "Predictions are currently disabled by admin" }, 403);
+    }
+
     if (!fight_id || !wallet || !fighter_pick || !amount_lamports || !tx_signature) {
       return json({ error: "Missing required fields" }, 400);
     }

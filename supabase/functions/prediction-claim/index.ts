@@ -46,6 +46,20 @@ Deno.serve(async (req) => {
       });
     }
 
+    // ── Kill switch check ──
+    const { data: settings } = await supabase
+      .from("prediction_settings")
+      .select("claims_enabled")
+      .eq("id", "global")
+      .single();
+
+    if (settings && !settings.claims_enabled) {
+      return new Response(JSON.stringify({ error: "Claims are currently disabled by admin" }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // Get fight
     const { data: fight, error: fErr } = await supabase
       .from("prediction_fights")

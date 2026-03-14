@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -14,7 +15,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   Shield, Plus, Lock, Trophy, Loader2, Play, CheckCircle, Ban,
-  ArrowDown, Trash2, Eye, AlertTriangle, RefreshCw,
+  ArrowDown, Trash2, Eye, AlertTriangle, RefreshCw, Power,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useWallet } from "@/hooks/useWallet";
@@ -82,6 +83,13 @@ export default function FightPredictionAdmin() {
   const [fights, setFights] = useState<Fight[]>([]);
   const [busy, setBusy] = useState(false);
 
+  // Kill switches
+  const [killSwitches, setKillSwitches] = useState({
+    predictions_enabled: true,
+    claims_enabled: true,
+    automation_enabled: true,
+  });
+  const [killSwitchLoading, setKillSwitchLoading] = useState(false);
   // Create event form
   const [eventName, setEventName] = useState("");
   const [eventOrg, setEventOrg] = useState("");
@@ -123,13 +131,15 @@ export default function FightPredictionAdmin() {
   const [entryCounts, setEntryCounts] = useState<Record<string, number>>({});
 
   const loadData = useCallback(async () => {
-    const [eventsRes, fightsRes, entriesRes] = await Promise.all([
+    const [eventsRes, fightsRes, entriesRes, settingsRes] = await Promise.all([
       supabase.from("prediction_events").select("*").order("created_at", { ascending: false }),
       supabase.from("prediction_fights").select("*").order("created_at", { ascending: false }),
       supabase.from("prediction_entries").select("fight_id"),
+      supabase.functions.invoke("prediction-admin", { body: { action: "getSettings", wallet: address } }),
     ]);
     if (eventsRes.data) setEvents(eventsRes.data as any);
     if (fightsRes.data) setFights(fightsRes.data as any);
+    if (settingsRes.data?.settings) setKillSwitches(settingsRes.data.settings);
     if (entriesRes.data) {
       const counts: Record<string, number> = {};
       entriesRes.data.forEach((e: any) => { counts[e.fight_id] = (counts[e.fight_id] || 0) + 1; });
@@ -169,6 +179,24 @@ export default function FightPredictionAdmin() {
 
   const withConfirm = (title: string, description: string, onConfirm: () => void, destructive = true) => {
     setConfirmAction({ title, description, onConfirm, destructive });
+  };
+
+  const toggleKillSwitch = async (key: "predictions_enabled" | "claims_enabled" | "automation_enabled") => {
+    setKillSwitchLoading(true);
+    try {
+      const newVal = !killSwitches[key];
+      const { data, error } = await supabase.functions.invoke("prediction-admin", {
+        body: { action: "updateSettings", wallet: address, [key]: newVal },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      setKillSwitches(prev => ({ ...prev, [key]: newVal }));
+      toast.success(`${key.replace(/_/g, " ")} → ${newVal ? "ON" : "OFF"}`);
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setKillSwitchLoading(false);
+    }
   };
 
   // ── Event actions ──
@@ -237,6 +265,32 @@ export default function FightPredictionAdmin() {
         <h1 className="text-2xl font-bold text-foreground font-['Cinzel'] flex items-center gap-2">
           <Shield className="w-6 h-6 text-primary" /> Prediction Admin
         </h1>
+
+        {/* ── Kill Switches ── */}
+        <Card className="bg-card border-border/50 p-4">
+          <h2 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
+            <Power className="w-4 h-4 text-destructive" /> Kill Switches
+          </h2>
+          <div className="space-y-3">
+            {([
+              { key: "predictions_enabled" as const, label: "Predictions", desc: "Allow new predictions to be submitted" },
+              { key: "claims_enabled" as const, label: "Claims", desc: "Allow winners to claim rewards" },
+              { key: "automation_enabled" as const, label: "Automation", desc: "Auto-settle confirmed fights via cron" },
+            ]).map(({ key, label, desc }) => (
+              <div key={key} className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-foreground">{label}</p>
+                  <p className="text-xs text-muted-foreground">{desc}</p>
+                </div>
+                <Switch
+                  checked={killSwitches[key]}
+                  onCheckedChange={() => toggleKillSwitch(key)}
+                  disabled={killSwitchLoading}
+                />
+              </div>
+            ))}
+          </div>
+        </Card>
 
         {/* ── Create Event ── */}
         <Card className="bg-card border-border/50 p-4">
