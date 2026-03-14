@@ -114,7 +114,11 @@ export default function EventSection({
       >
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xl">{config.icon}</span>
+            {config.image ? (
+              <img src={config.image} alt={sport} className="w-6 h-6 object-contain" />
+            ) : (
+              <span className="text-xl">{config.icon}</span>
+            )}
             <span className={`text-[10px] font-bold uppercase tracking-wider ${config.color}`}>{sport}</span>
             {event?.is_test && (
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-400">TEST</span>
