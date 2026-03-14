@@ -261,6 +261,7 @@ export default function FightPredictions() {
   };
 
   const handlePredict = (fight: Fight, pick: "fighter_a" | "fighter_b") => {
+    if (fight.status !== "open") return; // Block non-open fights
     if (!isConnected) { setShowWalletGate(true); return; }
     setSelectedFight(fight);
     setSelectedPick(pick);
