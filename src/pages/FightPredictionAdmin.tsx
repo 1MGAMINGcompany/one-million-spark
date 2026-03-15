@@ -1067,12 +1067,19 @@ function AdminFightCard({
 }
 
 // ── Ingest Panel ──
-const INGEST_LEAGUES = ["UFC", "Bellator", "PFL", "ONE"];
+const BDL_LEAGUES = ["UFC", "Bellator", "PFL", "ONE"];
+const TSDB_LEAGUES_LIST = ["Boxing", "Top Rank"];
+const PROVIDERS = [
+  { key: "all", label: "All Providers" },
+  { key: "balldontlie", label: "BALLDONTLIE (MMA)" },
+  { key: "thesportsdb", label: "TheSportsDB (Boxing)" },
+];
 
 function IngestPanel({ wallet, busy: parentBusy, onComplete }: { wallet: string; busy: boolean; onComplete: () => void }) {
   const [ingestBusy, setIngestBusy] = useState(false);
   const [dryRun, setDryRun] = useState(true);
   const [selectedLeagues, setSelectedLeagues] = useState<string[]>([]);
+  const [selectedProvider, setSelectedProvider] = useState("all");
   const [lastResult, setLastResult] = useState<any>(null);
 
   const toggleLeague = (l: string) => {
@@ -1080,6 +1087,10 @@ function IngestPanel({ wallet, busy: parentBusy, onComplete }: { wallet: string;
       prev.includes(l) ? prev.filter(x => x !== l) : [...prev, l]
     );
   };
+
+  const visibleLeagues = selectedProvider === "balldontlie" ? BDL_LEAGUES
+    : selectedProvider === "thesportsdb" ? TSDB_LEAGUES_LIST
+    : [...BDL_LEAGUES, ...TSDB_LEAGUES_LIST];
 
   const runIngest = async () => {
     setIngestBusy(true);
@@ -1089,6 +1100,7 @@ function IngestPanel({ wallet, busy: parentBusy, onComplete }: { wallet: string;
         body: {
           wallet,
           leagues: selectedLeagues.length > 0 ? selectedLeagues : undefined,
+          provider: selectedProvider !== "all" ? selectedProvider : undefined,
           dry_run: dryRun,
         },
       });
@@ -1096,10 +1108,10 @@ function IngestPanel({ wallet, busy: parentBusy, onComplete }: { wallet: string;
       if (data?.error) throw new Error(data.error);
       setLastResult(data);
       if (!dryRun) {
-        toast.success(`Ingested ${data.events_new} new events, ${data.fights_created} fights`);
+        toast.success(`Ingested ${data.events_new} new, ${data.events_updated || 0} updated, ${data.fights_created} fights`);
         onComplete();
       } else {
-        toast.info(`Dry run: ${data.events_new} new events found`);
+        toast.info(`Dry run: ${data.events_new} new, ${data.events_updated || 0} would update`);
       }
     } catch (err: any) {
       toast.error(err.message);
@@ -1110,8 +1122,26 @@ function IngestPanel({ wallet, busy: parentBusy, onComplete }: { wallet: string;
 
   return (
     <div className="space-y-3">
+      {/* Provider selector */}
       <div className="flex flex-wrap gap-1.5">
-        {INGEST_LEAGUES.map(l => (
+        {PROVIDERS.map(p => (
+          <button
+            key={p.key}
+            onClick={() => { setSelectedProvider(p.key); setSelectedLeagues([]); }}
+            className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+              selectedProvider === p.key
+                ? "bg-primary/20 text-primary border-primary/40"
+                : "bg-muted/30 text-muted-foreground border-border/30 hover:border-border"
+            }`}
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
+
+      {/* League chips */}
+      <div className="flex flex-wrap gap-1.5">
+        {visibleLeagues.map(l => (
           <button
             key={l}
             onClick={() => toggleLeague(l)}
@@ -1122,6 +1152,9 @@ function IngestPanel({ wallet, busy: parentBusy, onComplete }: { wallet: string;
             }`}
           >
             {l}
+            <span className="ml-1 text-[10px] text-muted-foreground/60">
+              {BDL_LEAGUES.includes(l) ? "MMA" : "BOX"}
+            </span>
           </button>
         ))}
       </div>
@@ -1148,12 +1181,19 @@ function IngestPanel({ wallet, busy: parentBusy, onComplete }: { wallet: string;
       {lastResult && (
         <div className="bg-muted/30 border border-border/30 rounded-lg p-3 text-xs space-y-1">
           <p className="text-foreground font-medium">
-            {lastResult.dry_run || dryRun ? "🔍 Dry Run" : "✅ Ingested"}
-            {lastResult.provider && <span className="text-muted-foreground ml-1">({lastResult.provider})</span>}
+            {dryRun ? "🔍 Dry Run" : "✅ Ingested"}
+            {lastResult.providers_used?.length > 0 && (
+              <span className="text-muted-foreground ml-1">({lastResult.providers_used.join(", ")})</span>
+            )}
           </p>
-          <p className="text-muted-foreground">Found: {lastResult.events_found} · New: {lastResult.events_new} · Dupes: {lastResult.events_skipped_dupe}</p>
+          <p className="text-muted-foreground">
+            Found: {lastResult.events_found} · New: {lastResult.events_new} · Updated: {lastResult.events_updated || 0}
+          </p>
           {lastResult.fights_found > 0 && (
             <p className="text-muted-foreground">Fights found: {lastResult.fights_found} · Created: {lastResult.fights_created}</p>
+          )}
+          {lastResult.fights_created > 0 && lastResult.fights_found === 0 && (
+            <p className="text-muted-foreground">Fights created: {lastResult.fights_created}</p>
           )}
           {lastResult.fights_endpoint_available === false && lastResult.events_found > 0 && (
             <p className="text-yellow-400 text-[10px]">⚠ Fights endpoint requires paid tier — only events imported</p>
@@ -1174,14 +1214,19 @@ function IngestPanel({ wallet, busy: parentBusy, onComplete }: { wallet: string;
               <div className="mt-1 space-y-2 max-h-80 overflow-y-auto">
                 {lastResult.details.map((d: any, i: number) => (
                   <div key={i} className="text-[10px] text-muted-foreground border-t border-border/20 pt-1.5">
-                    <p className="text-foreground font-medium">{d.event_name}</p>
+                    <p className="text-foreground font-medium">
+                      {d.action === "updated" ? "🔄 " : "🆕 "}{d.event_name}
+                    </p>
                     <div className="ml-2 space-y-0.5">
-                      <p>League: <span className="text-primary">{d.league}</span></p>
+                      <p>
+                        <span className="text-primary">{d.league}</span>
+                        {d.sport && <span className="text-muted-foreground ml-1">({d.sport})</span>}
+                        {d.provider && <span className="text-muted-foreground ml-1">· {d.provider}</span>}
+                      </p>
                       {d.event_date && <p>Date: {new Date(d.event_date).toLocaleDateString()}</p>}
                       {d.location && <p>📍 {d.location}</p>}
                       <p>ID: {d.source_event_id}</p>
                       <p>Fights: <span className="text-primary font-medium">{d.fight_count ?? 0}</span></p>
-                      {d.event_status && <p>Status: {d.event_status}</p>}
                       {d.fights_error && <p className="text-yellow-400">⚠ {d.fights_error}</p>}
                       {d.fights?.length > 0 && (
                         <details className="mt-1">
