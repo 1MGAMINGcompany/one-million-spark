@@ -30,9 +30,10 @@ const SQ = BOARD_SIZE / 8;
 const HALF = BOARD_SIZE / 2;
 const PIECE_SCALE = 1.4;
 
-const LIGHT_SQ = new THREE.Color("hsl(38, 45%, 75%)");
-const DARK_SQ = new THREE.Color("hsl(25, 35%, 32%)");
-const GOLD_TRIM = new THREE.Color("hsl(42, 75%, 50%)");
+// Default colors — overridden by skin
+const DEFAULT_LIGHT_SQ = "hsl(38, 45%, 75%)";
+const DEFAULT_DARK_SQ = "hsl(25, 35%, 32%)";
+const DEFAULT_GOLD_TRIM = "hsl(42, 75%, 50%)";
 
 function squareToWorld(sq: string, flipped: boolean): [number, number] {
   const file = sq.charCodeAt(0) - 97;
