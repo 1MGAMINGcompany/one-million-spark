@@ -1089,6 +1089,7 @@ function AutomationStatusPanel({
 }) {
   const [checking, setChecking] = useState(false);
   const [checkResult, setCheckResult] = useState<any>(null);
+  const [forcingLive, setForcingLive] = useState(false);
 
   const statusCounts = {
     open: fights.filter(f => f.status === "open").length,
