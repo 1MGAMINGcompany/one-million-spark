@@ -235,7 +235,8 @@ function MovingPiece({ piece, color, fromPos, toPos, isCapture, lite, progressRe
 
     const x = fromPos[0] + (toPos[0] - fromPos[0]) * moveT;
     const z = fromPos[1] + (toPos[1] - fromPos[1]) * moveT;
-    const arcY = Math.sin(moveT * Math.PI) * 0.3;
+    const arcHeight = isCapture ? 0.15 : 0.3;
+    const arcY = Math.sin(moveT * Math.PI) * arcHeight;
 
     if (groupRef.current) {
       groupRef.current.position.set(x, arcY, z);
