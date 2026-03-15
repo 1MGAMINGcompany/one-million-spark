@@ -563,6 +563,7 @@ export default function FightPredictions() {
           onClose={() => setClaimShareData(null)}
           variant="claim_win"
           eventTitle={claimShareData.eventTitle}
+          gameTitle={claimShareData.fighterName}
           solWon={claimShareData.solWon}
           wallet={address || undefined}
         />
