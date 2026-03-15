@@ -1089,6 +1089,7 @@ function AutomationStatusPanel({
 }) {
   const [checking, setChecking] = useState(false);
   const [checkResult, setCheckResult] = useState<any>(null);
+  const [forcingLive, setForcingLive] = useState(false);
 
   const statusCounts = {
     open: fights.filter(f => f.status === "open").length,
@@ -1256,6 +1257,40 @@ function AutomationStatusPanel({
           </span>
         </div>
       </div>
+
+      {/* ⚠️ Warning: past scheduled_live_at but not live */}
+      {livePassed && statusCounts.live === 0 && (statusCounts.open > 0 || statusCounts.locked > 0) && (
+        <div className="bg-destructive/10 border border-destructive/30 rounded px-2.5 py-2 text-[10px] space-y-1.5">
+          <div className="flex items-center gap-1.5 text-destructive font-bold">
+            <AlertTriangle className="w-3.5 h-3.5" /> Event should be LIVE but fights are stuck
+          </div>
+          <p className="text-muted-foreground">
+            Scheduled live time has passed but {statusCounts.open + statusCounts.locked} fight(s) are not live yet.
+            The next automation run will attempt auto-recovery. You can also force it now.
+          </p>
+          <Button
+            size="sm"
+            variant="outline"
+            className="w-full border-destructive/40 text-destructive hover:bg-destructive/10"
+            disabled={busy || forcingLive}
+            onClick={async () => {
+              setForcingLive(true);
+              try {
+                const res = await callAdmin("forceLiveEvent", { event_id: event.id });
+                toast.success(`Forced ${res?.forced_live ?? 0} fight(s) live`);
+                loadData();
+              } catch (e: any) {
+                toast.error(e.message);
+              } finally {
+                setForcingLive(false);
+              }
+            }}
+          >
+            {forcingLive ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-2" /> : <Play className="w-3.5 h-3.5 mr-2" />}
+            Force Live Now
+          </Button>
+        </div>
+      )}
 
       {/* Run Automation Check button */}
       <Button

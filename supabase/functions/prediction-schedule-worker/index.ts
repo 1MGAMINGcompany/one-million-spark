@@ -126,6 +126,43 @@ Deno.serve(async (req) => {
       results.push({ action: "mark_live", event_id: evt.id, ok: true });
     }
 
+    // ── Phase 2.5: Fallback auto-live for events past scheduled_live_at ──
+    // Safety net: if event should be live but fights are still locked/open
+    const { data: stuckEvents } = await supabase
+      .from("prediction_events")
+      .select("id, event_name, scheduled_live_at, source_provider")
+      .eq("status", "approved")
+      .eq("automation_paused", false)
+      .not("scheduled_live_at", "is", null)
+      .lte("scheduled_live_at", now);
+
+    for (const evt of stuckEvents ?? []) {
+      // Find fights that should be live but are still locked or open
+      const { data: stuckFights, error: sfErr } = await supabase
+        .from("prediction_fights")
+        .update({ status: "live" })
+        .eq("event_id", evt.id)
+        .in("status", ["locked", "open"])
+        .select("id");
+
+      if (sfErr) {
+        results.push({ action: "fallback_live", event_id: evt.id, ok: false, error: sfErr.message });
+        continue;
+      }
+
+      const fallbackCount = stuckFights?.length ?? 0;
+      if (fallbackCount > 0) {
+        await supabase.from("automation_logs").insert({
+          action: "fallback_auto_live",
+          event_id: evt.id,
+          source: "prediction-schedule-worker",
+          details: { live_fights: fallbackCount, event_name: evt.event_name, reason: "past_scheduled_live_at_fallback", provider: evt.source_provider },
+        });
+        console.log(`[schedule-worker] Fallback: marked ${fallbackCount} stuck fights live for event ${evt.id}`);
+        results.push({ action: "fallback_live", event_id: evt.id, ok: true });
+      }
+    }
+
     // ── Phase 3: Auto-lock events without scheduled_lock_at but with event_date passed ──
     // Fallback for events where admin approved but didn't set explicit lock time
     const { data: pastEvents } = await supabase
