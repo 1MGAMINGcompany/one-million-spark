@@ -166,7 +166,7 @@ function logPhraseShown(tier: CinematicTier) {
 
 function CinematicChessOverlayInner({
   event, duration, boardFlipped, tier = "2d-fallback",
-  isDismissing = false, onDismissComplete, isFirstEntry = true,
+  isDismissing = false, onDismissComplete, isFirstEntry = true, skinId,
 }: Props) {
   const [use3D, setUse3D] = useState(tier === "3d-full" || tier === "3d-lite");
   const [done, setDone] = useState(false);
