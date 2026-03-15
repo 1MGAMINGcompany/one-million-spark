@@ -417,75 +417,25 @@ function SceneLighting({ lite }: {
 
 // ─── Camera Rig ───────────────────────────────────────────────────────────────
 
-const TOP_DOWN_POS = new THREE.Vector3(0, 6.5, 0.01);
-const TOP_DOWN_LOOK = new THREE.Vector3(0, 0, 0);
+// Fixed elevated perspective — no camera movement at all
+const FIXED_CAM_POS = new THREE.Vector3(0, 4.5, 3.0);
+const FIXED_CAM_LOOK = new THREE.Vector3(0, 0, 0);
 
-function CameraRig({ fromPos, toPos, progressRef, isFirstEntryRef, isDismissingRef, dismissProgressRef }: {
-  fromPos: [number, number]; toPos: [number, number];
-  progressRef: React.MutableRefObject<number>;
-  isFirstEntryRef: React.MutableRefObject<boolean>;
-  isDismissingRef: React.MutableRefObject<boolean>;
-  dismissProgressRef: React.MutableRefObject<number>;
-}) {
+function CameraRig() {
   const { camera } = useThree();
-  const tmpPos = useRef(new THREE.Vector3());
-  const tmpLook = useRef(new THREE.Vector3());
-  const dramaticPos = useRef(new THREE.Vector3());
-  const dramaticLook = useRef(new THREE.Vector3());
 
   useEffect(() => {
-    const midX = (fromPos[0] + toPos[0]) / 2;
-    const midZ = (fromPos[1] + toPos[1]) / 2;
-    dramaticPos.current.set(midX * 0.3, 1.6, 3.2);
-    dramaticLook.current.set(midX * 0.3, 0.1, midZ * 0.4);
-
-    // Only set camera to top-down on first entry
-    if (isFirstEntryRef.current) {
-      camera.position.copy(TOP_DOWN_POS);
-      camera.lookAt(TOP_DOWN_LOOK);
-    }
+    camera.position.copy(FIXED_CAM_POS);
+    camera.lookAt(FIXED_CAM_LOOK);
     if (camera instanceof THREE.PerspectiveCamera) {
       camera.fov = 45;
       camera.updateProjectionMatrix();
     }
-  }, [camera, fromPos, toPos]);
+  }, [camera]);
 
   useFrame(() => {
-    // Handle dismiss swoop-out
-    if (isDismissingRef.current) {
-      const dt = dismissProgressRef.current;
-      const et = easeInOutCubic(dt);
-      tmpPos.current.lerpVectors(dramaticPos.current, TOP_DOWN_POS, et);
-      tmpLook.current.lerpVectors(dramaticLook.current, TOP_DOWN_LOOK, et);
-      camera.position.copy(tmpPos.current);
-      camera.lookAt(tmpLook.current);
-      return;
-    }
-
-    const progress = progressRef.current;
-    const { phase, t } = getPhase(progress, isFirstEntryRef.current);
-    const et = easeInOutCubic(t);
-    const midX = (fromPos[0] + toPos[0]) / 2;
-    const midZ = (fromPos[1] + toPos[1]) / 2;
-
-    if (phase === "swoop-in") {
-      tmpPos.current.lerpVectors(TOP_DOWN_POS, dramaticPos.current, et);
-      tmpLook.current.lerpVectors(TOP_DOWN_LOOK, dramaticLook.current, et);
-    } else if (phase === "move") {
-      const followT = easeInOutCubic(t);
-      tmpPos.current.copy(dramaticPos.current);
-      tmpPos.current.x += (toPos[0] - midX) * followT * 0.15;
-      tmpLook.current.copy(dramaticLook.current);
-      tmpLook.current.x += (toPos[0] - midX) * followT * 0.3;
-      tmpLook.current.z += (toPos[1] - midZ) * followT * 0.2;
-    } else {
-      // "hold" — stay at dramatic position
-      tmpPos.current.copy(dramaticPos.current);
-      tmpLook.current.copy(dramaticLook.current);
-    }
-
-    camera.position.copy(tmpPos.current);
-    camera.lookAt(tmpLook.current);
+    camera.position.copy(FIXED_CAM_POS);
+    camera.lookAt(FIXED_CAM_LOOK);
   });
 
   return null;
