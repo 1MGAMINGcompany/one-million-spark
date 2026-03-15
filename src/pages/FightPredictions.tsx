@@ -331,6 +331,7 @@ export default function FightPredictions() {
           eventTitle: f?.title || f?.event_name || "Prediction Win",
           solWon,
           fighterName: pickedName || undefined,
+          sport: f?.event_name,
         });
       }
     } catch (err: any) {
