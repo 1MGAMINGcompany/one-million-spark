@@ -201,6 +201,7 @@ function CinematicChessOverlayInner({
             tier={tier}
             isFirstEntry={isFirstEntry}
             isDismissing={isDismissing}
+            skinId={skinId}
             onComplete={() => {
               setDone(true);
               onDismissComplete?.();
