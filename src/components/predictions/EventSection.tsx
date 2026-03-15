@@ -149,7 +149,7 @@ export default function EventSection({
             {displayDate && <span>📅 {displayDate}</span>}
             {displayOrg && <span>🏢 {displayOrg}</span>}
             {displayLocation && <span>📍 {displayLocation}</span>}
-            <span>{fights.length} Fights</span>
+            <span>{fights.length} {getSportItemLabel(sport, fights.length)}</span>
             {openCount > 0 && <span className="text-green-400">{openCount} Open</span>}
             <span className="text-primary font-bold">{totalPool.toFixed(2)} SOL Pool</span>
           </div>

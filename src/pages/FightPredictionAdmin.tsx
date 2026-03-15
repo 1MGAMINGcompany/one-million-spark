@@ -846,7 +846,7 @@ function AdminEventCard({
             </div>
           )}
           {fights.length === 0 && (
-            <p className="text-xs text-muted-foreground text-center py-3">No fights under this event.</p>
+            <p className="text-xs text-muted-foreground text-center py-3">No {getItemLabelFromEvent(event.event_name, 0).toLowerCase()} under this event.</p>
           )}
         </div>
       )}
