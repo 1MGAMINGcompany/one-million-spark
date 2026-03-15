@@ -184,6 +184,7 @@ export default function FightPredictionAdmin() {
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
+      setTimeout(refreshNow, 300);
       return data;
     } finally {
       setBusy(false);
