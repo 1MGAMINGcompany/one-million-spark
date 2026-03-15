@@ -1,45 +1,61 @@
+# Fight Prediction System — Phase 2 In Progress
 
+## Status Lifecycle (Final)
 
-## Honest Assessment: Will It Look Amazing?
+```
+open → locked → live → result_selected → confirmed → settled
+                   └→ draw → refund_pending → refunds_processing → refunds_complete
+                   └→ cancelled
+```
 
-**Short answer: Not yet.** It's technically solid and production-safe, but visually it's still quite basic. Here's why:
+## Architecture
 
-### What It Does Well
-- Clean architecture with safe fallbacks
-- Mobile tiering works correctly
-- Piece movement with easing and arc looks decent
-- Capture/mate flash effects exist
+### Database Tables
+- `prediction_events` — Parent event grouping + automation fields (source_provider, source_event_id, automation_status, scheduling, result detection, confidence)
+- `prediction_fights` — Individual fights with event_id FK, weight_class, fight_class, method, refund tracking
+- `prediction_entries` — User prediction records
+- `prediction_admins` — Authorized admin wallets
+- `prediction_settings` — Global kill switches (predictions_enabled, claims_enabled, automation_enabled)
+- `automation_jobs` — Scheduled/running automation tasks (job_type, target, status, retries, result_payload)
+- `automation_logs` — Immutable audit trail (action, source, confidence, admin_wallet)
 
-### What Holds It Back Visually
-1. **Primitive pieces** — cylinders and boxes read as placeholder geometry, not as chess pieces. A pawn is just a small cylinder. A knight is two stacked boxes. Users won't feel "that's a knight moving."
-2. **Flat lighting** — one ambient + one directional light, no shadows, no rim lighting. The scene looks flat and unpolished.
-3. **No entry/exit transitions** — the 3D scene pops in abruptly (the 2D board fades out, but the 3D canvas just appears). No cinematic fade-in or zoom effect.
-4. **Minimal camera drama** — the orbit is ±0.08 radians (~5°). On a 390px phone screen, this is nearly imperceptible. The "cinematic" feels static.
-5. **No atmosphere** — no vignette, no bloom, no particles, no trailing effect. The board floats in a flat dark void.
-6. **SAN badge is tiny** — the move notation badge in the corner is easy to miss and doesn't feel premium.
-7. **Phrase bubble is subtle** — good for taste, but combined with everything else being subtle, the whole experience lacks punch.
+### Edge Functions
+- `prediction-admin` — Full lifecycle + getSettings/updateSettings for kill switches
+- `prediction-refund-worker` — Separate refund execution for draw scenarios (idempotent, safety-guarded)
+- `prediction-submit` — Submit predictions with 5% fee (respects predictions_enabled kill switch)
+- `prediction-claim` — Claim rewards (respects claims_enabled kill switch)
+- `prediction-feed` — Live activity feed
+- `prediction-auto-settle` — Cron auto-settle (respects automation_enabled kill switch)
+- `prediction-ingest` — BALLDONTLIE MMA API event/fight discovery (UFC, Bellator, PFL, ONE). Fetches events via `/events?year=YYYY`, full fight cards via `/fights?event_ids[]=ID`. Auth via `Authorization: API_KEY` header. Supports full card import (main_card, prelims, early_prelims segments with fight_order). Fights endpoint requires ALL-STAR tier. Dedupes by `bdl_{id}`. Stores as draft. Never auto-publishes.
+- `prediction-schedule-worker` — Cron: locks approved events at scheduled_lock_at, marks live at scheduled_live_at. Respects global + per-event automation_paused.
+- `prediction-result-worker` — Cron: fetches results from TheSportsDB for live auto-resolve events. Requires exact source_event_id match. Records payload + confidence. Flags low-confidence (<85%) for admin review. Auto-moves high-confidence fights to result_selected (NOT confirmed).
+- `prediction-settle-worker` — Idempotent job-based settlement. Creates jobs for confirmed fights past claims_open_at. CAS guard prevents double-pickup. Retry support (max 3). Full audit trail. Replaces simple auto-settle for new fights.
 
-### What Would Make It Amazing (Ordered by Impact)
+### Key Design Decisions
+1. Draw declaration is separate from refund execution (draw → refund_pending → refunds_processing → refunds_complete)
+2. `result_selected` is a real reversible status between `live` and `confirmed`
+3. `settled` means financially closed and immutable
+4. Events group fights; admin manages at event level
+5. Result worker only moves to `result_selected`, never `confirmed` — admin must confirm
+6. Settlement worker uses job table with CAS guards for exactly-once execution
+7. All workers respect both global kill switch AND per-event automation_paused flag
 
-These are the upgrades I'd recommend, in priority order:
+### Safety Guardrails
+- **Global kill switches**: predictions_enabled, claims_enabled, automation_enabled (enforced server-side)
+- **Per-event pause**: automation_paused flag stops schedule/result/settle workers for individual events
+- Server-side status guards on all transitions
+- Red confirmation dialogs for irreversible actions (lock, confirm, settle, draw, refunds)
+- Per-claim cap: 5 SOL, daily ceiling: 50 SOL
+- 5-minute safety delay before claims open
+- Refund tracking: refund_status, refunds_started_at, refunds_completed_at
+- Manual admin actions (settle, lock, etc.) always work regardless of kill switches
+- Settlement idempotency via automation_jobs deduplication
+- CAS (Compare-And-Swap) guards on job pickup prevent double-processing
 
-1. **Better piece silhouettes** — Use lathe geometries (profiles rotated around an axis) instead of raw boxes/cylinders. A pawn profile (base → stem → sphere top) takes ~8 lines and looks 10x better. No external models needed.
+---
 
-2. **Shadows + rim light** — Add `castShadow`/`receiveShadow` to the board and piece, plus a subtle colored rim light behind the piece. Instant depth.
+## Phase 3 (Next): Cron Scheduling
+Set up pg_cron jobs for schedule-worker, result-worker, and settle-worker.
 
-3. **Fade-in/out transition** — Animate the canvas container opacity from 0→1 over 150ms on mount, and 1→0 before unmount. Removes the jarring pop.
-
-4. **Subtle bloom/glow** — A post-processing `UnrealBloomPass` on the capture flash and mate flash would make those moments feel impactful. Lite tier can skip this.
-
-5. **Camera with more intent** — Start slightly zoomed out, push toward the destination square. Even just 15° of arc instead of 5° makes it feel like a "replay cam."
-
-6. **Board edge trim** — A thin gold border mesh around the board plane gives it a finished look instead of squares floating in space.
-
-7. **Piece trail** — A fading ghost trail (2-3 transparent copies behind the piece) during movement adds motion feel with minimal GPU cost.
-
-### Recommendation
-
-I can build upgrades 1-3 and 5-6 as the next safe step — they're all lightweight, no external assets, mobile-safe, and would dramatically improve the visual quality. Upgrades 4 and 7 can follow after.
-
-Want me to proceed with this visual polish pass?
-
+## Phase 4 (Next): Admin UI for Automation Monitoring
+Dashboard showing automation_jobs status, failed jobs, retry counts, audit logs.
