@@ -1399,6 +1399,7 @@ const ChessGame = () => {
                           tier={cinematic.tier}
                           isDismissing={!cinematic.isPersistent}
                           isFirstEntry={cinematic.isFirstEntry}
+                          skinId={chessSkin.skinId}
                         />
                       )}
                     </div>
