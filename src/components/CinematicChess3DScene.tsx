@@ -418,7 +418,7 @@ function SceneLighting({ lite }: {
 // ─── Camera Rig ───────────────────────────────────────────────────────────────
 
 // Fixed elevated perspective — no camera movement at all
-const FIXED_CAM_POS = new THREE.Vector3(0, 4.5, 3.0);
+const FIXED_CAM_POS = new THREE.Vector3(0, 3.2, 4.2);
 const FIXED_CAM_LOOK = new THREE.Vector3(0, 0, 0);
 
 function CameraRig() {
