@@ -46,21 +46,12 @@ function easeInOutCubic(t: number): number {
 }
 
 // ─── Animation Phase Helper ───────────────────────────────────────────────────
-// When NOT persistent (first entry): 0.00–0.15 swoop-in, 0.15–0.60 move, 0.60–1.00 swoop-out
-// When persistent (already in 3D):   0.00–0.70 move, 0.70–1.00 hold (no swoop)
-// Dismiss: separate swoop-out animation
+// Static camera — no swoop. Just: move (0–0.85) → hold (0.85–1.0)
 
-type AnimPhase = "swoop-in" | "move" | "hold" | "swoop-out";
+type AnimPhase = "move" | "hold";
 
-function getPhase(progress: number, isFirstEntry: boolean): { phase: AnimPhase; t: number } {
-  if (isFirstEntry) {
-    // First entry: swoop in → move → hold at dramatic angle
-    if (progress < 0.15) return { phase: "swoop-in", t: progress / 0.15 };
-    if (progress < 0.75) return { phase: "move", t: (progress - 0.15) / 0.60 };
-    return { phase: "hold", t: 1 };
-  }
-  // Subsequent moves (already in 3D): just move the piece
-  if (progress < 0.80) return { phase: "move", t: progress / 0.80 };
+function getPhase(progress: number, _isFirstEntry: boolean): { phase: AnimPhase; t: number } {
+  if (progress < 0.85) return { phase: "move", t: progress / 0.85 };
   return { phase: "hold", t: 1 };
 }
 
@@ -240,7 +231,7 @@ function MovingPiece({ piece, color, fromPos, toPos, isCapture, lite, progressRe
   useFrame(() => {
     const progress = progressRef.current;
     const { phase, t } = getPhase(progress, isFirstEntryRef.current);
-    const moveT = phase === "swoop-in" ? 0 : phase === "move" ? easeInOutCubic(t) : 1;
+    const moveT = phase === "move" ? easeInOutCubic(t) : 1;
 
     const x = fromPos[0] + (toPos[0] - fromPos[0]) * moveT;
     const z = fromPos[1] + (toPos[1] - fromPos[1]) * moveT;
@@ -349,8 +340,8 @@ function CaptureExplosion({ position, progressRef, isFirstEntryRef }: {
     const progress = progressRef.current;
     const { phase, t } = getPhase(progress, isFirstEntryRef.current);
 
-    // Explosion starts at 70% of move phase and plays for 0.8 seconds
-    const moveT = phase === "swoop-in" ? 0 : phase === "move" ? t : 1;
+    // Explosion starts at 70% of move phase
+    const moveT = phase === "move" ? t : 1;
     const explosionTrigger = 0.7;
     
     if (moveT < explosionTrigger) {
@@ -397,37 +388,15 @@ function CaptureExplosion({ position, progressRef, isFirstEntryRef }: {
 
 
 
-function SceneLighting({ lite, progressRef, isFirstEntryRef }: {
+function SceneLighting({ lite }: {
   lite: boolean;
-  progressRef: React.MutableRefObject<number>;
-  isFirstEntryRef: React.MutableRefObject<boolean>;
 }) {
-  const ambientRef = useRef<THREE.AmbientLight>(null);
-  const keyRef = useRef<THREE.DirectionalLight>(null);
-  const fillRef = useRef<THREE.DirectionalLight>(null);
-  const rimRef = useRef<THREE.PointLight>(null);
-
-  useFrame(() => {
-    const progress = progressRef.current;
-    const { phase, t } = getPhase(progress, isFirstEntryRef.current);
-    const swoopFactor = phase === "swoop-in"
-      ? easeInOutCubic(t)
-      : (phase === "move" || phase === "hold") ? 1
-      : 1 - easeInOutCubic(t);
-
-    if (ambientRef.current) ambientRef.current.intensity = 0.6 - swoopFactor * 0.2;
-    if (keyRef.current) keyRef.current.intensity = 0.8 + swoopFactor * 0.4;
-    if (fillRef.current) fillRef.current.intensity = swoopFactor * 0.35;
-    if (rimRef.current) rimRef.current.intensity = swoopFactor * 1.2;
-  });
-
   return (
     <>
-      <ambientLight ref={ambientRef} intensity={0.6} color="#f5f0e8" />
+      <ambientLight intensity={0.4} color="#f5f0e8" />
       <directionalLight
-        ref={keyRef}
         position={[3, 5, 2]}
-        intensity={0.8}
+        intensity={1.2}
         color="#f0dcc0"
         castShadow={!lite}
         shadow-mapSize-width={512}
@@ -437,9 +406,9 @@ function SceneLighting({ lite, progressRef, isFirstEntryRef }: {
         shadow-camera-top={3}
         shadow-camera-bottom={-3}
       />
-      <directionalLight ref={fillRef} position={[-3, 2, 1]} intensity={0} color="#a0b8d0" />
+      <directionalLight position={[-3, 2, 1]} intensity={0.35} color="#a0b8d0" />
       {!lite && (
-        <pointLight ref={rimRef} position={[0, 1.5, -3]} intensity={0} color="#d4a030" distance={8} decay={2} />
+        <pointLight position={[0, 1.5, -3]} intensity={1.2} color="#d4a030" distance={8} decay={2} />
       )}
       <directionalLight position={[0, -1, 2]} intensity={0.15} color="#7080a0" />
     </>
@@ -448,75 +417,25 @@ function SceneLighting({ lite, progressRef, isFirstEntryRef }: {
 
 // ─── Camera Rig ───────────────────────────────────────────────────────────────
 
-const TOP_DOWN_POS = new THREE.Vector3(0, 6.5, 0.01);
-const TOP_DOWN_LOOK = new THREE.Vector3(0, 0, 0);
+// Fixed elevated perspective — no camera movement at all
+const FIXED_CAM_POS = new THREE.Vector3(0, 4.5, 3.0);
+const FIXED_CAM_LOOK = new THREE.Vector3(0, 0, 0);
 
-function CameraRig({ fromPos, toPos, progressRef, isFirstEntryRef, isDismissingRef, dismissProgressRef }: {
-  fromPos: [number, number]; toPos: [number, number];
-  progressRef: React.MutableRefObject<number>;
-  isFirstEntryRef: React.MutableRefObject<boolean>;
-  isDismissingRef: React.MutableRefObject<boolean>;
-  dismissProgressRef: React.MutableRefObject<number>;
-}) {
+function CameraRig() {
   const { camera } = useThree();
-  const tmpPos = useRef(new THREE.Vector3());
-  const tmpLook = useRef(new THREE.Vector3());
-  const dramaticPos = useRef(new THREE.Vector3());
-  const dramaticLook = useRef(new THREE.Vector3());
 
   useEffect(() => {
-    const midX = (fromPos[0] + toPos[0]) / 2;
-    const midZ = (fromPos[1] + toPos[1]) / 2;
-    dramaticPos.current.set(midX * 0.3, 1.6, 3.2);
-    dramaticLook.current.set(midX * 0.3, 0.1, midZ * 0.4);
-
-    // Only set camera to top-down on first entry
-    if (isFirstEntryRef.current) {
-      camera.position.copy(TOP_DOWN_POS);
-      camera.lookAt(TOP_DOWN_LOOK);
-    }
+    camera.position.copy(FIXED_CAM_POS);
+    camera.lookAt(FIXED_CAM_LOOK);
     if (camera instanceof THREE.PerspectiveCamera) {
       camera.fov = 45;
       camera.updateProjectionMatrix();
     }
-  }, [camera, fromPos, toPos]);
+  }, [camera]);
 
   useFrame(() => {
-    // Handle dismiss swoop-out
-    if (isDismissingRef.current) {
-      const dt = dismissProgressRef.current;
-      const et = easeInOutCubic(dt);
-      tmpPos.current.lerpVectors(dramaticPos.current, TOP_DOWN_POS, et);
-      tmpLook.current.lerpVectors(dramaticLook.current, TOP_DOWN_LOOK, et);
-      camera.position.copy(tmpPos.current);
-      camera.lookAt(tmpLook.current);
-      return;
-    }
-
-    const progress = progressRef.current;
-    const { phase, t } = getPhase(progress, isFirstEntryRef.current);
-    const et = easeInOutCubic(t);
-    const midX = (fromPos[0] + toPos[0]) / 2;
-    const midZ = (fromPos[1] + toPos[1]) / 2;
-
-    if (phase === "swoop-in") {
-      tmpPos.current.lerpVectors(TOP_DOWN_POS, dramaticPos.current, et);
-      tmpLook.current.lerpVectors(TOP_DOWN_LOOK, dramaticLook.current, et);
-    } else if (phase === "move") {
-      const followT = easeInOutCubic(t);
-      tmpPos.current.copy(dramaticPos.current);
-      tmpPos.current.x += (toPos[0] - midX) * followT * 0.15;
-      tmpLook.current.copy(dramaticLook.current);
-      tmpLook.current.x += (toPos[0] - midX) * followT * 0.3;
-      tmpLook.current.z += (toPos[1] - midZ) * followT * 0.2;
-    } else {
-      // "hold" — stay at dramatic position
-      tmpPos.current.copy(dramaticPos.current);
-      tmpLook.current.copy(dramaticLook.current);
-    }
-
-    camera.position.copy(tmpPos.current);
-    camera.lookAt(tmpLook.current);
+    camera.position.copy(FIXED_CAM_POS);
+    camera.lookAt(FIXED_CAM_LOOK);
   });
 
   return null;
@@ -588,13 +507,11 @@ interface SceneProps {
 function SceneContent({ event, duration, boardFlipped, onComplete, onMoveComplete, lite, isFirstEntry, isDismissing }: SceneProps) {
   const progressRef = useRef(0);
   const isFirstEntryRef = useRef(isFirstEntry);
-  const isDismissingRef = useRef(isDismissing);
   const dismissProgressRef = useRef(0);
 
   // Keep refs in sync without re-renders
   useEffect(() => { isFirstEntryRef.current = isFirstEntry; }, [isFirstEntry]);
   useEffect(() => {
-    isDismissingRef.current = isDismissing;
     if (isDismissing) dismissProgressRef.current = 0;
   }, [isDismissing]);
 
@@ -617,7 +534,7 @@ function SceneContent({ event, duration, boardFlipped, onComplete, onMoveComplet
       {isDismissing && (
         <DismissDriver duration={800} onComplete={onComplete} dismissProgressRef={dismissProgressRef} />
       )}
-      <SceneLighting lite={lite} progressRef={progressRef} isFirstEntryRef={isFirstEntryRef} />
+      <SceneLighting lite={lite} />
       <BoardPlane lite={lite} />
 
       {staticPieces.map(p => (
@@ -650,14 +567,7 @@ function SceneContent({ event, duration, boardFlipped, onComplete, onMoveComplet
         />
       )}
 
-      <CameraRig
-        fromPos={fromPos}
-        toPos={toPos}
-        progressRef={progressRef}
-        isFirstEntryRef={isFirstEntryRef}
-        isDismissingRef={isDismissingRef}
-        dismissProgressRef={dismissProgressRef}
-      />
+      <CameraRig />
     </>
   );
 }
