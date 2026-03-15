@@ -154,13 +154,24 @@ export default function HomePredictionHighlights({
       });
   }, [fights, eventMap]);
 
-  // Filter by selected sport
+  // Today's fights only (for the top preview — max 2)
+  const todayFights = useMemo(() => {
+    const now = new Date();
+    return enrichedFights
+      .filter((f) => {
+        if (!f.eventDate) return false;
+        return new Date(f.eventDate).toDateString() === now.toDateString();
+      })
+      .slice(0, 2);
+  }, [enrichedFights]);
+
+  // Filter by selected sport (all days, shown inside tabs)
   const filtered = useMemo(() => {
     if (activeSport === "ALL") return enrichedFights;
     return enrichedFights.filter((f) => f.sport === activeSport);
   }, [enrichedFights, activeSport]);
 
-  // Group by day
+  // Group by day (inside tabs)
   const dayGroups = useMemo(() => {
     const groups = new Map<string, EnrichedFight[]>();
     filtered.forEach((f) => {
@@ -170,7 +181,6 @@ export default function HomePredictionHighlights({
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key)!.push(f);
     });
-    // Sort days chronologically
     return Array.from(groups.entries()).sort((a, b) => {
       if (a[0] === "Unknown") return 1;
       if (b[0] === "Unknown") return -1;
@@ -198,16 +208,25 @@ export default function HomePredictionHighlights({
   if (enrichedFights.length === 0) return null;
 
   return (
-    <div className="space-y-4">
-      {/* TODAY header */}
-      <div className="flex items-center gap-2">
-        <Clock className="w-5 h-5 text-primary" />
-        <h3 className="text-lg font-bold uppercase tracking-wider text-primary font-display">
-          Today's Predictions
-        </h3>
-      </div>
+    <div className="space-y-5">
+      {/* Today preview — max 2 cards */}
+      {todayFights.length > 0 && (
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <Clock className="w-5 h-5 text-primary" />
+            <h3 className="text-lg font-bold uppercase tracking-wider text-primary font-display">
+              Today
+            </h3>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {todayFights.map((f) => (
+              <CompactFightCard key={f.id} fight={f} onPredict={handlePredict} />
+            ))}
+          </div>
+        </div>
+      )}
 
-      {/* Sport tabs */}
+      {/* Sport tabs with all fights grouped by day */}
       <Tabs value={activeSport} onValueChange={setActiveSport} className="w-full">
         <TabsList className="w-full flex overflow-x-auto bg-muted/50 p-1 gap-0.5 h-auto flex-wrap">
           {SPORT_TABS.map((sport) => {
@@ -229,7 +248,6 @@ export default function HomePredictionHighlights({
           })}
         </TabsList>
 
-        {/* Single content area — same for all tabs since filtering is state-based */}
         <div className="mt-4 space-y-5">
           {dayGroups.length === 0 && (
             <p className="text-sm text-muted-foreground text-center py-4">
