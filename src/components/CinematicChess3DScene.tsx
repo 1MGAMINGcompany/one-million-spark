@@ -196,18 +196,19 @@ function StaticPiece({ piece, color, x, z, lite, skin }: {
 
 // ─── Moving Piece (imperative position via useFrame) ──────────────────────────
 
-function MovingPiece({ piece, color, fromPos, toPos, isCapture, lite, progressRef, isFirstEntryRef }: {
+function MovingPiece({ piece, color, fromPos, toPos, isCapture, lite, progressRef, isFirstEntryRef, skin }: {
   piece: string; color: "white" | "black";
   fromPos: [number, number]; toPos: [number, number];
   isCapture: boolean; lite: boolean;
   progressRef: React.MutableRefObject<number>;
   isFirstEntryRef: React.MutableRefObject<boolean>;
+  skin: ChessSkin;
 }) {
   const groupRef = useRef<THREE.Group>(null);
   const srcHighlightRef = useRef<THREE.Mesh>(null);
   const dstHighlightRef = useRef<THREE.Mesh>(null);
-  const geo = useMemo(() => getCachedGeo(piece, lite), [piece, lite]);
-  const mat = useMemo(() => getCachedMat(color, lite), [color, lite]);
+  const geo = useMemo(() => getCachedGeo(piece, lite, skin), [piece, lite, skin]);
+  const mat = useMemo(() => getCachedMat(color, lite, skin), [color, lite, skin]);
 
   useFrame(() => {
     const progress = progressRef.current;
