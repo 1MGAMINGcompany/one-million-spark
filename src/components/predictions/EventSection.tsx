@@ -33,11 +33,19 @@ interface PredictionEvent {
   location: string | null;
   status: string;
   is_test: boolean;
+  source_provider?: string | null;
 }
 
-function parseSport(eventName: string): string {
+const SOCCER_KEYWORDS = [
+  "MLS", "SOCCER", "FUTBOL", "PREMIER LEAGUE", "LA LIGA", "CHAMPIONS LEAGUE",
+  "SERIE A", "BUNDESLIGA", "LIGUE 1", "EREDIVISIE", "LIGA MX", "EPL",
+  "COPA", "EURO", "FIFA", "WORLD CUP",
+];
+
+function parseSport(eventName: string, sourceProvider?: string | null): string {
+  if (sourceProvider === "api-football") return "FUTBOL";
   const upper = eventName.toUpperCase();
-  if (upper.includes("MLS") || upper.includes("SOCCER") || upper.includes("FUTBOL")) return "FUTBOL";
+  if (SOCCER_KEYWORDS.some(k => upper.includes(k))) return "FUTBOL";
   if (upper.includes("UFC") || upper.includes("MMA")) return "MMA";
   if (upper.includes("BOXING")) return "BOXING";
   if (upper.includes("MUAY THAI")) return "MUAY THAI";
@@ -94,7 +102,7 @@ export default function EventSection({
   const [expanded, setExpanded] = useState(hasOpen);
 
   const parsed = parseEventLabel(eventName);
-  const sport = parseSport(eventName);
+  const sport = parseSport(eventName, event?.source_provider);
   const config = SPORT_CONFIG[sport] || SPORT_CONFIG["MUAY THAI"];
 
   const totalPool = fights.reduce((sum, f) => sum + f.pool_a_lamports + f.pool_b_lamports, 0) / LAMPORTS;

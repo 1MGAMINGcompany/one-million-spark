@@ -36,6 +36,7 @@ interface PredictionEvent {
   location: string | null;
   status: string;
   is_test: boolean;
+  source_provider?: string | null;
 }
 
 interface FeedEntry {
@@ -173,7 +174,7 @@ export default function FightPredictions() {
   }, [fights, events]);
 
   const activeSports = useMemo(() => {
-    const sports = new Set(Object.keys(groupedEvents).map(e => parseSport(e)));
+    const sports = new Set(Object.entries(groupedEvents).map(([key, val]) => parseSport(key, val.event?.source_provider)));
     return ALL_SPORTS.filter(s => s === "ALL" || sports.has(s) || ["BOXING", "MMA", "FUTBOL"].includes(s));
   }, [groupedEvents]);
 
@@ -181,7 +182,7 @@ export default function FightPredictions() {
   const filteredEvents = useMemo(() => {
     if (activeSport === "ALL") return groupedEvents;
     return Object.fromEntries(
-      Object.entries(groupedEvents).filter(([key]) => parseSport(key) === activeSport)
+      Object.entries(groupedEvents).filter(([key, val]) => parseSport(key, val.event?.source_provider) === activeSport)
     );
   }, [groupedEvents, activeSport]);
 

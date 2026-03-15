@@ -16,6 +16,6 @@ export function getSportItemLabel(sport: string, count: number): string {
 }
 
 /** Convenience: pass event name, auto-detect sport */
-export function getItemLabelFromEvent(eventName: string, count: number): string {
-  return getSportItemLabel(parseSport(eventName), count);
+export function getItemLabelFromEvent(eventName: string, count: number, sourceProvider?: string | null): string {
+  return getSportItemLabel(parseSport(eventName, sourceProvider), count);
 }

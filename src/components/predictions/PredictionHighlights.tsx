@@ -8,7 +8,7 @@ import type { Fight } from "./FightCard";
 
 const LAMPORTS = 1_000_000_000;
 
-interface PredictionEvent {
+export interface PredictionEvent {
   id: string;
   event_name: string;
   organization: string | null;
@@ -16,6 +16,7 @@ interface PredictionEvent {
   location: string | null;
   status: string;
   is_test: boolean;
+  source_provider?: string | null;
 }
 
 interface HighlightFight extends Fight {
@@ -350,4 +351,4 @@ export default function PredictionHighlights({
   );
 }
 
-export type { PredictionEvent };
+
