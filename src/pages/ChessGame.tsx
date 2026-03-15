@@ -1237,6 +1237,11 @@ const ChessGame = () => {
       setMoveHistory(gameCopy.history());
       setLastMove({ from, to });
 
+      // Fire cinematic overlay if enabled
+      if (attackingPiece) {
+        cinematic.fire(buildCinematicEvent(from, to, attackingPiece.type, attackingPiece.color, !!targetPiece, move.san, gameCopy));
+      }
+
       // Send move to opponent via WebRTC
       const moveData: ChessMove = {
         from,
