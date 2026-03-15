@@ -582,6 +582,11 @@ export default function PlayerProfile() {
         </CardContent>
       </Card>
 
+      {/* Referral Section - only visible on own profile */}
+      {isOwnProfile && wallet && (
+        <ReferralSection wallet={wallet} />
+      )}
+
       {/* Recoverable Rooms Section - only visible on own profile */}
       {isOwnProfile && wallet && (
         <RecoverableRoomsSection wallet={wallet} />
