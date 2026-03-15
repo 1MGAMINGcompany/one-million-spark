@@ -507,13 +507,11 @@ interface SceneProps {
 function SceneContent({ event, duration, boardFlipped, onComplete, onMoveComplete, lite, isFirstEntry, isDismissing }: SceneProps) {
   const progressRef = useRef(0);
   const isFirstEntryRef = useRef(isFirstEntry);
-  const isDismissingRef = useRef(isDismissing);
   const dismissProgressRef = useRef(0);
 
   // Keep refs in sync without re-renders
   useEffect(() => { isFirstEntryRef.current = isFirstEntry; }, [isFirstEntry]);
   useEffect(() => {
-    isDismissingRef.current = isDismissing;
     if (isDismissing) dismissProgressRef.current = 0;
   }, [isDismissing]);
 
