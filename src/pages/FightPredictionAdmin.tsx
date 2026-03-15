@@ -38,6 +38,9 @@ interface PredictionEvent {
   automation_paused: boolean;
   requires_admin_approval: boolean;
   automation_status: string;
+  scheduled_lock_at: string | null;
+  scheduled_live_at: string | null;
+  last_automation_check_at: string | null;
 }
 
 interface Fight {
@@ -683,6 +686,11 @@ function AdminEventCard({
       {/* Expanded Content */}
       {expanded && (
         <div className="px-4 pb-4 space-y-3">
+          {/* ── Automation Status Panel (approved events with fights) ── */}
+          {event.status === "approved" && fights.length > 0 && (
+            <AutomationStatusPanel event={event} fights={fights} busy={busy} callAdmin={callAdmin} loadData={loadData} />
+          )}
+
           {/* Event actions */}
           <div className="flex gap-2 flex-wrap">
             {event.status === "draft" && (
@@ -1065,6 +1073,184 @@ function AdminFightCard({
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// ── Automation Status Panel ──
+function AutomationStatusPanel({
+  event, fights, busy, callAdmin, loadData,
+}: {
+  event: PredictionEvent;
+  fights: Fight[];
+  busy: boolean;
+  callAdmin: (action: string, extra?: Record<string, any>) => Promise<any>;
+  loadData: () => void;
+}) {
+  const [checking, setChecking] = useState(false);
+  const [checkResult, setCheckResult] = useState<any>(null);
+
+  const statusCounts = {
+    open: fights.filter(f => f.status === "open").length,
+    locked: fights.filter(f => f.status === "locked").length,
+    live: fights.filter(f => f.status === "live").length,
+    result_selected: fights.filter(f => f.status === "result_selected").length,
+    confirmed: fights.filter(f => f.status === "confirmed").length,
+    settled: fights.filter(f => ["settled", "refunds_complete"].includes(f.status)).length,
+    draw: fights.filter(f => f.status === "draw").length,
+    cancelled: fights.filter(f => f.status === "cancelled").length,
+  };
+
+  const now = new Date();
+  const lockAt = event.scheduled_lock_at ? new Date(event.scheduled_lock_at) : null;
+  const liveAt = event.scheduled_live_at ? new Date(event.scheduled_live_at) : null;
+  const eventAt = event.event_date ? new Date(event.event_date) : null;
+  const lockPassed = lockAt ? lockAt <= now : false;
+  const livePassed = liveAt ? liveAt <= now : false;
+
+  const allSettled = fights.length > 0 && fights.every(f => ["settled", "refunds_complete", "cancelled", "draw"].includes(f.status));
+  const hasResults = fights.some(f => ["result_selected", "confirmed", "settled"].includes(f.status));
+
+  const runAutomationCheck = async () => {
+    setChecking(true);
+    setCheckResult(null);
+    try {
+      // Invoke schedule worker and result worker in parallel
+      const [schedRes, resultRes] = await Promise.all([
+        supabase.functions.invoke("prediction-schedule-worker", { body: {} }),
+        supabase.functions.invoke("prediction-result-worker", { body: {} }),
+      ]);
+      setCheckResult({
+        schedule: schedRes.data,
+        results: resultRes.data,
+        scheduleError: schedRes.error?.message,
+        resultsError: resultRes.error?.message,
+      });
+      toast.success("Automation check complete");
+      setTimeout(loadData, 500);
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  return (
+    <div className="bg-muted/20 border border-border/40 rounded-lg p-3 space-y-3">
+      <p className="text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-2">
+        <RefreshCw className="w-3.5 h-3.5 text-primary" /> Automation Status
+      </p>
+
+      {/* Event metadata row */}
+      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[10px]">
+        <div className="text-muted-foreground">Event Start</div>
+        <div className="text-foreground font-medium">
+          {eventAt ? eventAt.toLocaleString() : "—"}
+        </div>
+
+        <div className="text-muted-foreground">Lock Time</div>
+        <div className={`font-medium ${lockPassed ? "text-yellow-400" : "text-foreground"}`}>
+          {lockAt ? lockAt.toLocaleString() : "—"}
+          {lockPassed && " ✓"}
+        </div>
+
+        <div className="text-muted-foreground">Live Time</div>
+        <div className={`font-medium ${livePassed ? "text-red-400" : "text-foreground"}`}>
+          {liveAt ? liveAt.toLocaleString() : "—"}
+          {livePassed && " ✓"}
+        </div>
+
+        <div className="text-muted-foreground">Provider</div>
+        <div className="text-foreground font-medium uppercase">
+          {event.source_provider || "manual"}
+        </div>
+
+        <div className="text-muted-foreground">Automation</div>
+        <div className={`font-medium ${
+          event.automation_paused ? "text-yellow-400" : "text-green-400"
+        }`}>
+          {event.automation_paused ? "⏸ Paused" : event.automation_status === "manual" ? "Manual" : "Active"}
+        </div>
+
+        <div className="text-muted-foreground">Last Check</div>
+        <div className="text-foreground font-medium">
+          {event.last_automation_check_at
+            ? new Date(event.last_automation_check_at).toLocaleString()
+            : "—"}
+        </div>
+      </div>
+
+      {/* Fight status summary */}
+      <div className="flex flex-wrap gap-1.5">
+        {([
+          { key: "open", label: "Open", count: statusCounts.open, color: "bg-green-500/20 text-green-400" },
+          { key: "locked", label: "Locked", count: statusCounts.locked, color: "bg-yellow-500/20 text-yellow-400" },
+          { key: "live", label: "Live", count: statusCounts.live, color: "bg-red-500/20 text-red-400" },
+          { key: "result_selected", label: "Result", count: statusCounts.result_selected, color: "bg-orange-500/20 text-orange-400" },
+          { key: "confirmed", label: "Confirmed", count: statusCounts.confirmed, color: "bg-blue-500/20 text-blue-400" },
+          { key: "settled", label: "Settled", count: statusCounts.settled, color: "bg-primary/20 text-primary" },
+        ] as const).map(s => (
+          <span key={s.key} className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+            s.count > 0 ? s.color : "bg-muted/30 text-muted-foreground/40"
+          }`}>
+            {s.count} {s.label}
+          </span>
+        ))}
+      </div>
+
+      {/* Settlement readiness indicator */}
+      <div className="text-[10px] space-y-0.5">
+        <div className="flex items-center gap-1.5">
+          <span className={`w-2 h-2 rounded-full ${lockPassed || statusCounts.open === 0 ? "bg-green-400" : "bg-muted-foreground/30"}`} />
+          <span className="text-muted-foreground">Auto-Lock</span>
+          <span className="text-foreground font-medium ml-auto">
+            {statusCounts.open === 0 ? "All locked ✓" : lockPassed ? "Lock triggered ✓" : lockAt ? "Pending" : "No schedule"}
+          </span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className={`w-2 h-2 rounded-full ${hasResults ? "bg-green-400" : "bg-muted-foreground/30"}`} />
+          <span className="text-muted-foreground">Auto-Result</span>
+          <span className="text-foreground font-medium ml-auto">
+            {statusCounts.result_selected + statusCounts.confirmed + statusCounts.settled > 0
+              ? `${statusCounts.result_selected + statusCounts.confirmed + statusCounts.settled}/${fights.length} resolved`
+              : "Awaiting results"}
+          </span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className={`w-2 h-2 rounded-full ${allSettled ? "bg-green-400" : statusCounts.settled > 0 ? "bg-yellow-400" : "bg-muted-foreground/30"}`} />
+          <span className="text-muted-foreground">Settlement</span>
+          <span className="text-foreground font-medium ml-auto">
+            {allSettled ? "Complete ✓" : statusCounts.settled > 0 ? `${statusCounts.settled}/${fights.length} settled` : "Not started"}
+          </span>
+        </div>
+      </div>
+
+      {/* Run Automation Check button */}
+      <Button
+        size="sm"
+        variant="outline"
+        className="w-full border-primary/40 text-primary hover:bg-primary/10"
+        disabled={busy || checking}
+        onClick={runAutomationCheck}
+      >
+        {checking ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-2" /> : <RefreshCw className="w-3.5 h-3.5 mr-2" />}
+        Run Automation Check Now
+      </Button>
+
+      {/* Check results */}
+      {checkResult && (
+        <div className="bg-background/60 border border-border/30 rounded p-2 text-[10px] space-y-1">
+          <p className="text-foreground font-medium">📊 Check Results</p>
+          {checkResult.scheduleError && <p className="text-destructive">Schedule: {checkResult.scheduleError}</p>}
+          {checkResult.resultsError && <p className="text-destructive">Results: {checkResult.resultsError}</p>}
+          {checkResult.schedule && (
+            <p className="text-muted-foreground">Schedule: {checkResult.schedule.processed ?? 0} actions processed</p>
+          )}
+          {checkResult.results && (
+            <p className="text-muted-foreground">Results: {checkResult.results.checked ?? checkResult.results.processed ?? 0} checked</p>
+          )}
+        </div>
+      )}
     </div>
   );
 }
