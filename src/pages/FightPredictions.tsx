@@ -100,7 +100,7 @@ export default function FightPredictions() {
   const [activeSport, setActiveSport] = useState("ALL");
   const [showWalletGate, setShowWalletGate] = useState(false);
   const [showPredictionSuccess, setShowPredictionSuccess] = useState(false);
-  const [claimShareData, setClaimShareData] = useState<{ eventTitle: string; solWon: number } | null>(null);
+  const [claimShareData, setClaimShareData] = useState<{ eventTitle: string; solWon: number; fighterName?: string } | null>(null);
 
   const loadFights = useCallback(async () => {
     const [fightsRes, eventsRes] = await Promise.all([
