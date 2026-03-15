@@ -17,10 +17,10 @@ const STORAGE_KEY = "chess-cinematic-mode";
 
 export type CinematicTier = "3d-full" | "3d-lite" | "2d-fallback";
 
-/** Duration per tier */
+/** Duration per tier — 3D needs longer for swoop-in / move / swoop-out phases */
 const TIER_DURATION: Record<CinematicTier, number> = {
-  "3d-full": 1100,
-  "3d-lite": 700,
+  "3d-full": 2800,
+  "3d-lite": 2000,
   "2d-fallback": 1000,
 };
 

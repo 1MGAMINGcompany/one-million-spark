@@ -1413,7 +1413,7 @@ const ChessGame = () => {
                   <div className="absolute -inset-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 rounded-2xl blur-xl opacity-50" />
                   <div ref={boardContainerRef} className="relative p-1 rounded-xl bg-gradient-to-br from-primary/40 via-primary/20 to-primary/40 shadow-[0_0_40px_-10px_hsl(45_93%_54%_/_0.4)]">
                     <div className="bg-gradient-to-b from-midnight-light via-background to-midnight-light rounded-lg overflow-hidden p-4">
-                      <div className={`transition-[opacity,filter] duration-200 ${cinematic.activeEvent ? 'opacity-0 blur-sm' : 'opacity-100'}`}>
+                      <div className={`transition-[opacity,filter] duration-500 ${cinematic.activeEvent ? 'opacity-30 blur-[1px]' : 'opacity-100'}`}>
                         <ChessBoardPremium
                           game={game}
                           onMove={handleMove}
