@@ -959,7 +959,7 @@ const ChessGame = () => {
           setLastMove({ from: move.from, to: move.to });
           // Cinematic overlay for opponent moves
           if (attackingPiece) {
-            cinematic.fire(buildCinematicEvent(move.from, move.to, attackingPiece.type, attackingPiece.color, !!targetPiece, result.san, gameCopy));
+            cinematic.fire(buildCinematicEvent(move.from, move.to, attackingPiece.type, attackingPiece.color, !!targetPiece, result.san, gameCopy, targetPiece?.type, targetPiece?.color));
           }
           recordPlayerMoveRef.current(roomPlayersRef.current[gameRef.current.turn() === "w" ? 1 : 0] || "", result.san);
           
@@ -1200,7 +1200,7 @@ const ChessGame = () => {
 
       // Fire cinematic overlay if enabled
       if (attackingPiece) {
-        cinematic.fire(buildCinematicEvent(from, to, attackingPiece.type, attackingPiece.color, !!targetPiece, move.san, gameCopy));
+        cinematic.fire(buildCinematicEvent(from, to, attackingPiece.type, attackingPiece.color, !!targetPiece, move.san, gameCopy, targetPiece?.type, targetPiece?.color));
       }
 
       // Send move to opponent via WebRTC

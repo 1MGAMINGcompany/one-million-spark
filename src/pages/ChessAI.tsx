@@ -250,7 +250,7 @@ const ChessAI = () => {
       // Fire cinematic overlay for AI move
       if (attackingPiece) {
         cinematic.fire(
-          buildCinematicEvent(parsed.from, parsed.to, attackingPiece.type, attackingPiece.color, wasCapture, move.san, currentGame)
+          buildCinematicEvent(parsed.from, parsed.to, attackingPiece.type, attackingPiece.color, wasCapture, move.san, currentGame, capturedPieceType as any, capturedPieceType ? (attackingPiece.color === "w" ? "b" : "w") : undefined)
         );
       }
       
@@ -323,7 +323,7 @@ const ChessAI = () => {
       // Fire cinematic overlay for player move
       if (attackingPiece) {
         cinematic.fire(
-          buildCinematicEvent(from, to, attackingPiece.type, attackingPiece.color, !!targetPiece, move.san, gameCopy)
+          buildCinematicEvent(from, to, attackingPiece.type, attackingPiece.color, !!targetPiece, move.san, gameCopy, targetPiece?.type, targetPiece?.color)
         );
       }
 

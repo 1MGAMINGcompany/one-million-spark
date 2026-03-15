@@ -235,7 +235,8 @@ function MovingPiece({ piece, color, fromPos, toPos, isCapture, lite, progressRe
 
     const x = fromPos[0] + (toPos[0] - fromPos[0]) * moveT;
     const z = fromPos[1] + (toPos[1] - fromPos[1]) * moveT;
-    const arcY = Math.sin(moveT * Math.PI) * 0.3;
+    const arcHeight = isCapture ? 0.15 : 0.3;
+    const arcY = Math.sin(moveT * Math.PI) * arcHeight;
 
     if (groupRef.current) {
       groupRef.current.position.set(x, arcY, z);
@@ -288,27 +289,94 @@ const GOLD_PARTICLE_COLORS = [
   new THREE.Color("#E6BE8A"),
 ];
 
+// ─── VictimPiece (captured piece stays visible, shakes, then crushes) ─────────
+
+function VictimPiece({ piece, color, position, lite, progressRef, isFirstEntryRef }: {
+  piece: string; color: "white" | "black";
+  position: [number, number]; lite: boolean;
+  progressRef: React.MutableRefObject<number>;
+  isFirstEntryRef: React.MutableRefObject<boolean>;
+}) {
+  const groupRef = useRef<THREE.Group>(null);
+  const geo = useMemo(() => getCachedGeo(piece, lite), [piece, lite]);
+  const mat = useMemo(() => getCachedMat(color, lite), [color, lite]);
+
+  useFrame(() => {
+    if (!groupRef.current) return;
+    const progress = progressRef.current;
+    const { phase, t } = getPhase(progress, isFirstEntryRef.current);
+    const moveT = phase === "move" ? easeInOutCubic(t) : 1;
+
+    if (moveT < 0.65) {
+      // Fully visible, no shake
+      groupRef.current.position.set(position[0], 0, position[1]);
+      groupRef.current.scale.set(1, 1, 1);
+      groupRef.current.rotation.set(0, 0, 0);
+    } else if (moveT < 0.85) {
+      // Shake/vibrate phase — attacker is close
+      const shakeT = (moveT - 0.65) / 0.2;
+      const intensity = shakeT * 0.06;
+      groupRef.current.position.set(
+        position[0] + (Math.random() - 0.5) * intensity,
+        0,
+        position[1] + (Math.random() - 0.5) * intensity
+      );
+      groupRef.current.rotation.set(
+        (Math.random() - 0.5) * shakeT * 0.15,
+        0,
+        (Math.random() - 0.5) * shakeT * 0.15
+      );
+      const crushScale = 1 - shakeT * 0.3;
+      groupRef.current.scale.set(crushScale, crushScale, crushScale);
+    } else {
+      // Crush to zero
+      const crushT = Math.min((moveT - 0.85) / 0.1, 1);
+      const s = Math.max(0, (1 - 0.3) * (1 - crushT));
+      groupRef.current.scale.set(s, s * 0.3, s); // flatten vertically
+      groupRef.current.position.set(position[0], 0, position[1]);
+    }
+  });
+
+  return (
+    <group ref={groupRef} position={[position[0], 0, position[1]]}>
+      <mesh geometry={geo} castShadow material={mat} />
+      {piece === "king" && (
+        <group position={[0, 0.58 * PIECE_SCALE, 0]}>
+          <mesh castShadow material={mat}>
+            <boxGeometry args={[0.03 * PIECE_SCALE, 0.1 * PIECE_SCALE, 0.03 * PIECE_SCALE]} />
+          </mesh>
+          <mesh position={[0, 0.03 * PIECE_SCALE, 0]} castShadow material={mat}>
+            <boxGeometry args={[0.08 * PIECE_SCALE, 0.03 * PIECE_SCALE, 0.03 * PIECE_SCALE]} />
+          </mesh>
+        </group>
+      )}
+    </group>
+  );
+}
+
+// ─── Gold Capture Explosion (Enhanced) ────────────────────────────────────────
+
 function CaptureExplosion({ position, progressRef, isFirstEntryRef }: {
   position: [number, number];
   progressRef: React.MutableRefObject<number>;
   isFirstEntryRef: React.MutableRefObject<boolean>;
 }) {
-  const COUNT = 60;
+  const COUNT = 120;
   const meshRef = useRef<THREE.InstancedMesh>(null);
+  const flashRef = useRef<THREE.Mesh>(null);
   const dummy = useMemo(() => new THREE.Object3D(), []);
 
-  // Pre-compute random velocities and properties
   const particleData = useMemo(() => {
     return Array.from({ length: COUNT }, () => {
       const angle = Math.random() * Math.PI * 2;
-      const elevation = Math.random() * Math.PI * 0.6 - 0.1;
-      const speed = 1.5 + Math.random() * 3;
+      const elevation = Math.random() * Math.PI * 0.7 - 0.1;
+      const speed = 2.0 + Math.random() * 4.0;
       return {
         vx: Math.cos(angle) * Math.cos(elevation) * speed,
-        vy: Math.sin(elevation) * speed + 1.5,
+        vy: Math.sin(elevation) * speed + 2.0,
         vz: Math.sin(angle) * Math.cos(elevation) * speed,
-        rotSpeed: (Math.random() - 0.5) * 10,
-        scale: 0.015 + Math.random() * 0.035,
+        rotSpeed: (Math.random() - 0.5) * 12,
+        scale: 0.02 + Math.random() * 0.04,
         colorIdx: Math.floor(Math.random() * GOLD_PARTICLE_COLORS.length),
       };
     });
@@ -317,13 +385,18 @@ function CaptureExplosion({ position, progressRef, isFirstEntryRef }: {
   const geo = useMemo(() => new THREE.BoxGeometry(1, 1, 1), []);
   const mat = useMemo(() => new THREE.MeshStandardMaterial({
     color: "#FFD700",
-    metalness: 0.9,
-    roughness: 0.1,
+    metalness: 0.95,
+    roughness: 0.05,
     emissive: "#FFD700",
-    emissiveIntensity: 0.3,
+    emissiveIntensity: 0.6,
   }), []);
 
-  // Set initial colors
+  const flashMat = useMemo(() => new THREE.MeshBasicMaterial({
+    color: "#FFD700",
+    transparent: true,
+    opacity: 0,
+  }), []);
+
   useEffect(() => {
     if (!meshRef.current) return;
     const color = new THREE.Color();
@@ -334,18 +407,28 @@ function CaptureExplosion({ position, progressRef, isFirstEntryRef }: {
     if (meshRef.current.instanceColor) meshRef.current.instanceColor.needsUpdate = true;
   }, [particleData]);
 
-  useFrame((_state, delta) => {
+  useFrame(() => {
     if (!meshRef.current) return;
 
     const progress = progressRef.current;
     const { phase, t } = getPhase(progress, isFirstEntryRef.current);
-
-    // Explosion starts at 70% of move phase
     const moveT = phase === "move" ? t : 1;
-    const explosionTrigger = 0.7;
-    
+    const explosionTrigger = 0.80;
+
+    // Gold flash
+    if (flashRef.current) {
+      if (moveT >= explosionTrigger) {
+        const flashT = Math.min((moveT - explosionTrigger) / 0.12, 1);
+        const flashScale = flashT * 0.6;
+        flashRef.current.scale.set(flashScale, flashScale, flashScale);
+        (flashRef.current.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 0.8 * (1 - flashT));
+        flashRef.current.visible = true;
+      } else {
+        flashRef.current.visible = false;
+      }
+    }
+
     if (moveT < explosionTrigger) {
-      // Hide all particles before trigger
       for (let i = 0; i < COUNT; i++) {
         dummy.position.set(0, -100, 0);
         dummy.scale.set(0, 0, 0);
@@ -357,15 +440,15 @@ function CaptureExplosion({ position, progressRef, isFirstEntryRef }: {
     }
 
     const explosionT = Math.min((moveT - explosionTrigger) / (1 - explosionTrigger), 1);
-    const gravity = 4;
+    const gravity = 3.5;
 
     for (let i = 0; i < COUNT; i++) {
       const p = particleData[i];
-      const time = explosionT * 1.2; // stretch time a bit for drama
+      const time = explosionT * 1.5;
       const x = position[0] + p.vx * time;
       const y = p.vy * time - 0.5 * gravity * time * time;
       const z = position[1] + p.vz * time;
-      const fadeOut = Math.max(0, 1 - explosionT * 1.1);
+      const fadeOut = Math.max(0, 1 - explosionT * 0.85);
       const s = p.scale * fadeOut;
 
       dummy.position.set(x, Math.max(0.01, y), z);
@@ -382,7 +465,13 @@ function CaptureExplosion({ position, progressRef, isFirstEntryRef }: {
   });
 
   return (
-    <instancedMesh ref={meshRef} args={[geo, mat, COUNT]} frustumCulled={false} />
+    <>
+      <instancedMesh ref={meshRef} args={[geo, mat, COUNT]} frustumCulled={false} />
+      <mesh ref={flashRef} position={[position[0], 0.2, position[1]]} visible={false}>
+        <sphereGeometry args={[1, 16, 16]} />
+        <primitive object={flashMat} attach="material" />
+      </mesh>
+    </>
   );
 }
 
@@ -418,7 +507,7 @@ function SceneLighting({ lite }: {
 // ─── Camera Rig ───────────────────────────────────────────────────────────────
 
 // Fixed elevated perspective — no camera movement at all
-const FIXED_CAM_POS = new THREE.Vector3(0, 4.5, 3.0);
+const FIXED_CAM_POS = new THREE.Vector3(0, 3.2, 4.2);
 const FIXED_CAM_LOOK = new THREE.Vector3(0, 0, 0);
 
 function CameraRig() {
@@ -558,6 +647,17 @@ function SceneContent({ event, duration, boardFlipped, onComplete, onMoveComplet
         progressRef={progressRef}
         isFirstEntryRef={isFirstEntryRef}
       />
+
+      {event.isCapture && event.capturedPiece && event.capturedColor && (
+        <VictimPiece
+          piece={event.capturedPiece}
+          color={event.capturedColor}
+          position={toPos}
+          lite={lite}
+          progressRef={progressRef}
+          isFirstEntryRef={isFirstEntryRef}
+        />
+      )}
 
       {event.isCapture && (
         <CaptureExplosion
