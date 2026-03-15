@@ -752,7 +752,8 @@ Deno.serve(async (req) => {
         fights_found: results.fights_found,
         fights_created: results.fights_created,
         errors: results.errors,
-        dry_run: !!dry_run,
+        dry_run: !!effectiveDryRun,
+        single_source_event_id: single_source_event_id || null,
       },
       admin_wallet: wallet,
     });
