@@ -286,7 +286,116 @@ function MovingPiece({ piece, color, fromPos, toPos, isCapture, lite, progressRe
   );
 }
 
-// ─── Lighting ─────────────────────────────────────────────────────────────────
+// ─── Gold Capture Explosion ───────────────────────────────────────────────────
+
+const GOLD_PARTICLE_COLORS = [
+  new THREE.Color("#FFD700"),
+  new THREE.Color("#FFC107"),
+  new THREE.Color("#FFEB3B"),
+  new THREE.Color("#F9A825"),
+  new THREE.Color("#FFE082"),
+  new THREE.Color("#E6BE8A"),
+];
+
+function CaptureExplosion({ position, progressRef, isFirstEntryRef }: {
+  position: [number, number];
+  progressRef: React.MutableRefObject<number>;
+  isFirstEntryRef: React.MutableRefObject<boolean>;
+}) {
+  const COUNT = 60;
+  const meshRef = useRef<THREE.InstancedMesh>(null);
+  const dummy = useMemo(() => new THREE.Object3D(), []);
+
+  // Pre-compute random velocities and properties
+  const particleData = useMemo(() => {
+    return Array.from({ length: COUNT }, () => {
+      const angle = Math.random() * Math.PI * 2;
+      const elevation = Math.random() * Math.PI * 0.6 - 0.1;
+      const speed = 1.5 + Math.random() * 3;
+      return {
+        vx: Math.cos(angle) * Math.cos(elevation) * speed,
+        vy: Math.sin(elevation) * speed + 1.5,
+        vz: Math.sin(angle) * Math.cos(elevation) * speed,
+        rotSpeed: (Math.random() - 0.5) * 10,
+        scale: 0.015 + Math.random() * 0.035,
+        colorIdx: Math.floor(Math.random() * GOLD_PARTICLE_COLORS.length),
+      };
+    });
+  }, []);
+
+  const geo = useMemo(() => new THREE.BoxGeometry(1, 1, 1), []);
+  const mat = useMemo(() => new THREE.MeshStandardMaterial({
+    color: "#FFD700",
+    metalness: 0.9,
+    roughness: 0.1,
+    emissive: "#FFD700",
+    emissiveIntensity: 0.3,
+  }), []);
+
+  // Set initial colors
+  useEffect(() => {
+    if (!meshRef.current) return;
+    const color = new THREE.Color();
+    for (let i = 0; i < COUNT; i++) {
+      color.copy(GOLD_PARTICLE_COLORS[particleData[i].colorIdx]);
+      meshRef.current.setColorAt(i, color);
+    }
+    if (meshRef.current.instanceColor) meshRef.current.instanceColor.needsUpdate = true;
+  }, [particleData]);
+
+  useFrame((_state, delta) => {
+    if (!meshRef.current) return;
+
+    const progress = progressRef.current;
+    const { phase, t } = getPhase(progress, isFirstEntryRef.current);
+
+    // Explosion starts at 70% of move phase and plays for 0.8 seconds
+    const moveT = phase === "swoop-in" ? 0 : phase === "move" ? t : 1;
+    const explosionTrigger = 0.7;
+    
+    if (moveT < explosionTrigger) {
+      // Hide all particles before trigger
+      for (let i = 0; i < COUNT; i++) {
+        dummy.position.set(0, -100, 0);
+        dummy.scale.set(0, 0, 0);
+        dummy.updateMatrix();
+        meshRef.current.setMatrixAt(i, dummy.matrix);
+      }
+      meshRef.current.instanceMatrix.needsUpdate = true;
+      return;
+    }
+
+    const explosionT = Math.min((moveT - explosionTrigger) / (1 - explosionTrigger), 1);
+    const gravity = 4;
+
+    for (let i = 0; i < COUNT; i++) {
+      const p = particleData[i];
+      const time = explosionT * 1.2; // stretch time a bit for drama
+      const x = position[0] + p.vx * time;
+      const y = p.vy * time - 0.5 * gravity * time * time;
+      const z = position[1] + p.vz * time;
+      const fadeOut = Math.max(0, 1 - explosionT * 1.1);
+      const s = p.scale * fadeOut;
+
+      dummy.position.set(x, Math.max(0.01, y), z);
+      dummy.rotation.set(
+        p.rotSpeed * time,
+        p.rotSpeed * time * 0.7,
+        p.rotSpeed * time * 0.3
+      );
+      dummy.scale.set(s, s, s);
+      dummy.updateMatrix();
+      meshRef.current.setMatrixAt(i, dummy.matrix);
+    }
+    meshRef.current.instanceMatrix.needsUpdate = true;
+  });
+
+  return (
+    <instancedMesh ref={meshRef} args={[geo, mat, COUNT]} frustumCulled={false} />
+  );
+}
+
+
 
 function SceneLighting({ lite, progressRef, isFirstEntryRef }: {
   lite: boolean;
