@@ -1436,7 +1436,7 @@ const ChessGame = () => {
                           tier={cinematic.tier}
                         />
                       )}
-                  </div>
+                    </div>
                 </div>
 
               {/* Animation Toggle + Cinematic Toggle */}
