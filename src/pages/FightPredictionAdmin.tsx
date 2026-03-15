@@ -1198,13 +1198,45 @@ function AutomationStatusPanel({
         ))}
       </div>
 
-      {/* Settlement readiness indicator */}
+      {/* Next automation step */}
+      {(() => {
+        const nextLock = lockAt && !lockPassed && statusCounts.open > 0;
+        const nextLive = liveAt && !livePassed && (statusCounts.locked > 0 || (lockPassed && statusCounts.open === 0));
+        const nextTime = nextLock ? lockAt : nextLive ? liveAt : null;
+        const nextLabel = nextLock ? "Auto-Lock" : nextLive ? "Go Live" : null;
+        if (nextTime && nextLabel) {
+          const diffMs = nextTime.getTime() - now.getTime();
+          const diffMin = Math.floor(diffMs / 60_000);
+          const diffHrs = Math.floor(diffMin / 60);
+          const remaining = diffHrs > 0
+            ? `${diffHrs}h ${diffMin % 60}m`
+            : diffMin > 0
+              ? `${diffMin}m`
+              : "< 1m";
+          return (
+            <div className="bg-primary/5 border border-primary/20 rounded px-2.5 py-1.5 text-[10px] flex items-center justify-between">
+              <span className="text-muted-foreground">Next step:</span>
+              <span className="text-primary font-bold">{nextLabel} in {remaining}</span>
+            </div>
+          );
+        }
+        return null;
+      })()}
+
+      {/* Readiness indicators */}
       <div className="text-[10px] space-y-0.5">
         <div className="flex items-center gap-1.5">
           <span className={`w-2 h-2 rounded-full ${lockPassed || statusCounts.open === 0 ? "bg-green-400" : "bg-muted-foreground/30"}`} />
           <span className="text-muted-foreground">Auto-Lock</span>
           <span className="text-foreground font-medium ml-auto">
-            {statusCounts.open === 0 ? "All locked ✓" : lockPassed ? "Lock triggered ✓" : lockAt ? "Pending" : "No schedule"}
+            {statusCounts.open === 0 ? "All locked ✓" : lockPassed ? "Lock triggered ✓" : lockAt ? `At ${lockAt.toLocaleString()}` : "No schedule"}
+          </span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className={`w-2 h-2 rounded-full ${livePassed || statusCounts.live > 0 ? "bg-green-400" : "bg-muted-foreground/30"}`} />
+          <span className="text-muted-foreground">Go Live</span>
+          <span className="text-foreground font-medium ml-auto">
+            {statusCounts.live > 0 || livePassed ? "Live ✓" : liveAt ? `At ${liveAt.toLocaleString()}` : "No schedule"}
           </span>
         </div>
         <div className="flex items-center gap-1.5">
