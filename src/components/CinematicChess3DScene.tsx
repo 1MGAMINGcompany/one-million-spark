@@ -273,15 +273,16 @@ const GOLD_PARTICLE_COLORS = [
 
 // ─── VictimPiece (captured piece stays visible, shakes, then crushes) ─────────
 
-function VictimPiece({ piece, color, position, lite, progressRef, isFirstEntryRef }: {
+function VictimPiece({ piece, color, position, lite, progressRef, isFirstEntryRef, skin }: {
   piece: string; color: "white" | "black";
   position: [number, number]; lite: boolean;
   progressRef: React.MutableRefObject<number>;
   isFirstEntryRef: React.MutableRefObject<boolean>;
+  skin: ChessSkin;
 }) {
   const groupRef = useRef<THREE.Group>(null);
-  const geo = useMemo(() => getCachedGeo(piece, lite), [piece, lite]);
-  const mat = useMemo(() => getCachedMat(color, lite), [color, lite]);
+  const geo = useMemo(() => getCachedGeo(piece, lite, skin), [piece, lite, skin]);
+  const mat = useMemo(() => getCachedMat(color, lite, skin), [color, lite, skin]);
 
   useFrame(() => {
     if (!groupRef.current) return;
