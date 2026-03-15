@@ -108,7 +108,7 @@ function getCachedMat(color: "white" | "black", lite: boolean, skin: ChessSkin):
 
 // ─── Board (static — never re-renders) ────────────────────────────────────────
 
-function BoardPlane({ lite }: { lite: boolean }) {
+function BoardPlane({ lite, skin }: { lite: boolean; skin: ChessSkin }) {
   const geo = useMemo(() => new THREE.PlaneGeometry(SQ, SQ), []);
   const squares = useMemo(() => {
     const r: { x: number; z: number; dark: boolean }[] = [];
@@ -118,20 +118,25 @@ function BoardPlane({ lite }: { lite: boolean }) {
     return r;
   }, []);
 
+  const LIGHT_SQ = useMemo(() => new THREE.Color(skin.boardLight), [skin.boardLight]);
+  const DARK_SQ = useMemo(() => new THREE.Color(skin.boardDark), [skin.boardDark]);
+  const TRIM_COLOR = useMemo(() => new THREE.Color(skin.boardTrim), [skin.boardTrim]);
+  const baseColor = skin.boardBase || "#191920";
+
   const lightMat = useMemo(() => lite
     ? new THREE.MeshStandardMaterial({ color: LIGHT_SQ, roughness: 0.5 })
     : new THREE.MeshPhysicalMaterial({ color: LIGHT_SQ, roughness: 0.35, clearcoat: 0.3, clearcoatRoughness: 0.4 }),
-  [lite]);
+  [lite, LIGHT_SQ]);
 
   const darkMat = useMemo(() => lite
     ? new THREE.MeshStandardMaterial({ color: DARK_SQ, roughness: 0.5 })
     : new THREE.MeshPhysicalMaterial({ color: DARK_SQ, roughness: 0.3, clearcoat: 0.4, clearcoatRoughness: 0.3 }),
-  [lite]);
+  [lite, DARK_SQ]);
 
   const trimMat = useMemo(() => lite
-    ? new THREE.MeshStandardMaterial({ color: GOLD_TRIM, roughness: 0.3, metalness: 0.8 })
-    : new THREE.MeshPhysicalMaterial({ color: GOLD_TRIM, roughness: 0.15, metalness: 0.9, clearcoat: 0.8, clearcoatRoughness: 0.1 }),
-  [lite]);
+    ? new THREE.MeshStandardMaterial({ color: TRIM_COLOR, roughness: 0.3, metalness: 0.8 })
+    : new THREE.MeshPhysicalMaterial({ color: TRIM_COLOR, roughness: 0.15, metalness: 0.9, clearcoat: 0.8, clearcoatRoughness: 0.1 }),
+  [lite, TRIM_COLOR]);
 
   const trimThickness = 0.04;
   const trimHeight = 0.06;
@@ -146,7 +151,7 @@ function BoardPlane({ lite }: { lite: boolean }) {
       </group>
       <mesh position={[0, -0.05, 0]}>
         <boxGeometry args={[BOARD_SIZE + 0.1, 0.08, BOARD_SIZE + 0.1]} />
-        <meshStandardMaterial color="#191920" roughness={0.8} />
+        <meshStandardMaterial color={baseColor} roughness={0.8} />
       </mesh>
       <mesh position={[0, trimHeight / 2, -HALF - trimThickness / 2]} material={trimMat}>
         <boxGeometry args={[totalSize, trimHeight, trimThickness]} />
