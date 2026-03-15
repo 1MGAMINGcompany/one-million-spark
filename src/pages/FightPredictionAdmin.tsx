@@ -508,6 +508,7 @@ export default function FightPredictionAdmin() {
             event={event}
             fights={eventFights(event.id)}
             entryCounts={entryCounts}
+            botConfirmData={botConfirmData}
             busy={busy}
             onFightAction={fightAction}
             onConfirm={withConfirm}
