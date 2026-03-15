@@ -92,6 +92,8 @@ const ChessGame = () => {
   const [winnerWallet, setWinnerWallet] = useState<string | null>(null); // Direct wallet address of winner
   const [lastMove, setLastMove] = useState<{ from: Square; to: Square } | null>(null);
   const cinematic = useCinematicMode();
+  const chessSkin = useChessSkin();
+  const [showSkinPicker, setShowSkinPicker] = useState(false);
   const [boardImage, setBoardImage] = useState<string | null>(null);
   const boardContainerRef = useRef<HTMLDivElement>(null);
 
