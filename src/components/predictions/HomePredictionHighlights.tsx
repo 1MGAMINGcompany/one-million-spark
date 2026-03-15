@@ -151,7 +151,7 @@ export default function HomePredictionHighlights({
           ...f,
           eventLabel: ev?.event_name || f.event_name,
           eventDate: ev?.event_date || null,
-          sport: parseSport(ev?.event_name || f.event_name),
+          sport: parseSport(ev?.event_name || f.event_name, ev?.source_provider),
         };
       });
   }, [fights, eventMap]);
