@@ -14,7 +14,14 @@ const BDL_LEAGUES: Record<string, number> = {
   ONE: 4,
 };
 
+// ── TheSportsDB league IDs (combat sports) ──
+const TSDB_LEAGUES: Record<string, { id: number; sport: string }> = {
+  Boxing: { id: 4443, sport: "Boxing" },
+  "Top Rank": { id: 4875, sport: "Boxing" },
+};
+
 const BDL_BASE = "https://api.balldontlie.io/mma/v1";
+const TSDB_BASE = "https://www.thesportsdb.com/api/v1/json";
 
 // ── Helpers ──
 function json(data: unknown, status = 200) {
@@ -50,7 +57,6 @@ async function bdlFetch(path: string, apiKey: string, params?: Record<string, st
   return res.json();
 }
 
-// Paginate through all results
 async function bdlFetchAll(path: string, apiKey: string, params?: Record<string, string>): Promise<any[]> {
   const all: any[] = [];
   let cursor: string | undefined;
@@ -68,6 +74,28 @@ async function bdlFetchAll(path: string, apiKey: string, params?: Record<string,
   return all;
 }
 
+async function tsdbFetch(path: string, apiKey: string): Promise<any> {
+  const url = `${TSDB_BASE}/${apiKey}/${path}`;
+  console.log(`[ingest] GET ${url}`);
+  const res = await fetch(url);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`TheSportsDB ${res.status}: ${text}`);
+  }
+  return res.json();
+}
+
+// Check if a fight already exists under an event
+async function fightExists(supabase: any, eventId: string, f1Name: string, f2Name: string): Promise<boolean> {
+  const { data } = await supabase
+    .from("prediction_fights")
+    .select("id")
+    .eq("event_id", eventId)
+    .or(`and(fighter_a_name.eq.${f1Name},fighter_b_name.eq.${f2Name}),and(fighter_a_name.eq.${f2Name},fighter_b_name.eq.${f1Name})`)
+    .maybeSingle();
+  return !!data;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -79,13 +107,8 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const apiKey = Deno.env.get("BALLDONTLIE_API_KEY");
-    if (!apiKey) {
-      return json({ error: "BALLDONTLIE_API_KEY secret not configured" }, 500);
-    }
-
     const body = await req.json();
-    const { wallet, leagues, dry_run } = body;
+    const { wallet, leagues, dry_run, provider } = body;
 
     // ── Admin verification ──
     if (!wallet) return json({ error: "Missing wallet" }, 400);
@@ -109,19 +132,11 @@ Deno.serve(async (req) => {
       return json({ error: "Automation is disabled by admin kill switch" }, 403);
     }
 
-    // ── Determine target leagues ──
-    const targetLeagues = leagues && Array.isArray(leagues) && leagues.length > 0
-      ? leagues.filter((l: string) => l in BDL_LEAGUES)
-      : Object.keys(BDL_LEAGUES);
-
-    if (targetLeagues.length === 0) {
-      return json({ error: "No valid leagues specified" }, 400);
-    }
-
     const results = {
-      provider: "balldontlie",
+      providers_used: [] as string[],
       events_found: 0,
       events_new: 0,
+      events_updated: 0,
       events_skipped_dupe: 0,
       fights_found: 0,
       fights_created: 0,
@@ -130,191 +145,373 @@ Deno.serve(async (req) => {
       details: [] as any[],
     };
 
-    // ── Fetch current year events for each league ──
-    const currentYear = new Date().getFullYear();
+    // ── Determine which providers to run ──
+    const runBDL = !provider || provider === "balldontlie" || provider === "all";
+    const runTSDB = !provider || provider === "thesportsdb" || provider === "all";
 
-    for (const leagueName of targetLeagues) {
-      const leagueId = BDL_LEAGUES[leagueName];
+    // ══════════════════════════════════════════
+    // PROVIDER 1: BALLDONTLIE (MMA)
+    // ══════════════════════════════════════════
+    if (runBDL) {
+      const apiKey = Deno.env.get("BALLDONTLIE_API_KEY");
+      if (!apiKey) {
+        results.errors.push("BALLDONTLIE_API_KEY not configured — skipping MMA");
+      } else {
+        results.providers_used.push("balldontlie");
+        const targetLeagues = leagues && Array.isArray(leagues) && leagues.length > 0
+          ? leagues.filter((l: string) => l in BDL_LEAGUES)
+          : Object.keys(BDL_LEAGUES);
 
-      try {
-        // Step 1: Get events from BALLDONTLIE
-        const allEvents = await bdlFetchAll("/events", apiKey, { year: String(currentYear) });
+        const currentYear = new Date().getFullYear();
 
-        // Filter to events matching this league
-        const leagueEvents = allEvents.filter(
-          (ev: any) => ev.league?.id === leagueId
-        );
-
-        results.events_found += leagueEvents.length;
-        console.log(`[ingest] ${leagueName}: found ${leagueEvents.length} events`);
-
-        for (const ev of leagueEvents) {
-          const sourceEventId = `bdl_${ev.id}`;
-          const eventName = ev.name || ev.short_name || "Unknown Event";
-          const eventDate = ev.date || null;
-          const venue = [ev.venue_name, ev.venue_city, ev.venue_state, ev.venue_country]
-            .filter(Boolean)
-            .join(", ");
-
-          // ── Dedupe by source_event_id ──
-          const { data: existing } = await supabase
-            .from("prediction_events")
-            .select("id")
-            .eq("source_event_id", sourceEventId)
-            .maybeSingle();
-
-          if (existing) {
-            results.events_skipped_dupe++;
-            continue;
-          }
-
-          // ── Try to fetch full fight card ──
-          let fights: any[] = [];
-          let fightsError: string | null = null;
+        for (const leagueName of targetLeagues) {
+          const leagueId = BDL_LEAGUES[leagueName];
           try {
-            fights = await bdlFetchAll("/fights", apiKey, { "event_ids[]": String(ev.id) });
-            results.fights_endpoint_available = true;
-            results.fights_found += fights.length;
-          } catch (fErr: any) {
-            // Fights endpoint requires ALL-STAR tier; log gracefully
-            if (fErr.message?.includes("402") || fErr.message?.includes("403") || fErr.message?.includes("401")) {
-              fightsError = "fights_endpoint_requires_paid_tier";
-              console.log(`[ingest] Fights endpoint not available (paid tier required)`);
-            } else {
-              fightsError = fErr.message;
-              console.log(`[ingest] Fights fetch error: ${fErr.message}`);
-            }
-          }
+            const allEvents = await bdlFetchAll("/events", apiKey, { year: String(currentYear) });
+            const leagueEvents = allEvents.filter((ev: any) => ev.league?.id === leagueId);
+            results.events_found += leagueEvents.length;
 
-          // ── Build detail record ──
-          const detail: any = {
-            source_event_id: sourceEventId,
-            event_name: eventName,
-            league: leagueName,
-            league_id: leagueId,
-            event_date: eventDate,
-            location: venue,
-            event_status: ev.status,
-            fight_count: fights.length,
-            fights_error: fightsError,
-          };
+            for (const ev of leagueEvents) {
+              const sourceEventId = `bdl_${ev.id}`;
+              const eventName = ev.name || ev.short_name || "Unknown Event";
+              const eventDate = ev.date || null;
+              const venue = [ev.venue_name, ev.venue_city, ev.venue_state, ev.venue_country]
+                .filter(Boolean)
+                .join(", ");
 
-          if (fights.length > 0) {
-            detail.fights = fights.map((f: any) => ({
-              fighter1: f.fighter1?.name || "TBA",
-              fighter2: f.fighter2?.name || "TBA",
-              weight_class: f.weight_class?.name || null,
-              is_main_event: f.is_main_event || false,
-              card_segment: f.card_segment || null,
-              fight_order: f.fight_order || null,
-            }));
-          }
+              // ── Check existing ──
+              const { data: existing } = await supabase
+                .from("prediction_events")
+                .select("id, event_name, status")
+                .eq("source_event_id", sourceEventId)
+                .maybeSingle();
 
-          if (dry_run) {
-            results.events_new++;
-            detail.dry_run = true;
-            results.details.push(detail);
-            continue;
-          }
-
-          // ── Insert event as draft ──
-          const { data: newEvent, error: insertErr } = await supabase
-            .from("prediction_events")
-            .insert({
-              event_name: eventName,
-              organization: leagueName,
-              event_date: eventDate,
-              location: venue || null,
-              source: "balldontlie",
-              source_url: `https://mma.balldontlie.io/#events`,
-              source_provider: "balldontlie",
-              source_event_id: sourceEventId,
-              status: "draft",
-              is_test: false,
-              auto_resolve: false,
-              automation_status: "discovered",
-              requires_admin_approval: true,
-            })
-            .select()
-            .single();
-
-          if (insertErr) {
-            results.errors.push(`${leagueName}/${sourceEventId}: ${insertErr.message}`);
-            continue;
-          }
-
-          results.events_new++;
-
-          // ── Create fight rows from full card ──
-          if (fights.length > 0 && newEvent) {
-            for (const fight of fights) {
-              const f1Name = normalizeName(fight.fighter1?.name || "TBA");
-              const f2Name = normalizeName(fight.fighter2?.name || "TBA");
-              if (f1Name === "Tba" && f2Name === "Tba") continue;
-
-              const fightTitle = `${f1Name} vs ${f2Name}`;
-              const weightClass = fight.weight_class?.name || null;
-
-              const { error: fightErr } = await supabase
-                .from("prediction_fights")
-                .insert({
-                  title: fightTitle,
-                  fighter_a_name: f1Name,
-                  fighter_b_name: f2Name,
-                  event_name: eventName,
-                  event_id: newEvent.id,
-                  source: "balldontlie",
-                  status: "open",
-                  weight_class: weightClass,
-                  fight_class: fight.is_main_event ? "A" : (fight.card_segment === "main_card" ? "B" : "C"),
-                });
-
-              if (!fightErr) {
-                results.fights_created++;
-              } else {
-                results.errors.push(`Fight create: ${fightErr.message}`);
+              // ── Try to fetch fights ──
+              let fights: any[] = [];
+              let fightsError: string | null = null;
+              try {
+                fights = await bdlFetchAll("/fights", apiKey, { "event_ids[]": String(ev.id) });
+                results.fights_endpoint_available = true;
+                results.fights_found += fights.length;
+              } catch (fErr: any) {
+                if (fErr.message?.includes("402") || fErr.message?.includes("403") || fErr.message?.includes("401")) {
+                  fightsError = "fights_endpoint_requires_paid_tier";
+                } else {
+                  fightsError = fErr.message;
+                }
               }
-            }
-          }
 
-          // ── Log the action ──
-          await supabase.from("automation_logs").insert({
-            event_id: newEvent?.id || null,
-            action: "event_discovered",
-            source: "balldontlie",
-            details: {
-              league: leagueName,
-              league_id: leagueId,
-              raw_name: eventName,
-              source_event_id: sourceEventId,
-              fights_count: fights.length,
-              fights_error: fightsError,
-            },
-            admin_wallet: wallet,
+              const detail: any = {
+                source_event_id: sourceEventId,
+                event_name: eventName,
+                league: leagueName,
+                sport: "MMA",
+                provider: "balldontlie",
+                event_date: eventDate,
+                location: venue,
+                fight_count: fights.length,
+                fights_error: fightsError,
+                action: existing ? "updated" : "created",
+              };
+
+              if (fights.length > 0) {
+                detail.fights = fights.map((f: any) => ({
+                  fighter1: f.fighter1?.name || "TBA",
+                  fighter2: f.fighter2?.name || "TBA",
+                  weight_class: f.weight_class?.name || null,
+                  is_main_event: f.is_main_event || false,
+                  card_segment: f.card_segment || null,
+                }));
+              }
+
+              if (dry_run) {
+                if (existing) results.events_updated++;
+                else results.events_new++;
+                detail.dry_run = true;
+                results.details.push(detail);
+                continue;
+              }
+
+              let eventId: string;
+
+              if (existing) {
+                // ── UPSERT: update metadata ──
+                await supabase
+                  .from("prediction_events")
+                  .update({
+                    event_date: eventDate,
+                    location: venue || null,
+                    organization: leagueName,
+                    updated_at: new Date().toISOString(),
+                  })
+                  .eq("id", existing.id);
+
+                eventId = existing.id;
+                results.events_updated++;
+
+                await supabase.from("automation_logs").insert({
+                  event_id: eventId,
+                  action: "event_updated",
+                  source: "balldontlie",
+                  details: { league: leagueName, source_event_id: sourceEventId, fights_count: fights.length },
+                  admin_wallet: wallet,
+                });
+              } else {
+                // ── INSERT new draft ──
+                const { data: newEvent, error: insertErr } = await supabase
+                  .from("prediction_events")
+                  .insert({
+                    event_name: eventName,
+                    organization: leagueName,
+                    event_date: eventDate,
+                    location: venue || null,
+                    source: "balldontlie",
+                    source_url: `https://mma.balldontlie.io/#events`,
+                    source_provider: "balldontlie",
+                    source_event_id: sourceEventId,
+                    status: "draft",
+                    is_test: false,
+                    auto_resolve: false,
+                    automation_status: "discovered",
+                    requires_admin_approval: true,
+                  })
+                  .select()
+                  .single();
+
+                if (insertErr) {
+                  results.errors.push(`${leagueName}/${sourceEventId}: ${insertErr.message}`);
+                  continue;
+                }
+                eventId = newEvent.id;
+                results.events_new++;
+
+                await supabase.from("automation_logs").insert({
+                  event_id: eventId,
+                  action: "event_discovered",
+                  source: "balldontlie",
+                  details: { league: leagueName, source_event_id: sourceEventId, fights_count: fights.length },
+                  admin_wallet: wallet,
+                });
+              }
+
+              // ── Sync fights (dedup by fighter names) ──
+              if (fights.length > 0) {
+                for (const fight of fights) {
+                  const f1Name = normalizeName(fight.fighter1?.name || "TBA");
+                  const f2Name = normalizeName(fight.fighter2?.name || "TBA");
+                  if (f1Name === "Tba" && f2Name === "Tba") continue;
+
+                  // Check if fight already exists
+                  const { data: existingFight } = await supabase
+                    .from("prediction_fights")
+                    .select("id")
+                    .eq("event_id", eventId)
+                    .eq("fighter_a_name", f1Name)
+                    .eq("fighter_b_name", f2Name)
+                    .maybeSingle();
+
+                  if (existingFight) continue;
+
+                  // Also check reversed names
+                  const { data: existingFightRev } = await supabase
+                    .from("prediction_fights")
+                    .select("id")
+                    .eq("event_id", eventId)
+                    .eq("fighter_a_name", f2Name)
+                    .eq("fighter_b_name", f1Name)
+                    .maybeSingle();
+
+                  if (existingFightRev) continue;
+
+                  const fightTitle = `${f1Name} vs ${f2Name}`;
+                  const weightClass = fight.weight_class?.name || null;
+
+                  const { error: fightErr } = await supabase
+                    .from("prediction_fights")
+                    .insert({
+                      title: fightTitle,
+                      fighter_a_name: f1Name,
+                      fighter_b_name: f2Name,
+                      event_name: eventName,
+                      event_id: eventId,
+                      source: "balldontlie",
+                      status: "open",
+                      weight_class: weightClass,
+                      fight_class: fight.is_main_event ? "A" : (fight.card_segment === "main_card" ? "B" : "C"),
+                    });
+
+                  if (!fightErr) results.fights_created++;
+                  else results.errors.push(`Fight create: ${fightErr.message}`);
+                }
+              }
+
+              detail.event_id = eventId;
+              results.details.push(detail);
+            }
+          } catch (leagueErr) {
+            const msg = leagueErr instanceof Error ? leagueErr.message : String(leagueErr);
+            results.errors.push(`${leagueName}: ${msg}`);
+          }
+        }
+      }
+    }
+
+    // ══════════════════════════════════════════
+    // PROVIDER 2: TheSportsDB (Boxing/Combat)
+    // ══════════════════════════════════════════
+    if (runTSDB) {
+      const tsdbKey = Deno.env.get("THESPORTSDB_API_KEY") || "3"; // free tier key = "3"
+      results.providers_used.push("thesportsdb");
+
+      const targetTSDB = leagues && Array.isArray(leagues) && leagues.length > 0
+        ? Object.entries(TSDB_LEAGUES).filter(([name]) => leagues.includes(name))
+        : Object.entries(TSDB_LEAGUES);
+
+      for (const [leagueName, { id: leagueId, sport }] of targetTSDB) {
+        try {
+          const data = await tsdbFetch(`eventsnextleague.php?id=${leagueId}`, tsdbKey);
+          const events_raw = data?.events || [];
+
+          // Filter to combat sports only
+          const combatEvents = events_raw.filter((ev: any) => {
+            const s = (ev.strSport || "").toLowerCase();
+            return s === "fighting" || s === "boxing" || s === "mma" || s === "muay thai";
           });
 
-          detail.event_id = newEvent?.id;
-          results.details.push(detail);
+          results.events_found += combatEvents.length;
+
+          for (const ev of combatEvents) {
+            const sourceEventId = `tsdb_${ev.idEvent}`;
+            const eventName = ev.strEvent || "Unknown Event";
+            const eventDate = ev.dateEvent || null;
+            const venue = [ev.strVenue, ev.strCity, ev.strCountry].filter(Boolean).join(", ");
+
+            const { data: existing } = await supabase
+              .from("prediction_events")
+              .select("id, event_name, status")
+              .eq("source_event_id", sourceEventId)
+              .maybeSingle();
+
+            const detail: any = {
+              source_event_id: sourceEventId,
+              event_name: eventName,
+              league: leagueName,
+              sport,
+              provider: "thesportsdb",
+              event_date: eventDate,
+              location: venue,
+              fight_count: 0,
+              action: existing ? "updated" : "created",
+            };
+
+            if (dry_run) {
+              if (existing) results.events_updated++;
+              else results.events_new++;
+              detail.dry_run = true;
+              results.details.push(detail);
+              continue;
+            }
+
+            if (existing) {
+              await supabase
+                .from("prediction_events")
+                .update({
+                  event_date: eventDate ? `${eventDate}T00:00:00Z` : null,
+                  location: venue || null,
+                  organization: leagueName,
+                  updated_at: new Date().toISOString(),
+                })
+                .eq("id", existing.id);
+
+              results.events_updated++;
+              detail.event_id = existing.id;
+
+              await supabase.from("automation_logs").insert({
+                event_id: existing.id,
+                action: "event_updated",
+                source: "thesportsdb",
+                details: { league: leagueName, sport, source_event_id: sourceEventId },
+                admin_wallet: wallet,
+              });
+            } else {
+              const { data: newEvent, error: insertErr } = await supabase
+                .from("prediction_events")
+                .insert({
+                  event_name: eventName,
+                  organization: leagueName,
+                  event_date: eventDate ? `${eventDate}T00:00:00Z` : null,
+                  location: venue || null,
+                  source: "thesportsdb",
+                  source_provider: "thesportsdb",
+                  source_event_id: sourceEventId,
+                  status: "draft",
+                  is_test: false,
+                  auto_resolve: false,
+                  automation_status: "discovered",
+                  requires_admin_approval: true,
+                })
+                .select()
+                .single();
+
+              if (insertErr) {
+                results.errors.push(`${leagueName}/${sourceEventId}: ${insertErr.message}`);
+                continue;
+              }
+
+              results.events_new++;
+              detail.event_id = newEvent.id;
+
+              // For boxing events with two names in the title, create a single fight/market
+              const vsMatch = eventName.match(/^(.+?)\s+vs\.?\s+(.+?)$/i);
+              if (vsMatch) {
+                const f1 = normalizeName(vsMatch[1]);
+                const f2 = normalizeName(vsMatch[2]);
+                const { error: fightErr } = await supabase
+                  .from("prediction_fights")
+                  .insert({
+                    title: `${f1} vs ${f2}`,
+                    fighter_a_name: f1,
+                    fighter_b_name: f2,
+                    event_name: eventName,
+                    event_id: newEvent.id,
+                    source: "thesportsdb",
+                    status: "open",
+                  });
+                if (!fightErr) {
+                  results.fights_created++;
+                  detail.fight_count = 1;
+                }
+              }
+
+              await supabase.from("automation_logs").insert({
+                event_id: newEvent.id,
+                action: "event_discovered",
+                source: "thesportsdb",
+                details: { league: leagueName, sport, source_event_id: sourceEventId },
+                admin_wallet: wallet,
+              });
+            }
+
+            results.details.push(detail);
+          }
+        } catch (leagueErr) {
+          const msg = leagueErr instanceof Error ? leagueErr.message : String(leagueErr);
+          results.errors.push(`${leagueName} (TheSportsDB): ${msg}`);
         }
-      } catch (leagueErr) {
-        const msg = leagueErr instanceof Error ? leagueErr.message : String(leagueErr);
-        results.errors.push(`${leagueName}: ${msg}`);
-        console.error(`[ingest] Error for ${leagueName}:`, leagueErr);
       }
     }
 
     // ── Log summary ──
     await supabase.from("automation_logs").insert({
       action: "ingest_completed",
-      source: "balldontlie",
+      source: "prediction-ingest",
       details: {
-        leagues: targetLeagues,
+        providers: results.providers_used,
         events_found: results.events_found,
         events_new: results.events_new,
-        events_skipped_dupe: results.events_skipped_dupe,
+        events_updated: results.events_updated,
         fights_found: results.fights_found,
         fights_created: results.fights_created,
-        fights_endpoint_available: results.fights_endpoint_available,
         errors: results.errors,
         dry_run: !!dry_run,
       },
