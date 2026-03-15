@@ -539,6 +539,24 @@ export default function PlayerProfile() {
                 {profile.favorite_game ? capitalize(profile.favorite_game) : '—'}
               </p>
             </div>
+
+            {/* Skins Unlocked — own profile only (localStorage-based) */}
+            {isOwnProfile && (() => {
+              const games = (() => { try { return parseInt(localStorage.getItem('chess-games-completed') || '0', 10) || 0; } catch { return 0; } })();
+              const shares = (() => { try { return parseInt(localStorage.getItem('chess-shares-count') || '0', 10) || 0; } catch { return 0; } })();
+              const unlocked = CHESS_SKINS.filter(s => games >= s.unlockGames && shares >= s.unlockShares).length;
+              return (
+                <div className="bg-muted/30 rounded-lg p-4">
+                  <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                    <Palette className="h-4 w-4" />
+                    <span className="text-xs uppercase tracking-wide">Skins</span>
+                  </div>
+                  <p className="text-2xl font-bold text-foreground">
+                    {unlocked}<span className="text-muted-foreground text-base font-normal"> / {CHESS_SKINS.length}</span>
+                  </p>
+                </div>
+              );
+            })()}
           </div>
 
           {/* Recent Games */}
