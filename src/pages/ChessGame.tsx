@@ -1427,21 +1427,53 @@ const ChessGame = () => {
                         isCheckmate={game.isCheckmate()}
                       />
                     </div>
+                    {/* Cinematic Chess Overlay */}
+                    {cinematic.activeEvent && (
+                      <CinematicChessOverlay
+                        event={cinematic.activeEvent}
+                        duration={cinematic.duration}
+                        boardFlipped={effectiveColor === "b"}
+                      />
+                    )}
                   </div>
                 </div>
 
-              {/* Animation Toggle */}
-              <div className="flex justify-center">
+              {/* Animation Toggle + Cinematic Toggle */}
+              <div className="flex justify-center items-center gap-6">
                 <AnimationToggle 
                   enabled={animationsEnabled} 
                   onToggle={() => setAnimationsEnabled(prev => !prev)} 
                 />
+                {cinematic.isAllowed && (
+                  <button
+                    onClick={cinematic.toggle}
+                    className="flex items-center gap-2 group"
+                  >
+                    <span className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
+                      {cinematic.enabled ? "3D Cinematic" : "2D Mode"}
+                    </span>
+                    <div 
+                      className={`relative w-14 h-7 rounded-full transition-all duration-300 ${
+                        cinematic.enabled 
+                          ? "bg-gradient-to-r from-primary/80 to-primary shadow-[0_0_12px_-2px_hsl(45_93%_54%_/_0.6)]" 
+                          : "bg-muted/30 border border-muted-foreground/20"
+                      }`}
+                    >
+                      <div 
+                        className={`absolute top-0.5 w-6 h-6 rounded-full transition-all duration-300 flex items-center justify-center ${
+                          cinematic.enabled 
+                            ? "left-[calc(100%-26px)] bg-gradient-to-br from-primary to-primary/80 shadow-[0_0_8px_hsl(45_93%_54%_/_0.5)]" 
+                            : "left-0.5 bg-muted-foreground/30"
+                        }`}
+                      >
+                        <span className="text-[9px] font-bold">
+                          {cinematic.enabled ? "3D" : "2D"}
+                        </span>
+                      </div>
+                    </div>
+                  </button>
+                )}
               </div>
-
-              {/* Status Bar */}
-              <div 
-                className={`relative overflow-hidden rounded-lg border transition-colors duration-300 ${
-                  gameOver 
                     ? gameStatus.includes("win") 
                       ? "bg-green-500/10 border-green-500/30" 
                       : gameStatus.includes("lose")
