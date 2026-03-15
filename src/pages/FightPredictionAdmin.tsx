@@ -1082,6 +1082,7 @@ const PROVIDERS = [
 
 function IngestPanel({ wallet, busy: parentBusy, onComplete }: { wallet: string; busy: boolean; onComplete: () => void }) {
   const [ingestBusy, setIngestBusy] = useState(false);
+  const [importingId, setImportingId] = useState<string | null>(null);
   const [dryRun, setDryRun] = useState(true);
   const [selectedLeagues, setSelectedLeagues] = useState<string[]>([]);
   const [selectedProvider, setSelectedProvider] = useState("all");
@@ -1123,6 +1124,37 @@ function IngestPanel({ wallet, busy: parentBusy, onComplete }: { wallet: string;
       toast.error(err.message);
     } finally {
       setIngestBusy(false);
+    }
+  };
+
+  const importSingleEvent = async (sourceEventId: string, provider: string, eventName: string) => {
+    setImportingId(sourceEventId);
+    try {
+      const { data, error } = await supabase.functions.invoke("prediction-ingest", {
+        body: {
+          wallet,
+          single_source_event_id: sourceEventId,
+          provider: provider || undefined,
+        },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      toast.success(`Imported "${eventName}" as draft — ${data.fights_created || 0} fights`);
+      onComplete();
+      // Update dry-run results to mark this event as imported
+      setLastResult((prev: any) => {
+        if (!prev?.details) return prev;
+        return {
+          ...prev,
+          details: prev.details.map((d: any) =>
+            d.source_event_id === sourceEventId ? { ...d, imported: true } : d
+          ),
+        };
+      });
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setImportingId(null);
     }
   };
 
@@ -1224,7 +1256,7 @@ function IngestPanel({ wallet, busy: parentBusy, onComplete }: { wallet: string;
                 {lastResult.details.map((d: any, i: number) => (
                   <div key={i} className="text-[10px] text-muted-foreground border-t border-border/20 pt-1.5">
                     <p className="text-foreground font-medium">
-                      {d.action === "updated" ? "🔄 " : "🆕 "}{d.event_name}
+                      {d.imported ? "✅ " : d.action === "updated" ? "🔄 " : "🆕 "}{d.event_name}
                     </p>
                     <div className="ml-2 space-y-0.5">
                       <p>
@@ -1251,6 +1283,25 @@ function IngestPanel({ wallet, busy: parentBusy, onComplete }: { wallet: string;
                           </div>
                         </details>
                       )}
+                      {/* Import single event button (dry-run only) */}
+                      {d.dry_run && !d.imported && (
+                        <button
+                          onClick={() => importSingleEvent(d.source_event_id, d.provider, d.event_name)}
+                          disabled={!!importingId || ingestBusy}
+                          className="mt-1.5 flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1 rounded-full bg-green-500/20 text-green-400 border border-green-500/30 hover:bg-green-500/30 transition-colors disabled:opacity-50"
+                        >
+                          {importingId === d.source_event_id ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <Download className="w-3 h-3" />
+                          )}
+                          Import This Event
+                        </button>
+                      )}
+                      {d.imported && (
+                        <p className="mt-1 text-[10px] font-bold text-green-400">✅ Imported as draft</p>
+                      )}
+
                     </div>
                   </div>
                 ))}

@@ -106,7 +106,10 @@ Deno.serve(async (req) => {
     );
 
     const body = await req.json();
-    const { wallet, leagues, dry_run, provider } = body;
+    const { wallet, leagues, dry_run, provider, single_source_event_id } = body;
+
+    // If importing a single event, force non-dry-run
+    const effectiveDryRun = single_source_event_id ? false : !!dry_run;
 
     // ── Admin verification ──
     if (!wallet) return json({ error: "Missing wallet" }, 400);
@@ -249,7 +252,12 @@ Deno.serve(async (req) => {
                 }));
               }
 
-              if (dry_run) {
+              // ── Single-event filter ──
+              if (single_source_event_id && sourceEventId !== single_source_event_id) {
+                continue;
+              }
+
+              if (effectiveDryRun) {
                 if (existing) results.events_updated++;
                 else results.events_new++;
                 detail.dry_run = true;
@@ -458,7 +466,12 @@ Deno.serve(async (req) => {
               action: existing ? "updated" : "created",
             };
 
-            if (dry_run) {
+            // ── Single-event filter ──
+            if (single_source_event_id && sourceEventId !== single_source_event_id) {
+              continue;
+            }
+
+            if (effectiveDryRun) {
               if (existing) results.events_updated++;
               else results.events_new++;
               detail.dry_run = true;
@@ -619,7 +632,12 @@ Deno.serve(async (req) => {
                 action: existing ? "updated" : "created",
               };
 
-              if (dry_run) {
+              // ── Single-event filter ──
+              if (single_source_event_id && sourceEventId !== single_source_event_id) {
+                continue;
+              }
+
+              if (effectiveDryRun) {
                 if (existing) results.events_updated++;
                 else results.events_new++;
                 detail.dry_run = true;
@@ -734,7 +752,8 @@ Deno.serve(async (req) => {
         fights_found: results.fights_found,
         fights_created: results.fights_created,
         errors: results.errors,
-        dry_run: !!dry_run,
+        dry_run: !!effectiveDryRun,
+        single_source_event_id: single_source_event_id || null,
       },
       admin_wallet: wallet,
     });
