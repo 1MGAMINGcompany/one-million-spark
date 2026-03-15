@@ -178,16 +178,6 @@ export default function HomePredictionHighlights({
     });
   }, [filtered]);
 
-  const handlePredict = (fight: Fight, pick: "fighter_a" | "fighter_b") => {
-    if (!wallet) {
-      onWalletRequired?.();
-      return;
-    }
-    onPredict?.(fight, pick);
-  };
-
-  if (enrichedFights.length === 0) return null;
-
   // Count per sport for badge
   const sportCounts = useMemo(() => {
     const counts: Record<string, number> = { ALL: enrichedFights.length };
