@@ -1438,6 +1438,7 @@ const ChessGame = () => {
                       )}
                     </div>
                 </div>
+                </div>
 
               {/* Animation Toggle + Cinematic Toggle */}
               <div className="flex justify-center items-center gap-6">
