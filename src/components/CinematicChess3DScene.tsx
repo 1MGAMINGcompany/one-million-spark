@@ -466,26 +466,38 @@ interface CinematicChess3DSceneProps {
 
 export default function CinematicChess3DScene({ event, duration, boardFlipped, onComplete, onError, tier }: CinematicChess3DSceneProps) {
   const lite = tier === "3d-lite";
-  const [opacity, setOpacity] = useState(0);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const fadeIn = useRef(false);
 
-  // Fade in on mount
+  // Fade in after canvas is ready (requestAnimationFrame ensures paint)
   useEffect(() => {
-    const raf = requestAnimationFrame(() => setOpacity(1));
+    const raf = requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (containerRef.current) {
+          containerRef.current.style.opacity = "1";
+          fadeIn.current = true;
+        }
+      });
+    });
     return () => cancelAnimationFrame(raf);
   }, []);
 
-  // Fade out before complete
+  // Fade out before complete — all imperative, no setState
   const handleComplete = useCallback(() => {
-    setOpacity(0);
-    setTimeout(onComplete, 250);
+    if (containerRef.current) {
+      containerRef.current.style.opacity = "0";
+    }
+    setTimeout(onComplete, 300);
   }, [onComplete]);
 
   return (
     <div
+      ref={containerRef}
       className="absolute inset-0 pointer-events-none z-40 rounded-lg overflow-hidden"
       style={{
-        opacity,
-        transition: "opacity 250ms ease-in-out",
+        opacity: 0,
+        transition: "opacity 300ms ease-in-out",
+        willChange: "opacity",
       }}
     >
       <Canvas
@@ -494,7 +506,10 @@ export default function CinematicChess3DScene({ event, duration, boardFlipped, o
         dpr={lite ? [1, 1] : [1, 1.5]}
         camera={{ fov: 45, near: 0.1, far: 50 }}
         style={{ position: "relative", zIndex: 1, background: "transparent" }}
-        onCreated={({ gl }) => { if (!gl.getContext()) onError(); }}
+        onCreated={({ gl }) => {
+          const ctx = gl.getContext();
+          if (!ctx) onError();
+        }}
         fallback={null}
       >
         <SceneContent event={event} duration={duration} boardFlipped={boardFlipped} onComplete={handleComplete} lite={lite} />
