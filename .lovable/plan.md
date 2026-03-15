@@ -1,61 +1,39 @@
-# Fight Prediction System — Phase 2 In Progress
 
-## Status Lifecycle (Final)
 
-```
-open → locked → live → result_selected → confirmed → settled
-                   └→ draw → refund_pending → refunds_processing → refunds_complete
-                   └→ cancelled
-```
+## Problem
 
-## Architecture
+The `parseSport()` function only recognizes "MLS", "SOCCER", "FUTBOL", "UFC", "MMA", "BOXING", and "MUAY THAI" keywords. Soccer events from API-Football use league names like "Premier League", "La Liga", "Serie A" — none of which match. These events fall through to the default branch which returns the first part of the event name, failing to match `SPORT_CONFIG["FUTBOL"]` and defaulting to the Muay Thai icon. They also won't appear under the FUTBOL sport tab.
 
-### Database Tables
-- `prediction_events` — Parent event grouping + automation fields (source_provider, source_event_id, automation_status, scheduling, result detection, confidence)
-- `prediction_fights` — Individual fights with event_id FK, weight_class, fight_class, method, refund tracking
-- `prediction_entries` — User prediction records
-- `prediction_admins` — Authorized admin wallets
-- `prediction_settings` — Global kill switches (predictions_enabled, claims_enabled, automation_enabled)
-- `automation_jobs` — Scheduled/running automation tasks (job_type, target, status, retries, result_payload)
-- `automation_logs` — Immutable audit trail (action, source, confidence, admin_wallet)
+## Plan
 
-### Edge Functions
-- `prediction-admin` — Full lifecycle + getSettings/updateSettings for kill switches
-- `prediction-refund-worker` — Separate refund execution for draw scenarios (idempotent, safety-guarded)
-- `prediction-submit` — Submit predictions with 5% fee (respects predictions_enabled kill switch)
-- `prediction-claim` — Claim rewards (respects claims_enabled kill switch)
-- `prediction-feed` — Live activity feed
-- `prediction-auto-settle` — Cron auto-settle (respects automation_enabled kill switch)
-- `prediction-ingest` — BALLDONTLIE MMA API event/fight discovery (UFC, Bellator, PFL, ONE). Fetches events via `/events?year=YYYY`, full fight cards via `/fights?event_ids[]=ID`. Auth via `Authorization: API_KEY` header. Supports full card import (main_card, prelims, early_prelims segments with fight_order). Fights endpoint requires ALL-STAR tier. Dedupes by `bdl_{id}`. Stores as draft. Never auto-publishes.
-- `prediction-schedule-worker` — Cron: locks approved events at scheduled_lock_at, marks live at scheduled_live_at. Respects global + per-event automation_paused.
-- `prediction-result-worker` — Cron: fetches results from TheSportsDB for live auto-resolve events. Requires exact source_event_id match. Records payload + confidence. Flags low-confidence (<85%) for admin review. Auto-moves high-confidence fights to result_selected (NOT confirmed).
-- `prediction-settle-worker` — Idempotent job-based settlement. Creates jobs for confirmed fights past claims_open_at. CAS guard prevents double-pickup. Retry support (max 3). Full audit trail. Replaces simple auto-settle for new fights.
+### 1. Update `parseSport()` — add soccer league keywords + `source_provider` fallback
 
-### Key Design Decisions
-1. Draw declaration is separate from refund execution (draw → refund_pending → refunds_processing → refunds_complete)
-2. `result_selected` is a real reversible status between `live` and `confirmed`
-3. `settled` means financially closed and immutable
-4. Events group fights; admin manages at event level
-5. Result worker only moves to `result_selected`, never `confirmed` — admin must confirm
-6. Settlement worker uses job table with CAS guards for exactly-once execution
-7. All workers respect both global kill switch AND per-event automation_paused flag
+In `src/components/predictions/EventSection.tsx`:
 
-### Safety Guardrails
-- **Global kill switches**: predictions_enabled, claims_enabled, automation_enabled (enforced server-side)
-- **Per-event pause**: automation_paused flag stops schedule/result/settle workers for individual events
-- Server-side status guards on all transitions
-- Red confirmation dialogs for irreversible actions (lock, confirm, settle, draw, refunds)
-- Per-claim cap: 5 SOL, daily ceiling: 50 SOL
-- 5-minute safety delay before claims open
-- Refund tracking: refund_status, refunds_started_at, refunds_completed_at
-- Manual admin actions (settle, lock, etc.) always work regardless of kill switches
-- Settlement idempotency via automation_jobs deduplication
-- CAS (Compare-And-Swap) guards on job pickup prevent double-processing
+- Add a second optional parameter: `sourceProvider?: string | null`
+- If `sourceProvider === "api-football"`, return `"FUTBOL"` immediately
+- Add keyword matches for major leagues: `PREMIER LEAGUE`, `LA LIGA`, `CHAMPIONS LEAGUE`, `SERIE A`, `BUNDESLIGA`, `LIGUE 1`, `EREDIVISIE`, `LIGA MX`, `EPL`, `COPA`, `EURO`, `FIFA`, `WORLD CUP`
+- This ensures all soccer events map to `"FUTBOL"` regardless of naming
 
----
+### 2. Add `source_provider` to the public `PredictionEvent` interface
 
-## Phase 3 (Next): Cron Scheduling
-Set up pg_cron jobs for schedule-worker, result-worker, and settle-worker.
+In both `EventSection.tsx` and `FightPredictions.tsx`, add `source_provider?: string | null` to the `PredictionEvent` interface so it's available for sport detection.
 
-## Phase 4 (Next): Admin UI for Automation Monitoring
-Dashboard showing automation_jobs status, failed jobs, retry counts, audit logs.
+### 3. Pass `source_provider` through sport detection calls
+
+In `FightPredictions.tsx`:
+- The events query already uses `select("*")` which includes `source_provider` — no query change needed
+- Update the `parseSport()` calls at lines 176 and 184 to pass the event's `source_provider`
+- Update `EventSection` to pass `event?.source_provider` into `parseSport()`
+
+### 4. Update `HomePredictionHighlights.tsx`
+
+- Add `source_provider` to its `PredictionEvent` type
+- Pass `source_provider` into `parseSport()` during fight enrichment so the FUTBOL tab and soccer icon work correctly in the homepage highlights
+
+### 5. Update `sportLabels.ts`
+
+- Update `getItemLabelFromEvent` to accept and forward `sourceProvider`
+
+No backend, wallet, claim, or settlement logic is touched.
+
