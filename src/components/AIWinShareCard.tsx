@@ -4,6 +4,7 @@ import { toPng } from "html-to-image";
 import { Download, Share2, Copy, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import GoldConfettiExplosion from "@/components/GoldConfettiExplosion";
+import { incrementChessShares } from "@/hooks/useChessSkin";
 import PyramidLogo from "@/components/PyramidLogo";
 import {
   ChessIcon,
