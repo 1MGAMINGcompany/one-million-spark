@@ -52,7 +52,7 @@ import { getAnonId } from "@/lib/anonIdentity";
 import { useCinematicMode } from "@/hooks/useCinematicMode";
 import { buildCinematicEvent } from "@/lib/buildCinematicEvent";
 import CinematicChessOverlay from "@/components/CinematicChessOverlay";
-import { useChessSkin } from "@/hooks/useChessSkin";
+import { useChessSkin, incrementChessGames } from "@/hooks/useChessSkin";
 import ChessSkinPicker from "@/components/ChessSkinPicker";
 import { Palette } from "lucide-react";
 
@@ -317,10 +317,11 @@ const ChessGame = () => {
     }
   }, [game, moveHistory, gameOver, gameStatus, roomPlayers, saveChessSession, roomMode]);
 
-  // Finish session and archive room when game ends
+  // Finish session, archive room, and track skin progress when game ends
   useEffect(() => {
     if (gameOver && roomPlayers.length >= 2) {
       finishChessSession(winnerWallet);
+      incrementChessGames();
     }
   }, [gameOver, roomPlayers.length, finishChessSession, winnerWallet]);
 

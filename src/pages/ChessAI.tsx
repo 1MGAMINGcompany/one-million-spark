@@ -120,7 +120,7 @@ const ChessAI = () => {
       if (isPlayerWin) {
         const dur = getDuration();
         recordWin();
-        incrementChessGames();
+        if (difficulty === "medium" || difficulty === "hard") incrementChessGames();
         setWinDuration(dur);
         // Delay share card to show the winning move + capture board screenshot
         setTimeout(async () => {
@@ -136,7 +136,7 @@ const ChessAI = () => {
         }, 2500);
       } else {
         recordLoss();
-        incrementChessGames();
+        if (difficulty === "medium" || difficulty === "hard") incrementChessGames();
       }
       return true;
     }
