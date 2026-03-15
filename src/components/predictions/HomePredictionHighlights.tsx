@@ -137,6 +137,7 @@ export default function HomePredictionHighlights({
   wallet?: string | null;
 }) {
   const [activeSport, setActiveSport] = useState<string>("ALL");
+  const [tabOpen, setTabOpen] = useState(false);
 
   const eventMap = useMemo(() => new Map(events.map((e) => [e.id, e])), [events]);
 
