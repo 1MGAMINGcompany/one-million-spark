@@ -1068,6 +1068,47 @@ Deno.serve(async (req: Request) => {
           console.warn("[settle-game] match_share_cards exception (non-fatal):", shareException);
         }
 
+        // Step 5: Record referral rewards (best effort, non-fatal)
+        try {
+          const potLamportsRef = Number(roomData.stakeLamports) * roomData.maxPlayers;
+          const feeRef = Math.floor(potLamportsRef * 0.05);
+          const referralRewardBps = 2000; // 20% of platform fee
+
+          for (const playerWallet of playersOnChain) {
+            const { data: playerProfile } = await supabase
+              .from("player_profiles")
+              .select("referred_by_wallet")
+              .eq("wallet", playerWallet)
+              .maybeSingle();
+
+            if (playerProfile?.referred_by_wallet) {
+              const perPlayerFee = Math.floor(feeRef / playersOnChain.length);
+              const rewardAmount = Math.floor((perPlayerFee * referralRewardBps) / 10000);
+
+              if (rewardAmount > 0) {
+                await supabase.from("referral_rewards").insert({
+                  referrer_wallet: playerProfile.referred_by_wallet,
+                  player_wallet: playerWallet,
+                  source_type: "skill_game",
+                  source_id: roomPda,
+                  wager_amount: Number(roomData.stakeLamports),
+                  platform_fee_amount: perPlayerFee,
+                  referral_reward_amount: rewardAmount,
+                  status: "accrued",
+                }).then(({ error: refErr }) => {
+                  if (refErr) {
+                    console.warn("[settle-game] referral_reward insert failed (non-fatal):", refErr.message);
+                  } else {
+                    console.log("[settle-game] ✅ Referral reward recorded for", playerWallet.slice(0, 8));
+                  }
+                });
+              }
+            }
+          }
+        } catch (refException) {
+          console.warn("[settle-game] referral_rewards exception (non-fatal):", refException);
+        }
+
         dbRecorded = !dbError;
         console.log("[settle-game] 📊 DB recording complete:", { dbRecorded, dbError });
 
