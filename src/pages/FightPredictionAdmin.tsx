@@ -463,147 +463,29 @@ export default function FightPredictionAdmin() {
         )}
 
         {filteredEvents.map(event => (
-          <Card key={event.id} className={`bg-card border-border/50 p-4 ${event.is_test ? 'border-yellow-500/30' : ''}`}>
-            <div className="flex items-start justify-between mb-2">
-              <div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  {event.is_test && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-400">TEST</span>}
-                  <h3 className="font-bold text-foreground text-sm">{event.event_name}</h3>
-                </div>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {[event.organization, event.location, event.event_date?.split('T')[0]].filter(Boolean).join(' · ')}
-                </p>
-                <p className="text-xs text-muted-foreground">{eventFights(event.id).length} fights</p>
-              </div>
-              <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                event.status === 'draft' ? 'bg-muted text-muted-foreground' :
-                event.status === 'approved' ? 'bg-green-500/20 text-green-400' :
-                event.status === 'archived' ? 'bg-blue-500/20 text-blue-400' :
-                event.status === 'dismissed' ? 'bg-orange-500/20 text-orange-400' :
-                'bg-red-500/20 text-red-400'
-              }`}>{event.status.toUpperCase()}</span>
-            </div>
-
-            <div className="flex gap-2 mt-3 flex-wrap">
-              {/* Approve / Reject for drafts */}
-              {event.status === "draft" && (
-                <>
-                  <Button size="sm" onClick={async () => { try { await callAdmin("approveEvent", { event_id: event.id }); toast.success("Approved"); loadData(); } catch(e:any){toast.error(e.message);} }} disabled={busy}
-                    className="bg-green-500/20 text-green-400 hover:bg-green-500/30">
-                    <Eye className="w-3 h-3 mr-1" /> Approve
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => withConfirm(
-                    "Dismiss Event",
-                    `Dismiss "${event.event_name}"? It will be hidden from the active view but can be found under Dismissed.`,
-                    () => handleDismissEvent(event.id, event.event_name),
-                    false
-                  )} disabled={busy}
-                    className="border-orange-500/50 text-orange-400 hover:bg-orange-500/10">
-                    <EyeOff className="w-3 h-3 mr-1" /> Dismiss
-                  </Button>
-                </>
-              )}
-
-              {/* Archive for settled/completed events */}
-              {["approved", "rejected"].includes(event.status) && eventIsFullySettled(event.id) && (
-                <Button size="sm" variant="outline" onClick={() => withConfirm(
-                  "Archive Event",
-                  `Archive "${event.event_name}"? It will be moved out of the active workflow.`,
-                  () => handleArchiveEvent(event.id, event.event_name),
-                  false
-                )} disabled={busy}
-                  className="border-blue-500/50 text-blue-400 hover:bg-blue-500/10">
-                  <Archive className="w-3 h-3 mr-1" /> Archive
-                </Button>
-              )}
-
-              {/* Archive button for approved events without active fights */}
-              {event.status === "approved" && eventFights(event.id).every(f => ["settled", "refunds_complete", "cancelled"].includes(f.status) || eventFights(event.id).length === 0) && (
-                <Button size="sm" variant="outline" onClick={() => withConfirm(
-                  "Archive Event",
-                  `Archive "${event.event_name}"? It will be moved out of the active workflow.`,
-                  () => handleArchiveEvent(event.id, event.event_name),
-                  false
-                )} disabled={busy}
-                  className="border-blue-500/50 text-blue-400 hover:bg-blue-500/10">
-                  <Archive className="w-3 h-3 mr-1" /> Archive
-                </Button>
-              )}
-
-              {/* Delete — only when no predictions exist */}
-              {!eventHasPredictions(event.id) && !["archived"].includes(event.status) && (
-                <Button size="sm" variant="outline" onClick={() => withConfirm(
-                  "Delete Event",
-                  `Permanently delete "${event.event_name}" and its fights? This cannot be undone.`,
-                  () => handleDeleteEvent(event.id, event.event_name)
-                )} disabled={busy}
-                  className="border-destructive/50 text-destructive hover:bg-destructive/10">
-                  <Trash2 className="w-3 h-3 mr-1" /> Delete
-                </Button>
-              )}
-
-              {/* For archived/dismissed: show archive info or allow delete if safe */}
-              {["archived", "dismissed"].includes(event.status) && !eventHasPredictions(event.id) && (
-                <Button size="sm" variant="outline" onClick={() => withConfirm(
-                  "Delete Event",
-                  `Permanently delete "${event.event_name}"? This cannot be undone.`,
-                  () => handleDeleteEvent(event.id, event.event_name)
-                )} disabled={busy}
-                  className="border-destructive/50 text-destructive hover:bg-destructive/10">
-                  <Trash2 className="w-3 h-3 mr-1" /> Delete
-                </Button>
-              )}
-
-              {/* For dismissed events: has predictions — offer archive instead */}
-              {["dismissed"].includes(event.status) && eventHasPredictions(event.id) && (
-                <Button size="sm" variant="outline" onClick={() => withConfirm(
-                  "Archive Event",
-                  `Cannot delete "${event.event_name}" because it has predictions. Archive instead?`,
-                  () => handleArchiveEvent(event.id, event.event_name),
-                  false
-                )} disabled={busy}
-                  className="border-blue-500/50 text-blue-400 hover:bg-blue-500/10">
-                  <Archive className="w-3 h-3 mr-1" /> Archive Instead
-                </Button>
-              )}
-
-              {/* Legacy test event delete */}
-              {event.is_test && !["archived", "dismissed"].includes(event.status) && (
-                <Button size="sm" variant="outline" disabled={busy}
-                  className="border-destructive/50 text-destructive hover:bg-destructive/10"
-                  onClick={() => withConfirm(
-                    "Delete Test Event",
-                    `Delete "${event.event_name}" and all its fights? This cannot be undone.`,
-                    async () => { try { await callAdmin("deleteTestEvent", { event_id: event.id }); toast.success("Deleted"); loadData(); } catch(e:any){toast.error(e.message);} }
-                  )}>
-                  <Trash2 className="w-3 h-3 mr-1" /> Delete Test
-                </Button>
-              )}
-            </div>
-
-            {/* Fights under this event */}
-            {eventFights(event.id).length > 0 && (
-              <div className="mt-4 space-y-3">
-                {eventFights(event.id).map(fight => (
-                  <AdminFightCard
-                    key={fight.id}
-                    fight={fight}
-                    busy={busy}
-                    entryCount={entryCounts[fight.id] || 0}
-                    onAction={(action, extra) => fightAction(action, fight.id, extra)}
-                    onConfirm={withConfirm}
-                    onRefund={async () => {
-                      try {
-                        const result = await callRefundWorker(fight.id);
-                        toast.success(`Refunded ${result.refunded} entries`);
-                        loadData();
-                      } catch (e: any) { toast.error(e.message); }
-                    }}
-                  />
-                ))}
-              </div>
-            )}
-          </Card>
+          <AdminEventCard
+            key={event.id}
+            event={event}
+            fights={eventFights(event.id)}
+            entryCounts={entryCounts}
+            busy={busy}
+            onFightAction={fightAction}
+            onConfirm={withConfirm}
+            onRefund={async (fightId) => {
+              try {
+                const result = await callRefundWorker(fightId);
+                toast.success(`Refunded ${result.refunded} entries`);
+                loadData();
+              } catch (e: any) { toast.error(e.message); }
+            }}
+            callAdmin={callAdmin}
+            loadData={loadData}
+            onDismiss={handleDismissEvent}
+            onArchive={handleArchiveEvent}
+            onDelete={handleDeleteEvent}
+            eventHasPredictions={eventHasPredictions(event.id)}
+            eventIsFullySettled={eventIsFullySettled(event.id)}
+          />
         ))}
 
         {/* ── Ungrouped Fights ── */}
