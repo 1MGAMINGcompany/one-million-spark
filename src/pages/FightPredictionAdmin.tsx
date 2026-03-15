@@ -291,32 +291,31 @@ export default function FightPredictionAdmin() {
 
   type AdminFilterType = "active" | "pending" | "live" | "review" | "archived" | "dismissed";
 
+  // Mutually exclusive filter assignment: each event belongs to exactly one bucket
+  const getEventBucket = (e: PredictionEvent): AdminFilterType => {
+    if (["dismissed", "rejected"].includes(e.status)) return "dismissed";
+    if (e.status === "archived") return "archived";
+    if (e.status === "draft") return "pending";
+    // For approved events, check fight states
+    const ef = eventFights(e.id);
+    if (ef.some(f => f.status === "live")) return "live";
+    if (ef.some(f => f.review_required)) return "review";
+    return "active";
+  };
+
+  const bucketCounts: Record<AdminFilterType, number> = { active: 0, pending: 0, live: 0, review: 0, archived: 0, dismissed: 0 };
+  events.forEach(e => { bucketCounts[getEventBucket(e)]++; });
+
   const FILTER_TABS: { key: AdminFilterType; label: string; count: number }[] = [
-    { key: "active", label: "Active", count: events.filter(e => ["approved"].includes(e.status)).length },
-    { key: "pending", label: "Pending", count: events.filter(e => e.status === "draft").length },
-    { key: "live", label: "Live", count: events.filter(e => {
-      const ef = eventFights(e.id);
-      return ef.some(f => f.status === "live");
-    }).length },
-    { key: "review", label: "Review", count: events.filter(e => {
-      const ef = eventFights(e.id);
-      return ef.some(f => f.review_required);
-    }).length },
-    { key: "archived", label: "Archived", count: events.filter(e => e.status === "archived").length },
-    { key: "dismissed", label: "Dismissed", count: events.filter(e => ["dismissed", "rejected"].includes(e.status)).length },
+    { key: "active", label: "Active", count: bucketCounts.active },
+    { key: "pending", label: "Pending", count: bucketCounts.pending },
+    { key: "live", label: "Live", count: bucketCounts.live },
+    { key: "review", label: "Review", count: bucketCounts.review },
+    { key: "archived", label: "Archived", count: bucketCounts.archived },
+    { key: "dismissed", label: "Dismissed", count: bucketCounts.dismissed },
   ];
 
-  const filteredEvents = events.filter(e => {
-    switch (adminFilter) {
-      case "active": return ["approved"].includes(e.status);
-      case "pending": return e.status === "draft";
-      case "live": return eventFights(e.id).some(f => f.status === "live");
-      case "review": return eventFights(e.id).some(f => f.review_required);
-      case "archived": return e.status === "archived";
-      case "dismissed": return ["dismissed", "rejected"].includes(e.status);
-      default: return true;
-    }
-  });
+  const filteredEvents = events.filter(e => getEventBucket(e) === adminFilter);
 
   const handleDismissEvent = async (eventId: string, eventName: string) => {
     try {
