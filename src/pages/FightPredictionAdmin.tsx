@@ -32,6 +32,12 @@ interface PredictionEvent {
   is_test: boolean;
   auto_resolve: boolean;
   created_at: string;
+  source: string;
+  source_provider: string | null;
+  source_event_id: string | null;
+  automation_paused: boolean;
+  requires_admin_approval: boolean;
+  automation_status: string;
 }
 
 interface Fight {
@@ -285,32 +291,31 @@ export default function FightPredictionAdmin() {
 
   type AdminFilterType = "active" | "pending" | "live" | "review" | "archived" | "dismissed";
 
+  // Mutually exclusive filter assignment: each event belongs to exactly one bucket
+  const getEventBucket = (e: PredictionEvent): AdminFilterType => {
+    if (["dismissed", "rejected"].includes(e.status)) return "dismissed";
+    if (e.status === "archived") return "archived";
+    if (e.status === "draft") return "pending";
+    // For approved events, check fight states
+    const ef = eventFights(e.id);
+    if (ef.some(f => f.status === "live")) return "live";
+    if (ef.some(f => f.review_required)) return "review";
+    return "active";
+  };
+
+  const bucketCounts: Record<AdminFilterType, number> = { active: 0, pending: 0, live: 0, review: 0, archived: 0, dismissed: 0 };
+  events.forEach(e => { bucketCounts[getEventBucket(e)]++; });
+
   const FILTER_TABS: { key: AdminFilterType; label: string; count: number }[] = [
-    { key: "active", label: "Active", count: events.filter(e => ["approved"].includes(e.status)).length },
-    { key: "pending", label: "Pending", count: events.filter(e => e.status === "draft").length },
-    { key: "live", label: "Live", count: events.filter(e => {
-      const ef = eventFights(e.id);
-      return ef.some(f => f.status === "live");
-    }).length },
-    { key: "review", label: "Review", count: events.filter(e => {
-      const ef = eventFights(e.id);
-      return ef.some(f => f.review_required);
-    }).length },
-    { key: "archived", label: "Archived", count: events.filter(e => e.status === "archived").length },
-    { key: "dismissed", label: "Dismissed", count: events.filter(e => ["dismissed", "rejected"].includes(e.status)).length },
+    { key: "active", label: "Active", count: bucketCounts.active },
+    { key: "pending", label: "Pending", count: bucketCounts.pending },
+    { key: "live", label: "Live", count: bucketCounts.live },
+    { key: "review", label: "Review", count: bucketCounts.review },
+    { key: "archived", label: "Archived", count: bucketCounts.archived },
+    { key: "dismissed", label: "Dismissed", count: bucketCounts.dismissed },
   ];
 
-  const filteredEvents = events.filter(e => {
-    switch (adminFilter) {
-      case "active": return ["approved"].includes(e.status);
-      case "pending": return e.status === "draft";
-      case "live": return eventFights(e.id).some(f => f.status === "live");
-      case "review": return eventFights(e.id).some(f => f.review_required);
-      case "archived": return e.status === "archived";
-      case "dismissed": return ["dismissed", "rejected"].includes(e.status);
-      default: return true;
-    }
-  });
+  const filteredEvents = events.filter(e => getEventBucket(e) === adminFilter);
 
   const handleDismissEvent = async (eventId: string, eventName: string) => {
     try {
@@ -627,6 +632,19 @@ function AdminEventCard({
               event.status === 'dismissed' ? 'bg-orange-500/20 text-orange-400' :
               'bg-red-500/20 text-red-400'
             }`}>{event.status.toUpperCase()}</span>
+            {event.source_provider && event.source_provider !== 'manual' && (
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-accent/30 text-accent-foreground uppercase">
+                {event.source_provider}
+              </span>
+            )}
+            {event.organization && (
+              <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-muted/60 text-muted-foreground">
+                {event.organization}
+              </span>
+            )}
+            {event.automation_paused && (
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-400">⏸ PAUSED</span>
+            )}
             {liveCount > 0 && (
               <span className="flex items-center gap-1 text-[10px] font-bold text-red-400 bg-red-500/15 px-2 py-0.5 rounded-full">
                 <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
@@ -642,9 +660,11 @@ function AdminEventCard({
           <h3 className="font-bold text-foreground text-sm mt-1">{event.event_name}</h3>
           <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground flex-wrap">
             {event.event_date && <span>📅 {event.event_date.split('T')[0]}</span>}
-            {event.organization && <span>🏢 {event.organization}</span>}
             {event.location && <span>📍 {event.location}</span>}
           </div>
+          {event.source_event_id && (
+            <p className="text-[10px] text-muted-foreground/50 font-mono mt-0.5">{event.source_event_id}</p>
+          )}
           <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground flex-wrap">
             <span className="font-bold text-foreground">{fights.length} fights</span>
             <span>{totalPredictions} predictions</span>
@@ -680,6 +700,23 @@ function AdminEventCard({
               </>
             )}
 
+            {/* Pause / Resume Automation */}
+            {["approved"].includes(event.status) && !event.automation_paused && (
+              <Button size="sm" variant="outline" onClick={async () => {
+                try { await callAdmin("pauseAutomation", { event_id: event.id }); toast.success("Automation paused"); loadData(); } catch(e:any){toast.error(e.message);}
+              }} disabled={busy}
+                className="border-yellow-500/50 text-yellow-400 hover:bg-yellow-500/10">
+                ⏸ Pause Auto
+              </Button>
+            )}
+            {["approved"].includes(event.status) && event.automation_paused && (
+              <Button size="sm" variant="outline" onClick={async () => {
+                try { await callAdmin("resumeAutomation", { event_id: event.id }); toast.success("Automation resumed"); loadData(); } catch(e:any){toast.error(e.message);}
+              }} disabled={busy}
+                className="border-green-500/50 text-green-400 hover:bg-green-500/10">
+                ▶ Resume Auto
+              </Button>
+            )}
             {["approved", "rejected"].includes(event.status) && eventIsFullySettled && (
               <Button size="sm" variant="outline" onClick={() => onConfirm(
                 "Archive Event",
@@ -1030,12 +1067,19 @@ function AdminFightCard({
 }
 
 // ── Ingest Panel ──
-const INGEST_LEAGUES = ["UFC", "Bellator", "PFL", "ONE"];
+const BDL_LEAGUES = ["UFC", "Bellator", "PFL", "ONE"];
+const TSDB_LEAGUES_LIST = ["Boxing", "Top Rank"];
+const PROVIDERS = [
+  { key: "all", label: "All Providers" },
+  { key: "balldontlie", label: "BALLDONTLIE (MMA)" },
+  { key: "thesportsdb", label: "TheSportsDB (Boxing)" },
+];
 
 function IngestPanel({ wallet, busy: parentBusy, onComplete }: { wallet: string; busy: boolean; onComplete: () => void }) {
   const [ingestBusy, setIngestBusy] = useState(false);
   const [dryRun, setDryRun] = useState(true);
   const [selectedLeagues, setSelectedLeagues] = useState<string[]>([]);
+  const [selectedProvider, setSelectedProvider] = useState("all");
   const [lastResult, setLastResult] = useState<any>(null);
 
   const toggleLeague = (l: string) => {
@@ -1043,6 +1087,10 @@ function IngestPanel({ wallet, busy: parentBusy, onComplete }: { wallet: string;
       prev.includes(l) ? prev.filter(x => x !== l) : [...prev, l]
     );
   };
+
+  const visibleLeagues = selectedProvider === "balldontlie" ? BDL_LEAGUES
+    : selectedProvider === "thesportsdb" ? TSDB_LEAGUES_LIST
+    : [...BDL_LEAGUES, ...TSDB_LEAGUES_LIST];
 
   const runIngest = async () => {
     setIngestBusy(true);
@@ -1052,6 +1100,7 @@ function IngestPanel({ wallet, busy: parentBusy, onComplete }: { wallet: string;
         body: {
           wallet,
           leagues: selectedLeagues.length > 0 ? selectedLeagues : undefined,
+          provider: selectedProvider !== "all" ? selectedProvider : undefined,
           dry_run: dryRun,
         },
       });
@@ -1059,10 +1108,10 @@ function IngestPanel({ wallet, busy: parentBusy, onComplete }: { wallet: string;
       if (data?.error) throw new Error(data.error);
       setLastResult(data);
       if (!dryRun) {
-        toast.success(`Ingested ${data.events_new} new events, ${data.fights_created} fights`);
+        toast.success(`Ingested ${data.events_new} new, ${data.events_updated || 0} updated, ${data.fights_created} fights`);
         onComplete();
       } else {
-        toast.info(`Dry run: ${data.events_new} new events found`);
+        toast.info(`Dry run: ${data.events_new} new, ${data.events_updated || 0} would update`);
       }
     } catch (err: any) {
       toast.error(err.message);
@@ -1073,8 +1122,26 @@ function IngestPanel({ wallet, busy: parentBusy, onComplete }: { wallet: string;
 
   return (
     <div className="space-y-3">
+      {/* Provider selector */}
       <div className="flex flex-wrap gap-1.5">
-        {INGEST_LEAGUES.map(l => (
+        {PROVIDERS.map(p => (
+          <button
+            key={p.key}
+            onClick={() => { setSelectedProvider(p.key); setSelectedLeagues([]); }}
+            className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+              selectedProvider === p.key
+                ? "bg-primary/20 text-primary border-primary/40"
+                : "bg-muted/30 text-muted-foreground border-border/30 hover:border-border"
+            }`}
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
+
+      {/* League chips */}
+      <div className="flex flex-wrap gap-1.5">
+        {visibleLeagues.map(l => (
           <button
             key={l}
             onClick={() => toggleLeague(l)}
@@ -1085,6 +1152,9 @@ function IngestPanel({ wallet, busy: parentBusy, onComplete }: { wallet: string;
             }`}
           >
             {l}
+            <span className="ml-1 text-[10px] text-muted-foreground/60">
+              {BDL_LEAGUES.includes(l) ? "MMA" : "BOX"}
+            </span>
           </button>
         ))}
       </div>
@@ -1111,12 +1181,19 @@ function IngestPanel({ wallet, busy: parentBusy, onComplete }: { wallet: string;
       {lastResult && (
         <div className="bg-muted/30 border border-border/30 rounded-lg p-3 text-xs space-y-1">
           <p className="text-foreground font-medium">
-            {lastResult.dry_run || dryRun ? "🔍 Dry Run" : "✅ Ingested"}
-            {lastResult.provider && <span className="text-muted-foreground ml-1">({lastResult.provider})</span>}
+            {dryRun ? "🔍 Dry Run" : "✅ Ingested"}
+            {lastResult.providers_used?.length > 0 && (
+              <span className="text-muted-foreground ml-1">({lastResult.providers_used.join(", ")})</span>
+            )}
           </p>
-          <p className="text-muted-foreground">Found: {lastResult.events_found} · New: {lastResult.events_new} · Dupes: {lastResult.events_skipped_dupe}</p>
+          <p className="text-muted-foreground">
+            Found: {lastResult.events_found} · New: {lastResult.events_new} · Updated: {lastResult.events_updated || 0}
+          </p>
           {lastResult.fights_found > 0 && (
             <p className="text-muted-foreground">Fights found: {lastResult.fights_found} · Created: {lastResult.fights_created}</p>
+          )}
+          {lastResult.fights_created > 0 && lastResult.fights_found === 0 && (
+            <p className="text-muted-foreground">Fights created: {lastResult.fights_created}</p>
           )}
           {lastResult.fights_endpoint_available === false && lastResult.events_found > 0 && (
             <p className="text-yellow-400 text-[10px]">⚠ Fights endpoint requires paid tier — only events imported</p>
@@ -1137,14 +1214,19 @@ function IngestPanel({ wallet, busy: parentBusy, onComplete }: { wallet: string;
               <div className="mt-1 space-y-2 max-h-80 overflow-y-auto">
                 {lastResult.details.map((d: any, i: number) => (
                   <div key={i} className="text-[10px] text-muted-foreground border-t border-border/20 pt-1.5">
-                    <p className="text-foreground font-medium">{d.event_name}</p>
+                    <p className="text-foreground font-medium">
+                      {d.action === "updated" ? "🔄 " : "🆕 "}{d.event_name}
+                    </p>
                     <div className="ml-2 space-y-0.5">
-                      <p>League: <span className="text-primary">{d.league}</span></p>
+                      <p>
+                        <span className="text-primary">{d.league}</span>
+                        {d.sport && <span className="text-muted-foreground ml-1">({d.sport})</span>}
+                        {d.provider && <span className="text-muted-foreground ml-1">· {d.provider}</span>}
+                      </p>
                       {d.event_date && <p>Date: {new Date(d.event_date).toLocaleDateString()}</p>}
                       {d.location && <p>📍 {d.location}</p>}
                       <p>ID: {d.source_event_id}</p>
                       <p>Fights: <span className="text-primary font-medium">{d.fight_count ?? 0}</span></p>
-                      {d.event_status && <p>Status: {d.event_status}</p>}
                       {d.fights_error && <p className="text-yellow-400">⚠ {d.fights_error}</p>}
                       {d.fights?.length > 0 && (
                         <details className="mt-1">

@@ -487,6 +487,54 @@ Deno.serve(async (req) => {
       return json({ deleted: true });
     }
 
+    if (action === "pauseAutomation") {
+      const { event_id } = body;
+      if (!event_id) return json({ error: "Missing event_id" }, 400);
+
+      const { data, error } = await supabase
+        .from("prediction_events")
+        .update({ automation_paused: true, updated_at: new Date().toISOString() })
+        .eq("id", event_id)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      await supabase.from("automation_logs").insert({
+        action: "pause_automation",
+        event_id,
+        admin_wallet: wallet,
+        source: "admin_manual",
+        details: { event_name: data.event_name },
+      });
+
+      return json({ event: data });
+    }
+
+    if (action === "resumeAutomation") {
+      const { event_id } = body;
+      if (!event_id) return json({ error: "Missing event_id" }, 400);
+
+      const { data, error } = await supabase
+        .from("prediction_events")
+        .update({ automation_paused: false, updated_at: new Date().toISOString() })
+        .eq("id", event_id)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      await supabase.from("automation_logs").insert({
+        action: "resume_automation",
+        event_id,
+        admin_wallet: wallet,
+        source: "admin_manual",
+        details: { event_name: data.event_name },
+      });
+
+      return json({ event: data });
+    }
+
     return json({ error: "Unknown action" }, 400);
   } catch (err) {
     return new Response(JSON.stringify({ error: err.message }), {
