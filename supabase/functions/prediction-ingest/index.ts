@@ -756,9 +756,9 @@ Deno.serve(async (req) => {
 
                 await supabase.from("automation_logs").insert({
                   event_id: newEvent.id,
-                  action: "event_discovered",
+                  action: "soccer_fixture_imported",
                   source: "api-football",
-                  details: { league: leagueName, sport, source_event_id: sourceEventId, fixture_id: fixtureId },
+                  details: { league: leagueName, sport, source_event_id: sourceEventId, fixture_id: fixtureId, home: homeTeam, away: awayTeam },
                   admin_wallet: wallet,
                 });
               }
