@@ -351,4 +351,4 @@ export default function PredictionHighlights({
   );
 }
 
-export type { PredictionEvent };
+
