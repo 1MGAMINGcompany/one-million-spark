@@ -671,14 +671,16 @@ interface CinematicChess3DSceneProps {
   tier: CinematicTier;
   isFirstEntry: boolean;
   isDismissing: boolean;
+  skinId?: string;
 }
 
 export default function CinematicChess3DScene({
   event, duration, boardFlipped, onComplete, onMoveComplete, onError, tier,
-  isFirstEntry, isDismissing,
+  isFirstEntry, isDismissing, skinId = "classic",
 }: CinematicChess3DSceneProps) {
   const lite = tier === "3d-lite";
   const containerRef = useRef<HTMLDivElement>(null);
+  const skin = useMemo(() => getSkinById(skinId), [skinId]);
 
   // Fade in after canvas is ready
   useEffect(() => {
@@ -731,6 +733,7 @@ export default function CinematicChess3DScene({
           lite={lite}
           isFirstEntry={isFirstEntry}
           isDismissing={isDismissing}
+          skin={skin}
         />
       </Canvas>
 
