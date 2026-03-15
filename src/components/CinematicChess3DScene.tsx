@@ -524,19 +524,20 @@ function CameraRig({ fromPos, toPos, progressRef, isFirstEntryRef, isDismissingR
 
 // ─── Animation Driver ─────────────────────────────────────────────────────────
 
-function AnimationDriver({ duration, onMoveComplete, progressRef }: {
+function AnimationDriver({ duration, onMoveComplete, progressRef, eventKey }: {
   duration: number; onMoveComplete: () => void;
   progressRef: React.MutableRefObject<number>;
+  eventKey: string;
 }) {
   const startTime = useRef(Date.now());
   const completed = useRef(false);
 
-  // Reset on new event
+  // Reset on new event (eventKey changes per move)
   useEffect(() => {
     startTime.current = Date.now();
     completed.current = false;
     progressRef.current = 0;
-  }, [duration]);
+  }, [eventKey]);
 
   useFrame(() => {
     const p = Math.min((Date.now() - startTime.current) / duration, 1);
@@ -612,7 +613,7 @@ function SceneContent({ event, duration, boardFlipped, onComplete, onMoveComplet
 
   return (
     <>
-      <AnimationDriver duration={duration} onMoveComplete={onMoveComplete} progressRef={progressRef} />
+      <AnimationDriver duration={duration} onMoveComplete={onMoveComplete} progressRef={progressRef} eventKey={`${event.from}-${event.to}-${event.san}`} />
       {isDismissing && (
         <DismissDriver duration={800} onComplete={onComplete} dismissProgressRef={dismissProgressRef} />
       )}

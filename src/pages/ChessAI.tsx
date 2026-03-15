@@ -28,64 +28,7 @@ const parseUCIMove = (uciMove: string): { from: Square; to: Square; promotion?: 
   return { from, to, promotion };
 };
 
-// Animation Toggle Component
-const AnimationToggle = ({ 
-  enabled, 
-  onToggle 
-}: { 
-  enabled: boolean; 
-  onToggle: () => void;
-}) => {
-  return (
-    <button
-      onClick={onToggle}
-      className="flex items-center gap-3 group"
-    >
-      <span className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
-        {useTranslation().t('gameAI.boardAnimations')}
-      </span>
-      <div 
-        className={`relative w-14 h-7 rounded-full transition-all duration-300 ${
-          enabled 
-            ? "bg-gradient-to-r from-primary/80 to-primary shadow-[0_0_12px_-2px_hsl(45_93%_54%_/_0.6)]" 
-            : "bg-muted/30 border border-muted-foreground/20"
-        }`}
-      >
-        {/* Track labels */}
-        <span className={`absolute left-1.5 top-1/2 -translate-y-1/2 text-[9px] font-bold transition-opacity ${
-          enabled ? "opacity-0" : "opacity-50"
-        }`}>
-          OFF
-        </span>
-        <span className={`absolute right-1.5 top-1/2 -translate-y-1/2 text-[9px] font-bold transition-opacity ${
-          enabled ? "opacity-0" : "opacity-0"
-        }`}>
-          ON
-        </span>
-        
-        {/* Thumb with pyramid */}
-        <div 
-          className={`absolute top-0.5 w-6 h-6 rounded-full transition-all duration-300 flex items-center justify-center ${
-            enabled 
-              ? "left-[calc(100%-26px)] bg-gradient-to-br from-gold-light to-primary shadow-[0_0_8px_hsl(45_93%_54%_/_0.5)]" 
-              : "left-0.5 bg-muted-foreground/30"
-          }`}
-        >
-          {/* Pyramid icon */}
-          <div 
-            className={`w-3 h-3 transition-opacity ${enabled ? "opacity-100" : "opacity-30"}`}
-            style={{
-              background: enabled 
-                ? "linear-gradient(to top, hsl(35 80% 30%) 0%, hsl(45 93% 70%) 100%)" 
-                : "linear-gradient(to top, hsl(0 0% 30%) 0%, hsl(0 0% 50%) 100%)",
-              clipPath: "polygon(50% 0%, 0% 100%, 100% 100%)"
-            }}
-          />
-        </div>
-      </div>
-    </button>
-  );
-};
+// Animation Toggle removed — cinematic 3D toggle replaces it
 
 const ChessAI = () => {
   const { t } = useTranslation();
@@ -530,7 +473,7 @@ const ChessAI = () => {
                 {/* Gold frame */}
                 <div ref={boardContainerRef} className="relative p-1 rounded-xl bg-gradient-to-br from-primary/40 via-primary/20 to-primary/40 shadow-[0_0_40px_-10px_hsl(45_93%_54%_/_0.4)]">
                   <div className="relative bg-gradient-to-b from-midnight-light via-background to-midnight-light rounded-lg overflow-hidden p-4">
-                    <div className={`transition-[opacity,filter] duration-500 ${cinematic.activeEvent ? 'opacity-30 blur-[1px]' : 'opacity-100'}`}>
+                    <div className={`transition-[opacity,filter] duration-300 ${cinematic.isPersistent ? 'opacity-30 blur-[1px]' : 'opacity-100'}`}>
                       <ChessBoardPremium
                         game={game}
                         onMove={handleMove}
@@ -557,12 +500,8 @@ const ChessAI = () => {
                 </div>
               </div>
 
-              {/* Animation Toggle + Cinematic Toggle */}
-              <div className="flex justify-center items-center gap-6">
-                <AnimationToggle 
-                  enabled={animationsEnabled} 
-                  onToggle={() => setAnimationsEnabled(prev => !prev)} 
-                />
+              {/* Cinematic Toggle */}
+              <div className="flex justify-center items-center">
                 <button
                   onClick={cinematic.toggle}
                   className="flex items-center gap-2 group"
