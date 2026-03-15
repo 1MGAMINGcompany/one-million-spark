@@ -648,6 +648,17 @@ function SceneContent({ event, duration, boardFlipped, onComplete, onMoveComplet
         isFirstEntryRef={isFirstEntryRef}
       />
 
+      {event.isCapture && event.capturedPiece && event.capturedColor && (
+        <VictimPiece
+          piece={event.capturedPiece}
+          color={event.capturedColor}
+          position={toPos}
+          lite={lite}
+          progressRef={progressRef}
+          isFirstEntryRef={isFirstEntryRef}
+        />
+      )}
+
       {event.isCapture && (
         <CaptureExplosion
           position={toPos}
