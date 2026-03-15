@@ -184,5 +184,5 @@ export function useCinematicMode(): UseCinematicModeReturn {
     };
   }, []);
 
-  return { enabled, toggle, activeEvent, isPersistent, fire, dismiss, tier, isAllowed, duration };
+  return { enabled, toggle, activeEvent, isPersistent, isFirstEntry, fire, dismiss, tier, isAllowed, duration };
 }
