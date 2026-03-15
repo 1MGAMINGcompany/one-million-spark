@@ -268,15 +268,22 @@ Deno.serve(async (req) => {
               let eventId: string;
 
               if (existing) {
-                // ── UPSERT: update metadata ──
+                // ── UPSERT: update metadata + sync automation times ──
+                const updatePayload: Record<string, any> = {
+                  event_date: eventDate,
+                  location: venue || null,
+                  organization: leagueName,
+                  updated_at: new Date().toISOString(),
+                };
+                // Sync lock/live times if event_date changed
+                if (eventDate) {
+                  const evMs = new Date(eventDate).getTime();
+                  updatePayload.scheduled_lock_at = new Date(evMs - 60_000).toISOString();
+                  updatePayload.scheduled_live_at = new Date(evMs).toISOString();
+                }
                 await supabase
                   .from("prediction_events")
-                  .update({
-                    event_date: eventDate,
-                    location: venue || null,
-                    organization: leagueName,
-                    updated_at: new Date().toISOString(),
-                  })
+                  .update(updatePayload)
                   .eq("id", existing.id);
 
                 eventId = existing.id;
@@ -290,9 +297,15 @@ Deno.serve(async (req) => {
                   admin_wallet: wallet,
                 });
               } else {
-                // ── INSERT new draft ──
-                // Compute scheduled_lock_at from event_date (lock at event start time)
-                const scheduledLockAt = eventDate ? new Date(eventDate).toISOString() : null;
+              // ── INSERT new draft ──
+                // MMA/combat: lock 60s before event, go live at event start
+                let scheduledLockAt: string | null = null;
+                let scheduledLiveAt: string | null = null;
+                if (eventDate) {
+                  const eventMs = new Date(eventDate).getTime();
+                  scheduledLockAt = new Date(eventMs - 60_000).toISOString();
+                  scheduledLiveAt = new Date(eventMs).toISOString();
+                }
 
                 const { data: newEvent, error: insertErr } = await supabase
                   .from("prediction_events")
@@ -311,6 +324,7 @@ Deno.serve(async (req) => {
                     automation_status: "discovered",
                     requires_admin_approval: true,
                     scheduled_lock_at: scheduledLockAt,
+                    scheduled_live_at: scheduledLiveAt,
                   })
                   .select()
                   .single();
@@ -501,6 +515,15 @@ Deno.serve(async (req) => {
                 admin_wallet: wallet,
               });
             } else {
+              // Combat sports: lock 60s before event, go live at event start
+              let scheduledLockAtTsdb: string | null = null;
+              let scheduledLiveAtTsdb: string | null = null;
+              if (eventDate) {
+                const eventMs = new Date(eventDate.includes("T") ? eventDate : `${eventDate}T00:00:00Z`).getTime();
+                scheduledLockAtTsdb = new Date(eventMs - 60_000).toISOString();
+                scheduledLiveAtTsdb = new Date(eventMs).toISOString();
+              }
+
               const { data: newEvent, error: insertErr } = await supabase
                 .from("prediction_events")
                 .insert({
@@ -516,6 +539,8 @@ Deno.serve(async (req) => {
                   auto_resolve: false,
                   automation_status: "discovered",
                   requires_admin_approval: true,
+                  scheduled_lock_at: scheduledLockAtTsdb,
+                  scheduled_live_at: scheduledLiveAtTsdb,
                 })
                 .select()
                 .single();
