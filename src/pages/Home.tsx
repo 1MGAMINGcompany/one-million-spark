@@ -7,6 +7,7 @@ import FeaturedGameCard from "@/components/FeaturedGameCard";
 import { ChessIcon, DominoIcon, BackgammonIcon, CheckersIcon, LudoIcon } from "@/components/GameIcons";
 import PyramidLogo from "@/components/PyramidLogo";
 import predictionsFighters from "@/assets/predictions-fighters.png";
+import futbolBall from "@/assets/futbol.png";
 // import { MobileAppPrompt } from "@/components/MobileAppPrompt"; // Temporarily disabled
 import { usePrivySolBalance } from "@/hooks/usePrivySolBalance";
 import { AddSolCard } from "@/components/AddSolCard";
@@ -141,7 +142,8 @@ const Home = () => {
                     <Button asChild size="lg" variant="gold" className="flex w-full min-w-0 whitespace-normal group text-lg h-auto py-2 pl-2 pr-4 sm:pr-8 transition-all shadow-[0_0_20px_-4px_hsl(45_93%_54%_/_0.4)]">
                       <Link to="/predictions" className="w-full min-w-0 flex items-center gap-3">
                         <img src={predictionsFighters} alt="" className="h-14 sm:h-16 w-auto object-contain shrink-0" />
-                        <span className="text-xl sm:text-2xl md:text-3xl font-bold tracking-wide leading-tight">{t("home.sportPredictions")}</span>
+                        <span className="text-xl sm:text-2xl md:text-3xl font-bold tracking-wide leading-tight flex-1">{t("home.sportPredictions")}</span>
+                        <img src={futbolBall} alt="" className="h-10 sm:h-14 w-auto object-contain shrink-0" />
                       </Link>
                     </Button>
                     <Button asChild size="lg" variant="gold" className="flex w-full min-w-0 whitespace-normal group text-lg h-auto py-5 px-4 sm:px-8 transition-all shadow-[0_0_20px_-4px_hsl(45_93%_54%_/_0.4)]">
