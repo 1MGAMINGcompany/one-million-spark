@@ -303,6 +303,13 @@ const ChessAI = () => {
       if (wasCapture && currentAnimationsEnabled && capturedPieceType && attackerPieceType) {
         triggerAnimation(attackerPieceType, capturedPieceType, targetSquare);
       }
+
+      // Fire cinematic overlay for AI move
+      if (attackingPiece) {
+        cinematic.fire(
+          buildCinematicEvent(parsed.from, parsed.to, attackingPiece.type, attackingPiece.color, wasCapture, move.san, currentGame)
+        );
+      }
       
       setGame(new Chess(currentGame.fen()));
       setMoveHistory(currentGame.history());
