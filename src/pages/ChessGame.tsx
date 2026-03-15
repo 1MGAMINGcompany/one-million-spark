@@ -138,6 +138,7 @@ const ChessGame = () => {
   const [animationsEnabled, setAnimationsEnabled] = useState(true);
   const [winnerWallet, setWinnerWallet] = useState<string | null>(null); // Direct wallet address of winner
   const [lastMove, setLastMove] = useState<{ from: Square; to: Square } | null>(null);
+  const cinematic = useCinematicMode();
   const [boardImage, setBoardImage] = useState<string | null>(null);
   const boardContainerRef = useRef<HTMLDivElement>(null);
 
