@@ -237,7 +237,7 @@ export default function FightPredictions() {
   }, [fights]);
 
   const comingSoonSports = useMemo(() => {
-    const existingSports = new Set(Object.keys(groupedEvents).map(e => parseSport(e)));
+    const existingSports = new Set(Object.entries(groupedEvents).map(([key, val]) => parseSport(key, val.event?.source_provider)));
     return ["BOXING", "MMA", "FUTBOL"].filter(s => !existingSports.has(s));
   }, [groupedEvents]);
 
@@ -477,7 +477,7 @@ export default function FightPredictions() {
             )}
 
             {/* Coming Soon cards */}
-            {(activeSport === "ALL" || !Object.keys(groupedEvents).some(e => parseSport(e) === activeSport)) &&
+            {(activeSport === "ALL" || !Object.entries(groupedEvents).some(([key, val]) => parseSport(key, val.event?.source_provider) === activeSport)) &&
               comingSoonSports.map((sport) => <ComingSoonCard key={sport} sport={sport} />)}
           </>
         )}

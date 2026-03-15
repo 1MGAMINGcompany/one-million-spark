@@ -46,7 +46,7 @@ function parseSport(eventName: string, sourceProvider?: string | null): string {
   if (sourceProvider === "api-football") return "FUTBOL";
   const upper = eventName.toUpperCase();
   if (SOCCER_KEYWORDS.some(k => upper.includes(k))) return "FUTBOL";
-  if (upper.includes("UFC") || upper.includes("MMA")) return "MMA";
+  if (upper.includes("UFC") || upper.includes("MMA") || upper.includes("PFL") || upper.includes("BELLATOR") || upper.includes("ONE CHAMPIONSHIP")) return "MMA";
   if (upper.includes("BOXING")) return "BOXING";
   if (upper.includes("MUAY THAI")) return "MUAY THAI";
   const parts = eventName.split(' — ');
@@ -99,7 +99,7 @@ export default function EventSection({
   event?: PredictionEvent;
 }) {
   const hasOpen = fights.some(f => f.status === "open");
-  const [expanded, setExpanded] = useState(hasOpen);
+  const [expanded, setExpanded] = useState(false);
 
   const parsed = parseEventLabel(eventName);
   const sport = parseSport(eventName, event?.source_provider);
