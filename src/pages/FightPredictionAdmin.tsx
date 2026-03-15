@@ -1232,7 +1232,7 @@ function IngestPanel({ wallet, busy: parentBusy, onComplete }: { wallet: string;
                         {d.sport && <span className="text-muted-foreground ml-1">({d.sport})</span>}
                         {d.provider && <span className="text-muted-foreground ml-1">· {d.provider}</span>}
                       </p>
-                      {d.event_date && <p>Date: {new Date(d.event_date).toLocaleDateString()}</p>}
+                      {d.event_date && <p>📅 {new Date(d.event_date).toLocaleString()}</p>}
                       {d.location && <p>📍 {d.location}</p>}
                       <p>ID: {d.source_event_id}</p>
                       <p>Fights: <span className="text-primary font-medium">{d.fight_count ?? 0}</span></p>
