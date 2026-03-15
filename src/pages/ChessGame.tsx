@@ -1441,6 +1441,8 @@ const ChessGame = () => {
                           duration={cinematic.duration}
                           boardFlipped={effectiveColor === "b"}
                           tier={cinematic.tier}
+                          isDismissing={!cinematic.isPersistent}
+                          isFirstEntry={!cinematic.isPersistent}
                         />
                       )}
                     </div>
