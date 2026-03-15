@@ -190,7 +190,7 @@ function CinematicChessOverlayInner({ event, duration, boardFlipped, tier = "2d-
 
   return (
     <>
-      <Suspense fallback={fallback}>
+      <Suspense fallback={null}>
         <ErrorBoundary3D fallback={fallback}>
           <CinematicChess3DScene
             event={event}
