@@ -700,6 +700,23 @@ function AdminEventCard({
               </>
             )}
 
+            {/* Pause / Resume Automation */}
+            {["approved"].includes(event.status) && !event.automation_paused && (
+              <Button size="sm" variant="outline" onClick={async () => {
+                try { await callAdmin("pauseAutomation", { event_id: event.id }); toast.success("Automation paused"); loadData(); } catch(e:any){toast.error(e.message);}
+              }} disabled={busy}
+                className="border-yellow-500/50 text-yellow-400 hover:bg-yellow-500/10">
+                ⏸ Pause Auto
+              </Button>
+            )}
+            {["approved"].includes(event.status) && event.automation_paused && (
+              <Button size="sm" variant="outline" onClick={async () => {
+                try { await callAdmin("resumeAutomation", { event_id: event.id }); toast.success("Automation resumed"); loadData(); } catch(e:any){toast.error(e.message);}
+              }} disabled={busy}
+                className="border-green-500/50 text-green-400 hover:bg-green-500/10">
+                ▶ Resume Auto
+              </Button>
+
             {["approved", "rejected"].includes(event.status) && eventIsFullySettled && (
               <Button size="sm" variant="outline" onClick={() => onConfirm(
                 "Archive Event",
