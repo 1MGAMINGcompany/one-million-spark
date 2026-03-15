@@ -1156,7 +1156,7 @@ function IngestPanel({ wallet, busy: parentBusy, onComplete }: { wallet: string;
           >
             {l}
             <span className="ml-1 text-[10px] text-muted-foreground/60">
-              {BDL_LEAGUES.includes(l) ? "MMA" : "BOX"}
+            {BDL_LEAGUES.includes(l) ? "MMA" : TSDB_LEAGUES_LIST.includes(l) ? "BOX" : "⚽"}
             </span>
           </button>
         ))}
