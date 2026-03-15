@@ -120,6 +120,7 @@ const ChessAI = () => {
       if (isPlayerWin) {
         const dur = getDuration();
         recordWin();
+        incrementChessGames();
         setWinDuration(dur);
         // Delay share card to show the winning move + capture board screenshot
         setTimeout(async () => {
