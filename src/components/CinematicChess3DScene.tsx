@@ -388,37 +388,15 @@ function CaptureExplosion({ position, progressRef, isFirstEntryRef }: {
 
 
 
-function SceneLighting({ lite, progressRef, isFirstEntryRef }: {
+function SceneLighting({ lite }: {
   lite: boolean;
-  progressRef: React.MutableRefObject<number>;
-  isFirstEntryRef: React.MutableRefObject<boolean>;
 }) {
-  const ambientRef = useRef<THREE.AmbientLight>(null);
-  const keyRef = useRef<THREE.DirectionalLight>(null);
-  const fillRef = useRef<THREE.DirectionalLight>(null);
-  const rimRef = useRef<THREE.PointLight>(null);
-
-  useFrame(() => {
-    const progress = progressRef.current;
-    const { phase, t } = getPhase(progress, isFirstEntryRef.current);
-    const swoopFactor = phase === "swoop-in"
-      ? easeInOutCubic(t)
-      : (phase === "move" || phase === "hold") ? 1
-      : 1 - easeInOutCubic(t);
-
-    if (ambientRef.current) ambientRef.current.intensity = 0.6 - swoopFactor * 0.2;
-    if (keyRef.current) keyRef.current.intensity = 0.8 + swoopFactor * 0.4;
-    if (fillRef.current) fillRef.current.intensity = swoopFactor * 0.35;
-    if (rimRef.current) rimRef.current.intensity = swoopFactor * 1.2;
-  });
-
   return (
     <>
-      <ambientLight ref={ambientRef} intensity={0.6} color="#f5f0e8" />
+      <ambientLight intensity={0.4} color="#f5f0e8" />
       <directionalLight
-        ref={keyRef}
         position={[3, 5, 2]}
-        intensity={0.8}
+        intensity={1.2}
         color="#f0dcc0"
         castShadow={!lite}
         shadow-mapSize-width={512}
@@ -428,9 +406,9 @@ function SceneLighting({ lite, progressRef, isFirstEntryRef }: {
         shadow-camera-top={3}
         shadow-camera-bottom={-3}
       />
-      <directionalLight ref={fillRef} position={[-3, 2, 1]} intensity={0} color="#a0b8d0" />
+      <directionalLight position={[-3, 2, 1]} intensity={0.35} color="#a0b8d0" />
       {!lite && (
-        <pointLight ref={rimRef} position={[0, 1.5, -3]} intensity={0} color="#d4a030" distance={8} decay={2} />
+        <pointLight position={[0, 1.5, -3]} intensity={1.2} color="#d4a030" distance={8} decay={2} />
       )}
       <directionalLight position={[0, -1, 2]} intensity={0.15} color="#7080a0" />
     </>
