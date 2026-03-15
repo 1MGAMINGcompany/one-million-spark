@@ -32,6 +32,12 @@ interface PredictionEvent {
   is_test: boolean;
   auto_resolve: boolean;
   created_at: string;
+  source: string;
+  source_provider: string | null;
+  source_event_id: string | null;
+  automation_paused: boolean;
+  requires_admin_approval: boolean;
+  automation_status: string;
 }
 
 interface Fight {
