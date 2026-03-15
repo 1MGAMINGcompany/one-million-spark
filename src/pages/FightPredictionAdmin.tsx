@@ -289,7 +289,7 @@ export default function FightPredictionAdmin() {
     return ef.length > 0 && ef.every(f => ["settled", "refunds_complete", "cancelled"].includes(f.status));
   };
 
-  type AdminFilterType = "active" | "pending" | "live" | "review" | "archived" | "dismissed";
+  type AdminFilterType = "needs_action" | "active" | "pending" | "live" | "review" | "archived" | "dismissed";
 
   // Mutually exclusive filter assignment: each event belongs to exactly one bucket
   const getEventBucket = (e: PredictionEvent): AdminFilterType => {
@@ -300,13 +300,16 @@ export default function FightPredictionAdmin() {
     const ef = eventFights(e.id);
     if (ef.some(f => f.status === "live")) return "live";
     if (ef.some(f => f.review_required)) return "review";
+    // Needs action: confirmed fights waiting for settle, or result_selected needing confirm
+    if (ef.some(f => ["result_selected", "confirmed", "refund_pending"].includes(f.status))) return "needs_action";
     return "active";
   };
 
-  const bucketCounts: Record<AdminFilterType, number> = { active: 0, pending: 0, live: 0, review: 0, archived: 0, dismissed: 0 };
+  const bucketCounts: Record<AdminFilterType, number> = { needs_action: 0, active: 0, pending: 0, live: 0, review: 0, archived: 0, dismissed: 0 };
   events.forEach(e => { bucketCounts[getEventBucket(e)]++; });
 
   const FILTER_TABS: { key: AdminFilterType; label: string; count: number }[] = [
+    { key: "needs_action", label: "⚡ Action", count: bucketCounts.needs_action },
     { key: "active", label: "Active", count: bucketCounts.active },
     { key: "pending", label: "Pending", count: bucketCounts.pending },
     { key: "live", label: "Live", count: bucketCounts.live },
