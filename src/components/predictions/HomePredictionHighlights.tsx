@@ -234,48 +234,59 @@ export default function HomePredictionHighlights({
         </div>
       )}
 
-      {/* Sport tabs with all fights grouped by day */}
-      <Tabs value={activeSport} onValueChange={setActiveSport} className="w-full">
-        <TabsList className="w-full flex overflow-x-auto bg-muted/50 p-1 gap-0.5 h-auto flex-wrap">
-          {SPORT_TABS.map((sport) => {
-            const count = sportCounts[sport] || 0;
-            if (sport !== "ALL" && count === 0) return null;
-            return (
-              <TabsTrigger
-                key={sport}
-                value={sport}
-                className="flex items-center gap-1.5 text-[11px] px-2.5 py-1.5 data-[state=active]:bg-background data-[state=active]:text-foreground"
-              >
-                {SPORT_IMG[sport] && (
-                  <img src={SPORT_IMG[sport]} alt="" className="w-4 h-4 object-contain" />
-                )}
-                <span>{sport}</span>
-                <span className="text-[9px] text-muted-foreground">({count})</span>
-              </TabsTrigger>
-            );
-          })}
-        </TabsList>
+      {/* Sport tabs — collapsed by default */}
+      <Collapsible open={tabOpen} onOpenChange={setTabOpen}>
+        <Tabs value={activeSport} onValueChange={(v) => { setActiveSport(v); setTabOpen(true); }} className="w-full">
+          <div className="flex items-center gap-2">
+            <TabsList className="flex-1 flex overflow-x-auto bg-muted/50 p-1 gap-0.5 h-auto flex-wrap">
+              {SPORT_TABS.map((sport) => {
+                const count = sportCounts[sport] || 0;
+                if (sport !== "ALL" && count === 0) return null;
+                return (
+                  <TabsTrigger
+                    key={sport}
+                    value={sport}
+                    className="flex items-center gap-1.5 text-[11px] px-2.5 py-1.5 data-[state=active]:bg-background data-[state=active]:text-foreground"
+                  >
+                    {SPORT_IMG[sport] && (
+                      <img src={SPORT_IMG[sport]} alt="" className="w-4 h-4 object-contain" />
+                    )}
+                    <span>{sport}</span>
+                    <span className="text-[9px] text-muted-foreground">({count})</span>
+                  </TabsTrigger>
+                );
+              })}
+            </TabsList>
+            <CollapsibleTrigger asChild>
+              <button className="p-1.5 rounded-md hover:bg-muted/60 transition-colors">
+                <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${tabOpen ? "rotate-180" : ""}`} />
+              </button>
+            </CollapsibleTrigger>
+          </div>
 
-        <div className="mt-4 space-y-5">
-          {dayGroups.length === 0 && (
-            <p className="text-sm text-muted-foreground text-center py-4">
-              No predictions for this sport yet.
-            </p>
-          )}
-          {dayGroups.map(([dayKey, dayFights]) => (
-            <div key={dayKey}>
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-                {dayKey === "Unknown" ? "Date TBD" : formatDayLabel(dayKey)}
-              </p>
-              <div className="grid gap-3 sm:grid-cols-2">
-                {dayFights.map((f) => (
-                  <CompactFightCard key={f.id} fight={f} onPredict={handlePredict} />
-                ))}
-              </div>
+          <CollapsibleContent>
+            <div className="mt-4 space-y-5">
+              {dayGroups.length === 0 && (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  No upcoming predictions for this sport.
+                </p>
+              )}
+              {dayGroups.map(([dayKey, dayFights]) => (
+                <div key={dayKey}>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                    {dayKey === "Unknown" ? "Date TBD" : formatDayLabel(dayKey)}
+                  </p>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {dayFights.map((f) => (
+                      <CompactFightCard key={f.id} fight={f} onPredict={handlePredict} />
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-      </Tabs>
+          </CollapsibleContent>
+        </Tabs>
+      </Collapsible>
 
       {/* View All CTA */}
       {showViewAll && (
