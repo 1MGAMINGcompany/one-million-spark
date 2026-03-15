@@ -20,8 +20,17 @@ const TSDB_LEAGUES: Record<string, { id: number; sport: string }> = {
   "Top Rank": { id: 4875, sport: "Boxing" },
 };
 
+// ── API-Football league IDs (soccer – placeholder) ──
+const APIFB_LEAGUES: Record<string, { id: number; sport: string }> = {
+  "Premier League": { id: 39, sport: "Soccer" },
+  "La Liga": { id: 140, sport: "Soccer" },
+  "Champions League": { id: 2, sport: "Soccer" },
+  "MLS": { id: 253, sport: "Soccer" },
+};
+
 const BDL_BASE = "https://api.balldontlie.io/mma/v1";
 const TSDB_BASE = "https://www.thesportsdb.com/api/v1/json";
+const APIFB_BASE = "https://v3.football.api-sports.io";
 
 // ── Helpers ──
 function json(data: unknown, status = 200) {
@@ -85,17 +94,6 @@ async function tsdbFetch(path: string, apiKey: string): Promise<any> {
   return res.json();
 }
 
-// Check if a fight already exists under an event
-async function fightExists(supabase: any, eventId: string, f1Name: string, f2Name: string): Promise<boolean> {
-  const { data } = await supabase
-    .from("prediction_fights")
-    .select("id")
-    .eq("event_id", eventId)
-    .or(`and(fighter_a_name.eq.${f1Name},fighter_b_name.eq.${f2Name}),and(fighter_a_name.eq.${f2Name},fighter_b_name.eq.${f1Name})`)
-    .maybeSingle();
-  return !!data;
-}
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -134,6 +132,7 @@ Deno.serve(async (req) => {
 
     const results = {
       providers_used: [] as string[],
+      providers_skipped: [] as { provider: string; reason: string }[],
       events_found: 0,
       events_new: 0,
       events_updated: 0,
@@ -148,6 +147,7 @@ Deno.serve(async (req) => {
     // ── Determine which providers to run ──
     const runBDL = !provider || provider === "balldontlie" || provider === "all";
     const runTSDB = !provider || provider === "thesportsdb" || provider === "all";
+    const runAPIFB = !provider || provider === "api-football" || provider === "all";
 
     // ══════════════════════════════════════════
     // PROVIDER 1: BALLDONTLIE (MMA)
@@ -258,6 +258,9 @@ Deno.serve(async (req) => {
                 });
               } else {
                 // ── INSERT new draft ──
+                // Compute scheduled_lock_at from event_date (lock at event start time)
+                const scheduledLockAt = eventDate ? new Date(eventDate).toISOString() : null;
+
                 const { data: newEvent, error: insertErr } = await supabase
                   .from("prediction_events")
                   .insert({
@@ -274,6 +277,7 @@ Deno.serve(async (req) => {
                     auto_resolve: false,
                     automation_status: "discovered",
                     requires_admin_approval: true,
+                    scheduled_lock_at: scheduledLockAt,
                   })
                   .select()
                   .single();
@@ -301,7 +305,7 @@ Deno.serve(async (req) => {
                   const f2Name = normalizeName(fight.fighter2?.name || "TBA");
                   if (f1Name === "Tba" && f2Name === "Tba") continue;
 
-                  // Check if fight already exists
+                  // Check if fight already exists (both orderings)
                   const { data: existingFight } = await supabase
                     .from("prediction_fights")
                     .select("id")
@@ -312,7 +316,6 @@ Deno.serve(async (req) => {
 
                   if (existingFight) continue;
 
-                  // Also check reversed names
                   const { data: existingFightRev } = await supabase
                     .from("prediction_fights")
                     .select("id")
@@ -501,12 +504,178 @@ Deno.serve(async (req) => {
       }
     }
 
+    // ══════════════════════════════════════════
+    // PROVIDER 3: API-Football (Soccer)
+    // ══════════════════════════════════════════
+    if (runAPIFB) {
+      const apifbKey = Deno.env.get("API_FOOTBALL_KEY");
+      if (!apifbKey) {
+        // Gracefully skip — do NOT throw
+        results.providers_skipped.push({
+          provider: "api-football",
+          reason: "API_FOOTBALL_KEY not configured",
+        });
+        console.log("[ingest] API_FOOTBALL_KEY not set — skipping soccer provider");
+      } else {
+        results.providers_used.push("api-football");
+
+        const targetAPIFB = leagues && Array.isArray(leagues) && leagues.length > 0
+          ? Object.entries(APIFB_LEAGUES).filter(([name]) => leagues.includes(name))
+          : Object.entries(APIFB_LEAGUES);
+
+        for (const [leagueName, { id: leagueId, sport }] of targetAPIFB) {
+          try {
+            // Fetch next 10 fixtures for this league
+            const url = `${APIFB_BASE}/fixtures?league=${leagueId}&next=10`;
+            console.log(`[ingest] GET ${url}`);
+            const res = await fetch(url, {
+              headers: { "x-apisports-key": apifbKey },
+            });
+            if (!res.ok) {
+              const text = await res.text();
+              throw new Error(`API-Football ${res.status}: ${text}`);
+            }
+            const data = await res.json();
+            const fixtures = data?.response || [];
+            results.events_found += fixtures.length;
+
+            for (const fix of fixtures) {
+              const fixtureId = fix.fixture?.id;
+              if (!fixtureId) continue;
+
+              const sourceEventId = `apifb_${fixtureId}`;
+              const homeTeam = fix.teams?.home?.name || "Home";
+              const awayTeam = fix.teams?.away?.name || "Away";
+              const eventName = `${homeTeam} vs ${awayTeam}`;
+              const eventDate = fix.fixture?.date || null;
+              const venue = [fix.fixture?.venue?.name, fix.fixture?.venue?.city].filter(Boolean).join(", ");
+
+              const { data: existing } = await supabase
+                .from("prediction_events")
+                .select("id, event_name, status")
+                .eq("source_event_id", sourceEventId)
+                .maybeSingle();
+
+              const detail: any = {
+                source_event_id: sourceEventId,
+                event_name: eventName,
+                league: leagueName,
+                sport,
+                provider: "api-football",
+                event_date: eventDate,
+                location: venue,
+                fight_count: 0,
+                action: existing ? "updated" : "created",
+              };
+
+              if (dry_run) {
+                if (existing) results.events_updated++;
+                else results.events_new++;
+                detail.dry_run = true;
+                results.details.push(detail);
+                continue;
+              }
+
+              if (existing) {
+                await supabase
+                  .from("prediction_events")
+                  .update({
+                    event_date: eventDate,
+                    location: venue || null,
+                    organization: leagueName,
+                    updated_at: new Date().toISOString(),
+                  })
+                  .eq("id", existing.id);
+
+                results.events_updated++;
+                detail.event_id = existing.id;
+
+                await supabase.from("automation_logs").insert({
+                  event_id: existing.id,
+                  action: "event_updated",
+                  source: "api-football",
+                  details: { league: leagueName, sport, source_event_id: sourceEventId },
+                  admin_wallet: wallet,
+                });
+              } else {
+                // Soccer: lock 5 minutes before kickoff
+                let scheduledLockAt: string | null = null;
+                if (eventDate) {
+                  const lockDate = new Date(new Date(eventDate).getTime() - 5 * 60 * 1000);
+                  scheduledLockAt = lockDate.toISOString();
+                }
+
+                const { data: newEvent, error: insertErr } = await supabase
+                  .from("prediction_events")
+                  .insert({
+                    event_name: eventName,
+                    organization: leagueName,
+                    event_date: eventDate,
+                    location: venue || null,
+                    source: "api-football",
+                    source_provider: "api-football",
+                    source_event_id: sourceEventId,
+                    status: "draft",
+                    is_test: false,
+                    auto_resolve: false,
+                    automation_status: "discovered",
+                    requires_admin_approval: true,
+                    scheduled_lock_at: scheduledLockAt,
+                  })
+                  .select()
+                  .single();
+
+                if (insertErr) {
+                  results.errors.push(`${leagueName}/${sourceEventId}: ${insertErr.message}`);
+                  continue;
+                }
+
+                results.events_new++;
+                detail.event_id = newEvent.id;
+
+                // Soccer: 1 event = 1 market (Home vs Away)
+                const { error: fightErr } = await supabase
+                  .from("prediction_fights")
+                  .insert({
+                    title: eventName,
+                    fighter_a_name: homeTeam,
+                    fighter_b_name: awayTeam,
+                    event_name: eventName,
+                    event_id: newEvent.id,
+                    source: "api-football",
+                    status: "open",
+                  });
+                if (!fightErr) {
+                  results.fights_created++;
+                  detail.fight_count = 1;
+                }
+
+                await supabase.from("automation_logs").insert({
+                  event_id: newEvent.id,
+                  action: "event_discovered",
+                  source: "api-football",
+                  details: { league: leagueName, sport, source_event_id: sourceEventId, fixture_id: fixtureId },
+                  admin_wallet: wallet,
+                });
+              }
+
+              results.details.push(detail);
+            }
+          } catch (leagueErr) {
+            const msg = leagueErr instanceof Error ? leagueErr.message : String(leagueErr);
+            results.errors.push(`${leagueName} (API-Football): ${msg}`);
+          }
+        }
+      }
+    }
+
     // ── Log summary ──
     await supabase.from("automation_logs").insert({
       action: "ingest_completed",
       source: "prediction-ingest",
       details: {
         providers: results.providers_used,
+        providers_skipped: results.providers_skipped,
         events_found: results.events_found,
         events_new: results.events_new,
         events_updated: results.events_updated,

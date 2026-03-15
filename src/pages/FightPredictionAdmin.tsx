@@ -289,7 +289,7 @@ export default function FightPredictionAdmin() {
     return ef.length > 0 && ef.every(f => ["settled", "refunds_complete", "cancelled"].includes(f.status));
   };
 
-  type AdminFilterType = "active" | "pending" | "live" | "review" | "archived" | "dismissed";
+  type AdminFilterType = "needs_action" | "active" | "pending" | "live" | "review" | "archived" | "dismissed";
 
   // Mutually exclusive filter assignment: each event belongs to exactly one bucket
   const getEventBucket = (e: PredictionEvent): AdminFilterType => {
@@ -300,13 +300,16 @@ export default function FightPredictionAdmin() {
     const ef = eventFights(e.id);
     if (ef.some(f => f.status === "live")) return "live";
     if (ef.some(f => f.review_required)) return "review";
+    // Needs action: confirmed fights waiting for settle, or result_selected needing confirm
+    if (ef.some(f => ["result_selected", "confirmed", "refund_pending"].includes(f.status))) return "needs_action";
     return "active";
   };
 
-  const bucketCounts: Record<AdminFilterType, number> = { active: 0, pending: 0, live: 0, review: 0, archived: 0, dismissed: 0 };
+  const bucketCounts: Record<AdminFilterType, number> = { needs_action: 0, active: 0, pending: 0, live: 0, review: 0, archived: 0, dismissed: 0 };
   events.forEach(e => { bucketCounts[getEventBucket(e)]++; });
 
   const FILTER_TABS: { key: AdminFilterType; label: string; count: number }[] = [
+    { key: "needs_action", label: "⚡ Action", count: bucketCounts.needs_action },
     { key: "active", label: "Active", count: bucketCounts.active },
     { key: "pending", label: "Pending", count: bucketCounts.pending },
     { key: "live", label: "Live", count: bucketCounts.live },
@@ -380,7 +383,7 @@ export default function FightPredictionAdmin() {
             <Download className="w-4 h-4 text-primary" /> Event Ingest
           </h2>
           <p className="text-xs text-muted-foreground mb-3">
-            Fetch upcoming combat sports events from TheSportsDB. Events are stored as drafts — never auto-published.
+            Fetch upcoming events from configured providers. Soccer requires API_FOOTBALL_KEY. Events are stored as drafts — never auto-published.
           </p>
           <IngestPanel wallet={address!} busy={busy} onComplete={loadData} />
         </Card>
@@ -1069,10 +1072,12 @@ function AdminFightCard({
 // ── Ingest Panel ──
 const BDL_LEAGUES = ["UFC", "Bellator", "PFL", "ONE"];
 const TSDB_LEAGUES_LIST = ["Boxing", "Top Rank"];
+const APIFB_LEAGUES_LIST = ["Premier League", "La Liga", "Champions League", "MLS"];
 const PROVIDERS = [
   { key: "all", label: "All Providers" },
   { key: "balldontlie", label: "BALLDONTLIE (MMA)" },
   { key: "thesportsdb", label: "TheSportsDB (Boxing)" },
+  { key: "api-football", label: "API-Football (Soccer)" },
 ];
 
 function IngestPanel({ wallet, busy: parentBusy, onComplete }: { wallet: string; busy: boolean; onComplete: () => void }) {
@@ -1090,7 +1095,8 @@ function IngestPanel({ wallet, busy: parentBusy, onComplete }: { wallet: string;
 
   const visibleLeagues = selectedProvider === "balldontlie" ? BDL_LEAGUES
     : selectedProvider === "thesportsdb" ? TSDB_LEAGUES_LIST
-    : [...BDL_LEAGUES, ...TSDB_LEAGUES_LIST];
+    : selectedProvider === "api-football" ? APIFB_LEAGUES_LIST
+    : [...BDL_LEAGUES, ...TSDB_LEAGUES_LIST, ...APIFB_LEAGUES_LIST];
 
   const runIngest = async () => {
     setIngestBusy(true);
@@ -1153,7 +1159,7 @@ function IngestPanel({ wallet, busy: parentBusy, onComplete }: { wallet: string;
           >
             {l}
             <span className="ml-1 text-[10px] text-muted-foreground/60">
-              {BDL_LEAGUES.includes(l) ? "MMA" : "BOX"}
+            {BDL_LEAGUES.includes(l) ? "MMA" : TSDB_LEAGUES_LIST.includes(l) ? "BOX" : "⚽"}
             </span>
           </button>
         ))}

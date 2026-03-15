@@ -11,20 +11,22 @@ const corsHeaders = {
  * Idempotent, job-based settlement worker for prediction fights.
  *
  * Flow:
- * 1. Picks pending settlement jobs from automation_jobs (type = "settle_fight")
- * 2. Acquires row lock via FOR UPDATE SKIP LOCKED (serialization)
+ * 1. Auto-creates jobs for confirmed fights whose claims_open_at has elapsed
+ * 2. Acquires job via CAS (compare-and-swap) status guard — prevents double-pickup
  * 3. Validates fight is confirmed + claims_open_at has passed
- * 4. Settles the fight (sets status = "settled")
+ * 4. Settles the fight (sets status = "settled", settled_at = now)
  * 5. Marks job complete with idempotency protection
- * 6. Logs every action
- * 7. Retries on failure up to max_retries
+ * 6. Logs every action to automation_logs
+ * 7. Retries on failure up to max_retries (default 3)
  *
  * Safety:
- * - One settlement per fight via idempotency (job deduplication)
- * - Respects claims_open_at safety timer
+ * - One settlement per fight via job deduplication (target_id + job_type)
+ * - Respects claims_open_at safety timer (3 min for bot, 5 min for admin)
  * - Respects global automation kill switch
  * - Never changes wallet/claim logic
  * - Full audit trail in automation_logs
+ * - No duplicate settle: CAS guard on fight.status === "confirmed"
+ * - No duplicate reward: settlement only changes status, claims happen separately
  */
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -96,7 +98,7 @@ Deno.serve(async (req) => {
       .limit(20);
 
     for (const job of jobs ?? []) {
-      // Mark job as running (optimistic lock via status guard)
+      // CAS: Mark job as running (prevents double-pickup)
       const { data: claimed, error: claimErr } = await supabase
         .from("automation_jobs")
         .update({
@@ -105,14 +107,11 @@ Deno.serve(async (req) => {
           updated_at: now.toISOString(),
         })
         .eq("id", job.id)
-        .eq("status", "pending") // CAS guard — prevents double-pickup
+        .eq("status", "pending")
         .select()
         .single();
 
-      if (claimErr || !claimed) {
-        // Another worker already picked this up
-        continue;
-      }
+      if (claimErr || !claimed) continue; // Another worker got it
 
       try {
         const fightId = job.target_id;
@@ -151,7 +150,7 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        // ── Settle the fight ──
+        // ── Settle the fight (CAS guard on status) ──
         const { error: settleErr } = await supabase
           .from("prediction_fights")
           .update({
@@ -159,7 +158,7 @@ Deno.serve(async (req) => {
             settled_at: now.toISOString(),
           })
           .eq("id", fightId)
-          .eq("status", "confirmed"); // CAS guard
+          .eq("status", "confirmed"); // CAS: only settle if still confirmed
 
         if (settleErr) throw settleErr;
 
@@ -167,7 +166,7 @@ Deno.serve(async (req) => {
         results.push({ job_id: job.id, fight_id: fightId, ok: true });
 
         console.log(`[settle-worker] Settled fight ${fightId} via job ${job.id}`);
-      } catch (jobErr) {
+      } catch (jobErr: any) {
         // Retry logic
         const newRetry = (job.retry_count ?? 0) + 1;
         const maxRetries = job.max_retries ?? 3;
@@ -192,7 +191,6 @@ Deno.serve(async (req) => {
             details: { error: jobErr.message, retries: newRetry },
           });
         } else {
-          // Return to pending for retry
           await supabase
             .from("automation_jobs")
             .update({
@@ -213,7 +211,7 @@ Deno.serve(async (req) => {
       settled: results.filter((r) => r.ok && !r.error).length,
       results,
     });
-  } catch (err) {
+  } catch (err: any) {
     console.error("[settle-worker] Error:", err);
     return new Response(JSON.stringify({ error: err.message }), {
       status: 500,
