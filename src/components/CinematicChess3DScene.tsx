@@ -171,11 +171,11 @@ function BoardPlane({ lite, skin }: { lite: boolean; skin: ChessSkin }) {
 
 // ─── Static Piece (no animation, never re-renders) ────────────────────────────
 
-function StaticPiece({ piece, color, x, z, lite }: {
-  piece: string; color: "white" | "black"; x: number; z: number; lite: boolean;
+function StaticPiece({ piece, color, x, z, lite, skin }: {
+  piece: string; color: "white" | "black"; x: number; z: number; lite: boolean; skin: ChessSkin;
 }) {
-  const geo = useMemo(() => getCachedGeo(piece, lite), [piece, lite]);
-  const mat = useMemo(() => getCachedMat(color, lite), [color, lite]);
+  const geo = useMemo(() => getCachedGeo(piece, lite, skin), [piece, lite, skin]);
+  const mat = useMemo(() => getCachedMat(color, lite, skin), [color, lite, skin]);
 
   return (
     <group position={[x, 0, z]}>
