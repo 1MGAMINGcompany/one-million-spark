@@ -99,7 +99,7 @@ export default function EventSection({
   event?: PredictionEvent;
 }) {
   const hasOpen = fights.some(f => f.status === "open");
-  const [expanded, setExpanded] = useState(hasOpen);
+  const [expanded, setExpanded] = useState(false);
 
   const parsed = parseEventLabel(eventName);
   const sport = parseSport(eventName, event?.source_provider);
