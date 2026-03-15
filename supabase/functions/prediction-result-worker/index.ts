@@ -464,12 +464,12 @@ async function processAPIFBResults(supabase: any, evt: any, apiKey: string, sour
     }).eq("id", fight.id).in("status", ["live", "locked"]);
 
     await supabase.from("automation_logs").insert({
-      action: "bot_result_selected",
+      action: "soccer_result_selected",
       event_id: evt.id,
       fight_id: fight.id,
       source: "prediction-result-worker",
       confidence,
-      details: { winner, score: `${homeScore}-${awayScore}`, provider: "api-football" },
+      details: { winner, score: `${homeScore}-${awayScore}`, provider: "api-football", home: homeTeam, away: awayTeam },
     });
 
     await supabase.from("prediction_fights").update({
@@ -479,12 +479,12 @@ async function processAPIFBResults(supabase: any, evt: any, apiKey: string, sour
     }).eq("id", fight.id).eq("status", "result_selected");
 
     await supabase.from("automation_logs").insert({
-      action: "bot_auto_confirm",
+      action: "soccer_result_confirmed",
       event_id: evt.id,
       fight_id: fight.id,
       source: "prediction-result-worker",
       confidence,
-      details: { winner, score: `${homeScore}-${awayScore}`, claims_open_at: claimsOpenAt.toISOString(), provider: "api-football" },
+      details: { winner, score: `${homeScore}-${awayScore}`, claims_open_at: claimsOpenAt.toISOString(), provider: "api-football", home: homeTeam, away: awayTeam },
     });
 
     resolved++;
