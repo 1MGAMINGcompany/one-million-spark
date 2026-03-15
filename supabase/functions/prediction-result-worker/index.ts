@@ -16,14 +16,23 @@ const BOT_CLAIMS_DELAY_MS = 3 * 60 * 1000; // 3 minutes for bot-confirmed
  * prediction-result-worker
  * Cron-triggered: fetches results for live/approved events from all providers.
  *
+ * Hardened MMA auto-confirm rules:
+ * 1. Fight API status must be "completed"
+ * 2. Winner must be present
+ * 3. Both fighters must match local fight record
+ * 4. No conflicting result state already saved
+ * 5. Provider payload must be complete enough to identify winner side
+ * 6. High confidence → result_selected → confirmed (two-step) with 3-min claims timer
+ * 7. Low confidence → flag for admin review only
+ *
  * Safety:
  * - Requires exact source_event_id match
  * - Records result payload and confidence
  * - Flags low-confidence for admin review
- * - Auto-confirms only high-confidence matches with 3-min claims timer
  * - Never bypasses admin safety rules
  * - Never changes claim/settlement/wallet flow
  * - Respects global + per-event automation pause
+ * - Idempotent: won't re-confirm already confirmed/settled fights
  */
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -69,7 +78,6 @@ Deno.serve(async (req) => {
         const provider = evt.source_provider;
         const sourceId = evt.source_event_id!;
 
-        // ── Route to correct provider ──
         if (provider === "balldontlie") {
           if (!bdlKey) { results.push({ event_id: evt.id, action: "skip", ok: true, details: "no_bdl_key" }); continue; }
           await processBDLResults(supabase, evt, bdlKey, sourceId, results);
@@ -97,21 +105,17 @@ Deno.serve(async (req) => {
 });
 
 // ══════════════════════════════════════════
-// BALLDONTLIE MMA result detection
+// BALLDONTLIE MMA result detection (hardened)
 // ══════════════════════════════════════════
 async function processBDLResults(
   supabase: any, evt: any, apiKey: string, sourceId: string,
   results: any[]
 ) {
-  // sourceId = "bdl_<event_id>"
   const bdlEventId = sourceId.replace("bdl_", "");
-
-  // Fetch fights for this event
   const url = `${BDL_BASE}/fights?event_ids[]=${bdlEventId}&per_page=100`;
   const res = await fetch(url, { headers: { Authorization: apiKey } });
 
   if (!res.ok) {
-    // May be paid-tier only; skip gracefully
     results.push({ event_id: evt.id, action: "fetch_fights", ok: false, details: `HTTP ${res.status}` });
     return;
   }
@@ -125,10 +129,10 @@ async function processBDLResults(
     return;
   }
 
-  // Get our DB fights for this event
+  // Get our DB fights for this event — only live/locked (idempotent: skip confirmed/settled)
   const { data: dbFights } = await supabase
     .from("prediction_fights")
-    .select("id, fighter_a_name, fighter_b_name, status")
+    .select("id, fighter_a_name, fighter_b_name, status, winner, confirmed_at")
     .eq("event_id", evt.id)
     .in("status", ["live", "locked"]);
 
@@ -142,7 +146,19 @@ async function processBDLResults(
   let flagged = 0;
 
   for (const dbFight of dbFights) {
-    // Match API fight by fighter names
+    // ── GUARD: Skip if already has a winner set (conflicting state) ──
+    if (dbFight.winner) {
+      console.log(`[result-worker] Fight ${dbFight.id} already has winner=${dbFight.winner}, skipping`);
+      continue;
+    }
+
+    // ── GUARD: Skip if already confirmed ──
+    if (dbFight.confirmed_at) {
+      console.log(`[result-worker] Fight ${dbFight.id} already confirmed, skipping`);
+      continue;
+    }
+
+    // ── Match API fight by fighter names ──
     const matchedAPI = apiFights.find((af: any) => {
       const a1 = norm(af.fighter1?.name || "");
       const a2 = norm(af.fighter2?.name || "");
@@ -153,34 +169,58 @@ async function processBDLResults(
 
     if (!matchedAPI) continue;
 
-    // Check if fight has a result
+    // ── RULE 1: Fight API status must be "completed" ──
+    const apiStatus = (matchedAPI.status || "").toLowerCase();
+    if (!["completed", "finished", "final"].includes(apiStatus)) continue;
+
+    // ── RULE 2: Winner must be present ──
     const winnerId = matchedAPI.winner_id;
-    const status = (matchedAPI.status || "").toLowerCase();
-    const resultMethod = matchedAPI.method || matchedAPI.result || null;
+    if (!winnerId) {
+      await flagForReview(supabase, evt.id, dbFight.id, "API reports completed but no winner_id", matchedAPI);
+      flagged++;
+      continue;
+    }
 
-    if (!winnerId || !["completed", "finished", "final"].includes(status)) continue;
+    // ── RULE 3: Both fighters must be known in the API response ──
+    const fighter1Name = matchedAPI.fighter1?.name;
+    const fighter2Name = matchedAPI.fighter2?.name;
+    if (!fighter1Name || !fighter2Name) {
+      await flagForReview(supabase, evt.id, dbFight.id, "Incomplete fighter data in API response", matchedAPI);
+      flagged++;
+      continue;
+    }
 
-    // Determine winner side
+    // ── RULE 4: Determine winner side safely ──
     const winnerName = norm(
-      matchedAPI.winner_id === matchedAPI.fighter1?.id
-        ? matchedAPI.fighter1?.name || ""
-        : matchedAPI.fighter2?.name || ""
+      winnerId === matchedAPI.fighter1?.id ? fighter1Name : fighter2Name
     );
     const winner = winnerName === norm(dbFight.fighter_a_name) ? "fighter_a"
                  : winnerName === norm(dbFight.fighter_b_name) ? "fighter_b"
                  : null;
 
     if (!winner) {
-      // Can't determine side — flag for review
-      await flagForReview(supabase, evt.id, dbFight.id, "Cannot determine winner side from API data", matchedAPI);
+      await flagForReview(supabase, evt.id, dbFight.id,
+        `Cannot match winner "${winnerName}" to either fighter side`,
+        { winnerId, fighter1: matchedAPI.fighter1, fighter2: matchedAPI.fighter2 }
+      );
       flagged++;
       continue;
     }
 
-    // Compute confidence
+    // ── RULE 5: Compute confidence ──
+    const resultMethod = matchedAPI.method || matchedAPI.result || null;
     const confidence = computeBDLConfidence(matchedAPI);
-    const payload = { winner_id: winnerId, status, method: resultMethod, fighter1: matchedAPI.fighter1, fighter2: matchedAPI.fighter2 };
+    const payload = {
+      winner_id: winnerId,
+      status: apiStatus,
+      method: resultMethod,
+      fighter1: matchedAPI.fighter1,
+      fighter2: matchedAPI.fighter2,
+      round: matchedAPI.round ?? null,
+      time: matchedAPI.time ?? null,
+    };
 
+    // Update event-level result tracking
     await supabase.from("prediction_events").update({
       result_detected_at: new Date().toISOString(),
       result_source_payload: payload,
@@ -189,18 +229,43 @@ async function processBDLResults(
     }).eq("id", evt.id);
 
     if (confidence >= HIGH_CONFIDENCE_THRESHOLD) {
-      // Auto-confirm with 3-minute claims timer
+      // ── HIGH CONFIDENCE: Two-step auto-confirm ──
       const now = new Date();
       const claimsOpenAt = new Date(now.getTime() + BOT_CLAIMS_DELAY_MS);
 
-      await supabase.from("prediction_fights").update({
-        status: "confirmed",
+      // Step 1: Move to result_selected
+      const { error: rsErr } = await supabase.from("prediction_fights").update({
+        status: "result_selected",
         winner,
         method: resultMethod || null,
-        confirmed_at: now.toISOString(),
         resolved_at: now.toISOString(),
-        claims_open_at: claimsOpenAt.toISOString(),
       }).eq("id", dbFight.id).in("status", ["live", "locked"]);
+
+      if (rsErr) {
+        console.error(`[result-worker] Failed result_selected for ${dbFight.id}:`, rsErr.message);
+        continue;
+      }
+
+      await supabase.from("automation_logs").insert({
+        action: "bot_result_selected",
+        event_id: evt.id,
+        fight_id: dbFight.id,
+        source: "prediction-result-worker",
+        confidence,
+        details: { winner, method: resultMethod, provider: "balldontlie", payload },
+      });
+
+      // Step 2: Auto-confirm with 3-minute claims timer
+      const { error: cfErr } = await supabase.from("prediction_fights").update({
+        status: "confirmed",
+        confirmed_at: now.toISOString(),
+        claims_open_at: claimsOpenAt.toISOString(),
+      }).eq("id", dbFight.id).eq("status", "result_selected");
+
+      if (cfErr) {
+        console.error(`[result-worker] Failed confirm for ${dbFight.id}:`, cfErr.message);
+        continue;
+      }
 
       await supabase.from("automation_logs").insert({
         action: "bot_auto_confirm",
@@ -208,12 +273,28 @@ async function processBDLResults(
         fight_id: dbFight.id,
         source: "prediction-result-worker",
         confidence,
-        details: { winner, method: resultMethod, claims_open_at: claimsOpenAt.toISOString(), provider: "balldontlie" },
+        details: {
+          winner,
+          method: resultMethod,
+          claims_open_at: claimsOpenAt.toISOString(),
+          provider: "balldontlie",
+          confidence_pct: `${(confidence * 100).toFixed(0)}%`,
+        },
       });
 
+      console.log(`[result-worker] BDL auto-confirmed fight ${dbFight.id}: ${winner}, confidence=${(confidence * 100).toFixed(0)}%, claims at ${claimsOpenAt.toISOString()}`);
       resolved++;
     } else {
-      await flagForReview(supabase, evt.id, dbFight.id, `Low confidence (${(confidence * 100).toFixed(0)}%)`, payload);
+      // ── LOW CONFIDENCE: Flag for admin review ──
+      await supabase.from("prediction_fights").update({
+        review_required: true,
+        review_reason: `Low confidence (${(confidence * 100).toFixed(0)}%) — requires manual review`,
+      }).eq("id", dbFight.id);
+
+      await flagForReview(supabase, evt.id, dbFight.id,
+        `Low confidence (${(confidence * 100).toFixed(0)}%) — bot cannot confirm`,
+        { ...payload, confidence_pct: `${(confidence * 100).toFixed(0)}%` }
+      );
       flagged++;
     }
   }
@@ -224,7 +305,7 @@ async function processBDLResults(
 }
 
 // ══════════════════════════════════════════
-// TheSportsDB result detection (existing)
+// TheSportsDB result detection
 // ══════════════════════════════════════════
 async function processTSDBResults(supabase: any, evt: any, sourceId: string, results: any[]) {
   const tsdbId = sourceId.replace("tsdb_", "");
@@ -329,7 +410,7 @@ async function processAPIFBResults(supabase: any, evt: any, apiKey: string, sour
     return;
   }
 
-  const confidence = 0.95; // API-Football final results are highly reliable
+  const confidence = 0.95;
   const payload = { homeTeam, awayTeam, homeScore, awayScore, status: fixStatus, fixture_id: fixtureId };
 
   await supabase.from("prediction_events").update({
@@ -339,10 +420,9 @@ async function processAPIFBResults(supabase: any, evt: any, apiKey: string, sour
     last_automation_check_at: new Date().toISOString(),
   }).eq("id", evt.id);
 
-  // Get fights for this event
   const { data: dbFights } = await supabase
     .from("prediction_fights")
-    .select("id, fighter_a_name, fighter_b_name, status")
+    .select("id, fighter_a_name, fighter_b_name, status, winner, confirmed_at")
     .eq("event_id", evt.id)
     .in("status", ["live", "locked"]);
 
@@ -354,13 +434,14 @@ async function processAPIFBResults(supabase: any, evt: any, apiKey: string, sour
   let resolved = 0;
 
   for (const fight of dbFights) {
-    // Draw handling: if equal scores, flag for review (draw markets need manual handling)
+    // Idempotency: skip fights with existing winner or confirmation
+    if (fight.winner || fight.confirmed_at) continue;
+
     if (homeScore === awayScore) {
       await flagForReview(supabase, evt.id, fight.id, `Draw result (${homeScore}-${awayScore})`, payload);
       continue;
     }
 
-    // Determine winner
     const winnerTeam = homeScore > awayScore ? homeTeam : awayTeam;
     const winner = norm(winnerTeam) === norm(fight.fighter_a_name) ? "fighter_a"
                  : norm(winnerTeam) === norm(fight.fighter_b_name) ? "fighter_b"
@@ -371,18 +452,31 @@ async function processAPIFBResults(supabase: any, evt: any, apiKey: string, sour
       continue;
     }
 
-    // Auto-confirm with 3-minute safety timer
     const now = new Date();
     const claimsOpenAt = new Date(now.getTime() + BOT_CLAIMS_DELAY_MS);
 
+    // Two-step: result_selected → confirmed
     await supabase.from("prediction_fights").update({
-      status: "confirmed",
+      status: "result_selected",
       winner,
       method: `${homeScore}-${awayScore}`,
-      confirmed_at: now.toISOString(),
       resolved_at: now.toISOString(),
-      claims_open_at: claimsOpenAt.toISOString(),
     }).eq("id", fight.id).in("status", ["live", "locked"]);
+
+    await supabase.from("automation_logs").insert({
+      action: "bot_result_selected",
+      event_id: evt.id,
+      fight_id: fight.id,
+      source: "prediction-result-worker",
+      confidence,
+      details: { winner, score: `${homeScore}-${awayScore}`, provider: "api-football" },
+    });
+
+    await supabase.from("prediction_fights").update({
+      status: "confirmed",
+      confirmed_at: now.toISOString(),
+      claims_open_at: claimsOpenAt.toISOString(),
+    }).eq("id", fight.id).eq("status", "result_selected");
 
     await supabase.from("automation_logs").insert({
       action: "bot_auto_confirm",
@@ -435,11 +529,18 @@ function computeBDLConfidence(fight: any): number {
   let score = 0;
   let checks = 0;
 
+  // Core: winner present
   checks++; if (fight.winner_id) score++;
+  // Core: completed status
   checks++; if (["completed", "finished", "final"].includes((fight.status || "").toLowerCase())) score++;
+  // Method known (KO, TKO, Decision, etc.)
   checks++; if (fight.method || fight.result) score++;
+  // Both fighters have names
   checks++; if (fight.fighter1?.name && fight.fighter2?.name) score++;
-  checks++; if (fight.rounds != null) score++;
+  // Round data present
+  checks++; if (fight.rounds != null || fight.round != null) score++;
+  // Both fighters have IDs (needed for winner mapping)
+  checks++; if (fight.fighter1?.id && fight.fighter2?.id) score++;
 
   return checks > 0 ? score / checks : 0;
 }
@@ -460,7 +561,7 @@ function computeTSDBConfidence(evt: Record<string, unknown>): number {
 async function autoResolveTSDBFights(supabase: any, eventId: string, sourceEvent: any) {
   const { data: fights } = await supabase
     .from("prediction_fights")
-    .select("id, fighter_a_name, fighter_b_name, status")
+    .select("id, fighter_a_name, fighter_b_name, status, winner, confirmed_at")
     .eq("event_id", eventId)
     .in("status", ["live", "locked"]);
 
@@ -470,19 +571,38 @@ async function autoResolveTSDBFights(supabase: any, eventId: string, sourceEvent
   const resolved: any[] = [];
 
   for (const fight of fights) {
+    // Idempotency guard
+    if (fight.winner || fight.confirmed_at) {
+      resolved.push({ fight_id: fight.id, matched: false, reason: "already_has_result" });
+      continue;
+    }
+
     const winner = matchFightWinner(fight.fighter_a_name, fight.fighter_b_name, resultStr);
 
     if (winner) {
       const now = new Date();
       const claimsOpenAt = new Date(now.getTime() + BOT_CLAIMS_DELAY_MS);
 
+      // Two-step: result_selected → confirmed
+      await supabase.from("prediction_fights").update({
+        status: "result_selected",
+        winner,
+        resolved_at: now.toISOString(),
+      }).eq("id", fight.id).in("status", ["live", "locked"]);
+
+      await supabase.from("automation_logs").insert({
+        action: "bot_result_selected",
+        event_id: eventId,
+        fight_id: fight.id,
+        source: "prediction-result-worker",
+        details: { winner, provider: "thesportsdb" },
+      });
+
       await supabase.from("prediction_fights").update({
         status: "confirmed",
-        winner,
         confirmed_at: now.toISOString(),
-        resolved_at: now.toISOString(),
         claims_open_at: claimsOpenAt.toISOString(),
-      }).eq("id", fight.id).in("status", ["live", "locked"]);
+      }).eq("id", fight.id).eq("status", "result_selected");
 
       await supabase.from("automation_logs").insert({
         action: "bot_auto_confirm",
