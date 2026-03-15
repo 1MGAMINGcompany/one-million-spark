@@ -35,9 +35,16 @@ interface PredictionEvent {
   is_test: boolean;
 }
 
-function parseSport(eventName: string): string {
+const SOCCER_KEYWORDS = [
+  "MLS", "SOCCER", "FUTBOL", "PREMIER LEAGUE", "LA LIGA", "CHAMPIONS LEAGUE",
+  "SERIE A", "BUNDESLIGA", "LIGUE 1", "EREDIVISIE", "LIGA MX", "EPL",
+  "COPA", "EURO", "FIFA", "WORLD CUP",
+];
+
+function parseSport(eventName: string, sourceProvider?: string | null): string {
+  if (sourceProvider === "api-football") return "FUTBOL";
   const upper = eventName.toUpperCase();
-  if (upper.includes("MLS") || upper.includes("SOCCER") || upper.includes("FUTBOL")) return "FUTBOL";
+  if (SOCCER_KEYWORDS.some(k => upper.includes(k))) return "FUTBOL";
   if (upper.includes("UFC") || upper.includes("MMA")) return "MMA";
   if (upper.includes("BOXING")) return "BOXING";
   if (upper.includes("MUAY THAI")) return "MUAY THAI";
