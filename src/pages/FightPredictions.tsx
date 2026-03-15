@@ -36,6 +36,7 @@ interface PredictionEvent {
   location: string | null;
   status: string;
   is_test: boolean;
+  source_provider?: string | null;
 }
 
 interface FeedEntry {
