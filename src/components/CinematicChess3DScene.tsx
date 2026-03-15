@@ -608,7 +608,7 @@ function SceneContent({ event, duration, boardFlipped, onComplete, onMoveComplet
         <DismissDriver duration={800} onComplete={onComplete} dismissProgressRef={dismissProgressRef} />
       )}
       <SceneLighting lite={lite} />
-      <BoardPlane lite={lite} />
+      <BoardPlane lite={lite} skin={skin} />
 
       {staticPieces.map(p => (
         <StaticPiece
@@ -618,6 +618,7 @@ function SceneContent({ event, duration, boardFlipped, onComplete, onMoveComplet
           x={p.pos[0]}
           z={p.pos[1]}
           lite={lite}
+          skin={skin}
         />
       ))}
 
@@ -630,6 +631,7 @@ function SceneContent({ event, duration, boardFlipped, onComplete, onMoveComplet
         lite={lite}
         progressRef={progressRef}
         isFirstEntryRef={isFirstEntryRef}
+        skin={skin}
       />
 
       {event.isCapture && event.capturedPiece && event.capturedColor && (
@@ -640,6 +642,7 @@ function SceneContent({ event, duration, boardFlipped, onComplete, onMoveComplet
           lite={lite}
           progressRef={progressRef}
           isFirstEntryRef={isFirstEntryRef}
+          skin={skin}
         />
       )}
 
