@@ -1442,7 +1442,7 @@ const ChessGame = () => {
                           boardFlipped={effectiveColor === "b"}
                           tier={cinematic.tier}
                           isDismissing={!cinematic.isPersistent}
-                          isFirstEntry={!cinematic.isPersistent}
+                          isFirstEntry={cinematic.isFirstEntry}
                         />
                       )}
                     </div>
