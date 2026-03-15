@@ -100,7 +100,7 @@ export default function FightPredictions() {
   const [activeSport, setActiveSport] = useState("ALL");
   const [showWalletGate, setShowWalletGate] = useState(false);
   const [showPredictionSuccess, setShowPredictionSuccess] = useState(false);
-  const [claimShareData, setClaimShareData] = useState<{ eventTitle: string; solWon: number } | null>(null);
+  const [claimShareData, setClaimShareData] = useState<{ eventTitle: string; solWon: number; fighterName?: string } | null>(null);
 
   const loadFights = useCallback(async () => {
     const [fightsRes, eventsRes] = await Promise.all([
@@ -311,6 +311,8 @@ export default function FightPredictions() {
 
   const handleClaim = async (fightId: string) => {
     if (!address) return;
+    const f = fights.find(fi => fi.id === fightId);
+    const userPick = userEntries.find(e => e.fight_id === fightId);
     setClaiming(true);
     try {
       const { data, error } = await supabase.functions.invoke("prediction-claim", {
@@ -320,11 +322,17 @@ export default function FightPredictions() {
       if (data?.error) throw new Error(data.error);
       const solWon = data.reward_sol || 0;
       toast.success("Reward claimed!", { description: `${solWon.toFixed(4)} SOL sent` });
-      const f = fights.find(f => f.id === fightId);
+      await loadUserEntries();
       if (SOCIAL_SHARE_ENABLED) {
-        setClaimShareData({ eventTitle: f?.title || "", solWon });
+        const pickedName = userPick
+          ? (userPick.fighter_pick === "fighter_a" ? f?.fighter_a_name : f?.fighter_b_name)
+          : undefined;
+        setClaimShareData({
+          eventTitle: f?.title || f?.event_name || "Prediction Win",
+          solWon,
+          fighterName: pickedName || undefined,
+        });
       }
-      loadUserEntries();
     } catch (err: any) {
       toast.error("Claim failed", { description: err.message });
     } finally {
@@ -555,6 +563,7 @@ export default function FightPredictions() {
           onClose={() => setClaimShareData(null)}
           variant="claim_win"
           eventTitle={claimShareData.eventTitle}
+          gameTitle={claimShareData.fighterName}
           solWon={claimShareData.solWon}
           wallet={address || undefined}
         />
