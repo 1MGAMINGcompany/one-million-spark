@@ -56,6 +56,8 @@ const ChessAI = () => {
   const [boardImage, setBoardImage] = useState<string | null>(null);
   const boardContainerRef = useRef<HTMLDivElement>(null);
   const cinematic = useCinematicMode();
+  const chessSkin = useChessSkin();
+  const [showSkinPicker, setShowSkinPicker] = useState(false);
   
   // Session continuity
   const { clearActiveGame } = useActiveAIGame(gameOver);
