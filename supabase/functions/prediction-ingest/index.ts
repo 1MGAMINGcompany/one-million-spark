@@ -508,6 +508,15 @@ Deno.serve(async (req) => {
                 admin_wallet: wallet,
               });
             } else {
+              // Combat sports: lock 60s before event, go live at event start
+              let scheduledLockAtTsdb: string | null = null;
+              let scheduledLiveAtTsdb: string | null = null;
+              if (eventDate) {
+                const eventMs = new Date(eventDate.includes("T") ? eventDate : `${eventDate}T00:00:00Z`).getTime();
+                scheduledLockAtTsdb = new Date(eventMs - 60_000).toISOString();
+                scheduledLiveAtTsdb = new Date(eventMs).toISOString();
+              }
+
               const { data: newEvent, error: insertErr } = await supabase
                 .from("prediction_events")
                 .insert({
@@ -523,6 +532,8 @@ Deno.serve(async (req) => {
                   auto_resolve: false,
                   automation_status: "discovered",
                   requires_admin_approval: true,
+                  scheduled_lock_at: scheduledLockAtTsdb,
+                  scheduled_live_at: scheduledLiveAtTsdb,
                 })
                 .select()
                 .single();
