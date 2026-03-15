@@ -686,6 +686,11 @@ function AdminEventCard({
       {/* Expanded Content */}
       {expanded && (
         <div className="px-4 pb-4 space-y-3">
+          {/* ── Automation Status Panel (approved events with fights) ── */}
+          {event.status === "approved" && fights.length > 0 && (
+            <AutomationStatusPanel event={event} fights={fights} busy={busy} callAdmin={callAdmin} loadData={loadData} />
+          )}
+
           {/* Event actions */}
           <div className="flex gap-2 flex-wrap">
             {event.status === "draft" && (
