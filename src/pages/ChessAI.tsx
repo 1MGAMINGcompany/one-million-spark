@@ -136,7 +136,7 @@ const ChessAI = () => {
         }, 2500);
       } else {
         recordLoss();
-        incrementChessGames();
+        if (difficulty === "medium" || difficulty === "hard") incrementChessGames();
       }
       return true;
     }

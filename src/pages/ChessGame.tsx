@@ -317,10 +317,11 @@ const ChessGame = () => {
     }
   }, [game, moveHistory, gameOver, gameStatus, roomPlayers, saveChessSession, roomMode]);
 
-  // Finish session and archive room when game ends
+  // Finish session, archive room, and track skin progress when game ends
   useEffect(() => {
     if (gameOver && roomPlayers.length >= 2) {
       finishChessSession(winnerWallet);
+      incrementChessGames();
     }
   }, [gameOver, roomPlayers.length, finishChessSession, winnerWallet]);
 
