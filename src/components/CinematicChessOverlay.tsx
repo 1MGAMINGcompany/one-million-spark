@@ -3,13 +3,16 @@
  *
  * Routes to 3D scene (full or lite) based on detected tier.
  * Falls back to lightweight 2D placeholder on WebGL failure or 2d-fallback tier.
+ * Shows optional personality phrase bubbles on top.
  *
  * pointer-events: none – never blocks interaction.
  */
 
-import { useState, useEffect, memo, lazy, Suspense, Component, type ReactNode, type ErrorInfo } from "react";
+import { useState, useEffect, useMemo, memo, lazy, Suspense, Component, type ReactNode, type ErrorInfo } from "react";
 import type { CinematicEvent } from "@/lib/buildCinematicEvent";
 import type { CinematicTier } from "@/hooks/useCinematicMode";
+import { getCinematicPhrase } from "@/lib/cinematicPhrases";
+import { supabase } from "@/integrations/supabase/client";
 
 const CinematicChess3DScene = lazy(() => import("@/components/CinematicChess3DScene"));
 
@@ -105,31 +108,98 @@ class ErrorBoundary3D extends Component<{ children: ReactNode; fallback: ReactNo
   render() { return this.state.hasError ? this.props.fallback : this.props.children; }
 }
 
+// ─── Phrase Bubble ────────────────────────────────────────────────────────────
+
+function PhraseBubble({ phrase, duration }: { phrase: string; duration: number }) {
+  const [visible, setVisible] = useState(false);
+  const [fading, setFading] = useState(false);
+
+  useEffect(() => {
+    // Appear after a short delay so it layers on top of the animation start
+    const showTimer = setTimeout(() => setVisible(true), 200);
+    const fadeTimer = setTimeout(() => setFading(true), duration - 400);
+    return () => { clearTimeout(showTimer); clearTimeout(fadeTimer); };
+  }, [duration]);
+
+  if (!visible) return null;
+
+  return (
+    <div
+      className="absolute top-3 left-1/2 -translate-x-1/2 z-50 pointer-events-none"
+      style={{
+        opacity: fading ? 0 : 1,
+        transform: `translateX(-50%) translateY(${fading ? "-8px" : "0"})`,
+        transition: "opacity 300ms ease-out, transform 300ms ease-out",
+      }}
+    >
+      <div className="px-3 py-1.5 rounded-full bg-black/70 backdrop-blur-sm border border-primary/30 shadow-[0_0_12px_-4px_hsl(45_93%_54%_/_0.4)]">
+        <span className="text-xs font-medium text-primary whitespace-nowrap">
+          {phrase}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// ─── Analytics (fire-and-forget) ──────────────────────────────────────────────
+
+function logPhraseShown(tier: CinematicTier) {
+  try {
+    const sessionId = typeof sessionStorage !== "undefined"
+      ? (sessionStorage.getItem("1mg_session_id") || "unknown")
+      : "unknown";
+    supabase.from("monkey_analytics").insert({
+      session_id: sessionId,
+      event: "cinematic_phrase_shown",
+      context: "chess",
+      metadata: tier,
+    }).then(); // fire-and-forget
+  } catch { /* silent */ }
+}
+
 // ─── Orchestrator ─────────────────────────────────────────────────────────────
 
 function CinematicChessOverlayInner({ event, duration, boardFlipped, tier = "2d-fallback" }: Props) {
   const [use3D, setUse3D] = useState(tier === "3d-full" || tier === "3d-lite");
   const [done, setDone] = useState(false);
 
+  // Compute phrase once per event (memoized on event identity)
+  const phrase = useMemo(() => getCinematicPhrase(event), [event]);
+
+  // Log analytics once if phrase is shown
+  useEffect(() => {
+    if (phrase) logPhraseShown(tier);
+  }, [phrase, tier]);
+
   if (done) return null;
 
-  const fallback = <Fallback2DOverlay event={event} duration={duration} boardFlipped={boardFlipped} />;
+  const phraseBubble = phrase ? <PhraseBubble phrase={phrase} duration={duration} /> : null;
+
+  const fallback = (
+    <>
+      <Fallback2DOverlay event={event} duration={duration} boardFlipped={boardFlipped} />
+      {phraseBubble}
+    </>
+  );
 
   if (!use3D || tier === "2d-fallback") return fallback;
 
   return (
-    <Suspense fallback={fallback}>
-      <ErrorBoundary3D fallback={fallback}>
-        <CinematicChess3DScene
-          event={event}
-          duration={duration}
-          boardFlipped={boardFlipped}
-          tier={tier}
-          onComplete={() => setDone(true)}
-          onError={() => setUse3D(false)}
-        />
-      </ErrorBoundary3D>
-    </Suspense>
+    <>
+      <Suspense fallback={fallback}>
+        <ErrorBoundary3D fallback={fallback}>
+          <CinematicChess3DScene
+            event={event}
+            duration={duration}
+            boardFlipped={boardFlipped}
+            tier={tier}
+            onComplete={() => setDone(true)}
+            onError={() => setUse3D(false)}
+          />
+        </ErrorBoundary3D>
+      </Suspense>
+      {phraseBubble}
+    </>
   );
 }
 
