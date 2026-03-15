@@ -736,6 +736,11 @@ const ChessAI = () => {
         boardImage={boardImage || undefined}
         winningMove={moveHistory.length > 0 ? moveHistory[moveHistory.length - 1] : undefined}
       />
+      <ChessSkinPicker
+        open={showSkinPicker}
+        onOpenChange={setShowSkinPicker}
+        skinHook={chessSkin}
+      />
     </div>
   );
 };
