@@ -1256,7 +1256,7 @@ function IngestPanel({ wallet, busy: parentBusy, onComplete }: { wallet: string;
                 {lastResult.details.map((d: any, i: number) => (
                   <div key={i} className="text-[10px] text-muted-foreground border-t border-border/20 pt-1.5">
                     <p className="text-foreground font-medium">
-                      {d.action === "updated" ? "🔄 " : "🆕 "}{d.event_name}
+                      {d.imported ? "✅ " : d.action === "updated" ? "🔄 " : "🆕 "}{d.event_name}
                     </p>
                     <div className="ml-2 space-y-0.5">
                       <p>
@@ -1274,6 +1274,33 @@ function IngestPanel({ wallet, busy: parentBusy, onComplete }: { wallet: string;
                           <summary className="cursor-pointer hover:text-foreground">🥊 {d.fights.length} fight(s)</summary>
                           <div className="ml-2 mt-0.5 space-y-0.5">
                             {d.fights.map((f: any, fi: number) => (
+                              <p key={fi}>
+                                {f.is_main_event ? "⭐ " : ""}{f.fighter1} vs {f.fighter2}
+                                {f.weight_class && <span className="text-muted-foreground"> ({f.weight_class})</span>}
+                                {f.card_segment && <span className="text-muted-foreground ml-1">[{f.card_segment}]</span>}
+                              </p>
+                            ))}
+                          </div>
+                        </details>
+                      )}
+                      {/* Import single event button (dry-run only) */}
+                      {d.dry_run && !d.imported && (
+                        <button
+                          onClick={() => importSingleEvent(d.source_event_id, d.provider, d.event_name)}
+                          disabled={!!importingId || ingestBusy}
+                          className="mt-1.5 flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1 rounded-full bg-green-500/20 text-green-400 border border-green-500/30 hover:bg-green-500/30 transition-colors disabled:opacity-50"
+                        >
+                          {importingId === d.source_event_id ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <Download className="w-3 h-3" />
+                          )}
+                          Import This Event
+                        </button>
+                      )}
+                      {d.imported && (
+                        <p className="mt-1 text-[10px] font-bold text-green-400">✅ Imported as draft</p>
+                      )}
                               <p key={fi}>
                                 {f.is_main_event ? "⭐ " : ""}{f.fighter1} vs {f.fighter2}
                                 {f.weight_class && <span className="text-muted-foreground"> ({f.weight_class})</span>}
