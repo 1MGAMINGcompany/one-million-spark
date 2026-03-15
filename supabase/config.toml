@@ -80,3 +80,9 @@ verify_jwt = false
 
 [functions.prediction-auto-settle]
 verify_jwt = false
+
+[functions.referral-bind]
+verify_jwt = false
+
+[functions.referral-admin-set-code]
+verify_jwt = false
