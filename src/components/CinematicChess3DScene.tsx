@@ -57,50 +57,16 @@ function getPhase(progress: number, _isFirstEntry: boolean): { phase: AnimPhase;
   return { phase: "hold", t: 1 };
 }
 
-// ─── Lathe Profiles ───────────────────────────────────────────────────────────
-
-const PIECE_PROFILES: Record<string, [number, number][]> = {
-  pawn: [
-    [0, 0], [0.12, 0], [0.13, 0.02], [0.1, 0.04],
-    [0.06, 0.12], [0.05, 0.18], [0.07, 0.22], [0.06, 0.28], [0, 0.3],
-  ],
-  rook: [
-    [0, 0], [0.14, 0], [0.15, 0.02], [0.12, 0.05],
-    [0.08, 0.15], [0.08, 0.30], [0.12, 0.32], [0.12, 0.40],
-    [0.09, 0.40], [0.09, 0.38], [0.06, 0.38], [0.06, 0.40], [0, 0.40],
-  ],
-  knight: [
-    [0, 0], [0.13, 0], [0.14, 0.02], [0.1, 0.05],
-    [0.07, 0.12], [0.06, 0.20], [0.08, 0.25], [0.1, 0.32],
-    [0.08, 0.38], [0.04, 0.42], [0, 0.44],
-  ],
-  bishop: [
-    [0, 0], [0.13, 0], [0.14, 0.02], [0.1, 0.05],
-    [0.06, 0.15], [0.05, 0.28], [0.07, 0.33], [0.06, 0.40],
-    [0.03, 0.44], [0, 0.47],
-  ],
-  queen: [
-    [0, 0], [0.14, 0], [0.15, 0.02], [0.11, 0.06],
-    [0.07, 0.18], [0.06, 0.32], [0.09, 0.36], [0.1, 0.42],
-    [0.07, 0.48], [0.04, 0.52], [0, 0.55],
-  ],
-  king: [
-    [0, 0], [0.14, 0], [0.15, 0.02], [0.11, 0.06],
-    [0.07, 0.20], [0.06, 0.36], [0.09, 0.40], [0.1, 0.46],
-    [0.08, 0.50], [0.04, 0.54], [0.02, 0.56], [0, 0.58],
-  ],
-};
-
-// ─── Global Material & Geometry Cache (never recreated) ───────────────────────
+// ─── Skin-Keyed Material & Geometry Cache ─────────────────────────────────────
 
 const _geoCache = new Map<string, THREE.LatheGeometry>();
 const _matCache = new Map<string, THREE.Material>();
 
-function getCachedGeo(piece: string, lite: boolean): THREE.LatheGeometry {
-  const key = `${piece}-${lite ? "l" : "f"}`;
+function getCachedGeo(piece: string, lite: boolean, skin: ChessSkin): THREE.LatheGeometry {
+  const key = `${skin.id}-${piece}-${lite ? "l" : "f"}`;
   let g = _geoCache.get(key);
   if (!g) {
-    const profile = PIECE_PROFILES[piece] ?? PIECE_PROFILES.pawn;
+    const profile = skin.profiles[piece] ?? skin.profiles.pawn;
     const pts = profile.map(([x, y]) => new THREE.Vector2(x * PIECE_SCALE, y * PIECE_SCALE));
     g = new THREE.LatheGeometry(pts, lite ? 10 : 16);
     _geoCache.set(key, g);
@@ -108,28 +74,35 @@ function getCachedGeo(piece: string, lite: boolean): THREE.LatheGeometry {
   return g;
 }
 
-function getCachedMat(color: "white" | "black", lite: boolean): THREE.Material {
-  const key = `${color}-${lite ? "l" : "f"}`;
+function buildMaterial(config: MaterialConfig, lite: boolean): THREE.Material {
+  if (lite) {
+    return new THREE.MeshStandardMaterial({
+      color: config.color,
+      roughness: config.roughness,
+      metalness: config.metalness,
+      ...(config.emissive ? { emissive: config.emissive, emissiveIntensity: config.emissiveIntensity ?? 0 } : {}),
+    });
+  }
+  return new THREE.MeshPhysicalMaterial({
+    color: config.color,
+    roughness: config.roughness,
+    metalness: config.metalness,
+    clearcoat: config.clearcoat ?? 0,
+    clearcoatRoughness: config.clearcoatRoughness ?? 0,
+    ...(config.emissive ? { emissive: config.emissive, emissiveIntensity: config.emissiveIntensity ?? 0 } : {}),
+  });
+}
+
+function getCachedMat(color: "white" | "black", lite: boolean, skin: ChessSkin): THREE.Material {
+  const key = `${skin.id}-${color}-${lite ? "l" : "f"}`;
   let m = _matCache.get(key);
   if (!m) {
-    if (color === "white") {
-      m = lite
-        ? new THREE.MeshStandardMaterial({ color: "#f0e6d3", roughness: 0.3, metalness: 0.05 })
-        : new THREE.MeshPhysicalMaterial({
-            color: "#f5ead8", roughness: 0.15, metalness: 0.02,
-            clearcoat: 1.0, clearcoatRoughness: 0.08,
-          });
-    } else {
-      m = lite
-        ? new THREE.MeshStandardMaterial({ color: "#1a1a22", roughness: 0.25, metalness: 0.4 })
-        : new THREE.MeshPhysicalMaterial({
-            color: "#141418", roughness: 0.12, metalness: 0.6,
-            clearcoat: 0.9, clearcoatRoughness: 0.05,
-          });
-    }
+    const config = color === "white" ? skin.whiteMat : skin.blackMat;
+    m = buildMaterial(config, lite);
     _matCache.set(key, m);
   }
   return m;
+}
 }
 
 // ─── Board (static — never re-renders) ────────────────────────────────────────
