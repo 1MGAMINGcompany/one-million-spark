@@ -367,9 +367,14 @@ export default function FightPredictionAdmin() {
   return (
     <div className="min-h-screen bg-background pt-20 px-4 pb-8">
       <div className="max-w-2xl mx-auto space-y-6">
-        <h1 className="text-2xl font-bold text-foreground font-['Cinzel'] flex items-center gap-2">
-          <Shield className="w-6 h-6 text-primary" /> Prediction Admin
-        </h1>
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold text-foreground font-['Cinzel'] flex items-center gap-2">
+            <Shield className="w-6 h-6 text-primary" /> Prediction Admin
+          </h1>
+          <Button variant="outline" size="sm" onClick={() => window.location.href = '/referrals/admin'} className="gap-2">
+            <Users className="w-4 h-4" /> Referrals
+          </Button>
+        </div>
 
         {/* ── Kill Switches ── */}
         <Card className="bg-card border-border/50 p-4">
