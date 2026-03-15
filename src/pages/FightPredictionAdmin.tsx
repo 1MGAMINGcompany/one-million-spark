@@ -1092,7 +1092,8 @@ function IngestPanel({ wallet, busy: parentBusy, onComplete }: { wallet: string;
 
   const visibleLeagues = selectedProvider === "balldontlie" ? BDL_LEAGUES
     : selectedProvider === "thesportsdb" ? TSDB_LEAGUES_LIST
-    : [...BDL_LEAGUES, ...TSDB_LEAGUES_LIST];
+    : selectedProvider === "api-football" ? APIFB_LEAGUES_LIST
+    : [...BDL_LEAGUES, ...TSDB_LEAGUES_LIST, ...APIFB_LEAGUES_LIST];
 
   const runIngest = async () => {
     setIngestBusy(true);
