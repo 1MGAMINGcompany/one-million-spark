@@ -632,6 +632,19 @@ function AdminEventCard({
               event.status === 'dismissed' ? 'bg-orange-500/20 text-orange-400' :
               'bg-red-500/20 text-red-400'
             }`}>{event.status.toUpperCase()}</span>
+            {event.source_provider && event.source_provider !== 'manual' && (
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-accent/30 text-accent-foreground uppercase">
+                {event.source_provider}
+              </span>
+            )}
+            {event.organization && (
+              <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-muted/60 text-muted-foreground">
+                {event.organization}
+              </span>
+            )}
+            {event.automation_paused && (
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-400">⏸ PAUSED</span>
+            )}
             {liveCount > 0 && (
               <span className="flex items-center gap-1 text-[10px] font-bold text-red-400 bg-red-500/15 px-2 py-0.5 rounded-full">
                 <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
@@ -647,9 +660,11 @@ function AdminEventCard({
           <h3 className="font-bold text-foreground text-sm mt-1">{event.event_name}</h3>
           <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground flex-wrap">
             {event.event_date && <span>📅 {event.event_date.split('T')[0]}</span>}
-            {event.organization && <span>🏢 {event.organization}</span>}
             {event.location && <span>📍 {event.location}</span>}
           </div>
+          {event.source_event_id && (
+            <p className="text-[10px] text-muted-foreground/50 font-mono mt-0.5">{event.source_event_id}</p>
+          )}
           <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground flex-wrap">
             <span className="font-bold text-foreground">{fights.length} fights</span>
             <span>{totalPredictions} predictions</span>
