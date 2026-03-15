@@ -335,7 +335,7 @@ const ChessAI = () => {
         setGameStatus(t('gameAI.yourTurn'));
       }
     }
-  }, [checkGameOver, triggerAnimation, play, getRandomMove, t]);
+  }, [checkGameOver, triggerAnimation, play, getRandomMove, t, cinematic]);
 
   const handleMove = useCallback((from: Square, to: Square): boolean => {
     if (gameOver || isThinking) return false;
