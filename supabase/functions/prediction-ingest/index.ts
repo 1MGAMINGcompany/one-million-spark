@@ -268,15 +268,22 @@ Deno.serve(async (req) => {
               let eventId: string;
 
               if (existing) {
-                // ── UPSERT: update metadata ──
+                // ── UPSERT: update metadata + sync automation times ──
+                const updatePayload: Record<string, any> = {
+                  event_date: eventDate,
+                  location: venue || null,
+                  organization: leagueName,
+                  updated_at: new Date().toISOString(),
+                };
+                // Sync lock/live times if event_date changed
+                if (eventDate) {
+                  const evMs = new Date(eventDate).getTime();
+                  updatePayload.scheduled_lock_at = new Date(evMs - 60_000).toISOString();
+                  updatePayload.scheduled_live_at = new Date(evMs).toISOString();
+                }
                 await supabase
                   .from("prediction_events")
-                  .update({
-                    event_date: eventDate,
-                    location: venue || null,
-                    organization: leagueName,
-                    updated_at: new Date().toISOString(),
-                  })
+                  .update(updatePayload)
                   .eq("id", existing.id);
 
                 eventId = existing.id;
