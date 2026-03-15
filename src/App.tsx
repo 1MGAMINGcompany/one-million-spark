@@ -88,7 +88,9 @@ function useVisualViewportHeight() {
 // PART E: App content with conditional footer
 const AppContent = () => {
   const location = useLocation();
+  const { address } = useWallet();
   useVisualViewportHeight();
+  useReferralCapture(address);
   // Global presence heartbeat — fires for every visitor on every page.
   // AI game pages augment this with useAIGameTracker (same session_id, richer metadata).
   const page = location.pathname === "/"
