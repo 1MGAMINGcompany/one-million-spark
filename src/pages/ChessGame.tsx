@@ -1432,6 +1432,7 @@ const ChessGame = () => {
                         event={cinematic.activeEvent}
                         duration={cinematic.duration}
                         boardFlipped={effectiveColor === "b"}
+                        tier={cinematic.tier}
                       />
                     )}
                   </div>
