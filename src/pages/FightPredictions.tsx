@@ -477,7 +477,7 @@ export default function FightPredictions() {
             )}
 
             {/* Coming Soon cards */}
-            {(activeSport === "ALL" || !Object.keys(groupedEvents).some(e => parseSport(e) === activeSport)) &&
+            {(activeSport === "ALL" || !Object.entries(groupedEvents).some(([key, val]) => parseSport(key, val.event?.source_provider) === activeSport)) &&
               comingSoonSports.map((sport) => <ComingSoonCard key={sport} sport={sport} />)}
           </>
         )}
