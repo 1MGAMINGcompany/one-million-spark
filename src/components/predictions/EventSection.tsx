@@ -6,6 +6,7 @@ import muayThaiImg from "@/assets/muay-thai.png";
 import boxingGloveImg from "@/assets/boxing-glove.png";
 import mmaGlovesImg from "@/assets/mma-gloves.png";
 import futbolImg from "@/assets/futbol.png";
+import { getSportItemLabel } from "@/lib/sportLabels";
 
 const LAMPORTS = 1_000_000_000;
 
