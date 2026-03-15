@@ -93,7 +93,7 @@ export default function EventSection({
   const [expanded, setExpanded] = useState(hasOpen);
 
   const parsed = parseEventLabel(eventName);
-  const sport = parsed.sport;
+  const sport = parseSport(eventName);
   const config = SPORT_CONFIG[sport] || SPORT_CONFIG["MUAY THAI"];
 
   const totalPool = fights.reduce((sum, f) => sum + f.pool_a_lamports + f.pool_b_lamports, 0) / LAMPORTS;
