@@ -148,6 +148,12 @@ export function useCinematicMode(): UseCinematicModeReturn {
           clearTimeout(dismissTimeoutRef.current);
           dismissTimeoutRef.current = null;
         }
+        // First fire in a session = swoop-in; subsequent fires = no swoop
+        if (!isPersistent) {
+          setIsFirstEntry(true);
+        } else {
+          setIsFirstEntry(false);
+        }
         setActiveEvent(event);
         setIsPersistent(true);
       } catch {
@@ -155,7 +161,7 @@ export function useCinematicMode(): UseCinematicModeReturn {
         setIsPersistent(false);
       }
     },
-    [enabled],
+    [enabled, isPersistent],
   );
 
   /**
