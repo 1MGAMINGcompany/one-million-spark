@@ -90,7 +90,8 @@ export default function AIWinShareCard({
       `https://twitter.com/intent/tweet?text=${encodeURIComponent(xText)}`,
       "_blank"
     );
-  }, [xText]);
+    if (game === "chess") incrementChessShares();
+  }, [xText, game]);
 
   const handleWhatsApp = useCallback(() => {
     window.open(`https://wa.me/?text=${encodeURIComponent(waText)}`, "_blank");
