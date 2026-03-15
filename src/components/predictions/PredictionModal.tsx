@@ -36,6 +36,7 @@ export default function PredictionModal({
   onSubmit,
   submitting,
   showSuccess,
+  wallet,
 }: {
   fight: Fight;
   pick: "fighter_a" | "fighter_b";
@@ -43,6 +44,7 @@ export default function PredictionModal({
   onSubmit: (amount: number) => void;
   submitting: boolean;
   showSuccess?: boolean;
+  wallet?: string;
 }) {
   const { formatUsd } = useSolPrice();
   const [amount, setAmount] = useState("");
