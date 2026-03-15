@@ -52,7 +52,7 @@ import { getAnonId } from "@/lib/anonIdentity";
 import { useCinematicMode } from "@/hooks/useCinematicMode";
 import { buildCinematicEvent } from "@/lib/buildCinematicEvent";
 import CinematicChessOverlay from "@/components/CinematicChessOverlay";
-import { useChessSkin } from "@/hooks/useChessSkin";
+import { useChessSkin, incrementChessGames } from "@/hooks/useChessSkin";
 import ChessSkinPicker from "@/components/ChessSkinPicker";
 import { Palette } from "lucide-react";
 
