@@ -1,14 +1,17 @@
 /**
- * CinematicChess3DScene – lightweight Three.js cinematic move animation.
+ * CinematicChess3DScene – polished Three.js cinematic move animation.
  *
- * Supports two quality tiers:
- *   "3d-full"  – full camera motion, arc, effects (~1100ms)
- *   "3d-lite"  – reduced camera, lower arc, fewer effects (~700ms)
+ * Upgrades over v1:
+ *   - Lathe-geometry piece silhouettes (recognizable chess profiles)
+ *   - Shadows + rim light for depth
+ *   - Fade-in/out container transition
+ *   - Dramatic camera arc (~15° orbit + push-in)
+ *   - Gold board edge trim
  *
  * pointer-events: none – never blocks interaction.
  */
 
-import { useRef, useMemo, useEffect, useState } from "react";
+import { useRef, useMemo, useEffect, useState, useCallback } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import type { CinematicEvent } from "@/lib/buildCinematicEvent";
@@ -22,10 +25,11 @@ const HALF = BOARD_SIZE / 2;
 
 const LIGHT_SQ = new THREE.Color("hsl(38, 40%, 72%)");
 const DARK_SQ = new THREE.Color("hsl(28, 30%, 38%)");
-const WHITE_PIECE = new THREE.Color("hsl(45, 80%, 85%)");
-const BLACK_PIECE = new THREE.Color("hsl(220, 15%, 22%)");
+const WHITE_PIECE = new THREE.Color("hsl(45, 80%, 90%)");
+const BLACK_PIECE = new THREE.Color("hsl(220, 15%, 18%)");
 const CAPTURE_FLASH = new THREE.Color("hsl(0, 70%, 55%)");
 const MATE_FLASH = new THREE.Color("hsl(45, 93%, 54%)");
+const GOLD_TRIM = new THREE.Color("hsl(42, 70%, 45%)");
 
 function squareToWorld(sq: string, flipped: boolean): [number, number] {
   const file = sq.charCodeAt(0) - 97;
@@ -39,9 +43,69 @@ function easeInOutCubic(t: number): number {
   return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 }
 
+// ─── Lathe Profile Helpers ────────────────────────────────────────────────────
+
+function makeLathe(points: [number, number][], segments = 16): THREE.LatheGeometry {
+  const pts = points.map(([x, y]) => new THREE.Vector2(x, y));
+  return new THREE.LatheGeometry(pts, segments);
+}
+
+// Profiles: [radius, height] pairs defining half-silhouette
+const PIECE_PROFILES: Record<string, { points: [number, number][]; segs?: number }> = {
+  pawn: {
+    points: [
+      [0, 0], [0.12, 0], [0.13, 0.02], [0.1, 0.04], // base
+      [0.06, 0.12], [0.05, 0.18], // stem
+      [0.07, 0.22], [0.06, 0.28], [0, 0.3], // head sphere-ish
+    ],
+  },
+  rook: {
+    points: [
+      [0, 0], [0.14, 0], [0.15, 0.02], [0.12, 0.05], // base
+      [0.08, 0.15], [0.08, 0.30], // stem
+      [0.12, 0.32], [0.12, 0.40], // battlements wide
+      [0.09, 0.40], [0.09, 0.38], [0.06, 0.38], [0.06, 0.40], // crenellation
+      [0, 0.40],
+    ],
+  },
+  knight: {
+    points: [
+      [0, 0], [0.13, 0], [0.14, 0.02], [0.1, 0.05], // base
+      [0.07, 0.12], [0.06, 0.20], // stem
+      [0.08, 0.25], [0.1, 0.32], [0.08, 0.38], // head bulk
+      [0.04, 0.42], [0, 0.44], // muzzle taper
+    ],
+  },
+  bishop: {
+    points: [
+      [0, 0], [0.13, 0], [0.14, 0.02], [0.1, 0.05], // base
+      [0.06, 0.15], [0.05, 0.28], // stem
+      [0.07, 0.33], [0.06, 0.40], [0.03, 0.44], // mitre
+      [0, 0.47], // tip
+    ],
+  },
+  queen: {
+    points: [
+      [0, 0], [0.14, 0], [0.15, 0.02], [0.11, 0.06], // base
+      [0.07, 0.18], [0.06, 0.32], // stem
+      [0.09, 0.36], [0.1, 0.42], [0.07, 0.48], // crown
+      [0.04, 0.52], [0, 0.55], // orb
+    ],
+  },
+  king: {
+    points: [
+      [0, 0], [0.14, 0], [0.15, 0.02], [0.11, 0.06], // base
+      [0.07, 0.20], [0.06, 0.36], // stem
+      [0.09, 0.40], [0.1, 0.46], [0.08, 0.50], // crown
+      [0.04, 0.54], [0.02, 0.56], // taper
+      [0, 0.58], // cross will be separate
+    ],
+  },
+};
+
 // ─── Board ────────────────────────────────────────────────────────────────────
 
-function BoardPlane() {
+function BoardPlane({ lite }: { lite: boolean }) {
   const geo = useMemo(() => new THREE.PlaneGeometry(SQ, SQ), []);
   const squares = useMemo(() => {
     const r: { x: number; z: number; dark: boolean }[] = [];
@@ -52,36 +116,92 @@ function BoardPlane() {
   }, []);
 
   return (
-    <group rotation={[-Math.PI / 2, 0, 0]}>
-      {squares.map((s, i) => (
-        <mesh key={i} geometry={geo} position={[s.x, s.z, 0]}>
-          <meshStandardMaterial color={s.dark ? DARK_SQ : LIGHT_SQ} />
-        </mesh>
-      ))}
+    <group>
+      {/* Board squares */}
+      <group rotation={[-Math.PI / 2, 0, 0]}>
+        {squares.map((s, i) => (
+          <mesh key={i} geometry={geo} position={[s.x, s.z, 0]} receiveShadow>
+            <meshStandardMaterial color={s.dark ? DARK_SQ : LIGHT_SQ} roughness={0.7} />
+          </mesh>
+        ))}
+      </group>
+
+      {/* Gold edge trim — 4 bars around board */}
+      {!lite && <BoardEdgeTrim />}
     </group>
   );
 }
 
-// ─── Piece Shape Factory ──────────────────────────────────────────────────────
+function BoardEdgeTrim() {
+  const trimThickness = 0.04;
+  const trimHeight = 0.06;
+  const totalSize = BOARD_SIZE + trimThickness * 2;
+  const mat = useMemo(
+    () => <meshStandardMaterial color={GOLD_TRIM} roughness={0.3} metalness={0.7} />,
+    [],
+  );
 
-function PieceShape({ piece, color }: { piece: string; color: THREE.Color }) {
-  const mat = useMemo(() => <meshStandardMaterial color={color} roughness={0.5} metalness={0.2} />, [color]);
-  switch (piece) {
-    case "pawn": return <mesh position={[0,0.15,0]}><cylinderGeometry args={[0.08,0.12,0.3,12]}/>{mat}</mesh>;
-    case "rook": return <group><mesh position={[0,0.2,0]}><boxGeometry args={[0.22,0.4,0.22]}/>{mat}</mesh><mesh position={[0,0.42,0]}><boxGeometry args={[0.26,0.06,0.26]}/>{mat}</mesh></group>;
-    case "knight": return <group><mesh position={[0,0.18,0]}><boxGeometry args={[0.18,0.36,0.18]}/>{mat}</mesh><mesh position={[0.06,0.38,0]}><boxGeometry args={[0.14,0.12,0.14]}/>{mat}</mesh></group>;
-    case "bishop": return <group><mesh position={[0,0.22,0]}><cylinderGeometry args={[0.06,0.12,0.44,12]}/>{mat}</mesh><mesh position={[0,0.46,0]}><sphereGeometry args={[0.05,8,8]}/>{mat}</mesh></group>;
-    case "queen": return <group><mesh position={[0,0.25,0]}><cylinderGeometry args={[0.07,0.13,0.5,12]}/>{mat}</mesh><mesh position={[0,0.52,0]}><sphereGeometry args={[0.08,10,10]}/>{mat}</mesh></group>;
-    case "king": return <group><mesh position={[0,0.28,0]}><cylinderGeometry args={[0.08,0.14,0.56,12]}/>{mat}</mesh><mesh position={[0,0.6,0]}><boxGeometry args={[0.04,0.14,0.04]}/>{mat}</mesh><mesh position={[0,0.62,0]}><boxGeometry args={[0.12,0.04,0.04]}/>{mat}</mesh></group>;
-    default: return <mesh position={[0,0.15,0]}><cylinderGeometry args={[0.08,0.12,0.3,12]}/>{mat}</mesh>;
-  }
+  return (
+    <group>
+      {/* Top */}
+      <mesh position={[0, trimHeight / 2, -HALF - trimThickness / 2]}>
+        <boxGeometry args={[totalSize, trimHeight, trimThickness]} />
+        {mat}
+      </mesh>
+      {/* Bottom */}
+      <mesh position={[0, trimHeight / 2, HALF + trimThickness / 2]}>
+        <boxGeometry args={[totalSize, trimHeight, trimThickness]} />
+        {mat}
+      </mesh>
+      {/* Left */}
+      <mesh position={[-HALF - trimThickness / 2, trimHeight / 2, 0]}>
+        <boxGeometry args={[trimThickness, trimHeight, BOARD_SIZE]} />
+        {mat}
+      </mesh>
+      {/* Right */}
+      <mesh position={[HALF + trimThickness / 2, trimHeight / 2, 0]}>
+        <boxGeometry args={[trimThickness, trimHeight, BOARD_SIZE]} />
+        {mat}
+      </mesh>
+    </group>
+  );
+}
+
+// ─── Piece Shape Factory (Lathe) ──────────────────────────────────────────────
+
+function PieceShape({ piece, color, lite }: { piece: string; color: THREE.Color; lite: boolean }) {
+  const geo = useMemo(() => {
+    const profile = PIECE_PROFILES[piece] ?? PIECE_PROFILES.pawn;
+    return makeLathe(profile.points, lite ? 10 : (profile.segs ?? 16));
+  }, [piece, lite]);
+
+  return (
+    <group>
+      <mesh geometry={geo} castShadow>
+        <meshStandardMaterial color={color} roughness={0.4} metalness={0.25} />
+      </mesh>
+      {/* King cross (extra geometry) */}
+      {piece === "king" && (
+        <group position={[0, 0.58, 0]}>
+          <mesh castShadow>
+            <boxGeometry args={[0.03, 0.1, 0.03]} />
+            <meshStandardMaterial color={color} roughness={0.4} metalness={0.25} />
+          </mesh>
+          <mesh position={[0, 0.03, 0]} castShadow>
+            <boxGeometry args={[0.08, 0.03, 0.03]} />
+            <meshStandardMaterial color={color} roughness={0.4} metalness={0.25} />
+          </mesh>
+        </group>
+      )}
+    </group>
+  );
 }
 
 // ─── Piece Proxy ──────────────────────────────────────────────────────────────
 
 interface PieceProxyProps {
-  piece: string; color: "white"|"black";
-  fromPos: [number,number]; toPos: [number,number];
+  piece: string; color: "white" | "black";
+  fromPos: [number, number]; toPos: [number, number];
   isCapture: boolean; isMate: boolean;
   progress: number; lite: boolean;
 }
@@ -91,7 +211,7 @@ function PieceProxy({ piece, color, fromPos, toPos, isCapture, isMate, progress,
   const t = easeInOutCubic(Math.min(progress, 1));
   const x = fromPos[0] + (toPos[0] - fromPos[0]) * t;
   const z = fromPos[1] + (toPos[1] - fromPos[1]) * t;
-  const arcY = Math.sin(t * Math.PI) * (lite ? 0.15 : 0.3);
+  const arcY = Math.sin(t * Math.PI) * (lite ? 0.18 : 0.35);
 
   const showFlash = (isCapture || isMate) && progress > 0.6;
   const flashOpacity = showFlash ? Math.max(0, 1 - (progress - 0.6) / 0.4) * (lite ? 0.5 : 0.8) : 0;
@@ -99,7 +219,7 @@ function PieceProxy({ piece, color, fromPos, toPos, isCapture, isMate, progress,
   return (
     <>
       <group position={[x, arcY, z]}>
-        <PieceShape piece={piece} color={pieceColor} />
+        <PieceShape piece={piece} color={pieceColor} lite={lite} />
       </group>
       {showFlash && (
         <mesh position={[toPos[0], 0.02, toPos[1]]} rotation={[-Math.PI / 2, 0, 0]}>
@@ -111,9 +231,44 @@ function PieceProxy({ piece, color, fromPos, toPos, isCapture, isMate, progress,
   );
 }
 
+// ─── Lighting ─────────────────────────────────────────────────────────────────
+
+function SceneLighting({ lite }: { lite: boolean }) {
+  return (
+    <>
+      <ambientLight intensity={lite ? 0.5 : 0.35} />
+      {/* Main key light — casts shadows */}
+      <directionalLight
+        position={[3, 6, 2]}
+        intensity={lite ? 0.7 : 0.9}
+        castShadow={!lite}
+        shadow-mapSize-width={lite ? 0 : 512}
+        shadow-mapSize-height={lite ? 0 : 512}
+        shadow-camera-left={-3}
+        shadow-camera-right={3}
+        shadow-camera-top={3}
+        shadow-camera-bottom={-3}
+        shadow-bias={-0.002}
+      />
+      {/* Fill light from opposite side */}
+      <directionalLight position={[-2, 3, -1]} intensity={0.2} />
+      {/* Rim / accent light — gold-tinted from behind */}
+      {!lite && (
+        <pointLight
+          position={[0, 2, -3.5]}
+          intensity={0.6}
+          color="hsl(42, 80%, 55%)"
+          distance={8}
+          decay={2}
+        />
+      )}
+    </>
+  );
+}
+
 // ─── Camera ───────────────────────────────────────────────────────────────────
 
-function CameraRig({ fromPos, toPos, progress, lite }: { fromPos: [number,number]; toPos: [number,number]; progress: number; lite: boolean }) {
+function CameraRig({ fromPos, toPos, progress, lite }: { fromPos: [number, number]; toPos: [number, number]; progress: number; lite: boolean }) {
   const { camera } = useThree();
 
   useEffect(() => {
@@ -122,24 +277,33 @@ function CameraRig({ fromPos, toPos, progress, lite }: { fromPos: [number,number
   }, [camera]);
 
   useFrame(() => {
+    const t = easeInOutCubic(Math.min(progress, 1));
+
     if (lite) {
-      // Minimal camera — almost static, tiny push-in
-      const t = easeInOutCubic(Math.min(progress, 1));
-      camera.position.set(0, 4.5, 3.5 - t * 0.15);
-      camera.lookAt(0, 0, 0);
+      // Lite: gentle push-in toward destination
+      const pushX = toPos[0] * 0.08 * t;
+      const pushZ = toPos[1] * 0.08 * t;
+      camera.position.set(pushX, 4.5 - t * 0.15, 3.5 - t * 0.2);
+      camera.lookAt(pushX * 0.5, 0, pushZ * 0.5);
       return;
     }
 
-    const t = easeInOutCubic(Math.min(progress, 1));
+    // Full: dramatic orbit arc (~15°) + push toward destination
     const midX = (fromPos[0] + toPos[0]) / 2;
     const midZ = (fromPos[1] + toPos[1]) / 2;
-    const orbitAngle = THREE.MathUtils.lerp(-0.08, 0.08, t);
+    const orbitAngle = THREE.MathUtils.lerp(-0.26, 0.26, t); // ~15° total swing
+    const pushIn = t * 0.6;
+
     camera.position.set(
-      midX * 0.15 + Math.sin(orbitAngle) * 0.3,
-      4.5 - t * 0.3,
-      3.5 - t * 0.4 + Math.cos(orbitAngle) * 0.1,
+      midX * 0.2 + Math.sin(orbitAngle) * 0.8,
+      4.5 - pushIn * 0.5,
+      3.5 - pushIn + Math.cos(orbitAngle) * 0.15,
     );
-    camera.lookAt(midX * 0.3, 0, midZ * 0.3);
+    camera.lookAt(
+      midX * 0.4 + (toPos[0] - midX) * t * 0.3,
+      0,
+      midZ * 0.4 + (toPos[1] - midZ) * t * 0.3,
+    );
   });
 
   return null;
@@ -170,9 +334,8 @@ function SceneContent({ event, duration, boardFlipped, onComplete, lite }: Scene
 
   return (
     <>
-      <ambientLight intensity={lite ? 0.7 : 0.6} />
-      <directionalLight position={[3, 5, 2]} intensity={lite ? 0.6 : 0.8} />
-      <BoardPlane />
+      <SceneLighting lite={lite} />
+      <BoardPlane lite={lite} />
       <PieceProxy piece={event.piece} color={event.color} fromPos={fromPos} toPos={toPos} isCapture={event.isCapture} isMate={event.isMate} progress={progress} lite={lite} />
 
       {/* Source highlight */}
@@ -201,21 +364,44 @@ interface CinematicChess3DSceneProps {
 
 export default function CinematicChess3DScene({ event, duration, boardFlipped, onComplete, onError, tier }: CinematicChess3DSceneProps) {
   const lite = tier === "3d-lite";
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [opacity, setOpacity] = useState(0);
+
+  // Fade in on mount
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => setOpacity(1));
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
+  // Fade out before complete
+  const handleComplete = useCallback(() => {
+    setOpacity(0);
+    setTimeout(onComplete, 180);
+  }, [onComplete]);
 
   return (
-    <div className="absolute inset-0 pointer-events-none z-40 rounded-lg overflow-hidden">
+    <div
+      ref={containerRef}
+      className="absolute inset-0 pointer-events-none z-40 rounded-lg overflow-hidden"
+      style={{
+        opacity,
+        transition: "opacity 180ms ease-in-out",
+      }}
+    >
       <Canvas
+        shadows={!lite}
         gl={{ antialias: !lite, alpha: false, powerPreference: lite ? "low-power" : "default" }}
         dpr={lite ? [1, 1] : [1, 1.5]}
         style={{ background: "hsl(220, 15%, 8%)" }}
         onCreated={({ gl }) => { if (!gl.getContext()) onError(); }}
         fallback={null}
       >
-        <SceneContent event={event} duration={duration} boardFlipped={boardFlipped} onComplete={onComplete} lite={lite} />
+        <SceneContent event={event} duration={duration} boardFlipped={boardFlipped} onComplete={handleComplete} lite={lite} />
       </Canvas>
 
-      <div className="absolute bottom-2 right-2 px-2 py-1 rounded bg-black/60 backdrop-blur-sm">
-        <span className="text-xs font-mono text-primary font-bold">{event.san}</span>
+      {/* SAN badge — slightly larger and more prominent */}
+      <div className="absolute bottom-3 right-3 px-3 py-1.5 rounded-md bg-black/70 backdrop-blur-sm border border-primary/20">
+        <span className="text-sm font-mono text-primary font-bold tracking-wider">{event.san}</span>
       </div>
     </div>
   );
