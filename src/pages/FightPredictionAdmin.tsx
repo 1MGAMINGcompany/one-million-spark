@@ -716,8 +716,7 @@ function AdminEventCard({
                 className="border-green-500/50 text-green-400 hover:bg-green-500/10">
                 ▶ Resume Auto
               </Button>
-
-            {["approved", "rejected"].includes(event.status) && eventIsFullySettled && (
+            )}
               <Button size="sm" variant="outline" onClick={() => onConfirm(
                 "Archive Event",
                 `Archive "${event.event_name}"?`,
