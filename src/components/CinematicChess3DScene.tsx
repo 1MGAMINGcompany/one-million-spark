@@ -21,6 +21,7 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import type { CinematicEvent, BoardPiece } from "@/lib/buildCinematicEvent";
 import type { CinematicTier } from "@/hooks/useCinematicMode";
+import { getSkinById, type ChessSkin, type MaterialConfig } from "@/lib/chessSkins";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
