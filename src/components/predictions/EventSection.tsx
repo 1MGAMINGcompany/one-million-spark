@@ -158,7 +158,7 @@ export default function EventSection({
             {displayOrg && <span>🏢 {displayOrg}</span>}
             {displayLocation && <span>📍 {displayLocation}</span>}
             <span>{fights.length} {getSportItemLabel(sport, fights.length)}</span>
-            {openCount > 0 && <span className="text-green-400">{openCount} Open</span>}
+            {openCount > 0 && <span className="text-green-400">{openCount} Open {getSportItemLabel(sport, openCount)}</span>}
             <span className="text-primary font-bold">{totalPool.toFixed(2)} SOL Pool</span>
           </div>
         </div>
