@@ -1300,7 +1300,8 @@ function IngestPanel({ wallet, busy: parentBusy, onComplete }: { wallet: string;
                       )}
                       {d.imported && (
                         <p className="mt-1 text-[10px] font-bold text-green-400">✅ Imported as draft</p>
-                      )
+                      )}
+
                     </div>
                   </div>
                 ))}
