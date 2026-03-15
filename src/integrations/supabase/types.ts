@@ -463,6 +463,51 @@ export type Database = {
         }
         Relationships: []
       }
+      leaderboard_cache: {
+        Row: {
+          category: string
+          losses: number
+          net_sol: number
+          period: string
+          rank: number | null
+          total_entries: number
+          total_sol_played: number
+          total_sol_won: number
+          updated_at: string
+          wallet: string
+          win_rate: number | null
+          wins: number
+        }
+        Insert: {
+          category: string
+          losses?: number
+          net_sol?: number
+          period?: string
+          rank?: number | null
+          total_entries?: number
+          total_sol_played?: number
+          total_sol_won?: number
+          updated_at?: string
+          wallet: string
+          win_rate?: number | null
+          wins?: number
+        }
+        Update: {
+          category?: string
+          losses?: number
+          net_sol?: number
+          period?: string
+          rank?: number | null
+          total_entries?: number
+          total_sol_played?: number
+          total_sol_won?: number
+          updated_at?: string
+          wallet?: string
+          win_rate?: number | null
+          wins?: number
+        }
+        Relationships: []
+      }
       match_share_cards: {
         Row: {
           created_at: string

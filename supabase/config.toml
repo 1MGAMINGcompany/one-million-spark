@@ -86,3 +86,6 @@ verify_jwt = false
 
 [functions.referral-admin-set-code]
 verify_jwt = false
+
+[functions.rebuild-leaderboard]
+verify_jwt = false
