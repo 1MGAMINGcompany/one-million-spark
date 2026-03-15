@@ -169,10 +169,8 @@ export function useCinematicMode(): UseCinematicModeReturn {
    * swoop-out animation and then unmount.
    */
   const dismiss = useCallback(() => {
-    // The overlay/3D scene handles fade-out via onComplete
-    // We clear after a delay to allow the swoop-out to play
     setIsPersistent(false);
-    // Give the scene time to play swoop-out + fade
+    setIsFirstEntry(true); // Reset for next session
     dismissTimeoutRef.current = setTimeout(() => {
       setActiveEvent(null);
     }, duration + 500);
