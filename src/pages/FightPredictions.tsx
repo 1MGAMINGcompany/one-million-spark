@@ -566,6 +566,7 @@ export default function FightPredictions() {
           gameTitle={claimShareData.fighterName}
           solWon={claimShareData.solWon}
           wallet={address || undefined}
+          sport={claimShareData.sport}
         />
       )}
     </div>
