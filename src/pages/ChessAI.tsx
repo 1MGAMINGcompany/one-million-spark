@@ -491,7 +491,7 @@ const ChessAI = () => {
                       />
                     </div>
                     {/* Cinematic Chess Overlay */}
-                    {cinematic.activeEvent && (
+                     {cinematic.activeEvent && (
                       <CinematicChessOverlay
                         event={cinematic.activeEvent}
                         duration={cinematic.duration}
@@ -499,6 +499,7 @@ const ChessAI = () => {
                         tier={cinematic.tier}
                         isDismissing={!cinematic.isPersistent}
                         isFirstEntry={cinematic.isFirstEntry}
+                        skinId={chessSkin.skinId}
                       />
                     )}
                   </div>
