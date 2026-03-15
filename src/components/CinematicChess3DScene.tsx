@@ -231,7 +231,7 @@ function MovingPiece({ piece, color, fromPos, toPos, isCapture, lite, progressRe
   useFrame(() => {
     const progress = progressRef.current;
     const { phase, t } = getPhase(progress, isFirstEntryRef.current);
-    const moveT = phase === "swoop-in" ? 0 : phase === "move" ? easeInOutCubic(t) : 1;
+    const moveT = phase === "move" ? easeInOutCubic(t) : 1;
 
     const x = fromPos[0] + (toPos[0] - fromPos[0]) * moveT;
     const z = fromPos[1] + (toPos[1] - fromPos[1]) * moveT;
