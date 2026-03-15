@@ -7,6 +7,7 @@ import FeaturedGameCard from "@/components/FeaturedGameCard";
 import { ChessIcon, DominoIcon, BackgammonIcon, CheckersIcon, LudoIcon } from "@/components/GameIcons";
 import PyramidLogo from "@/components/PyramidLogo";
 import predictionsFighters from "@/assets/predictions-fighters.png";
+import futbolBall from "@/assets/futbol.png";
 // import { MobileAppPrompt } from "@/components/MobileAppPrompt"; // Temporarily disabled
 import { usePrivySolBalance } from "@/hooks/usePrivySolBalance";
 import { AddSolCard } from "@/components/AddSolCard";
