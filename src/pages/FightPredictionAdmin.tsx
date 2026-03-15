@@ -1300,16 +1300,7 @@ function IngestPanel({ wallet, busy: parentBusy, onComplete }: { wallet: string;
                       )}
                       {d.imported && (
                         <p className="mt-1 text-[10px] font-bold text-green-400">✅ Imported as draft</p>
-                      )}
-                              <p key={fi}>
-                                {f.is_main_event ? "⭐ " : ""}{f.fighter1} vs {f.fighter2}
-                                {f.weight_class && <span className="text-muted-foreground"> ({f.weight_class})</span>}
-                                {f.card_segment && <span className="text-muted-foreground ml-1">[{f.card_segment}]</span>}
-                              </p>
-                            ))}
-                          </div>
-                        </details>
-                      )}
+                      )
                     </div>
                   </div>
                 ))}
