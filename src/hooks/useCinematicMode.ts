@@ -97,6 +97,8 @@ export interface UseCinematicModeReturn {
   activeEvent: CinematicEvent | null;
   /** Whether 3D scene is persistent (waiting for dismiss) */
   isPersistent: boolean;
+  /** Whether this is the first event in the current 3D session */
+  isFirstEntry: boolean;
   /** Fire a cinematic animation for a completed move */
   fire: (event: CinematicEvent) => void;
   /** Dismiss the 3D scene — triggers swoop-out and fade back to 2D */
