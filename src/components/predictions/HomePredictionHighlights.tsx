@@ -175,14 +175,20 @@ export default function HomePredictionHighlights({
 
   // Group by day (inside tabs)
   const dayGroups = useMemo(() => {
+    const todayStr = new Date().toDateString();
     const groups = new Map<string, EnrichedFight[]>();
-    filtered.forEach((f) => {
-      const key = f.eventDate
-        ? new Date(f.eventDate).toDateString()
-        : "Unknown";
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key)!.push(f);
-    });
+    filtered
+      .filter((f) => {
+        if (f.eventDate && new Date(f.eventDate).toDateString() === todayStr) return false;
+        return true;
+      })
+      .forEach((f) => {
+        const key = f.eventDate
+          ? new Date(f.eventDate).toDateString()
+          : "Unknown";
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key)!.push(f);
+      });
     return Array.from(groups.entries()).sort((a, b) => {
       if (a[0] === "Unknown") return 1;
       if (b[0] === "Unknown") return -1;
