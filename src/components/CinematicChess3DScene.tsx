@@ -340,8 +340,8 @@ function CaptureExplosion({ position, progressRef, isFirstEntryRef }: {
     const progress = progressRef.current;
     const { phase, t } = getPhase(progress, isFirstEntryRef.current);
 
-    // Explosion starts at 70% of move phase and plays for 0.8 seconds
-    const moveT = phase === "swoop-in" ? 0 : phase === "move" ? t : 1;
+    // Explosion starts at 70% of move phase
+    const moveT = phase === "move" ? t : 1;
     const explosionTrigger = 0.7;
     
     if (moveT < explosionTrigger) {
