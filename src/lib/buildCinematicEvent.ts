@@ -21,6 +21,10 @@ export interface CinematicEvent {
   isMate: boolean;
   isPromotion: boolean;
   san: string;
+  /** Piece type of the captured piece (if any) */
+  capturedPiece?: string;
+  /** Color of the captured piece (if any) */
+  capturedColor?: "white" | "black";
   /** Full board state AFTER the move (used to render all pieces in 3D) */
   boardPieces: BoardPiece[];
 }
