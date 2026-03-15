@@ -52,6 +52,8 @@ import ReferralAdmin from "./pages/ReferralAdmin";
 import DebugHUD from "./components/DebugHUD";
 import AIAgentHelperOverlay from "./components/AIAgentHelperOverlay";
 import { isDebugEnabled } from "@/lib/debugLog";
+import { useReferralCapture } from "@/hooks/useReferralCapture";
+import { useWallet } from "@/hooks/useWallet";
 
 // DEV-ONLY: Import to auto-run config check on app load
 import "./lib/devConfigCheck";
