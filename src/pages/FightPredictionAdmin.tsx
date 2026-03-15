@@ -540,6 +540,7 @@ export default function FightPredictionAdmin() {
                   fight={fight}
                   busy={busy}
                   entryCount={entryCounts[fight.id] || 0}
+                  botConfirm={botConfirmData[fight.id] || null}
                   onAction={(action, extra) => fightAction(action, fight.id, extra)}
                   onConfirm={withConfirm}
                   onRefund={async () => {
