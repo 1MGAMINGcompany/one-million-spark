@@ -187,6 +187,16 @@ export default function HomePredictionHighlights({
     return counts;
   }, [enrichedFights]);
 
+  const handlePredict = (fight: Fight, pick: "fighter_a" | "fighter_b") => {
+    if (!wallet) {
+      onWalletRequired?.();
+      return;
+    }
+    onPredict?.(fight, pick);
+  };
+
+  if (enrichedFights.length === 0) return null;
+
   return (
     <div className="space-y-4">
       {/* TODAY header */}
