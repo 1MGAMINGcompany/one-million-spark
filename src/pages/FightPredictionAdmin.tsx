@@ -665,7 +665,7 @@ function AdminEventCard({
             }`}>{event.status.toUpperCase()}</span>
             {event.source_provider && event.source_provider !== 'manual' && (
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-accent/30 text-accent-foreground uppercase">
-                {event.source_provider}
+                {event.source_provider === 'api-football' ? '⚽ API-FOOTBALL' : event.source_provider}
               </span>
             )}
             {event.organization && (
