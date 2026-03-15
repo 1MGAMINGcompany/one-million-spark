@@ -171,8 +171,30 @@ Deno.serve(async (req) => {
           const leagueId = BDL_LEAGUES[leagueName];
           try {
             const allEvents = await bdlFetchAll("/events", apiKey, { year: String(currentYear) });
-            const leagueEvents = allEvents.filter((ev: any) => ev.league?.id === leagueId);
-            results.events_found += leagueEvents.length;
+            const leagueEventsRaw = allEvents.filter((ev: any) => ev.league?.id === leagueId);
+            results.events_found += leagueEventsRaw.length;
+
+            // ── Filter to upcoming events only ──
+            const leagueEvents = leagueEventsRaw
+              .filter((ev: any) => {
+                if (!ev.date) return true; // keep events with no date (manual review)
+                const eventTime = new Date(ev.date);
+                if (eventTime <= now) {
+                  // Log filtered-out past event
+                  const sid = `bdl_${ev.id}`;
+                  console.log(`[ingest] Filtered past event: ${sid} (${ev.name || "?"}) date=${ev.date}`);
+                  supabase.from("automation_logs").insert({
+                    action: "past_event_filtered",
+                    source: "balldontlie",
+                    details: { source_event_id: sid, event_name: ev.name, event_date: ev.date, reason: "past_event_filtered" },
+                    admin_wallet: wallet,
+                  }).then(() => {});
+                  results.events_filtered_past++;
+                  return false;
+                }
+                return true;
+              })
+              .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
             for (const ev of leagueEvents) {
               const sourceEventId = `bdl_${ev.id}`;
