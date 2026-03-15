@@ -72,11 +72,7 @@ Deno.serve(async (req: Request) => {
       return Response.json({ success: false, error: "circular_referral" }, { headers: corsHeaders });
     }
 
-    // 6. Generate referral code for new user if needed
-    const newUserCode = existingProfile?.referral_code ||
-      generateReferralCode(wallet);
-
-    // 7. Upsert the player profile with referral binding
+    // 6. Upsert the player profile with referral binding (no code generation — admin only)
     const { error: upsertErr } = await supabase
       .from("player_profiles")
       .upsert(
@@ -85,7 +81,6 @@ Deno.serve(async (req: Request) => {
           referred_by_code: code,
           referred_by_wallet: referrer.wallet,
           referral_created_at: new Date().toISOString(),
-          referral_code: newUserCode,
         },
         { onConflict: "wallet" }
       );
@@ -110,16 +105,7 @@ Deno.serve(async (req: Request) => {
   }
 });
 
-function generateReferralCode(wallet: string): string {
-  // Simple deterministic code from wallet
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  let code = "";
-  for (let i = 0; i < 8; i++) {
-    const charCode = wallet.charCodeAt(i % wallet.length) + i * 7;
-    code += chars[charCode % chars.length];
-  }
-  return code;
-}
+// generateReferralCode removed — codes are admin-issued only
 
 // deno-lint-ignore no-explicit-any
 async function logAbuse(supabase: any, wallet: string, code: string, reason: string) {
