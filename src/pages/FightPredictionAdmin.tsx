@@ -383,7 +383,7 @@ export default function FightPredictionAdmin() {
             <Download className="w-4 h-4 text-primary" /> Event Ingest
           </h2>
           <p className="text-xs text-muted-foreground mb-3">
-            Fetch upcoming combat sports events from TheSportsDB. Events are stored as drafts — never auto-published.
+            Fetch upcoming events from configured providers. Soccer requires API_FOOTBALL_KEY. Events are stored as drafts — never auto-published.
           </p>
           <IngestPanel wallet={address!} busy={busy} onComplete={loadData} />
         </Card>
