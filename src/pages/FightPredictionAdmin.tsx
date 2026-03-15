@@ -612,13 +612,14 @@ function useCountdown(targetIso: string | null): { text: string | null; seconds:
 
 // ── Per-Event Admin Card (with expand/collapse) ──
 function AdminEventCard({
-  event, fights, entryCounts, busy,
+  event, fights, entryCounts, botConfirmData, busy,
   onFightAction, onConfirm, onRefund, callAdmin, loadData,
   onDismiss, onArchive, onDelete, eventHasPredictions, eventIsFullySettled,
 }: {
   event: PredictionEvent;
   fights: Fight[];
   entryCounts: Record<string, number>;
+  botConfirmData: Record<string, { confidence: number; provider: string; confirmed_at: string; claims_open_at: string }>;
   busy: boolean;
   onFightAction: (action: string, fightId: string, extra?: Record<string, any>) => Promise<void>;
   onConfirm: (title: string, desc: string, onConfirm: () => void, destructive?: boolean) => void;
