@@ -103,7 +103,8 @@ function getCachedMat(color: "white" | "black", lite: boolean, skin: ChessSkin):
   }
   return m;
 }
-}
+
+
 
 // ─── Board (static — never re-renders) ────────────────────────────────────────
 
