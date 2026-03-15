@@ -1194,6 +1194,9 @@ function IngestPanel({ wallet, busy: parentBusy, onComplete }: { wallet: string;
           </p>
           <p className="text-muted-foreground">
             Found: {lastResult.events_found} · New: {lastResult.events_new} · Updated: {lastResult.events_updated || 0}
+            {(lastResult.events_filtered_past ?? 0) > 0 && (
+              <span className="text-yellow-400 ml-1">· ⏳ {lastResult.events_filtered_past} past filtered</span>
+            )}
           </p>
           {lastResult.fights_found > 0 && (
             <p className="text-muted-foreground">Fights found: {lastResult.fights_found} · Created: {lastResult.fights_created}</p>
