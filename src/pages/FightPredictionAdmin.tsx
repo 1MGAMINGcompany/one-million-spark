@@ -148,7 +148,7 @@ export default function FightPredictionAdmin() {
       supabase.from("prediction_fights").select("*").order("created_at", { ascending: false }),
       supabase.from("prediction_entries").select("fight_id"),
       supabase.functions.invoke("prediction-admin", { body: { action: "getSettings", wallet: address } }),
-      supabase.from("automation_logs").select("fight_id, confidence, details, created_at").eq("action", "bot_auto_confirm").order("created_at", { ascending: false }),
+      supabase.from("automation_logs").select("fight_id, confidence, details, created_at").in("action", ["bot_auto_confirm", "soccer_result_confirmed"]).order("created_at", { ascending: false }),
     ]);
     if (eventsRes.data) setEvents(eventsRes.data as any);
     if (fightsRes.data) setFights(fightsRes.data as any);
