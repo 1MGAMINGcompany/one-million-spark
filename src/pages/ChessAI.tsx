@@ -365,6 +365,13 @@ const ChessAI = () => {
         triggerAnimation(attackingPiece.type, targetPiece.type, to);
       }
 
+      // Fire cinematic overlay for player move
+      if (attackingPiece) {
+        cinematic.fire(
+          buildCinematicEvent(from, to, attackingPiece.type, attackingPiece.color, !!targetPiece, move.san, gameCopy)
+        );
+      }
+
       setGame(new Chess(gameCopy.fen()));
       setMoveHistory(gameCopy.history());
       setLastMove({ from, to });
