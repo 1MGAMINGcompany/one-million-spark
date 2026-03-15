@@ -547,10 +547,8 @@ const ChessAI = () => {
                         duration={cinematic.duration}
                         boardFlipped={false}
                         tier={cinematic.tier}
-                        isPersistent={cinematic.isPersistent}
-                        isDismissing={!cinematic.isPersistent && !!cinematic.activeEvent}
+                        isDismissing={!cinematic.isPersistent}
                         isFirstEntry={!cinematic.isPersistent}
-                        onDismissComplete={() => {}}
                       />
                     )}
                   </div>
