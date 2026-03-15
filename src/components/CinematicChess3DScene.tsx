@@ -46,21 +46,12 @@ function easeInOutCubic(t: number): number {
 }
 
 // ─── Animation Phase Helper ───────────────────────────────────────────────────
-// When NOT persistent (first entry): 0.00–0.15 swoop-in, 0.15–0.60 move, 0.60–1.00 swoop-out
-// When persistent (already in 3D):   0.00–0.70 move, 0.70–1.00 hold (no swoop)
-// Dismiss: separate swoop-out animation
+// Static camera — no swoop. Just: move (0–0.85) → hold (0.85–1.0)
 
-type AnimPhase = "swoop-in" | "move" | "hold" | "swoop-out";
+type AnimPhase = "move" | "hold";
 
-function getPhase(progress: number, isFirstEntry: boolean): { phase: AnimPhase; t: number } {
-  if (isFirstEntry) {
-    // First entry: swoop in → move → hold at dramatic angle
-    if (progress < 0.15) return { phase: "swoop-in", t: progress / 0.15 };
-    if (progress < 0.75) return { phase: "move", t: (progress - 0.15) / 0.60 };
-    return { phase: "hold", t: 1 };
-  }
-  // Subsequent moves (already in 3D): just move the piece
-  if (progress < 0.80) return { phase: "move", t: progress / 0.80 };
+function getPhase(progress: number, _isFirstEntry: boolean): { phase: AnimPhase; t: number } {
+  if (progress < 0.85) return { phase: "move", t: progress / 0.85 };
   return { phase: "hold", t: 1 };
 }
 
