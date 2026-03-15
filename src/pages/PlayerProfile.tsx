@@ -6,7 +6,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useWallet } from '@solana/wallet-adapter-react';
-import { ArrowLeft, Flame, Trophy, Target, Coins, Zap, Gamepad2, TrendingUp, Loader2 } from 'lucide-react';
+import { ArrowLeft, Flame, Trophy, Target, Coins, Zap, Gamepad2, TrendingUp, Loader2, Palette } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { supabase } from '@/integrations/supabase/client';
