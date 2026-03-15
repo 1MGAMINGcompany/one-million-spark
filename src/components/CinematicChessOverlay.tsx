@@ -25,6 +25,8 @@ interface Props {
   onDismissComplete?: () => void;
   /** Whether this is the very first event (triggers swoop-in) */
   isFirstEntry?: boolean;
+  /** Chess skin ID for themed rendering */
+  skinId?: string;
 }
 
 // ─── 2D Fallback ──────────────────────────────────────────────────────────────
