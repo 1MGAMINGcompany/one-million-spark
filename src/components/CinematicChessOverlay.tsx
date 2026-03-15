@@ -14,7 +14,11 @@ import type { CinematicTier } from "@/hooks/useCinematicMode";
 import { getCinematicPhrase } from "@/lib/cinematicPhrases";
 import { supabase } from "@/integrations/supabase/client";
 
+// Eagerly import to avoid Suspense flash — the chunk is small enough
 const CinematicChess3DScene = lazy(() => import("@/components/CinematicChess3DScene"));
+
+// Preload the 3D scene chunk as soon as this module loads
+const _preload = import("@/components/CinematicChess3DScene");
 
 interface Props {
   event: CinematicEvent;
@@ -186,7 +190,7 @@ function CinematicChessOverlayInner({ event, duration, boardFlipped, tier = "2d-
 
   return (
     <>
-      <Suspense fallback={fallback}>
+      <Suspense fallback={null}>
         <ErrorBoundary3D fallback={fallback}>
           <CinematicChess3DScene
             event={event}
