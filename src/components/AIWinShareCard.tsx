@@ -4,6 +4,7 @@ import { toPng } from "html-to-image";
 import { Download, Share2, Copy, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import GoldConfettiExplosion from "@/components/GoldConfettiExplosion";
+import { incrementChessShares } from "@/hooks/useChessSkin";
 import PyramidLogo from "@/components/PyramidLogo";
 import {
   ChessIcon,
@@ -89,11 +90,13 @@ export default function AIWinShareCard({
       `https://twitter.com/intent/tweet?text=${encodeURIComponent(xText)}`,
       "_blank"
     );
-  }, [xText]);
+    if (game === "chess") incrementChessShares();
+  }, [xText, game]);
 
   const handleWhatsApp = useCallback(() => {
     window.open(`https://wa.me/?text=${encodeURIComponent(waText)}`, "_blank");
-  }, [waText]);
+    if (game === "chess") incrementChessShares();
+  }, [waText, game]);
 
   const handleCopy = useCallback(async () => {
     try {

@@ -25,6 +25,8 @@ interface Props {
   onDismissComplete?: () => void;
   /** Whether this is the very first event (triggers swoop-in) */
   isFirstEntry?: boolean;
+  /** Chess skin ID for themed rendering */
+  skinId?: string;
 }
 
 // ─── 2D Fallback ──────────────────────────────────────────────────────────────
@@ -164,7 +166,7 @@ function logPhraseShown(tier: CinematicTier) {
 
 function CinematicChessOverlayInner({
   event, duration, boardFlipped, tier = "2d-fallback",
-  isDismissing = false, onDismissComplete, isFirstEntry = true,
+  isDismissing = false, onDismissComplete, isFirstEntry = true, skinId,
 }: Props) {
   const [use3D, setUse3D] = useState(tier === "3d-full" || tier === "3d-lite");
   const [done, setDone] = useState(false);
@@ -199,6 +201,7 @@ function CinematicChessOverlayInner({
             tier={tier}
             isFirstEntry={isFirstEntry}
             isDismissing={isDismissing}
+            skinId={skinId}
             onComplete={() => {
               setDone(true);
               onDismissComplete?.();

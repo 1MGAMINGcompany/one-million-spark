@@ -18,6 +18,9 @@ import { useActiveAIGame } from "@/hooks/useActiveAIGame";
 import { useCinematicMode } from "@/hooks/useCinematicMode";
 import { buildCinematicEvent } from "@/lib/buildCinematicEvent";
 import CinematicChessOverlay from "@/components/CinematicChessOverlay";
+import { useChessSkin, incrementChessGames, incrementChessShares } from "@/hooks/useChessSkin";
+import ChessSkinPicker from "@/components/ChessSkinPicker";
+import { Palette } from "lucide-react";
 
 // Helper to convert UCI move (e.g., "e2e4") to from/to squares
 const parseUCIMove = (uciMove: string): { from: Square; to: Square; promotion?: string } | null => {
@@ -53,6 +56,8 @@ const ChessAI = () => {
   const [boardImage, setBoardImage] = useState<string | null>(null);
   const boardContainerRef = useRef<HTMLDivElement>(null);
   const cinematic = useCinematicMode();
+  const chessSkin = useChessSkin();
+  const [showSkinPicker, setShowSkinPicker] = useState(false);
   
   // Session continuity
   const { clearActiveGame } = useActiveAIGame(gameOver);
@@ -115,6 +120,7 @@ const ChessAI = () => {
       if (isPlayerWin) {
         const dur = getDuration();
         recordWin();
+        incrementChessGames();
         setWinDuration(dur);
         // Delay share card to show the winning move + capture board screenshot
         setTimeout(async () => {
@@ -130,6 +136,7 @@ const ChessAI = () => {
         }, 2500);
       } else {
         recordLoss();
+        incrementChessGames();
       }
       return true;
     }
@@ -486,7 +493,7 @@ const ChessAI = () => {
                       />
                     </div>
                     {/* Cinematic Chess Overlay */}
-                    {cinematic.activeEvent && (
+                     {cinematic.activeEvent && (
                       <CinematicChessOverlay
                         event={cinematic.activeEvent}
                         duration={cinematic.duration}
@@ -494,14 +501,23 @@ const ChessAI = () => {
                         tier={cinematic.tier}
                         isDismissing={!cinematic.isPersistent}
                         isFirstEntry={cinematic.isFirstEntry}
+                        skinId={chessSkin.skinId}
                       />
                     )}
                   </div>
                 </div>
               </div>
 
-              {/* Cinematic Toggle */}
-              <div className="flex justify-center items-center">
+              {/* Cinematic Toggle + Skin Picker */}
+              <div className="flex justify-center items-center gap-3">
+                <button
+                  onClick={() => setShowSkinPicker(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border/40 bg-card/50 hover:border-primary/40 hover:bg-primary/5 transition-all group"
+                  title="Change skin"
+                >
+                  <Palette className="w-3.5 h-3.5 text-muted-foreground group-hover:text-primary transition-colors" />
+                  <span className="text-[11px] text-muted-foreground group-hover:text-primary font-medium">{chessSkin.activeSkin.name}</span>
+                </button>
                 <button
                   onClick={cinematic.toggle}
                   className="flex items-center gap-2 group"
@@ -719,6 +735,11 @@ const ChessAI = () => {
         durationSeconds={winDuration}
         boardImage={boardImage || undefined}
         winningMove={moveHistory.length > 0 ? moveHistory[moveHistory.length - 1] : undefined}
+      />
+      <ChessSkinPicker
+        open={showSkinPicker}
+        onOpenChange={setShowSkinPicker}
+        skinHook={chessSkin}
       />
     </div>
   );

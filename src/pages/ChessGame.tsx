@@ -52,6 +52,9 @@ import { getAnonId } from "@/lib/anonIdentity";
 import { useCinematicMode } from "@/hooks/useCinematicMode";
 import { buildCinematicEvent } from "@/lib/buildCinematicEvent";
 import CinematicChessOverlay from "@/components/CinematicChessOverlay";
+import { useChessSkin } from "@/hooks/useChessSkin";
+import ChessSkinPicker from "@/components/ChessSkinPicker";
+import { Palette } from "lucide-react";
 
 // Persisted chess game state
 interface PersistedChessState {
@@ -89,6 +92,8 @@ const ChessGame = () => {
   const [winnerWallet, setWinnerWallet] = useState<string | null>(null); // Direct wallet address of winner
   const [lastMove, setLastMove] = useState<{ from: Square; to: Square } | null>(null);
   const cinematic = useCinematicMode();
+  const chessSkin = useChessSkin();
+  const [showSkinPicker, setShowSkinPicker] = useState(false);
   const [boardImage, setBoardImage] = useState<string | null>(null);
   const boardContainerRef = useRef<HTMLDivElement>(null);
 
@@ -1394,14 +1399,23 @@ const ChessGame = () => {
                           tier={cinematic.tier}
                           isDismissing={!cinematic.isPersistent}
                           isFirstEntry={cinematic.isFirstEntry}
+                          skinId={chessSkin.skinId}
                         />
                       )}
                     </div>
                 </div>
                 </div>
 
-              {/* Cinematic Toggle */}
-              <div className="flex justify-center items-center">
+              {/* Cinematic Toggle + Skin Picker */}
+              <div className="flex justify-center items-center gap-3">
+                <button
+                  onClick={() => setShowSkinPicker(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border/40 bg-card/50 hover:border-primary/40 hover:bg-primary/5 transition-all group"
+                  title="Change skin"
+                >
+                  <Palette className="w-3.5 h-3.5 text-muted-foreground group-hover:text-primary transition-colors" />
+                  <span className="text-[11px] text-muted-foreground group-hover:text-primary font-medium">{chessSkin.activeSkin.name}</span>
+                </button>
                 {cinematic.isAllowed && (
                   <button
                     onClick={cinematic.toggle}
@@ -1676,6 +1690,11 @@ const ChessGame = () => {
         isLoading={isForfeiting}
         gameType="2player"
         stakeSol={entryFeeSol}
+      />
+      <ChessSkinPicker
+        open={showSkinPicker}
+        onOpenChange={setShowSkinPicker}
+        skinHook={chessSkin}
       />
     </div>
     </InAppBrowserRecovery>

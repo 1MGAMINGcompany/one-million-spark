@@ -21,6 +21,7 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import type { CinematicEvent, BoardPiece } from "@/lib/buildCinematicEvent";
 import type { CinematicTier } from "@/hooks/useCinematicMode";
+import { getSkinById, type ChessSkin, type MaterialConfig } from "@/lib/chessSkins";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -29,9 +30,7 @@ const SQ = BOARD_SIZE / 8;
 const HALF = BOARD_SIZE / 2;
 const PIECE_SCALE = 1.4;
 
-const LIGHT_SQ = new THREE.Color("hsl(38, 45%, 75%)");
-const DARK_SQ = new THREE.Color("hsl(25, 35%, 32%)");
-const GOLD_TRIM = new THREE.Color("hsl(42, 75%, 50%)");
+
 
 function squareToWorld(sq: string, flipped: boolean): [number, number] {
   const file = sq.charCodeAt(0) - 97;
@@ -55,50 +54,16 @@ function getPhase(progress: number, _isFirstEntry: boolean): { phase: AnimPhase;
   return { phase: "hold", t: 1 };
 }
 
-// ─── Lathe Profiles ───────────────────────────────────────────────────────────
-
-const PIECE_PROFILES: Record<string, [number, number][]> = {
-  pawn: [
-    [0, 0], [0.12, 0], [0.13, 0.02], [0.1, 0.04],
-    [0.06, 0.12], [0.05, 0.18], [0.07, 0.22], [0.06, 0.28], [0, 0.3],
-  ],
-  rook: [
-    [0, 0], [0.14, 0], [0.15, 0.02], [0.12, 0.05],
-    [0.08, 0.15], [0.08, 0.30], [0.12, 0.32], [0.12, 0.40],
-    [0.09, 0.40], [0.09, 0.38], [0.06, 0.38], [0.06, 0.40], [0, 0.40],
-  ],
-  knight: [
-    [0, 0], [0.13, 0], [0.14, 0.02], [0.1, 0.05],
-    [0.07, 0.12], [0.06, 0.20], [0.08, 0.25], [0.1, 0.32],
-    [0.08, 0.38], [0.04, 0.42], [0, 0.44],
-  ],
-  bishop: [
-    [0, 0], [0.13, 0], [0.14, 0.02], [0.1, 0.05],
-    [0.06, 0.15], [0.05, 0.28], [0.07, 0.33], [0.06, 0.40],
-    [0.03, 0.44], [0, 0.47],
-  ],
-  queen: [
-    [0, 0], [0.14, 0], [0.15, 0.02], [0.11, 0.06],
-    [0.07, 0.18], [0.06, 0.32], [0.09, 0.36], [0.1, 0.42],
-    [0.07, 0.48], [0.04, 0.52], [0, 0.55],
-  ],
-  king: [
-    [0, 0], [0.14, 0], [0.15, 0.02], [0.11, 0.06],
-    [0.07, 0.20], [0.06, 0.36], [0.09, 0.40], [0.1, 0.46],
-    [0.08, 0.50], [0.04, 0.54], [0.02, 0.56], [0, 0.58],
-  ],
-};
-
-// ─── Global Material & Geometry Cache (never recreated) ───────────────────────
+// ─── Skin-Keyed Material & Geometry Cache ─────────────────────────────────────
 
 const _geoCache = new Map<string, THREE.LatheGeometry>();
 const _matCache = new Map<string, THREE.Material>();
 
-function getCachedGeo(piece: string, lite: boolean): THREE.LatheGeometry {
-  const key = `${piece}-${lite ? "l" : "f"}`;
+function getCachedGeo(piece: string, lite: boolean, skin: ChessSkin): THREE.LatheGeometry {
+  const key = `${skin.id}-${piece}-${lite ? "l" : "f"}`;
   let g = _geoCache.get(key);
   if (!g) {
-    const profile = PIECE_PROFILES[piece] ?? PIECE_PROFILES.pawn;
+    const profile = skin.profiles[piece] ?? skin.profiles.pawn;
     const pts = profile.map(([x, y]) => new THREE.Vector2(x * PIECE_SCALE, y * PIECE_SCALE));
     g = new THREE.LatheGeometry(pts, lite ? 10 : 16);
     _geoCache.set(key, g);
@@ -106,33 +71,41 @@ function getCachedGeo(piece: string, lite: boolean): THREE.LatheGeometry {
   return g;
 }
 
-function getCachedMat(color: "white" | "black", lite: boolean): THREE.Material {
-  const key = `${color}-${lite ? "l" : "f"}`;
+function buildMaterial(config: MaterialConfig, lite: boolean): THREE.Material {
+  if (lite) {
+    return new THREE.MeshStandardMaterial({
+      color: config.color,
+      roughness: config.roughness,
+      metalness: config.metalness,
+      ...(config.emissive ? { emissive: config.emissive, emissiveIntensity: config.emissiveIntensity ?? 0 } : {}),
+    });
+  }
+  return new THREE.MeshPhysicalMaterial({
+    color: config.color,
+    roughness: config.roughness,
+    metalness: config.metalness,
+    clearcoat: config.clearcoat ?? 0,
+    clearcoatRoughness: config.clearcoatRoughness ?? 0,
+    ...(config.emissive ? { emissive: config.emissive, emissiveIntensity: config.emissiveIntensity ?? 0 } : {}),
+  });
+}
+
+function getCachedMat(color: "white" | "black", lite: boolean, skin: ChessSkin): THREE.Material {
+  const key = `${skin.id}-${color}-${lite ? "l" : "f"}`;
   let m = _matCache.get(key);
   if (!m) {
-    if (color === "white") {
-      m = lite
-        ? new THREE.MeshStandardMaterial({ color: "#f0e6d3", roughness: 0.3, metalness: 0.05 })
-        : new THREE.MeshPhysicalMaterial({
-            color: "#f5ead8", roughness: 0.15, metalness: 0.02,
-            clearcoat: 1.0, clearcoatRoughness: 0.08,
-          });
-    } else {
-      m = lite
-        ? new THREE.MeshStandardMaterial({ color: "#1a1a22", roughness: 0.25, metalness: 0.4 })
-        : new THREE.MeshPhysicalMaterial({
-            color: "#141418", roughness: 0.12, metalness: 0.6,
-            clearcoat: 0.9, clearcoatRoughness: 0.05,
-          });
-    }
+    const config = color === "white" ? skin.whiteMat : skin.blackMat;
+    m = buildMaterial(config, lite);
     _matCache.set(key, m);
   }
   return m;
 }
 
+
+
 // ─── Board (static — never re-renders) ────────────────────────────────────────
 
-function BoardPlane({ lite }: { lite: boolean }) {
+function BoardPlane({ lite, skin }: { lite: boolean; skin: ChessSkin }) {
   const geo = useMemo(() => new THREE.PlaneGeometry(SQ, SQ), []);
   const squares = useMemo(() => {
     const r: { x: number; z: number; dark: boolean }[] = [];
@@ -142,20 +115,25 @@ function BoardPlane({ lite }: { lite: boolean }) {
     return r;
   }, []);
 
+  const LIGHT_SQ = useMemo(() => new THREE.Color(skin.boardLight), [skin.boardLight]);
+  const DARK_SQ = useMemo(() => new THREE.Color(skin.boardDark), [skin.boardDark]);
+  const TRIM_COLOR = useMemo(() => new THREE.Color(skin.boardTrim), [skin.boardTrim]);
+  const baseColor = skin.boardBase || "#191920";
+
   const lightMat = useMemo(() => lite
     ? new THREE.MeshStandardMaterial({ color: LIGHT_SQ, roughness: 0.5 })
     : new THREE.MeshPhysicalMaterial({ color: LIGHT_SQ, roughness: 0.35, clearcoat: 0.3, clearcoatRoughness: 0.4 }),
-  [lite]);
+  [lite, LIGHT_SQ]);
 
   const darkMat = useMemo(() => lite
     ? new THREE.MeshStandardMaterial({ color: DARK_SQ, roughness: 0.5 })
     : new THREE.MeshPhysicalMaterial({ color: DARK_SQ, roughness: 0.3, clearcoat: 0.4, clearcoatRoughness: 0.3 }),
-  [lite]);
+  [lite, DARK_SQ]);
 
   const trimMat = useMemo(() => lite
-    ? new THREE.MeshStandardMaterial({ color: GOLD_TRIM, roughness: 0.3, metalness: 0.8 })
-    : new THREE.MeshPhysicalMaterial({ color: GOLD_TRIM, roughness: 0.15, metalness: 0.9, clearcoat: 0.8, clearcoatRoughness: 0.1 }),
-  [lite]);
+    ? new THREE.MeshStandardMaterial({ color: TRIM_COLOR, roughness: 0.3, metalness: 0.8 })
+    : new THREE.MeshPhysicalMaterial({ color: TRIM_COLOR, roughness: 0.15, metalness: 0.9, clearcoat: 0.8, clearcoatRoughness: 0.1 }),
+  [lite, TRIM_COLOR]);
 
   const trimThickness = 0.04;
   const trimHeight = 0.06;
@@ -170,7 +148,7 @@ function BoardPlane({ lite }: { lite: boolean }) {
       </group>
       <mesh position={[0, -0.05, 0]}>
         <boxGeometry args={[BOARD_SIZE + 0.1, 0.08, BOARD_SIZE + 0.1]} />
-        <meshStandardMaterial color="#191920" roughness={0.8} />
+        <meshStandardMaterial color={baseColor} roughness={0.8} />
       </mesh>
       <mesh position={[0, trimHeight / 2, -HALF - trimThickness / 2]} material={trimMat}>
         <boxGeometry args={[totalSize, trimHeight, trimThickness]} />
@@ -190,11 +168,11 @@ function BoardPlane({ lite }: { lite: boolean }) {
 
 // ─── Static Piece (no animation, never re-renders) ────────────────────────────
 
-function StaticPiece({ piece, color, x, z, lite }: {
-  piece: string; color: "white" | "black"; x: number; z: number; lite: boolean;
+function StaticPiece({ piece, color, x, z, lite, skin }: {
+  piece: string; color: "white" | "black"; x: number; z: number; lite: boolean; skin: ChessSkin;
 }) {
-  const geo = useMemo(() => getCachedGeo(piece, lite), [piece, lite]);
-  const mat = useMemo(() => getCachedMat(color, lite), [color, lite]);
+  const geo = useMemo(() => getCachedGeo(piece, lite, skin), [piece, lite, skin]);
+  const mat = useMemo(() => getCachedMat(color, lite, skin), [color, lite, skin]);
 
   return (
     <group position={[x, 0, z]}>
@@ -215,18 +193,19 @@ function StaticPiece({ piece, color, x, z, lite }: {
 
 // ─── Moving Piece (imperative position via useFrame) ──────────────────────────
 
-function MovingPiece({ piece, color, fromPos, toPos, isCapture, lite, progressRef, isFirstEntryRef }: {
+function MovingPiece({ piece, color, fromPos, toPos, isCapture, lite, progressRef, isFirstEntryRef, skin }: {
   piece: string; color: "white" | "black";
   fromPos: [number, number]; toPos: [number, number];
   isCapture: boolean; lite: boolean;
   progressRef: React.MutableRefObject<number>;
   isFirstEntryRef: React.MutableRefObject<boolean>;
+  skin: ChessSkin;
 }) {
   const groupRef = useRef<THREE.Group>(null);
   const srcHighlightRef = useRef<THREE.Mesh>(null);
   const dstHighlightRef = useRef<THREE.Mesh>(null);
-  const geo = useMemo(() => getCachedGeo(piece, lite), [piece, lite]);
-  const mat = useMemo(() => getCachedMat(color, lite), [color, lite]);
+  const geo = useMemo(() => getCachedGeo(piece, lite, skin), [piece, lite, skin]);
+  const mat = useMemo(() => getCachedMat(color, lite, skin), [color, lite, skin]);
 
   useFrame(() => {
     const progress = progressRef.current;
@@ -291,15 +270,16 @@ const GOLD_PARTICLE_COLORS = [
 
 // ─── VictimPiece (captured piece stays visible, shakes, then crushes) ─────────
 
-function VictimPiece({ piece, color, position, lite, progressRef, isFirstEntryRef }: {
+function VictimPiece({ piece, color, position, lite, progressRef, isFirstEntryRef, skin }: {
   piece: string; color: "white" | "black";
   position: [number, number]; lite: boolean;
   progressRef: React.MutableRefObject<number>;
   isFirstEntryRef: React.MutableRefObject<boolean>;
+  skin: ChessSkin;
 }) {
   const groupRef = useRef<THREE.Group>(null);
-  const geo = useMemo(() => getCachedGeo(piece, lite), [piece, lite]);
-  const mat = useMemo(() => getCachedMat(color, lite), [color, lite]);
+  const geo = useMemo(() => getCachedGeo(piece, lite, skin), [piece, lite, skin]);
+  const mat = useMemo(() => getCachedMat(color, lite, skin), [color, lite, skin]);
 
   useFrame(() => {
     if (!groupRef.current) return;
@@ -591,9 +571,10 @@ interface SceneProps {
   lite: boolean;
   isFirstEntry: boolean;
   isDismissing: boolean;
+  skin: ChessSkin;
 }
 
-function SceneContent({ event, duration, boardFlipped, onComplete, onMoveComplete, lite, isFirstEntry, isDismissing }: SceneProps) {
+function SceneContent({ event, duration, boardFlipped, onComplete, onMoveComplete, lite, isFirstEntry, isDismissing, skin }: SceneProps) {
   const progressRef = useRef(0);
   const isFirstEntryRef = useRef(isFirstEntry);
   const dismissProgressRef = useRef(0);
@@ -624,7 +605,7 @@ function SceneContent({ event, duration, boardFlipped, onComplete, onMoveComplet
         <DismissDriver duration={800} onComplete={onComplete} dismissProgressRef={dismissProgressRef} />
       )}
       <SceneLighting lite={lite} />
-      <BoardPlane lite={lite} />
+      <BoardPlane lite={lite} skin={skin} />
 
       {staticPieces.map(p => (
         <StaticPiece
@@ -634,6 +615,7 @@ function SceneContent({ event, duration, boardFlipped, onComplete, onMoveComplet
           x={p.pos[0]}
           z={p.pos[1]}
           lite={lite}
+          skin={skin}
         />
       ))}
 
@@ -646,6 +628,7 @@ function SceneContent({ event, duration, boardFlipped, onComplete, onMoveComplet
         lite={lite}
         progressRef={progressRef}
         isFirstEntryRef={isFirstEntryRef}
+        skin={skin}
       />
 
       {event.isCapture && event.capturedPiece && event.capturedColor && (
@@ -656,6 +639,7 @@ function SceneContent({ event, duration, boardFlipped, onComplete, onMoveComplet
           lite={lite}
           progressRef={progressRef}
           isFirstEntryRef={isFirstEntryRef}
+          skin={skin}
         />
       )}
 
@@ -684,14 +668,16 @@ interface CinematicChess3DSceneProps {
   tier: CinematicTier;
   isFirstEntry: boolean;
   isDismissing: boolean;
+  skinId?: string;
 }
 
 export default function CinematicChess3DScene({
   event, duration, boardFlipped, onComplete, onMoveComplete, onError, tier,
-  isFirstEntry, isDismissing,
+  isFirstEntry, isDismissing, skinId = "classic",
 }: CinematicChess3DSceneProps) {
   const lite = tier === "3d-lite";
   const containerRef = useRef<HTMLDivElement>(null);
+  const skin = useMemo(() => getSkinById(skinId), [skinId]);
 
   // Fade in after canvas is ready
   useEffect(() => {
@@ -744,6 +730,7 @@ export default function CinematicChess3DScene({
           lite={lite}
           isFirstEntry={isFirstEntry}
           isDismissing={isDismissing}
+          skin={skin}
         />
       </Canvas>
 
