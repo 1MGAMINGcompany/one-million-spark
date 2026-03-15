@@ -105,16 +105,7 @@ Deno.serve(async (req: Request) => {
   }
 });
 
-function generateReferralCode(wallet: string): string {
-  // Simple deterministic code from wallet
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  let code = "";
-  for (let i = 0; i < 8; i++) {
-    const charCode = wallet.charCodeAt(i % wallet.length) + i * 7;
-    code += chars[charCode % chars.length];
-  }
-  return code;
-}
+// generateReferralCode removed — codes are admin-issued only
 
 // deno-lint-ignore no-explicit-any
 async function logAbuse(supabase: any, wallet: string, code: string, reason: string) {
