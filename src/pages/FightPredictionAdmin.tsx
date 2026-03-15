@@ -1082,6 +1082,7 @@ const PROVIDERS = [
 
 function IngestPanel({ wallet, busy: parentBusy, onComplete }: { wallet: string; busy: boolean; onComplete: () => void }) {
   const [ingestBusy, setIngestBusy] = useState(false);
+  const [importingId, setImportingId] = useState<string | null>(null);
   const [dryRun, setDryRun] = useState(true);
   const [selectedLeagues, setSelectedLeagues] = useState<string[]>([]);
   const [selectedProvider, setSelectedProvider] = useState("all");
@@ -1123,6 +1124,37 @@ function IngestPanel({ wallet, busy: parentBusy, onComplete }: { wallet: string;
       toast.error(err.message);
     } finally {
       setIngestBusy(false);
+    }
+  };
+
+  const importSingleEvent = async (sourceEventId: string, provider: string, eventName: string) => {
+    setImportingId(sourceEventId);
+    try {
+      const { data, error } = await supabase.functions.invoke("prediction-ingest", {
+        body: {
+          wallet,
+          single_source_event_id: sourceEventId,
+          provider: provider || undefined,
+        },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      toast.success(`Imported "${eventName}" as draft — ${data.fights_created || 0} fights`);
+      onComplete();
+      // Update dry-run results to mark this event as imported
+      setLastResult((prev: any) => {
+        if (!prev?.details) return prev;
+        return {
+          ...prev,
+          details: prev.details.map((d: any) =>
+            d.source_event_id === sourceEventId ? { ...d, imported: true } : d
+          ),
+        };
+      });
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setImportingId(null);
     }
   };
 
