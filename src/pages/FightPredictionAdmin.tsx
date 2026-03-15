@@ -569,6 +569,204 @@ function useCountdown(targetIso: string | null): { text: string | null; seconds:
   return { text: `${m}m ${sec.toString().padStart(2, "0")}s`, seconds: remaining, expired: false };
 }
 
+// ── Per-Event Admin Card (with expand/collapse) ──
+function AdminEventCard({
+  event, fights, entryCounts, busy,
+  onFightAction, onConfirm, onRefund, callAdmin, loadData,
+  onDismiss, onArchive, onDelete, eventHasPredictions, eventIsFullySettled,
+}: {
+  event: PredictionEvent;
+  fights: Fight[];
+  entryCounts: Record<string, number>;
+  busy: boolean;
+  onFightAction: (action: string, fightId: string, extra?: Record<string, any>) => Promise<void>;
+  onConfirm: (title: string, desc: string, onConfirm: () => void, destructive?: boolean) => void;
+  onRefund: (fightId: string) => Promise<void>;
+  callAdmin: (action: string, extra?: Record<string, any>) => Promise<any>;
+  loadData: () => void;
+  onDismiss: (eventId: string, eventName: string) => Promise<void>;
+  onArchive: (eventId: string, eventName: string) => Promise<void>;
+  onDelete: (eventId: string, eventName: string) => Promise<void>;
+  eventHasPredictions: boolean;
+  eventIsFullySettled: boolean;
+}) {
+  const hasActiveFights = fights.some(f => ["open", "locked", "live", "result_selected", "confirmed"].includes(f.status));
+  const [expanded, setExpanded] = useState(hasActiveFights);
+  const totalPool = fights.reduce((sum, f) => sum + f.pool_a_lamports + f.pool_b_lamports, 0) / LAMPORTS;
+  const totalPredictions = fights.reduce((sum, f) => sum + (entryCounts[f.id] || 0), 0);
+  const liveCount = fights.filter(f => f.status === "live").length;
+  const openCount = fights.filter(f => f.status === "open").length;
+  const settledCount = fights.filter(f => ["settled", "refunds_complete"].includes(f.status)).length;
+
+  return (
+    <Card className={`bg-card border-border/50 overflow-hidden ${event.is_test ? 'border-yellow-500/30' : ''}`}>
+      {/* Collapsible Header */}
+      <button
+        className="w-full px-4 py-4 flex items-start sm:items-center justify-between gap-3 text-left"
+        onClick={() => setExpanded(!expanded)}
+      >
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            {event.is_test && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-400">TEST</span>}
+            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+              event.status === 'draft' ? 'bg-muted text-muted-foreground' :
+              event.status === 'approved' ? 'bg-green-500/20 text-green-400' :
+              event.status === 'archived' ? 'bg-blue-500/20 text-blue-400' :
+              event.status === 'dismissed' ? 'bg-orange-500/20 text-orange-400' :
+              'bg-red-500/20 text-red-400'
+            }`}>{event.status.toUpperCase()}</span>
+            {liveCount > 0 && (
+              <span className="flex items-center gap-1 text-[10px] font-bold text-red-400 bg-red-500/15 px-2 py-0.5 rounded-full">
+                <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
+                {liveCount} LIVE
+              </span>
+            )}
+            {openCount > 0 && liveCount === 0 && (
+              <span className="flex items-center gap-1 text-[10px] font-bold text-green-400 bg-green-500/15 px-2 py-0.5 rounded-full">
+                {openCount} OPEN
+              </span>
+            )}
+          </div>
+          <h3 className="font-bold text-foreground text-sm mt-1">{event.event_name}</h3>
+          <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground flex-wrap">
+            {event.event_date && <span>📅 {event.event_date.split('T')[0]}</span>}
+            {event.organization && <span>🏢 {event.organization}</span>}
+            {event.location && <span>📍 {event.location}</span>}
+          </div>
+          <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground flex-wrap">
+            <span className="font-bold text-foreground">{fights.length} fights</span>
+            <span>{totalPredictions} predictions</span>
+            <span className="text-primary font-bold">{totalPool.toFixed(4)} SOL</span>
+            {settledCount > 0 && <span className="text-green-400">{settledCount} settled</span>}
+          </div>
+        </div>
+        <div className="shrink-0 mt-1">
+          {expanded ? <ChevronUp className="w-5 h-5 text-muted-foreground" /> : <ChevronDown className="w-5 h-5 text-muted-foreground" />}
+        </div>
+      </button>
+
+      {/* Expanded Content */}
+      {expanded && (
+        <div className="px-4 pb-4 space-y-3">
+          {/* Event actions */}
+          <div className="flex gap-2 flex-wrap">
+            {event.status === "draft" && (
+              <>
+                <Button size="sm" onClick={async () => { try { await callAdmin("approveEvent", { event_id: event.id }); toast.success("Approved"); loadData(); } catch(e:any){toast.error(e.message);} }} disabled={busy}
+                  className="bg-green-500/20 text-green-400 hover:bg-green-500/30">
+                  <Eye className="w-3 h-3 mr-1" /> Approve
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => onConfirm(
+                  "Dismiss Event",
+                  `Dismiss "${event.event_name}"? It will be hidden from active view.`,
+                  () => onDismiss(event.id, event.event_name),
+                  false
+                )} disabled={busy}
+                  className="border-orange-500/50 text-orange-400 hover:bg-orange-500/10">
+                  <EyeOff className="w-3 h-3 mr-1" /> Dismiss
+                </Button>
+              </>
+            )}
+
+            {["approved", "rejected"].includes(event.status) && eventIsFullySettled && (
+              <Button size="sm" variant="outline" onClick={() => onConfirm(
+                "Archive Event",
+                `Archive "${event.event_name}"?`,
+                () => onArchive(event.id, event.event_name),
+                false
+              )} disabled={busy}
+                className="border-blue-500/50 text-blue-400 hover:bg-blue-500/10">
+                <Archive className="w-3 h-3 mr-1" /> Archive
+              </Button>
+            )}
+
+            {event.status === "approved" && fights.every(f => ["settled", "refunds_complete", "cancelled"].includes(f.status) || fights.length === 0) && (
+              <Button size="sm" variant="outline" onClick={() => onConfirm(
+                "Archive Event",
+                `Archive "${event.event_name}"?`,
+                () => onArchive(event.id, event.event_name),
+                false
+              )} disabled={busy}
+                className="border-blue-500/50 text-blue-400 hover:bg-blue-500/10">
+                <Archive className="w-3 h-3 mr-1" /> Archive
+              </Button>
+            )}
+
+            {!eventHasPredictions && !["archived"].includes(event.status) && (
+              <Button size="sm" variant="outline" onClick={() => onConfirm(
+                "Delete Event",
+                `Permanently delete "${event.event_name}" and its fights?`,
+                () => onDelete(event.id, event.event_name)
+              )} disabled={busy}
+                className="border-destructive/50 text-destructive hover:bg-destructive/10">
+                <Trash2 className="w-3 h-3 mr-1" /> Delete
+              </Button>
+            )}
+
+            {["archived", "dismissed"].includes(event.status) && !eventHasPredictions && (
+              <Button size="sm" variant="outline" onClick={() => onConfirm(
+                "Delete Event",
+                `Permanently delete "${event.event_name}"?`,
+                () => onDelete(event.id, event.event_name)
+              )} disabled={busy}
+                className="border-destructive/50 text-destructive hover:bg-destructive/10">
+                <Trash2 className="w-3 h-3 mr-1" /> Delete
+              </Button>
+            )}
+
+            {["dismissed"].includes(event.status) && eventHasPredictions && (
+              <Button size="sm" variant="outline" onClick={() => onConfirm(
+                "Archive Event",
+                `Cannot delete — has predictions. Archive instead?`,
+                () => onArchive(event.id, event.event_name),
+                false
+              )} disabled={busy}
+                className="border-blue-500/50 text-blue-400 hover:bg-blue-500/10">
+                <Archive className="w-3 h-3 mr-1" /> Archive Instead
+              </Button>
+            )}
+
+            {event.is_test && !["archived", "dismissed"].includes(event.status) && (
+              <Button size="sm" variant="outline" disabled={busy}
+                className="border-destructive/50 text-destructive hover:bg-destructive/10"
+                onClick={() => onConfirm(
+                  "Delete Test Event",
+                  `Delete "${event.event_name}" and all its fights?`,
+                  async () => { try { await callAdmin("deleteTestEvent", { event_id: event.id }); toast.success("Deleted"); loadData(); } catch(e:any){toast.error(e.message);} }
+                )}>
+                <Trash2 className="w-3 h-3 mr-1" /> Delete Test
+              </Button>
+            )}
+          </div>
+
+          {/* Fight cards */}
+          {fights.length > 0 && (
+            <div className="space-y-3 border-t border-border/30 pt-3">
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                Fights ({fights.length})
+              </p>
+              {fights.map(fight => (
+                <AdminFightCard
+                  key={fight.id}
+                  fight={fight}
+                  busy={busy}
+                  entryCount={entryCounts[fight.id] || 0}
+                  onAction={(action, extra) => onFightAction(action, fight.id, extra)}
+                  onConfirm={onConfirm}
+                  onRefund={() => onRefund(fight.id)}
+                />
+              ))}
+            </div>
+          )}
+          {fights.length === 0 && (
+            <p className="text-xs text-muted-foreground text-center py-3">No fights under this event.</p>
+          )}
+        </div>
+      )}
+    </Card>
+  );
+}
+
 // ── Per-Fight Admin Card ──
 function AdminFightCard({
   fight, busy, entryCount, onAction, onConfirm, onRefund,
