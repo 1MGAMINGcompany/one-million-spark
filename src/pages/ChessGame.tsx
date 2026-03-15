@@ -1000,6 +1000,10 @@ const ChessGame = () => {
           setGame(new Chess(gameCopy.fen()));
           setMoveHistory(gameCopy.history());
           setLastMove({ from: move.from, to: move.to });
+          // Cinematic overlay for opponent moves
+          if (attackingPiece) {
+            cinematic.fire(buildCinematicEvent(move.from, move.to, attackingPiece.type, attackingPiece.color, !!targetPiece, result.san, gameCopy));
+          }
           recordPlayerMoveRef.current(roomPlayersRef.current[gameRef.current.turn() === "w" ? 1 : 0] || "", result.san);
           
           checkGameOverInline(gameCopy);
