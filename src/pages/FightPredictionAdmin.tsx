@@ -1069,10 +1069,12 @@ function AdminFightCard({
 // ── Ingest Panel ──
 const BDL_LEAGUES = ["UFC", "Bellator", "PFL", "ONE"];
 const TSDB_LEAGUES_LIST = ["Boxing", "Top Rank"];
+const APIFB_LEAGUES_LIST = ["Premier League", "La Liga", "Champions League", "MLS"];
 const PROVIDERS = [
   { key: "all", label: "All Providers" },
   { key: "balldontlie", label: "BALLDONTLIE (MMA)" },
   { key: "thesportsdb", label: "TheSportsDB (Boxing)" },
+  { key: "api-football", label: "API-Football (Soccer)" },
 ];
 
 function IngestPanel({ wallet, busy: parentBusy, onComplete }: { wallet: string; busy: boolean; onComplete: () => void }) {
