@@ -154,13 +154,24 @@ export default function HomePredictionHighlights({
       });
   }, [fights, eventMap]);
 
-  // Filter by selected sport
+  // Today's fights only (for the top preview — max 2)
+  const todayFights = useMemo(() => {
+    const now = new Date();
+    return enrichedFights
+      .filter((f) => {
+        if (!f.eventDate) return false;
+        return new Date(f.eventDate).toDateString() === now.toDateString();
+      })
+      .slice(0, 2);
+  }, [enrichedFights]);
+
+  // Filter by selected sport (all days, shown inside tabs)
   const filtered = useMemo(() => {
     if (activeSport === "ALL") return enrichedFights;
     return enrichedFights.filter((f) => f.sport === activeSport);
   }, [enrichedFights, activeSport]);
 
-  // Group by day
+  // Group by day (inside tabs)
   const dayGroups = useMemo(() => {
     const groups = new Map<string, EnrichedFight[]>();
     filtered.forEach((f) => {
@@ -170,7 +181,6 @@ export default function HomePredictionHighlights({
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key)!.push(f);
     });
-    // Sort days chronologically
     return Array.from(groups.entries()).sort((a, b) => {
       if (a[0] === "Unknown") return 1;
       if (b[0] === "Unknown") return -1;
