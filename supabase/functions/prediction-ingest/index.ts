@@ -252,7 +252,12 @@ Deno.serve(async (req) => {
                 }));
               }
 
-              if (dry_run) {
+              // ── Single-event filter ──
+              if (single_source_event_id && sourceEventId !== single_source_event_id) {
+                continue;
+              }
+
+              if (effectiveDryRun) {
                 if (existing) results.events_updated++;
                 else results.events_new++;
                 detail.dry_run = true;
