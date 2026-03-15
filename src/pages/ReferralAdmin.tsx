@@ -194,9 +194,14 @@ export default function ReferralAdmin() {
 
   return (
     <div className="container max-w-3xl py-8 px-4">
-      <Button variant="ghost" size="sm" className="mb-4" onClick={() => navigate(-1)}>
-        <ArrowLeft className="mr-2 h-4 w-4" /> Back
-      </Button>
+      <div className="flex items-center gap-2 mb-4">
+        <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>
+          <ArrowLeft className="mr-2 h-4 w-4" /> Back
+        </Button>
+        <Button variant="outline" size="sm" onClick={() => navigate("/predictions/admin")} className="gap-2">
+          <Shield className="h-4 w-4" /> Predictions Admin
+        </Button>
+      </div>
 
       <h1 className="text-2xl font-bold mb-6">Referral Dashboard</h1>
 
