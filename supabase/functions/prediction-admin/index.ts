@@ -171,6 +171,34 @@ Deno.serve(async (req) => {
       return json({ fight: data });
     }
 
+    if (action === "forceLiveEvent") {
+      const { event_id } = body;
+      if (!event_id) return json({ error: "Missing event_id" }, 400);
+
+      // Force all locked/open fights to live for this event
+      const { data: updated, error } = await supabase
+        .from("prediction_fights")
+        .update({ status: "live" })
+        .eq("event_id", event_id)
+        .in("status", ["locked", "open"])
+        .select("id");
+
+      if (error) throw error;
+
+      const count = updated?.length ?? 0;
+
+      // Audit log
+      await supabase.from("automation_logs").insert({
+        action: "force_live_event",
+        event_id,
+        source: "prediction-admin",
+        admin_wallet: wallet,
+        details: { forced_live_fights: count },
+      });
+
+      return json({ forced_live: count });
+    }
+
     if (action === "selectResult") {
       const { fight_id, winner } = body;
       if (!winner || !["fighter_a", "fighter_b"].includes(winner)) {
