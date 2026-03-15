@@ -1,11 +1,10 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { Swords, TrendingUp, ChevronDown, ChevronUp, Loader2, Share2 } from "lucide-react";
+import { Swords, TrendingUp, ChevronDown, ChevronUp, Loader2, Radio, Clock, Trophy } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useWallet } from "@/hooks/useWallet";
 import { toast } from "sonner";
 import {
-  Connection,
   PublicKey,
   SystemProgram,
   Transaction,
@@ -15,7 +14,6 @@ import EventSection, { parseSport } from "@/components/predictions/EventSection"
 import predictionsHero from "@/assets/predictions-hero.jpeg";
 import PredictionModal from "@/components/predictions/PredictionModal";
 import ComingSoonCard from "@/components/predictions/ComingSoonCard";
-import PredictionHighlights from "@/components/predictions/PredictionHighlights";
 import { WalletGateModal } from "@/components/WalletGateModal";
 import SocialShareModal from "@/components/SocialShareModal";
 import { SOCIAL_SHARE_ENABLED } from "@/lib/socialShareConfig";
@@ -47,6 +45,43 @@ interface FeedEntry {
   amount_lamports: number;
   fight_id: string;
   created_at: string;
+}
+
+type StatusSection = "live" | "today" | "upcoming";
+
+const STATUS_CONFIG: Record<StatusSection, { icon: React.ReactNode; label: string; className: string; dotClassName: string }> = {
+  live: {
+    icon: <Radio className="w-4 h-4" />,
+    label: "LIVE NOW",
+    className: "text-red-400",
+    dotClassName: "bg-red-400 animate-pulse",
+  },
+  today: {
+    icon: <Clock className="w-4 h-4" />,
+    label: "TODAY",
+    className: "text-primary",
+    dotClassName: "",
+  },
+  upcoming: {
+    icon: <Trophy className="w-4 h-4" />,
+    label: "UPCOMING",
+    className: "text-muted-foreground",
+    dotClassName: "",
+  },
+};
+
+function StatusSectionHeader({ section, count }: { section: StatusSection; count: number }) {
+  const config = STATUS_CONFIG[section];
+  return (
+    <div className="flex items-center gap-2 mb-3">
+      <span className={config.className}>{config.icon}</span>
+      <h3 className={`text-sm font-bold uppercase tracking-wider ${config.className}`}>
+        {config.label}
+      </h3>
+      {config.dotClassName && <span className={`w-2 h-2 rounded-full ${config.dotClassName}`} />}
+      <span className="text-[10px] text-muted-foreground">({count})</span>
+    </div>
+  );
 }
 
 export default function FightPredictions() {
@@ -91,8 +126,6 @@ export default function FightPredictions() {
   useEffect(() => { loadFights(); loadFeed(); }, [loadFights, loadFeed]);
   useEffect(() => { loadUserEntries(); }, [loadUserEntries]);
 
-  // Realtime subscription for instant updates (may silently fail if tables
-  // are not in supabase_realtime publication — polling below is the safety net)
   useEffect(() => {
     const channel = supabase
       .channel("prediction-realtime")
@@ -104,16 +137,12 @@ export default function FightPredictions() {
     return () => { supabase.removeChannel(channel); };
   }, [loadFights, loadFeed, loadUserEntries, address]);
 
-  // Polling fallback: refresh fight pools every 15s so mobile / other devices
-  // always get updated data even if realtime is not working
   useEffect(() => {
-    const interval = setInterval(() => {
-      loadFights();
-    }, 15_000);
+    const interval = setInterval(() => { loadFights(); }, 15_000);
     return () => clearInterval(interval);
   }, [loadFights]);
 
-  // Group fights by event. If fight has event_id, use event name. Else fall back to event_name field.
+  // Group fights by event
   const groupedEvents = useMemo(() => {
     const eventMap = new Map(events.map(e => [e.id, e]));
     const groups: Record<string, { event?: PredictionEvent; fights: Fight[] }> = {};
@@ -143,12 +172,56 @@ export default function FightPredictions() {
     return ALL_SPORTS.filter(s => s === "ALL" || sports.has(s) || ["BOXING", "MMA", "FUTBOL"].includes(s));
   }, [groupedEvents]);
 
+  // Filter by sport
   const filteredEvents = useMemo(() => {
     if (activeSport === "ALL") return groupedEvents;
     return Object.fromEntries(
       Object.entries(groupedEvents).filter(([key]) => parseSport(key) === activeSport)
     );
   }, [groupedEvents, activeSport]);
+
+  // Categorize events into status sections (each event appears ONCE)
+  const { liveEvents, todayEvents, upcomingEvents } = useMemo(() => {
+    const eventMap = new Map(events.map(e => [e.id, e]));
+    const live: [string, { event?: PredictionEvent; fights: Fight[] }][] = [];
+    const today: [string, { event?: PredictionEvent; fights: Fight[] }][] = [];
+    const upcoming: [string, { event?: PredictionEvent; fights: Fight[] }][] = [];
+
+    const isToday = (dateStr: string | null | undefined) => {
+      if (!dateStr) return false;
+      return new Date(dateStr).toDateString() === new Date().toDateString();
+    };
+
+    const isFuture = (dateStr: string | null | undefined) => {
+      if (!dateStr) return true;
+      const d = new Date(dateStr);
+      const now = new Date();
+      now.setHours(0, 0, 0, 0);
+      return d > now;
+    };
+
+    Object.entries(filteredEvents).forEach(([eventName, group]) => {
+      const hasLive = group.fights.some(f => f.status === "live");
+
+      if (hasLive) {
+        live.push([eventName, group]);
+      } else {
+        const ev = group.event;
+        const eventDate = ev?.event_date || null;
+
+        if (isToday(eventDate)) {
+          today.push([eventName, group]);
+        } else if (isFuture(eventDate)) {
+          upcoming.push([eventName, group]);
+        } else {
+          // Past events or no date — show in today as fallback
+          today.push([eventName, group]);
+        }
+      }
+    });
+
+    return { liveEvents: live, todayEvents: today, upcomingEvents: upcoming };
+  }, [filteredEvents, events]);
 
   const hotFightIds = useMemo(() => {
     const sorted = [...fights]
@@ -183,18 +256,15 @@ export default function FightPredictions() {
         })
       );
 
-      // Fetch blockhash via server-side proxy to avoid browser CORS/403 on RPC
       const { data: bhData, error: bhError } = await supabase.functions.invoke("solana-rpc-read", {
         body: { method: "getLatestBlockhash", params: [{ commitment: "confirmed" }] },
       });
       if (bhError || !bhData?.ok) throw new Error("Failed to get recent blockhash via proxy");
       const blockhash = bhData.result.value.blockhash;
-      const lastValidBlockHeight = bhData.result.value.lastValidBlockHeight;
 
       tx.recentBlockhash = blockhash;
       tx.feePayer = publicKey;
       const signature = await sendTransaction(tx, connection);
-      // Confirm via proxy as well
       const confirmStart = Date.now();
       let confirmed = false;
       while (Date.now() - confirmStart < 60_000 && !confirmed) {
@@ -269,17 +339,35 @@ export default function FightPredictions() {
   };
 
   const handlePredict = (fight: Fight, pick: "fighter_a" | "fighter_b") => {
-    if (fight.status !== "open") return; // Block non-open fights
+    if (fight.status !== "open") return;
     if (!isConnected) { setShowWalletGate(true); return; }
     setSelectedFight(fight);
     setSelectedPick(pick);
   };
 
+  const hasContent = liveEvents.length > 0 || todayEvents.length > 0 || upcomingEvents.length > 0;
+
+  const renderEventList = (entries: [string, { event?: PredictionEvent; fights: Fight[] }][]) =>
+    entries.map(([eventName, group]) => (
+      <EventSection
+        key={eventName}
+        eventName={eventName}
+        fights={group.fights}
+        wallet={address}
+        userEntries={userEntries}
+        onPredict={handlePredict}
+        onClaim={handleClaim}
+        claiming={claiming}
+        hotFightIds={hotFightIds}
+        onWalletRequired={() => setShowWalletGate(true)}
+        event={group.event}
+      />
+    ));
+
   return (
     <div className="min-h-screen bg-background">
       {/* Hero */}
       <div className="relative overflow-hidden">
-        {/* Hero Image */}
         <div className="relative h-56 sm:h-72 md:h-96 w-full">
           <img
             src={predictionsHero}
@@ -304,7 +392,7 @@ export default function FightPredictions() {
         </div>
       </div>
 
-      {/* Sport Tabs */}
+      {/* Sport Filter Chips */}
       <div className="max-w-4xl mx-auto px-4 mb-6">
         <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
           {activeSports.map((sport) => {
@@ -330,45 +418,50 @@ export default function FightPredictions() {
         </div>
       </div>
 
-      {/* Content */}
+      {/* Content — organized by status sections */}
       <div className="max-w-4xl mx-auto px-4 pb-8 space-y-6">
         {loading ? (
           <div className="flex justify-center py-12">
             <Loader2 className="w-8 h-8 animate-spin text-primary" />
           </div>
-        ) : Object.keys(filteredEvents).length === 0 && activeSport !== "ALL" ? (
+        ) : !hasContent ? (
           <div className="text-center py-12 text-muted-foreground">
             <Swords className="w-12 h-12 mx-auto mb-3 opacity-40" />
-            <p>No {activeSport} events yet. Stay tuned!</p>
+            <p>{activeSport !== "ALL" ? `No ${activeSport} events yet. Stay tuned!` : "No events available."}</p>
           </div>
         ) : (
           <>
-            {/* Highlight sections: LIVE NOW / TODAY / UPCOMING */}
-            {activeSport === "ALL" && (
-              <PredictionHighlights
-                fights={fights}
-                events={events}
-                onPredict={handlePredict}
-                wallet={address}
-                onWalletRequired={() => setShowWalletGate(true)}
-              />
+            {/* LIVE NOW */}
+            {liveEvents.length > 0 && (
+              <div>
+                <StatusSectionHeader section="live" count={liveEvents.length} />
+                <div className="space-y-3">
+                  {renderEventList(liveEvents)}
+                </div>
+              </div>
             )}
 
-            {Object.entries(filteredEvents).map(([eventName, group]) => (
-              <EventSection
-                key={eventName}
-                eventName={eventName}
-                fights={group.fights}
-                wallet={address}
-                userEntries={userEntries}
-                onPredict={handlePredict}
-                onClaim={handleClaim}
-                claiming={claiming}
-                hotFightIds={hotFightIds}
-                onWalletRequired={() => setShowWalletGate(true)}
-                event={group.event}
-              />
-            ))}
+            {/* TODAY */}
+            {todayEvents.length > 0 && (
+              <div>
+                <StatusSectionHeader section="today" count={todayEvents.length} />
+                <div className="space-y-3">
+                  {renderEventList(todayEvents)}
+                </div>
+              </div>
+            )}
+
+            {/* UPCOMING */}
+            {upcomingEvents.length > 0 && (
+              <div>
+                <StatusSectionHeader section="upcoming" count={upcomingEvents.length} />
+                <div className="space-y-3">
+                  {renderEventList(upcomingEvents)}
+                </div>
+              </div>
+            )}
+
+            {/* Coming Soon cards */}
             {(activeSport === "ALL" || !Object.keys(groupedEvents).some(e => parseSport(e) === activeSport)) &&
               comingSoonSports.map((sport) => <ComingSoonCard key={sport} sport={sport} />)}
           </>
