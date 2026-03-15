@@ -829,7 +829,7 @@ function AdminEventCard({
           {fights.length > 0 && (
             <div className="space-y-3 border-t border-border/30 pt-3">
               <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-                Fights ({fights.length})
+                {getItemLabelFromEvent(event.event_name, fights.length)} ({fights.length})
               </p>
               {fights.map(fight => (
                 <AdminFightCard
