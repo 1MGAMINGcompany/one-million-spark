@@ -830,6 +830,7 @@ function AdminEventCard({
                   fight={fight}
                   busy={busy}
                   entryCount={entryCounts[fight.id] || 0}
+                  botConfirm={botConfirmData[fight.id] || null}
                   onAction={(action, extra) => onFightAction(action, fight.id, extra)}
                   onConfirm={onConfirm}
                   onRefund={() => onRefund(fight.id)}
