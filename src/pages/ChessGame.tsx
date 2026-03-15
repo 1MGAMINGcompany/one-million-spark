@@ -49,6 +49,9 @@ import { getSolanaEndpoint } from "@/lib/solana-config";
 import { useTxLock } from "@/contexts/TxLockContext";
 import { dbg, isDebugEnabled } from "@/lib/debugLog";
 import { getAnonId } from "@/lib/anonIdentity";
+import { useCinematicMode } from "@/hooks/useCinematicMode";
+import { buildCinematicEvent } from "@/lib/buildCinematicEvent";
+import CinematicChessOverlay from "@/components/CinematicChessOverlay";
 
 // Persisted chess game state
 interface PersistedChessState {
@@ -134,6 +137,7 @@ const ChessGame = () => {
   const [animationsEnabled, setAnimationsEnabled] = useState(true);
   const [winnerWallet, setWinnerWallet] = useState<string | null>(null); // Direct wallet address of winner
   const [lastMove, setLastMove] = useState<{ from: Square; to: Square } | null>(null);
+  const cinematic = useCinematicMode();
   const [boardImage, setBoardImage] = useState<string | null>(null);
   const boardContainerRef = useRef<HTMLDivElement>(null);
 
@@ -995,6 +999,10 @@ const ChessGame = () => {
           setGame(new Chess(gameCopy.fen()));
           setMoveHistory(gameCopy.history());
           setLastMove({ from: move.from, to: move.to });
+          // Cinematic overlay for opponent moves
+          if (attackingPiece) {
+            cinematic.fire(buildCinematicEvent(move.from, move.to, attackingPiece.type, attackingPiece.color, !!targetPiece, result.san, gameCopy));
+          }
           recordPlayerMoveRef.current(roomPlayersRef.current[gameRef.current.turn() === "w" ? 1 : 0] || "", result.san);
           
           checkGameOverInline(gameCopy);
@@ -1232,6 +1240,11 @@ const ChessGame = () => {
       setMoveHistory(gameCopy.history());
       setLastMove({ from, to });
 
+      // Fire cinematic overlay if enabled
+      if (attackingPiece) {
+        cinematic.fire(buildCinematicEvent(from, to, attackingPiece.type, attackingPiece.color, !!targetPiece, move.san, gameCopy));
+      }
+
       // Send move to opponent via WebRTC
       const moveData: ChessMove = {
         from,
@@ -1413,15 +1426,52 @@ const ChessGame = () => {
                         isCheckmate={game.isCheckmate()}
                       />
                     </div>
+                    {/* Cinematic Chess Overlay */}
+                    {cinematic.activeEvent && (
+                      <CinematicChessOverlay
+                        event={cinematic.activeEvent}
+                        duration={cinematic.duration}
+                        boardFlipped={effectiveColor === "b"}
+                      />
+                    )}
                   </div>
                 </div>
 
-              {/* Animation Toggle */}
-              <div className="flex justify-center">
+              {/* Animation Toggle + Cinematic Toggle */}
+              <div className="flex justify-center items-center gap-6">
                 <AnimationToggle 
                   enabled={animationsEnabled} 
                   onToggle={() => setAnimationsEnabled(prev => !prev)} 
                 />
+                {cinematic.isAllowed && (
+                  <button
+                    onClick={cinematic.toggle}
+                    className="flex items-center gap-2 group"
+                  >
+                    <span className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
+                      {cinematic.enabled ? "3D Cinematic" : "2D Mode"}
+                    </span>
+                    <div 
+                      className={`relative w-14 h-7 rounded-full transition-all duration-300 ${
+                        cinematic.enabled 
+                          ? "bg-gradient-to-r from-primary/80 to-primary shadow-[0_0_12px_-2px_hsl(45_93%_54%_/_0.6)]" 
+                          : "bg-muted/30 border border-muted-foreground/20"
+                      }`}
+                    >
+                      <div 
+                        className={`absolute top-0.5 w-6 h-6 rounded-full transition-all duration-300 flex items-center justify-center ${
+                          cinematic.enabled 
+                            ? "left-[calc(100%-26px)] bg-gradient-to-br from-primary to-primary/80 shadow-[0_0_8px_hsl(45_93%_54%_/_0.5)]" 
+                            : "left-0.5 bg-muted-foreground/30"
+                        }`}
+                      >
+                        <span className="text-[9px] font-bold">
+                          {cinematic.enabled ? "3D" : "2D"}
+                        </span>
+                      </div>
+                    </div>
+                  </button>
+                )}
               </div>
 
               {/* Status Bar */}
