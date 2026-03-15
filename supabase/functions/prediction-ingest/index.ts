@@ -671,14 +671,21 @@ Deno.serve(async (req) => {
               }
 
               if (existing) {
+                const updatePayload: Record<string, any> = {
+                  event_date: eventDate,
+                  location: venue || null,
+                  organization: leagueName,
+                  updated_at: new Date().toISOString(),
+                };
+                // Sync lock/live times if event_date changed
+                if (eventDate) {
+                  const evMs = new Date(eventDate).getTime();
+                  updatePayload.scheduled_lock_at = new Date(evMs - 60_000).toISOString();
+                  updatePayload.scheduled_live_at = new Date(evMs).toISOString();
+                }
                 await supabase
                   .from("prediction_events")
-                  .update({
-                    event_date: eventDate,
-                    location: venue || null,
-                    organization: leagueName,
-                    updated_at: new Date().toISOString(),
-                  })
+                  .update(updatePayload)
                   .eq("id", existing.id);
 
                 results.events_updated++;
@@ -686,17 +693,19 @@ Deno.serve(async (req) => {
 
                 await supabase.from("automation_logs").insert({
                   event_id: existing.id,
-                  action: "event_updated",
+                  action: "soccer_fixture_updated",
                   source: "api-football",
-                  details: { league: leagueName, sport, source_event_id: sourceEventId },
+                  details: { league: leagueName, sport, source_event_id: sourceEventId, fixture_id: fixtureId },
                   admin_wallet: wallet,
                 });
               } else {
-                // Soccer: lock 5 minutes before kickoff
+                // Soccer: lock 60s before kickoff, go live at kickoff
                 let scheduledLockAt: string | null = null;
+                let scheduledLiveAt: string | null = null;
                 if (eventDate) {
-                  const lockDate = new Date(new Date(eventDate).getTime() - 5 * 60 * 1000);
-                  scheduledLockAt = lockDate.toISOString();
+                  const evMs = new Date(eventDate).getTime();
+                  scheduledLockAt = new Date(evMs - 60_000).toISOString();
+                  scheduledLiveAt = new Date(evMs).toISOString();
                 }
 
                 const { data: newEvent, error: insertErr } = await supabase
@@ -715,6 +724,7 @@ Deno.serve(async (req) => {
                     automation_status: "discovered",
                     requires_admin_approval: true,
                     scheduled_lock_at: scheduledLockAt,
+                    scheduled_live_at: scheduledLiveAt,
                   })
                   .select()
                   .single();
