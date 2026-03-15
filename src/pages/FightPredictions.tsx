@@ -100,7 +100,7 @@ export default function FightPredictions() {
   const [activeSport, setActiveSport] = useState("ALL");
   const [showWalletGate, setShowWalletGate] = useState(false);
   const [showPredictionSuccess, setShowPredictionSuccess] = useState(false);
-  const [claimShareData, setClaimShareData] = useState<{ eventTitle: string; solWon: number; fighterName?: string } | null>(null);
+  const [claimShareData, setClaimShareData] = useState<{ eventTitle: string; solWon: number; fighterName?: string; sport?: string } | null>(null);
 
   const loadFights = useCallback(async () => {
     const [fightsRes, eventsRes] = await Promise.all([
@@ -331,6 +331,7 @@ export default function FightPredictions() {
           eventTitle: f?.title || f?.event_name || "Prediction Win",
           solWon,
           fighterName: pickedName || undefined,
+          sport: f?.event_name,
         });
       }
     } catch (err: any) {
@@ -547,6 +548,7 @@ export default function FightPredictions() {
           onSubmit={handleSubmit}
           submitting={submitting}
           showSuccess={showPredictionSuccess}
+          wallet={address || undefined}
         />
       )}
 
@@ -566,6 +568,7 @@ export default function FightPredictions() {
           gameTitle={claimShareData.fighterName}
           solWon={claimShareData.solWon}
           wallet={address || undefined}
+          sport={claimShareData.sport}
         />
       )}
     </div>
