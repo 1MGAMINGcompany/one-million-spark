@@ -130,6 +130,8 @@ Deno.serve(async (req) => {
       return json({ error: "Automation is disabled by admin kill switch" }, 403);
     }
 
+    const now = new Date();
+
     const results = {
       providers_used: [] as string[],
       providers_skipped: [] as { provider: string; reason: string }[],
@@ -137,6 +139,7 @@ Deno.serve(async (req) => {
       events_new: 0,
       events_updated: 0,
       events_skipped_dupe: 0,
+      events_filtered_past: 0,
       fights_found: 0,
       fights_created: 0,
       fights_endpoint_available: false,
@@ -168,8 +171,30 @@ Deno.serve(async (req) => {
           const leagueId = BDL_LEAGUES[leagueName];
           try {
             const allEvents = await bdlFetchAll("/events", apiKey, { year: String(currentYear) });
-            const leagueEvents = allEvents.filter((ev: any) => ev.league?.id === leagueId);
-            results.events_found += leagueEvents.length;
+            const leagueEventsRaw = allEvents.filter((ev: any) => ev.league?.id === leagueId);
+            results.events_found += leagueEventsRaw.length;
+
+            // ── Filter to upcoming events only ──
+            const leagueEvents = leagueEventsRaw
+              .filter((ev: any) => {
+                if (!ev.date) return true; // keep events with no date (manual review)
+                const eventTime = new Date(ev.date);
+                if (eventTime <= now) {
+                  // Log filtered-out past event
+                  const sid = `bdl_${ev.id}`;
+                  console.log(`[ingest] Filtered past event: ${sid} (${ev.name || "?"}) date=${ev.date}`);
+                  supabase.from("automation_logs").insert({
+                    action: "past_event_filtered",
+                    source: "balldontlie",
+                    details: { source_event_id: sid, event_name: ev.name, event_date: ev.date, reason: "past_event_filtered" },
+                    admin_wallet: wallet,
+                  }).then(() => {});
+                  results.events_filtered_past++;
+                  return false;
+                }
+                return true;
+              })
+              .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
             for (const ev of leagueEvents) {
               const sourceEventId = `bdl_${ev.id}`;
@@ -376,10 +401,36 @@ Deno.serve(async (req) => {
           const events_raw = data?.events || [];
 
           // Filter to combat sports only
-          const combatEvents = events_raw.filter((ev: any) => {
+          const combatEventsRaw = events_raw.filter((ev: any) => {
             const s = (ev.strSport || "").toLowerCase();
             return s === "fighting" || s === "boxing" || s === "mma" || s === "muay thai";
           });
+
+          // ── Filter to upcoming events only ──
+          const combatEvents = combatEventsRaw
+            .filter((ev: any) => {
+              const dateStr = ev.dateEvent || ev.strTimestamp;
+              if (!dateStr) return true;
+              const eventTime = new Date(dateStr.includes("T") ? dateStr : `${dateStr}T00:00:00Z`);
+              if (eventTime <= now) {
+                const sid = `tsdb_${ev.idEvent}`;
+                console.log(`[ingest] Filtered past event: ${sid} (${ev.strEvent || "?"}) date=${dateStr}`);
+                supabase.from("automation_logs").insert({
+                  action: "past_event_filtered",
+                  source: "thesportsdb",
+                  details: { source_event_id: sid, event_name: ev.strEvent, event_date: dateStr, reason: "past_event_filtered" },
+                  admin_wallet: wallet,
+                }).then(() => {});
+                results.events_filtered_past++;
+                return false;
+              }
+              return true;
+            })
+            .sort((a: any, b: any) => {
+              const da = a.dateEvent || a.strTimestamp || "";
+              const db = b.dateEvent || b.strTimestamp || "";
+              return new Date(da).getTime() - new Date(db).getTime();
+            });
 
           results.events_found += combatEvents.length;
 
@@ -677,6 +728,7 @@ Deno.serve(async (req) => {
         providers: results.providers_used,
         providers_skipped: results.providers_skipped,
         events_found: results.events_found,
+        events_filtered_past: results.events_filtered_past,
         events_new: results.events_new,
         events_updated: results.events_updated,
         fights_found: results.fights_found,

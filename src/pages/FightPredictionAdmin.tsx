@@ -1194,6 +1194,9 @@ function IngestPanel({ wallet, busy: parentBusy, onComplete }: { wallet: string;
           </p>
           <p className="text-muted-foreground">
             Found: {lastResult.events_found} · New: {lastResult.events_new} · Updated: {lastResult.events_updated || 0}
+            {(lastResult.events_filtered_past ?? 0) > 0 && (
+              <span className="text-yellow-400 ml-1">· ⏳ {lastResult.events_filtered_past} past filtered</span>
+            )}
           </p>
           {lastResult.fights_found > 0 && (
             <p className="text-muted-foreground">Fights found: {lastResult.fights_found} · Created: {lastResult.fights_created}</p>
@@ -1229,7 +1232,7 @@ function IngestPanel({ wallet, busy: parentBusy, onComplete }: { wallet: string;
                         {d.sport && <span className="text-muted-foreground ml-1">({d.sport})</span>}
                         {d.provider && <span className="text-muted-foreground ml-1">· {d.provider}</span>}
                       </p>
-                      {d.event_date && <p>Date: {new Date(d.event_date).toLocaleDateString()}</p>}
+                      {d.event_date && <p>📅 {new Date(d.event_date).toLocaleString()}</p>}
                       {d.location && <p>📍 {d.location}</p>}
                       <p>ID: {d.source_event_id}</p>
                       <p>Fights: <span className="text-primary font-medium">{d.fight_count ?? 0}</span></p>
