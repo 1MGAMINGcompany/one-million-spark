@@ -1,61 +1,61 @@
-# Fight Prediction System — Phase 2 In Progress
 
-## Status Lifecycle (Final)
 
+## Problem
+
+After successfully claiming prediction winnings, the Share Win card modal should appear but doesn't reliably show up. Two issues identified:
+
+### Root Causes
+
+1. **Event title can be empty**: Line 325 does `f?.title || ""` — if the fight's `title` field is empty or the fight isn't found in the local `fights` array (due to a realtime refresh replacing the array mid-claim), `eventTitle` becomes `""`. The modal renders but with a blank title, making it hard to notice.
+
+2. **No user pick info passed**: The `claim_win` variant of `SocialShareModal` only receives `eventTitle` and `solWon`, but doesn't show which fighter the user picked — making the card less meaningful.
+
+3. **Potential state race**: `loadUserEntries()` is called on line 327 immediately after setting `claimShareData`. The realtime listener also triggers `loadFights()` on entry changes, which could cause a cascade of re-renders. While `claimShareData` state should survive re-renders, moving the share trigger to after all state updates is safer.
+
+## Fix — `src/pages/FightPredictions.tsx`
+
+In `handleClaim`:
+
+1. **Capture fight data before the async call** — store `fight` reference at the top of `handleClaim` before any awaits, so realtime refreshes can't invalidate it.
+
+2. **Use robust title fallback**: `f?.title || f?.event_name || "Prediction Win"` so the card always has meaningful text.
+
+3. **Include fighter pick info**: Look up the user's entry for this fight to find their `fighter_pick`, resolve the fighter name, and pass it as `gameTitle` (which `claim_win` variant renders as the heading).
+
+4. **Move share trigger after all data refreshes**: Call `loadUserEntries()` first, then set `claimShareData` after a brief delay to avoid render conflicts.
+
+```typescript
+const handleClaim = async (fightId: string) => {
+  if (!address) return;
+  const f = fights.find(fi => fi.id === fightId);        // capture before async
+  const userPick = userEntries.find(e => e.fight_id === fightId);
+  setClaiming(true);
+  try {
+    const { data, error } = await supabase.functions.invoke("prediction-claim", {
+      body: { fight_id: fightId, wallet: address },
+    });
+    if (error) throw error;
+    if (data?.error) throw new Error(data.error);
+    const solWon = data.reward_sol || 0;
+    toast.success("Reward claimed!", { description: `${solWon.toFixed(4)} SOL sent` });
+    await loadUserEntries();
+    if (SOCIAL_SHARE_ENABLED) {
+      const pickedName = userPick
+        ? (userPick.fighter_pick === "fighter_a" ? f?.fighter_a_name : f?.fighter_b_name)
+        : undefined;
+      setClaimShareData({
+        eventTitle: f?.title || f?.event_name || "Prediction Win",
+        solWon,
+        fighterName: pickedName || undefined,
+      });
+    }
+  } catch (err: any) { ... }
+};
 ```
-open → locked → live → result_selected → confirmed → settled
-                   └→ draw → refund_pending → refunds_processing → refunds_complete
-                   └→ cancelled
-```
 
-## Architecture
+5. **Update `claimShareData` type** to include optional `fighterName`.
 
-### Database Tables
-- `prediction_events` — Parent event grouping + automation fields (source_provider, source_event_id, automation_status, scheduling, result detection, confidence)
-- `prediction_fights` — Individual fights with event_id FK, weight_class, fight_class, method, refund tracking
-- `prediction_entries` — User prediction records
-- `prediction_admins` — Authorized admin wallets
-- `prediction_settings` — Global kill switches (predictions_enabled, claims_enabled, automation_enabled)
-- `automation_jobs` — Scheduled/running automation tasks (job_type, target, status, retries, result_payload)
-- `automation_logs` — Immutable audit trail (action, source, confidence, admin_wallet)
+6. **Pass `fighterName` as `gameTitle`** to `SocialShareModal` so the claim_win variant shows which fighter won.
 
-### Edge Functions
-- `prediction-admin` — Full lifecycle + getSettings/updateSettings for kill switches
-- `prediction-refund-worker` — Separate refund execution for draw scenarios (idempotent, safety-guarded)
-- `prediction-submit` — Submit predictions with 5% fee (respects predictions_enabled kill switch)
-- `prediction-claim` — Claim rewards (respects claims_enabled kill switch)
-- `prediction-feed` — Live activity feed
-- `prediction-auto-settle` — Cron auto-settle (respects automation_enabled kill switch)
-- `prediction-ingest` — BALLDONTLIE MMA API event/fight discovery (UFC, Bellator, PFL, ONE). Fetches events via `/events?year=YYYY`, full fight cards via `/fights?event_ids[]=ID`. Auth via `Authorization: API_KEY` header. Supports full card import (main_card, prelims, early_prelims segments with fight_order). Fights endpoint requires ALL-STAR tier. Dedupes by `bdl_{id}`. Stores as draft. Never auto-publishes.
-- `prediction-schedule-worker` — Cron: locks approved events at scheduled_lock_at, marks live at scheduled_live_at. Respects global + per-event automation_paused.
-- `prediction-result-worker` — Cron: fetches results from TheSportsDB for live auto-resolve events. Requires exact source_event_id match. Records payload + confidence. Flags low-confidence (<85%) for admin review. Auto-moves high-confidence fights to result_selected (NOT confirmed).
-- `prediction-settle-worker` — Idempotent job-based settlement. Creates jobs for confirmed fights past claims_open_at. CAS guard prevents double-pickup. Retry support (max 3). Full audit trail. Replaces simple auto-settle for new fights.
+No changes to wallet logic, settlement, admin, or automation.
 
-### Key Design Decisions
-1. Draw declaration is separate from refund execution (draw → refund_pending → refunds_processing → refunds_complete)
-2. `result_selected` is a real reversible status between `live` and `confirmed`
-3. `settled` means financially closed and immutable
-4. Events group fights; admin manages at event level
-5. Result worker only moves to `result_selected`, never `confirmed` — admin must confirm
-6. Settlement worker uses job table with CAS guards for exactly-once execution
-7. All workers respect both global kill switch AND per-event automation_paused flag
-
-### Safety Guardrails
-- **Global kill switches**: predictions_enabled, claims_enabled, automation_enabled (enforced server-side)
-- **Per-event pause**: automation_paused flag stops schedule/result/settle workers for individual events
-- Server-side status guards on all transitions
-- Red confirmation dialogs for irreversible actions (lock, confirm, settle, draw, refunds)
-- Per-claim cap: 5 SOL, daily ceiling: 50 SOL
-- 5-minute safety delay before claims open
-- Refund tracking: refund_status, refunds_started_at, refunds_completed_at
-- Manual admin actions (settle, lock, etc.) always work regardless of kill switches
-- Settlement idempotency via automation_jobs deduplication
-- CAS (Compare-And-Swap) guards on job pickup prevent double-processing
-
----
-
-## Phase 3 (Next): Cron Scheduling
-Set up pg_cron jobs for schedule-worker, result-worker, and settle-worker.
-
-## Phase 4 (Next): Admin UI for Automation Monitoring
-Dashboard showing automation_jobs status, failed jobs, retry counts, audit logs.
