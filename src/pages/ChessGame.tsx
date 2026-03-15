@@ -556,6 +556,13 @@ const ChessGame = () => {
   // isMyTurn includes canPlay gate - used for board disable
   const isMyTurn = canPlay && isActuallyMyTurn;
 
+  // Dismiss cinematic 3D overlay when it becomes the player's turn
+  useEffect(() => {
+    if (isMyTurn && cinematic.isPersistent) {
+      cinematic.dismiss();
+    }
+  }, [isMyTurn, cinematic.isPersistent]);
+
   // Ref for forfeit function - will be set by useForfeit hook
   const forfeitFnRef = useRef<(() => Promise<void>) | null>(null);
 
