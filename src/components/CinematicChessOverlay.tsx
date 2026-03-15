@@ -1,9 +1,8 @@
 /**
  * CinematicChessOverlay – orchestrates cinematic chess move animation.
  *
- * Routes to 3D scene (full or lite) based on detected tier.
- * Falls back to lightweight 2D placeholder on WebGL failure or 2d-fallback tier.
- * Shows optional personality phrase bubbles on top.
+ * Supports persistent mode: the 3D scene stays mounted across multiple
+ * moves and only swoop-outs when isDismissing=true.
  *
  * pointer-events: none – never blocks interaction.
  */
@@ -14,10 +13,7 @@ import type { CinematicTier } from "@/hooks/useCinematicMode";
 import { getCinematicPhrase } from "@/lib/cinematicPhrases";
 import { supabase } from "@/integrations/supabase/client";
 
-// Eagerly import to avoid Suspense flash — the chunk is small enough
 const CinematicChess3DScene = lazy(() => import("@/components/CinematicChess3DScene"));
-
-// Preload the 3D scene chunk as soon as this module loads
 const _preload = import("@/components/CinematicChess3DScene");
 
 interface Props {
@@ -25,6 +21,10 @@ interface Props {
   duration: number;
   boardFlipped: boolean;
   tier?: CinematicTier;
+  isDismissing?: boolean;
+  onDismissComplete?: () => void;
+  /** Whether this is the very first event (triggers swoop-in) */
+  isFirstEntry?: boolean;
 }
 
 // ─── 2D Fallback ──────────────────────────────────────────────────────────────
@@ -119,7 +119,6 @@ function PhraseBubble({ phrase, duration }: { phrase: string; duration: number }
   const [fading, setFading] = useState(false);
 
   useEffect(() => {
-    // Appear after a short delay so it layers on top of the animation start
     const showTimer = setTimeout(() => setVisible(true), 200);
     const fadeTimer = setTimeout(() => setFading(true), duration - 400);
     return () => { clearTimeout(showTimer); clearTimeout(fadeTimer); };
@@ -145,7 +144,7 @@ function PhraseBubble({ phrase, duration }: { phrase: string; duration: number }
   );
 }
 
-// ─── Analytics (fire-and-forget) ──────────────────────────────────────────────
+// ─── Analytics ────────────────────────────────────────────────────────────────
 
 function logPhraseShown(tier: CinematicTier) {
   try {
@@ -157,20 +156,21 @@ function logPhraseShown(tier: CinematicTier) {
       event: "cinematic_phrase_shown",
       context: "chess",
       metadata: tier,
-    }).then(); // fire-and-forget
+    }).then();
   } catch { /* silent */ }
 }
 
 // ─── Orchestrator ─────────────────────────────────────────────────────────────
 
-function CinematicChessOverlayInner({ event, duration, boardFlipped, tier = "2d-fallback" }: Props) {
+function CinematicChessOverlayInner({
+  event, duration, boardFlipped, tier = "2d-fallback",
+  isDismissing = false, onDismissComplete, isFirstEntry = true,
+}: Props) {
   const [use3D, setUse3D] = useState(tier === "3d-full" || tier === "3d-lite");
   const [done, setDone] = useState(false);
 
-  // Compute phrase once per event (memoized on event identity)
   const phrase = useMemo(() => getCinematicPhrase(event), [event]);
 
-  // Log analytics once if phrase is shown
   useEffect(() => {
     if (phrase) logPhraseShown(tier);
   }, [phrase, tier]);
@@ -197,7 +197,15 @@ function CinematicChessOverlayInner({ event, duration, boardFlipped, tier = "2d-
             duration={duration}
             boardFlipped={boardFlipped}
             tier={tier}
-            onComplete={() => setDone(true)}
+            isFirstEntry={isFirstEntry}
+            isDismissing={isDismissing}
+            onComplete={() => {
+              setDone(true);
+              onDismissComplete?.();
+            }}
+            onMoveComplete={() => {
+              // Move animation done — scene stays mounted in persistent mode
+            }}
             onError={() => setUse3D(false)}
           />
         </ErrorBoundary3D>
