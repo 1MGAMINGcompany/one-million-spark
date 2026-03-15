@@ -48,9 +48,12 @@ import HelpCenter from "./pages/HelpCenter";
 import HelpArticle from "./pages/HelpArticle";
 import FightPredictions from "./pages/FightPredictions";
 import FightPredictionAdmin from "./pages/FightPredictionAdmin";
+import ReferralAdmin from "./pages/ReferralAdmin";
 import DebugHUD from "./components/DebugHUD";
 import AIAgentHelperOverlay from "./components/AIAgentHelperOverlay";
 import { isDebugEnabled } from "@/lib/debugLog";
+import { useReferralCapture } from "@/hooks/useReferralCapture";
+import { useWallet } from "@/hooks/useWallet";
 
 // DEV-ONLY: Import to auto-run config check on app load
 import "./lib/devConfigCheck";
@@ -85,7 +88,9 @@ function useVisualViewportHeight() {
 // PART E: App content with conditional footer
 const AppContent = () => {
   const location = useLocation();
+  const { address } = useWallet();
   useVisualViewportHeight();
+  useReferralCapture(address);
   // Global presence heartbeat — fires for every visitor on every page.
   // AI game pages augment this with useAIGameTracker (same session_id, richer metadata).
   const page = location.pathname === "/"
@@ -143,6 +148,7 @@ const AppContent = () => {
           <Route path="/leaderboard/:game" element={<Leaderboard />} />
           <Route path="/predictions" element={<FightPredictions />} />
           <Route path="/predictions/admin" element={<FightPredictionAdmin />} />
+          <Route path="/referrals/admin" element={<ReferralAdmin />} />
           <Route path="/debug/join" element={isDebugEnabled() ? <DebugJoinRoom /> : <Navigate to="/" replace />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
