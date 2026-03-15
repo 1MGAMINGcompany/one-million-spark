@@ -401,10 +401,36 @@ Deno.serve(async (req) => {
           const events_raw = data?.events || [];
 
           // Filter to combat sports only
-          const combatEvents = events_raw.filter((ev: any) => {
+          const combatEventsRaw = events_raw.filter((ev: any) => {
             const s = (ev.strSport || "").toLowerCase();
             return s === "fighting" || s === "boxing" || s === "mma" || s === "muay thai";
           });
+
+          // ── Filter to upcoming events only ──
+          const combatEvents = combatEventsRaw
+            .filter((ev: any) => {
+              const dateStr = ev.dateEvent || ev.strTimestamp;
+              if (!dateStr) return true;
+              const eventTime = new Date(dateStr.includes("T") ? dateStr : `${dateStr}T00:00:00Z`);
+              if (eventTime <= now) {
+                const sid = `tsdb_${ev.idEvent}`;
+                console.log(`[ingest] Filtered past event: ${sid} (${ev.strEvent || "?"}) date=${dateStr}`);
+                supabase.from("automation_logs").insert({
+                  action: "past_event_filtered",
+                  source: "thesportsdb",
+                  details: { source_event_id: sid, event_name: ev.strEvent, event_date: dateStr, reason: "past_event_filtered" },
+                  admin_wallet: wallet,
+                }).then(() => {});
+                results.events_filtered_past++;
+                return false;
+              }
+              return true;
+            })
+            .sort((a: any, b: any) => {
+              const da = a.dateEvent || a.strTimestamp || "";
+              const db = b.dateEvent || b.strTimestamp || "";
+              return new Date(da).getTime() - new Date(db).getTime();
+            });
 
           results.events_found += combatEvents.length;
 
