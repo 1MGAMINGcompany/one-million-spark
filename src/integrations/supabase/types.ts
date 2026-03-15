@@ -635,6 +635,10 @@ export type Database = {
           last_game_at: string | null
           longest_streak: number
           losses: number
+          referral_code: string | null
+          referral_created_at: string | null
+          referred_by_code: string | null
+          referred_by_wallet: string | null
           total_sol_won: number
           updated_at: string
           wallet: string
@@ -650,6 +654,10 @@ export type Database = {
           last_game_at?: string | null
           longest_streak?: number
           losses?: number
+          referral_code?: string | null
+          referral_created_at?: string | null
+          referred_by_code?: string | null
+          referred_by_wallet?: string | null
           total_sol_won?: number
           updated_at?: string
           wallet: string
@@ -665,6 +673,10 @@ export type Database = {
           last_game_at?: string | null
           longest_streak?: number
           losses?: number
+          referral_code?: string | null
+          referral_created_at?: string | null
+          referred_by_code?: string | null
+          referred_by_wallet?: string | null
           total_sol_won?: number
           updated_at?: string
           wallet?: string
@@ -1099,6 +1111,78 @@ export type Database = {
           result?: string
           room_pda?: string
           tx_signature?: string | null
+        }
+        Relationships: []
+      }
+      referral_abuse_logs: {
+        Row: {
+          attempted_code: string | null
+          created_at: string
+          id: string
+          metadata: Json | null
+          reason: string
+          wallet: string
+        }
+        Insert: {
+          attempted_code?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          reason: string
+          wallet: string
+        }
+        Update: {
+          attempted_code?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          reason?: string
+          wallet?: string
+        }
+        Relationships: []
+      }
+      referral_rewards: {
+        Row: {
+          created_at: string
+          id: string
+          notes: string | null
+          paid_at: string | null
+          platform_fee_amount: number
+          player_wallet: string
+          referral_reward_amount: number
+          referrer_wallet: string
+          source_id: string
+          source_type: string
+          status: string
+          wager_amount: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          notes?: string | null
+          paid_at?: string | null
+          platform_fee_amount?: number
+          player_wallet: string
+          referral_reward_amount?: number
+          referrer_wallet: string
+          source_id: string
+          source_type: string
+          status?: string
+          wager_amount?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          notes?: string | null
+          paid_at?: string | null
+          platform_fee_amount?: number
+          player_wallet?: string
+          referral_reward_amount?: number
+          referrer_wallet?: string
+          source_id?: string
+          source_type?: string
+          status?: string
+          wager_amount?: number
         }
         Relationships: []
       }
