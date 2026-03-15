@@ -11,7 +11,7 @@
  * pointer-events: none – never blocks interaction.
  */
 
-import { useRef, useMemo, useEffect, useState, useCallback } from "react";
+import { useRef, useMemo, useEffect, useCallback } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import type { CinematicEvent, BoardPiece } from "@/lib/buildCinematicEvent";
