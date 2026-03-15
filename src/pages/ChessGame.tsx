@@ -1200,7 +1200,7 @@ const ChessGame = () => {
 
       // Fire cinematic overlay if enabled
       if (attackingPiece) {
-        cinematic.fire(buildCinematicEvent(from, to, attackingPiece.type, attackingPiece.color, !!targetPiece, move.san, gameCopy));
+        cinematic.fire(buildCinematicEvent(from, to, attackingPiece.type, attackingPiece.color, !!targetPiece, move.san, gameCopy, targetPiece?.type, targetPiece?.color));
       }
 
       // Send move to opponent via WebRTC

@@ -323,7 +323,7 @@ const ChessAI = () => {
       // Fire cinematic overlay for player move
       if (attackingPiece) {
         cinematic.fire(
-          buildCinematicEvent(from, to, attackingPiece.type, attackingPiece.color, !!targetPiece, move.san, gameCopy)
+          buildCinematicEvent(from, to, attackingPiece.type, attackingPiece.color, !!targetPiece, move.san, gameCopy, targetPiece?.type, targetPiece?.color)
         );
       }
 
