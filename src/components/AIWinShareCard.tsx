@@ -95,7 +95,8 @@ export default function AIWinShareCard({
 
   const handleWhatsApp = useCallback(() => {
     window.open(`https://wa.me/?text=${encodeURIComponent(waText)}`, "_blank");
-  }, [waText]);
+    if (game === "chess") incrementChessShares();
+  }, [waText, game]);
 
   const handleCopy = useCallback(async () => {
     try {
