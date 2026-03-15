@@ -49,6 +49,10 @@ import { getSolanaEndpoint } from "@/lib/solana-config";
 import { useTxLock } from "@/contexts/TxLockContext";
 import { dbg, isDebugEnabled } from "@/lib/debugLog";
 import { getAnonId } from "@/lib/anonIdentity";
+import { useCinematicMode } from "@/hooks/useCinematicMode";
+import { buildCinematicEvent } from "@/lib/buildCinematicEvent";
+import CinematicChessOverlay from "@/components/CinematicChessOverlay";
+import { lazy } from "react";
 
 // Persisted chess game state
 interface PersistedChessState {
