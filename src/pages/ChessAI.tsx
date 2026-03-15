@@ -316,6 +316,9 @@ const ChessAI = () => {
       setLastMove({ from: parsed.from, to: parsed.to });
       setIsThinking(false);
 
+      // Dismiss cinematic after AI move completes (back to player's turn)
+      cinematic.dismiss();
+
       if (!checkGameOver(currentGame)) {
         setGameStatus(t('gameAI.yourTurn'));
       }
