@@ -506,8 +506,16 @@ const ChessAI = () => {
                 </div>
               </div>
 
-              {/* Cinematic Toggle */}
-              <div className="flex justify-center items-center">
+              {/* Cinematic Toggle + Skin Picker */}
+              <div className="flex justify-center items-center gap-3">
+                <button
+                  onClick={() => setShowSkinPicker(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border/40 bg-card/50 hover:border-primary/40 hover:bg-primary/5 transition-all group"
+                  title="Change skin"
+                >
+                  <Palette className="w-3.5 h-3.5 text-muted-foreground group-hover:text-primary transition-colors" />
+                  <span className="text-[11px] text-muted-foreground group-hover:text-primary font-medium">{chessSkin.activeSkin.name}</span>
+                </button>
                 <button
                   onClick={cinematic.toggle}
                   className="flex items-center gap-2 group"
