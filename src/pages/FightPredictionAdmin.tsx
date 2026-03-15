@@ -149,7 +149,16 @@ export default function FightPredictionAdmin() {
     }
   }, []);
 
-  useEffect(() => { if (isAdmin) loadData(); }, [isAdmin, loadData]);
+  // Initial load + 5-second polling for admin freshness
+  useEffect(() => {
+    if (!isAdmin) return;
+    loadData();
+    const interval = setInterval(loadData, 5000);
+    return () => clearInterval(interval);
+  }, [isAdmin, loadData]);
+
+  // Force immediate refresh helper
+  const refreshNow = useCallback(() => { loadData(); }, [loadData]);
 
   const callAdmin = async (action: string, extra: Record<string, any> = {}) => {
     setBusy(true);
@@ -159,6 +168,8 @@ export default function FightPredictionAdmin() {
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
+      // Force immediate data refresh after every admin action
+      setTimeout(refreshNow, 300);
       return data;
     } finally {
       setBusy(false);
@@ -173,6 +184,7 @@ export default function FightPredictionAdmin() {
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
+      setTimeout(refreshNow, 300);
       return data;
     } finally {
       setBusy(false);
