@@ -15,6 +15,9 @@ import AIWinShareCard from "@/components/AIWinShareCard";
 import ProactiveGameTip from "@/components/ProactiveGameTip";
 import ChessOnboardingOverlay from "@/components/ChessOnboardingOverlay";
 import { useActiveAIGame } from "@/hooks/useActiveAIGame";
+import { useCinematicMode } from "@/hooks/useCinematicMode";
+import { buildCinematicEvent } from "@/lib/buildCinematicEvent";
+import CinematicChessOverlay from "@/components/CinematicChessOverlay";
 
 // Helper to convert UCI move (e.g., "e2e4") to from/to squares
 const parseUCIMove = (uciMove: string): { from: Square; to: Square; promotion?: string } | null => {
@@ -106,6 +109,7 @@ const ChessAI = () => {
   const [lastMove, setLastMove] = useState<{ from: Square; to: Square } | null>(null);
   const [boardImage, setBoardImage] = useState<string | null>(null);
   const boardContainerRef = useRef<HTMLDivElement>(null);
+  const cinematic = useCinematicMode();
   
   // Session continuity
   const { clearActiveGame } = useActiveAIGame(gameOver);
@@ -299,6 +303,13 @@ const ChessAI = () => {
       if (wasCapture && currentAnimationsEnabled && capturedPieceType && attackerPieceType) {
         triggerAnimation(attackerPieceType, capturedPieceType, targetSquare);
       }
+
+      // Fire cinematic overlay for AI move
+      if (attackingPiece) {
+        cinematic.fire(
+          buildCinematicEvent(parsed.from, parsed.to, attackingPiece.type, attackingPiece.color, wasCapture, move.san, currentGame)
+        );
+      }
       
       setGame(new Chess(currentGame.fen()));
       setMoveHistory(currentGame.history());
@@ -324,7 +335,7 @@ const ChessAI = () => {
         setGameStatus(t('gameAI.yourTurn'));
       }
     }
-  }, [checkGameOver, triggerAnimation, play, getRandomMove, t]);
+  }, [checkGameOver, triggerAnimation, play, getRandomMove, t, cinematic]);
 
   const handleMove = useCallback((from: Square, to: Square): boolean => {
     if (gameOver || isThinking) return false;
@@ -361,6 +372,13 @@ const ChessAI = () => {
         triggerAnimation(attackingPiece.type, targetPiece.type, to);
       }
 
+      // Fire cinematic overlay for player move
+      if (attackingPiece) {
+        cinematic.fire(
+          buildCinematicEvent(from, to, attackingPiece.type, attackingPiece.color, !!targetPiece, move.san, gameCopy)
+        );
+      }
+
       setGame(new Chess(gameCopy.fen()));
       setMoveHistory(gameCopy.history());
       setLastMove({ from, to });
@@ -373,7 +391,7 @@ const ChessAI = () => {
     } catch {
       return false;
     }
-  }, [game, gameOver, isThinking, checkGameOver, makeAIMove, animationsEnabled, triggerAnimation, play]);
+  }, [game, gameOver, isThinking, checkGameOver, makeAIMove, animationsEnabled, triggerAnimation, play, cinematic]);
 
   const restartGame = useCallback(() => {
     setGame(new Chess());
@@ -506,7 +524,7 @@ const ChessAI = () => {
                 
                 {/* Gold frame */}
                 <div ref={boardContainerRef} className="relative p-1 rounded-xl bg-gradient-to-br from-primary/40 via-primary/20 to-primary/40 shadow-[0_0_40px_-10px_hsl(45_93%_54%_/_0.4)]">
-                  <div className="bg-gradient-to-b from-midnight-light via-background to-midnight-light rounded-lg overflow-hidden p-4">
+                  <div className="relative bg-gradient-to-b from-midnight-light via-background to-midnight-light rounded-lg overflow-hidden p-4">
                     <ChessBoardPremium
                       game={game}
                       onMove={handleMove}
@@ -517,16 +535,52 @@ const ChessAI = () => {
                       lastMove={lastMove || undefined}
                       isCheckmate={game.isCheckmate()}
                     />
+                    {/* Cinematic Chess Overlay */}
+                    {cinematic.activeEvent && (
+                      <CinematicChessOverlay
+                        event={cinematic.activeEvent}
+                        duration={cinematic.duration}
+                        boardFlipped={false}
+                        tier={cinematic.tier}
+                      />
+                    )}
                   </div>
                 </div>
               </div>
 
-              {/* Animation Toggle - below board */}
-              <div className="flex justify-center">
+              {/* Animation Toggle + Cinematic Toggle */}
+              <div className="flex justify-center items-center gap-6">
                 <AnimationToggle 
                   enabled={animationsEnabled} 
                   onToggle={() => setAnimationsEnabled(prev => !prev)} 
                 />
+                <button
+                  onClick={cinematic.toggle}
+                  className="flex items-center gap-2 group"
+                >
+                  <span className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
+                    {cinematic.enabled ? "3D Cinematic" : "2D Mode"}
+                  </span>
+                  <div 
+                    className={`relative w-14 h-7 rounded-full transition-all duration-300 ${
+                      cinematic.enabled 
+                        ? "bg-gradient-to-r from-primary/80 to-primary shadow-[0_0_12px_-2px_hsl(45_93%_54%_/_0.6)]" 
+                        : "bg-muted/30 border border-muted-foreground/20"
+                    }`}
+                  >
+                    <div 
+                      className={`absolute top-0.5 w-6 h-6 rounded-full transition-all duration-300 flex items-center justify-center ${
+                        cinematic.enabled 
+                          ? "left-[calc(100%-26px)] bg-gradient-to-br from-primary to-primary/80 shadow-[0_0_8px_hsl(45_93%_54%_/_0.5)]" 
+                          : "left-0.5 bg-muted-foreground/30"
+                      }`}
+                    >
+                      <span className="text-[9px] font-bold">
+                        {cinematic.enabled ? "3D" : "2D"}
+                      </span>
+                    </div>
+                  </div>
+                </button>
               </div>
 
               {/* Premium Status Bar with Egyptian iconography */}
