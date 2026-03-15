@@ -106,7 +106,10 @@ Deno.serve(async (req) => {
     );
 
     const body = await req.json();
-    const { wallet, leagues, dry_run, provider } = body;
+    const { wallet, leagues, dry_run, provider, single_source_event_id } = body;
+
+    // If importing a single event, force non-dry-run
+    const effectiveDryRun = single_source_event_id ? false : !!dry_run;
 
     // ── Admin verification ──
     if (!wallet) return json({ error: "Missing wallet" }, 400);
