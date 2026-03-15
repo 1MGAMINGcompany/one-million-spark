@@ -130,6 +130,8 @@ Deno.serve(async (req) => {
       return json({ error: "Automation is disabled by admin kill switch" }, 403);
     }
 
+    const now = new Date();
+
     const results = {
       providers_used: [] as string[],
       providers_skipped: [] as { provider: string; reason: string }[],
@@ -137,6 +139,7 @@ Deno.serve(async (req) => {
       events_new: 0,
       events_updated: 0,
       events_skipped_dupe: 0,
+      events_filtered_past: 0,
       fights_found: 0,
       fights_created: 0,
       fights_endpoint_available: false,
