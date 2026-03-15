@@ -12,6 +12,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { supabase } from '@/integrations/supabase/client';
 import { RecoverableRoomsSection } from '@/components/RecoverableRoomsSection';
 import ReferralSection from '@/components/ReferralSection';
+import { CHESS_SKINS } from '@/lib/chessSkins';
 
 interface PlayerProfileData {
   wallet: string;
