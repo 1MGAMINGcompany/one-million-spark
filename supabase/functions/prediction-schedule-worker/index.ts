@@ -11,12 +11,17 @@ const corsHeaders = {
  * Cron-triggered: locks approved events at scheduled_lock_at,
  * marks them live at scheduled_live_at.
  * 
+ * Sport-specific behavior:
+ * - MMA: lock at event start time (scheduled_lock_at = event_date)
+ * - Soccer: lock 5 minutes before kickoff (set during ingest)
+ * 
  * Safety:
  * - Respects global automation_enabled kill switch
  * - Respects per-event automation_paused flag
  * - Only touches approved events
  * - Never changes wallet logic
  * - Logs every action to automation_logs
+ * - Idempotent: won't re-lock already locked fights
  */
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -44,16 +49,17 @@ Deno.serve(async (req) => {
     const results: { action: string; event_id: string; ok: boolean; error?: string }[] = [];
 
     // ── Phase 1: Lock events at scheduled_lock_at ──
+    // This handles both MMA (lock at event time) and Soccer (lock 5min before kickoff)
     const { data: lockable } = await supabase
       .from("prediction_events")
-      .select("id, event_name, scheduled_lock_at")
+      .select("id, event_name, scheduled_lock_at, source_provider")
       .eq("status", "approved")
       .eq("automation_paused", false)
       .not("scheduled_lock_at", "is", null)
       .lte("scheduled_lock_at", now);
 
     for (const evt of lockable ?? []) {
-      // Lock all open fights under this event
+      // Only lock fights that are still open (idempotent)
       const { data: fights, error: fErr } = await supabase
         .from("prediction_fights")
         .update({ status: "locked" })
@@ -68,29 +74,31 @@ Deno.serve(async (req) => {
 
       const lockedCount = fights?.length ?? 0;
 
-      // Log
-      await supabase.from("automation_logs").insert({
-        action: "schedule_lock",
-        event_id: evt.id,
-        source: "prediction-schedule-worker",
-        details: { locked_fights: lockedCount, event_name: evt.event_name },
-      });
+      // Only log if we actually locked something
+      if (lockedCount > 0) {
+        await supabase.from("automation_logs").insert({
+          action: "schedule_lock",
+          event_id: evt.id,
+          source: "prediction-schedule-worker",
+          details: { locked_fights: lockedCount, event_name: evt.event_name, provider: evt.source_provider },
+        });
+        console.log(`[schedule-worker] Locked ${lockedCount} fights for event ${evt.id} (${evt.source_provider})`);
+      }
 
       results.push({ action: "lock_fights", event_id: evt.id, ok: true });
-      console.log(`[schedule-worker] Locked ${lockedCount} fights for event ${evt.id}`);
     }
 
     // ── Phase 2: Mark events live at scheduled_live_at ──
     const { data: liveable } = await supabase
       .from("prediction_events")
-      .select("id, event_name, scheduled_live_at")
+      .select("id, event_name, scheduled_live_at, source_provider")
       .eq("status", "approved")
       .eq("automation_paused", false)
       .not("scheduled_live_at", "is", null)
       .lte("scheduled_live_at", now);
 
     for (const evt of liveable ?? []) {
-      // Mark all locked fights under this event as live
+      // Only mark locked fights as live (idempotent)
       const { data: fights, error: fErr } = await supabase
         .from("prediction_fights")
         .update({ status: "live" })
@@ -105,23 +113,55 @@ Deno.serve(async (req) => {
 
       const liveCount = fights?.length ?? 0;
 
-      // Log
-      await supabase.from("automation_logs").insert({
-        action: "schedule_live",
-        event_id: evt.id,
-        source: "prediction-schedule-worker",
-        details: { live_fights: liveCount, event_name: evt.event_name },
-      });
+      if (liveCount > 0) {
+        await supabase.from("automation_logs").insert({
+          action: "schedule_live",
+          event_id: evt.id,
+          source: "prediction-schedule-worker",
+          details: { live_fights: liveCount, event_name: evt.event_name, provider: evt.source_provider },
+        });
+        console.log(`[schedule-worker] Marked ${liveCount} fights live for event ${evt.id} (${evt.source_provider})`);
+      }
 
       results.push({ action: "mark_live", event_id: evt.id, ok: true });
-      console.log(`[schedule-worker] Marked ${liveCount} fights live for event ${evt.id}`);
+    }
+
+    // ── Phase 3: Auto-lock events without scheduled_lock_at but with event_date passed ──
+    // Fallback for events where admin approved but didn't set explicit lock time
+    const { data: pastEvents } = await supabase
+      .from("prediction_events")
+      .select("id, event_name, event_date, source_provider")
+      .eq("status", "approved")
+      .eq("automation_paused", false)
+      .is("scheduled_lock_at", null)
+      .not("event_date", "is", null)
+      .lte("event_date", now);
+
+    for (const evt of pastEvents ?? []) {
+      const { data: fights } = await supabase
+        .from("prediction_fights")
+        .update({ status: "locked" })
+        .eq("event_id", evt.id)
+        .eq("status", "open")
+        .select("id");
+
+      const lockedCount = fights?.length ?? 0;
+      if (lockedCount > 0) {
+        await supabase.from("automation_logs").insert({
+          action: "schedule_lock_fallback",
+          event_id: evt.id,
+          source: "prediction-schedule-worker",
+          details: { locked_fights: lockedCount, event_name: evt.event_name, reason: "event_date_passed" },
+        });
+        results.push({ action: "lock_fallback", event_id: evt.id, ok: true });
+      }
     }
 
     return json({
       processed: results.length,
       results,
     });
-  } catch (err) {
+  } catch (err: any) {
     console.error("[schedule-worker] Error:", err);
     return new Response(JSON.stringify({ error: err.message }), {
       status: 500,
