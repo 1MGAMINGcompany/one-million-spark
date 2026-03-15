@@ -140,13 +140,15 @@ export default function FightPredictionAdmin() {
   }, [address]);
 
   const [entryCounts, setEntryCounts] = useState<Record<string, number>>({});
+  const [botConfirmData, setBotConfirmData] = useState<Record<string, { confidence: number; provider: string; confirmed_at: string; claims_open_at: string }>>({});
 
   const loadData = useCallback(async () => {
-    const [eventsRes, fightsRes, entriesRes, settingsRes] = await Promise.all([
+    const [eventsRes, fightsRes, entriesRes, settingsRes, logsRes] = await Promise.all([
       supabase.from("prediction_events").select("*").order("created_at", { ascending: false }),
       supabase.from("prediction_fights").select("*").order("created_at", { ascending: false }),
       supabase.from("prediction_entries").select("fight_id"),
       supabase.functions.invoke("prediction-admin", { body: { action: "getSettings", wallet: address } }),
+      supabase.from("automation_logs").select("fight_id, confidence, details, created_at").eq("action", "bot_auto_confirm").order("created_at", { ascending: false }),
     ]);
     if (eventsRes.data) setEvents(eventsRes.data as any);
     if (fightsRes.data) setFights(fightsRes.data as any);
@@ -155,6 +157,21 @@ export default function FightPredictionAdmin() {
       const counts: Record<string, number> = {};
       entriesRes.data.forEach((e: any) => { counts[e.fight_id] = (counts[e.fight_id] || 0) + 1; });
       setEntryCounts(counts);
+    }
+    if (logsRes.data) {
+      const bcd: Record<string, any> = {};
+      for (const log of logsRes.data as any[]) {
+        if (log.fight_id && !bcd[log.fight_id]) {
+          const d = log.details || {};
+          bcd[log.fight_id] = {
+            confidence: log.confidence ?? 0,
+            provider: d.provider || "unknown",
+            confirmed_at: d.claims_open_at ? new Date(new Date(d.claims_open_at).getTime() - 3 * 60 * 1000).toISOString() : log.created_at,
+            claims_open_at: d.claims_open_at || null,
+          };
+        }
+      }
+      setBotConfirmData(bcd);
     }
   }, []);
 
