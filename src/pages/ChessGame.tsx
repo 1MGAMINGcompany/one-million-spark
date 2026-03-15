@@ -1474,6 +1474,11 @@ const ChessGame = () => {
                   </button>
                 )}
               </div>
+
+              {/* Status Bar */}
+              <div 
+                className={`relative overflow-hidden rounded-lg border transition-colors duration-300 ${
+                  gameOver 
                     ? gameStatus.includes("win") 
                       ? "bg-green-500/10 border-green-500/30" 
                       : gameStatus.includes("lose")
