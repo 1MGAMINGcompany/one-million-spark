@@ -525,16 +525,18 @@ const ChessAI = () => {
                 {/* Gold frame */}
                 <div ref={boardContainerRef} className="relative p-1 rounded-xl bg-gradient-to-br from-primary/40 via-primary/20 to-primary/40 shadow-[0_0_40px_-10px_hsl(45_93%_54%_/_0.4)]">
                   <div className="relative bg-gradient-to-b from-midnight-light via-background to-midnight-light rounded-lg overflow-hidden p-4">
-                    <ChessBoardPremium
-                      game={game}
-                      onMove={handleMove}
-                      disabled={gameOver || isThinking}
-                      captureAnimations={animations}
-                      onAnimationComplete={handleAnimationComplete}
-                      animationsEnabled={animationsEnabled}
-                      lastMove={lastMove || undefined}
-                      isCheckmate={game.isCheckmate()}
-                    />
+                    <div className={`transition-[opacity,filter] duration-200 ${cinematic.activeEvent ? 'opacity-0 blur-sm' : 'opacity-100'}`}>
+                      <ChessBoardPremium
+                        game={game}
+                        onMove={handleMove}
+                        disabled={gameOver || isThinking}
+                        captureAnimations={animations}
+                        onAnimationComplete={handleAnimationComplete}
+                        animationsEnabled={animationsEnabled}
+                        lastMove={lastMove || undefined}
+                        isCheckmate={game.isCheckmate()}
+                      />
+                    </div>
                     {/* Cinematic Chess Overlay */}
                     {cinematic.activeEvent && (
                       <CinematicChessOverlay

@@ -205,9 +205,9 @@ export default function CinematicChess3DScene({ event, duration, boardFlipped, o
   return (
     <div className="absolute inset-0 pointer-events-none z-40 rounded-lg overflow-hidden">
       <Canvas
-        gl={{ antialias: !lite, alpha: true, powerPreference: lite ? "low-power" : "default" }}
+        gl={{ antialias: !lite, alpha: false, powerPreference: lite ? "low-power" : "default" }}
         dpr={lite ? [1, 1] : [1, 1.5]}
-        style={{ background: "transparent" }}
+        style={{ background: "hsl(220, 15%, 8%)" }}
         onCreated={({ gl }) => { if (!gl.getContext()) onError(); }}
         fallback={null}
       >
