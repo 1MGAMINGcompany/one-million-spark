@@ -62,56 +62,7 @@ interface PersistedChessState {
   winnerSeat?: number;
 }
 
-// Animation Toggle Component
-const AnimationToggle = ({ 
-  enabled, 
-  onToggle 
-}: { 
-  enabled: boolean; 
-  onToggle: () => void;
-}) => {
-  const { t } = useTranslation();
-  return (
-    <button
-      onClick={onToggle}
-      className="flex items-center gap-3 group"
-    >
-      <span className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
-        {t('gameAI.boardAnimations')}
-      </span>
-      <div 
-        className={`relative w-14 h-7 rounded-full transition-all duration-300 ${
-          enabled 
-            ? "bg-gradient-to-r from-primary/80 to-primary shadow-[0_0_12px_-2px_hsl(45_93%_54%_/_0.6)]" 
-            : "bg-muted/30 border border-muted-foreground/20"
-        }`}
-      >
-        <span className={`absolute left-1.5 top-1/2 -translate-y-1/2 text-[9px] font-bold transition-opacity ${
-          enabled ? "opacity-0" : "opacity-50"
-        }`}>
-          OFF
-        </span>
-        <div 
-          className={`absolute top-0.5 w-6 h-6 rounded-full transition-all duration-300 flex items-center justify-center ${
-            enabled 
-              ? "left-[calc(100%-26px)] bg-gradient-to-br from-gold-light to-primary shadow-[0_0_8px_hsl(45_93%_54%_/_0.5)]" 
-              : "left-0.5 bg-muted-foreground/30"
-          }`}
-        >
-          <div 
-            className={`w-3 h-3 transition-opacity ${enabled ? "opacity-100" : "opacity-30"}`}
-            style={{
-              background: enabled 
-                ? "linear-gradient(to top, hsl(35 80% 30%) 0%, hsl(45 93% 70%) 100%)" 
-                : "linear-gradient(to top, hsl(0 0% 30%) 0%, hsl(0 0% 50%) 100%)",
-              clipPath: "polygon(50% 0%, 0% 100%, 100% 100%)"
-            }}
-          />
-        </div>
-      </div>
-    </button>
-  );
-};
+// Animation Toggle removed — cinematic 3D toggle replaces it
 
 interface ChessMove {
   from: Square;
