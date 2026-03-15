@@ -4,6 +4,11 @@
  * Camera starts top-down (matching 2D board), swoops to dramatic angle,
  * piece moves, camera returns to top-down. All pieces rendered.
  *
+ * Supports persistent mode: stays in 3D across multiple moves.
+ * When a new event arrives while already in 3D, the piece move plays
+ * without swoop-in (camera stays dramatic). Swoop-out only plays
+ * on dismiss.
+ *
  * CRITICAL: No React state updates during animation — all animation
  * is driven by refs and imperative Three.js mutations to avoid
  * re-renders and material flashing.
@@ -41,14 +46,22 @@ function easeInOutCubic(t: number): number {
 }
 
 // ─── Animation Phase Helper ───────────────────────────────────────────────────
-// 0.00–0.20: Camera swoops from top-down to dramatic
-// 0.20–0.75: Piece moves
-// 0.75–1.00: Camera returns to top-down
+// When NOT persistent (first entry): 0.00–0.15 swoop-in, 0.15–0.60 move, 0.60–1.00 swoop-out
+// When persistent (already in 3D):   0.00–0.70 move, 0.70–1.00 hold (no swoop)
+// Dismiss: separate swoop-out animation
 
-function getPhase(progress: number) {
-  if (progress < 0.20) return { phase: "swoop-in" as const, t: progress / 0.20 };
-  if (progress < 0.75) return { phase: "move" as const, t: (progress - 0.20) / 0.55 };
-  return { phase: "swoop-out" as const, t: (progress - 0.75) / 0.25 };
+type AnimPhase = "swoop-in" | "move" | "hold" | "swoop-out";
+
+function getPhase(progress: number, isFirstEntry: boolean): { phase: AnimPhase; t: number } {
+  if (isFirstEntry) {
+    // First entry: swoop in → move → hold at dramatic angle
+    if (progress < 0.15) return { phase: "swoop-in", t: progress / 0.15 };
+    if (progress < 0.75) return { phase: "move", t: (progress - 0.15) / 0.60 };
+    return { phase: "hold", t: 1 };
+  }
+  // Subsequent moves (already in 3D): just move the piece
+  if (progress < 0.80) return { phase: "move", t: progress / 0.80 };
+  return { phase: "hold", t: 1 };
 }
 
 // ─── Lathe Profiles ───────────────────────────────────────────────────────────
@@ -159,13 +172,11 @@ function BoardPlane({ lite }: { lite: boolean }) {
 
   return (
     <group>
-      {/* Board squares raised slightly above pedestal */}
       <group rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.002, 0]}>
         {squares.map((s, i) => (
           <mesh key={i} geometry={geo} position={[s.x, s.z, 0]} receiveShadow material={s.dark ? darkMat : lightMat} />
         ))}
       </group>
-      {/* Pedestal — top face at y = -0.01 (well below squares at y=0.002) */}
       <mesh position={[0, -0.05, 0]}>
         <boxGeometry args={[BOARD_SIZE + 0.1, 0.08, BOARD_SIZE + 0.1]} />
         <meshStandardMaterial color="#191920" roughness={0.8} />
@@ -213,11 +224,12 @@ function StaticPiece({ piece, color, x, z, lite }: {
 
 // ─── Moving Piece (imperative position via useFrame) ──────────────────────────
 
-function MovingPiece({ piece, color, fromPos, toPos, isCapture, lite, progressRef }: {
+function MovingPiece({ piece, color, fromPos, toPos, isCapture, lite, progressRef, isFirstEntryRef }: {
   piece: string; color: "white" | "black";
   fromPos: [number, number]; toPos: [number, number];
   isCapture: boolean; lite: boolean;
   progressRef: React.MutableRefObject<number>;
+  isFirstEntryRef: React.MutableRefObject<boolean>;
 }) {
   const groupRef = useRef<THREE.Group>(null);
   const srcHighlightRef = useRef<THREE.Mesh>(null);
@@ -227,7 +239,7 @@ function MovingPiece({ piece, color, fromPos, toPos, isCapture, lite, progressRe
 
   useFrame(() => {
     const progress = progressRef.current;
-    const { phase, t } = getPhase(progress);
+    const { phase, t } = getPhase(progress, isFirstEntryRef.current);
     const moveT = phase === "swoop-in" ? 0 : phase === "move" ? easeInOutCubic(t) : 1;
 
     const x = fromPos[0] + (toPos[0] - fromPos[0]) * moveT;
@@ -261,13 +273,11 @@ function MovingPiece({ piece, color, fromPos, toPos, isCapture, lite, progressRe
         )}
       </group>
 
-      {/* Source highlight */}
       <mesh ref={srcHighlightRef} position={[fromPos[0], 0.005, fromPos[1]]} rotation={[-Math.PI / 2, 0, 0]}>
         <planeGeometry args={[SQ * 0.95, SQ * 0.95]} />
         <meshBasicMaterial color="#ffd700" transparent opacity={0.35} />
       </mesh>
 
-      {/* Destination highlight */}
       <mesh ref={dstHighlightRef} position={[toPos[0], 0.005, toPos[1]]} rotation={[-Math.PI / 2, 0, 0]}>
         <planeGeometry args={[SQ * 0.95, SQ * 0.95]} />
         <meshBasicMaterial color={isCapture ? "#ff3333" : "#ffd700"} transparent opacity={0} />
@@ -276,9 +286,13 @@ function MovingPiece({ piece, color, fromPos, toPos, isCapture, lite, progressRe
   );
 }
 
-// ─── Lighting (imperative intensity updates — no conditional mount/unmount) ───
+// ─── Lighting ─────────────────────────────────────────────────────────────────
 
-function SceneLighting({ lite, progressRef }: { lite: boolean; progressRef: React.MutableRefObject<number> }) {
+function SceneLighting({ lite, progressRef, isFirstEntryRef }: {
+  lite: boolean;
+  progressRef: React.MutableRefObject<number>;
+  isFirstEntryRef: React.MutableRefObject<boolean>;
+}) {
   const ambientRef = useRef<THREE.AmbientLight>(null);
   const keyRef = useRef<THREE.DirectionalLight>(null);
   const fillRef = useRef<THREE.DirectionalLight>(null);
@@ -286,10 +300,10 @@ function SceneLighting({ lite, progressRef }: { lite: boolean; progressRef: Reac
 
   useFrame(() => {
     const progress = progressRef.current;
-    const { phase, t } = getPhase(progress);
+    const { phase, t } = getPhase(progress, isFirstEntryRef.current);
     const swoopFactor = phase === "swoop-in"
       ? easeInOutCubic(t)
-      : phase === "move" ? 1
+      : (phase === "move" || phase === "hold") ? 1
       : 1 - easeInOutCubic(t);
 
     if (ambientRef.current) ambientRef.current.intensity = 0.6 - swoopFactor * 0.2;
@@ -323,14 +337,17 @@ function SceneLighting({ lite, progressRef }: { lite: boolean; progressRef: Reac
   );
 }
 
-// ─── Camera Rig (imperative — reads progressRef) ──────────────────────────────
+// ─── Camera Rig ───────────────────────────────────────────────────────────────
 
 const TOP_DOWN_POS = new THREE.Vector3(0, 6.5, 0.01);
 const TOP_DOWN_LOOK = new THREE.Vector3(0, 0, 0);
 
-function CameraRig({ fromPos, toPos, progressRef }: {
+function CameraRig({ fromPos, toPos, progressRef, isFirstEntryRef, isDismissingRef, dismissProgressRef }: {
   fromPos: [number, number]; toPos: [number, number];
   progressRef: React.MutableRefObject<number>;
+  isFirstEntryRef: React.MutableRefObject<boolean>;
+  isDismissingRef: React.MutableRefObject<boolean>;
+  dismissProgressRef: React.MutableRefObject<number>;
 }) {
   const { camera } = useThree();
   const tmpPos = useRef(new THREE.Vector3());
@@ -344,8 +361,11 @@ function CameraRig({ fromPos, toPos, progressRef }: {
     dramaticPos.current.set(midX * 0.3, 1.6, 3.2);
     dramaticLook.current.set(midX * 0.3, 0.1, midZ * 0.4);
 
-    camera.position.copy(TOP_DOWN_POS);
-    camera.lookAt(TOP_DOWN_LOOK);
+    // Only set camera to top-down on first entry
+    if (isFirstEntryRef.current) {
+      camera.position.copy(TOP_DOWN_POS);
+      camera.lookAt(TOP_DOWN_LOOK);
+    }
     if (camera instanceof THREE.PerspectiveCamera) {
       camera.fov = 45;
       camera.updateProjectionMatrix();
@@ -353,8 +373,19 @@ function CameraRig({ fromPos, toPos, progressRef }: {
   }, [camera, fromPos, toPos]);
 
   useFrame(() => {
+    // Handle dismiss swoop-out
+    if (isDismissingRef.current) {
+      const dt = dismissProgressRef.current;
+      const et = easeInOutCubic(dt);
+      tmpPos.current.lerpVectors(dramaticPos.current, TOP_DOWN_POS, et);
+      tmpLook.current.lerpVectors(dramaticLook.current, TOP_DOWN_LOOK, et);
+      camera.position.copy(tmpPos.current);
+      camera.lookAt(tmpLook.current);
+      return;
+    }
+
     const progress = progressRef.current;
-    const { phase, t } = getPhase(progress);
+    const { phase, t } = getPhase(progress, isFirstEntryRef.current);
     const et = easeInOutCubic(t);
     const midX = (fromPos[0] + toPos[0]) / 2;
     const midZ = (fromPos[1] + toPos[1]) / 2;
@@ -370,8 +401,9 @@ function CameraRig({ fromPos, toPos, progressRef }: {
       tmpLook.current.x += (toPos[0] - midX) * followT * 0.3;
       tmpLook.current.z += (toPos[1] - midZ) * followT * 0.2;
     } else {
-      tmpPos.current.lerpVectors(dramaticPos.current, TOP_DOWN_POS, et);
-      tmpLook.current.lerpVectors(dramaticLook.current, TOP_DOWN_LOOK, et);
+      // "hold" — stay at dramatic position
+      tmpPos.current.copy(dramaticPos.current);
+      tmpLook.current.copy(dramaticLook.current);
     }
 
     camera.position.copy(tmpPos.current);
@@ -381,18 +413,46 @@ function CameraRig({ fromPos, toPos, progressRef }: {
   return null;
 }
 
-// ─── Animation Driver (single useFrame, no setState) ──────────────────────────
+// ─── Animation Driver ─────────────────────────────────────────────────────────
 
-function AnimationDriver({ duration, onComplete, progressRef }: {
-  duration: number; onComplete: () => void;
+function AnimationDriver({ duration, onMoveComplete, progressRef }: {
+  duration: number; onMoveComplete: () => void;
   progressRef: React.MutableRefObject<number>;
+}) {
+  const startTime = useRef(Date.now());
+  const completed = useRef(false);
+
+  // Reset on new event
+  useEffect(() => {
+    startTime.current = Date.now();
+    completed.current = false;
+    progressRef.current = 0;
+  }, [duration]);
+
+  useFrame(() => {
+    const p = Math.min((Date.now() - startTime.current) / duration, 1);
+    progressRef.current = p;
+    if (p >= 1 && !completed.current) {
+      completed.current = true;
+      onMoveComplete();
+    }
+  });
+
+  return null;
+}
+
+// ─── Dismiss Driver (swoop-out) ───────────────────────────────────────────────
+
+function DismissDriver({ duration, onComplete, dismissProgressRef }: {
+  duration: number; onComplete: () => void;
+  dismissProgressRef: React.MutableRefObject<number>;
 }) {
   const startTime = useRef(Date.now());
   const completed = useRef(false);
 
   useFrame(() => {
     const p = Math.min((Date.now() - startTime.current) / duration, 1);
-    progressRef.current = p;
+    dismissProgressRef.current = p;
     if (p >= 1 && !completed.current) {
       completed.current = true;
       setTimeout(onComplete, 50);
@@ -405,16 +465,32 @@ function AnimationDriver({ duration, onComplete, progressRef }: {
 // ─── Scene Content ────────────────────────────────────────────────────────────
 
 interface SceneProps {
-  event: CinematicEvent; duration: number; boardFlipped: boolean;
-  onComplete: () => void; lite: boolean;
+  event: CinematicEvent;
+  duration: number;
+  boardFlipped: boolean;
+  onComplete: () => void;
+  onMoveComplete: () => void;
+  lite: boolean;
+  isFirstEntry: boolean;
+  isDismissing: boolean;
 }
 
-function SceneContent({ event, duration, boardFlipped, onComplete, lite }: SceneProps) {
+function SceneContent({ event, duration, boardFlipped, onComplete, onMoveComplete, lite, isFirstEntry, isDismissing }: SceneProps) {
   const progressRef = useRef(0);
+  const isFirstEntryRef = useRef(isFirstEntry);
+  const isDismissingRef = useRef(isDismissing);
+  const dismissProgressRef = useRef(0);
+
+  // Keep refs in sync without re-renders
+  useEffect(() => { isFirstEntryRef.current = isFirstEntry; }, [isFirstEntry]);
+  useEffect(() => {
+    isDismissingRef.current = isDismissing;
+    if (isDismissing) dismissProgressRef.current = 0;
+  }, [isDismissing]);
+
   const fromPos = useMemo(() => squareToWorld(event.from, boardFlipped), [event.from, boardFlipped]);
   const toPos = useMemo(() => squareToWorld(event.to, boardFlipped), [event.to, boardFlipped]);
 
-  // Pre-compute static pieces once (exclude piece at destination — that's the moving piece)
   const staticPieces = useMemo(() => {
     const pieces = event.boardPieces ?? [];
     return pieces
@@ -427,11 +503,13 @@ function SceneContent({ event, duration, boardFlipped, onComplete, lite }: Scene
 
   return (
     <>
-      <AnimationDriver duration={duration} onComplete={onComplete} progressRef={progressRef} />
-      <SceneLighting lite={lite} progressRef={progressRef} />
+      <AnimationDriver duration={duration} onMoveComplete={onMoveComplete} progressRef={progressRef} />
+      {isDismissing && (
+        <DismissDriver duration={800} onComplete={onComplete} dismissProgressRef={dismissProgressRef} />
+      )}
+      <SceneLighting lite={lite} progressRef={progressRef} isFirstEntryRef={isFirstEntryRef} />
       <BoardPlane lite={lite} />
 
-      {/* Static pieces — rendered once, never update */}
       {staticPieces.map(p => (
         <StaticPiece
           key={p.square}
@@ -443,7 +521,6 @@ function SceneContent({ event, duration, boardFlipped, onComplete, lite }: Scene
         />
       ))}
 
-      {/* Moving piece — updates position imperatively via progressRef */}
       <MovingPiece
         piece={event.piece}
         color={event.color}
@@ -452,9 +529,17 @@ function SceneContent({ event, duration, boardFlipped, onComplete, lite }: Scene
         isCapture={event.isCapture}
         lite={lite}
         progressRef={progressRef}
+        isFirstEntryRef={isFirstEntryRef}
       />
 
-      <CameraRig fromPos={fromPos} toPos={toPos} progressRef={progressRef} />
+      <CameraRig
+        fromPos={fromPos}
+        toPos={toPos}
+        progressRef={progressRef}
+        isFirstEntryRef={isFirstEntryRef}
+        isDismissingRef={isDismissingRef}
+        dismissProgressRef={dismissProgressRef}
+      />
     </>
   );
 }
@@ -462,34 +547,42 @@ function SceneContent({ event, duration, boardFlipped, onComplete, lite }: Scene
 // ─── Export ───────────────────────────────────────────────────────────────────
 
 interface CinematicChess3DSceneProps {
-  event: CinematicEvent; duration: number; boardFlipped: boolean;
-  onComplete: () => void; onError: () => void; tier: CinematicTier;
+  event: CinematicEvent;
+  duration: number;
+  boardFlipped: boolean;
+  onComplete: () => void;
+  onMoveComplete: () => void;
+  onError: () => void;
+  tier: CinematicTier;
+  isFirstEntry: boolean;
+  isDismissing: boolean;
 }
 
-export default function CinematicChess3DScene({ event, duration, boardFlipped, onComplete, onError, tier }: CinematicChess3DSceneProps) {
+export default function CinematicChess3DScene({
+  event, duration, boardFlipped, onComplete, onMoveComplete, onError, tier,
+  isFirstEntry, isDismissing,
+}: CinematicChess3DSceneProps) {
   const lite = tier === "3d-lite";
   const containerRef = useRef<HTMLDivElement>(null);
-  const fadeIn = useRef(false);
 
-  // Fade in after canvas is ready (requestAnimationFrame ensures paint)
+  // Fade in after canvas is ready
   useEffect(() => {
     const raf = requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         if (containerRef.current) {
           containerRef.current.style.opacity = "1";
-          fadeIn.current = true;
         }
       });
     });
     return () => cancelAnimationFrame(raf);
   }, []);
 
-  // Fade out before complete — all imperative, no setState
+  // Fade out when dismissing completes
   const handleComplete = useCallback(() => {
     if (containerRef.current) {
       containerRef.current.style.opacity = "0";
     }
-    setTimeout(onComplete, 300);
+    setTimeout(onComplete, 350);
   }, [onComplete]);
 
   return (
@@ -498,7 +591,7 @@ export default function CinematicChess3DScene({ event, duration, boardFlipped, o
       className="absolute inset-0 pointer-events-none z-40 rounded-lg overflow-hidden"
       style={{
         opacity: 0,
-        transition: "opacity 300ms ease-in-out",
+        transition: "opacity 350ms ease-in-out",
         willChange: "opacity",
       }}
     >
@@ -514,7 +607,16 @@ export default function CinematicChess3DScene({ event, duration, boardFlipped, o
         }}
         fallback={null}
       >
-        <SceneContent event={event} duration={duration} boardFlipped={boardFlipped} onComplete={handleComplete} lite={lite} />
+        <SceneContent
+          event={event}
+          duration={duration}
+          boardFlipped={boardFlipped}
+          onComplete={handleComplete}
+          onMoveComplete={onMoveComplete}
+          lite={lite}
+          isFirstEntry={isFirstEntry}
+          isDismissing={isDismissing}
+        />
       </Canvas>
 
       {/* SAN badge */}

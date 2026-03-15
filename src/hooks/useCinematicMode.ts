@@ -4,6 +4,11 @@
  * Capability-based detection replaces hard width gating.
  * Returns a render tier: "3d-full" | "3d-lite" | "2d-fallback"
  *
+ * Persistent 3D: After a move fires, the 3D scene stays mounted until
+ * dismiss() is called (typically when it's the local player's turn).
+ * Additional moves that fire while 3D is active play in-place without
+ * swoop-in/out — only the final dismiss triggers the swoop-out.
+ *
  * Fail-safe: respects reduced-motion, WebGL availability, and device
  * capability. Silently disables on any error. Default OFF.
  */
@@ -17,10 +22,10 @@ const STORAGE_KEY = "chess-cinematic-mode";
 
 export type CinematicTier = "3d-full" | "3d-lite" | "2d-fallback";
 
-/** Duration per tier — 3D needs longer for swoop-in / move / swoop-out phases */
+/** Duration per tier for a single move animation */
 const TIER_DURATION: Record<CinematicTier, number> = {
-  "3d-full": 2800,
-  "3d-lite": 2000,
+  "3d-full": 3200,
+  "3d-lite": 2400,
   "2d-fallback": 1000,
 };
 
@@ -51,44 +56,30 @@ function hasCoarsePointer(): boolean {
   }
 }
 
-/**
- * Simple heuristic to estimate device tier.
- * Uses only safe, synchronous browser signals.
- */
 function detectTier(): CinematicTier {
   try {
-    // Hard blocks → 2D fallback
     if (prefersReducedMotion()) return "2d-fallback";
     if (!isWebGLAvailable()) return "2d-fallback";
 
-    // Gather capability signals
     const cores = (navigator as any).hardwareConcurrency ?? 0;
-    const memoryGB = (navigator as any).deviceMemory ?? 0; // Chrome-only, 0 if unavailable
+    const memoryGB = (navigator as any).deviceMemory ?? 0;
     const isTouchDevice = hasCoarsePointer();
     const screenArea = screen.width * screen.height;
 
-    // Score: higher = more capable
     let score = 0;
-
-    // CPU cores
     if (cores >= 8) score += 3;
     else if (cores >= 4) score += 2;
     else if (cores >= 2) score += 1;
 
-    // Memory (only available in Chromium)
     if (memoryGB >= 8) score += 3;
     else if (memoryGB >= 4) score += 2;
     else if (memoryGB >= 2) score += 1;
-    // memoryGB === 0 means unknown — don't penalize
 
-    // Screen area as a rough proxy for device class
-    if (screenArea >= 2_000_000) score += 2; // large tablet / desktop
-    else if (screenArea >= 500_000) score += 1; // standard phone
+    if (screenArea >= 2_000_000) score += 2;
+    else if (screenArea >= 500_000) score += 1;
 
-    // Touch penalty — mobile GPUs are generally weaker
     if (isTouchDevice) score -= 1;
 
-    // Decision
     if (score >= 5) return "3d-full";
     if (score >= 2) return "3d-lite";
     return "2d-fallback";
@@ -100,28 +91,27 @@ function detectTier(): CinematicTier {
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
 export interface UseCinematicModeReturn {
-  /** Whether cinematic mode is enabled by the user */
   enabled: boolean;
-  /** Toggle cinematic mode on/off */
   toggle: () => void;
   /** Currently playing event (null when idle) */
   activeEvent: CinematicEvent | null;
+  /** Whether 3D scene is persistent (waiting for dismiss) */
+  isPersistent: boolean;
+  /** Whether this is the first event in the current 3D session */
+  isFirstEntry: boolean;
   /** Fire a cinematic animation for a completed move */
   fire: (event: CinematicEvent) => void;
-  /** Detected render tier */
+  /** Dismiss the 3D scene — triggers swoop-out and fade back to 2D */
+  dismiss: () => void;
   tier: CinematicTier;
-  /** Whether cinematic is allowed at all (tier !== "2d-fallback" or still usable) */
   isAllowed: boolean;
-  /** Animation duration for current tier */
   duration: number;
 }
 
 export function useCinematicMode(): UseCinematicModeReturn {
-  // Detect tier once on mount
   const tier = useMemo<CinematicTier>(() => detectTier(), []);
   const duration = TIER_DURATION[tier];
 
-  // Persist user preference
   const [enabled, setEnabled] = useState<boolean>(() => {
     try {
       return localStorage.getItem(STORAGE_KEY) === "1";
@@ -131,9 +121,11 @@ export function useCinematicMode(): UseCinematicModeReturn {
   });
 
   const [activeEvent, setActiveEvent] = useState<CinematicEvent | null>(null);
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [isPersistent, setIsPersistent] = useState(false);
+  const [isFirstEntry, setIsFirstEntry] = useState(true);
+  const dismissTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const isAllowed = tier !== "2d-fallback" || enabled; // 2d-fallback still works, just simpler
+  const isAllowed = tier !== "2d-fallback" || enabled;
 
   const toggle = useCallback(() => {
     setEnabled((prev) => {
@@ -143,23 +135,52 @@ export function useCinematicMode(): UseCinematicModeReturn {
     });
   }, []);
 
+  /**
+   * Fire a cinematic event. The 3D scene will stay mounted (persistent)
+   * until dismiss() is called. If already persistent, a new event
+   * replaces the current one and plays in-place.
+   */
   const fire = useCallback(
     (event: CinematicEvent) => {
       if (!enabled) return;
       try {
-        if (timeoutRef.current) clearTimeout(timeoutRef.current);
+        if (dismissTimeoutRef.current) {
+          clearTimeout(dismissTimeoutRef.current);
+          dismissTimeoutRef.current = null;
+        }
+        // First fire in a session = swoop-in; subsequent fires = no swoop
+        if (!isPersistent) {
+          setIsFirstEntry(true);
+        } else {
+          setIsFirstEntry(false);
+        }
         setActiveEvent(event);
-        timeoutRef.current = setTimeout(() => setActiveEvent(null), duration);
+        setIsPersistent(true);
       } catch {
         setActiveEvent(null);
+        setIsPersistent(false);
       }
     },
-    [enabled, duration],
+    [enabled, isPersistent],
   );
 
+  /**
+   * Dismiss the persistent 3D scene. The 3D scene will play its
+   * swoop-out animation and then unmount.
+   */
+  const dismiss = useCallback(() => {
+    setIsPersistent(false);
+    setIsFirstEntry(true); // Reset for next session
+    dismissTimeoutRef.current = setTimeout(() => {
+      setActiveEvent(null);
+    }, duration + 500);
+  }, [duration]);
+
   useEffect(() => {
-    return () => { if (timeoutRef.current) clearTimeout(timeoutRef.current); };
+    return () => {
+      if (dismissTimeoutRef.current) clearTimeout(dismissTimeoutRef.current);
+    };
   }, []);
 
-  return { enabled, toggle, activeEvent, fire, tier, isAllowed, duration };
+  return { enabled, toggle, activeEvent, isPersistent, isFirstEntry, fire, dismiss, tier, isAllowed, duration };
 }
