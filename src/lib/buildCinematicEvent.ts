@@ -72,6 +72,8 @@ export function buildCinematicEvent(
   wasCapture: boolean,
   san: string,
   gameAfterMove: Chess,
+  capturedPieceType?: PieceSymbol,
+  capturedPieceColor?: Color,
 ): CinematicEvent {
   return {
     from,
@@ -83,6 +85,8 @@ export function buildCinematicEvent(
     isMate: gameAfterMove.isCheckmate(),
     isPromotion: san.includes("="),
     san,
+    capturedPiece: capturedPieceType ? (PIECE_NAMES[capturedPieceType] ?? "pawn") : undefined,
+    capturedColor: capturedPieceColor ? (capturedPieceColor === "w" ? "white" : "black") : undefined,
     boardPieces: extractBoardPieces(gameAfterMove),
   };
 }
