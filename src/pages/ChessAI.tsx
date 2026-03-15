@@ -524,7 +524,7 @@ const ChessAI = () => {
                 
                 {/* Gold frame */}
                 <div ref={boardContainerRef} className="relative p-1 rounded-xl bg-gradient-to-br from-primary/40 via-primary/20 to-primary/40 shadow-[0_0_40px_-10px_hsl(45_93%_54%_/_0.4)]">
-                  <div className="bg-gradient-to-b from-midnight-light via-background to-midnight-light rounded-lg overflow-hidden p-4">
+                  <div className="relative bg-gradient-to-b from-midnight-light via-background to-midnight-light rounded-lg overflow-hidden p-4">
                     <ChessBoardPremium
                       game={game}
                       onMove={handleMove}
@@ -535,16 +535,52 @@ const ChessAI = () => {
                       lastMove={lastMove || undefined}
                       isCheckmate={game.isCheckmate()}
                     />
+                    {/* Cinematic Chess Overlay */}
+                    {cinematic.activeEvent && (
+                      <CinematicChessOverlay
+                        event={cinematic.activeEvent}
+                        duration={cinematic.duration}
+                        boardFlipped={false}
+                        tier={cinematic.tier}
+                      />
+                    )}
                   </div>
                 </div>
               </div>
 
-              {/* Animation Toggle - below board */}
-              <div className="flex justify-center">
+              {/* Animation Toggle + Cinematic Toggle */}
+              <div className="flex justify-center items-center gap-6">
                 <AnimationToggle 
                   enabled={animationsEnabled} 
                   onToggle={() => setAnimationsEnabled(prev => !prev)} 
                 />
+                <button
+                  onClick={cinematic.toggle}
+                  className="flex items-center gap-2 group"
+                >
+                  <span className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
+                    {cinematic.enabled ? "3D Cinematic" : "2D Mode"}
+                  </span>
+                  <div 
+                    className={`relative w-14 h-7 rounded-full transition-all duration-300 ${
+                      cinematic.enabled 
+                        ? "bg-gradient-to-r from-primary/80 to-primary shadow-[0_0_12px_-2px_hsl(45_93%_54%_/_0.6)]" 
+                        : "bg-muted/30 border border-muted-foreground/20"
+                    }`}
+                  >
+                    <div 
+                      className={`absolute top-0.5 w-6 h-6 rounded-full transition-all duration-300 flex items-center justify-center ${
+                        cinematic.enabled 
+                          ? "left-[calc(100%-26px)] bg-gradient-to-br from-primary to-primary/80 shadow-[0_0_8px_hsl(45_93%_54%_/_0.5)]" 
+                          : "left-0.5 bg-muted-foreground/30"
+                      }`}
+                    >
+                      <span className="text-[9px] font-bold">
+                        {cinematic.enabled ? "3D" : "2D"}
+                      </span>
+                    </div>
+                  </div>
+                </button>
               </div>
 
               {/* Premium Status Bar with Egyptian iconography */}
