@@ -637,6 +637,7 @@ export type Database = {
           losses: number
           referral_code: string | null
           referral_created_at: string | null
+          referral_label: string | null
           referred_by_code: string | null
           referred_by_wallet: string | null
           total_sol_won: number
@@ -656,6 +657,7 @@ export type Database = {
           losses?: number
           referral_code?: string | null
           referral_created_at?: string | null
+          referral_label?: string | null
           referred_by_code?: string | null
           referred_by_wallet?: string | null
           total_sol_won?: number
@@ -675,6 +677,7 @@ export type Database = {
           losses?: number
           referral_code?: string | null
           referral_created_at?: string | null
+          referral_label?: string | null
           referred_by_code?: string | null
           referred_by_wallet?: string | null
           total_sol_won?: number

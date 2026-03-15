@@ -72,11 +72,7 @@ Deno.serve(async (req: Request) => {
       return Response.json({ success: false, error: "circular_referral" }, { headers: corsHeaders });
     }
 
-    // 6. Generate referral code for new user if needed
-    const newUserCode = existingProfile?.referral_code ||
-      generateReferralCode(wallet);
-
-    // 7. Upsert the player profile with referral binding
+    // 6. Upsert the player profile with referral binding (no code generation — admin only)
     const { error: upsertErr } = await supabase
       .from("player_profiles")
       .upsert(
@@ -85,7 +81,6 @@ Deno.serve(async (req: Request) => {
           referred_by_code: code,
           referred_by_wallet: referrer.wallet,
           referral_created_at: new Date().toISOString(),
-          referral_code: newUserCode,
         },
         { onConflict: "wallet" }
       );
