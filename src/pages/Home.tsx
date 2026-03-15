@@ -13,7 +13,7 @@ import { AddSolCard } from "@/components/AddSolCard";
 import { WelcomeIntroModal } from "@/components/WelcomeIntroModal";
 import { LiveActivityIndicator } from "@/components/LiveActivityIndicator";
 import { getActiveAIGame, dismissActiveAIGame } from "@/hooks/useActiveAIGame";
-import PredictionHighlights from "@/components/predictions/PredictionHighlights";
+import HomePredictionHighlights from "@/components/predictions/HomePredictionHighlights";
 import type { PredictionEvent } from "@/components/predictions/PredictionHighlights";
 import type { Fight } from "@/components/predictions/FightCard";
 import { supabase } from "@/integrations/supabase/client";
@@ -293,7 +293,7 @@ const Home = () => {
               </h2>
               <div className="h-px flex-1 max-w-24 bg-gradient-to-l from-transparent to-border" />
             </div>
-            <PredictionHighlights
+            <HomePredictionHighlights
               fights={predFights}
               events={predEvents}
               showViewAll
