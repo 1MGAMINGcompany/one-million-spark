@@ -109,6 +109,7 @@ const ChessAI = () => {
   const [lastMove, setLastMove] = useState<{ from: Square; to: Square } | null>(null);
   const [boardImage, setBoardImage] = useState<string | null>(null);
   const boardContainerRef = useRef<HTMLDivElement>(null);
+  const cinematic = useCinematicMode();
   
   // Session continuity
   const { clearActiveGame } = useActiveAIGame(gameOver);
