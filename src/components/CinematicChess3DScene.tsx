@@ -641,7 +641,14 @@ function SceneContent({ event, duration, boardFlipped, onComplete, onMoveComplet
         isFirstEntryRef={isFirstEntryRef}
       />
 
-      <CameraRig
+      {event.isCapture && (
+        <CaptureExplosion
+          position={toPos}
+          progressRef={progressRef}
+          isFirstEntryRef={isFirstEntryRef}
+        />
+      )}
+
         fromPos={fromPos}
         toPos={toPos}
         progressRef={progressRef}
