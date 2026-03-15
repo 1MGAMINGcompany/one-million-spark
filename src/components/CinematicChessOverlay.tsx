@@ -3,13 +3,16 @@
  *
  * Routes to 3D scene (full or lite) based on detected tier.
  * Falls back to lightweight 2D placeholder on WebGL failure or 2d-fallback tier.
+ * Shows optional personality phrase bubbles on top.
  *
  * pointer-events: none – never blocks interaction.
  */
 
-import { useState, useEffect, memo, lazy, Suspense, Component, type ReactNode, type ErrorInfo } from "react";
+import { useState, useEffect, useMemo, memo, lazy, Suspense, Component, type ReactNode, type ErrorInfo } from "react";
 import type { CinematicEvent } from "@/lib/buildCinematicEvent";
 import type { CinematicTier } from "@/hooks/useCinematicMode";
+import { getCinematicPhrase } from "@/lib/cinematicPhrases";
+import { supabase } from "@/integrations/supabase/client";
 
 const CinematicChess3DScene = lazy(() => import("@/components/CinematicChess3DScene"));
 
