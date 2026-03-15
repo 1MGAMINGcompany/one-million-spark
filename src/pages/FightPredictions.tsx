@@ -145,9 +145,14 @@ export default function FightPredictions() {
   // Group fights by event
   const groupedEvents = useMemo(() => {
     const eventMap = new Map(events.map(e => [e.id, e]));
+    // Build set of approved event IDs for filtering
+    const approvedEventIds = new Set(events.map(e => e.id));
     const groups: Record<string, { event?: PredictionEvent; fights: Fight[] }> = {};
 
     fights.forEach((f) => {
+      // Skip fights belonging to non-approved (archived/dismissed) events
+      if (f.event_id && !approvedEventIds.has(f.event_id)) return;
+
       let groupKey: string;
       let event: PredictionEvent | undefined;
 
