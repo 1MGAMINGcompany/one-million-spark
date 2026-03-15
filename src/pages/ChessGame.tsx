@@ -1691,6 +1691,11 @@ const ChessGame = () => {
         gameType="2player"
         stakeSol={entryFeeSol}
       />
+      <ChessSkinPicker
+        open={showSkinPicker}
+        onOpenChange={setShowSkinPicker}
+        skinHook={chessSkin}
+      />
     </div>
     </InAppBrowserRecovery>
     </GameErrorBoundary>
