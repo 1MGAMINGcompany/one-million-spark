@@ -1,11 +1,12 @@
 /**
  * CinematicChess3DScene – Seamless 2D→3D→2D chess cinematic.
  *
- * The camera starts top-down (matching the 2D board view), swoops down
- * to a dramatic low angle while the piece moves, then pulls back to
- * top-down before fading out — creating a seamless transition.
+ * Camera starts top-down (matching 2D board), swoops to dramatic angle,
+ * piece moves, camera returns to top-down. All pieces rendered.
  *
- * All pieces from the actual game state are rendered on the board.
+ * CRITICAL: No React state updates during animation — all animation
+ * is driven by refs and imperative Three.js mutations to avoid
+ * re-renders and material flashing.
  *
  * pointer-events: none – never blocks interaction.
  */
@@ -39,8 +40,8 @@ function easeInOutCubic(t: number): number {
   return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 }
 
-// ─── Animation Phases ─────────────────────────────────────────────────────────
-// 0.00–0.20: Camera swoops from top-down to dramatic angle
+// ─── Animation Phase Helper ───────────────────────────────────────────────────
+// 0.00–0.20: Camera swoops from top-down to dramatic
 // 0.20–0.75: Piece moves
 // 0.75–1.00: Camera returns to top-down
 
@@ -50,83 +51,82 @@ function getPhase(progress: number) {
   return { phase: "swoop-out" as const, t: (progress - 0.75) / 0.25 };
 }
 
-// ─── Lathe Profile Helpers ────────────────────────────────────────────────────
-
-function makeLathe(points: [number, number][], segments = 16): THREE.LatheGeometry {
-  const pts = points.map(([x, y]) => new THREE.Vector2(x * PIECE_SCALE, y * PIECE_SCALE));
-  return new THREE.LatheGeometry(pts, segments);
-}
+// ─── Lathe Profiles ───────────────────────────────────────────────────────────
 
 const PIECE_PROFILES: Record<string, [number, number][]> = {
   pawn: [
     [0, 0], [0.12, 0], [0.13, 0.02], [0.1, 0.04],
-    [0.06, 0.12], [0.05, 0.18],
-    [0.07, 0.22], [0.06, 0.28], [0, 0.3],
+    [0.06, 0.12], [0.05, 0.18], [0.07, 0.22], [0.06, 0.28], [0, 0.3],
   ],
   rook: [
     [0, 0], [0.14, 0], [0.15, 0.02], [0.12, 0.05],
-    [0.08, 0.15], [0.08, 0.30],
-    [0.12, 0.32], [0.12, 0.40],
-    [0.09, 0.40], [0.09, 0.38], [0.06, 0.38], [0.06, 0.40],
-    [0, 0.40],
+    [0.08, 0.15], [0.08, 0.30], [0.12, 0.32], [0.12, 0.40],
+    [0.09, 0.40], [0.09, 0.38], [0.06, 0.38], [0.06, 0.40], [0, 0.40],
   ],
   knight: [
     [0, 0], [0.13, 0], [0.14, 0.02], [0.1, 0.05],
-    [0.07, 0.12], [0.06, 0.20],
-    [0.08, 0.25], [0.1, 0.32], [0.08, 0.38],
-    [0.04, 0.42], [0, 0.44],
+    [0.07, 0.12], [0.06, 0.20], [0.08, 0.25], [0.1, 0.32],
+    [0.08, 0.38], [0.04, 0.42], [0, 0.44],
   ],
   bishop: [
     [0, 0], [0.13, 0], [0.14, 0.02], [0.1, 0.05],
-    [0.06, 0.15], [0.05, 0.28],
-    [0.07, 0.33], [0.06, 0.40], [0.03, 0.44],
-    [0, 0.47],
+    [0.06, 0.15], [0.05, 0.28], [0.07, 0.33], [0.06, 0.40],
+    [0.03, 0.44], [0, 0.47],
   ],
   queen: [
     [0, 0], [0.14, 0], [0.15, 0.02], [0.11, 0.06],
-    [0.07, 0.18], [0.06, 0.32],
-    [0.09, 0.36], [0.1, 0.42], [0.07, 0.48],
-    [0.04, 0.52], [0, 0.55],
+    [0.07, 0.18], [0.06, 0.32], [0.09, 0.36], [0.1, 0.42],
+    [0.07, 0.48], [0.04, 0.52], [0, 0.55],
   ],
   king: [
     [0, 0], [0.14, 0], [0.15, 0.02], [0.11, 0.06],
-    [0.07, 0.20], [0.06, 0.36],
-    [0.09, 0.40], [0.1, 0.46], [0.08, 0.50],
-    [0.04, 0.54], [0.02, 0.56],
-    [0, 0.58],
+    [0.07, 0.20], [0.06, 0.36], [0.09, 0.40], [0.1, 0.46],
+    [0.08, 0.50], [0.04, 0.54], [0.02, 0.56], [0, 0.58],
   ],
 };
 
-// ─── Cached Geometries & Materials ────────────────────────────────────────────
+// ─── Global Material & Geometry Cache (never recreated) ───────────────────────
 
-const geoCache = new Map<string, THREE.LatheGeometry>();
-function getGeo(piece: string, lite: boolean): THREE.LatheGeometry {
-  const key = `${piece}-${lite}`;
-  if (!geoCache.has(key)) {
+const _geoCache = new Map<string, THREE.LatheGeometry>();
+const _matCache = new Map<string, THREE.Material>();
+
+function getCachedGeo(piece: string, lite: boolean): THREE.LatheGeometry {
+  const key = `${piece}-${lite ? "l" : "f"}`;
+  let g = _geoCache.get(key);
+  if (!g) {
     const profile = PIECE_PROFILES[piece] ?? PIECE_PROFILES.pawn;
-    geoCache.set(key, makeLathe(profile, lite ? 10 : 16));
+    const pts = profile.map(([x, y]) => new THREE.Vector2(x * PIECE_SCALE, y * PIECE_SCALE));
+    g = new THREE.LatheGeometry(pts, lite ? 10 : 16);
+    _geoCache.set(key, g);
   }
-  return geoCache.get(key)!;
+  return g;
 }
 
-function makeMat(color: "white" | "black", lite: boolean): THREE.Material {
-  if (color === "white") {
-    return lite
-      ? new THREE.MeshStandardMaterial({ color: "#f0e6d3", roughness: 0.3, metalness: 0.05 })
-      : new THREE.MeshPhysicalMaterial({
-          color: "#f5ead8", roughness: 0.15, metalness: 0.02,
-          clearcoat: 1.0, clearcoatRoughness: 0.08, reflectivity: 0.8,
-        });
+function getCachedMat(color: "white" | "black", lite: boolean): THREE.Material {
+  const key = `${color}-${lite ? "l" : "f"}`;
+  let m = _matCache.get(key);
+  if (!m) {
+    if (color === "white") {
+      m = lite
+        ? new THREE.MeshStandardMaterial({ color: "#f0e6d3", roughness: 0.3, metalness: 0.05 })
+        : new THREE.MeshPhysicalMaterial({
+            color: "#f5ead8", roughness: 0.15, metalness: 0.02,
+            clearcoat: 1.0, clearcoatRoughness: 0.08,
+          });
+    } else {
+      m = lite
+        ? new THREE.MeshStandardMaterial({ color: "#1a1a22", roughness: 0.25, metalness: 0.4 })
+        : new THREE.MeshPhysicalMaterial({
+            color: "#141418", roughness: 0.12, metalness: 0.6,
+            clearcoat: 0.9, clearcoatRoughness: 0.05,
+          });
+    }
+    _matCache.set(key, m);
   }
-  return lite
-    ? new THREE.MeshStandardMaterial({ color: "#1a1a22", roughness: 0.25, metalness: 0.4 })
-    : new THREE.MeshPhysicalMaterial({
-        color: "#141418", roughness: 0.12, metalness: 0.6,
-        clearcoat: 0.9, clearcoatRoughness: 0.05, reflectivity: 1.0,
-      });
+  return m;
 }
 
-// ─── Board ────────────────────────────────────────────────────────────────────
+// ─── Board (static — never re-renders) ────────────────────────────────────────
 
 function BoardPlane({ lite }: { lite: boolean }) {
   const geo = useMemo(() => new THREE.PlaneGeometry(SQ, SQ), []);
@@ -159,20 +159,15 @@ function BoardPlane({ lite }: { lite: boolean }) {
 
   return (
     <group>
-      {/* Board squares */}
       <group rotation={[-Math.PI / 2, 0, 0]}>
         {squares.map((s, i) => (
           <mesh key={i} geometry={geo} position={[s.x, s.z, 0]} receiveShadow material={s.dark ? darkMat : lightMat} />
         ))}
       </group>
-
-      {/* Thin pedestal */}
       <mesh position={[0, -0.04, 0]}>
         <boxGeometry args={[BOARD_SIZE + 0.1, 0.08, BOARD_SIZE + 0.1]} />
-        <meshStandardMaterial color="hsl(220, 12%, 10%)" roughness={0.8} />
+        <meshStandardMaterial color="#191920" roughness={0.8} />
       </mesh>
-
-      {/* Gold trim */}
       <mesh position={[0, trimHeight / 2, -HALF - trimThickness / 2]} material={trimMat}>
         <boxGeometry args={[totalSize, trimHeight, trimThickness]} />
       </mesh>
@@ -189,14 +184,16 @@ function BoardPlane({ lite }: { lite: boolean }) {
   );
 }
 
-// ─── Piece Mesh ───────────────────────────────────────────────────────────────
+// ─── Static Piece (no animation, never re-renders) ────────────────────────────
 
-function PieceMesh({ piece, color, lite }: { piece: string; color: "white" | "black"; lite: boolean }) {
-  const geo = useMemo(() => getGeo(piece, lite), [piece, lite]);
-  const mat = useMemo(() => makeMat(color, lite), [color, lite]);
+function StaticPiece({ piece, color, x, z, lite }: {
+  piece: string; color: "white" | "black"; x: number; z: number; lite: boolean;
+}) {
+  const geo = useMemo(() => getCachedGeo(piece, lite), [piece, lite]);
+  const mat = useMemo(() => getCachedMat(color, lite), [color, lite]);
 
   return (
-    <group>
+    <group position={[x, 0, z]}>
       <mesh geometry={geo} castShadow material={mat} />
       {piece === "king" && (
         <group position={[0, 0.58 * PIECE_SCALE, 0]}>
@@ -212,82 +209,102 @@ function PieceMesh({ piece, color, lite }: { piece: string; color: "white" | "bl
   );
 }
 
-// ─── Static Board Pieces (all pieces except the moving one) ───────────────────
+// ─── Moving Piece (imperative position via useFrame) ──────────────────────────
 
-function StaticPieces({ boardPieces, movingTo, flipped, lite }: {
-  boardPieces: BoardPiece[]; movingTo: string; flipped: boolean; lite: boolean;
-}) {
-  // Exclude the piece at 'to' square since PieceProxy handles the moving piece
-  const staticPieces = useMemo(
-    () => boardPieces.filter(p => p.square !== movingTo),
-    [boardPieces, movingTo],
-  );
-
-  return (
-    <>
-      {staticPieces.map((p) => {
-        const [x, z] = squareToWorld(p.square, flipped);
-        return (
-          <group key={p.square} position={[x, 0, z]}>
-            <PieceMesh piece={p.piece} color={p.color} lite={lite} />
-          </group>
-        );
-      })}
-    </>
-  );
-}
-
-// ─── Moving Piece with Highlights ─────────────────────────────────────────────
-
-function MovingPiece({ piece, color, fromPos, toPos, moveProgress, isCapture, lite }: {
+function MovingPiece({ piece, color, fromPos, toPos, isCapture, lite, progressRef }: {
   piece: string; color: "white" | "black";
   fromPos: [number, number]; toPos: [number, number];
-  moveProgress: number; isCapture: boolean; lite: boolean;
+  isCapture: boolean; lite: boolean;
+  progressRef: React.MutableRefObject<number>;
 }) {
-  const t = easeInOutCubic(Math.min(moveProgress, 1));
-  const x = fromPos[0] + (toPos[0] - fromPos[0]) * t;
-  const z = fromPos[1] + (toPos[1] - fromPos[1]) * t;
-  const arcY = Math.sin(t * Math.PI) * 0.3;
+  const groupRef = useRef<THREE.Group>(null);
+  const srcHighlightRef = useRef<THREE.Mesh>(null);
+  const dstHighlightRef = useRef<THREE.Mesh>(null);
+  const geo = useMemo(() => getCachedGeo(piece, lite), [piece, lite]);
+  const mat = useMemo(() => getCachedMat(color, lite), [color, lite]);
+
+  useFrame(() => {
+    const progress = progressRef.current;
+    const { phase, t } = getPhase(progress);
+    const moveT = phase === "swoop-in" ? 0 : phase === "move" ? easeInOutCubic(t) : 1;
+
+    const x = fromPos[0] + (toPos[0] - fromPos[0]) * moveT;
+    const z = fromPos[1] + (toPos[1] - fromPos[1]) * moveT;
+    const arcY = Math.sin(moveT * Math.PI) * 0.3;
+
+    if (groupRef.current) {
+      groupRef.current.position.set(x, arcY, z);
+    }
+    if (srcHighlightRef.current) {
+      (srcHighlightRef.current.material as THREE.MeshBasicMaterial).opacity = 0.35 * (1 - moveT);
+    }
+    if (dstHighlightRef.current) {
+      (dstHighlightRef.current.material as THREE.MeshBasicMaterial).opacity = 0.4 * moveT;
+    }
+  });
 
   return (
     <>
-      <group position={[x, arcY, z]}>
-        <PieceMesh piece={piece} color={color} lite={lite} />
+      <group ref={groupRef} position={[fromPos[0], 0, fromPos[1]]}>
+        <mesh geometry={geo} castShadow material={mat} />
+        {piece === "king" && (
+          <group position={[0, 0.58 * PIECE_SCALE, 0]}>
+            <mesh castShadow material={mat}>
+              <boxGeometry args={[0.03 * PIECE_SCALE, 0.1 * PIECE_SCALE, 0.03 * PIECE_SCALE]} />
+            </mesh>
+            <mesh position={[0, 0.03 * PIECE_SCALE, 0]} castShadow material={mat}>
+              <boxGeometry args={[0.08 * PIECE_SCALE, 0.03 * PIECE_SCALE, 0.03 * PIECE_SCALE]} />
+            </mesh>
+          </group>
+        )}
       </group>
 
       {/* Source highlight */}
-      <mesh position={[fromPos[0], 0.005, fromPos[1]]} rotation={[-Math.PI / 2, 0, 0]}>
+      <mesh ref={srcHighlightRef} position={[fromPos[0], 0.005, fromPos[1]]} rotation={[-Math.PI / 2, 0, 0]}>
         <planeGeometry args={[SQ * 0.95, SQ * 0.95]} />
-        <meshBasicMaterial color="#ffd700" transparent opacity={0.35 * (1 - moveProgress)} />
+        <meshBasicMaterial color="#ffd700" transparent opacity={0.35} />
       </mesh>
 
       {/* Destination highlight */}
-      <mesh position={[toPos[0], 0.005, toPos[1]]} rotation={[-Math.PI / 2, 0, 0]}>
+      <mesh ref={dstHighlightRef} position={[toPos[0], 0.005, toPos[1]]} rotation={[-Math.PI / 2, 0, 0]}>
         <planeGeometry args={[SQ * 0.95, SQ * 0.95]} />
-        <meshBasicMaterial
-          color={isCapture ? "#ff3333" : "#ffd700"}
-          transparent opacity={0.4 * moveProgress}
-        />
+        <meshBasicMaterial color={isCapture ? "#ff3333" : "#ffd700"} transparent opacity={0} />
       </mesh>
     </>
   );
 }
 
-// ─── Lighting ─────────────────────────────────────────────────────────────────
+// ─── Lighting (imperative intensity updates — no conditional mount/unmount) ───
 
-function SceneLighting({ lite, swoopFactor }: { lite: boolean; swoopFactor: number }) {
-  // swoopFactor: 0 = top-down (bright even light), 1 = dramatic angle (cinematic lighting)
+function SceneLighting({ lite, progressRef }: { lite: boolean; progressRef: React.MutableRefObject<number> }) {
+  const ambientRef = useRef<THREE.AmbientLight>(null);
+  const keyRef = useRef<THREE.DirectionalLight>(null);
+  const fillRef = useRef<THREE.DirectionalLight>(null);
+  const rimRef = useRef<THREE.PointLight>(null);
+
+  useFrame(() => {
+    const progress = progressRef.current;
+    const { phase, t } = getPhase(progress);
+    const swoopFactor = phase === "swoop-in"
+      ? easeInOutCubic(t)
+      : phase === "move" ? 1
+      : 1 - easeInOutCubic(t);
+
+    if (ambientRef.current) ambientRef.current.intensity = 0.6 - swoopFactor * 0.2;
+    if (keyRef.current) keyRef.current.intensity = 0.8 + swoopFactor * 0.4;
+    if (fillRef.current) fillRef.current.intensity = swoopFactor * 0.35;
+    if (rimRef.current) rimRef.current.intensity = swoopFactor * 1.2;
+  });
+
   return (
     <>
-      {/* Bright ambient for top-down clarity, reduces when dramatic */}
-      <ambientLight intensity={0.6 - swoopFactor * 0.2} color="hsl(40, 30%, 95%)" />
-
-      {/* Key light */}
+      <ambientLight ref={ambientRef} intensity={0.6} color="#f5f0e8" />
       <directionalLight
+        ref={keyRef}
         position={[3, 5, 2]}
-        intensity={0.8 + swoopFactor * 0.4}
-        color="hsl(35, 60%, 90%)"
-        castShadow={!lite && swoopFactor > 0.3}
+        intensity={0.8}
+        color="#f0dcc0"
+        castShadow={!lite}
         shadow-mapSize-width={512}
         shadow-mapSize-height={512}
         shadow-camera-left={-3}
@@ -295,94 +312,89 @@ function SceneLighting({ lite, swoopFactor }: { lite: boolean; swoopFactor: numb
         shadow-camera-top={3}
         shadow-camera-bottom={-3}
       />
-
-      {/* Cool fill — visible during dramatic phase */}
-      <directionalLight
-        position={[-3, 2, 1]}
-        intensity={swoopFactor * 0.35}
-        color="hsl(210, 50%, 75%)"
-      />
-
-      {/* Gold rim light — only at dramatic angle */}
-      {!lite && swoopFactor > 0.2 && (
-        <pointLight
-          position={[0, 1.5, -3]}
-          intensity={swoopFactor * 1.2}
-          color="hsl(42, 85%, 55%)"
-          distance={8}
-          decay={2}
-        />
+      <directionalLight ref={fillRef} position={[-3, 2, 1]} intensity={0} color="#a0b8d0" />
+      {!lite && (
+        <pointLight ref={rimRef} position={[0, 1.5, -3]} intensity={0} color="#d4a030" distance={8} decay={2} />
       )}
-
-      {/* Bottom fill */}
-      <directionalLight position={[0, -1, 2]} intensity={0.15} color="hsl(220, 20%, 60%)" />
+      <directionalLight position={[0, -1, 2]} intensity={0.15} color="#7080a0" />
     </>
   );
 }
 
-// ─── Camera Rig: Top-down ↔ Dramatic ──────────────────────────────────────────
-//
-// Top-down: camera at (0, 6.5, 0) looking straight down — matches 2D board
-// Dramatic: camera at low angle looking across the board
-//
-// swoopIn:  top-down → dramatic   (0.00–0.20)
-// move:     dramatic, slight follow (0.20–0.75)
-// swoopOut: dramatic → top-down   (0.75–1.00)
+// ─── Camera Rig (imperative — reads progressRef) ──────────────────────────────
 
-const TOP_DOWN_POS = new THREE.Vector3(0, 6.5, 0.01); // tiny z to avoid gimbal lock
+const TOP_DOWN_POS = new THREE.Vector3(0, 6.5, 0.01);
 const TOP_DOWN_LOOK = new THREE.Vector3(0, 0, 0);
 
-function CameraRig({ fromPos, toPos, progress }: {
-  fromPos: [number, number]; toPos: [number, number]; progress: number;
+function CameraRig({ fromPos, toPos, progressRef }: {
+  fromPos: [number, number]; toPos: [number, number];
+  progressRef: React.MutableRefObject<number>;
 }) {
   const { camera } = useThree();
   const tmpPos = useRef(new THREE.Vector3());
   const tmpLook = useRef(new THREE.Vector3());
+  const dramaticPos = useRef(new THREE.Vector3());
+  const dramaticLook = useRef(new THREE.Vector3());
 
   useEffect(() => {
+    const midX = (fromPos[0] + toPos[0]) / 2;
+    const midZ = (fromPos[1] + toPos[1]) / 2;
+    dramaticPos.current.set(midX * 0.3, 1.6, 3.2);
+    dramaticLook.current.set(midX * 0.3, 0.1, midZ * 0.4);
+
     camera.position.copy(TOP_DOWN_POS);
     camera.lookAt(TOP_DOWN_LOOK);
     if (camera instanceof THREE.PerspectiveCamera) {
       camera.fov = 45;
       camera.updateProjectionMatrix();
     }
-  }, [camera]);
+  }, [camera, fromPos, toPos]);
 
   useFrame(() => {
+    const progress = progressRef.current;
     const { phase, t } = getPhase(progress);
     const et = easeInOutCubic(t);
-
     const midX = (fromPos[0] + toPos[0]) / 2;
     const midZ = (fromPos[1] + toPos[1]) / 2;
 
-    // Dramatic camera position — low angle, slightly offset
-    const dramaticPos = new THREE.Vector3(
-      midX * 0.3,
-      1.6,
-      3.2,
-    );
-    const dramaticLook = new THREE.Vector3(midX * 0.3, 0.1, midZ * 0.4);
-
     if (phase === "swoop-in") {
-      // Interpolate top-down → dramatic
-      tmpPos.current.lerpVectors(TOP_DOWN_POS, dramaticPos, et);
-      tmpLook.current.lerpVectors(TOP_DOWN_LOOK, dramaticLook, et);
+      tmpPos.current.lerpVectors(TOP_DOWN_POS, dramaticPos.current, et);
+      tmpLook.current.lerpVectors(TOP_DOWN_LOOK, dramaticLook.current, et);
     } else if (phase === "move") {
-      // Hold at dramatic with slight follow toward destination
       const followT = easeInOutCubic(t);
-      tmpPos.current.copy(dramaticPos);
+      tmpPos.current.copy(dramaticPos.current);
       tmpPos.current.x += (toPos[0] - midX) * followT * 0.15;
-      tmpLook.current.copy(dramaticLook);
+      tmpLook.current.copy(dramaticLook.current);
       tmpLook.current.x += (toPos[0] - midX) * followT * 0.3;
       tmpLook.current.z += (toPos[1] - midZ) * followT * 0.2;
     } else {
-      // Interpolate dramatic → top-down
-      tmpPos.current.lerpVectors(dramaticPos, TOP_DOWN_POS, et);
-      tmpLook.current.lerpVectors(dramaticLook, TOP_DOWN_LOOK, et);
+      tmpPos.current.lerpVectors(dramaticPos.current, TOP_DOWN_POS, et);
+      tmpLook.current.lerpVectors(dramaticLook.current, TOP_DOWN_LOOK, et);
     }
 
     camera.position.copy(tmpPos.current);
     camera.lookAt(tmpLook.current);
+  });
+
+  return null;
+}
+
+// ─── Animation Driver (single useFrame, no setState) ──────────────────────────
+
+function AnimationDriver({ duration, onComplete, progressRef }: {
+  duration: number; onComplete: () => void;
+  progressRef: React.MutableRefObject<number>;
+}) {
+  const startTime = useRef(Date.now());
+  const completed = useRef(false);
+
+  useFrame(() => {
+    const p = Math.min((Date.now() - startTime.current) / duration, 1);
+    progressRef.current = p;
+    if (p >= 1 && !completed.current) {
+      completed.current = true;
+      setTimeout(onComplete, 50);
+    }
   });
 
   return null;
@@ -396,52 +408,51 @@ interface SceneProps {
 }
 
 function SceneContent({ event, duration, boardFlipped, onComplete, lite }: SceneProps) {
-  const [progress, setProgress] = useState(0);
-  const startTime = useRef(Date.now());
-  const completed = useRef(false);
-
+  const progressRef = useRef(0);
   const fromPos = useMemo(() => squareToWorld(event.from, boardFlipped), [event.from, boardFlipped]);
   const toPos = useMemo(() => squareToWorld(event.to, boardFlipped), [event.to, boardFlipped]);
 
-  // Compute the move sub-progress (piece only moves during move phase)
-  const { phase } = getPhase(progress);
-  const moveProgress = phase === "move" ? getPhase(progress).t : (phase === "swoop-in" ? 0 : 1);
-
-  // Compute swoopFactor for lighting (0=top-down, 1=dramatic)
-  const swoopFactor = phase === "swoop-in"
-    ? easeInOutCubic(getPhase(progress).t)
-    : phase === "move" ? 1
-    : 1 - easeInOutCubic(getPhase(progress).t);
-
-  useFrame(() => {
-    const p = Math.min((Date.now() - startTime.current) / duration, 1);
-    setProgress(p);
-    if (p >= 1 && !completed.current) {
-      completed.current = true;
-      setTimeout(onComplete, 50);
-    }
-  });
+  // Pre-compute static pieces once (exclude piece at destination — that's the moving piece)
+  const staticPieces = useMemo(() => {
+    const pieces = event.boardPieces ?? [];
+    return pieces
+      .filter(p => p.square !== event.to)
+      .map(p => ({
+        ...p,
+        pos: squareToWorld(p.square, boardFlipped),
+      }));
+  }, [event.boardPieces, event.to, boardFlipped]);
 
   return (
     <>
-      <SceneLighting lite={lite} swoopFactor={swoopFactor} />
+      <AnimationDriver duration={duration} onComplete={onComplete} progressRef={progressRef} />
+      <SceneLighting lite={lite} progressRef={progressRef} />
       <BoardPlane lite={lite} />
-      <StaticPieces
-        boardPieces={event.boardPieces ?? []}
-        movingTo={event.to}
-        flipped={boardFlipped}
-        lite={lite}
-      />
+
+      {/* Static pieces — rendered once, never update */}
+      {staticPieces.map(p => (
+        <StaticPiece
+          key={p.square}
+          piece={p.piece}
+          color={p.color}
+          x={p.pos[0]}
+          z={p.pos[1]}
+          lite={lite}
+        />
+      ))}
+
+      {/* Moving piece — updates position imperatively via progressRef */}
       <MovingPiece
         piece={event.piece}
         color={event.color}
         fromPos={fromPos}
         toPos={toPos}
-        moveProgress={moveProgress}
         isCapture={event.isCapture}
         lite={lite}
+        progressRef={progressRef}
       />
-      <CameraRig fromPos={fromPos} toPos={toPos} progress={progress} />
+
+      <CameraRig fromPos={fromPos} toPos={toPos} progressRef={progressRef} />
     </>
   );
 }
@@ -457,7 +468,7 @@ export default function CinematicChess3DScene({ event, duration, boardFlipped, o
   const lite = tier === "3d-lite";
   const [opacity, setOpacity] = useState(0);
 
-  // Quick fade in
+  // Fade in on mount
   useEffect(() => {
     const raf = requestAnimationFrame(() => setOpacity(1));
     return () => cancelAnimationFrame(raf);
@@ -466,7 +477,7 @@ export default function CinematicChess3DScene({ event, duration, boardFlipped, o
   // Fade out before complete
   const handleComplete = useCallback(() => {
     setOpacity(0);
-    setTimeout(onComplete, 180);
+    setTimeout(onComplete, 250);
   }, [onComplete]);
 
   return (
@@ -474,7 +485,7 @@ export default function CinematicChess3DScene({ event, duration, boardFlipped, o
       className="absolute inset-0 pointer-events-none z-40 rounded-lg overflow-hidden"
       style={{
         opacity,
-        transition: "opacity 180ms ease-in-out",
+        transition: "opacity 250ms ease-in-out",
       }}
     >
       <Canvas
@@ -490,8 +501,8 @@ export default function CinematicChess3DScene({ event, duration, boardFlipped, o
       </Canvas>
 
       {/* SAN badge */}
-      <div className="absolute bottom-3 right-3 z-20 px-3 py-1.5 rounded-lg bg-black/75 backdrop-blur-md border border-yellow-500/30 shadow-lg shadow-yellow-500/10">
-        <span className="text-sm font-mono font-bold tracking-widest" style={{ color: "#ffd700" }}>
+      <div className="absolute bottom-3 right-3 z-20 px-3 py-1.5 rounded-lg bg-black/75 backdrop-blur-md border border-primary/30 shadow-lg shadow-primary/10">
+        <span className="text-sm font-mono font-bold tracking-widest text-primary">
           {event.san}
         </span>
       </div>
