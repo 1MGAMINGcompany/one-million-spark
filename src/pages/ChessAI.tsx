@@ -18,6 +18,9 @@ import { useActiveAIGame } from "@/hooks/useActiveAIGame";
 import { useCinematicMode } from "@/hooks/useCinematicMode";
 import { buildCinematicEvent } from "@/lib/buildCinematicEvent";
 import CinematicChessOverlay from "@/components/CinematicChessOverlay";
+import { useChessSkin, incrementChessGames, incrementChessShares } from "@/hooks/useChessSkin";
+import ChessSkinPicker from "@/components/ChessSkinPicker";
+import { Palette } from "lucide-react";
 
 // Helper to convert UCI move (e.g., "e2e4") to from/to squares
 const parseUCIMove = (uciMove: string): { from: Square; to: Square; promotion?: string } | null => {
