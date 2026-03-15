@@ -536,7 +536,7 @@ function SceneContent({ event, duration, boardFlipped, onComplete, onMoveComplet
       {isDismissing && (
         <DismissDriver duration={800} onComplete={onComplete} dismissProgressRef={dismissProgressRef} />
       )}
-      <SceneLighting lite={lite} progressRef={progressRef} isFirstEntryRef={isFirstEntryRef} />
+      <SceneLighting lite={lite} />
       <BoardPlane lite={lite} />
 
       {staticPieces.map(p => (
