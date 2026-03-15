@@ -38,6 +38,9 @@ interface PredictionEvent {
   automation_paused: boolean;
   requires_admin_approval: boolean;
   automation_status: string;
+  scheduled_lock_at: string | null;
+  scheduled_live_at: string | null;
+  last_automation_check_at: string | null;
 }
 
 interface Fight {
