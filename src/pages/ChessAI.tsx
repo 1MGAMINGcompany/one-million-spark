@@ -557,12 +557,8 @@ const ChessAI = () => {
                 </div>
               </div>
 
-              {/* Animation Toggle + Cinematic Toggle */}
-              <div className="flex justify-center items-center gap-6">
-                <AnimationToggle 
-                  enabled={animationsEnabled} 
-                  onToggle={() => setAnimationsEnabled(prev => !prev)} 
-                />
+              {/* Cinematic Toggle */}
+              <div className="flex justify-center items-center">
                 <button
                   onClick={cinematic.toggle}
                   className="flex items-center gap-2 group"

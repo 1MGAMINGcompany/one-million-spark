@@ -613,7 +613,7 @@ function SceneContent({ event, duration, boardFlipped, onComplete, onMoveComplet
 
   return (
     <>
-      <AnimationDriver duration={duration} onMoveComplete={onMoveComplete} progressRef={progressRef} />
+      <AnimationDriver duration={duration} onMoveComplete={onMoveComplete} progressRef={progressRef} eventKey={`${event.from}-${event.to}-${event.san}`} />
       {isDismissing && (
         <DismissDriver duration={800} onComplete={onComplete} dismissProgressRef={dismissProgressRef} />
       )}

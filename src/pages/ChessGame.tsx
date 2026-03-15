@@ -1449,12 +1449,8 @@ const ChessGame = () => {
                 </div>
                 </div>
 
-              {/* Animation Toggle + Cinematic Toggle */}
-              <div className="flex justify-center items-center gap-6">
-                <AnimationToggle 
-                  enabled={animationsEnabled} 
-                  onToggle={() => setAnimationsEnabled(prev => !prev)} 
-                />
+              {/* Cinematic Toggle */}
+              <div className="flex justify-center items-center">
                 {cinematic.isAllowed && (
                   <button
                     onClick={cinematic.toggle}

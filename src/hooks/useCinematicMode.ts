@@ -173,7 +173,7 @@ export function useCinematicMode(): UseCinematicModeReturn {
     setIsFirstEntry(true); // Reset for next session
     dismissTimeoutRef.current = setTimeout(() => {
       setActiveEvent(null);
-    }, duration + 500);
+    }, 1000);
   }, [duration]);
 
   useEffect(() => {
