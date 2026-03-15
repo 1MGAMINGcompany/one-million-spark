@@ -290,9 +290,15 @@ Deno.serve(async (req) => {
                   admin_wallet: wallet,
                 });
               } else {
-                // ── INSERT new draft ──
-                // Compute scheduled_lock_at from event_date (lock at event start time)
-                const scheduledLockAt = eventDate ? new Date(eventDate).toISOString() : null;
+              // ── INSERT new draft ──
+                // MMA/combat: lock 60s before event, go live at event start
+                let scheduledLockAt: string | null = null;
+                let scheduledLiveAt: string | null = null;
+                if (eventDate) {
+                  const eventMs = new Date(eventDate).getTime();
+                  scheduledLockAt = new Date(eventMs - 60_000).toISOString();
+                  scheduledLiveAt = new Date(eventMs).toISOString();
+                }
 
                 const { data: newEvent, error: insertErr } = await supabase
                   .from("prediction_events")
@@ -311,6 +317,7 @@ Deno.serve(async (req) => {
                     automation_status: "discovered",
                     requires_admin_approval: true,
                     scheduled_lock_at: scheduledLockAt,
+                    scheduled_live_at: scheduledLiveAt,
                   })
                   .select()
                   .single();
