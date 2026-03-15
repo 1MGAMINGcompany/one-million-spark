@@ -159,12 +159,14 @@ function BoardPlane({ lite }: { lite: boolean }) {
 
   return (
     <group>
-      <group rotation={[-Math.PI / 2, 0, 0]}>
+      {/* Board squares raised slightly above pedestal */}
+      <group rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.002, 0]}>
         {squares.map((s, i) => (
           <mesh key={i} geometry={geo} position={[s.x, s.z, 0]} receiveShadow material={s.dark ? darkMat : lightMat} />
         ))}
       </group>
-      <mesh position={[0, -0.04, 0]}>
+      {/* Pedestal — top face at y = -0.01 (well below squares at y=0.002) */}
+      <mesh position={[0, -0.05, 0]}>
         <boxGeometry args={[BOARD_SIZE + 0.1, 0.08, BOARD_SIZE + 0.1]} />
         <meshStandardMaterial color="#191920" roughness={0.8} />
       </mesh>
