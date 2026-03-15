@@ -728,6 +728,7 @@ Deno.serve(async (req) => {
         providers: results.providers_used,
         providers_skipped: results.providers_skipped,
         events_found: results.events_found,
+        events_filtered_past: results.events_filtered_past,
         events_new: results.events_new,
         events_updated: results.events_updated,
         fights_found: results.fights_found,
