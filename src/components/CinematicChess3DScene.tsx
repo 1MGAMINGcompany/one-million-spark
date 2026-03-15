@@ -574,9 +574,10 @@ interface SceneProps {
   lite: boolean;
   isFirstEntry: boolean;
   isDismissing: boolean;
+  skin: ChessSkin;
 }
 
-function SceneContent({ event, duration, boardFlipped, onComplete, onMoveComplete, lite, isFirstEntry, isDismissing }: SceneProps) {
+function SceneContent({ event, duration, boardFlipped, onComplete, onMoveComplete, lite, isFirstEntry, isDismissing, skin }: SceneProps) {
   const progressRef = useRef(0);
   const isFirstEntryRef = useRef(isFirstEntry);
   const dismissProgressRef = useRef(0);
