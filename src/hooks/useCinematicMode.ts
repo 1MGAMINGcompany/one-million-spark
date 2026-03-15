@@ -122,6 +122,7 @@ export function useCinematicMode(): UseCinematicModeReturn {
 
   const [activeEvent, setActiveEvent] = useState<CinematicEvent | null>(null);
   const [isPersistent, setIsPersistent] = useState(false);
+  const [isFirstEntry, setIsFirstEntry] = useState(true);
   const dismissTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isAllowed = tier !== "2d-fallback" || enabled;
