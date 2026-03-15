@@ -391,7 +391,7 @@ const ChessAI = () => {
     } catch {
       return false;
     }
-  }, [game, gameOver, isThinking, checkGameOver, makeAIMove, animationsEnabled, triggerAnimation, play]);
+  }, [game, gameOver, isThinking, checkGameOver, makeAIMove, animationsEnabled, triggerAnimation, play, cinematic]);
 
   const restartGame = useCallback(() => {
     setGame(new Chess());
