@@ -69,7 +69,7 @@ export default function ReferralAdmin() {
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
   const fetchData = async () => {
-    if (!address) return;
+    if (!address) { setLoading(false); return; }
 
     const { data: adminRow } = await supabase
       .from("prediction_admins")
