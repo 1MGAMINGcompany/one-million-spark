@@ -143,7 +143,7 @@ export default function PredictionModal({
             fighterPick={fighterName}
             amountSol={amountNum}
             poolSol={(fight.pool_a_lamports + fight.pool_b_lamports) / LAMPORTS}
-            wallet={undefined}
+            wallet={wallet}
           />
         )}
       </>

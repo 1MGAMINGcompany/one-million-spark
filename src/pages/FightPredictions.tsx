@@ -548,6 +548,7 @@ export default function FightPredictions() {
           onSubmit={handleSubmit}
           submitting={submitting}
           showSuccess={showPredictionSuccess}
+          wallet={address || undefined}
         />
       )}
 
