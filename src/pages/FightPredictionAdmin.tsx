@@ -140,13 +140,15 @@ export default function FightPredictionAdmin() {
   }, [address]);
 
   const [entryCounts, setEntryCounts] = useState<Record<string, number>>({});
+  const [botConfirmData, setBotConfirmData] = useState<Record<string, { confidence: number; provider: string; confirmed_at: string; claims_open_at: string }>>({});
 
   const loadData = useCallback(async () => {
-    const [eventsRes, fightsRes, entriesRes, settingsRes] = await Promise.all([
+    const [eventsRes, fightsRes, entriesRes, settingsRes, logsRes] = await Promise.all([
       supabase.from("prediction_events").select("*").order("created_at", { ascending: false }),
       supabase.from("prediction_fights").select("*").order("created_at", { ascending: false }),
       supabase.from("prediction_entries").select("fight_id"),
       supabase.functions.invoke("prediction-admin", { body: { action: "getSettings", wallet: address } }),
+      supabase.from("automation_logs").select("fight_id, confidence, details, created_at").eq("action", "bot_auto_confirm").order("created_at", { ascending: false }),
     ]);
     if (eventsRes.data) setEvents(eventsRes.data as any);
     if (fightsRes.data) setFights(fightsRes.data as any);
@@ -155,6 +157,21 @@ export default function FightPredictionAdmin() {
       const counts: Record<string, number> = {};
       entriesRes.data.forEach((e: any) => { counts[e.fight_id] = (counts[e.fight_id] || 0) + 1; });
       setEntryCounts(counts);
+    }
+    if (logsRes.data) {
+      const bcd: Record<string, any> = {};
+      for (const log of logsRes.data as any[]) {
+        if (log.fight_id && !bcd[log.fight_id]) {
+          const d = log.details || {};
+          bcd[log.fight_id] = {
+            confidence: log.confidence ?? 0,
+            provider: d.provider || "unknown",
+            confirmed_at: d.claims_open_at ? new Date(new Date(d.claims_open_at).getTime() - 3 * 60 * 1000).toISOString() : log.created_at,
+            claims_open_at: d.claims_open_at || null,
+          };
+        }
+      }
+      setBotConfirmData(bcd);
     }
   }, []);
 
@@ -491,6 +508,7 @@ export default function FightPredictionAdmin() {
             event={event}
             fights={eventFights(event.id)}
             entryCounts={entryCounts}
+            botConfirmData={botConfirmData}
             busy={busy}
             onFightAction={fightAction}
             onConfirm={withConfirm}
@@ -522,6 +540,7 @@ export default function FightPredictionAdmin() {
                   fight={fight}
                   busy={busy}
                   entryCount={entryCounts[fight.id] || 0}
+                  botConfirm={botConfirmData[fight.id] || null}
                   onAction={(action, extra) => fightAction(action, fight.id, extra)}
                   onConfirm={withConfirm}
                   onRefund={async () => {
@@ -594,13 +613,14 @@ function useCountdown(targetIso: string | null): { text: string | null; seconds:
 
 // ── Per-Event Admin Card (with expand/collapse) ──
 function AdminEventCard({
-  event, fights, entryCounts, busy,
+  event, fights, entryCounts, botConfirmData, busy,
   onFightAction, onConfirm, onRefund, callAdmin, loadData,
   onDismiss, onArchive, onDelete, eventHasPredictions, eventIsFullySettled,
 }: {
   event: PredictionEvent;
   fights: Fight[];
   entryCounts: Record<string, number>;
+  botConfirmData: Record<string, { confidence: number; provider: string; confirmed_at: string; claims_open_at: string }>;
   busy: boolean;
   onFightAction: (action: string, fightId: string, extra?: Record<string, any>) => Promise<void>;
   onConfirm: (title: string, desc: string, onConfirm: () => void, destructive?: boolean) => void;
@@ -811,6 +831,7 @@ function AdminEventCard({
                   fight={fight}
                   busy={busy}
                   entryCount={entryCounts[fight.id] || 0}
+                  botConfirm={botConfirmData[fight.id] || null}
                   onAction={(action, extra) => onFightAction(action, fight.id, extra)}
                   onConfirm={onConfirm}
                   onRefund={() => onRefund(fight.id)}
@@ -829,11 +850,12 @@ function AdminEventCard({
 
 // ── Per-Fight Admin Card ──
 function AdminFightCard({
-  fight, busy, entryCount, onAction, onConfirm, onRefund,
+  fight, busy, entryCount, botConfirm, onAction, onConfirm, onRefund,
 }: {
   fight: Fight;
   busy: boolean;
   entryCount: number;
+  botConfirm: { confidence: number; provider: string; confirmed_at: string; claims_open_at: string } | null;
   onAction: (action: string, extra?: Record<string, any>) => Promise<void>;
   onConfirm: (title: string, desc: string, onConfirm: () => void, destructive?: boolean) => void;
   onRefund: () => Promise<void>;
@@ -844,6 +866,7 @@ function AdminFightCard({
   const s = fight.status;
   const { text: countdownText, expired: timerExpired } = useCountdown(s === "confirmed" ? fight.claims_open_at : null);
   const claimsOpen = fight.claims_open_at && new Date() >= new Date(fight.claims_open_at);
+  const isBotConfirmed = !!botConfirm;
 
   // Auto-settle when timer expires
   useEffect(() => {
@@ -854,19 +877,31 @@ function AdminFightCard({
         setAutoSettled(true);
       }).catch((err) => {
         console.error("[AutoSettle] Failed:", err);
-        autoSettleRef.current = false; // allow retry
+        autoSettleRef.current = false;
       });
     }
   }, [s, timerExpired, busy, fight.id, onAction]);
   const totalPoolSol = ((fight.pool_a_lamports + fight.pool_b_lamports) / LAMPORTS).toFixed(4);
 
   return (
-    <div className={`bg-background/80 border border-border/30 rounded-lg p-4 ${fight.review_required ? 'ring-2 ring-yellow-500/40' : ''}`}>
+    <div className={`bg-background/80 border border-border/30 rounded-lg p-4 ${fight.review_required ? 'ring-2 ring-yellow-500/40' : isBotConfirmed ? 'ring-1 ring-blue-500/30' : ''}`}>
+      {/* Review required banner */}
       {fight.review_required && (
         <div className="flex items-center gap-2 mb-2 text-yellow-400">
           <AlertTriangle className="w-4 h-4" />
-          <span className="text-xs font-bold">REVIEW REQUIRED</span>
+          <span className="text-xs font-bold">NEEDS REVIEW</span>
           {fight.review_reason && <span className="text-xs text-muted-foreground">— {fight.review_reason}</span>}
+        </div>
+      )}
+
+      {/* Bot confirmed banner */}
+      {isBotConfirmed && !fight.review_required && (
+        <div className="flex items-center gap-2 mb-2 text-blue-400">
+          <CheckCircle className="w-4 h-4" />
+          <span className="text-xs font-bold">BOT CONFIRMED</span>
+          <span className="text-[10px] text-muted-foreground ml-auto">
+            {(botConfirm.confidence * 100).toFixed(0)}% • {botConfirm.provider}
+          </span>
         </div>
       )}
 
@@ -879,6 +914,26 @@ function AdminFightCard({
           {s.toUpperCase().replace('_', ' ')}
         </span>
       </div>
+
+      {/* Bot confirmation detail row */}
+      {isBotConfirmed && (
+        <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-[10px] mb-3 bg-blue-500/5 border border-blue-500/10 rounded p-2">
+          <div className="text-muted-foreground">Confidence</div>
+          <div className={`font-medium ${botConfirm.confidence >= 0.85 ? 'text-green-400' : 'text-yellow-400'}`}>
+            {(botConfirm.confidence * 100).toFixed(0)}%
+          </div>
+          <div className="text-muted-foreground">Provider</div>
+          <div className="text-foreground font-medium uppercase">{botConfirm.provider}</div>
+          <div className="text-muted-foreground">Confirmed At</div>
+          <div className="text-foreground font-medium">
+            {fight.confirmed_at ? new Date(fight.confirmed_at).toLocaleString() : "—"}
+          </div>
+          <div className="text-muted-foreground">Claims Open At</div>
+          <div className="text-foreground font-medium">
+            {fight.claims_open_at ? new Date(fight.claims_open_at).toLocaleString() : "—"}
+          </div>
+        </div>
+      )}
 
       {/* Stats bar */}
       <div className="grid grid-cols-3 gap-2 mb-3 bg-muted/30 rounded-lg p-2">
