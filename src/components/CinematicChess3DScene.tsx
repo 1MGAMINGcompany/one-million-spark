@@ -649,6 +649,7 @@ function SceneContent({ event, duration, boardFlipped, onComplete, onMoveComplet
         />
       )}
 
+      <CameraRig
         fromPos={fromPos}
         toPos={toPos}
         progressRef={progressRef}
