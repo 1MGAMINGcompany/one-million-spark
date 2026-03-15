@@ -136,6 +136,7 @@ const ChessAI = () => {
         }, 2500);
       } else {
         recordLoss();
+        incrementChessGames();
       }
       return true;
     }
