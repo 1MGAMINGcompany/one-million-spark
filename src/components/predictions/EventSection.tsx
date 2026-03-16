@@ -114,6 +114,7 @@ export default function EventSection({
 }) {
   const hasOpen = fights.some(f => f.status === "open");
   const [expanded, setExpanded] = useState(false);
+  const [leagueLogoError, setLeagueLogoError] = useState(false);
 
   const parsed = parseEventLabel(eventName);
   const sport = parseSport(eventName, event?.source_provider);
@@ -133,6 +134,8 @@ export default function EventSection({
   const displayDate = event?.event_date ? new Date(event.event_date).toLocaleDateString() : parsed.date;
   const displayOrg = event?.organization;
   const displayLocation = event?.location;
+  const countdown = formatCountdown(event?.event_date ?? null);
+  const showLeagueLogo = event?.league_logo && !leagueLogoError;
 
   return (
     <div className={`rounded-xl border ${config.borderColor} overflow-hidden`}>
