@@ -73,9 +73,11 @@ function logShareAction(variant: ShareVariant, method: string, wallet?: string) 
   }).then(() => {});
 }
 
-function buildShareUrl(wallet?: string): string {
+function buildShareUrl(referralCode?: string): string {
   const base = "https://1mgaming.com/predictions";
-  if (wallet) return `${base}?ref=${wallet}`;
+  if (referralCode && referralCode.length >= 4 && referralCode.length <= 16) {
+    return `${base}?ref=${referralCode}`;
+  }
   return base;
 }
 
