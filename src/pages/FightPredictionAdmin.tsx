@@ -1356,6 +1356,43 @@ function AutomationStatusPanel({
         </div>
       )}
 
+      {/* ⚠️ Stale live: soccer event with live fights past event_date — offer Force Result Sync */}
+      {event.source_provider === "api-football" && statusCounts.live > 0 && eventAt && eventAt < now && (
+        <div className="bg-amber-500/10 border border-amber-500/30 rounded px-2.5 py-2 text-[10px] space-y-1.5">
+          <div className="flex items-center gap-1.5 text-amber-400 font-bold">
+            <AlertTriangle className="w-3.5 h-3.5" /> Match finished but {statusCounts.live} fight(s) still live
+          </div>
+          <p className="text-muted-foreground">
+            Event date has passed. Re-query API-Football for the final result and apply it automatically.
+          </p>
+          <Button
+            size="sm"
+            variant="outline"
+            className="w-full border-amber-500/40 text-amber-400 hover:bg-amber-500/10"
+            disabled={busy || syncingResult}
+            onClick={async () => {
+              setSyncingResult(true);
+              try {
+                const res = await callAdmin("forceResultSync", { event_id: event.id });
+                if (res?.synced) {
+                  toast.success(`Result synced: ${res.score} — ${res.resolved} confirmed, ${res.draws} draw(s)`);
+                } else {
+                  toast.info(res?.message || "No result available yet");
+                }
+                loadData();
+              } catch (e: any) {
+                toast.error(e.message);
+              } finally {
+                setSyncingResult(false);
+              }
+            }}
+          >
+            {syncingResult ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-2" /> : <RefreshCw className="w-3.5 h-3.5 mr-2" />}
+            Force Result Sync
+          </Button>
+        </div>
+      )}
+
       {/* Run Automation Check button */}
       <Button
         size="sm"
