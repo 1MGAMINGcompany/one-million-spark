@@ -88,6 +88,9 @@ export default function FightCard({
 
   const badge = STATUS_BADGE[fight.status] || STATUS_BADGE.open;
 
+  const isSoccer = fight.source === "api-football";
+  const hasLogos = isSoccer && !!(fight.home_logo && fight.away_logo);
+
   // Parse title
   const titleParts = fight.title.split(' — ');
   const fightLabel = titleParts[0] || fight.title;
