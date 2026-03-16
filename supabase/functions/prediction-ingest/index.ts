@@ -739,6 +739,7 @@ Deno.serve(async (req) => {
                     requires_admin_approval: true,
                     scheduled_lock_at: scheduledLockAt,
                     scheduled_live_at: scheduledLiveAt,
+                    league_logo: fix.league?.logo || null,
                   })
                   .select()
                   .single();
