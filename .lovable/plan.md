@@ -1,61 +1,51 @@
-# Fight Prediction System — Phase 2 In Progress
 
-## Status Lifecycle (Final)
 
-```
-open → locked → live → result_selected → confirmed → settled
-                   └→ draw → refund_pending → refunds_processing → refunds_complete
-                   └→ cancelled
-```
+## Plan: Integrate GLB Chess Pieces for Classic Skin
 
-## Architecture
+### Overview
+Load the uploaded `chess_board.glb` and use its exact mesh geometries for the "classic" skin's 3D cinematic scene, replacing the procedural LatheGeometry pieces. Other skins keep lathe profiles as before.
 
-### Database Tables
-- `prediction_events` — Parent event grouping + automation fields (source_provider, source_event_id, automation_status, scheduling, result detection, confidence)
-- `prediction_fights` — Individual fights with event_id FK, weight_class, fight_class, method, refund tracking
-- `prediction_entries` — User prediction records
-- `prediction_admins` — Authorized admin wallets
-- `prediction_settings` — Global kill switches (predictions_enabled, claims_enabled, automation_enabled)
-- `automation_jobs` — Scheduled/running automation tasks (job_type, target, status, retries, result_payload)
-- `automation_logs` — Immutable audit trail (action, source, confidence, admin_wallet)
+### Mesh Name Mapping
 
-### Edge Functions
-- `prediction-admin` — Full lifecycle + getSettings/updateSettings for kill switches
-- `prediction-refund-worker` — Separate refund execution for draw scenarios (idempotent, safety-guarded)
-- `prediction-submit` — Submit predictions with 5% fee (respects predictions_enabled kill switch)
-- `prediction-claim` — Claim rewards (respects claims_enabled kill switch)
-- `prediction-feed` — Live activity feed
-- `prediction-auto-settle` — Cron auto-settle (respects automation_enabled kill switch)
-- `prediction-ingest` — BALLDONTLIE MMA API event/fight discovery (UFC, Bellator, PFL, ONE). Fetches events via `/events?year=YYYY`, full fight cards via `/fights?event_ids[]=ID`. Auth via `Authorization: API_KEY` header. Supports full card import (main_card, prelims, early_prelims segments with fight_order). Fights endpoint requires ALL-STAR tier. Dedupes by `bdl_{id}`. Stores as draft. Never auto-publishes.
-- `prediction-schedule-worker` — Cron: locks approved events at scheduled_lock_at, marks live at scheduled_live_at. Respects global + per-event automation_paused.
-- `prediction-result-worker` — Cron: fetches results from TheSportsDB for live auto-resolve events. Requires exact source_event_id match. Records payload + confidence. Flags low-confidence (<85%) for admin review. Auto-moves high-confidence fights to result_selected (NOT confirmed).
-- `prediction-settle-worker` — Idempotent job-based settlement. Creates jobs for confirmed fights past claims_open_at. CAS guard prevents double-pickup. Retry support (max 3). Full audit trail. Replaces simple auto-settle for new fights.
+Use these exact names from the GLB:
 
-### Key Design Decisions
-1. Draw declaration is separate from refund execution (draw → refund_pending → refunds_processing → refunds_complete)
-2. `result_selected` is a real reversible status between `live` and `confirmed`
-3. `settled` means financially closed and immutable
-4. Events group fights; admin manages at event level
-5. Result worker only moves to `result_selected`, never `confirmed` — admin must confirm
-6. Settlement worker uses job table with CAS guards for exactly-once execution
-7. All workers respect both global kill switch AND per-event automation_paused flag
+| Piece | White mesh | Black mesh |
+|-------|-----------|------------|
+| king | `king1_pieces_w_0` | `king2_pieces_b_0` |
+| queen | `queen1_pieces_w_0` | `queen2_pieces_b_0` |
+| rook | `rook1_pieces_w_0` | `rook2_pieces_b_0` |
+| bishop | `bishop1_pieces_w_0` | `bishop2_pieces_b_0` |
+| knight | `knight3_pieces_w_0` | `knight1_pieces_b_0` |
+| pawn | `pawn1_pieces_w_0` | `pawn8_pieces_b_0` |
 
-### Safety Guardrails
-- **Global kill switches**: predictions_enabled, claims_enabled, automation_enabled (enforced server-side)
-- **Per-event pause**: automation_paused flag stops schedule/result/settle workers for individual events
-- Server-side status guards on all transitions
-- Red confirmation dialogs for irreversible actions (lock, confirm, settle, draw, refunds)
-- Per-claim cap: 5 SOL, daily ceiling: 50 SOL
-- 5-minute safety delay before claims open
-- Refund tracking: refund_status, refunds_started_at, refunds_completed_at
-- Manual admin actions (settle, lock, etc.) always work regardless of kill switches
-- Settlement idempotency via automation_jobs deduplication
-- CAS (Compare-And-Swap) guards on job pickup prevent double-processing
+One mesh per piece type per color (we pick the first available variant).
 
----
+### Files
 
-## Phase 3 (Next): Cron Scheduling
-Set up pg_cron jobs for schedule-worker, result-worker, and settle-worker.
+**Copy asset:**
+- `chess_board.glb` → `public/models/chess_board.glb`
 
-## Phase 4 (Next): Admin UI for Automation Monitoring
-Dashboard showing automation_jobs status, failed jobs, retry counts, audit logs.
+**Create `src/hooks/useChessGLB.ts`:**
+- Use `useGLTF` from `@react-three/drei` (already installed) to load `/models/chess_board.glb`
+- Traverse the scene, log all mesh names once for debugging
+- Build a map: `{ king_w, queen_w, rook_w, bishop_w, knight_w, pawn_w, king_b, queen_b, ... }` → `BufferGeometry`
+- Export a hook that returns `getGLBGeo(piece: string, color: "white"|"black"): BufferGeometry | null`
+- Preload with `useGLTF.preload("/models/chess_board.glb")`
+
+**Edit `src/lib/chessSkins.ts`:**
+- Add optional `glbPath?: string` to `ChessSkin` interface
+- Set `glbPath: "/models/chess_board.glb"` on the classic skin only
+
+**Edit `src/components/CinematicChess3DScene.tsx`:**
+- Import the GLB hook
+- In `getCachedGeo`: if `skin.glbPath`, try GLB geometry first; fall back to lathe if null
+- GLB geometries may need scaling/centering — apply a uniform scale factor and center vertically so pieces sit on Y=0
+- `StaticPiece`, `MovingPiece`, `VictimPiece`: pass `color` to geo lookup (GLB has separate white/black meshes); remove the hardcoded king cross decoration when using GLB (the GLB king already has its crown)
+- The board from the GLB (`chess_board_board1_0`) is **not** used — we keep the existing procedural board for skin flexibility
+
+### Key Details
+- GLB geometries are cloned and cached per piece+color to avoid mutation issues
+- The geometry's bounding box is used to auto-center and normalize height to match existing piece scale (~`PIECE_SCALE`)
+- Console debug log lists all mesh names on first load (guarded behind `import.meta.env.DEV`)
+- No changes to non-classic skins — they continue using lathe profiles
+
