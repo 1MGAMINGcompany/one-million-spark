@@ -173,6 +173,7 @@ export function GameEndScreen({
   const { connection } = useConnection();
   const { publicKey, sendTransaction } = useWallet();
   const { play } = useSound();
+  const referralCode = useMyReferralCode(myAddress);
 
   // Clear active free room on game end
   useEffect(() => { clearActiveRoom(); }, []);
