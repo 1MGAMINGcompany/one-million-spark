@@ -7,6 +7,7 @@ import boxingGloveImg from "@/assets/boxing-glove.png";
 import mmaGlovesImg from "@/assets/mma-gloves.png";
 import futbolImg from "@/assets/futbol.png";
 import { getSportItemLabel } from "@/lib/sportLabels";
+import { formatEventDateTime, formatEventTime } from "@/lib/formatEventLocalDateTime";
 
 const LAMPORTS = 1_000_000_000;
 
