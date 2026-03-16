@@ -45,20 +45,24 @@ Deno.serve(async (req) => {
       return json({ processed: 0, message: "Automation disabled globally" });
     }
 
-    const now = new Date().toISOString();
+    const now = new Date();
+    const nowISO = now.toISOString();
     const results: { action: string; event_id: string; ok: boolean; error?: string }[] = [];
 
+    console.log(`[schedule-worker] Run started at ${nowISO}`);
+
     // ── Phase 1: Lock events at scheduled_lock_at ──
-    // This handles both MMA (lock at event time) and Soccer (lock 5min before kickoff)
     const { data: lockable } = await supabase
       .from("prediction_events")
-      .select("id, event_name, scheduled_lock_at, source_provider")
+      .select("id, event_name, event_date, scheduled_lock_at, scheduled_live_at, source_provider, source_event_id")
       .eq("status", "approved")
       .eq("automation_paused", false)
       .not("scheduled_lock_at", "is", null)
-      .lte("scheduled_lock_at", now);
+      .lte("scheduled_lock_at", nowISO);
 
     for (const evt of lockable ?? []) {
+      console.log(`[schedule-worker] Lock candidate: event=${evt.id} provider=${evt.source_provider} source_id=${evt.source_event_id} event_date=${evt.event_date} scheduled_lock_at=${evt.scheduled_lock_at} scheduled_live_at=${evt.scheduled_live_at} server_time=${nowISO}`);
+
       // Only lock fights that are still open (idempotent)
       const { data: fights, error: fErr } = await supabase
         .from("prediction_fights")
@@ -74,13 +78,20 @@ Deno.serve(async (req) => {
 
       const lockedCount = fights?.length ?? 0;
 
-      // Only log if we actually locked something
       if (lockedCount > 0) {
         await supabase.from("automation_logs").insert({
           action: "schedule_lock",
           event_id: evt.id,
           source: "prediction-schedule-worker",
-          details: { locked_fights: lockedCount, event_name: evt.event_name, provider: evt.source_provider },
+          details: {
+            locked_fights: lockedCount,
+            event_name: evt.event_name,
+            provider: evt.source_provider,
+            source_event_id: evt.source_event_id,
+            event_date: evt.event_date,
+            scheduled_lock_at: evt.scheduled_lock_at,
+            server_time: nowISO,
+          },
         });
         console.log(`[schedule-worker] Locked ${lockedCount} fights for event ${evt.id} (${evt.source_provider})`);
       }
@@ -89,15 +100,42 @@ Deno.serve(async (req) => {
     }
 
     // ── Phase 2: Mark events live at scheduled_live_at ──
+    // SAFETY GUARD: Also verify event_date has passed to prevent early LIVE
     const { data: liveable } = await supabase
       .from("prediction_events")
-      .select("id, event_name, scheduled_live_at, source_provider")
+      .select("id, event_name, event_date, scheduled_live_at, source_provider, source_event_id")
       .eq("status", "approved")
       .eq("automation_paused", false)
       .not("scheduled_live_at", "is", null)
-      .lte("scheduled_live_at", now);
+      .lte("scheduled_live_at", nowISO);
 
     for (const evt of liveable ?? []) {
+      console.log(`[schedule-worker] Live candidate: event=${evt.id} provider=${evt.source_provider} source_id=${evt.source_event_id} event_date=${evt.event_date} scheduled_live_at=${evt.scheduled_live_at} server_time=${nowISO}`);
+
+      // ── SAFETY GUARD: Never go LIVE before event_date ──
+      // Even if scheduled_live_at is wrong, the actual event start time is the hard floor.
+      if (evt.event_date) {
+        const eventStart = new Date(evt.event_date).getTime();
+        if (now.getTime() < eventStart) {
+          console.warn(`[schedule-worker] SAFETY BLOCK: event ${evt.id} event_date=${evt.event_date} is in the future (server=${nowISO}). Refusing to go LIVE early.`);
+          await supabase.from("automation_logs").insert({
+            action: "live_blocked_early",
+            event_id: evt.id,
+            source: "prediction-schedule-worker",
+            details: {
+              event_name: evt.event_name,
+              event_date: evt.event_date,
+              scheduled_live_at: evt.scheduled_live_at,
+              server_time: nowISO,
+              reason: "event_date is in the future — refusing early LIVE",
+              provider: evt.source_provider,
+            },
+          });
+          results.push({ action: "mark_live", event_id: evt.id, ok: false, error: "safety_block_event_date_future" });
+          continue;
+        }
+      }
+
       // Only mark locked fights as live (idempotent)
       const { data: fights, error: fErr } = await supabase
         .from("prediction_fights")
@@ -118,7 +156,15 @@ Deno.serve(async (req) => {
           action: "schedule_live",
           event_id: evt.id,
           source: "prediction-schedule-worker",
-          details: { live_fights: liveCount, event_name: evt.event_name, provider: evt.source_provider },
+          details: {
+            live_fights: liveCount,
+            event_name: evt.event_name,
+            provider: evt.source_provider,
+            source_event_id: evt.source_event_id,
+            event_date: evt.event_date,
+            scheduled_live_at: evt.scheduled_live_at,
+            server_time: nowISO,
+          },
         });
         console.log(`[schedule-worker] Marked ${liveCount} fights live for event ${evt.id} (${evt.source_provider})`);
       }
@@ -128,15 +174,25 @@ Deno.serve(async (req) => {
 
     // ── Phase 2.5: Fallback auto-live for events past scheduled_live_at ──
     // Safety net: if event should be live but fights are still locked/open
+    // SAME SAFETY GUARD: event_date must have passed
     const { data: stuckEvents } = await supabase
       .from("prediction_events")
-      .select("id, event_name, scheduled_live_at, source_provider")
+      .select("id, event_name, event_date, scheduled_live_at, source_provider, source_event_id")
       .eq("status", "approved")
       .eq("automation_paused", false)
       .not("scheduled_live_at", "is", null)
-      .lte("scheduled_live_at", now);
+      .lte("scheduled_live_at", nowISO);
 
     for (const evt of stuckEvents ?? []) {
+      // ── SAFETY GUARD: Never go LIVE before event_date ──
+      if (evt.event_date) {
+        const eventStart = new Date(evt.event_date).getTime();
+        if (now.getTime() < eventStart) {
+          console.warn(`[schedule-worker] SAFETY BLOCK (fallback): event ${evt.id} event_date=${evt.event_date} is in the future. Skipping.`);
+          continue;
+        }
+      }
+
       // Find fights that should be live but are still locked or open
       const { data: stuckFights, error: sfErr } = await supabase
         .from("prediction_fights")
@@ -156,7 +212,15 @@ Deno.serve(async (req) => {
           action: "fallback_auto_live",
           event_id: evt.id,
           source: "prediction-schedule-worker",
-          details: { live_fights: fallbackCount, event_name: evt.event_name, reason: "past_scheduled_live_at_fallback", provider: evt.source_provider },
+          details: {
+            live_fights: fallbackCount,
+            event_name: evt.event_name,
+            reason: "past_scheduled_live_at_fallback",
+            provider: evt.source_provider,
+            source_event_id: evt.source_event_id,
+            event_date: evt.event_date,
+            server_time: nowISO,
+          },
         });
         console.log(`[schedule-worker] Fallback: marked ${fallbackCount} stuck fights live for event ${evt.id}`);
         results.push({ action: "fallback_live", event_id: evt.id, ok: true });
