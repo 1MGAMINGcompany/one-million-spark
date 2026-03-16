@@ -199,9 +199,9 @@ export default function EventSection({
       </button>
 
       {expanded && (
-        <div className="p-4 space-y-4 bg-background/50">
+        <div className="p-3 sm:p-4 space-y-3 bg-background/50">
           {sortedMain.length > 0 && (
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className={`grid gap-3 ${sport === "FUTBOL" && sortedMain.length === 1 ? "grid-cols-1 max-w-2xl mx-auto" : "sm:grid-cols-2"}`}>
               {sortedMain.map((fight) => (
                 <FightCard
                   key={fight.id}
@@ -213,6 +213,7 @@ export default function EventSection({
                   claiming={claiming}
                   isHot={hotFightIds.has(fight.id)}
                   onWalletRequired={onWalletRequired}
+                  isSoccerEvent={sport === "FUTBOL"}
                 />
               ))}
             </div>
@@ -235,6 +236,7 @@ export default function EventSection({
                     claiming={claiming}
                     isHot={hotFightIds.has(fight.id)}
                     onWalletRequired={onWalletRequired}
+                    isSoccerEvent={sport === "FUTBOL"}
                   />
                 ))}
               </div>
