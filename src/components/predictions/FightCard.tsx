@@ -99,17 +99,19 @@ export default function FightCard({
   const fightClass = fight.fight_class || titleParts[2] || null;
 
   return (
-    <Card className="bg-card border-border/50 overflow-hidden relative">
+    <Card className={`bg-card border-border/50 overflow-hidden relative ${isSoccer ? 'border-primary/20' : ''}`}>
 
-      {/* Header */}
-      <div className="px-4 py-3 border-b border-border/30">
+      {/* Header — simplified for soccer to avoid repeating event info */}
+      <div className={`px-4 py-3 border-b border-border/30 ${isSoccer ? 'py-2' : ''}`}>
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-bold text-foreground font-['Cinzel']">{fightLabel}</h3>
+          <h3 className={`font-bold text-foreground font-['Cinzel'] ${isSoccer ? 'text-xs text-muted-foreground' : 'text-sm'}`}>
+            {isSoccer ? 'Match Prediction' : fightLabel}
+          </h3>
           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${badge.className}`}>
             {badge.label}
           </span>
         </div>
-        {(weight || fightClass || fight.method) && (
+        {!isSoccer && (weight || fightClass || fight.method) && (
           <div className="flex items-center gap-2 mt-1 flex-wrap">
             {weight && (
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-yellow-500/15 text-yellow-300">{weight}</span>
@@ -130,9 +132,9 @@ export default function FightCard({
         )}
       </div>
 
-      {/* Fighters */}
-      <div className="p-4">
-        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3" dir="ltr">
+      {/* Fighters / Teams */}
+      <div className={`${isSoccer ? 'p-5 sm:p-6' : 'p-4'}`}>
+        <div className={`grid grid-cols-[1fr_auto_1fr] items-center ${isSoccer ? 'gap-4 sm:gap-6' : 'gap-3'}`} dir="ltr">
           <FighterColumn
             name={fight.fighter_a_name}
             poolSol={poolASol}
@@ -142,10 +144,11 @@ export default function FightCard({
             onPredict={() => wallet ? onPredict(fight, "fighter_a") : onWalletRequired?.()}
             formatUsd={formatUsd}
             logo={hasLogos ? fight.home_logo : undefined}
+            isSoccer={isSoccer}
           />
-          <div className="flex flex-col items-center">
-            <Swords className="w-5 h-5 text-primary/60" />
-            <span className="text-[10px] text-muted-foreground font-bold">VS</span>
+          <div className="flex flex-col items-center gap-0.5">
+            <Swords className={`text-primary/60 ${isSoccer ? 'w-6 h-6' : 'w-5 h-5'}`} />
+            <span className={`text-muted-foreground font-bold ${isSoccer ? 'text-[11px]' : 'text-[10px]'}`}>VS</span>
           </div>
           <FighterColumn
             name={fight.fighter_b_name}
@@ -156,15 +159,16 @@ export default function FightCard({
             onPredict={() => wallet ? onPredict(fight, "fighter_b") : onWalletRequired?.()}
             formatUsd={formatUsd}
             logo={hasLogos ? fight.away_logo : undefined}
+            isSoccer={isSoccer}
           />
         </div>
 
-        {/* Total pool */}
-        <div className="mt-3 pt-2 border-t border-border/30 flex items-center justify-between">
-          <span className="text-[10px] text-muted-foreground">Total Pool</span>
-          <span className="text-xs font-bold text-primary">
+        {/* Total pool — prominent for soccer */}
+        <div className={`mt-3 pt-3 border-t border-border/30 flex items-center justify-between ${isSoccer ? 'bg-primary/5 -mx-5 sm:-mx-6 px-5 sm:px-6 py-3 -mb-5 sm:-mb-6 mt-4 border-t-primary/20' : ''}`}>
+          <span className={`text-muted-foreground ${isSoccer ? 'text-xs font-semibold' : 'text-[10px]'}`}>Total Pool</span>
+          <span className={`font-bold text-primary ${isSoccer ? 'text-base sm:text-lg' : 'text-xs'}`}>
             {totalPool.toFixed(2)} SOL
-            {formatUsd(totalPool) && <span className="text-[10px] text-muted-foreground font-normal ml-1">{formatUsd(totalPool)}</span>}
+            {formatUsd(totalPool) && <span className={`text-muted-foreground font-normal ml-1.5 ${isSoccer ? 'text-xs' : 'text-[10px]'}`}>{formatUsd(totalPool)}</span>}
           </span>
         </div>
 
