@@ -91,7 +91,7 @@ export default function SocialShareModal(props: ShareModalProps) {
   const cardRef = useRef<HTMLDivElement>(null);
   const [copied, setCopied] = useState(false);
 
-  const shareUrl = buildShareUrl(wallet);
+  const shareUrl = buildShareUrl(referralCode);
   const caption = buildCaption(props, shareUrl);
   const emoji = sportEmoji(sport);
   const label = sportLabel(sport);
