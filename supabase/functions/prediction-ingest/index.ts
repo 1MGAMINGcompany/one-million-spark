@@ -763,6 +763,8 @@ Deno.serve(async (req) => {
                     event_id: newEvent.id,
                     source: "api-football",
                     status: "open",
+                    home_logo: fix.teams?.home?.logo || null,
+                    away_logo: fix.teams?.away?.logo || null,
                   });
                 if (!fightErr) {
                   results.fights_created++;
