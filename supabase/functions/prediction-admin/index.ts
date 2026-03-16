@@ -563,6 +563,181 @@ Deno.serve(async (req) => {
       return json({ event: data });
     }
 
+    if (action === "forceResultSync") {
+      const { event_id } = body;
+      if (!event_id) return json({ error: "Missing event_id" }, 400);
+
+      // Get event details
+      const { data: evt } = await supabase
+        .from("prediction_events")
+        .select("id, event_name, source_provider, source_event_id, auto_resolve, status")
+        .eq("id", event_id)
+        .single();
+
+      if (!evt) return json({ error: "Event not found" }, 404);
+      if (evt.source_provider !== "api-football") {
+        return json({ error: "Force Result Sync is only available for API-Football events" }, 400);
+      }
+      if (!evt.source_event_id) {
+        return json({ error: "Event has no source_event_id" }, 400);
+      }
+
+      const apifbKey = Deno.env.get("API_FOOTBALL_KEY");
+      if (!apifbKey) return json({ error: "API_FOOTBALL_KEY not configured" }, 500);
+
+      const fixtureId = evt.source_event_id.replace("apifb_", "");
+      const APIFB_BASE = "https://v3.football.api-sports.io";
+      const apiRes = await fetch(`${APIFB_BASE}/fixtures?id=${fixtureId}`, {
+        headers: { "x-apisports-key": apifbKey },
+      });
+
+      if (!apiRes.ok) {
+        return json({ error: `API-Football returned HTTP ${apiRes.status}` }, 502);
+      }
+
+      const apiData = await apiRes.json();
+      const fixture = apiData?.response?.[0];
+
+      if (!fixture) {
+        return json({ error: "No fixture data from API-Football", fixture_id: fixtureId }, 404);
+      }
+
+      const fixStatus = (fixture.fixture?.status?.short || "").toUpperCase();
+      const fixLong = fixture.fixture?.status?.long || "";
+      const homeScore = fixture.goals?.home;
+      const awayScore = fixture.goals?.away;
+      const homeTeam = fixture.teams?.home?.name;
+      const awayTeam = fixture.teams?.away?.name;
+      const isFinished = ["FT", "AET", "PEN", "AWD", "WO"].includes(fixStatus);
+
+      // Log the sync attempt
+      await supabase.from("automation_logs").insert({
+        action: "force_result_sync",
+        event_id,
+        admin_wallet: wallet,
+        source: "prediction-admin",
+        details: {
+          fixture_id: fixtureId,
+          api_status: fixStatus,
+          api_status_long: fixLong,
+          home: homeTeam,
+          away: awayTeam,
+          home_score: homeScore,
+          away_score: awayScore,
+          is_finished: isFinished,
+        },
+      });
+
+      if (!isFinished) {
+        return json({
+          synced: false,
+          message: `Match is not finished yet (status: ${fixStatus} — ${fixLong})`,
+          fixture_status: fixStatus,
+          scores: homeScore != null ? `${homeScore}-${awayScore}` : null,
+        });
+      }
+
+      if (homeScore == null || awayScore == null) {
+        return json({ synced: false, message: "Match finished but scores unavailable", fixture_status: fixStatus });
+      }
+
+      // Get active fights for this event
+      const { data: dbFights } = await supabase
+        .from("prediction_fights")
+        .select("id, fighter_a_name, fighter_b_name, status, winner, confirmed_at")
+        .eq("event_id", event_id)
+        .in("status", ["live", "locked"]);
+
+      if (!dbFights || dbFights.length === 0) {
+        return json({ synced: false, message: "No active fights to resolve for this event" });
+      }
+
+      let resolved = 0;
+      let draws = 0;
+      const fightResults: any[] = [];
+
+      for (const fight of dbFights) {
+        if (fight.winner || fight.confirmed_at) continue;
+
+        if (homeScore === awayScore) {
+          // Draw handling
+          await supabase.from("prediction_fights").update({
+            status: "draw",
+            winner: null,
+            method: `Draw ${homeScore}-${awayScore}`,
+          }).eq("id", fight.id).in("status", ["live", "locked"]);
+
+          await supabase.from("prediction_fights").update({
+            status: "refund_pending",
+            refund_status: "pending",
+            refunds_started_at: new Date().toISOString(),
+          }).eq("id", fight.id).eq("status", "draw");
+
+          await supabase.from("automation_logs").insert({
+            action: "force_sync_draw",
+            event_id,
+            fight_id: fight.id,
+            admin_wallet: wallet,
+            source: "prediction-admin",
+            details: { score: `${homeScore}-${awayScore}` },
+          });
+
+          draws++;
+          fightResults.push({ fight_id: fight.id, outcome: "draw" });
+          continue;
+        }
+
+        const norm = (s: string) => s.toLowerCase().trim().replace(/\s+/g, " ");
+        const winnerTeam = homeScore > awayScore ? homeTeam : awayTeam;
+        const winner = norm(winnerTeam) === norm(fight.fighter_a_name) ? "fighter_a"
+                     : norm(winnerTeam) === norm(fight.fighter_b_name) ? "fighter_b"
+                     : null;
+
+        if (!winner) {
+          fightResults.push({ fight_id: fight.id, outcome: "name_mismatch", winnerTeam });
+          continue;
+        }
+
+        const now = new Date();
+        const claimsOpenAt = new Date(now.getTime() + 3 * 60 * 1000);
+
+        await supabase.from("prediction_fights").update({
+          status: "result_selected",
+          winner,
+          method: `${homeScore}-${awayScore}`,
+          resolved_at: now.toISOString(),
+        }).eq("id", fight.id).in("status", ["live", "locked"]);
+
+        await supabase.from("prediction_fights").update({
+          status: "confirmed",
+          confirmed_at: now.toISOString(),
+          claims_open_at: claimsOpenAt.toISOString(),
+        }).eq("id", fight.id).eq("status", "result_selected");
+
+        await supabase.from("automation_logs").insert({
+          action: "force_sync_confirmed",
+          event_id,
+          fight_id: fight.id,
+          admin_wallet: wallet,
+          source: "prediction-admin",
+          confidence: 0.95,
+          details: { winner, score: `${homeScore}-${awayScore}`, claims_open_at: claimsOpenAt.toISOString() },
+        });
+
+        resolved++;
+        fightResults.push({ fight_id: fight.id, outcome: "confirmed", winner });
+      }
+
+      return json({
+        synced: true,
+        fixture_status: fixStatus,
+        score: `${homeScore}-${awayScore}`,
+        resolved,
+        draws,
+        fights: fightResults,
+      });
+    }
+
     return json({ error: "Unknown action" }, 400);
   } catch (err) {
     return new Response(JSON.stringify({ error: err.message }), {

@@ -374,9 +374,13 @@ async function processTSDBResults(supabase: any, evt: any, sourceId: string, res
 async function processAPIFBResults(supabase: any, evt: any, apiKey: string, sourceId: string, results: any[]) {
   const fixtureId = sourceId.replace("apifb_", "");
   const url = `${APIFB_BASE}/fixtures?id=${fixtureId}`;
+
+  console.log(`[result-worker][soccer] Checking fixture ${fixtureId} for event ${evt.id} (${evt.event_name})`);
+
   const res = await fetch(url, { headers: { "x-apisports-key": apiKey } });
 
   if (!res.ok) {
+    console.error(`[result-worker][soccer] API-FOOTBALL HTTP ${res.status} for fixture ${fixtureId}`);
     results.push({ event_id: evt.id, action: "fetch", ok: false, details: `HTTP ${res.status}` });
     return;
   }
@@ -386,12 +390,16 @@ async function processAPIFBResults(supabase: any, evt: any, apiKey: string, sour
 
   if (!fixture) {
     await updateLastCheck(supabase, evt.id);
+    console.log(`[result-worker][soccer] No fixture data for ${fixtureId}`);
     results.push({ event_id: evt.id, action: "check", ok: true, details: "no_fixture_data" });
     return;
   }
 
   const fixStatus = (fixture.fixture?.status?.short || "").toUpperCase();
-  const isFinished = fixStatus === "FT" || fixStatus === "AET" || fixStatus === "PEN";
+  const fixLong = fixture.fixture?.status?.long || "";
+  const isFinished = ["FT", "AET", "PEN", "AWD", "WO"].includes(fixStatus);
+
+  console.log(`[result-worker][soccer] Fixture ${fixtureId} status: ${fixStatus} (${fixLong}), isFinished=${isFinished}`);
 
   if (!isFinished) {
     await updateLastCheck(supabase, evt.id);
@@ -406,12 +414,15 @@ async function processAPIFBResults(supabase: any, evt: any, apiKey: string, sour
 
   if (homeScore == null || awayScore == null) {
     await updateLastCheck(supabase, evt.id);
+    console.warn(`[result-worker][soccer] Fixture ${fixtureId} finished but no scores`);
     results.push({ event_id: evt.id, action: "check", ok: true, details: "no_scores" });
     return;
   }
 
   const confidence = 0.95;
-  const payload = { homeTeam, awayTeam, homeScore, awayScore, status: fixStatus, fixture_id: fixtureId };
+  const payload = { homeTeam, awayTeam, homeScore, awayScore, status: fixStatus, statusLong: fixLong, fixture_id: fixtureId };
+
+  console.log(`[result-worker][soccer] Fixture ${fixtureId} final: ${homeTeam} ${homeScore} - ${awayScore} ${awayTeam} (${fixStatus})`);
 
   await supabase.from("prediction_events").update({
     result_detected_at: new Date().toISOString(),
@@ -427,28 +438,71 @@ async function processAPIFBResults(supabase: any, evt: any, apiKey: string, sour
     .in("status", ["live", "locked"]);
 
   if (!dbFights || dbFights.length === 0) {
+    console.log(`[result-worker][soccer] No active fights for event ${evt.id}`);
+    await updateLastCheck(supabase, evt.id);
     results.push({ event_id: evt.id, action: "check", ok: true, details: "no_active_fights" });
     return;
   }
 
   let resolved = 0;
+  let draws = 0;
 
   for (const fight of dbFights) {
     // Idempotency: skip fights with existing winner or confirmation
-    if (fight.winner || fight.confirmed_at) continue;
-
-    if (homeScore === awayScore) {
-      await flagForReview(supabase, evt.id, fight.id, `Draw result (${homeScore}-${awayScore})`, payload);
+    if (fight.winner || fight.confirmed_at) {
+      console.log(`[result-worker][soccer] Fight ${fight.id} already has winner/confirmation, skipping`);
       continue;
     }
 
+    // ── DRAW HANDLING: Auto-declare draw and advance to refund_pending ──
+    if (homeScore === awayScore) {
+      console.log(`[result-worker][soccer] Draw detected for fight ${fight.id}: ${homeScore}-${awayScore}`);
+
+      const { error: drawErr } = await supabase.from("prediction_fights").update({
+        status: "draw",
+        winner: null,
+        method: `Draw ${homeScore}-${awayScore}`,
+      }).eq("id", fight.id).in("status", ["live", "locked"]);
+
+      if (drawErr) {
+        console.error(`[result-worker][soccer] Failed to set draw for fight ${fight.id}:`, drawErr.message);
+        await flagForReview(supabase, evt.id, fight.id, `Draw result (${homeScore}-${awayScore}) — auto-draw failed: ${drawErr.message}`, payload);
+        continue;
+      }
+
+      // Auto-advance to refund_pending
+      const { error: refundErr } = await supabase.from("prediction_fights").update({
+        status: "refund_pending",
+        refund_status: "pending",
+        refunds_started_at: new Date().toISOString(),
+      }).eq("id", fight.id).eq("status", "draw");
+
+      if (refundErr) {
+        console.error(`[result-worker][soccer] Failed to set refund_pending for fight ${fight.id}:`, refundErr.message);
+      }
+
+      await supabase.from("automation_logs").insert({
+        action: "soccer_draw_detected",
+        event_id: evt.id,
+        fight_id: fight.id,
+        source: "prediction-result-worker",
+        confidence,
+        details: { score: `${homeScore}-${awayScore}`, provider: "api-football", home: homeTeam, away: awayTeam, auto_refund: !refundErr },
+      });
+
+      draws++;
+      continue;
+    }
+
+    // ── WINNER HANDLING ──
     const winnerTeam = homeScore > awayScore ? homeTeam : awayTeam;
     const winner = norm(winnerTeam) === norm(fight.fighter_a_name) ? "fighter_a"
                  : norm(winnerTeam) === norm(fight.fighter_b_name) ? "fighter_b"
                  : null;
 
     if (!winner) {
-      await flagForReview(supabase, evt.id, fight.id, "Cannot match winner to fighter names", payload);
+      console.warn(`[result-worker][soccer] Cannot match winner "${winnerTeam}" to fight ${fight.id} (${fight.fighter_a_name} vs ${fight.fighter_b_name})`);
+      await flagForReview(supabase, evt.id, fight.id, `Cannot match winner team "${winnerTeam}" to fighter names`, payload);
       continue;
     }
 
@@ -456,12 +510,17 @@ async function processAPIFBResults(supabase: any, evt: any, apiKey: string, sour
     const claimsOpenAt = new Date(now.getTime() + BOT_CLAIMS_DELAY_MS);
 
     // Two-step: result_selected → confirmed
-    await supabase.from("prediction_fights").update({
+    const { error: rsErr } = await supabase.from("prediction_fights").update({
       status: "result_selected",
       winner,
       method: `${homeScore}-${awayScore}`,
       resolved_at: now.toISOString(),
     }).eq("id", fight.id).in("status", ["live", "locked"]);
+
+    if (rsErr) {
+      console.error(`[result-worker][soccer] Failed result_selected for fight ${fight.id}:`, rsErr.message);
+      continue;
+    }
 
     await supabase.from("automation_logs").insert({
       action: "soccer_result_selected",
@@ -472,11 +531,16 @@ async function processAPIFBResults(supabase: any, evt: any, apiKey: string, sour
       details: { winner, score: `${homeScore}-${awayScore}`, provider: "api-football", home: homeTeam, away: awayTeam },
     });
 
-    await supabase.from("prediction_fights").update({
+    const { error: cfErr } = await supabase.from("prediction_fights").update({
       status: "confirmed",
       confirmed_at: now.toISOString(),
       claims_open_at: claimsOpenAt.toISOString(),
     }).eq("id", fight.id).eq("status", "result_selected");
+
+    if (cfErr) {
+      console.error(`[result-worker][soccer] Failed confirm for fight ${fight.id}:`, cfErr.message);
+      continue;
+    }
 
     await supabase.from("automation_logs").insert({
       action: "soccer_result_confirmed",
@@ -487,10 +551,13 @@ async function processAPIFBResults(supabase: any, evt: any, apiKey: string, sour
       details: { winner, score: `${homeScore}-${awayScore}`, claims_open_at: claimsOpenAt.toISOString(), provider: "api-football", home: homeTeam, away: awayTeam },
     });
 
+    console.log(`[result-worker][soccer] Auto-confirmed fight ${fight.id}: ${winner} (${homeScore}-${awayScore}), claims at ${claimsOpenAt.toISOString()}`);
     resolved++;
   }
 
-  results.push({ event_id: evt.id, action: "apifb_results", ok: true, details: { resolved } });
+  await updateLastCheck(supabase, evt.id);
+  results.push({ event_id: evt.id, action: "apifb_results", ok: true, details: { resolved, draws } });
+  console.log(`[result-worker][soccer] Event ${evt.id}: resolved=${resolved}, draws=${draws}`);
 }
 
 // ── Shared helpers ──
