@@ -48,6 +48,7 @@ export default function PredictionModal({
   wallet?: string;
 }) {
   const { formatUsd } = useSolPrice();
+  const referralCode = useMyReferralCode(wallet ?? null);
   const [amount, setAmount] = useState("");
   const amountNum = parseFloat(amount) || 0;
   const fee = amountNum * FEE_RATE;
