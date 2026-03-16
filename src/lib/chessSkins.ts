@@ -57,6 +57,7 @@ export const CHESS_SKINS: ChessSkin[] = [
     unlockGames: 0,
     unlockShares: 0,
     profiles: CLASSIC_PROFILES,
+    glbPath: "/models/chess_board.glb",
     whiteMat: { color: "#f5ead8", roughness: 0.15, metalness: 0.02, clearcoat: 1.0, clearcoatRoughness: 0.08 },
     blackMat: { color: "#141418", roughness: 0.12, metalness: 0.6, clearcoat: 0.9, clearcoatRoughness: 0.05 },
     boardLight: "hsl(38, 45%, 75%)",
