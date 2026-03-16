@@ -1,70 +1,61 @@
+# Fight Prediction System — Phase 2 In Progress
 
+## Status Lifecycle (Final)
 
-## Fix: Stale LIVE Soccer Events + Terminology Audit
+```
+open → locked → live → result_selected → confirmed → settled
+                   └→ draw → refund_pending → refunds_processing → refunds_complete
+                   └→ cancelled
+```
 
-### Analysis
+## Architecture
 
-**Stale LIVE guard**: The categorization logic (lines 212-229 of `FightPredictions.tsx`) pushes any event with a `status === "live"` fight directly into the LIVE NOW bucket with no date check. A match from March 15 with `status = "live"` still appears under LIVE NOW on March 16.
+### Database Tables
+- `prediction_events` — Parent event grouping + automation fields (source_provider, source_event_id, automation_status, scheduling, result detection, confidence)
+- `prediction_fights` — Individual fights with event_id FK, weight_class, fight_class, method, refund tracking
+- `prediction_entries` — User prediction records
+- `prediction_admins` — Authorized admin wallets
+- `prediction_settings` — Global kill switches (predictions_enabled, claims_enabled, automation_enabled)
+- `automation_jobs` — Scheduled/running automation tasks (job_type, target, status, retries, result_payload)
+- `automation_logs` — Immutable audit trail (action, source, confidence, admin_wallet)
 
-**Terminology**: Already correctly handled. `sportLabels.ts` returns "Match/Matches" for FUTBOL/SOCCER, and `EventSection.tsx` uses `getSportItemLabel()` for all user-facing counts. `FightCard.tsx` shows "Match Prediction" for soccer headers. All remaining "fight" references are internal code (variable names, types, props) — not user-visible. No terminology changes needed.
+### Edge Functions
+- `prediction-admin` — Full lifecycle + getSettings/updateSettings for kill switches
+- `prediction-refund-worker` — Separate refund execution for draw scenarios (idempotent, safety-guarded)
+- `prediction-submit` — Submit predictions with 5% fee (respects predictions_enabled kill switch)
+- `prediction-claim` — Claim rewards (respects claims_enabled kill switch)
+- `prediction-feed` — Live activity feed
+- `prediction-auto-settle` — Cron auto-settle (respects automation_enabled kill switch)
+- `prediction-ingest` — BALLDONTLIE MMA API event/fight discovery (UFC, Bellator, PFL, ONE). Fetches events via `/events?year=YYYY`, full fight cards via `/fights?event_ids[]=ID`. Auth via `Authorization: API_KEY` header. Supports full card import (main_card, prelims, early_prelims segments with fight_order). Fights endpoint requires ALL-STAR tier. Dedupes by `bdl_{id}`. Stores as draft. Never auto-publishes.
+- `prediction-schedule-worker` — Cron: locks approved events at scheduled_lock_at, marks live at scheduled_live_at. Respects global + per-event automation_paused.
+- `prediction-result-worker` — Cron: fetches results from TheSportsDB for live auto-resolve events. Requires exact source_event_id match. Records payload + confidence. Flags low-confidence (<85%) for admin review. Auto-moves high-confidence fights to result_selected (NOT confirmed).
+- `prediction-settle-worker` — Idempotent job-based settlement. Creates jobs for confirmed fights past claims_open_at. CAS guard prevents double-pickup. Retry support (max 3). Full audit trail. Replaces simple auto-settle for new fights.
+
+### Key Design Decisions
+1. Draw declaration is separate from refund execution (draw → refund_pending → refunds_processing → refunds_complete)
+2. `result_selected` is a real reversible status between `live` and `confirmed`
+3. `settled` means financially closed and immutable
+4. Events group fights; admin manages at event level
+5. Result worker only moves to `result_selected`, never `confirmed` — admin must confirm
+6. Settlement worker uses job table with CAS guards for exactly-once execution
+7. All workers respect both global kill switch AND per-event automation_paused flag
+
+### Safety Guardrails
+- **Global kill switches**: predictions_enabled, claims_enabled, automation_enabled (enforced server-side)
+- **Per-event pause**: automation_paused flag stops schedule/result/settle workers for individual events
+- Server-side status guards on all transitions
+- Red confirmation dialogs for irreversible actions (lock, confirm, settle, draw, refunds)
+- Per-claim cap: 5 SOL, daily ceiling: 50 SOL
+- 5-minute safety delay before claims open
+- Refund tracking: refund_status, refunds_started_at, refunds_completed_at
+- Manual admin actions (settle, lock, etc.) always work regardless of kill switches
+- Settlement idempotency via automation_jobs deduplication
+- CAS (Compare-And-Swap) guards on job pickup prevent double-processing
 
 ---
 
-### Plan
+## Phase 3 (Next): Cron Scheduling
+Set up pg_cron jobs for schedule-worker, result-worker, and settle-worker.
 
-#### Part 1 — Stale-live guard in `FightPredictions.tsx`
-
-In the categorization `useMemo` (line 212-229), modify the `hasLive` branch:
-
-```
-if (hasLive) {
-  const eventDate = group.event?.event_date;
-  const isStaleLive = eventDate && (Date.now() - new Date(eventDate).getTime()) > 24 * 60 * 60 * 1000;
-
-  if (isStaleLive) {
-    // Debug warning for stale rows
-    console.warn('[predictions] stale-live event demoted:', {
-      eventName, eventDate, status: 'live'
-    });
-    today.push([eventName, group]);
-  } else {
-    live.push([eventName, group]);
-  }
-}
-```
-
-This demotes events with `status=live` but `event_date` older than 24h into the TODAY bucket instead of LIVE NOW.
-
-#### Part 2 — Stale badge in `EventSection.tsx`
-
-Pass the stale-live signal through to `EventSection` and display a subtle badge.
-
-1. Add an optional `isStaleLive?: boolean` prop to `EventSection`.
-2. In the header badges area, when `isStaleLive` is true:
-   - Hide the normal "LIVE" or "OPEN" pulse badge
-   - Show a subtle amber badge: "⏳ Awaiting Result"
-3. Keep all other header behavior (countdown, collapse, pool) unchanged.
-
-In `FightPredictions.tsx`, compute `isStaleLive` per event entry and pass it to `EventSection` in `renderEventList`. For today entries that were demoted from live, tag them.
-
-#### Part 3 — Terminology audit result
-
-No changes needed. The existing `sportLabels.ts` correctly maps FUTBOL → Match/Matches, and all user-facing label points already use it. Combat sports correctly show Fight/Fights.
-
----
-
-### Files changed
-
-| File | Change |
-|------|--------|
-| `src/pages/FightPredictions.tsx` | Add 24h stale-live guard in categorization useMemo; pass `isStaleLive` prop |
-| `src/components/predictions/EventSection.tsx` | Accept `isStaleLive` prop; render "⏳ Awaiting Result" badge instead of LIVE pulse |
-
-### Safety
-
-- UI-only — no database mutations
-- No Solana/wallet/settlement changes
-- Combat sports unaffected
-- Mobile layout unchanged
-- Stale events remain visible (just demoted from LIVE NOW to TODAY)
-
+## Phase 4 (Next): Admin UI for Automation Monitoring
+Dashboard showing automation_jobs status, failed jobs, retry counts, audit logs.

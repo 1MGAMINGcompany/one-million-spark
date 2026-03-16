@@ -190,7 +190,7 @@ export default function FightPredictions() {
   }, [groupedEvents, activeSport]);
 
   // Categorize events into status sections (each event appears ONCE)
-  const { liveEvents, todayEvents, upcomingEvents } = useMemo(() => {
+  const { liveEvents, todayEvents, upcomingEvents, staleLiveKeys } = useMemo(() => {
     const eventMap = new Map(events.map(e => [e.id, e]));
     const live: [string, { event?: PredictionEvent; fights: Fight[] }][] = [];
     const today: [string, { event?: PredictionEvent; fights: Fight[] }][] = [];
@@ -209,11 +209,22 @@ export default function FightPredictions() {
       return d > now;
     };
 
+    const staleLiveKeys = new Set<string>();
+
     Object.entries(filteredEvents).forEach(([eventName, group]) => {
       const hasLive = group.fights.some(f => f.status === "live");
 
       if (hasLive) {
-        live.push([eventName, group]);
+        const eventDate = group.event?.event_date;
+        const isStaleLive = eventDate && (Date.now() - new Date(eventDate).getTime()) > 24 * 60 * 60 * 1000;
+
+        if (isStaleLive) {
+          console.warn('[predictions] stale-live event demoted:', { eventName, eventDate, status: 'live' });
+          staleLiveKeys.add(eventName);
+          today.push([eventName, group]);
+        } else {
+          live.push([eventName, group]);
+        }
       } else {
         const ev = group.event;
         const eventDate = ev?.event_date || null;
@@ -229,7 +240,7 @@ export default function FightPredictions() {
       }
     });
 
-    return { liveEvents: live, todayEvents: today, upcomingEvents: upcoming };
+    return { liveEvents: live, todayEvents: today, upcomingEvents: upcoming, staleLiveKeys };
   }, [filteredEvents, events]);
 
   const hotFightIds = useMemo(() => {
@@ -379,6 +390,7 @@ export default function FightPredictions() {
         hotFightIds={hotFightIds}
         onWalletRequired={() => setShowWalletGate(true)}
         event={group.event}
+        isStaleLive={staleLiveKeys.has(eventName)}
       />
     ));
 
