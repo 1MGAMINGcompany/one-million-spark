@@ -220,7 +220,7 @@ function FighterColumn({
         <img
           src={logo}
           alt=""
-          className="w-8 h-8 object-contain mx-auto mb-1"
+          className="w-7 h-7 object-contain mx-auto mb-1.5"
           onError={() => setLogoError(true)}
           loading="lazy"
         />
