@@ -688,6 +688,7 @@ Deno.serve(async (req) => {
                   event_date: eventDate,
                   location: venue || null,
                   organization: leagueName,
+                  league_logo: fix.league?.logo || null,
                   updated_at: new Date().toISOString(),
                 };
                 // Sync lock/live times if event_date changed
