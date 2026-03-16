@@ -236,6 +236,7 @@ export default function EventSection({
                     claiming={claiming}
                     isHot={hotFightIds.has(fight.id)}
                     onWalletRequired={onWalletRequired}
+                    isSoccerEvent={sport === "FUTBOL"}
                   />
                 ))}
               </div>

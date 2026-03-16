@@ -209,11 +209,11 @@ export default function FightCard({
 }
 
 function FighterColumn({
-  name, poolSol, odds, isWinner, canPredict, onPredict, formatUsd, logo,
+  name, poolSol, odds, isWinner, canPredict, onPredict, formatUsd, logo, isSoccer,
 }: {
   name: string; poolSol: number; odds: number; isWinner: boolean;
   canPredict: boolean; onPredict: () => void; formatUsd: (sol: number) => string;
-  logo?: string | null;
+  logo?: string | null; isSoccer?: boolean;
 }) {
   const [logoError, setLogoError] = useState(false);
   const showLogo = logo && !logoError;
@@ -224,19 +224,19 @@ function FighterColumn({
         <img
           src={logo}
           alt=""
-          className="w-7 h-7 object-contain mx-auto mb-1.5"
+          className={`object-contain mx-auto ${isSoccer ? 'w-10 h-10 sm:w-12 sm:h-12 mb-2 drop-shadow-md' : 'w-7 h-7 mb-1.5'}`}
           onError={() => setLogoError(true)}
           loading="lazy"
         />
       )}
-      <p className={`font-bold text-foreground ${showLogo ? 'text-[15px]' : 'text-sm'}`}>{name}</p>
-      <p className="text-xs text-muted-foreground mt-1">
+      <p className={`font-bold text-foreground ${isSoccer && showLogo ? 'text-base sm:text-lg' : showLogo ? 'text-[15px]' : 'text-sm'}`}>{name}</p>
+      <p className={`text-muted-foreground mt-1 ${isSoccer ? 'text-xs sm:text-sm' : 'text-xs'}`}>
         {poolSol.toFixed(2)} SOL
         {formatUsd(poolSol) && <span className="block text-[10px] text-muted-foreground/70">{formatUsd(poolSol)}</span>}
       </p>
-      <p className="text-primary font-bold text-lg">{odds.toFixed(2)}x</p>
+      <p className={`text-primary font-bold ${isSoccer ? 'text-xl sm:text-2xl' : 'text-lg'}`}>{odds.toFixed(2)}x</p>
       {canPredict && (
-        <Button size="sm" className="mt-2 w-full bg-primary text-primary-foreground hover:bg-primary/90 text-xs" onClick={onPredict}>
+        <Button size="sm" className={`mt-2 w-full bg-primary text-primary-foreground hover:bg-primary/90 ${isSoccer ? 'text-sm py-2.5 font-bold' : 'text-xs'}`} onClick={onPredict}>
           Predict
         </Button>
       )}
