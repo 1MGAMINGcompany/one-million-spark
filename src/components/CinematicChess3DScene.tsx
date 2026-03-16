@@ -57,9 +57,8 @@ function getPhase(progress: number, _isFirstEntry: boolean): { phase: AnimPhase;
 // ─── Skin-Keyed Material & Geometry Cache ─────────────────────────────────────
 
 const _geoCache = new Map<string, THREE.LatheGeometry>();
-const _matCache = new Map<string, THREE.Material>();
 
-function getCachedGeo(piece: string, lite: boolean, skin: ChessSkin): THREE.LatheGeometry {
+function getCachedLatheGeo(piece: string, lite: boolean, skin: ChessSkin): THREE.LatheGeometry {
   const key = `${skin.id}-${piece}-${lite ? "l" : "f"}`;
   let g = _geoCache.get(key);
   if (!g) {
