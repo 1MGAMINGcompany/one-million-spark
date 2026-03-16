@@ -240,7 +240,7 @@ export default function FightPredictions() {
       }
     });
 
-    return { liveEvents: live, todayEvents: today, upcomingEvents: upcoming };
+    return { liveEvents: live, todayEvents: today, upcomingEvents: upcoming, staleLiveKeys };
   }, [filteredEvents, events]);
 
   const hotFightIds = useMemo(() => {
