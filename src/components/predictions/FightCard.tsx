@@ -24,6 +24,9 @@ interface Fight {
   weight_class?: string | null;
   fight_class?: string | null;
   refund_status?: string | null;
+  home_logo?: string | null;
+  away_logo?: string | null;
+  source?: string | null;
 }
 
 const STATUS_BADGE: Record<string, { label: string; className: string }> = {
