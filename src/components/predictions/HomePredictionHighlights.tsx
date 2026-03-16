@@ -9,6 +9,7 @@ import { useSolPrice } from "@/hooks/useSolPrice";
 import { parseSport } from "@/components/predictions/EventSection";
 import type { Fight } from "@/components/predictions/FightCard";
 import type { PredictionEvent } from "@/components/predictions/PredictionHighlights";
+import { formatEventDateTime } from "@/lib/formatEventLocalDateTime";
 
 import muayThaiImg from "@/assets/muay-thai.png";
 import boxingGloveImg from "@/assets/boxing-glove.png";
@@ -116,7 +117,7 @@ function formatDayLabel(dateStr: string): string {
   const tomorrow = new Date(now);
   tomorrow.setDate(tomorrow.getDate() + 1);
   if (d.toDateString() === tomorrow.toDateString()) return "Tomorrow";
-  return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+  return formatEventDateTime(dateStr);
 }
 
 type EnrichedFight = Fight & { eventLabel?: string; eventDate?: string | null; sport: string };

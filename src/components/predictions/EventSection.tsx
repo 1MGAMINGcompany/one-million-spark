@@ -7,6 +7,7 @@ import boxingGloveImg from "@/assets/boxing-glove.png";
 import mmaGlovesImg from "@/assets/mma-gloves.png";
 import futbolImg from "@/assets/futbol.png";
 import { getSportItemLabel } from "@/lib/sportLabels";
+import { formatEventDateTime, formatEventTime } from "@/lib/formatEventLocalDateTime";
 
 const LAMPORTS = 1_000_000_000;
 
@@ -43,11 +44,12 @@ function formatCountdown(eventDate: string | null): string | null {
   if (diff <= 0) return "Started";
   const hours = Math.floor(diff / 3_600_000);
   const mins = Math.floor((diff % 3_600_000) / 60_000);
+  const localTime = formatEventTime(eventDate);
   if (hours > 48) {
     const days = Math.floor(hours / 24);
-    return `Starts in ${days}d`;
+    return `Starts in ${days}d • ${localTime}`;
   }
-  return `Starts in ${hours}h ${mins}m`;
+  return `Starts in ${hours}h ${mins}m • ${localTime}`;
 }
 
 const SOCCER_KEYWORDS = [
@@ -133,7 +135,7 @@ export default function EventSection({
   const sortedTournament = sortFights(tournamentFights);
 
   // Use event metadata if available
-  const displayDate = event?.event_date ? new Date(event.event_date).toLocaleDateString() : parsed.date;
+  const displayDate = event?.event_date ? formatEventDateTime(event.event_date) : parsed.date;
   const displayOrg = event?.organization;
   const displayLocation = event?.location;
   const countdown = formatCountdown(event?.event_date ?? null);
