@@ -591,9 +591,7 @@ function SceneContent({ event, duration, boardFlipped, onComplete, onMoveComplet
   // Unified geometry resolver: GLB first (if skin has glbPath), then lathe fallback
   const getGeo: GetGeoFn = useCallback((piece: string, color: "white" | "black") => {
     if (skin.glbPath) {
-      const heightMap: Record<string, number> = { pawn: 0.55, rook: 0.65, knight: 0.7, bishop: 0.75, queen: 0.9, king: 1.0 };
-      const targetH = (heightMap[piece] ?? 0.55) * PIECE_SCALE;
-      const glbGeo = getGLBGeo(piece, color, targetH);
+      const glbGeo = getGLBGeo(piece, color);
       if (glbGeo) return glbGeo;
     }
     return getCachedLatheGeo(piece, lite, skin);

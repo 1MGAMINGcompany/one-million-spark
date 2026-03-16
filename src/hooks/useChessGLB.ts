@@ -1,8 +1,8 @@
 /**
  * useChessGLB — loads chess_board.glb and extracts per-piece BufferGeometry.
  *
- * Exact mesh names from the GLB are used as the primary mapping.
- * Falls back to null (caller should use lathe profiles) if a mesh is missing.
+ * Uses the GLB board mesh as a scaling reference so pieces are correctly
+ * proportioned regardless of the model's native units.
  */
 
 import { useMemo, useRef } from "react";
@@ -10,6 +10,12 @@ import { useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 
 const GLB_PATH = "/models/chess_board.glb";
+
+/** Our procedural board spans BOARD_SIZE units (–2 to +2) */
+const BOARD_SIZE = 4;
+
+/** Name of the board mesh inside the GLB (used as scaling reference) */
+const BOARD_MESH_NAME = "chess_board_board1_0";
 
 /** Exact mesh names from the GLB, keyed by "piece_color" */
 const MESH_MAP: Record<string, string> = {
@@ -27,15 +33,13 @@ const MESH_MAP: Record<string, string> = {
   pawn_black: "pawn8_pieces_b_0",
 };
 
-/** Geometry cache — cloned & normalized, keyed by mesh name */
+/** Geometry cache — cloned & scaled, keyed by mesh name */
 const _glbGeoCache = new Map<string, THREE.BufferGeometry>();
 
-function normalizeGeometry(geo: THREE.BufferGeometry, targetHeight: number): THREE.BufferGeometry {
+function scaleGeometry(geo: THREE.BufferGeometry, scale: number): THREE.BufferGeometry {
   const clone = geo.clone();
   clone.computeBoundingBox();
   const bb = clone.boundingBox!;
-  const h = bb.max.y - bb.min.y;
-  const scale = h > 0 ? targetHeight / h : 1;
 
   // Center X/Z, put base at Y=0
   const cx = (bb.min.x + bb.max.x) / 2;
@@ -49,8 +53,9 @@ export function useChessGLB() {
   const { scene } = useGLTF(GLB_PATH);
   const logged = useRef(false);
 
-  const meshLookup = useMemo(() => {
+  const { meshLookup, boardScale } = useMemo(() => {
     const lookup = new Map<string, THREE.Mesh>();
+    let bScale = 1;
 
     scene.traverse((child) => {
       if ((child as THREE.Mesh).isMesh) {
@@ -58,26 +63,39 @@ export function useChessGLB() {
       }
     });
 
+    // Compute board scale from the board mesh
+    const boardMesh = lookup.get(BOARD_MESH_NAME);
+    if (boardMesh) {
+      const box = new THREE.Box3().setFromBufferAttribute(
+        boardMesh.geometry.getAttribute("position") as THREE.BufferAttribute
+      );
+      const glbBoardWidth = Math.max(box.max.x - box.min.x, box.max.z - box.min.z);
+      if (glbBoardWidth > 0) {
+        bScale = BOARD_SIZE / glbBoardWidth;
+      }
+    }
+
     // Debug log (dev only, once)
     if (!logged.current && import.meta.env.DEV) {
       logged.current = true;
       console.log("[useChessGLB] meshes found:", Array.from(lookup.keys()));
+      console.log("[useChessGLB] boardScale:", bScale);
     }
 
-    return lookup;
+    return { meshLookup: lookup, boardScale: bScale };
   }, [scene]);
 
   /**
-   * Get a normalized BufferGeometry for a piece+color.
+   * Get a uniformly-scaled BufferGeometry for a piece+color.
    * Returns null if the mesh isn't found in the GLB.
    */
   const getGLBGeo = useMemo(() => {
-    return (piece: string, color: "white" | "black", targetHeight: number): THREE.BufferGeometry | null => {
+    return (piece: string, color: "white" | "black"): THREE.BufferGeometry | null => {
       const key = `${piece}_${color}`;
       const meshName = MESH_MAP[key];
       if (!meshName) return null;
 
-      const cacheKey = `${meshName}_${targetHeight}`;
+      const cacheKey = `${meshName}_${boardScale.toFixed(4)}`;
       let cached = _glbGeoCache.get(cacheKey);
       if (cached) return cached;
 
@@ -89,11 +107,11 @@ export function useChessGLB() {
         return null;
       }
 
-      cached = normalizeGeometry(mesh.geometry, targetHeight);
+      cached = scaleGeometry(mesh.geometry, boardScale);
       _glbGeoCache.set(cacheKey, cached);
       return cached;
     };
-  }, [meshLookup]);
+  }, [meshLookup, boardScale]);
 
   return { getGLBGeo };
 }
