@@ -636,8 +636,14 @@ Deno.serve(async (req) => {
               const homeTeam = fix.teams?.home?.name || "Home";
               const awayTeam = fix.teams?.away?.name || "Away";
               const eventName = `${homeTeam} vs ${awayTeam}`;
-              const eventDate = fix.fixture?.date || null;
+              // IMPORTANT: Use fixture.timestamp (Unix epoch) for unambiguous UTC.
+              // fixture.date may contain timezone offsets that could be misinterpreted.
+              const fixtureTimestamp = fix.fixture?.timestamp;
+              const eventDate = fixtureTimestamp
+                ? new Date(fixtureTimestamp * 1000).toISOString()
+                : (fix.fixture?.date || null);
               const venue = [fix.fixture?.venue?.name, fix.fixture?.venue?.city].filter(Boolean).join(", ");
+              console.log(`[ingest] API-Football fixture ${fixtureId}: timestamp=${fixtureTimestamp} date=${fix.fixture?.date} normalized_utc=${eventDate}`);
 
               const { data: existing } = await supabase
                 .from("prediction_events")
