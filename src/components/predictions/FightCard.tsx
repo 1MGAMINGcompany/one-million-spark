@@ -204,13 +204,26 @@ export default function FightCard({
 }
 
 function FighterColumn({
-  name, poolSol, odds, isWinner, canPredict, onPredict, formatUsd,
+  name, poolSol, odds, isWinner, canPredict, onPredict, formatUsd, logo,
 }: {
   name: string; poolSol: number; odds: number; isWinner: boolean;
   canPredict: boolean; onPredict: () => void; formatUsd: (sol: number) => string;
+  logo?: string | null;
 }) {
+  const [logoError, setLogoError] = useState(false);
+  const showLogo = logo && !logoError;
+
   return (
     <div className="text-center">
+      {showLogo && (
+        <img
+          src={logo}
+          alt=""
+          className="w-8 h-8 object-contain mx-auto mb-1"
+          onError={() => setLogoError(true)}
+          loading="lazy"
+        />
+      )}
       <p className="font-bold text-foreground text-sm">{name}</p>
       <p className="text-xs text-muted-foreground mt-1">
         {poolSol.toFixed(2)} SOL
