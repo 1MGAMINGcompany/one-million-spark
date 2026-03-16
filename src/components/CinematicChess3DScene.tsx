@@ -198,19 +198,21 @@ function StaticPiece({ piece, color, x, z, lite, skin, getGeo }: {
 
 // ─── Moving Piece (imperative position via useFrame) ──────────────────────────
 
-function MovingPiece({ piece, color, fromPos, toPos, isCapture, lite, progressRef, isFirstEntryRef, skin }: {
+function MovingPiece({ piece, color, fromPos, toPos, isCapture, lite, progressRef, isFirstEntryRef, skin, getGeo }: {
   piece: string; color: "white" | "black";
   fromPos: [number, number]; toPos: [number, number];
   isCapture: boolean; lite: boolean;
   progressRef: React.MutableRefObject<number>;
   isFirstEntryRef: React.MutableRefObject<boolean>;
   skin: ChessSkin;
+  getGeo: GetGeoFn;
 }) {
   const groupRef = useRef<THREE.Group>(null);
   const srcHighlightRef = useRef<THREE.Mesh>(null);
   const dstHighlightRef = useRef<THREE.Mesh>(null);
-  const geo = useMemo(() => getCachedGeo(piece, lite, skin), [piece, lite, skin]);
+  const geo = useMemo(() => getGeo(piece, color), [piece, color, getGeo]);
   const mat = useMemo(() => getCachedMat(color, lite, skin), [color, lite, skin]);
+  const useGLBModel = !!skin.glbPath;
 
   useFrame(() => {
     const progress = progressRef.current;
@@ -237,7 +239,7 @@ function MovingPiece({ piece, color, fromPos, toPos, isCapture, lite, progressRe
     <>
       <group ref={groupRef} position={[fromPos[0], 0, fromPos[1]]}>
         <mesh geometry={geo} castShadow material={mat} />
-        {piece === "king" && (
+        {!useGLBModel && piece === "king" && (
           <group position={[0, 0.58 * PIECE_SCALE, 0]}>
             <mesh castShadow material={mat}>
               <boxGeometry args={[0.03 * PIECE_SCALE, 0.1 * PIECE_SCALE, 0.03 * PIECE_SCALE]} />
