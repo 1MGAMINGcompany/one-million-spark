@@ -295,7 +295,7 @@ export default function ReferralAdmin() {
       <h1 className="text-2xl font-bold mb-6">Referral Dashboard</h1>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-3 gap-3 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
         <Card className="border-border/50 bg-card/80">
           <CardContent className="p-4 text-center">
             <p className="text-2xl font-bold text-foreground">{totals.totalReferred}</p>
@@ -312,6 +312,14 @@ export default function ReferralAdmin() {
           <CardContent className="p-4 text-center">
             <p className="text-2xl font-bold text-emerald-400">{formatSol(totals.totalPaid)}</p>
             <p className="text-xs text-muted-foreground uppercase">Total Paid</p>
+          </CardContent>
+        </Card>
+        <Card className="border-border/50 bg-card/80">
+          <CardContent className="p-4 text-center">
+            <p className={`text-2xl font-bold ${totals.totalEarned - totals.totalPaid > 0 ? "text-amber-400" : "text-muted-foreground"}`}>
+              {formatSol(Math.max(0, totals.totalEarned - totals.totalPaid))}
+            </p>
+            <p className="text-xs text-muted-foreground uppercase">Total Unpaid</p>
           </CardContent>
         </Card>
       </div>
