@@ -1583,11 +1583,16 @@ function IngestPanel({ wallet, busy: parentBusy, onComplete }: { wallet: string;
                       {d.event_date && <p>📅 {new Date(d.event_date).toLocaleString()}</p>}
                       {d.location && <p>📍 {d.location}</p>}
                       <p>ID: {d.source_event_id}</p>
-                      <p>Fights: <span className="text-primary font-medium">{d.fight_count ?? 0}</span></p>
+                      <p>{(() => {
+                        const isSoccer = d.provider === "api-football" || ["FUTBOL", "SOCCER"].includes((d.sport || "").toUpperCase());
+                        const count = isSoccer ? 1 : (d.fight_count ?? 0);
+                        const label = isSoccer ? (count === 1 ? "Match" : "Matches") : (count === 1 ? "Fight" : "Fights");
+                        return <>{label}: <span className="text-primary font-medium">{count}</span></>;
+                      })()}</p>
                       {d.fights_error && <p className="text-yellow-400">⚠ {d.fights_error}</p>}
                       {d.fights?.length > 0 && (
                         <details className="mt-1">
-                          <summary className="cursor-pointer hover:text-foreground">🥊 {d.fights.length} fight(s)</summary>
+                          <summary className="cursor-pointer hover:text-foreground">{d.provider === "api-football" || ["FUTBOL", "SOCCER"].includes((d.sport || "").toUpperCase()) ? "⚽" : "🥊"} {d.fights.length} {d.provider === "api-football" || ["FUTBOL", "SOCCER"].includes((d.sport || "").toUpperCase()) ? (d.fights.length === 1 ? "match" : "matches") : (d.fights.length === 1 ? "fight" : "fights")}</summary>
                           <div className="ml-2 mt-0.5 space-y-0.5">
                             {d.fights.map((f: any, fi: number) => (
                               <p key={fi}>
