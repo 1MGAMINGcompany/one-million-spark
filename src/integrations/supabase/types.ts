@@ -852,6 +852,7 @@ export type Database = {
           id: string
           is_test: boolean
           last_automation_check_at: string | null
+          league_logo: string | null
           location: string | null
           organization: string | null
           requires_admin_approval: boolean
@@ -882,6 +883,7 @@ export type Database = {
           id?: string
           is_test?: boolean
           last_automation_check_at?: string | null
+          league_logo?: string | null
           location?: string | null
           organization?: string | null
           requires_admin_approval?: boolean
@@ -912,6 +914,7 @@ export type Database = {
           id?: string
           is_test?: boolean
           last_automation_check_at?: string | null
+          league_logo?: string | null
           location?: string | null
           organization?: string | null
           requires_admin_approval?: boolean
@@ -944,6 +947,7 @@ export type Database = {
       prediction_fights: {
         Row: {
           auto_resolve: boolean
+          away_logo: string | null
           claims_open_at: string | null
           confirmed_at: string | null
           created_at: string
@@ -952,6 +956,7 @@ export type Database = {
           fight_class: string | null
           fighter_a_name: string
           fighter_b_name: string
+          home_logo: string | null
           id: string
           method: string | null
           pool_a_lamports: number
@@ -974,6 +979,7 @@ export type Database = {
         }
         Insert: {
           auto_resolve?: boolean
+          away_logo?: string | null
           claims_open_at?: string | null
           confirmed_at?: string | null
           created_at?: string
@@ -982,6 +988,7 @@ export type Database = {
           fight_class?: string | null
           fighter_a_name: string
           fighter_b_name: string
+          home_logo?: string | null
           id?: string
           method?: string | null
           pool_a_lamports?: number
@@ -1004,6 +1011,7 @@ export type Database = {
         }
         Update: {
           auto_resolve?: boolean
+          away_logo?: string | null
           claims_open_at?: string | null
           confirmed_at?: string | null
           created_at?: string
@@ -1012,6 +1020,7 @@ export type Database = {
           fight_class?: string | null
           fighter_a_name?: string
           fighter_b_name?: string
+          home_logo?: string | null
           id?: string
           method?: string | null
           pool_a_lamports?: number
