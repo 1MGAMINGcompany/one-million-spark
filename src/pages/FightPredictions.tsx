@@ -17,6 +17,7 @@ import ComingSoonCard from "@/components/predictions/ComingSoonCard";
 import { WalletGateModal } from "@/components/WalletGateModal";
 import SocialShareModal from "@/components/SocialShareModal";
 import { SOCIAL_SHARE_ENABLED } from "@/lib/socialShareConfig";
+import { useMyReferralCode } from "@/hooks/useMyReferralCode";
 import type { Fight } from "@/components/predictions/FightCard";
 
 const LAMPORTS = 1_000_000_000;
@@ -87,6 +88,7 @@ function StatusSectionHeader({ section, count }: { section: StatusSection; count
 
 export default function FightPredictions() {
   const { address, publicKey, isConnected, sendTransaction, connection } = useWallet();
+  const referralCode = useMyReferralCode(address ?? null);
   const { t } = useTranslation();
   const [fights, setFights] = useState<Fight[]>([]);
   const [events, setEvents] = useState<PredictionEvent[]>([]);
@@ -574,6 +576,7 @@ export default function FightPredictions() {
           gameTitle={claimShareData.fighterName}
           solWon={claimShareData.solWon}
           wallet={address || undefined}
+          referralCode={referralCode ?? undefined}
           sport={claimShareData.sport}
         />
       )}

@@ -3,6 +3,7 @@ import { Trophy, RefreshCw, BarChart2, Star, LogOut, Wallet, ChevronDown, Chevro
 import { ShareResultCard } from '@/components/ShareResultCard';
 import SocialShareModal from '@/components/SocialShareModal';
 import { SOCIAL_SHARE_ENABLED } from '@/lib/socialShareConfig';
+import { useMyReferralCode } from '@/hooks/useMyReferralCode';
 import GoldConfettiExplosion from '@/components/GoldConfettiExplosion';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -172,6 +173,7 @@ export function GameEndScreen({
   const { connection } = useConnection();
   const { publicKey, sendTransaction } = useWallet();
   const { play } = useSound();
+  const referralCode = useMyReferralCode(myAddress);
 
   // Clear active free room on game end
   useEffect(() => { clearActiveRoom(); }, []);
@@ -845,6 +847,7 @@ export function GameEndScreen({
           gameName={gameType}
           solWon={payoutInfo?.winnerPayout}
           wallet={myAddress || undefined}
+          referralCode={referralCode ?? undefined}
           opponentType={players.length > 2 ? `${players.length} players` : players.find(p => p.address !== myAddress)?.name}
           streak={playerStats ? undefined : undefined}
         />

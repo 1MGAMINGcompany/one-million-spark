@@ -54,6 +54,8 @@ export interface ShareModalProps {
   gameTitle?: string;
   solWon?: number;
   wallet?: string;
+  /** Admin-issued referral code (4-16 alphanum). Used for ?ref= param. */
+  referralCode?: string;
   opponentType?: string;
   streak?: number;
   gameName?: string;
@@ -71,9 +73,11 @@ function logShareAction(variant: ShareVariant, method: string, wallet?: string) 
   }).then(() => {});
 }
 
-function buildShareUrl(wallet?: string): string {
+function buildShareUrl(referralCode?: string): string {
   const base = "https://1mgaming.com/predictions";
-  if (wallet) return `${base}?ref=${wallet}`;
+  if (referralCode && referralCode.length >= 4 && referralCode.length <= 16) {
+    return `${base}?ref=${referralCode}`;
+  }
   return base;
 }
 
@@ -81,13 +85,13 @@ export default function SocialShareModal(props: ShareModalProps) {
   const {
     open, onClose, variant,
     eventTitle, sport, fighterPick, amountSol, poolSol,
-    gameTitle, solWon, wallet, opponentType, streak, gameName,
+    gameTitle, solWon, wallet, referralCode, opponentType, streak, gameName,
   } = props;
 
   const cardRef = useRef<HTMLDivElement>(null);
   const [copied, setCopied] = useState(false);
 
-  const shareUrl = buildShareUrl(wallet);
+  const shareUrl = buildShareUrl(referralCode);
   const caption = buildCaption(props, shareUrl);
   const emoji = sportEmoji(sport);
   const label = sportLabel(sport);

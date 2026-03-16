@@ -4,6 +4,7 @@ import { Loader2, CheckCircle2, Eye, Clock, Trophy, Coins, Share2 } from "lucide
 import { Link } from "react-router-dom";
 import type { Fight } from "./FightCard";
 import { useSolPrice } from "@/hooks/useSolPrice";
+import { useMyReferralCode } from "@/hooks/useMyReferralCode";
 import SocialShareModal from "@/components/SocialShareModal";
 import { SOCIAL_SHARE_ENABLED } from "@/lib/socialShareConfig";
 
@@ -47,6 +48,7 @@ export default function PredictionModal({
   wallet?: string;
 }) {
   const { formatUsd } = useSolPrice();
+  const referralCode = useMyReferralCode(wallet ?? null);
   const [amount, setAmount] = useState("");
   const amountNum = parseFloat(amount) || 0;
   const fee = amountNum * FEE_RATE;
@@ -144,6 +146,7 @@ export default function PredictionModal({
             amountSol={amountNum}
             poolSol={(fight.pool_a_lamports + fight.pool_b_lamports) / LAMPORTS}
             wallet={wallet}
+            referralCode={referralCode ?? undefined}
           />
         )}
       </>
