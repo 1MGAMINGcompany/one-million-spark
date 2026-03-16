@@ -847,6 +847,7 @@ export function GameEndScreen({
           gameName={gameType}
           solWon={payoutInfo?.winnerPayout}
           wallet={myAddress || undefined}
+          referralCode={referralCode ?? undefined}
           opponentType={players.length > 2 ? `${players.length} players` : players.find(p => p.address !== myAddress)?.name}
           streak={playerStats ? undefined : undefined}
         />
