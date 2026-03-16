@@ -38,6 +38,8 @@ const _glbGeoCache = new Map<string, THREE.BufferGeometry>();
 
 function scaleGeometry(geo: THREE.BufferGeometry, scale: number): THREE.BufferGeometry {
   const clone = geo.clone();
+  // Convert Blender Z-up to Three.js Y-up
+  clone.rotateX(-Math.PI / 2);
   clone.computeBoundingBox();
   const bb = clone.boundingBox!;
 
