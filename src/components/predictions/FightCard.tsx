@@ -220,12 +220,12 @@ function FighterColumn({
         <img
           src={logo}
           alt=""
-          className="w-8 h-8 object-contain mx-auto mb-1"
+          className="w-7 h-7 object-contain mx-auto mb-1.5"
           onError={() => setLogoError(true)}
           loading="lazy"
         />
       )}
-      <p className="font-bold text-foreground text-sm">{name}</p>
+      <p className={`font-bold text-foreground ${showLogo ? 'text-[15px]' : 'text-sm'}`}>{name}</p>
       <p className="text-xs text-muted-foreground mt-1">
         {poolSol.toFixed(2)} SOL
         {formatUsd(poolSol) && <span className="block text-[10px] text-muted-foreground/70">{formatUsd(poolSol)}</span>}

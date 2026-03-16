@@ -154,7 +154,7 @@ export default function EventSection({
               <img
                 src={event!.league_logo!}
                 alt=""
-                className="w-5 h-5 object-contain"
+                className="w-[18px] h-[18px] object-contain"
                 onError={() => setLeagueLogoError(true)}
                 loading="lazy"
               />
