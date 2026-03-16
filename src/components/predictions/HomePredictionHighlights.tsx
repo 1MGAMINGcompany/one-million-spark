@@ -9,6 +9,7 @@ import { useSolPrice } from "@/hooks/useSolPrice";
 import { parseSport } from "@/components/predictions/EventSection";
 import type { Fight } from "@/components/predictions/FightCard";
 import type { PredictionEvent } from "@/components/predictions/PredictionHighlights";
+import { formatEventDateTime } from "@/lib/formatEventLocalDateTime";
 
 import muayThaiImg from "@/assets/muay-thai.png";
 import boxingGloveImg from "@/assets/boxing-glove.png";
