@@ -585,20 +585,19 @@ function SceneContent({ event, duration, boardFlipped, onComplete, onMoveComplet
   const isFirstEntryRef = useRef(isFirstEntry);
   const dismissProgressRef = useRef(0);
 
-  // GLB geometry loader (only loads if skin has glbPath)
-  const glbHook = skin.glbPath ? useChessGLB() : null;
+  // GLB geometry loader — always called (React hooks must be unconditional)
+  const { getGLBGeo } = useChessGLB();
 
-  // Unified geometry resolver: GLB first, then lathe fallback
+  // Unified geometry resolver: GLB first (if skin has glbPath), then lathe fallback
   const getGeo: GetGeoFn = useCallback((piece: string, color: "white" | "black") => {
-    if (glbHook) {
-      // Target height matches PIECE_SCALE-based lathe pieces (~0.8 for pawn to ~1.1 for king)
+    if (skin.glbPath) {
       const heightMap: Record<string, number> = { pawn: 0.55, rook: 0.65, knight: 0.7, bishop: 0.75, queen: 0.9, king: 1.0 };
       const targetH = (heightMap[piece] ?? 0.55) * PIECE_SCALE;
-      const glbGeo = glbHook.getGLBGeo(piece, color, targetH);
+      const glbGeo = getGLBGeo(piece, color, targetH);
       if (glbGeo) return glbGeo;
     }
     return getCachedLatheGeo(piece, lite, skin);
-  }, [glbHook, lite, skin]);
+  }, [getGLBGeo, lite, skin]);
 
   // Keep refs in sync without re-renders
   useEffect(() => { isFirstEntryRef.current = isFirstEntry; }, [isFirstEntry]);
@@ -741,7 +740,12 @@ export default function CinematicChess3DScene({
         style={{ position: "relative", zIndex: 1, background: "transparent" }}
         onCreated={({ gl }) => {
           const ctx = gl.getContext();
-          if (!ctx) onError();
+          if (!ctx) { onError(); return; }
+          gl.domElement.addEventListener("webglcontextlost", (e) => {
+            e.preventDefault();
+            console.warn("[CinematicChess3D] WebGL context lost — falling back to 2D");
+            onError();
+          });
         }}
         fallback={null}
       >
