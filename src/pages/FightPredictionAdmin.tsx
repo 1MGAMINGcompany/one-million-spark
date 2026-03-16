@@ -1568,64 +1568,163 @@ function IngestPanel({ wallet, busy: parentBusy, onComplete }: { wallet: string;
               <summary className="text-muted-foreground cursor-pointer hover:text-foreground font-medium">
                 📋 {lastResult.details.length} event(s) details
               </summary>
-              <div className="mt-1 space-y-2 max-h-80 overflow-y-auto">
-                {lastResult.details.map((d: any, i: number) => (
-                  <div key={i} className="text-[10px] text-muted-foreground border-t border-border/20 pt-1.5">
-                    <p className="text-foreground font-medium">
-                      {d.imported ? "✅ " : d.action === "updated" ? "🔄 " : "🆕 "}{d.event_name}
-                    </p>
-                    <div className="ml-2 space-y-0.5">
-                      <p>
-                        <span className="text-primary">{d.league}</span>
-                        {d.sport && <span className="text-muted-foreground ml-1">({d.sport})</span>}
-                        {d.provider && <span className="text-muted-foreground ml-1">· {d.provider}</span>}
-                      </p>
-                      {d.event_date && <p>📅 {new Date(d.event_date).toLocaleString()}</p>}
-                      {d.location && <p>📍 {d.location}</p>}
-                      <p>ID: {d.source_event_id}</p>
-                      <p>{(() => {
-                        const isSoccer = d.provider === "api-football" || ["FUTBOL", "SOCCER"].includes((d.sport || "").toUpperCase());
-                        const count = isSoccer ? 1 : (d.fight_count ?? 0);
-                        const label = isSoccer ? (count === 1 ? "Match" : "Matches") : (count === 1 ? "Fight" : "Fights");
-                        return <>{label}: <span className="text-primary font-medium">{count}</span></>;
-                      })()}</p>
-                      {d.fights_error && <p className="text-yellow-400">⚠ {d.fights_error}</p>}
-                      {d.fights?.length > 0 && (
-                        <details className="mt-1">
-                          <summary className="cursor-pointer hover:text-foreground">{d.provider === "api-football" || ["FUTBOL", "SOCCER"].includes((d.sport || "").toUpperCase()) ? "⚽" : "🥊"} {d.fights.length} {d.provider === "api-football" || ["FUTBOL", "SOCCER"].includes((d.sport || "").toUpperCase()) ? (d.fights.length === 1 ? "match" : "matches") : (d.fights.length === 1 ? "fight" : "fights")}</summary>
-                          <div className="ml-2 mt-0.5 space-y-0.5">
-                            {d.fights.map((f: any, fi: number) => (
-                              <p key={fi}>
-                                {f.is_main_event ? "⭐ " : ""}{f.fighter1} vs {f.fighter2}
-                                {f.weight_class && <span className="text-muted-foreground"> ({f.weight_class})</span>}
-                                {f.card_segment && <span className="text-muted-foreground ml-1">[{f.card_segment}]</span>}
-                              </p>
-                            ))}
-                          </div>
-                        </details>
-                      )}
-                      {/* Import single event button (dry-run only) */}
-                      {d.dry_run && !d.imported && (
-                        <button
-                          onClick={() => importSingleEvent(d.source_event_id, d.provider, d.event_name)}
-                          disabled={!!importingId || ingestBusy}
-                          className="mt-1.5 flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1 rounded-full bg-green-500/20 text-green-400 border border-green-500/30 hover:bg-green-500/30 transition-colors disabled:opacity-50"
-                        >
-                          {importingId === d.source_event_id ? (
-                            <Loader2 className="w-3 h-3 animate-spin" />
-                          ) : (
-                            <Download className="w-3 h-3" />
-                          )}
-                          Import This Event
-                        </button>
-                      )}
-                      {d.imported && (
-                        <p className="mt-1 text-[10px] font-bold text-green-400">✅ Imported as draft</p>
-                      )}
+              <div className="mt-1 space-y-2 max-h-[500px] overflow-y-auto">
+                {lastResult.details.map((d: any, i: number) => {
+                  const isSoccer = d.provider === "api-football" || ["FUTBOL", "SOCCER"].includes((d.sport || "").toUpperCase());
 
+                  // Countdown helper
+                  const countdown = (() => {
+                    if (!d.event_date) return null;
+                    const diff = new Date(d.event_date).getTime() - Date.now();
+                    if (diff <= 0) return "Started";
+                    const h = Math.floor(diff / 3_600_000);
+                    const m = Math.floor((diff % 3_600_000) / 60_000);
+                    if (h > 48) return `${Math.floor(h / 24)}d ${h % 24}h`;
+                    return `${h}h ${m}m`;
+                  })();
+
+                  // ── Soccer card (premium layout) ──
+                  if (isSoccer) {
+                    return (
+                      <div key={i} className="rounded-lg border border-border/40 bg-card/60 overflow-hidden">
+                        {/* League row */}
+                        <div className="flex items-center gap-2 px-3 py-1.5 bg-muted/30 border-b border-border/20">
+                          {d.league_logo && (
+                            <img src={d.league_logo} alt="" className="w-4 h-4 object-contain" />
+                          )}
+                          <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                            {d.league_name || d.league}
+                          </span>
+                          <span className="text-[10px] text-muted-foreground/60 ml-auto">
+                            {d.imported ? "✅" : d.action === "updated" ? "🔄" : "🆕"}
+                          </span>
+                        </div>
+
+                        {/* Matchup */}
+                        <div className="px-3 py-3">
+                          <div className="flex items-center justify-center gap-3">
+                            <div className="flex flex-col items-center gap-1 flex-1 min-w-0">
+                              {d.home_logo && (
+                                <img src={d.home_logo} alt="" className="w-7 h-7 object-contain" />
+                              )}
+                              <span className="text-xs font-bold text-foreground text-center truncate w-full">
+                                {d.home_team || "Home"}
+                              </span>
+                            </div>
+                            <span className="text-[10px] font-bold text-muted-foreground/60 shrink-0">VS</span>
+                            <div className="flex flex-col items-center gap-1 flex-1 min-w-0">
+                              {d.away_logo && (
+                                <img src={d.away_logo} alt="" className="w-7 h-7 object-contain" />
+                              )}
+                              <span className="text-xs font-bold text-foreground text-center truncate w-full">
+                                {d.away_team || "Away"}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Meta row */}
+                          <div className="flex items-center justify-center gap-3 mt-2 text-[10px] text-muted-foreground flex-wrap">
+                            {countdown && (
+                              <span className={`font-bold px-1.5 py-0.5 rounded ${countdown === "Started" ? "bg-red-500/15 text-red-400" : "bg-primary/10 text-primary"}`}>
+                                {countdown === "Started" ? "⏱ Started" : `⏳ ${countdown}`}
+                              </span>
+                            )}
+                            {d.event_date && (
+                              <span>📅 {new Date(d.event_date).toLocaleString()}</span>
+                            )}
+                            {d.location && <span>📍 {d.location}</span>}
+                          </div>
+                          <div className="flex items-center justify-between mt-2">
+                            <span className="text-[9px] text-muted-foreground/50">{d.source_event_id}</span>
+                            <span className="text-[10px] text-primary font-bold">Match: 1</span>
+                          </div>
+                        </div>
+
+                        {/* Import button */}
+                        <div className="px-3 pb-2.5">
+                          {d.dry_run && !d.imported && (
+                            <button
+                              onClick={() => importSingleEvent(d.source_event_id, d.provider, d.event_name)}
+                              disabled={!!importingId || ingestBusy}
+                              className="w-full flex items-center justify-center gap-1.5 text-[10px] font-bold px-2.5 py-1.5 rounded-lg bg-green-500/20 text-green-400 border border-green-500/30 hover:bg-green-500/30 transition-colors disabled:opacity-50"
+                            >
+                              {importingId === d.source_event_id ? (
+                                <Loader2 className="w-3 h-3 animate-spin" />
+                              ) : (
+                                <Download className="w-3 h-3" />
+                              )}
+                              Import This Match
+                            </button>
+                          )}
+                          {d.imported && (
+                            <p className="text-[10px] font-bold text-green-400 text-center">✅ Imported as draft</p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  // ── Combat sports card (existing layout, slightly improved) ──
+                  return (
+                    <div key={i} className="text-[10px] text-muted-foreground border-t border-border/20 pt-1.5">
+                      <p className="text-foreground font-medium">
+                        {d.imported ? "✅ " : d.action === "updated" ? "🔄 " : "🆕 "}{d.event_name}
+                      </p>
+                      <div className="ml-2 space-y-0.5">
+                        <p>
+                          <span className="text-primary">{d.league}</span>
+                          {d.sport && <span className="text-muted-foreground ml-1">({d.sport})</span>}
+                          {d.provider && <span className="text-muted-foreground ml-1">· {d.provider}</span>}
+                        </p>
+                        {countdown && (
+                          <span className={`inline-block text-[9px] font-bold px-1.5 py-0.5 rounded ${countdown === "Started" ? "bg-red-500/15 text-red-400" : "bg-primary/10 text-primary"}`}>
+                            {countdown === "Started" ? "⏱ Started" : `⏳ ${countdown}`}
+                          </span>
+                        )}
+                        {d.event_date && <p>📅 {new Date(d.event_date).toLocaleString()}</p>}
+                        {d.location && <p>📍 {d.location}</p>}
+                        <p>ID: {d.source_event_id}</p>
+                        <p>{(() => {
+                          const count = d.fight_count ?? 0;
+                          const label = count === 1 ? "Fight" : "Fights";
+                          return <>{label}: <span className="text-primary font-medium">{count}</span></>;
+                        })()}</p>
+                        {d.fights_error && <p className="text-yellow-400">⚠ {d.fights_error}</p>}
+                        {d.fights?.length > 0 && (
+                          <details className="mt-1">
+                            <summary className="cursor-pointer hover:text-foreground">🥊 {d.fights.length} {d.fights.length === 1 ? "fight" : "fights"}</summary>
+                            <div className="ml-2 mt-0.5 space-y-0.5">
+                              {d.fights.map((f: any, fi: number) => (
+                                <p key={fi}>
+                                  {f.is_main_event ? "⭐ " : ""}{f.fighter1} vs {f.fighter2}
+                                  {f.weight_class && <span className="text-muted-foreground"> ({f.weight_class})</span>}
+                                  {f.card_segment && <span className="text-muted-foreground ml-1">[{f.card_segment}]</span>}
+                                </p>
+                              ))}
+                            </div>
+                          </details>
+                        )}
+                        {d.dry_run && !d.imported && (
+                          <button
+                            onClick={() => importSingleEvent(d.source_event_id, d.provider, d.event_name)}
+                            disabled={!!importingId || ingestBusy}
+                            className="mt-1.5 flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1 rounded-full bg-green-500/20 text-green-400 border border-green-500/30 hover:bg-green-500/30 transition-colors disabled:opacity-50"
+                          >
+                            {importingId === d.source_event_id ? (
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                            ) : (
+                              <Download className="w-3 h-3" />
+                            )}
+                            Import This Event
+                          </button>
+                        )}
+                        {d.imported && (
+                          <p className="mt-1 text-[10px] font-bold text-green-400">✅ Imported as draft</p>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </details>
           )}

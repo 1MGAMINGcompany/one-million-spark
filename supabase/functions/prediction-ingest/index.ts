@@ -661,6 +661,13 @@ Deno.serve(async (req) => {
                 location: venue,
                 fight_count: 0,
                 action: existing ? "updated" : "created",
+                // Soccer-specific UI enrichment (dry-run preview only)
+                home_team: homeTeam,
+                away_team: awayTeam,
+                home_logo: fix.teams?.home?.logo || null,
+                away_logo: fix.teams?.away?.logo || null,
+                league_logo: fix.league?.logo || null,
+                league_name: fix.league?.name || leagueName,
               };
 
               // ── Single-event filter ──
