@@ -372,7 +372,7 @@ export default function FightPredictionAdmin() {
           <h1 className="text-2xl font-bold text-foreground font-['Cinzel'] flex items-center gap-2">
             <Shield className="w-6 h-6 text-primary" /> Prediction Admin
           </h1>
-          <Button variant="outline" size="sm" onClick={() => window.location.href = '/referrals/admin'} className="gap-2">
+          <Button variant="outline" size="sm" onClick={() => navigate('/referrals/admin')} className="gap-2">
             <Users className="w-4 h-4" /> Referrals
           </Button>
         </div>
