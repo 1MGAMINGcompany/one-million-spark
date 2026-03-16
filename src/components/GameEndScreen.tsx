@@ -3,6 +3,7 @@ import { Trophy, RefreshCw, BarChart2, Star, LogOut, Wallet, ChevronDown, Chevro
 import { ShareResultCard } from '@/components/ShareResultCard';
 import SocialShareModal from '@/components/SocialShareModal';
 import { SOCIAL_SHARE_ENABLED } from '@/lib/socialShareConfig';
+import { useMyReferralCode } from '@/hooks/useMyReferralCode';
 import GoldConfettiExplosion from '@/components/GoldConfettiExplosion';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';

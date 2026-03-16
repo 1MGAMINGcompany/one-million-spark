@@ -17,6 +17,7 @@ import ComingSoonCard from "@/components/predictions/ComingSoonCard";
 import { WalletGateModal } from "@/components/WalletGateModal";
 import SocialShareModal from "@/components/SocialShareModal";
 import { SOCIAL_SHARE_ENABLED } from "@/lib/socialShareConfig";
+import { useMyReferralCode } from "@/hooks/useMyReferralCode";
 import type { Fight } from "@/components/predictions/FightCard";
 
 const LAMPORTS = 1_000_000_000;

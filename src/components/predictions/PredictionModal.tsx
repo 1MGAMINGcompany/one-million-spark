@@ -4,6 +4,7 @@ import { Loader2, CheckCircle2, Eye, Clock, Trophy, Coins, Share2 } from "lucide
 import { Link } from "react-router-dom";
 import type { Fight } from "./FightCard";
 import { useSolPrice } from "@/hooks/useSolPrice";
+import { useMyReferralCode } from "@/hooks/useMyReferralCode";
 import SocialShareModal from "@/components/SocialShareModal";
 import { SOCIAL_SHARE_ENABLED } from "@/lib/socialShareConfig";
 
