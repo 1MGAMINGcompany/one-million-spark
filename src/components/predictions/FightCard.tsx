@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Swords, Trophy, Loader2 } from "lucide-react";
@@ -24,6 +25,9 @@ interface Fight {
   weight_class?: string | null;
   fight_class?: string | null;
   refund_status?: string | null;
+  home_logo?: string | null;
+  away_logo?: string | null;
+  source?: string | null;
 }
 
 const STATUS_BADGE: Record<string, { label: string; className: string }> = {
@@ -85,6 +89,9 @@ export default function FightCard({
 
   const badge = STATUS_BADGE[fight.status] || STATUS_BADGE.open;
 
+  const isSoccer = fight.source === "api-football";
+  const hasLogos = isSoccer && !!(fight.home_logo && fight.away_logo);
+
   // Parse title
   const titleParts = fight.title.split(' — ');
   const fightLabel = titleParts[0] || fight.title;
@@ -134,6 +141,7 @@ export default function FightCard({
             canPredict={fight.status === "open"}
             onPredict={() => wallet ? onPredict(fight, "fighter_a") : onWalletRequired?.()}
             formatUsd={formatUsd}
+            logo={hasLogos ? fight.home_logo : undefined}
           />
           <div className="flex flex-col items-center">
             <Swords className="w-5 h-5 text-primary/60" />
@@ -147,6 +155,7 @@ export default function FightCard({
             canPredict={fight.status === "open"}
             onPredict={() => wallet ? onPredict(fight, "fighter_b") : onWalletRequired?.()}
             formatUsd={formatUsd}
+            logo={hasLogos ? fight.away_logo : undefined}
           />
         </div>
 
@@ -196,13 +205,26 @@ export default function FightCard({
 }
 
 function FighterColumn({
-  name, poolSol, odds, isWinner, canPredict, onPredict, formatUsd,
+  name, poolSol, odds, isWinner, canPredict, onPredict, formatUsd, logo,
 }: {
   name: string; poolSol: number; odds: number; isWinner: boolean;
   canPredict: boolean; onPredict: () => void; formatUsd: (sol: number) => string;
+  logo?: string | null;
 }) {
+  const [logoError, setLogoError] = useState(false);
+  const showLogo = logo && !logoError;
+
   return (
     <div className="text-center">
+      {showLogo && (
+        <img
+          src={logo}
+          alt=""
+          className="w-8 h-8 object-contain mx-auto mb-1"
+          onError={() => setLogoError(true)}
+          loading="lazy"
+        />
+      )}
       <p className="font-bold text-foreground text-sm">{name}</p>
       <p className="text-xs text-muted-foreground mt-1">
         {poolSol.toFixed(2)} SOL

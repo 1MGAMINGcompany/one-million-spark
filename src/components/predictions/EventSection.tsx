@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import FightCard from "./FightCard";
 import type { Fight } from "./FightCard";
@@ -34,6 +34,20 @@ interface PredictionEvent {
   status: string;
   is_test: boolean;
   source_provider?: string | null;
+  league_logo?: string | null;
+}
+
+function formatCountdown(eventDate: string | null): string | null {
+  if (!eventDate) return null;
+  const diff = new Date(eventDate).getTime() - Date.now();
+  if (diff <= 0) return "Started";
+  const hours = Math.floor(diff / 3_600_000);
+  const mins = Math.floor((diff % 3_600_000) / 60_000);
+  if (hours > 48) {
+    const days = Math.floor(hours / 24);
+    return `Starts in ${days}d`;
+  }
+  return `Starts in ${hours}h ${mins}m`;
 }
 
 const SOCCER_KEYWORDS = [
@@ -100,6 +114,7 @@ export default function EventSection({
 }) {
   const hasOpen = fights.some(f => f.status === "open");
   const [expanded, setExpanded] = useState(false);
+  const [leagueLogoError, setLeagueLogoError] = useState(false);
 
   const parsed = parseEventLabel(eventName);
   const sport = parseSport(eventName, event?.source_provider);
@@ -119,6 +134,8 @@ export default function EventSection({
   const displayDate = event?.event_date ? new Date(event.event_date).toLocaleDateString() : parsed.date;
   const displayOrg = event?.organization;
   const displayLocation = event?.location;
+  const countdown = formatCountdown(event?.event_date ?? null);
+  const showLeagueLogo = event?.league_logo && !leagueLogoError;
 
   return (
     <div className={`rounded-xl border ${config.borderColor} overflow-hidden`}>
@@ -128,10 +145,19 @@ export default function EventSection({
       >
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            {config.image ? (
+           {config.image ? (
               <img src={config.image} alt={sport} className="w-6 h-6 object-contain" />
             ) : (
               <span className="text-xl">{config.icon}</span>
+            )}
+            {showLeagueLogo && (
+              <img
+                src={event!.league_logo!}
+                alt=""
+                className="w-5 h-5 object-contain"
+                onError={() => setLeagueLogoError(true)}
+                loading="lazy"
+              />
             )}
             <span className={`text-[10px] font-bold uppercase tracking-wider ${config.color}`}>{sport}</span>
             {event?.is_test && (
@@ -154,6 +180,11 @@ export default function EventSection({
             {parsed.name}
           </h2>
           <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground flex-wrap">
+            {countdown && (
+              <span className={`font-bold ${countdown === "Started" ? "text-red-400" : "text-primary"}`}>
+                ⏱ {countdown}
+              </span>
+            )}
             {displayDate && <span>📅 {displayDate}</span>}
             {displayOrg && <span>🏢 {displayOrg}</span>}
             {displayLocation && <span>📍 {displayLocation}</span>}

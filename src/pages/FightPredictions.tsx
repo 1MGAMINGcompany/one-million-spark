@@ -38,6 +38,7 @@ interface PredictionEvent {
   status: string;
   is_test: boolean;
   source_provider?: string | null;
+  league_logo?: string | null;
 }
 
 interface FeedEntry {
