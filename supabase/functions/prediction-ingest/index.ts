@@ -688,6 +688,7 @@ Deno.serve(async (req) => {
                   event_date: eventDate,
                   location: venue || null,
                   organization: leagueName,
+                  league_logo: fix.league?.logo || null,
                   updated_at: new Date().toISOString(),
                 };
                 // Sync lock/live times if event_date changed
@@ -738,6 +739,7 @@ Deno.serve(async (req) => {
                     requires_admin_approval: true,
                     scheduled_lock_at: scheduledLockAt,
                     scheduled_live_at: scheduledLiveAt,
+                    league_logo: fix.league?.logo || null,
                   })
                   .select()
                   .single();
@@ -761,6 +763,8 @@ Deno.serve(async (req) => {
                     event_id: newEvent.id,
                     source: "api-football",
                     status: "open",
+                    home_logo: fix.teams?.home?.logo || null,
+                    away_logo: fix.teams?.away?.logo || null,
                   });
                 if (!fightErr) {
                   results.fights_created++;
