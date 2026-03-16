@@ -22,6 +22,8 @@ export interface ChessSkin {
   unlockShares: number;
   /** Lathe profiles per piece type: array of [radius, height] control points */
   profiles: Record<string, [number, number][]>;
+  /** Optional path to a GLB model file (overrides lathe profiles when available) */
+  glbPath?: string;
   whiteMat: MaterialConfig;
   blackMat: MaterialConfig;
   boardLight: string;
