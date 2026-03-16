@@ -166,6 +166,108 @@ export default function FightCard({
 
         {/* Draw info */}
         {["draw", "refund_pending", "refunds_processing", "refunds_complete"].includes(fight.status) && (
+          <div className="mx-4 sm:mx-6 mb-3 bg-muted/30 border border-border/30 rounded-lg p-3 text-center">
+            <p className="text-xs font-bold text-muted-foreground">
+              {fight.status === "refunds_complete" ? "✅ Refunds complete" :
+               fight.status === "refunds_processing" ? "⏳ Refunds processing..." :
+               fight.status === "refund_pending" ? "📋 Refunds queued" :
+               "🤝 Draw / No Contest"}
+            </p>
+          </div>
+        )}
+
+        {/* Claim button */}
+        {hasWinningEntries && claimsOpen && (
+          <div className="px-4 sm:px-6 pb-4">
+            <Button
+              className="w-full bg-gradient-to-r from-primary to-accent text-primary-foreground font-bold"
+              onClick={() => onClaim(fight.id)}
+              disabled={claiming}
+            >
+              {claiming ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Trophy className="w-4 h-4 mr-2" />}
+              Claim Reward
+            </Button>
+          </div>
+        )}
+        {hasWinningEntries && !claimsOpen && (
+          <div className="mx-4 sm:mx-6 mb-4 bg-primary/10 border border-primary/20 rounded-lg p-3 text-center">
+            <p className="text-xs font-bold text-primary mb-1">🎉 You won!</p>
+            <p className="text-[11px] text-muted-foreground">
+              Rewards will become claimable shortly.
+            </p>
+          </div>
+        )}
+      </Card>
+    );
+  }
+
+  // ── Non-soccer (combat sports) card ──
+  return (
+    <Card className="bg-card border-border/50 overflow-hidden relative">
+      <div className="px-4 py-3 border-b border-border/30">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-bold text-foreground font-['Cinzel']">{fightLabel}</h3>
+          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${badge.className}`}>
+            {badge.label}
+          </span>
+        </div>
+        {(weight || fightClass || fight.method) && (
+          <div className="flex items-center gap-2 mt-1 flex-wrap">
+            {weight && (
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-yellow-500/15 text-yellow-300">{weight}</span>
+            )}
+            {fightClass && (
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                fightClass.startsWith('A') ? 'bg-primary/30 text-primary' :
+                fightClass.startsWith('B') ? 'bg-secondary text-secondary-foreground' :
+                'bg-muted text-muted-foreground'
+              }`}>{fightClass}</span>
+            )}
+            {fight.method && (
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                {fight.method}
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="p-4">
+        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3" dir="ltr">
+          <FighterColumn
+            name={fight.fighter_a_name}
+            poolSol={poolASol}
+            odds={oddsA}
+            isWinner={fight.winner === "fighter_a" && isClaimable}
+            canPredict={fight.status === "open"}
+            onPredict={() => wallet ? onPredict(fight, "fighter_a") : onWalletRequired?.()}
+            formatUsd={formatUsd}
+          />
+          <div className="flex flex-col items-center gap-0.5">
+            <Swords className="w-5 h-5 text-primary/60" />
+            <span className="text-[10px] text-muted-foreground font-bold">VS</span>
+          </div>
+          <FighterColumn
+            name={fight.fighter_b_name}
+            poolSol={poolBSol}
+            odds={oddsB}
+            isWinner={fight.winner === "fighter_b" && isClaimable}
+            canPredict={fight.status === "open"}
+            onPredict={() => wallet ? onPredict(fight, "fighter_b") : onWalletRequired?.()}
+            formatUsd={formatUsd}
+          />
+        </div>
+
+        <div className="mt-3 pt-3 border-t border-border/30 flex items-center justify-between">
+          <span className="text-[10px] text-muted-foreground">Total Pool</span>
+          <span className="text-xs font-bold text-primary">
+            {totalPool.toFixed(2)} SOL
+            {formatUsd(totalPool) && <span className="text-[10px] text-muted-foreground font-normal ml-1.5">{formatUsd(totalPool)}</span>}
+          </span>
+        </div>
+
+        {/* Draw info */}
+        {["draw", "refund_pending", "refunds_processing", "refunds_complete"].includes(fight.status) && (
           <div className="mt-3 bg-muted/30 border border-border/30 rounded-lg p-3 text-center">
             <p className="text-xs font-bold text-muted-foreground">
               {fight.status === "refunds_complete" ? "✅ Refunds complete" :
