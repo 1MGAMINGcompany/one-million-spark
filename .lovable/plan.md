@@ -1,75 +1,61 @@
+# Fight Prediction System — Phase 2 In Progress
 
+## Status Lifecycle (Final)
 
-## Audit Results: 4 Production Safety Checks
-
-### 1. Reward calculation is HARDCODED at 20% -- CONFIRMED BUG
-
-**File:** `supabase/functions/settle-game/index.ts` (line 1075)
 ```
-const referralRewardBps = 2000; // 20% of platform fee
+open → locked → live → result_selected → confirmed → settled
+                   └→ draw → refund_pending → refunds_processing → refunds_complete
+                   └→ cancelled
 ```
 
-The settle-game function fetches `referred_by_wallet` from `player_profiles` but does NOT fetch `referral_percentage`. It uses a hardcoded 2000 bps (20%) for all referrers regardless of their assigned percentage.
+## Architecture
 
-**Fix:** In the settle-game function:
-- Change the `player_profiles` select from `"referred_by_wallet"` to `"referred_by_wallet, referral_percentage"`
-- Look up the **referrer's** profile to get their `referral_percentage` (the current query fetches the *referred player's* profile, not the referrer's)
-- Replace `referralRewardBps = 2000` with `referralRewardBps = (referrerProfile.referral_percentage || 20) * 100`
+### Database Tables
+- `prediction_events` — Parent event grouping + automation fields (source_provider, source_event_id, automation_status, scheduling, result detection, confidence)
+- `prediction_fights` — Individual fights with event_id FK, weight_class, fight_class, method, refund tracking
+- `prediction_entries` — User prediction records
+- `prediction_admins` — Authorized admin wallets
+- `prediction_settings` — Global kill switches (predictions_enabled, claims_enabled, automation_enabled)
+- `automation_jobs` — Scheduled/running automation tasks (job_type, target, status, retries, result_payload)
+- `automation_logs` — Immutable audit trail (action, source, confidence, admin_wallet)
 
-Note: `prediction-submit` and `prediction-settle-worker` do NOT have referral reward logic, so no changes needed there.
+### Edge Functions
+- `prediction-admin` — Full lifecycle + getSettings/updateSettings for kill switches
+- `prediction-refund-worker` — Separate refund execution for draw scenarios (idempotent, safety-guarded)
+- `prediction-submit` — Submit predictions with 5% fee (respects predictions_enabled kill switch)
+- `prediction-claim` — Claim rewards (respects claims_enabled kill switch)
+- `prediction-feed` — Live activity feed
+- `prediction-auto-settle` — Cron auto-settle (respects automation_enabled kill switch)
+- `prediction-ingest` — BALLDONTLIE MMA API event/fight discovery (UFC, Bellator, PFL, ONE). Fetches events via `/events?year=YYYY`, full fight cards via `/fights?event_ids[]=ID`. Auth via `Authorization: API_KEY` header. Supports full card import (main_card, prelims, early_prelims segments with fight_order). Fights endpoint requires ALL-STAR tier. Dedupes by `bdl_{id}`. Stores as draft. Never auto-publishes.
+- `prediction-schedule-worker` — Cron: locks approved events at scheduled_lock_at, marks live at scheduled_live_at. Respects global + per-event automation_paused.
+- `prediction-result-worker` — Cron: fetches results from TheSportsDB for live auto-resolve events. Requires exact source_event_id match. Records payload + confidence. Flags low-confidence (<85%) for admin review. Auto-moves high-confidence fights to result_selected (NOT confirmed).
+- `prediction-settle-worker` — Idempotent job-based settlement. Creates jobs for confirmed fights past claims_open_at. CAS guard prevents double-pickup. Retry support (max 3). Full audit trail. Replaces simple auto-settle for new fights.
 
----
+### Key Design Decisions
+1. Draw declaration is separate from refund execution (draw → refund_pending → refunds_processing → refunds_complete)
+2. `result_selected` is a real reversible status between `live` and `confirmed`
+3. `settled` means financially closed and immutable
+4. Events group fights; admin manages at event level
+5. Result worker only moves to `result_selected`, never `confirmed` — admin must confirm
+6. Settlement worker uses job table with CAS guards for exactly-once execution
+7. All workers respect both global kill switch AND per-event automation_paused flag
 
-### 2. Existing codes have sane default -- OK
-
-The migration set `DEFAULT 20` on `referral_percentage`. All existing rows already have `referral_percentage = 20`. The admin UI and totals computation work correctly with this default. No fix needed.
-
----
-
-### 3. Double-click payout protection -- NEEDS FIX
-
-The `ReferralAdmin.tsx` UI does disable the button via `disabled={submittingPayout}`, which prevents most double-clicks. However, the edge function `referral-admin-record-payout` has zero server-side deduplication. Two rapid requests will create two identical payout records.
-
-**Fix (UI-side, minimal):**
-- Already handled by `submittingPayout` state disabling the button. This is adequate for admin tooling.
-- Optional improvement: close the modal immediately on success (already done via `setPayoutOpen(false)`).
-
-No server-side dedup needed for an admin-only tool used by one person, but worth noting.
-
----
-
-### 4. Admin auth is INCONSISTENT -- CONFIRMED ISSUE
-
-Three auth paths:
-- **ReferralAdmin.tsx (client):** checks `prediction_admins` table OR hardcoded `ADMIN_WALLETS` array
-- **referral-admin-set-code:** checks `prediction_admins` table ONLY (no hardcoded fallback)
-- **referral-admin-record-payout:** checks `prediction_admins` table ONLY (no hardcoded fallback)
-
-If the admin wallet is only in the hardcoded `ADMIN_WALLETS` but not in `prediction_admins`, the UI will show the admin dashboard but all edge function calls will fail with "not_admin".
-
-**Fix:** Remove the `ADMIN_WALLETS` hardcoded fallback from `ReferralAdmin.tsx` so it relies solely on `prediction_admins`, matching both edge functions. (Or add the same fallback to the edge functions, but DB-only is cleaner.)
-
----
-
-### 5. Summary cards at top -- ALREADY EXISTS
-
-The current `ReferralAdmin.tsx` already has summary cards showing Total Referred, Total Earned, and Total Paid. No change needed.
+### Safety Guardrails
+- **Global kill switches**: predictions_enabled, claims_enabled, automation_enabled (enforced server-side)
+- **Per-event pause**: automation_paused flag stops schedule/result/settle workers for individual events
+- Server-side status guards on all transitions
+- Red confirmation dialogs for irreversible actions (lock, confirm, settle, draw, refunds)
+- Per-claim cap: 5 SOL, daily ceiling: 50 SOL
+- 5-minute safety delay before claims open
+- Refund tracking: refund_status, refunds_started_at, refunds_completed_at
+- Manual admin actions (settle, lock, etc.) always work regardless of kill switches
+- Settlement idempotency via automation_jobs deduplication
+- CAS (Compare-And-Swap) guards on job pickup prevent double-processing
 
 ---
 
-## Plan
+## Phase 3 (Next): Cron Scheduling
+Set up pg_cron jobs for schedule-worker, result-worker, and settle-worker.
 
-### Step 1: Fix settle-game referral percentage (critical)
-- In `supabase/functions/settle-game/index.ts` lines 1075-1086:
-  - After finding `referred_by_wallet`, fetch the **referrer's** `referral_percentage` from `player_profiles`
-  - Use `referralRewardBps = (referrerPercentage || 20) * 100` instead of hardcoded 2000
-
-### Step 2: Fix admin auth consistency
-- In `src/pages/ReferralAdmin.tsx` line 61: remove the `ADMIN_WALLETS` constant
-- In the `fetchData` function: remove the `|| ADMIN_WALLETS.includes(address)` fallback so admin check is `prediction_admins` only, matching edge functions
-
-### Step 3: Add "Total Unpaid" to summary
-- Add a 4th summary card showing `Total Unpaid = Total Earned - Total Paid` for quick reconciliation
-
-These are minimal, safe changes with no impact on wallet, Solana, or gameplay logic.
-
+## Phase 4 (Next): Admin UI for Automation Monitoring
+Dashboard showing automation_jobs status, failed jobs, retry counts, audit logs.

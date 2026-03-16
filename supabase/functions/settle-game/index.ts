@@ -1072,8 +1072,6 @@ Deno.serve(async (req: Request) => {
         try {
           const potLamportsRef = Number(roomData.stakeLamports) * roomData.maxPlayers;
           const feeRef = Math.floor(potLamportsRef * 0.05);
-          const referralRewardBps = 2000; // 20% of platform fee
-
           for (const playerWallet of playersOnChain) {
             const { data: playerProfile } = await supabase
               .from("player_profiles")
@@ -1082,6 +1080,14 @@ Deno.serve(async (req: Request) => {
               .maybeSingle();
 
             if (playerProfile?.referred_by_wallet) {
+              // Fetch the REFERRER's percentage (not the referred player's)
+              const { data: referrerProfile } = await supabase
+                .from("player_profiles")
+                .select("referral_percentage")
+                .eq("wallet", playerProfile.referred_by_wallet)
+                .maybeSingle();
+
+              const referralRewardBps = (referrerProfile?.referral_percentage || 20) * 100;
               const perPlayerFee = Math.floor(feeRef / playersOnChain.length);
               const rewardAmount = Math.floor((perPlayerFee * referralRewardBps) / 10000);
 
