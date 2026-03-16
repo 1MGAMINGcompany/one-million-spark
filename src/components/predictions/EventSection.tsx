@@ -34,6 +34,20 @@ interface PredictionEvent {
   status: string;
   is_test: boolean;
   source_provider?: string | null;
+  league_logo?: string | null;
+}
+
+function formatCountdown(eventDate: string | null): string | null {
+  if (!eventDate) return null;
+  const diff = new Date(eventDate).getTime() - Date.now();
+  if (diff <= 0) return "Started";
+  const hours = Math.floor(diff / 3_600_000);
+  const mins = Math.floor((diff % 3_600_000) / 60_000);
+  if (hours > 48) {
+    const days = Math.floor(hours / 24);
+    return `Starts in ${days}d`;
+  }
+  return `Starts in ${hours}h ${mins}m`;
 }
 
 const SOCCER_KEYWORDS = [
