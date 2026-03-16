@@ -174,15 +174,25 @@ Deno.serve(async (req) => {
 
     // ── Phase 2.5: Fallback auto-live for events past scheduled_live_at ──
     // Safety net: if event should be live but fights are still locked/open
+    // SAME SAFETY GUARD: event_date must have passed
     const { data: stuckEvents } = await supabase
       .from("prediction_events")
-      .select("id, event_name, scheduled_live_at, source_provider")
+      .select("id, event_name, event_date, scheduled_live_at, source_provider, source_event_id")
       .eq("status", "approved")
       .eq("automation_paused", false)
       .not("scheduled_live_at", "is", null)
-      .lte("scheduled_live_at", now);
+      .lte("scheduled_live_at", nowISO);
 
     for (const evt of stuckEvents ?? []) {
+      // ── SAFETY GUARD: Never go LIVE before event_date ──
+      if (evt.event_date) {
+        const eventStart = new Date(evt.event_date).getTime();
+        if (now.getTime() < eventStart) {
+          console.warn(`[schedule-worker] SAFETY BLOCK (fallback): event ${evt.id} event_date=${evt.event_date} is in the future. Skipping.`);
+          continue;
+        }
+      }
+
       // Find fights that should be live but are still locked or open
       const { data: stuckFights, error: sfErr } = await supabase
         .from("prediction_fights")
@@ -202,7 +212,15 @@ Deno.serve(async (req) => {
           action: "fallback_auto_live",
           event_id: evt.id,
           source: "prediction-schedule-worker",
-          details: { live_fights: fallbackCount, event_name: evt.event_name, reason: "past_scheduled_live_at_fallback", provider: evt.source_provider },
+          details: {
+            live_fights: fallbackCount,
+            event_name: evt.event_name,
+            reason: "past_scheduled_live_at_fallback",
+            provider: evt.source_provider,
+            source_event_id: evt.source_event_id,
+            event_date: evt.event_date,
+            server_time: nowISO,
+          },
         });
         console.log(`[schedule-worker] Fallback: marked ${fallbackCount} stuck fights live for event ${evt.id}`);
         results.push({ action: "fallback_live", event_id: evt.id, ok: true });
