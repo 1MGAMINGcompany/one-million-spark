@@ -277,16 +277,18 @@ const GOLD_PARTICLE_COLORS = [
 
 // ─── VictimPiece (captured piece stays visible, shakes, then crushes) ─────────
 
-function VictimPiece({ piece, color, position, lite, progressRef, isFirstEntryRef, skin }: {
+function VictimPiece({ piece, color, position, lite, progressRef, isFirstEntryRef, skin, getGeo }: {
   piece: string; color: "white" | "black";
   position: [number, number]; lite: boolean;
   progressRef: React.MutableRefObject<number>;
   isFirstEntryRef: React.MutableRefObject<boolean>;
   skin: ChessSkin;
+  getGeo: GetGeoFn;
 }) {
   const groupRef = useRef<THREE.Group>(null);
-  const geo = useMemo(() => getCachedGeo(piece, lite, skin), [piece, lite, skin]);
+  const geo = useMemo(() => getGeo(piece, color), [piece, color, getGeo]);
   const mat = useMemo(() => getCachedMat(color, lite, skin), [color, lite, skin]);
+  const useGLBModel = !!skin.glbPath;
 
   useFrame(() => {
     if (!groupRef.current) return;
@@ -295,12 +297,10 @@ function VictimPiece({ piece, color, position, lite, progressRef, isFirstEntryRe
     const moveT = phase === "move" ? easeInOutCubic(t) : 1;
 
     if (moveT < 0.65) {
-      // Fully visible, no shake
       groupRef.current.position.set(position[0], 0, position[1]);
       groupRef.current.scale.set(1, 1, 1);
       groupRef.current.rotation.set(0, 0, 0);
     } else if (moveT < 0.85) {
-      // Shake/vibrate phase — attacker is close
       const shakeT = (moveT - 0.65) / 0.2;
       const intensity = shakeT * 0.06;
       groupRef.current.position.set(
@@ -316,10 +316,9 @@ function VictimPiece({ piece, color, position, lite, progressRef, isFirstEntryRe
       const crushScale = 1 - shakeT * 0.3;
       groupRef.current.scale.set(crushScale, crushScale, crushScale);
     } else {
-      // Crush to zero
       const crushT = Math.min((moveT - 0.85) / 0.1, 1);
       const s = Math.max(0, (1 - 0.3) * (1 - crushT));
-      groupRef.current.scale.set(s, s * 0.3, s); // flatten vertically
+      groupRef.current.scale.set(s, s * 0.3, s);
       groupRef.current.position.set(position[0], 0, position[1]);
     }
   });
@@ -327,7 +326,7 @@ function VictimPiece({ piece, color, position, lite, progressRef, isFirstEntryRe
   return (
     <group ref={groupRef} position={[position[0], 0, position[1]]}>
       <mesh geometry={geo} castShadow material={mat} />
-      {piece === "king" && (
+      {!useGLBModel && piece === "king" && (
         <group position={[0, 0.58 * PIECE_SCALE, 0]}>
           <mesh castShadow material={mat}>
             <boxGeometry args={[0.03 * PIECE_SCALE, 0.1 * PIECE_SCALE, 0.03 * PIECE_SCALE]} />
