@@ -100,6 +100,7 @@ export default function EventSection({
   hotFightIds,
   onWalletRequired,
   event,
+  isStaleLive,
 }: {
   eventName: string;
   fights: Fight[];

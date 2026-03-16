@@ -190,7 +190,7 @@ export default function FightPredictions() {
   }, [groupedEvents, activeSport]);
 
   // Categorize events into status sections (each event appears ONCE)
-  const { liveEvents, todayEvents, upcomingEvents } = useMemo(() => {
+  const { liveEvents, todayEvents, upcomingEvents, staleLiveKeys } = useMemo(() => {
     const eventMap = new Map(events.map(e => [e.id, e]));
     const live: [string, { event?: PredictionEvent; fights: Fight[] }][] = [];
     const today: [string, { event?: PredictionEvent; fights: Fight[] }][] = [];
