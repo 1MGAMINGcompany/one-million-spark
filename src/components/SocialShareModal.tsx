@@ -54,6 +54,8 @@ export interface ShareModalProps {
   gameTitle?: string;
   solWon?: number;
   wallet?: string;
+  /** Admin-issued referral code (4-16 alphanum). Used for ?ref= param. */
+  referralCode?: string;
   opponentType?: string;
   streak?: number;
   gameName?: string;
