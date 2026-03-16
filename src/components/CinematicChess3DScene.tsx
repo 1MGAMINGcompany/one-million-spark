@@ -22,6 +22,7 @@ import * as THREE from "three";
 import type { CinematicEvent, BoardPiece } from "@/lib/buildCinematicEvent";
 import type { CinematicTier } from "@/hooks/useCinematicMode";
 import { getSkinById, type ChessSkin, type MaterialConfig } from "@/lib/chessSkins";
+import { useChessGLB } from "@/hooks/useChessGLB";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -57,9 +58,8 @@ function getPhase(progress: number, _isFirstEntry: boolean): { phase: AnimPhase;
 // ─── Skin-Keyed Material & Geometry Cache ─────────────────────────────────────
 
 const _geoCache = new Map<string, THREE.LatheGeometry>();
-const _matCache = new Map<string, THREE.Material>();
 
-function getCachedGeo(piece: string, lite: boolean, skin: ChessSkin): THREE.LatheGeometry {
+function getCachedLatheGeo(piece: string, lite: boolean, skin: ChessSkin): THREE.LatheGeometry {
   const key = `${skin.id}-${piece}-${lite ? "l" : "f"}`;
   let g = _geoCache.get(key);
   if (!g) {
@@ -70,6 +70,8 @@ function getCachedGeo(piece: string, lite: boolean, skin: ChessSkin): THREE.Lath
   }
   return g;
 }
+
+const _matCache = new Map<string, THREE.Material>();
 
 function buildMaterial(config: MaterialConfig, lite: boolean): THREE.Material {
   if (lite) {
@@ -168,16 +170,19 @@ function BoardPlane({ lite, skin }: { lite: boolean; skin: ChessSkin }) {
 
 // ─── Static Piece (no animation, never re-renders) ────────────────────────────
 
-function StaticPiece({ piece, color, x, z, lite, skin }: {
-  piece: string; color: "white" | "black"; x: number; z: number; lite: boolean; skin: ChessSkin;
+type GetGeoFn = (piece: string, color: "white" | "black") => THREE.BufferGeometry;
+
+function StaticPiece({ piece, color, x, z, lite, skin, getGeo }: {
+  piece: string; color: "white" | "black"; x: number; z: number; lite: boolean; skin: ChessSkin; getGeo: GetGeoFn;
 }) {
-  const geo = useMemo(() => getCachedGeo(piece, lite, skin), [piece, lite, skin]);
+  const geo = useMemo(() => getGeo(piece, color), [piece, color, getGeo]);
   const mat = useMemo(() => getCachedMat(color, lite, skin), [color, lite, skin]);
+  const useGLB = !!skin.glbPath;
 
   return (
     <group position={[x, 0, z]}>
       <mesh geometry={geo} castShadow material={mat} />
-      {piece === "king" && (
+      {!useGLB && piece === "king" && (
         <group position={[0, 0.58 * PIECE_SCALE, 0]}>
           <mesh castShadow material={mat}>
             <boxGeometry args={[0.03 * PIECE_SCALE, 0.1 * PIECE_SCALE, 0.03 * PIECE_SCALE]} />
@@ -193,19 +198,21 @@ function StaticPiece({ piece, color, x, z, lite, skin }: {
 
 // ─── Moving Piece (imperative position via useFrame) ──────────────────────────
 
-function MovingPiece({ piece, color, fromPos, toPos, isCapture, lite, progressRef, isFirstEntryRef, skin }: {
+function MovingPiece({ piece, color, fromPos, toPos, isCapture, lite, progressRef, isFirstEntryRef, skin, getGeo }: {
   piece: string; color: "white" | "black";
   fromPos: [number, number]; toPos: [number, number];
   isCapture: boolean; lite: boolean;
   progressRef: React.MutableRefObject<number>;
   isFirstEntryRef: React.MutableRefObject<boolean>;
   skin: ChessSkin;
+  getGeo: GetGeoFn;
 }) {
   const groupRef = useRef<THREE.Group>(null);
   const srcHighlightRef = useRef<THREE.Mesh>(null);
   const dstHighlightRef = useRef<THREE.Mesh>(null);
-  const geo = useMemo(() => getCachedGeo(piece, lite, skin), [piece, lite, skin]);
+  const geo = useMemo(() => getGeo(piece, color), [piece, color, getGeo]);
   const mat = useMemo(() => getCachedMat(color, lite, skin), [color, lite, skin]);
+  const useGLBModel = !!skin.glbPath;
 
   useFrame(() => {
     const progress = progressRef.current;
@@ -232,7 +239,7 @@ function MovingPiece({ piece, color, fromPos, toPos, isCapture, lite, progressRe
     <>
       <group ref={groupRef} position={[fromPos[0], 0, fromPos[1]]}>
         <mesh geometry={geo} castShadow material={mat} />
-        {piece === "king" && (
+        {!useGLBModel && piece === "king" && (
           <group position={[0, 0.58 * PIECE_SCALE, 0]}>
             <mesh castShadow material={mat}>
               <boxGeometry args={[0.03 * PIECE_SCALE, 0.1 * PIECE_SCALE, 0.03 * PIECE_SCALE]} />
@@ -270,16 +277,18 @@ const GOLD_PARTICLE_COLORS = [
 
 // ─── VictimPiece (captured piece stays visible, shakes, then crushes) ─────────
 
-function VictimPiece({ piece, color, position, lite, progressRef, isFirstEntryRef, skin }: {
+function VictimPiece({ piece, color, position, lite, progressRef, isFirstEntryRef, skin, getGeo }: {
   piece: string; color: "white" | "black";
   position: [number, number]; lite: boolean;
   progressRef: React.MutableRefObject<number>;
   isFirstEntryRef: React.MutableRefObject<boolean>;
   skin: ChessSkin;
+  getGeo: GetGeoFn;
 }) {
   const groupRef = useRef<THREE.Group>(null);
-  const geo = useMemo(() => getCachedGeo(piece, lite, skin), [piece, lite, skin]);
+  const geo = useMemo(() => getGeo(piece, color), [piece, color, getGeo]);
   const mat = useMemo(() => getCachedMat(color, lite, skin), [color, lite, skin]);
+  const useGLBModel = !!skin.glbPath;
 
   useFrame(() => {
     if (!groupRef.current) return;
@@ -288,12 +297,10 @@ function VictimPiece({ piece, color, position, lite, progressRef, isFirstEntryRe
     const moveT = phase === "move" ? easeInOutCubic(t) : 1;
 
     if (moveT < 0.65) {
-      // Fully visible, no shake
       groupRef.current.position.set(position[0], 0, position[1]);
       groupRef.current.scale.set(1, 1, 1);
       groupRef.current.rotation.set(0, 0, 0);
     } else if (moveT < 0.85) {
-      // Shake/vibrate phase — attacker is close
       const shakeT = (moveT - 0.65) / 0.2;
       const intensity = shakeT * 0.06;
       groupRef.current.position.set(
@@ -309,10 +316,9 @@ function VictimPiece({ piece, color, position, lite, progressRef, isFirstEntryRe
       const crushScale = 1 - shakeT * 0.3;
       groupRef.current.scale.set(crushScale, crushScale, crushScale);
     } else {
-      // Crush to zero
       const crushT = Math.min((moveT - 0.85) / 0.1, 1);
       const s = Math.max(0, (1 - 0.3) * (1 - crushT));
-      groupRef.current.scale.set(s, s * 0.3, s); // flatten vertically
+      groupRef.current.scale.set(s, s * 0.3, s);
       groupRef.current.position.set(position[0], 0, position[1]);
     }
   });
@@ -320,7 +326,7 @@ function VictimPiece({ piece, color, position, lite, progressRef, isFirstEntryRe
   return (
     <group ref={groupRef} position={[position[0], 0, position[1]]}>
       <mesh geometry={geo} castShadow material={mat} />
-      {piece === "king" && (
+      {!useGLBModel && piece === "king" && (
         <group position={[0, 0.58 * PIECE_SCALE, 0]}>
           <mesh castShadow material={mat}>
             <boxGeometry args={[0.03 * PIECE_SCALE, 0.1 * PIECE_SCALE, 0.03 * PIECE_SCALE]} />
@@ -579,6 +585,21 @@ function SceneContent({ event, duration, boardFlipped, onComplete, onMoveComplet
   const isFirstEntryRef = useRef(isFirstEntry);
   const dismissProgressRef = useRef(0);
 
+  // GLB geometry loader (only loads if skin has glbPath)
+  const glbHook = skin.glbPath ? useChessGLB() : null;
+
+  // Unified geometry resolver: GLB first, then lathe fallback
+  const getGeo: GetGeoFn = useCallback((piece: string, color: "white" | "black") => {
+    if (glbHook) {
+      // Target height matches PIECE_SCALE-based lathe pieces (~0.8 for pawn to ~1.1 for king)
+      const heightMap: Record<string, number> = { pawn: 0.55, rook: 0.65, knight: 0.7, bishop: 0.75, queen: 0.9, king: 1.0 };
+      const targetH = (heightMap[piece] ?? 0.55) * PIECE_SCALE;
+      const glbGeo = glbHook.getGLBGeo(piece, color, targetH);
+      if (glbGeo) return glbGeo;
+    }
+    return getCachedLatheGeo(piece, lite, skin);
+  }, [glbHook, lite, skin]);
+
   // Keep refs in sync without re-renders
   useEffect(() => { isFirstEntryRef.current = isFirstEntry; }, [isFirstEntry]);
   useEffect(() => {
@@ -616,6 +637,7 @@ function SceneContent({ event, duration, boardFlipped, onComplete, onMoveComplet
           z={p.pos[1]}
           lite={lite}
           skin={skin}
+          getGeo={getGeo}
         />
       ))}
 
@@ -629,6 +651,7 @@ function SceneContent({ event, duration, boardFlipped, onComplete, onMoveComplet
         progressRef={progressRef}
         isFirstEntryRef={isFirstEntryRef}
         skin={skin}
+        getGeo={getGeo}
       />
 
       {event.isCapture && event.capturedPiece && event.capturedColor && (
@@ -640,6 +663,7 @@ function SceneContent({ event, duration, boardFlipped, onComplete, onMoveComplet
           progressRef={progressRef}
           isFirstEntryRef={isFirstEntryRef}
           skin={skin}
+          getGeo={getGeo}
         />
       )}
 
