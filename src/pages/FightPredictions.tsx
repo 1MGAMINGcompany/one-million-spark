@@ -88,6 +88,7 @@ function StatusSectionHeader({ section, count }: { section: StatusSection; count
 
 export default function FightPredictions() {
   const { address, publicKey, isConnected, sendTransaction, connection } = useWallet();
+  const referralCode = useMyReferralCode(address ?? null);
   const { t } = useTranslation();
   const [fights, setFights] = useState<Fight[]>([]);
   const [events, setEvents] = useState<PredictionEvent[]>([]);
