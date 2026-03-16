@@ -103,7 +103,7 @@ export default function ReferralAdmin() {
       .eq("wallet", address)
       .maybeSingle();
 
-    const admin = !!adminRow || ADMIN_WALLETS.includes(address);
+    const admin = !!adminRow;
     setIsAdmin(admin);
     if (!admin) { setLoading(false); return; }
 
