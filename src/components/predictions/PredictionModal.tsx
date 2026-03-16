@@ -146,6 +146,7 @@ export default function PredictionModal({
             amountSol={amountNum}
             poolSol={(fight.pool_a_lamports + fight.pool_b_lamports) / LAMPORTS}
             wallet={wallet}
+            referralCode={referralCode ?? undefined}
           />
         )}
       </>
