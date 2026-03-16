@@ -70,7 +70,8 @@ function getCachedLatheGeo(piece: string, lite: boolean, skin: ChessSkin): THREE
   return g;
 }
 
-function buildMaterial(config: MaterialConfig, lite: boolean): THREE.Material {
+const _matCache = new Map<string, THREE.Material>();
+
   if (lite) {
     return new THREE.MeshStandardMaterial({
       color: config.color,
