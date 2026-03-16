@@ -1,41 +1,41 @@
 /**
  * Referral Admin Dashboard
- * Issue codes, view top referrers, totals, recent events
+ * Issue codes, view top referrers, totals, recent events, record payouts
  */
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Users, Coins, Shield, TrendingUp, Loader2, Plus, Copy, Check } from "lucide-react";
+import { ArrowLeft, Shield, Loader2, Plus, Copy, Check, DollarSign, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { useWallet } from "@/hooks/useWallet";
 import { toast } from "@/hooks/use-toast";
 
-interface TopReferrer {
-  wallet: string;
-  referred_count: number;
-  total_accrued: number;
-  total_paid: number;
-}
-
-interface RecentReward {
-  id: string;
-  referrer_wallet: string;
-  player_wallet: string;
-  source_type: string;
-  referral_reward_amount: number;
-  status: string;
-  created_at: string;
-}
-
-interface IssuedCode {
+/* ───── types ───── */
+interface ReferrerProfile {
   wallet: string;
   referral_code: string;
   referral_label: string | null;
+  referral_percentage: number;
 }
 
+interface PayoutLog {
+  id: string;
+  referral_wallet: string;
+  referral_code: string | null;
+  amount_sol: number;
+  paid_at: string;
+  paid_by_admin_wallet: string;
+  tx_hash: string | null;
+  note: string | null;
+}
+
+/* ───── helpers ───── */
 function shortenWallet(address: string): string {
   if (!address || address.length < 10) return address;
   return `${address.slice(0, 4)}…${address.slice(-4)}`;
@@ -47,27 +47,54 @@ function formatSol(lamports: number): string {
   return sol.toFixed(4).replace(/\.?0+$/, "");
 }
 
-const ADMIN_WALLETS = [
-  "GA4oxfEHPCjo7KTLWMyxjq2J5tEScihqvFh5rFMM88JX",
-];
+function fmtSol(n: number): string {
+  if (n === 0) return "0";
+  return n.toFixed(4).replace(/\.?0+$/, "");
+}
 
+function fmtDate(d: string): string {
+  return new Date(d).toLocaleDateString(undefined, {
+    month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit",
+  });
+}
+
+const ADMIN_WALLETS = ["GA4oxfEHPCjo7KTLWMyxjq2J5tEScihqvFh5rFMM88JX"];
+const PERCENTAGE_OPTIONS = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50];
+
+/* ───── main component ───── */
 export default function ReferralAdmin() {
   const navigate = useNavigate();
   const { address } = useWallet();
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [topReferrers, setTopReferrers] = useState<TopReferrer[]>([]);
-  const [recentRewards, setRecentRewards] = useState<RecentReward[]>([]);
-  const [issuedCodes, setIssuedCodes] = useState<IssuedCode[]>([]);
-  const [totals, setTotals] = useState({ accrued: 0, paid: 0, totalReferred: 0 });
+
+  // Data
+  const [referrers, setReferrers] = useState<ReferrerProfile[]>([]);
+  const [earnedMap, setEarnedMap] = useState<Map<string, number>>(new Map());
+  const [paidMap, setPaidMap] = useState<Map<string, number>>(new Map());
+  const [payoutLogs, setPayoutLogs] = useState<PayoutLog[]>([]);
+  const [lastPayoutMap, setLastPayoutMap] = useState<Map<string, string>>(new Map());
+  const [totals, setTotals] = useState({ totalReferred: 0, totalEarned: 0, totalPaid: 0 });
 
   // Issue code form
   const [targetWallet, setTargetWallet] = useState("");
   const [customCode, setCustomCode] = useState("");
   const [label, setLabel] = useState("");
+  const [percentage, setPercentage] = useState("20");
   const [issuing, setIssuing] = useState(false);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
+  // Payout modal
+  const [payoutOpen, setPayoutOpen] = useState(false);
+  const [payoutWallet, setPayoutWallet] = useState("");
+  const [payoutCode, setPayoutCode] = useState("");
+  const [payoutAmount, setPayoutAmount] = useState("");
+  const [payoutTxHash, setPayoutTxHash] = useState("");
+  const [payoutNote, setPayoutNote] = useState("");
+  const [payoutUnpaid, setPayoutUnpaid] = useState(0);
+  const [submittingPayout, setSubmittingPayout] = useState(false);
+
+  /* ───── fetch ───── */
   const fetchData = async () => {
     if (!address) { setLoading(false); return; }
 
@@ -82,52 +109,60 @@ export default function ReferralAdmin() {
     if (!admin) { setLoading(false); return; }
 
     try {
-      // Fetch issued codes
+      // Fetch referrers (profiles with codes)
       const { data: codes } = await supabase
         .from("player_profiles")
-        .select("wallet, referral_code, referral_label")
+        .select("wallet, referral_code, referral_label, referral_percentage")
         .not("referral_code", "is", null)
         .order("created_at", { ascending: false });
 
-      if (codes) setIssuedCodes(codes as IssuedCode[]);
+      if (codes) setReferrers(codes as ReferrerProfile[]);
 
-      // Fetch rewards for aggregation
+      // Fetch all referral_rewards for earned totals
       const { data: allRewards } = await supabase
         .from("referral_rewards")
-        .select("referrer_wallet, referral_reward_amount, status");
+        .select("referrer_wallet, referral_reward_amount");
 
+      const earned = new Map<string, number>();
+      let totalEarned = 0;
       if (allRewards) {
-        const referrerMap = new Map<string, { accrued: number; paid: number; count: number }>();
-        let totalAccrued = 0, totalPaid = 0;
-
         for (const r of allRewards) {
-          const entry = referrerMap.get(r.referrer_wallet) || { accrued: 0, paid: 0, count: 0 };
-          entry.count++;
-          if (r.status === "accrued") { entry.accrued += r.referral_reward_amount; totalAccrued += r.referral_reward_amount; }
-          else if (r.status === "paid") { entry.paid += r.referral_reward_amount; totalPaid += r.referral_reward_amount; }
-          referrerMap.set(r.referrer_wallet, entry);
+          earned.set(r.referrer_wallet, (earned.get(r.referrer_wallet) || 0) + r.referral_reward_amount);
+          totalEarned += r.referral_reward_amount;
         }
-
-        const { count: totalReferred } = await supabase
-          .from("player_profiles")
-          .select("wallet", { count: "exact", head: true })
-          .not("referred_by_wallet", "is", null);
-
-        setTotals({ accrued: totalAccrued, paid: totalPaid, totalReferred: totalReferred || 0 });
-
-        const topArr: TopReferrer[] = Array.from(referrerMap.entries())
-          .map(([wallet, data]) => ({ wallet, referred_count: data.count, total_accrued: data.accrued, total_paid: data.paid }))
-          .sort((a, b) => b.total_accrued - a.total_accrued)
-          .slice(0, 20);
-        setTopReferrers(topArr);
       }
+      setEarnedMap(earned);
 
-      const { data: recent } = await supabase
-        .from("referral_rewards")
-        .select("id, referrer_wallet, player_wallet, source_type, referral_reward_amount, status, created_at")
-        .order("created_at", { ascending: false })
-        .limit(20);
-      if (recent) setRecentRewards(recent);
+      // Fetch payout logs
+      const { data: logs } = await supabase
+        .from("referral_payout_logs")
+        .select("*")
+        .order("paid_at", { ascending: false });
+
+      const paid = new Map<string, number>();
+      const lastPayout = new Map<string, string>();
+      let totalPaidSol = 0;
+      if (logs) {
+        setPayoutLogs(logs as PayoutLog[]);
+        for (const l of logs as PayoutLog[]) {
+          const solLamports = l.amount_sol * 1_000_000_000;
+          paid.set(l.referral_wallet, (paid.get(l.referral_wallet) || 0) + solLamports);
+          totalPaidSol += solLamports;
+          if (!lastPayout.has(l.referral_wallet)) {
+            lastPayout.set(l.referral_wallet, l.paid_at);
+          }
+        }
+      }
+      setPaidMap(paid);
+      setLastPayoutMap(lastPayout);
+
+      // Total referred count
+      const { count: totalReferred } = await supabase
+        .from("player_profiles")
+        .select("wallet", { count: "exact", head: true })
+        .not("referred_by_wallet", "is", null);
+
+      setTotals({ totalReferred: totalReferred || 0, totalEarned, totalPaid: totalPaidSol });
     } catch (err) {
       console.error("[ReferralAdmin] Error:", err);
     } finally {
@@ -137,28 +172,81 @@ export default function ReferralAdmin() {
 
   useEffect(() => { fetchData(); }, [address]);
 
+  /* ───── issue code ───── */
   const handleIssueCode = async () => {
     if (!address || !targetWallet || !customCode) return;
     setIssuing(true);
     try {
       const { data, error } = await supabase.functions.invoke("referral-admin-set-code", {
-        body: { adminWallet: address, targetWallet: targetWallet.trim(), customCode: customCode.trim(), label: label.trim() || null },
+        body: {
+          adminWallet: address,
+          targetWallet: targetWallet.trim(),
+          customCode: customCode.trim(),
+          label: label.trim() || null,
+          percentage: Number(percentage),
+        },
       });
 
       if (error || !data?.success) {
-        const msg = data?.message || data?.error || "Failed to issue code";
-        toast({ title: "Error", description: msg, variant: "destructive" });
+        toast({ title: "Error", description: data?.message || data?.error || "Failed to issue code", variant: "destructive" });
       } else {
-        toast({ title: "Code Issued", description: `Code "${data.code}" assigned to ${shortenWallet(data.wallet)}` });
-        setTargetWallet("");
-        setCustomCode("");
-        setLabel("");
+        toast({ title: "Code Issued", description: `Code "${data.code}" assigned at ${data.percentage}%` });
+        setTargetWallet(""); setCustomCode(""); setLabel(""); setPercentage("20");
         fetchData();
       }
-    } catch (err) {
+    } catch {
       toast({ title: "Error", description: "Network error", variant: "destructive" });
     } finally {
       setIssuing(false);
+    }
+  };
+
+  /* ───── record payout ───── */
+  const openPayoutModal = (wallet: string, code: string, unpaidLamports: number) => {
+    setPayoutWallet(wallet);
+    setPayoutCode(code);
+    setPayoutUnpaid(unpaidLamports);
+    setPayoutAmount("");
+    setPayoutTxHash("");
+    setPayoutNote("");
+    setPayoutOpen(true);
+  };
+
+  const handleRecordPayout = async () => {
+    if (!address || !payoutWallet) return;
+    const amt = Number(payoutAmount);
+    if (!amt || amt <= 0) {
+      toast({ title: "Error", description: "Amount must be > 0", variant: "destructive" });
+      return;
+    }
+    const unpaidSol = payoutUnpaid / 1_000_000_000;
+    if (amt > unpaidSol + 0.0001) {
+      toast({ title: "Error", description: `Amount exceeds unpaid balance of ${fmtSol(unpaidSol)} SOL`, variant: "destructive" });
+      return;
+    }
+    setSubmittingPayout(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("referral-admin-record-payout", {
+        body: {
+          adminWallet: address,
+          referralWallet: payoutWallet,
+          referralCode: payoutCode || null,
+          amountSol: amt,
+          txHash: payoutTxHash.trim() || null,
+          note: payoutNote.trim() || null,
+        },
+      });
+      if (error || !data?.success) {
+        toast({ title: "Error", description: data?.message || data?.error || "Failed to record payout", variant: "destructive" });
+      } else {
+        toast({ title: "Payout Recorded", description: `${amt} SOL recorded for ${shortenWallet(payoutWallet)}` });
+        setPayoutOpen(false);
+        fetchData();
+      }
+    } catch {
+      toast({ title: "Error", description: "Network error", variant: "destructive" });
+    } finally {
+      setSubmittingPayout(false);
     }
   };
 
@@ -168,6 +256,7 @@ export default function ReferralAdmin() {
     setTimeout(() => setCopiedCode(null), 2000);
   };
 
+  /* ───── loading / access gate ───── */
   if (loading) {
     return (
       <div className="container max-w-3xl py-8 px-4">
@@ -192,6 +281,7 @@ export default function ReferralAdmin() {
     );
   }
 
+  /* ───── render ───── */
   return (
     <div className="container max-w-3xl py-8 px-4">
       <div className="flex items-center gap-2 mb-4">
@@ -204,6 +294,28 @@ export default function ReferralAdmin() {
       </div>
 
       <h1 className="text-2xl font-bold mb-6">Referral Dashboard</h1>
+
+      {/* Summary Cards */}
+      <div className="grid grid-cols-3 gap-3 mb-6">
+        <Card className="border-border/50 bg-card/80">
+          <CardContent className="p-4 text-center">
+            <p className="text-2xl font-bold text-foreground">{totals.totalReferred}</p>
+            <p className="text-xs text-muted-foreground uppercase">Total Referred</p>
+          </CardContent>
+        </Card>
+        <Card className="border-border/50 bg-card/80">
+          <CardContent className="p-4 text-center">
+            <p className="text-2xl font-bold text-primary">{formatSol(totals.totalEarned)}</p>
+            <p className="text-xs text-muted-foreground uppercase">Total Earned</p>
+          </CardContent>
+        </Card>
+        <Card className="border-border/50 bg-card/80">
+          <CardContent className="p-4 text-center">
+            <p className="text-2xl font-bold text-emerald-400">{formatSol(totals.totalPaid)}</p>
+            <p className="text-xs text-muted-foreground uppercase">Total Paid</p>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Issue Code Section */}
       <Card className="border-primary/30 bg-card/80 backdrop-blur mb-6">
@@ -222,7 +334,7 @@ export default function ReferralAdmin() {
                 className="mt-1"
               />
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-3">
               <div>
                 <Label className="text-xs text-muted-foreground">Code * (4-16 chars)</Label>
                 <Input
@@ -241,6 +353,19 @@ export default function ReferralAdmin() {
                   className="mt-1"
                 />
               </div>
+              <div>
+                <Label className="text-xs text-muted-foreground">Percentage</Label>
+                <Select value={percentage} onValueChange={setPercentage}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PERCENTAGE_OPTIONS.map((p) => (
+                      <SelectItem key={p} value={String(p)}>{p}%</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <Button
               onClick={handleIssueCode}
@@ -254,24 +379,85 @@ export default function ReferralAdmin() {
         </CardContent>
       </Card>
 
-      {/* Issued Codes */}
-      {issuedCodes.length > 0 && (
+      {/* Referrer Profiles with earned/paid/unpaid */}
+      {referrers.length > 0 && (
         <Card className="border-border/50 bg-card/80 backdrop-blur mb-6">
           <CardContent className="p-4">
-            <h3 className="font-semibold mb-3">Issued Codes ({issuedCodes.length})</h3>
-            <div className="space-y-1.5">
-              {issuedCodes.map((c) => (
-                <div key={c.wallet} className="flex items-center justify-between p-2 bg-muted/20 rounded-lg text-sm">
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono font-bold text-primary">{c.referral_code}</span>
-                    <span className="font-mono text-muted-foreground">{shortenWallet(c.wallet)}</span>
-                    {c.referral_label && (
-                      <span className="text-xs text-muted-foreground bg-muted/30 px-1.5 py-0.5 rounded">{c.referral_label}</span>
-                    )}
+            <h3 className="font-semibold mb-3">Referrer Profiles ({referrers.length})</h3>
+            <div className="space-y-2">
+              {referrers.map((r) => {
+                const earned = earnedMap.get(r.wallet) || 0;
+                const paid = paidMap.get(r.wallet) || 0;
+                const unpaid = Math.max(0, earned - paid);
+                const lastPay = lastPayoutMap.get(r.wallet);
+
+                return (
+                  <div key={r.wallet} className="p-3 bg-muted/20 rounded-lg text-sm space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-mono font-bold text-primary">{r.referral_code}</span>
+                        <span className="font-mono text-muted-foreground">{shortenWallet(r.wallet)}</span>
+                        {r.referral_label && (
+                          <span className="text-xs text-muted-foreground bg-muted/30 px-1.5 py-0.5 rounded">{r.referral_label}</span>
+                        )}
+                        <span className="text-xs font-medium bg-primary/20 text-primary px-1.5 py-0.5 rounded">{r.referral_percentage}%</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => copyCode(r.referral_code)}>
+                          {copiedCode === r.referral_code ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+                        </Button>
+                        {unpaid > 0 && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7 text-xs gap-1"
+                            onClick={() => openPayoutModal(r.wallet, r.referral_code, unpaid)}
+                          >
+                            <DollarSign className="h-3 w-3" /> Pay
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                      <span>Earned: <span className="text-primary font-mono">{formatSol(earned)}</span></span>
+                      <span>Paid: <span className="text-emerald-400 font-mono">{formatSol(paid)}</span></span>
+                      <span>Unpaid: <span className={`font-mono ${unpaid > 0 ? "text-amber-400" : "text-muted-foreground"}`}>{formatSol(unpaid)}</span></span>
+                      {lastPay && <span>Last payout: {fmtDate(lastPay)}</span>}
+                    </div>
                   </div>
-                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => copyCode(c.referral_code)}>
-                    {copiedCode === c.referral_code ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
-                  </Button>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Payout History */}
+      {payoutLogs.length > 0 && (
+        <Card className="border-border/50 bg-card/80 backdrop-blur mb-6">
+          <CardContent className="p-4">
+            <h3 className="font-semibold mb-3">Payout History ({payoutLogs.length})</h3>
+            <div className="space-y-1.5">
+              {payoutLogs.map((l) => (
+                <div key={l.id} className="flex items-center justify-between p-2 bg-muted/20 rounded-lg text-xs">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-muted-foreground">{fmtDate(l.paid_at)}</span>
+                    <span className="font-mono text-foreground">{shortenWallet(l.referral_wallet)}</span>
+                    {l.referral_code && <span className="font-mono text-primary">{l.referral_code}</span>}
+                    <span className="text-muted-foreground">by {shortenWallet(l.paid_by_admin_wallet)}</span>
+                    {l.tx_hash && (
+                      <a
+                        href={`https://solscan.io/tx/${l.tx_hash}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary underline"
+                      >
+                        tx
+                      </a>
+                    )}
+                    {l.note && <span className="text-muted-foreground italic">"{l.note}"</span>}
+                  </div>
+                  <span className="font-mono text-emerald-400 whitespace-nowrap">+{fmtSol(l.amount_sol)} SOL</span>
                 </div>
               ))}
             </div>
@@ -279,81 +465,69 @@ export default function ReferralAdmin() {
         </Card>
       )}
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-3 gap-3 mb-6">
-        <Card className="border-border/50 bg-card/80">
-          <CardContent className="p-4 text-center">
-            <Users className="h-5 w-5 text-muted-foreground mx-auto mb-1" />
-            <p className="text-2xl font-bold text-foreground">{totals.totalReferred}</p>
-            <p className="text-xs text-muted-foreground uppercase">Total Referred</p>
-          </CardContent>
-        </Card>
-        <Card className="border-border/50 bg-card/80">
-          <CardContent className="p-4 text-center">
-            <Coins className="h-5 w-5 text-primary mx-auto mb-1" />
-            <p className="text-2xl font-bold text-primary">{formatSol(totals.accrued)}</p>
-            <p className="text-xs text-muted-foreground uppercase">Accrued SOL</p>
-          </CardContent>
-        </Card>
-        <Card className="border-border/50 bg-card/80">
-          <CardContent className="p-4 text-center">
-            <Coins className="h-5 w-5 text-emerald-400 mx-auto mb-1" />
-            <p className="text-2xl font-bold text-emerald-400">{formatSol(totals.paid)}</p>
-            <p className="text-xs text-muted-foreground uppercase">Paid SOL</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Top Referrers */}
-      <Card className="border-border/50 bg-card/80 backdrop-blur mb-6">
-        <CardContent className="p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <TrendingUp className="h-4 w-4 text-primary" />
-            <h3 className="font-semibold">Top Referrers</h3>
+      {/* Payout Modal */}
+      <Dialog open={payoutOpen} onOpenChange={setPayoutOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Record Payout</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label className="text-xs text-muted-foreground">Referral Wallet</Label>
+              <p className="font-mono text-sm">{shortenWallet(payoutWallet)}</p>
+            </div>
+            {payoutCode && (
+              <div>
+                <Label className="text-xs text-muted-foreground">Referral Code</Label>
+                <p className="font-mono text-sm text-primary">{payoutCode}</p>
+              </div>
+            )}
+            <div>
+              <Label className="text-xs text-muted-foreground">Unpaid Balance</Label>
+              <p className="font-mono text-sm text-amber-400">{formatSol(payoutUnpaid)} SOL</p>
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">Amount (SOL) *</Label>
+              <Input
+                type="number"
+                step="0.0001"
+                min="0.0001"
+                placeholder="0.00"
+                value={payoutAmount}
+                onChange={(e) => setPayoutAmount(e.target.value)}
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">Tx Hash (optional)</Label>
+              <Input
+                placeholder="Solana transaction signature"
+                value={payoutTxHash}
+                onChange={(e) => setPayoutTxHash(e.target.value)}
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">Note (optional)</Label>
+              <Textarea
+                placeholder="e.g. March payout"
+                value={payoutNote}
+                onChange={(e) => setPayoutNote(e.target.value)}
+                className="mt-1"
+                rows={2}
+              />
+            </div>
+            <Button
+              onClick={handleRecordPayout}
+              disabled={submittingPayout || !payoutAmount || Number(payoutAmount) <= 0}
+              className="w-full"
+            >
+              {submittingPayout ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <DollarSign className="h-4 w-4 mr-2" />}
+              Record Payout
+            </Button>
           </div>
-          {topReferrers.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-4">No referral data yet</p>
-          ) : (
-            <div className="space-y-2">
-              {topReferrers.map((r, i) => (
-                <div key={r.wallet} className="flex items-center justify-between p-2 bg-muted/20 rounded-lg text-sm">
-                  <div className="flex items-center gap-2">
-                    <span className="text-muted-foreground w-5 text-right">#{i + 1}</span>
-                    <span className="font-mono text-foreground">{shortenWallet(r.wallet)}</span>
-                    <span className="text-xs text-muted-foreground">{r.referred_count} reward{r.referred_count !== 1 ? "s" : ""}</span>
-                  </div>
-                  <span className="font-mono text-primary">{formatSol(r.total_accrued + r.total_paid)} SOL</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Recent Rewards */}
-      <Card className="border-border/50 bg-card/80 backdrop-blur">
-        <CardContent className="p-4">
-          <h3 className="font-semibold mb-3">Recent Referral Events</h3>
-          {recentRewards.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-4">No events yet</p>
-          ) : (
-            <div className="space-y-1.5">
-              {recentRewards.map((r) => (
-                <div key={r.id} className="flex items-center justify-between p-2 bg-muted/20 rounded-lg text-xs">
-                  <div className="flex items-center gap-2">
-                    <span className={`uppercase px-1.5 py-0.5 rounded font-medium ${
-                      r.status === "paid" ? "bg-emerald-500/20 text-emerald-400" : "bg-primary/20 text-primary"
-                    }`}>{r.status}</span>
-                    <span className="text-muted-foreground">{shortenWallet(r.referrer_wallet)} ← {shortenWallet(r.player_wallet)}</span>
-                    <span className="text-muted-foreground capitalize">{r.source_type.replace("_", " ")}</span>
-                  </div>
-                  <span className="font-mono text-foreground">+{formatSol(r.referral_reward_amount)}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
