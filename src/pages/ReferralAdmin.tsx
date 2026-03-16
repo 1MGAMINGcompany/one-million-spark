@@ -58,7 +58,6 @@ function fmtDate(d: string): string {
   });
 }
 
-const ADMIN_WALLETS = ["GA4oxfEHPCjo7KTLWMyxjq2J5tEScihqvFh5rFMM88JX"];
 const PERCENTAGE_OPTIONS = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50];
 
 /* ───── main component ───── */
