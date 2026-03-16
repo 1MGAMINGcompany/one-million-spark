@@ -87,6 +87,9 @@ verify_jwt = false
 [functions.referral-admin-set-code]
 verify_jwt = false
 
+[functions.referral-admin-record-payout]
+verify_jwt = false
+
 
 [functions.prediction-ingest]
 verify_jwt = false
