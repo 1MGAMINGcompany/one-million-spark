@@ -683,6 +683,7 @@ export type Database = {
           referral_code: string | null
           referral_created_at: string | null
           referral_label: string | null
+          referral_percentage: number
           referred_by_code: string | null
           referred_by_wallet: string | null
           total_sol_won: number
@@ -703,6 +704,7 @@ export type Database = {
           referral_code?: string | null
           referral_created_at?: string | null
           referral_label?: string | null
+          referral_percentage?: number
           referred_by_code?: string | null
           referred_by_wallet?: string | null
           total_sol_won?: number
@@ -723,6 +725,7 @@ export type Database = {
           referral_code?: string | null
           referral_created_at?: string | null
           referral_label?: string | null
+          referral_percentage?: number
           referred_by_code?: string | null
           referred_by_wallet?: string | null
           total_sol_won?: number
@@ -1186,6 +1189,42 @@ export type Database = {
           metadata?: Json | null
           reason?: string
           wallet?: string
+        }
+        Relationships: []
+      }
+      referral_payout_logs: {
+        Row: {
+          amount_sol: number
+          created_at: string
+          id: string
+          note: string | null
+          paid_at: string
+          paid_by_admin_wallet: string
+          referral_code: string | null
+          referral_wallet: string
+          tx_hash: string | null
+        }
+        Insert: {
+          amount_sol: number
+          created_at?: string
+          id?: string
+          note?: string | null
+          paid_at?: string
+          paid_by_admin_wallet: string
+          referral_code?: string | null
+          referral_wallet: string
+          tx_hash?: string | null
+        }
+        Update: {
+          amount_sol?: number
+          created_at?: string
+          id?: string
+          note?: string | null
+          paid_at?: string
+          paid_by_admin_wallet?: string
+          referral_code?: string | null
+          referral_wallet?: string
+          tx_hash?: string | null
         }
         Relationships: []
       }
