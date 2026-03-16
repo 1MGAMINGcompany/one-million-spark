@@ -7,6 +7,8 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+const ALLOWED_PERCENTAGES = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50];
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -17,7 +19,7 @@ Deno.serve(async (req: Request) => {
   const supabase = createClient(supabaseUrl, serviceKey);
 
   try {
-    const { adminWallet, targetWallet, customCode, label } = await req.json();
+    const { adminWallet, targetWallet, customCode, label, percentage } = await req.json();
 
     // Validate inputs
     if (!adminWallet || typeof adminWallet !== "string" || adminWallet.length < 32) {
@@ -36,6 +38,15 @@ Deno.serve(async (req: Request) => {
     if (code.length < 4 || code.length > 16 || !/^[A-Z0-9]+$/.test(code)) {
       return Response.json(
         { success: false, error: "code_format_invalid", message: "Code must be 4-16 alphanumeric characters" },
+        { headers: corsHeaders }
+      );
+    }
+
+    // Validate percentage if provided
+    const pct = percentage !== undefined && percentage !== null ? Number(percentage) : 20;
+    if (!ALLOWED_PERCENTAGES.includes(pct)) {
+      return Response.json(
+        { success: false, error: "invalid_percentage", message: `Percentage must be one of: ${ALLOWED_PERCENTAGES.join(", ")}` },
         { headers: corsHeaders }
       );
     }
@@ -65,7 +76,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // 3. Upsert player_profiles with code + label
+    // 3. Upsert player_profiles with code + label + percentage
     const { error: upsertErr } = await supabase
       .from("player_profiles")
       .upsert(
@@ -73,6 +84,7 @@ Deno.serve(async (req: Request) => {
           wallet: targetWallet,
           referral_code: code,
           referral_label: label?.trim() || null,
+          referral_percentage: pct,
         },
         { onConflict: "wallet" }
       );
@@ -82,10 +94,10 @@ Deno.serve(async (req: Request) => {
       return Response.json({ success: false, error: "db_error" }, { headers: corsHeaders });
     }
 
-    console.log(`[referral-admin-set-code] ✅ Admin ${adminWallet.slice(0, 8)} set code "${code}" for ${targetWallet.slice(0, 8)} (label: ${label || "none"})`);
+    console.log(`[referral-admin-set-code] ✅ Admin ${adminWallet.slice(0, 8)} set code "${code}" for ${targetWallet.slice(0, 8)} (label: ${label || "none"}, pct: ${pct}%)`);
 
     return Response.json(
-      { success: true, code, wallet: targetWallet, label: label || null },
+      { success: true, code, wallet: targetWallet, label: label || null, percentage: pct },
       { headers: corsHeaders }
     );
   } catch (err) {
