@@ -88,6 +88,7 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export default function FightPredictionAdmin() {
+  const navigate = useNavigate();
   const { address } = useWallet();
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
