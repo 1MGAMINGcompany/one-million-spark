@@ -45,20 +45,24 @@ Deno.serve(async (req) => {
       return json({ processed: 0, message: "Automation disabled globally" });
     }
 
-    const now = new Date().toISOString();
+    const now = new Date();
+    const nowISO = now.toISOString();
     const results: { action: string; event_id: string; ok: boolean; error?: string }[] = [];
 
+    console.log(`[schedule-worker] Run started at ${nowISO}`);
+
     // ── Phase 1: Lock events at scheduled_lock_at ──
-    // This handles both MMA (lock at event time) and Soccer (lock 5min before kickoff)
     const { data: lockable } = await supabase
       .from("prediction_events")
-      .select("id, event_name, scheduled_lock_at, source_provider")
+      .select("id, event_name, event_date, scheduled_lock_at, scheduled_live_at, source_provider, source_event_id")
       .eq("status", "approved")
       .eq("automation_paused", false)
       .not("scheduled_lock_at", "is", null)
-      .lte("scheduled_lock_at", now);
+      .lte("scheduled_lock_at", nowISO);
 
     for (const evt of lockable ?? []) {
+      console.log(`[schedule-worker] Lock candidate: event=${evt.id} provider=${evt.source_provider} source_id=${evt.source_event_id} event_date=${evt.event_date} scheduled_lock_at=${evt.scheduled_lock_at} scheduled_live_at=${evt.scheduled_live_at} server_time=${nowISO}`);
+
       // Only lock fights that are still open (idempotent)
       const { data: fights, error: fErr } = await supabase
         .from("prediction_fights")
@@ -74,13 +78,20 @@ Deno.serve(async (req) => {
 
       const lockedCount = fights?.length ?? 0;
 
-      // Only log if we actually locked something
       if (lockedCount > 0) {
         await supabase.from("automation_logs").insert({
           action: "schedule_lock",
           event_id: evt.id,
           source: "prediction-schedule-worker",
-          details: { locked_fights: lockedCount, event_name: evt.event_name, provider: evt.source_provider },
+          details: {
+            locked_fights: lockedCount,
+            event_name: evt.event_name,
+            provider: evt.source_provider,
+            source_event_id: evt.source_event_id,
+            event_date: evt.event_date,
+            scheduled_lock_at: evt.scheduled_lock_at,
+            server_time: nowISO,
+          },
         });
         console.log(`[schedule-worker] Locked ${lockedCount} fights for event ${evt.id} (${evt.source_provider})`);
       }
