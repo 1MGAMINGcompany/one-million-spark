@@ -170,16 +170,19 @@ function BoardPlane({ lite, skin }: { lite: boolean; skin: ChessSkin }) {
 
 // ─── Static Piece (no animation, never re-renders) ────────────────────────────
 
-function StaticPiece({ piece, color, x, z, lite, skin }: {
-  piece: string; color: "white" | "black"; x: number; z: number; lite: boolean; skin: ChessSkin;
+type GetGeoFn = (piece: string, color: "white" | "black") => THREE.BufferGeometry;
+
+function StaticPiece({ piece, color, x, z, lite, skin, getGeo }: {
+  piece: string; color: "white" | "black"; x: number; z: number; lite: boolean; skin: ChessSkin; getGeo: GetGeoFn;
 }) {
-  const geo = useMemo(() => getCachedGeo(piece, lite, skin), [piece, lite, skin]);
+  const geo = useMemo(() => getGeo(piece, color), [piece, color, getGeo]);
   const mat = useMemo(() => getCachedMat(color, lite, skin), [color, lite, skin]);
+  const useGLB = !!skin.glbPath;
 
   return (
     <group position={[x, 0, z]}>
       <mesh geometry={geo} castShadow material={mat} />
-      {piece === "king" && (
+      {!useGLB && piece === "king" && (
         <group position={[0, 0.58 * PIECE_SCALE, 0]}>
           <mesh castShadow material={mat}>
             <boxGeometry args={[0.03 * PIECE_SCALE, 0.1 * PIECE_SCALE, 0.03 * PIECE_SCALE]} />
