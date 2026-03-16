@@ -258,6 +258,43 @@ Deno.serve(async (req) => {
       }
     }
 
+    // ── Phase 4: Stale-live diagnostic (log only, no mutations) ──
+    const threeHoursAgo = new Date(now.getTime() - 3 * 60 * 60 * 1000).toISOString();
+    const { data: staleLive } = await supabase
+      .from("prediction_events")
+      .select("id, event_name, event_date, source_provider, status")
+      .eq("status", "approved")
+      .not("event_date", "is", null)
+      .lte("event_date", threeHoursAgo);
+
+    if (staleLive && staleLive.length > 0) {
+      for (const evt of staleLive) {
+        // Check if any child fights are still live
+        const { data: liveFights } = await supabase
+          .from("prediction_fights")
+          .select("id")
+          .eq("event_id", evt.id)
+          .eq("status", "live")
+          .limit(1);
+
+        if (liveFights && liveFights.length > 0) {
+          console.warn(`[STALE_EVENT] event_id=${evt.id} event_name=${evt.event_name} provider=${evt.source_provider} event_date=${evt.event_date} status=live server_time=${nowISO}`);
+          await supabase.from("automation_logs").insert({
+            action: "stale_live_detected",
+            event_id: evt.id,
+            source: "prediction-schedule-worker",
+            details: {
+              event_name: evt.event_name,
+              provider: evt.source_provider,
+              event_date: evt.event_date,
+              server_time: nowISO,
+              reason: "event has live fights >3h past event_date",
+            },
+          });
+        }
+      }
+    }
+
     return json({
       processed: results.length,
       results,
