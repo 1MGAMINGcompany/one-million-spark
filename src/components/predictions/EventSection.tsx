@@ -44,11 +44,12 @@ function formatCountdown(eventDate: string | null): string | null {
   if (diff <= 0) return "Started";
   const hours = Math.floor(diff / 3_600_000);
   const mins = Math.floor((diff % 3_600_000) / 60_000);
+  const localTime = formatEventTime(eventDate);
   if (hours > 48) {
     const days = Math.floor(hours / 24);
-    return `Starts in ${days}d`;
+    return `Starts in ${days}d • ${localTime}`;
   }
-  return `Starts in ${hours}h ${mins}m`;
+  return `Starts in ${hours}h ${mins}m • ${localTime}`;
 }
 
 const SOCCER_KEYWORDS = [
