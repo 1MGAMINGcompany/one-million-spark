@@ -140,6 +140,7 @@ export default function FightCard({
             canPredict={fight.status === "open"}
             onPredict={() => wallet ? onPredict(fight, "fighter_a") : onWalletRequired?.()}
             formatUsd={formatUsd}
+            logo={hasLogos ? fight.home_logo : undefined}
           />
           <div className="flex flex-col items-center">
             <Swords className="w-5 h-5 text-primary/60" />
@@ -153,6 +154,7 @@ export default function FightCard({
             canPredict={fight.status === "open"}
             onPredict={() => wallet ? onPredict(fight, "fighter_b") : onWalletRequired?.()}
             formatUsd={formatUsd}
+            logo={hasLogos ? fight.away_logo : undefined}
           />
         </div>
 
