@@ -164,10 +164,15 @@ export default function EventSection({
             {event?.is_test && (
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-400">TEST</span>
             )}
-            {liveCount > 0 && (
+            {liveCount > 0 && !isStaleLive && (
               <span className="flex items-center gap-1 text-[10px] font-bold text-red-400 bg-red-500/15 px-2 py-0.5 rounded-full">
                 <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
                 LIVE
+              </span>
+            )}
+            {isStaleLive && (
+              <span className="flex items-center gap-1 text-[10px] font-bold text-amber-400 bg-amber-500/15 px-2 py-0.5 rounded-full">
+                ⏳ Awaiting Result
               </span>
             )}
             {hasOpen && liveCount === 0 && (

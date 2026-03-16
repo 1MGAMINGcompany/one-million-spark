@@ -390,6 +390,7 @@ export default function FightPredictions() {
         hotFightIds={hotFightIds}
         onWalletRequired={() => setShowWalletGate(true)}
         event={group.event}
+        isStaleLive={staleLiveKeys.has(eventName)}
       />
     ));
 
