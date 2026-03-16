@@ -344,4 +344,49 @@ function FighterColumn({
   );
 }
 
+function SoccerTeamColumn({
+  name, odds, canPredict, onPredict, logo, isWinner,
+}: {
+  name: string; odds: number; canPredict: boolean; onPredict: () => void;
+  logo?: string | null; isWinner: boolean;
+}) {
+  const [logoError, setLogoError] = useState(false);
+  const showLogo = logo && !logoError;
+
+  return (
+    <div className="text-center flex flex-col items-center gap-1">
+      {showLogo ? (
+        <img
+          src={logo}
+          alt=""
+          className="w-10 h-10 sm:w-12 sm:h-12 object-contain drop-shadow-md"
+          onError={() => setLogoError(true)}
+          loading="lazy"
+        />
+      ) : (
+        <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-muted/40 flex items-center justify-center text-muted-foreground text-lg font-bold">
+          {name.charAt(0)}
+        </div>
+      )}
+      <p className="font-bold text-foreground text-sm sm:text-base leading-tight mt-0.5">{name}</p>
+      <p className="text-xl sm:text-2xl font-bold text-primary leading-none">{odds.toFixed(2)}x</p>
+      {canPredict && (
+        <Button
+          size="sm"
+          className="mt-1.5 w-full bg-primary text-primary-foreground hover:bg-primary/90 text-sm py-2.5 font-bold"
+          onClick={onPredict}
+        >
+          Predict
+        </Button>
+      )}
+      {isWinner && (
+        <div className="mt-1 flex items-center justify-center gap-1 text-primary">
+          <Trophy className="w-4 h-4" />
+          <span className="text-xs font-bold">WINNER</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export type { Fight };
