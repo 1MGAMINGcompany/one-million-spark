@@ -740,7 +740,12 @@ export default function CinematicChess3DScene({
         style={{ position: "relative", zIndex: 1, background: "transparent" }}
         onCreated={({ gl }) => {
           const ctx = gl.getContext();
-          if (!ctx) onError();
+          if (!ctx) { onError(); return; }
+          gl.domElement.addEventListener("webglcontextlost", (e) => {
+            e.preventDefault();
+            console.warn("[CinematicChess3D] WebGL context lost — falling back to 2D");
+            onError();
+          });
         }}
         fallback={null}
       >
