@@ -100,20 +100,118 @@ export default function FightCard({
   const weight = fight.weight_class || titleParts[1] || null;
   const fightClass = fight.fight_class || titleParts[2] || null;
 
-  return (
-    <Card className={`bg-card border-border/50 overflow-hidden relative ${isSoccer ? 'border-primary/20' : ''}`}>
-
-      {/* Header — simplified for soccer to avoid repeating event info */}
-      <div className={`px-4 py-3 border-b border-border/30 ${isSoccer ? 'py-2' : ''}`}>
-        <div className="flex items-center justify-between">
-          <h3 className={`font-bold text-foreground font-['Cinzel'] ${isSoccer ? 'text-xs text-muted-foreground' : 'text-sm'}`}>
-            {isSoccer ? 'Match Prediction' : fightLabel}
-          </h3>
+  if (isSoccer) {
+    return (
+      <Card className="bg-card border-primary/20 overflow-hidden relative">
+        {/* Compact status bar */}
+        <div className="px-4 py-2 border-b border-border/20 flex items-center justify-between">
+          <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Match Prediction</span>
           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${badge.className}`}>
             {badge.label}
           </span>
         </div>
-        {!isSoccer && (weight || fightClass || fight.method) && (
+
+        {/* Matchup area */}
+        <div className="px-4 pt-5 pb-3 sm:px-6">
+          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 sm:gap-5" dir="ltr">
+            {/* Home */}
+            <SoccerTeamColumn
+              name={fight.fighter_a_name}
+              odds={oddsA}
+              canPredict={fight.status === "open"}
+              onPredict={() => wallet ? onPredict(fight, "fighter_a") : onWalletRequired?.()}
+              logo={hasLogos ? fight.home_logo : undefined}
+              isWinner={fight.winner === "fighter_a" && isClaimable}
+            />
+
+            {/* Center divider */}
+            <div className="flex flex-col items-center gap-1">
+              <span className="text-[10px] font-bold text-muted-foreground/60 uppercase tracking-widest">vs</span>
+            </div>
+
+            {/* Away */}
+            <SoccerTeamColumn
+              name={fight.fighter_b_name}
+              odds={oddsB}
+              canPredict={fight.status === "open"}
+              onPredict={() => wallet ? onPredict(fight, "fighter_b") : onWalletRequired?.()}
+              logo={hasLogos ? fight.away_logo : undefined}
+              isWinner={fight.winner === "fighter_b" && isClaimable}
+            />
+          </div>
+        </div>
+
+        {/* Pool strip */}
+        <div className="bg-primary/8 border-t border-primary/15 px-4 sm:px-6 py-3 flex items-center justify-between">
+          <div className="flex flex-col">
+            <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Prize Pool</span>
+            <span className="text-lg sm:text-xl font-bold text-primary font-['Cinzel'] leading-tight">
+              {totalPool.toFixed(2)} SOL
+            </span>
+            {formatUsd(totalPool) && (
+              <span className="text-[10px] text-muted-foreground/70">{formatUsd(totalPool)}</span>
+            )}
+          </div>
+          <div className="flex gap-3 text-[10px] text-muted-foreground">
+            <div className="text-center">
+              <span className="block font-bold text-foreground text-xs">{poolASol.toFixed(2)}</span>
+              <span>Home</span>
+            </div>
+            <div className="text-center">
+              <span className="block font-bold text-foreground text-xs">{poolBSol.toFixed(2)}</span>
+              <span>Away</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Draw info */}
+        {["draw", "refund_pending", "refunds_processing", "refunds_complete"].includes(fight.status) && (
+          <div className="mx-4 sm:mx-6 mb-3 bg-muted/30 border border-border/30 rounded-lg p-3 text-center">
+            <p className="text-xs font-bold text-muted-foreground">
+              {fight.status === "refunds_complete" ? "✅ Refunds complete" :
+               fight.status === "refunds_processing" ? "⏳ Refunds processing..." :
+               fight.status === "refund_pending" ? "📋 Refunds queued" :
+               "🤝 Draw / No Contest"}
+            </p>
+          </div>
+        )}
+
+        {/* Claim button */}
+        {hasWinningEntries && claimsOpen && (
+          <div className="px-4 sm:px-6 pb-4">
+            <Button
+              className="w-full bg-gradient-to-r from-primary to-accent text-primary-foreground font-bold"
+              onClick={() => onClaim(fight.id)}
+              disabled={claiming}
+            >
+              {claiming ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Trophy className="w-4 h-4 mr-2" />}
+              Claim Reward
+            </Button>
+          </div>
+        )}
+        {hasWinningEntries && !claimsOpen && (
+          <div className="mx-4 sm:mx-6 mb-4 bg-primary/10 border border-primary/20 rounded-lg p-3 text-center">
+            <p className="text-xs font-bold text-primary mb-1">🎉 You won!</p>
+            <p className="text-[11px] text-muted-foreground">
+              Rewards will become claimable shortly.
+            </p>
+          </div>
+        )}
+      </Card>
+    );
+  }
+
+  // ── Non-soccer (combat sports) card ──
+  return (
+    <Card className="bg-card border-border/50 overflow-hidden relative">
+      <div className="px-4 py-3 border-b border-border/30">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-bold text-foreground font-['Cinzel']">{fightLabel}</h3>
+          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${badge.className}`}>
+            {badge.label}
+          </span>
+        </div>
+        {(weight || fightClass || fight.method) && (
           <div className="flex items-center gap-2 mt-1 flex-wrap">
             {weight && (
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-yellow-500/15 text-yellow-300">{weight}</span>
@@ -134,9 +232,8 @@ export default function FightCard({
         )}
       </div>
 
-      {/* Fighters / Teams */}
-      <div className={`${isSoccer ? 'p-5 sm:p-6' : 'p-4'}`}>
-        <div className={`grid grid-cols-[1fr_auto_1fr] items-center ${isSoccer ? 'gap-4 sm:gap-6' : 'gap-3'}`} dir="ltr">
+      <div className="p-4">
+        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3" dir="ltr">
           <FighterColumn
             name={fight.fighter_a_name}
             poolSol={poolASol}
@@ -145,12 +242,10 @@ export default function FightCard({
             canPredict={fight.status === "open"}
             onPredict={() => wallet ? onPredict(fight, "fighter_a") : onWalletRequired?.()}
             formatUsd={formatUsd}
-            logo={hasLogos ? fight.home_logo : undefined}
-            isSoccer={isSoccer}
           />
           <div className="flex flex-col items-center gap-0.5">
-            <Swords className={`text-primary/60 ${isSoccer ? 'w-6 h-6' : 'w-5 h-5'}`} />
-            <span className={`text-muted-foreground font-bold ${isSoccer ? 'text-[11px]' : 'text-[10px]'}`}>VS</span>
+            <Swords className="w-5 h-5 text-primary/60" />
+            <span className="text-[10px] text-muted-foreground font-bold">VS</span>
           </div>
           <FighterColumn
             name={fight.fighter_b_name}
@@ -160,17 +255,14 @@ export default function FightCard({
             canPredict={fight.status === "open"}
             onPredict={() => wallet ? onPredict(fight, "fighter_b") : onWalletRequired?.()}
             formatUsd={formatUsd}
-            logo={hasLogos ? fight.away_logo : undefined}
-            isSoccer={isSoccer}
           />
         </div>
 
-        {/* Total pool — prominent for soccer */}
-        <div className={`mt-3 pt-3 border-t border-border/30 flex items-center justify-between ${isSoccer ? 'bg-primary/5 -mx-5 sm:-mx-6 px-5 sm:px-6 py-3 -mb-5 sm:-mb-6 mt-4 border-t-primary/20' : ''}`}>
-          <span className={`text-muted-foreground ${isSoccer ? 'text-xs font-semibold' : 'text-[10px]'}`}>Total Pool</span>
-          <span className={`font-bold text-primary ${isSoccer ? 'text-base sm:text-lg' : 'text-xs'}`}>
+        <div className="mt-3 pt-3 border-t border-border/30 flex items-center justify-between">
+          <span className="text-[10px] text-muted-foreground">Total Pool</span>
+          <span className="text-xs font-bold text-primary">
             {totalPool.toFixed(2)} SOL
-            {formatUsd(totalPool) && <span className={`text-muted-foreground font-normal ml-1.5 ${isSoccer ? 'text-xs' : 'text-[10px]'}`}>{formatUsd(totalPool)}</span>}
+            {formatUsd(totalPool) && <span className="text-[10px] text-muted-foreground font-normal ml-1.5">{formatUsd(totalPool)}</span>}
           </span>
         </div>
 
@@ -244,6 +336,51 @@ function FighterColumn({
       )}
       {isWinner && (
         <div className="mt-2 flex items-center justify-center gap-1 text-primary">
+          <Trophy className="w-4 h-4" />
+          <span className="text-xs font-bold">WINNER</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SoccerTeamColumn({
+  name, odds, canPredict, onPredict, logo, isWinner,
+}: {
+  name: string; odds: number; canPredict: boolean; onPredict: () => void;
+  logo?: string | null; isWinner: boolean;
+}) {
+  const [logoError, setLogoError] = useState(false);
+  const showLogo = logo && !logoError;
+
+  return (
+    <div className="text-center flex flex-col items-center gap-1">
+      {showLogo ? (
+        <img
+          src={logo}
+          alt=""
+          className="w-10 h-10 sm:w-12 sm:h-12 object-contain drop-shadow-md"
+          onError={() => setLogoError(true)}
+          loading="lazy"
+        />
+      ) : (
+        <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-muted/40 flex items-center justify-center text-muted-foreground text-lg font-bold">
+          {name.charAt(0)}
+        </div>
+      )}
+      <p className="font-bold text-foreground text-sm sm:text-base leading-tight mt-0.5">{name}</p>
+      <p className="text-xl sm:text-2xl font-bold text-primary leading-none">{odds.toFixed(2)}x</p>
+      {canPredict && (
+        <Button
+          size="sm"
+          className="mt-1.5 w-full bg-primary text-primary-foreground hover:bg-primary/90 text-sm py-2.5 font-bold"
+          onClick={onPredict}
+        >
+          Predict
+        </Button>
+      )}
+      {isWinner && (
+        <div className="mt-1 flex items-center justify-center gap-1 text-primary">
           <Trophy className="w-4 h-4" />
           <span className="text-xs font-bold">WINNER</span>
         </div>
