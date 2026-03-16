@@ -135,7 +135,7 @@ export default function EventSection({
   const sortedTournament = sortFights(tournamentFights);
 
   // Use event metadata if available
-  const displayDate = event?.event_date ? new Date(event.event_date).toLocaleDateString() : parsed.date;
+  const displayDate = event?.event_date ? formatEventDateTime(event.event_date) : parsed.date;
   const displayOrg = event?.organization;
   const displayLocation = event?.location;
   const countdown = formatCountdown(event?.event_date ?? null);
