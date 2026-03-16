@@ -209,11 +209,22 @@ export default function FightPredictions() {
       return d > now;
     };
 
+    const staleLiveKeys = new Set<string>();
+
     Object.entries(filteredEvents).forEach(([eventName, group]) => {
       const hasLive = group.fights.some(f => f.status === "live");
 
       if (hasLive) {
-        live.push([eventName, group]);
+        const eventDate = group.event?.event_date;
+        const isStaleLive = eventDate && (Date.now() - new Date(eventDate).getTime()) > 24 * 60 * 60 * 1000;
+
+        if (isStaleLive) {
+          console.warn('[predictions] stale-live event demoted:', { eventName, eventDate, status: 'live' });
+          staleLiveKeys.add(eventName);
+          today.push([eventName, group]);
+        } else {
+          live.push([eventName, group]);
+        }
       } else {
         const ev = group.event;
         const eventDate = ev?.event_date || null;
