@@ -111,6 +111,7 @@ export default function EventSection({
   hotFightIds: Set<string>;
   onWalletRequired?: () => void;
   event?: PredictionEvent;
+  isStaleLive?: boolean;
 }) {
   const hasOpen = fights.some(f => f.status === "open");
   const [expanded, setExpanded] = useState(false);
