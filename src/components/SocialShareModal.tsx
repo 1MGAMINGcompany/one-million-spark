@@ -85,7 +85,7 @@ export default function SocialShareModal(props: ShareModalProps) {
   const {
     open, onClose, variant,
     eventTitle, sport, fighterPick, amountSol, poolSol,
-    gameTitle, solWon, wallet, opponentType, streak, gameName,
+    gameTitle, solWon, wallet, referralCode, opponentType, streak, gameName,
   } = props;
 
   const cardRef = useRef<HTMLDivElement>(null);
