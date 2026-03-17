@@ -91,7 +91,10 @@ export default function FightCard({
   const claimsOpen =
     fight.claims_open_at && new Date() >= new Date(fight.claims_open_at);
 
-  const badge = STATUS_BADGE[fight.status] || STATUS_BADGE.open;
+  // UI-level guard: if event has started and fight is still "open" in DB, show as LOCKED
+  const displayStatus = (eventHasStarted && fight.status === "open") ? "locked" : fight.status;
+  const badge = STATUS_BADGE[displayStatus] || STATUS_BADGE.open;
+  const canPredict = displayStatus === "open";
 
   const isSoccer = fight.source === "api-football";
   const hasLogos = isSoccer && !!(fight.home_logo && fight.away_logo);
