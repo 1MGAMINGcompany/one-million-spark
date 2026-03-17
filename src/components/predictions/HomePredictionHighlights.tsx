@@ -157,13 +157,18 @@ export default function HomePredictionHighlights({
       });
   }, [fights, eventMap]);
 
-  // Today's fights only (for the top preview — max 2)
+  // Today's fights only — must be on today's local calendar AND not yet started, or started today
   const todayFights = useMemo(() => {
     const now = new Date();
+    const nowMs = now.getTime();
+    const todayStr = now.toDateString();
     return enrichedFights
       .filter((f) => {
         if (!f.eventDate) return false;
-        return new Date(f.eventDate).toDateString() === now.toDateString();
+        const eventMs = new Date(f.eventDate).getTime();
+        const isEventToday = new Date(eventMs).toDateString() === todayStr;
+        // Only include if it's today's date; exclude past-day started events
+        return isEventToday;
       })
       .slice(0, 2);
   }, [enrichedFights]);
