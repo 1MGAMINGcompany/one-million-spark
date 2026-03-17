@@ -179,13 +179,20 @@ export default function HomePredictionHighlights({
     return enrichedFights.filter((f) => f.sport === activeSport);
   }, [enrichedFights, activeSport]);
 
-  // Group by day (inside tabs)
+  // Group by day (inside tabs) — exclude today's fights AND past-day started events
   const dayGroups = useMemo(() => {
-    const todayStr = new Date().toDateString();
+    const now = new Date();
+    const nowMs = now.getTime();
+    const todayStr = now.toDateString();
     const groups = new Map<string, EnrichedFight[]>();
     filtered
       .filter((f) => {
-        if (f.eventDate && new Date(f.eventDate).toDateString() === todayStr) return false;
+        if (!f.eventDate) return true; // no date — include
+        const eventMs = new Date(f.eventDate).getTime();
+        const eventLocalDate = new Date(eventMs).toDateString();
+        // Exclude today (shown above) and past-day started events
+        if (eventLocalDate === todayStr) return false;
+        if (eventMs <= nowMs) return false; // already started and not today
         return true;
       })
       .forEach((f) => {
