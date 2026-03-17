@@ -50,7 +50,7 @@ interface FeedEntry {
   created_at: string;
 }
 
-type StatusSection = "live" | "today" | "upcoming";
+type StatusSection = "live" | "today" | "upcoming" | "past";
 
 const STATUS_CONFIG: Record<StatusSection, { icon: React.ReactNode; label: string; className: string; dotClassName: string }> = {
   live: {
