@@ -138,7 +138,7 @@ export default function FightCard({
             <SoccerTeamColumn
               name={fight.fighter_b_name}
               odds={oddsB}
-              canPredict={fight.status === "open"}
+              canPredict={canPredict}
               onPredict={() => wallet ? onPredict(fight, "fighter_b") : onWalletRequired?.()}
               logo={hasLogos ? fight.away_logo : undefined}
               isWinner={fight.winner === "fighter_b" && isClaimable}
