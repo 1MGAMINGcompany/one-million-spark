@@ -1,4 +1,4 @@
-# Fight Prediction System — Phase 2 In Progress
+# Fight Prediction System — Phase 3 Complete
 
 ## Status Lifecycle (Final)
 
@@ -20,42 +20,55 @@ open → locked → live → result_selected → confirmed → settled
 - `automation_logs` — Immutable audit trail (action, source, confidence, admin_wallet)
 
 ### Edge Functions
-- `prediction-admin` — Full lifecycle + getSettings/updateSettings for kill switches
+- `prediction-admin` — Full lifecycle + getSettings/updateSettings for kill switches. **approveEvent now sets auto_resolve: true + automation_status: scheduled**
 - `prediction-refund-worker` — Separate refund execution for draw scenarios (idempotent, safety-guarded)
 - `prediction-submit` — Submit predictions with 5% fee (respects predictions_enabled kill switch)
 - `prediction-claim` — Claim rewards (respects claims_enabled kill switch)
 - `prediction-feed` — Live activity feed
 - `prediction-auto-settle` — Cron auto-settle (respects automation_enabled kill switch)
-- `prediction-ingest` — BALLDONTLIE MMA API event/fight discovery (UFC, Bellator, PFL, ONE). Fetches events via `/events?year=YYYY`, full fight cards via `/fights?event_ids[]=ID`. Auth via `Authorization: API_KEY` header. Supports full card import (main_card, prelims, early_prelims segments with fight_order). Fights endpoint requires ALL-STAR tier. Dedupes by `bdl_{id}`. Stores as draft. Never auto-publishes.
-- `prediction-schedule-worker` — Cron: locks approved events at scheduled_lock_at, marks live at scheduled_live_at. Respects global + per-event automation_paused.
-- `prediction-result-worker` — Cron: fetches results from TheSportsDB for live auto-resolve events. Requires exact source_event_id match. Records payload + confidence. Flags low-confidence (<85%) for admin review. Auto-moves high-confidence fights to result_selected (NOT confirmed).
-- `prediction-settle-worker` — Idempotent job-based settlement. Creates jobs for confirmed fights past claims_open_at. CAS guard prevents double-pickup. Retry support (max 3). Full audit trail. Replaces simple auto-settle for new fights.
+- `prediction-ingest` — Multi-provider API event/fight discovery
+- `prediction-schedule-worker` — Cron (every 1 min): locks approved events at scheduled_lock_at, marks live at scheduled_live_at
+- `prediction-result-worker` — Cron (every 2 min): fetches results from APIs for live auto-resolve events
+- `prediction-settle-worker` — Cron (every 1 min): idempotent job-based settlement
+
+### Cron Jobs (Active)
+| Job ID | Name | Schedule | Function |
+|--------|------|----------|----------|
+| 2 | prediction-auto-settle | * * * * * | prediction-auto-settle |
+| 4 | prediction-schedule-worker | * * * * * | prediction-schedule-worker |
+| 5 | prediction-result-worker | */2 * * * * | prediction-result-worker |
+| 6 | prediction-settle-worker | * * * * * | prediction-settle-worker |
 
 ### Key Design Decisions
-1. Draw declaration is separate from refund execution (draw → refund_pending → refunds_processing → refunds_complete)
+1. Draw declaration is separate from refund execution
 2. `result_selected` is a real reversible status between `live` and `confirmed`
 3. `settled` means financially closed and immutable
 4. Events group fights; admin manages at event level
 5. Result worker only moves to `result_selected`, never `confirmed` — admin must confirm
 6. Settlement worker uses job table with CAS guards for exactly-once execution
 7. All workers respect both global kill switch AND per-event automation_paused flag
+8. **approveEvent automatically enables auto_resolve** so workers pick up events immediately
+
+### Admin Workflow (Fully Automated)
+1. Ingest events from API (prediction-ingest)
+2. Approve event in admin UI → sets auto_resolve: true, automation_status: scheduled
+3. **Everything else is automatic:**
+   - Schedule worker locks fights 60s before event
+   - Schedule worker marks fights live at event start
+   - Result worker detects outcomes from APIs
+   - Admin confirms results (or high-confidence auto-confirms)
+   - Settle worker closes markets after claims_open_at
+   - Users claim SOL rewards
 
 ### Safety Guardrails
-- **Global kill switches**: predictions_enabled, claims_enabled, automation_enabled (enforced server-side)
-- **Per-event pause**: automation_paused flag stops schedule/result/settle workers for individual events
+- **Global kill switches**: predictions_enabled, claims_enabled, automation_enabled
+- **Per-event pause**: automation_paused flag
 - Server-side status guards on all transitions
-- Red confirmation dialogs for irreversible actions (lock, confirm, settle, draw, refunds)
 - Per-claim cap: 5 SOL, daily ceiling: 50 SOL
-- 5-minute safety delay before claims open
-- Refund tracking: refund_status, refunds_started_at, refunds_completed_at
-- Manual admin actions (settle, lock, etc.) always work regardless of kill switches
-- Settlement idempotency via automation_jobs deduplication
-- CAS (Compare-And-Swap) guards on job pickup prevent double-processing
+- 5-minute safety delay before claims open (3 min for bot)
+- CAS guards on job pickup prevent double-processing
 
 ---
-
-## Phase 3 (Next): Cron Scheduling
-Set up pg_cron jobs for schedule-worker, result-worker, and settle-worker.
 
 ## Phase 4 (Next): Admin UI for Automation Monitoring
 Dashboard showing automation_jobs status, failed jobs, retry counts, audit logs.
