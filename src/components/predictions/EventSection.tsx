@@ -225,6 +225,7 @@ export default function EventSection({
                   isHot={hotFightIds.has(fight.id)}
                   onWalletRequired={onWalletRequired}
                   isSoccerEvent={sport === "FUTBOL"}
+                  eventHasStarted={eventHasStarted}
                 />
               ))}
             </div>
