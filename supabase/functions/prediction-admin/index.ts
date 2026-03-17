@@ -75,13 +75,25 @@ Deno.serve(async (req) => {
       const { event_id } = body;
       const { data, error } = await supabase
         .from("prediction_events")
-        .update({ status: "approved" })
+        .update({
+          status: "approved",
+          auto_resolve: true,
+          admin_approved_at: new Date().toISOString(),
+          automation_status: "scheduled",
+        })
         .eq("id", event_id)
         .eq("status", "draft")
         .select()
         .single();
 
       if (error) throw error;
+
+      // Also enable auto_resolve on all fights under this event
+      await supabase
+        .from("prediction_fights")
+        .update({ auto_resolve: true })
+        .eq("event_id", event_id);
+
       return json({ event: data });
     }
 
