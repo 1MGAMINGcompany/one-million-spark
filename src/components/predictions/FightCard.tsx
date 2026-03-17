@@ -63,6 +63,7 @@ export default function FightCard({
   isHot,
   onWalletRequired,
   isSoccerEvent,
+  eventHasStarted,
 }: {
   fight: Fight;
   onPredict: (fight: Fight, pick: "fighter_a" | "fighter_b") => void;
@@ -73,6 +74,7 @@ export default function FightCard({
   isHot?: boolean;
   onWalletRequired?: () => void;
   isSoccerEvent?: boolean;
+  eventHasStarted?: boolean;
 }) {
   const { formatUsd } = useSolPrice();
   const { oddsA, oddsB } = calcOdds(fight.pool_a_lamports, fight.pool_b_lamports);
