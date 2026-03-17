@@ -1,69 +1,74 @@
+# Fight Prediction System — Phase 3 Complete
 
+## Status Lifecycle (Final)
 
-## Prediction Automation Audit — Findings
-
-### What Works Today (End-to-End)
-
-Your current flow after you **approve an event** is:
-
-```text
-approved → [schedule-worker locks fights] → [schedule-worker marks live]
-         → [result-worker detects result] → result_selected → confirmed
-         → [auto-settle settles after claims_open_at] → settled
-         → [user claims SOL via prediction-claim]
+```
+open → locked → live → result_selected → confirmed → settled
+                   └→ draw → refund_pending → refunds_processing → refunds_complete
+                   └→ cancelled
 ```
 
-**All secrets are configured**: `BALLDONTLIE_API_KEY`, `API_FOOTBALL_KEY`, `PREDICTION_VERIFIER_SECRET_KEY`, `SOLANA_RPC_URL`.
+## Architecture
 
-### Critical Gap: Missing Cron Jobs
+### Database Tables
+- `prediction_events` — Parent event grouping + automation fields (source_provider, source_event_id, automation_status, scheduling, result detection, confidence)
+- `prediction_fights` — Individual fights with event_id FK, weight_class, fight_class, method, refund tracking
+- `prediction_entries` — User prediction records
+- `prediction_admins` — Authorized admin wallets
+- `prediction_settings` — Global kill switches (predictions_enabled, claims_enabled, automation_enabled)
+- `automation_jobs` — Scheduled/running automation tasks (job_type, target, status, retries, result_payload)
+- `automation_logs` — Immutable audit trail (action, source, confidence, admin_wallet)
 
-Only `prediction-auto-settle` has cron jobs (2 duplicates, actually). The two most important workers have **NO cron jobs**:
+### Edge Functions
+- `prediction-admin` — Full lifecycle + getSettings/updateSettings for kill switches. **approveEvent now sets auto_resolve: true + automation_status: scheduled**
+- `prediction-refund-worker` — Separate refund execution for draw scenarios (idempotent, safety-guarded)
+- `prediction-submit` — Submit predictions with 5% fee (respects predictions_enabled kill switch)
+- `prediction-claim` — Claim rewards (respects claims_enabled kill switch)
+- `prediction-feed` — Live activity feed
+- `prediction-auto-settle` — Cron auto-settle (respects automation_enabled kill switch)
+- `prediction-ingest` — Multi-provider API event/fight discovery
+- `prediction-schedule-worker` — Cron (every 1 min): locks approved events at scheduled_lock_at, marks live at scheduled_live_at
+- `prediction-result-worker` — Cron (every 2 min): fetches results from APIs for live auto-resolve events
+- `prediction-settle-worker` — Cron (every 1 min): idempotent job-based settlement
 
-| Worker | Cron? | Impact |
-|--------|-------|--------|
-| `prediction-schedule-worker` | **MISSING** | Fights never auto-lock or go live |
-| `prediction-result-worker` | **MISSING** | Results never auto-detected |
-| `prediction-settle-worker` | **MISSING** | Job-based settlement never runs |
-| `prediction-auto-settle` | ✅ (duplicate) | Confirmed→settled works |
-| `prediction-refund-worker` | N/A (admin-triggered) | OK as-is |
+### Cron Jobs (Active)
+| Job ID | Name | Schedule | Function |
+|--------|------|----------|----------|
+| 2 | prediction-auto-settle | * * * * * | prediction-auto-settle |
+| 4 | prediction-schedule-worker | * * * * * | prediction-schedule-worker |
+| 5 | prediction-result-worker | */2 * * * * | prediction-result-worker |
+| 6 | prediction-settle-worker | * * * * * | prediction-settle-worker |
 
-**This is the root cause**: After you approve events, nothing happens automatically because the schedule and result workers are never called.
+### Key Design Decisions
+1. Draw declaration is separate from refund execution
+2. `result_selected` is a real reversible status between `live` and `confirmed`
+3. `settled` means financially closed and immutable
+4. Events group fights; admin manages at event level
+5. Result worker only moves to `result_selected`, never `confirmed` — admin must confirm
+6. Settlement worker uses job table with CAS guards for exactly-once execution
+7. All workers respect both global kill switch AND per-event automation_paused flag
+8. **approveEvent automatically enables auto_resolve** so workers pick up events immediately
 
-### Secondary: Duplicate Auto-Settle Cron
+### Admin Workflow (Fully Automated)
+1. Ingest events from API (prediction-ingest)
+2. Approve event in admin UI → sets auto_resolve: true, automation_status: scheduled
+3. **Everything else is automatic:**
+   - Schedule worker locks fights 60s before event
+   - Schedule worker marks fights live at event start
+   - Result worker detects outcomes from APIs
+   - Admin confirms results (or high-confidence auto-confirms)
+   - Settle worker closes markets after claims_open_at
+   - Users claim SOL rewards
 
-There are two identical cron jobs (jobid 2 and 3) for `prediction-auto-settle`. One should be removed.
+### Safety Guardrails
+- **Global kill switches**: predictions_enabled, claims_enabled, automation_enabled
+- **Per-event pause**: automation_paused flag
+- Server-side status guards on all transitions
+- Per-claim cap: 5 SOL, daily ceiling: 50 SOL
+- 5-minute safety delay before claims open (3 min for bot)
+- CAS guards on job pickup prevent double-processing
 
-### Additional Issue: `approveEvent` Doesn't Set `auto_resolve`
+---
 
-When you approve an event via `approveEvent`, it only sets `status: "approved"`. If the event was ingested with `auto_resolve: false` (the default), the result-worker will skip it because it filters on `auto_resolve = true`. You'd need to manually toggle that or the ingest should set it.
-
-### Plan
-
-1. **Add cron job for `prediction-schedule-worker`** — every minute, handles lock + live transitions
-2. **Add cron job for `prediction-result-worker`** — every 2 minutes, detects results from APIs
-3. **Add cron job for `prediction-settle-worker`** — every minute, job-based settlement
-4. **Remove duplicate `prediction-auto-settle` cron** (jobid 3)
-5. **Fix `approveEvent`** to also set `auto_resolve: true` when approving, so the result worker picks it up automatically
-
-All changes are SQL inserts for cron jobs + one small update to the `prediction-admin` edge function. No schema changes, no Solana/wallet/settlement logic changes.
-
-### Technical Detail
-
-Cron jobs will be added via the insert tool (not migrations) since they contain project-specific URLs and keys:
-
-```sql
--- Schedule worker: every minute
-SELECT cron.schedule('prediction-schedule-worker', '* * * * *', $$ ... $$);
-
--- Result worker: every 2 minutes
-SELECT cron.schedule('prediction-result-worker', '*/2 * * * *', $$ ... $$);
-
--- Settle worker: every minute  
-SELECT cron.schedule('prediction-settle-worker', '* * * * *', $$ ... $$);
-
--- Remove duplicate
-SELECT cron.unschedule(3);
-```
-
-The `approveEvent` action in `prediction-admin` will be updated to include `auto_resolve: true` alongside `status: "approved"`.
-
+## Phase 4 (Next): Admin UI for Automation Monitoring
+Dashboard showing automation_jobs status, failed jobs, retry counts, audit logs.
