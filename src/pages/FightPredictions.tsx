@@ -215,8 +215,11 @@ export default function FightPredictions() {
       const eventMs = eventDate ? new Date(eventDate).getTime() : null;
 
       if (hasLive) {
-        // Stale-live guard: live status but event started >24h ago
-        const isStaleLive = eventMs != null && (nowMs - eventMs) > 24 * 60 * 60 * 1000;
+        // Stale-live guard: started >6h ago OR on a previous calendar day
+        const isStaleLive = eventMs != null && (
+          (nowMs - eventMs) > 6 * 60 * 60 * 1000 ||
+          new Date(eventMs).toDateString() !== todayStr
+        );
 
         if (isStaleLive) {
           console.warn('[predictions] stale-live event demoted:', { eventName, eventDate, status: 'live' });
