@@ -509,6 +509,16 @@ export default function FightPredictions() {
               </div>
             )}
 
+            {/* AWAITING RESULTS (past started events) */}
+            {pastEvents.length > 0 && (
+              <div>
+                <StatusSectionHeader section="past" count={pastEvents.length} />
+                <div className="space-y-3">
+                  {renderEventList(pastEvents)}
+                </div>
+              </div>
+            )}
+
             {/* Coming Soon cards */}
             {(activeSport === "ALL" || !Object.entries(groupedEvents).some(([key, val]) => parseSport(key, val.event?.source_provider) === activeSport)) &&
               comingSoonSports.map((sport) => <ComingSoonCard key={sport} sport={sport} />)}
