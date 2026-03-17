@@ -196,57 +196,69 @@ export default function FightPredictions() {
   }, [groupedEvents, activeSport]);
 
   // Categorize events into status sections (each event appears ONCE)
-  const { liveEvents, todayEvents, upcomingEvents, staleLiveKeys } = useMemo(() => {
-    const eventMap = new Map(events.map(e => [e.id, e]));
+  const { liveEvents, todayEvents, upcomingEvents, pastEvents, staleLiveKeys } = useMemo(() => {
+    const now = new Date();
+    const nowMs = now.getTime();
+    const todayStr = now.toDateString();
+
     const live: [string, { event?: PredictionEvent; fights: Fight[] }][] = [];
     const today: [string, { event?: PredictionEvent; fights: Fight[] }][] = [];
     const upcoming: [string, { event?: PredictionEvent; fights: Fight[] }][] = [];
-
-    const isToday = (dateStr: string | null | undefined) => {
-      if (!dateStr) return false;
-      return new Date(dateStr).toDateString() === new Date().toDateString();
-    };
-
-    const isFuture = (dateStr: string | null | undefined) => {
-      if (!dateStr) return true;
-      const d = new Date(dateStr);
-      const now = new Date();
-      now.setHours(0, 0, 0, 0);
-      return d > now;
-    };
+    const past: [string, { event?: PredictionEvent; fights: Fight[] }][] = [];
 
     const staleLiveKeys = new Set<string>();
 
     Object.entries(filteredEvents).forEach(([eventName, group]) => {
       const hasLive = group.fights.some(f => f.status === "live");
+      const ev = group.event;
+      const eventDate = ev?.event_date || null;
+      const eventMs = eventDate ? new Date(eventDate).getTime() : null;
 
       if (hasLive) {
-        const eventDate = group.event?.event_date;
-        const isStaleLive = eventDate && (Date.now() - new Date(eventDate).getTime()) > 24 * 60 * 60 * 1000;
+        // Stale-live guard: live status but event started >24h ago
+        const isStaleLive = eventMs != null && (nowMs - eventMs) > 24 * 60 * 60 * 1000;
 
         if (isStaleLive) {
           console.warn('[predictions] stale-live event demoted:', { eventName, eventDate, status: 'live' });
           staleLiveKeys.add(eventName);
-          today.push([eventName, group]);
+          past.push([eventName, group]);
         } else {
           live.push([eventName, group]);
         }
       } else {
-        const ev = group.event;
-        const eventDate = ev?.event_date || null;
+        // Use full timestamp comparisons — not just calendar date
+        const eventLocalDate = eventMs != null ? new Date(eventMs).toDateString() : null;
+        const hasStarted = eventMs != null && eventMs <= nowMs;
+        const isEventToday = eventLocalDate === todayStr;
 
-        if (isToday(eventDate)) {
-          today.push([eventName, group]);
-        } else if (isFuture(eventDate)) {
+        if (hasStarted) {
+          // Event already started — if it's today's calendar date, keep in today; otherwise past
+          if (isEventToday) {
+            today.push([eventName, group]);
+          } else {
+            // Yesterday or older — NEVER in TODAY
+            past.push([eventName, group]);
+          }
+        } else if (eventMs == null) {
+          // No date — treat as upcoming
           upcoming.push([eventName, group]);
-        } else {
-          // Past events or no date — show in today as fallback
+        } else if (isEventToday) {
           today.push([eventName, group]);
+        } else {
+          upcoming.push([eventName, group]);
         }
+      }
+
+      // Debug diagnostic for any event landing in an unexpected bucket
+      if (eventMs != null && eventMs <= nowMs) {
+        const bucket = hasLive
+          ? (staleLiveKeys.has(eventName) ? 'past(stale-live)' : 'live')
+          : (new Date(eventMs).toDateString() === todayStr ? 'today' : 'past');
+        console.debug('[predictions:grouping]', { eventName, eventDate, nowLocal: now.toISOString(), bucket });
       }
     });
 
-    return { liveEvents: live, todayEvents: today, upcomingEvents: upcoming, staleLiveKeys };
+    return { liveEvents: live, todayEvents: today, upcomingEvents: upcoming, pastEvents: past, staleLiveKeys };
   }, [filteredEvents, events]);
 
   const hotFightIds = useMemo(() => {
