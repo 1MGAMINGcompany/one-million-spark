@@ -244,7 +244,7 @@ export default function FightCard({
             poolSol={poolASol}
             odds={oddsA}
             isWinner={fight.winner === "fighter_a" && isClaimable}
-            canPredict={fight.status === "open"}
+            canPredict={canPredict}
             onPredict={() => wallet ? onPredict(fight, "fighter_a") : onWalletRequired?.()}
             formatUsd={formatUsd}
           />
