@@ -71,6 +71,12 @@ const STATUS_CONFIG: Record<StatusSection, { icon: React.ReactNode; label: strin
     className: "text-muted-foreground",
     dotClassName: "",
   },
+  past: {
+    icon: <Clock className="w-4 h-4" />,
+    label: "AWAITING RESULTS",
+    className: "text-amber-400",
+    dotClassName: "bg-amber-400 animate-pulse",
+  },
 };
 
 function StatusSectionHeader({ section, count }: { section: StatusSection; count: number }) {
