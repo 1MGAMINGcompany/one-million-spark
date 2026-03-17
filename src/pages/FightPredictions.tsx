@@ -392,7 +392,7 @@ export default function FightPredictions() {
     setSelectedPick(pick);
   };
 
-  const hasContent = liveEvents.length > 0 || todayEvents.length > 0 || upcomingEvents.length > 0;
+  const hasContent = liveEvents.length > 0 || todayEvents.length > 0 || upcomingEvents.length > 0 || pastEvents.length > 0;
 
   const renderEventList = (entries: [string, { event?: PredictionEvent; fights: Fight[] }][]) =>
     entries.map(([eventName, group]) => (
