@@ -50,7 +50,7 @@ interface FeedEntry {
   created_at: string;
 }
 
-type StatusSection = "live" | "today" | "upcoming";
+type StatusSection = "live" | "today" | "upcoming" | "past";
 
 const STATUS_CONFIG: Record<StatusSection, { icon: React.ReactNode; label: string; className: string; dotClassName: string }> = {
   live: {
@@ -70,6 +70,12 @@ const STATUS_CONFIG: Record<StatusSection, { icon: React.ReactNode; label: strin
     label: "UPCOMING",
     className: "text-muted-foreground",
     dotClassName: "",
+  },
+  past: {
+    icon: <Clock className="w-4 h-4" />,
+    label: "AWAITING RESULTS",
+    className: "text-amber-400",
+    dotClassName: "bg-amber-400 animate-pulse",
   },
 };
 
@@ -190,57 +196,69 @@ export default function FightPredictions() {
   }, [groupedEvents, activeSport]);
 
   // Categorize events into status sections (each event appears ONCE)
-  const { liveEvents, todayEvents, upcomingEvents, staleLiveKeys } = useMemo(() => {
-    const eventMap = new Map(events.map(e => [e.id, e]));
+  const { liveEvents, todayEvents, upcomingEvents, pastEvents, staleLiveKeys } = useMemo(() => {
+    const now = new Date();
+    const nowMs = now.getTime();
+    const todayStr = now.toDateString();
+
     const live: [string, { event?: PredictionEvent; fights: Fight[] }][] = [];
     const today: [string, { event?: PredictionEvent; fights: Fight[] }][] = [];
     const upcoming: [string, { event?: PredictionEvent; fights: Fight[] }][] = [];
-
-    const isToday = (dateStr: string | null | undefined) => {
-      if (!dateStr) return false;
-      return new Date(dateStr).toDateString() === new Date().toDateString();
-    };
-
-    const isFuture = (dateStr: string | null | undefined) => {
-      if (!dateStr) return true;
-      const d = new Date(dateStr);
-      const now = new Date();
-      now.setHours(0, 0, 0, 0);
-      return d > now;
-    };
+    const past: [string, { event?: PredictionEvent; fights: Fight[] }][] = [];
 
     const staleLiveKeys = new Set<string>();
 
     Object.entries(filteredEvents).forEach(([eventName, group]) => {
       const hasLive = group.fights.some(f => f.status === "live");
+      const ev = group.event;
+      const eventDate = ev?.event_date || null;
+      const eventMs = eventDate ? new Date(eventDate).getTime() : null;
 
       if (hasLive) {
-        const eventDate = group.event?.event_date;
-        const isStaleLive = eventDate && (Date.now() - new Date(eventDate).getTime()) > 24 * 60 * 60 * 1000;
+        // Stale-live guard: live status but event started >24h ago
+        const isStaleLive = eventMs != null && (nowMs - eventMs) > 24 * 60 * 60 * 1000;
 
         if (isStaleLive) {
           console.warn('[predictions] stale-live event demoted:', { eventName, eventDate, status: 'live' });
           staleLiveKeys.add(eventName);
-          today.push([eventName, group]);
+          past.push([eventName, group]);
         } else {
           live.push([eventName, group]);
         }
       } else {
-        const ev = group.event;
-        const eventDate = ev?.event_date || null;
+        // Use full timestamp comparisons — not just calendar date
+        const eventLocalDate = eventMs != null ? new Date(eventMs).toDateString() : null;
+        const hasStarted = eventMs != null && eventMs <= nowMs;
+        const isEventToday = eventLocalDate === todayStr;
 
-        if (isToday(eventDate)) {
-          today.push([eventName, group]);
-        } else if (isFuture(eventDate)) {
+        if (hasStarted) {
+          // Event already started — if it's today's calendar date, keep in today; otherwise past
+          if (isEventToday) {
+            today.push([eventName, group]);
+          } else {
+            // Yesterday or older — NEVER in TODAY
+            past.push([eventName, group]);
+          }
+        } else if (eventMs == null) {
+          // No date — treat as upcoming
           upcoming.push([eventName, group]);
-        } else {
-          // Past events or no date — show in today as fallback
+        } else if (isEventToday) {
           today.push([eventName, group]);
+        } else {
+          upcoming.push([eventName, group]);
         }
+      }
+
+      // Debug diagnostic for any event landing in an unexpected bucket
+      if (eventMs != null && eventMs <= nowMs) {
+        const bucket = hasLive
+          ? (staleLiveKeys.has(eventName) ? 'past(stale-live)' : 'live')
+          : (new Date(eventMs).toDateString() === todayStr ? 'today' : 'past');
+        console.debug('[predictions:grouping]', { eventName, eventDate, nowLocal: now.toISOString(), bucket });
       }
     });
 
-    return { liveEvents: live, todayEvents: today, upcomingEvents: upcoming, staleLiveKeys };
+    return { liveEvents: live, todayEvents: today, upcomingEvents: upcoming, pastEvents: past, staleLiveKeys };
   }, [filteredEvents, events]);
 
   const hotFightIds = useMemo(() => {
@@ -374,7 +392,7 @@ export default function FightPredictions() {
     setSelectedPick(pick);
   };
 
-  const hasContent = liveEvents.length > 0 || todayEvents.length > 0 || upcomingEvents.length > 0;
+  const hasContent = liveEvents.length > 0 || todayEvents.length > 0 || upcomingEvents.length > 0 || pastEvents.length > 0;
 
   const renderEventList = (entries: [string, { event?: PredictionEvent; fights: Fight[] }][]) =>
     entries.map(([eventName, group]) => (
@@ -487,6 +505,16 @@ export default function FightPredictions() {
                 <StatusSectionHeader section="upcoming" count={upcomingEvents.length} />
                 <div className="space-y-3">
                   {renderEventList(upcomingEvents)}
+                </div>
+              </div>
+            )}
+
+            {/* AWAITING RESULTS (past started events) */}
+            {pastEvents.length > 0 && (
+              <div>
+                <StatusSectionHeader section="past" count={pastEvents.length} />
+                <div className="space-y-3">
+                  {renderEventList(pastEvents)}
                 </div>
               </div>
             )}

@@ -116,7 +116,9 @@ export default function EventSection({
   event?: PredictionEvent;
   isStaleLive?: boolean;
 }) {
-  const hasOpen = fights.some(f => f.status === "open");
+  // UI-level OPEN guard: if event has started, override "open" display to "locked"
+  const eventHasStarted = event?.event_date ? new Date(event.event_date).getTime() <= Date.now() : false;
+  const hasOpen = fights.some(f => f.status === "open") && !eventHasStarted;
   const [expanded, setExpanded] = useState(false);
   const [leagueLogoError, setLeagueLogoError] = useState(false);
 
@@ -125,7 +127,7 @@ export default function EventSection({
   const config = SPORT_CONFIG[sport] || SPORT_CONFIG["MUAY THAI"];
 
   const totalPool = fights.reduce((sum, f) => sum + f.pool_a_lamports + f.pool_b_lamports, 0) / LAMPORTS;
-  const openCount = fights.filter(f => f.status === "open").length;
+  const openCount = eventHasStarted ? 0 : fights.filter(f => f.status === "open").length;
   const liveCount = fights.filter(f => f.status === "live").length;
 
   const mainFights = fights.filter(f => !f.event_name.includes("Road to Tulum"));
@@ -223,6 +225,7 @@ export default function EventSection({
                   isHot={hotFightIds.has(fight.id)}
                   onWalletRequired={onWalletRequired}
                   isSoccerEvent={sport === "FUTBOL"}
+                  eventHasStarted={eventHasStarted}
                 />
               ))}
             </div>
@@ -246,6 +249,7 @@ export default function EventSection({
                     isHot={hotFightIds.has(fight.id)}
                     onWalletRequired={onWalletRequired}
                     isSoccerEvent={sport === "FUTBOL"}
+                    eventHasStarted={eventHasStarted}
                   />
                 ))}
               </div>

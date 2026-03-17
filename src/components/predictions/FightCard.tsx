@@ -63,6 +63,7 @@ export default function FightCard({
   isHot,
   onWalletRequired,
   isSoccerEvent,
+  eventHasStarted,
 }: {
   fight: Fight;
   onPredict: (fight: Fight, pick: "fighter_a" | "fighter_b") => void;
@@ -73,6 +74,7 @@ export default function FightCard({
   isHot?: boolean;
   onWalletRequired?: () => void;
   isSoccerEvent?: boolean;
+  eventHasStarted?: boolean;
 }) {
   const { formatUsd } = useSolPrice();
   const { oddsA, oddsB } = calcOdds(fight.pool_a_lamports, fight.pool_b_lamports);
@@ -89,7 +91,10 @@ export default function FightCard({
   const claimsOpen =
     fight.claims_open_at && new Date() >= new Date(fight.claims_open_at);
 
-  const badge = STATUS_BADGE[fight.status] || STATUS_BADGE.open;
+  // UI-level guard: if event has started and fight is still "open" in DB, show as LOCKED
+  const displayStatus = (eventHasStarted && fight.status === "open") ? "locked" : fight.status;
+  const badge = STATUS_BADGE[displayStatus] || STATUS_BADGE.open;
+  const canPredict = displayStatus === "open";
 
   const isSoccer = fight.source === "api-football";
   const hasLogos = isSoccer && !!(fight.home_logo && fight.away_logo);
@@ -118,7 +123,7 @@ export default function FightCard({
             <SoccerTeamColumn
               name={fight.fighter_a_name}
               odds={oddsA}
-              canPredict={fight.status === "open"}
+              canPredict={canPredict}
               onPredict={() => wallet ? onPredict(fight, "fighter_a") : onWalletRequired?.()}
               logo={hasLogos ? fight.home_logo : undefined}
               isWinner={fight.winner === "fighter_a" && isClaimable}
@@ -133,7 +138,7 @@ export default function FightCard({
             <SoccerTeamColumn
               name={fight.fighter_b_name}
               odds={oddsB}
-              canPredict={fight.status === "open"}
+              canPredict={canPredict}
               onPredict={() => wallet ? onPredict(fight, "fighter_b") : onWalletRequired?.()}
               logo={hasLogos ? fight.away_logo : undefined}
               isWinner={fight.winner === "fighter_b" && isClaimable}
@@ -239,7 +244,7 @@ export default function FightCard({
             poolSol={poolASol}
             odds={oddsA}
             isWinner={fight.winner === "fighter_a" && isClaimable}
-            canPredict={fight.status === "open"}
+            canPredict={canPredict}
             onPredict={() => wallet ? onPredict(fight, "fighter_a") : onWalletRequired?.()}
             formatUsd={formatUsd}
           />
@@ -252,7 +257,7 @@ export default function FightCard({
             poolSol={poolBSol}
             odds={oddsB}
             isWinner={fight.winner === "fighter_b" && isClaimable}
-            canPredict={fight.status === "open"}
+            canPredict={canPredict}
             onPredict={() => wallet ? onPredict(fight, "fighter_b") : onWalletRequired?.()}
             formatUsd={formatUsd}
           />

@@ -243,14 +243,6 @@ export default function PredictionHighlights({
     return d.toDateString() === now.toDateString();
   };
 
-  const isFuture = (dateStr: string | null | undefined) => {
-    if (!dateStr) return true; // no date = treat as upcoming
-    const d = new Date(dateStr);
-    const now = new Date();
-    now.setHours(0, 0, 0, 0);
-    return d > now;
-  };
-
   const prioritySort = (a: HighlightFight, b: HighlightFight) => {
     const PRIORITY_NAMES = ["Josh Emmett", "Kevin Vallejos"];
     const aIsPriority = PRIORITY_NAMES.some(n => a.fighter_a_name.includes(n) || a.fighter_b_name.includes(n));
@@ -261,6 +253,9 @@ export default function PredictionHighlights({
   };
 
   const { liveFights, todayFights, upcomingFights } = useMemo(() => {
+    const now = new Date();
+    const nowMs = now.getTime();
+    const todayStr = now.toDateString();
     const live: HighlightFight[] = [];
     const today: HighlightFight[] = [];
     const upcoming: HighlightFight[] = [];
@@ -268,16 +263,32 @@ export default function PredictionHighlights({
     enrichedFights.forEach((f) => {
       const ev = f.event_id ? eventMap.get(f.event_id) : undefined;
       const eventDate = ev?.event_date || null;
+      const eventMs = eventDate ? new Date(eventDate).getTime() : null;
 
       if (f.status === "live") {
-        live.push(f);
-      } else if (f.status === "open" || f.status === "locked") {
-        if (isToday(eventDate)) {
-          today.push(f);
-        } else if (isFuture(eventDate)) {
-          upcoming.push(f);
+        // Only show in live if not stale (>24h)
+        if (eventMs != null && (nowMs - eventMs) > 24 * 60 * 60 * 1000) {
+          // Stale live — skip from highlights
         } else {
+          live.push(f);
+        }
+      } else if (f.status === "open" || f.status === "locked") {
+        const hasStarted = eventMs != null && eventMs <= nowMs;
+        const eventLocalDate = eventMs != null ? new Date(eventMs).toDateString() : null;
+        const isEventToday = eventLocalDate === todayStr;
+
+        if (hasStarted) {
+          // Only keep in today if it's actually today's date; otherwise drop from highlights
+          if (isEventToday) {
+            today.push(f);
+          }
+          // Past started events: excluded from highlights
+        } else if (eventMs == null) {
+          upcoming.push(f);
+        } else if (isEventToday) {
           today.push(f);
+        } else {
+          upcoming.push(f);
         }
       }
     });
