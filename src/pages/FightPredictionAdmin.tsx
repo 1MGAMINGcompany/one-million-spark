@@ -1106,7 +1106,7 @@ function AdminFightCard({
         {s === "refund_pending" && (
           <Button size="lg" className="w-full justify-start bg-yellow-500/10 text-yellow-400 hover:bg-yellow-500/20 border border-yellow-500/30"
             disabled={busy}
-            onClick={() => onConfirm("Process Refunds Now", "This will send SOL back to each predictor. Make sure the payout wallet is funded.", async () => { await onRefund(); })}>
+            onClick={() => onConfirm("Process Refunds Now", "This will refund each predictor. Make sure the payout wallet is funded.", async () => { await onRefund(); })}>
             <RefreshCw className="w-4 h-4 mr-3" /> Process Refunds
           </Button>
         )}
