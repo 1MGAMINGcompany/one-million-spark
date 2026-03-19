@@ -444,6 +444,9 @@ export default function FightPredictionAdmin() {
           </div>
         </Card>
 
+        {/* ── Runtime System Controls ── */}
+        <RuntimeControlsPanel wallet={address!} />
+
         {/* ── Event Ingest ── */}
         <Card className="bg-card border-border/50 p-4">
           <h2 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
