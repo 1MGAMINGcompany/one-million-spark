@@ -24,8 +24,14 @@ const LEGACY_DEFAULT_FEE_BPS = 500;
 /** Only these statuses allow new trades */
 const TRADABLE_STATUSES = new Set(["open"]);
 
-/** Max age (ms) for cached price data to be considered fresh */
+/** Max age (ms) for cached price data to be considered fresh (general gate) */
 const MAX_PRICE_STALENESS_MS = 10 * 60 * 1000; // 10 minutes
+
+/** Strict freshness for fallback when live price is unavailable */
+const FALLBACK_MAX_PRICE_AGE_MS = 60 * 1000; // 60 seconds
+
+/** Max order size (USDC) allowed when falling back to cached price */
+const FALLBACK_MAX_ORDER_USDC = 25;
 
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), {
@@ -393,11 +399,52 @@ Deno.serve(async (req) => {
                 live_price: livePrice,
               }, 400);
             }
+          } else {
+            // Live price returned 0/invalid — treat as fetch failure
+            throw new Error("live_price_zero");
           }
+        } else {
+          throw new Error(`clob_http_${priceRes.status}`);
         }
       } catch (slipErr) {
-        // Non-blocking: if live price fetch fails, proceed with cached price
-        console.warn("[prediction-submit] Live price check failed, proceeding with cached:", slipErr);
+        // ── LIVE PRICE UNAVAILABLE — strict fallback gate ──
+        console.warn("[prediction-submit] Live price check failed:", slipErr);
+        await auditLog(supabase, null, normalizedWallet, "live_price_fetch_failed", { fight_id, token_id: tokenId }, {
+          error: String(slipErr),
+        });
+
+        const lastSyncedMs = fight.polymarket_last_synced_at
+          ? new Date(fight.polymarket_last_synced_at).getTime()
+          : 0;
+        const cachedAge = Date.now() - lastSyncedMs;
+
+        const fallbackAllowed =
+          lastSyncedMs > 0 &&
+          cachedAge <= FALLBACK_MAX_PRICE_AGE_MS &&
+          fight.polymarket_active === true &&
+          !!fight.polymarket_market_id &&
+          !!tokenId &&
+          parsedAmount <= FALLBACK_MAX_ORDER_USDC;
+
+        if (!fallbackAllowed) {
+          await auditLog(supabase, null, normalizedWallet, "cached_price_fallback_rejected", { fight_id }, {
+            cached_age_ms: cachedAge,
+            max_age_ms: FALLBACK_MAX_PRICE_AGE_MS,
+            amount: parsedAmount,
+            max_fallback_usdc: FALLBACK_MAX_ORDER_USDC,
+            polymarket_active: fight.polymarket_active,
+            has_token: !!tokenId,
+          });
+          return json({
+            error: "Live pricing unavailable. Please try again in a moment.",
+            error_code: "live_price_unavailable",
+          }, 503);
+        }
+
+        await auditLog(supabase, null, normalizedWallet, "cached_price_fallback_allowed", { fight_id }, {
+          cached_age_ms: cachedAge,
+          amount: parsedAmount,
+        });
       }
     }
 
