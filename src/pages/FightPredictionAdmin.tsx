@@ -979,7 +979,7 @@ function AdminFightCard({
           </span>
           <Switch
             checked={fight.trading_allowed}
-            onCheckedChange={(checked) => onAction("toggleTrading", { fight_id: fight.id, trading_allowed: checked })}
+            onCheckedChange={(checked) => onAction("toggleTrading", { trading_allowed: checked })}
             disabled={busy}
             className="scale-75"
           />
