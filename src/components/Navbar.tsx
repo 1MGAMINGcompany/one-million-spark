@@ -39,9 +39,7 @@ const Navbar = () => {
   const { authenticated, login, logout } = usePrivy();
   const { isPrivyUser, walletAddress, balanceMatic, loading: balanceLoading, shortAddress: privyShortAddress } = usePrivyWallet();
 
-  const shortAddress = walletAddress
-    ? `${walletAddress.slice(0, 4)}...${walletAddress.slice(-4)}`
-    : null;
+  const shortAddress = privyShortAddress;
 
   // Check notification permission on mount (safe for wallet webviews)
   useEffect(() => {
