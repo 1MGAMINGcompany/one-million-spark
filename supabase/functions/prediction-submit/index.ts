@@ -86,6 +86,13 @@ Deno.serve(async (req) => {
       return json({ error: "Predictions are closed for this fight" }, 400);
     }
 
+    // ── Source-aware commission calculation ──
+    const commissionBps = Number(fight.commission_bps ?? DEFAULT_FEE_BPS);
+    const fee_usd = Number((parsedAmount * commissionBps / 10_000).toFixed(6));
+    const pool_usd = Number((parsedAmount - fee_usd).toFixed(6));
+    // Shares are integer cents for atomic pool math
+    const shares = Math.floor(pool_usd * 100);
+
     // ══════════════════════════════════════════════════════
     // POLYMARKET ORDER ROUTING
     // ══════════════════════════════════════════════════════
