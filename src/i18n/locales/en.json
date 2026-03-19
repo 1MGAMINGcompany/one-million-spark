@@ -646,9 +646,9 @@
     "insufficientTitle": "Not Enough Balance",
     "insufficientDesc": "You need more funds to continue.",
     "goToAddFunds": "Add Funds",
-    "insufficientRent": "You need a bit more to cover the network fee (~0.003 SOL extra).",
+    "insufficientRent": "You need a bit more to cover the transaction.",
     "addFundsNow": "Add Funds Now",
-    "insufficientForRoom": "You need {{need}} SOL but only have {{have}} SOL. Add funds to continue."
+    "insufficientForRoom": "You need {{need}} USDC but only have {{have}} USDC. Add funds to continue."
   },
   "addFunds": {
     "heroTitle": "Add Funds",
