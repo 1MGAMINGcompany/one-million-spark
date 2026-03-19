@@ -76,7 +76,7 @@ function getFightPoolUsd(fight: Fight): number {
   return (fight.pool_a_lamports + fight.pool_b_lamports) / 1_000_000_000;
 }
 
-const LAMPORTS = 1_000_000_000;
+// DEPRECATED: LAMPORTS constant removed — use getFightPoolUsd() instead
 
 const METHODS = ["KO", "TKO", "Decision", "Submission", "DQ", "Split Decision", "Unanimous Decision"];
 
