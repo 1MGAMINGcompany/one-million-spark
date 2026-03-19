@@ -37,7 +37,7 @@ const Navbar = () => {
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const { connected, publicKey } = useWallet();
   const { authenticated, login, logout } = usePrivy();
-  const { isPrivyUser, walletAddress, balanceSol, loading: balanceLoading } = usePrivySolBalance();
+  const { isPrivyUser, walletAddress, balanceMatic, loading: balanceLoading, shortAddress: privyShortAddress } = usePrivyWallet();
 
   const shortAddress = walletAddress
     ? `${walletAddress.slice(0, 4)}...${walletAddress.slice(-4)}`
