@@ -3,10 +3,6 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Swords, Trophy, Loader2 } from "lucide-react";
 
-// TODO [POLYMARKET]: Replace lamports with native USD amounts
-// once the database schema is migrated.
-const LAMPORTS = 1_000_000_000;
-
 interface Fight {
   id: string;
   title: string;
@@ -14,6 +10,9 @@ interface Fight {
   fighter_b_name: string;
   pool_a_lamports: number;
   pool_b_lamports: number;
+  // New USD columns (used when available)
+  pool_a_usd?: number;
+  pool_b_usd?: number;
   shares_a: number;
   shares_b: number;
   status: string;
@@ -54,9 +53,13 @@ function calcOdds(poolA: number, poolB: number) {
   };
 }
 
-// Convert legacy lamports to display value (USD during migration)
-function toDisplayAmount(lamports: number): number {
-  return lamports / LAMPORTS;
+/** Get USD pool value — prefers new USD columns, falls back to legacy lamports / 1e9 */
+function getPoolUsd(fight: Fight): { poolA: number; poolB: number } {
+  if ((fight.pool_a_usd != null && fight.pool_a_usd > 0) || (fight.pool_b_usd != null && fight.pool_b_usd > 0)) {
+    return { poolA: fight.pool_a_usd ?? 0, poolB: fight.pool_b_usd ?? 0 };
+  }
+  // Legacy fallback: treat lamports as 1:1 USD placeholder
+  return { poolA: fight.pool_a_lamports / 1_000_000_000, poolB: fight.pool_b_lamports / 1_000_000_000 };
 }
 
 export default function FightCard({
@@ -82,10 +85,9 @@ export default function FightCard({
   isSoccerEvent?: boolean;
   eventHasStarted?: boolean;
 }) {
-  const { oddsA, oddsB } = calcOdds(fight.pool_a_lamports, fight.pool_b_lamports);
-  const totalPool = toDisplayAmount(fight.pool_a_lamports + fight.pool_b_lamports);
-  const poolA = toDisplayAmount(fight.pool_a_lamports);
-  const poolB = toDisplayAmount(fight.pool_b_lamports);
+  const { poolA, poolB } = getPoolUsd(fight);
+  const { oddsA, oddsB } = calcOdds(poolA, poolB);
+  const totalPool = poolA + poolB;
 
   const isClaimable = ["confirmed", "settled"].includes(fight.status);
   const hasWinningEntries =

@@ -9,8 +9,6 @@ import futbolImg from "@/assets/futbol.png";
 import { getSportItemLabel } from "@/lib/sportLabels";
 import { formatEventDateTime, formatEventTime } from "@/lib/formatEventLocalDateTime";
 
-const LAMPORTS = 1_000_000_000;
-
 interface SportConfig {
   icon?: string;
   image?: string;
@@ -91,6 +89,15 @@ function sortFights(fights: Fight[]): Fight[] {
   });
 }
 
+/** Get USD pool total — prefers new columns, falls back to legacy */
+function getTotalPoolUsd(fights: Fight[]): number {
+  const hasUsd = fights.some(f => (f.pool_a_usd ?? 0) > 0 || (f.pool_b_usd ?? 0) > 0);
+  if (hasUsd) {
+    return fights.reduce((sum, f) => sum + (f.pool_a_usd ?? 0) + (f.pool_b_usd ?? 0), 0);
+  }
+  return fights.reduce((sum, f) => sum + f.pool_a_lamports + f.pool_b_lamports, 0) / 1_000_000_000;
+}
+
 export default function EventSection({
   eventName,
   fights,
@@ -116,7 +123,6 @@ export default function EventSection({
   event?: PredictionEvent;
   isStaleLive?: boolean;
 }) {
-  // UI-level OPEN guard: if event has started, override "open" display to "locked"
   const eventHasStarted = event?.event_date ? new Date(event.event_date).getTime() <= Date.now() : false;
   const hasOpen = fights.some(f => f.status === "open") && !eventHasStarted;
   const [expanded, setExpanded] = useState(false);
@@ -126,7 +132,7 @@ export default function EventSection({
   const sport = parseSport(eventName, event?.source_provider);
   const config = SPORT_CONFIG[sport] || SPORT_CONFIG["MUAY THAI"];
 
-  const totalPool = fights.reduce((sum, f) => sum + f.pool_a_lamports + f.pool_b_lamports, 0) / LAMPORTS;
+  const totalPool = getTotalPoolUsd(fights);
   const openCount = eventHasStarted ? 0 : fights.filter(f => f.status === "open").length;
   const liveCount = fights.filter(f => f.status === "live").length;
 
@@ -136,7 +142,6 @@ export default function EventSection({
   const sortedMain = sortFights(mainFights);
   const sortedTournament = sortFights(tournamentFights);
 
-  // Use event metadata if available
   const displayDate = event?.event_date ? formatEventDateTime(event.event_date) : parsed.date;
   const displayOrg = event?.organization;
   const displayLocation = event?.location;
@@ -201,7 +206,7 @@ export default function EventSection({
             {displayLocation && <span>📍 {displayLocation}</span>}
             <span>{fights.length} {getSportItemLabel(sport, fights.length)}</span>
             {openCount > 0 && <span className="text-green-400">{openCount} Open {getSportItemLabel(sport, openCount)}</span>}
-            <span className="text-primary font-bold">{totalPool.toFixed(2)} SOL Pool</span>
+            <span className="text-primary font-bold">${totalPool.toFixed(2)} Pool</span>
           </div>
         </div>
         <div className="shrink-0 mt-1">
