@@ -1,6 +1,27 @@
-# Fight Prediction System — Phase 3 Complete
+# 1MGAMING Platform Architecture — Phase 5
 
-## Status Lifecycle (Final)
+## Product Types
+
+| Product | Commission | Source | Execution |
+|---------|-----------|--------|-----------|
+| Polymarket Predictions | 2% (200bps) | `polymarket` | Polymarket CLOB + CTF redemption |
+| Native 1MGAMING Predictions | 5% (500bps) | `manual` | Local pool + admin lifecycle |
+| PvP Skill Games (USDC/POL) | 5% (500bps) | N/A | Polygon smart contracts (future) |
+| Free Games vs AI | 0% | N/A | Client-side, no wallet required |
+
+## Shared Infrastructure
+- **Auth**: Privy (one account, one EVM wallet on Polygon)
+- **Database**: Supabase (prediction_events, prediction_fights, prediction_entries)
+- **Admin**: Single admin UI with source-type filters and badges
+- **Content**: Enrichment layer (logos, photos, explainer cards, stats_json)
+
+## Separated Concerns
+- **Commission**: `commission_bps` column on `prediction_fights` (200 for polymarket, 500 for native)
+- **Execution**: Source-aware routing in `prediction-submit` and `prediction-claim`
+- **Settlement**: Polymarket = redemption_pending; Native = local pool payout
+- **Skill Games**: Completely separate tables (game_sessions, matches, game_moves)
+
+## Status Lifecycle
 
 ```
 open → locked → live → result_selected → confirmed → settled
@@ -8,67 +29,44 @@ open → locked → live → result_selected → confirmed → settled
                    └→ cancelled
 ```
 
-## Architecture
-
-### Database Tables
-- `prediction_events` — Parent event grouping + automation fields (source_provider, source_event_id, automation_status, scheduling, result detection, confidence)
-- `prediction_fights` — Individual fights with event_id FK, weight_class, fight_class, method, refund tracking
-- `prediction_entries` — User prediction records
+## Database Tables
+- `prediction_events` — Parent event grouping + automation + enrichment (featured, category, enrichment_notes)
+- `prediction_fights` — Individual markets with source-aware commission_bps, enrichment (fighter photos, stats_json, explainer_card, featured)
+- `prediction_entries` — User prediction records with polymarket_order_id tracking
 - `prediction_admins` — Authorized admin wallets
-- `prediction_settings` — Global kill switches (predictions_enabled, claims_enabled, automation_enabled)
-- `automation_jobs` — Scheduled/running automation tasks (job_type, target, status, retries, result_payload)
-- `automation_logs` — Immutable audit trail (action, source, confidence, admin_wallet)
+- `prediction_settings` — Global kill switches
+- `automation_jobs` / `automation_logs` — Job-based automation
+- `polymarket_sync_state` — Sync tracking
 
-### Edge Functions
-- `prediction-admin` — Full lifecycle + getSettings/updateSettings for kill switches. **approveEvent now sets auto_resolve: true + automation_status: scheduled**
-- `prediction-refund-worker` — Separate refund execution for draw scenarios (idempotent, safety-guarded)
-- `prediction-submit` — Submit predictions with 5% fee (respects predictions_enabled kill switch)
-- `prediction-claim` — Claim rewards (respects claims_enabled kill switch)
-- `prediction-feed` — Live activity feed
-- `prediction-auto-settle` — Cron auto-settle (respects automation_enabled kill switch)
-- `prediction-ingest` — Multi-provider API event/fight discovery
-- `prediction-schedule-worker` — Cron (every 1 min): locks approved events at scheduled_lock_at, marks live at scheduled_live_at
-- `prediction-result-worker` — Cron (every 2 min): fetches results from APIs for live auto-resolve events
-- `prediction-settle-worker` — Cron (every 1 min): idempotent job-based settlement
+## Edge Functions
+- `prediction-submit` — Source-aware commission (reads fight.commission_bps)
+- `prediction-claim` — Polymarket vs local claim paths
+- `prediction-admin` — Full lifecycle + sets source/commission on createFight
+- `polymarket-sync` — Idempotent Gamma API sync (sets commission_bps=200)
+- `polymarket-prices` — CLOB price refresh
+- `prediction-refund-worker` — Draw refund execution
+- `prediction-ingest` — Multi-provider event ingestion
+- `prediction-schedule-worker` / `prediction-result-worker` / `prediction-settle-worker` — Automation
 
-### Cron Jobs (Active)
-| Job ID | Name | Schedule | Function |
-|--------|------|----------|----------|
-| 2 | prediction-auto-settle | * * * * * | prediction-auto-settle |
-| 4 | prediction-schedule-worker | * * * * * | prediction-schedule-worker |
-| 5 | prediction-result-worker | */2 * * * * | prediction-result-worker |
-| 6 | prediction-settle-worker | * * * * * | prediction-settle-worker |
+## Blockers
 
-### Key Design Decisions
-1. Draw declaration is separate from refund execution
-2. `result_selected` is a real reversible status between `live` and `confirmed`
-3. `settled` means financially closed and immutable
-4. Events group fights; admin manages at event level
-5. Result worker only moves to `result_selected`, never `confirmed` — admin must confirm
-6. Settlement worker uses job table with CAS guards for exactly-once execution
-7. All workers respect both global kill switch AND per-event automation_paused flag
-8. **approveEvent automatically enables auto_resolve** so workers pick up events immediately
+### Full Polymarket User Trading
+1. Configure POLYMARKET_API_KEY, API_SECRET, PASSPHRASE secrets
+2. Implement EIP-712 order signing in prediction-submit
+3. CTF allowance setup for builder wallet on Polygon
+4. User position sync from Polymarket Data API
+5. CTF redemption in prediction-claim
 
-### Admin Workflow (Fully Automated)
-1. Ingest events from API (prediction-ingest)
-2. Approve event in admin UI → sets auto_resolve: true, automation_status: scheduled
-3. **Everything else is automatic:**
-   - Schedule worker locks fights 60s before event
-   - Schedule worker marks fights live at event start
-   - Result worker detects outcomes from APIs
-   - Admin confirms results (or high-confidence auto-confirms)
-   - Settle worker closes markets after claims_open_at
-   - Users claim SOL rewards
+### Polygon USDC/POL PvP Games
+1. Deploy PvP smart contract on Polygon (escrow + settlement)
+2. Migrate game room creation to use USDC/POL stakes
+3. Update settlement to call Polygon contract instead of Solana program
+4. Keep Solana path isolated for legacy games
 
-### Safety Guardrails
-- **Global kill switches**: predictions_enabled, claims_enabled, automation_enabled
-- **Per-event pause**: automation_paused flag
-- Server-side status guards on all transitions
-- Per-claim cap: 5 SOL, daily ceiling: 50 SOL
-- 5-minute safety delay before claims open (3 min for bot)
-- CAS guards on job pickup prevent double-processing
+## Next Prompts
 
----
+### Prompt 1: Polymarket User Trading
+> "Implement authenticated Polymarket CLOB trading: (1) Add POLYMARKET_API_KEY, API_SECRET, and PASSPHRASE secrets. (2) Implement EIP-712 order signing in prediction-submit using the builder wallet. (3) Add position sync from Polymarket Data API to reconcile user holdings. (4) Connect prediction-claim to CTF redemption on Polygon. (5) Add a WebSocket price listener edge function for real-time orderbook updates."
 
-## Phase 4 (Next): Admin UI for Automation Monitoring
-Dashboard showing automation_jobs status, failed jobs, retry counts, audit logs.
+### Prompt 2: Polygon USDC/POL Skill Games
+> "Migrate skill-based PvP games to Polygon: (1) Design a simple Polygon escrow contract for USDC/POL stakes. (2) Update CreateRoom to accept USDC/POL amounts via Privy wallet. (3) Update settle-game to call the Polygon contract instead of Solana program. (4) Keep the existing Solana game paths isolated but functional. (5) Apply 5% commission in the settlement contract."
