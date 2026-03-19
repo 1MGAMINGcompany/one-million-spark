@@ -576,11 +576,12 @@ export default function FightPredictions() {
         <PredictionModal
           fight={selectedFight}
           pick={selectedPick}
-          onClose={() => { setSelectedFight(null); setSelectedPick(null); setShowPredictionSuccess(false); }}
+          onClose={() => { setSelectedFight(null); setSelectedPick(null); setShowPredictionSuccess(false); setLastTradeResult(null); }}
           onSubmit={handleSubmit}
           submitting={submitting}
           showSuccess={showPredictionSuccess}
           wallet={address || undefined}
+          tradeResult={lastTradeResult}
         />
       )}
 
