@@ -22,7 +22,7 @@ Deno.serve(async (req) => {
 
     let query = supabase
       .from("prediction_entries")
-      .select("id, fight_id, wallet, fighter_pick, amount_lamports, created_at")
+      .select("id, fight_id, wallet, fighter_pick, amount_usd, amount_lamports, created_at")
       .order("created_at", { ascending: false })
       .limit(50);
 
@@ -36,6 +36,10 @@ Deno.serve(async (req) => {
     // Truncate wallets for privacy
     const feed = (data || []).map((e: any) => ({
       ...e,
+      // Provide USD amount, falling back from legacy lamports
+      amount_usd: e.amount_usd != null && Number(e.amount_usd) > 0
+        ? Number(e.amount_usd)
+        : (e.amount_lamports || 0) / 1_000_000_000,
       wallet_short: e.wallet ? `${e.wallet.slice(0, 4)}...${e.wallet.slice(-4)}` : "anon",
     }));
 

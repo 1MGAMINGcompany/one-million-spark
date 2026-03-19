@@ -52,6 +52,8 @@ interface Fight {
   fighter_b_name: string;
   pool_a_lamports: number;
   pool_b_lamports: number;
+  pool_a_usd: number;
+  pool_b_usd: number;
   shares_a: number;
   shares_b: number;
   status: string;
@@ -67,7 +69,14 @@ interface Fight {
   settled_at: string | null;
 }
 
-const LAMPORTS = 1_000_000_000;
+/** Return total pool in USD. Falls back to legacy lamports→SOL conversion for old data. */
+function getFightPoolUsd(fight: Fight): number {
+  const usd = (fight.pool_a_usd ?? 0) + (fight.pool_b_usd ?? 0);
+  if (usd > 0) return usd;
+  return (fight.pool_a_lamports + fight.pool_b_lamports) / 1_000_000_000;
+}
+
+// DEPRECATED: LAMPORTS constant removed — use getFightPoolUsd() instead
 
 const METHODS = ["KO", "TKO", "Decision", "Submission", "DQ", "Split Decision", "Unanimous Decision"];
 
@@ -643,7 +652,7 @@ function AdminEventCard({
 }) {
   const hasActiveFights = fights.some(f => ["open", "locked", "live", "result_selected", "confirmed"].includes(f.status));
   const [expanded, setExpanded] = useState(hasActiveFights);
-  const totalPool = fights.reduce((sum, f) => sum + f.pool_a_lamports + f.pool_b_lamports, 0) / LAMPORTS;
+  const totalPool = fights.reduce((sum, f) => sum + getFightPoolUsd(f), 0);
   const totalPredictions = fights.reduce((sum, f) => sum + (entryCounts[f.id] || 0), 0);
   const liveCount = fights.filter(f => f.status === "live").length;
   const openCount = fights.filter(f => f.status === "open").length;
@@ -702,7 +711,7 @@ function AdminEventCard({
           <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground flex-wrap">
             <span className="font-bold text-foreground">{fights.length} {getItemLabelFromEvent(event.event_name, fights.length).toLowerCase()}</span>
             <span>{totalPredictions} predictions</span>
-            <span className="text-primary font-bold">{totalPool.toFixed(4)} SOL</span>
+            <span className="text-primary font-bold">${totalPool.toFixed(2)}</span>
             {settledCount > 0 && <span className="text-green-400">{settledCount} settled</span>}
           </div>
         </div>
@@ -889,7 +898,7 @@ function AdminFightCard({
       });
     }
   }, [s, timerExpired, busy, fight.id, onAction]);
-  const totalPoolSol = ((fight.pool_a_lamports + fight.pool_b_lamports) / LAMPORTS).toFixed(4);
+  const totalPoolUsd = getFightPoolUsd(fight).toFixed(2);
 
   return (
     <div className={`bg-background/80 border border-border/30 rounded-lg p-4 ${fight.review_required ? 'ring-2 ring-yellow-500/40' : isBotConfirmed ? 'ring-1 ring-blue-500/30' : ''}`}>
@@ -947,7 +956,7 @@ function AdminFightCard({
       <div className="grid grid-cols-3 gap-2 mb-3 bg-muted/30 rounded-lg p-2">
         <div className="text-center">
           <p className="text-[10px] text-muted-foreground">Pool</p>
-          <p className="text-xs font-bold text-foreground">{totalPoolSol} SOL</p>
+          <p className="text-xs font-bold text-foreground">${totalPoolUsd}</p>
         </div>
         <div className="text-center">
           <p className="text-[10px] text-muted-foreground">Predictions</p>
@@ -1097,7 +1106,7 @@ function AdminFightCard({
         {s === "refund_pending" && (
           <Button size="lg" className="w-full justify-start bg-yellow-500/10 text-yellow-400 hover:bg-yellow-500/20 border border-yellow-500/30"
             disabled={busy}
-            onClick={() => onConfirm("Process Refunds Now", "This will send SOL back to each predictor. Make sure the payout wallet is funded.", async () => { await onRefund(); })}>
+            onClick={() => onConfirm("Process Refunds Now", "This will refund each predictor. Make sure the payout wallet is funded.", async () => { await onRefund(); })}>
             <RefreshCw className="w-4 h-4 mr-3" /> Process Refunds
           </Button>
         )}

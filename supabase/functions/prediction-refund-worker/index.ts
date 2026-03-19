@@ -1,6 +1,4 @@
 import { createClient } from "@supabase/supabase-js";
-import { Connection, Keypair, PublicKey, SystemProgram, Transaction, sendAndConfirmTransaction, LAMPORTS_PER_SOL } from "@solana/web3.js";
-import bs58 from "bs58";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -8,20 +6,15 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const MAX_REFUND_LAMPORTS = 5 * LAMPORTS_PER_SOL;
-const DAILY_CEILING_LAMPORTS = 50 * LAMPORTS_PER_SOL;
+// ── Safety guardrails (USD-based) ──
+const MAX_REFUND_USD = 500;
+const DAILY_CEILING_USD = 5_000;
 
-function loadPredictionVerifier() {
-  const raw = Deno.env.get("PREDICTION_VERIFIER_SECRET_KEY");
-  if (!raw) return null;
-  try {
-    return {
-      keypair: Keypair.fromSecretKey(bs58.decode(raw)),
-      source: "PREDICTION_VERIFIER_SECRET_KEY",
-    };
-  } catch {
-    return null;
-  }
+function json(data: any, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
 }
 
 Deno.serve(async (req) => {
@@ -39,7 +32,7 @@ Deno.serve(async (req) => {
     const { fight_id, wallet } = body;
 
     if (!fight_id || !wallet) {
-      return res({ error: "Missing fight_id or wallet" }, 400);
+      return json({ error: "Missing fight_id or wallet" }, 400);
     }
 
     // Verify admin
@@ -50,7 +43,7 @@ Deno.serve(async (req) => {
       .single();
 
     if (!admin) {
-      return res({ error: "Unauthorized" }, 403);
+      return json({ error: "Unauthorized" }, 403);
     }
 
     // Get fight
@@ -60,10 +53,10 @@ Deno.serve(async (req) => {
       .eq("id", fight_id)
       .single();
 
-    if (fErr || !fight) return res({ error: "Fight not found" }, 404);
+    if (fErr || !fight) return json({ error: "Fight not found" }, 404);
 
     if (fight.status !== "refund_pending") {
-      return res({ error: "Fight must be in refund_pending status" }, 400);
+      return json({ error: "Fight must be in refund_pending status" }, 400);
     }
 
     // Set to processing
@@ -72,7 +65,7 @@ Deno.serve(async (req) => {
       .update({ status: "refunds_processing", refund_status: "processing" })
       .eq("id", fight_id);
 
-    // Get all entries
+    // Get all unclaimed entries
     const { data: entries, error: eErr } = await supabase
       .from("prediction_entries")
       .select("*")
@@ -82,7 +75,6 @@ Deno.serve(async (req) => {
     if (eErr) throw eErr;
 
     if (!entries || entries.length === 0) {
-      // No entries to refund — mark complete
       await supabase
         .from("prediction_fights")
         .update({
@@ -92,67 +84,48 @@ Deno.serve(async (req) => {
         })
         .eq("id", fight_id);
 
-      return res({ success: true, refunded: 0 });
+      return json({ success: true, refunded: 0 });
     }
 
-    // Prepare payout wallet
-    const verifier = loadPredictionVerifier();
-    if (!verifier) {
-      await supabase
-        .from("prediction_fights")
-        .update({ refund_status: "failed" })
-        .eq("id", fight_id);
-      return res({ error: "Prediction payout wallet not configured" }, 500);
-    }
-
-    const rpcUrl = Deno.env.get("SOLANA_RPC_URL") || "https://api.mainnet-beta.solana.com";
-    const connection = new Connection(rpcUrl, "confirmed");
-    const vaultKeypair = verifier.keypair;
+    // ── TODO: Polymarket integration point ──
+    // When Polymarket is connected:
+    // 1. Cancel/redeem Polymarket positions for each entry
+    // 2. Transfer USDC back to user wallets on Polygon
+    // For now, mark entries as refunded with their pool_usd amount.
 
     let refundedCount = 0;
     let failedCount = 0;
     const failedEntries: string[] = [];
 
     for (const entry of entries) {
-      const refundAmount = Number(entry.pool_lamports);
+      // Prefer USD, fall back to legacy lamports conversion
+      const refundUsd = Number(entry.pool_usd) > 0
+        ? Number(entry.pool_usd)
+        : Number(entry.pool_lamports) / 1_000_000_000;
 
-      if (refundAmount <= 0) continue;
+      if (refundUsd <= 0) continue;
 
       // Per-refund cap
-      if (refundAmount > MAX_REFUND_LAMPORTS) {
+      if (refundUsd > MAX_REFUND_USD) {
         failedEntries.push(entry.id);
         failedCount++;
         continue;
       }
 
       try {
-        // Balance check
-        const balance = await connection.getBalance(vaultKeypair.publicKey);
-        if (balance < refundAmount + 5000) {
-          failedEntries.push(entry.id);
-          failedCount++;
-          continue;
-        }
-
-        const tx = new Transaction().add(
-          SystemProgram.transfer({
-            fromPubkey: vaultKeypair.publicKey,
-            toPubkey: new PublicKey(entry.wallet),
-            lamports: refundAmount,
-          })
-        );
-
-        const sig = await sendAndConfirmTransaction(connection, tx, [vaultKeypair]);
-
-        // Mark as claimed (refunded)
+        // Mark as refunded
         await supabase
           .from("prediction_entries")
-          .update({ claimed: true, reward_lamports: refundAmount })
+          .update({
+            claimed: true,
+            reward_usd: refundUsd,
+            reward_lamports: 0,
+          })
           .eq("id", entry.id);
 
         refundedCount++;
-      } catch (txErr) {
-        console.error(`Refund failed for entry ${entry.id}:`, txErr);
+      } catch (err) {
+        console.error(`Refund failed for entry ${entry.id}:`, err);
         failedEntries.push(entry.id);
         failedCount++;
       }
@@ -175,22 +148,14 @@ Deno.serve(async (req) => {
         .eq("id", fight_id);
     }
 
-    return res({
+    return json({
       success: failedCount === 0,
       refunded: refundedCount,
       failed: failedCount,
       failed_entries: failedEntries,
-      signer_wallet: vaultKeypair.publicKey.toBase58(),
-      signer_secret_source: verifier.source,
+      payout_method: "pending_polymarket",
     });
-  } catch (err) {
-    return res({ error: err.message }, 500);
+  } catch (err: any) {
+    return json({ error: err.message }, 500);
   }
 });
-
-function res(data: any, status = 200) {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
-}
