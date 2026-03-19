@@ -3,31 +3,36 @@ import { Button } from "@/components/ui/button";
 import { Loader2, CheckCircle2, Eye, Clock, Trophy, Coins, Share2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import type { Fight } from "./FightCard";
-import { useSolPrice } from "@/hooks/useSolPrice";
 import { useMyReferralCode } from "@/hooks/useMyReferralCode";
 import SocialShareModal from "@/components/SocialShareModal";
 import { SOCIAL_SHARE_ENABLED } from "@/lib/socialShareConfig";
 
-const MIN_SOL = 0.05;
+const MIN_USD = 1.0; // Minimum prediction in USD
 const FEE_RATE = 0.05;
 
-/**
- * Estimate reward by simulating what happens when the user's contribution
- * is added to the pool. This avoids division-by-zero when the picked side
- * has no existing pool and gives a realistic payout estimate.
- */
+// TODO [POLYMARKET]: Replace static reward estimation with Polymarket
+// CLOB order book pricing when market data layer is connected.
 function estimateReward(
   poolA: number,
   poolB: number,
   pick: "fighter_a" | "fighter_b",
-  contributionLamports: number,
+  contribution: number,
 ): number {
-  if (contributionLamports <= 0) return 0;
+  if (contribution <= 0) return 0;
   const pickedPool = pick === "fighter_a" ? poolA : poolB;
-  const newPickedPool = pickedPool + contributionLamports;
-  const newTotal = poolA + poolB + contributionLamports;
-  // User's share of the winning side × total pool
-  return (contributionLamports / newPickedPool) * newTotal;
+  const newPickedPool = pickedPool + contribution;
+  const newTotal = poolA + poolB + contribution;
+  return (contribution / newPickedPool) * newTotal;
+}
+
+// Convert lamports to USD display value (legacy DB stores lamports)
+// TODO [POLYMARKET]: When migrating DB schema, replace lamports with
+// native USD/USDC amounts in the prediction_fights table.
+const LAMPORTS = 1_000_000_000;
+function poolToUsd(lamports: number): number {
+  // Approximate: 1 SOL ≈ pool unit for display purposes during migration
+  // This will be replaced with actual USD values from Polymarket
+  return lamports / LAMPORTS;
 }
 
 export default function PredictionModal({
@@ -47,7 +52,6 @@ export default function PredictionModal({
   showSuccess?: boolean;
   wallet?: string;
 }) {
-  const { formatUsd } = useSolPrice();
   const referralCode = useMyReferralCode(wallet ?? null);
   const [amount, setAmount] = useState("");
   const amountNum = parseFloat(amount) || 0;
@@ -55,16 +59,12 @@ export default function PredictionModal({
   const poolContribution = amountNum - fee;
   const fighterName = pick === "fighter_a" ? fight.fighter_a_name : fight.fighter_b_name;
 
-  // Convert SOL pool contribution to lamports for the estimate, then back to SOL
-  const LAMPORTS = 1_000_000_000;
-  const contributionLamports = Math.round(poolContribution * LAMPORTS);
-  const estimatedRewardLamports = estimateReward(
-    fight.pool_a_lamports,
-    fight.pool_b_lamports,
+  const estimatedReward = estimateReward(
+    poolToUsd(fight.pool_a_lamports),
+    poolToUsd(fight.pool_b_lamports),
     pick,
-    contributionLamports,
+    poolContribution,
   );
-  const estimatedReward = estimatedRewardLamports / LAMPORTS;
 
   const [showShare, setShowShare] = useState(false);
 
@@ -116,7 +116,7 @@ export default function PredictionModal({
                 <div>
                   <p className="text-sm font-medium text-foreground">3. Claim your reward</p>
                   <p className="text-xs text-muted-foreground">
-                    If your fighter wins, a <span className="font-bold text-foreground">Claim Reward</span> button appears — tap it to receive SOL to your wallet
+                    If your fighter wins, a <span className="font-bold text-foreground">Claim Reward</span> button appears — tap it to receive your payout
                   </p>
                 </div>
               </div>
@@ -144,7 +144,7 @@ export default function PredictionModal({
             sport={fight.event_name}
             fighterPick={fighterName}
             amountSol={amountNum}
-            poolSol={(fight.pool_a_lamports + fight.pool_b_lamports) / LAMPORTS}
+            poolSol={poolToUsd(fight.pool_a_lamports + fight.pool_b_lamports)}
             wallet={wallet}
             referralCode={referralCode ?? undefined}
           />
@@ -167,23 +167,23 @@ export default function PredictionModal({
 
         <div className="space-y-4">
           <div>
-            <label className="text-sm text-muted-foreground">Amount (SOL)</label>
+            <label className="text-sm text-muted-foreground">Amount (USD)</label>
             <input
               type="number"
-              min={MIN_SOL}
-              step="0.01"
+              min={MIN_USD}
+              step="0.50"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               placeholder="0.00"
               className="w-full mt-1 px-4 py-3 rounded-lg bg-input border border-border text-foreground text-lg font-bold focus:outline-none focus:ring-2 focus:ring-primary"
             />
-            {/* Need SOL helper */}
+            {/* TODO [POLYMARKET]: Add fund wallet deep link for Polygon */}
             <Link
               to="/add-funds"
               className="inline-flex items-center gap-1.5 mt-2 text-xs text-primary hover:text-primary/80 transition-colors"
             >
               <Coins className="w-3 h-3" />
-              Need SOL? Learn how to add funds →
+              Need funds? Learn how to add funds →
             </Link>
           </div>
 
@@ -191,19 +191,19 @@ export default function PredictionModal({
             <div className="bg-secondary/50 rounded-lg p-4 space-y-2">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Amount</span>
-                <span className="text-foreground font-medium">{amountNum.toFixed(4)} SOL {formatUsd(amountNum) && <span className="text-muted-foreground/70 text-xs">{formatUsd(amountNum)}</span>}</span>
+                <span className="text-foreground font-medium">${amountNum.toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Fee (5%)</span>
-                <span className="text-destructive font-medium">-{fee.toFixed(4)} SOL {formatUsd(fee) && <span className="text-xs opacity-70">{formatUsd(fee)}</span>}</span>
+                <span className="text-destructive font-medium">-${fee.toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Pool Contribution</span>
-                <span className="text-foreground font-medium">{poolContribution.toFixed(4)} SOL {formatUsd(poolContribution) && <span className="text-muted-foreground/70 text-xs">{formatUsd(poolContribution)}</span>}</span>
+                <span className="text-foreground font-medium">${poolContribution.toFixed(2)}</span>
               </div>
               <div className="border-t border-border/30 pt-2 flex justify-between text-sm">
                 <span className="text-muted-foreground">Est. Reward</span>
-                <span className="text-primary font-bold">{estimatedReward.toFixed(4)} SOL {formatUsd(estimatedReward) && <span className="text-xs font-normal text-muted-foreground">{formatUsd(estimatedReward)}</span>}</span>
+                <span className="text-primary font-bold">${estimatedReward.toFixed(2)}</span>
               </div>
               <p className="text-[10px] text-muted-foreground/60 mt-1">
                 *Based on current odds. Final reward depends on pool at close.
@@ -213,16 +213,16 @@ export default function PredictionModal({
 
           <Button
             className="w-full bg-primary text-primary-foreground font-bold py-3"
-            disabled={amountNum < MIN_SOL || submitting}
+            disabled={amountNum < MIN_USD || submitting}
             onClick={() => onSubmit(amountNum)}
           >
             {submitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
             {submitting ? "Submitting..." : "Submit Prediction"}
           </Button>
 
-          {amountNum > 0 && amountNum < MIN_SOL && (
+          {amountNum > 0 && amountNum < MIN_USD && (
             <p className="text-xs text-destructive text-center">
-              Minimum: {MIN_SOL} SOL {formatUsd(MIN_SOL) && <span className="text-muted-foreground">({formatUsd(MIN_SOL)})</span>}
+              Minimum: ${MIN_USD.toFixed(2)}
             </p>
           )}
         </div>

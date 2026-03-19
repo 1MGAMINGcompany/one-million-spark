@@ -3,7 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useWallet } from "@/hooks/useWallet";
 import { usePrivy } from "@privy-io/react-auth";
-import { usePrivySolBalance } from "@/hooks/usePrivySolBalance";
+import { usePrivyWallet } from "@/hooks/usePrivyWallet";
 import { Home, Wallet, PlusCircle, LayoutList, Menu, X, Coins, Volume2, VolumeX, Bell, BellOff, Trophy, ChevronDown, LogOut, ArrowRightLeft, Sparkles, User, Swords } from "lucide-react";
 import { WalletButton } from "./WalletButton";
 import { PrivyLoginButton } from "./PrivyLoginButton";
@@ -37,11 +37,9 @@ const Navbar = () => {
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const { connected, publicKey } = useWallet();
   const { authenticated, login, logout } = usePrivy();
-  const { isPrivyUser, walletAddress, balanceSol, loading: balanceLoading } = usePrivySolBalance();
+  const { isPrivyUser, walletAddress, balanceMatic, loading: balanceLoading, shortAddress: privyShortAddress } = usePrivyWallet();
 
-  const shortAddress = walletAddress
-    ? `${walletAddress.slice(0, 4)}...${walletAddress.slice(-4)}`
-    : null;
+  const shortAddress = privyShortAddress;
 
   // Check notification permission on mount (safe for wallet webviews)
   useEffect(() => {
@@ -226,7 +224,7 @@ const Navbar = () => {
                       <Skeleton className="h-4 w-20" />
                     ) : (
                       <span className="text-sm font-semibold text-foreground">
-                        {balanceSol !== null ? `${balanceSol.toFixed(4)} SOL` : "—"}
+                        {balanceMatic !== null ? `${balanceMatic.toFixed(4)} MATIC` : "—"}
                       </span>
                     )}
                   </div>
