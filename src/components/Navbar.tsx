@@ -3,7 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useWallet } from "@/hooks/useWallet";
 import { usePrivy } from "@privy-io/react-auth";
-import { usePrivySolBalance } from "@/hooks/usePrivySolBalance";
+import { usePrivyWallet } from "@/hooks/usePrivyWallet";
 import { Home, Wallet, PlusCircle, LayoutList, Menu, X, Coins, Volume2, VolumeX, Bell, BellOff, Trophy, ChevronDown, LogOut, ArrowRightLeft, Sparkles, User, Swords } from "lucide-react";
 import { WalletButton } from "./WalletButton";
 import { PrivyLoginButton } from "./PrivyLoginButton";
