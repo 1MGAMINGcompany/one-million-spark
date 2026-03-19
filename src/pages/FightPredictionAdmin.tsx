@@ -652,7 +652,7 @@ function AdminEventCard({
 }) {
   const hasActiveFights = fights.some(f => ["open", "locked", "live", "result_selected", "confirmed"].includes(f.status));
   const [expanded, setExpanded] = useState(hasActiveFights);
-  const totalPool = fights.reduce((sum, f) => sum + f.pool_a_lamports + f.pool_b_lamports, 0) / LAMPORTS;
+  const totalPool = fights.reduce((sum, f) => sum + getFightPoolUsd(f), 0);
   const totalPredictions = fights.reduce((sum, f) => sum + (entryCounts[f.id] || 0), 0);
   const liveCount = fights.filter(f => f.status === "live").length;
   const openCount = fights.filter(f => f.status === "open").length;
