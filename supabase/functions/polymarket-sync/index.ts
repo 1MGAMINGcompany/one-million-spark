@@ -316,12 +316,15 @@ Deno.serve(async (req) => {
       const { query } = body;
       if (!query) return json({ error: "Missing query" }, 400);
 
-      const gammaRes = await fetch(
-        `${GAMMA_BASE}/events?title=${encodeURIComponent(query)}&active=true&limit=${limit}`
-      );
+      // Use the /public-search endpoint for real keyword search
+      const searchUrl = `${GAMMA_BASE}/public-search?q=${encodeURIComponent(query)}&limit=${limit}`;
+      console.log(`[polymarket-sync] Search: ${searchUrl}`);
+      const gammaRes = await fetch(searchUrl);
       if (!gammaRes.ok) return json({ error: `Gamma API returned ${gammaRes.status}` }, 502);
 
-      const results: GammaEvent[] = await gammaRes.json();
+      const searchData = await gammaRes.json();
+      const results: GammaEvent[] = searchData.events || [];
+      console.log(`[polymarket-sync] Search returned ${results.length} events for "${query}"`);
       return json({
         results: results.map(e => ({
           id: e.id,
