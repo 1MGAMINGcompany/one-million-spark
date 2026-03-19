@@ -69,11 +69,11 @@
     "dominosWinCondition": "Win by playing all your tiles first or having the lowest score."
   },
   "walletRequired": {
-    "title": "Wallet Required",
-    "description": "Please connect your Solana wallet to use this feature.",
-    "hint": "Click \"Select Wallet\" in the top-right.",
+    "title": "Account Required",
+    "description": "Please sign in to use this feature.",
+    "hint": "Click \"Sign Up / Log In\" to get started.",
     "feesTitle": "Game Fees",
-    "feesDescription": "All game entry fees are paid in SOL on the Solana network."
+    "feesDescription": "All game entry fees are paid in USDC on Polygon."
   },
   "gameMultiplayer": {
     "rooms": "Rooms",
