@@ -15,6 +15,7 @@ import SocialShareModal from "@/components/SocialShareModal";
 import { SOCIAL_SHARE_ENABLED } from "@/lib/socialShareConfig";
 import { useMyReferralCode } from "@/hooks/useMyReferralCode";
 import type { Fight } from "@/components/predictions/FightCard";
+import type { TradeResult } from "@/components/predictions/tradeResultTypes";
 
 const FEE_RATE = 0.05;
 
