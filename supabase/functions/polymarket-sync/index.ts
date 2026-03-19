@@ -421,6 +421,7 @@ Deno.serve(async (req) => {
             event_name: gEvent.title,
             event_id: eventId,
             source: "polymarket",
+            commission_bps: 200, // 2% for imported Polymarket events
             polymarket_market_id: market.id,
             polymarket_condition_id: market.conditionId,
             polymarket_slug: market.slug,

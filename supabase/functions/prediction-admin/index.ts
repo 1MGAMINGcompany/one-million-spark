@@ -147,6 +147,8 @@ Deno.serve(async (req) => {
           event_id: event_id || null,
           weight_class: weight_class || null,
           fight_class: fight_class || null,
+          source: "manual",
+          commission_bps: 500, // 5% for native 1MGAMING events
         })
         .select()
         .single();

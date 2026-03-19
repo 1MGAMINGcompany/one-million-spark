@@ -194,6 +194,8 @@ Deno.serve(async (req) => {
       entry,
       pool_contribution_usd: pool_usd,
       fee_usd,
+      commission_bps: commissionBps,
+      source: fight.source || "manual",
       shares,
       polymarket_backed: isPolymarketBacked,
       polymarket_status,
