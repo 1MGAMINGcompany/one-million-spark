@@ -224,7 +224,7 @@ const Navbar = () => {
                       <Skeleton className="h-4 w-20" />
                     ) : (
                       <span className="text-sm font-semibold text-foreground">
-                        {balanceSol !== null ? `${balanceSol.toFixed(4)} SOL` : "—"}
+                        {balanceMatic !== null ? `${balanceMatic.toFixed(4)} MATIC` : "—"}
                       </span>
                     )}
                   </div>
