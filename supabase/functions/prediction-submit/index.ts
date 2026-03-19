@@ -21,6 +21,12 @@ const CLOB_BASE = "https://clob.polymarket.com";
 const MIN_PREDICTION_USD = 1.0;
 const LEGACY_DEFAULT_FEE_BPS = 500;
 
+/** Only these statuses allow new trades */
+const TRADABLE_STATUSES = new Set(["open"]);
+
+/** Max age (ms) for cached price data to be considered fresh */
+const MAX_PRICE_STALENESS_MS = 10 * 60 * 1000; // 10 minutes
+
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), {
     status,
@@ -281,16 +287,71 @@ Deno.serve(async (req) => {
       await auditLog(supabase, null, normalizedWallet, "trade_failed", { fight_id }, { reason: "fight_not_found" });
       return json({ error: "Fight not found" }, 404);
     }
-    if (fight.status !== "open") {
-      await auditLog(supabase, null, normalizedWallet, "trade_failed", { fight_id, fight_status: fight.status }, { reason: "fight_not_open" });
-      return json({ error: "Predictions are closed for this fight" }, 400);
+    // ═══════════════════════════════════════════════════
+    // VALIDATE FIGHT STATUS (tradability gate)
+    // ═══════════════════════════════════════════════════
+    if (!TRADABLE_STATUSES.has(fight.status)) {
+      const errorCode = fight.status === "locked" ? "market_locked"
+        : fight.status === "live" ? "market_locked"
+        : fight.status === "settled" || fight.status === "confirmed" ? "market_settled"
+        : fight.status === "cancelled" ? "market_cancelled"
+        : "market_not_tradable";
+
+      await auditLog(supabase, null, normalizedWallet, "tradability_check_failed", { fight_id, fight_status: fight.status }, { error_code: errorCode });
+      return json({ error: "This market is no longer open for predictions", error_code: errorCode, fight_status: fight.status }, 400);
+    }
+
+    // ═══════════════════════════════════════════════════
+    // SOURCE-AWARE ROUTING PREP (moved up for validation)
+    // ═══════════════════════════════════════════════════
+    const isPolymarketBacked = !!(fight.polymarket_market_id && fight.polymarket_outcome_a_token);
+
+    const tokenId = isPolymarketBacked
+      ? (fighter_pick === "fighter_a" ? fight.polymarket_outcome_a_token : fight.polymarket_outcome_b_token)
+      : null;
+
+    // ═══════════════════════════════════════════════════
+    // POLYMARKET-SPECIFIC VALIDATIONS
+    // ═══════════════════════════════════════════════════
+    if (isPolymarketBacked) {
+      // 1) Required market mapping
+      if (!fight.polymarket_market_id) {
+        await auditLog(supabase, null, normalizedWallet, "tradability_check_failed", { fight_id }, { error_code: "missing_market_mapping", field: "polymarket_market_id" });
+        return json({ error: "Market configuration incomplete", error_code: "missing_market_mapping" }, 400);
+      }
+      if (!tokenId) {
+        await auditLog(supabase, null, normalizedWallet, "tradability_check_failed", { fight_id, fighter_pick }, { error_code: "missing_market_mapping", field: "token_id" });
+        return json({ error: "Market token configuration incomplete for this outcome", error_code: "missing_market_mapping" }, 400);
+      }
+
+      // 2) Polymarket active flag (source of truth: prediction_fights.polymarket_active)
+      if (fight.polymarket_active === false) {
+        await auditLog(supabase, null, normalizedWallet, "tradability_check_failed", { fight_id }, { error_code: "market_inactive" });
+        return json({ error: "This Polymarket market is no longer active", error_code: "market_inactive" }, 400);
+      }
+
+      // 3) Polymarket end date check
+      if (fight.polymarket_end_date && new Date(fight.polymarket_end_date) <= new Date()) {
+        await auditLog(supabase, null, normalizedWallet, "tradability_check_failed", { fight_id }, { error_code: "market_expired", end_date: fight.polymarket_end_date });
+        return json({ error: "This market has expired", error_code: "market_expired" }, 400);
+      }
+
+      // 4) Quote freshness check (reject if cached price older than threshold)
+      const lastSynced = fight.polymarket_last_synced_at ? new Date(fight.polymarket_last_synced_at).getTime() : 0;
+      const priceAge = Date.now() - lastSynced;
+      if (lastSynced === 0 || priceAge > MAX_PRICE_STALENESS_MS) {
+        await auditLog(supabase, null, normalizedWallet, "stale_quote_rejected", { fight_id }, {
+          error_code: "stale_quote", price_age_ms: priceAge, threshold_ms: MAX_PRICE_STALENESS_MS,
+          last_synced: fight.polymarket_last_synced_at || "never",
+        });
+        return json({ error: "Market price data is stale. Please try again shortly.", error_code: "stale_quote" }, 400);
+      }
     }
 
     // ═══════════════════════════════════════════════════
     // 6) EXPLICIT FEE MODEL
     // ═══════════════════════════════════════════════════
     const systemFeeBps = controls ? Number(controls.default_fee_bps) : LEGACY_DEFAULT_FEE_BPS;
-    // Per-fight override takes precedence if set
     const effectiveFeeBps = fight.commission_bps != null ? Number(fight.commission_bps) : systemFeeBps;
     const fee_usd = Number((parsedAmount * effectiveFeeBps / 10_000).toFixed(6));
     const net_amount_usdc = Number((parsedAmount - fee_usd).toFixed(6));
@@ -302,23 +363,42 @@ Deno.serve(async (req) => {
       ? Math.min(Number(clientSlippage), systemMaxSlippage)
       : systemMaxSlippage;
 
-    // ═══════════════════════════════════════════════════
-    // SOURCE-AWARE ROUTING PREP
-    // ═══════════════════════════════════════════════════
-    const isPolymarketBacked = !!(fight.polymarket_market_id && fight.polymarket_outcome_a_token);
-
-    const tokenId = isPolymarketBacked
-      ? (fighter_pick === "fighter_a" ? fight.polymarket_outcome_a_token : fight.polymarket_outcome_b_token)
-      : null;
-
+    // Expected price from cached data
     const expectedPrice = isPolymarketBacked
       ? Number(fighter_pick === "fighter_a" ? (fight.price_a || 0.5) : (fight.price_b || 0.5))
       : null;
 
-    // Validate Polymarket tokens exist for CLOB path
-    if (isPolymarketBacked && !tokenId) {
-      await auditLog(supabase, null, normalizedWallet, "trade_failed", { fight_id, fighter_pick }, { reason: "missing_token_id" });
-      return json({ error: "Market token configuration incomplete for this outcome" }, 400);
+    // ═══════════════════════════════════════════════════
+    // SLIPPAGE CHECK — fetch live price and compare
+    // ═══════════════════════════════════════════════════
+    if (isPolymarketBacked && tokenId && expectedPrice != null && expectedPrice > 0) {
+      try {
+        const priceRes = await fetch(`${CLOB_BASE}/price?token_id=${tokenId}&side=BUY`);
+        if (priceRes.ok) {
+          const priceData = await priceRes.json();
+          const livePrice = parseFloat(priceData?.price || "0");
+
+          if (livePrice > 0) {
+            const slippageBps = Math.abs(livePrice - expectedPrice) / expectedPrice * 10_000;
+            if (slippageBps > effectiveSlippage) {
+              await auditLog(supabase, null, normalizedWallet, "slippage_rejected", { fight_id, token_id: tokenId }, {
+                error_code: "slippage_exceeded",
+                expected_price: expectedPrice, live_price: livePrice,
+                slippage_bps: Math.round(slippageBps), max_slippage_bps: effectiveSlippage,
+              });
+              return json({
+                error: "Price has moved beyond acceptable range. Please retry.",
+                error_code: "slippage_exceeded",
+                expected_price: expectedPrice,
+                live_price: livePrice,
+              }, 400);
+            }
+          }
+        }
+      } catch (slipErr) {
+        // Non-blocking: if live price fetch fails, proceed with cached price
+        console.warn("[prediction-submit] Live price check failed, proceeding with cached:", slipErr);
+      }
     }
 
     await auditLog(supabase, null, normalizedWallet, "controls_passed", {
