@@ -1,181 +1,88 @@
-import { useWallet } from "@/hooks/useWallet";
 import { usePrivy } from "@privy-io/react-auth";
-import { useSolPrice } from "@/hooks/useSolPrice";
-import { usePrivySolBalance } from "@/hooks/usePrivySolBalance";
-import { AddSolCard } from "@/components/AddSolCard";
-import { Wallet, CreditCard, Gamepad2, Link2, CheckCircle2, ExternalLink, RefreshCw, Sparkles, Users } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { useWalletModal } from "@solana/wallet-adapter-react-ui";
-import { useNavigate } from "react-router-dom";
-import { toast } from "sonner";
-import { useTranslation } from "react-i18next";
-import { useFundWallet } from "@privy-io/react-auth/solana";
 import { useLogin } from "@privy-io/react-auth";
+import { CreditCard, Shield, Zap, CheckCircle2, Wallet, DollarSign, Users } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
+import { usePrivyWallet } from "@/hooks/usePrivyWallet";
 
 const AddFunds = () => {
   const { t } = useTranslation();
-  const { isConnected, address } = useWallet();
-  const { setVisible } = useWalletModal();
-  const { price, loading, refetch } = useSolPrice();
   const navigate = useNavigate();
-  const { isPrivyUser, walletAddress, balanceSol } = usePrivySolBalance();
-  const { fundWallet } = useFundWallet();
-  const { login } = useLogin();
-
-  const handleBuyWithCard = async () => {
-    if (!walletAddress) return;
-    try {
-      console.log("[AddFunds] calling fundWallet for", walletAddress);
-      await fundWallet({
-        address: walletAddress,
-        options: {
-          chain: "solana:mainnet",
-          amount: "0.05",
-        },
-      });
-      console.log("[AddFunds] fundWallet resolved");
-    } catch (e: any) {
-      console.error("[AddFunds] fundWallet error:", e);
-      if (e?.message !== "CLOSED_MODAL" && e?.message !== "User closed modal") {
-        toast.error("Could not open payment. Please try again.");
-      }
-    }
-  };
-
   const { authenticated } = usePrivy();
+  const { login } = useLogin();
+  const { walletAddress, isPrivyUser } = usePrivyWallet();
 
-  const handleBuyOrLogin = async () => {
-    if (isPrivyUser && walletAddress) {
-      await handleBuyWithCard();
-    } else if (authenticated) {
-      toast.info("Loading your wallet... please try again in a moment.");
-    } else {
-      login();
-    }
-  };
-
-  // Privy users with embedded wallets get the simplified view
-  if (isPrivyUser && walletAddress) {
-    return (
-      <div className="min-h-screen bg-background py-12 px-4">
-        <div className="max-w-2xl mx-auto">
-          <div className="text-center mb-6">
-            <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-3 font-cinzel">
-              {t("addFunds.heroTitle")}
-            </h1>
-            <p className="text-muted-foreground">
-              {t("addFunds.heroSubtitlePrivy")}
-            </p>
-          </div>
-          <AddSolCard walletAddress={walletAddress} balanceSol={balanceSol} />
-
-          {/* Quick Info */}
-          <div className="max-w-md mx-auto mt-6">
-            <QuickInfoSection t={t} />
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const isLoggedIn = authenticated && isPrivyUser && !!walletAddress;
 
   return (
     <div className="min-h-screen bg-background py-12 px-4">
       <div className="max-w-2xl mx-auto">
         {/* Hero Section */}
         <div className="text-center mb-10">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 border border-primary/20 mx-auto mb-4">
+            <DollarSign className="h-8 w-8 text-primary" />
+          </div>
           <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-3 font-cinzel">
-            {t("addFunds.heroTitle")}
+            Add Funds
           </h1>
           <p className="text-xl text-primary font-medium mb-2">
-            {t("addFunds.heroTagline")}
+            Fast, simple, and secure ✨
           </p>
           <p className="text-muted-foreground">
-            {t("addFunds.heroSubtitle")}
+            {isLoggedIn
+              ? "Your account is ready — add USDC to start playing and predicting."
+              : "Create an account in seconds, then add funds with your favorite payment method."}
           </p>
-          
-          {/* SOL Price Display */}
-          <div className="flex flex-col items-center gap-2 mt-4">
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-card border border-border rounded-lg">
-              <span className="text-sm text-muted-foreground">{t("addFunds.solPrice")}:</span>
-              <span className="font-semibold text-primary">
-                {loading ? "..." : price ? `$${price.toFixed(2)}` : "N/A"}
-              </span>
-              <button 
-                onClick={refetch} 
-                className="text-muted-foreground hover:text-foreground transition-colors"
-                title={t("addFunds.refreshPrice")}
-              >
-                <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
-              </button>
-            </div>
-            <div className="text-xs text-muted-foreground flex items-center gap-1.5">
-              <span className="text-primary">💰</span>
-              <span>{t("addFunds.minEntry")}: <span className="text-foreground font-medium">$0.50 USD</span></span>
-              <span className="text-muted-foreground/60">
-                (~{price ? (0.5 / price).toFixed(4) : "0.004"} SOL)
-              </span>
-            </div>
-          </div>
-
-          {/* Buy with Card - Top CTA */}
-          <div className="mt-5">
-            <Button onClick={handleBuyOrLogin} size="lg" variant="gold" className="w-full text-lg">
-              <CreditCard className="mr-2 h-5 w-5" />
-              Buy with Card
-            </Button>
-            <p className="text-xs text-muted-foreground mt-2 text-center">
-              Credit Card · Apple Pay · Google Pay
-            </p>
-          </div>
         </div>
 
-        {/* How Easy It Is - Visual Flow */}
+        {/* How It Works - Visual Flow */}
         <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-primary/10 border border-primary/20 rounded-xl p-6 mb-8">
           <div className="flex items-center justify-center gap-4 md:gap-8">
             <div className="text-center">
               <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center mx-auto mb-2">
-                <Link2 className="h-5 w-5 text-primary" />
+                <Wallet className="h-5 w-5 text-primary" />
               </div>
-              <p className="text-sm font-medium">{t("addFunds.stepConnect")}</p>
+              <p className="text-sm font-medium">Sign Up</p>
             </div>
             <div className="text-primary text-2xl">→</div>
             <div className="text-center">
               <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center mx-auto mb-2">
                 <CreditCard className="h-5 w-5 text-primary" />
               </div>
-              <p className="text-sm font-medium">{t("addFunds.stepBuy")}</p>
+              <p className="text-sm font-medium">Add USDC</p>
             </div>
             <div className="text-primary text-2xl">→</div>
             <div className="text-center">
               <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center mx-auto mb-2">
-                <Gamepad2 className="h-5 w-5 text-primary" />
+                <Zap className="h-5 w-5 text-primary" />
               </div>
-              <p className="text-sm font-medium">{t("addFunds.stepPlay")}</p>
+              <p className="text-sm font-medium">Play!</p>
             </div>
           </div>
           <p className="text-center text-muted-foreground text-sm mt-4">
-            {t("addFunds.takesLessThan2Min")}
+            Takes less than 2 minutes to get started
           </p>
         </div>
 
-        {/* Wallet Connection Status */}
-        {isConnected && (
+        {/* Wallet Status */}
+        {isLoggedIn && (
           <div className="bg-card border border-primary/30 rounded-lg p-4 mb-6 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <CheckCircle2 className="h-5 w-5 text-green-500" />
               <div>
-                <p className="text-sm text-green-400 font-medium">{t("addFunds.walletConnected")}</p>
-                <p className="font-mono text-xs text-muted-foreground">{address?.slice(0, 8)}...{address?.slice(-8)}</p>
+                <p className="text-sm text-green-400 font-medium">Account Connected</p>
+                <p className="font-mono text-xs text-muted-foreground">{walletAddress?.slice(0, 8)}...{walletAddress?.slice(-6)}</p>
               </div>
             </div>
             <span className="text-xs px-2 py-1 rounded bg-green-500/20 text-green-400">
-              Mainnet
+              Polygon
             </span>
           </div>
         )}
 
         <div className="space-y-5">
-          {/* Step 1: Get a Wallet */}
+          {/* Step 1: Create Account */}
           <section className="bg-card border border-border rounded-xl p-6">
             <div className="flex items-start gap-4">
               <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-bold shrink-0">
@@ -183,31 +90,30 @@ const AddFunds = () => {
               </div>
               <div className="flex-1">
                 <h2 className="text-lg font-semibold text-foreground mb-1">
-                  {t("addFunds.getWalletTitle")}
+                  {isLoggedIn ? "✅ Account Created" : "Create Your Account"}
                 </h2>
                 <p className="text-muted-foreground text-sm mb-4">
-                  {t("addFunds.getWalletDesc")}
+                  {isLoggedIn
+                    ? "Your secure wallet was created automatically when you signed up."
+                    : "Sign up with email, Google, or Twitter. A secure wallet is created for you automatically — no extensions or seed phrases needed."}
                 </p>
-                
-                <WalletGrid />
 
-                {!isConnected && (
-                  <Button onClick={() => setVisible(true)} className="w-full mt-4">
+                {!isLoggedIn && (
+                  <Button onClick={() => login()} className="w-full" size="lg">
                     <Wallet className="mr-2 h-4 w-4" />
-                    {t("wallet.connectWallet")}
+                    Sign Up / Log In
                   </Button>
                 )}
               </div>
             </div>
           </section>
 
-          {/* Step 2: Buy SOL */}
+          {/* Step 2: Add Funds */}
           <section className="bg-card border border-border rounded-xl p-6 relative overflow-hidden">
-            {/* No Exchanges Badge */}
             <div className="absolute top-4 right-4">
               <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-green-500/20 text-green-400 text-xs font-medium">
-                <Sparkles className="h-3 w-3" />
-                {t("addFunds.noExchanges")}
+                <Zap className="h-3 w-3" />
+                No exchanges needed!
               </span>
             </div>
 
@@ -217,17 +123,17 @@ const AddFunds = () => {
               </div>
               <div className="flex-1">
                 <h2 className="text-lg font-semibold text-foreground mb-1">
-                  {t("addFunds.buySolTitle")}
+                  Add USDC to Your Wallet
                 </h2>
                 <p className="text-muted-foreground text-sm mb-4">
-                  {t("addFunds.buySolDesc")}
+                  Buy USDC instantly with your card. Funds arrive in seconds.
                 </p>
-                
+
                 {/* Payment Methods */}
                 <div className="flex flex-wrap gap-2 mb-4">
                   <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted/50 text-sm">
                     <CreditCard className="h-4 w-4 text-primary" />
-                    {t("addFunds.creditCard")}
+                    Credit Card
                   </span>
                   <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted/50 text-sm">
                     <span className="text-base"></span>
@@ -239,27 +145,51 @@ const AddFunds = () => {
                   </span>
                 </div>
 
-                <Button onClick={handleBuyOrLogin} size="lg" variant="gold" className="w-full text-lg">
+                <Button
+                  onClick={() => {
+                    if (!isLoggedIn) {
+                      login();
+                    } else {
+                      // Privy fund wallet flow — will be wired to Polygon USDC fiat onramp
+                      window.open("https://app.moonpay.com/swap?defaultCurrencyCode=usdc_polygon", "_blank");
+                    }
+                  }}
+                  size="lg"
+                  variant="gold"
+                  className="w-full text-lg"
+                >
                   <CreditCard className="mr-2 h-5 w-5" />
-                  Buy with Card
+                  {isLoggedIn ? "Buy USDC" : "Sign Up & Buy USDC"}
                 </Button>
 
                 <p className="text-xs text-muted-foreground mt-3">
-                  {t("addFunds.alreadyHaveSol")}
+                  Already have USDC or crypto? You can also send USDC (Polygon) to your wallet address above.
                 </p>
-
               </div>
             </div>
           </section>
 
           {/* Quick Info */}
-          <QuickInfoSection t={t} />
-
-          {/* Get Wallet Links */}
-          <section className="bg-card border border-border rounded-xl p-5">
-            <h3 className="font-medium text-foreground mb-2">{t("addFunds.noWalletYet")}</h3>
-            <p className="text-sm text-muted-foreground mb-4">{t("addFunds.downloadWallet")}</p>
-            <WalletDownloadGrid />
+          <section className="bg-muted/20 border border-border/50 rounded-xl p-5">
+            <h3 className="font-medium text-foreground mb-3">Quick Info</h3>
+            <ul className="space-y-2 text-sm text-muted-foreground">
+              <li className="flex items-start gap-2">
+                <CheckCircle2 className="h-4 w-4 text-green-500 mt-0.5 shrink-0" />
+                Entry fees, prizes, and predictions are in USDC
+              </li>
+              <li className="flex items-start gap-2">
+                <CheckCircle2 className="h-4 w-4 text-green-500 mt-0.5 shrink-0" />
+                Network fees are covered for you (gas-sponsored)
+              </li>
+              <li className="flex items-start gap-2">
+                <CheckCircle2 className="h-4 w-4 text-green-500 mt-0.5 shrink-0" />
+                Winners receive prizes minus 5% platform fee
+              </li>
+              <li className="flex items-start gap-2">
+                <Shield className="h-4 w-4 text-green-500 mt-0.5 shrink-0" />
+                Your wallet is secured by Privy — no seed phrases to lose
+              </li>
+            </ul>
           </section>
 
           {/* Fun CTA - Play with Friends */}
@@ -270,16 +200,13 @@ const AddFunds = () => {
               </div>
             </div>
             <h3 className="text-lg font-semibold text-foreground mb-2">
-              🎮 {t("addFunds.readyToPlay")}
+              🎮 Ready to play with friends?
             </h3>
             <p className="text-muted-foreground text-sm mb-4">
-              {t("addFunds.createPrivateDesc")}
-            </p>
-            <p className="text-xs text-primary mb-4">
-              ✨ {t("addFunds.privateRoomsNeverExpire")}
+              Create a private room and share the link — your friends can join anytime!
             </p>
             <Button onClick={() => navigate("/create-room")} variant="default" size="lg">
-              {t("addFunds.createPrivateRoom")}
+              Create a Private Room
             </Button>
           </section>
         </div>
@@ -287,71 +214,5 @@ const AddFunds = () => {
     </div>
   );
 };
-
-function QuickInfoSection({ t }: { t: (key: string) => string }) {
-  return (
-    <section className="bg-muted/20 border border-border/50 rounded-xl p-5">
-      <h3 className="font-medium text-foreground mb-3">{t("addFunds.quickInfo")}</h3>
-      <ul className="space-y-2 text-sm text-muted-foreground">
-        <li className="flex items-start gap-2">
-          <CheckCircle2 className="h-4 w-4 text-green-500 mt-0.5 shrink-0" />
-          {t("addFunds.infoFeesInSol")}
-        </li>
-        <li className="flex items-start gap-2">
-          <CheckCircle2 className="h-4 w-4 text-green-500 mt-0.5 shrink-0" />
-          {t("addFunds.infoNetworkFees")}
-        </li>
-        <li className="flex items-start gap-2">
-          <CheckCircle2 className="h-4 w-4 text-green-500 mt-0.5 shrink-0" />
-          {t("addFunds.infoPlatformFee")}
-        </li>
-      </ul>
-    </section>
-  );
-}
-
-function WalletGrid() {
-  return (
-    <div className="grid grid-cols-3 gap-3">
-      <a href="https://phantom.app" target="_blank" rel="noopener noreferrer"
-        className="flex flex-col items-center gap-2 p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors border border-border/50">
-        <div className="w-10 h-10 rounded-full bg-purple-500/20 flex items-center justify-center"><span className="text-lg">👻</span></div>
-        <span className="text-sm font-medium">Phantom</span>
-      </a>
-      <a href="https://solflare.com" target="_blank" rel="noopener noreferrer"
-        className="flex flex-col items-center gap-2 p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors border border-border/50">
-        <div className="w-10 h-10 rounded-full bg-orange-500/20 flex items-center justify-center"><span className="text-lg">🔆</span></div>
-        <span className="text-sm font-medium">Solflare</span>
-      </a>
-      <a href="https://backpack.app" target="_blank" rel="noopener noreferrer"
-        className="flex flex-col items-center gap-2 p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors border border-border/50">
-        <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center"><span className="text-lg">🎒</span></div>
-        <span className="text-sm font-medium">Backpack</span>
-      </a>
-    </div>
-  );
-}
-
-function WalletDownloadGrid() {
-  return (
-    <div className="grid grid-cols-3 gap-3">
-      <a href="https://phantom.app/download" target="_blank" rel="noopener noreferrer"
-        className="flex flex-col items-center gap-2 p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors border border-border/50">
-        <div className="w-10 h-10 rounded-full bg-purple-500/20 flex items-center justify-center"><span className="text-lg">👻</span></div>
-        <span className="text-sm font-medium flex items-center gap-1">Phantom <ExternalLink className="h-3 w-3" /></span>
-      </a>
-      <a href="https://solflare.com/download" target="_blank" rel="noopener noreferrer"
-        className="flex flex-col items-center gap-2 p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors border border-border/50">
-        <div className="w-10 h-10 rounded-full bg-orange-500/20 flex items-center justify-center"><span className="text-lg">🔆</span></div>
-        <span className="text-sm font-medium flex items-center gap-1">Solflare <ExternalLink className="h-3 w-3" /></span>
-      </a>
-      <a href="https://backpack.app/download" target="_blank" rel="noopener noreferrer"
-        className="flex flex-col items-center gap-2 p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors border border-border/50">
-        <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center"><span className="text-lg">🎒</span></div>
-        <span className="text-sm font-medium flex items-center gap-1">Backpack <ExternalLink className="h-3 w-3" /></span>
-      </a>
-    </div>
-  );
-}
 
 export default AddFunds;

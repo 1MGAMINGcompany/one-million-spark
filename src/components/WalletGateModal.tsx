@@ -8,11 +8,8 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Wallet, Info, Eye, ChevronDown } from "lucide-react";
+import { Wallet, Eye, Shield } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { HowToConnectSolModal } from "./HowToConnectSolModal";
-import { WalletPickerDialog } from "./WalletPickerDialog";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 interface WalletGateModalProps {
   isOpen: boolean;
@@ -29,88 +26,48 @@ export function WalletGateModal({
 }: WalletGateModalProps) {
   const { login } = usePrivy();
   const { t } = useTranslation();
-  const [showHelp, setShowHelp] = useState(false);
-  const [showWalletPicker, setShowWalletPicker] = useState(false);
 
   const handlePrivyLogin = () => {
     onClose();
     login();
   };
 
-  const handleExternalWallet = () => {
-    onClose();
-    setShowWalletPicker(true);
-  };
-
   return (
-    <>
-      <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-        <DialogContent className="sm:max-w-md bg-background border-border">
-          <DialogHeader className="text-center">
-            <div className="mx-auto w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-4">
-              <Wallet className="text-primary" size={32} />
-            </div>
-            <DialogTitle className="text-xl font-cinzel text-center">
-              {title || t("wallet.loginToPlay")}
-            </DialogTitle>
-            <DialogDescription className="text-center text-muted-foreground">
-              {description || t("wallet.loginToPlayDesc")}
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 pt-2">
-            <Button 
-              onClick={handlePrivyLogin}
-              className="w-full"
-              size="lg"
-            >
-              <Wallet className="mr-2" size={18} />
-              {t("wallet.continue")}
-            </Button>
-
-            <Collapsible>
-              <CollapsibleTrigger className="flex items-center justify-center gap-1 w-full text-xs text-muted-foreground hover:text-primary transition-colors">
-                <ChevronDown size={14} />
-                {t("wallet.orUseExternal")}
-              </CollapsibleTrigger>
-              <CollapsibleContent className="pt-3">
-                <Button 
-                  onClick={handleExternalWallet}
-                  variant="outline"
-                  className="w-full"
-                  size="lg"
-                >
-                  <Wallet className="mr-2" size={18} />
-                  {t("wallet.connect")}
-                </Button>
-              </CollapsibleContent>
-            </Collapsible>
-
-            <button
-              onClick={() => setShowHelp(true)}
-              className="w-full flex items-center justify-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors py-2"
-            >
-              <Info size={14} />
-              {t("wallet.howToConnectSol")}
-            </button>
-
-            <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground/70 pt-2 border-t border-border/30">
-              <Eye size={12} />
-              <span>{t("wallet.browseWithoutWallet")}</span>
-            </div>
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-md bg-background border-border">
+        <DialogHeader className="text-center">
+          <div className="mx-auto w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-4">
+            <Wallet className="text-primary" size={32} />
           </div>
-        </DialogContent>
-      </Dialog>
+          <DialogTitle className="text-xl font-cinzel text-center">
+            {title || "Sign in to continue"}
+          </DialogTitle>
+          <DialogDescription className="text-center text-muted-foreground">
+            {description || "Create an account or log in to play games and make predictions. Your secure wallet is created automatically."}
+          </DialogDescription>
+        </DialogHeader>
 
-      <WalletPickerDialog 
-        open={showWalletPicker} 
-        onOpenChange={setShowWalletPicker} 
-      />
+        <div className="space-y-4 pt-2">
+          <Button 
+            onClick={handlePrivyLogin}
+            className="w-full"
+            size="lg"
+          >
+            <Wallet className="mr-2" size={18} />
+            Sign Up / Log In
+          </Button>
 
-      <HowToConnectSolModal 
-        isOpen={showHelp} 
-        onClose={() => setShowHelp(false)} 
-      />
-    </>
+          <div className="flex items-center gap-2 text-xs text-muted-foreground/80 justify-center">
+            <Shield size={12} />
+            <span>No extensions or seed phrases needed</span>
+          </div>
+
+          <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground/70 pt-2 border-t border-border/30">
+            <Eye size={12} />
+            <span>{t("wallet.browseWithoutWallet")}</span>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
