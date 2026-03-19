@@ -39,9 +39,9 @@ export function WelcomeIntroModal({ isAuthenticated }: WelcomeIntroModalProps) {
   };
 
   const steps = [
-    { icon: Wallet, label: t("welcomeIntro.walletReady"), desc: t("welcomeIntro.walletReadyDesc") },
-    { icon: Coins, label: t("welcomeIntro.addSol"), desc: t("welcomeIntro.addSolDesc") },
-    { icon: Swords, label: t("welcomeIntro.joinMatch"), desc: t("welcomeIntro.joinMatchDesc") },
+    { icon: Wallet, label: "Wallet ready", desc: "Your wallet was created automatically." },
+    { icon: Coins, label: "Add USDC", desc: "Fund your wallet to enter matches and predictions." },
+    { icon: Swords, label: "Join a match", desc: "Play chess, backgammon, dominos & more." },
   ];
 
   return (

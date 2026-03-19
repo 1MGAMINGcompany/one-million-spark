@@ -2,7 +2,7 @@ import { useTranslation } from "react-i18next";
 import { CheckCircle } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 
-const wallets = ["Phantom", "Solflare", "Backpack"];
+const wallets = ["Privy (Email / Google / Twitter)"];
 const games = [
   { name: "Chess", live: true },
   { name: "Backgammon", live: true },
