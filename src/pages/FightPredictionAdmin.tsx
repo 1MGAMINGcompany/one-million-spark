@@ -956,7 +956,7 @@ function AdminFightCard({
       <div className="grid grid-cols-3 gap-2 mb-3 bg-muted/30 rounded-lg p-2">
         <div className="text-center">
           <p className="text-[10px] text-muted-foreground">Pool</p>
-          <p className="text-xs font-bold text-foreground">{totalPoolSol} SOL</p>
+          <p className="text-xs font-bold text-foreground">${totalPoolUsd}</p>
         </div>
         <div className="text-center">
           <p className="text-[10px] text-muted-foreground">Predictions</p>
