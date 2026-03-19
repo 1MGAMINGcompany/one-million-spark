@@ -69,17 +69,41 @@ const AddFunds = () => {
 
         {/* Wallet Status */}
         {isLoggedIn && (
-          <div className="bg-card border border-primary/30 rounded-lg p-4 mb-6 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <CheckCircle2 className="h-5 w-5 text-green-500" />
+          <div className="bg-card border border-primary/30 rounded-lg p-4 mb-6">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-3">
+                <CheckCircle2 className="h-5 w-5 text-green-500" />
+                <div>
+                  <p className="text-sm text-green-400 font-medium">Account Connected</p>
+                  <p className="font-mono text-xs text-muted-foreground">{walletAddress?.slice(0, 8)}...{walletAddress?.slice(-6)}</p>
+                </div>
+              </div>
+              <span className="text-xs px-2 py-1 rounded bg-green-500/20 text-green-400">
+                Polygon
+              </span>
+            </div>
+            <div className="bg-muted/30 rounded-lg p-3 flex items-center justify-between">
               <div>
-                <p className="text-sm text-green-400 font-medium">Account Connected</p>
-                <p className="font-mono text-xs text-muted-foreground">{walletAddress?.slice(0, 8)}...{walletAddress?.slice(-6)}</p>
+                <p className="text-xs text-muted-foreground mb-0.5">USDC Balance</p>
+                {usdcLoading ? (
+                  <div className="flex items-center gap-1.5">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                    <span className="text-sm text-muted-foreground">Loading...</span>
+                  </div>
+                ) : usdcError ? (
+                  <p className="text-sm text-muted-foreground">Unable to load balance</p>
+                ) : (
+                  <p className="text-xl font-bold text-foreground">
+                    ${usdc_balance_formatted ?? "0.00"}
+                  </p>
+                )}
+              </div>
+              <div className="text-right">
+                <span className="text-xs px-2 py-0.5 rounded bg-primary/10 text-primary font-medium">
+                  USDC
+                </span>
               </div>
             </div>
-            <span className="text-xs px-2 py-1 rounded bg-green-500/20 text-green-400">
-              Polygon
-            </span>
           </div>
         )}
 
