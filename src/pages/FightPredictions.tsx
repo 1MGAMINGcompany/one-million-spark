@@ -16,9 +16,6 @@ import { SOCIAL_SHARE_ENABLED } from "@/lib/socialShareConfig";
 import { useMyReferralCode } from "@/hooks/useMyReferralCode";
 import type { Fight } from "@/components/predictions/FightCard";
 
-// TODO [POLYMARKET]: Replace lamports-based pool math with USD/USDC
-// once the database schema is migrated from Solana lamports.
-const LAMPORTS = 1_000_000_000;
 const FEE_RATE = 0.05;
 
 // DEPRECATED: Solana wallet addresses — will be removed when Polygon
