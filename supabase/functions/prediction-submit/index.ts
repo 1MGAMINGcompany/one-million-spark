@@ -431,6 +431,84 @@ Deno.serve(async (req) => {
             avg_fill_price: avgFillPrice,
             finalized_at: new Date().toISOString(),
           });
+
+          // ── Post-submit targeted reconciliation (best-effort, 2s timeout) ──
+          try {
+            await auditLog(supabase, tradeOrderId, normalizedWallet, "post_submit_reconcile_started");
+
+            const reconPath = `/order/${orderResult.orderId}`;
+            const reconTs = Math.floor(Date.now() / 1000).toString();
+            const reconHmac = await generateClobHmac(pmSession!.pm_api_secret!, reconTs, "GET", reconPath);
+
+            const reconController = new AbortController();
+            const reconTimeout = setTimeout(() => reconController.abort(), 2000);
+
+            const reconRes = await fetch(`${CLOB_BASE}${reconPath}`, {
+              headers: {
+                "Content-Type": "application/json",
+                POLY_API_KEY: pmSession!.pm_api_key!,
+                POLY_SIGNATURE: reconHmac,
+                POLY_PASSPHRASE: pmSession!.pm_passphrase!,
+                POLY_TIMESTAMP: reconTs,
+              },
+              signal: reconController.signal,
+            });
+            clearTimeout(reconTimeout);
+
+            if (reconRes.ok) {
+              const clobOrder = await reconRes.json();
+              const clobStatus = (clobOrder.status || "").toUpperCase();
+
+              const reconUpdates: Record<string, unknown> = { reconciled_at: new Date().toISOString() };
+              let reconStatusChanged = false;
+
+              if (clobStatus === "MATCHED" || clobStatus === "FILLED") {
+                const matchedSize = Number(clobOrder.size_matched ?? clobOrder.original_size ?? 0);
+                const originalSize = Number(clobOrder.original_size ?? 0);
+                const isPartial = originalSize > 0 && matchedSize < originalSize;
+                const reconPrice = Number(clobOrder.price ?? clobOrder.average_price ?? 0);
+
+                const newStatus = isPartial ? "partial_fill" : "filled";
+                if (matchedSize > 0) {
+                  reconUpdates.filled_shares = matchedSize;
+                  reconUpdates.filled_amount_usdc = reconPrice > 0 ? matchedSize * reconPrice : filledAmountUsdc;
+                  if (reconPrice > 0) reconUpdates.avg_fill_price = reconPrice;
+                  filledShares = matchedSize;
+                  filledAmountUsdc = Number(reconUpdates.filled_amount_usdc);
+                  if (reconPrice > 0) avgFillPrice = reconPrice;
+                }
+                if (newStatus !== tradeStatus) {
+                  reconUpdates.status = newStatus;
+                  tradeStatus = newStatus;
+                  reconStatusChanged = true;
+                }
+              } else if (clobStatus === "CANCELED" || clobStatus === "CANCELLED") {
+                reconUpdates.status = "cancelled";
+                reconUpdates.error_code = "clob_cancelled";
+                reconUpdates.finalized_at = new Date().toISOString();
+                tradeStatus = "cancelled";
+                reconStatusChanged = true;
+              } else if (clobStatus === "LIVE" || clobStatus === "OPEN") {
+                reconUpdates.status = "submitted";
+                tradeStatus = "submitted";
+                reconStatusChanged = true;
+              }
+
+              await updateTradeOrder(supabase, tradeOrderId!, reconUpdates);
+              await auditLog(supabase, tradeOrderId, normalizedWallet, "post_submit_reconcile_result", null, {
+                clob_status: clobStatus, status_changed: reconStatusChanged, new_status: tradeStatus, filled_shares: filledShares,
+              });
+            } else {
+              await auditLog(supabase, tradeOrderId, normalizedWallet, "post_submit_reconcile_failed", null, {
+                reason: "clob_http_error", http_status: reconRes.status,
+              });
+            }
+          } catch (reconErr: any) {
+            const isTimeout = reconErr?.name === "AbortError";
+            await auditLog(supabase, tradeOrderId, normalizedWallet, "post_submit_reconcile_failed", null, {
+              reason: isTimeout ? "timeout" : "exception", message: reconErr?.message?.substring(0, 200) ?? "unknown",
+            });
+          }
         } else {
           // CLOB rejection
           polymarket_status = orderResult.status;
