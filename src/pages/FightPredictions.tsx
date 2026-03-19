@@ -280,6 +280,9 @@ export default function FightPredictions() {
       // that will handle Polygon transaction execution with gas sponsorship.
       
       // For now, record the prediction intent server-side
+      // Get Privy access token for DID binding in prediction_accounts
+      const privyToken = await getAccessToken();
+
       const { data, error } = await supabase.functions.invoke("prediction-submit", {
         body: {
           fight_id: selectedFight.id,
@@ -287,8 +290,8 @@ export default function FightPredictions() {
           fighter_pick: selectedPick,
           amount_usd: amountUsd,
           chain: "polygon",
-          // TODO [POLYMARKET]: Include Polymarket order details here
         },
+        headers: privyToken ? { "x-privy-token": privyToken } : {},
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
