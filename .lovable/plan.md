@@ -1,99 +1,36 @@
-# 1MGAMING Platform Architecture — Phase 6
 
-## Product Types
 
-| Product | Commission | Source | Execution |
-|---------|-----------|--------|-----------|
-| Polymarket Predictions | 2% (200bps) | `polymarket` | User-authenticated CLOB orders + CTF redemption |
-| Native 1MGAMING Predictions | 5% (500bps) | `manual` | Local pool + admin lifecycle |
-| PvP Skill Games (USDC/POL) | 5% (500bps) | N/A | Polygon smart contracts (future) |
-| Free Games vs AI | 0% | N/A | Client-side, no wallet required |
+## Plan: Register polymarket-sync Edge Function in Config
 
-## Shared Infrastructure
-- **Auth**: Privy (one account, one EVM wallet on Polygon)
-- **Database**: Supabase (prediction_events, prediction_fights, prediction_entries)
-- **Admin**: Single admin UI with source-type filters and badges
-- **Content**: Enrichment layer (logos, photos, explainer cards, stats_json)
+### Problem
+The "Import from Polymarket" panel already exists in the admin dashboard (`FightPredictionAdmin.tsx` lines 449-458, component at lines 1842-2043) with full functionality:
+- **Sync by tag** (sports, politics, crypto, etc.)
+- **Search by keyword** with Enter key support
+- **Import single event** with per-result Import button
+- **Refresh prices** for active markets
+- Success/error feedback via toast notifications
 
-## Trading Auth Architecture
+However, the `polymarket-sync` edge function is **missing from `supabase/config.toml`**, so it defaults to requiring JWT verification. Since the admin dashboard calls it without a JWT (using wallet-based admin verification instead), all calls will fail with auth errors.
 
-### User vs Builder Wallet Separation
-- **User wallet**: Used for Polymarket CLOB trading identity (EIP-712 signing)
-- **Builder wallet**: Platform attribution only (gas sponsorship, NOT trading)
-- **Credentials**: Derived server-side from user's wallet signature, stored in `polymarket_user_sessions`
+### Fix
+Add `polymarket-sync` to `supabase/config.toml` with `verify_jwt = false` (matching the pattern used by every other edge function in this project). The function already has its own admin verification via the `prediction_admins` table.
 
-### Auth Flow
-```
-User signs SIWE message → polymarket-auth derives credentials → stored in DB
-                                                                      ↓
-prediction-submit reads user's PM session → places order using USER's creds
-                                                                      ↓
-polymarket-positions syncs user holdings → cached in polymarket_user_positions
-                                                                      ↓
-prediction-claim checks source → Polymarket: CTF redemption | Native: local pool
-```
+### File to change
+- `supabase/config.toml` — add `[functions.polymarket-sync]` section with `verify_jwt = false`
 
-### Key Tables
-- `polymarket_user_sessions` — Server-side only. User's PM API credentials (never exposed to frontend)
-- `polymarket_user_positions` — Cached user positions (public read for UI display)
+### Where the button appears
+The Polymarket Sync panel is located in `/predictions/admin`, between the "Event Ingest" card and the "Create Event" card. It contains:
+1. **Tag chips** (sports, politics, crypto, entertainment, science) to select a category
+2. **"Sync [tag]"** button — fetches and upserts all active markets for that tag as drafts
+3. **"Refresh Prices"** button — updates prices for already-imported active markets
+4. **Search bar** — type a keyword, press Enter or click the eye icon to search Polymarket
+5. **Import buttons** — each search result has an "Import" button to import that single event
 
-## Commission Logic
-- Lives on `prediction_fights.commission_bps` column
-- Set at fight creation: 200 for polymarket imports, 500 for native
-- Read in `prediction-submit` for fee calculation
-- Displayed in frontend via `getFeeRate(fight)` / `getFeeLabel(fight)`
+### Import behavior
+- **Events** are imported with `status: "draft"` and `requires_admin_approval: true`
+- **Fights/markets** are imported with `status: "open"`, `source: "polymarket"`, and `commission_bps: 200` (2%)
+- Events appear in the "Pending" filter tab after import, requiring admin approval before going live
 
-## Status Lifecycle
+### Technical details
+No code changes needed beyond the config.toml registration. The edge function (`polymarket-sync`) already handles admin wallet verification server-side by checking the `prediction_admins` table.
 
-```
-open → locked → live → result_selected → confirmed → settled
-                  └→ draw → refund_pending → refunds_processing → refunds_complete
-                  └→ cancelled
-```
-
-## Edge Functions
-
-### Prediction Flow
-- `prediction-submit` — Source-aware commission + user-authenticated order routing
-- `prediction-claim` — Polymarket CTF redemption vs native pool payout
-- `prediction-admin` — Full lifecycle + sets source/commission on createFight
-- `prediction-feed` — Public prediction data
-
-### Polymarket Integration
-- `polymarket-auth` — User wallet-based credential derivation (SIWE → API creds)
-- `polymarket-positions` — User position sync from Polymarket Data API
-- `polymarket-sync` — Idempotent Gamma API sync (sets commission_bps=200)
-- `polymarket-prices` — CLOB price refresh (public, no auth)
-
-### Automation
-- `prediction-schedule-worker` / `prediction-result-worker` / `prediction-settle-worker`
-- `prediction-refund-worker` — Draw refund execution
-- `prediction-ingest` — Multi-provider event ingestion
-
-## Implementation Status
-
-### Polymarket User Trading (Production-Ready)
-1. ✅ polymarket_user_sessions table with RLS deny-all
-2. ✅ polymarket-auth: SIWE verification via viem + CLOB API key derivation
-3. ✅ prediction-submit: Live CLOB order submission via user credentials
-4. ✅ prediction-claim: Polymarket CTF redemption path + market resolution check
-5. ✅ polymarket-positions: Live CLOB order sync + local fallback
-6. ✅ polymarket-prices: Public CLOB price refresh
-7. ✅ Frontend hooks: usePolymarketSession, usePolymarketPositions, usePolymarketPrices
-8. ✅ Unique constraint on positions for proper upsert
-9. ✅ viem added to deno.json for EVM signature verification
-
-### Remaining Blockers
-1. ⬜ Polymarket CLOB API key registration may require allowlisting — test with real wallet
-2. ⬜ CTF token allowance flow (user approves CTF Exchange to spend USDC on Polygon)
-3. ⬜ On-chain CTF redemption call in prediction-claim (currently marks as submitted)
-4. ⬜ Gas sponsorship for derived wallet transactions (Privy paymaster or relayer)
-
-### Polygon USDC/POL PvP Games
-1. ⬜ Deploy PvP smart contract on Polygon (escrow + settlement)
-2. ⬜ Migrate game room creation to use USDC/POL stakes
-3. ⬜ Update settlement to call Polygon contract instead of Solana program
-4. ⬜ Keep Solana path isolated for legacy games
-
-## Next Prompt: Polygon USDC/POL Skill Games
-> "Migrate skill-based PvP games to Polygon: (1) Design a simple Polygon escrow contract for USDC/POL stakes. (2) Update CreateRoom to accept USDC/POL amounts via Privy wallet. (3) Update settle-game to call the Polygon contract instead of Solana program. (4) Keep the existing Solana game paths isolated but functional. (5) Apply 5% commission in the settlement contract."
