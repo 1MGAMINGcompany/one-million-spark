@@ -927,8 +927,24 @@ function AdminFightCard({
   }, [s, timerExpired, busy, fight.id, onAction]);
   const totalPoolUsd = getFightPoolUsd(fight).toFixed(2);
 
+  const isPolymarket = !!fight.polymarket_market_id;
+
   return (
-    <div className={`bg-background/80 border border-border/30 rounded-lg p-4 ${fight.review_required ? 'ring-2 ring-yellow-500/40' : isBotConfirmed ? 'ring-1 ring-blue-500/30' : ''}`}>
+    <div className={`bg-background/80 border border-border/30 rounded-lg p-4 ${fight.review_required ? 'ring-2 ring-yellow-500/40' : isBotConfirmed ? 'ring-1 ring-blue-500/30' : isPolymarket ? 'ring-1 ring-purple-500/20' : ''}`}>
+      {/* Polymarket badge */}
+      {isPolymarket && (
+        <div className="flex items-center gap-2 mb-2 text-purple-400">
+          <span className="text-xs font-bold">🟣 POLYMARKET</span>
+          <span className="text-[10px] text-muted-foreground ml-auto">
+            {fight.price_a > 0 && fight.price_b > 0 ? (
+              <>
+                {fight.fighter_a_name} {(fight.price_a * 100).toFixed(0)}¢ · {fight.fighter_b_name} {(fight.price_b * 100).toFixed(0)}¢
+              </>
+            ) : "Prices unavailable"}
+          </span>
+        </div>
+      )}
+
       {/* Review required banner */}
       {fight.review_required && (
         <div className="flex items-center gap-2 mb-2 text-yellow-400">
