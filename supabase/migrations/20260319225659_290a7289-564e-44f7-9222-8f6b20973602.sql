@@ -1,0 +1,1 @@
+ALTER TABLE public.prediction_accounts ADD COLUMN IF NOT EXISTS privy_did text UNIQUE;

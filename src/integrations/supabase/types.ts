@@ -912,6 +912,7 @@ export type Database = {
           created_at: string
           id: string
           last_active_at: string
+          privy_did: string | null
           status: string
           wallet_evm: string | null
           wallet_solana: string | null
@@ -921,6 +922,7 @@ export type Database = {
           created_at?: string
           id?: string
           last_active_at?: string
+          privy_did?: string | null
           status?: string
           wallet_evm?: string | null
           wallet_solana?: string | null
@@ -930,6 +932,7 @@ export type Database = {
           created_at?: string
           id?: string
           last_active_at?: string
+          privy_did?: string | null
           status?: string
           wallet_evm?: string | null
           wallet_solana?: string | null

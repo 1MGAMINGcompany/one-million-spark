@@ -5,9 +5,10 @@ import { createRemoteJWKSet, jwtVerify } from "npm:jose@5";
  * prediction-trade-status — Secure read endpoint for a single trade order.
  *
  * Auth: Privy JWT verification via JWKS.
- * The caller must provide a valid Privy access token in the x-privy-token header.
- * Ownership is verified by matching the wallet in the request body against
- * prediction_trade_orders.wallet.
+ * Ownership: Resolved server-side by looking up the caller's privy_did
+ * in prediction_accounts to get the trusted wallet, then matching against
+ * prediction_trade_orders.wallet. Falls back to request-body wallet ONLY
+ * if no prediction_accounts record exists for this DID (temporary compat).
  *
  * Returns minimal safe fields only.
  */
@@ -38,7 +39,7 @@ async function verifyPrivyToken(token: string, appId: string) {
     issuer: "privy.io",
     audience: appId,
   });
-  return payload; // contains sub (did:privy:...), iat, exp, etc.
+  return payload;
 }
 
 Deno.serve(async (req) => {
@@ -59,35 +60,62 @@ Deno.serve(async (req) => {
       return json({ error: "Internal configuration error" }, 500);
     }
 
-    let _claims: Awaited<ReturnType<typeof verifyPrivyToken>>;
+    let claims: Awaited<ReturnType<typeof verifyPrivyToken>>;
     try {
-      _claims = await verifyPrivyToken(privyToken, appId);
+      claims = await verifyPrivyToken(privyToken, appId);
     } catch (err) {
       console.warn("[prediction-trade-status] Privy JWT verification failed:", (err as Error).message);
       return json({ error: "Invalid or expired authentication token", error_code: "auth_invalid" }, 401);
     }
 
-    // Token is valid — caller is an authenticated Privy user
-    const privyDid = _claims.sub; // e.g. "did:privy:xxxxx"
+    const privyDid = claims.sub; // e.g. "did:privy:xxxxx"
+    if (!privyDid) {
+      return json({ error: "Invalid token: missing subject", error_code: "auth_invalid" }, 401);
+    }
 
     const body = await req.json();
-    const { trade_order_id, wallet } = body;
+    const { trade_order_id, wallet: bodyWallet } = body;
 
     // ── Input validation ──
     if (!trade_order_id || typeof trade_order_id !== "string" || trade_order_id.length < 10) {
       return json({ error: "Missing or invalid trade_order_id" }, 400);
     }
 
-    if (!wallet || typeof wallet !== "string" || wallet.length < 10) {
-      return json({ error: "Missing or invalid wallet" }, 400);
-    }
-
-    const normalizedWallet = wallet.trim().toLowerCase();
-
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
+
+    // ── Server-side wallet resolution from trusted Privy DID ──
+    let trustedWallet: string | null = null;
+    {
+      const { data: account } = await supabase
+        .from("prediction_accounts")
+        .select("wallet_evm")
+        .eq("privy_did", privyDid)
+        .maybeSingle();
+
+      if (account?.wallet_evm) {
+        trustedWallet = account.wallet_evm.trim().toLowerCase();
+      }
+    }
+
+    // TEMPORARY FALLBACK: If no prediction_accounts record exists for this DID,
+    // accept the request-body wallet. This covers the window where a user has
+    // authenticated but their DID hasn't been bound yet (e.g., first submission
+    // is still in-flight). Remove this fallback once all active users have
+    // privy_did bound in prediction_accounts.
+    if (!trustedWallet && bodyWallet && typeof bodyWallet === "string" && bodyWallet.length >= 10) {
+      console.warn(
+        `[prediction-trade-status] No prediction_accounts record for DID ${privyDid?.slice(0, 20)}. ` +
+        `Falling back to request-body wallet (temporary compat).`
+      );
+      trustedWallet = bodyWallet.trim().toLowerCase();
+    }
+
+    if (!trustedWallet) {
+      return json({ error: "No wallet associated with this identity", error_code: "no_wallet" }, 403);
+    }
 
     // ── Fetch trade order ──
     const { data: order, error } = await supabase
@@ -107,9 +135,9 @@ Deno.serve(async (req) => {
       return json({ error: "Trade not found", error_code: "not_found" }, 404);
     }
 
-    // ── Ownership check ──
+    // ── Ownership check using server-resolved wallet ──
     const orderWallet = (order.wallet || "").trim().toLowerCase();
-    if (orderWallet !== normalizedWallet) {
+    if (orderWallet !== trustedWallet) {
       return json({ error: "Forbidden", error_code: "not_owner" }, 403);
     }
 

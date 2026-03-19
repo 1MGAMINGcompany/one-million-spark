@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { createRemoteJWKSet, jwtVerify } from "npm:jose@5";
 
 /**
  * prediction-submit — Production trade execution gateway.
@@ -14,7 +15,7 @@ import { createClient } from "@supabase/supabase-js";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+    "authorization, x-client-info, apikey, content-type, x-privy-token, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
 const CLOB_BASE = "https://clob.polymarket.com";
@@ -156,6 +157,29 @@ Deno.serve(async (req) => {
   let tradeOrderId: string | null = null;
   let normalizedWallet: string | null = null;
 
+  // ── Optional Privy JWT extraction for identity binding ──
+  // If present, we extract the trusted DID to bind to prediction_accounts.
+  // Not required for trade submission (wallet is still the primary key),
+  // but enables server-side ownership resolution in other endpoints.
+  let privyDid: string | null = null;
+  {
+    const privyToken = req.headers.get("x-privy-token");
+    const appId = Deno.env.get("VITE_PRIVY_APP_ID");
+    if (privyToken && privyToken.length >= 20 && appId) {
+      try {
+        const jwks = createRemoteJWKSet(new URL("https://auth.privy.io/.well-known/jwks.json"));
+        const { payload } = await jwtVerify(privyToken, jwks, {
+          issuer: "privy.io",
+          audience: appId,
+        });
+        privyDid = (payload.sub as string) || null;
+      } catch (e) {
+        // Non-fatal: DID binding is best-effort during submission
+        console.warn("[prediction-submit] Privy JWT extraction failed (non-fatal):", (e as Error).message);
+      }
+    }
+  }
+
   try {
     const body = await req.json();
     const { fight_id, wallet, fighter_pick, amount_usd, slippage_bps: clientSlippage } = body;
@@ -230,26 +254,51 @@ Deno.serve(async (req) => {
     });
 
     // ═══════════════════════════════════════════════════
-    // 2) RESOLVE USER ACCOUNT
+    // 2) RESOLVE USER ACCOUNT (with Privy DID binding)
     // ═══════════════════════════════════════════════════
     let accountId: string | null = null;
     {
-      const { data: existing } = await supabase
-        .from("prediction_accounts")
-        .select("id")
-        .eq("wallet_evm", normalizedWallet)
-        .maybeSingle();
+      // Prefer lookup by privy_did if available (trusted identity)
+      let existing: { id: string } | null = null;
+      if (privyDid) {
+        const { data } = await supabase
+          .from("prediction_accounts")
+          .select("id")
+          .eq("privy_did", privyDid)
+          .maybeSingle();
+        existing = data;
+      }
+      // Fallback: lookup by wallet_evm (backward compat for pre-DID accounts)
+      if (!existing) {
+        const { data } = await supabase
+          .from("prediction_accounts")
+          .select("id")
+          .eq("wallet_evm", normalizedWallet)
+          .maybeSingle();
+        existing = data;
+      }
 
       if (existing) {
         accountId = existing.id;
+        // Update: bind privy_did if newly available, refresh last_active_at
+        const updatePayload: Record<string, unknown> = {
+          last_active_at: new Date().toISOString(),
+          wallet_evm: normalizedWallet,
+        };
+        if (privyDid) updatePayload.privy_did = privyDid;
         await supabase
           .from("prediction_accounts")
-          .update({ last_active_at: new Date().toISOString() })
+          .update(updatePayload)
           .eq("id", accountId);
       } else {
+        const insertPayload: Record<string, unknown> = {
+          wallet_evm: normalizedWallet,
+          auth_provider: "privy",
+        };
+        if (privyDid) insertPayload.privy_did = privyDid;
         const { data: created } = await supabase
           .from("prediction_accounts")
-          .insert({ wallet_evm: normalizedWallet, auth_provider: "privy" })
+          .insert(insertPayload)
           .select("id")
           .single();
         accountId = created?.id ?? null;
