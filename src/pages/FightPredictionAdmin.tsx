@@ -711,7 +711,7 @@ function AdminEventCard({
           <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground flex-wrap">
             <span className="font-bold text-foreground">{fights.length} {getItemLabelFromEvent(event.event_name, fights.length).toLowerCase()}</span>
             <span>{totalPredictions} predictions</span>
-            <span className="text-primary font-bold">{totalPool.toFixed(4)} SOL</span>
+            <span className="text-primary font-bold">${totalPool.toFixed(2)}</span>
             {settledCount > 0 && <span className="text-green-400">{settledCount} settled</span>}
           </div>
         </div>
