@@ -1194,6 +1194,7 @@ export type Database = {
           stats_json: Json | null
           status: string
           title: string
+          trading_allowed: boolean
           updated_at: string
           weight_class: string | null
           winner: string | null
@@ -1247,6 +1248,7 @@ export type Database = {
           stats_json?: Json | null
           status?: string
           title: string
+          trading_allowed?: boolean
           updated_at?: string
           weight_class?: string | null
           winner?: string | null
@@ -1300,6 +1302,7 @@ export type Database = {
           stats_json?: Json | null
           status?: string
           title?: string
+          trading_allowed?: boolean
           updated_at?: string
           weight_class?: string | null
           winner?: string | null

@@ -830,6 +830,34 @@ Deno.serve(async (req) => {
       return json({ controls: data });
     }
 
+    // ── Market Allowlist Toggle ──
+
+    if (action === "toggleTrading") {
+      const { fight_id, trading_allowed } = body;
+      if (!fight_id || typeof trading_allowed !== "boolean") {
+        return json({ error: "Missing fight_id or trading_allowed" }, 400);
+      }
+
+      const { data, error } = await supabase
+        .from("prediction_fights")
+        .update({ trading_allowed, updated_at: new Date().toISOString() })
+        .eq("id", fight_id)
+        .select("id, trading_allowed")
+        .single();
+
+      if (error) throw error;
+
+      await supabase.from("automation_logs").insert({
+        action: "toggle_trading",
+        fight_id,
+        admin_wallet: wallet,
+        source: "prediction-admin",
+        details: { trading_allowed },
+      });
+
+      return json({ fight: data });
+    }
+
     return json({ error: "Unknown action" }, 400);
   } catch (err) {
     return new Response(JSON.stringify({ error: err.message }), {
