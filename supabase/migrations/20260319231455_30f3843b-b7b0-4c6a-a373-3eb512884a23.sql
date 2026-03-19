@@ -1,0 +1,1 @@
+ALTER TABLE public.prediction_fights ADD COLUMN IF NOT EXISTS trading_allowed boolean NOT NULL DEFAULT false;
