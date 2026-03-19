@@ -1,10 +1,11 @@
 import { usePrivy } from "@privy-io/react-auth";
 import { useLogin } from "@privy-io/react-auth";
-import { CreditCard, Shield, Zap, CheckCircle2, Wallet, DollarSign, Users } from "lucide-react";
+import { CreditCard, Shield, Zap, CheckCircle2, Wallet, DollarSign, Users, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { usePrivyWallet } from "@/hooks/usePrivyWallet";
+import { usePolygonUSDC } from "@/hooks/usePolygonUSDC";
 
 const AddFunds = () => {
   const { t } = useTranslation();
@@ -12,6 +13,7 @@ const AddFunds = () => {
   const { authenticated } = usePrivy();
   const { login } = useLogin();
   const { walletAddress, isPrivyUser } = usePrivyWallet();
+  const { usdc_balance_formatted, usdc_balance, is_loading: usdcLoading, error: usdcError } = usePolygonUSDC();
 
   const isLoggedIn = authenticated && isPrivyUser && !!walletAddress;
 
