@@ -293,6 +293,17 @@ export default function FightPredictions() {
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
 
+      // Capture backend result for the success screen
+      setLastTradeResult({
+        trade_order_id: data?.trade_order_id,
+        trade_status: data?.trade_status,
+        requested_amount_usdc: data?.requested_amount_usdc,
+        fee_usdc: data?.fee_usdc,
+        fee_bps: data?.fee_bps,
+        net_amount_usdc: data?.net_amount_usdc,
+        entry_id: data?.entry_id,
+      });
+
       toast.success("Prediction submitted!", {
         description: `$${amountUsd.toFixed(2)} on ${selectedPick === "fighter_a" ? selectedFight.fighter_a_name : selectedFight.fighter_b_name}`,
       });
