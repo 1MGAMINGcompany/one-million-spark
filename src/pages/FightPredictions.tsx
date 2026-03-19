@@ -42,6 +42,7 @@ interface FeedEntry {
   wallet_short: string;
   fighter_pick: string;
   amount_lamports: number;
+  amount_usd?: number;
   fight_id: string;
   created_at: string;
 }
