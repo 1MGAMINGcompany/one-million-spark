@@ -48,13 +48,16 @@ export interface ShareModalProps {
   eventTitle?: string;
   sport?: string;
   fighterPick?: string;
-  amountSol?: number;
-  poolSol?: number;
-  /** Win / Victory */
+  /** USD amount for predictions */
+  amountUsd?: number;
+  /** USD pool total */
+  poolUsd?: number;
+  /** Win / Victory — USD won */
   gameTitle?: string;
+  amountWon?: number;
+  /** @deprecated — use amountWon for predictions, kept for skill-game backward compat */
   solWon?: number;
   wallet?: string;
-  /** Admin-issued referral code (4-16 alphanum). Used for ?ref= param. */
   referralCode?: string;
   opponentType?: string;
   streak?: number;
@@ -84,9 +87,14 @@ function buildShareUrl(referralCode?: string): string {
 export default function SocialShareModal(props: ShareModalProps) {
   const {
     open, onClose, variant,
-    eventTitle, sport, fighterPick, amountSol, poolSol,
-    gameTitle, solWon, wallet, referralCode, opponentType, streak, gameName,
+    eventTitle, sport, fighterPick, amountUsd, poolUsd,
+    gameTitle, amountWon, solWon, wallet, referralCode, opponentType, streak, gameName,
   } = props;
+
+  // Unified win amount: prefer amountWon (USD), fall back to solWon for skill games
+  const winAmount = amountWon ?? solWon;
+  const isSolWin = amountWon == null && solWon != null;
+  const winUnit = isSolWin ? "SOL" : "USD";
 
   const cardRef = useRef<HTMLDivElement>(null);
   const [copied, setCopied] = useState(false);
@@ -167,12 +175,10 @@ export default function SocialShareModal(props: ShareModalProps) {
                 crossOrigin="anonymous"
               />
               <div className="absolute inset-0 bg-gradient-to-b from-transparent via-black/40 to-[hsl(var(--card))]" />
-              {/* Logo badge */}
               <div className="absolute top-3 left-3 flex items-center gap-2">
                 <img src={pyramidLogo} alt="1MGAMING" className="w-7 h-7" crossOrigin="anonymous" />
                 <span className="text-[11px] font-bold text-white/90 tracking-wider font-['Cinzel']">1MGAMING</span>
               </div>
-              {/* Result label */}
               <div className="absolute top-3 right-3">
                 <span className={`text-[10px] font-extrabold px-3 py-1 rounded-full tracking-wider ${
                   variant === "prediction"
@@ -188,7 +194,6 @@ export default function SocialShareModal(props: ShareModalProps) {
             <div className="px-5 pb-5 pt-2 space-y-3">
               {variant === "prediction" && (
                 <>
-                  {/* Sport badge */}
                   <p className="text-[10px] uppercase tracking-widest text-primary font-bold">
                     {emoji} {label}
                   </p>
@@ -197,16 +202,16 @@ export default function SocialShareModal(props: ShareModalProps) {
                     <span className="text-xs text-muted-foreground">I Picked</span>
                     <span className="text-sm font-bold text-foreground">{fighterPick}</span>
                   </div>
-                  {amountSol != null && amountSol > 0 && (
+                  {amountUsd != null && amountUsd > 0 && (
                     <div className="flex items-center justify-between bg-secondary/40 rounded-lg px-3 py-2">
                       <span className="text-xs text-muted-foreground">Amount</span>
-                      <span className="text-sm font-bold text-primary">{amountSol.toFixed(2)} SOL</span>
+                      <span className="text-sm font-bold text-primary">${amountUsd.toFixed(2)}</span>
                     </div>
                   )}
-                  {poolSol != null && poolSol > 0 && (
+                  {poolUsd != null && poolUsd > 0 && (
                     <div className="flex items-center justify-between bg-secondary/40 rounded-lg px-3 py-2">
                       <span className="text-xs text-muted-foreground">Pool</span>
-                      <span className="text-sm font-bold text-muted-foreground">{poolSol.toFixed(2)} SOL</span>
+                      <span className="text-sm font-bold text-muted-foreground">${poolUsd.toFixed(2)}</span>
                     </div>
                   )}
                 </>
@@ -218,9 +223,11 @@ export default function SocialShareModal(props: ShareModalProps) {
                     {emoji} {label}
                   </p>
                   <h3 className="text-base font-bold text-foreground font-['Cinzel'] leading-tight">{gameTitle || eventTitle}</h3>
-                  {solWon != null && (
+                  {winAmount != null && (
                     <div className="text-center py-2">
-                      <p className="text-3xl font-extrabold text-primary font-['Cinzel']">{solWon.toFixed(4)} SOL</p>
+                      <p className="text-3xl font-extrabold text-primary font-['Cinzel']">
+                        {isSolWin ? `${winAmount.toFixed(4)} SOL` : `$${winAmount.toFixed(2)}`}
+                      </p>
                       <p className="text-[10px] uppercase tracking-widest text-green-400 font-bold mt-1">Reward Claimed</p>
                     </div>
                   )}
@@ -230,9 +237,11 @@ export default function SocialShareModal(props: ShareModalProps) {
               {variant === "victory" && (
                 <>
                   <h3 className="text-base font-bold text-foreground font-['Cinzel'] leading-tight">{gameName || gameTitle}</h3>
-                  {solWon != null && solWon > 0 && (
+                  {winAmount != null && winAmount > 0 && (
                     <div className="text-center py-2">
-                      <p className="text-3xl font-extrabold text-primary font-['Cinzel']">{solWon.toFixed(4)} SOL</p>
+                      <p className="text-3xl font-extrabold text-primary font-['Cinzel']">
+                        {isSolWin ? `${winAmount.toFixed(4)} SOL` : `$${winAmount.toFixed(2)}`}
+                      </p>
                       <p className="text-[10px] uppercase tracking-widest text-green-400 font-bold mt-1">Won</p>
                     </div>
                   )}
@@ -288,7 +297,6 @@ export default function SocialShareModal(props: ShareModalProps) {
             </Button>
           </div>
 
-          {/* Native share fallback on mobile */}
           {"share" in navigator && (
             <Button variant="outline" size="sm" className="w-full gap-1.5 text-xs" onClick={handleNativeShare}>
               <Link2 className="w-3.5 h-3.5" />
@@ -308,10 +316,14 @@ export default function SocialShareModal(props: ShareModalProps) {
 function buildCaption(p: ShareModalProps, url: string): string {
   const emoji = sportEmoji(p.sport);
   if (p.variant === "prediction") {
-    return `${emoji} My pick: ${p.fighterPick}${p.amountSol ? ` | ${p.amountSol.toFixed(2)} SOL` : ""} on @1MGaming\n${p.eventTitle || ""}`;
+    return `${emoji} My pick: ${p.fighterPick}${p.amountUsd ? ` | $${p.amountUsd.toFixed(2)}` : ""} on @1MGaming\n${p.eventTitle || ""}`;
   }
   if (p.variant === "claim_win") {
-    return `💰 Won ${p.solWon?.toFixed(4) || ""} SOL on @1MGaming!\n${p.gameTitle || p.eventTitle || ""}`;
+    const won = p.amountWon ?? p.solWon;
+    const fmt = p.amountWon != null ? `$${won?.toFixed(2)}` : `${won?.toFixed(4) || ""} SOL`;
+    return `💰 Won ${fmt} on @1MGaming!\n${p.gameTitle || p.eventTitle || ""}`;
   }
-  return `🏆 Victory on @1MGaming!${p.solWon ? ` Won ${p.solWon.toFixed(4)} SOL` : ""}\n${p.gameName || p.gameTitle || ""}`;
+  const won = p.amountWon ?? p.solWon;
+  const fmt = p.amountWon != null ? `$${won?.toFixed(2)}` : won ? `${won.toFixed(4)} SOL` : "";
+  return `🏆 Victory on @1MGaming!${fmt ? ` Won ${fmt}` : ""}\n${p.gameName || p.gameTitle || ""}`;
 }

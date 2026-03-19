@@ -25,14 +25,12 @@ function estimateReward(
   return (contribution / newPickedPool) * newTotal;
 }
 
-// Convert lamports to USD display value (legacy DB stores lamports)
-// TODO [POLYMARKET]: When migrating DB schema, replace lamports with
-// native USD/USDC amounts in the prediction_fights table.
-const LAMPORTS = 1_000_000_000;
-function poolToUsd(lamports: number): number {
-  // Approximate: 1 SOL ≈ pool unit for display purposes during migration
-  // This will be replaced with actual USD values from Polymarket
-  return lamports / LAMPORTS;
+/** Get USD pool value — prefers new columns, falls back to legacy lamports / 1e9 */
+function getPoolUsd(fight: Fight): { poolA: number; poolB: number } {
+  if ((fight.pool_a_usd != null && fight.pool_a_usd > 0) || (fight.pool_b_usd != null && fight.pool_b_usd > 0)) {
+    return { poolA: fight.pool_a_usd ?? 0, poolB: fight.pool_b_usd ?? 0 };
+  }
+  return { poolA: fight.pool_a_lamports / 1_000_000_000, poolB: fight.pool_b_lamports / 1_000_000_000 };
 }
 
 export default function PredictionModal({
@@ -59,9 +57,11 @@ export default function PredictionModal({
   const poolContribution = amountNum - fee;
   const fighterName = pick === "fighter_a" ? fight.fighter_a_name : fight.fighter_b_name;
 
+  const { poolA, poolB } = getPoolUsd(fight);
+
   const estimatedReward = estimateReward(
-    poolToUsd(fight.pool_a_lamports),
-    poolToUsd(fight.pool_b_lamports),
+    poolA,
+    poolB,
     pick,
     poolContribution,
   );
@@ -143,8 +143,8 @@ export default function PredictionModal({
             eventTitle={fight.title}
             sport={fight.event_name}
             fighterPick={fighterName}
-            amountSol={amountNum}
-            poolSol={poolToUsd(fight.pool_a_lamports + fight.pool_b_lamports)}
+            amountUsd={amountNum}
+            poolUsd={poolA + poolB}
             wallet={wallet}
             referralCode={referralCode ?? undefined}
           />

@@ -790,42 +790,54 @@ export type Database = {
       prediction_entries: {
         Row: {
           amount_lamports: number
+          amount_usd: number | null
           claimed: boolean
           created_at: string
           fee_lamports: number
+          fee_usd: number | null
           fight_id: string
           fighter_pick: string
           id: string
           pool_lamports: number
+          pool_usd: number | null
           reward_lamports: number | null
+          reward_usd: number | null
           shares: number
           tx_signature: string | null
           wallet: string
         }
         Insert: {
           amount_lamports: number
+          amount_usd?: number | null
           claimed?: boolean
           created_at?: string
           fee_lamports: number
+          fee_usd?: number | null
           fight_id: string
           fighter_pick: string
           id?: string
           pool_lamports: number
+          pool_usd?: number | null
           reward_lamports?: number | null
+          reward_usd?: number | null
           shares: number
           tx_signature?: string | null
           wallet: string
         }
         Update: {
           amount_lamports?: number
+          amount_usd?: number | null
           claimed?: boolean
           created_at?: string
           fee_lamports?: number
+          fee_usd?: number | null
           fight_id?: string
           fighter_pick?: string
           id?: string
           pool_lamports?: number
+          pool_usd?: number | null
           reward_lamports?: number | null
+          reward_usd?: number | null
           shares?: number
           tx_signature?: string | null
           wallet?: string
@@ -960,7 +972,9 @@ export type Database = {
           id: string
           method: string | null
           pool_a_lamports: number
+          pool_a_usd: number
           pool_b_lamports: number
+          pool_b_usd: number
           refund_status: string | null
           refunds_completed_at: string | null
           refunds_started_at: string | null
@@ -992,7 +1006,9 @@ export type Database = {
           id?: string
           method?: string | null
           pool_a_lamports?: number
+          pool_a_usd?: number
           pool_b_lamports?: number
+          pool_b_usd?: number
           refund_status?: string | null
           refunds_completed_at?: string | null
           refunds_started_at?: string | null
@@ -1024,7 +1040,9 @@ export type Database = {
           id?: string
           method?: string | null
           pool_a_lamports?: number
+          pool_a_usd?: number
           pool_b_lamports?: number
+          pool_b_usd?: number
           refund_status?: string | null
           refunds_completed_at?: string | null
           refunds_started_at?: string | null
@@ -1442,6 +1460,15 @@ export type Database = {
         Args: {
           p_fight_id: string
           p_pool_lamports: number
+          p_shares: number
+          p_side: string
+        }
+        Returns: undefined
+      }
+      prediction_update_pool_usd: {
+        Args: {
+          p_fight_id: string
+          p_pool_usd: number
           p_shares: number
           p_side: string
         }

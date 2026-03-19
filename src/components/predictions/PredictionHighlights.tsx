@@ -3,10 +3,7 @@ import { Link } from "react-router-dom";
 import { Swords, Trophy, Lock, Radio, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { useSolPrice } from "@/hooks/useSolPrice";
 import type { Fight } from "./FightCard";
-
-const LAMPORTS = 1_000_000_000;
 
 export interface PredictionEvent {
   id: string;
@@ -69,6 +66,14 @@ function calcOdds(poolA: number, poolB: number) {
   };
 }
 
+/** Get USD pool — prefers new columns, falls back to legacy */
+function getPoolUsd(fight: Fight): number {
+  if ((fight.pool_a_usd ?? 0) > 0 || (fight.pool_b_usd ?? 0) > 0) {
+    return (fight.pool_a_usd ?? 0) + (fight.pool_b_usd ?? 0);
+  }
+  return (fight.pool_a_lamports + fight.pool_b_lamports) / 1_000_000_000;
+}
+
 function HighlightCard({
   fight,
   onPredict,
@@ -78,9 +83,10 @@ function HighlightCard({
   onPredict?: (fight: Fight, pick: "fighter_a" | "fighter_b") => void;
   compact?: boolean;
 }) {
-  const { formatUsd } = useSolPrice();
-  const { oddsA, oddsB } = calcOdds(fight.pool_a_lamports, fight.pool_b_lamports);
-  const totalPool = (fight.pool_a_lamports + fight.pool_b_lamports) / LAMPORTS;
+  const poolA = (fight.pool_a_usd ?? 0) > 0 ? fight.pool_a_usd! : fight.pool_a_lamports / 1_000_000_000;
+  const poolB = (fight.pool_b_usd ?? 0) > 0 ? fight.pool_b_usd! : fight.pool_b_lamports / 1_000_000_000;
+  const { oddsA, oddsB } = calcOdds(poolA, poolB);
+  const totalPool = poolA + poolB;
   const badge = getStatusBadge(fight.status);
   const btn = getButtonState(fight.status);
 
@@ -156,10 +162,7 @@ function HighlightCard({
         <div className="mt-2 pt-1.5 border-t border-border/30 flex items-center justify-between">
           <span className="text-[10px] text-muted-foreground">Pool</span>
           <span className="text-[11px] font-bold text-primary">
-            {totalPool.toFixed(2)} SOL
-            {formatUsd(totalPool) && (
-              <span className="text-[10px] text-muted-foreground font-normal ml-1">{formatUsd(totalPool)}</span>
-            )}
+            ${totalPool.toFixed(2)}
           </span>
         </div>
       </div>
@@ -266,9 +269,8 @@ export default function PredictionHighlights({
       const eventMs = eventDate ? new Date(eventDate).getTime() : null;
 
       if (f.status === "live") {
-        // Only show in live if not stale (>24h)
         if (eventMs != null && (nowMs - eventMs) > 24 * 60 * 60 * 1000) {
-          // Stale live — skip from highlights
+          // Stale live — skip
         } else {
           live.push(f);
         }
@@ -278,11 +280,9 @@ export default function PredictionHighlights({
         const isEventToday = eventLocalDate === todayStr;
 
         if (hasStarted) {
-          // Only keep in today if it's actually today's date; otherwise drop from highlights
           if (isEventToday) {
             today.push(f);
           }
-          // Past started events: excluded from highlights
         } else if (eventMs == null) {
           upcoming.push(f);
         } else if (isEventToday) {
@@ -314,7 +314,6 @@ export default function PredictionHighlights({
 
   return (
     <div className="space-y-6">
-      {/* LIVE NOW */}
       {liveFights.length > 0 && (
         <div>
           <SectionHeader section="live" count={liveFights.length} />
@@ -326,7 +325,6 @@ export default function PredictionHighlights({
         </div>
       )}
 
-      {/* TODAY */}
       {todayFights.length > 0 && (
         <div>
           <SectionHeader section="today" count={todayFights.length} />
@@ -338,7 +336,6 @@ export default function PredictionHighlights({
         </div>
       )}
 
-      {/* UPCOMING */}
       {upcomingFights.length > 0 && (
         <div>
           <SectionHeader section="upcoming" count={upcomingFights.length} />
@@ -350,7 +347,6 @@ export default function PredictionHighlights({
         </div>
       )}
 
-      {/* View All CTA */}
       {showViewAll && (
         <div className="text-center">
           <Button asChild variant="outline" size="sm" className="border-primary/30">
@@ -361,5 +357,3 @@ export default function PredictionHighlights({
     </div>
   );
 }
-
-

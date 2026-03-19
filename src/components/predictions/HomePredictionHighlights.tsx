@@ -5,7 +5,6 @@ import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/component
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { useSolPrice } from "@/hooks/useSolPrice";
 import { parseSport } from "@/components/predictions/EventSection";
 import type { Fight } from "@/components/predictions/FightCard";
 import type { PredictionEvent } from "@/components/predictions/PredictionHighlights";
@@ -16,7 +15,6 @@ import boxingGloveImg from "@/assets/boxing-glove.png";
 import mmaGlovesImg from "@/assets/mma-gloves.png";
 import futbolImg from "@/assets/futbol.png";
 
-const LAMPORTS = 1_000_000_000;
 const SPORT_TABS = ["ALL", "MMA", "BOXING", "MUAY THAI", "FUTBOL"] as const;
 
 const SPORT_IMG: Record<string, string> = {
@@ -42,9 +40,10 @@ function CompactFightCard({
   fight: Fight & { eventLabel?: string };
   onPredict?: (fight: Fight, pick: "fighter_a" | "fighter_b") => void;
 }) {
-  const { formatUsd } = useSolPrice();
-  const { oddsA, oddsB } = calcOdds(fight.pool_a_lamports, fight.pool_b_lamports);
-  const totalPool = (fight.pool_a_lamports + fight.pool_b_lamports) / LAMPORTS;
+  const poolA = (fight.pool_a_usd ?? 0) > 0 ? fight.pool_a_usd! : fight.pool_a_lamports / 1_000_000_000;
+  const poolB = (fight.pool_b_usd ?? 0) > 0 ? fight.pool_b_usd! : fight.pool_b_lamports / 1_000_000_000;
+  const { oddsA, oddsB } = calcOdds(poolA, poolB);
+  const totalPool = poolA + poolB;
   const isOpen = fight.status === "open";
 
   return (
@@ -99,10 +98,7 @@ function CompactFightCard({
         <div className="mt-2 pt-1.5 border-t border-border/30 flex items-center justify-between">
           <span className="text-[10px] text-muted-foreground">Pool</span>
           <span className="text-[11px] font-bold text-primary">
-            {totalPool.toFixed(2)} SOL
-            {formatUsd(totalPool) && (
-              <span className="text-[10px] text-muted-foreground font-normal ml-1">{formatUsd(totalPool)}</span>
-            )}
+            ${totalPool.toFixed(2)}
           </span>
         </div>
       </div>
@@ -142,7 +138,6 @@ export default function HomePredictionHighlights({
 
   const eventMap = useMemo(() => new Map(events.map((e) => [e.id, e])), [events]);
 
-  // Enrich fights with sport + event date, filter to active only
   const enrichedFights: EnrichedFight[] = useMemo(() => {
     return fights
       .filter((f) => ["open", "locked", "live"].includes(f.status))
@@ -157,29 +152,24 @@ export default function HomePredictionHighlights({
       });
   }, [fights, eventMap]);
 
-  // Today's fights only — must be on today's local calendar AND not yet started, or started today
   const todayFights = useMemo(() => {
     const now = new Date();
-    const nowMs = now.getTime();
     const todayStr = now.toDateString();
     return enrichedFights
       .filter((f) => {
         if (!f.eventDate) return false;
         const eventMs = new Date(f.eventDate).getTime();
         const isEventToday = new Date(eventMs).toDateString() === todayStr;
-        // Only include if it's today's date; exclude past-day started events
         return isEventToday;
       })
       .slice(0, 2);
   }, [enrichedFights]);
 
-  // Filter by selected sport (all days, shown inside tabs)
   const filtered = useMemo(() => {
     if (activeSport === "ALL") return enrichedFights;
     return enrichedFights.filter((f) => f.sport === activeSport);
   }, [enrichedFights, activeSport]);
 
-  // Group by day (inside tabs) — exclude today's fights AND past-day started events
   const dayGroups = useMemo(() => {
     const now = new Date();
     const nowMs = now.getTime();
@@ -187,12 +177,11 @@ export default function HomePredictionHighlights({
     const groups = new Map<string, EnrichedFight[]>();
     filtered
       .filter((f) => {
-        if (!f.eventDate) return true; // no date — include
+        if (!f.eventDate) return true;
         const eventMs = new Date(f.eventDate).getTime();
         const eventLocalDate = new Date(eventMs).toDateString();
-        // Exclude today (shown above) and past-day started events
         if (eventLocalDate === todayStr) return false;
-        if (eventMs <= nowMs) return false; // already started and not today
+        if (eventMs <= nowMs) return false;
         return true;
       })
       .forEach((f) => {
@@ -209,7 +198,6 @@ export default function HomePredictionHighlights({
     });
   }, [filtered]);
 
-  // Count per sport for badge
   const sportCounts = useMemo(() => {
     const counts: Record<string, number> = { ALL: enrichedFights.length };
     enrichedFights.forEach((f) => {
@@ -230,7 +218,6 @@ export default function HomePredictionHighlights({
 
   return (
     <div className="space-y-5">
-      {/* Today preview — max 2 cards */}
       {todayFights.length > 0 && (
         <div>
           <div className="flex items-center gap-2 mb-3">
@@ -247,7 +234,6 @@ export default function HomePredictionHighlights({
         </div>
       )}
 
-      {/* Sport tabs — collapsed by default */}
       <Collapsible open={tabOpen} onOpenChange={setTabOpen}>
         <Tabs value={activeSport} onValueChange={(v) => { setActiveSport(v); setTabOpen(true); }} className="w-full">
           <div className="flex items-center gap-2">
@@ -301,7 +287,6 @@ export default function HomePredictionHighlights({
         </Tabs>
       </Collapsible>
 
-      {/* View All CTA */}
       {showViewAll && (
         <div className="text-center pt-2">
           <Button asChild variant="outline" size="sm" className="border-primary/30">

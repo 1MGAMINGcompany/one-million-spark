@@ -16,9 +16,6 @@ import { SOCIAL_SHARE_ENABLED } from "@/lib/socialShareConfig";
 import { useMyReferralCode } from "@/hooks/useMyReferralCode";
 import type { Fight } from "@/components/predictions/FightCard";
 
-// TODO [POLYMARKET]: Replace lamports-based pool math with USD/USDC
-// once the database schema is migrated from Solana lamports.
-const LAMPORTS = 1_000_000_000;
 const FEE_RATE = 0.05;
 
 // DEPRECATED: Solana wallet addresses — will be removed when Polygon
@@ -45,6 +42,7 @@ interface FeedEntry {
   wallet_short: string;
   fighter_pick: string;
   amount_lamports: number;
+  amount_usd?: number;
   fight_id: string;
   created_at: string;
 }
@@ -111,7 +109,7 @@ export default function FightPredictions() {
   const [activeSport, setActiveSport] = useState("ALL");
   const [showWalletGate, setShowWalletGate] = useState(false);
   const [showPredictionSuccess, setShowPredictionSuccess] = useState(false);
-  const [claimShareData, setClaimShareData] = useState<{ eventTitle: string; solWon: number; fighterName?: string; sport?: string } | null>(null);
+  const [claimShareData, setClaimShareData] = useState<{ eventTitle: string; amountWon: number; fighterName?: string; sport?: string } | null>(null);
 
   const isConnected = authenticated && isPrivyUser;
 
@@ -250,8 +248,15 @@ export default function FightPredictions() {
   const hotFightIds = useMemo(() => {
     const sorted = [...fights]
       .filter(f => f.status === "open")
-      .sort((a, b) => (b.pool_a_lamports + b.pool_b_lamports) - (a.pool_a_lamports + a.pool_b_lamports));
-    return new Set(sorted.slice(0, 3).filter(f => (f.pool_a_lamports + f.pool_b_lamports) > 0).map(f => f.id));
+      .sort((a, b) => {
+        const poolA = ((a as any).pool_a_usd || a.pool_a_lamports / 1e9) + ((a as any).pool_b_usd || a.pool_b_lamports / 1e9);
+        const poolB = ((b as any).pool_a_usd || b.pool_a_lamports / 1e9) + ((b as any).pool_b_usd || b.pool_b_lamports / 1e9);
+        return poolB - poolA;
+      });
+    return new Set(sorted.slice(0, 3).filter(f => {
+      const pool = ((f as any).pool_a_usd || f.pool_a_lamports / 1e9) + ((f as any).pool_b_usd || f.pool_b_lamports / 1e9);
+      return pool > 0;
+    }).map(f => f.id));
   }, [fights]);
 
   const comingSoonSports = useMemo(() => {
@@ -312,7 +317,7 @@ export default function FightPredictions() {
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
-      const amountWon = data.reward_sol || data.reward_usd || 0;
+      const amountWon = data.reward_usd || data.reward_sol || 0;
       toast.success("Reward claimed!", { description: `$${amountWon.toFixed(2)} sent to your wallet` });
       await loadUserEntries();
       if (SOCIAL_SHARE_ENABLED) {
@@ -321,7 +326,7 @@ export default function FightPredictions() {
           : undefined;
         setClaimShareData({
           eventTitle: f?.title || f?.event_name || "Prediction Win",
-          solWon: amountWon,
+          amountWon,
           fighterName: pickedName || undefined,
           sport: f?.event_name,
         });
@@ -518,7 +523,7 @@ export default function FightPredictions() {
                       </span>
                     </div>
                     <span className="text-xs font-bold text-primary whitespace-nowrap ml-2">
-                      ${(entry.amount_lamports / LAMPORTS).toFixed(2)}
+                      ${(entry.amount_usd ?? entry.amount_lamports / 1_000_000_000).toFixed(2)}
                     </span>
                   </div>
                 ))
@@ -543,7 +548,7 @@ export default function FightPredictions() {
                       <p className="text-xs text-muted-foreground">{f?.title || ""}</p>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm font-bold text-primary">${(entry.amount_lamports / LAMPORTS).toFixed(2)}</p>
+                      <p className="text-sm font-bold text-primary">${(entry.amount_usd ?? entry.amount_lamports / 1_000_000_000).toFixed(2)}</p>
                       {entry.claimed && <p className="text-xs text-green-400">✓ Claimed</p>}
                     </div>
                   </div>
@@ -580,7 +585,7 @@ export default function FightPredictions() {
           variant="claim_win"
           eventTitle={claimShareData.eventTitle}
           gameTitle={claimShareData.fighterName}
-          solWon={claimShareData.solWon}
+          amountWon={claimShareData.amountWon}
           wallet={address || undefined}
           referralCode={referralCode ?? undefined}
           sport={claimShareData.sport}
