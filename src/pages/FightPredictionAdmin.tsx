@@ -70,8 +70,11 @@ interface Fight {
   claims_open_at: string | null;
   confirmed_at: string | null;
   settled_at: string | null;
-  // Polymarket mapping
+  // Source & commission
   source: string;
+  commission_bps: number;
+  featured: boolean;
+  // Polymarket mapping
   polymarket_market_id: string | null;
   polymarket_condition_id: string | null;
   polymarket_slug: string | null;
@@ -80,6 +83,11 @@ interface Fight {
   price_a: number;
   price_b: number;
   polymarket_last_synced_at: string | null;
+  // Enrichment
+  fighter_a_photo: string | null;
+  fighter_b_photo: string | null;
+  enrichment_notes: string | null;
+  explainer_card: string | null;
 }
 
 /** Return total pool in USD. Falls back to legacy lamports→SOL conversion for old data. */
