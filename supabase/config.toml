@@ -105,3 +105,6 @@ verify_jwt = false
 
 [functions.polymarket-prices]
 verify_jwt = false
+
+[functions.polymarket-sync]
+verify_jwt = false
